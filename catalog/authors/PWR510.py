@@ -170,6 +170,140 @@ sinusoid, and the third harmonic is no longer negligible. Every gain curve in th
 resonance and worth checking against a simulation anywhere else.
 ''',
             },
+            "build": {
+                "title": "The tank the first-harmonic approximation leaves behind",
+                "minutes": 26,
+                "brief": r"""
+Strip the first-harmonic approximation of everything it replaces and this is what is
+left: a sinusoidal source, a series $L$ and $C$, and a resistor standing in for the
+rectifier and the load. It is an ordinary linear circuit, which is the entire point —
+that is what the approximation was *for*.
+
+## What is on the canvas
+
+The 1 V source is the fundamental of the half-bridge square wave. The 12.57 Ω resistor
+is $R_{ac}$, the equivalent resistance the rectifier and load present to the tank.
+
+## What to add
+
+The resonant inductor and the resonant capacitor, in series between the source and the
+load, sized for
+
+$$f_r = 100\ \text{kHz}, \qquad Q = 3$$
+
+Two specifications, two components. From
+$$f_r = \frac{1}{2\pi\sqrt{L_rC_r}}, \qquad Q = \frac{1}{R_{ac}}\sqrt{\frac{L_r}{C_r}}$$
+you get $\sqrt{L_rC_r}$ from the first and $\sqrt{L_r/C_r}$ from the second, and
+multiplying and dividing those two recovers $L_r$ and $C_r$ separately. Put the probe
+on the load.
+
+## What the checks measure
+
+- **At resonance the tank disappears.** The inductive and capacitive reactances are
+  equal and opposite, they cancel exactly, and the source sees only $R_{ac}$ — so the
+  gain is 1. That is why a series-resonant converter run at $f_r$ has unity gain
+  whatever $Q$ is, and it is the fixed point every gain curve in this course passes
+  through.
+- **Off resonance, $Q$ decides how fast it falls.** At $1.2f_r$ the gain must be
+  $1/\sqrt{1 + Q^2(x - 1/x)^2} = 0.673$. That single number pins $Q$, and with $f_r$
+  already fixed it pins both components.
+- **It can only buck.** The gain never exceeds 1 at any frequency. This is the whole
+  reason the LLC of the next module exists: one extra inductor buys gains above unity
+  and a converter that still regulates at light load.
+- **Below resonance the current leads.** The tank is net capacitive there, which is
+  the region a designer avoids, because leading current is the opposite of what zero-
+  voltage switching needs.
+""",
+                "start": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "rac", "kind": "R", "x": 14, "y": 7, "rot": 1, "value": 12.57},
+                        {"id": "g1", "kind": "GND", "x": 14, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 14, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]},
+                        {"a": [14, 5], "b": [14, 6]},
+                        {"a": [14, 8], "b": [14, 9]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "lr", "kind": "L", "x": 6, "y": 5, "rot": 0, "value": 60.0e-6},
+                        {"id": "cr", "kind": "C", "x": 10, "y": 5, "rot": 0, "value": 42.2e-9},
+                        {"id": "rac", "kind": "R", "x": 14, "y": 7, "rot": 1, "value": 12.57},
+                        {"id": "g1", "kind": "GND", "x": 14, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 14, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]},
+                        {"a": [2, 5], "b": [5, 5]},
+                        {"a": [7, 5], "b": [9, 5]},
+                        {"a": [11, 5], "b": [14, 5]},
+                        {"a": [14, 5], "b": [14, 6]},
+                        {"a": [14, 8], "b": [14, 9]},
+                    ],
+                },
+                "checks": [
+                    {
+                        "name": "one L and one C, in series with the load",
+                        "code": r"""
+c.assert(c.count('L') === 1, 'One resonant inductor; there are ' + c.count('L') + '.');
+c.assert(c.count('C') === 1, 'One resonant capacitor; there are ' + c.count('C') + '.');
+c.assert(c.vout() < 0.01,
+  'At DC the series capacitor blocks everything, so the load should sit at 0 V. It ' +
+  'reads ' + c.fmt(c.vout(), 'V') + ', which means there is a DC path around the ' +
+  'capacitor — the two components are probably in parallel rather than in series.');
+""",
+                    },
+                    {
+                        "name": "unity gain at 100 kHz, where the reactances cancel",
+                        "code": r"""
+c.close(c.gain(100e3), 1.0, 0.04,
+  'the gain at the resonant frequency. There the inductor and the capacitor cancel ' +
+  'exactly and the source sees only R_ac, so all of it appears across the load. A ' +
+  'gain below 1 here means the resonance is not at 100 kHz — check sqrt(L*C)');
+""",
+                    },
+                    {
+                        "name": "Q = 3: the gain at 120 kHz is 0.673",
+                        "code": r"""
+c.close(c.gain(120e3), 0.6727, 0.06,
+  'the gain at 1.2 times resonance. With M = 1/sqrt(1 + Q^2 (x - 1/x)^2) this is 0.673 ' +
+  'for Q = 3. A gain closer to 1 means Q is too low — the tank is not selective ' +
+  'enough; a much smaller one means Q is too high');
+c.close(c.gain(80e3), 0.5952, 0.07,
+  'the same test below resonance, at 0.8 f_r. The curve is not symmetric in frequency ' +
+  'and this side falls faster, which is worth seeing once');
+""",
+                    },
+                    {
+                        "name": "it can only buck — and below resonance the current leads",
+                        "code": r"""
+[40e3, 70e3, 100e3, 130e3, 200e3, 400e3].forEach(function (f) {
+  const g = c.gain(f);
+  c.assert(g <= 1.02,
+    'The gain reaches ' + g.toFixed(3) + ' at ' + c.fmt(f, 'Hz') + '. A series-resonant ' +
+    'tank driven into a resistive load cannot exceed unity at any frequency — if it ' +
+    'does, the load is not across the resistor or the components are not in series.');
+});
+c.assert(c.phase(80e3) > 5,
+  'Below resonance the tank is net capacitive and the load voltage should lead the ' +
+  'source. The phase reads ' + c.phase(80e3).toFixed(1) + ' degrees. This is the ' +
+  'region a designer stays out of, because leading current is exactly what ' +
+  'zero-voltage switching cannot use.');
+""",
+                    },
+                ],
+                "hints": [
+                    "$\\sqrt{L_rC_r} = 1/(2\\pi f_r)$ and $\\sqrt{L_r/C_r} = QR_{ac}$. Multiply the two to get $L_r$; divide to get $C_r$.",
+                    "$QR_{ac} = 3 \\times 12.57 = 37.7\\ \\Omega$ — the tank's own characteristic impedance, and a number worth recognising on sight.",
+                    "Series means the load current flows through both of them. If either one has a wire to ground on both sides, it is in parallel and the DC check will say so.",
+                ],
+            },
             "lab": {
                 "title": "Characterise a series-resonant tank",
                 "runtime": "python",
@@ -463,6 +597,92 @@ and $1/x$. Frequency control therefore has two solutions for every target gain, 
 only one of them puts the tank on the inductive side where the bridge can switch at
 zero volts. Module 3 is about which side that is.
 ''',
+            },
+            "quiz": {
+                "title": "Why one inductor turns SRC into LLC",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "For the series-resonant gain $M(x) = 1/\\sqrt{1 + Q^2(x - 1/x)^2}$, what is the largest value $M$ can take?",
+                        "opts": ["1, reached at $x = 1$", "$Q$, reached at $x = 1$", "Unbounded as $Q$ grows", "$1/Q$"],
+                        "a": 0,
+                        "why": r"""
+The bracket $(x - 1/x)$ is zero only at $x = 1$, and everywhere else it makes the
+denominator larger than 1. So the gain peaks at exactly unity, at resonance, whatever
+$Q$ is — an SRC can only buck. That single algebraic fact is the reason the topology
+cannot hold up its output when the input sags, and the reason the next paragraph of
+this module exists.
+""",
+                    },
+                    {
+                        "q": "At light load, $Q$ falls towards zero. What happens to the SRC gain curve?",
+                        "opts": [
+                            "It flattens towards 1 everywhere, so frequency stops controlling the output",
+                            "It becomes sharper, so control gets easier",
+                            "It inverts",
+                            "It is unchanged — $Q$ only affects efficiency",
+                        ],
+                        "a": 0,
+                        "why": r"""
+With $Q \to 0$ the $Q^2$ term vanishes and $M \to 1$ at *every* frequency. The
+controller's only lever — frequency — stops doing anything, and the converter loses
+regulation exactly when the load is lightest. Sweeping frequency to the limit does not
+help, which is why unloaded SRCs are notorious for running away to their frequency
+clamp.
+""",
+                    },
+                    {
+                        "q": "What does LLC add to the series-resonant tank?",
+                        "opts": [
+                            "A magnetising inductance in parallel with the load",
+                            "A second capacitor in series with the load",
+                            "A resistor to damp the tank",
+                            "A second switching bridge",
+                        ],
+                        "a": 0,
+                        "why": r"""
+One inductance across the load — usually not an added component at all, but the
+transformer's own magnetising inductance, which was always there and is now being
+designed rather than minimised. That is the appeal: the topology gets a second
+resonance and gain above unity out of a parasitic it already had.
+""",
+                    },
+                    {
+                        "q": "Where does the LLC's ability to exceed unity gain come from?",
+                        "opts": [
+                            "A second, lower resonance formed by $L_r + L_m$ with $C_r$",
+                            "The rectifier's forward drop",
+                            "Operating above the series resonance",
+                            "The output capacitor",
+                        ],
+                        "a": 0,
+                        "why": r"""
+There are two resonances. The upper one, $1/(2\pi\sqrt{L_rC_r})$, is where the tank
+behaves like the SRC and the gain is 1. The lower one, $1/(2\pi\sqrt{(L_r+L_m)C_r})$,
+appears when the load is light enough that $L_m$ is not shorted out by it, and near it
+the gain rises above unity. The converter is *boosting* between the two, which is what
+lets it hold the output up through a dropout. Running above the series resonance does
+the opposite — that region always bucks.
+""",
+                    },
+                    {
+                        "q": "As the LLC's load is removed entirely, where does the gain peak move?",
+                        "opts": [
+                            "Down towards $1/(2\\pi\\sqrt{(L_r+L_m)C_r})$",
+                            "Up towards $1/(2\\pi\\sqrt{L_rC_r})$",
+                            "It stays fixed at the series resonance",
+                            "It disappears",
+                        ],
+                        "a": 0,
+                        "why": r"""
+At no load nothing damps $L_m$, so it is fully in the resonance and the peak sits at the
+*lower* frequency, where it is also very tall and very sharp. As load is applied the
+reflected resistance progressively shorts $L_m$ out and the peak slides up towards the
+series resonance while flattening. That whole family of curves — one per load — is what
+the lab draws, and reading a design off it is what LLC design *is*.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Draw the LLC gain family",
@@ -774,6 +994,94 @@ inductive side of the gain curve. Sitting below the peak, the current leads and 
 transition happens the wrong way round.
 ''',
             },
+            "blanks": {
+                "title": "The charge budget that ZVS really is",
+                "minutes": 9,
+                "caption": "zvs.py — four numbers, one inequality",
+                "lang": "python",
+                "brief": r"""
+Zero-voltage switching sounds like a property of the topology. It is not — it is an
+inequality between two charges, and it either holds at your operating point or it does
+not.
+
+Assume a half-bridge at the series resonance with unity gain, so the voltage across
+$L_m$ is clamped to $V_{in}/2$ for each half period.
+""",
+                "listing": """# The charge the transition has to move: both devices' output capacitance,
+# swung across the full rail.
+Q_needed = ___ * V_in
+
+# The magnetising current is a triangle. Across L_m sits V_in/2 for half a
+# period, so its peak is
+I_m_peak = V_in / (___ * L_m * f_sw)
+
+# During the dead time that current is roughly constant, and it delivers
+Q_available = I_m_peak * ___
+
+# ZVS is exactly the statement   Q_available >= Q_needed.
+# Raising L_m cuts the circulating current and therefore the conduction loss,
+# and it ___ .
+""",
+                "blanks": [
+                    {
+                        "prompt": "Two devices, one rail.",
+                        "hole": "?",
+                        "opts": ["2 * C_oss", "C_oss", "C_oss / 2", "4 * C_oss"],
+                        "a": 0,
+                        "why": "One device's $C_{oss}$ has to be discharged from $V_{in}$ to 0 while the other is charged from 0 to $V_{in}$, so both are moved across the full rail and the charges add. Any capacitance you deliberately add across the bridge goes in here too — and it is why adding a snubber capacitor makes ZVS harder, not easier.",
+                        "whys": [
+                            "One device's $C_{oss}$ has to be discharged from $V_{in}$ to 0 while the other is charged from 0 to $V_{in}$, so both are moved across the full rail and the charges add. Any capacitance you deliberately add across the bridge goes in here too — and it is why adding a snubber capacitor makes ZVS harder, not easier.",
+                            "Counts only one device. The other one is charging at the same time, through the same node, and its charge has to come from somewhere too.",
+                            "Half of one device, which underestimates the requirement by a factor of four and produces a design that does not switch softly on the bench.",
+                            "Twice too much. There are two devices, not four — though a full bridge, with two legs, does have twice this per leg.",
+                        ],
+                    },
+                    {
+                        "prompt": "V_in/2 across L_m for half a period. What is the peak of the triangle?",
+                        "hole": "?",
+                        "opts": ["8", "4", "2", "16"],
+                        "a": 0,
+                        "why": "$\\Delta I = (V_{in}/2)(T_{sw}/2)/L_m = V_{in}/(4L_mf_{sw})$ peak-to-peak, and the triangle is symmetric about zero, so the peak is half of that: $V_{in}/(8L_mf_{sw})$.",
+                        "whys": [
+                            "$\\Delta I = (V_{in}/2)(T_{sw}/2)/L_m = V_{in}/(4L_mf_{sw})$ peak-to-peak, and the triangle is symmetric about zero, so the peak is half of that: $V_{in}/(8L_mf_{sw})$.",
+                            "That is the peak-to-peak swing, not the peak. Forgetting that the magnetising current is symmetric about zero overestimates the available charge by exactly two, and two is the whole margin in most designs.",
+                            "Uses the full rail across $L_m$ rather than half of it, and forgets the peak-to-peak factor as well.",
+                            "Too small by two: this would be the peak if the current only swung one way, which a magnetising current cannot do without saturating the core.",
+                        ],
+                    },
+                    {
+                        "prompt": "How long does it have to do it in?",
+                        "hole": "?",
+                        "opts": ["t_dead", "T_sw", "T_sw / 2", "1 / f_sw"],
+                        "a": 0,
+                        "why": "The dead time, and nothing longer. Once the gate goes high the transition is over — whatever the drain voltage happens to be at that instant is what gets switched. That is why dead time is a design parameter and not just a safety margin against shoot-through.",
+                        "whys": [
+                            "The dead time, and nothing longer. Once the gate goes high the transition is over — whatever the drain voltage happens to be at that instant is what gets switched. That is why dead time is a design parameter and not just a safety margin against shoot-through.",
+                            "A whole period is orders of magnitude longer than the window actually available, and would predict ZVS in designs that visibly hard-switch.",
+                            "Half a period is the conduction interval, not the transition. The transition is the sliver between one device turning off and the other turning on.",
+                            "The same as a whole period, written differently.",
+                        ],
+                    },
+                    {
+                        "prompt": "Larger L_m means less circulating current. What does it do to ZVS?",
+                        "hole": "?",
+                        "opts": [
+                            "makes ZVS harder, because there is less current to move the charge",
+                            "makes ZVS easier, because the transition is gentler",
+                            "leaves ZVS unaffected",
+                            "raises the series resonant frequency",
+                        ],
+                        "a": 0,
+                        "why": "This is the central trade of LLC design. $I_{m,peak}$ is inversely proportional to $L_m$, so the same inductance that reduces the loss in module 4's budget also reduces the charge available in module 3's inequality. The design sits at the largest $L_m$ that still closes the budget, with margin — and the margin is what has to survive tolerance and temperature.",
+                        "whys": [
+                            "This is the central trade of LLC design. $I_{m,peak}$ is inversely proportional to $L_m$, so the same inductance that reduces the loss in module 4's budget also reduces the charge available in module 3's inequality. The design sits at the largest $L_m$ that still closes the budget, with margin — and the margin is what has to survive tolerance and temperature.",
+                            "It is exactly backwards, and it is the assumption behind a converter that is efficient in simulation and hot on the bench: less circulating current is less charge to work with.",
+                            "$L_m$ appears directly in $I_{m,peak}$ and therefore directly in the charge available. It is the dominant term in the whole budget.",
+                            "$L_m$ sits across the load, so it moves the *lower* resonance; the series resonance is set by $L_r$ and $C_r$ and does not contain $L_m$ at all.",
+                        ],
+                    },
+                ],
+            },
             "lab": {
                 "title": "Close the zero-voltage switching budget",
                 "runtime": "python",
@@ -1064,6 +1372,89 @@ applied voltage actually *reduces* core loss. Frequency is limited by switching 
 by gate drive and by the physical size you are willing to give the magnetics, not by
 the core material.
 ''',
+            },
+            "quiz": {
+                "title": "Four honest terms",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A symmetric triangular current of peak $I_m$ has what RMS value?",
+                        "opts": ["$I_m/\\sqrt{3}$", "$I_m/\\sqrt{2}$", "$I_m/2$", "$I_m$"],
+                        "a": 0,
+                        "why": r"""
+$I_m/\sqrt{3} = 0.577I_m$. It is a different constant from the sinusoid's
+$1/\sqrt{2} = 0.707$, and using the wrong one is a 22% error in current and therefore a
+50% error in $I^2R$ loss — enough to turn a design that runs warm into one that does
+not. The two constants are worth memorising as a pair, because a resonant converter's
+primary current contains one of each.
+""",
+                    },
+                    {
+                        "q": "The primary current is the load-carrying sinusoid plus the magnetising triangle. How do they combine into an RMS figure?",
+                        "opts": [
+                            "In quadrature — the squares add, because one is in phase with the load and the other is not",
+                            "They add directly",
+                            "Only the larger of the two matters",
+                            "They subtract, because the magnetising current is reactive",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$I_{rms}^2 \approx I_{load,rms}^2 + I_{m,rms}^2$. The magnetising current is very nearly
+in quadrature with the load component, so the squares add and the total is less than the
+plain sum — which is genuinely good news, and the reason a modest magnetising current
+costs less than its magnitude suggests. What it does not do is disappear: it is
+resistive loss in the primary winding and the switches all the same.
+""",
+                    },
+                    {
+                        "q": "How much power does the magnetising current deliver to the load?",
+                        "opts": ["None", "A share proportional to $L_m$", "All of it, at light load", "It depends on the switching frequency"],
+                        "a": 0,
+                        "why": r"""
+None at all. It circulates between the tank and the bridge, returning every joule it
+borrows — and paying $I^2R$ in the windings and the channel resistance on the way round,
+twice per cycle. It is a pure cost on the loss ledger, bought deliberately because it is
+what makes ZVS possible. Naming it "circulating" rather than "wasted" is not a
+euphemism: it does a job, just not the job of delivering power.
+""",
+                    },
+                    {
+                        "q": "Which loss does zero-voltage switching actually eliminate?",
+                        "opts": [
+                            "The $\\tfrac{1}{2}C_{oss}V_{in}^2$ dumped inside the device at hard turn-on",
+                            "Conduction loss in the channel",
+                            "Core loss in the transformer",
+                            "The diode drop in the output rectifier",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Only the turn-on energy, and only that. The charge on $C_{oss}$ has to go somewhere when
+the device turns on; hard-switched, it goes through the channel as heat, and at high
+frequency that term dominates everything else. ZVS moves the charge *before* the gate
+rises, using the magnetising current, so nothing is dumped. Conduction, core and
+rectifier losses are all untouched — which is the honest framing this module insists on:
+ZVS relocates loss, it does not delete it.
+""",
+                    },
+                    {
+                        "q": "You double $L_m$. What is the trade?",
+                        "opts": [
+                            "Less circulating current and less conduction loss, but less charge available for ZVS",
+                            "Less loss everywhere, with no cost",
+                            "More gain, at the price of efficiency",
+                            "Nothing changes below resonance",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The magnetising current halves, so its contribution to the RMS falls and the conduction
+term improves. But it is that same current that has to move $2C_{oss}V_{in}$ during the
+dead time, so the ZVS budget from module 3 gets tighter — and if it stops closing, the
+turn-on loss you had eliminated comes back all at once, dwarfing what you saved. The
+design point is the largest $L_m$ that still closes the budget with margin, which is why
+these two modules have to be read together.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Build an honest loss budget",

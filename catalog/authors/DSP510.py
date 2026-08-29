@@ -138,6 +138,91 @@ $f_s/M$, and the filter in front of it must stop at $\pi/M$. Everything after th
 module is about paying less for that filter.
 ''',
             },
+            "quiz": {
+                "title": "Where a component lands after decimation",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A signal contains a component at normalised frequency $\\omega = 0.6\\pi$. It is decimated by $M = 4$ with no filter. Where does that component appear?",
+                        "opts": ["$0.4\\pi$", "$0.6\\pi$", "$2.4\\pi$", "$0.15\\pi$"],
+                        "a": 0,
+                        "why": r"""
+Decimation *stretches* the frequency axis by $M$: the component moves to
+$M\omega = 2.4\pi$, and frequency is only defined modulo $2\pi$, so it reappears at
+$2.4\pi - 2\pi = 0.4\pi$. It has not been removed and it has not been attenuated —
+it has been *relocated*, into the middle of the band you were trying to keep. Dividing
+by $M$ instead of multiplying is the natural guess, because the sample *rate* went
+down; the frequency measured in radians per sample goes up for exactly that reason.
+""",
+                    },
+                    {
+                        "q": "What arithmetic does the downsampling operation $y[n] = x[nM]$ itself perform?",
+                        "opts": [
+                            "None — it selects samples and discards the rest",
+                            "It averages each block of $M$ samples",
+                            "It low-pass filters, then selects",
+                            "It interpolates between the kept samples",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Downsampling is pure selection: no multiply, no add, nothing computed. That is worth
+being precise about, because the *decimator* people build does average — but the
+averaging is the anti-alias filter in front, a separate block that you chose and can
+change. Conflating the two is what leads to "decimation lost my signal" when the real
+story is that no filter was ever put there. Keeping them apart is also what makes
+polyphase possible in module 3.
+""",
+                    },
+                    {
+                        "q": "Before decimating by $M$, where must the anti-alias filter cut off?",
+                        "opts": ["$\\pi/M$", "$\\pi M$", "$\\pi/2M$", "$\\pi$ — no filter is needed"],
+                        "a": 0,
+                        "why": r"""
+After the stretch by $M$, anything originally above $\pi/M$ lands above $\pi$ and
+folds. So the filter has to have removed it beforehand: cutoff $\pi/M$, which is the
+new Nyquist limit referred back to the old rate. $\pi/2M$ is a factor of two too
+conservative and throws away half the band you paid for; $\pi M$ is beyond $\pi$ and
+therefore meaningless.
+""",
+                    },
+                    {
+                        "q": "A component sits above $\\pi/M$ and you decimate without filtering. What happens to it?",
+                        "opts": [
+                            "It folds down and lands somewhere inside the kept band",
+                            "It is removed, because the new rate cannot represent it",
+                            "It is attenuated in proportion to how far above the limit it is",
+                            "Nothing — it stays where it was",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Folding, not deletion. This is the single most expensive misconception in resampling,
+because it makes the failure invisible: the output has the right length, the right
+level, and a spurious component sitting in the middle of the wanted band which no
+later processing can separate out. There is no gentle roll-off either — the fold is
+exact and full amplitude. The only defence is the filter in front, which is why it is
+not optional.
+""",
+                    },
+                    {
+                        "q": "Is downsampling a time-invariant operation?",
+                        "opts": [
+                            "No — delaying the input by one sample does not simply delay the output",
+                            "Yes, like any LTI block",
+                            "Yes, provided the anti-alias filter is linear phase",
+                            "Only when $M$ is a power of two",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Shift the input by one sample and a *different* set of samples survives, giving an
+output that is not the old output delayed — it is a different signal. Downsampling is
+periodically time-varying with period $M$, which is why you cannot describe it with a
+transfer function on its own and why the noble identities in module 3 are worth
+stating carefully: they say exactly when a filter may be moved across a rate change,
+and the answer is not "always". Linear phase and powers of two change nothing here.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Decimate a signal without destroying it",
                 "runtime": "python",
@@ -398,6 +483,91 @@ filter has. Everything else — length, window, ripple — is a cost decision, n
 correctness one.
 ''',
             },
+            "blanks": {
+                "title": "Interpolation, in four decisions",
+                "minutes": 9,
+                "caption": "interpolate.py — zero-stuff, filter, restore the level",
+                "lang": "python",
+                "brief": r"""
+Upsampling is three lines and every one of them has a trap in it. Fill the holes, then
+read the result: *put the samples where they belong, remove the copies that creates,
+and put back the level the zeros took away.*
+""",
+                "listing": """import numpy as np
+from scipy.signal import lfilter
+
+# Interpolate x by L: zero-stuff, then filter.
+y        = np.zeros(len(x) * L)
+y[::L]   = ___                    # what goes in the non-zero slots
+y        = lfilter(h, 1, y)       # h is a unit-DC-gain low-pass
+y        = y * ___                # restore the level the zeros cost us
+
+# the anti-image filter's cutoff, in radians per sample at the HIGH rate
+wc = ___
+
+# repeating each sample instead of zero-stuffing would be the same as
+# filtering the zero-stuffed signal with ___
+""",
+                "blanks": [
+                    {
+                        "prompt": "Every L-th slot gets a real sample. Which one?",
+                        "hole": "?",
+                        "opts": ["x", "x * L", "x / L", "np.repeat(x, L)"],
+                        "a": 0,
+                        "why": "The original samples, unscaled. Zero insertion does not change any sample it keeps — the level correction is a separate step, and doing it here as well would apply it twice.",
+                        "whys": [
+                            "The original samples, unscaled. Zero insertion does not change any sample it keeps — the level correction is a separate step, and doing it here as well would apply it twice.",
+                            "The scaling is real but it belongs after the filter, and putting it here as well multiplies the output by $L$ twice over.",
+                            "Dividing goes the wrong way: the zeros already pulled the average down by $L$, so the correction multiplies.",
+                            "That is sample-and-hold, not zero insertion, and it is the mistake the last blank is about — it leaves the images in, shaped by a sinc.",
+                        ],
+                    },
+                    {
+                        "prompt": "Three samples in four are now zero. What did that cost the level?",
+                        "hole": "?",
+                        "opts": ["L", "1 / L", "L ** 2", "1 — nothing was lost"],
+                        "a": 0,
+                        "why": "Zero-stuffing keeps the *energy* of each surviving sample but spreads it over $L$ times as many slots, so a unit-DC-gain filter returns a signal $L$ times too small. Multiplying by $L$ puts it back. Equivalently: give the filter a DC gain of $L$ and skip this line.",
+                        "whys": [
+                            "Zero-stuffing keeps the *energy* of each surviving sample but spreads it over $L$ times as many slots, so a unit-DC-gain filter returns a signal $L$ times too small. Multiplying by $L$ puts it back. Equivalently: give the filter a DC gain of $L$ and skip this line.",
+                            "That is the direction of the loss, not the correction — it makes the output $L^2$ times too small.",
+                            "Over-corrects by a factor of $L$. The zeros cost one factor of $L$, not two: the sample count went up by $L$ and each original sample still appears exactly once.",
+                            "Something was: the mean of the zero-stuffed signal is $1/L$ of the original mean, because the same total is now spread over $L$ times as many samples.",
+                        ],
+                    },
+                    {
+                        "prompt": "Zero insertion creates L−1 extra copies of the spectrum. Where must the filter cut?",
+                        "hole": "?",
+                        "opts": ["np.pi / L", "np.pi * L", "np.pi / (2 * L)", "np.pi"],
+                        "a": 0,
+                        "why": "The compressed spectrum occupies up to $\\pi/L$ and the first image begins just above it, so $\\pi/L$ is exactly the boundary between what you keep and what you must remove. It is the same number as the anti-alias cutoff for decimation by $L$ — the two problems are mirror images.",
+                        "whys": [
+                            "The compressed spectrum occupies up to $\\pi/L$ and the first image begins just above it, so $\\pi/L$ is exactly the boundary between what you keep and what you must remove. It is the same number as the anti-alias cutoff for decimation by $L$ — the two problems are mirror images.",
+                            "Above $\\pi$, which is not a frequency: at the high rate the axis still only runs to $\\pi$.",
+                            "A factor of two too tight. It removes the images, but it also removes the top half of the signal you were interpolating.",
+                            "Passes everything, so all $L-1$ images survive and the output is the zero-stuffed signal itself — audibly a harsh, bright copy of the original.",
+                        ],
+                    },
+                    {
+                        "prompt": "Sample-and-hold is not filter-free. What filter is it?",
+                        "hole": "?",
+                        "opts": [
+                            "a length-L rectangular window",
+                            "an ideal low-pass at pi/L",
+                            "no filter at all",
+                            "a first-order difference",
+                        ],
+                        "a": 0,
+                        "why": "Holding each sample for $L$ slots is convolution with a rectangle of length $L$ — a zero-order hold. Its response is a sinc, which droops across the passband and leaves the images attenuated but present. It is cheap and it is sometimes enough; what it is not is equivalent to interpolation.",
+                        "whys": [
+                            "Holding each sample for $L$ slots is convolution with a rectangle of length $L$ — a zero-order hold. Its response is a sinc, which droops across the passband and leaves the images attenuated but present. It is cheap and it is sometimes enough; what it is not is equivalent to interpolation.",
+                            "That is what you *wanted*; the rectangle is what you got. The gap between them is the sinc droop in the passband and the image leakage above it.",
+                            "Repetition is a linear time-invariant operation on the zero-stuffed signal, so it certainly is a filter — that is precisely why it changes the spectrum.",
+                            "A difference is a high-pass; holding is emphatically a low-pass. The sign of the error would be the opposite of what you hear.",
+                        ],
+                    },
+                ],
+            },
             "lab": {
                 "title": "Interpolate by zero insertion and filtering",
                 "runtime": "python",
@@ -636,6 +806,88 @@ $E_m(z)$ on the slow side. Each branch of $N/M$ taps now runs once per *output*
 sample instead of once per input sample, and the total is $N$ multiplications per
 output rather than $N$ per input.
 ''',
+            },
+            "quiz": {
+                "title": "Polyphase, and what it is allowed to move",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "In $H(z) = \\sum_{m} z^{-m}E_m(z^M)$, what is the impulse response of branch $E_m$?",
+                        "opts": ["$h[nM + m]$", "$h[n + m]$", "$h[nM]$ for every $m$", "$h[m]$"],
+                        "a": 0,
+                        "why": r"""
+Every $M$-th tap, starting at offset $m$. The decomposition is nothing more than
+dealing the taps of $h$ into $M$ piles like a pack of cards, so the branches together
+contain each tap exactly once and no arithmetic has been invented or lost. Seeing it
+as a re-indexing rather than a transformation is what makes the noble identities
+obvious rather than magical.
+""",
+                    },
+                    {
+                        "q": "The noble identity for decimation says that downsampling by $M$ followed by $G(z)$ is identical to:",
+                        "opts": [
+                            "$G(z^M)$ followed by downsampling by $M$",
+                            "$G(z)$ followed by downsampling by $M$",
+                            "$G(z^{1/M})$ followed by downsampling by $M$",
+                            "downsampling by $M$ followed by $G(z^M)$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Moving a filter to the *fast* side of a downsampler requires upsampling its impulse
+response — inserting $M-1$ zeros between every tap, which is what $z \to z^M$ means.
+Leaving $G(z)$ unchanged is the tempting move and it is simply a different system:
+filtering at the high rate with the low-rate coefficients is not the same operation.
+The identity is exact, not an approximation, and it is the whole reason polyphase
+costs nothing in accuracy.
+""",
+                    },
+                    {
+                        "q": "A length-120 filter feeds a decimator by $M = 4$. What does polyphase save?",
+                        "opts": [
+                            "Three quarters of the multiplications — the ones whose results were discarded",
+                            "Three quarters of the memory",
+                            "Nothing; it is a different way of writing the same cost",
+                            "Half the multiplications, whatever $M$ is",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The direct form computes an output for every input sample and then throws three in
+four away. Polyphase identifies those in advance and never computes them, so the
+multiply rate drops by exactly $M$ — 120 multiplies per output either way, but per
+*input* it falls from 120 to 30. The taps all still have to be stored, so memory is
+unchanged; and the saving is $M$, not a fixed half.
+""",
+                    },
+                    {
+                        "q": "Does a polyphase decimator produce a different output from the direct implementation?",
+                        "opts": [
+                            "No — it is an algebraic identity, sample for sample",
+                            "Yes, slightly, because the branches are shorter",
+                            "Yes — it has less delay",
+                            "Only if the filter is not linear phase",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Identical, sample for sample, in exact arithmetic. That is what makes it worth doing:
+it is a restructuring of the same sum, not an approximation you trade accuracy for.
+In floating point the two differ in the last bits because the additions happen in a
+different order, which is a rounding artefact and not a design decision. Linear phase
+is unrelated — it buys tap symmetry, a separate and stackable saving.
+""",
+                    },
+                    {
+                        "q": "In a polyphase decimator by $M$, the branch filters run at which rate?",
+                        "opts": ["The low output rate", "The high input rate", "$M$ times the input rate", "Each branch at a different rate"],
+                        "a": 0,
+                        "why": r"""
+That is the point of the whole exercise. The commutator hands each branch one input in
+$M$, so every branch sees the *output* rate, and the hardware clock for the multipliers
+drops by $M$. If the branches still ran at the input rate you would have reorganised
+the arithmetic without saving any of it — which is exactly what happens if you apply
+the noble identity in the wrong direction.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Polyphase decimation and interpolation",
@@ -947,6 +1199,82 @@ For 44.1 kHz to 48 kHz, $L = 160$ and $M = 147$. The literal reading of that say
 build a 7.056 MHz intermediate signal; the polyphase reading says run a 32-tap branch
 48000 times a second. Same output, four orders of magnitude apart in cost.
 ''',
+            },
+            "blanks": {
+                "title": "48 kHz to 44.1 kHz, decision by decision",
+                "minutes": 9,
+                "caption": "resample.py — the four choices that define a rational converter",
+                "lang": "python",
+                "brief": r"""
+The most common resampling job in the world, and every one of its four decisions is a
+place people go wrong. Fill them in and the recipe reads itself.
+""",
+                "listing": """from math import gcd
+
+# 48 kHz  ->  44.1 kHz
+g = gcd(48000, 44100)             # 300
+L = 44100 // g                    # 147
+M = 48000 // g                    # 160
+
+# 1. ___ by L  (write each sample, then L-1 zeros)
+# 2. one low-pass filter, running at the ___ rate,
+#       with cutoff   wc = ___
+# 3. ___ by M  (keep one sample in M, discard the rest)
+""",
+                "blanks": [
+                    {
+                        "prompt": "Which operation has to come first?",
+                        "hole": "?",
+                        "opts": ["upsample", "downsample", "filter", "delay"],
+                        "a": 0,
+                        "why": "Upsampling first, always. Decimating by 160 before interpolating by 147 would band-limit the signal to $\\pi/160$ and then stretch that back out — the audio above about 150 Hz would already be gone, and no later stage can recover it.",
+                        "whys": [
+                            "Upsampling first, always. Decimating by 160 before interpolating by 147 would band-limit the signal to $\\pi/160$ and then stretch that back out — the audio above about 150 Hz would already be gone, and no later stage can recover it.",
+                            "This is the order that destroys the signal: decimating first throws away band that the interpolation afterwards cannot bring back. It is the single most common bug in a rate converter, and it is silent — the output is the right length and the right level.",
+                            "The filter has a job to do, but it cannot do it until the zeros exist: it is what turns them into samples.",
+                            "A delay changes nothing about the rate and is not part of the conversion.",
+                        ],
+                    },
+                    {
+                        "prompt": "The two rate changes are 147 up and 160 down. What rate does the filter see?",
+                        "hole": "?",
+                        "opts": ["high (147 x 48 kHz)", "input (48 kHz)", "output (44.1 kHz)", "the lower of the two"],
+                        "a": 0,
+                        "why": "It sits between the two stages, so it runs at $L$ times the input rate — 7.056 MHz here. That is a large number, and it is exactly why polyphase from module 3 matters: the structure lets the multipliers run at the output rate instead while computing the same result.",
+                        "whys": [
+                            "It sits between the two stages, so it runs at $L$ times the input rate — 7.056 MHz here. That is a large number, and it is exactly why polyphase from module 3 matters: the structure lets the multipliers run at the output rate instead while computing the same result.",
+                            "The upsampler has already raised the rate before the filter is reached; at the input rate the zeros have not been inserted yet.",
+                            "The decimator has not run yet, so the output rate does not exist at this point in the chain.",
+                            "Neither of the original rates: the intermediate rate is higher than both, by construction.",
+                        ],
+                    },
+                    {
+                        "prompt": "One filter, two jobs. Which cutoff satisfies both?",
+                        "hole": "?",
+                        "opts": ["min(pi/L, pi/M)", "pi / L", "pi / M", "pi / (L * M)"],
+                        "a": 0,
+                        "why": "It must suppress the interpolation images (which needs $\\pi/L$) and band-limit before the decimation (which needs $\\pi/M$). Whichever is tighter binds, and here $M > L$ so $\\pi/160$ wins — the output rate is the lower one, so it is the decimation that sets the limit.",
+                        "whys": [
+                            "It must suppress the interpolation images (which needs $\\pi/L$) and band-limit before the decimation (which needs $\\pi/M$). Whichever is tighter binds, and here $M > L$ so $\\pi/160$ wins — the output rate is the lower one, so it is the decimation that sets the limit.",
+                            "Enough for the images, not enough for the decimation that follows. Going 48 kHz to 44.1 kHz this leaves everything between 22.05 kHz and 24 kHz to fold back into the audio band.",
+                            "Right in this particular direction, but only by accident: reverse the conversion to 44.1 into 48 kHz and it becomes the looser of the two and lets the images through.",
+                            "Far tighter than either job needs, and it throws away almost the entire signal.",
+                        ],
+                    },
+                    {
+                        "prompt": "And the last step.",
+                        "hole": "?",
+                        "opts": ["downsample", "upsample", "filter", "delay"],
+                        "a": 0,
+                        "why": "Keep one sample in $M$. By now the filter has removed everything above $\\pi/M$, so there is nothing left to fold and the selection is safe — which is the entire reason the filter had to come first.",
+                        "whys": [
+                            "Keep one sample in $M$. By now the filter has removed everything above $\\pi/M$, so there is nothing left to fold and the selection is safe — which is the entire reason the filter had to come first.",
+                            "Already done, in step 1. Doing it twice gives a rate of $L^2/M$ times the input, which is not the conversion asked for.",
+                            "One filter is enough: the two filters the naive chain would use sit back to back at the same rate and collapse into a single one, which is what step 2 already is.",
+                            "A delay does not change the rate.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "A rational rate converter, written literally",

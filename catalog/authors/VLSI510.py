@@ -386,6 +386,93 @@ fraction of a stage. And this is all before a single hazard — the next three
 modules are about how much of the 3.52 you actually keep.
 ''',
             },
+            "quiz": {
+                "title": "Why the encoding looks the way it does",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "`rd`, `rs1` and `rs2` occupy the same bit positions in every format that has them. What does that buy?",
+                        "opts": [
+                            "The register file can be read before the instruction has been decoded",
+                            "It makes the immediates contiguous",
+                            "It allows a variable instruction length",
+                            "It reduces the number of opcodes needed",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The register read and the decode happen in the same cycle, in parallel, because the
+fetch unit can point at bits 19:15 and 24:20 without yet knowing what the instruction
+*is*. If those fields moved between formats, the read would have to wait for the
+decoder and the pipeline would grow a stage. This is the design rule that explains
+almost every oddity in the layout — including the scrambled immediates, which are the
+price paid for it.
+""",
+                    },
+                    {
+                        "q": "How many instruction formats does RV32I define?",
+                        "opts": ["Six: R, I, S, B, U, J", "Four: R, I, S, U", "Three: R, I, J", "Eight, one per opcode class"],
+                        "a": 0,
+                        "why": r"""
+Six, and they differ only in what they do with the bits *not* used for registers —
+that is, in how they assemble an immediate. B and J are not really separate encodings
+so much as S and U with the immediate bits permuted for branch and jump targets, which
+is why some references count four base formats plus two variants. Either way the
+register fields are common to all of them.
+""",
+                    },
+                    {
+                        "q": "The immediate bits are scrambled rather than laid out in order. Why?",
+                        "opts": [
+                            "So each immediate bit comes from as few different instruction bits as possible",
+                            "To leave room for future 64-bit extensions",
+                            "To make the encoding harder to disassemble",
+                            "Because the assembler emits them in that order",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Every immediate bit that can come from only one place in the word needs no multiplexer
+in front of it — just a wire. The scrambling is chosen to maximise how many bits are in
+that happy position across all six formats, so the immediate-generation logic is a
+handful of gates rather than a wide mux. It is ugly to read and cheap to build, and
+that trade is made deliberately: humans read disassembly, silicon builds muxes.
+""",
+                    },
+                    {
+                        "q": "S-type splits its 12-bit immediate into two pieces. What forces the split?",
+                        "opts": [
+                            "The `rs1` and `rs2` fields must stay where they always are",
+                            "12 bits do not fit in one contiguous field",
+                            "The two halves are sign-extended separately",
+                            "The upper half is optional",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A store needs two source registers and no destination, so `rs2` occupies bits 24:20 —
+right where an I-type immediate would have been. The immediate has to go round it, and
+the pieces land in the `rd` slot and the `funct7` slot. Twelve contiguous bits do exist
+elsewhere in the word; using them would have moved `rs1` or `rs2`, and that is the one
+thing the design will not do. Both halves are one number, sign-extended once.
+""",
+                    },
+                    {
+                        "q": "Branch offsets are stored without their least significant bit. Why can they be?",
+                        "opts": [
+                            "Instruction addresses are even, so that bit is always zero",
+                            "Branches can only jump forwards",
+                            "The bit is stored in the opcode instead",
+                            "It doubles the number of registers that can be addressed",
+                        ],
+                        "a": 0,
+                        "why": r"""
+With the compressed extension present, instructions are 2-byte aligned, so a target
+address always has bit 0 clear and storing it would waste a bit. Dropping it doubles
+the reach of the same field: a 12-bit encoded field becomes a 13-bit signed byte
+offset, $\pm 4$ KiB. The same trick, one bit further, is what gives J-type its
+$\pm 1$ MiB range.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Write an RV32I decoder",
                 "runtime": "python",
@@ -729,6 +816,86 @@ compiled program is full of. The next module removes almost all of it with a
 comparator on each source register and one multiplexer in front of each ALU
 input.
 ''',
+            },
+            "blanks": {
+                "title": "Counting cycles in a five-stage pipe",
+                "minutes": 8,
+                "caption": "cpi.py — fill, stalls, and what CPI actually converges to",
+                "lang": "python",
+                "brief": r"""
+Every claim a microarchitect makes reduces to this arithmetic. Fill it in once and the
+rest of the course is bookkeeping.
+
+`N` instructions through a `D`-stage pipeline, with `S` stall cycles inserted in total.
+""",
+                "listing": """D = 5                       # stages
+# The first instruction takes D cycles; every one after it retires one per cycle,
+# so a pipeline with no hazards at all finishes N instructions in
+cycles_ideal = N + ___
+
+# Each stall inserts one bubble, and bubbles simply add:
+cycles = N + (D - 1) + ___
+
+# Cycles per instruction is that, over N:
+CPI = 1 + (D - 1) / N + ___
+
+# For large N the fill term vanishes and CPI tends to
+CPI_large_N = 1 + ___
+""",
+                "blanks": [
+                    {
+                        "prompt": "The fill cost: how many cycles before the first result appears?",
+                        "hole": "?",
+                        "opts": ["D - 1", "D", "N", "0"],
+                        "a": 0,
+                        "why": "Four extra cycles for a five-stage pipe. The first instruction needs all $D$ cycles, but $D-1$ of those overlap with nothing, so the total is $N + (D-1)$ — one cycle per instruction plus the fill.",
+                        "whys": [
+                            "Four extra cycles for a five-stage pipe. The first instruction needs all $D$ cycles, but $D-1$ of those overlap with nothing, so the total is $N + (D-1)$ — one cycle per instruction plus the fill.",
+                            "Off by one: this counts the first instruction twice, once in $N$ and once in $D$. Check it against $N = 1$, where the answer must be exactly $D$.",
+                            "That would make the pipeline take $2N$ cycles regardless of depth, which is the cost of no pipelining at all.",
+                            "Only true for an infinitely deep-throughput machine with no start-up, which is the approximation the last line makes on purpose — but not the exact count.",
+                        ],
+                    },
+                    {
+                        "prompt": "S bubbles have been inserted. How do they enter the total?",
+                        "hole": "?",
+                        "opts": ["S", "S * N", "4 * S", "S / N"],
+                        "a": 0,
+                        "why": "One bubble is one wasted cycle, so they add straight in. Bubbles do not compound and they do not scale with depth — which is why a deeper pipe costs more in *fill* but not more per stall.",
+                        "whys": [
+                            "One bubble is one wasted cycle, so they add straight in. Bubbles do not compound and they do not scale with depth — which is why a deeper pipe costs more in *fill* but not more per stall.",
+                            "This would mean every instruction pays for every stall in the program. $S$ is already a total over the whole run, not a per-instruction rate.",
+                            "The stall count does not scale with depth: a bubble occupies one cycle whether the pipe is five stages or fifteen. Depth shows up in the branch *penalty*, which is a different term.",
+                            "That is the per-instruction stall rate, which belongs in the CPI expression rather than the cycle count.",
+                        ],
+                    },
+                    {
+                        "prompt": "Divide the stall cycles by the instruction count.",
+                        "hole": "?",
+                        "opts": ["S / N", "S", "S * N", "N / S"],
+                        "a": 0,
+                        "why": "$S/N$ is the average number of stall cycles per instruction, and that is what CPI is made of. It is also the number worth quoting in a report: 'stalls cost 0.31 CPI' is comparable across programs in a way that a raw bubble count is not.",
+                        "whys": [
+                            "$S/N$ is the average number of stall cycles per instruction, and that is what CPI is made of. It is also the number worth quoting in a report: 'stalls cost 0.31 CPI' is comparable across programs in a way that a raw bubble count is not.",
+                            "Adding a whole-program total to a per-instruction average mixes units; the result grows without bound as the program gets longer.",
+                            "Multiplying makes the penalty worse the longer the program runs, which is the opposite of how an average behaves.",
+                            "Inverted, so a program with no stalls at all would have infinite CPI.",
+                        ],
+                    },
+                    {
+                        "prompt": "N grows large. What survives?",
+                        "hole": "?",
+                        "opts": ["S / N", "(D - 1) / N", "D - 1", "0, so CPI tends to 1"],
+                        "a": 0,
+                        "why": "The fill term $(D-1)/N$ vanishes because it is a fixed cost spread over more and more instructions, but $S$ grows *with* $N$, so $S/N$ tends to the program's stall rate and stays. Deep pipelines are not penalised by depth in steady state; they are penalised by the longer branch penalties depth causes.",
+                        "whys": [
+                            "The fill term $(D-1)/N$ vanishes because it is a fixed cost spread over more and more instructions, but $S$ grows *with* $N$, so $S/N$ tends to the program's stall rate and stays. Deep pipelines are not penalised by depth in steady state; they are penalised by the longer branch penalties depth causes.",
+                            "This is the term that *disappears* — $D$ is a constant and $N$ is growing, so it goes to zero. Start-up cost is irrelevant to a long-running program.",
+                            "Depth does not appear in steady-state CPI at all. That is the whole argument for pipelining: the fill is paid once.",
+                            "Only for a program with no hazards. Real code stalls, and $S/N$ is the number the rest of this course is about reducing.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "A stalling pipeline model",
@@ -1081,6 +1248,84 @@ figure of 1.75 becomes about $1 + f_{lu}$, which on ordinary compiled code is
 nearer 1.1.
 ''',
             },
+            "quiz": {
+                "title": "Forwarding, and the one case it cannot save",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "Why is forwarding possible at all?",
+                        "opts": [
+                            "The value is finished several stages before it becomes architecturally visible",
+                            "The register file can be written and read in the same cycle",
+                            "The compiler has already reordered the instructions",
+                            "The ALU is faster than the register file",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An ALU result exists at the end of EX; it is not written to the register file until WB,
+two stages later. Those two stages are pure bookkeeping as far as the value is
+concerned, so a wire from the EX/MEM latch back to the ALU input delivers it early. The
+same-cycle write-then-read trick in the register file is a real and separate
+optimisation — it handles the distance-three case — but it is not what forwarding is.
+""",
+                    },
+                    {
+                        "q": "Which dependence can forwarding *not* eliminate?",
+                        "opts": [
+                            "A load followed immediately by an instruction that uses the loaded value",
+                            "An ALU result used by the very next instruction",
+                            "An ALU result used two instructions later",
+                            "A branch that depends on the instruction before it",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Load-use, and the reason is timing, not routing: a load's value arrives at the end of
+MEM, but the consumer needs it at the *start* of its EX — which is the same cycle.
+Forwarding can move a value across stages, not backwards in time. One bubble makes the
+two line up, and that single unavoidable cycle is why compilers try to put an
+independent instruction after every load.
+""",
+                    },
+                    {
+                        "q": "An ALU result is needed by the instruction two later. Where does it come from?",
+                        "opts": [
+                            "The MEM/WB latch, forwarded into EX",
+                            "The EX/MEM latch, forwarded into EX",
+                            "The register file, with no forwarding needed",
+                            "It requires a one-cycle stall",
+                        ],
+                        "a": 0,
+                        "why": r"""
+By then the producer has moved on a stage, so the value is sitting in MEM/WB rather
+than EX/MEM. Both paths exist and the forwarding unit picks between them by comparing
+register numbers; getting the priority wrong here is a classic bug, because when *both*
+match you must take the newer value from EX/MEM, not the stale one from MEM/WB.
+""",
+                    },
+                    {
+                        "q": "With full forwarding, how many bubbles does a load followed by a dependent instruction cost?",
+                        "opts": ["One", "Two", "Three", "None"],
+                        "a": 0,
+                        "why": r"""
+Exactly one. Forwarding has already done everything it can: the interlock delays the
+consumer by a single cycle so that MEM's output and the consumer's EX input meet.
+Without any forwarding it would be three, which is the measurement worth making in the
+lab — the difference between those two numbers is what the forwarding paths are worth.
+""",
+                    },
+                    {
+                        "q": "Which hazard does forwarding do nothing about?",
+                        "opts": ["Control hazards", "Read-after-write hazards", "Write-after-write hazards", "Structural hazards on the register file"],
+                        "a": 0,
+                        "why": r"""
+Forwarding moves *data* that already exists. A control hazard is the absence of
+information: until the branch resolves, nobody knows which instruction should be
+fetched next, and there is no value anywhere in the machine to route. That is why the
+next module is about guessing — it is the only tool left.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Forwarding paths and the load-use interlock",
                 "runtime": "python",
@@ -1432,6 +1677,76 @@ because the penalty multiplies the error rate. This is why branch prediction
 research followed pipeline depth: at $c_{mis} = 2$ nobody needed gshare, and at
 $c_{mis} = 20$ nothing else would do.
 ''',
+            },
+            "blanks": {
+                "title": "What a wrong guess costs",
+                "minutes": 8,
+                "caption": "branch.py — penalty, accuracy, and the CPI they produce",
+                "lang": "python",
+                "brief": r"""
+A predictor is judged by one number, and it is not its accuracy — it is the CPI that
+accuracy buys. Fill in the chain that connects them.
+
+The branch resolves in EX, and the front end has been fetching all along.
+""",
+                "listing": """# Instructions fetched after the branch and thrown away on a mispredict:
+penalty = ___
+
+b = 0.20                      # fraction of instructions that are branches
+a = 0.92                      # fraction of those predicted correctly
+
+# Added CPI from mispredicts:
+cpi_penalty = b * ___ * penalty
+
+# A two-bit saturating counter changes its prediction only after ___ ,
+# which is why a loop's single exit no longer flips it.
+""",
+                "blanks": [
+                    {
+                        "prompt": "Fetch is in stage 1, the branch resolves in stage 3. How many are in flight?",
+                        "hole": "?",
+                        "opts": ["2", "1", "3", "5"],
+                        "a": 0,
+                        "why": "Two: the instructions fetched in the cycles the branch spent in ID and EX. They are squashed when the real target arrives. Resolving one stage earlier would save one of them, which is exactly why some designs move branch comparison into ID and pay for it with a longer cycle.",
+                        "whys": [
+                            "Two: the instructions fetched in the cycles the branch spent in ID and EX. They are squashed when the real target arrives. Resolving one stage earlier would save one of them, which is exactly why some designs move branch comparison into ID and pay for it with a longer cycle.",
+                            "One is the cost if the branch resolved in ID. Here it resolves a stage later, and the front end has fetched one more by then.",
+                            "Three would be the cost of resolving in MEM. Counting stages between fetch and resolve is the way to get this right, rather than memorising a number.",
+                            "The depth of the pipe is not the penalty: instructions ahead of the branch are unaffected, and stages after the resolve point have nothing to squash.",
+                        ],
+                    },
+                    {
+                        "prompt": "Only the wrong guesses cost anything.",
+                        "hole": "?",
+                        "opts": ["(1 - a)", "a", "(1 + a)", "1"],
+                        "a": 0,
+                        "why": "The mispredict *rate*. Here $0.20 \\times 0.08 \\times 2 = 0.032$ — three hundredths of a cycle per instruction, from a predictor that is wrong nearly one time in twelve. That small number is why prediction is worth doing and why chasing the last percent of accuracy has such poor returns.",
+                        "whys": [
+                            "The mispredict *rate*. Here $0.20 \\times 0.08 \\times 2 = 0.032$ — three hundredths of a cycle per instruction, from a predictor that is wrong nearly one time in twelve. That small number is why prediction is worth doing and why chasing the last percent of accuracy has such poor returns.",
+                            "That charges the penalty to every branch predicted *correctly*, which is precisely the set that costs nothing — a perfect predictor would come out as the most expensive.",
+                            "Greater than one, so the machine would lose more cycles than it has branches.",
+                            "This is the no-prediction case, where every branch pays. Comparing it against the correct expression is the honest way to state what the predictor bought.",
+                        ],
+                    },
+                    {
+                        "prompt": "What makes a two-bit counter different from a one-bit one?",
+                        "hole": "?",
+                        "opts": [
+                            "two consecutive surprises",
+                            "one surprise",
+                            "every branch",
+                            "a pipeline flush",
+                        ],
+                        "a": 0,
+                        "why": "Two-bit is hysteresis. A loop that runs a hundred times and exits once flips a one-bit predictor twice — wrong on the exit, then wrong again on the next entry — while a two-bit counter absorbs the exit as a single surprise and is still predicting 'taken' when the loop restarts. One extra flip-flop per entry, and it halves the mispredicts on exactly the pattern loops produce.",
+                        "whys": [
+                            "Two-bit is hysteresis. A loop that runs a hundred times and exits once flips a one-bit predictor twice — wrong on the exit, then wrong again on the next entry — while a two-bit counter absorbs the exit as a single surprise and is still predicting 'taken' when the loop restarts. One extra flip-flop per entry, and it halves the mispredicts on exactly the pattern loops produce.",
+                            "That is the one-bit predictor, and it is the behaviour the second bit exists to prevent.",
+                            "A predictor that changed its mind on every branch would carry no state and predict nothing.",
+                            "The flush is the consequence of a mispredict, not the thing the counter responds to; the counter is updated by the branch's actual outcome.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Build and measure a branch predictor",

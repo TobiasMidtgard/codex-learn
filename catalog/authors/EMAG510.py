@@ -136,6 +136,179 @@ impedance and a velocity before you have decided how long it is, which is why $Z
 is a property of the cross-section alone.
 ''',
             },
+            "build": {
+                "title": "A line, made of eight components",
+                "minutes": 26,
+                "brief": r"""
+The derivation treats $L$ and $C$ as *per unit length* and takes a limit. A real
+simulation cannot take that limit, so it chops the line into sections — and four
+sections is already enough to behave like a line over a useful band.
+
+## What is on the canvas
+
+A 1 V source behind a 100 Ω source resistance, then four identical sections of
+**1 µH series inductance and 100 pF shunt capacitance**. The far end is open, which
+means the line is unterminated and every wave that reaches the end comes straight back.
+
+## What to add
+
+One resistor from the far end to ground, and the probe on that node.
+
+The value is the one number this module is about. A section has $L = 1$ µH and
+$C = 100$ pF, so
+
+$$Z_0 = \sqrt{L/C}$$
+
+and a line terminated in its own characteristic impedance cannot tell the difference
+between the resistor and more line. Nothing comes back.
+
+## What the checks measure
+
+- At DC the inductors are wire and the capacitors are gaps, so the whole thing is your
+  resistor and the 100 Ω source resistance in series: the probe must read exactly half
+  the source. That pins the value.
+- The one that matters: the response must be **flat** from 1 MHz to 8 MHz. A line
+  terminated in anything else builds standing waves, and the standing waves put peaks
+  and nulls in that band. Flatness is not a coincidence of the value — it *is* the
+  matched condition.
+- The phase at 2 MHz gives the delay. Each section is $\sqrt{LC} = 10$ ns, so four of
+  them are 40 ns, and 40 ns at 2 MHz is $-28.8°$. That number is the line's length
+  expressed the only way a network analyser can see it.
+
+## Where the model stops
+
+Push the frequency up and the ladder stops behaving like a line: a real line passes
+everything, but four lumped sections have a cutoff near $1/(\pi\sqrt{LC}) = 32$ MHz
+and fall apart above it. The checks stay well below that on purpose. If you want the
+model good to a higher frequency, the fix is more sections of smaller $L$ and $C$ —
+which is the limit the derivation took, approached one step at a time.
+""",
+                "start": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "rs", "kind": "R", "x": 4, "y": 5, "rot": 0, "value": 100},
+                        {"id": "l1", "kind": "L", "x": 7, "y": 5, "rot": 0, "value": 1e-6},
+                        {"id": "c1", "kind": "C", "x": 8, "y": 7, "rot": 1, "value": 100e-12},
+                        {"id": "g1", "kind": "GND", "x": 8, "y": 9},
+                        {"id": "l2", "kind": "L", "x": 11, "y": 5, "rot": 0, "value": 1e-6},
+                        {"id": "c2", "kind": "C", "x": 12, "y": 7, "rot": 1, "value": 100e-12},
+                        {"id": "g2", "kind": "GND", "x": 12, "y": 9},
+                        {"id": "l3", "kind": "L", "x": 15, "y": 5, "rot": 0, "value": 1e-6},
+                        {"id": "c3", "kind": "C", "x": 16, "y": 7, "rot": 1, "value": 100e-12},
+                        {"id": "g3", "kind": "GND", "x": 16, "y": 9},
+                        {"id": "l4", "kind": "L", "x": 19, "y": 5, "rot": 0, "value": 1e-6},
+                        {"id": "c4", "kind": "C", "x": 20, "y": 7, "rot": 1, "value": 100e-12},
+                        {"id": "g4", "kind": "GND", "x": 20, "y": 9},
+                        {"id": "g5", "kind": "GND", "x": 23, "y": 9},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]}, {"a": [2, 5], "b": [3, 5]},
+                        {"a": [5, 5], "b": [6, 5]},
+                        {"a": [8, 5], "b": [8, 6]}, {"a": [8, 8], "b": [8, 9]},
+                        {"a": [8, 5], "b": [10, 5]},
+                        {"a": [12, 5], "b": [12, 6]}, {"a": [12, 8], "b": [12, 9]},
+                        {"a": [12, 5], "b": [14, 5]},
+                        {"a": [16, 5], "b": [16, 6]}, {"a": [16, 8], "b": [16, 9]},
+                        {"a": [16, 5], "b": [18, 5]},
+                        {"a": [20, 5], "b": [20, 6]}, {"a": [20, 8], "b": [20, 9]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "rs", "kind": "R", "x": 4, "y": 5, "rot": 0, "value": 100},
+                        {"id": "l1", "kind": "L", "x": 7, "y": 5, "rot": 0, "value": 1e-6},
+                        {"id": "c1", "kind": "C", "x": 8, "y": 7, "rot": 1, "value": 100e-12},
+                        {"id": "g1", "kind": "GND", "x": 8, "y": 9},
+                        {"id": "l2", "kind": "L", "x": 11, "y": 5, "rot": 0, "value": 1e-6},
+                        {"id": "c2", "kind": "C", "x": 12, "y": 7, "rot": 1, "value": 100e-12},
+                        {"id": "g2", "kind": "GND", "x": 12, "y": 9},
+                        {"id": "l3", "kind": "L", "x": 15, "y": 5, "rot": 0, "value": 1e-6},
+                        {"id": "c3", "kind": "C", "x": 16, "y": 7, "rot": 1, "value": 100e-12},
+                        {"id": "g3", "kind": "GND", "x": 16, "y": 9},
+                        {"id": "l4", "kind": "L", "x": 19, "y": 5, "rot": 0, "value": 1e-6},
+                        {"id": "c4", "kind": "C", "x": 20, "y": 7, "rot": 1, "value": 100e-12},
+                        {"id": "g4", "kind": "GND", "x": 20, "y": 9},
+                        {"id": "rl", "kind": "R", "x": 23, "y": 7, "rot": 1, "value": 100},
+                        {"id": "g5", "kind": "GND", "x": 23, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 23, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]}, {"a": [2, 5], "b": [3, 5]},
+                        {"a": [5, 5], "b": [6, 5]},
+                        {"a": [8, 5], "b": [8, 6]}, {"a": [8, 8], "b": [8, 9]},
+                        {"a": [8, 5], "b": [10, 5]},
+                        {"a": [12, 5], "b": [12, 6]}, {"a": [12, 8], "b": [12, 9]},
+                        {"a": [12, 5], "b": [14, 5]},
+                        {"a": [16, 5], "b": [16, 6]}, {"a": [16, 8], "b": [16, 9]},
+                        {"a": [16, 5], "b": [18, 5]},
+                        {"a": [20, 5], "b": [20, 6]}, {"a": [20, 8], "b": [20, 9]},
+                        {"a": [20, 5], "b": [23, 5]}, {"a": [23, 5], "b": [23, 6]},
+                        {"a": [23, 8], "b": [23, 9]},
+                    ],
+                },
+                "checks": [
+                    {
+                        "name": "one terminating resistor, and the DC divider it makes",
+                        "code": r"""
+c.assert(c.count('R') === 2,
+  'There should be two resistors: the 100 ohm source resistance already on the canvas ' +
+  'and the one you add at the far end. There are ' + c.count('R') + '.');
+c.close(c.vout(), 0.5, 0.02,
+  'the probed node at DC. At DC every inductor is a wire and every capacitor is an ' +
+  'open circuit, so the source resistance and your terminator form a plain divider. ' +
+  'Half the source means the two are equal');
+""",
+                    },
+                    {
+                        "name": "flat from 1 MHz to 8 MHz — no standing waves",
+                        "code": r"""
+const fs = [1e6, 2e6, 4e6, 6e6, 8e6];
+const g = fs.map(function (f) { return c.gain(f); });
+let lo = g[0], hi = g[0];
+for (let i = 1; i < g.length; i++) { if (g[i] < lo) lo = g[i]; if (g[i] > hi) hi = g[i]; }
+c.assert(hi / lo < 1.10,
+  'The response varies from ' + c.fmt(lo, 'V') + ' to ' + c.fmt(hi, 'V') + ' across ' +
+  '1-8 MHz, a ripple of ' + ((hi / lo - 1) * 100).toFixed(0) + '%. That ripple is a ' +
+  'standing wave: part of every wave is coming back off the far end and interfering ' +
+  'with the wave still going out. Terminate in sqrt(L/C) and there is nothing to ' +
+  'come back.');
+c.close(g[2], 0.5, 0.06, 'the level at 4 MHz, which for a matched line is the same 0.5 as at DC');
+""",
+                    },
+                    {
+                        "name": "four sections of 10 ns each: -28.8 degrees at 2 MHz",
+                        "code": r"""
+const ph = c.phase(2e6);
+c.close(ph, -28.8, 0.15,
+  'the phase at 2 MHz. Each section delays by sqrt(L*C) = 10 ns, so four sections are ' +
+  '40 ns, and 40 ns at 2 MHz is 0.08 of a cycle: -28.8 degrees. A phase near zero ' +
+  'means the sections are not in series; a much larger one means the line is longer ' +
+  'than four sections');
+""",
+                    },
+                    {
+                        "name": "the delay is proportional to frequency, as a line's must be",
+                        "code": r"""
+const p1 = c.phase(1e6), p2 = c.phase(2e6), p3 = c.phase(3e6);
+c.close(p2 / p1, 2.0, 0.08,
+  'the ratio of phase at 2 MHz to phase at 1 MHz. A delay gives phase proportional ' +
+  'to frequency, so doubling the frequency must double the phase');
+c.close(p3 / p1, 3.0, 0.10,
+  'the same test at 3 MHz. Departure from a straight line here is dispersion — the ' +
+  'ladder is not a real line and starts to show it as the frequency climbs toward ' +
+  'the section cutoff');
+""",
+                    },
+                ],
+                "hints": [
+                    "$Z_0 = \\sqrt{L/C}$ with $L = 1\\ \\mu$H and $C = 100$ pF. Do the division before the square root and the numbers stay friendly.",
+                    "The far end of the line is the right-hand end of the fourth inductor, at the same node as the fourth shunt capacitor.",
+                    "The probe goes on that same node — it is the load voltage you are measuring, not the voltage across anything else.",
+                ],
+            },
             "lab": {
                 "title": "Simulate a line as a ladder of LC sections",
                 "runtime": "python",
@@ -413,6 +586,73 @@ an attempt to buy bandwidth back, usually by cascading sections whose impedances
 gradually rather than jumping once.
 ''',
             },
+            "quiz": {
+                "title": "What comes back, and how loudly",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A 50 Ω line is terminated in 100 Ω. What is the reflection coefficient?",
+                        "opts": ["$+1/3$", "$+1/2$", "$+2/3$", "$-1/3$"],
+                        "a": 0,
+                        "why": r"""
+$\Gamma = (Z_L - Z_0)/(Z_L + Z_0) = 50/150 = 1/3$. It is positive because the load is
+*larger* than the line, which means the reflected voltage adds at the load rather than
+subtracting — an open circuit is the extreme case at $\Gamma = +1$. A third of the
+voltage comes back, so a ninth of the power does: mismatch is far more forgiving in
+power than the voltage figure suggests, which is why return loss is quoted in dB.
+""",
+                    },
+                    {
+                        "q": "With $|\\Gamma| = 1/3$, what is the VSWR?",
+                        "opts": ["2.0", "1.33", "3.0", "1.5"],
+                        "a": 0,
+                        "why": r"""
+$\text{VSWR} = (1+|\Gamma|)/(1-|\Gamma|) = (4/3)/(2/3) = 2$. The standing-wave ratio is
+the peak of the interference pattern over its trough, and it is measurable with nothing
+but a probe on a slotted line — which is how this was done before network analysers.
+Two useful anchors: $|\Gamma| = 1/3$ is a VSWR of 2, and a perfect match is a VSWR of
+exactly 1, never 0.
+""",
+                    },
+                    {
+                        "q": "A line is left open at the far end. What is $\\Gamma$ there?",
+                        "opts": ["$+1$", "$-1$", "$0$", "Undefined, because no current flows"],
+                        "a": 0,
+                        "why": r"""
+$+1$: everything comes back, in phase, and the voltage at the open end doubles while
+the current is forced to zero. A *short* is the mirror image at $\Gamma = -1$, where
+the voltage cancels and the current doubles. Both reflect all the power, differing only
+in sign — which is why a quarter-wavelength of line turns one into the other, and why a
+shorted stub is a usable open circuit if you cut it to the right length.
+""",
+                    },
+                    {
+                        "q": "A quarter-wave transformer matches a 50 Ω line to a 200 Ω load. What impedance must the quarter-wave section have?",
+                        "opts": ["100 Ω", "125 Ω", "150 Ω", "250 Ω"],
+                        "a": 0,
+                        "why": r"""
+The geometric mean: $Z_1 = \sqrt{Z_0Z_L} = \sqrt{50 \times 200} = 100\ \Omega$. The
+arithmetic mean, 125 Ω, is the natural guess and is wrong — a quarter-wave line inverts
+impedance about its own $Z_1$, so it is multiplication that has to balance, not
+addition. The catch is in the name: it is a quarter wave at exactly one frequency, and
+the match degrades either side of it. That narrowness is why real matching networks
+cascade several sections.
+""",
+                    },
+                    {
+                        "q": "What is the return loss for $|\\Gamma| = 1/3$?",
+                        "opts": ["About 9.5 dB", "About 3 dB", "About 20 dB", "About 0.5 dB"],
+                        "a": 0,
+                        "why": r"""
+$-20\log_{10}(1/3) = 9.54$ dB. Return loss is a *positive* number that gets bigger as
+the match gets better, which is the opposite of the intuition its name suggests — 20 dB
+return loss means $|\Gamma| = 0.1$ and is a good match; 3 dB means most of the power is
+coming back. Worth memorising as a ladder: 6 dB is $|\Gamma| = 0.5$, 14 dB is 0.2, 20 dB
+is 0.1.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Reflection, standing waves and a quarter-wave match",
                 "runtime": "python",
@@ -680,6 +920,107 @@ advances by less than $\omega/c$ radians per metre the phase pattern sweeps alon
 axis *faster* than light. The energy does not: it follows the zig-zag and crawls. The
 next module separates the two and puts numbers on both.
 ''',
+            },
+            "blanks": {
+                "title": "Where a guide's cutoff comes from",
+                "minutes": 9,
+                "caption": "the TE_mn cutoff, assembled from the boundary conditions",
+                "lang": "text",
+                "brief": r"""
+A hollow guide has one conductor, so it cannot support TEM and every mode it does carry
+has a cutoff. Fill in the chain from the wall boundary conditions to the number on the
+datasheet.
+
+The guide is rectangular with inner dimensions $a \times b$ and $a > b$.
+""",
+                "listing": """Tangential E must vanish on the walls, which quantises the
+transverse wavenumbers:
+
+        k_x = ___                  k_y = n*pi/b
+
+Cutoff is where the transverse wavenumber has used up the whole
+of k = omega/c, leaving nothing for propagation along z:
+
+        f_c(m,n) = ___ * sqrt( (m/a)^2 + (n/b)^2 )
+
+With a > b the lowest of these is the mode ___ ,
+
+        f_c = c / ___
+
+Below its cutoff beta is imaginary, and the field ___ .
+""",
+                "blanks": [
+                    {
+                        "prompt": "The x-direction has width a and mode number m.",
+                        "hole": "?",
+                        "opts": ["m*pi/a", "m*pi/b", "pi/(m*a)", "m*a/pi"],
+                        "a": 0,
+                        "why": "Half a wavelength must fit across the guide an integer number of times, which is exactly $k_x a = m\\pi$. Pairing $m$ with $a$ and $n$ with $b$ is the whole of the index convention, and it is why the wide dimension carries the low-order mode.",
+                        "whys": [
+                            "Half a wavelength must fit across the guide an integer number of times, which is exactly $k_x a = m\\pi$. Pairing $m$ with $a$ and $n$ with $b$ is the whole of the index convention, and it is why the wide dimension carries the low-order mode.",
+                            "Pairs $m$ with the wrong dimension. Swapping them swaps which mode is dominant, and predicts $TE_{01}$ where every datasheet says $TE_{10}$.",
+                            "Inverted: a *wider* guide would then have a larger $k_x$ and a higher cutoff, which is backwards — a bigger box is easier to propagate in, not harder.",
+                            "The dimensions are wrong; a wavenumber has units of one over length, and this has units of length.",
+                        ],
+                    },
+                    {
+                        "prompt": "Turn a transverse wavenumber into a frequency.",
+                        "hole": "?",
+                        "opts": ["c/2", "c", "2*c", "1/(2*c)"],
+                        "a": 0,
+                        "why": "From $k_c = \\omega_c/c$ with $k_c^2 = (m\\pi/a)^2 + (n\\pi/b)^2$, the $\\pi$ and the $2\\pi$ in $\\omega = 2\\pi f$ leave a factor of $c/2$. It is the same $c/2$ that makes a half-wavelength resonator's frequency $c/2\\ell$.",
+                        "whys": [
+                            "From $k_c = \\omega_c/c$ with $k_c^2 = (m\\pi/a)^2 + (n\\pi/b)^2$, the $\\pi$ and the $2\\pi$ in $\\omega = 2\\pi f$ leave a factor of $c/2$. It is the same $c/2$ that makes a half-wavelength resonator's frequency $c/2\\ell$.",
+                            "A factor of two high, which would put every guide's cutoff at twice its real value — and predict that WR-90 starts at 13 GHz rather than 6.56 GHz.",
+                            "Four times too high. The $2\\pi$ from angular frequency divides here, it does not multiply.",
+                            "Dimensionally upside down: this gives a frequency that falls as the speed of light rises.",
+                        ],
+                    },
+                    {
+                        "prompt": "With a > b, which indices give the lowest cutoff?",
+                        "hole": "?",
+                        "opts": ["TE_10", "TE_11", "TM_11", "TE_01"],
+                        "a": 0,
+                        "why": "Put $m = 1, n = 0$ and only the $1/a$ term survives — and $a$ is the *larger* dimension, so it gives the smallest frequency. $TE_{10}$ is the dominant mode of every standard rectangular guide, and the single-mode band runs from its cutoff up to the next mode's.",
+                        "whys": [
+                            "Put $m = 1, n = 0$ and only the $1/a$ term survives — and $a$ is the *larger* dimension, so it gives the smallest frequency. $TE_{10}$ is the dominant mode of every standard rectangular guide, and the single-mode band runs from its cutoff up to the next mode's.",
+                            "Both indices non-zero, so both terms contribute and the cutoff is higher than either alone. It is a real mode, just not the first one.",
+                            "TM modes need both indices non-zero — $TM_{10}$ does not exist, because a TM mode with a zero index has no fields at all. So the lowest TM mode is already above several TE modes.",
+                            "Uses $b$, the narrow dimension, so its cutoff is *higher*, not lower. For the usual $a = 2b$ it is exactly twice $TE_{10}$'s, which is what sets the top of the single-mode band.",
+                        ],
+                    },
+                    {
+                        "prompt": "Put m=1, n=0 into the formula above.",
+                        "hole": "?",
+                        "opts": ["2*a", "a", "2*b", "a + b"],
+                        "a": 0,
+                        "why": "$f_c = (c/2)(1/a) = c/2a$: the guide cuts off when the free-space wavelength reaches twice the wide dimension. That is the sentence worth carrying away — a guide passes nothing whose half-wavelength will not fit across it.",
+                        "whys": [
+                            "$f_c = (c/2)(1/a) = c/2a$: the guide cuts off when the free-space wavelength reaches twice the wide dimension. That is the sentence worth carrying away — a guide passes nothing whose half-wavelength will not fit across it.",
+                            "Drops the factor of two, doubling every cutoff frequency you compute.",
+                            "The narrow dimension does not appear in $TE_{10}$'s cutoff at all — which is why guide height can be chosen for power handling without moving the band.",
+                            "Cutoff comes from one dimension for this mode, not from a combination of both.",
+                        ],
+                    },
+                    {
+                        "prompt": "Below cutoff, beta is imaginary. What does the field do?",
+                        "hole": "?",
+                        "opts": [
+                            "decays exponentially without carrying power",
+                            "propagates, but attenuated by the walls",
+                            "reflects with a 90 degree phase shift",
+                            "travels faster than light",
+                        ],
+                        "a": 0,
+                        "why": "$e^{-j\\beta z}$ with imaginary $\\beta$ becomes a real decaying exponential — an evanescent field. It stores energy and returns it; it transports none, and a guide below cutoff is a near-perfect mirror rather than an absorber. This is why a microwave oven door with holes far smaller than 12 cm leaks nothing.",
+                        "whys": [
+                            "$e^{-j\\beta z}$ with imaginary $\\beta$ becomes a real decaying exponential — an evanescent field. It stores energy and returns it; it transports none, and a guide below cutoff is a near-perfect mirror rather than an absorber. This is why a microwave oven door with holes far smaller than 12 cm leaks nothing.",
+                            "Wall loss is a separate, much smaller effect that exists above cutoff too. Below cutoff the decay happens in a *perfect* conductor, where there is no loss at all — so it is not dissipation.",
+                            "There is a reflection, and for a lossless guide it is total, but the description of the field inside is the decaying exponential rather than a phase shift.",
+                            "That describes phase velocity *above* cutoff, which is the subject of the next module and carries no information.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Mode table, cutoff and the single-mode band",
@@ -991,6 +1332,85 @@ Near cutoff the phase pattern sweeps along the axis arbitrarily fast while the e
 barely crawls. Nothing overtakes light, because the phase pattern is not a thing that
 can carry a message — only the envelope is, and it moves at $v_g$.
 ''',
+            },
+            "quiz": {
+                "title": "Two velocities, and which one is real",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "In a guide above cutoff, $v_p = \\omega/\\beta$ is greater than $c$ at every frequency in the band. What does that mean?",
+                        "opts": [
+                            "Nothing is violated — no energy or information moves at the phase velocity",
+                            "The guide must be lossy for this to be possible",
+                            "It only happens close to cutoff and can be ignored",
+                            "The calculation has a sign error",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Phase velocity is the speed of a point of constant phase on an infinite, unmodulated
+sinusoid — and an infinite sinusoid carries no information, because it has already been
+going forever. Nothing is transmitted by it. The moment you modulate the wave to send
+something, the envelope moves at the group velocity, which stays below $c$. It is
+superluminal at *every* frequency in the band, not just near cutoff, and the effect is
+perfectly real in a lossless guide.
+""",
+                    },
+                    {
+                        "q": "Which velocity is the speed of a pulse envelope?",
+                        "opts": ["$d\\omega/d\\beta$", "$\\omega/\\beta$", "$\\beta/\\omega$", "$d\\beta/d\\omega$"],
+                        "a": 0,
+                        "why": r"""
+The group velocity is the *slope* of the dispersion curve, not a ratio of its
+coordinates. That distinction is the whole content of this module: $\omega/\beta$ is a
+chord from the origin and $d\omega/d\beta$ is a tangent, and in a guide they differ.
+Its reciprocal $d\beta/d\omega$ is the group *delay* per unit length, which is what a
+network analyser actually reports.
+""",
+                    },
+                    {
+                        "q": "For a hollow rectangular guide, what is $v_pv_g$?",
+                        "opts": ["$c^2$", "$c$", "$c^2/2$", "It depends on the mode"],
+                        "a": 0,
+                        "why": r"""
+Exactly $c^2$, for every mode of a hollow guide. It falls out of
+$\beta^2 = (\omega/c)^2 - k_c^2$ in two lines and it is the cleanest sanity check in the
+subject: if the phase velocity is $1.5c$ then the group velocity is $c/1.5$, and the
+excess of one is precisely the deficit of the other. It also makes the superluminal
+phase velocity feel less alarming — the two are locked together, and their geometric
+mean is always $c$.
+""",
+                    },
+                    {
+                        "q": "As the frequency falls towards cutoff, what happens to the group velocity?",
+                        "opts": ["It goes to zero", "It goes to $c$", "It goes to infinity", "It is unchanged"],
+                        "a": 0,
+                        "why": r"""
+It stalls. At cutoff the wave is bouncing straight across the guide with no forward
+component at all, so the energy makes no progress and $v_g \to 0$ while $v_p \to \infty$
+— their product still $c^2$. This is why the usable band of a guide starts comfortably
+*above* cutoff, typically at $1.25f_c$: right at the edge the delay becomes enormous and
+violently frequency-dependent.
+""",
+                    },
+                    {
+                        "q": "A short pulse is sent down a dispersive guide. What happens to it?",
+                        "opts": [
+                            "It spreads out, because its frequency components arrive at different times",
+                            "It attenuates but keeps its shape",
+                            "It arrives unchanged if the guide is lossless",
+                            "It splits into two pulses",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Dispersion spreads pulses. A short pulse is wide in frequency, and in a guide each of
+those frequencies has its own $v_g$, so the components that started together arrive
+apart. Losslessness does not help at all — no energy is lost, it is redistributed in
+time, which is exactly why a lossless fibre still limits bit rate. The delay *spread*
+is the quantity the lab computes, and it is what sets how close together two symbols
+may be sent.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Measure the two velocities, and the delay spread they cause",

@@ -143,6 +143,94 @@ A designer who wants more gain must lower $V_{ov}$ or lengthen the device — an
 of those cost speed, which is what module 3 quantifies.
 ''',
             },
+            "quiz": {
+                "title": "Every parameter in the model is a slope",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "What is $g_m$, precisely?",
+                        "opts": [
+                            "$\\partial I_D/\\partial V_{GS}$ at the operating point",
+                            "$I_D/V_{GS}$ at the operating point",
+                            "$\\partial I_D/\\partial V_{DS}$",
+                            "The reciprocal of the channel resistance",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A derivative, not a ratio. $I_D/V_{GS}$ would include the threshold voltage, which
+carries no signal and contributes no gain — the device responds to *changes* about the
+bias point, and the slope there is the only thing the small-signal model keeps.
+$\partial I_D/\partial V_{DS}$ is the output conductance $1/r_o$, a different slope on
+a different axis of the same surface.
+""",
+                    },
+                    {
+                        "q": "At a fixed drain current, how do you get more $g_m$ out of a device?",
+                        "opts": [
+                            "Make it wider, so the same current flows at a smaller overdrive",
+                            "Make it narrower",
+                            "Raise $V_{DS}$",
+                            "You cannot — $g_m = 2I_D/V_{ov}$ depends only on the current",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$g_m = \sqrt{2kI_D}$ says it plainly: at fixed current, more $k$ (a wider device) means
+more $g_m$. Read the other way, $g_m = 2I_D/V_{ov}$, the wider device reaches the same
+current at a lower overdrive, and a lower overdrive at the same current *is* a higher
+$g_m$. The two forms are the same statement and neither is a licence to ignore the
+device — the third form's $V_{ov}$ is not a free parameter, it is set by the geometry
+you chose.
+""",
+                    },
+                    {
+                        "q": "In the standard model, what is $r_o$?",
+                        "opts": ["$1/(\\lambda I_D)$", "$\\lambda I_D$", "$V_{ov}/I_D$", "$1/g_m$"],
+                        "a": 0,
+                        "why": r"""
+Channel-length modulation makes $I_D$ creep up with $V_{DS}$ by a factor
+$(1 + \lambda V_{DS})$, and the slope of that is $\lambda I_D$ — so the resistance is its
+reciprocal. Note the consequence: $r_o$ *falls* as you bias harder, which is why current
+and gain pull against each other. $1/g_m$ is the resistance looking into a source, an
+entirely different port.
+""",
+                    },
+                    {
+                        "q": "The intrinsic gain $g_mr_o$ works out to $2/(\\lambda V_{ov})$. What does that tell you?",
+                        "opts": [
+                            "It does not depend on the drain current at all",
+                            "It rises with current",
+                            "It falls as the square of the current",
+                            "It depends only on the width",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The current cancels: $g_m$ rises as $\sqrt{I_D}$ and $r_o$ falls as $1/I_D$, so the
+product depends only on the overdrive and on $\lambda$ — which is to say on the *channel
+length*, since $\lambda \propto 1/L$. This is the most useful single fact in analog
+design on a given process: you cannot buy gain from a single device with current, only
+with geometry, and that is why the cascode in module 4 exists.
+""",
+                    },
+                    {
+                        "q": "What is small-signal analysis, mathematically?",
+                        "opts": [
+                            "A first-order Taylor expansion of the device equations about the bias point",
+                            "An exact solution restricted to small currents",
+                            "An averaging of the device equations over a cycle",
+                            "A change of units",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Every parameter in the hybrid-pi model is a partial derivative evaluated at one point,
+which is exactly what a first-order Taylor expansion is. Two consequences follow and
+both matter: the model is *linear*, which is what makes superposition and phasors legal;
+and it is only valid for excursions small enough that the second-order term stays
+negligible, which is what "small-signal" means and where distortion comes from when it
+does not.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Small-signal parameters from the bias point",
                 "runtime": "python",
@@ -428,6 +516,87 @@ the gain, so a 6 fF overlap capacitor can look like 110 fF. Second, the estimate
 assumes $v_{out} = -A_v v_{in}$ at *every* frequency, which is false near the corner —
 the lab measures exactly how wrong that makes the answer.
 ''',
+            },
+            "blanks": {
+                "title": "Miller, in one line each",
+                "minutes": 9,
+                "caption": "miller.py — what a bridging capacitor looks like from each side",
+                "lang": "python",
+                "brief": r"""
+Miller's theorem replaces one awkward bridging capacitor with two grounded ones, and
+the whole of a common-source stage's bandwidth problem is in the size of the first.
+
+The stage has voltage gain $-A_v$ from gate to drain, and $C_{gd}$ bridges the two.
+""",
+                "listing": """# Miller's theorem: a bridging Z across a gain of -Av looks, from the input,
+# like an impedance Z/(1 + Av) to ground -- which for a capacitor means
+
+C_in_from_Cgd  = C_gd * (1 + ___)
+
+# and from the output side, where the far end is the input,
+
+C_out_from_Cgd = C_gd * (1 + ___)
+
+# so the pole the source resistance sees sits at
+
+f_in = 1 / (2 * pi * R_sig * (C_gs + ___))
+
+# and the multiplication is worst in a stage with ___ .
+""",
+                "blanks": [
+                    {
+                        "prompt": "The input side sees the far end swinging the other way, and harder.",
+                        "hole": "?",
+                        "opts": ["Av", "1 / Av", "Av ** 2", "0"],
+                        "a": 0,
+                        "why": "A 1 V wiggle at the gate puts $-A_v$ volts at the drain, so the voltage *across* $C_{gd}$ is $1 + A_v$ volts and it draws $(1+A_v)$ times the current a grounded $C_{gd}$ would. That is the whole of the Miller effect: the capacitor is not bigger, the voltage across it is.",
+                        "whys": [
+                            "A 1 V wiggle at the gate puts $-A_v$ volts at the drain, so the voltage *across* $C_{gd}$ is $1 + A_v$ volts and it draws $(1+A_v)$ times the current a grounded $C_{gd}$ would. That is the whole of the Miller effect: the capacitor is not bigger, the voltage across it is.",
+                            "That is the *output* side's factor. Using it at the input makes the multiplication into a division and predicts that high-gain stages are the fastest — the opposite of what every measurement shows.",
+                            "The factor is linear in the gain, not quadratic. A stage with a gain of 20 multiplies $C_{gd}$ by 21, not by 400.",
+                            "This would say a bridging capacitor is no different from a grounded one, which is precisely the assumption the theorem exists to correct.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now stand at the drain and look back.",
+                        "hole": "?",
+                        "opts": ["1 / Av", "Av", "2", "0"],
+                        "a": 0,
+                        "why": "From the output the gain to the far end is $-1/A_v$, so the factor is $1 + 1/A_v$ — barely more than 1 for any real gain. The asymmetry is the useful part: $C_{gd}$ is devastating at the input and nearly irrelevant at the output, which is why bandwidth work concentrates entirely on the input node.",
+                        "whys": [
+                            "From the output the gain to the far end is $-1/A_v$, so the factor is $1 + 1/A_v$ — barely more than 1 for any real gain. The asymmetry is the useful part: $C_{gd}$ is devastating at the input and nearly irrelevant at the output, which is why bandwidth work concentrates entirely on the input node.",
+                            "Applies the input factor to the output as well, which would double-count the multiplication and predict an output pole far lower than the measured one.",
+                            "There is no factor of two here; the theorem is not symmetric, and that asymmetry is its main practical consequence.",
+                            "Would remove $C_{gd}$ from the output entirely. Its contribution there is small but it is not nothing.",
+                        ],
+                    },
+                    {
+                        "prompt": "What loads the input node, besides C_gs?",
+                        "hole": "?",
+                        "opts": ["C_gd * (1 + Av)", "C_gd", "C_gs", "C_gd / Av"],
+                        "a": 0,
+                        "why": "The Miller-multiplied $C_{gd}$, and in a high-gain stage it dominates $C_{gs}$ outright even though $C_{gd}$ is by far the smaller capacitor. That is the sentence to carry away: the small one does the damage, because the gain is standing behind it.",
+                        "whys": [
+                            "The Miller-multiplied $C_{gd}$, and in a high-gain stage it dominates $C_{gs}$ outright even though $C_{gd}$ is by far the smaller capacitor. That is the sentence to carry away: the small one does the damage, because the gain is standing behind it.",
+                            "The raw value, unmultiplied. This is the estimate that makes a stage look ten times faster than it measures, and it is the most common bandwidth error in a first design.",
+                            "$C_{gs}$ is already in the expression; adding it twice does not account for the bridging capacitor at all.",
+                            "Divides where it should multiply, which would make high-gain stages the fastest ones.",
+                        ],
+                    },
+                    {
+                        "prompt": "When does the multiplication hurt most?",
+                        "hole": "?",
+                        "opts": ["high gain", "low gain", "a small C_gd", "a small source resistance"],
+                        "a": 0,
+                        "why": "The factor is $1 + A_v$, so the more gain the stage has, the more of its own bandwidth it destroys. Gain and bandwidth are in direct conflict through a single capacitor — and the cascode in module 4 is the answer: it keeps the gain but stops the input device from swinging its own drain, so there is nothing left to multiply.",
+                        "whys": [
+                            "The factor is $1 + A_v$, so the more gain the stage has, the more of its own bandwidth it destroys. Gain and bandwidth are in direct conflict through a single capacitor — and the cascode in module 4 is the answer: it keeps the gain but stops the input device from swinging its own drain, so there is nothing left to multiply.",
+                            "At a gain of 1 the factor is only 2, which is nearly harmless. Low-gain stages barely suffer from Miller at all, which is why a source follower is fast.",
+                            "A small $C_{gd}$ helps; the problem is that the multiplication can make even a small one dominant.",
+                            "A small $R_{sig}$ also helps — it raises the pole for any capacitance. The multiplication itself does not depend on it.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Miller estimate against an exact nodal solution",
@@ -726,6 +895,133 @@ can differ by a factor of two in $f_{max}$. Neither number is the bandwidth of a
 amplifier: both assume conditions no amplifier operates under.
 ''',
             },
+            "build": {
+                "title": "The small-signal model is a circuit — so build it",
+                "minutes": 24,
+                "brief": r"""
+Everything in this module is drawn as a schematic in the textbook and then solved as
+algebra. Here it is a schematic you can actually measure, because the hybrid-pi output
+network contains nothing a linear solver cannot handle.
+
+## What the current source is
+
+The canvas has a **2 mA current source**, and it is not a bias current. It is
+$g_mv_{gs}$ with $g_m = 2$ mA/V and a 1 V signal on the gate — the controlled source of
+the model, frozen at one input amplitude so that the number the probe reads *is* the
+voltage gain. That is the one liberty taken here, and it is the standard one: with the
+input held at 1 V, a controlled source and an independent source are indistinguishable.
+
+## What to add
+
+The output resistance and the load capacitance, in parallel with the source, so the
+stage has
+
+$$A_0 = 9.1, \qquad f_{3dB} = 35\ \text{MHz}$$
+
+$A_0 = g_mR_{out}$ gives you the resistance; $f_{3dB} = 1/(2\pi R_{out}C_L)$ then gives
+you the capacitance. Probe the output node.
+
+## What the checks measure
+
+- The DC gain, which is just $I \times R_{out}$ with the capacitor an open circuit.
+- The $-3$ dB corner, found by measurement rather than by formula.
+- **The product**, and this is the module's whole point: $A_0 \times f_{3dB}$ comes out
+  at 318 MHz, and $R_{out}$ has cancelled out of it. Well above the pole the gain is
+  $g_m/(2\pi fC_L)$ — the resistor has stopped mattering entirely, and what is left is
+  the device's transconductance against the capacitance it has to drive.
+
+## And what it does not promise
+
+318 MHz is $g_m/2\pi C_L$ for *this* load. It is not $f_T$, which is measured with the
+output shorted and the capacitance being the device's own $C_{gs} + C_{gd}$ rather than
+whatever you hung on the drain. The two expressions look identical and describe
+different things — which is the distinction the rest of this module is built around.
+""",
+                "start": {
+                    "parts": [
+                        {"id": "i", "kind": "I", "x": 3, "y": 7, "rot": 1, "value": 0.002},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                        {"id": "g1", "kind": "GND", "x": 9, "y": 10},
+                        {"id": "g2", "kind": "GND", "x": 15, "y": 10},
+                        {"id": "out", "kind": "OUT", "x": 18, "y": 6},
+                    ],
+                    "wires": [
+                        {"a": [3, 8], "b": [3, 10]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "i", "kind": "I", "x": 3, "y": 7, "rot": 1, "value": 0.002},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                        {"id": "ro", "kind": "R", "x": 9, "y": 8, "rot": 1, "value": 4545},
+                        {"id": "g1", "kind": "GND", "x": 9, "y": 10},
+                        {"id": "cl", "kind": "C", "x": 15, "y": 8, "rot": 1, "value": 1.0e-12},
+                        {"id": "g2", "kind": "GND", "x": 15, "y": 10},
+                        {"id": "out", "kind": "OUT", "x": 18, "y": 6},
+                    ],
+                    "wires": [
+                        {"a": [3, 8], "b": [3, 10]},
+                        {"a": [3, 6], "b": [9, 6]},
+                        {"a": [9, 6], "b": [9, 7]},
+                        {"a": [9, 9], "b": [9, 10]},
+                        {"a": [9, 6], "b": [15, 6]},
+                        {"a": [15, 6], "b": [15, 7]},
+                        {"a": [15, 9], "b": [15, 10]},
+                        {"a": [15, 6], "b": [18, 6]},
+                    ],
+                },
+                "checks": [
+                    {
+                        "name": "one resistor and one capacitor, giving a gain of 9.1",
+                        "code": r"""
+c.assert(c.count('R') === 1, 'One output resistance; there are ' + c.count('R') + '.');
+c.assert(c.count('C') === 1, 'One load capacitance; there are ' + c.count('C') + '.');
+c.close(Math.abs(c.vout()), 9.09, 0.04,
+  'the output at DC. The capacitor is an open circuit there, so the 2 mA flows ' +
+  'entirely through your resistor and the node sits at I * R_out. A gain of 9.1 needs ' +
+  'R_out = 9.1 / 2 mA');
+""",
+                    },
+                    {
+                        "name": "the -3 dB corner is at 35 MHz",
+                        "code": r"""
+const fc = c.corner(1e3, 1e10);
+c.close(fc, 35.0e6, 0.06,
+  'the measured -3 dB frequency. It is 1/(2*pi*R_out*C_L), so with R_out already fixed ' +
+  'by the gain check, this is entirely a statement about C_L. Too high a corner means ' +
+  'the capacitor is too small');
+""",
+                    },
+                    {
+                        "name": "the product is 318 MHz, and the resistor is not in it",
+                        "code": r"""
+const fc = c.corner(1e3, 1e10);
+c.close(Math.abs(c.vout()) * fc, 318.3e6, 0.08,
+  'gain times bandwidth. Multiply A0 = g_m*R_out by f_3dB = 1/(2*pi*R_out*C_L) and ' +
+  'R_out cancels, leaving g_m/(2*pi*C_L). This is the number that does not move when ' +
+  'you trade gain for bandwidth');
+""",
+                    },
+                    {
+                        "name": "far above the pole, only g_m and C_L are left",
+                        "code": r"""
+c.close(c.gain(1e9), 0.3183, 0.06,
+  'the gain at 1 GHz, nearly thirty times past the corner. There the capacitor is ' +
+  'far stiffer than the resistor and carries essentially all the current, so the ' +
+  'output is g_m/(2*pi*f*C_L) = 2 mA/V / (2*pi * 1 GHz * 1 pF) and the resistor has ' +
+  'dropped out of the answer entirely');
+c.assert(c.gain(1e9) < c.gain(1e8),
+  'The response must still be falling at 1 GHz. If it is not, there is a second path ' +
+  'to the output that is not rolling off.');
+""",
+                    },
+                ],
+                "hints": [
+                    "$R_{out} = A_0/g_m = 9.1 / (2\\ \\text{mA/V})$. The answer is a few kilohms.",
+                    "Then $C_L = 1/(2\\pi R_{out}f_{3dB})$, which comes out very close to a round 1 pF.",
+                    "Both components go from the output node to ground, in parallel with the current source — not in series with anything.",
+                ],
+            },
             "lab": {
                 "title": "Measure f_T the way the definition says",
                 "runtime": "python",
@@ -987,6 +1283,97 @@ $C_{gs}+C_{gd}(1+g_mR_L)$ to roughly $C_{gs}+2C_{gd}$, and the available gain ro
 from $g_mr_o$ to $(g_mr_o)^2$. Both improvements come from the same structural change:
 the input device no longer sees its own output swing.
 ''',
+            },
+            "quiz": {
+                "title": "What stacking a device buys, and what it costs",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "How does a cascode defeat the Miller effect?",
+                        "opts": [
+                            "It holds the input device's drain nearly still, so the gain across $C_{gd}$ is about $-1$",
+                            "It removes $C_{gd}$ from the input device",
+                            "It lowers the stage's overall gain",
+                            "It adds a zero that cancels the input pole",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The upper device presents a low resistance — about $1/g_{m2}$ — at its source, so the
+input device's drain barely moves however hard the stage is driving. The Miller factor
+across $C_{gd1}$ collapses from $1 + A_v$ to roughly 2. The capacitor is still there and
+so is the gain; what has changed is where the gain is *developed*, which is now at the
+cascode's drain instead.
+""",
+                    },
+                    {
+                        "q": "Looking into the source of the upper device, with a load $R_L$ on its drain, the resistance is about:",
+                        "opts": [
+                            "$\\left(R_L/(g_{m2}r_{o2})\\right) + 1/g_{m2}$",
+                            "$g_{m2}r_{o2}R_L$",
+                            "$r_{o2}$",
+                            "$R_L$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The load is divided down by the device's own intrinsic gain before it appears at the
+source, and $1/g_{m2}$ is added on top. For a modest $R_L$ the first term is negligible
+and the answer is just $1/g_{m2}$ — which is the low resistance that kills the Miller
+effect. The catch is that with a very large $R_L$, as in a cascode current-source load,
+the first term stops being negligible and some of the Miller multiplication comes back.
+$g_{m2}r_{o2}R_L$ is the resistance looking into the *drain*, the other direction.
+""",
+                    },
+                    {
+                        "q": "What is the output resistance of a cascode?",
+                        "opts": [
+                            "About $g_{m2}r_{o2}r_{o1}$",
+                            "About $r_{o1} + r_{o2}$",
+                            "About $r_{o1}r_{o2}/(r_{o1}+r_{o2})$",
+                            "About $r_{o2}$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The upper device's own intrinsic gain multiplies the lower one's output resistance — a
+factor of tens, so a cascode's output resistance is one to two orders above a single
+device's. That is the *other* reason cascodes are everywhere: not only bandwidth, but
+a much better current source and much higher achievable gain. Adding them in series
+would be a modest improvement; the multiplication is what makes it worth the stack.
+""",
+                    },
+                    {
+                        "q": "What does the cascode cost?",
+                        "opts": [
+                            "Voltage headroom — a second device's worth of $V_{DSsat}$",
+                            "Current, since it needs its own bias tail",
+                            "Gain",
+                            "Input capacitance",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Headroom, and on a modern low-voltage process that is the binding constraint. The two
+devices are in series and each needs its own $V_{DSsat}$ before the signal has anywhere
+to swing. It costs no extra current — the same current flows through both, which is
+exactly why the topology is efficient — and it *raises* gain rather than lowering it.
+""",
+                    },
+                    {
+                        "q": "Does the cascode raise the $f_T$ of the input device?",
+                        "opts": [
+                            "No — $f_T$ describes the device alone, and the device has not changed",
+                            "Yes, by the cascode's intrinsic gain",
+                            "Yes, by a factor of two",
+                            "Only if the upper device is wider",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$f_T = g_m/(2\pi(C_{gs}+C_{gd}))$ is measured with the output shorted, and there is
+nothing in it about what the drain is connected to. The cascode changes the *circuit's*
+bandwidth, which was never $f_T$ in the first place — and that is the distinction module
+3 spent its time on. A figure of merit for the device is not a promise about the
+amplifier.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Common-source against cascode, by nodal analysis",
