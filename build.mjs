@@ -52,43 +52,78 @@ const bundleKeys = [...bundleText.matchAll(/^@@[ \t]+(\S+)[ \t]*$/gm)].map((m) =
 notes.push(`bundle: ${bundleParts.length} parts, ${bundleKeys.length} keys`);
 
 /* ---------------------------------------------------------------- degree */
-let degree = { program: null, courses: [] };
-if (existsSync(join(CATALOG, '_spine.json'))) {
-  const spine = JSON.parse(read(join(CATALOG, '_spine.json')));
+/* Every catalog/_spine*.json describes one programme. A course is placed by
+   (program, band) — `band` is the neutral name for what CS calls a year and the EE
+   M.S. calls a track, so a track never has to be labelled "Year 1". Spines written
+   before this used `year`; that is still accepted and copied into `band`. */
+const spineFiles = readdirSync(CATALOG)
+  .filter((f) => /^_spine.*\.json$/.test(f))
+  /* the base _spine.json is the founding programme and leads the list */
+  .sort((a, b) => (a === '_spine.json' ? -1 : b === '_spine.json' ? 1 : a.localeCompare(b)));
+
+const programs = [];
+const allCourses = [];
+const seenId = new Map();          /* id -> programme, for the collision guard */
+
+for (const file of spineFiles) {
+  const spine = JSON.parse(read(join(CATALOG, file)));
+  const prog = spine.program;
+  if (!prog || !prog.id) { problems.push(`${file}: no program.id`); continue; }
+
+  /* accept the legacy `years` key, and default the noun for programmes that predate it */
+  prog.bands = prog.bands || prog.years || [];
+  prog.bandNoun = prog.bandNoun || 'Year';
+  delete prog.years;
+
   const order = spine.courses.map((c) => c.id);
   const byId = new Map(spine.courses.map((c) => [c.id, c]));
-
-  const courses = [];
   const missing = [];
+  let bundled = 0;
+
   for (const id of order) {
-    const p = join(CATALOG, id + '.json');
-    if (!existsSync(p)) { missing.push(id); continue; }
-    const course = JSON.parse(read(p));
+    /* The lesson keyspace is flat and shared with the foundation track ids, so a
+       duplicate here would silently overwrite a course rather than fail. */
+    if (seenId.has(id)) {
+      problems.push(`duplicate course id "${id}" in ${file} — already used by ${seenId.get(id)}`);
+      continue;
+    }
+    seenId.set(id, prog.id);
+
+    const cp = join(CATALOG, id + '.json');
+    if (!existsSync(cp)) { missing.push(id); continue; }
+    const course = JSON.parse(read(cp));
 
     /* the spine is the single source of truth for placement metadata */
     const s = byId.get(id);
-    for (const key of ['title', 'year', 'level', 'credits', 'hours']) {
+    s.band = s.band !== undefined ? s.band : s.year;
+    for (const key of ['title', 'level', 'credits', 'hours']) {
       if (String(course[key]) !== String(s[key])) {
         notes.push(`${id}: ${key} "${course[key]}" != spine "${s[key]}" — using the spine`);
         course[key] = s[key];
       }
     }
+    course.band = s.band;
+    course.program = prog.id;
     course.prereqs = s.prereqs;
     course.stack = course.stack && course.stack.length ? course.stack : s.stack;
     course.icon = course.icon || s.icon;
+    delete course.year;
 
     const labs = course.modules.filter((m) => m.lab).length;
     if (!labs) problems.push(`${id}: no labs`);
-    courses.push(course);
+    allCourses.push(course);
+    bundled++;
   }
+
   if (missing.length) {
-    notes.push(`catalog: ${missing.length} course(s) not yet authored -> ${missing.join(', ')}`);
+    notes.push(`${prog.id}: ${missing.length} course(s) not yet authored -> ${missing.join(', ')}`);
   }
-  degree = { program: spine.program, courses };
-  notes.push(`degree: ${courses.length}/${order.length} courses bundled`);
-} else {
-  notes.push('catalog: no _spine.json — building without the degree');
+  programs.push(prog);
+  notes.push(`${prog.id}: ${bundled}/${order.length} courses bundled`);
 }
+
+const degree = { programs, courses: allCourses };
+if (!programs.length) notes.push('catalog: no _spine*.json — building without any programme');
 
 /* `</script>` inside any JSON string would terminate the host <script>.
    Escaping every `<` as < keeps the JSON valid JS and inert to the parser. */
@@ -168,6 +203,21 @@ if (problems.length) {
 }
 
 if (problems.length) {
+  console.log('\nbuild aborted');
+  process.exit(1);
+}
+
+/* The inlined artifact is the one you can open from disk; past this it stops being
+   a reasonable thing to double-click, and the programme payloads should be split. */
+const SIZE_BUDGET_KB = 6144;
+const sizeKb = Buffer.byteLength(html, 'utf8') / 1024;
+if (sizeKb > SIZE_BUDGET_KB) {
+  problems.push(`built file is ${Math.round(sizeKb)} KB, over the ${SIZE_BUDGET_KB} KB budget — ` +
+    'split the programme payloads instead of growing the single file');
+}
+if (problems.length) {
+  console.log('\nPROBLEMS:');
+  for (const pr of problems) console.log('  !', pr);
   console.log('\nbuild aborted');
   process.exit(1);
 }

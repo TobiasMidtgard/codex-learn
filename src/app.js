@@ -24,7 +24,21 @@ const teardownFns = [];
 })();
 
 /* ---------- degree catalog ---------- */
-const DEGREE = (typeof DEGREE_DATA !== 'undefined' && DEGREE_DATA) ? DEGREE_DATA : { program: null, courses: [] };
+const DEGREE = (typeof DEGREE_DATA !== 'undefined' && DEGREE_DATA) ? DEGREE_DATA : { programs: [], courses: [] };
+/* A course is placed by (program, band). `band` is the neutral name for what the CS
+   degree calls a year and the EE master's calls a track, so nothing has to pretend a
+   track is a year. */
+const PROGRAMS = DEGREE.programs || [];
+const PROGRAM_OF = {};
+PROGRAMS.forEach(function (pr) { PROGRAM_OF[pr.id] = pr; });
+function programOf(c) { return PROGRAM_OF[c && c.program] || PROGRAMS[0] || null; }
+function bandOf(pr, n) {
+  const bands = (pr && pr.bands) || [];
+  for (const b of bands) if (b.n === n) return b;
+  return null;
+}
+function bandLabel(pr, n) { return ((pr && pr.bandNoun) || 'Year') + ' ' + n; }
+function defaultProgramId() { return PROGRAMS.length ? PROGRAMS[0].id : ''; }
 const COURSE_OF = {};
 const COURSE_DEPENDENTS = {};
 const LEVEL_ORDER = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
@@ -112,7 +126,12 @@ function capstoneMd(c) {
   }
 })();
 
-function coursesInYear(n) { return DEGREE.courses.filter(function (c) { return c.year === n; }); }
+function coursesInBand(programId, n) {
+  return DEGREE.courses.filter(function (c) { return c.program === programId && c.band === n; });
+}
+function coursesInProgram(programId) {
+  return DEGREE.courses.filter(function (c) { return c.program === programId; });
+}
 function courseUnits(c) { return TRACK_LESSONS[c.id] || []; }
 function courseDone(c) {
   return courseUnits(c).reduce(function (n, l) { return n + (P.completed[l.id] ? 1 : 0); }, 0);
@@ -128,9 +147,10 @@ function prereqState(c) {
   });
   return { list: list, allMet: list.every(function (p) { return p.met; }) };
 }
-function degreeTotals() {
+function degreeTotals(programId) {
   let units = 0, done = 0, credits = 0, earned = 0, labs = 0;
-  for (const c of DEGREE.courses) {
+  const list = programId ? coursesInProgram(programId) : DEGREE.courses;
+  for (const c of list) {
     const u = courseUnits(c);
     units += u.length;
     const d = courseDone(c);
@@ -140,14 +160,17 @@ function degreeTotals() {
     labs += c.modules.filter(function (m) { return m.lab; }).length;
   }
   return { units: units, done: done, credits: credits, earned: earned, labs: labs,
-           courses: DEGREE.courses.length,
+           courses: list.length,
            pct: units ? Math.round(done / units * 100) : 0 };
 }
 
 let P = { completed: {}, quiz: {}, code: {}, xp: 0, last: null, playground: null, activity: {}, name: '', railHidden: false };
 let route = { view: 'home' };
 const openTracks = {};
-const openYears = {};
+/* keyed "&lt;programId&gt;:&lt;band&gt;" — two programmes both have a band 1, and a bare
+   number would open and close them together */
+const openBands = {};
+function bandKey(programId, n) { return programId + ':' + n; }
 
 /* ---------- activity: real data behind the dashboard's charts ---------- */
 function dayKey(d) {
@@ -306,7 +329,7 @@ function applyTheme() {
 const NAV = [
   { id: 'home', label: 'Dashboard', view: 'home',
     d: 'M3 10.5 12 3l9 7.5M5.5 9.2V20h13V9.2' },
-  { id: 'degree', label: 'Degree catalog', view: 'degree',
+  { id: 'degree', label: 'Programmes', view: 'programs',
     d: 'M12 3 2 8l10 5 10-5-10-5ZM2 13.5l10 5 10-5M2 18l10 5 10-5' },
   { id: 'progress', label: 'Progress', view: 'progress',
     d: 'M4 19.5V14M9.5 19.5V6M15 19.5v-8M20.5 19.5V9' },
@@ -467,17 +490,18 @@ function renderRail() {
     h += '</div>';
   }
 
-  if (DEGREE.program && DEGREE.courses.length) {
-    h += '<div class="rail-sec">CS degree</div>';
-    for (const y of DEGREE.program.years) {
-      const list = coursesInYear(y.n);
+  for (const pr of PROGRAMS) {
+    if (!coursesInProgram(pr.id).length) continue;
+    h += '<div class="rail-sec">' + esc(pr.short || pr.name) + '</div>';
+    for (const y of pr.bands) {
+      const list = coursesInBand(pr.id, y.n);
       if (!list.length) continue;
-      const open = !!openYears[y.n];
+      const open = !!openBands[bandKey(pr.id, y.n)];
       const doneC = list.filter(courseComplete).length;
       h += '<div class="rail-track' + (open ? ' open' : '') + '">' +
-        '<button data-year="' + y.n + '">' +
+        '<button data-band="' + y.n + '" data-program="' + esc(pr.id) + '">' +
           '<span class="t-icon" style="--tt:' + y.tint + '">' + y.icon + '</span>' +
-          '<span class="t-name">Year ' + y.n + '</span>' +
+          '<span class="t-name">' + esc(bandLabel(pr, y.n)) + '</span>' +
           '<span class="t-pct">' + doneC + '/' + list.length + '</span>' +
         '</button>';
       if (open) {
@@ -508,10 +532,10 @@ function renderRail() {
       renderRail();
     });
   });
-  $all('[data-year]', rail).forEach(function (b) {
+  $all('[data-band]', rail).forEach(function (b) {
     b.addEventListener('click', function () {
-      const n = +b.dataset.year;
-      openYears[n] = !openYears[n];
+      const k = bandKey(b.dataset.program, +b.dataset.band);
+      openBands[k] = !openBands[k];
       renderRail();
     });
   });
@@ -535,7 +559,7 @@ let teardown = null;
    Playground, from the next lesson, from anywhere — should land where they left
    off, not at the top. */
 const SCROLL_MEM = {};
-function routeKey(r) { return r ? r.view + ':' + (r.id || r.track || '') : ''; }
+function routeKey(r) { return r ? r.view + ':' + (r.id || r.track || r.program || '') : ''; }
 function scrollHost() { return $('#task-pane') || $('#main'); }
 function rememberScroll() {
   const host = scrollHost();
@@ -551,18 +575,21 @@ function go(r) {
     const info = LESSON_INDEX[r.id];
     if (!info) { route = { view: 'home' }; }
     else {
-      if (info.track.kind === 'course') openYears[info.track.year] = true;
+      if (info.track.kind === 'course') openBands[bandKey(info.track.program, info.track.band)] = true;
       else openTracks[info.track.id] = true;
       P.last = r.id;
       saveSoon();
     }
   }
   if (r.view === 'track') openTracks[r.track] = true;
-  if (r.view === 'course' && COURSE_OF[r.id]) openYears[COURSE_OF[r.id].year] = true;
+  if (r.view === 'course' && COURSE_OF[r.id]) {
+    const cc = COURSE_OF[r.id];
+    openBands[bandKey(cc.program, cc.band)] = true;
+  }
   renderRail();
 
   /* icon-rail active state */
-  const section = route.view === 'course' ? 'degree'
+  const section = (route.view === 'course' || route.view === 'programs') ? 'degree'
     : (route.view === 'track' || route.view === 'lesson') ? navSectionFor(route)
     : route.view;
   $all('[data-nav]').forEach(function (b) {
@@ -590,7 +617,8 @@ function go(r) {
   main.scrollTop = 0;
   if (route.view === 'home') renderHome(main);
   else if (route.view === 'track') renderTrack(main, TRACK_OF[route.track]);
-  else if (route.view === 'degree') renderDegree(main);
+  else if (route.view === 'programs') renderPrograms(main);
+  else if (route.view === 'degree') renderDegree(main, route.program);
   else if (route.view === 'course') renderCourse(main, COURSE_OF[route.id]);
   else if (route.view === 'progress') renderProgress(main);
   else if (route.view === 'profile') renderProfile(main);
@@ -614,7 +642,15 @@ function navSectionFor(r) {
 
 function screenMeta(r) {
   if (r.view === 'home') return { title: 'Dashboard', crumb: TOTAL.lessons + ' lessons · ' + DEGREE.courses.length + ' degree courses' };
-  if (r.view === 'degree') return { title: 'Degree catalog', crumb: 'Five years · ' + DEGREE.courses.length + ' courses' };
+  if (r.view === 'programs') {
+    return { title: 'Programmes', crumb: PROGRAMS.length + ' majors · ' + DEGREE.courses.length + ' courses' };
+  }
+  if (r.view === 'degree') {
+    const dpr = PROGRAM_OF[r.program] || PROGRAMS[0];
+    const dn = dpr ? coursesInProgram(dpr.id).length : 0;
+    return { title: dpr ? (dpr.short || dpr.name) : 'Programme',
+             crumb: dpr ? ((dpr.bands || []).length + ' ' + (dpr.bandNoun || 'Year').toLowerCase() + 's · ' + dn + ' courses') : '' };
+  }
   if (r.view === 'progress') return { title: 'Progress', crumb: 'Level ' + level() + ' · ' + P.xp.toLocaleString('en-GB') + ' XP' };
   if (r.view === 'play') return { title: 'Playground', crumb: 'Scratchpad · nothing is checked' };
   if (r.view === 'profile') return { title: 'Profile', crumb: (P.name || 'Unnamed learner') + ' · Level ' + level() };
@@ -624,7 +660,9 @@ function screenMeta(r) {
   }
   if (r.view === 'course') {
     const c = COURSE_OF[r.id];
-    return { title: c ? c.title : 'Course', crumb: c ? c.id + ' · Year ' + c.year + ' · ' + c.level : '' };
+    const cpr = c ? programOf(c) : null;
+    return { title: c ? c.title : 'Course',
+             crumb: c ? c.id + ' · ' + bandLabel(cpr, c.band) + ' · ' + c.level : '' };
   }
   if (r.view === 'lesson') {
     const info = LESSON_INDEX[r.id];
@@ -663,8 +701,9 @@ function lessonNav(l) {
 function crumbHtml(l) {
   const info = LESSON_INDEX[l.id];
   if (info.track.kind === 'course') {
+    const lpr = programOf(info.track);
     return '<div class="crumb"><button data-go="home">Home</button><span>›</span>' +
-      '<button data-go="degree">Degree</button><span>›</span>' +
+      '<button data-go="degree">' + esc(lpr ? (lpr.short || lpr.name) : 'Programmes') + '</button><span>›</span>' +
       '<button data-go="course">' + esc(info.track.id) + '</button><span>›</span>' +
       '<span>' + esc(info.module.title) + '</span></div>';
   }
@@ -677,7 +716,7 @@ function wireCrumb(root, l) {
     b.addEventListener('click', function () {
       const k = b.dataset.go;
       if (k === 'home') go({ view: 'home' });
-      else if (k === 'degree') go({ view: 'degree' });
+      else if (k === 'degree') go({ view: 'degree', program: info.track.program });
       else if (k === 'course') go({ view: 'course', id: info.track.id });
       else go({ view: 'track', track: info.track.id });
     });
@@ -768,7 +807,8 @@ function renderHome(main) {
         '<h1>' + (started ? 'Welcome back.' : 'Learn by <em>building things</em> that run.') + '</h1>' +
         '<p class="lede">' + (started
           ? 'Every lab here is checked by tests that actually execute your code. Pick up where you left off, or open the degree catalog.'
-          : 'Five foundation tracks and a full five-year Computer Science degree — ' + (TOTAL.tasks + dt.labs) +
+          : esc(TRACKS.length + ' foundation tracks and ' + PROGRAMS.length + ' full degree ' +
+          (PROGRAMS.length === 1 ? 'programme' : 'programmes') + ' \u2014 ') + (TOTAL.tasks + dt.labs) +
             ' coding labs, all auto-checked, no setup. Your progress saves itself.') + '</p>' +
       '</div>' +
       '<div class="acts">' +
@@ -824,7 +864,7 @@ function renderHome(main) {
           '<div class="hr"></div>' +
           '<button class="rowlink" id="go-degree-row">' +
             '<span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg></span>' +
-            '<span class="tx"><b>' + (dt.courses ? 'Computer Science degree' : 'Degree catalog') + '</b>' +
+            '<span class="tx"><b>' + (PROGRAMS.length > 1 ? PROGRAMS.length + ' degree programmes' : (PROGRAMS[0] ? PROGRAMS[0].name : 'Degree catalog')) + '</b>' +
             '<span>' + dt.done + ' of ' + dt.units + ' units · ' + dt.pct + '% complete</span></span>' +
             '<svg class="go" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 5 7 7-7 7"/></svg>' +
           '</button>' +
@@ -835,8 +875,8 @@ function renderHome(main) {
 
   $('#resume-btn').addEventListener('click', function () { go({ view: 'lesson', id: target.id }); });
   $('#resume-card').addEventListener('click', function () { go({ view: 'lesson', id: target.id }); });
-  $('#open-degree').addEventListener('click', function () { go({ view: 'degree' }); });
-  $('#go-degree-row').addEventListener('click', function () { go({ view: 'degree' }); });
+  $('#open-degree').addEventListener('click', function () { go({ view: 'programs' }); });
+  $('#go-degree-row').addEventListener('click', function () { go({ view: 'programs' }); });
   $all('.track-card', main).forEach(function (c) {
     c.addEventListener('click', function () { go({ view: 'track', track: c.dataset.track }); });
   });
@@ -871,12 +911,13 @@ function renderProgress(main) {
     const flat = TRACK_LESSONS[t.id];
     const done = trackDone(t.id);
     return { name: t.name, done: done, total: flat.length, pct: flat.length ? done / flat.length * 100 : 0 };
-  }).concat(DEGREE.program ? DEGREE.program.years.map(function (y) {
-    const list = coursesInYear(y.n);
+  }).concat(PROGRAMS.flatMap(function (pr) { return pr.bands.map(function (y) {
+    const list = coursesInBand(pr.id, y.n);
     const u = list.reduce(function (s, c) { return s + courseUnits(c).length; }, 0);
     const d = list.reduce(function (s, c) { return s + courseDone(c); }, 0);
-    return { name: 'Year ' + y.n + ' — ' + y.title, done: d, total: u, pct: u ? d / u * 100 : 0 };
-  }) : []);
+    return { name: (pr.short || pr.name) + ' · ' + bandLabel(pr, y.n) + ' — ' + y.title,
+             done: d, total: u, pct: u ? d / u * 100 : 0 };
+  }); }).filter(function (m) { return m.total > 0; }));
 
   main.innerHTML = '<div class="page">' +
     '<div style="display:flex;align-items:center;gap:22px;margin-bottom:30px;flex-wrap:wrap">' +
@@ -1337,7 +1378,71 @@ function renderTrack(main, t) {
 }
 
 /* ---------- degree: programme overview ---------- */
-let degFilter = { q: '', level: 'all' };
+const degFilters = {};
+function degFilterFor(programId) {
+  if (!degFilters[programId]) degFilters[programId] = { q: '', level: 'all' };
+  return degFilters[programId];
+}
+
+/* The programme name with its distinctive half emphasised — each spine names the
+   substring itself rather than the view hard-coding one programme's title. */
+function emphasise(pr) {
+  const name = esc(pr.name);
+  const key = pr.emphasis ? esc(pr.emphasis) : '';
+  return key && name.indexOf(key) !== -1 ? name.replace(key, '<em>' + key + '</em>') : name;
+}
+
+/* ---------- the majors ----------
+   With more than one programme the catalogue needs a front door, otherwise the
+   icon-rail button has to guess which one you meant. */
+function renderPrograms(main) {
+  const cards = PROGRAMS.map(function (pr) {
+    const t = degreeTotals(pr.id);
+    const authored = coursesInProgram(pr.id).length;
+    const planned = (pr.bands || []).length;
+    const levels = {};
+    coursesInProgram(pr.id).forEach(function (c) { levels[c.level] = (levels[c.level] || 0) + 1; });
+    const spread = LEVEL_ORDER.filter(function (lv) { return levels[lv]; })
+      .map(function (lv) { return '<span class="chip level ' + lv + '">' + levels[lv] + ' ' + lv + '</span>'; })
+      .join('');
+    const bandList = (pr.bands || []).map(function (b) {
+      const n = coursesInBand(pr.id, b.n).length;
+      return '<li><span class="pb-icon" style="--tt:' + b.tint + '">' + b.icon + '</span>' +
+        '<span class="pb-t">' + esc(b.title) + '</span>' +
+        '<span class="pb-n">' + (n ? n + ' course' + (n === 1 ? '' : 's') : 'soon') + '</span></li>';
+    }).join('');
+    return '<button class="prog-card' + (authored ? '' : ' empty') + '" data-program="' + esc(pr.id) + '">' +
+      '<div class="pc-head">' +
+        '<div><h2>' + emphasise(pr) + '</h2><p>' + esc(pr.subtitle) + '</p></div>' +
+        ringHtml(t.pct) +
+      '</div>' +
+      '<div class="pc-stats">' +
+        '<div class="stat"><b>' + authored + '</b><span>Courses</span></div>' +
+        '<div class="stat"><b>' + t.units + '</b><span>Units</span></div>' +
+        '<div class="stat"><b>' + t.labs + '</b><span>Labs</span></div>' +
+        '<div class="stat"><b>' + planned + '</b><span>' + esc((pr.bandNoun || 'Year') + 's') + '</span></div>' +
+      '</div>' +
+      (spread ? '<div class="pc-levels">' + spread + '</div>' : '') +
+      '<ul class="pc-bands">' + bandList + '</ul>' +
+    '</button>';
+  }).join('');
+
+  main.innerHTML = '<div class="page wide">' +
+    '<div class="crumb"><button data-go="home">Home</button><span>›</span><span>Programmes</span></div>' +
+    '<div class="page-head">' +
+      '<h1>Two majors</h1>' +
+      '<p>Pick a programme to see its ' + esc(PROGRAMS.map(function (pr) { return (pr.bandNoun || 'Year').toLowerCase(); })
+        .filter(function (v, i, a) { return a.indexOf(v) === i; }).join('s and ')) + 's. ' +
+      'Progress is tracked separately for each.</p>' +
+    '</div>' +
+    '<div class="prog-grid">' + cards + '</div>' +
+  '</div>';
+
+  $('[data-go="home"]', main).addEventListener('click', function () { go({ view: 'home' }); });
+  $all('.prog-card', main).forEach(function (b) {
+    b.addEventListener('click', function () { go({ view: 'degree', program: b.dataset.program }); });
+  });
+}
 
 function courseCardHtml(c) {
   const units = courseUnits(c);
@@ -1366,35 +1471,37 @@ function courseCardHtml(c) {
   '</button>';
 }
 
-function renderDegree(main) {
+function renderDegree(main, programId) {
   if (!DEGREE.courses.length) {
     main.innerHTML = '<div class="page"><h1>No catalog loaded</h1><p>The degree catalog was not bundled into this build.</p></div>';
     return;
   }
-  const dt = degreeTotals();
-  const prog = DEGREE.program;
+  const prog = PROGRAM_OF[programId] || PROGRAMS[0];
+  if (!prog) { main.innerHTML = '<div class="page"><h1>No programme</h1></div>'; return; }
+  const dt = degreeTotals(prog.id);
+  const filt = degFilterFor(prog.id);
 
   function bands() {
     let out = '';
-    const q = degFilter.q.trim().toLowerCase();
+    const q = filt.q.trim().toLowerCase();
     let shown = 0;
-    for (const y of prog.years) {
-      let list = coursesInYear(y.n);
+    for (const y of prog.bands) {
+      let list = coursesInBand(prog.id, y.n);
       if (q) {
         list = list.filter(function (c) {
           return (c.id + ' ' + c.title + ' ' + c.summary + ' ' + (c.stack || []).join(' ')).toLowerCase().indexOf(q) !== -1;
         });
       }
-      if (degFilter.level !== 'all') list = list.filter(function (c) { return c.level === degFilter.level; });
+      if (filt.level !== 'all') list = list.filter(function (c) { return c.level === filt.level; });
       if (!list.length) continue;
       shown += list.length;
-      const all = coursesInYear(y.n);
+      const all = coursesInBand(prog.id, y.n);
       const doneC = all.filter(courseComplete).length;
       const pct = all.length ? Math.round(doneC / all.length * 100) : 0;
       out += '<section class="year-band">' +
         '<div class="year-head">' +
           '<span class="year-badge" style="--tt:' + y.tint + '">' + y.n + '</span>' +
-          '<div><h2>Year ' + y.n + ' — ' + esc(y.title) + '</h2><p>' + esc(y.theme) + '</p></div>' +
+          '<div><h2>' + esc(bandLabel(prog, y.n)) + ' — ' + esc(y.title) + '</h2><p>' + esc(y.theme) + '</p></div>' +
           '<div class="yr-prog"><b>' + doneC + '/' + all.length + '</b>courses<div class="bar"><i style="width:' + pct + '%"></i></div></div>' +
         '</div>' +
         '<div class="course-grid">' + list.map(courseCardHtml).join('') + '</div>' +
@@ -1405,10 +1512,11 @@ function renderDegree(main) {
 
   const b = bands();
   main.innerHTML = '<div class="page wide">' +
-    '<div class="crumb"><button data-go="home">Home</button><span>›</span><span>Degree catalog</span></div>' +
+    '<div class="crumb"><button data-go="home">Home</button><span>›</span>' +
+      '<button data-go="programs">Programmes</button><span>›</span><span>' + esc(prog.short || prog.name) + '</span></div>' +
     '<div class="deg-hero">' +
       '<div>' +
-        '<h1>' + esc(prog.name).replace('Computer Science', '<em>Computer Science</em>') + '</h1>' +
+        '<h1>' + emphasise(prog) + '</h1>' +
         '<p>' + esc(prog.subtitle) + '</p>' +
         '<div class="deg-stats">' +
           '<div class="stat"><b>' + dt.courses + '</b><span>Courses</span></div>' +
@@ -1424,10 +1532,10 @@ function renderDegree(main) {
       '</div>' +
     '</div>' +
     '<div class="filters">' +
-      '<input type="search" id="deg-q" placeholder="Search courses, topics, languages…" value="' + esc(degFilter.q) + '">' +
+      '<input type="search" id="deg-q" placeholder="Search courses, topics, languages…" value="' + esc(filt.q) + '">' +
       '<div class="seg" id="deg-lv">' +
         ['all'].concat(LEVEL_ORDER).map(function (lv) {
-          return '<button data-lv="' + lv + '"' + (degFilter.level === lv ? ' class="active"' : '') + '>' +
+          return '<button data-lv="' + lv + '"' + (filt.level === lv ? ' class="active"' : '') + '>' +
             (lv === 'all' ? 'All levels' : lv) + '</button>';
         }).join('') +
       '</div>' +
@@ -1437,19 +1545,20 @@ function renderDegree(main) {
   '</div>';
 
   $('[data-go="home"]', main).addEventListener('click', function () { go({ view: 'home' }); });
+  $('[data-go="programs"]', main).addEventListener('click', function () { go({ view: 'programs' }); });
   $all('.course-card', main).forEach(function (c) {
     c.addEventListener('click', function () { go({ view: 'course', id: c.dataset.course }); });
   });
   const q = $('#deg-q', main);
   q.addEventListener('input', debounce(function () {
-    degFilter.q = q.value;
+    filt.q = q.value;
     const pos = q.selectionStart;
-    renderDegree(main);
+    renderDegree(main, prog.id);
     const nq = $('#deg-q', main);
     if (nq) { nq.focus(); try { nq.setSelectionRange(pos, pos); } catch (e) {} }
   }, 180));
   $all('#deg-lv button', main).forEach(function (bn) {
-    bn.addEventListener('click', function () { degFilter.level = bn.dataset.lv; renderDegree(main); });
+    bn.addEventListener('click', function () { filt.level = bn.dataset.lv; renderDegree(main, prog.id); });
   });
 }
 
@@ -1498,7 +1607,8 @@ function depMapSvg(c) {
 }
 
 function renderCourse(main, c) {
-  if (!c) { go({ view: 'degree' }); return; }
+  if (!c) { go({ view: 'programs' }); return; }
+  const cpr = programOf(c);
   const units = courseUnits(c);
   const d = courseDone(c);
   const pre = prereqState(c);
@@ -1536,8 +1646,8 @@ function renderCourse(main, c) {
   const capDone = c.capstoneLessonId && P.completed[c.capstoneLessonId];
   main.innerHTML = '<div class="page wide lv-' + c.level + '">' +
     '<div class="crumb"><button data-go="home">Home</button><span>›</span>' +
-      '<button data-go="degree">Degree</button><span>›</span>' +
-      '<span>Year ' + c.year + '</span><span>›</span><span>' + esc(c.id) + '</span></div>' +
+      '<button data-go="degree">' + esc(cpr ? (cpr.short || cpr.name) : 'Programmes') + '</button><span>›</span>' +
+      '<span>' + esc(bandLabel(cpr, c.band)) + '</span><span>›</span><span>' + esc(c.id) + '</span></div>' +
 
     '<div class="course-head">' +
       '<div>' +
@@ -1545,7 +1655,7 @@ function renderCourse(main, c) {
           '<span class="ch-icon">' + esc(c.icon || '◆') + '</span>' +
           '<span class="chip mono">' + esc(c.id) + '</span>' +
           '<span class="chip level">' + esc(c.level) + '</span>' +
-          '<span class="chip mono">Year ' + c.year + '</span>' +
+          '<span class="chip mono">' + esc(bandLabel(cpr, c.band)) + '</span>' +
         '</div>' +
         '<h1>' + esc(c.title) + '</h1>' +
         '<p class="lede">' + esc(c.summary) + '</p>' +
@@ -1617,7 +1727,7 @@ function renderCourse(main, c) {
   '</div>';
 
   $('[data-go="home"]', main).addEventListener('click', function () { go({ view: 'home' }); });
-  $('[data-go="degree"]', main).addEventListener('click', function () { go({ view: 'degree' }); });
+  $('[data-go="degree"]', main).addEventListener('click', function () { go({ view: 'degree', program: c.program }); });
   $('#course-start', main).addEventListener('click', function () {
     go({ view: 'lesson', id: (next || units[0]).id });
   });
@@ -2515,7 +2625,7 @@ async function boot() {
   openTracks.python = true;
   if (P.last && LESSON_INDEX[P.last]) {
     const info = LESSON_INDEX[P.last];
-    if (info.track.kind === 'course') openYears[info.track.year] = true;
+    if (info.track.kind === 'course') openBands[bandKey(info.track.program, info.track.band)] = true;
     else openTracks[info.track.id] = true;
   }
   go({ view: 'home' });

@@ -4,49 +4,596 @@
     "name": "Computer Science — 5 Year Program",
     "subtitle": "Integrated BSc + MSc track, 32 courses, every module ending in code that runs.",
     "years": [
-      { "n": 1, "title": "Foundations & Mathematics", "theme": "Learn to express ideas as programs, and to reason about them formally.", "icon": "◴", "tint": "#E4EEFA" },
-      { "n": 2, "title": "Core CS & Systems",        "theme": "How machines actually execute, store and organise work.",            "icon": "◵", "tint": "#FFE9DC" },
-      { "n": 3, "title": "Theory, Networks & Design", "theme": "Limits of computation, and the systems built up to those limits.",  "icon": "◶", "tint": "#E1F4E8" },
-      { "n": 4, "title": "Advanced & Specialisations","theme": "Scale, learning, parallelism, and a chosen depth track.",           "icon": "◷", "tint": "#F1E8FB" },
-      { "n": 5, "title": "Advanced Topics & Capstone","theme": "Frontier subjects, verification, ethics and a portfolio build.",    "icon": "⬤", "tint": "#FFF3D6" }
-    ]
+      {
+        "n": 1,
+        "title": "Foundations & Mathematics",
+        "theme": "Learn to express ideas as programs, and to reason about them formally.",
+        "icon": "◴",
+        "tint": "#E4EEFA"
+      },
+      {
+        "n": 2,
+        "title": "Core CS & Systems",
+        "theme": "How machines actually execute, store and organise work.",
+        "icon": "◵",
+        "tint": "#FFE9DC"
+      },
+      {
+        "n": 3,
+        "title": "Theory, Networks & Design",
+        "theme": "Limits of computation, and the systems built up to those limits.",
+        "icon": "◶",
+        "tint": "#E1F4E8"
+      },
+      {
+        "n": 4,
+        "title": "Advanced & Specialisations",
+        "theme": "Scale, learning, parallelism, and a chosen depth track.",
+        "icon": "◷",
+        "tint": "#F1E8FB"
+      },
+      {
+        "n": 5,
+        "title": "Advanced Topics & Capstone",
+        "theme": "Frontier subjects, verification, ethics and a portfolio build.",
+        "icon": "⬤",
+        "tint": "#FFF3D6"
+      }
+    ],
+    "short": "Computer Science",
+    "emphasis": "Computer Science"
   },
   "courses": [
-    { "id": "CS101",   "year": 1, "title": "Introduction to Programming",                 "level": "Beginner",     "prereqs": [],                            "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 120, "icon": "▶" },
-    { "id": "CS102",   "year": 1, "title": "Object-Oriented Programming",                 "level": "Beginner",     "prereqs": ["CS101"],                     "stack": ["Python", "Java (reference)"],      "runtime": "python", "credits": 10, "hours": 120, "icon": "◈" },
-    { "id": "MA101",   "year": 1, "title": "Discrete Mathematics",                        "level": "Beginner",     "prereqs": [],                            "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 110, "icon": "∀" },
-    { "id": "MA111",   "year": 1, "title": "Calculus I — Limits & Derivatives",           "level": "Beginner",     "prereqs": [],                            "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 110, "icon": "∫" },
-    { "id": "MA112",   "year": 1, "title": "Calculus II — Integration & Series",          "level": "Intermediate", "prereqs": ["MA111"],                     "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 110, "icon": "∑" },
-    { "id": "MA121",   "year": 1, "title": "Linear Algebra",                              "level": "Intermediate", "prereqs": ["MA101"],                     "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 120, "icon": "▦" },
-    { "id": "CE101",   "year": 1, "title": "Digital Logic & Computer Systems",            "level": "Beginner",     "prereqs": [],                            "stack": ["Verilog (reference)", "Python"],   "runtime": "python", "credits": 10, "hours": 120, "icon": "⎓" },
-
-    { "id": "CS201",   "year": 2, "title": "Data Structures & Algorithms",                "level": "Intermediate", "prereqs": ["CS102", "MA101"],            "stack": ["Python", "C (reference)"],         "runtime": "python", "credits": 15, "hours": 160, "icon": "≡" },
-    { "id": "CE201",   "year": 2, "title": "Computer Organization & Architecture",        "level": "Intermediate", "prereqs": ["CE101", "CS101"],            "stack": ["C (reference)", "Python"],         "runtime": "python", "credits": 10, "hours": 130, "icon": "⚙" },
-    { "id": "CS210",   "year": 2, "title": "Operating Systems",                           "level": "Intermediate", "prereqs": ["CE201", "CS201"],            "stack": ["C (reference)", "Python"],         "runtime": "python", "credits": 15, "hours": 150, "icon": "◱" },
-    { "id": "MA201",   "year": 2, "title": "Probability & Statistics for Computing",      "level": "Intermediate", "prereqs": ["MA112"],                     "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 120, "icon": "σ" },
-    { "id": "CS220",   "year": 2, "title": "Database Management Systems",                 "level": "Intermediate", "prereqs": ["CS201"],                     "stack": ["SQL", "Python", "SQLite"],         "runtime": "python", "credits": 10, "hours": 130, "icon": "⛃" },
-    { "id": "SE201",   "year": 2, "title": "Software Engineering Principles",             "level": "Intermediate", "prereqs": ["CS102"],                     "stack": ["Python", "Git", "pytest"],         "runtime": "python", "credits": 10, "hours": 130, "icon": "⚒" },
-
-    { "id": "CS301",   "year": 3, "title": "Design & Analysis of Algorithms",             "level": "Advanced",     "prereqs": ["CS201", "MA101"],            "stack": ["Python"],                          "runtime": "python", "credits": 15, "hours": 160, "icon": "⌘" },
-    { "id": "CS310",   "year": 3, "title": "Theory of Computation & Automata",            "level": "Advanced",     "prereqs": ["MA101", "CS201"],            "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 130, "icon": "λ" },
-    { "id": "CS320",   "year": 3, "title": "Computer Networks",                           "level": "Advanced",     "prereqs": ["CS210"],                     "stack": ["Python", "Go (reference)"],        "runtime": "python", "credits": 15, "hours": 150, "icon": "⛓" },
-    { "id": "CS330",   "year": 3, "title": "Compiler Construction & Programming Languages","level": "Advanced",    "prereqs": ["CS301", "CS310"],            "stack": ["Python", "Rust (reference)"],      "runtime": "python", "credits": 15, "hours": 170, "icon": "⟳" },
-    { "id": "SEC301",  "year": 3, "title": "Cybersecurity & Cryptography",                "level": "Advanced",     "prereqs": ["CS320", "MA201"],            "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 140, "icon": "⚿" },
-    { "id": "WEB301",  "year": 3, "title": "Full-Stack & Mobile Development",             "level": "Intermediate", "prereqs": ["CS220", "SE201"],            "stack": ["HTML", "CSS", "JavaScript", "Python"], "runtime": "web", "credits": 15, "hours": 160, "icon": "⬚" },
-
-    { "id": "CS401",   "year": 4, "title": "Distributed Systems & Cloud Computing",       "level": "Advanced",     "prereqs": ["CS320", "CS210"],            "stack": ["Go (reference)", "Python", "Docker"], "runtime": "python", "credits": 15, "hours": 170, "icon": "☷" },
-    { "id": "ML401",   "year": 4, "title": "Machine Learning & Statistical Modeling",     "level": "Advanced",     "prereqs": ["MA121", "MA201", "CS301"],   "stack": ["Python"],                          "runtime": "python", "credits": 15, "hours": 170, "icon": "∴" },
-    { "id": "HPC401",  "year": 4, "title": "High-Performance & Parallel Computing",       "level": "Advanced",     "prereqs": ["CE201", "CS301"],            "stack": ["C/OpenMP (reference)", "Python"],  "runtime": "python", "credits": 10, "hours": 150, "icon": "║" },
-    { "id": "GFX401",  "year": 4, "title": "Computer Graphics & Visualization",           "level": "Advanced",     "prereqs": ["MA121", "CS201"],            "stack": ["GLSL (reference)", "Python", "Canvas"], "runtime": "python", "credits": 10, "hours": 150, "icon": "◩" },
-    { "id": "ELEC410", "year": 4, "title": "AI Track — Reinforcement Learning & Search",  "level": "Advanced",     "prereqs": ["ML401"],                     "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 140, "icon": "✦" },
-    { "id": "ELEC420", "year": 4, "title": "Security Track — Offensive & Defensive Security","level": "Advanced",  "prereqs": ["SEC301"],                    "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 140, "icon": "⛨" },
-    { "id": "ELEC430", "year": 4, "title": "Data Track — Data Engineering at Scale",      "level": "Advanced",     "prereqs": ["CS220", "MA201"],            "stack": ["Python", "SQL"],                   "runtime": "python", "credits": 10, "hours": 140, "icon": "⌸" },
-
-    { "id": "DL501",   "year": 5, "title": "Deep Learning & Generative AI",               "level": "Expert",       "prereqs": ["ML401", "MA121"],            "stack": ["Python"],                          "runtime": "python", "credits": 15, "hours": 180, "icon": "✧" },
-    { "id": "FM501",   "year": 5, "title": "Formal Methods & Program Verification",       "level": "Expert",       "prereqs": ["CS310", "CS330"],            "stack": ["Python", "Z3 / Dafny (reference)"], "runtime": "python", "credits": 10, "hours": 150, "icon": "⊨" },
-    { "id": "ETH501",  "year": 5, "title": "Ethics, Policy & Technology Law",             "level": "Intermediate", "prereqs": ["SE201", "ML401"],            "stack": ["Python"],                          "runtime": "python", "credits": 10, "hours": 110, "icon": "⚖" },
-    { "id": "QC510",   "year": 5, "title": "Advanced Elective — Quantum Computing",       "level": "Expert",       "prereqs": ["MA121", "CS310"],            "stack": ["Python", "Qiskit (reference)"],    "runtime": "python", "credits": 10, "hours": 150, "icon": "⚛" },
-    { "id": "ROB520",  "year": 5, "title": "Advanced Elective — Robotics & Autonomy",     "level": "Expert",       "prereqs": ["ML401", "MA121"],            "stack": ["Python", "ROS 2 (reference)"],     "runtime": "python", "credits": 10, "hours": 150, "icon": "☸" },
-    { "id": "CAP501",  "year": 5, "title": "Capstone Engineering Project",                "level": "Expert",       "prereqs": ["CS330", "CS401", "SE201", "CS220"], "stack": ["Python", "SQL", "HTTP"],    "runtime": "python", "credits": 30, "hours": 300, "icon": "★" }
+    {
+      "id": "CS101",
+      "year": 1,
+      "title": "Introduction to Programming",
+      "level": "Beginner",
+      "prereqs": [],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "▶"
+    },
+    {
+      "id": "CS102",
+      "year": 1,
+      "title": "Object-Oriented Programming",
+      "level": "Beginner",
+      "prereqs": [
+        "CS101"
+      ],
+      "stack": [
+        "Python",
+        "Java (reference)"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "◈"
+    },
+    {
+      "id": "MA101",
+      "year": 1,
+      "title": "Discrete Mathematics",
+      "level": "Beginner",
+      "prereqs": [],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 110,
+      "icon": "∀"
+    },
+    {
+      "id": "MA111",
+      "year": 1,
+      "title": "Calculus I — Limits & Derivatives",
+      "level": "Beginner",
+      "prereqs": [],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 110,
+      "icon": "∫"
+    },
+    {
+      "id": "MA112",
+      "year": 1,
+      "title": "Calculus II — Integration & Series",
+      "level": "Intermediate",
+      "prereqs": [
+        "MA111"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 110,
+      "icon": "∑"
+    },
+    {
+      "id": "MA121",
+      "year": 1,
+      "title": "Linear Algebra",
+      "level": "Intermediate",
+      "prereqs": [
+        "MA101"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "▦"
+    },
+    {
+      "id": "CE101",
+      "year": 1,
+      "title": "Digital Logic & Computer Systems",
+      "level": "Beginner",
+      "prereqs": [],
+      "stack": [
+        "Verilog (reference)",
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "⎓"
+    },
+    {
+      "id": "CS201",
+      "year": 2,
+      "title": "Data Structures & Algorithms",
+      "level": "Intermediate",
+      "prereqs": [
+        "CS102",
+        "MA101"
+      ],
+      "stack": [
+        "Python",
+        "C (reference)"
+      ],
+      "runtime": "python",
+      "credits": 15,
+      "hours": 160,
+      "icon": "≡"
+    },
+    {
+      "id": "CE201",
+      "year": 2,
+      "title": "Computer Organization & Architecture",
+      "level": "Intermediate",
+      "prereqs": [
+        "CE101",
+        "CS101"
+      ],
+      "stack": [
+        "C (reference)",
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "⚙"
+    },
+    {
+      "id": "CS210",
+      "year": 2,
+      "title": "Operating Systems",
+      "level": "Intermediate",
+      "prereqs": [
+        "CE201",
+        "CS201"
+      ],
+      "stack": [
+        "C (reference)",
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 15,
+      "hours": 150,
+      "icon": "◱"
+    },
+    {
+      "id": "MA201",
+      "year": 2,
+      "title": "Probability & Statistics for Computing",
+      "level": "Intermediate",
+      "prereqs": [
+        "MA112"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "σ"
+    },
+    {
+      "id": "CS220",
+      "year": 2,
+      "title": "Database Management Systems",
+      "level": "Intermediate",
+      "prereqs": [
+        "CS201"
+      ],
+      "stack": [
+        "SQL",
+        "Python",
+        "SQLite"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "⛃"
+    },
+    {
+      "id": "SE201",
+      "year": 2,
+      "title": "Software Engineering Principles",
+      "level": "Intermediate",
+      "prereqs": [
+        "CS102"
+      ],
+      "stack": [
+        "Python",
+        "Git",
+        "pytest"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "⚒"
+    },
+    {
+      "id": "CS301",
+      "year": 3,
+      "title": "Design & Analysis of Algorithms",
+      "level": "Advanced",
+      "prereqs": [
+        "CS201",
+        "MA101"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 15,
+      "hours": 160,
+      "icon": "⌘"
+    },
+    {
+      "id": "CS310",
+      "year": 3,
+      "title": "Theory of Computation & Automata",
+      "level": "Advanced",
+      "prereqs": [
+        "MA101",
+        "CS201"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "λ"
+    },
+    {
+      "id": "CS320",
+      "year": 3,
+      "title": "Computer Networks",
+      "level": "Advanced",
+      "prereqs": [
+        "CS210"
+      ],
+      "stack": [
+        "Python",
+        "Go (reference)"
+      ],
+      "runtime": "python",
+      "credits": 15,
+      "hours": 150,
+      "icon": "⛓"
+    },
+    {
+      "id": "CS330",
+      "year": 3,
+      "title": "Compiler Construction & Programming Languages",
+      "level": "Advanced",
+      "prereqs": [
+        "CS301",
+        "CS310"
+      ],
+      "stack": [
+        "Python",
+        "Rust (reference)"
+      ],
+      "runtime": "python",
+      "credits": 15,
+      "hours": 170,
+      "icon": "⟳"
+    },
+    {
+      "id": "SEC301",
+      "year": 3,
+      "title": "Cybersecurity & Cryptography",
+      "level": "Advanced",
+      "prereqs": [
+        "CS320",
+        "MA201"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 140,
+      "icon": "⚿"
+    },
+    {
+      "id": "WEB301",
+      "year": 3,
+      "title": "Full-Stack & Mobile Development",
+      "level": "Intermediate",
+      "prereqs": [
+        "CS220",
+        "SE201"
+      ],
+      "stack": [
+        "HTML",
+        "CSS",
+        "JavaScript",
+        "Python"
+      ],
+      "runtime": "web",
+      "credits": 15,
+      "hours": 160,
+      "icon": "⬚"
+    },
+    {
+      "id": "CS401",
+      "year": 4,
+      "title": "Distributed Systems & Cloud Computing",
+      "level": "Advanced",
+      "prereqs": [
+        "CS320",
+        "CS210"
+      ],
+      "stack": [
+        "Go (reference)",
+        "Python",
+        "Docker"
+      ],
+      "runtime": "python",
+      "credits": 15,
+      "hours": 170,
+      "icon": "☷"
+    },
+    {
+      "id": "ML401",
+      "year": 4,
+      "title": "Machine Learning & Statistical Modeling",
+      "level": "Advanced",
+      "prereqs": [
+        "MA121",
+        "MA201",
+        "CS301"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 15,
+      "hours": 170,
+      "icon": "∴"
+    },
+    {
+      "id": "HPC401",
+      "year": 4,
+      "title": "High-Performance & Parallel Computing",
+      "level": "Advanced",
+      "prereqs": [
+        "CE201",
+        "CS301"
+      ],
+      "stack": [
+        "C/OpenMP (reference)",
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 150,
+      "icon": "║"
+    },
+    {
+      "id": "GFX401",
+      "year": 4,
+      "title": "Computer Graphics & Visualization",
+      "level": "Advanced",
+      "prereqs": [
+        "MA121",
+        "CS201"
+      ],
+      "stack": [
+        "GLSL (reference)",
+        "Python",
+        "Canvas"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 150,
+      "icon": "◩"
+    },
+    {
+      "id": "ELEC410",
+      "year": 4,
+      "title": "AI Track — Reinforcement Learning & Search",
+      "level": "Advanced",
+      "prereqs": [
+        "ML401"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 140,
+      "icon": "✦"
+    },
+    {
+      "id": "ELEC420",
+      "year": 4,
+      "title": "Security Track — Offensive & Defensive Security",
+      "level": "Advanced",
+      "prereqs": [
+        "SEC301"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 140,
+      "icon": "⛨"
+    },
+    {
+      "id": "ELEC430",
+      "year": 4,
+      "title": "Data Track — Data Engineering at Scale",
+      "level": "Advanced",
+      "prereqs": [
+        "CS220",
+        "MA201"
+      ],
+      "stack": [
+        "Python",
+        "SQL"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 140,
+      "icon": "⌸"
+    },
+    {
+      "id": "DL501",
+      "year": 5,
+      "title": "Deep Learning & Generative AI",
+      "level": "Expert",
+      "prereqs": [
+        "ML401",
+        "MA121"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 15,
+      "hours": 180,
+      "icon": "✧"
+    },
+    {
+      "id": "FM501",
+      "year": 5,
+      "title": "Formal Methods & Program Verification",
+      "level": "Expert",
+      "prereqs": [
+        "CS310",
+        "CS330"
+      ],
+      "stack": [
+        "Python",
+        "Z3 / Dafny (reference)"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 150,
+      "icon": "⊨"
+    },
+    {
+      "id": "ETH501",
+      "year": 5,
+      "title": "Ethics, Policy & Technology Law",
+      "level": "Intermediate",
+      "prereqs": [
+        "SE201",
+        "ML401"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 110,
+      "icon": "⚖"
+    },
+    {
+      "id": "QC510",
+      "year": 5,
+      "title": "Advanced Elective — Quantum Computing",
+      "level": "Expert",
+      "prereqs": [
+        "MA121",
+        "CS310"
+      ],
+      "stack": [
+        "Python",
+        "Qiskit (reference)"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 150,
+      "icon": "⚛"
+    },
+    {
+      "id": "ROB520",
+      "year": 5,
+      "title": "Advanced Elective — Robotics & Autonomy",
+      "level": "Expert",
+      "prereqs": [
+        "ML401",
+        "MA121"
+      ],
+      "stack": [
+        "Python",
+        "ROS 2 (reference)"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 150,
+      "icon": "☸"
+    },
+    {
+      "id": "CAP501",
+      "year": 5,
+      "title": "Capstone Engineering Project",
+      "level": "Expert",
+      "prereqs": [
+        "CS330",
+        "CS401",
+        "SE201",
+        "CS220"
+      ],
+      "stack": [
+        "Python",
+        "SQL",
+        "HTTP"
+      ],
+      "runtime": "python",
+      "credits": 30,
+      "hours": 300,
+      "icon": "★"
+    }
   ]
 }

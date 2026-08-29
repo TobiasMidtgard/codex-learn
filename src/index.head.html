@@ -479,11 +479,41 @@ kbd{font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:4px;bor
 .seg button:hover{color:var(--ink)}
 .seg button.active{background:var(--lime);color:var(--on-lime)}
 
+/* ---------- the majors ---------- */
+.page-head{margin-bottom:26px}
+.page-head h1{margin:0 0 8px;font-size:30px;font-weight:600;letter-spacing:-0.03em;text-wrap:balance}
+.page-head p{margin:0;font-size:14px;color:var(--ink-3);max-width:62ch;text-wrap:pretty}
+.prog-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}
+.prog-card{
+  display:block;width:100%;text-align:left;padding:22px 24px;border-radius:var(--r-lg);
+  border:1px solid var(--line);background:var(--surface);cursor:pointer;
+  transition:border-color .18s,transform .18s,background .18s;animation:fadeUp .45s var(--ease) both;
+}
+.prog-card:hover{border-color:var(--lime-30);transform:translateY(-2px)}
+.prog-card.empty{opacity:.82}
+.pc-head{display:flex;align-items:flex-start;gap:18px;margin-bottom:18px}
+.pc-head>div{flex:1;min-width:0}
+.pc-head h2{margin:0 0 7px;font-size:20px;font-weight:600;letter-spacing:-0.025em;color:var(--ink);text-wrap:balance}
+.pc-head h2 em{color:var(--lime);font-style:normal}
+.pc-head p{margin:0;font-size:13px;line-height:1.6;color:var(--ink-3);text-wrap:pretty}
+.pc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.pc-stats .stat b{display:block;font-family:var(--mono);font-size:19px;color:var(--ink);letter-spacing:-.02em}
+.pc-stats .stat span{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-5)}
+.pc-levels{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.pc-bands{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.pc-bands li{display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:10px;padding:5px 0;font-size:13px;color:var(--ink-2)}
+.pc-bands li+li{border-top:1px solid var(--line)}
+.pb-icon{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:11px;
+  background:color-mix(in srgb,var(--tt,#fff) 22%,transparent);color:var(--ink-2)}
+.pb-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pb-n{font-family:var(--mono);font-size:10.5px;color:var(--ink-5);white-space:nowrap}
+@media (max-width:560px){.pc-stats{grid-template-columns:repeat(2,1fr)}}
+
 .year-band{margin:0 0 30px}
 .year-head{display:flex;align-items:center;gap:14px;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .year-badge{width:42px;height:42px;flex:none;border-radius:12px;display:grid;place-items:center;
-  font-family:var(--mono);font-weight:700;font-size:15px;color:var(--lime);
-  background:var(--lime-08);border:1px solid var(--lime-30)}
+  font-family:var(--mono);font-weight:700;font-size:15px;color:var(--ink);
+  background:color-mix(in srgb,var(--tt,var(--lime)) 20%,transparent);border:1px solid color-mix(in srgb,var(--tt,var(--lime)) 42%,transparent)}
 .year-head h2{margin:0;font-size:19px;font-weight:600;letter-spacing:-.02em}
 .year-head p{margin:2px 0 0;color:var(--ink-4);font-size:13px}
 .year-head .yr-prog{margin-left:auto;text-align:right;flex:none;font-family:var(--mono);font-size:10.5px;color:var(--ink-4)}
