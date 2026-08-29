@@ -224,7 +224,7 @@ def check_course(path) -> dict:
         course = json.load(fh)
 
     cid = course.get("id", os.path.basename(path))
-    report = {"id": cid, "path": path, "labs": [], "errors": []}
+    report = {"id": cid, "path": path, "labs": [], "errors": [], "notes": []}
 
     for tag, mtitle, lab in iter_labs(course):
         name = f"{cid}/{tag}"
@@ -266,9 +266,21 @@ def check_course(path) -> dict:
         st = spawn({"files": starter, "main": lab["main"], "tests": tests})
         entry["starter"] = st
         st_failed = [t for t in st["tests"] if not t["pass"]]
+        st_passed = [t for t in st["tests"] if t["pass"]]
         if not st_failed and not st.get("fatal"):
             entry["warning"] = "starter already passes every check"
             report["errors"].append(f"{name}: starter is pre-solved")
+        elif st_passed:
+            # A check the stub already satisfies teaches nothing, whether or not the
+            # others fail. Only reporting the all-pass case let a single vacuous check
+            # hide inside a "starter 1/7" that nobody reads: usually an assertion about
+            # an absence, or a division by a stubbed zero producing inf.
+            entry["hollow"] = [t["name"] for t in st_passed]
+            report["notes"].append(
+                f"{name}: the starter already passes "
+                + ", ".join(repr(t["name"]) for t in st_passed)
+                + " — check that assertion is not satisfied by the stub"
+            )
 
         entry["summary"] = (f"solution {len(sol['tests']) - len(failed)}/{len(sol['tests'])}"
                             f" · starter {len(st['tests']) - len(st_failed)}/{len(st['tests'])}")
@@ -320,6 +332,7 @@ def main():
 
     reports = [check_course(p) for p in paths]
     all_errors = [e for r in reports for e in r["errors"]]
+    all_notes = [n for r in reports for n in r.get("notes", [])]
 
     if args.json:
         print(json.dumps({"reports": reports, "errors": all_errors}, indent=1))
@@ -338,6 +351,8 @@ def main():
         print()
         if all_errors:
             print(f"{len(all_errors)} problem(s):")
+            for n in all_notes:
+                print('  ?', n)
             for e in all_errors:
                 print("  -", e)
         else:

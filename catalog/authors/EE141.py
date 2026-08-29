@@ -1,0 +1,1673 @@
+"""EE141 — Electricity and Magnetism.
+
+A first-year course. It assumes school mathematics and EE111, the mathematics
+course — complex numbers, derivatives, the exponential, and the first-order RC and
+RL responses — and nothing else: no prior circuits beyond EE101, no field theory,
+no vector calculus, no programming beyond arithmetic. Anything EE111 does not
+supply is defined here where it first appears; the decibel is the one such term
+and module 3 defines it.
+
+Authoring rules, same as the rest of the catalog:
+
+  * every multi-line body is r'''...''' opening on a newline, never r\"\"\"
+  * file contents start at column 0 — clean_code does not dedent them
+  * numpy and the standard library only
+  * every expected number was produced by running the code, never assumed
+"""
+
+COURSE = {
+    "id": "EE141",
+    "title": "Electricity and Magnetism",
+    "band": 1,
+    "level": "Intermediate",
+    "prereqs": ["EE111"],
+    "stack": ["Python", "NumPy"],
+    "credits": 10,
+    "hours": 130,
+    "icon": "◎",
+    "summary": (
+        "Circuits treat a wire as a thing that carries current and a capacitor as a "
+        "number in farads. This course asks where those numbers come from. It starts "
+        "with the force between two charges, builds the electric field and the "
+        "potential out of it, uses Gauss's law to get answers without integrating, "
+        "and then does the same job on the magnetic side: Ampere's law, Faraday "
+        "induction, and inductance read straight off a coil's dimensions."
+    ),
+    "outcomes": [
+        "Compute the force and the field produced by a set of point charges, and say why superposition is allowed.",
+        "Move between field, potential and energy, and use Gauss's law to get a field from symmetry alone.",
+        "Work out a capacitance from the geometry of the conductors, and build an RC circuit with a specified time constant.",
+        "Use Ampere's law and Faraday's law to explain what a coil does, and compute an inductance from its dimensions.",
+    ],
+    "assessment": (
+        "Four quizzes that check the definitions landed, two circuits drawn and graded "
+        "by measurement in the schematic editor, four short Python labs, and a capstone "
+        "toolkit that designs a capacitor and a coil to a specification."
+    ),
+    "reading": [
+        "*Electricity and Magnetism*, Purcell & Morin — chapters 1 to 3 for the electrostatics, 6 for the magnetic field.",
+        "The MIT 8.02 course notes, freely available, for worked Gauss's law and Ampere's law examples.",
+    ],
+
+    "modules": [
+        # ---- M1 -----------------------------------------------------------
+        {
+            "title": "Charge, force and the electric field",
+            "summary": "Two charges push or pull. Divide that force by the charge you used to measure it and you have a field.",
+            "concepts": [
+                "Charge is a property of matter, measured in coulombs (C). It comes in two signs and is conserved.",
+                "Coulomb's law: two point charges $q_1$ and $q_2$ a distance $r$ apart push each other apart with force $F = k q_1 q_2 / r^2$, where $k = 1/(4\\pi\\varepsilon_0) \\approx 8.99\\times10^9$ N m²/C². A negative product means they attract.",
+                "The electric field $E$ at a point is the force a charge would feel there, divided by that charge: $E = F/q$. Its units are newtons per coulomb, which are the same thing as volts per metre.",
+                "Superposition: the field of several charges is the vector sum of the fields each one would produce alone. Nothing interferes with anything.",
+                "Field lines are curves you get by starting somewhere and always walking in the direction of the field. They start on positive charge and end on negative charge.",
+            ],
+            "sandbox": {
+                "title": "Reading a field off its arrows",
+                "visualiser": "phase-portrait",
+                "minutes": 8,
+                "initial": {"a11": 1, "a12": 0, "a21": 0, "a22": 1},
+                "brief": r'''
+The panel draws a two-dimensional vector field. Read the axes as the two coordinates
+of a flat region of space, the short strokes as the direction of the electric field
+at each of those points, and the coloured curves as field lines: each one starts on
+the rim and then follows the arrows wherever they lead.
+
+The four sliders set how the field depends on position. That is a restriction — a
+real point charge makes a field that falls off as $1/r^2$, which no slider here can
+produce — but it is not a cheat. Inside a ball of uniformly spread charge the field
+really does grow in direct proportion to the distance from the centre, which is
+exactly what these sliders describe. The opening values, $a_{11} = a_{22} = 1$ with
+the other two zero, are that case: the field at every point points straight away from
+the black dot, and gets stronger the further out you go.
+''',
+                "notice": [
+                    "As it opens, every stroke points away from the black dot and all eight curves run straight outwards. That is positive charge spread through the region: field lines begin here.",
+                    "Set $a_{11}$ and $a_{22}$ both to $-1$. Every arrow reverses and the curves now run inwards to the dot. Nothing about the geometry changed — only the sign of the charge.",
+                    "Set $a_{11} = 1$ and $a_{22} = -1$, leaving $a_{12}$ and $a_{21}$ at zero. Four of the eight curves sweep in from above and below, turn, and leave along the horizontal axis without going near the dot; two more, launched on the horizontal axis itself, simply run outwards. The last two are launched exactly on the vertical axis, and they run into the dot and stop — not because there is charge there, but because that one point is where the field is exactly zero and there is no direction left to follow. Everywhere else nothing begins or ends. This is what an electric field looks like where there is no charge, and module 2 turns that observation into Gauss's law.",
+                    "Set $a_{11} = a_{22} = 0$, $a_{12} = 1$, $a_{21} = -1$. Every curve now wraps round the dot instead of running into it or out of it, and the readout calls the pattern a *centre*. (The drawn rings creep outward by about a tenth of their radius over the interval sketched; that is the forward-Euler step in the drawing code, not the field.) No electrostatic field can circulate like that. A magnetic field always does, and module 4 is about why.",
+                ],
+            },
+            "quiz": {
+                "title": "Charge and field, checked",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Two small charged spheres sit 10 cm apart and repel each other with a force of 4 mN. You move them to 20 cm apart. What is the force now?",
+                        "opts": ["2 mN", "1 mN", "8 mN", "4 mN, unchanged"],
+                        "a": 1,
+                        "why": (
+                            "Coulomb's law has $r^2$ in the denominator, so the force falls as the *square* "
+                            "of the distance: doubling the separation divides the force by four, giving 1 mN. "
+                            "Answering 2 mN is the common slip — that would be the answer if the law went as "
+                            "$1/r$, which is the law for the magnetic field around a straight wire but not for "
+                            "the force between charges."
+                        ),
+                    },
+                    {
+                        "q": "You measure the electric field at a point by placing a small charge there and dividing the force it feels by its charge. You then repeat the measurement with a charge twice as large. What do you get?",
+                        "opts": [
+                            "Twice the field, because the force is twice as big",
+                            "Half the field",
+                            "The same field",
+                            "Nothing — a field can only be measured with a 1 C charge",
+                        ],
+                        "a": 2,
+                        "why": (
+                            "The force doubles and the charge you divide by doubles, so the ratio $E = F/q$ is "
+                            "unchanged. That is the whole point of defining a field: it is a property of the "
+                            "space, put there by the *source* charges, and it does not depend on what you use "
+                            "to probe it. (A real probe charge does disturb the sources it is measuring, which "
+                            "is why the definition says *small*.)"
+                        ),
+                    },
+                    {
+                        "q": "Two identical positive charges sit at $(-d, 0)$ and $(+d, 0)$. What is the electric field exactly halfway between them, at the origin?",
+                        "opts": [
+                            "Zero",
+                            "Twice the field of one charge, pointing along the x-axis",
+                            "Twice the field of one charge, pointing along the y-axis",
+                            "Undefined, because two fields cannot occupy the same point",
+                        ],
+                        "a": 0,
+                        "why": (
+                            "Each charge pushes a positive test charge away from itself, so at the midpoint one "
+                            "field points in $+x$ and the other in $-x$ with exactly equal magnitude. Vectors "
+                            "add, and these cancel. Note that the fields do not somehow annihilate: move a "
+                            "millimetre off the midpoint and the field is back. Note also that the *potential* "
+                            "at that point is not zero — module 2 makes that distinction."
+                        ),
+                    },
+                    {
+                        "q": "Which way does the electric field point in the space around an isolated negative charge?",
+                        "opts": [
+                            "Radially outward, away from the charge",
+                            "Radially inward, towards the charge",
+                            "In circles around the charge",
+                            "There is no field, because the charge is negative",
+                        ],
+                        "a": 1,
+                        "why": (
+                            "The field is defined as the force *per unit positive charge*. A positive test "
+                            "charge is attracted to a negative source, so the field points inward. This is the "
+                            "sign convention doing real work: the field of a negative charge is the field of a "
+                            "positive one with every arrow reversed, which is what you saw in the sandbox when "
+                            "you made both diagonal entries negative."
+                        ),
+                    },
+                    {
+                        "q": "A charge of $+1$ nC and a charge of $+1$ µC — a thousand times larger — are held a fixed distance apart. Compare the electric force on each.",
+                        "opts": [
+                            "The force on the small charge is a thousand times larger",
+                            "The force on the large charge is a thousand times larger",
+                            "The forces are equal in size and opposite in direction",
+                            "There is no force on the small charge, only on the large one",
+                        ],
+                        "a": 2,
+                        "why": (
+                            "Coulomb's law is symmetric: the same expression $k q_1 q_2 / r^2$ gives the force "
+                            "on each, so the magnitudes are identical and the directions opposite — Newton's "
+                            "third law, exactly as for gravity. What differs is the *acceleration*, since the "
+                            "two objects have different masses, and that is usually what makes people expect "
+                            "the forces themselves to differ."
+                        ),
+                    },
+                    {
+                        "q": "Why can two electric field lines never cross?",
+                        "opts": [
+                            "They can, wherever two charges are close together",
+                            "Because the field at the crossing point would have to have two different directions at once",
+                            "Because field lines repel each other",
+                            "Because crossing lines would mean infinite force",
+                        ],
+                        "a": 1,
+                        "why": (
+                            "A field line is drawn by following the field direction, and at any given point the "
+                            "field is a single vector with one direction. Two lines crossing would mean two "
+                            "directions at one point, which the definition forbids. The one exception is a point "
+                            "where the field is exactly zero — there is no direction to follow there, and that "
+                            "is why lines appear to meet at the null point between two like charges."
+                        ),
+                    },
+                ],
+            },
+            "lab": {
+                "title": "Coulomb's law and superposition",
+                "runtime": "python",
+                "minutes": 25,
+                "brief": r'''
+Two functions, both short.
+
+`coulomb_force(q1, q2, r)` returns the **signed** force between two point charges
+`r` metres apart, in newtons: positive when they push apart, negative when they pull
+together. The constant `K` is already defined for you.
+
+`field_at(charges, point)` returns the electric field at `point` as a NumPy array
+`[Ex, Ey]`, in volts per metre. `charges` is a list of `(q, x, y)` triples. Add up
+one contribution per charge: a charge $q$ sitting at $\mathbf{s}$ contributes
+
+```text
+E = K * q * (point - s) / |point - s|**3
+```
+
+That expression is worth a second look. Its magnitude is $Kq/r^2$, because one power
+of $r$ in the cube is used up normalising the direction vector — so it is Coulomb's
+law with the direction attached.
+''',
+                "files": [{"name": "main.py", "content": r'''
+import numpy as np
+
+EPS0 = 8.8541878128e-12          # permittivity of free space, in F/m
+K = 1.0 / (4.0 * np.pi * EPS0)   # Coulomb constant, in N m^2 / C^2
+
+
+def coulomb_force(q1, q2, r):
+    """Signed force between two point charges r metres apart, in newtons.
+
+    Positive means they repel; negative means they attract.
+    """
+    # TODO: Coulomb's law.
+    return 0.0
+
+
+def field_at(charges, point):
+    """Electric field at `point`, in V/m, as a numpy array [Ex, Ey].
+
+    `charges` is a list of (q, x, y) triples in SI units.
+    """
+    point = np.asarray(point, dtype=float)
+    E = np.zeros(2)
+    # TODO: add one contribution per charge.
+    return E
+
+
+if __name__ == "__main__":
+    print("force between two 1 nC charges 10 cm apart:",
+          coulomb_force(1e-9, 1e-9, 0.1), "N")
+    print("field 10 cm from a 1 nC charge:",
+          field_at([(1e-9, 0.0, 0.0)], (0.1, 0.0)))
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+import numpy as np
+
+EPS0 = 8.8541878128e-12          # permittivity of free space, in F/m
+K = 1.0 / (4.0 * np.pi * EPS0)   # Coulomb constant, in N m^2 / C^2
+
+
+def coulomb_force(q1, q2, r):
+    """Signed force between two point charges r metres apart, in newtons.
+
+    Positive means they repel; negative means they attract.
+    """
+    return K * q1 * q2 / (r * r)
+
+
+def field_at(charges, point):
+    """Electric field at `point`, in V/m, as a numpy array [Ex, Ey].
+
+    `charges` is a list of (q, x, y) triples in SI units.
+    """
+    point = np.asarray(point, dtype=float)
+    E = np.zeros(2)
+    for q, sx, sy in charges:
+        d = point - np.array([float(sx), float(sy)])
+        r = float(np.hypot(d[0], d[1]))
+        if r == 0.0:
+            continue
+        E = E + K * q * d / r ** 3
+    return E
+
+
+if __name__ == "__main__":
+    print("force between two 1 nC charges 10 cm apart:",
+          coulomb_force(1e-9, 1e-9, 0.1), "N")
+    print("field 10 cm from a 1 nC charge:",
+          field_at([(1e-9, 0.0, 0.0)], (0.1, 0.0)))
+'''}],
+                "hints": [
+                    "`coulomb_force` is one line: `K * q1 * q2 / (r * r)`. Do not take an absolute value — the sign is carrying the physics.",
+                    "In `field_at`, `d = point - np.array([sx, sy])` is the vector *from the charge to the point*, which is the direction a positive charge is pushed.",
+                    "`np.hypot(d[0], d[1])` gives the distance. Dividing `d` by the cube of it normalises the direction and applies $1/r^2$ in one step.",
+                ],
+                "tests": [
+                    {"name": "two like charges repel, with the right magnitude", "code": r'''
+_f = coulomb_force(1e-9, 1e-9, 0.1)
+assert _f > 0, "two positive charges push each other apart, so the force is positive"
+assert abs(_f - 8.987551792261173e-07) < 1e-15, \
+    f"expected K*1e-18/0.01 = 8.98755e-07 N, got {_f!r}"
+'''},
+                    {"name": "opposite charges attract", "code": r'''
+_f = coulomb_force(1e-9, -1e-9, 0.1)
+assert _f < 0, "a positive and a negative charge attract, which the sign should show"
+assert abs(_f + 8.987551792261173e-07) < 1e-15, f"expected -8.98755e-07 N, got {_f!r}"
+'''},
+                    {"name": "the force falls as the square of the distance", "code": r'''
+_near = coulomb_force(2e-9, 3e-9, 0.05)
+_far = coulomb_force(2e-9, 3e-9, 0.10)
+assert abs(_near / _far - 4.0) < 1e-9, \
+    f"doubling the distance should divide the force by 4, got a ratio of {_near / _far}"
+'''},
+                    {"name": "the field of one positive charge points away from it", "code": r'''
+import numpy as np
+_E = np.asarray(field_at([(1e-9, 0.0, 0.0)], (0.1, 0.0)), dtype=float)
+assert _E.shape == (2,), f"field_at should return two components, got shape {_E.shape}"
+assert _E[0] > 0 and abs(_E[1]) < 1e-12, f"the field should point along +x, got {_E.tolist()}"
+assert abs(_E[0] - 898.7551792261172) < 1e-9, \
+    f"expected K*1e-9/0.01 = 898.755 V/m, got {_E[0]!r}"
+'''},
+                    {"name": "the field of one negative charge points towards it", "code": r'''
+import numpy as np
+_E = np.asarray(field_at([(-1e-9, 0.0, 0.0)], (0.1, 0.0)), dtype=float)
+assert _E[0] < 0, f"a negative charge pulls a positive test charge inwards, got {_E.tolist()}"
+assert abs(_E[0] + 898.7551792261172) < 1e-9, f"expected -898.755 V/m, got {_E[0]!r}"
+'''},
+                    {"name": "two equal charges cancel at the midpoint, and only there", "code": r'''
+import numpy as np
+_pair = [(3e-9, -0.1, 0.0), (3e-9, 0.1, 0.0)]
+_E = np.asarray(field_at(_pair, (0.0, 0.0)), dtype=float)
+assert float(np.hypot(_E[0], _E[1])) < 1e-9, \
+    f"equal charges either side should cancel exactly at the midpoint, got {_E.tolist()}"
+_off = np.asarray(field_at(_pair, (0.0, 0.05)), dtype=float)
+assert abs(_off[0]) < 1e-9, f"by symmetry the x component is still zero here, got {_off[0]!r}"
+assert abs(_off[1] - 1929.29056884442) < 1e-6, \
+    f"5 cm off the midpoint the field is back: expected 1929.29 V/m along +y, got {_off[1]!r}"
+'''},
+                    {"name": "superposition adds, it does not average", "code": r'''
+import numpy as np
+_one = np.asarray(field_at([(2e-9, -0.05, 0.0)], (0.0, 0.0)), dtype=float)
+_two = np.asarray(field_at([(2e-9, -0.05, 0.0), (-2e-9, 0.05, 0.0)], (0.0, 0.0)), dtype=float)
+assert abs(_two[0] - 2.0 * _one[0]) < 1e-6, \
+    "at the centre of a +q/-q pair both fields point the same way and add to twice one of them"
+assert abs(_two[0] - 14380.082867617872) < 1e-6, \
+    f"expected 14380.08 V/m along +x, got {_two[0]!r}"
+'''},
+                ],
+            },
+        },
+
+        # ---- M2 -----------------------------------------------------------
+        {
+            "title": "Potential, energy and Gauss's law",
+            "summary": "One number per point instead of an arrow, and a way to get fields from symmetry without integrating anything.",
+            "concepts": [
+                "Electric potential $V$ at a point is the work per unit charge needed to bring a charge there from far away, measured in volts (joules per coulomb). It is a single number, not an arrow.",
+                "For a point charge, $V = kq/r$ — note the single power of $r$, against $r^2$ for the field.",
+                "Potentials add as ordinary numbers, so a potential sum is easier than a field sum. The field is recovered as the slope: $E = -\\mathrm{d}V/\\mathrm{d}x$ in one dimension.",
+                "The work done by the field on a charge moving from A to B is $q(V_A - V_B)$, and depends only on the endpoints — never on the route.",
+                "Electric flux through a surface counts the field lines crossing it. Gauss's law: the flux out of any *closed* surface equals the charge enclosed divided by $\\varepsilon_0$, whatever the shape of the surface.",
+                "Gauss's law turns symmetry into answers: for a sphere, a long line or a large flat plate, one line of algebra gives the field with no integration at all.",
+            ],
+            "sandbox": {
+                "title": "Where the field lines begin",
+                "visualiser": "phase-portrait",
+                "minutes": 8,
+                "initial": {"a11": 1, "a12": 0, "a21": 0, "a22": -1},
+                "brief": r'''
+The same vector-field panel as module 1, opened on a different field. Read the axes
+as two coordinates in a flat region of space and the strokes as the direction of $E$.
+
+The readout under the picture reports two numbers about the field you have set up.
+The one that matters here is the **trace**, $a_{11} + a_{22}$. For a field written
+this way the trace *is* the divergence — the amount by which lines begin at a point
+rather than merely pass through it — and Gauss's law says that number is proportional
+to the charge density sitting there. Zero trace means no charge.
+
+The opening values have trace exactly zero, and the picture shows what that looks
+like: lines that arrive, turn, and leave again, with nothing anywhere for one to
+begin or end on.
+''',
+                "notice": [
+                    "As it opens the readout says trace = 0.00, and the label calls it a saddle. Six of the eight curves pass through without touching the dot; the two launched exactly on the vertical axis run into it and stop, at the single point where the field is zero. No curve anywhere begins or ends on charge, because there is none: charge-free space, drawn.",
+                    "Raise $a_{11}$ to 2 and leave $a_{22}$ at $-1$. The trace reads 1.00 and the curves now spread outward overall — positive charge is present, and Gauss's law says the enclosed charge is what the trace measures.",
+                    "Set both $a_{11}$ and $a_{22}$ to $-1.5$. The trace reads $-3.00$ and every curve now ends on the black dot: a negative charge density, with the lines terminating on it.",
+                    "Now move $a_{12}$ and $a_{21}$ around while leaving $a_{11}$ and $a_{22}$ alone. The picture distorts a great deal and the trace never budges. Charge is what makes lines start and stop; shearing the field sideways is not charge.",
+                ],
+            },
+            "quiz": {
+                "title": "Potential and Gauss's law, checked",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "A charge $+q$ sits at $(-d, 0)$ and a charge $-q$ at $(+d, 0)$. What is true at the midpoint?",
+                        "opts": [
+                            "Both the potential and the field are zero",
+                            "The potential is zero but the field is not",
+                            "The field is zero but the potential is not",
+                            "Neither is zero",
+                        ],
+                        "a": 1,
+                        "why": (
+                            "Potentials are plain numbers and add: $kq/d + k(-q)/d = 0$. Fields are vectors, and "
+                            "here both point the same way — away from the positive charge and towards the "
+                            "negative one — so they add up to twice one of them rather than cancelling. Zero "
+                            "potential never implies zero field; it is the *slope* of the potential that gives "
+                            "the field, and a function can pass through zero on a steep slope."
+                        ),
+                    },
+                    {
+                        "q": "You carry a charge from A to B through an electric field, once along a straight line and once by a long meandering path. Compare the work done by the field.",
+                        "opts": [
+                            "The straight path does less work",
+                            "The long path does more work, because it is longer",
+                            "The work is the same for both",
+                            "It depends on how fast you move the charge",
+                        ],
+                        "a": 2,
+                        "why": (
+                            "The work done by the electrostatic field is $q(V_A - V_B)$ — endpoint values only, "
+                            "with the path nowhere in the expression. That is precisely what makes a *potential* "
+                            "definable at all. The intuition that a longer path costs more comes from friction, "
+                            "which is not a conservative force; an electrostatic field is."
+                        ),
+                    },
+                    {
+                        "q": "A point charge $q$ sits at the centre of an imaginary sphere of radius $r$. You double the radius. What happens to the total electric flux out of the sphere?",
+                        "opts": [
+                            "It falls to a quarter",
+                            "It halves",
+                            "It stays the same",
+                            "It quadruples",
+                        ],
+                        "a": 2,
+                        "why": (
+                            "The field weakens as $1/r^2$ but the surface area grows as $r^2$, and flux is field "
+                            "times area, so the two changes cancel exactly. Gauss's law states the result "
+                            "directly: the flux is $q/\\varepsilon_0$, which mentions only the enclosed charge. "
+                            "Answering a quarter is reading the $1/r^2$ of the field and forgetting the area."
+                        ),
+                    },
+                    {
+                        "q": "A charged sphere sits just *outside* a closed imaginary surface. What is the net flux through that surface?",
+                        "opts": [
+                            "Zero",
+                            "Non-zero, since the field from the sphere certainly passes through the surface",
+                            "Zero only if the surface is a sphere too",
+                            "Half of $q/\\varepsilon_0$",
+                        ],
+                        "a": 0,
+                        "why": (
+                            "Field lines from an outside charge enter the surface on one side and leave on the "
+                            "other, so every line contributes once negatively and once positively and the *net* "
+                            "flux is zero. The field is definitely non-zero everywhere on the surface — Gauss's "
+                            "law is about the net count of lines crossing, not about whether a field is present."
+                        ),
+                    },
+                    {
+                        "q": "What is the electric field inside a hollow metal box that carries a static charge on its surface, with nothing inside it?",
+                        "opts": [
+                            "Zero everywhere inside",
+                            "Uniform and equal to the field just outside",
+                            "Strongest at the centre",
+                            "It points from the walls towards the centre",
+                        ],
+                        "a": 0,
+                        "why": (
+                            "Take any closed surface inside the cavity: it encloses no charge, so the net flux is "
+                            "zero, and since the charges on a conductor have arranged themselves so that no field "
+                            "remains in the metal, there is nothing left to make a field in the cavity either. "
+                            "This is the Faraday cage, and it is why a car is a reasonable place to be in a "
+                            "thunderstorm."
+                        ),
+                    },
+                    {
+                        "q": "In a region the potential is a constant 12 V everywhere. What is the electric field there?",
+                        "opts": [
+                            "12 V/m, pointing in the direction of decreasing potential",
+                            "Zero",
+                            "12 V/m, pointing in the direction of increasing potential",
+                            "Undefined without knowing the charges",
+                        ],
+                        "a": 1,
+                        "why": (
+                            "The field is the *rate of change* of potential with position, $E = -\\mathrm{d}V/"
+                            "\\mathrm{d}x$, so a flat potential means no field. The number 12 is a red herring, "
+                            "and a useful one: the zero of potential is a choice you make, and adding 12 V to "
+                            "everything everywhere changes no measurable quantity at all."
+                        ),
+                    },
+                ],
+            },
+            "lab": {
+                "title": "Potential, work and flux",
+                "runtime": "python",
+                "minutes": 28,
+                "brief": r'''
+Three short functions, on the same list-of-charges representation as module 1.
+
+`potential_at(charges, point)` returns the potential in volts: add $kq/r$ for every
+charge. One number out, not an array — no directions are involved.
+
+`work_done(q, charges, start, end)` returns the work in joules that the field does on
+a charge `q` carried from `start` to `end`. That is $q(V_{\text{start}} -
+V_{\text{end}})$, and the path never enters into it.
+
+`flux_through_sphere(charges, centre, radius)` returns the electric flux out of an
+imaginary sphere, in V·m. Do **not** integrate anything. Gauss's law says the answer
+is the enclosed charge divided by $\varepsilon_0$, so the entire job is deciding which
+charges are inside — distance from the centre strictly less than the radius.
+''',
+                "files": [{"name": "main.py", "content": r'''
+import numpy as np
+
+EPS0 = 8.8541878128e-12
+K = 1.0 / (4.0 * np.pi * EPS0)
+
+
+def potential_at(charges, point):
+    """Electric potential at `point`, in volts. A single number."""
+    point = np.asarray(point, dtype=float)
+    # TODO: add K*q/r for every charge.
+    return 0.0
+
+
+def work_done(q, charges, start, end):
+    """Work in joules done by the field on charge `q` carried from `start` to `end`."""
+    # TODO: endpoints only.
+    return 0.0
+
+
+def flux_through_sphere(charges, centre, radius):
+    """Electric flux out of a sphere, in V*m, by Gauss's law."""
+    centre = np.asarray(centre, dtype=float)
+    # TODO: total the charge strictly inside, then divide by EPS0.
+    return 0.0
+
+
+if __name__ == "__main__":
+    one = [(1e-9, 0.0, 0.0)]
+    print("potential 10 cm from 1 nC:", potential_at(one, (0.1, 0.0)), "V")
+    print("flux out of a 5 cm sphere around it:",
+          flux_through_sphere(one, (0.0, 0.0), 0.05), "V m")
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+import numpy as np
+
+EPS0 = 8.8541878128e-12
+K = 1.0 / (4.0 * np.pi * EPS0)
+
+
+def potential_at(charges, point):
+    """Electric potential at `point`, in volts. A single number."""
+    point = np.asarray(point, dtype=float)
+    total = 0.0
+    for q, sx, sy in charges:
+        r = float(np.hypot(point[0] - sx, point[1] - sy))
+        if r == 0.0:
+            continue
+        total += K * q / r
+    return float(total)
+
+
+def work_done(q, charges, start, end):
+    """Work in joules done by the field on charge `q` carried from `start` to `end`."""
+    return float(q * (potential_at(charges, start) - potential_at(charges, end)))
+
+
+def flux_through_sphere(charges, centre, radius):
+    """Electric flux out of a sphere, in V*m, by Gauss's law."""
+    centre = np.asarray(centre, dtype=float)
+    enclosed = 0.0
+    for q, sx, sy in charges:
+        r = float(np.hypot(sx - centre[0], sy - centre[1]))
+        if r < radius:
+            enclosed += q
+    return float(enclosed / EPS0)
+
+
+if __name__ == "__main__":
+    one = [(1e-9, 0.0, 0.0)]
+    print("potential 10 cm from 1 nC:", potential_at(one, (0.1, 0.0)), "V")
+    print("flux out of a 5 cm sphere around it:",
+          flux_through_sphere(one, (0.0, 0.0), 0.05), "V m")
+'''}],
+                "hints": [
+                    "`potential_at` has no direction in it at all: accumulate a plain float, one `K * q / r` per charge.",
+                    "`work_done` should call `potential_at` twice. If you find yourself writing a loop over a path, re-read the definition.",
+                    "`flux_through_sphere` never touches the field. Total the charges whose distance from the centre is less than the radius, and divide by `EPS0`.",
+                ],
+                "tests": [
+                    {"name": "the potential of a point charge falls as 1/r", "code": r'''
+_v1 = potential_at([(1e-9, 0.0, 0.0)], (0.1, 0.0))
+_v2 = potential_at([(1e-9, 0.0, 0.0)], (0.2, 0.0))
+assert abs(_v1 - 89.87551792261172) < 1e-9, f"expected K*1e-9/0.1 = 89.8755 V, got {_v1!r}"
+assert abs(_v1 / _v2 - 2.0) < 1e-9, \
+    f"doubling the distance should halve the potential, got a ratio of {_v1 / _v2}"
+'''},
+                    {"name": "potentials add as numbers, so a dipole centre reads zero", "code": r'''
+_v = potential_at([(2e-9, -0.05, 0.0), (-2e-9, 0.05, 0.0)], (0.0, 0.0))
+assert abs(_v) < 1e-12, \
+    f"equal and opposite charges give equal and opposite potentials at the midpoint, got {_v!r}"
+_same = potential_at([(2e-9, -0.05, 0.0), (2e-9, 0.05, 0.0)], (0.0, 0.0))
+assert abs(_same - 719.0041433808938) < 1e-9, \
+    f"make both charges positive and the same sum gives 719.00 V, not zero, got {_same!r}"
+'''},
+                    {"name": "the potential of a negative charge is negative", "code": r'''
+_v = potential_at([(-3e-9, 0.0, 0.0)], (0.15, 0.0))
+assert _v < 0, f"a negative charge lowers the potential around it, got {_v!r}"
+assert abs(_v + 179.75103584522343) < 1e-9, f"expected -179.751 V, got {_v!r}"
+'''},
+                    {"name": "the field does positive work pushing a charge away", "code": r'''
+_w = work_done(1e-9, [(1e-9, 0.0, 0.0)], (0.1, 0.0), (0.2, 0.0))
+assert _w > 0, "a positive charge moving away from a positive source is pushed, so the field does work on it"
+assert abs(_w - 4.493775896130586e-08) < 1e-18, f"expected 4.4938e-08 J, got {_w!r}"
+'''},
+                    {"name": "work depends on the endpoints, not the direction of travel", "code": r'''
+_there = work_done(2e-9, [(5e-9, 0.0, 0.0)], (0.1, 0.0), (0.3, 0.0))
+_back = work_done(2e-9, [(5e-9, 0.0, 0.0)], (0.3, 0.0), (0.1, 0.0))
+assert abs(_there - 5.991701194840781e-07) < 1e-17, \
+    f"expected 5.9917e-07 J moving out from 10 cm to 30 cm, got {_there!r}"
+assert abs(_there + _back) < 1e-20, \
+    f"going and returning must cancel exactly, got {_there!r} and {_back!r}"
+'''},
+                    {"name": "flux counts the enclosed charge and nothing else", "code": r'''
+_inside = flux_through_sphere([(1e-9, 0.0, 0.0)], (0.0, 0.0), 0.05)
+assert abs(_inside - 112.94090673730192) < 1e-9, f"expected 1 nC / EPS0 = 112.94 V m, got {_inside!r}"
+_outside = flux_through_sphere([(1e-9, 0.5, 0.0)], (0.0, 0.0), 0.05)
+assert abs(_outside) < 1e-12, \
+    f"a charge outside the surface contributes no net flux, got {_outside!r}"
+'''},
+                    {"name": "flux does not care about the size of the surface", "code": r'''
+_small = flux_through_sphere([(4e-9, 0.0, 0.0), (-1e-9, 0.02, 0.0)], (0.0, 0.0), 0.05)
+_big = flux_through_sphere([(4e-9, 0.0, 0.0), (-1e-9, 0.02, 0.0)], (0.0, 0.0), 0.40)
+assert abs(_small - _big) < 1e-9, \
+    "both spheres enclose the same 3 nC, so both must report the same flux"
+assert abs(_small - 338.82272021190574) < 1e-9, f"expected 3 nC / EPS0 = 338.82 V m, got {_small!r}"
+'''},
+                ],
+            },
+        },
+
+        # ---- M3 -----------------------------------------------------------
+        {
+            "title": "Capacitance from geometry",
+            "summary": "Two conductors, a gap, and a number in farads that you can compute from the dimensions alone.",
+            "concepts": [
+                "Put charge $+Q$ on one conductor and $-Q$ on another and a potential difference $V$ appears between them. The ratio $C = Q/V$ is the capacitance, in farads, and it depends only on the geometry and the material in the gap.",
+                "Parallel plates of area $A$ separated by $d$: the field between them is uniform, $V = Ed$, and $C = \\varepsilon_0 A / d$. Wider plates hold more charge at the same voltage; a wider gap holds less.",
+                "A dielectric — an insulator that polarises — multiplies the capacitance by its relative permittivity $\\varepsilon_r$, which is 1 for vacuum and around 4 for glass.",
+                "Capacitors in parallel add ($C = C_1 + C_2$); in series their reciprocals add, so the total is smaller than the smallest one.",
+                "The energy stored is $\\tfrac{1}{2}CV^2$, and it lives in the field in the gap, not on the plates.",
+                "Charging a capacitor through a resistor takes time: $\\tau = RC$ seconds, after which the capacitor has reached 63% of the supply voltage, and about 95% after $3\\tau$.",
+            ],
+            "quiz": {
+                "title": "Capacitance, checked",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "You pull the plates of a parallel-plate capacitor twice as far apart, changing nothing else. What happens to its capacitance?",
+                        "opts": ["It doubles", "It halves", "It quadruples", "It is unchanged"],
+                        "a": 1,
+                        "why": (
+                            "$C = \\varepsilon_0 A/d$ has the gap in the denominator, so doubling $d$ halves $C$. "
+                            "Physically: at a given voltage the field $E = V/d$ is now weaker, so less charge is "
+                            "needed on the plates to produce it. Note this is a $1/d$ law, not $1/d^2$ — the "
+                            "inverse square belongs to the force between point charges, not to plate geometry."
+                        ),
+                    },
+                    {
+                        "q": "You slide a sheet of glass with $\\varepsilon_r = 4$ into the gap, filling it completely. The capacitance becomes:",
+                        "opts": [
+                            "Four times larger",
+                            "Four times smaller",
+                            "Unchanged, since glass is an insulator and carries no current",
+                            "Twice as large",
+                        ],
+                        "a": 0,
+                        "why": (
+                            "The glass polarises: its molecules line up and their own field partly cancels the "
+                            "field from the plates, so the same charge produces a smaller voltage — and $C = Q/V$ "
+                            "goes up by the factor $\\varepsilon_r$, here four. The tempting wrong answer is that "
+                            "an insulator can do nothing because no current flows through it, but capacitance was "
+                            "never about current."
+                        ),
+                    },
+                    {
+                        "q": "Two 1 µF capacitors are connected in series. The combination behaves as:",
+                        "opts": ["2 µF", "1 µF", "0.5 µF", "It depends on the applied voltage"],
+                        "a": 2,
+                        "why": (
+                            "In series the reciprocals add: $1/C = 1/1 + 1/1$ per microfarad, giving 0.5 µF. The "
+                            "geometric picture is the one to keep: two identical capacitors in series is the same "
+                            "as one capacitor with twice the plate separation, and doubling $d$ halves $C$. "
+                            "Answering 2 µF is applying the *parallel* rule, which is the rule that does add."
+                        ),
+                    },
+                    {
+                        "q": "A 1 µF and a 3 µF capacitor sit in series across a battery. Compare the charge stored on each.",
+                        "opts": [
+                            "The 3 µF holds three times the charge",
+                            "The 1 µF holds three times the charge",
+                            "They hold the same charge; the voltages differ instead",
+                            "They hold the same charge and the same voltage",
+                        ],
+                        "a": 2,
+                        "why": (
+                            "The plates between the two capacitors are isolated, so whatever charge leaves one "
+                            "must arrive on the other: series capacitors carry identical charge. With $Q$ fixed "
+                            "and $V = Q/C$, the *smaller* capacitor takes the larger share of the voltage — here "
+                            "the 1 µF takes three quarters of it. This is why series capacitors are used to split "
+                            "a voltage that would break down a single one."
+                        ),
+                    },
+                    {
+                        "q": "You double the voltage across a capacitor. The stored energy:",
+                        "opts": ["Doubles", "Halves", "Quadruples", "Stays the same"],
+                        "a": 2,
+                        "why": (
+                            "The energy is $\\tfrac{1}{2}CV^2$, so it goes as the *square* of the voltage: doubling "
+                            "$V$ multiplies the energy by four. The charge only doubles — the extra factor comes "
+                            "from the fact that each additional coulomb has to be pushed onto a plate that is "
+                            "already at a higher potential than the last one was."
+                        ),
+                    },
+                    {
+                        "q": "A 1 µF capacitor charges from a 5 V supply through a 1 kΩ resistor. After 1 ms — one time constant — the capacitor voltage is about:",
+                        "opts": ["5 V, fully charged", "3.16 V", "2.5 V, exactly half", "1.84 V"],
+                        "a": 1,
+                        "why": (
+                            "One time constant $\\tau = RC$ brings the capacitor to $1 - 1/e = 63.2\\%$ of the "
+                            "supply, which is 3.16 V — not half, and not full. The charging curve is exponential, "
+                            "so it never technically finishes; 95% is reached at $3\\tau$ and 99% at about "
+                            "$4.6\\tau$. You will measure this exact number on a circuit you draw in the next "
+                            "exercise."
+                        ),
+                    },
+                ],
+            },
+            "build": {
+                "title": "A one-millisecond RC",
+                "minutes": 25,
+                "brief": r'''
+Draw a circuit that charges a capacitor from a **5 V source through a resistor**, so
+that the voltage on the capacitor reaches 63% of the supply — 3.16 V — one
+millisecond after the supply is applied.
+
+The canvas opens with the source, a ground and a 1 kΩ resistor already wired, and a
+probe on the node that will become the output. What is missing is a capacitor from
+that node down to a ground of its own, and a value for it.
+
+Only the **product** $RC$ is fixed by the specification, so you choose the split, and
+you may change the resistor as well as add the capacitor. 1 kΩ with 1 µF works; so
+does 10 kΩ with 100 nF, and the checks will accept either, because they measure the
+circuit rather than compare it to a drawing.
+
+Values are typed in engineering notation: `1k`, `100n`, `4.7u`.
+
+The checks measure four things:
+
+- the settled DC voltage at the probe,
+- the time the transient takes to cross 3.16 V,
+- the **corner frequency** $f_c = 1/(2\pi RC)$, which EE111 defined as the frequency
+  where the output has fallen to $1/\sqrt{2} = 0.707$ of its low-frequency size,
+- and that the output really is filtered rather than wired straight to the source.
+
+That fall to $0.707$ is also written **−3 dB**. A *decibel* is a size ratio put on a
+logarithmic scale: a ratio $g$ is $20\log_{10} g$ decibels, so $g = 1$ is 0 dB,
+$g = 0.707$ is $-3.01$ dB, and $g = 0.1$ is $-20$ dB. It is a change of units and
+nothing more, but it is the unit every filter is quoted in. Above the corner this
+filter loses a further factor of ten — a further 20 dB — for every decade of
+frequency, which is the fastest a circuit with one capacitor in it can fall.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 5},
+                        {"id": "p1", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 1000},
+                        {"id": "p2", "kind": "GND", "x": 3, "y": 9, "rot": 0, "value": 0},
+                        {"id": "p3", "kind": "OUT", "x": 11, "y": 4, "rot": 0, "value": 0},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 4], "b": [5, 4]},
+                        {"a": [7, 4], "b": [9, 4]},
+                        {"a": [3, 7], "b": [3, 9]},
+                        {"a": [9, 4], "b": [11, 4]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 5},
+                        {"id": "p1", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 1000},
+                        {"id": "p2", "kind": "C", "x": 9, "y": 6, "rot": 1, "value": 1e-6},
+                        {"id": "p3", "kind": "GND", "x": 3, "y": 9, "rot": 0, "value": 0},
+                        {"id": "p4", "kind": "GND", "x": 9, "y": 9, "rot": 0, "value": 0},
+                        {"id": "p5", "kind": "OUT", "x": 11, "y": 4, "rot": 0, "value": 0},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 4], "b": [5, 4]},
+                        {"a": [7, 4], "b": [9, 4]},
+                        {"a": [9, 4], "b": [9, 5]},
+                        {"a": [3, 7], "b": [3, 9]},
+                        {"a": [9, 7], "b": [9, 9]},
+                        {"a": [9, 4], "b": [11, 4]},
+                    ],
+                },
+                "checks": [
+                    {"name": "the capacitor eventually charges to the full 5 V", "code": r'''
+c.close(c.vout(), 5.0, 0.02, "the settled voltage at the probe");
+'''},
+                    {"name": "it reaches 63% of the supply after 1 ms", "code": r'''
+var s = c.step(0.005);
+var last = s.v[s.v.length - 1];
+c.assert(last > 4.5, "after 5 ms the output has only reached " + c.fmt(last, "V") +
+  " — the time constant is far longer than 1 ms");
+var t63 = null;
+for (var i = 1; i < s.t.length; i++) {
+  if (s.v[i] >= 0.632 * 5.0) { t63 = s.t[i]; break; }
+}
+c.assert(t63 !== null, "the output never reaches 3.16 V within 5 ms");
+c.close(t63, 1.0e-3, 0.08, "the time to reach 63% of 5 V");
+'''},
+                    {"name": "the same RC product puts the corner at 159 Hz", "code": r'''
+var fc = c.corner(1, 1e5);
+c.close(fc, 159.15, 0.06, "the -3 dB frequency (which is 1/(2*pi*R*C))");
+'''},
+                    {"name": "the output is filtered, not just wired to the source", "code": r'''
+var low = c.gain(1);
+var high = c.gain(1.5915e4);
+c.assert(low > 4.5, "at 1 Hz the output should still follow the source, but it reads " +
+  c.fmt(low, "V"));
+c.assert(high < 0.15 * low, "a hundred times above the corner the output should be far " +
+  "smaller than at DC, but it is " + (100 * high / low).toFixed(0) + "% of it");
+'''},
+                ],
+                "hints": [
+                    "The capacitor goes from the probe node down to a ground of its own — vertical, with its top pin meeting the wire that carries the resistor's right-hand end.",
+                    "Pick the resistor first, then the capacitor: $C = \\tau / R$, and with $\\tau = 1$ ms a 1 kΩ resistor asks for 1 µF.",
+                    "Type `1u` for a microfarad. If the transient check reports a time constant ten times too large, the capacitor is probably `10u`.",
+                    "The corner check is not a second specification — $1/(2\\pi RC)$ with $RC = 1$ ms is 159.15 Hz automatically. If the time check passes and this one does not, look for a second resistor or capacitor loading the node.",
+                ],
+            },
+            "lab": {
+                "title": "Capacitance from dimensions",
+                "runtime": "python",
+                "minutes": 22,
+                "brief": r'''
+The circuit you just drew used a 1 µF part with no questions asked. This lab asks
+where that number comes from, and closes the loop back to the time constant you
+measured.
+
+`plate_capacitance(area, gap, eps_r)` returns the capacitance of two parallel plates
+in farads: $\varepsilon_0 \varepsilon_r A / d$.
+
+`series_capacitance(caps)` and `parallel_capacitance(caps)` combine a list of values.
+Reciprocals add in series; values add in parallel.
+
+`charge_time(r, c, frac)` returns how long an RC circuit takes to reach the fraction
+`frac` of its final voltage. Rearranging $v(t) = V(1 - e^{-t/RC})$ gives
+
+```text
+t = -R * C * log(1 - frac)
+```
+
+and putting `frac = 0.632` into it should return, to three figures, the millisecond
+the schematic editor measured.
+''',
+                "files": [{"name": "main.py", "content": r'''
+import numpy as np
+
+EPS0 = 8.8541878128e-12   # F/m
+
+
+def plate_capacitance(area, gap, eps_r=1.0):
+    """Capacitance in farads of two parallel plates of `area` m^2, `gap` m apart."""
+    # TODO: eps0 * eps_r * A / d
+    return 0.0
+
+
+def series_capacitance(caps):
+    """Capacitance of a list of capacitors in series, in farads."""
+    # TODO: the reciprocals add.
+    return 0.0
+
+
+def parallel_capacitance(caps):
+    """Capacitance of a list of capacitors in parallel, in farads."""
+    # TODO: the values add.
+    return 0.0
+
+
+def charge_time(r, c, frac):
+    """Seconds for an RC circuit to reach `frac` of its final voltage."""
+    # TODO: invert v(t) = V(1 - exp(-t/RC)).
+    return 0.0
+
+
+if __name__ == "__main__":
+    small = plate_capacitance(1e-4, 1e-4)
+    print("1 cm^2 plates 0.1 mm apart:", small, "F")
+    print("with glass in the gap:", plate_capacitance(1e-4, 1e-4, 4.0), "F")
+    print("1 kohm and 1 uF reach 63.2% after", charge_time(1000.0, 1e-6, 0.632), "s")
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+import numpy as np
+
+EPS0 = 8.8541878128e-12   # F/m
+
+
+def plate_capacitance(area, gap, eps_r=1.0):
+    """Capacitance in farads of two parallel plates of `area` m^2, `gap` m apart."""
+    return float(EPS0 * eps_r * area / gap)
+
+
+def series_capacitance(caps):
+    """Capacitance of a list of capacitors in series, in farads."""
+    total = 0.0
+    for c in caps:
+        total += 1.0 / c
+    return float(1.0 / total)
+
+
+def parallel_capacitance(caps):
+    """Capacitance of a list of capacitors in parallel, in farads."""
+    return float(sum(caps))
+
+
+def charge_time(r, c, frac):
+    """Seconds for an RC circuit to reach `frac` of its final voltage."""
+    return float(-r * c * np.log(1.0 - frac))
+
+
+if __name__ == "__main__":
+    small = plate_capacitance(1e-4, 1e-4)
+    print("1 cm^2 plates 0.1 mm apart:", small, "F")
+    print("with glass in the gap:", plate_capacitance(1e-4, 1e-4, 4.0), "F")
+    print("1 kohm and 1 uF reach 63.2% after", charge_time(1000.0, 1e-6, 0.632), "s")
+'''}],
+                "hints": [
+                    "`plate_capacitance` is one expression. Keep the units straight: area in square metres, gap in metres.",
+                    "For the series case accumulate `1/c` and take the reciprocal at the end. Returning the sum itself gives the parallel answer, which is the classic slip.",
+                    "`charge_time` needs a natural logarithm: `np.log`, not `np.log10`.",
+                ],
+                "tests": [
+                    {"name": "a square centimetre a tenth of a millimetre away", "code": r'''
+_c = plate_capacitance(1e-4, 1e-4)
+assert abs(_c - 8.8541878128e-12) < 1e-24, \
+    f"with A/d = 1 the capacitance is just eps0 = 8.854 pF, got {_c!r}"
+'''},
+                    {"name": "wider gap, less capacitance; more area, more", "code": r'''
+_base = plate_capacitance(1e-4, 1e-4)
+_wide = plate_capacitance(1e-4, 2e-4)
+_big = plate_capacitance(3e-4, 1e-4)
+assert abs(_wide - 4.4270939064e-12) < 1e-24, \
+    f"1 cm^2 plates 0.2 mm apart come to 4.427 pF, got {_wide!r}"
+assert abs(_wide - _base / 2.0) < 1e-24, "doubling the gap should halve the capacitance"
+assert abs(_big - 2.65625634384e-11) < 1e-23, \
+    f"3 cm^2 plates 0.1 mm apart come to 26.56 pF, got {_big!r}"
+assert abs(_big - 3.0 * _base) < 1e-24, "tripling the area should triple the capacitance"
+'''},
+                    {"name": "a dielectric multiplies the capacitance", "code": r'''
+_vac = plate_capacitance(2e-4, 5e-5)
+_glass = plate_capacitance(2e-4, 5e-5, 4.0)
+assert abs(_vac - 3.54167512512e-11) < 1e-23, \
+    f"A/d = 4 in vacuum gives 4*eps0 = 35.42 pF, got {_vac!r}"
+assert abs(_glass - 4.0 * _vac) < 1e-22, \
+    f"eps_r = 4 should give four times the vacuum value, got {_glass!r} against {_vac!r}"
+'''},
+                    {"name": "series is smaller than the smallest, parallel is the sum", "code": r'''
+_s = series_capacitance([1e-6, 1e-6])
+assert abs(_s - 5e-7) < 1e-16, f"two 1 uF in series is 0.5 uF, got {_s!r}"
+_mixed = series_capacitance([1e-6, 2e-6])
+assert _mixed < 1e-6, f"a series combination is smaller than its smallest member, got {_mixed!r}"
+assert abs(_mixed - 6.666666666666667e-07) < 1e-16, f"expected 0.667 uF, got {_mixed!r}"
+_p = parallel_capacitance([1e-6, 2e-6])
+assert abs(_p - 3e-6) < 1e-16, f"in parallel they add to 3 uF, got {_p!r}"
+'''},
+                    {"name": "one time constant is 63.2% of the way there", "code": r'''
+import math
+_tau = charge_time(1000.0, 1e-6, 1.0 - 1.0 / math.e)
+assert abs(_tau - 1e-3) < 1e-12, \
+    f"reaching 1 - 1/e of the supply takes exactly RC = 1 ms, got {_tau!r}"
+'''},
+                    {"name": "the numbers match the circuit you drew", "code": r'''
+_t63 = charge_time(1000.0, 1e-6, 0.632)
+assert abs(_t63 - 1e-3) < 2e-6, \
+    f"1 kohm with 1 uF should reach 63.2% at about 1 ms, got {_t63!r}"
+_t95 = charge_time(1000.0, 1e-6, 0.95)
+assert abs(_t95 - 0.00299573227355399) < 1e-12, \
+    f"95% takes just under three time constants, got {_t95!r}"
+assert _t95 > 2.5 * _t63, "the last few per cent take far longer than the first 63%"
+'''},
+                ],
+            },
+        },
+
+        # ---- M4 -----------------------------------------------------------
+        {
+            "title": "Magnetic fields, induction and inductance",
+            "summary": "Moving charge makes a field that curls, a changing field makes a voltage, and a coil's shape fixes how much.",
+            "concepts": [
+                "A current makes a magnetic field $B$, measured in tesla. Around a long straight wire the field circles the wire and falls off as $1/r$ — not $1/r^2$.",
+                "Ampere's law: add up $B$ along any closed loop and the total is $\\mu_0$ times the current threaded through the loop. For a wire this gives $B = \\mu_0 I / (2\\pi r)$ in one line.",
+                "Magnetic field lines always close on themselves. There is no magnetic charge for them to start on, so the net magnetic flux out of any closed surface is exactly zero.",
+                "Magnetic flux through a loop is $\\Phi = BA\\cos\\theta$, in webers. Faraday's law: a *changing* flux drives a voltage, $\\mathcal{E} = -\\mathrm{d}\\Phi/\\mathrm{d}t$. A steady flux drives nothing.",
+                "Lenz's law is the minus sign: the induced current flows the way that opposes the change that caused it. Energy conservation, wearing a different hat.",
+                "A coil links its own flux, so changing its own current induces a voltage in itself: $v = L\\,\\mathrm{d}i/\\mathrm{d}t$. For a solenoid of $N$ turns, length $\\ell$ and cross-section $A$, $L = \\mu_0 N^2 A / \\ell$ — the turns count squared, because each turn both makes and links the flux.",
+                "Through a resistor, an inductor's current settles with time constant $\\tau = L/R$, and a capacitor and an inductor together resonate at $\\omega_0 = 1/\\sqrt{LC}$.",
+            ],
+            "sandbox": {
+                "title": "A capacitor and an inductor in the same loop",
+                "visualiser": "bode",
+                "minutes": 8,
+                "initial": {"wn": 20, "zeta": 0.5, "K": 1},
+                "brief": r'''
+Put a resistor, an inductor and a capacitor in series across a source and probe the
+capacitor. The top panel is the size of the output as the source frequency is swept,
+in decibels, as module 3 defined them: 0 dB means the output is the same size as the
+source, $+20$ dB means ten times larger, $-20$ dB a tenth. The bottom panel is how far
+the output lags the source, in degrees. Both are drawn for the response
+
+$$\frac{1}{(1 - x^2) + j\,2\zeta x}, \qquad x = \frac{\omega}{\omega_n}$$
+
+which is exactly what that circuit does, with $\omega_n = 1/\sqrt{LC}$ and
+$\zeta = \tfrac{R}{2}\sqrt{C/L}$. So $\omega_n$ is the resonance set by the two energy
+stores, and $\zeta$ is the damping the resistor adds. The third slider, $K$, is an
+overall gain applied to the whole curve; leave it at 1 and the picture is the circuit
+exactly.
+
+The amber dot marks the response exactly at the resonant frequency.
+''',
+                "notice": [
+                    "Pull $\\zeta$ down to 0.05 — a small series resistance. The amber dot climbs to +20 dB: the voltage across the capacitor is ten times the source voltage. Nothing is amplifying anything; energy is sloshing between the capacitor and the inductor and the source only tops it up.",
+                    "Whatever you do to $\\zeta$, the lower curve crosses the dashed −90° line at exactly $\\omega_n$. Damping changes how sharp the transition is, never where it sits.",
+                    "Above $\\omega_n$ the magnitude falls by 40 dB per decade — a factor of a hundred in size for every factor of ten in frequency. The RC filter you built in module 3 has one energy store and manages 20 dB per decade. Two energy stores, twice the roll-off.",
+                    "Raise $\\omega_n$ and the whole picture slides right with its shape unchanged. Only the product $LC$ decides where the resonance is: halving $L$ and doubling $C$ leaves it exactly where it was.",
+                ],
+            },
+            "quiz": {
+                "title": "Magnetism and induction, checked",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "You measure the magnetic field 2 cm from a long straight wire, then move out to 6 cm. The field is now:",
+                        "opts": ["A third as strong", "A ninth as strong", "A sixth as strong", "Unchanged"],
+                        "a": 0,
+                        "why": (
+                            "Ampere's law gives $B = \\mu_0 I / (2\\pi r)$ for a long straight wire: a single power "
+                            "of $r$, so tripling the distance divides the field by three. The instinct to answer "
+                            "'a ninth' comes from Coulomb's law, but the geometry is different — a wire is a line "
+                            "of sources, not a point, and its field falls off more slowly."
+                        ),
+                    },
+                    {
+                        "q": "What is the net magnetic flux out of a closed surface drawn around one end of a bar magnet?",
+                        "opts": [
+                            "Positive, since the north pole is inside",
+                            "Zero",
+                            "It depends on the shape of the surface",
+                            "Equal to the pole strength divided by $\\mu_0$",
+                        ],
+                        "a": 1,
+                        "why": (
+                            "Magnetic field lines have no ends: every line that leaves the surface comes back in "
+                            "somewhere else, because there is no magnetic charge for a line to start on. So the "
+                            "net flux out of *any* closed surface is exactly zero — the magnetic counterpart of "
+                            "Gauss's law, with a zero on the right-hand side. Cutting a magnet in half gives two "
+                            "magnets, never an isolated pole."
+                        ),
+                    },
+                    {
+                        "q": "A coil of wire sits motionless in a strong, perfectly steady magnetic field. What voltage appears across its ends?",
+                        "opts": [
+                            "A large one, because the flux through it is large",
+                            "None",
+                            "One proportional to the field strength",
+                            "One proportional to the coil's area",
+                        ],
+                        "a": 1,
+                        "why": (
+                            "Faraday's law is about the *rate of change* of flux, $\\mathcal{E} = -\\mathrm{d}\\Phi/"
+                            "\\mathrm{d}t$. A steady flux, however large, has zero rate of change and induces "
+                            "nothing. This is why transformers only work on alternating current, and why you have "
+                            "to move a magnet past a coil rather than just holding it there."
+                        ),
+                    },
+                    {
+                        "q": "You push the north pole of a magnet towards a coil. Which way does the induced current flow?",
+                        "opts": [
+                            "The way that makes the coil's near face a north pole, pushing back",
+                            "The way that makes the coil's near face a south pole, pulling the magnet in",
+                            "It alternates as the magnet moves",
+                            "No current flows until the magnet touches the coil",
+                        ],
+                        "a": 0,
+                        "why": (
+                            "Lenz's law: the induced current opposes the change that produced it, so the coil "
+                            "presents a north face and repels the approaching magnet. It has to. If it attracted "
+                            "the magnet instead, the magnet would accelerate in, inducing more current, "
+                            "accelerating further — free energy from nothing. The minus sign in Faraday's law is "
+                            "energy conservation written into the equation."
+                        ),
+                    },
+                    {
+                        "q": "You wind a solenoid with twice as many turns, keeping its length and cross-section the same. Its inductance:",
+                        "opts": ["Doubles", "Quadruples", "Halves", "Is unchanged"],
+                        "a": 1,
+                        "why": (
+                            "$L = \\mu_0 N^2 A / \\ell$ — the turn count is *squared*, so twice the turns is four "
+                            "times the inductance. The reason it appears twice is worth holding on to: doubling "
+                            "the turns doubles the field the coil makes for a given current, and then doubles "
+                            "again the number of turns that link that field."
+                        ),
+                    },
+                    {
+                        "q": "A 10 mH inductor is switched onto a supply through a 100 Ω resistor. How long until the current has reached 63% of its final value?",
+                        "opts": ["1 ms", "100 µs", "10 µs", "1 s"],
+                        "a": 1,
+                        "why": (
+                            "For an inductor the time constant is $\\tau = L/R = 0.01/100 = 100$ µs. Note that the "
+                            "resistance is in the *denominator*, the opposite of the capacitor case where "
+                            "$\\tau = RC$: a bigger resistor makes an RL circuit faster and an RC circuit slower. "
+                            "The 1 s option is the slip to watch for: it is $L$ multiplied by $R$, the "
+                            "capacitor's rule applied to an inductor. The 1 ms option is the RC time "
+                            "constant from module 3, which belongs to a different circuit entirely."
+                        ),
+                    },
+                ],
+            },
+            "build": {
+                "title": "An inductor that takes 159 microseconds",
+                "minutes": 25,
+                "brief": r'''
+Draw the inductive twin of the RC you built in module 3: a **5 V source**, an
+inductor in series, and a resistor from the inductor's far end down to ground, with
+the probe on the junction between them.
+
+At DC an inductor is simply a piece of wire, so the settled output is the full supply.
+Immediately after switch-on it is the opposite — the inductor resists any sudden
+change in its current, so the output starts at zero and climbs. The time constant is
+
+$$\tau = \frac{L}{R}$$
+
+and the specification is $\tau = 159$ µs, which puts the filter's corner at 1 kHz.
+
+The canvas opens with the source wired straight to the resistor. Insert an inductor
+into that path and choose the pair of values. As before, only the ratio is fixed:
+10 mH with 62.8 Ω works, and so does 1 mH with 6.28 Ω.
+
+Type inductances as `10m` for 10 millihenries.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 5},
+                        {"id": "p1", "kind": "R", "x": 9, "y": 6, "rot": 1, "value": 62.8},
+                        {"id": "p2", "kind": "GND", "x": 3, "y": 9, "rot": 0, "value": 0},
+                        {"id": "p3", "kind": "GND", "x": 9, "y": 9, "rot": 0, "value": 0},
+                        {"id": "p4", "kind": "OUT", "x": 11, "y": 4, "rot": 0, "value": 0},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 4], "b": [9, 4]},
+                        {"a": [9, 4], "b": [9, 5]},
+                        {"a": [3, 7], "b": [3, 9]},
+                        {"a": [9, 7], "b": [9, 9]},
+                        {"a": [9, 4], "b": [11, 4]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 5},
+                        {"id": "p1", "kind": "L", "x": 6, "y": 4, "rot": 0, "value": 0.01},
+                        {"id": "p2", "kind": "R", "x": 9, "y": 6, "rot": 1, "value": 62.8},
+                        {"id": "p3", "kind": "GND", "x": 3, "y": 9, "rot": 0, "value": 0},
+                        {"id": "p4", "kind": "GND", "x": 9, "y": 9, "rot": 0, "value": 0},
+                        {"id": "p5", "kind": "OUT", "x": 11, "y": 4, "rot": 0, "value": 0},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 4], "b": [5, 4]},
+                        {"a": [7, 4], "b": [9, 4]},
+                        {"a": [9, 4], "b": [9, 5]},
+                        {"a": [3, 7], "b": [3, 9]},
+                        {"a": [9, 7], "b": [9, 9]},
+                        {"a": [9, 4], "b": [11, 4]},
+                    ],
+                },
+                "checks": [
+                    {"name": "at DC the inductor is just wire, so the output is the full 5 V", "code": r'''
+c.close(c.vout(), 5.0, 0.02, "the settled voltage at the probe");
+'''},
+                    {"name": "the current takes 159 microseconds to reach 63%", "code": r'''
+var s = c.step(0.001);
+var last = s.v[s.v.length - 1];
+c.assert(last > 4.5, "after 1 ms the output has only reached " + c.fmt(last, "V") +
+  " — the L/R time constant is far longer than 159 us");
+var t63 = null;
+for (var i = 1; i < s.t.length; i++) {
+  if (s.v[i] >= 0.632 * 5.0) { t63 = s.t[i]; break; }
+}
+c.assert(t63 !== null, "the output never reaches 3.16 V within 1 ms");
+c.close(t63, 1.5915e-4, 0.10, "the time to reach 63% of 5 V");
+'''},
+                    {"name": "the corner sits at 1 kHz", "code": r'''
+var fc = c.corner(10, 1e6);
+c.close(fc, 1000.0, 0.06, "the -3 dB frequency (which is R/(2*pi*L))");
+'''},
+                    {"name": "one decade past the corner the output is down tenfold", "code": r'''
+var low = c.gain(10);
+var dec = c.gain(10000);
+c.assert(low > 4.5, "at 10 Hz the output should still follow the source, but it reads " +
+  c.fmt(low, "V"));
+c.close(dec / low, 0.0995, 0.15, "the gain a decade above the corner, relative to DC");
+'''},
+                ],
+                "hints": [
+                    "The source is currently wired straight across to the resistor. Delete the long wire, drop the inductor into the gap, and rejoin both ends.",
+                    "Choose the resistor first: with $\\tau = L/R$, a 10 mH coil needs $R = L/\\tau = 0.01/159\\,\\mu\\text{s} \\approx 62.8\\ \\Omega$.",
+                    "If the DC check fails with an under-determined message, the probe node is floating — the resistor must reach ground.",
+                    "A time constant ten times too *short* usually means the inductor was typed as `1m` rather than `10m`.",
+                ],
+            },
+            "lab": {
+                "title": "A coil, from its dimensions to its time constant",
+                "runtime": "python",
+                "minutes": 24,
+                "brief": r'''
+The same closing of the loop as module 3, on the magnetic side: from the shape of a
+coil to the number you typed into the schematic.
+
+`solenoid_inductance(turns, length, area, mu_r)` returns $\mu_0 \mu_r N^2 A / \ell$ in
+henries. `MU0` is defined for you.
+
+`emf_from_flux_change(flux_start, flux_end, dt)` returns the average induced voltage
+over the interval, $-\Delta\Phi/\Delta t$. Keep the minus sign: it is Lenz's law, and
+a rising flux must give a negative emf.
+
+`rl_time_constant(inductance, resistance)` returns $L/R$ in seconds — the number the
+circuit editor measured for you as 159 µs.
+''',
+                "files": [{"name": "main.py", "content": r'''
+import numpy as np
+
+MU0 = 1.25663706212e-6   # permeability of free space, in H/m
+
+
+def solenoid_inductance(turns, length, area, mu_r=1.0):
+    """Inductance in henries of a solenoid: mu0 * mu_r * N^2 * A / length."""
+    # TODO: mind the square on the turn count.
+    return 0.0
+
+
+def emf_from_flux_change(flux_start, flux_end, dt):
+    """Average induced emf in volts over `dt` seconds, from Faraday's law."""
+    # TODO: minus the rate of change of flux.
+    return 0.0
+
+
+def rl_time_constant(inductance, resistance):
+    """Time constant in seconds of an inductor discharging through a resistor."""
+    # TODO: L over R, not L times R.
+    return 0.0
+
+
+if __name__ == "__main__":
+    L = solenoid_inductance(500, 0.2, 1e-4)
+    print("500 turns, 20 cm long, 1 cm^2 cross-section:", L, "H")
+    print("with 62.8 ohm in series, tau =", rl_time_constant(L, 62.8), "s")
+    print("flux rising 0 -> 2 mWb in 10 ms gives",
+          emf_from_flux_change(0.0, 2e-3, 0.01), "V")
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+import numpy as np
+
+MU0 = 1.25663706212e-6   # permeability of free space, in H/m
+
+
+def solenoid_inductance(turns, length, area, mu_r=1.0):
+    """Inductance in henries of a solenoid: mu0 * mu_r * N^2 * A / length."""
+    return float(MU0 * mu_r * turns * turns * area / length)
+
+
+def emf_from_flux_change(flux_start, flux_end, dt):
+    """Average induced emf in volts over `dt` seconds, from Faraday's law."""
+    return float(-(flux_end - flux_start) / dt)
+
+
+def rl_time_constant(inductance, resistance):
+    """Time constant in seconds of an inductor discharging through a resistor."""
+    return float(inductance / resistance)
+
+
+if __name__ == "__main__":
+    L = solenoid_inductance(500, 0.2, 1e-4)
+    print("500 turns, 20 cm long, 1 cm^2 cross-section:", L, "H")
+    print("with 62.8 ohm in series, tau =", rl_time_constant(L, 62.8), "s")
+    print("flux rising 0 -> 2 mWb in 10 ms gives",
+          emf_from_flux_change(0.0, 2e-3, 0.01), "V")
+'''}],
+                "hints": [
+                    "`turns * turns` (or `turns ** 2`) — the squared turn count is the whole character of the formula.",
+                    "The emf is *minus* the change in flux over the time taken, so a flux that grows gives a negative answer.",
+                    "The RL time constant divides: a bigger resistor makes the circuit settle faster, which is the opposite of the RC case.",
+                ],
+                "tests": [
+                    {"name": "a 500-turn solenoid", "code": r'''
+_L = solenoid_inductance(500, 0.2, 1e-4)
+assert abs(_L - 0.000157079632765) < 1e-15, \
+    f"expected MU0*500^2*1e-4/0.2 = 157.08 uH, got {_L!r}"
+'''},
+                    {"name": "inductance goes as the square of the turns", "code": r'''
+_one = solenoid_inductance(200, 0.1, 5e-4)
+_two = solenoid_inductance(400, 0.1, 5e-4)
+assert abs(_two / _one - 4.0) < 1e-9, \
+    f"doubling the turns should quadruple the inductance, got a ratio of {_two / _one}"
+'''},
+                    {"name": "a longer coil of the same turns is weaker", "code": r'''
+_short = solenoid_inductance(300, 0.05, 2e-4)
+_long = solenoid_inductance(300, 0.10, 2e-4)
+assert abs(_short / _long - 2.0) < 1e-9, "the length is in the denominator"
+_core = solenoid_inductance(300, 0.05, 2e-4, 200.0)
+assert abs(_core - 200.0 * _short) < 1e-12, "an iron core of mu_r = 200 multiplies L by 200"
+'''},
+                    {"name": "a rising flux induces a negative emf", "code": r'''
+_e = emf_from_flux_change(0.0, 2e-3, 0.01)
+assert _e < 0, "Lenz's law: the induced emf opposes the rise, so it comes out negative"
+assert abs(_e + 0.2) < 1e-12, f"expected -0.2 V, got {_e!r}"
+_back = emf_from_flux_change(2e-3, 0.0, 0.01)
+assert abs(_back - 0.2) < 1e-12, f"reversing the change reverses the emf, got {_back!r}"
+'''},
+                    {"name": "a steady flux induces nothing, a changing one does", "code": r'''
+_e = emf_from_flux_change(5e-3, 5e-3, 0.01)
+assert abs(_e) < 1e-15, \
+    f"Faraday's law responds to change, not to the size of the flux, got {_e!r}"
+_drop = emf_from_flux_change(5e-3, 4e-3, 0.01)
+assert abs(_drop - 0.1) < 1e-12, \
+    f"the same 5 mWb falling by 1 mWb over 10 ms gives +0.1 V, got {_drop!r}"
+'''},
+                    {"name": "the time constant matches the circuit you drew", "code": r'''
+_tau = rl_time_constant(0.01, 62.8)
+assert abs(_tau - 0.00015923566878980894) < 1e-15, \
+    f"10 mH with 62.8 ohm is 159 us, exactly as the editor measured, got {_tau!r}"
+assert abs(rl_time_constant(0.01, 125.6) - _tau / 2.0) < 1e-15, \
+    "doubling the resistance halves the RL time constant"
+'''},
+                ],
+            },
+        },
+    ],
+
+    # ---- capstone ---------------------------------------------------------
+    "capstone": {
+        "title": "An electromagnetics toolkit, and two components designed with it",
+        "runtime": "python",
+        "minutes": 100,
+        "brief": r'''
+Everything in this course has been the same move made twice: start from a force or a
+geometry, and end with a number you can put into a circuit. This capstone assembles
+the pieces into one small toolkit and then uses it backwards — not "what does this
+shape do", but "what shape do I need".
+
+`emconst.py` holds the constants and is read-only. Work in `main.py`.
+
+## What to build
+
+1. **Fields and potentials.** `field_at(charges, point)` and
+   `potential_at(charges, point)`, as in modules 1 and 2: a vector sum and a scalar
+   sum over a list of `(q, x, y)` charges.
+2. **Gauss's law.** `flux_out_of_sphere(charges, centre, radius)`, using enclosed
+   charge only.
+3. **Geometry, forwards.** `plate_capacitance(area, gap, eps_r)` and
+   `solenoid_inductance(turns, length, area, mu_r)`.
+4. **Geometry, backwards.** `design_capacitor(target_c, gap, eps_r)` returns the plate
+   area in m² that hits the target, and `design_solenoid(target_l, length, area)`
+   returns the turn count. Each must be an exact inverse of the forward function —
+   feed the answer back in and the target must come out. Leave the turn count as a
+   real number; rounding it to a whole number of turns is a manufacturing decision,
+   not a physics one.
+5. **Transients.** `rc_voltage(v_source, r, c, t)` gives the capacitor voltage at time
+   `t` when charging from rest, and `rl_voltage(v_source, l, r, t)` gives the voltage
+   across the resistor of a series RL from switch-on. Both are the same shape,
+   $V(1 - e^{-t/\tau})$, with $\tau = RC$ in one case and $L/R$ in the other — which is
+   the tidiest evidence you have that the electric and magnetic sides of this course
+   are two halves of one subject.
+
+Then put a comment at the top of `main.py` recording the plate area your
+`design_capacitor` returned for a 1 nF capacitor with a 0.5 mm gap and $\varepsilon_r
+= 4$, and the turn count `design_solenoid` returned for a 10 mH coil 10 cm long with a
+2 cm² cross-section — with a sentence on whether either is a component you would
+actually build.
+''',
+        "deliverables": [
+            "`field_at` and `potential_at`, both by superposition over a list of point charges, with the field returned as a two-element NumPy array and the potential as a plain float.",
+            "`flux_out_of_sphere`, computed from the enclosed charge by Gauss's law and not by integrating a field over a surface.",
+            "`plate_capacitance` and `solenoid_inductance`, each straight from the geometry, and the two inverse functions `design_capacitor` and `design_solenoid` that hit a target exactly.",
+            "`rc_voltage` and `rl_voltage`, the charging curves of the two circuits built in modules 3 and 4, agreeing with the time constants those exercises measured.",
+            "A comment at the top of `main.py` giving the designed plate area and turn count, and a sentence on whether each is physically sensible.",
+        ],
+        "constraints": [
+            "NumPy and the standard library only.",
+            "`emconst.py` is read-only; import the constants from it rather than retyping them, so every function is using the same numbers.",
+            "`flux_out_of_sphere` must not call `field_at`. The point of Gauss's law is that the field never has to be computed.",
+            "The design functions must invert the forward functions algebraically. A search loop that gets close is not the same thing and will fail the round-trip checks.",
+        ],
+        "rubric": [
+            {"criterion": "Fields and potentials", "weight": 30,
+             "evidence": "Superposition is correct in both direction and magnitude: a single charge gives the textbook value, two equal charges cancel at their midpoint, and a dipole centre gives zero potential with a non-zero field."},
+            {"criterion": "Gauss's law", "weight": 20,
+             "evidence": "The flux depends only on the charge enclosed: it is unchanged by the radius of the surface, and a charge just outside contributes nothing."},
+            {"criterion": "Geometry both ways", "weight": 30,
+             "evidence": "Forward formulas scale correctly with area, gap, turns and length, and each design function is an exact inverse — its output fed back into the forward function reproduces the target to floating-point precision."},
+            {"criterion": "Transients", "weight": 20,
+             "evidence": "Both charging curves start at zero, reach 63.2% at one time constant and 95% at three, and reproduce the 1 ms and 159 µs measured in the two circuit exercises."},
+        ],
+        "hints": [
+            "Every function here already exists in one of the four labs. The capstone is mostly assembly, so bring them across and make them agree on their constants.",
+            "`design_capacitor` is `plate_capacitance` solved for the area: $A = C d / (\\varepsilon_0 \\varepsilon_r)$.",
+            "`design_solenoid` needs a square root: $N = \\sqrt{L \\ell / (\\mu_0 A)}$.",
+            "`rc_voltage` and `rl_voltage` differ only in how they build $\\tau$. Write one helper that takes a time constant and call it twice.",
+            "At $t = 0$ both curves must return exactly zero — a capacitor cannot change its voltage instantly, and an inductor cannot change its current instantly.",
+        ],
+        "files": [
+            {"name": "emconst.py", "ro": True, "content": r'''
+"""Physical constants. Do not edit — the checks rely on these exact values."""
+
+EPS0 = 8.8541878128e-12      # permittivity of free space, F/m
+MU0 = 1.25663706212e-6       # permeability of free space, H/m
+K = 8987551792.261171        # 1 / (4 pi eps0), N m^2 / C^2
+'''},
+            {"name": "main.py", "content": r'''
+import numpy as np
+from emconst import EPS0, MU0, K
+
+# Designed components:
+#   1 nF capacitor, 0.5 mm gap, eps_r = 4  ->  plate area TODO m^2, and whether that is sensible
+#   10 mH coil, 10 cm long, 2 cm^2 section ->  TODO turns, and whether that is sensible
+
+
+def field_at(charges, point):
+    """Electric field at `point` in V/m, as a numpy array [Ex, Ey]."""
+    point = np.asarray(point, dtype=float)
+    # TODO
+    return np.zeros(2)
+
+
+def potential_at(charges, point):
+    """Electric potential at `point`, in volts."""
+    # TODO
+    return 0.0
+
+
+def flux_out_of_sphere(charges, centre, radius):
+    """Electric flux out of a sphere in V*m, by Gauss's law."""
+    # TODO: enclosed charge only.
+    return 0.0
+
+
+def plate_capacitance(area, gap, eps_r=1.0):
+    """Capacitance in farads of two parallel plates."""
+    # TODO
+    return 0.0
+
+
+def solenoid_inductance(turns, length, area, mu_r=1.0):
+    """Inductance in henries of a solenoid."""
+    # TODO
+    return 0.0
+
+
+def design_capacitor(target_c, gap, eps_r=1.0):
+    """Plate area in m^2 that gives `target_c` farads at this gap."""
+    # TODO: invert plate_capacitance.
+    return 0.0
+
+
+def design_solenoid(target_l, length, area, mu_r=1.0):
+    """Turn count that gives `target_l` henries for this coil shape."""
+    # TODO: invert solenoid_inductance.
+    return 0.0
+
+
+def rc_voltage(v_source, r, c, t):
+    """Capacitor voltage at time `t`, charging from rest through `r`."""
+    # TODO
+    return 0.0
+
+
+def rl_voltage(v_source, l, r, t):
+    """Resistor voltage at time `t` in a series RL, from switch-on."""
+    # TODO
+    return 0.0
+
+
+if __name__ == "__main__":
+    print("area for 1 nF:", design_capacitor(1e-9, 0.5e-3, 4.0), "m^2")
+    print("turns for 10 mH:", design_solenoid(0.01, 0.1, 2e-4))
+    print("RC at one time constant:", rc_voltage(5.0, 1000.0, 1e-6, 1e-3), "V")
+'''},
+        ],
+        "main": "main.py",
+        "solution": [
+            {"name": "main.py", "content": r'''
+import numpy as np
+from emconst import EPS0, MU0, K
+
+# Designed components:
+#   1 nF capacitor, 0.5 mm gap, eps_r = 4  ->  0.01412 m^2 of plate, about 12 cm square.
+#       Buildable, but only just: this is why real 1 nF parts are rolled or stacked
+#       rather than left as two flat plates in air.
+#   10 mH coil, 10 cm long, 2 cm^2 section ->  1994.7 turns.
+#       Perfectly ordinary for a wound air-cored coil, though the wire resistance that
+#       comes with two thousand turns is what actually limits such a design.
+
+
+def field_at(charges, point):
+    """Electric field at `point` in V/m, as a numpy array [Ex, Ey]."""
+    point = np.asarray(point, dtype=float)
+    E = np.zeros(2)
+    for q, sx, sy in charges:
+        d = point - np.array([float(sx), float(sy)])
+        r = float(np.hypot(d[0], d[1]))
+        if r == 0.0:
+            continue
+        E = E + K * q * d / r ** 3
+    return E
+
+
+def potential_at(charges, point):
+    """Electric potential at `point`, in volts."""
+    point = np.asarray(point, dtype=float)
+    total = 0.0
+    for q, sx, sy in charges:
+        r = float(np.hypot(point[0] - sx, point[1] - sy))
+        if r == 0.0:
+            continue
+        total += K * q / r
+    return float(total)
+
+
+def flux_out_of_sphere(charges, centre, radius):
+    """Electric flux out of a sphere in V*m, by Gauss's law."""
+    centre = np.asarray(centre, dtype=float)
+    enclosed = 0.0
+    for q, sx, sy in charges:
+        if float(np.hypot(sx - centre[0], sy - centre[1])) < radius:
+            enclosed += q
+    return float(enclosed / EPS0)
+
+
+def plate_capacitance(area, gap, eps_r=1.0):
+    """Capacitance in farads of two parallel plates."""
+    return float(EPS0 * eps_r * area / gap)
+
+
+def solenoid_inductance(turns, length, area, mu_r=1.0):
+    """Inductance in henries of a solenoid."""
+    return float(MU0 * mu_r * turns * turns * area / length)
+
+
+def design_capacitor(target_c, gap, eps_r=1.0):
+    """Plate area in m^2 that gives `target_c` farads at this gap."""
+    return float(target_c * gap / (EPS0 * eps_r))
+
+
+def design_solenoid(target_l, length, area, mu_r=1.0):
+    """Turn count that gives `target_l` henries for this coil shape."""
+    return float(np.sqrt(target_l * length / (MU0 * mu_r * area)))
+
+
+def _rise(v_source, tau, t):
+    """The shared charging curve: V(1 - exp(-t/tau))."""
+    return float(v_source * (1.0 - np.exp(-t / tau)))
+
+
+def rc_voltage(v_source, r, c, t):
+    """Capacitor voltage at time `t`, charging from rest through `r`."""
+    return _rise(v_source, r * c, t)
+
+
+def rl_voltage(v_source, l, r, t):
+    """Resistor voltage at time `t` in a series RL, from switch-on."""
+    return _rise(v_source, l / r, t)
+
+
+if __name__ == "__main__":
+    print("area for 1 nF:", design_capacitor(1e-9, 0.5e-3, 4.0), "m^2")
+    print("turns for 10 mH:", design_solenoid(0.01, 0.1, 2e-4))
+    print("RC at one time constant:", rc_voltage(5.0, 1000.0, 1e-6, 1e-3), "V")
+'''},
+        ],
+        "tests": [
+            {"name": "the field superposes, in direction and in size", "code": r'''
+import numpy as np
+_E = np.asarray(field_at([(1e-9, 0.0, 0.0)], (0.1, 0.0)), dtype=float)
+assert _E.shape == (2,), f"field_at should return two components, got shape {_E.shape}"
+assert abs(_E[0] - 898.7551792261172) < 1e-6 and abs(_E[1]) < 1e-9, \
+    f"expected 898.755 V/m along +x, got {_E.tolist()}"
+_pair = np.asarray(field_at([(3e-9, -0.1, 0.0), (3e-9, 0.1, 0.0)], (0.0, 0.0)), dtype=float)
+assert float(np.hypot(_pair[0], _pair[1])) < 1e-9, \
+    f"two equal charges cancel at their midpoint, got {_pair.tolist()}"
+'''},
+            {"name": "potential is a scalar sum, and disagrees with the field", "code": r'''
+import numpy as np
+_v = potential_at([(2e-9, -0.05, 0.0), (-2e-9, 0.05, 0.0)], (0.0, 0.0))
+assert abs(_v) < 1e-12, f"a dipole centre sits at zero potential, got {_v!r}"
+_E = np.asarray(field_at([(2e-9, -0.05, 0.0), (-2e-9, 0.05, 0.0)], (0.0, 0.0)), dtype=float)
+assert abs(_E[0] - 14380.082867617872) < 1e-6, \
+    f"the field there is emphatically not zero: expected 14380.08 V/m, got {_E[0]!r}"
+assert abs(potential_at([(1e-9, 0.0, 0.0)], (0.1, 0.0)) - 89.87551792261172) < 1e-9
+'''},
+            {"name": "flux sees only the enclosed charge", "code": r'''
+_inside = flux_out_of_sphere([(1e-9, 0.0, 0.0)], (0.0, 0.0), 0.05)
+assert abs(_inside - 112.94090673730192) < 1e-9, f"expected 1 nC / EPS0, got {_inside!r}"
+_outside = flux_out_of_sphere([(1e-9, 0.5, 0.0)], (0.0, 0.0), 0.05)
+assert abs(_outside) < 1e-12, f"a charge outside contributes no net flux, got {_outside!r}"
+_wide = flux_out_of_sphere([(1e-9, 0.0, 0.0)], (0.0, 0.0), 0.40)
+assert abs(_wide - _inside) < 1e-9, "growing the surface changes nothing while the charge stays inside"
+'''},
+            {"name": "the geometry formulas scale as they should", "code": r'''
+_c = plate_capacitance(1e-4, 1e-4)
+assert abs(_c - 8.8541878128e-12) < 1e-24, f"A/d = 1 gives eps0 exactly, got {_c!r}"
+assert abs(plate_capacitance(1e-4, 2e-4) - _c / 2.0) < 1e-24, "doubling the gap halves C"
+assert abs(plate_capacitance(1e-4, 1e-4, 4.0) - 4.0 * _c) < 1e-23, "eps_r = 4 quadruples C"
+_l = solenoid_inductance(500, 0.2, 1e-4)
+assert abs(_l - 0.000157079632765) < 1e-15, f"expected 157.08 uH, got {_l!r}"
+assert abs(solenoid_inductance(1000, 0.2, 1e-4) - 4.0 * _l) < 1e-14, \
+    "twice the turns is four times the inductance"
+'''},
+            {"name": "the design functions invert the geometry exactly", "code": r'''
+_area = design_capacitor(1e-9, 0.5e-3, 4.0)
+assert abs(_area - 0.01411761334216274) < 1e-12, f"expected 0.01412 m^2, got {_area!r}"
+assert abs(plate_capacitance(_area, 0.5e-3, 4.0) - 1e-9) < 1e-21, \
+    "feeding the designed area back in must return the 1 nF target"
+_n = design_solenoid(0.01, 0.1, 2e-4)
+assert abs(_n - 1994.7114014642273) < 1e-6, f"expected 1994.7 turns, got {_n!r}"
+assert abs(solenoid_inductance(_n, 0.1, 2e-4) - 0.01) < 1e-15, \
+    "feeding the designed turn count back in must return the 10 mH target"
+'''},
+            {"name": "the design functions are not hard-coded to those two targets", "code": r'''
+_a2 = design_capacitor(4.7e-9, 1e-4, 1.0)
+assert abs(plate_capacitance(_a2, 1e-4, 1.0) - 4.7e-9) < 1e-20, \
+    "a different target must still round-trip"
+_n2 = design_solenoid(2.2e-3, 0.05, 8e-4)
+assert abs(solenoid_inductance(_n2, 0.05, 8e-4) - 2.2e-3) < 1e-15, \
+    "a different coil must still round-trip"
+assert _n2 < 1994.7114014642273, \
+    "a smaller inductance on a fatter core needs fewer turns, not more"
+'''},
+            {"name": "both transients start at zero and hit 63.2% at one tau", "code": r'''
+assert abs(rc_voltage(5.0, 1000.0, 1e-6, 0.0)) < 1e-15, \
+    "a capacitor cannot change its voltage instantly, so v(0) is exactly 0"
+assert abs(rl_voltage(5.0, 0.01, 62.8, 0.0)) < 1e-15, \
+    "an inductor cannot change its current instantly, so the resistor starts at 0 V"
+assert abs(rc_voltage(5.0, 1000.0, 1e-6, 1e-3) - 3.1606027941427883) < 1e-9, \
+    "1 kohm and 1 uF reach 63.2% of 5 V at t = 1 ms"
+assert abs(rl_voltage(5.0, 0.01, 62.8, 0.01 / 62.8) - 3.1606027941427883) < 1e-9, \
+    "10 mH and 62.8 ohm reach the same 63.2% at t = L/R"
+'''},
+            {"name": "the two circuits from modules 3 and 4 agree with the toolkit", "code": r'''
+_rc95 = rc_voltage(5.0, 1000.0, 1e-6, 3e-3)
+assert abs(_rc95 / 5.0 - 0.950212931632136) < 1e-9, \
+    f"three time constants is 95.02% of the way there, got {_rc95 / 5.0!r}"
+_tau_rl = 0.01 / 62.8
+assert abs(_tau_rl - 0.00015923566878980894) < 1e-15
+_late = rl_voltage(5.0, 0.01, 62.8, 5.0 * _tau_rl)
+assert _late > 4.9, f"after five time constants the RL is within 1% of the supply, got {_late!r}"
+assert rl_voltage(5.0, 0.01, 62.8, 1e-6) < rl_voltage(5.0, 0.01, 62.8, 1e-5), \
+    "the curve must be rising, not falling"
+'''},
+        ],
+    },
+}

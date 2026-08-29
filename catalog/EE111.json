@@ -1,0 +1,1283 @@
+{
+ "id": "EE111",
+ "title": "Mathematics for Electrical Engineering",
+ "year": 1,
+ "level": "Beginner",
+ "prereqs": [],
+ "stack": [
+  "Python",
+  "SymPy"
+ ],
+ "credits": 10,
+ "hours": 120,
+ "icon": "◈",
+ "summary": "Electrical engineering is written in five pieces of mathematics: complex numbers, the exponential function, differentiation, integration, and simultaneous equations. This course teaches those five from the beginning and shows, in a working circuit simulator, what each one is for. Nothing is assumed beyond school algebra and trigonometry.",
+ "outcomes": [
+  "Add, multiply, conjugate and divide complex numbers, and place them on the Argand plane.",
+  "State Euler's identity and use a phasor to add sinusoids of the same frequency.",
+  "Differentiate and integrate the exponentials and sinusoids that circuits produce, and apply i = C dv/dt.",
+  "Solve a first-order differential equation, and recognise the time constant in a measured response.",
+  "Write a set of simultaneous equations as a matrix and solve it."
+ ],
+ "assessment": "Four quizzes, three circuits drawn and measured in the schematic editor, four small Python labs, and a capstone that computes an RC network four different ways.",
+ "reading": [
+  "*Engineering Mathematics*, Stroud — parts 1 and 2, for the algebra at exactly this level.",
+  "*Mathematical Methods for Physics and Engineering*, Riley, Hobson & Bence — chapter 3 for complex numbers.",
+  "*The Art of Electronics*, Horowitz & Hill — chapter 1, where complex impedance is put to work, once module 2 is done."
+ ],
+ "modules": [
+  {
+   "title": "Complex numbers and the Argand plane",
+   "summary": "A number with two parts, drawn as a point on a plane. Multiplying by j turns that point a quarter of the way round.",
+   "concepts": [
+    "The symbol $j$ is defined by one rule and one rule only: $j^2 = -1$. Engineers write $j$ rather than $i$ because $i$ is already the current.",
+    "A complex number is $a + jb$: $a$ is the **real part**, $b$ is the **imaginary part**. Both are ordinary real numbers.",
+    "The **Argand plane** draws $a + jb$ as the point $(a, b)$ — real part across, imaginary part up. Addition is then exactly vector addition.",
+    "The **modulus** $|a + jb| = \\sqrt{a^2 + b^2}$ is the distance from the origin; the **argument** is the angle from the positive real axis, found with $\\arctan$ of $b/a$ in the right quadrant.",
+    "The **conjugate** of $a + jb$ is $a - jb$: the same point reflected in the real axis. Multiplying a number by its own conjugate gives $a^2 + b^2$, a real number — which is how division is done.",
+    "Multiplying by $j$ rotates a point a quarter turn anticlockwise and changes nothing else. That single fact is why complex numbers describe alternating current."
+   ],
+   "sandbox": {
+    "title": "Multiplying by j, drawn as motion",
+    "visualiser": "phase-portrait",
+    "minutes": 8,
+    "brief": "Take the horizontal axis to be the real part of a complex number and the vertical\naxis to be the imaginary part. That is the Argand plane.\n\nThe four sliders set a matrix that turns a point into a velocity. The short strokes\npoint along that velocity — they are all drawn the same length, so they show the\ndirection and not the speed — and the coloured curves are the paths that follow it\nfrom eight starting points around a circle.\n\nThe matrix it opens with is $\\begin{bmatrix} 0 & -1 \\\\ 1 & 0\\end{bmatrix}$, which\nsends the point $(a, b)$ to $(-b, a)$ — and $(-b, a)$ is exactly $j$ times $a + jb$.\nSo the picture on screen is what \"multiply by $j$\" does, applied over and over.",
+    "initial": {
+     "a11": 0,
+     "a12": -1,
+     "a21": 1,
+     "a22": 0
+    },
+    "notice": [
+     "The eight curves are circles about the origin. Multiplying by $j$ never changes the modulus, only the angle — so a point can only ever go round. (The drawing steps forward in small jumps, so the circles creep outwards by about a tenth of their radius over the run; that is the drawing's arithmetic, not the mathematics.)",
+     "Set $a_{11}$ and $a_{22}$ both to $-0.3$ and leave the other two alone. The circles become inward spirals, and the readout under the plot changes to *stable spiral*. Rotation plus shrinking is what a decaying oscillation looks like — hold on to this picture, it returns in module 2.",
+     "Now set $a_{11}$ and $a_{22}$ both to $+0.3$. The spirals run outwards instead, past the edge of the plot and off the panel, where the drawing gives up on each curve in turn. Same rotation, opposite growth.",
+     "Set $a_{12}$ to $+1$ so both off-diagonal entries are $+1$. The readout says *saddle*: the paths no longer go round at all. Rotation needed that minus sign — one entry, and the whole character of the picture changes."
+    ]
+   },
+   "quiz": {
+    "title": "Does the definition hold up",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "What is $j^2$?",
+      "opts": [
+       "$1$",
+       "$j$",
+       "$-1$",
+       "$0$"
+      ],
+      "a": 2,
+      "why": "This is the definition, not a result: $j$ is *introduced* as a thing whose square is $-1$, because no real number has that property. Everything else about complex numbers follows from ordinary algebra plus this one substitution. A common slip is $j^2 = j$, which would make $j$ equal to 0 or 1 and leave nothing new."
+     },
+     {
+      "q": "What is $(3 + 4j) + (1 - 2j)$?",
+      "opts": [
+       "$4 + 6j$",
+       "$4 + 2j$",
+       "$4 - 8j$",
+       "$3 - 8j$"
+      ],
+      "a": 1,
+      "why": "Add the real parts and add the imaginary parts, separately: $3 + 1 = 4$ and $4 + (-2) = 2$. Nothing multiplies, so $j^2$ never appears. On the Argand plane this is the parallelogram rule — the same addition you would do with two arrows."
+     },
+     {
+      "q": "What is $|3 + 4j|$, the modulus?",
+      "opts": [
+       "$7$",
+       "$25$",
+       "$12$",
+       "$5$"
+      ],
+      "a": 3,
+      "why": "The modulus is the distance from the origin to the point $(3, 4)$, so it is Pythagoras: $\\sqrt{3^2 + 4^2} = \\sqrt{25} = 5$. Two frequent errors are adding the parts to get 7, and stopping at $3^2 + 4^2 = 25$ without taking the square root."
+     },
+     {
+      "q": "What is the conjugate of $2 - 5j$?",
+      "opts": [
+       "$-2 + 5j$",
+       "$2 + 5j$",
+       "$-2 - 5j$",
+       "$5 - 2j$"
+      ],
+      "a": 1,
+      "why": "Conjugating flips the sign of the imaginary part and leaves the real part alone: the point is reflected in the horizontal axis. It does not negate the whole number, and it does not swap the two parts over."
+     },
+     {
+      "q": "On the Argand plane, what does multiplying a number by $j$ do to it?",
+      "opts": [
+       "Doubles its distance from the origin",
+       "Reflects it in the real axis",
+       "Turns it a quarter turn anticlockwise about the origin",
+       "Moves it one unit upwards"
+      ],
+      "a": 2,
+      "why": "Check it on a case: $j(a + jb) = ja + j^2 b = -b + ja$, so $(a, b)$ becomes $(-b, a)$. Draw those two points and the angle between them is 90 degrees, with the distance from the origin unchanged. Reflection in the real axis is conjugation, a different operation; and *adding* $j$, not multiplying, is what moves a point one unit up."
+     },
+     {
+      "q": "What is $(2 + 3j)(2 - 3j)$?",
+      "opts": [
+       "$4 - 9j$",
+       "$4 + 9j$",
+       "$13j$",
+       "$13$"
+      ],
+      "a": 3,
+      "why": "Expand: $4 - 6j + 6j - 9j^2$. The two middle terms cancel, and $-9j^2 = +9$, leaving $13$ with no imaginary part at all. A number times its own conjugate is always real and equal to the modulus squared — which is exactly why you multiply top and bottom by the conjugate when dividing."
+     }
+    ]
+   },
+   "build": null,
+   "derive": null,
+   "lab": {
+    "title": "Complex arithmetic, built from nothing",
+    "runtime": "python",
+    "minutes": 30,
+    "brief": "Python has complex numbers built in. You are going to write them yourself once, so\nthat nothing about them is magic afterwards.\n\nA complex number here is an ordinary pair of floats: the tuple `(a, b)` means\n$a + jb$. Fill in the six functions in `main.py`:\n\n- `add(x, y)` and `mul(x, y)` — the arithmetic. For `mul`, expand the brackets and\n  replace $j^2$ with $-1$.\n- `conj(x)` — flip the sign of the imaginary part.\n- `modulus(x)` — the distance from the origin.\n- `argument(x)` — the angle from the positive real axis, in radians. Use\n  `math.atan2(b, a)`, which gets the quadrant right; `math.atan(b / a)` does not.\n- `divide(x, y)` — multiply top and bottom by the conjugate of the bottom, so the\n  bottom becomes the real number $|y|^2$, then divide both parts by it. Raise\n  `ZeroDivisionError` if the bottom is $0 + 0j$.\n\n`main.py` prints a few results when you run it; the checks call your functions.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n# A complex number is the tuple (real_part, imaginary_part).\n# So (3.0, 4.0) means 3 + 4j.\n\n\ndef add(x, y):\n    \"\"\"(a + jb) + (c + jd). Add the two parts separately.\"\"\"\n    # TODO\n    return (0.0, 0.0)\n\n\ndef mul(x, y):\n    \"\"\"(a + jb)(c + jd). Expand, then replace j*j with -1.\"\"\"\n    # TODO\n    return (0.0, 0.0)\n\n\ndef conj(x):\n    \"\"\"a + jb  ->  a - jb.\"\"\"\n    # TODO\n    return (0.0, 0.0)\n\n\ndef modulus(x):\n    \"\"\"The distance from the origin to the point (a, b).\"\"\"\n    # TODO\n    return 0.0\n\n\ndef argument(x):\n    \"\"\"The angle in radians from the positive real axis. Use math.atan2.\"\"\"\n    # TODO\n    return 0.0\n\n\ndef divide(x, y):\n    \"\"\"x / y, by multiplying top and bottom by the conjugate of y.\"\"\"\n    # TODO\n    return (0.0, 0.0)\n\n\nif __name__ == \"__main__\":\n    print(\"j * j        =\", mul((0.0, 1.0), (0.0, 1.0)))\n    print(\"(3+4j) sum   =\", add((3.0, 4.0), (1.0, -2.0)))\n    print(\"|3+4j|       =\", modulus((3.0, 4.0)))\n    print(\"arg(0+2j)    =\", round(argument((0.0, 2.0)), 6), \"rad\")\n    print(\"1 / j        =\", divide((1.0, 0.0), (0.0, 1.0)))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n# A complex number is the tuple (real_part, imaginary_part).\n# So (3.0, 4.0) means 3 + 4j.\n\n\ndef add(x, y):\n    \"\"\"(a + jb) + (c + jd). Add the two parts separately.\"\"\"\n    return (x[0] + y[0], x[1] + y[1])\n\n\ndef mul(x, y):\n    \"\"\"(a + jb)(c + jd). Expand, then replace j*j with -1.\"\"\"\n    a, b = x\n    c, d = y\n    return (a * c - b * d, a * d + b * c)\n\n\ndef conj(x):\n    \"\"\"a + jb  ->  a - jb.\"\"\"\n    return (x[0], -x[1])\n\n\ndef modulus(x):\n    \"\"\"The distance from the origin to the point (a, b).\"\"\"\n    return math.hypot(x[0], x[1])\n\n\ndef argument(x):\n    \"\"\"The angle in radians from the positive real axis. Use math.atan2.\"\"\"\n    return math.atan2(x[1], x[0])\n\n\ndef divide(x, y):\n    \"\"\"x / y, by multiplying top and bottom by the conjugate of y.\"\"\"\n    bottom = y[0] * y[0] + y[1] * y[1]\n    if bottom == 0.0:\n        raise ZeroDivisionError(\"cannot divide by 0 + 0j\")\n    top = mul(x, conj(y))\n    return (top[0] / bottom, top[1] / bottom)\n\n\nif __name__ == \"__main__\":\n    print(\"j * j        =\", mul((0.0, 1.0), (0.0, 1.0)))\n    print(\"(3+4j) sum   =\", add((3.0, 4.0), (1.0, -2.0)))\n    print(\"|3+4j|       =\", modulus((3.0, 4.0)))\n    print(\"arg(0+2j)    =\", round(argument((0.0, 2.0)), 6), \"rad\")\n    print(\"1 / j        =\", divide((1.0, 0.0), (0.0, 1.0)))\n"
+     }
+    ],
+    "hints": [
+     "For `mul`, write the four products out on paper first: $ac + jad + jbc + j^2bd$. Only the last one changes sign.",
+     "`math.hypot(a, b)` is $\\sqrt{a^2 + b^2}$ and avoids overflow; `math.atan2(b, a)` takes the parts in that order — imaginary first.",
+     "For `divide`, you already have `mul` and `conj`. Multiply the top by `conj(y)`, work out $|y|^2$ as `y[0]**2 + y[1]**2`, and divide each part of the result by it."
+    ],
+    "tests": [
+     {
+      "name": "j squared is minus one",
+      "code": "_r = mul((0.0, 1.0), (0.0, 1.0))\nassert abs(_r[0] - (-1.0)) < 1e-12 and abs(_r[1]) < 1e-12, \\\n    f\"j*j should be (-1, 0), got {_r}\""
+     },
+     {
+      "name": "addition works part by part",
+      "code": "_r = add((3.0, 4.0), (1.0, -2.0))\nassert abs(_r[0] - 4.0) < 1e-12 and abs(_r[1] - 2.0) < 1e-12, \\\n    f\"(3+4j) + (1-2j) should be (4, 2), got {_r}\""
+     },
+     {
+      "name": "multiplication is not part by part",
+      "code": "_r = mul((3.0, 4.0), (1.0, -2.0))\nassert abs(_r[0] - 11.0) < 1e-12 and abs(_r[1] - (-2.0)) < 1e-12, \\\n    f\"(3+4j)(1-2j) should be (11, -2), got {_r} — expand all four products\""
+     },
+     {
+      "name": "modulus is Pythagoras",
+      "code": "assert abs(modulus((3.0, 4.0)) - 5.0) < 1e-12, \\\n    f\"|3+4j| should be 5, got {modulus((3.0, 4.0))}\"\nassert abs(modulus((-3.0, -4.0)) - 5.0) < 1e-12, \\\n    \"the modulus is a distance and can never be negative\""
+     },
+     {
+      "name": "argument gets the quadrant right",
+      "code": "import math\nassert abs(argument((0.0, 2.0)) - math.pi / 2) < 1e-12, \\\n    \"0 + 2j sits straight up, at pi/2\"\n_a = argument((-1.0, 1.0))\nassert abs(_a - 3 * math.pi / 4) < 1e-12, \\\n    f\"-1 + j is in the second quadrant, at 3pi/4, got {_a} — atan alone cannot see this\""
+     },
+     {
+      "name": "a number times its conjugate is real",
+      "code": "_r = mul((3.0, 4.0), conj((3.0, 4.0)))\nassert abs(_r[1]) < 1e-12, f\"the imaginary part should vanish, got {_r}\"\nassert abs(_r[0] - 25.0) < 1e-12, f\"it should equal |3+4j|^2 = 25, got {_r[0]}\""
+     },
+     {
+      "name": "division by j turns the other way",
+      "code": "_r = divide((1.0, 0.0), (0.0, 1.0))\nassert abs(_r[0]) < 1e-12 and abs(_r[1] - (-1.0)) < 1e-12, \\\n    f\"1/j should be (0, -1), got {_r} — dividing by j is a quarter turn clockwise\""
+     },
+     {
+      "name": "dividing by zero is refused",
+      "code": "try:\n    divide((1.0, 2.0), (0.0, 0.0))\nexcept ZeroDivisionError:\n    pass\nelse:\n    raise AssertionError(\"dividing by 0 + 0j should raise ZeroDivisionError\")"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Euler's identity and the phasor",
+   "summary": "One equation ties the exponential to the sine and cosine, and turns trigonometry into arithmetic.",
+   "concepts": [
+    "**Euler's identity**: $e^{j\\theta} = \\cos\\theta + j\\sin\\theta$. Read it as a point on the unit circle at angle $\\theta$.",
+    "It follows that $|e^{j\\theta}| = 1$ for every real $\\theta$: a pure imaginary exponent rotates and never stretches.",
+    "Running it backwards gives $\\cos\\theta = \\frac{e^{j\\theta} + e^{-j\\theta}}{2}$ and $\\sin\\theta = \\frac{e^{j\\theta} - e^{-j\\theta}}{2j}$.",
+    "A **phasor** is a complex number carrying the amplitude and the phase of a sinusoid: $A\\cos(\\omega t + \\phi)$ is written $A e^{j\\phi}$, and the $\\omega t$ is left implied because every signal in the circuit shares it.",
+    "Two sinusoids of the *same frequency* add by adding their phasors — ordinary complex addition, no trigonometric identities.",
+    "A general exponent $\\sigma + j\\omega$ gives $e^{\\sigma t}e^{j\\omega t}$: a rotation at rate $\\omega$ scaled by a growth or decay $e^{\\sigma t}$. Negative $\\sigma$ means the oscillation dies away."
+   ],
+   "sandbox": {
+    "title": "A complex exponent, seen as a response",
+    "visualiser": "pole-step",
+    "minutes": 8,
+    "brief": "The left panel is the complex plane again, and the two dots are the exponents that\nthis system's response is built from. The right panel is that response: what the\noutput does after the input is switched on at time zero, with the dashed line\nmarking where it eventually settles.\n\nThe two sliders move the dots. $\\zeta$ (zeta) controls how far to the left they sit\n— that is the real part $\\sigma$, the decay. $\\omega_n$ controls how far they are\nfrom the origin overall.",
+    "initial": {
+     "zeta": 0.2,
+     "wn": 4
+    },
+    "notice": [
+     "Drag $\\zeta$ down to 0. The dots land exactly on the vertical axis, so the exponent is purely imaginary, and the response oscillates between 0 and 2 forever without ever settling. A purely imaginary exponent rotates and never decays — that is $|e^{j\\theta}| = 1$, drawn.",
+     "Put $\\zeta$ back to about 0.2 and watch the response wobble in and stop. The dots are now at $\\sigma \\approx -0.8$ with an imaginary part near $\\pm 3.9$: the rotation is still there, but it is multiplied by a shrinking $e^{\\sigma t}$.",
+     "Push $\\zeta$ up to 1. The caption under the left panel changes from $\\omega_d$ to *both poles real*, the two dots meet on the horizontal axis, and the response climbs to the dashed line without crossing it. No imaginary part means no rotation, so nothing can overshoot.",
+     "Hold $\\zeta$ and double $\\omega_n$ from 4 to 8. The shape of the response is identical; only the numbers on the time axis halve. The angle of the dots, not their distance, sets the character."
+    ]
+   },
+   "quiz": {
+    "title": "Euler, phase and amplitude",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "What is $e^{j\\pi}$?",
+      "opts": [
+       "$1$",
+       "$-1$",
+       "$j$",
+       "$\\pi$"
+      ],
+      "a": 1,
+      "why": "Put $\\theta = \\pi$ into $e^{j\\theta} = \\cos\\theta + j\\sin\\theta$: $\\cos\\pi = -1$ and $\\sin\\pi = 0$, so the answer is $-1 + 0j$. Geometrically you have gone half way round the unit circle from $+1$, which lands you on $-1$."
+     },
+     {
+      "q": "For a real angle $\\theta$, what is $|e^{j\\theta}|$?",
+      "opts": [
+       "$e^{\\theta}$",
+       "$\\theta$",
+       "$1$, always",
+       "It depends on $\\theta$ in a complicated way"
+      ],
+      "a": 2,
+      "why": "$|e^{j\\theta}|^2 = \\cos^2\\theta + \\sin^2\\theta = 1$, for every $\\theta$. The tempting wrong answer is $e^{\\theta}$ — that is the size of $e^{\\theta}$ with a *real* exponent. A real exponent stretches; an imaginary one rotates. Keeping those two apart is most of what this module is for."
+     },
+     {
+      "q": "Which expression equals $\\cos\\theta$?",
+      "opts": [
+       "$\\frac{e^{j\\theta} - e^{-j\\theta}}{2}$",
+       "$\\frac{e^{j\\theta} + e^{-j\\theta}}{2}$",
+       "$\\frac{e^{j\\theta} + e^{-j\\theta}}{2j}$",
+       "$\\frac{e^{j\\theta}}{2}$"
+      ],
+      "a": 1,
+      "why": "Write $e^{j\\theta} = \\cos\\theta + j\\sin\\theta$ and $e^{-j\\theta} = \\cos\\theta - j\\sin\\theta$, then add them: the sines cancel and you get $2\\cos\\theta$. Subtracting instead leaves $2j\\sin\\theta$, which is why the *sine* formula is the one carrying the $2j$ on the bottom."
+     },
+     {
+      "q": "The signal $5\\cos(\\omega t + 30^\\circ)$ is written as a phasor. What is it?",
+      "opts": [
+       "Amplitude 30, angle $5^\\circ$",
+       "Amplitude 5, angle $-30^\\circ$",
+       "Amplitude 5, angle $30^\\circ$",
+       "Amplitude $5\\omega$, angle $30^\\circ$"
+      ],
+      "a": 2,
+      "why": "A phasor keeps the two things that vary from signal to signal — the amplitude and the phase — and drops the $\\omega t$, because every signal in a circuit driven at one frequency shares it. So $5\\cos(\\omega t + 30^\\circ)$ becomes $5e^{j30^\\circ}$. The sign is kept as written: a *positive* angle inside the cosine means the signal leads."
+     },
+     {
+      "q": "A quantity behaves as $e^{(-2 + 10j)t}$. What does it do as $t$ increases?",
+      "opts": [
+       "Oscillates while growing without limit",
+       "Oscillates forever at constant amplitude",
+       "Falls straight to zero without oscillating",
+       "Oscillates while shrinking towards zero"
+      ],
+      "a": 3,
+      "why": "Split it: $e^{-2t} \\cdot e^{j10t}$. The second factor has modulus 1 and only rotates, at 10 radians per second. The first is a real decaying exponential, and it is the whole of the shrinking. Sign of the real part decides shrink or grow; the imaginary part decides only how fast it goes round."
+     },
+     {
+      "q": "Two sinusoids of the same frequency, amplitudes 3 and 4, with the second lagging the first by exactly $90^\\circ$. What is the amplitude of their sum?",
+      "opts": [
+       "7",
+       "5",
+       "1",
+       "12"
+      ],
+      "a": 1,
+      "why": "As phasors they are $3$ and $-4j$, which are at right angles on the Argand plane, so the sum has modulus $\\sqrt{3^2 + 4^2} = 5$. Amplitudes only add to 7 when the two signals are exactly in phase, and only subtract to 1 when they are exactly opposed. This is the whole reason for phasors: the geometry does the trigonometry for you."
+     }
+    ]
+   },
+   "build": {
+    "title": "A filter that lags by 45 degrees",
+    "minutes": 22,
+    "brief": "Time to draw a circuit.\n\nA **resistor** (R) resists current: the current through it is the voltage across it\ndivided by its resistance, at every instant. A **capacitor** (C) does not pass a\nsteady current at all, but it does pass a changing one, and the faster the change\nthe more easily it passes. That difference is enough to make a *filter*: something\nthat lets slow signals through and holds fast ones back.\n\nBuild a circuit with these properties, driven by the voltage source that is already\non the canvas, and put the probe on the output:\n\n1. It passes low frequencies and blocks high ones.\n2. Its **corner frequency** — the frequency at which the output has fallen to\n   $1/\\sqrt{2}$ of its low-frequency size — is **1 kHz**.\n3. At that corner frequency the output **lags the input by 45 degrees**.\n\nThe third property is the one that needs module 2. The output is the input\nmultiplied by a complex number, and at the corner that complex number has an angle\nof $-45^\\circ$. You are drawing Euler's identity.\n\nAny pair of values with the right product will pass: the checks measure the circuit,\nthey do not compare it with a drawing.\n\n**How to use the editor.** Pick a part from the toolbar and click the grid to place\nit; pick *Wire* and click twice to run a wire; pick *Probe* and click the node you\nare calling the output. *Select* a part to change its value. The corner frequency\nof a resistor and a capacitor together is $f_c = \\dfrac{1}{2\\pi RC}$.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 1
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "OUT",
+       "x": 5,
+       "y": 4
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        3,
+        4
+       ]
+      },
+      {
+       "a": [
+        3,
+        4
+       ],
+       "b": [
+        5,
+        4
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 1
+      },
+      {
+       "id": "p1",
+       "kind": "R",
+       "x": 6,
+       "y": 4,
+       "rot": 0,
+       "value": 1592
+      },
+      {
+       "id": "p2",
+       "kind": "C",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 1e-07
+      },
+      {
+       "id": "p3",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p4",
+       "kind": "GND",
+       "x": 9,
+       "y": 9
+      },
+      {
+       "id": "p5",
+       "kind": "OUT",
+       "x": 9,
+       "y": 4
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        3,
+        4
+       ]
+      },
+      {
+       "a": [
+        3,
+        4
+       ],
+       "b": [
+        5,
+        4
+       ]
+      },
+      {
+       "a": [
+        7,
+        4
+       ],
+       "b": [
+        9,
+        4
+       ]
+      },
+      {
+       "a": [
+        9,
+        4
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        9,
+        9
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "low frequencies get through and high ones do not",
+      "code": "const low = c.gain(10);\nconst high = c.gain(100000);\nc.assert(low > 1e-6, \"nothing at all reaches the probe at 10 Hz — check the wiring and where the probe sits\");\nc.assert(high < low / 10, \"at 100 kHz the output is \" + c.fmt(high, \"V\") + \" against \" +\n  c.fmt(low, \"V\") + \" at 10 Hz; a low-pass filter should have cut it by far more than that\");"
+     },
+     {
+      "name": "the corner frequency is 1 kHz",
+      "code": "c.close(c.corner(10, 1e6), 1000, 0.05, \"the frequency where the output is 1/sqrt(2) of its low-frequency value\");"
+     },
+     {
+      "name": "the output lags the input by 45 degrees at the corner",
+      "code": "c.close(c.phase(1000), -45, 0.15, \"the phase of the output at 1 kHz\");"
+     },
+     {
+      "name": "ten times past the corner it is ten times smaller",
+      "code": "const ratio = c.gain(10000) / c.gain(10);\nc.close(ratio, 0.0995, 0.2, \"the size at 10 kHz relative to the flat region\");"
+     }
+    ],
+    "hints": [
+     "Two parts are enough. The source drives the first one, the two of them meet at a node, and the second goes on down to ground. The probe belongs on the node between them.",
+     "Rearrange $f_c = 1/(2\\pi RC)$ to get the product you need: $RC = 1/(2\\pi \\times 1000) \\approx 1.59\\times10^{-4}$. Pick a round capacitor value first — 100 nF, say — and let the resistor take whatever value that forces.",
+     "You can type values as `100n`, `1.6k` or `1e-7`; the editor understands all three.",
+     "Nothing is measurable until there is a ground and a probe. Ground is what all the voltages are measured against, and the probe says which node the checks should look at."
+    ]
+   },
+   "derive": null,
+   "lab": {
+    "title": "Adding sinusoids without trigonometry",
+    "runtime": "python",
+    "minutes": 26,
+    "brief": "The circuit you just drew multiplies its input by a complex number. This lab\ncomputes that number, and uses phasors to add sinusoids.\n\nPython writes the imaginary unit as `j` attached to a number: `3+4j` is a complex\nnumber, `abs(z)` is its modulus, and `cmath.phase(z)` is its argument in radians.\n\nFill in four functions:\n\n- `phasor(amp, phase_deg)` — return the complex number of amplitude `amp` at angle\n  `phase_deg` degrees.\n- `to_polar(z)` — return the pair `(amplitude, phase_in_degrees)`.\n- `add_sinusoids(a1, p1, a2, p2)` — add two sinusoids *of the same frequency* given\n  as amplitude and phase in degrees, and return the sum in the same form.\n- `rc_gain(R, C, f)` — return the complex number the resistor–capacitor filter\n  multiplies its input by at frequency `f` hertz:\n\n$$G = \\frac{1}{1 + j\\,2\\pi f R C}$$\n\nAt the corner frequency $f_c = 1/(2\\pi RC)$ the bottom becomes $1 + j$, and you\nshould find that `abs(rc_gain(...))` is $1/\\sqrt{2}$ and the phase is exactly\n$-45^\\circ$ — the two numbers your circuit was measured against.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import cmath\nimport math\n\n\ndef phasor(amp, phase_deg):\n    \"\"\"The complex number with this amplitude and this phase (in degrees).\"\"\"\n    # TODO: amp * e^(j * angle in radians)\n    return 0j\n\n\ndef to_polar(z):\n    \"\"\"Return (amplitude, phase in degrees) for the complex number z.\"\"\"\n    # TODO: abs(z) and cmath.phase(z), converted to degrees\n    return (0.0, 0.0)\n\n\ndef add_sinusoids(a1, p1, a2, p2):\n    \"\"\"Add two same-frequency sinusoids given as amplitude and phase in degrees.\"\"\"\n    # TODO: turn both into phasors, add, convert back\n    return (0.0, 0.0)\n\n\ndef rc_gain(R, C, f):\n    \"\"\"The complex gain 1 / (1 + j*2*pi*f*R*C) of a resistor-capacitor filter.\"\"\"\n    # TODO\n    return 0j\n\n\nif __name__ == \"__main__\":\n    print(\"3 at 0 deg plus 4 at 90 deg ->\", add_sinusoids(3.0, 0.0, 4.0, 90.0))\n    R, C = 1592.0, 1e-7\n    fc = 1.0 / (2.0 * math.pi * R * C)\n    print(\"corner frequency:\", round(fc, 2), \"Hz\")\n    print(\"gain at the corner:\", to_polar(rc_gain(R, C, fc)))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import cmath\nimport math\n\n\ndef phasor(amp, phase_deg):\n    \"\"\"The complex number with this amplitude and this phase (in degrees).\"\"\"\n    return amp * cmath.exp(1j * math.radians(phase_deg))\n\n\ndef to_polar(z):\n    \"\"\"Return (amplitude, phase in degrees) for the complex number z.\"\"\"\n    return (abs(z), math.degrees(cmath.phase(z)))\n\n\ndef add_sinusoids(a1, p1, a2, p2):\n    \"\"\"Add two same-frequency sinusoids given as amplitude and phase in degrees.\"\"\"\n    return to_polar(phasor(a1, p1) + phasor(a2, p2))\n\n\ndef rc_gain(R, C, f):\n    \"\"\"The complex gain 1 / (1 + j*2*pi*f*R*C) of a resistor-capacitor filter.\"\"\"\n    return 1.0 / (1.0 + 1j * 2.0 * math.pi * f * R * C)\n\n\nif __name__ == \"__main__\":\n    print(\"3 at 0 deg plus 4 at 90 deg ->\", add_sinusoids(3.0, 0.0, 4.0, 90.0))\n    R, C = 1592.0, 1e-7\n    fc = 1.0 / (2.0 * math.pi * R * C)\n    print(\"corner frequency:\", round(fc, 2), \"Hz\")\n    print(\"gain at the corner:\", to_polar(rc_gain(R, C, fc)))\n"
+     }
+    ],
+    "hints": [
+     "`cmath.exp(1j * x)` is $e^{jx}$ with `x` in radians, and `math.radians` converts degrees for you.",
+     "`to_polar` and `phasor` are inverses of each other. Write them first and check that `to_polar(phasor(2, 30))` gives back `(2, 30)`.",
+     "In `rc_gain` the whole of $2\\pi f R C$ multiplies `1j`, so the bottom is `1 + 1j * 2 * math.pi * f * R * C`. Bracket the whole of that before dividing: `1 / (1 + ...)`. Writing `1 / 1 + 1j * ...` divides by the 1 alone and leaves the rest untouched."
+    ],
+    "tests": [
+     {
+      "name": "a phasor at 90 degrees is j",
+      "code": "_z = phasor(1.0, 90.0)\nassert abs(_z - 1j) < 1e-12, f\"1 at 90 degrees should be j, got {_z}\"\n_z2 = phasor(2.0, 0.0)\nassert abs(_z2 - 2.0) < 1e-12, f\"2 at 0 degrees should be 2, got {_z2}\""
+     },
+     {
+      "name": "polar and back is the identity",
+      "code": "_a, _p = to_polar(phasor(3.0, -37.0))\nassert abs(_a - 3.0) < 1e-9, f\"amplitude should come back as 3, got {_a}\"\nassert abs(_p - (-37.0)) < 1e-9, f\"phase should come back as -37 degrees, got {_p}\""
+     },
+     {
+      "name": "3 and 4 at right angles make 5",
+      "code": "_a, _p = add_sinusoids(3.0, 0.0, 4.0, 90.0)\nassert abs(_a - 5.0) < 1e-9, f\"the amplitude should be 5, not 7, got {_a}\"\nassert abs(_p - 53.13010235415598) < 1e-6, f\"the phase should be 53.13 degrees, got {_p}\""
+     },
+     {
+      "name": "in phase they add, opposed they cancel",
+      "code": "_a, _p = add_sinusoids(1.0, 0.0, 1.0, 0.0)\nassert abs(_a - 2.0) < 1e-9, f\"two equal signals in phase add to amplitude 2, got {_a}\"\n_a, _p = add_sinusoids(1.0, 0.0, 1.0, 180.0)\nassert _a < 1e-9, f\"two equal signals half a cycle apart cancel exactly, got amplitude {_a}\""
+     },
+     {
+      "name": "the gain is 1 at zero frequency",
+      "code": "_g = rc_gain(1000.0, 1e-6, 0.0)\nassert abs(_g - 1.0) < 1e-12, f\"with nothing changing the filter passes everything, got {_g}\""
+     },
+     {
+      "name": "at the corner the gain is 1/sqrt(2) at -45 degrees",
+      "code": "import math\n_R, _C = 1592.0, 1e-7\n_fc = 1.0 / (2.0 * math.pi * _R * _C)\n_amp, _ph = to_polar(rc_gain(_R, _C, _fc))\nassert abs(_amp - 0.7071067811865475) < 1e-9, f\"the amplitude should be 1/sqrt(2), got {_amp}\"\nassert abs(_ph - (-45.0)) < 1e-9, f\"the phase should be exactly -45 degrees, got {_ph}\""
+     },
+     {
+      "name": "ten times past the corner the gain is a tenth",
+      "code": "import math\n_R, _C = 1592.0, 1e-7\n_fc = 1.0 / (2.0 * math.pi * _R * _C)\n_amp, _ph = to_polar(rc_gain(_R, _C, 10.0 * _fc))\nassert abs(_amp - 0.09950371902099893) < 1e-9, f\"expected about 0.0995, got {_amp}\"\nassert _ph < -80.0, f\"the phase should be heading for -90 degrees, got {_ph}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Differentiating and integrating what circuits produce",
+   "summary": "Two operations, and only a handful of functions to apply them to — because circuits only make exponentials and sinusoids.",
+   "concepts": [
+    "A **derivative** $\\frac{dv}{dt}$ is the slope of a graph of $v$ against $t$: how fast the quantity is changing right now, in volts per second.",
+    "An **integral** $\\int i\\,dt$ is the area under the graph so far: how much has accumulated, in this case charge in coulombs.",
+    "The exponential is the one function that reproduces itself when differentiated: $\\frac{d}{dt}e^{at} = a\\,e^{at}$, the same function again times a constant. Nothing but a multiple of $e^{at}$ behaves this way, which is why it is everywhere in circuits.",
+    "$\\frac{d}{dt}\\sin(\\omega t) = \\omega\\cos(\\omega t)$ and $\\frac{d}{dt}\\cos(\\omega t) = -\\omega\\sin(\\omega t)$. The $\\omega$ appearing out front is the chain rule, and it is the reason fast signals produce big currents.",
+    "The **capacitor law** is $i = C\\frac{dv}{dt}$: the current into a capacitor is proportional to how fast its voltage is changing, not to the voltage itself.",
+    "Turn that around and the capacitor is an integrator: $v = \\frac{1}{C}\\int i\\,dt$. Push a constant current in and the voltage climbs in a straight line.",
+    "The **inductor law** is the mirror image: $v = L\\frac{di}{dt}$. A sudden change of current through an inductor would need an infinite voltage, so current through an inductor cannot jump."
+   ],
+   "sandbox": {
+    "title": "Exponentials, added together",
+    "visualiser": "pole-step",
+    "minutes": 7,
+    "brief": "The same two panels as in module 2, but this time both dots sit on the horizontal\naxis, so both exponents are ordinary real numbers and there is no rotation at all.\nThe response on the right is a sum of two decaying exponentials, and it is the\ncommonest shape in the whole subject.",
+    "initial": {
+     "zeta": 1.4,
+     "wn": 3
+    },
+    "notice": [
+     "The caption under the left panel reads *both poles real*, and the two dots are far apart: one close to the origin, near $-1.3$, and one much further left, near $-7.1$. The far one has died away almost immediately; the near one is what you are watching for the rest of the plot.",
+     "The curve rises towards the dashed line and never crosses it. With no imaginary part there is nothing to rotate, so nothing can overshoot — a sum of decaying exponentials can only approach its final value from one side.",
+     "Push $\\zeta$ up to 1.6. The near dot creeps closer to the origin, from about $-1.26$ to about $-1.05$, and the curve now ends further short of the dashed line than it did — about 92% of the way up instead of 97%. The slowest exponential always sets the pace.",
+     "Now drag $\\zeta$ down to 0.7. The two dots change colour, lift off the horizontal axis, and the caption becomes $\\omega_d$; the response overshoots the dashed line by about 5% before settling back on it. That is the moment the exponents become complex and module 2's rotation comes back."
+    ]
+   },
+   "quiz": {
+    "title": "Slopes, areas, and what a capacitor does",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "What is $\\frac{d}{dt}e^{at}$, where $a$ is a constant?",
+      "opts": [
+       "$e^{at}$",
+       "$t\\,e^{at}$",
+       "$a\\,e^{at}$",
+       "$a\\,e^{a}$"
+      ],
+      "a": 2,
+      "why": "The exponential comes back unchanged apart from a factor of $a$ from the chain rule. Answering $e^{at}$ is the standard slip — that is only right when $a = 1$. The factor matters: it is what makes a fast-decaying exponential also a steeply-sloping one."
+     },
+     {
+      "q": "A capacitor has a perfectly steady voltage across it. What current flows into it?",
+      "opts": [
+       "A steady current proportional to the voltage",
+       "None",
+       "An infinite current",
+       "A current proportional to $C$ alone"
+      ],
+      "a": 1,
+      "why": "$i = C\\frac{dv}{dt}$, and a steady voltage has $\\frac{dv}{dt} = 0$, so the current is zero however large the voltage is. This is what people mean when they say a capacitor *blocks DC*. Confusing it with a resistor, where current is proportional to voltage, is the mistake to avoid: for a capacitor it is proportional to the *rate of change*."
+     },
+     {
+      "q": "What is $\\frac{d}{dt}\\sin(\\omega t)$?",
+      "opts": [
+       "$\\cos(\\omega t)$",
+       "$-\\omega\\cos(\\omega t)$",
+       "$\\omega\\sin(\\omega t)$",
+       "$\\omega\\cos(\\omega t)$"
+      ],
+      "a": 3,
+      "why": "The sine differentiates to the cosine, and the chain rule brings out the $\\omega$ from inside the bracket. Dropping that $\\omega$ is the usual error, and it is not a small one: it says a signal at 1 MHz changes no faster than a signal at 1 Hz. The minus sign belongs to the derivative of the *cosine*, not the sine."
+     },
+     {
+      "q": "A steady current $I$ flows into a capacitor $C$ for a time $T$, starting from zero volts. What is the final voltage?",
+      "opts": [
+       "$ICT$",
+       "$IT$",
+       "$\\frac{IT}{C}$",
+       "$\\frac{I}{CT}$"
+      ],
+      "a": 2,
+      "why": "Integrating the capacitor law: $v = \\frac{1}{C}\\int_0^T I\\,dt = \\frac{IT}{C}$. The integral of a constant is the constant times the elapsed time — the area of a rectangle. Note the shape of the answer: bigger capacitor, *smaller* voltage for the same charge, because $C$ is on the bottom."
+     },
+     {
+      "q": "Why can the current through an inductor not change instantly?",
+      "opts": [
+       "Because inductors have resistance",
+       "Because $v = L\\frac{di}{dt}$, and an instant change would demand an infinite voltage",
+       "Because the current has to go somewhere first",
+       "It can — inductors respond instantly"
+      ],
+      "a": 1,
+      "why": "An instantaneous jump in current means $\\frac{di}{dt}$ is infinite, and $v = L\\frac{di}{dt}$ then demands an infinite voltage, which no real source can supply. So inductor current is continuous. The mirror statement holds for capacitors: their *voltage* cannot jump, because that would need infinite current."
+     },
+     {
+      "q": "You plot current against time and measure the area under the curve. What physical quantity have you measured?",
+      "opts": [
+       "Charge, in coulombs",
+       "Energy, in joules",
+       "Power, in watts",
+       "Voltage, in volts"
+      ],
+      "a": 0,
+      "why": "Current is charge per second, so current multiplied by time is charge — and the area under the curve is exactly that product, accumulated over an interval where the current varies. Energy would need the area under a *power* curve, and power is voltage times current, not current alone."
+     }
+    ]
+   },
+   "build": {
+    "title": "Integration you can watch",
+    "minutes": 20,
+    "brief": "There is a capacitor on the canvas already, with a probe on its top plate and its\nbottom plate grounded. Nothing is driving it, so the probe reads a flat zero.\n\nAdd a **current source** — the part marked `I` — and wire it so that a steady\ncurrent flows into that capacitor. A current source pushes a fixed number of amps\naround the loop regardless of what voltage that takes, which is the electrical way\nof saying \"the input is a constant\".\n\nThe capacitor then integrates that constant. Get the values right and the probe\nvoltage must **climb in a straight line at exactly 1 volt per millisecond**, so it\nreads 1 V after 1 ms, 2 V after 2 ms, and is still climbing at the same rate at\n3 ms. Straight, not curved: this is the integral of a constant.\n\nFrom $i = C\\dfrac{dv}{dt}$, a constant current $I$ gives a slope of\n$\\dfrac{dv}{dt} = \\dfrac{I}{C}$, so it is the *ratio* you have to get right. Any\ncurrent and capacitance with that ratio will pass.\n\nTo run it yourself, choose **Transient** in the analysis panel, set *Stop after* to\n`3m`, and press Solve.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "C",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 1e-06
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "OUT",
+       "x": 3,
+       "y": 3
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        3
+       ],
+       "b": [
+        3,
+        5
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "C",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 1e-06
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "OUT",
+       "x": 3,
+       "y": 3
+      },
+      {
+       "id": "p3",
+       "kind": "I",
+       "x": 4,
+       "y": 4,
+       "rot": 0,
+       "value": 0.001
+      },
+      {
+       "id": "p4",
+       "kind": "GND",
+       "x": 5,
+       "y": 6
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        3
+       ],
+       "b": [
+        3,
+        5
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        5,
+        4
+       ],
+       "b": [
+        5,
+        6
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "the probe starts at zero and rises",
+      "code": "const s = c.step(3e-3);\nc.assert(Math.abs(s.v[0]) < 0.02, \"an uncharged capacitor starts at 0 V, but the probe begins at \" +\n  c.fmt(s.v[0], \"V\"));\nc.assert(s.v[s.v.length - 1] > 0.5, \"after 3 ms the probe reads \" + c.fmt(s.v[s.v.length - 1], \"V\") +\n  \"; it should have climbed to about 3 V. If it went downwards, the current is flowing the wrong way.\");"
+     },
+     {
+      "name": "one millisecond in, it reads 1 volt",
+      "code": "const s = c.step(3e-3);\nlet k = 0;\nfor (let i = 1; i < s.t.length; i++) {\n  if (Math.abs(s.t[i] - 1e-3) < Math.abs(s.t[k] - 1e-3)) k = i;\n}\nc.close(s.v[k], 1.0, 0.05, \"the probe voltage after 1 ms\");"
+     },
+     {
+      "name": "two milliseconds in, it reads 2 volts",
+      "code": "const s = c.step(3e-3);\nlet k = 0;\nfor (let i = 1; i < s.t.length; i++) {\n  if (Math.abs(s.t[i] - 2e-3) < Math.abs(s.t[k] - 2e-3)) k = i;\n}\nc.close(s.v[k], 2.0, 0.05, \"the probe voltage after 2 ms — twice the time, twice the voltage\");"
+     },
+     {
+      "name": "the climb does not flatten off",
+      "code": "const s = c.step(3e-3);\nconst n = s.t.length - 1;\nconst m = Math.round(n * 2 / 3);\nconst slope = (s.v[n] - s.v[m]) / (s.t[n] - s.t[m]);\nc.close(slope, 1000, 0.05, \"the slope over the last millisecond, in volts per second\");"
+     }
+    ],
+    "hints": [
+     "One millisecond is $10^{-3}$ s, so 1 volt per millisecond is a slope of 1000 volts per second. You need $I/C = 1000$.",
+     "With the capacitor left at 1 µF, that means a current of 1 mA. Type it as `1m` in the value box.",
+     "The current source needs a complete loop: one end on the capacitor's top node, the other end down to a ground of its own.",
+     "If the voltage ramps downwards instead of upwards, the source is pushing current the other way round. Rotate it, or swap which of its two ends you grounded."
+    ]
+   },
+   "derive": null,
+   "lab": {
+    "title": "Slopes and areas from samples",
+    "runtime": "python",
+    "minutes": 28,
+    "brief": "The circuit you just built did the integration in hardware. Now do both operations\nin software, on lists of measured samples — which is what an oscilloscope, or any\nsimulator, actually has to work with.\n\n`cap_current(times, volts, C)` returns the current into a capacitor at each sample,\nusing $i = C\\frac{dv}{dt}$. Estimate the slope with a **central difference**: at\nsample $k$ in the middle of the list,\n\n$$\\frac{dv}{dt} \\approx \\frac{v_{k+1} - v_{k-1}}{t_{k+1} - t_{k-1}}$$\n\nAt the two ends there is no neighbour on one side, so use the one-sided difference\nwith the sample that does exist.\n\n`cap_voltage(times, currents, C)` goes the other way: $v = \\frac{1}{C}\\int i\\,dt$,\nstarting from 0 V, using the **trapezoid rule**. Each step adds the area of a\ntrapezoid of width $t_k - t_{k-1}$ and average height $(i_k + i_{k-1})/2$, then\ndivides by $C$. Return a list the same length as `times`, beginning with `0.0`.\n\nBoth rules are exact when the thing they are applied to is a straight line, which\nis why the checks start there.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef cap_current(times, volts, C):\n    \"\"\"Return i = C dv/dt at every sample: central differences inside, one-sided at the ends.\"\"\"\n    # TODO: build a list the same length as `times`.\n    return []\n\n\ndef cap_voltage(times, currents, C):\n    \"\"\"Return v = (1/C) * integral of i dt at every sample, starting from 0 V.\"\"\"\n    # TODO: trapezoid rule, accumulating as you go. First entry is 0.0.\n    return []\n\n\nif __name__ == \"__main__\":\n    ts = [k * 1e-5 for k in range(101)]\n    vs = [1000.0 * t for t in ts]          # a 1 V per ms ramp, as in the circuit\n    C = 1e-6\n    i = cap_current(ts, vs, C)\n    print(\"current into the capacitor:\", i[:3], \"...\")\n    back = cap_voltage(ts, i, C)\n    print(\"integrated back to:\", round(back[-1], 6), \"V after\", ts[-1], \"s\")\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef cap_current(times, volts, C):\n    \"\"\"Return i = C dv/dt at every sample: central differences inside, one-sided at the ends.\"\"\"\n    n = len(times)\n    out = []\n    for k in range(n):\n        if k == 0:\n            slope = (volts[1] - volts[0]) / (times[1] - times[0])\n        elif k == n - 1:\n            slope = (volts[n - 1] - volts[n - 2]) / (times[n - 1] - times[n - 2])\n        else:\n            slope = (volts[k + 1] - volts[k - 1]) / (times[k + 1] - times[k - 1])\n        out.append(C * slope)\n    return out\n\n\ndef cap_voltage(times, currents, C):\n    \"\"\"Return v = (1/C) * integral of i dt at every sample, starting from 0 V.\"\"\"\n    out = [0.0]\n    for k in range(1, len(times)):\n        h = times[k] - times[k - 1]\n        area = h * (currents[k] + currents[k - 1]) / 2.0\n        out.append(out[-1] + area / C)\n    return out\n\n\nif __name__ == \"__main__\":\n    ts = [k * 1e-5 for k in range(101)]\n    vs = [1000.0 * t for t in ts]          # a 1 V per ms ramp, as in the circuit\n    C = 1e-6\n    i = cap_current(ts, vs, C)\n    print(\"current into the capacitor:\", i[:3], \"...\")\n    back = cap_voltage(ts, i, C)\n    print(\"integrated back to:\", round(back[-1], 6), \"V after\", ts[-1], \"s\")\n"
+     }
+    ],
+    "hints": [
+     "Handle the three cases in order: `k == 0`, `k == n - 1`, and everything in between. The central difference spans *two* steps, so its denominator is `times[k+1] - times[k-1]`, not one step.",
+     "Do not forget to multiply the slope by `C`. The units only work out as amps if you do.",
+     "In `cap_voltage`, start the output list as `[0.0]` and append one entry per gap between samples. The list then ends up the same length as `times`.",
+     "Check yourself on the ramp before running anything else: a straight line of slope 1000 V/s through a 1 µF capacitor must give exactly 1 mA at every single sample, ends included."
+    ],
+    "tests": [
+     {
+      "name": "a straight ramp gives a constant current",
+      "code": "_ts = [k * 1e-5 for k in range(101)]\n_vs = [1000.0 * t for t in _ts]\n_i = cap_current(_ts, _vs, 1e-6)\nassert len(_i) == len(_ts), f\"expected {len(_ts)} samples of current, got {len(_i)}\"\nfor _k, _val in enumerate(_i):\n    assert abs(_val - 1e-3) < 1e-12, \\\n        f\"sample {_k} should be 1 mA everywhere on a straight ramp, got {_val}\""
+     },
+     {
+      "name": "the ends are handled too",
+      "code": "_ts = [0.0, 1e-5, 2e-5, 3e-5]\n_vs = [0.0, 2.0, 4.0, 6.0]\n_i = cap_current(_ts, _vs, 2e-6)\nassert abs(_i[0] - 0.4) < 1e-12, f\"first sample should use a one-sided slope: 2e-6 * 2e5 = 0.4 A, got {_i[0]}\"\nassert abs(_i[-1] - 0.4) < 1e-12, f\"last sample should do the same, got {_i[-1]}\""
+     },
+     {
+      "name": "a sinusoid gives the chain rule back",
+      "code": "import math\n_w = 2.0 * math.pi * 50.0\n_ts = [k * 1e-5 for k in range(2001)]\n_vs = [math.sin(_w * t) for t in _ts]\n_i = cap_current(_ts, _vs, 1e-6)\n_want = 1e-6 * _w\nassert abs(_i[0] - _want) < 1e-9, \\\n    f\"at t=0 the slope is w*cos(0) = {_w:.4f}, so i should be {_want:.6e}, got {_i[0]:.6e}\"\nassert abs(max(_i) - _want) < 1e-9, \\\n    f\"the peak current should be C*w = {_want:.6e}, got {max(_i):.6e}\""
+     },
+     {
+      "name": "a constant current integrates to a ramp",
+      "code": "_ts = [k * 1e-5 for k in range(101)]\n_is = [1e-3] * len(_ts)\n_v = cap_voltage(_ts, _is, 1e-6)\nassert len(_v) == len(_ts), f\"expected {len(_ts)} samples of voltage, got {len(_v)}\"\nassert abs(_v[0]) < 1e-15, f\"it must start from 0 V, got {_v[0]}\"\nassert abs(_v[-1] - 1.0) < 1e-12, \\\n    f\"1 mA into 1 uF for 1 ms is exactly 1 V, got {_v[-1]}\"\nassert abs(_v[50] - 0.5) < 1e-12, f\"halfway through it should be at 0.5 V, got {_v[50]}\""
+     },
+     {
+      "name": "a rising current integrates to a curve",
+      "code": "_ts = [k * 1e-5 for k in range(101)]\n_is = [1.0 * t for t in _ts]\n_v = cap_voltage(_ts, _is, 1e-6)\nassert abs(_v[-1] - 0.5) < 1e-12, \\\n    f\"the area under a triangle of height 1e-3 and width 1e-3 is 5e-7 C, so 0.5 V, got {_v[-1]}\""
+     },
+     {
+      "name": "differentiating then integrating returns the original",
+      "code": "import math\n_ts = [k * 1e-5 for k in range(501)]\n_vs = [3.0 * math.sin(2.0 * math.pi * 50.0 * t) for t in _ts]\n_back = cap_voltage(_ts, cap_current(_ts, _vs, 1e-6), 1e-6)\nfor _k in range(0, len(_ts), 25):\n    assert abs(_back[_k] - _vs[_k]) < 2e-3, \\\n        f\"at sample {_k} the round trip gave {_back[_k]:.6f} against the original {_vs[_k]:.6f}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "First-order equations, and equations solved all at once",
+   "summary": "One equation that involves a rate of change, and several equations that must hold simultaneously. Circuits produce both.",
+   "concepts": [
+    "A **differential equation** is an equation containing a derivative. A resistor and a capacitor in series across a source obey $\\frac{dv}{dt} = \\frac{V_s - v}{RC}$: the rate of change depends on how far you still have to go.",
+    "Its solution, starting from $v(0) = 0$, is $v(t) = V_s\\left(1 - e^{-t/RC}\\right)$. You do not have to take that on trust: differentiate it, put both sides of the equation side by side, and they agree.",
+    "The product $RC$ has units of seconds and is called the **time constant**, written $\\tau$. After one $\\tau$ the response has covered $1 - e^{-1} = 63.2\\%$ of the distance; after five, 99.3%.",
+    "An inductor and a resistor give the same equation with $\\tau = L/R$. One resistor and one energy store always produce a first-order equation, whichever store it is.",
+    "A network of resistors instead gives **simultaneous equations**: one current-balance equation per node, all of which must hold at once.",
+    "Those equations are written as a matrix: $G\\mathbf{v} = \\mathbf{i}$, where each diagonal entry of $G$ is the sum of the conductances at that node and each off-diagonal entry is minus the conductance joining two nodes.",
+    "A 2×2 system is solved by the **determinant**: $\\det = a_{11}a_{22} - a_{12}a_{21}$, and there is a single answer exactly when that determinant is not zero."
+   ],
+   "sandbox": {
+    "title": "Two equations at once, coupled or not",
+    "visualiser": "phase-portrait",
+    "minutes": 8,
+    "brief": "The four sliders are the four entries of a 2×2 matrix, and the matrix says how fast\neach of two quantities changes in terms of both of them. Take $x_1$ to be a voltage\nsomewhere in a circuit and $x_2$ to be a voltage somewhere else.\n\nIt opens with both off-diagonal entries at zero, which means the two quantities do\nnot affect each other at all: $\\dot{x_1} = -x_1$ and $\\dot{x_2} = -2x_2$, two\nseparate first-order equations, each with the exponential solution from this\nmodule.",
+    "initial": {
+     "a11": -1,
+     "a12": 0,
+     "a21": 0,
+     "a22": -2
+    },
+    "notice": [
+     "Every arrow points inwards and every curve ends at the origin: both exponentials decay. The readout underneath says *stable node*, and gives $\\text{trace} = -3$, $\\det = 2$.",
+     "The curves flatten onto the horizontal axis before they arrive. $x_2$ decays twice as fast as $x_1$, so the vertical part of the motion is over first and the slow coordinate finishes the journey alone. The slowest time constant always wins in the end.",
+     "Set $a_{12}$ to 1. The two equations are now coupled — $x_2$ feeds into $\\dot{x_1}$ — and the curves visibly lean over. But the trace and determinant in the readout do not move at all, and it is still a stable node: coupling changed the paths without changing the two decay rates.",
+     "Put $a_{12}$ back to 0 and raise $a_{11}$ to $+0.5$. The determinant goes negative, the readout changes to *saddle*, and the curves run away along the horizontal axis. One positive rate is enough to ruin the whole system, however well behaved the other one is."
+    ]
+   },
+   "quiz": {
+    "title": "Time constants and determinants",
+    "minutes": 9,
+    "questions": [
+     {
+      "q": "A resistor and capacitor charge a node from a step of $V_s$ volts. After exactly one time constant, how far has the output got?",
+      "opts": [
+       "Exactly half way",
+       "About 37% of the way",
+       "About 63% of the way to $V_s$",
+       "All the way"
+      ],
+      "a": 2,
+      "why": "$v(\\tau) = V_s(1 - e^{-1}) = 0.632\\,V_s$. The 37% figure is the very same number seen from the other side — it is the fraction *remaining*, $e^{-1}$ — and mixing the two up is the classic error. Half way happens a little earlier, at $0.693\\tau$."
+     },
+     {
+      "q": "You double the resistance and halve the capacitance. What happens to the time constant $\\tau = RC$?",
+      "opts": [
+       "It doubles",
+       "It stays the same",
+       "It halves",
+       "It is quartered"
+      ],
+      "a": 1,
+      "why": "$\\tau$ depends only on the *product*: $(2R)(C/2) = RC$. This is why a build check on a time constant cannot ask for particular values of $R$ and $C$ — infinitely many pairs give the same behaviour, and the circuit does not know which pair you chose."
+     },
+     {
+      "q": "Which function solves $\\frac{dv}{dt} = \\frac{V_s - v}{\\tau}$ with $v(0) = 0$?",
+      "opts": [
+       "$V_s e^{-t/\\tau}$",
+       "$V_s\\frac{t}{\\tau}$",
+       "$V_s\\left(1 - e^{-t/\\tau}\\right)$",
+       "$V_s\\left(1 + e^{-t/\\tau}\\right)$"
+      ],
+      "a": 2,
+      "why": "Test the candidates at $t = 0$ and at $t = \\infty$: the answer must start at 0 and finish at $V_s$. Only $V_s(1 - e^{-t/\\tau})$ does both. $V_s e^{-t/\\tau}$ is the *decaying* solution, which answers a different question — a charged capacitor emptying itself — and the straight line would need a constant current, not a resistor."
+     },
+     {
+      "q": "You write the node equations of a resistor network as $G\\mathbf{v} = \\mathbf{i}$. What sits on the diagonal of $G$?",
+      "opts": [
+       "The resistance of the largest resistor at that node",
+       "The voltage at that node",
+       "Always 1",
+       "The sum of all the conductances touching that node"
+      ],
+      "a": 3,
+      "why": "Each row is a current balance at one node. The node's own voltage appears once for every component attached to it, so the coefficients add up: the diagonal entry is $\\sum 1/R$ over everything touching the node. Conductances, not resistances — that is why the matrix is built from $1/R$ throughout, and why the off-diagonal entries are negative."
+     },
+     {
+      "q": "A 2×2 system of simultaneous equations has no single answer when the determinant is:",
+      "opts": [
+       "Zero",
+       "One",
+       "Negative",
+       "Very large"
+      ],
+      "a": 0,
+      "why": "The determinant divides the answer, so a determinant of zero means there is no single answer to divide out — the two equations are either the same equation twice, or they contradict each other. A negative determinant is perfectly ordinary and just means the solution comes out with the signs the algebra gives it."
+     },
+     {
+      "q": "Multiply an ohm by a farad. What unit do you get?",
+      "opts": [
+       "A hertz",
+       "A second",
+       "A volt",
+       "An amp"
+      ],
+      "a": 1,
+      "why": "Ohms times farads is seconds, which is why $\\tau = RC$ is a time at all. It is worth checking this the long way once: an ohm is volts per amp and a farad is coulombs per volt, so the product is coulombs per amp, and an amp is coulombs per second. A useful habit — if the units of a formula are wrong, the formula is wrong."
+     }
+    ]
+   },
+   "build": {
+    "title": "A circuit with a time constant of one millisecond",
+    "minutes": 22,
+    "brief": "The canvas has a 5 V source, a ground, and a probe sitting straight on the source,\nso the probe jumps to 5 V the instant the supply appears. Put something between them\nthat makes the rise take time.\n\nBuild a circuit driven by that 5 V source whose probe voltage:\n\n1. starts at **0 V**,\n2. rises to **5 V** and stays there,\n3. passes 63% of the way — that is 3.16 V — after exactly **1 millisecond**,\n4. and is 95% of the way there at 3 ms, because the rise is exponential rather than\n   a straight climb.\n\nYou need one resistor and one energy store. It can be a capacitor, with\n$\\tau = RC$; it can equally be an **inductor** (the part marked `L`), with\n$\\tau = L/R$. Either gives the same differential equation and the same curve, which\nis the point of the module — and only one of the two is drawn in the reference\nanswer, so pick whichever you can reason about.\n\nTo see the response, choose **Transient**, set *Stop after* to `5m` and press Solve.\n\nAn inductor resists changes in current, so with an inductor in series the current\nstarts at zero and builds up; put the probe where the growing current shows as a\ngrowing voltage.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 5
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "OUT",
+       "x": 5,
+       "y": 4
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        3,
+        4
+       ]
+      },
+      {
+       "a": [
+        3,
+        4
+       ],
+       "b": [
+        5,
+        4
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 5
+      },
+      {
+       "id": "p1",
+       "kind": "L",
+       "x": 6,
+       "y": 4,
+       "rot": 0,
+       "value": 0.1
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 100
+      },
+      {
+       "id": "p3",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p4",
+       "kind": "GND",
+       "x": 9,
+       "y": 9
+      },
+      {
+       "id": "p5",
+       "kind": "OUT",
+       "x": 9,
+       "y": 4
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        3,
+        4
+       ]
+      },
+      {
+       "a": [
+        3,
+        4
+       ],
+       "b": [
+        5,
+        4
+       ]
+      },
+      {
+       "a": [
+        7,
+        4
+       ],
+       "b": [
+        9,
+        4
+       ]
+      },
+      {
+       "a": [
+        9,
+        4
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        9,
+        9
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "the output starts at zero, not at the supply",
+      "code": "const s = c.step(6e-3);\nc.assert(Math.abs(s.v[0]) < 0.05, \"at the instant the supply appears the probe already reads \" +\n  c.fmt(s.v[0], \"V\") + \"; there is nothing between the source and the probe to slow it down\");"
+     },
+     {
+      "name": "it settles at the full 5 volts",
+      "code": "const s = c.step(2e-2);\nc.close(s.v[s.v.length - 1], 5.0, 0.02, \"the settled output voltage\");"
+     },
+     {
+      "name": "it is 63% of the way there after 1 ms",
+      "code": "const s = c.step(6e-3);\nlet k = -1;\nfor (let i = 0; i < s.v.length; i++) {\n  if (s.v[i] >= 0.632 * 5.0) { k = i; break; }\n}\nc.assert(k >= 0, \"the output never reaches 3.16 V within 6 ms — the time constant is far too long\");\nc.close(s.t[k], 1e-3, 0.1, \"the time taken to reach 63% of the supply\");"
+     },
+     {
+      "name": "the rise is exponential, not a straight line",
+      "code": "const s = c.step(6e-3);\nlet k = 0;\nfor (let i = 1; i < s.t.length; i++) {\n  if (Math.abs(s.t[i] - 3e-3) < Math.abs(s.t[k] - 3e-3)) k = i;\n}\nc.close(s.v[k], 4.7515, 0.04, \"the output at 3 ms, which should be 95% of the way there\");"
+     }
+    ],
+    "hints": [
+     "For the inductor route: $\\tau = L/R$, and you need $\\tau = 1$ ms. Choose the resistor first — 100 Ω, say — and the inductance follows as $L = \\tau R$. Type it as `100m`.",
+     "For the capacitor route: $\\tau = RC$, so a 1 kΩ resistor with a 1 µF capacitor gives exactly 1 ms.",
+     "The probe must go on the node between the two parts, not on the source. On the source there is nothing to measure.",
+     "Both parts need somewhere to send their current: the second one should end at a ground.",
+     "If the response is over almost instantly, your time constant is too small by a factor you can read straight off the plot — the time axis is labelled."
+    ]
+   },
+   "derive": null,
+   "lab": {
+    "title": "Solving a network all at once",
+    "runtime": "python",
+    "minutes": 28,
+    "brief": "A resistor network does not have one equation with one unknown; it has one equation\nper node, and they all have to hold at the same time. This lab writes and solves\nsuch a pair.\n\n`solve2(a11, a12, a21, a22, b1, b2)` solves\n\n$$a_{11}x_1 + a_{12}x_2 = b_1, \\qquad a_{21}x_1 + a_{22}x_2 = b_2$$\n\nby determinants. Work out $\\det = a_{11}a_{22} - a_{12}a_{21}$ first. If it is zero\nthere is no single answer, so raise `ValueError`. Otherwise\n\n$$x_1 = \\frac{b_1 a_{22} - a_{12} b_2}{\\det}, \\qquad x_2 = \\frac{a_{11} b_2 - b_1 a_{21}}{\\det}$$\n\n`ladder(vs, r1, r2, r3)` uses it on a real circuit: a source `vs` feeds `r1` into\nnode 1, `r2` joins node 1 to node 2, and `r3` takes node 2 down to ground. Balancing\nthe currents at each node gives\n\n$$\\begin{bmatrix} \\frac{1}{r_1} + \\frac{1}{r_2} & -\\frac{1}{r_2} \\\\ -\\frac{1}{r_2} & \\frac{1}{r_2} + \\frac{1}{r_3} \\end{bmatrix}\\begin{bmatrix} v_1 \\\\ v_2 \\end{bmatrix} = \\begin{bmatrix} \\frac{v_s}{r_1} \\\\ 0 \\end{bmatrix}$$\n\nBuild those six numbers and hand them to `solve2`. Notice the pattern: the sum of\nthe conductances on the diagonal, minus the shared conductance off it, and the\nsource appearing only in the row of the node it feeds.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "def solve2(a11, a12, a21, a22, b1, b2):\n    \"\"\"Solve two simultaneous equations by determinants.\n\n    Raise ValueError when the determinant is zero.\n    \"\"\"\n    # TODO: determinant first, then the two answers.\n    return (0.0, 0.0)\n\n\ndef ladder(vs, r1, r2, r3):\n    \"\"\"Node voltages of  vs -[r1]- node1 -[r2]- node2 -[r3]- ground.\"\"\"\n    # TODO: build the four matrix entries and the two right-hand sides,\n    # then call solve2.\n    return (0.0, 0.0)\n\n\nif __name__ == \"__main__\":\n    print(\"solve2:\", solve2(2.0, 1.0, 1.0, 3.0, 5.0, 10.0))\n    print(\"ladder, three equal resistors:\", ladder(3.0, 1000.0, 1000.0, 1000.0))\n    print(\"ladder, 1k 2k 3k from 9 V:\", ladder(9.0, 1000.0, 2000.0, 3000.0))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "def solve2(a11, a12, a21, a22, b1, b2):\n    \"\"\"Solve two simultaneous equations by determinants.\n\n    Raise ValueError when the determinant is zero.\n    \"\"\"\n    det = a11 * a22 - a12 * a21\n    if abs(det) < 1e-15:\n        raise ValueError(\"the determinant is zero: these two equations do not fix a single answer\")\n    x1 = (b1 * a22 - a12 * b2) / det\n    x2 = (a11 * b2 - b1 * a21) / det\n    return (x1, x2)\n\n\ndef ladder(vs, r1, r2, r3):\n    \"\"\"Node voltages of  vs -[r1]- node1 -[r2]- node2 -[r3]- ground.\"\"\"\n    g11 = 1.0 / r1 + 1.0 / r2\n    g12 = -1.0 / r2\n    g21 = -1.0 / r2\n    g22 = 1.0 / r2 + 1.0 / r3\n    return solve2(g11, g12, g21, g22, vs / r1, 0.0)\n\n\nif __name__ == \"__main__\":\n    print(\"solve2:\", solve2(2.0, 1.0, 1.0, 3.0, 5.0, 10.0))\n    print(\"ladder, three equal resistors:\", ladder(3.0, 1000.0, 1000.0, 1000.0))\n    print(\"ladder, 1k 2k 3k from 9 V:\", ladder(9.0, 1000.0, 2000.0, 3000.0))\n"
+     }
+    ],
+    "hints": [
+     "Compute the determinant once and store it. You need it twice, and testing it for zero before dividing is what stops the function crashing on a badly posed network.",
+     "Compare floating-point numbers against a small tolerance rather than exactly: `abs(det) < 1e-15`.",
+     "In `ladder`, everything is a conductance — $1/r$ — never a resistance. If your answers come out enormous, that is the reason.",
+     "Sanity-check the three-equal-resistor case by hand: the same current flows through all three, so the voltages must be two thirds and one third of the source."
+    ],
+    "tests": [
+     {
+      "name": "a small system comes out right",
+      "code": "_x1, _x2 = solve2(2.0, 1.0, 1.0, 3.0, 5.0, 10.0)\nassert abs(_x1 - 1.0) < 1e-12 and abs(_x2 - 3.0) < 1e-12, \\\n    f\"expected (1, 3), got ({_x1}, {_x2})\""
+     },
+     {
+      "name": "the answers really satisfy both equations",
+      "code": "_a = (3.0, -2.0, 4.0, 5.0)\n_b = (7.0, -1.0)\n_x1, _x2 = solve2(_a[0], _a[1], _a[2], _a[3], _b[0], _b[1])\nassert abs(_a[0] * _x1 + _a[1] * _x2 - _b[0]) < 1e-9, \"the first equation is not satisfied\"\nassert abs(_a[2] * _x1 + _a[3] * _x2 - _b[1]) < 1e-9, \"the second equation is not satisfied\""
+     },
+     {
+      "name": "a zero determinant is refused",
+      "code": "try:\n    solve2(1.0, 2.0, 2.0, 4.0, 1.0, 2.0)\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"the second equation is just twice the first, so ValueError was expected\")"
+     },
+     {
+      "name": "three equal resistors divide evenly",
+      "code": "_v1, _v2 = ladder(3.0, 1000.0, 1000.0, 1000.0)\nassert abs(_v1 - 2.0) < 1e-9, f\"node 1 should sit at two thirds of 3 V, got {_v1}\"\nassert abs(_v2 - 1.0) < 1e-9, f\"node 2 should sit at one third of 3 V, got {_v2}\""
+     },
+     {
+      "name": "unequal resistors divide in proportion",
+      "code": "_v1, _v2 = ladder(9.0, 1000.0, 2000.0, 3000.0)\nassert abs(_v1 - 7.5) < 1e-9, f\"expected 7.5 V at node 1, got {_v1}\"\nassert abs(_v2 - 4.5) < 1e-9, f\"expected 4.5 V at node 2, got {_v2}\""
+     },
+     {
+      "name": "a big resistor to ground draws almost nothing",
+      "code": "_v1, _v2 = ladder(10.0, 1000.0, 1000.0, 1e9)\nassert abs(_v1 - 10.0) < 1e-3, f\"with almost no current there is almost no drop across r1, got {_v1}\"\nassert abs(_v2 - 10.0) < 1e-3, f\"and none across r2 either, got {_v2}\""
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "One RC network, computed four ways",
+  "brief": "Everything in this course points at the same small circuit: a source, a resistor,\nand a capacitor. You now know four different ways to say what it does, one from\neach module, and they must all agree.\n\nBuild a single file that computes all four and checks them against each other.\n\n## The circuit\n\nA source $V_s$ drives a resistor $R$, which feeds a node; a capacitor $C$ takes that\nnode down to ground. The node is the output.\n\n## The four descriptions\n\n1. **As simultaneous equations.** At DC the capacitor passes nothing, so the circuit\n   is resistive and a network of resistors becomes a matrix. Write a general solver\n   `solve_nodes(G, b)` for an $n \\times n$ system, by Gaussian elimination with\n   partial pivoting — that is, at each column, swap the row with the largest entry\n   into place before dividing, so you never divide by something tiny.\n\n2. **As a complex number.** At a frequency $f$ the output is the input multiplied by\n   $G(f) = 1/(1 + j2\\pi fRC)$. Its modulus is the size of the output and its\n   argument is the phase shift.\n\n3. **As a differential equation, solved numerically.** $\\frac{dv}{dt} = (V_s - v)/RC$\n   stepped forward in small increments of `dt` from $v = 0$.\n\n4. **As a differential equation, solved on paper.** $v(t) = V_s(1 - e^{-t/RC})$ —\n   and confirmed with SymPy, by substituting it back into the equation and asking\n   whether what is left over is zero.\n\n## Suggested order\n\n`solve_nodes` first, because it is the only one with any real bookkeeping in it, and\nthe checks for it do not depend on anything else. Then the two one-line functions in\nthe frequency domain. Then the two step responses, which is where the numbers have\nto start agreeing with each other.\n\nThe last function, `satisfies_ode`, is where SymPy earns its place: it does the\ndifferentiation symbolically, so you find out whether your closed form is right\nrather than whether it happens to match at the points you sampled.",
+  "deliverables": [
+   "`solve_nodes(G, b)` — Gaussian elimination with partial pivoting on an n x n system, returning the list of node voltages, and raising `ValueError` on a singular matrix.",
+   "`lowpass_gain(R, C, f)` and `corner_frequency(R, C)` — the complex gain at a frequency, and the frequency at which its modulus falls to $1/\\sqrt{2}$.",
+   "`step_euler(vs, R, C, dt, steps)` — the differential equation stepped forward numerically from 0 V, returning `steps + 1` samples.",
+   "`analytic_step(vs, R, C, t)` — the closed-form solution at a single time.",
+   "`satisfies_ode(vs, R, C)` — substitute the closed form back into the differential equation with SymPy and return whether the remainder is exactly zero."
+  ],
+  "constraints": [
+   "The standard library, NumPy and SymPy only. No SciPy, and no circuit-simulation library.",
+   "`solve_nodes` must work for any size of system, not just 2 x 2 — the checks use a three-node ladder as well as a two-node one.",
+   "Use partial pivoting, not plain elimination: a zero in a pivot position must be swapped away rather than divided by.",
+   "`step_euler` must start from 0 V and return a list of length `steps + 1`, so that sample `k` is the voltage at time `k * dt`.",
+   "`satisfies_ode` must do the differentiation symbolically. Sampling the two sides at a few times and comparing is not the same claim."
+  ],
+  "rubric": [
+   {
+    "criterion": "The linear solver",
+    "weight": 30,
+    "evidence": "solve_nodes returns the correct node voltages for both a two-node and a three-node resistive ladder, pivots rather than dividing by a zero, and raises ValueError when the matrix is singular."
+   },
+   {
+    "criterion": "The frequency description",
+    "weight": 25,
+    "evidence": "lowpass_gain has modulus 1 at zero frequency and modulus 1/sqrt(2) with a phase of exactly -45 degrees at the frequency returned by corner_frequency."
+   },
+   {
+    "criterion": "The two step responses agree",
+    "weight": 25,
+    "evidence": "step_euler starts at zero, has the right length, and tracks analytic_step to within a fraction of a percent once the step size is small; both settle at the supply voltage."
+   },
+   {
+    "criterion": "The symbolic confirmation",
+    "weight": 20,
+    "evidence": "satisfies_ode returns True for several different values of vs, R and C, and gets there by differentiating the closed form symbolically and simplifying the remainder to zero, rather than by sampling both sides at a few times and comparing."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 130,
+  "files": [
+   {
+    "name": "main.py",
+    "content": "import math\nimport sympy as sp\n\n\ndef solve_nodes(G, b):\n    \"\"\"Solve G x = b by Gaussian elimination with partial pivoting.\n\n    G is a list of n rows, each a list of n floats; b is a list of n floats.\n    Return the list of n answers. Raise ValueError if G is singular.\n    \"\"\"\n    # TODO\n    return []\n\n\ndef lowpass_gain(R, C, f):\n    \"\"\"The complex gain 1 / (1 + j*2*pi*f*R*C).\"\"\"\n    # TODO\n    return 0j\n\n\ndef corner_frequency(R, C):\n    \"\"\"The frequency at which the modulus of the gain is 1/sqrt(2).\"\"\"\n    # TODO\n    return 0.0\n\n\ndef step_euler(vs, R, C, dt, steps):\n    \"\"\"Step dv/dt = (vs - v) / (R*C) forward from 0 V. Return steps + 1 samples.\"\"\"\n    # TODO\n    return []\n\n\ndef analytic_step(vs, R, C, t):\n    \"\"\"The closed-form solution at time t, starting from 0 V.\"\"\"\n    # TODO\n    return 0.0\n\n\ndef satisfies_ode(vs, R, C):\n    \"\"\"True if the closed form satisfies dv/dt = (vs - v)/(R*C), checked symbolically.\"\"\"\n    # TODO\n    return False\n\n\nif __name__ == \"__main__\":\n    G = [[0.0015, -0.0005], [-0.0005, 0.0008333333333333334]]\n    b = [0.009, 0.0]\n    print(\"node voltages:\", solve_nodes(G, b))\n    R, C = 1000.0, 1e-6\n    print(\"corner frequency:\", round(corner_frequency(R, C), 3), \"Hz\")\n    print(\"gain there:\", lowpass_gain(R, C, corner_frequency(R, C)))\n    tau = R * C\n    ys = step_euler(5.0, R, C, tau / 2000.0, 6000)\n    print(\"numerical at 3 tau:\", round(ys[-1], 6))\n    print(\"analytic  at 3 tau:\", round(analytic_step(5.0, R, C, 3.0 * tau), 6))\n    print(\"closed form satisfies the equation:\", satisfies_ode(5.0, R, C))\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "main.py",
+    "content": "import math\nimport sympy as sp\n\n\ndef solve_nodes(G, b):\n    \"\"\"Solve G x = b by Gaussian elimination with partial pivoting.\n\n    G is a list of n rows, each a list of n floats; b is a list of n floats.\n    Return the list of n answers. Raise ValueError if G is singular.\n    \"\"\"\n    n = len(b)\n    M = [list(G[i]) + [b[i]] for i in range(n)]\n    for col in range(n):\n        piv = col\n        for r in range(col + 1, n):\n            if abs(M[r][col]) > abs(M[piv][col]):\n                piv = r\n        if abs(M[piv][col]) < 1e-15:\n            raise ValueError(\"the network does not fix a single set of voltages\")\n        M[col], M[piv] = M[piv], M[col]\n        d = M[col][col]\n        for cc in range(col, n + 1):\n            M[col][cc] /= d\n        for r in range(n):\n            if r == col:\n                continue\n            f = M[r][col]\n            if f == 0.0:\n                continue\n            for cc in range(col, n + 1):\n                M[r][cc] -= f * M[col][cc]\n    return [M[i][n] for i in range(n)]\n\n\ndef lowpass_gain(R, C, f):\n    \"\"\"The complex gain 1 / (1 + j*2*pi*f*R*C).\"\"\"\n    return 1.0 / (1.0 + 1j * 2.0 * math.pi * f * R * C)\n\n\ndef corner_frequency(R, C):\n    \"\"\"The frequency at which the modulus of the gain is 1/sqrt(2).\"\"\"\n    return 1.0 / (2.0 * math.pi * R * C)\n\n\ndef step_euler(vs, R, C, dt, steps):\n    \"\"\"Step dv/dt = (vs - v) / (R*C) forward from 0 V. Return steps + 1 samples.\"\"\"\n    tau = R * C\n    v = 0.0\n    out = [0.0]\n    for _ in range(steps):\n        v = v + dt * (vs - v) / tau\n        out.append(v)\n    return out\n\n\ndef analytic_step(vs, R, C, t):\n    \"\"\"The closed-form solution at time t, starting from 0 V.\"\"\"\n    return vs * (1.0 - math.exp(-t / (R * C)))\n\n\ndef satisfies_ode(vs, R, C):\n    \"\"\"True if the closed form satisfies dv/dt = (vs - v)/(R*C), checked symbolically.\"\"\"\n    t = sp.symbols(\"t\", positive=True)\n    v = vs * (1 - sp.exp(-t / (R * C)))\n    remainder = sp.simplify(sp.diff(v, t) - (vs - v) / (R * C))\n    return remainder == 0\n\n\nif __name__ == \"__main__\":\n    G = [[0.0015, -0.0005], [-0.0005, 0.0008333333333333334]]\n    b = [0.009, 0.0]\n    print(\"node voltages:\", solve_nodes(G, b))\n    R, C = 1000.0, 1e-6\n    print(\"corner frequency:\", round(corner_frequency(R, C), 3), \"Hz\")\n    print(\"gain there:\", lowpass_gain(R, C, corner_frequency(R, C)))\n    tau = R * C\n    ys = step_euler(5.0, R, C, tau / 2000.0, 6000)\n    print(\"numerical at 3 tau:\", round(ys[-1], 6))\n    print(\"analytic  at 3 tau:\", round(analytic_step(5.0, R, C, 3.0 * tau), 6))\n    print(\"closed form satisfies the equation:\", satisfies_ode(5.0, R, C))\n"
+   }
+  ],
+  "hints": [
+   "For `solve_nodes`, copy `G` into a working matrix with `b` appended as an extra column. Reduce that one array and the answers are left in the last column.",
+   "Partial pivoting is one line: before dividing by `M[col][col]`, find the row at or below `col` whose entry in that column has the largest absolute value, and swap it up.",
+   "`corner_frequency` is $1/(2\\pi RC)$. Do not compute it by searching the response — you know it in closed form.",
+   "For `step_euler`, one step is `v = v + dt * (vs - v) / (R * C)`. Append after stepping, and put the initial `0.0` in before the loop starts.",
+   "In `satisfies_ode`, build the symbol with `t = sympy.symbols('t', positive=True)`, form the expression, and test `sympy.simplify(sympy.diff(v, t) - (vs - v) / (R * C)) == 0`."
+  ],
+  "tests": [
+   {
+    "name": "a two-node ladder solves correctly",
+    "code": "_G = [[0.0015, -0.0005], [-0.0005, 1.0 / 2000.0 + 1.0 / 3000.0]]\n_b = [0.009, 0.0]\n_v = solve_nodes(_G, _b)\nassert len(_v) == 2, f\"expected 2 node voltages, got {len(_v)}\"\nassert abs(_v[0] - 7.5) < 1e-9, f\"node 1 should be 7.5 V, got {_v[0]}\"\nassert abs(_v[1] - 4.5) < 1e-9, f\"node 2 should be 4.5 V, got {_v[1]}\""
+   },
+   {
+    "name": "a three-node ladder solves correctly",
+    "code": "_g = 1.0 / 1000.0\n_G = [[2 * _g, -_g, 0.0], [-_g, 2 * _g, -_g], [0.0, -_g, 2 * _g]]\n_b = [4.0 * _g, 0.0, 0.0]\n_v = solve_nodes(_G, _b)\nfor _k, _want in enumerate([3.0, 2.0, 1.0]):\n    assert abs(_v[_k] - _want) < 1e-9, f\"node {_k + 1} should be {_want} V, got {_v[_k]}\""
+   },
+   {
+    "name": "pivoting handles a zero in the way",
+    "code": "_G = [[0.0, 2.0], [1.0, 1.0]]\n_b = [4.0, 3.0]\n_v = solve_nodes(_G, _b)\nassert abs(_v[0] - 1.0) < 1e-9 and abs(_v[1] - 2.0) < 1e-9, \\\n    f\"expected (1, 2), got {_v} — the first pivot is zero and must be swapped away\""
+   },
+   {
+    "name": "a singular matrix is refused",
+    "code": "try:\n    solve_nodes([[1.0, 2.0], [2.0, 4.0]], [1.0, 2.0])\nexcept ValueError:\n    pass\nelse:\n    raise AssertionError(\"the second row is twice the first, so ValueError was expected\")"
+   },
+   {
+    "name": "the gain is right at zero frequency and at the corner",
+    "code": "import math\n_R, _C = 1000.0, 1e-6\nassert abs(lowpass_gain(_R, _C, 0.0) - 1.0) < 1e-12, \"at DC the filter passes everything\"\n_fc = corner_frequency(_R, _C)\nassert abs(_fc - 159.15494309189535) < 1e-6, f\"expected about 159.15 Hz, got {_fc}\"\n_g = lowpass_gain(_R, _C, _fc)\nassert abs(abs(_g) - 0.7071067811865475) < 1e-9, f\"the modulus should be 1/sqrt(2), got {abs(_g)}\"\nassert abs(math.degrees(math.atan2(_g.imag, _g.real)) - (-45.0)) < 1e-9, \\\n    \"the phase at the corner should be exactly -45 degrees\""
+   },
+   {
+    "name": "the numerical and analytic step responses agree",
+    "code": "_R, _C, _vs = 1000.0, 1e-6, 5.0\n_tau = _R * _C\n_dt = _tau / 2000.0\n_ys = step_euler(_vs, _R, _C, _dt, 6000)\nassert len(_ys) == 6001, f\"expected 6001 samples, got {len(_ys)}\"\nassert abs(_ys[0]) < 1e-15, f\"it must start from 0 V, got {_ys[0]}\"\n_want = analytic_step(_vs, _R, _C, 3.0 * _tau)\nassert abs(_want - 4.751064658160680) < 1e-9, \\\n    f\"the closed form at 3 tau should be 4.7510647, got {_want}\"\nassert abs(_ys[-1] - _want) < 1e-3, \\\n    f\"numerical {_ys[-1]:.6f} against analytic {_want:.6f} — these should agree closely\""
+   },
+   {
+    "name": "the response settles at the supply",
+    "code": "_R, _C, _vs = 1000.0, 1e-6, 5.0\n_tau = _R * _C\n_ys = step_euler(_vs, _R, _C, _tau / 1000.0, 20000)\nassert abs(_ys[-1] - _vs) < 1e-6, f\"after 20 time constants it should be at {_vs} V, got {_ys[-1]}\"\nassert abs(analytic_step(_vs, _R, _C, 0.0)) < 1e-15, \"the closed form must give 0 at t = 0\""
+   },
+   {
+    "name": "SymPy confirms the closed form",
+    "code": "assert satisfies_ode(5.0, 1000.0, 1e-6) is True, \\\n    \"substituting the closed form into the equation should leave exactly zero\"\nassert satisfies_ode(2.0, 4700.0, 2.2e-7) is True, \\\n    \"it should hold for any values, not just the ones you tried first\""
+   }
+  ]
+ }
+}

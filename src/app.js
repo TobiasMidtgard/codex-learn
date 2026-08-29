@@ -1870,7 +1870,28 @@ function renderRead(main, l) {
 }
 
 /* ---------- quiz ---------- */
+/* Options were rendered in the order they were authored, and one course shipped with
+   all twenty-four answers at index 0 — a perfect score by pressing A every time. The
+   order is now derived from the lesson id and the question number, so it is stable for
+   a given learner (their best score keeps its meaning) but not the authoring order. */
+function shuffledOptions(lessonId, qi, q) {
+  let h = 2166136261;
+  const key = lessonId + ':' + qi;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const idx = q.opts.map(function (_, i) { return i; });
+  for (let i = idx.length - 1; i > 0; i--) {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    const j = (h >>> 0) % (i + 1);
+    const t = idx[i]; idx[i] = idx[j]; idx[j] = t;
+  }
+  return { order: idx, opts: idx.map(function (i) { return q.opts[i]; }), a: idx.indexOf(q.a) };
+}
+
 function renderQuiz(main, l) {
+  const shuffled = l.questions.map(function (q, qi) { return shuffledOptions(l.id, qi, q); });
   const answers = new Array(l.questions.length).fill(null);
   main.innerHTML = '<div class="lesson-read">' + lessonHeader(l) +
     '<p style="color:var(--ink-2);margin:0 0 18px">Answer every question — explanations appear as you go. ' +
@@ -1884,7 +1905,7 @@ function renderQuiz(main, l) {
   l.questions.forEach(function (q, qi) {
     const card = el('<div class="quiz-q"><div class="qn">QUESTION ' + (qi + 1) + ' / ' + l.questions.length + '</div>' +
       '<div class="qt">' + mdInline(q.q) + '</div>' +
-      '<div class="opts">' + q.opts.map(function (o, oi) {
+      '<div class="opts">' + shuffled[qi].opts.map(function (o, oi) {
         return '<button class="opt" data-oi="' + oi + '"><span class="k">' + 'ABCD'[oi] + '</span><span>' + mdInline(o) + '</span></button>';
       }).join('') + '</div><div class="ex-slot"></div></div>');
     box.appendChild(card);
@@ -1896,18 +1917,18 @@ function renderQuiz(main, l) {
         $all('.opt', card).forEach(function (b2) {
           b2.disabled = true;
           const i2 = +b2.dataset.oi;
-          if (i2 === q.a) b2.classList.add('correct');
+          if (i2 === shuffled[qi].a) b2.classList.add('correct');
           else if (i2 === oi) b2.classList.add('wrong');
         });
-        const good = oi === q.a;
+        const good = oi === shuffled[qi].a;
         $('.ex-slot', card).innerHTML = '<div class="explain ' + (good ? 'good' : 'bad') + '">' +
-          (good ? '✓ Right. ' : '✗ Not quite — the answer is <b>' + 'ABCD'[q.a] + '</b>. ') + mdInline(q.why) + '</div>';
+          (good ? '✓ Right. ' : '✗ Not quite — the answer is <b>' + 'ABCD'[shuffled[qi].a] + '</b>. ') + mdInline(q.why) + '</div>';
         if (answers.every(function (a) { return a !== null; })) finish();
       });
     });
   });
   function finish() {
-    const correct = answers.filter(function (a, i) { return a === l.questions[i].a; }).length;
+    const correct = answers.filter(function (a, i) { return a === shuffled[i].a; }).length;
     const pct = Math.round(correct / l.questions.length * 100);
     const pass = pct >= 70;
     P.quiz[l.id] = Math.max(P.quiz[l.id] || 0, pct);
