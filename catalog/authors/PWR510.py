@@ -24,8 +24,9 @@ COURSE = {
     "hours": 130,
     "icon": "◐",
     "summary": (
-        "A hard-switched bridge dissipates half the energy stored in its own device "
-        "capacitance on every transition, and that bill grows with frequency. A resonant "
+        "A hard-switched bridge dumps the whole energy stored in its own device "
+        "capacitance, half of C times V squared, into the channel on every transition, "
+        "and that bill grows with frequency. A resonant "
         "converter arranges for the voltage to be zero at the moment the device turns on, "
         "which is why offline supplies run at hundreds of kilohertz instead of tens. "
         "This course builds the series-resonant and LLC tanks from the first-harmonic "
@@ -53,10 +54,10 @@ COURSE = {
             "summary": "A square wave drives the bridge, but a selective tank only responds to its fundamental. That single approximation turns a switching circuit into a phasor problem.",
             "concepts": [
                 "The half-bridge output is a square wave between the rails; its fundamental has peak amplitude $2V_{in}/\\pi$ and no even harmonics at all.",
-                "A tank with any useful selectivity attenuates the third harmonic by roughly an order of magnitude, so keeping only the fundamental is not a wild simplification.",
+                "The tank is a filter, but a soft one at converter loads: the capstone tank ($L_n = 5$, $Q = 0.4$) still passes $0.63$ at $3f_r$ against $1$ at $f_r$, and the drive's third harmonic starts at a third of the fundamental, so it survives at about a fifth of it. Keeping only the fundamental is a working approximation, not a rigorous one.",
                 "The rectifier and its output capacitor are replaced by an equivalent resistance $R_{ac} = 8n^2R_L/\\pi^2$, chosen so the fundamental sees the same power flow.",
                 "The tank has two numbers: $\\omega_r = 1/\\sqrt{L_rC_r}$ and $Z_0 = \\sqrt{L_r/C_r}$. Load enters only through $Q = Z_0/R_{ac}$.",
-                "First-harmonic approximation is at its worst far from resonance and at heavy load, where the tank current stops looking sinusoidal.",
+                "First-harmonic approximation is at its worst far from resonance and at *light* load, because light load is small $Q$: at $Q = 0.85$ the third harmonic is $13$ per cent of the fundamental in the tank current, at $Q = 0.1$ it is $32$ per cent, and by $Q \\to 0$ the current has stopped being a sinusoid and is following the square wave.",
             ],
             "sandbox": {
                 "title": "Reading a tank off a Bode plot",
@@ -70,13 +71,15 @@ series $L_r$–$C_r$–$R_{ac}$ chain with a voltage source and take the output 
 capacitor and you get exactly this expression, with $\omega_n = \omega_r$ and
 $\zeta = 1/(2Q)$.
 
-So the damping slider is the load. It opens at $\zeta = 0.1$, which is $Q = 5$: a
-lightly loaded tank.
+So the damping slider is the load, and it runs the way round you may not expect:
+$\zeta = 1/(2Q) = R_{ac}/(2Z_0)$, so more damping is a *larger* $R_{ac}$, which is a
+*lighter* load. It opens at $\zeta = 0.1$, which is $Q = 5$ and $R_{ac} = Z_0/5$: a
+heavily loaded tank.
 ''',
                 "notice": [
-                    "The amber dot marks the gain at the corner, and it always reads $K/(2\\zeta)$ — which is $QK$. At the opening $\\zeta = 0.1$ that is $5$, or $14.0$ dB. The tank multiplies the driving fundamental by $Q$ at resonance, and that is the whole reason a resonant converter can boost.",
-                    "Drag $\\zeta$ up to $0.8$. The peak is gone entirely, and the amber dot has fallen to $-4.1$ dB, below the dashed 0 dB line. Above $\\zeta = 0.707$ the magnitude falls monotonically from DC, so a heavily loaded tank has no resonant rise at all.",
-                    "Watch the low-frequency end while you sweep $\\zeta$. It does not move: every curve in the family leaves the same $20\\log_{10}K$ asymptote. Frequency control has no authority down there, which is the light-load regulation problem in one picture.",
+                    "The amber dot marks the gain at the corner, and it always reads $K/(2\\zeta)$ — which is $QK$. At the opening $\\zeta = 0.1$ that is $5$, or $14.0$ dB. So the capacitor voltage is $Q$ times the driving fundamental at resonance. That resonant rise is the only place a tank's boost can come from — a series-resonant converter never gets at it, because it takes its output across the load rather than across a reactance, but an LLC takes its output across $L_m$ and does.",
+                    "Drag $\\zeta$ up to $0.8$. The peak is gone entirely, and the amber dot has fallen to $-4.1$ dB, below the dashed 0 dB line. Above $\\zeta = 0.707$ the magnitude falls monotonically from DC, so this tank — which is at $Q = 0.625$, a *lighter* load than the opening — has no resonant rise at all. In a series-loaded tank the load resistance is the damping, so it is light load that flattens the peak, not heavy.",
+                    "Watch the low-frequency end while you sweep $\\zeta$. It does not move: every curve in the family leaves the same $20\\log_{10}K$ asymptote. Frequency control has no authority down there: whatever the damping, the curve has already settled onto $K$ long before the axis runs out.",
                     "The phase plot is the switching test in disguise. The tank input impedance angle is $-(90^\\circ + \\varphi)$, where $\\varphi$ is the plotted phase. At the corner $\\varphi = -90^\\circ$ exactly, whatever the damping, so the tank is purely resistive there; anywhere the phase is *below* $-90^\\circ$ the tank looks inductive and the bridge can switch at zero volts. Check one: at $\\zeta = 0.5$ and one octave above the corner the phase reads $-146.3^\\circ$, so the impedance angle is $+56.3^\\circ$.",
                 ],
             },
@@ -165,9 +168,9 @@ linear tank, and a load resistance $8n^2R_L/\pi^2$. The factor $8/\pi^2 \approx 
 the only trace left of the rectifier.
 
 The approximation earns its keep because the tank is a filter. It fails where the tank
-stops filtering — deep into discontinuous conduction, or at very low $Q$, where the
-current is closer to triangular than sinusoidal and the third harmonic is no longer
-negligible. Every gain curve in this course is accurate to a few per cent near
+stops filtering — deep into discontinuous conduction, or at very low $Q$, where
+$R_{ac}$ swamps the reactance, the current follows the square drive rather than a
+sinusoid, and the third harmonic is no longer negligible. Every gain curve in this course is accurate to a few per cent near
 resonance and worth checking against a simulation anywhere else.
 ''',
             },
@@ -319,7 +322,7 @@ assert abs(_r2 - 124.50347045970466) < 1e-9, \
                     {"name": "Q is the ratio of the two tank numbers", "code": r'''
 _q = quality(60e-6, 33e-9, 50.0)
 assert abs(_q - 0.8528028654224417) < 1e-12, \
-    f"Q = Z0/Rac should be 0.852803, got {_q} — heavier load means smaller Q, not larger"
+    f"Q = Z0/Rac should be 0.852803, got {_q} — a heavier load is a smaller Rac and so a larger Q"
 '''},
                     {"name": "the driving fundamental is smaller than the rail", "code": r'''
 _v = fundamental_rms(400.0)
@@ -375,18 +378,23 @@ assert abs(_sym) < 1e-12, \
                 "initial": {"wn": 50, "zeta": 0.5, "K": 1},
                 "brief": r'''
 The same tank as the last sandbox, opened at $\zeta = 0.5$, which is $Q = 1$ — a
-loaded tank rather than an idle one. The point of this pass is not the shape of one
-curve but the shape of the *family*: what a controller can and cannot reach by moving
-frequency alone.
+lighter load than the last pass, since $\zeta$ rises with $R_{ac}$. The point of this
+pass is not the shape of one curve but the shape of the *family*: what a controller can
+and cannot reach by moving frequency alone.
+
+Keep in mind which tank this is. The load sits in series here, so it is the damping,
+and the peak grows as the load gets heavier. The LLC gain curve in the concepts above
+carries its load in parallel with $L_m$ and does the reverse. What transfers between
+them is the shape of the family, not the direction of the load axis.
 
 Sweep $\zeta$ slowly from one end to the other and watch three separate things: the
 low-frequency end, the corner, and the high-frequency tail.
 ''',
                 "notice": [
-                    "The corner marker traces $K/(2\\zeta)$ as you sweep, and that is exactly $Q$. Every bit of the load dependence of this tank lives in one number.",
-                    "At $\\zeta = 0.05$ the corner marker reads $20.0$ dB and at $\\zeta = 1.5$ it reads $-9.5$ dB. That is a 30 dB swing in resonant gain across the load range, and a frequency-mode controller has to cover all of it.",
-                    "Two decades of the tail are indistinguishable. At ten times the corner the magnitude is $-39.9$ dB for $\\zeta = 0.05$ and $-40.3$ dB for $\\zeta = 1.5$: the $-40$ dB per decade asymptote does not care about damping. Far above resonance you have gain authority but almost no load sensitivity.",
-                    "The low-frequency end is the mirror image and the more dangerous one. Every curve leaves the same flat $20\\log_{10}K$ line, so far below resonance frequency buys you nothing at any load. A series-resonant converter that has to regulate down to no load runs out of range here; the LLC's extra inductor is the fix, and the next lab draws it.",
+                    "The corner marker traces $K/(2\\zeta)$ as you sweep, which with the opening $K = 1$ is exactly $Q$. Every bit of the load dependence of this tank lives in one number.",
+                    "At $\\zeta = 0.05$ the corner marker reads $20.0$ dB and at $\\zeta = 1.5$ it reads $-9.5$ dB. That is a 30 dB swing in the gain available at the corner, across the full span of the slider. The controller is not asked to deliver 30 dB — the capstone only ever needs $0.95$ to $1.14$ — but it does have to hold that narrow output while the curve underneath it moves this far.",
+                    "The tail is indistinguishable across the whole decade and a half of it the axis shows above the corner. At ten times the corner the magnitude is $-39.9$ dB for $\\zeta = 0.05$ and $-40.3$ dB for $\\zeta = 1.5$: the $-40$ dB per decade asymptote does not care about damping. Far above resonance you have gain authority but almost no load sensitivity.",
+                    "The low-frequency end is the mirror image. Every curve leaves the same flat $20\\log_{10}K$ line, so far below resonance frequency buys you nothing at any load. A series-resonant converter meets the same wall at the other end of its own axis: at no load $Q \\to 0$, its gain sits at 1 for every frequency, and the controller can run the frequency up as far as it likes without pulling the output down. The LLC's extra inductor is the fix, and the next lab draws it.",
                 ],
             },
             "derive": {
@@ -691,7 +699,7 @@ It opens at zero dead time — the device is gated on the instant the other one 
 off.
 ''',
                 "notice": [
-                    "At zero dead time the trace is amber. The drain voltage collapses discontinuously and then rings, and the blue current steps to full scale in the same instant. That overlap of a large voltage and a large current is the switching loss, and the panel names its cause: the device turns on into a charged capacitance.",
+                    "At zero dead time the trace is amber. The drain voltage falls the whole way in under 8 ns — a near-vertical edge against the 600 ns the axis covers — and then rings on at the $32.5$ MHz the panel names, while the blue current steps to full scale in the same instant. That overlap of a large voltage and a large current is the switching loss, and the panel names its cause: the device turns on into a charged capacitance.",
                     "Raise the dead time in its 5 ns steps. The panel says this tank needs about 8 ns to swing the drain down; at 10 ns the trace turns green and changes shape completely — $V_{ds}$ is now a clean quarter-cosine that reaches zero and stays there, and the current ramps over about 60 ns instead of stepping. That is what turning on at zero volts looks like.",
                     "Now push the dead time on to 200 ns. Nothing on the plot changes at all — once $V_{ds}$ has reached zero the drawn waveform stops depending on the dead time. In the model the extra time is simply invisible; in a real bridge it is conduction time you paid for and did not use, and eventually the midpoint starts to drift back.",
                     "Halve $C_{oss}$ to 200 pF and read the swing time: it falls to about 5 ns, not 4. The requirement goes as $\\sqrt{LC}$, so a device with half the output capacitance buys you about 30 per cent of the dead time, not 50 per cent.",
@@ -1327,7 +1335,11 @@ the ones after it.
    time, at the operating frequency for that line. Above 1 means ZVS holds. Remember
    that the switching frequency, and hence the magnetising current, changes with line.
 9. `losses(Iout, Vin)` — a dict with exactly the keys `"conduction"`, `"secondary"`,
-   `"core"` and `"gate"`, in watts. Gate loss is $2Q_gV_gf_s$.
+   `"core"` and `"gate"`, in watts. Gate loss is $2Q_gV_gf_s$. Take `B_PK` straight
+   from the spec and do not rescale it with frequency: module 4 showed the flux swing
+   going as $1/f_s$, but the specification pins it at the nominal operating point, so
+   the core term is exact at nominal line and approximate at the extremes. There is no
+   switching term, because this design holds ZVS everywhere.
 10. `efficiency(Iout, Vin)` — output power over input power.
 
 ## Suggested order
@@ -1370,7 +1382,7 @@ resonance. Use that; do not re-derive it in the loop.
             "From $\\omega_r = 1/\\sqrt{L_rC_r}$ and $Z_0 = \\sqrt{L_r/C_r}$ you get $L_r = Z_0/\\omega_r$ and $C_r = 1/(Z_0\\omega_r)$ directly — no simultaneous equations needed.",
             "`required_gain(spec.V_IN_NOM)` must come out as exactly 1.0 if your turns ratio is right; check that before going further.",
             "In `zvs_margin`, compute `fs = operating_x(Vin) * spec.F_R` first, then the magnetising peak at that frequency, then `Im * T_DEAD / (2 * C_OSS * Vin)`.",
-            "The rail voltage cancels out of the ZVS *limit* but not out of the margin at a fixed tank, because the operating frequency moves with line. High line is the binding case.",
+            "The rail voltage cancels out of the margin too, not just out of the limit: the ratio reduces to $t_d/(16L_mf_sC_{oss})$. What is left is the switching frequency, and that does move with line, so high line — the fastest point — is the binding case.",
         ],
         "files": [
             {"name": "spec.py", "ro": True, "content": r'''

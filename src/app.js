@@ -94,6 +94,20 @@ function capstoneMd(c) {
         m.sandboxLessonId = sbl.id;
       }
 
+      if (m.quiz) {
+        const qzl = {
+          id: c.id + '-' + mnum + '-QZ',
+          type: 'quiz',
+          title: m.quiz.title,
+          min: m.quiz.minutes || 6,
+          questions: m.quiz.questions || [],
+          trackId: c.id, courseId: c.id, num: mnum + '\u00b7q',
+        };
+        LESSON_INDEX[qzl.id] = { lesson: qzl, track: c, module: modRef, mi: mi };
+        flat.push(qzl);
+        m.quizLessonId = qzl.id;
+      }
+
       if (m.derive) {
         const dvl = {
           id: c.id + '-' + mnum + '-DV',
@@ -2428,6 +2442,8 @@ function renderCode(main, l) {
 }
 
 /* ---------- playground ---------- */
+/* the modes whose body is a code editor; anything else renders its own view */
+const PLAY_CODE_MODES = { python: 1, js: 1, web: 1 };
 const PLAY_DEFAULTS = {
   python: { main: 'main.py', files: { 'main.py': '# Scratchpad — anything goes.\nfor i in range(1, 6):\n    print("*" * i)\n' } },
   js: { main: 'script.js', files: { 'script.js': '// Scratchpad — console.log away.\nconst names = ["Ada", "Linus", "Grace"];\nfor (const n of names) console.log("Hei, " + n + "!");\n' } },
@@ -2763,6 +2779,10 @@ function renderPlayground(main) {
     renderFtabs();
   }
   function setMode(m) {
+    /* Not every mode is a text editor. Switching in place worked while all three
+       were, but the circuit mode needs a different view entirely — without this it
+       loaded circuit.json into the code editor and the schematic "disappeared". */
+    if (!PLAY_CODE_MODES[m]) { st.mode = m; saveSoon(); go({ view: 'play' }); return; }
     mode = m;
     st.mode = m;
     names = Object.keys(st.files[m]);

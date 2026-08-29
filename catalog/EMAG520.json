@@ -51,7 +51,7 @@
      "Set load R to 50 and load X to 0. Both dots collapse onto the centre and the dashed circle shrinks to nothing: $|\\Gamma| = 0$, VSWR 1:1. The centre is the only point at which a 50 Ω system has nothing to fix.",
      "Set R = 100, X = 0, then walk line length from 0 to 0.5. The grey dot never moves, the bright dot goes round exactly once, and the readout holds at $|\\Gamma| = 0.333$, VSWR 2:1 the whole way. Half a wavelength of lossless line is one full turn and no improvement.",
      "Stop at line length 0.25 with R = 100, X = 0. The bright dot is diametrically opposite the load, on the real axis at $\\Gamma = -1/3$, which reads as 25 Ω. A quarter wave has turned a 2:1 step up into a 2:1 step down.",
-     "Now set R = 50 and raise X to 200. The dot rides the $r = 1$ circle out towards the rim, and the readout reaches $|\\Gamma| = 0.894$, VSWR 17.9:1. A perfect resistance with a reactance on it is still a bad load."
+     "Now set R = 50 and raise X to 200. The dot rides the $r = 1$ circle out towards the rim, and the readout reaches $|\\Gamma| = 0.894$, VSWR 17.94:1. A perfect resistance with a reactance on it is still a bad load."
     ]
    },
    "derive": {
@@ -126,7 +126,7 @@
       ]
      }
     ],
-    "closing": "Check the last result against a number you already know: $S = 2$ gives $8/9$, so a\n2:1 mismatch throws away a ninth of the incident power. That is under half a\ndecibel, which is why 2:1 is tolerated everywhere and why the *phase* of the\nreflection — the thing $S$ has thrown away — is usually the part that hurts."
+    "closing": "Check the last result against a number you already know: $S = 2$ gives $8/9$, so a\n2:1 mismatch throws away a ninth of the incident power. That is $10\\log_{10}(9/8)$,\nor 0.51 dB — a shade *over* half a decibel, and small enough that 2:1 is tolerated\nalmost everywhere, which is why the *phase* of the\nreflection — the thing $S$ has thrown away — is usually the part that hurts."
    },
    "lab": {
     "title": "Reflection, VSWR and a length of line",
@@ -148,7 +148,7 @@
     ],
     "hints": [
      "`complex(zl)` first, so an integer load does not silently do integer arithmetic.",
-     "`vswr` must depend on `abs(g)` only — a load of $-1/3$ and one of $+1/3$ produce the same standing wave.",
+     "`vswr` must depend on `abs(g)` only — a reflection coefficient of $-1/3$ and one of $+1/3$ produce the same standing wave.",
      "`np.log10` of a magnitude, times $-20$. Guard the zero case before you take the logarithm.",
      "In `input_impedance` the rotation is $e^{-2j\\beta l}$, not $e^{-j\\beta l}$: the wave travels the length twice."
     ],
@@ -317,7 +317,7 @@
     "tests": [
      {
       "name": "no series element is a through connection",
-      "code": "_S = s_series(0.0, 50.0)\nassert _S.shape == (2, 2), f\"a two-port has a 2x2 matrix, got {_S.shape}\"\nassert abs(_S[0, 0]) < 1e-12, \\\n    \"with nothing in the way there is nothing to reflect, so S11 must be 0\"\nassert abs(_S[1, 0] - 1.0) < 1e-12, \\\n    f\"a through connection passes the wave untouched, so S21 must be 1, got {_S[1, 0]}\""
+      "code": "_S = s_series(0.0, 50.0)\nassert _S.shape == (2, 2), f\"a two-port has a 2x2 matrix, got {_S.shape}\"\nassert abs(_S[0, 0]) < 1e-12, \\\n    \"with nothing in the way there is nothing to reflect, so S11 must be 0\"\nassert abs(_S[1, 0] - 1.0) < 1e-12, \\\n    f\"a through connection passes the wave untouched, so S21 must be 1, got {_S[1, 0]}\"\n_B = s_series(1e9, 50.0)\nassert abs(_B[0, 0] - 1.0) < 1e-6, \\\n    f\"a huge series impedance is an open circuit, so S11 must approach +1, got {_B[0, 0]}\"\nassert abs(_B[1, 0]) < 1e-6, \\\n    f\"and nothing crosses an open circuit, so S21 must approach 0, got {_B[1, 0]}\""
      },
      {
       "name": "a 50 ohm series resistor splits the wave two ways",
@@ -360,7 +360,7 @@
     "title": "Rotating onto the unity-resistance circle",
     "visualiser": "smith",
     "minutes": 9,
-    "brief": "Single-stub matching is two moves. First a length of line rotates the load until its\n*resistance* is right; then one reactance cancels what is left.\n\nThis chart draws constant-resistance circles, so it shows the series form of that\nconstruction directly: rotate until the bright dot lands on the circle marked\n$r = 1$, and the impedance there is $50 + jX$ for some $X$ you then cancel.",
+    "brief": "Single-stub matching is two moves. First a length of line rotates the load until its\n*resistance* is right; then one reactance cancels what is left.\n\nThis is an impedance chart, so it shows the series form of that construction\ndirectly: rotate until the bright dot lands on the constant-resistance circle for\n$r = 1$ — nothing here is labelled, so find it as the one interior circle that\npasses through the centre — and the impedance there is $50 + jX$ for some $X$ you\nthen cancel.",
     "initial": {
      "rl": 95,
      "xl": 0,
@@ -491,7 +491,7 @@
      },
      {
       "name": "a matched load asks for nothing",
-      "code": "_d, _b = single_stub(50.0, 50.0)\nassert abs(_b) < 1e-9, \\\n    f\"there is no susceptance to cancel on a matched load, got {_b}\"\nassert abs(matched_gamma(50.0, 50.0, _d, _b)) < 1e-12, \\\n    \"a matched load with no stub is still matched\"\nassert abs(load_gamma(100.0, 50.0) - 1.0 / 3.0) < 1e-12, \\\n    f\"check load_gamma: 100 ohm on a 50 ohm line reflects 1/3, got {load_gamma(100.0, 50.0)}\""
+      "code": "_d, _b = single_stub(50.0, 50.0)\nassert abs(_b) < 1e-9, \\\n    f\"there is no susceptance to cancel on a matched load, got {_b}\"\nassert abs(matched_gamma(50.0, 50.0, _d, _b)) < 1e-12, \\\n    \"a matched load with no stub is still matched\"\nassert abs(load_gamma(100.0, 50.0) - 1.0 / 3.0) < 1e-12, \\\n    f\"check load_gamma: 100 ohm on a 50 ohm line reflects 1/3, got {load_gamma(100.0, 50.0)}\"\n_d, _b = single_stub(25.0, 50.0)\nassert abs(_d - 0.09795663800765181) < 1e-9, \\\n    f\"25 ohm wants the stub 0.097957 wavelengths out, got {_d}\"\nassert abs(_b - 0.7071067811865476) < 1e-9, \\\n    f\"25 ohm mirrors the 100 ohm case, so the stub must add +0.7071 there, got {_b}\""
      },
      {
       "name": "a complex load, designed end to end",
@@ -522,7 +522,7 @@
     },
     "notice": [
      "R = 200, X = 0 reads $|\\Gamma| = 0.6$, VSWR 4:1. Change R to 75 and it reads $|\\Gamma| = 0.2$, VSWR 1.5:1. The first load reflects nine times the power of the second, and it is that ratio, not the ohms, that the matching network has to buy its way out of.",
-     "Leave R = 200 and sweep line length across the whole slider. The bright dot makes exactly one circuit at constant radius. Read that as frequency: over an octave the mismatch has rotated all the way round and improved by nothing.",
+     "Leave R = 200 and sweep line length across the whole slider. The bright dot makes exactly one circuit at constant radius, since the rotation angle is $4\\pi$ times the length in wavelengths. Read that as frequency: the whole slider is dc up to the frequency at which the line is half a wavelength, and one octave inside it — quarter wave to half wave — is only half a turn. Either way the mismatch has moved and improved by nothing.",
      "Set R = 50, X = 1: the readout is 40 dB return loss. Now set X = 10 — still a perfect 50 Ω resistor, still a small reactance — and it falls to 20 dB. A match is a knife edge in reactance, and holding that edge across a band is the entire problem of this module."
     ]
    },
@@ -634,11 +634,11 @@
      },
      {
       "name": "matched at the design frequency, bare at dc",
-      "code": "for _n in (1, 2, 3):\n    _s = binomial_sections(50.0, 100.0, _n)\n    _g = cascade_gamma(50.0, _s, 100.0, 1.0)\n    assert _g < 1e-9, \\\n        f\"{_n} binomial section(s) must give a perfect match at f0, got |Gamma| = {_g}\"\n_s2 = binomial_sections(50.0, 100.0, 2)\nassert abs(cascade_gamma(50.0, _s2, 100.0, 0.0) - 1.0 / 3.0) < 1e-9, \\\n    \"at zero frequency every section has zero length, so the bare 2:1 load shows through at 1/3\""
+      "code": "for _n, _half in ((1, 0.24253562503633297), (2, 0.17407765595569785),\n                  (3, 0.1242598254121419)):\n    _s = binomial_sections(50.0, 100.0, _n)\n    assert len(_s) == _n, f\"{_n} sections means {_n} impedances, got {len(_s)}\"\n    _g = cascade_gamma(50.0, _s, 100.0, 1.0)\n    assert _g < 1e-9, \\\n        f\"{_n} binomial section(s) must give a perfect match at f0, got |Gamma| = {_g}\"\n    _off = cascade_gamma(50.0, _s, 100.0, 0.5)\n    assert abs(_off - _half) < 1e-9, \\\n        f\"at half the design frequency {_n} section(s) leave |Gamma| = {_half}, got {_off}\"\n_s2 = binomial_sections(50.0, 100.0, 2)\nassert abs(cascade_gamma(50.0, _s2, 100.0, 0.0) - 1.0 / 3.0) < 1e-9, \\\n    \"at zero frequency every section has zero length, so the bare 2:1 load shows through at 1/3\""
      },
      {
       "name": "the response is symmetric about the design frequency",
-      "code": "_s = binomial_sections(50.0, 100.0, 1)\nfor _r in (0.3, 0.6, 0.9):\n    _a = cascade_gamma(50.0, _s, 100.0, _r)\n    _b = cascade_gamma(50.0, _s, 100.0, 2.0 - _r)\n    assert abs(_a - _b) < 1e-9, \\\n        f\"quarter-wave responses mirror about r = 1: {_a} at {_r} against {_b} at {2.0 - _r}\"\nassert abs(cascade_gamma(50.0, _s, 100.0, 0.5) - 0.242535625036333) < 1e-9, \\\n    f\"at half the design frequency a single section leaves |Gamma| = 0.24254, got {cascade_gamma(50.0, _s, 100.0, 0.5)}\""
+      "code": "_s = binomial_sections(50.0, 100.0, 1)\nfor _r, _want in ((0.3, 0.30046251958961323), (0.6, 0.2034664115336352),\n                  (0.9, 0.05522353650670177)):\n    _a = cascade_gamma(50.0, _s, 100.0, _r)\n    assert abs(_a - _want) < 1e-9, \\\n        f\"one section at r = {_r} leaves |Gamma| = {_want}, got {_a}\"\n    _b = cascade_gamma(50.0, _s, 100.0, 2.0 - _r)\n    assert abs(_a - _b) < 1e-9, \\\n        f\"quarter-wave responses mirror about r = 1: {_a} at {_r} against {_b} at {2.0 - _r}\"\nassert abs(cascade_gamma(50.0, _s, 100.0, 0.5) - 0.242535625036333) < 1e-9, \\\n    f\"at half the design frequency a single section leaves |Gamma| = 0.24254, got {cascade_gamma(50.0, _s, 100.0, 0.5)}\""
      },
      {
       "name": "the bandwidth matches the closed form",
@@ -737,7 +737,7 @@
    },
    {
     "name": "every transformer is exact at f0 and bare at dc",
-    "code": "from spec import Z0, R_LOAD\nfor _n in (1, 2, 3):\n    _s = binomial_sections(Z0, R_LOAD, _n)\n    _g = cascade_gamma(Z0, _s, R_LOAD, 1.0)\n    assert _g < 1e-9, \\\n        f\"{_n} section(s) must be exact at f0, got |Gamma| = {_g}\"\n    _dc = cascade_gamma(Z0, _s, R_LOAD, 0.0)\n    assert abs(_dc - 0.6) < 1e-9, \\\n        f\"at r = 0 every section has zero length, so the bare 0.6 must show through; got {_dc}\"\nassert abs(cascade_gamma(Z0, binomial_sections(Z0, R_LOAD, 1), R_LOAD, 2.0) - 0.6) < 1e-9, \\\n    \"at twice the design frequency each section is a half wave and transforms nothing\""
+    "code": "from spec import Z0, R_LOAD\nfor _n, _half in ((1, 0.4685212856658181), (2, 0.3511234415883917),\n                  (3, 0.2579800958418455)):\n    _s = binomial_sections(Z0, R_LOAD, _n)\n    assert len(_s) == _n, f\"{_n} sections means {_n} impedances, got {len(_s)}\"\n    _g = cascade_gamma(Z0, _s, R_LOAD, 1.0)\n    assert _g < 1e-9, \\\n        f\"{_n} section(s) must be exact at f0, got |Gamma| = {_g}\"\n    _off = cascade_gamma(Z0, _s, R_LOAD, 0.5)\n    assert abs(_off - _half) < 1e-9, \\\n        f\"at half the design frequency {_n} section(s) leave |Gamma| = {_half}, got {_off}\"\n    _dc = cascade_gamma(Z0, _s, R_LOAD, 0.0)\n    assert abs(_dc - 0.6) < 1e-9, \\\n        f\"at r = 0 every section has zero length, so the bare 0.6 must show through; got {_dc}\"\nassert abs(cascade_gamma(Z0, binomial_sections(Z0, R_LOAD, 1), R_LOAD, 2.0) - 0.6) < 1e-9, \\\n    \"at twice the design frequency each section is a half wave and transforms nothing\""
    },
    {
     "name": "the bandwidth finder recovers a known answer",

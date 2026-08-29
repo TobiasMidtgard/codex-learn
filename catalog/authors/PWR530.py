@@ -54,7 +54,7 @@ COURSE = {
                 "Faraday's law fixes the flux swing from the applied volt-seconds: $B_m = \\frac{V}{4 f N A_e}$ for a square wave.",
                 "The Steinmetz relation $P_v = k f^\\alpha B_m^\\beta$ is a *fit*, valid only over the range it was measured on.",
                 "Typical ferrite values are $\\alpha \\approx 1.4$ and $\\beta \\approx 2.5$ — the flux exponent is the larger one, which is why halving $B_m$ beats halving $f$.",
-                "At fixed applied volts and turns, raising $f$ *lowers* core loss, because $B_m$ falls faster than $f^\\alpha$ rises.",
+                "At fixed applied volts and turns, raising $f$ *lowers* core loss: $B_m \\propto \\frac{1}{f}$, so the $B_m^\\beta$ factor falls as $f^{-\\beta}$, and $\\beta > \\alpha$ leaves $P_v \\propto f^{\\alpha-\\beta}$.",
                 "Fitting $k$, $\\alpha$ and $\\beta$ is linear least squares once you take logarithms of all three axes.",
             ],
             "sandbox": {
@@ -322,8 +322,8 @@ assert 1.0 < _k < 2.0, \
             "summary": "Above a few tens of kilohertz a conductor stops using its own middle, and its neighbours make that worse.",
             "concepts": [
                 "Skin depth $\\delta = \\sqrt{\\frac{\\rho}{\\pi f \\mu}}$: 0.21 mm in copper at 100 kHz, and it falls only as $\\sqrt{f}$.",
-                "Dowell's normalised thickness $\\Delta = \\frac{h}{\\delta}$ is the one number a winding's ac behaviour depends on.",
-                "The proximity term scales as $m^2$ in the layer count, and it dominates the skin term for anything past two layers.",
+                "Dowell's normalised thickness $\\Delta = \\frac{h}{\\delta}$ is where frequency enters: at a fixed layer count the whole ac factor is a function of $\\Delta$ alone.",
+                "The proximity term scales as $m^2$ in the layer count, but it vanishes as $\\Delta^4$ in thin foil. At $\\Delta = 1$ it first overtakes the skin term at four layers; only in the thick limit does it do so from two layers up.",
                 "For thick conductors $\\frac{R_{ac}}{R_{dc}} \\to \\Delta \\frac{2m^2+1}{3}$, so $R_{ac}$ itself grows only as $\\sqrt{f}$ — but from a much higher floor.",
                 "There is an optimum thickness, not a maximum: past $\\Delta \\approx 1$ the extra copper carries no current and only couples to its neighbours.",
             ],
@@ -333,8 +333,8 @@ assert 1.0 < _k < 2.0, \
                 "minutes": 7,
                 "initial": {"wn": 20, "zeta": 0.7, "K": 1},
                 "brief": r'''
-This is a second-order low-pass, not a winding. It is here as a ruler: every claim
-in this module is a straight line on log–log axes, and the only skill needed to
+This is a second-order low-pass, not a winding. It is here as a ruler: the frequency
+laws in this module are straight lines on log–log axes, and the only skill needed to
 check one is counting decades of slope.
 
 The magnitude plot is dB against $\omega$ on a log axis, the phase plot below it is
@@ -440,8 +440,9 @@ F = D*(sinh(2D) + sin(2D))/(cosh(2D) - cos(2D))
 ```
 
 `optimal_delta(m)` returns the $\Delta$ that minimises the *ac resistance itself*,
-not the ratio. At a fixed copper cross-section per turn the dc resistance falls as
-$\frac{1}{\Delta}$, so the quantity to minimise is $\frac{F(\Delta)}{\Delta}$.
+not the ratio. The foil width is fixed by the window, so thickening the foil raises
+its cross-section in proportion to $\Delta$ and drops the dc resistance as
+$\frac{1}{\Delta}$; the quantity to minimise is therefore $\frac{F(\Delta)}{\Delta}$.
 Scan `np.linspace(0.05, 5.0, 4951)` — a grid of exactly 0.001 — and return the
 value of $\Delta$ at the minimum.
 ''',
@@ -605,7 +606,7 @@ You open at 30 nH of loop inductance, 150 pF of device capacitance and 5 ns of d
 time.
 ''',
                 "notice": [
-                    "The trace opens green: the quarter-cycle swing takes 3.3 ns, the 5 ns of dead time covers it, and $V_{ds}$ has reached zero before the blue current ramps in over 60 ns. There is no $\\frac{1}{2}CV^2$ turn-on loss, and that is the licence to raise $f$ and halve the area product.",
+                    "The trace opens green: the quarter-cycle swing takes 3.3 ns and the 5 ns of dead time covers it, so $V_{ds}$ is already at zero 3.3 ns in, while the blue current — which takes 60 ns to reach full scale — is still under a tenth of it. There is no $\\frac{1}{2}CV^2$ turn-on loss, and that is the licence to raise $f$ and halve the area product.",
                     "Set the dead time back to 0. The trace turns amber, $V_{ds}$ steps to 0.9 and rings about zero, and the current is already at full scale. That loss returns once per cycle, so it grows in direct proportion to $f$ — the term that eventually cancels the shrinking core.",
                     "Leave the dead time at 5 ns and raise $C_{oss}$ to 600 pF. The ring drops to 37.5 MHz and the quarter-cycle stretches to 6.7 ns, which 5 ns no longer covers, so the trace reverts to amber. Fitting a bigger device to cut conduction loss can cost you the soft switching that made the small core possible.",
                 ],
@@ -889,7 +890,7 @@ assert _b["core"] > _b["copper"], \
                 "The junction-to-ambient path is $R_{jc} + R_{cs} + R_{sa}$, and only the last of those is shared when several devices sit on one sink.",
                 "Transient thermal impedance $Z_{th}(t) = \\sum_i R_i (1 - e^{-t/\\tau_i})$: a short pulse sees far less than the steady-state resistance.",
                 "A Foster ladder of positive $R$ and $C$ has only real poles. A fit that produces an overshoot has been fitted to measurement noise.",
-                "Core loss rises with temperature, so $P$ and $T_j$ form a loop: past a critical $R_{ja}$ the steady solution disappears entirely.",
+                "A power ferrite's loss curve has a minimum near 100 °C; run it above that and core loss rises with temperature, so $P$ and $T_j$ form a loop. Past a critical $R_{ja}$ the steady solution disappears entirely.",
             ],
             "sandbox": {
                 "title": "A heatsink as a low-pass filter",
@@ -897,9 +898,11 @@ assert _b["core"] > _b["copper"], \
                 "minutes": 8,
                 "initial": {"wn": 2, "zeta": 1.5, "K": 20},
                 "brief": r'''
-Power in, temperature rise out. That is a transfer function, and a two-stage
-thermal ladder — package then heatsink — is a second-order low-pass with two real
-poles.
+Power in, temperature rise out. That is a transfer function, and this is a ruler for
+reading one rather than a model of a heatsink: the Foster ladder of the lab is a sum
+of first-order terms and rolls off at 20 dB per decade, while the curve drawn here is
+a textbook second order and rolls off at 40. Take the plateau and the corner from it,
+not the slope.
 
 Read the magnitude in dB as thermal impedance: the flat level on the left is the
 steady-state $R_{th}$ in K/W, and the roll-off on the right is why a short pulse of
@@ -907,8 +910,8 @@ power does not raise the junction the way a steady one does.
 ''',
                 "notice": [
                     "Read the flat level first. With $K = 20$ it sits at 26 dB, which is a thermal resistance of 20 K/W — the number a steady dissipation multiplies. Everything to the left of the corner is slow enough that the whole stack has reached equilibrium.",
-                    "The amber dot marks the corner. At $\\zeta = 1.5$ it sits at $\\frac{K}{2\\zeta} = 6.7$, which is 9.5 dB below the flat level, because the two poles are real and split to $0.38\\,\\omega_n$ and $2.62\\,\\omega_n$. Above the corner the magnitude falls 40 dB per decade: a power pulse ten times shorter raises the junction a hundred times less.",
-                    "Take $\\zeta$ down to 0.05. A 20 dB peak appears just below $\\omega_n$ and the phase dives through $-90°$ towards $-180°$. A ladder of positive thermal resistances and capacitances can never do that — its poles are always real — so a Foster fit that comes back underdamped has been fitted to noise, not to heat.",
+                    "The amber dot marks the corner, at $\\frac{K}{2\\zeta}$. With $K = 20$ and $\\zeta = 1.5$ that is 6.7 K/W, which is 9.5 dB below the flat level, and the two poles are real, sitting at $0.38\\,\\omega_n$ and $2.62\\,\\omega_n$. Where the corner falls is the number to carry away: a pulse much shorter than the slowest time constant sees far less than the steady-state resistance.",
+                    "Take $\\zeta$ down to 0.05. The magnitude peaks 20 dB above the plateau — 46 dB, so the tip runs off the top of a frame that stops at 40 — just below $\\omega_n$, and the phase dives through $-90°$ towards $-180°$. A ladder of positive thermal resistances and capacitances can never do that — its poles are always real — so a Foster fit that comes back underdamped has been fitted to noise, not to heat.",
                 ],
             },
             "derive": {
@@ -1361,7 +1364,11 @@ from cores import (CORES, SPEC, FREQS, RHO_CU, MU0,
 # Design record:
 #   chosen frequency -> 100 kHz. The sweep's 50 kHz entry is cooler but needs an
 #                       ETD44; 150 kHz and above all breach the 40 K limit because
-#                       core loss climbs as f**1.4 while the core stops shrinking.
+#                       the core list bottoms out at the ETD29, whose smaller
+#                       surface pushes R_th to 27.8 K/W against the ETD34's 21.7,
+#                       while Dowell's factor keeps climbing. Copper still
+#                       dominates at 150 and 200 kHz; core loss only takes over
+#                       by 300 kHz.
 #   chosen core      -> ETD34, at 29.95 K rise against a 40 K budget.
 #   interleaving was worth -> 24.33 K at 100 kHz (54.28 K down to 29.95 K), and it
 #                       is what makes the smaller core possible at all.

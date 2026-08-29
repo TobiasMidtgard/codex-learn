@@ -34,14 +34,14 @@
     "Offset, index, tag: the block offset selects a byte, the index selects a set, the tag is everything left over.",
     "Geometry: with capacity `C`, block size `B` and `W` ways, the cache has `C/B` blocks arranged in `C/(BW)` sets.",
     "Direct-mapped is one-way; fully associative is one set. Both are corners of the same design, not separate species.",
-    "True LRU is a per-set ordering, not a per-block counter — and it is the only policy that turns a repeated access into a hit reliably.",
+    "True LRU is a per-set ordering, not a per-block counter: a hit has to move its block to the recent end of that ordering. A policy that leaves the order alone on a hit is FIFO, and it will evict a block the program is still using.",
     "Widening the set costs `W` tag comparators and a `W`-to-1 multiplexer in the hit path, which is why real L1 caches stop at four or eight ways."
    ],
    "sandbox": {
     "title": "What capacity and associativity do not buy you",
     "visualiser": "cache",
     "minutes": 9,
-    "brief": "The plot sweeps cache size along the x axis and reports the miss rate of an LRU\ncache on a strided walk. The accented curve is the associativity you have selected;\nthe faint ones are the other two shown for comparison.\n\nRead the fine print of the experiment before you read the plot. The trace is a\ncyclic sweep over a working set defined as **four times the cache**, so the working\nset grows every time you drag the size slider. That is a deliberate worst case, and\nit is worth meeting before you meet the friendly cases.",
+    "brief": "The plot sweeps cache size along the x axis and reports the miss rate of an LRU\ncache on a strided walk. The accented curve is the associativity you have selected;\nthe faint ones are the three fixed references — direct, 4-way and 16-way — less\nwhichever of them you are currently sitting on.\n\nRead the fine print of the experiment before you read the plot. The trace is a\ncyclic sweep over a working set defined as **four times the cache**, so the working\nset grows every time you drag the size slider. That is a deliberate worst case, and\nit is worth meeting before you meet the friendly cases.",
     "initial": {
      "kb": 8,
      "ways": 1,
@@ -167,7 +167,7 @@
      },
      {
       "name": "every access is accounted for",
-      "code": "_hot = interleave(walk(0, 64, 4, 4), walk(1024, 64, 4, 4), walk(2048, 64, 4, 4))\n_c = Cache(1024, 64, 1)\n_h, _m = _c.run(_hot)\nassert _h + _m == len(_hot), \\\n    f\"48 accesses must produce 48 outcomes, got {_h} hits and {_m} misses\"\nassert _c.evictions == 44, \\\n    (f\"the first 4 misses land in empty sets and evict nothing; the other 44 each \"\n     f\"throw a block out. Got {_c.evictions}\")"
+      "code": "_hot = interleave(walk(0, 64, 4, 4), walk(1024, 64, 4, 4), walk(2048, 64, 4, 4))\n_c = Cache(1024, 64, 1)\n_h, _m = _c.run(_hot)\nassert _h + _m == len(_hot), \\\n    f\"48 accesses must produce 48 outcomes, got {_h} hits and {_m} misses\"\nassert _c.evictions == 44, \\\n    (f\"only four sets are ever used, so exactly four misses land in an empty set \"\n     f\"and evict nothing; the other 44 each throw a block out. Got {_c.evictions}\")"
      }
     ]
    }
@@ -332,7 +332,7 @@
     "$\\text{AMAT} = t_{hit} + m \\cdot t_{penalty}$ — one hit time always, and the penalty only sometimes.",
     "Two levels compose: the L2 access time and its own miss rate become the L1 penalty.",
     "Local miss rate is measured against accesses that reach the level; global miss rate is measured against all accesses, and is the product.",
-    "Write-back with write-allocate moves a whole block on a miss and another on a dirty eviction; write-through with no-write-allocate moves one word per write and nothing else.",
+    "Write-back with write-allocate moves a whole block on a miss and another on a dirty eviction; write-through with no-write-allocate sends one word per write, and still fetches a whole block whenever a *read* misses.",
     "Which wins is arithmetic, not doctrine: it turns on how many times a block is written before it leaves."
    ],
    "sandbox": {
@@ -346,7 +346,7 @@
      "stride": 8
     },
     "notice": [
-     "At a stride of 8 B the curve sits at 12.5 per cent, flat across the whole size axis. That is $1 + 0.125 \\times 100 = 13.5$ cycles per access against a 1-cycle hit: the hierarchy is running at about a thirteenth of its hit rate.",
+     "At a stride of 8 B the curve sits at 12.5 per cent, flat across the whole size axis. That is $1 + 0.125 \\times 100 = 13.5$ cycles per access: thirteen and a half times what the same access would cost if it hit.",
      "Halve the stride to 4 B and the curve halves to 6.25, giving $1 + 0.0625 \\times 100 = 7.25$ cycles. Halving the miss rate nearly halved the access time, because at these numbers the penalty term is almost the whole of it.",
      "Now drag the size slider anywhere you like at either stride. The curve does not move, so neither does the AMAT. On this trace no amount of capacity buys a single cycle — a reminder that AMAT is only as honest as the miss rate you feed it."
     ]
@@ -424,7 +424,7 @@
       ]
      }
     ],
-    "closing": "Set the two expressions equal and the break-even is a statement about reuse: a block\nmust be written more than about $B(1+d)/V$ times before it leaves for write-back to\npay. With 64-byte blocks and 8-byte words that is roughly eight writes per block —\neasy for a stack or an array being filled, impossible for a scatter."
+    "closing": "The break-even between the two is a statement about reuse, and it comes out cleanest\none block at a time. Write-back brings a block in and, if it was written at all, puts\nit back: $2B$ bytes. Write-through brings it in on the read that first touches it and\nthen sends $V$ bytes for each of $k$ writes: $B + kV$. So write-back is the cheaper of\nthe two exactly once $k$ exceeds $B/V$ — with 64-byte blocks and 8-byte words, eight\nwrites per block. Easy for a stack or an array being filled, impossible for a scatter."
    },
    "lab": {
     "title": "Write policy, byte for byte",
@@ -503,7 +503,7 @@
      "stride": 4
     },
     "notice": [
-     "At a stride of 4 B the curve sits at 6.25 per cent — one miss per sixteen accesses, the compulsory floor for a 64-byte block. Nothing on this plot goes below it, at any size or associativity.",
+     "At a stride of 4 B the curve sits at 6.25 per cent — one miss per sixteen accesses, which is the stride over the 64-byte block. Nothing on this plot goes below it, at any size or associativity, and by module 2's reckoning a third of those misses are compulsory and the rest capacity.",
      "Push the stride to 64 B and the curve jumps to 100 per cent, then drag associativity through its whole range. Neither the accented curve nor the faint ones move. Every miss you can create here is a placement or a volume miss.",
      "Now imagine the missing axis. A second cache writing one of these lines would invalidate this one, and the very next access to an address that has not moved, in a cache that has not evicted it, would miss anyway. That is the coherence miss, and it is the fourth C this plot has no room for."
     ]
@@ -536,14 +536,14 @@
       ]
      },
      {
-      "prompt": "A fraction $w$ of accesses are writes. Of those writes, a fraction $e$ find the block already in state Modified or Exclusive and need no bus transaction. Write the bus-upgrade rate per access.",
+      "prompt": "A fraction $w$ of accesses are writes. Of those writes, a fraction $e$ find the block already in state Modified or Exclusive and need no bus transaction. Write the rate, per access, at which a write has to put something on the bus.",
       "given": "",
       "answer": "w \\cdot \\left( 1 - e \\right)",
       "placeholder": "w \\cdot \\left( 1 - e \\right)",
-      "hint": "Only writes can upgrade, and only the ones that do not already own the block exclusively.",
+      "hint": "Only the writes that do not already hold the block in M or E reach the bus at all; whether each one becomes a BusUpgr or a BusRdX does not change how many there are.",
       "deconstruct": [
        "Writes happen at rate $w$ per access.",
-       "A fraction $e$ of them are silent, so $1-e$ of them must go to the bus."
+       "A fraction $e$ of them are silent, so $1-e$ of them must go to the bus — as a BusUpgr from Shared, as a BusRdX from Invalid."
       ]
      },
      {
@@ -638,7 +638,7 @@
  ],
  "capstone": {
   "title": "A coherent two-core hierarchy, measured",
-  "brief": "Put the four modules together into one model and make it report on itself.\n\nTwo cores, each with a private set-associative write-back L1 kept coherent by MESI\nover a snooping bus. Memory answers a miss when no other cache holds the block; the\nother cache answers it when it does. Every miss is classified, and the whole run\ncondenses into an average access time.\n\n`workloads.py` is read-only and supplies four two-core patterns. Everything else is\nyours.\n\n## What to build\n\n`L1(capacity_bytes, block_bytes, ways)` is a tag store: `index_of`, `present`,\n`touch`, `install` (returning the victim it displaced and that victim's state, or\n`(None, \"I\")`) and `drop`.\n\n`System(capacity_bytes=1024, block_bytes=64, ways=2)` owns two of them plus:\n\n- `bus` — counts of `BusRd`, `BusRdX`, `BusUpgr`, `Flush`;\n- `hits` and `miss`, the latter a dict over `MISS_KINDS`;\n- `served_by_memory` and `served_by_cache`, counting where each miss got its data;\n- `read(core, addr)` and `write(core, addr)` implementing MESI exactly as in module\n  4, but now on top of a real set-associative cache that can evict;\n- `state_of(core, addr)` and `accesses()`.\n\nClassify every miss into one of three kinds, per core:\n\n- `\"cold\"` — this core has never referenced this block before;\n- `\"coherence\"` — this core held the block and another core's write took it away;\n- `\"replacement\"` — anything else, i.e. this core evicted it itself.\n\nKeep a set of blocks each core has ever referenced and a set of blocks each core has\nhad invalidated out from under it; clear a block from the second set when it is\nreinstalled.\n\n`report(system, t_hit, t_snoop, t_mem)` returns a dict with `accesses`, `hits`,\n`misses`, `miss_rate` and `amat`, where\n\n```text\namat = t_hit + (served_by_memory * t_mem + served_by_cache * t_snoop) / accesses\n```\n\n## Suggested order\n\nGet `L1` and the single-core path working first — run `private_sweep` on one core\nand check that the cold and replacement counts behave the way module 2 taught you.\nThen add the remote cache, then the classification, then the report. The checks are\nordered the same way.\n\nA subtlety worth getting right early: a `BusUpgr` is a hit, not a miss. The data was\nalready there; only the permission was missing. Counting it as a miss makes the\nfalse-sharing and producer-consumer numbers wrong in a way that is hard to find\nlater.",
+  "brief": "Put the four modules together into one model and make it report on itself.\n\nTwo cores, each with a private set-associative write-back L1 kept coherent by MESI\nover a snooping bus. Memory answers a miss when no other cache holds the block; the\nother cache answers it when it does. Every miss is classified, and the whole run\ncondenses into an average access time.\n\n`workloads.py` is read-only and supplies four two-core patterns. Everything else is\nyours.\n\n## What to build\n\n`L1(capacity_bytes, block_bytes, ways)` is a tag store: `index_of`, `present`,\n`touch`, `install` (returning the victim it displaced and that victim's state, or\n`(None, \"I\")`) and `drop`.\n\n`System(capacity_bytes=1024, block_bytes=64, ways=2)` owns two of them plus:\n\n- `bus` — counts of `BusRd`, `BusRdX`, `BusUpgr`, `Flush`;\n- `hits` and `miss`, the latter a dict over `MISS_KINDS`;\n- `served_by_memory` and `served_by_cache`, counting where each miss got its data;\n- `read(core, addr)` and `write(core, addr)` implementing MESI exactly as in module\n  4, but now on top of a real set-associative cache that can evict;\n- `state_of(core, addr)` and `accesses()`.\n\nClassify every miss into one of three kinds, per core:\n\n- `\"cold\"` — this core has never referenced this block before;\n- `\"coherence\"` — this core held the block and another core's write took it away;\n- `\"replacement\"` — anything else, i.e. this core evicted it itself.\n\nKeep a set of blocks each core has ever referenced and a set of blocks each core has\nhad invalidated out from under it; clear a block from the second set when it is\nreinstalled.\n\n`report(system, t_hit, t_snoop, t_mem)` returns a dict with `accesses`, `hits`,\n`misses`, `miss_rate` and `amat`, where\n\n```text\namat = t_hit + (served_by_memory * t_mem + served_by_cache * t_snoop) / accesses\n```\n\n## Suggested order\n\nGet `L1` and the single-core path working first — run `private_sweep`, whose two\ncores never touch a block the other one has, so nothing coherent has to work yet, and\ncheck that the cold and replacement counts behave the way module 2 taught you.\nThen add the remote cache, then the classification, then the report. The checks are\nordered the same way.\n\nA subtlety worth getting right early: a `BusUpgr` is a hit, not a miss. The data was\nalready there; only the permission was missing. Counting it as a miss makes the\nfalse-sharing and producer-consumer numbers wrong in a way that is hard to find\nlater.",
   "deliverables": [
    "`L1`, a set-associative tag store with LRU replacement whose `install` reports the victim it displaced and the state that victim was in.",
    "`System.read` and `System.write` implementing the full MESI state machine over two `L1`s, with correct `bus` counts including a `Flush` on every eviction of a Modified block.",
@@ -667,7 +667,7 @@
    {
     "criterion": "Miss classification",
     "weight": 25,
-    "evidence": "Cold, replacement and coherence counts are correct on a private sweep that fits, on one that does not, and on a producer-consumer pattern where all three kinds appear."
+    "evidence": "Cold, replacement and coherence counts are correct on a private sweep that fits, on one that does not, and on a producer-consumer pattern where the consumer's copy is taken away by a remote write rather than evicted."
    },
    {
     "criterion": "AMAT reporting",

@@ -62,7 +62,7 @@ COURSE = {
                 "Offset, index, tag: the block offset selects a byte, the index selects a set, the tag is everything left over.",
                 "Geometry: with capacity `C`, block size `B` and `W` ways, the cache has `C/B` blocks arranged in `C/(BW)` sets.",
                 "Direct-mapped is one-way; fully associative is one set. Both are corners of the same design, not separate species.",
-                "True LRU is a per-set ordering, not a per-block counter — and it is the only policy that turns a repeated access into a hit reliably.",
+                "True LRU is a per-set ordering, not a per-block counter: a hit has to move its block to the recent end of that ordering. A policy that leaves the order alone on a hit is FIFO, and it will evict a block the program is still using.",
                 "Widening the set costs `W` tag comparators and a `W`-to-1 multiplexer in the hit path, which is why real L1 caches stop at four or eight ways.",
             ],
             "sandbox": {
@@ -73,7 +73,8 @@ COURSE = {
                 "brief": r'''
 The plot sweeps cache size along the x axis and reports the miss rate of an LRU
 cache on a strided walk. The accented curve is the associativity you have selected;
-the faint ones are the other two shown for comparison.
+the faint ones are the three fixed references — direct, 4-way and 16-way — less
+whichever of them you are currently sitting on.
 
 Read the fine print of the experiment before you read the plot. The trace is a
 cyclic sweep over a working set defined as **four times the cache**, so the working
@@ -385,8 +386,8 @@ _h, _m = _c.run(_hot)
 assert _h + _m == len(_hot), \
     f"48 accesses must produce 48 outcomes, got {_h} hits and {_m} misses"
 assert _c.evictions == 44, \
-    (f"the first 4 misses land in empty sets and evict nothing; the other 44 each "
-     f"throw a block out. Got {_c.evictions}")
+    (f"only four sets are ever used, so exactly four misses land in an empty set "
+     f"and evict nothing; the other 44 each throw a block out. Got {_c.evictions}")
 '''},
                 ],
             },
@@ -739,7 +740,7 @@ assert _four["hit"] == _one["hit"] + _one["conflict"], \
                 "$\\text{AMAT} = t_{hit} + m \\cdot t_{penalty}$ — one hit time always, and the penalty only sometimes.",
                 "Two levels compose: the L2 access time and its own miss rate become the L1 penalty.",
                 "Local miss rate is measured against accesses that reach the level; global miss rate is measured against all accesses, and is the product.",
-                "Write-back with write-allocate moves a whole block on a miss and another on a dirty eviction; write-through with no-write-allocate moves one word per write and nothing else.",
+                "Write-back with write-allocate moves a whole block on a miss and another on a dirty eviction; write-through with no-write-allocate sends one word per write, and still fetches a whole block whenever a *read* misses.",
                 "Which wins is arithmetic, not doctrine: it turns on how many times a block is written before it leaves.",
             ],
             "sandbox": {
@@ -753,7 +754,7 @@ Take a 1-cycle hit and a 100-cycle miss penalty, and convert each height you see
 into an average access time.
 ''',
                 "notice": [
-                    "At a stride of 8 B the curve sits at 12.5 per cent, flat across the whole size axis. That is $1 + 0.125 \\times 100 = 13.5$ cycles per access against a 1-cycle hit: the hierarchy is running at about a thirteenth of its hit rate.",
+                    "At a stride of 8 B the curve sits at 12.5 per cent, flat across the whole size axis. That is $1 + 0.125 \\times 100 = 13.5$ cycles per access: thirteen and a half times what the same access would cost if it hit.",
                     "Halve the stride to 4 B and the curve halves to 6.25, giving $1 + 0.0625 \\times 100 = 7.25$ cycles. Halving the miss rate nearly halved the access time, because at these numbers the penalty term is almost the whole of it.",
                     "Now drag the size slider anywhere you like at either stride. The curve does not move, so neither does the AMAT. On this trace no amount of capacity buys a single cycle — a reminder that AMAT is only as honest as the miss rate you feed it.",
                 ],
@@ -820,10 +821,12 @@ $B$ bytes and a word is $V$ bytes.
                     },
                 ],
                 "closing": r'''
-Set the two expressions equal and the break-even is a statement about reuse: a block
-must be written more than about $B(1+d)/V$ times before it leaves for write-back to
-pay. With 64-byte blocks and 8-byte words that is roughly eight writes per block —
-easy for a stack or an array being filled, impossible for a scatter.
+The break-even between the two is a statement about reuse, and it comes out cleanest
+one block at a time. Write-back brings a block in and, if it was written at all, puts
+it back: $2B$ bytes. Write-through brings it in on the read that first touches it and
+then sends $V$ bytes for each of $k$ writes: $B + kV$. So write-back is the cheaper of
+the two exactly once $k$ exceeds $B/V$ — with 64-byte blocks and 8-byte words, eight
+writes per block. Easy for a stack or an array being filled, impossible for a scatter.
 ''',
             },
             "lab": {
@@ -1182,7 +1185,7 @@ show. Everything on this axis is one cache in isolation; the misses this module 
 about do not appear on it at all.
 ''',
                 "notice": [
-                    "At a stride of 4 B the curve sits at 6.25 per cent — one miss per sixteen accesses, the compulsory floor for a 64-byte block. Nothing on this plot goes below it, at any size or associativity.",
+                    "At a stride of 4 B the curve sits at 6.25 per cent — one miss per sixteen accesses, which is the stride over the 64-byte block. Nothing on this plot goes below it, at any size or associativity, and by module 2's reckoning a third of those misses are compulsory and the rest capacity.",
                     "Push the stride to 64 B and the curve jumps to 100 per cent, then drag associativity through its whole range. Neither the accented curve nor the faint ones move. Every miss you can create here is a placement or a volume miss.",
                     "Now imagine the missing axis. A second cache writing one of these lines would invalidate this one, and the very next access to an address that has not moved, in a cache that has not evicted it, would miss anyway. That is the coherence miss, and it is the fourth C this plot has no room for.",
                 ],
@@ -1208,13 +1211,13 @@ miss served by the other cache costs $t_s$ on top.
                         ],
                     },
                     {
-                        "prompt": "A fraction $w$ of accesses are writes. Of those writes, a fraction $e$ find the block already in state Modified or Exclusive and need no bus transaction. Write the bus-upgrade rate per access.",
+                        "prompt": "A fraction $w$ of accesses are writes. Of those writes, a fraction $e$ find the block already in state Modified or Exclusive and need no bus transaction. Write the rate, per access, at which a write has to put something on the bus.",
                         "answer": "w \\cdot \\left( 1 - e \\right)",
                         "placeholder": "w \\cdot \\left( 1 - e \\right)",
-                        "hint": "Only writes can upgrade, and only the ones that do not already own the block exclusively.",
+                        "hint": "Only the writes that do not already hold the block in M or E reach the bus at all; whether each one becomes a BusUpgr or a BusRdX does not change how many there are.",
                         "deconstruct": [
                             "Writes happen at rate $w$ per access.",
-                            "A fraction $e$ of them are silent, so $1-e$ of them must go to the bus.",
+                            "A fraction $e$ of them are silent, so $1-e$ of them must go to the bus — as a BusUpgr from Shared, as a BusRdX from Invalid.",
                         ],
                     },
                     {
@@ -1650,8 +1653,9 @@ amat = t_hit + (served_by_memory * t_mem + served_by_cache * t_snoop) / accesses
 
 ## Suggested order
 
-Get `L1` and the single-core path working first — run `private_sweep` on one core
-and check that the cold and replacement counts behave the way module 2 taught you.
+Get `L1` and the single-core path working first — run `private_sweep`, whose two
+cores never touch a block the other one has, so nothing coherent has to work yet, and
+check that the cold and replacement counts behave the way module 2 taught you.
 Then add the remote cache, then the classification, then the report. The checks are
 ordered the same way.
 
@@ -1680,7 +1684,7 @@ later.
             {"criterion": "MESI state machine", "weight": 30,
              "evidence": "Every transition matches the module 4 table on both cores, including E on an uncontended read miss and a silent E to M upgrade, and the bus counts agree exactly on all four workloads."},
             {"criterion": "Miss classification", "weight": 25,
-             "evidence": "Cold, replacement and coherence counts are correct on a private sweep that fits, on one that does not, and on a producer-consumer pattern where all three kinds appear."},
+             "evidence": "Cold, replacement and coherence counts are correct on a private sweep that fits, on one that does not, and on a producer-consumer pattern where the consumer's copy is taken away by a remote write rather than evicted."},
             {"criterion": "AMAT reporting", "weight": 15,
              "evidence": "The report separates misses served by memory from misses served by the other cache and weights them by the right latency, matching hand computation to within 1e-9."},
             {"criterion": "False sharing demonstrated", "weight": 10,

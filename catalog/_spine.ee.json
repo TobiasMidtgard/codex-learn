@@ -1,68 +1,224 @@
 {
   "program": {
     "id": "ee-msc",
-    "name": "Electrical Engineering — M.S.",
+    "name": "Electrical Engineering — 5 Year Program",
+    "short": "Electrical Engineering",
     "emphasis": "Electrical Engineering",
-    "subtitle": "Six graduate tracks. Every topic opens in a sandbox you can push on, derives the mathematics with you rather than at you, and ends at a bench.",
-    "bandNoun": "Track",
+    "subtitle": "Integrated BSc + MSc track, 30 courses, from Ohm’s law to a silicon pipeline. Every topic opens in something you can push on, derives the mathematics with you, and ends at a bench.",
+    "bandNoun": "Year",
     "accent": "#6E9BFF",
     "bands": [
       {
         "n": 1,
-        "title": "Advanced Analog & RF IC Design",
-        "theme": "What a transistor actually does at a gigahertz, and why noise sets the floor on everything you can measure.",
-        "icon": "◈",
+        "title": "Circuits, Fields & Foundations",
+        "theme": "What a current is, what a field is, and the mathematics needed to say anything precise about either.",
+        "icon": "◴",
         "tint": "#E4EEFA"
       },
       {
         "n": 2,
-        "title": "Modern & Non-Linear Control",
-        "theme": "State-space as the working language: place poles, prove stability, estimate what you cannot measure.",
-        "icon": "◉",
-        "tint": "#E1F4E8"
-      },
-      {
-        "n": 3,
-        "title": "Digital Signal Processing & Machine Learning",
-        "theme": "Rate changes, adaptive filters, and the arithmetic that survives contact with a fixed-point DSP.",
-        "icon": "◊",
-        "tint": "#F1E8FB"
-      },
-      {
-        "n": 4,
-        "title": "Power Electronics & Drives",
-        "theme": "Switching hard enough to be efficient and softly enough to survive, then turning it into torque.",
-        "icon": "◐",
+        "title": "Devices, Signals & Instruments",
+        "theme": "Semiconductors that switch and amplify, signals described as spectra, and the discipline of actually measuring something.",
+        "icon": "◵",
         "tint": "#FFE9DC"
       },
       {
-        "n": 5,
-        "title": "Advanced Electromagnetics & Photonics",
-        "theme": "Fields obeying boundary conditions: guided waves, matched loads, and light in a dielectric.",
-        "icon": "◎",
-        "tint": "#FFF3D6"
+        "n": 3,
+        "title": "Systems & Analysis",
+        "theme": "State space, sampling, transmission lines, converters and pipelines — the working language of every specialisation above.",
+        "icon": "◶",
+        "tint": "#E1F4E8"
       },
       {
-        "n": 6,
-        "title": "VLSI & Embedded Architecture",
-        "theme": "A pipeline you can single-step, a memory hierarchy you can starve, and RTL you can drive with a testbench.",
-        "icon": "▣",
-        "tint": "#E8EEF4"
+        "n": 4,
+        "title": "Advanced Practice",
+        "theme": "Optimal control, adaptive filtering, noise, matching networks, drives and memory hierarchies.",
+        "icon": "◷",
+        "tint": "#F1E8FB"
+      },
+      {
+        "n": 5,
+        "title": "Specialisation & Capstone",
+        "theme": "Non-linear control, fixed-point DSP, synthesis, photonics, magnetics and verification, each ending in something built.",
+        "icon": "⬤",
+        "tint": "#FFF3D6"
       }
-    ],
-    "short": "Electrical Engineering"
+    ]
   },
   "courses": [
     {
-      "id": "RFIC510",
+      "id": "EE101",
       "band": 1,
-      "title": "High-Frequency Transistor Models",
-      "level": "Advanced",
+      "title": "Circuit Analysis I — Direct Current",
+      "level": "Beginner",
       "prereqs": [],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "◉"
+    },
+    {
+      "id": "EE102",
+      "band": 1,
+      "title": "Circuit Analysis II — Alternating Current",
+      "level": "Beginner",
+      "prereqs": [
+        "EE101"
+      ],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "◉"
+    },
+    {
+      "id": "EE111",
+      "band": 1,
+      "title": "Mathematics for Electrical Engineering",
+      "level": "Beginner",
+      "prereqs": [],
+      "stack": [
+        "Python",
+        "SymPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "◈"
+    },
+    {
+      "id": "EE121",
+      "band": 1,
+      "title": "Digital Logic and Boolean Algebra",
+      "level": "Beginner",
+      "prereqs": [],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "▣"
+    },
+    {
+      "id": "EE131",
+      "band": 1,
+      "title": "Programming for Engineers",
+      "level": "Beginner",
+      "prereqs": [],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "▶"
+    },
+    {
+      "id": "EE141",
+      "band": 1,
+      "title": "Electricity and Magnetism",
+      "level": "Intermediate",
+      "prereqs": [
+        "EE111"
+      ],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "◎"
+    },
+    {
+      "id": "EE201",
+      "band": 2,
+      "title": "Semiconductor Devices and Diodes",
+      "level": "Intermediate",
+      "prereqs": [
+        "EE102"
+      ],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "◈"
+    },
+    {
+      "id": "EE202",
+      "band": 2,
+      "title": "Transistor Amplifiers",
+      "level": "Intermediate",
+      "prereqs": [
+        "EE201"
+      ],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "◈"
+    },
+    {
+      "id": "EE211",
+      "band": 2,
+      "title": "Signals and Systems",
+      "level": "Intermediate",
+      "prereqs": [
+        "EE102",
+        "EE111"
+      ],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "◊"
+    },
+    {
+      "id": "EE221",
+      "band": 2,
+      "title": "Measurement and Instrumentation",
+      "level": "Intermediate",
+      "prereqs": [
+        "EE102"
+      ],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "▤"
+    },
+    {
+      "id": "EE231",
+      "band": 2,
+      "title": "Transforms and Linear Algebra",
+      "level": "Intermediate",
+      "prereqs": [
+        "EE111"
+      ],
       "stack": [
         "Python",
         "NumPy",
-        "SPICE-style netlists"
+        "SymPy"
       ],
       "runtime": "python",
       "credits": 10,
@@ -70,45 +226,32 @@
       "icon": "◈"
     },
     {
-      "id": "RFIC520",
-      "band": 1,
-      "title": "Noise in Analog Circuits",
-      "level": "Advanced",
+      "id": "EE241",
+      "band": 2,
+      "title": "Embedded C and Microcontrollers",
+      "level": "Intermediate",
       "prereqs": [
-        "RFIC510"
+        "EE121",
+        "EE131"
       ],
       "stack": [
         "Python",
-        "NumPy"
+        "C"
       ],
       "runtime": "python",
       "credits": 10,
       "hours": 130,
-      "icon": "◈"
-    },
-    {
-      "id": "RFIC530",
-      "band": 1,
-      "title": "Mixers, PLLs and Frequency Synthesis",
-      "level": "Expert",
-      "prereqs": [
-        "RFIC520"
-      ],
-      "stack": [
-        "Python",
-        "NumPy"
-      ],
-      "runtime": "python",
-      "credits": 12,
-      "hours": 150,
-      "icon": "◈"
+      "icon": "▣"
     },
     {
       "id": "CTRL510",
-      "band": 2,
+      "band": 3,
       "title": "State-Space Methods",
       "level": "Advanced",
-      "prereqs": [],
+      "prereqs": [
+        "EE211",
+        "EE231"
+      ],
       "stack": [
         "Python",
         "NumPy",
@@ -120,8 +263,100 @@
       "icon": "◉"
     },
     {
+      "id": "DSP510",
+      "band": 3,
+      "title": "Multirate Signal Processing",
+      "level": "Advanced",
+      "prereqs": [
+        "EE211"
+      ],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "◊"
+    },
+    {
+      "id": "EMAG510",
+      "band": 3,
+      "title": "Guided Waves and Waveguides",
+      "level": "Advanced",
+      "prereqs": [
+        "EE141",
+        "EE102"
+      ],
+      "stack": [
+        "Python",
+        "NumPy",
+        "SymPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "◎"
+    },
+    {
+      "id": "PWR510",
+      "band": 3,
+      "title": "Resonant Converters",
+      "level": "Advanced",
+      "prereqs": [
+        "EE201",
+        "EE102"
+      ],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "◐"
+    },
+    {
+      "id": "RFIC510",
+      "band": 3,
+      "title": "High-Frequency Transistor Models",
+      "level": "Advanced",
+      "prereqs": [
+        "EE202"
+      ],
+      "stack": [
+        "Python",
+        "NumPy",
+        "SPICE-style netlists"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "◈"
+    },
+    {
+      "id": "VLSI510",
+      "band": 3,
+      "title": "RISC-V Microarchitecture",
+      "level": "Advanced",
+      "prereqs": [
+        "EE121",
+        "EE241"
+      ],
+      "stack": [
+        "Verilog",
+        "JavaScript",
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "▣"
+    },
+    {
       "id": "CTRL520",
-      "band": 2,
+      "band": 4,
       "title": "Optimal Estimation and Control",
       "level": "Expert",
       "prereqs": [
@@ -137,41 +372,8 @@
       "icon": "◉"
     },
     {
-      "id": "CTRL530",
-      "band": 2,
-      "title": "Non-Linear and Sliding-Mode Control",
-      "level": "Expert",
-      "prereqs": [
-        "CTRL510"
-      ],
-      "stack": [
-        "Python",
-        "NumPy",
-        "SymPy"
-      ],
-      "runtime": "python",
-      "credits": 12,
-      "hours": 150,
-      "icon": "◉"
-    },
-    {
-      "id": "DSP510",
-      "band": 3,
-      "title": "Multirate Signal Processing",
-      "level": "Advanced",
-      "prereqs": [],
-      "stack": [
-        "Python",
-        "NumPy"
-      ],
-      "runtime": "python",
-      "credits": 10,
-      "hours": 130,
-      "icon": "◊"
-    },
-    {
       "id": "DSP520",
-      "band": 3,
+      "band": 4,
       "title": "Adaptive Filters",
       "level": "Advanced",
       "prereqs": [
@@ -188,28 +390,13 @@
       "icon": "◊"
     },
     {
-      "id": "DSP530",
-      "band": 3,
-      "title": "Fixed-Point and Embedded DSP",
-      "level": "Expert",
-      "prereqs": [
-        "DSP510"
-      ],
-      "stack": [
-        "Python",
-        "NumPy"
-      ],
-      "runtime": "python",
-      "credits": 12,
-      "hours": 150,
-      "icon": "◊"
-    },
-    {
-      "id": "PWR510",
+      "id": "EMAG520",
       "band": 4,
-      "title": "Resonant Converters",
+      "title": "S-Parameters and Impedance Matching",
       "level": "Advanced",
-      "prereqs": [],
+      "prereqs": [
+        "EMAG510"
+      ],
       "stack": [
         "Python",
         "NumPy"
@@ -217,7 +404,7 @@
       "runtime": "python",
       "credits": 10,
       "hours": 130,
-      "icon": "◐"
+      "icon": "◎"
     },
     {
       "id": "PWR520",
@@ -238,12 +425,12 @@
       "icon": "◐"
     },
     {
-      "id": "PWR530",
+      "id": "RFIC520",
       "band": 4,
-      "title": "Magnetics and Thermal Design",
+      "title": "Noise in Analog Circuits",
       "level": "Advanced",
       "prereqs": [
-        "PWR510"
+        "RFIC510"
       ],
       "stack": [
         "Python",
@@ -252,40 +439,59 @@
       "runtime": "python",
       "credits": 10,
       "hours": 130,
-      "icon": "◐"
+      "icon": "◈"
     },
     {
-      "id": "EMAG510",
+      "id": "VLSI520",
+      "band": 4,
+      "title": "Memory Hierarchy and Coherence",
+      "level": "Expert",
+      "prereqs": [
+        "VLSI510"
+      ],
+      "stack": [
+        "Python",
+        "NumPy"
+      ],
+      "runtime": "python",
+      "credits": 12,
+      "hours": 150,
+      "icon": "▣"
+    },
+    {
+      "id": "CTRL530",
       "band": 5,
-      "title": "Guided Waves and Waveguides",
-      "level": "Advanced",
-      "prereqs": [],
+      "title": "Non-Linear and Sliding-Mode Control",
+      "level": "Expert",
+      "prereqs": [
+        "CTRL510"
+      ],
       "stack": [
         "Python",
         "NumPy",
         "SymPy"
       ],
       "runtime": "python",
-      "credits": 10,
-      "hours": 130,
-      "icon": "◎"
+      "credits": 12,
+      "hours": 150,
+      "icon": "◉"
     },
     {
-      "id": "EMAG520",
+      "id": "DSP530",
       "band": 5,
-      "title": "S-Parameters and Impedance Matching",
-      "level": "Advanced",
+      "title": "Fixed-Point and Embedded DSP",
+      "level": "Expert",
       "prereqs": [
-        "EMAG510"
+        "DSP510"
       ],
       "stack": [
         "Python",
         "NumPy"
       ],
       "runtime": "python",
-      "credits": 10,
-      "hours": 130,
-      "icon": "◎"
+      "credits": 12,
+      "hours": 150,
+      "icon": "◊"
     },
     {
       "id": "EMAG530",
@@ -305,29 +511,29 @@
       "icon": "◎"
     },
     {
-      "id": "VLSI510",
-      "band": 6,
-      "title": "RISC-V Microarchitecture",
+      "id": "PWR530",
+      "band": 5,
+      "title": "Magnetics and Thermal Design",
       "level": "Advanced",
-      "prereqs": [],
+      "prereqs": [
+        "PWR510"
+      ],
       "stack": [
-        "Verilog",
-        "JavaScript",
         "Python",
         "NumPy"
       ],
       "runtime": "python",
       "credits": 10,
       "hours": 130,
-      "icon": "▣"
+      "icon": "◐"
     },
     {
-      "id": "VLSI520",
-      "band": 6,
-      "title": "Memory Hierarchy and Coherence",
+      "id": "RFIC530",
+      "band": 5,
+      "title": "Mixers, PLLs and Frequency Synthesis",
       "level": "Expert",
       "prereqs": [
-        "VLSI510"
+        "RFIC520"
       ],
       "stack": [
         "Python",
@@ -336,11 +542,11 @@
       "runtime": "python",
       "credits": 12,
       "hours": 150,
-      "icon": "▣"
+      "icon": "◈"
     },
     {
       "id": "VLSI530",
-      "band": 6,
+      "band": 5,
       "title": "RTL Design and Verification",
       "level": "Advanced",
       "prereqs": [

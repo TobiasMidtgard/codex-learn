@@ -325,7 +325,7 @@ for _th in (0.0, 0.4, 1.7, -2.2, 5.9):
             "concepts": [
                 "Flux linkages: $\\lambda_d = L_d i_d + \\lambda_m$ and $\\lambda_q = L_q i_q$. The magnet contributes to $d$ only, by definition of the $d$ axis.",
                 "Voltage equations: $v_d = R i_d + L_d \\dot{i_d} - \\omega_e L_q i_q$ and $v_q = R i_q + L_q \\dot{i_q} + \\omega_e (L_d i_d + \\lambda_m)$.",
-                "The two $\\omega_e$ terms come from differentiating a vector in a rotating frame. They are a rotation, not a loss, and they cancel in the power balance.",
+                "The two $\\omega_e$ terms come from differentiating a vector in a rotating frame, so neither of them dissipates anything. They do not cancel each other either: $\\tfrac{3}{2}\\left(i_d(-\\omega_e L_q i_q) + i_q \\omega_e (L_d i_d + \\lambda_m)\\right) = \\omega_e T_e / P_p$, which is the airgap power exactly. Only on a machine with $L_d = L_q$ and the magnet term set aside is the pair self-cancelling.",
                 "Torque $T_e = \\frac{3}{2} P_p \\left( \\lambda_m i_q + (L_d - L_q) i_d i_q \\right)$: a magnet term plus a reluctance term that is zero on a surface machine.",
                 "As a state-space plant the machine is $\\dot{x} = Ax + Bv + d$ with $A$ carrying $-R/L$ on the diagonal, the speed-dependent coupling off it, and $d$ the magnet back-EMF.",
             ],
@@ -531,7 +531,7 @@ assert abs(_A[0, 1] - 1257.142857142857) < 1e-6, \
 assert abs(_A[1, 0] + 509.0909090909091) < 1e-6, \
     f"A[1,0] should be -w_e*L_d/L_q = -509.0909..., got {_A[1, 0]}"
 assert _A[0, 1] > 0 > _A[1, 0], \
-    "the two coupling entries must have opposite signs, or the machine would not conserve energy"
+    "the two coupling entries must have opposite signs: the speed term rotates the current vector, it does not grow it along one axis"
 '''},
                     {"name": "B inverts the inductances and d carries the back-EMF", "code": r'''
 import numpy as np
@@ -608,10 +608,11 @@ that is the mechanical half — torque accelerates the rotor, the speed integrat
 position — with the current loop underneath assumed fast enough to be a pure gain.
 
 Position starts at 1 and is driven to zero by $u = -k_1 x - k_2 \dot{x}$, with the
-gains taken from the pole pair exactly as the derivation below takes them. The upper
-trace is the position; the lower one is the force it took, and in a drive that force
-is a torque, which through the torque constant is a $q$-axis current the inverter has
-to deliver.
+gains read straight off the pole pair: matching $s^2 + k_2 s + k_1$ to
+$(s - p_1)(s - p_2)$ gives $k_1 = p_1 p_2$ and $k_2 = -(p_1 + p_2)$. The upper trace
+is the position; the lower one is the force it took, and in a drive that force is a
+torque, which through the torque constant is a $q$-axis current the inverter has to
+deliver.
 ''',
                 "notice": [
                     "Double both poles, to $-4$ and $-8$. Settling roughly halves — about 2.3 s to 1.2 s — while the readout's first gain goes from 8 to 32. Twice the speed, four times the peak force.",
@@ -856,7 +857,7 @@ assert _clip[-1] > 9.5, \
                 "Six active switch states plus two zero states. In $\\alpha\\beta$ the active ones are vectors of length $\\tfrac{2}{3}V_{dc}$ at 60° spacing — the vertices of a hexagon.",
                 "Any reference inside the hexagon is synthesised by time-averaging its two neighbouring vertices: $t_1$, $t_2$ and the remainder $t_0$ on the zero states.",
                 "Linear operation needs the reference inside the *inscribed circle*, of radius $V_{dc}/\\sqrt{3}$ — against $V_{dc}/2$ for naive sine-triangle modulation. The ratio is $2/\\sqrt{3} = 1.1547$.",
-                "Splitting $t_0$ evenly between the two zero states is what shifts the common mode; it is equivalent to injecting a third harmonic of amplitude one sixth.",
+                "Splitting $t_0$ evenly between the two zero states is what shifts the common mode. The shift it produces is the min–max wave, $-\\tfrac{1}{2}(\\max + \\min)$ of the three references: a triangle at three times the fundamental whose peak is one quarter of the reference amplitude. It reaches the same $2/\\sqrt{3}$ linear range as a sinusoidal third harmonic injected at one sixth, but it is not that waveform.",
                 "Above base speed the back-EMF alone fills the voltage budget. Negative $i_d$ opposes the magnet flux and buys headroom back, bounded by the current circle $i_d^2 + i_q^2 \\le I_{max}^2$.",
             ],
             "sandbox": {
@@ -880,7 +881,7 @@ an inductance that has saturated.
             "derive": {
                 "title": "The inscribed circle, the 15 per cent, and where field weakening starts",
                 "minutes": 15,
-                "vars": ["V_dc", "V_max", "omega", "omega_b", "lambda_m", "L_d", "i_d", "V_peak"],
+                "vars": ["V_dc", "V_max", "omega", "omega_b", "lambda_m", "L_d", "i_d", "i_q", "I_max"],
                 "brief": r'''
 The six active vectors of a two-level inverter have length $\frac{2}{3}V_{dc}$ and
 sit 60° apart, so their tips are the vertices of a regular hexagon. A reference can
@@ -949,8 +950,10 @@ Four functions.
 `sector(v_alpha, v_beta)` returns the 60° sector, numbered 1 to 6 anticlockwise from
 the positive $\alpha$ axis. Sector 1 is $[0°, 60°)$.
 
-`dwell(v_alpha, v_beta, v_dc, t_s)` returns `(t1, t2, t0)`, the times spent on the
-leading vertex, the trailing vertex and the zero states over one period `t_s`. With
+`dwell(v_alpha, v_beta, v_dc, t_s)` returns `(t1, t2, t0)`: the time on the vertex at
+the *start* of the sector, the time on the vertex at its *end*, and the remainder on
+the zero states, over one period `t_s`. So `t1` belongs to the vector the reference
+has already swept past and `t2` to the one it is heading towards. With
 `th` the angle *within* the sector and `m` the reference magnitude:
 
 ```text
@@ -1095,7 +1098,7 @@ assert abs(_t0) < 1e-12, \
 _ts = 1e-4
 _t1, _t2, _t0 = dwell(200.0, 0.0, 300.0, _ts)
 assert abs(_t1 - _ts) < 1e-12, f"pointing straight at a vertex, t1 should be the whole period, got {_t1}"
-assert abs(_t2) < 1e-12, f"the trailing vertex is unused, got t2 = {_t2}"
+assert abs(_t2) < 1e-12, f"the vertex at the end of the sector is unused, got t2 = {_t2}"
 assert abs(_t0) < 1e-12, f"and nothing is left over, got t0 = {_t0}"
 '''},
                     {"name": "the weakening command switches on at base speed and not before", "code": r'''
@@ -1139,9 +1142,11 @@ The machine is the four-pole-pair interior PMSM used throughout: `R = 0.45` Ω,
 `machine.py` holds those numbers together with the plant derivative and the torque
 equation. Do not edit it; the checks depend on it.
 
-At $V_{max} = V_{dc}/\sqrt{3} = 173.2$ V the base speed is $V_{max}/\lambda_m = 2038$
-electrical rad/s. Below that, the loop should simply hit its reference. Above it, it
-cannot — unless you weaken the field.
+At $V_{max} = V_{dc}/\sqrt{3} = 173.2$ V the *no-load* base speed is
+$V_{max}/\lambda_m = 2038$ electrical rad/s. Under load it is lower, because
+$\omega_e L_q i_q$ claims a share of the same budget: at the 8 A reference the checks
+use, the budget is gone by 1776 rad/s. Well below that the loop simply hits its
+reference. Well above it, it cannot — unless you weaken the field.
 
 Build, in `main.py`:
 
@@ -1208,7 +1213,7 @@ Use `BW = 2000.0` rad/s for both axes, and set `id_ref` from `id_command` when
             {"criterion": "Voltage limiter", "weight": 15,
              "evidence": "A vector inside the circle is returned unchanged, one outside comes back with magnitude exactly v_max and the ratio of its components preserved to within 1e-12."},
             {"criterion": "Field-weakening command", "weight": 25,
-             "evidence": "id_command is zero below base speed, negative above it, satisfies the voltage-ellipse budget where it is not clamped, and never violates the current circle at extreme speed."},
+             "evidence": "id_command is zero while the budget still covers the operating point, negative once it does not — which at an 8 A reference is well below the no-load base speed — satisfies the voltage-ellipse budget where it is not clamped, and never violates the current circle at extreme speed."},
             {"criterion": "Closed-loop behaviour below base speed", "weight": 20,
              "evidence": "At 800 rad/s the loop reaches an 8 A q-axis reference to within 1e-3 A with the d-axis current held at zero, and never overshoots the reference."},
             {"criterion": "Closed-loop behaviour in field weakening", "weight": 20,
@@ -1217,7 +1222,7 @@ Use `BW = 2000.0` rad/s for both axes, and set `id_ref` from `id_command` when
         "hints": [
             "`v_limit()` in `machine.py` returns $V_{dc}/\\sqrt{3}$. Use it rather than hard-coding 173.2.",
             "The two axes need different proportional gains, because `pi_gains` is called once with `LD` and once with `LQ`. Both integral gains come out the same, at `BW * R`.",
-            "In `limit_voltage`, return the inputs unchanged when the magnitude is within the limit — the loop's anti-windup test compares the returned values with the requested ones, and a rescale by exactly 1.0 can still change the last bit.",
+            "In `limit_voltage`, return the inputs unchanged when the magnitude is within the limit — the loop's anti-windup test compares the returned values with the requested ones, and scaling by a `v_max/mag` that is merely close to one still moves the last bit and freezes both integrators on a step that was never clipped.",
             "If the 2500 rad/s run with weakening still ends up with negative `i_q`, check the sign of `ff_q`: the back-EMF opposes the applied voltage, so the feedforward must *add* $\\omega_e(L_d i_d + \\lambda_m)$, not subtract it.",
         ],
         "files": [

@@ -423,7 +423,7 @@ assert _fwd.count(1) == 3, f"three ones went in, so three should come out, got {
                 "Moore outputs depend only on the state, so they are registered and stable — and one cycle late.",
                 "Mealy outputs depend on the state *and* the current input, so they are earlier by one cycle and inherit every glitch on that input.",
                 "State encoding is an implementation choice: binary uses `ceil(log2 S)` flops, one-hot uses `S` flops and a much cheaper next-state cloud.",
-                "A state your machine cannot reach is either dead logic or a missing reset — and a machine that can enter an unreachable state cannot leave it.",
+                "A state your machine cannot reach is either dead logic or a missing reset, and whether an upset that lands the machine in one can get out again depends entirely on the next-state logic you wrote for that encoding.",
             ],
             "sandbox": {
                 "title": "A controller that holds instead of advancing",
@@ -451,8 +451,9 @@ Six dependent pairs are stalling to begin with.
                 "vars": ["W", "C", "f", "t_it", "t_reg", "T"],
                 "brief": r'''
 An iterative divider. The controller spends one cycle in LOAD capturing the
-operands, then $W$ cycles in ITER, one cycle per bit of the divisor, then one cycle
-in WRITEBACK before returning to IDLE ready for the next operation.
+operands, then $W$ cycles in ITER, one cycle per bit of the $W$-bit quotient, then
+one cycle in WRITEBACK — from which it goes straight back to LOAD when the next
+operation is already waiting, so back-to-back divisions cost nothing between them.
 
 Write $t_{it}$ for the combinational delay of one iteration's logic, and $t_{reg}$
 for the clock-to-output plus setup overhead of the register between cycles.
@@ -737,7 +738,7 @@ def _broken(s, b):
 _r = reachable(_broken, 6)
 assert _r == [0, 1, 2, 3], (
     f"got {_r} — this machine is encoded for six states but can only ever occupy "
-    "four; states 4 and 5 are dead logic, or a lock-up waiting to happen")
+    "four; states 4 and 5 are decode and flops that no input sequence can use")
 '''},
                 ],
             },
@@ -976,7 +977,7 @@ if __name__ == "__main__":
 '''}],
                 "hints": [
                     "Compute `in_ready`, `out_valid` and `out_data` from `q` *before* you change anything. They are registered outputs; the transfers are what happens at the edge.",
-                    "Do the removal before the append. With `depth=2` and a full queue nothing is accepted either way, but doing them in the wrong order on a `depth=1` slice gives you a buffer that passes data through combinationally.",
+                    "The removal and the append commute — the head leaves the front, the new item joins the back — so the order you write them in is not what to worry about. What breaks the block is deciding `in_ready` from the queue *after* the removal: on a `depth=1` slice that makes `in_ready` a function of `out_ready`, and the slice starts passing data through combinationally at one item per cycle instead of one per two.",
                     "In `run_link`, `offer and in_ready` is the acceptance and `out_valid and rdy` is the delivery. The loop ends when everything has been sent *and* the queue is empty — the last item still needs a cycle to leave.",
                 ],
                 "tests": [
@@ -1011,7 +1012,10 @@ _got, _cycles = run_link(_data, [1], [1, 0, 0], 2)
 assert _got == _data, (
     f"got {_got} — every item must come out exactly once and in order, however "
     "often the sink stalls")
-assert _cycles > len(_data), "a sink that is ready one cycle in three cannot finish in twelve cycles"
+assert _cycles == 37, (
+    f"got {_cycles} — the sink accepts one beat in three, so the twelfth item leaves "
+    "on cycle 36 and the loop stops on 37. The depth of the buffer does not change "
+    "that: throughput is set by whichever side stalls more")
 '''},
                     {"name": "two entries sustain one transfer per cycle", "code": r'''
 _data = list(range(6))
@@ -1340,7 +1344,7 @@ if __name__ == "__main__":
                 "hints": [
                     "Write `RefFifo.step` in the order the specification states it: sample `full` and `empty`, apply the pop, then test for room. The DUT tests for room before the pop, which is the whole difference.",
                     "`compare` returning `None` must mean 'the same', so two traces of different lengths are a mismatch at the point where the shorter one ran out.",
-                    "For the directed sequence, `depth` pushes fill it; the cycle after that is the interesting one. Then pop everything back out and count what comes — the item that was dropped is missing at the end, not at the moment it was dropped.",
+                    "For the directed sequence, `depth` pushes fill it and the cycle after that is the interesting one. A trace carries `full` and `empty` as well as the popped value, so the disagreement surfaces on the occupancy flag the cycle after the collision — the dropped item itself only goes missing at the end of the drain, which is why the sequence still has to drain.",
                 ],
                 "tests": [
                     {"name": "the reference agrees with the DUT while the FIFO never fills", "code": r'''
@@ -1471,7 +1475,7 @@ always a handshake decision that looked at the other side's wire.
             "No handshake output may depend on the other side's signal in the same cycle: `in_ready` is a function of stage 1's occupancy alone, and `out_valid` of stage 2's.",
             "`stimulus.py` is read-only.",
             "The bench compares against a reference computed independently of the pipeline — never against the pipeline's own output.",
-            "Every stage holds two items, not one and not four: the checks measure the cycle count and it is only right for two.",
+            "Every stage holds exactly two items. A one-deep stage fails on the cycle counts, and the depth itself is checked directly: with the sink held low the design must accept four items — two per stage — and then refuse.",
         ],
         "rubric": [
             {"criterion": "Cycle-accurate model", "weight": 25,
@@ -1520,6 +1524,7 @@ MASK16 = 0xFFFF
 
 # Clock budget:
 #   the stage that sets the period -> TODO, and what splitting it would buy
+#   (the design has two stages: the multiply, then the adder)
 
 
 class Reg:
@@ -1607,7 +1612,7 @@ if __name__ == "__main__":
     items = payloads(11, 12)
     got, cycles, bad = run(items, None, None)
     print("no stalls:", cycles, "cycles,", len(got), "items,", len(bad), "violations")
-    print("min period:", min_period([1.2, 0.7, 0.4], 0.05, 0.04, 0.02))
+    print("min period:", min_period([1.2, 0.7], 0.05, 0.04, 0.02))
 '''},
         ],
         "main": "main.py",
@@ -1619,10 +1624,11 @@ from stimulus import payloads, valid_pattern, ready_pattern
 MASK16 = 0xFFFF
 
 # Clock budget:
-#   the multiply in stage 1 sets the period at 1.2 ns of logic, so the whole design
-#   closes at 1.27 ns. Splitting that multiply into two 0.6 ns halves makes stage 2's
-#   0.7 ns adder the critical path and takes the period to 0.77 ns — a 1.65x
-#   frequency gain for one more stage of latency and one more set of registers.
+#   stage 1's multiply is 1.2 ns of logic and stage 2's adder is 0.7 ns, so the
+#   multiply sets the period and the design closes at 1.27 ns. Splitting that multiply
+#   into two 0.6 ns halves leaves the 0.7 ns adder critical and takes the period to
+#   0.77 ns — a 1.65x frequency gain for one more stage of latency and one more set
+#   of registers.
 
 
 class Reg:
@@ -1734,7 +1740,7 @@ if __name__ == "__main__":
     items = payloads(11, 12)
     got, cycles, bad = run(items, None, None)
     print("no stalls:", cycles, "cycles,", len(got), "items,", len(bad), "violations")
-    print("min period:", min_period([1.2, 0.7, 0.4], 0.05, 0.04, 0.02))
+    print("min period:", min_period([1.2, 0.7], 0.05, 0.04, 0.02))
 '''},
         ],
         "tests": [
@@ -1789,6 +1795,21 @@ assert _cycles == 28, (
     f"got {_cycles} — with this seeded pattern pair the run takes 28 cycles; a "
     "different count means the handshake is accepting or delivering on the wrong cycles")
 '''},
+            {"name": "each stage holds two items and no more", "code": r'''
+_p = Pipeline()
+_seq = []
+for _c in range(10):
+    _ir, _ov, _oi = _p.step(1, (3, 4), 0)
+    _seq.append(int(bool(_ir)))
+assert sum(_seq) == 4, (
+    f"with the sink held low for ten cycles the design accepted {sum(_seq)} items. "
+    "Two stages of two entries hold exactly four before the source is refused — a "
+    "one-deep stage would take two, a four-deep stage eight")
+assert _seq == [1, 1, 1, 1, 0, 0, 0, 0, 0, 0], (
+    f"in_ready went {_seq}. It must stay asserted for four cycles even though "
+    "out_ready was low throughout — it is a function of stage 1's occupancy alone — "
+    "and once both stages are full it must stay low")
+'''},
             {"name": "a stalled sink sees stable data, and the monitor would say so", "code": r'''
 from stimulus import payloads, valid_pattern, ready_pattern
 _got, _cycles, _bad = run(payloads(11, 12), valid_pattern(4, 64), ready_pattern(4, 64))
@@ -1804,15 +1825,15 @@ assert monitor([(1, 0, 5), (1, 1, 5), (0, 1, None)]) == [], (
     "it will flag every correct design")
 '''},
             {"name": "the clock budget prices the slowest stage", "code": r'''
-_p = min_period([1.2, 0.7, 0.4], 0.05, 0.04, 0.02)
+_p = min_period([1.2, 0.7], 0.05, 0.04, 0.02)
 assert abs(_p - 1.27) < 1e-9, (
     f"got {_p} — only the slowest stage matters: 1.2 of logic, plus t_cq and "
     "t_setup, less the skew that is lent to the path")
-_split = min_period([0.6, 0.6, 0.7, 0.4], 0.05, 0.04, 0.02)
+_split = min_period([0.6, 0.6, 0.7], 0.05, 0.04, 0.02)
 assert abs(_split - 0.77) < 1e-9, (
     f"got {_split} — splitting the 1.2 stage in two leaves the 0.7 adder critical")
-_f0 = max_frequency([1.2, 0.7, 0.4], 0.05, 0.04, 0.02)
-_f1 = max_frequency([0.6, 0.6, 0.7, 0.4], 0.05, 0.04, 0.02)
+_f0 = max_frequency([1.2, 0.7], 0.05, 0.04, 0.02)
+_f1 = max_frequency([0.6, 0.6, 0.7], 0.05, 0.04, 0.02)
 assert abs(_f0 - 1.0 / 1.27) < 1e-9, f"frequency is one over the period, got {_f0}"
 assert abs(_f1 / _f0 - 1.27 / 0.77) < 1e-9, (
     f"the split should buy a factor of {1.27 / 0.77:.3f} in frequency, got {_f1 / _f0:.3f}")

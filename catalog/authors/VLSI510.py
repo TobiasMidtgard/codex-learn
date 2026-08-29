@@ -260,12 +260,12 @@ COURSE = {
     "band": 6,
     "level": "Advanced",
     "prereqs": [],
-    "stack": ["Python", "Verilog"],
+    "stack": ["Python"],
     "credits": 10,
     "hours": 130,
     "icon": "▣",
     "summary": (
-        "RV32I has one instruction length, one register file and forty-odd opcodes, "
+        "RV32I has one instruction length, one register file and forty base instructions, "
         "which makes it small enough to hold in your head and complete enough to run "
         "real programs. This course takes that instruction set apart bit by bit and "
         "then builds the machine that runs it: five stages, the hazards that stop them, "
@@ -645,7 +645,7 @@ The same nine instructions as before, with forwarding switched off. The
 register the instruction above them writes. Watch where the rows go.
 ''',
                 "notice": [
-                    "Rows i1, i2 and i3 each start two cycles later than the row above, while i4 downwards keep the one-cycle spacing — only the first `dep` instructions are made dependent, and each dependence costs exactly two cycles.",
+                    "Rows i1, i2 and i3 each start three cycles after the row above rather than one, while i4 downwards keep the one-cycle spacing — only the first `dep` instructions are made dependent, and each dependence costs exactly two cycles on top of the one the instruction was going to take anyway.",
                     "Push dependent pairs to 6 and read the caption: the same nine instructions now take 25 cycles instead of 13, CPI 2.78 instead of 1.44. Nothing about the instructions changed, only what they read.",
                     "Notice what is *not* drawn: there is no cell marked `bubble`. A stall is only visible as a gap between one row's start and the next, which is exactly how it appears on a waveform — a stage holding its previous contents while nothing new arrives.",
                 ],
@@ -730,15 +730,16 @@ half of one, so a consumer may read in the *same* cycle its producer writes.
                         "hint": "Substitute into the expression you just wrote.",
                         "deconstruct": [
                             "$2 \\times 0.30 = 0.60$ and $f_2 = 0.15$.",
-                            "$1 + 0.60 + 0.15 = 1.75$ — the machine is doing well under 60% of its peak.",
+                            "$1 + 0.60 + 0.15 = 1.75$ — at $1/1.75$ the machine is doing 57% of its peak.",
                         ],
                     },
                 ],
                 "closing": r'''
 A CPI of 1.75 on a machine whose peak is 1.0 is not a rounding error; it is 43%
 of the throughput thrown away on nothing but register dependences, which every
-compiled program is full of. The next module removes almost all of it with about
-two hundred gates.
+compiled program is full of. The next module removes almost all of it with a
+comparator on each source register and one multiplexer in front of each ALU
+input.
 ''',
             },
             "lab": {
@@ -877,7 +878,7 @@ if __name__ == "__main__":
 '''}],
                 "hints": [
                     "Keep a dict from register number to the index of the most recent instruction that writes it. Only the most recent matters — anything older has already written back.",
-                    "`if r and r in writer` does two jobs at once: it skips `None` and it skips `x0`, which is register 0 and therefore falsy.",
+                    "`if r and r in writer` skips `x0` without a special case, because register 0 is the one register number that is falsy.",
                     "Record the write *after* computing this instruction's own start, or an instruction that reads and writes the same register will stall on itself.",
                 ],
                 "tests": [
@@ -974,7 +975,7 @@ _p = isa.assemble("""
 _s = schedule(_p)
 assert _s == [0, 1, 4, 7, 10, 13], f"expected [0, 1, 4, 7, 10, 13], got {_s}"
 assert cycles(_p) == 18, \
-    f"six instructions, four dependences, 18 cycles against an ideal 10: got {cycles(_p)}"
+    f"four of the seven dependences bind, two cycles each: 18 against an ideal 10, got {cycles(_p)}"
 '''},
                 ],
             },
@@ -1382,7 +1383,7 @@ instruction i3 and again at i6.
                 "notice": [
                     "Take mispredicts from 0 to 1 to 2. Each one pushes every row below it two cycles to the right — that is the front end being emptied and refilled, and the flush is drawn as the same kind of gap a data stall makes.",
                     "Now go from 2 to 4. Nothing happens. In a nine-instruction window this model only offers two branch slots, i3 and i6, so the third and fourth mispredictions have nowhere to land and the caption stays at CPI 1.89.",
-                    "Set dependent pairs to 6 while leaving forwarding on: still CPI 1.89, and every cycle above 1.0 is a control hazard. That number is the entire budget a branch predictor has to work with.",
+                    "Set dependent pairs to 6 while leaving forwarding on: still CPI 1.89. Seventeen cycles retire nine instructions, and the eight cycles of difference split evenly — four are the pipeline fill, four are the two flushes. Everything above the hazard-free 1.44 is control, and those four cycles are the entire budget a branch predictor has to work with.",
                 ],
             },
             "derive": {
@@ -1523,6 +1524,7 @@ class Gshare:
         return 0
 
     def predict(self, pc):
+        # TODO: the same rule as Bimodal, over this class's index.
         return False
 
     def update(self, pc, taken):
@@ -1634,16 +1636,26 @@ if __name__ == "__main__":
                 "tests": [
                     {"name": "a two-bit counter has hysteresis", "code": r'''
 _p = Bimodal()
-assert _p.predict(0x100) is False or _p.predict(0x100) == False, \
-    "the counters start at 1, which is weakly not taken"
-for _ in range(4):
+assert _p.index(0x100) != _p.index(0x104), \
+    ("two instructions four bytes apart must land in different counters; an index that "
+     "keeps the two low bits puts them in the same one: got %d and %d"
+     % (_p.index(0x100), _p.index(0x104)))
+assert not _p.predict(0x100), "the counters start at 1, which is weakly not taken"
+_p.update(0x100, True)
+assert _p.predict(0x100), "one taken takes the counter from 1 to 2, which predicts taken"
+for _ in range(3):
     _p.update(0x100, True)
-assert _p.predict(0x100), "four takens should saturate the counter at 3"
+assert _p.table[_p.index(0x100)] == 3, \
+    f"four takens saturate at 3 and must not run past it, got {_p.table[_p.index(0x100)]}"
 _p.update(0x100, False)
 assert _p.predict(0x100), \
     "one surprise must not change the prediction — that hysteresis is the whole point"
 _p.update(0x100, False)
 assert not _p.predict(0x100), "two in a row should flip it"
+for _ in range(3):
+    _p.update(0x100, False)
+assert _p.table[_p.index(0x100)] == 0, \
+    f"and it saturates at 0 at the bottom, got {_p.table[_p.index(0x100)]}"
 '''},
                     {"name": "a loop is predicted well after the first trip", "code": r'''
 import traces
@@ -1665,10 +1677,9 @@ assert _m == 200, \
 import traces
 _t = traces.alternating(200)
 _m = evaluate(Gshare(history_bits=4), _t)
-assert _m < 20, \
-    ("gshare gives each history context its own counter, so it should learn the "
-     "alternation in a handful of branches: got %d of 200" % _m)
-assert _m > 0, "it still has to learn it; a predictor that starts perfect is not learning"
+assert _m == 3, \
+    ("gshare gives each history context its own counter, so it learns the alternation "
+     "in a handful of branches and is never wrong again: expected 3 of 200, got %d" % _m)
 '''},
                     {"name": "history length is what separates two loops", "code": r'''
 import traces
@@ -1683,15 +1694,20 @@ assert _long < _short, \
     ("four bits are not enough for a six-iteration loop: gshare-4 got %d, gshare-8 %d"
      % (_short, _long))
 '''},
-                    {"name": "nothing predicts noise", "code": r'''
+                    {"name": "a counter chasing noise loses to a static guess", "code": r'''
 import traces
 _learnable = traces.loop_trace(trips=30, body=12)
 _noise = traces.pseudo_random(400, percent_taken=70, seed=12345)
 _good = evaluate(Bimodal(), _learnable) / len(_learnable)
-_bad = evaluate(Bimodal(), _noise) / len(_noise)
 assert _good < 0.12, f"the same predictor handles the loop well, got {_good:.3f} wrong"
-assert _bad > 0.25, \
-    ("and cannot do better than the bias on an unpredictable stream: got %.3f" % _bad)
+_bad = evaluate(Bimodal(), _noise) / len(_noise)
+_static = sum(1 for _pc, _taken in _noise if not _taken) / len(_noise)
+assert abs(_static - 0.3125) < 1e-12, \
+    f"this trace is 68.75% taken, so always-taken is wrong 0.3125 of the time, got {_static}"
+assert _bad > _static, \
+    ("with no pattern to learn, a counter that chases the last outcome is beaten by a "
+     "predictor with no state at all: it gets %.3f wrong against always-taken's %.3f"
+     % (_bad, _static))
 '''},
                     {"name": "mispredictions become a CPI", "code": r'''
 assert abs(cpi(20, 1000, 2) - 1.04) < 1e-12, \
@@ -1720,8 +1736,8 @@ is yours.
 
 ## The functional half
 
-A register file of 32 words with `x0` hard-wired to zero, a word-addressed data
-memory as a dict, and a program counter. `execute(ins)` applies one instruction
+A register file of 32 words with `x0` hard-wired to zero, a data memory as a dict from
+byte address to the 32-bit word stored there, and a program counter. `execute(ins)` applies one instruction
 and returns `(next_pc, taken)`:
 
 - R and I arithmetic: `add sub sll slt xor srl or and`, `addi slti xori ori andi`
@@ -1932,8 +1948,9 @@ FLUSH = 2          # a branch resolves in EX, so two fetched instructions die
 #   forwarding + bimodal     -> 62 cycles, CPI 1.41
 #   stalling   + not-taken   -> 107 cycles, CPI 2.43
 #   stalling   + bimodal     -> 93 cycles, CPI 2.11
-# Forwarding is worth 31 cycles here and the predictor 14, and the two are
-# almost independent: they remove different cycles.
+# Forwarding is worth 31 cycles under either predictor and the predictor 14 under
+# either forwarding setting: on this program the two savings are exactly additive,
+# because they remove different cycles.
 
 
 def to_signed(v):

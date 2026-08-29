@@ -51,6 +51,7 @@
      "Change $a_{11}$ and $a_{22}$ together so the trace stays the same. The picture barely changes — stability does not care about the entries individually."
     ]
    },
+   "quiz": null,
    "derive": {
     "title": "Putting a second-order system into state space",
     "minutes": 12,
@@ -190,6 +191,7 @@
      "Find the $\\zeta$ where overshoot disappears. The poles have just met on the real axis."
     ]
    },
+   "quiz": null,
    "derive": {
     "title": "Why eigenvalues decide stability",
     "minutes": 12,
@@ -321,6 +323,7 @@
      "Try to get settling under half a second and read off the peak effort. That number is an actuator specification."
     ]
    },
+   "quiz": null,
    "derive": {
     "title": "Placing the poles of a double integrator",
     "minutes": 14,
@@ -457,6 +460,7 @@
      "Scale $Q$ and $R$ up together by the same factor. Almost nothing changes — only the ratio matters."
     ]
    },
+   "quiz": null,
    "derive": {
     "title": "Why the estimation error forgets the input",
     "minutes": 12,

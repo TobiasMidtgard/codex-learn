@@ -92,6 +92,43 @@ def norm_lab(lab, ctx):
     return out
 
 
+def norm_quiz(q, ctx):
+    """Short questions with an explanation on every option.
+
+    A foundational course needs somewhere to check that a definition landed before
+    asking anyone to derive with it. The `why` is required on every question because
+    a quiz that only says "wrong" teaches nothing; it is shown whichever option was
+    picked."""
+    if not q:
+        return None
+    if not q.get("title"):
+        raise ValueError(f"{ctx}/quiz: missing title")
+    qs = q.get("questions") or []
+    if not 3 <= len(qs) <= 10:
+        raise ValueError(f"{ctx}/quiz: {len(qs)} questions (need 3-10)")
+    out = []
+    for i, item in enumerate(qs, 1):
+        where = f"{ctx}/quiz/q{i}"
+        if not item.get("q"):
+            raise ValueError(f"{where}: no question text")
+        opts = item.get("opts") or []
+        if len(opts) != 4:
+            raise ValueError(f"{where}: {len(opts)} options (need exactly 4 \u2014 the "
+                             "answer key is labelled A-D)")
+        a = item.get("a")
+        if not isinstance(a, int) or not 0 <= a < 4:
+            raise ValueError(f"{where}: `a` must be the index 0-3 of the correct option")
+        if not item.get("why"):
+            raise ValueError(f"{where}: no `why` \u2014 an explanation is the point of asking")
+        out.append({
+            "q": clean_md(item["q"]),
+            "opts": [clean_md(o) for o in opts],
+            "a": a,
+            "why": clean_md(item["why"]),
+        })
+    return {"title": q["title"], "minutes": int(q.get("minutes", 6)), "questions": out}
+
+
 def norm_sandbox(sb, ctx):
     """The intuition step: a visualiser id and the parameters it opens with.
 
@@ -179,6 +216,7 @@ def normalise(course):
             "summary": clean_md(m.get("summary", "")),
             "concepts": [clean_md(c) for c in m["concepts"]],
             "sandbox": norm_sandbox(m.get("sandbox"), ctx),
+            "quiz": norm_quiz(m.get("quiz"), ctx),
             "derive": norm_derive(m.get("derive"), ctx),
             "lab": norm_lab(m.get("lab"), ctx),
         })
