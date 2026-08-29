@@ -92,6 +92,57 @@ def norm_lab(lab, ctx):
     return out
 
 
+def norm_blanks(b, ctx):
+    """A listing with holes in it, from the Voltaic design.
+
+    The listing is authored with ___ where each blank goes; the nth ___ takes the nth
+    entry of `blanks`. A blank works on an equation as readily as on code, which is
+    how a physics module asks a question without pretending to be a programming one."""
+    if not b:
+        return None
+    for key in ("title", "listing"):
+        if not b.get(key):
+            raise ValueError(f"{ctx}/blanks: missing {key}")
+    holes = b["listing"].count("___")
+    items = b.get("blanks") or []
+    if holes != len(items):
+        raise ValueError(f"{ctx}/blanks: the listing has {holes} ___ but "
+                         f"{len(items)} blank(s) are defined")
+    if not 2 <= len(items) <= 8:
+        raise ValueError(f"{ctx}/blanks: {len(items)} blanks (need 2-8)")
+    out = []
+    for i, it in enumerate(items, 1):
+        where = f"{ctx}/blanks/{i}"
+        opts = it.get("opts") or []
+        if not 2 <= len(opts) <= 5:
+            raise ValueError(f"{where}: {len(opts)} options (need 2-5)")
+        a = it.get("a")
+        if not isinstance(a, int) or not 0 <= a < len(opts):
+            raise ValueError(f"{where}: `a` must index one of the options")
+        if not it.get("why"):
+            raise ValueError(f"{where}: no `why` \u2014 the explanation is the teaching")
+        whys = it.get("whys")
+        if whys is not None and len(whys) != len(opts):
+            raise ValueError(f"{where}: `whys` must have one entry per option")
+        out.append({
+            "prompt": clean_md(it.get("prompt", "")),
+            "hole": it.get("hole", ""),
+            "opts": [clean_md(o) for o in opts],
+            "a": a,
+            "why": clean_md(it["why"]),
+            "whys": [clean_md(w) for w in whys] if whys else None,
+        })
+    return {
+        "title": b["title"],
+        "minutes": int(b.get("minutes", 8)),
+        "brief": clean_md(b.get("brief", "")),
+        "caption": b.get("caption", ""),
+        "lang": b.get("lang", "text"),
+        "listing": clean_code(b["listing"]),
+        "blanks": out,
+    }
+
+
 def norm_build(b, ctx):
     """A circuit the learner draws, graded by measuring it.
 
@@ -253,6 +304,7 @@ def normalise(course):
             "concepts": [clean_md(c) for c in m["concepts"]],
             "sandbox": norm_sandbox(m.get("sandbox"), ctx),
             "quiz": norm_quiz(m.get("quiz"), ctx),
+            "blanks": norm_blanks(m.get("blanks"), ctx),
             "build": norm_build(m.get("build"), ctx),
             "derive": norm_derive(m.get("derive"), ctx),
             "lab": norm_lab(m.get("lab"), ctx),

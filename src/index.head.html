@@ -315,6 +315,7 @@ kbd{font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:4px;bor
 .chip.read{color:var(--blue);border-color:rgba(110,155,255,.28);background:var(--blue-12)}
 .chip.sandbox{background:rgba(110,155,255,.14);color:#9CD5FF}
 .chip.derive{background:rgba(167,139,250,.16);color:#C084FC}
+.chip.blanks{background:rgba(255,176,32,.16);color:#FFB020}
 .chip.quiz{color:var(--purple);border-color:rgba(167,139,250,.28);background:var(--purple-12)}
 .chip.code,.chip.lab{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}
 .chip.project,.chip.capstone{color:var(--amber);border-color:var(--amber-22);background:var(--amber-08)}
@@ -567,6 +568,61 @@ math[display=block]{display:block;margin:14px 0;overflow-x:auto;overflow-y:hidde
 .build-acts{display:flex;gap:10px;margin:16px 0 14px;flex-wrap:wrap}
 #build-checks{margin-bottom:8px}
 #build-mount{margin-top:16px}
+
+/* ---------- fill in the blanks ----------
+   The state colours are Voltaic's: green for right, pink for wrong, amber for a slot
+   waiting to be filled. They are used only for answer state, so they never compete
+   with the lime the rest of the app uses for progress. */
+:root{
+  --ans-ok:#5BE58A;
+  --ans-no:#FF5C7A;
+  --ans-wait:#FFB020;
+}
+[data-theme=light]{
+  --ans-ok:#1E7F45;
+  --ans-no:#C0264A;
+  --ans-wait:#9A5B00;
+}
+.blk-wrap{margin:18px 0 14px;border:1px solid var(--line-3);border-radius:var(--r-lg);
+  background:var(--editor);overflow:hidden}
+.blk-bar{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);
+  background:var(--sunk)}
+.blk-file{font-family:var(--mono);font-size:11.5px;color:var(--ink-4)}
+.blk-count{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-5)}
+.blk-listing{margin:0;padding:18px 20px;overflow-x:auto;font-family:var(--mono);
+  font-size:13.5px;line-height:2.05;color:var(--ink-2);white-space:pre}
+.blk{
+  display:inline-block;min-width:92px;padding:1px 10px;margin:0 1px;
+  border-radius:6px;border:1px dashed var(--ans-wait);
+  background:color-mix(in srgb,var(--ans-wait) 12%,transparent);
+  color:var(--ans-wait);font:inherit;font-size:.95em;cursor:pointer;text-align:center;
+  transition:background .14s,border-color .14s,color .14s;
+}
+.blk:hover{background:color-mix(in srgb,var(--ans-wait) 22%,transparent)}
+.blk.open{outline:2px solid var(--ans-wait);outline-offset:1px}
+.blk.filled{border-style:solid;border-color:var(--line-3);
+  background:var(--surface-2);color:var(--ink)}
+.blk.right{border-style:solid;border-color:var(--ans-ok);
+  background:color-mix(in srgb,var(--ans-ok) 14%,transparent);color:var(--ans-ok)}
+.blk.wrong{border-style:solid;border-color:var(--ans-no);
+  background:color-mix(in srgb,var(--ans-no) 14%,transparent);color:var(--ans-no)}
+.blk-pick{margin:0 0 14px;padding:14px 16px;border:1px solid var(--line-3);
+  border-radius:var(--r-lg);background:var(--surface);animation:fadeUp .18s var(--ease) both}
+.blk-pick-h{font-size:13px;color:var(--ink-2);margin-bottom:10px}
+.blk-opt{display:inline-block;margin:0 8px 8px 0;padding:7px 13px;border-radius:var(--r);
+  border:1px solid var(--line-2);background:transparent;color:var(--ink-2);
+  font:13px var(--mono);cursor:pointer;transition:border-color .14s,background .14s}
+.blk-opt:hover{border-color:var(--ink-4);color:var(--ink)}
+.blk-opt.on{border-color:var(--lime);background:var(--lime-12);color:var(--ink)}
+.blk-acts{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.blk-fb{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+.blk-row{display:grid;grid-template-columns:18px 1fr;gap:11px;padding:12px 14px;
+  border-radius:var(--r-lg);border:1px solid var(--line);background:var(--surface)}
+.blk-row.right{border-color:color-mix(in srgb,var(--ans-ok) 30%,transparent)}
+.blk-row.wrong{border-color:color-mix(in srgb,var(--ans-no) 30%,transparent)}
+.blk-row b{font-family:var(--mono);font-size:13px;color:var(--ink)}
+.blk-yours{font-family:var(--mono);font-size:11.5px;color:var(--ans-no)}
+.blk-row p{margin:5px 0 0;font-size:13px;line-height:1.6;color:var(--ink-3);text-wrap:pretty}
 
 /* ---------- circuit editor ---------- */
 .ckt{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}

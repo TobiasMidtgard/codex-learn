@@ -1,7 +1,7 @@
 /* ============ Codewright app: state, routing, views ============ */
 
 /* ---------- app state ---------- */
-const XP = { read: 10, sandbox: 15, quiz: 25, derive: 35, build: 35, code: 40, project: 120 };
+const XP = { read: 10, sandbox: 15, blanks: 20, quiz: 25, derive: 35, build: 35, code: 40, project: 120 };
 const LESSON_INDEX = {};
 const TRACK_LESSONS = {};
 const TRACK_OF = {};
@@ -106,6 +106,24 @@ function capstoneMd(c) {
         LESSON_INDEX[qzl.id] = { lesson: qzl, track: c, module: modRef, mi: mi };
         flat.push(qzl);
         m.quizLessonId = qzl.id;
+      }
+
+      if (m.blanks) {
+        const bkl = {
+          id: c.id + '-' + mnum + '-FB',
+          type: 'blanks',
+          title: m.blanks.title,
+          min: m.blanks.minutes || 8,
+          mdText: m.blanks.brief,
+          caption: m.blanks.caption,
+          lang: m.blanks.lang || 'text',
+          listing: m.blanks.listing,
+          blanks: m.blanks.blanks || [],
+          trackId: c.id, courseId: c.id, num: mnum + '\u00b7f',
+        };
+        LESSON_INDEX[bkl.id] = { lesson: bkl, track: c, module: modRef, mi: mi };
+        flat.push(bkl);
+        m.blanksLessonId = bkl.id;
       }
 
       if (m.build) {
@@ -235,7 +253,7 @@ function degreeTotals(programId) {
            pct: units ? Math.round(done / units * 100) : 0 };
 }
 
-let P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null, activity: {}, name: '', railHidden: false };
+let P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null, activity: {}, name: '', railHidden: false };
 let route = { view: 'home' };
 const openTracks = {};
 /* keyed "&lt;programId&gt;:&lt;band&gt;" — two programmes both have a band 1, and a bare
@@ -375,7 +393,7 @@ function firstIncomplete(tid) {
   return null;
 }
 function typeChip(type) {
-  const label = { read: 'Read', sandbox: 'Sandbox', quiz: 'Quiz', derive: 'Derive', build: 'Build', code: 'Code', project: 'Project' }[type] || type;
+  const label = { read: 'Read', sandbox: 'Sandbox', blanks: 'Fill in', quiz: 'Quiz', derive: 'Derive', build: 'Build', code: 'Code', project: 'Project' }[type] || type;
   return '<span class="chip ' + type + '">' + label + '</span>';
 }
 
@@ -701,6 +719,7 @@ function go(r) {
     else if (l.type === 'sandbox') renderSandbox(main, l);
     else if (l.type === 'derive') renderDerive(main, l);
     else if (l.type === 'build') renderBuild(main, l);
+    else if (l.type === 'blanks') renderBlanks(main, l);
     else renderCode(main, l);
   }
 
@@ -957,7 +976,7 @@ function renderHome(main) {
 }
 
 function typeChipText(type) {
-  return { read: 'Reading', sandbox: 'Sandbox', quiz: 'Quiz', derive: 'Derivation', build: 'Circuit', code: 'Lab', project: 'Capstone' }[type] || type;
+  return { read: 'Reading', sandbox: 'Sandbox', blanks: 'Fill in', quiz: 'Quiz', derive: 'Derivation', build: 'Circuit', code: 'Lab', project: 'Capstone' }[type] || type;
 }
 
 /* ---------- progress ---------- */
@@ -1085,7 +1104,7 @@ function adopt(progress) {
   if (!progress || typeof progress !== 'object') return;
   adopting = true;
   try {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null,
                         activity: {}, name: '', railHidden: false }, progress);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
     recomputeXp();
@@ -1185,7 +1204,7 @@ function importProgress(file) {
       toast('That does not look like a Codex Learn progress file');
       return;
     }
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null,
                         activity: {}, name: '', railHidden: false }, inc);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
     applyTheme();
@@ -1199,7 +1218,7 @@ function importProgress(file) {
   fr.readAsText(file);
 }
 function resetProgress() {
-  P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null,
+  P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null,
         activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme };
   updateXp();
   renderRail();
@@ -1966,6 +1985,135 @@ function currentFiles(l) {
   const saved = P.code[l.id] && P.code[l.id].files;
   if (saved) for (const f of base) if (!f.ro && typeof saved[f.name] === 'string') f.content = saved[f.name];
   return base;
+}
+
+/* ---------- lesson: fill the blanks ----------
+   Taken from the Voltaic design: a listing with holes in it that you click to fill.
+   It reads as one artefact rather than a list of questions, and because a blank is
+   just a slot with options it works on an equation as readily as on code — which is
+   the point, since a physics module should not have to ask its questions in Python.
+
+   Answering is one click, so it is cheap to attempt and cheap to be wrong; the
+   explanation for the option you chose is what carries the teaching. */
+function renderBlanks(main, l) {
+  const state = (P.blanks && P.blanks[l.id]) || {};
+  const picked = {};
+  (l.blanks || []).forEach(function (b, i) { picked[i] = state[i] === undefined ? null : state[i]; });
+  let open = null;          /* which blank's option list is showing */
+  let checked = false;
+
+  function slotHtml(b, i) {
+    const val = picked[i];
+    const isRight = val !== null && val === b.a;
+    const cls = !checked ? (val === null ? '' : ' filled')
+      : (isRight ? ' right' : ' wrong');
+    const label = val === null ? (b.hole || '?') : b.opts[val];
+    return '<button class="blk' + cls + (open === i ? ' open' : '') + '" data-blk="' + i + '">' +
+      esc(label) + '</button>';
+  }
+
+  /* the listing is authored with ___ where each blank goes, in order */
+  function listing() {
+    const parts = String(l.listing || '').split('___');
+    let out = '';
+    for (let i = 0; i < parts.length; i++) {
+      out += Highlight.render(parts[i], l.lang || 'text');
+      if (i < parts.length - 1 && l.blanks[i]) out += slotHtml(l.blanks[i], i);
+    }
+    return out;
+  }
+
+  function chooser() {
+    if (open === null) return '';
+    const b = l.blanks[open];
+    return '<div class="blk-pick">' +
+      '<div class="blk-pick-h">' + esc(b.prompt || 'Which one belongs here?') + '</div>' +
+      b.opts.map(function (o, oi) {
+        return '<button class="blk-opt' + (picked[open] === oi ? ' on' : '') +
+          '" data-opt="' + oi + '">' + esc(o) + '</button>';
+      }).join('') +
+    '</div>';
+  }
+
+  function feedback() {
+    if (!checked) return '';
+    return '<div class="blk-fb">' + l.blanks.map(function (b, i) {
+      const ok = picked[i] === b.a;
+      return '<div class="blk-row ' + (ok ? 'right' : 'wrong') + '">' +
+        '<span class="gmark ' + (ok ? 'done' : 'fail') + '"></span>' +
+        '<div><b>' + esc(b.opts[b.a]) + '</b>' +
+        (ok ? '' : ' <span class="blk-yours">you chose ' +
+          (picked[i] === null ? 'nothing' : esc(b.opts[picked[i]])) + '</span>') +
+        '<p>' + mdInline((picked[i] !== null && b.whys && b.whys[picked[i]]) || b.why) + '</p></div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function paint() {
+    const filled = l.blanks.filter(function (_, i) { return picked[i] !== null; }).length;
+    const right = l.blanks.filter(function (b, i) { return picked[i] === b.a; }).length;
+    main.innerHTML = '<div class="page reading">' +
+      lessonHeader(l) +
+      '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
+      '<div class="blk-wrap">' +
+        '<div class="blk-bar"><span class="blk-file">' + esc(l.caption || 'fill in the blanks') + '</span>' +
+          '<span class="blk-count">' + (checked ? right + ' / ' + l.blanks.length + ' right'
+            : filled + ' / ' + l.blanks.length + ' filled') + '</span></div>' +
+        '<pre class="blk-listing"><code>' + listing() + '</code></pre>' +
+      '</div>' +
+      chooser() +
+      '<div class="blk-acts">' +
+        '<button class="btn success" id="blk-check"' + (filled === l.blanks.length ? '' : ' disabled') + '>' +
+          (checked ? 'Check again' : 'Check') + '</button>' +
+        (checked ? '<button class="btn dark" id="blk-retry">Clear and retry</button>' : '') +
+      '</div>' +
+      feedback() +
+      footNav(l, P.completed[l.id] ? '<span class="done-note">\u2713 Filled</span>' : '') +
+    '</div>';
+
+    wireCrumb(main, l);
+    wireFootNav(main, l);
+
+    $all('[data-blk]', main).forEach(function (b) {
+      b.addEventListener('click', function () {
+        const i = +b.dataset.blk;
+        open = (open === i) ? null : i;
+        paint();
+      });
+    });
+    $all('[data-opt]', main).forEach(function (b) {
+      b.addEventListener('click', function () {
+        picked[open] = +b.dataset.opt;
+        P.blanks = P.blanks || {};
+        P.blanks[l.id] = Object.assign({}, picked);
+        saveSoon();
+        open = null;
+        checked = false;
+        paint();
+      });
+    });
+    const chk = $('#blk-check', main);
+    if (chk) chk.addEventListener('click', function () {
+      checked = true;
+      const got = l.blanks.filter(function (b, i) { return picked[i] === b.a; }).length;
+      paint();
+      if (got === l.blanks.length) {
+        if (completeLesson(l.id)) toast('All blanks filled \u00b7 +' + XP.blanks + ' XP', true);
+        renderRail();
+      }
+    });
+    const rt = $('#blk-retry', main);
+    if (rt) rt.addEventListener('click', function () {
+      l.blanks.forEach(function (_, i) { picked[i] = null; });
+      P.blanks = P.blanks || {};
+      P.blanks[l.id] = {};
+      checked = false;
+      saveSoon();
+      paint();
+    });
+  }
+
+  paint();
 }
 
 /* ---------- lesson: build a circuit ----------
@@ -3020,7 +3168,7 @@ async function boot() {
   BUNDLE = parseBundle(bundleEl ? bundleEl.textContent : '');
   const saved = await Store.load();
   if (saved && typeof saved === 'object') {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null,
                        activity: {}, name: '', railHidden: false }, saved);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
   }

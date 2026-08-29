@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin:0; padding:0; background:#080B10; }
+  * { box-sizing:border-box; }
+  a { color:#34E3D6; text-decoration:none; }
+  a:hover { color:#8DF3EA; }
+  input[type=range] { -webkit-appearance:none; appearance:none; height:4px; border-radius:2px; outline:none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:#E6EDF5; border:3px solid #0A0D12; box-shadow:0 0 0 1px #3A465A; cursor:grab; }
+  ::selection { background:#FFB020; color:#0A0D12; }
+  @keyframes glowpulse { 0%,100% { opacity:.55 } 50% { opacity:1 } }
+  @keyframes sweep { from { transform:translateX(-100%) } to { transform:translateX(220%) } }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#080B10;color:#E6EDF5;font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased">
+
+  <div style="position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:18px;padding:0 26px;height:60px;background:rgba(10,13,18,.92);backdrop-filter:blur(14px);border-bottom:1px solid #1B2331">
+    <div onClick="{{ goMap }}" style="display:flex;align-items:center;gap:9px;cursor:pointer">
+      <div style="width:22px;height:22px;border:2px solid #FFB020;border-radius:5px;display:flex;align-items:center;justify-content:center">
+        <div style="width:2px;height:11px;background:#FFB020;transform:skewX(-22deg)"></div>
+      </div>
+      <span style="font-weight:700;font-size:16px;letter-spacing:-0.02em">VOLTAIC</span>
+    </div>
+    <div style="width:1px;height:22px;background:#1B2331"></div>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8A97A8;letter-spacing:0.1em;text-transform:uppercase">Analog + Embedded Track</span>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:7px;padding:6px 12px;border:1px solid #2A3547;border-radius:999px">
+      <div style="width:7px;height:7px;border-radius:50%;background:#5BE58A"></div>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#B9C5D4">{{ streakText }}</span>
+    </div>
+    <div onClick="{{ onToggleCalc }}" style="display:flex;align-items:center;gap:8px;padding:6px 13px;border-radius:999px;background:{{ calcBtnBg }};border:1px solid {{ calcBtnBorder }};cursor:pointer">
+      <svg viewBox="0 0 20 20" style="width:14px;height:14px;display:block">
+        <rect x="3" y="2" width="14" height="16" rx="2.5" fill="none" stroke="{{ calcBtnFg }}" stroke-width="1.6" />
+        <path d="M6 6.5 H14 M6.5 11 H7 M9.7 11 H10.3 M13 11 H13.5 M6.5 14.5 H7 M9.7 14.5 H10.3 M13 14.5 H13.5" stroke="{{ calcBtnFg }}" stroke-width="1.6" stroke-linecap="round" />
+      </svg>
+      <span style="font-size:12.5px;font-weight:600;color:{{ calcBtnFg }}">Calc</span>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:6px;padding:6px 13px;border-radius:999px;background:#161D27;border:1px solid #2A3547">
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:{{ accent }}">{{ xp }}</span>
+      <span style="font-size:11px;color:#8A97A8;letter-spacing:0.08em">XP</span>
+    </div>
+  </div>
+
+  <sc-if value="{{ isMap }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width:1180px;margin:0 auto;padding:52px 26px 90px">
+    <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:44px;align-items:end;padding-bottom:44px;border-bottom:1px solid #1B2331">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.22em;color:#FFB020;text-transform:uppercase;margin-bottom:18px">Curriculum</div>
+        <h1 style="margin:0;font-size:54px;line-height:1.02;letter-spacing:-0.035em;font-weight:700;text-wrap:balance">Learn electronics by<br />moving the electrons.</h1>
+        <p style="margin:20px 0 0;max-width:52ch;font-size:16px;line-height:1.6;color:#98A5B6;text-wrap:pretty">Every task here is solved against a live solver — not a multiple-choice guess. Size a resistor, repair a failing LED driver, wire the breadboard hole by hole, then write the firmware that drives it.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="padding:16px;border:1px solid #1B2331;border-radius:12px;background:#0E131B">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:#E6EDF5">10</div>
+          <div style="font-size:12px;color:#8A97A8;margin-top:4px">interaction types</div>
+        </div>
+        <div style="padding:16px;border:1px solid #1B2331;border-radius:12px;background:#0E131B">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:#E6EDF5">{{ solvedCount }}<span style="color:#4A586C">/</span><span style="color:#4A586C">13</span></div>
+          <div style="font-size:12px;color:#8A97A8;margin-top:4px">tasks solved</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:38px 0 18px">
+      <h2 style="margin:0;font-size:14px;letter-spacing:0.16em;text-transform:uppercase;color:#8A97A8;font-family:'JetBrains Mono',monospace">Units</h2>
+      <span style="font-size:12px;color:#5E6D80">3 unlocked · maker + undergrad track</span>
+    </div>
+
+    <sc-for list="{{ units }}" as="u" hint-placeholder-count="7">
+      <div onClick="{{ u.onOpen }}" style="display:grid;grid-template-columns:64px 1fr 210px 130px;gap:22px;align-items:center;padding:20px 22px;margin-bottom:10px;border:1px solid {{ u.border }};border-radius:14px;background:{{ u.bg }};cursor:{{ u.cursor }};transition:border-color .15s, transform .15s" style-hover="{{ u.hover }}">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:{{ u.numColor }}">{{ u.num }}</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:19px;font-weight:600;letter-spacing:-0.015em;color:{{ u.titleColor }}">{{ u.title }}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:{{ u.tagBg }};color:{{ u.tagFg }}">{{ u.tag }}</span>
+          </div>
+          <div style="font-size:13.5px;color:#7C8A9C;margin-top:5px">{{ u.blurb }}</div>
+        </div>
+        <div>
+          <div style="height:5px;border-radius:3px;background:#1B2331;overflow:hidden">
+            <div style="height:100%;width:{{ u.pct }}%;background:{{ u.barColor }};border-radius:3px"></div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#6B7A8D;margin-top:7px">{{ u.progressText }}</div>
+        </div>
+        <div style="justify-self:end;font-size:13px;font-weight:600;padding:9px 16px;border-radius:9px;background:{{ u.ctaBg }};color:{{ u.ctaFg }};border:1px solid {{ u.ctaBorder }}">{{ u.cta }}</div>
+      </div>
+    </sc-for>
+
+    <div style="margin-top:46px;padding:26px 28px;border:1px solid #23304180;border-radius:16px;background:linear-gradient(180deg,#0E131B,#0A0E14)">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#34E3D6">Capstone · locked</div>
+      <div style="font-size:22px;font-weight:600;margin-top:10px;letter-spacing:-0.02em">Build a closed-loop LED dimmer with a potentiometer, RC filter and PWM firmware.</div>
+      <div style="font-size:13.5px;color:#7C8A9C;margin-top:8px">Unlocks after Units 02, 03 and 06. Everything you solve on the way is a piece of it.</div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isLesson }}" hint-placeholder-val="{{ false }}">
+  <div style="display:grid;grid-template-columns:minmax(0,254px) minmax(0,1fr);min-height:calc(100vh - 60px)">
+
+    <div style="border-right:1px solid #1B2331;padding:26px 20px;background:#0A0E14">
+      <div onClick="{{ goMap }}" style="font-size:12px;color:#8A97A8;cursor:pointer;margin-bottom:22px">← All units</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.16em;color:{{ accent }};text-transform:uppercase">{{ lessonUnit }}</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-0.025em;margin-top:7px;line-height:1.2">{{ lessonTitle }}</div>
+      <div style="height:4px;border-radius:2px;background:#1B2331;margin:18px 0 26px;overflow:hidden">
+        <div style="height:100%;width:{{ lessonPct }}%;background:{{ accent }};border-radius:2px;transition:width .35s"></div>
+      </div>
+      <sc-for list="{{ rail }}" as="r" hint-placeholder-count="5">
+        <div onClick="{{ r.onClick }}" style="display:grid;grid-template-columns:24px 1fr;gap:11px;align-items:start;padding:9px 10px;border-radius:9px;background:{{ r.bg }};cursor:pointer;margin-bottom:3px">
+          <div style="width:24px;height:24px;border-radius:50%;border:1.5px solid {{ r.dotBorder }};background:{{ r.dotBg }};display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:{{ r.dotFg }}">{{ r.mark }}</div>
+          <div>
+            <div style="font-size:13.5px;font-weight:{{ r.weight }};color:{{ r.fg }};line-height:1.3">{{ r.label }}</div>
+            <div style="font-size:11px;color:#5E6D80;margin-top:2px;font-family:'JetBrains Mono',monospace">{{ r.kindLabel }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display:flex;flex-direction:column;min-width:0">
+      <div style="flex:1;padding:34px 30px 20px;min-width:0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 9px;border-radius:5px;background:#161D27;border:1px solid #2A3547;color:#B9C5D4;letter-spacing:0.08em;text-transform:uppercase">{{ stepKindLabel }}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E6D80">STEP {{ stepNum }} / {{ stepCount }}</span>
+        </div>
+        <h2 style="margin:0 0 8px;font-size:27px;line-height:1.22;letter-spacing:-0.03em;font-weight:600;max-width:34ch;text-wrap:pretty">{{ prompt }}</h2>
+        <p style="margin:0 0 24px;font-size:14.5px;line-height:1.6;color:#8A97A8;max-width:70ch;text-wrap:pretty">{{ subPrompt }}</p>
+
+        <sc-if value="{{ isTeach }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;padding:20px;border:1px solid #1B2331;border-radius:14px;background:#0D1219">
+              <svg viewBox="0 0 420 300" style="width:100%;height:auto;display:block">
+                <path d="M96 42 H300 M300 42 V78 M300 132 V168 M300 168 H372 M300 168 V196 M300 250 V276 M96 276 H300 M96 42 V118 M96 200 V276" stroke="#3A465A" stroke-width="2" fill="none" />
+                <path d="M78 118 H114 M86 134 H106 M78 150 H114 M86 166 H106 M78 182 H114 M86 198 H106" stroke="#E6EDF5" stroke-width="2" fill="none" />
+                <rect x="287" y="78" width="26" height="54" rx="3" fill="#0D1219" stroke="#E6EDF5" stroke-width="2" />
+                <rect x="287" y="196" width="26" height="54" rx="3" fill="#0D1219" stroke="#E6EDF5" stroke-width="2" />
+                <circle cx="300" cy="168" r="4.5" fill="#FFB020" />
+                <path d="M282 276 H318 M289 283 H311 M296 290 H304" stroke="#3A465A" stroke-width="2" fill="none" />
+                <text x="60" y="164" text-anchor="end" fill="#8A97A8" font-family="JetBrains Mono, monospace" font-size="13">5 V</text>
+                <text x="330" y="110" fill="#E6EDF5" font-family="JetBrains Mono, monospace" font-size="13">R1</text>
+                <text x="330" y="228" fill="#E6EDF5" font-family="JetBrains Mono, monospace" font-size="13">R2</text>
+                <text x="382" y="164" fill="#FFB020" font-family="JetBrains Mono, monospace" font-size="13">Vout</text>
+              </svg>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;display:flex;flex-direction:column;gap:14px">
+              <div style="padding:18px 20px;border:1px solid #2A3547;border-radius:14px;background:#0E131B">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8A97A8;margin-bottom:12px">The whole idea</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:19px;color:#E6EDF5;line-height:1.7">Vout = 5 V · <span style="color:#FFB020">R2</span> / (<span style="color:#34E3D6">R1</span>+<span style="color:#FFB020">R2</span>)</div>
+                <div style="font-size:13.5px;color:#8A97A8;margin-top:14px;line-height:1.6;text-wrap:pretty">Two resistors in series carry the <em style="color:#E6EDF5;font-style:normal">same current</em>. So the supply voltage splits in proportion to resistance — nothing more mysterious than that.</div>
+              </div>
+              <div style="padding:18px 20px;border:1px solid #1B2331;border-radius:14px;background:#0D1219">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#FF5C7A;margin-bottom:10px">Where it bites</div>
+                <div style="font-size:13.5px;color:#8A97A8;line-height:1.6;text-wrap:pretty">The formula only holds while nothing draws current from the Vout node. Attach a load and the ratio shifts — you'll prove that two steps from now.</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isFind }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;padding:20px;border:1px solid #1B2331;border-radius:14px;background:#0D1219">
+              <svg viewBox="0 0 420 300" style="width:100%;height:auto;display:block">
+                <path d="M96 42 H300 M300 42 V78 M300 132 V168 M300 168 H372 M300 168 V196 M300 250 V276 M96 276 H300 M96 42 V118 M96 200 V276" stroke="#3A465A" stroke-width="2" fill="none" />
+                <path d="M78 118 H114 M86 134 H106 M78 150 H114 M86 166 H106 M78 182 H114 M86 198 H106" stroke="#E6EDF5" stroke-width="2" fill="none" />
+                <rect x="287" y="78" width="26" height="54" rx="3" fill="#0D1219" stroke="#E6EDF5" stroke-width="2" />
+                <rect x="287" y="196" width="26" height="54" rx="3" fill="#0D1219" stroke="#E6EDF5" stroke-width="2" />
+                <circle cx="300" cy="168" r="4.5" fill="#FFB020" />
+                <circle cx="372" cy="168" r="16" fill="none" stroke="#FFB020" stroke-width="2" stroke-dasharray="3 4" />
+                <path d="M282 276 H318 M289 283 H311 M296 290 H304" stroke="#3A465A" stroke-width="2" fill="none" />
+                <text x="60" y="164" text-anchor="end" fill="#8A97A8" font-family="JetBrains Mono, monospace" font-size="13">{{ findSrc }}</text>
+                <text x="330" y="110" fill="#E6EDF5" font-family="JetBrains Mono, monospace" font-size="13">{{ findR1 }}</text>
+                <text x="330" y="228" fill="#E6EDF5" font-family="JetBrains Mono, monospace" font-size="13">{{ findR2 }}</text>
+                <text x="372" y="173" text-anchor="middle" fill="#FFB020" font-family="JetBrains Mono, monospace" font-size="12">?</text>
+              </svg>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;padding:22px;border:1px solid #2A3547;border-radius:14px;background:#0E131B">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8A97A8">Your answer</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
+                <input value="{{ findVal }}" onChange="{{ onFind }}" inputmode="decimal" placeholder="0.00" style="flex:1;min-width:0;background:#080B10;border:1px solid {{ findBorder }};border-radius:10px;padding:13px 14px;font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:#E6EDF5;outline:none" />
+                <span style="font-family:'JetBrains Mono',monospace;font-size:18px;color:#8A97A8">{{ findUnit }}</span>
+              </div>
+              <div style="margin-top:18px;padding-top:16px;border-top:1px solid #1B2331">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8A97A8;margin-bottom:10px">Given</div>
+                <sc-for list="{{ findGiven }}" as="g" hint-placeholder-count="3">
+                  <div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-family:'JetBrains Mono',monospace;font-size:13px">
+                    <span style="color:#7C8A9C">{{ g.k }}</span><span style="color:#E6EDF5">{{ g.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:16px;font-size:12.5px;color:#5E6D80;line-height:1.55">{{ findHint }}</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isGraph }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;padding:18px 18px 10px;border:1px solid #1B2331;border-radius:14px;background:#0D1219">
+              <div style="display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8A97A8;letter-spacing:0.12em;text-transform:uppercase">{{ gTitle }}</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E6D80">{{ gAxisNote }}</span>
+              </div>
+              <svg viewBox="0 0 560 236" style="width:100%;height:auto;display:block">
+                <path d="M46 14 H548 M46 58 H548 M46 102 H548 M46 146 H548 M46 190 H548 M96 14 V190 M146 14 V190 M196 14 V190 M246 14 V190 M296 14 V190 M346 14 V190 M396 14 V190 M446 14 V190 M496 14 V190" stroke="#161D27" stroke-width="1" fill="none" />
+                <path d="M46 14 V190 H548" stroke="#3A465A" stroke-width="1.5" fill="none" />
+                <path d="{{ gTargetPath }}" stroke="#FF5C7A" stroke-width="1.5" stroke-dasharray="5 5" fill="none" />
+                <path d="{{ gPath }}" stroke="{{ gColor }}" stroke-width="2.5" fill="none" stroke-linejoin="round" />
+                <circle cx="{{ gMarkX }}" cy="{{ gMarkY }}" r="5" fill="{{ gColor }}" />
+                <text x="40" y="19" text-anchor="end" fill="#5E6D80" font-family="JetBrains Mono, monospace" font-size="10">{{ gYMax }}</text>
+                <text x="40" y="194" text-anchor="end" fill="#5E6D80" font-family="JetBrains Mono, monospace" font-size="10">0</text>
+                <text x="46" y="212" fill="#5E6D80" font-family="JetBrains Mono, monospace" font-size="10">0</text>
+                <text x="548" y="212" text-anchor="end" fill="#5E6D80" font-family="JetBrains Mono, monospace" font-size="10">{{ gXMax }}</text>
+                <text x="548" y="228" text-anchor="end" fill="#FF5C7A" font-family="JetBrains Mono, monospace" font-size="10">{{ gTargetLabel }}</text>
+              </svg>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;padding:22px;border:1px solid #2A3547;border-radius:14px;background:#0E131B">
+              <sc-for list="{{ gControls }}" as="c" hint-placeholder-count="2">
+                <div style="margin-bottom:22px">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px">
+                    <span style="font-size:13px;color:#8A97A8">{{ c.label }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:#E6EDF5">{{ c.display }}</span>
+                  </div>
+                  <input type="range" min="{{ c.min }}" max="{{ c.max }}" step="{{ c.step }}" value="{{ c.value }}" onChange="{{ c.onChange }}" style="width:100%;background:linear-gradient(90deg,{{ c.fill }} {{ c.pct }}%,#1B2331 {{ c.pct }}%)" />
+                </div>
+              </sc-for>
+              <div style="padding-top:16px;border-top:1px solid #1B2331">
+                <sc-for list="{{ gReadouts }}" as="r" hint-placeholder-count="3">
+                  <div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-family:'JetBrains Mono',monospace;font-size:13.5px">
+                    <span style="color:#7C8A9C">{{ r.k }}</span><span style="color:{{ r.color }};font-weight:600">{{ r.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:16px;padding:11px 13px;border-radius:9px;background:{{ gGoalBg }};border:1px solid {{ gGoalBorder }};font-size:12.5px;color:{{ gGoalFg }};line-height:1.5">{{ gGoalText }}</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isMcq }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;padding:20px;border:1px solid #1B2331;border-radius:14px;background:#0D1219">
+              <svg viewBox="0 0 460 300" style="width:100%;height:auto;display:block">
+                <path d="M96 42 H300 M300 42 V78 M300 132 V168 M300 168 H392 M300 168 V196 M300 250 V276 M96 276 H392 M96 42 V118 M96 200 V276 M392 168 V196 M392 250 V276" stroke="#3A465A" stroke-width="2" fill="none" />
+                <path d="M78 118 H114 M86 134 H106 M78 150 H114 M86 166 H106 M78 182 H114 M86 198 H106" stroke="#E6EDF5" stroke-width="2" fill="none" />
+                <rect x="287" y="78" width="26" height="54" rx="3" fill="#0D1219" stroke="#E6EDF5" stroke-width="2" />
+                <rect x="287" y="196" width="26" height="54" rx="3" fill="#0D1219" stroke="#E6EDF5" stroke-width="2" />
+                <rect x="379" y="196" width="26" height="54" rx="3" fill="#0D1219" stroke="#34E3D6" stroke-width="2" />
+                <circle cx="300" cy="168" r="4.5" fill="#FFB020" />
+                <path d="M282 276 H318 M289 283 H311 M296 290 H304" stroke="#3A465A" stroke-width="2" fill="none" />
+                <text x="60" y="164" text-anchor="end" fill="#8A97A8" font-family="JetBrains Mono, monospace" font-size="13">5 V</text>
+                <text x="272" y="110" text-anchor="end" fill="#E6EDF5" font-family="JetBrains Mono, monospace" font-size="13">10k</text>
+                <text x="272" y="228" text-anchor="end" fill="#E6EDF5" font-family="JetBrains Mono, monospace" font-size="13">10k</text>
+                <text x="414" y="228" fill="#34E3D6" font-family="JetBrains Mono, monospace" font-size="13">10k load</text>
+              </svg>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ mcqOptions }}" as="o" hint-placeholder-count="4">
+                <div onClick="{{ o.onClick }}" style="display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:center;padding:15px 16px;border:1px solid {{ o.border }};border-radius:12px;background:{{ o.bg }};cursor:pointer;transition:border-color .12s">
+                  <div style="width:26px;height:26px;border-radius:7px;border:1.5px solid {{ o.keyBorder }};display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:{{ o.keyFg }};background:{{ o.keyBg }}">{{ o.key }}</div>
+                  <div style="font-size:14.5px;color:{{ o.fg }};line-height:1.4">{{ o.text }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isMatch }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:24px;padding:16px;border:1px dashed #2A3547;border-radius:12px;background:#0D1219">
+              <sc-for list="{{ matchChips }}" as="c" hint-placeholder-count="5">
+                <div onClick="{{ c.onClick }}" style="padding:9px 15px;border-radius:999px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font-size:13.5px;font-weight:500;cursor:{{ c.cursor }};opacity:{{ c.opacity }};text-decoration:{{ c.strike }}">{{ c.label }}</div>
+              </sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
+              <sc-for list="{{ matchSlots }}" as="s" hint-placeholder-count="5">
+                <div onClick="{{ s.onClick }}" style="padding:16px 12px;border:1px solid {{ s.border }};border-radius:14px;background:{{ s.bg }};cursor:pointer;text-align:center">
+                  <svg viewBox="0 0 120 70" style="width:100%;height:auto;display:block">
+                    <path d="{{ s.sym }}" stroke="#E6EDF5" stroke-width="2.5" fill="none" stroke-linecap="round" />
+                    <path d="{{ s.sym2 }}" stroke="#E6EDF5" stroke-width="2.5" fill="#E6EDF5" />
+                  </svg>
+                  <div style="margin-top:12px;font-size:12.5px;font-weight:600;color:{{ s.fg }};min-height:34px;display:flex;align-items:center;justify-content:center;border-top:1px solid #1B2331;padding-top:10px">{{ s.answer }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isFix }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;">
+              <div style="display:flex;align-items:stretch;gap:0;padding:22px;border:1px solid #1B2331;border-radius:14px 14px 0 0;background:#0D1219;border-bottom:none;min-width:0;flex-wrap:wrap;gap:8px">
+                <sc-for list="{{ fixParts }}" as="p" hint-placeholder-count="4">
+                  <div style="flex:1;min-width:0;display:flex;align-items:center">
+                    <div style="height:2px;flex:1;min-width:6px;background:#3A465A"></div>
+                    <div onClick="{{ p.onClick }}" style="flex:0 1 auto;padding:13px 10px;border:1.5px solid {{ p.border }};border-radius:11px;background:{{ p.bg }};cursor:pointer;text-align:center;min-width:0">
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:{{ p.fg }}">{{ p.value }}</div>
+                      <div style="font-size:11px;color:#7C8A9C;margin-top:3px">{{ p.name }}</div>
+                    </div>
+                    <div style="height:2px;flex:1;background:#3A465A"></div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="height:34px;border:1px solid #1B2331;border-top:none;border-radius:0 0 14px 14px;background:#0D1219;position:relative">
+                <div style="position:absolute;left:22px;right:22px;top:-1px;height:2px;background:#3A465A"></div>
+              </div>
+              <div style="margin-top:14px;padding:16px 18px;border:1px solid {{ fixMeterBorder }};border-radius:12px;background:#0E131B;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:14px">
+                <sc-for list="{{ fixMeters }}" as="m" hint-placeholder-count="3">
+                  <div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#7C8A9C">{{ m.k }}</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:{{ m.color }};margin-top:5px">{{ m.v }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;padding:22px;border:1px solid #2A3547;border-radius:14px;background:#0E131B">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8A97A8">Step 1 — the culprit</div>
+              <div style="font-size:14px;color:#E6EDF5;margin-top:9px;font-weight:600">{{ fixPicked }}</div>
+              <div style="margin-top:22px;padding-top:18px;border-top:1px solid #1B2331">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:{{ fixStep2Color }}">Step 2 — the replacement</div>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+                  <sc-for list="{{ fixOptions }}" as="o" hint-placeholder-count="3">
+                    <div onClick="{{ o.onClick }}" style="padding:11px 14px;border:1px solid {{ o.border }};border-radius:10px;background:{{ o.bg }};color:{{ o.fg }};font-family:'JetBrains Mono',monospace;font-size:14px;cursor:{{ o.cursor }};opacity:{{ o.opacity }};display:flex;justify-content:space-between;gap:10px">
+                      <span>{{ o.label }}</span><span style="color:#5E6D80;font-family:'Space Grotesk',sans-serif;font-size:12px">{{ o.note }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isBuild }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;">
+              <div style="display:flex;align-items:stretch;padding:22px;border:1px solid #1B2331;border-radius:14px 14px 0 0;border-bottom:none;background:#0D1219;min-width:0;flex-wrap:wrap;gap:8px">
+                <sc-for list="{{ buildSlots }}" as="s" hint-placeholder-count="3">
+                  <div style="flex:1;min-width:0;display:flex;align-items:center">
+                    <div style="height:2px;flex:1;min-width:6px;background:#3A465A"></div>
+                    <div onClick="{{ s.onClick }}" style="flex:0 1 auto;padding:0 6px;border:1.5px dashed {{ s.border }};border-radius:12px;background:{{ s.bg }};cursor:pointer;min-width:0;min-height:78px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center">
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5E6D80">{{ s.role }}</div>
+                      <div style="font-size:13.5px;font-weight:600;color:{{ s.fg }};padding:0 8px;line-height:1.25">{{ s.label }}</div>
+                    </div>
+                    <div style="height:2px;flex:1;background:#3A465A"></div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="height:34px;border:1px solid #1B2331;border-top:none;border-radius:0 0 14px 14px;background:#0D1219;position:relative">
+                <div style="position:absolute;left:22px;right:22px;top:-1px;height:2px;background:#3A465A"></div>
+              </div>
+              <div style="margin-top:14px;padding:16px 18px;border:1px solid #2A3547;border-radius:12px;background:#0E131B;display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:14px">
+                <sc-for list="{{ buildMeters }}" as="m" hint-placeholder-count="3">
+                  <div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#7C8A9C">{{ m.k }}</div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;color:{{ m.color }};margin-top:5px">{{ m.v }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;padding:20px;border:1px solid #2A3547;border-radius:14px;background:#0E131B">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8A97A8;margin-bottom:13px">Parts bin</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ buildBin }}" as="b" hint-placeholder-count="6">
+                  <div onClick="{{ b.onClick }}" style="padding:11px 13px;border:1px solid {{ b.border }};border-radius:10px;background:{{ b.bg }};cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;opacity:{{ b.opacity }}">
+                    <span style="font-size:13.5px;color:{{ b.fg }};font-weight:500">{{ b.label }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E6D80">{{ b.tag }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:14px;font-size:12px;color:#5E6D80;line-height:1.5">{{ buildHint }}</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isMcu }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;border:1px solid #1B2331;border-radius:14px;background:#0B0F15;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #1B2331;background:#0D1219">
+                <div style="width:9px;height:9px;border-radius:50%;background:#FF5C7A"></div>
+                <div style="width:9px;height:9px;border-radius:50%;background:#FFB020"></div>
+                <div style="width:9px;height:9px;border-radius:50%;background:#5BE58A"></div>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#7C8A9C;margin-left:6px">fade.ino</span>
+              </div>
+              <div style="padding:20px 22px;font-family:'JetBrains Mono',monospace;font-size:14px;line-height:2.1;color:#B9C5D4;overflow-x:auto;white-space:nowrap">
+                <div><span style="color:#FF9BC0">void</span> <span style="color:#FFD98A">setup</span>() {</div>
+                <div style="padding-left:26px">  <span onClick="{{ onBlank1 }}" style="display:inline-block;min-width:112px;text-align:center;padding:2px 8px;border-radius:6px;border:1px dashed {{ b1Border }};background:{{ b1Bg }};color:{{ b1Fg }};cursor:pointer">{{ b1 }}</span>(<span style="color:#FFB020">9</span>, <span style="color:#34E3D6">OUTPUT</span>);</div>
+                <div>}</div>
+                <div style="height:14px"></div>
+                <div><span style="color:#FF9BC0">void</span> <span style="color:#FFD98A">loop</span>() {</div>
+                <div style="padding-left:26px">  <span style="color:#FF9BC0">for</span> (<span style="color:#FF9BC0">int</span> v = <span style="color:#FFB020">0</span>; v &lt;= <span style="color:#FFB020">255</span>; v++) {</div>
+                <div style="padding-left:52px">    <span onClick="{{ onBlank2 }}" style="display:inline-block;min-width:130px;text-align:center;padding:2px 8px;border-radius:6px;border:1px dashed {{ b2Border }};background:{{ b2Bg }};color:{{ b2Fg }};cursor:pointer">{{ b2 }}</span>(<span style="color:#FFB020">9</span>, v);</div>
+                <div style="padding-left:52px">    <span style="color:#FFD98A">delay</span>(<span onClick="{{ onBlank3 }}" style="display:inline-block;min-width:56px;text-align:center;padding:2px 8px;border-radius:6px;border:1px dashed {{ b3Border }};background:{{ b3Bg }};color:{{ b3Fg }};cursor:pointer">{{ b3 }}</span>);</div>
+                <div style="padding-left:26px">  }</div>
+                <div>}</div>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;padding:16px 22px;border-top:1px solid #1B2331;background:#0D1219">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E6D80;letter-spacing:0.1em;text-transform:uppercase;width:100%;margin-bottom:4px">{{ mcuTokenLabel }}</span>
+                <sc-for list="{{ mcuTokens }}" as="t" hint-placeholder-count="3">
+                  <div onClick="{{ t.onClick }}" style="padding:8px 14px;border-radius:8px;border:1px solid {{ t.border }};background:{{ t.bg }};color:{{ t.fg }};font-family:'JetBrains Mono',monospace;font-size:13px;cursor:pointer">{{ t.label }}</div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;padding:20px;border:1px solid #2A3547;border-radius:14px;background:#0E131B">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8A97A8;margin-bottom:16px">Hardware attached</div>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:22px 0;border-radius:12px;background:#080B10;border:1px solid #1B2331">
+                <div style="width:54px;height:54px;border-radius:50%;background:{{ ledColor }};box-shadow:0 0 {{ ledGlow }}px {{ ledColor }};transition:all .12s"></div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7C8A9C">D9 → 330 Ω → LED</div>
+              </div>
+              <div style="margin-top:16px">
+                <sc-for list="{{ mcuReadouts }}" as="r" hint-placeholder-count="3">
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;font-family:'JetBrains Mono',monospace;font-size:13px">
+                    <span style="color:#7C8A9C">{{ r.k }}</span><span style="color:{{ r.color }};font-weight:600">{{ r.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div onClick="{{ onRun }}" style="margin-top:16px;padding:11px;border-radius:10px;text-align:center;font-size:13.5px;font-weight:600;cursor:pointer;background:{{ runBg }};color:{{ runFg }};border:1px solid {{ runBorder }}">{{ runLabel }}</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isWave }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;padding:18px 18px 10px;border:1px solid #1B2331;border-radius:14px;background:#0D1219">
+              <div style="display:flex;flex-wrap:wrap;gap:4px 14px;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8A97A8;letter-spacing:0.12em;text-transform:uppercase">Scope · CH1 D9</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5E6D80">4.0 ms window · 1 V/div</span>
+              </div>
+              <svg viewBox="0 0 560 236" style="width:100%;height:auto;display:block">
+                <path d="M46 14 H548 M46 58 H548 M46 102 H548 M46 146 H548 M46 190 H548 M96 14 V190 M146 14 V190 M196 14 V190 M246 14 V190 M296 14 V190 M346 14 V190 M396 14 V190 M446 14 V190 M496 14 V190" stroke="#161D27" stroke-width="1" fill="none" />
+                <path d="M46 14 V190 H548" stroke="#3A465A" stroke-width="1.5" fill="none" />
+                <path d="{{ wTargetPath }}" stroke="#FF5C7A" stroke-width="1.5" stroke-dasharray="5 5" fill="none" />
+                <path d="{{ wPath }}" stroke="#34E3D6" stroke-width="2.5" fill="none" />
+                <path d="{{ wAvgPath }}" stroke="#FFB020" stroke-width="1.5" fill="none" />
+                <text x="40" y="19" text-anchor="end" fill="#5E6D80" font-family="JetBrains Mono, monospace" font-size="10">5 V</text>
+                <text x="40" y="194" text-anchor="end" fill="#5E6D80" font-family="JetBrains Mono, monospace" font-size="10">0</text>
+                <text x="548" y="212" text-anchor="end" fill="#5E6D80" font-family="JetBrains Mono, monospace" font-size="10">4 ms</text>
+                <text x="46" y="228" fill="#FF5C7A" font-family="JetBrains Mono, monospace" font-size="10">— — target trace</text>
+                <text x="548" y="228" text-anchor="end" fill="#FFB020" font-family="JetBrains Mono, monospace" font-size="10">{{ wAvgLabel }}</text>
+              </svg>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;padding:22px;border:1px solid #2A3547;border-radius:14px;background:#0E131B">
+              <sc-for list="{{ wControls }}" as="c" hint-placeholder-count="2">
+                <div style="margin-bottom:22px">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px">
+                    <span style="font-size:13px;color:#8A97A8">{{ c.label }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:#E6EDF5">{{ c.display }}</span>
+                  </div>
+                  <input type="range" min="{{ c.min }}" max="{{ c.max }}" step="{{ c.step }}" value="{{ c.value }}" onChange="{{ c.onChange }}" style="width:100%;background:linear-gradient(90deg,{{ c.fill }} {{ c.pct }}%,#1B2331 {{ c.pct }}%)" />
+                </div>
+              </sc-for>
+              <div style="padding-top:16px;border-top:1px solid #1B2331">
+                <sc-for list="{{ wReadouts }}" as="r" hint-placeholder-count="3">
+                  <div style="display:flex;justify-content:space-between;padding:6px 0;font-family:'JetBrains Mono',monospace;font-size:13.5px">
+                    <span style="color:#7C8A9C">{{ r.k }}</span><span style="color:{{ r.color }};font-weight:600">{{ r.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:16px;padding:11px 13px;border-radius:9px;background:{{ wGoalBg }};border:1px solid {{ wGoalBorder }};font-size:12.5px;color:{{ wGoalFg }};line-height:1.5">{{ wGoalText }}</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isBread }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;padding:18px;border:1px solid #1B2331;border-radius:14px;background:#0D1219;overflow-x:auto">
+              <div style="position:relative;width:560px;height:412px;margin:0 auto">
+                <div style="position:absolute;left:8px;top:56px;width:544px;height:296px;border-radius:8px;background:#EDE9DF;box-shadow:inset 0 0 0 1px #C9C3B4"></div>
+                <div style="position:absolute;left:8px;top:196px;width:544px;height:20px;background:#DFDACD;border-top:1px solid #C9C3B4;border-bottom:1px solid #C9C3B4"></div>
+                <div style="position:absolute;left:8px;top:18px;width:544px;height:26px;border-radius:6px;background:#0E131B;border:1px solid #2A3547;display:flex;align-items:center;padding:0 12px;gap:14px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#FF5C7A;letter-spacing:0.14em">+5V RAIL — unused</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5E6D80;letter-spacing:0.14em">GND RAIL — unused</span>
+                </div>
+                <sc-for list="{{ bbHoles }}" as="h" hint-placeholder-count="20">
+                  <div onClick="{{ h.onClick }}" style="position:absolute;left:{{ h.x }}px;top:{{ h.y }}px;width:14px;height:14px;border-radius:3px;background:{{ h.bg }};box-shadow:inset 0 0 0 1px {{ h.ring }};cursor:pointer;z-index:2"></div>
+                </sc-for>
+                <div style="position:absolute;left:{{ resLeft }}px;top:236px;width:{{ resW }}px;height:4px;background:#9C9384;z-index:3"></div>
+                <div style="position:absolute;left:{{ resBodyLeft }}px;top:226px;width:52px;height:24px;border-radius:11px;background:#C7A26B;box-shadow:inset 0 -3px 6px rgba(0,0,0,.25);z-index:4;display:flex;align-items:center;justify-content:center;gap:3px">
+                  <div style="width:3px;height:24px;background:#3B2A1A"></div>
+                  <div style="width:3px;height:24px;background:#C24B1A"></div>
+                  <div style="width:3px;height:24px;background:#8A5A2B"></div>
+                </div>
+                <div style="position:absolute;left:{{ ledLeft }}px;top:288px;width:{{ ledW }}px;height:4px;background:#9C9384;z-index:3"></div>
+                <div style="position:absolute;left:{{ ledBodyLeft }}px;top:274px;width:32px;height:32px;border-radius:50% 50% 46% 46%;background:{{ bbLedColor }};box-shadow:0 0 {{ bbLedGlow }}px {{ bbLedColor }};z-index:4;transition:all .2s"></div>
+                <sc-for list="{{ bbWires }}" as="w" hint-placeholder-count="0">
+                  <div style="position:absolute;left:{{ w.x }}px;top:{{ w.y }}px;width:{{ w.len }}px;height:4px;border-radius:2px;background:{{ w.color }};transform:rotate({{ w.deg }}deg);transform-origin:0 50%;z-index:6;opacity:.9"></div>
+                </sc-for>
+                <sc-for list="{{ bbPads }}" as="p" hint-placeholder-count="3">
+                  <div onClick="{{ p.onClick }}" style="position:absolute;left:{{ p.x }}px;top:368px;width:96px;height:34px;border-radius:8px;border:1.5px solid {{ p.border }};background:{{ p.bg }};color:{{ p.fg }};display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;cursor:pointer;z-index:7">{{ p.label }}</div>
+                </sc-for>
+                <div style="position:absolute;left:340px;top:368px;width:212px;height:34px;border-radius:8px;border:1px dashed #2A3547;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#5E6D80;letter-spacing:0.1em">ARDUINO HEADER</div>
+              </div>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;padding:20px;border:1px solid #2A3547;border-radius:14px;background:#0E131B">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8A97A8;margin-bottom:12px">Netlist</div>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <sc-for list="{{ bbNets }}" as="n" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:9px;font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ n.color }}">
+                    <span style="width:14px">{{ n.mark }}</span><span>{{ n.text }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:18px;padding-top:16px;border-top:1px solid #1B2331;font-size:12.5px;color:#7C8A9C;line-height:1.55">{{ bbStatus }}</div>
+              <div onClick="{{ onClearWires }}" style="margin-top:16px;padding:10px;border-radius:9px;text-align:center;font-size:13px;font-weight:600;cursor:pointer;background:#161D27;border:1px solid #2A3547;color:#B9C5D4">Clear jumpers</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isC2c }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start">
+            <div style="flex:2 1 400px;min-width:0;border:1px solid #1B2331;border-radius:14px;background:#0B0F15;overflow:hidden">
+              <div style="padding:11px 16px;border-bottom:1px solid #1B2331;background:#0D1219;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#7C8A9C">given · button.ino</div>
+              <div style="padding:18px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.95;color:#B9C5D4;white-space:pre;overflow-x:auto">{{ c2cCode }}</div>
+            </div>
+            <div style="flex:1 1 290px;min-width:0;">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+                <sc-for list="{{ c2cSlots }}" as="s" hint-placeholder-count="3">
+                  <div onClick="{{ s.onClick }}" style="padding:18px 14px;border:1.5px dashed {{ s.border }};border-radius:14px;background:{{ s.bg }};cursor:pointer;min-height:118px;display:flex;flex-direction:column;justify-content:space-between">
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#5E6D80">{{ s.role }}</div>
+                    <div style="font-size:14px;font-weight:600;color:{{ s.fg }};line-height:1.3">{{ s.label }}</div>
+                    <div style="font-size:11.5px;color:#5E6D80">{{ s.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin-top:18px;padding:18px 20px;border:1px solid #2A3547;border-radius:14px;background:#0E131B">
+                <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#8A97A8;margin-bottom:13px">Parts bin</div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px">
+                  <sc-for list="{{ c2cBin }}" as="b" hint-placeholder-count="6">
+                    <div onClick="{{ b.onClick }}" style="padding:9px 14px;border-radius:999px;border:1px solid {{ b.border }};background:{{ b.bg }};color:{{ b.fg }};font-size:13px;font-weight:500;cursor:pointer;opacity:{{ b.opacity }}">{{ b.label }}</div>
+                  </sc-for>
+                </div>
+                <div style="margin-top:14px;font-size:12.5px;color:#5E6D80;line-height:1.5">Read the code carefully — <span style="font-family:'JetBrains Mono',monospace;color:#B9C5D4">INPUT_PULLUP</span> tells you which side of the button goes where.</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:640px;padding:34px;border:1px solid #2A3547;border-radius:18px;background:linear-gradient(180deg,#0F141C,#0A0E14)">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#5BE58A">Unit cleared</div>
+            <div style="font-size:32px;font-weight:700;letter-spacing:-0.03em;margin-top:12px">{{ lessonTitle }}</div>
+            <div style="font-size:14.5px;color:#8A97A8;margin-top:10px;line-height:1.6">{{ doneText }}</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:26px 0">
+              <sc-for list="{{ doneStats }}" as="d" hint-placeholder-count="3">
+                <div style="padding:15px;border:1px solid #1B2331;border-radius:12px;background:#0D1219">
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:{{ d.color }}">{{ d.v }}</div>
+                  <div style="font-size:11.5px;color:#7C8A9C;margin-top:4px">{{ d.k }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div onClick="{{ goMap }}" style="display:inline-block;padding:13px 24px;border-radius:11px;background:{{ accent }};color:#0A0D12;font-size:14.5px;font-weight:700;cursor:pointer">Back to the map</div>
+          </div>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ showBar }}" hint-placeholder-val="{{ true }}">
+      <div style="position:sticky;bottom:0;display:flex;align-items:center;gap:20px;padding:18px 40px;background:rgba(10,14,20,.95);backdrop-filter:blur(14px);border-top:1px solid {{ barBorder }}">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14.5px;font-weight:700;color:{{ fbColor }}">{{ fbTitle }}</div>
+          <div style="font-size:13px;color:#8A97A8;margin-top:3px;line-height:1.45;text-wrap:pretty">{{ fbText }}</div>
+        </div>
+        <div onClick="{{ onSkip }}" style="font-size:13px;color:#5E6D80;cursor:pointer;padding:10px">{{ skipLabel }}</div>
+        <div onClick="{{ onPrimary }}" style="padding:13px 28px;border-radius:11px;background:{{ ctaBg }};color:{{ ctaFg }};font-size:14.5px;font-weight:700;cursor:pointer;white-space:nowrap;border:1px solid {{ ctaBorder }}">{{ ctaLabel }}</div>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ calcOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;right:22px;bottom:104px;z-index:60;width:312px;max-height:calc(100vh - 190px);display:flex;flex-direction:column;border:1px solid #2A3547;border-radius:16px;background:#0C1118;box-shadow:0 24px 60px rgba(0,0,0,.6);overflow:hidden">
+    <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:12px 15px;border-bottom:1px solid #1B2331;background:#0E131B">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.16em;text-transform:uppercase;color:#8A97A8">Bench calculator</span>
+      <div onClick="{{ onToggleCalc }}" style="font-size:16px;line-height:1;color:#5E6D80;cursor:pointer;padding:2px 4px">×</div>
+    </div>
+    <div style="flex:0 0 auto;padding:14px 15px 8px">
+      <input value="{{ calcExpr }}" onChange="{{ onCalcType }}" onKeyDown="{{ onCalcKeyDown }}" ref="{{ calcRef }}" placeholder="type it: (9-2)/15m" style="width:100%;background:#080B10;border:1px solid #232F41;border-radius:8px;padding:9px 11px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#E6EDF5;outline:none" />
+      <div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:{{ calcResultColor }};text-align:right;margin-top:2px">{{ calcResult }}</div>
+    </div>
+    <div style="flex:1 1 auto;min-height:0;overflow-y:auto">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 15px 12px">
+      <sc-for list="{{ calcFormulas }}" as="fm" hint-placeholder-count="4">
+        <div onClick="{{ fm.onClick }}" style="padding:5px 9px;border-radius:7px;border:1px solid #232F41;background:#11161E;color:#B9C5D4;font-family:'JetBrains Mono',monospace;font-size:10.5px;cursor:pointer">{{ fm.label }}</div>
+      </sc-for>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 15px 14px">
+      <sc-for list="{{ calcKeys }}" as="ky" hint-placeholder-count="24">
+        <div onClick="{{ ky.onClick }}" style="padding:11px 0;border-radius:9px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;cursor:pointer;background:{{ ky.bg }};color:{{ ky.fg }};border:1px solid {{ ky.border }}">{{ ky.label }}</div>
+      </sc-for>
+    </div>
+    <div style="padding:12px 15px 15px;border-top:1px solid #1B2331;background:#0A0E14">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;color:#8A97A8">Saved values</span>
+        <div onClick="{{ onSaveSlot }}" style="font-size:11.5px;font-weight:700;color:{{ saveFg }};cursor:pointer">+ save result</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <sc-for list="{{ calcSlots }}" as="sl" hint-placeholder-count="0">
+          <div style="display:grid;grid-template-columns:74px 1fr auto auto;gap:8px;align-items:center;padding:7px 9px;border-radius:9px;background:#11161E;border:1px solid #232F41">
+            <input value="{{ sl.label }}" onChange="{{ sl.onLabel }}" style="min-width:0;background:transparent;border:none;outline:none;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8A97A8" />
+            <div onClick="{{ sl.onInsert }}" style="min-width:0;font-family:'JetBrains Mono',monospace;font-size:13.5px;font-weight:600;color:#E6EDF5;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sl.value }}</div>
+            <div onClick="{{ sl.onUse }}" style="font-size:11px;font-weight:700;color:{{ sl.useFg }};cursor:{{ sl.useCursor }};padding:2px 4px">{{ sl.useLabel }}</div>
+            <div onClick="{{ sl.onDelete }}" style="font-size:14px;line-height:1;color:#4A586C;cursor:pointer;padding:0 2px">×</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="font-size:11.5px;color:#5E6D80;margin-top:9px;line-height:1.5">{{ calcTip }}</div>
+    </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;accentColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#FFB020&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#FFB020&quot;,&quot;#34E3D6&quot;,&quot;#8B7BFF&quot;,&quot;#5BE58A&quot;]},&quot;showHints&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Pedagogy&quot;}}">
+class Component extends DCLogic {
+  state = { screen: 'map', lid: 'ohm', si: 0, work: {}, xp: 120, solved: {}, running: false, phase: 0, calcOpen: false, expr: '', slots: [] };
+
+  CKEYS = ['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '0', '.', '(', ')', '+', 'k', 'm', 'µ', 'C', '⌫', '^', '='];
+  CFORM = [
+    ['V = I·R', 'I*R'], ['R = (Vs−Vf)/I', '(9-2)/0.015'], ['Vout divider', '5*2200/(1000+2200)'], ['τ = R·C', '10000*1e-6']
+  ];
+
+  SUF = { k: '1e3', K: '1e3', M: '1e6', m: '1e-3', u: '1e-6', n: '1e-9', p: '1e-12', G: '1e9' };
+  calcVal() {
+    let s = (this.state.expr || '').trim();
+    if (!s) return null;
+    if (/[^0-9.+\-*/()^ eEkKMmunpGµΩ]/.test(s)) return null;
+    s = s.replace(/µ/g, 'u').replace(/Ω/g, '');
+    // suffix binds to its own number only: 470/10k === 470/(10*1e3)
+    s = s.replace(/(\d+(?:\.\d+)?)\s*([kKMmunpG])/g, (mm, num, su) => '(' + num + '*' + this.SUF[su] + ')');
+    s = s.replace(/\^/g, '**');
+    try {
+      const r = Function('"use strict";return (' + s + ')')();
+      return (typeof r === 'number' && isFinite(r)) ? r : null;
+    } catch (e) { return null; }
+  }
+  calcFmt(r) {
+    if (r === null) return '—';
+    const a = Math.abs(r);
+    if (a !== 0 && (a >= 1e6 || a < 1e-3)) return r.toExponential(4).replace('e', 'e');
+    return String(parseFloat(r.toPrecision(8)));
+  }
+  ckey = k => () => {
+    this.setState(s => {
+      if (k === 'C') return { expr: '' };
+      if (k === '⌫') return { expr: s.expr.slice(0, -1) };
+      if (k === '=') { const r = this.calcVal(); return { expr: r === null ? s.expr : this.calcFmt(r) }; }
+      return { expr: s.expr + k };
+    });
+  };
+
+  get accent() { return this.props.accentColor || '#FFB020'; }
+  get hints() { return this.props.showHints !== false; }
+
+  LESSONS = [
+    { id: 'ohm', unit: 'Unit 02', title: 'Voltage Dividers', steps: ['teach', 'find', 'graphdiv', 'mcq', 'match'] },
+    { id: 'led', unit: 'Unit 03', title: 'LEDs, Limits & RC', steps: ['find2', 'fix', 'build', 'graphrc'] },
+    { id: 'mcu', unit: 'Unit 06', title: 'Arduino PWM & I/O', steps: ['mcu', 'wave', 'bread', 'c2c'] }
+  ];
+
+  KIND = {
+    teach: ['Concept', 'read'], find: ['Find the value', 'numeric'], graphdiv: ['Tune the divider', 'interactive graph'],
+    mcq: ['Loaded divider', 'diagram choice'], match: ['Symbol drill', 'drag & match'], find2: ['Size the resistor', 'numeric'],
+    fix: ['Fix the circuit', 'diagnose'], build: ['Build to spec', 'construct'], graphrc: ['RC time constant', 'interactive graph'],
+    mcu: ['Program the MCU', 'firmware'], wave: ['Match the waveform', 'timing'], bread: ['Wire the breadboard', 'wiring'],
+    c2c: ['Circuit for the code', 'construct'], done: ['Complete', 'summary']
+  };
+
+  PROMPTS = {
+    teach: ['A divider is just two resistors sharing a current.', 'Read this once, then you will never guess at a divider again.'],
+    find: ['What voltage appears at Vout?', 'No load on the output node. Two decimal places is plenty.'],
+    graphdiv: ['Deliver 3.30 V from a 5 V rail — and draw under 1 mA doing it.', 'The dashed line is your target. Both constraints must hold at once.'],
+    mcq: ['You hang a 10 kΩ load across the output. Now what does Vout read?', 'The load is in parallel with R2. Redo the ratio with the new bottom resistance.'],
+    match: ['Name every symbol on the bench.', 'Pick a label, then tap the symbol it belongs to. Tap a placed label to take it back.'],
+    find2: ['Size the series resistor for this LED.', 'You want 15 mA through a red LED with a 2.0 V forward drop, running off 9 V.'],
+    fix: ['This driver kills LEDs in about a second. Find out why.', 'Tap the part you believe is wrong, then choose what it should have been.'],
+    build: ['Build a 9 V LED indicator that runs at roughly 15 mA.', 'Drop one part into each position. The meters update as you go.'],
+    graphrc: ['Tune R and C for a 10 ms time constant.', 'The curve is the capacitor voltage after the switch closes. τ is where it crosses 63%.'],
+    mcu: ['Complete the firmware so the LED fades up over about one second.', 'Tap a blank, then choose the token that belongs there.'],
+    wave: ['Match the target PWM trace on D9.', 'Duty sets the average voltage; frequency sets how tight the pulses pack.'],
+    bread: ['Wire this LED circuit to D9 and ground.', 'Tap a header pad, then tap a breadboard hole to lay a jumper. Column strips are connected vertically within each half.'],
+    c2c: ['Draw the circuit this sketch expects.', 'Three positions, three parts. Everything else in the bin is a decoy.'],
+    done: ['', '']
+  };
+
+  key() { return this.state.lid + '.' + this.state.si; }
+  W() { return this.state.work[this.key()] || {}; }
+  setW(p) { const k = this.key(); this.setState(s => ({ work: { ...s.work, [k]: { ...(s.work[k] || {}), ...p } } })); }
+  get lesson() { return this.LESSONS.find(l => l.id === this.state.lid); }
+  get kind() { return this.state.si >= this.lesson.steps.length ? 'done' : this.lesson.steps[this.state.si]; }
+
+  fmt(n, d) { return (Math.round(n * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d); }
+  ohm(r) { return r >= 1000 ? this.fmt(r / 1000, r % 1000 === 0 ? 0 : 1) + ' kΩ' : Math.round(r) + ' Ω'; }
+
+  go(si) { this.setState({ si, running: false }); }
+  next = () => {
+    const w = this.W();
+    if (!w.checked) { this.check(); return; }
+    this.go(Math.min(this.state.si + 1, this.lesson.steps.length));
+  };
+  readDone = () => {
+    const k = this.key(), first = !this.state.solved[k];
+    this.setState(s => ({ solved: { ...s.solved, [k]: true }, xp: first ? s.xp + 25 : s.xp }));
+    this.go(this.state.si + 1);
+  };
+  check = () => {
+    const r = this.evaluate();
+    const k = this.key();
+    const first = r.ok && !this.state.solved[k];
+    this.setState(s => ({
+      work: { ...s.work, [k]: { ...(s.work[k] || {}), checked: true, ok: r.ok, msg: r.msg, title: r.title } },
+      solved: r.ok ? { ...s.solved, [k]: true } : s.solved,
+      xp: first ? s.xp + 50 : s.xp
+    }));
+  };
+  skip = () => { this.setState(s => ({ work: { ...s.work, [this.key()]: { ...(s.work[this.key()] || {}), revealed: true } } })); };
+
+  evaluate() {
+    const k = this.kind, w = this.W();
+    if (k === 'find') {
+      const v = parseFloat(w.val);
+      if (isNaN(v)) return { ok: false, title: 'Nothing entered', msg: 'Type a number into the answer box.' };
+      const t = 5 * 2200 / 3200;
+      return Math.abs(v - t) <= 0.03
+        ? { ok: true, title: 'Exactly right — 3.44 V', msg: '5 V × 2.2k / (1k + 2.2k). The bottom resistor takes 69 % of the rail.' }
+        : { ok: false, title: 'Not quite', msg: 'Vout is the fraction of total resistance sitting below the tap: R2 / (R1 + R2), times 5 V.' };
+    }
+    if (k === 'find2') {
+      const v = parseFloat(w.val);
+      if (isNaN(v)) return { ok: false, title: 'Nothing entered', msg: 'Type a resistance in ohms.' };
+      const t = (9 - 2) / 0.015;
+      return Math.abs(v - t) / t <= 0.03
+        ? { ok: true, title: 'Right — about 467 Ω', msg: '(9 − 2) V across the resistor at 15 mA. In practice you fit a 470 Ω, the nearest standard value.' }
+        : { ok: false, title: 'Not there yet', msg: 'The resistor only sees the leftover voltage: supply minus the LED drop. Then R = V / I.' };
+    }
+    if (k === 'graphdiv') {
+      const r1 = w.r1 ?? 2200, r2 = w.r2 ?? 2200;
+      const v = 5 * r2 / (r1 + r2), i = 5000 / (r1 + r2);
+      if (Math.abs(v - 3.3) > 0.03) return { ok: false, title: 'Vout is ' + this.fmt(v, 2) + ' V', msg: 'Target is 3.30 V. Raise R2 relative to R1 to lift the tap.' };
+      if (i > 1) return { ok: false, title: 'Ratio is right, current is not', msg: 'You are drawing ' + this.fmt(i, 2) + ' mA. Scale both resistors up together — the ratio holds, the current drops.' };
+      return { ok: true, title: 'Both constraints met', msg: 'Ratio sets the voltage, absolute size sets the current. That is the whole trick to dividers.' };
+    }
+    if (k === 'mcq') return w.pick === 1
+      ? { ok: true, title: 'Correct — 1.67 V', msg: 'The 10k load parallels R2 to give 5k. 5 V × 5k / 15k = 1.67 V. Dividers collapse under load.' }
+      : { ok: false, title: 'Not right', msg: 'Combine R2 with the load in parallel first, then apply the ratio to the new bottom resistance.' };
+    if (k === 'match') {
+      const a = w.assign || {};
+      const wrong = this.SYMS.filter(s => a[s.id] !== s.name);
+      return wrong.length === 0
+        ? { ok: true, title: 'All five named', msg: 'Two parallel lines is a capacitor; a triangle into a bar is a diode. The arrows make it an LED.' }
+        : { ok: false, title: wrong.length + ' still wrong', msg: 'Look at the number of terminals first — that narrows it to one or two candidates immediately.' };
+    }
+    if (k === 'fix') {
+      if (w.part !== 'r') return { ok: false, title: 'Wrong part', msg: 'The battery and the LED are both fine on their own. Something is failing to protect the LED.' };
+      if (w.fix !== 470) return { ok: false, title: 'Right part, wrong value', msg: 'At 9 V with a 2 V LED drop, you need roughly 470 Ω to land near 15 mA.' };
+      return { ok: true, title: 'Fixed — 470 Ω', msg: '10 Ω let 700 mA through: about 45× the LED rating. The resistor is the only thing setting current here.' };
+    }
+    if (k === 'build') {
+      const s = w.slots || {};
+      return (s.src === '9 V battery' && s.lim === '470 Ω' && s.load === 'LED (Vf 2 V)')
+        ? { ok: true, title: 'Runs at 14.9 mA', msg: 'Source, limiter, load — the three roles every indicator circuit needs.' }
+        : { ok: false, title: 'Not a working indicator yet', msg: 'You need a supply, something to set the current, and the thing you want to light. Check the meters.' };
+    }
+    if (k === 'graphrc') {
+      const tau = this.rc().tau;
+      return Math.abs(tau - 10) <= 0.5
+        ? { ok: true, title: 'τ = ' + this.fmt(tau, 2) + ' ms', msg: 'Time constant is just R × C. Five τ is close enough to fully charged for any practical purpose.' }
+        : { ok: false, title: 'τ = ' + this.fmt(tau, 2) + ' ms', msg: 'Target 10 ms. τ = R × C, so 10 kΩ with 1 µF gets you there exactly.' };
+    }
+    if (k === 'mcu') {
+      const b = w.blanks || {};
+      const bad = [];
+      if (b[1] !== 'pinMode') bad.push('the setup line configures direction');
+      if (b[2] !== 'analogWrite') bad.push('you need a PWM write, not an on/off write');
+      if (b[3] !== '4') bad.push('256 steps × your delay should land near 1000 ms');
+      return bad.length === 0
+        ? { ok: true, title: 'Compiles and fades', msg: '256 steps at 4 ms is about 1.02 s per sweep. analogWrite gives you 8-bit PWM on D9.' }
+        : { ok: false, title: 'Not there yet', msg: 'Hint: ' + bad[0] + '.' };
+    }
+    if (k === 'wave') {
+      const d = this.W().duty ?? 50, f = this.FREQS[this.W().fi ?? 2];
+      if (f !== 1000) return { ok: false, title: 'Frequency is ' + f + ' Hz', msg: 'The target shows four full cycles across a 4 ms window — that is 1 kHz.' };
+      if (Math.abs(d - 30) > 1) return { ok: false, title: 'Duty is ' + d + ' %', msg: 'The target is high for a bit under a third of each period. Average voltage should read 1.50 V.' };
+      return { ok: true, title: '30 % at 1 kHz', msg: 'Average = 5 V × duty. That is why PWM dims an LED without ever leaving full-on or full-off.' };
+    }
+    if (k === 'bread') {
+      const ws = this.W().wires || [];
+      const bad = ws.some(x => x.a === '5V' || x.b === '5V');
+      if (bad) return { ok: false, title: '5 V is not part of this circuit', msg: 'The pin drives the LED directly. Remove the 5 V jumper.' };
+      if (!this.bbHas('D9', 5)) return { ok: false, title: 'D9 is not connected', msg: 'The free leg of the resistor sits in column 5, bottom half. Jumper D9 to any hole in that strip.' };
+      if (!this.bbHas('GND', 13)) return { ok: false, title: 'No return path', msg: 'The LED cathode is in column 13. Current needs a way back to GND.' };
+      return { ok: true, title: 'Circuit is closed', msg: 'D9 → 330 Ω → LED → GND. Holes in the same column and half are one node; the centre channel splits them.' };
+    }
+    if (k === 'c2c') {
+      const s = this.W().slots || {};
+      return (s.p2 === 'Button to GND' && s.lim === '330 Ω' && s.led === 'LED to GND')
+        ? { ok: true, title: 'That is the circuit', msg: 'INPUT_PULLUP holds the pin high internally, so the button only has to pull it down to ground. No external pull-up needed.' }
+        : { ok: false, title: 'Not what the sketch expects', msg: 'The pin is configured INPUT_PULLUP — so the switch belongs between the pin and ground, and pin 13 drives an LED through a limiter.' };
+    }
+    return { ok: true, title: '', msg: '' };
+  }
+
+  SYMS = [
+    { id: 's1', name: 'Resistor', d: 'M6 35 H26 M26 35 L32 22 L40 48 L48 22 L56 48 L64 22 L70 35 M70 35 H114', d2: '' },
+    { id: 's2', name: 'Capacitor', d: 'M6 35 H52 M52 16 V54 M68 16 V54 M68 35 H114', d2: '' },
+    { id: 's3', name: 'LED', d: 'M6 35 H44 M44 18 V52 M44 18 L74 35 L44 52 M74 18 V52 M74 35 H114 M84 22 L96 12 M92 26 L104 16', d2: '' },
+    { id: 's4', name: 'Ground', d: 'M60 8 V30 M40 30 H80 M47 40 H73 M54 50 H66', d2: '' },
+    { id: 's5', name: 'NPN transistor', d: 'M60 8 V26 M46 20 V50 M46 26 L60 26 M46 44 L60 44 M60 44 V62 M6 35 H46', d2: 'M56 40 L64 46 L60 52 Z' }
+  ];
+
+  FREQS = [100, 250, 500, 1000, 2000];
+  RVALS = [1000, 2200, 4700, 10000, 22000];
+  CVALS = [0.1, 0.22, 0.47, 1, 2.2, 4.7, 10];
+
+  rc() {
+    const w = this.W();
+    const R = this.RVALS[w.ri ?? 1], C = this.CVALS[w.ci ?? 2];
+    return { R, C, tau: R * C / 1000 };
+  }
+
+  bbCols = { rows: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] };
+  holeX(c) { return 20 + (c - 1) * 26; }
+  holeY(r) { const i = this.bbCols.rows.indexOf(r); return i < 5 ? 66 + i * 26 : 222 + (i - 5) * 26; }
+  padX(id) { return { D9: 12, '5V': 122, GND: 232 }[id]; }
+  isBot(id) { return 'fghij'.indexOf(id[0]) >= 0; }
+  colOf(id) { return parseInt(id.slice(1), 10); }
+  bbHas(pad, col) {
+    return (this.W().wires || []).some(w => {
+      const o = w.a === pad ? w.b : (w.b === pad ? w.a : null);
+      return o && this.colOf(o) === col && this.isBot(o);
+    });
+  }
+  onHole = id => () => {
+    const w = this.W(), p = w.pending;
+    if (!p) { this.setW({ pending: id, checked: false }); return; }
+    if (p === id) { this.setW({ pending: null }); return; }
+    this.setW({ wires: [...(w.wires || []), { a: p, b: id }], pending: null, checked: false });
+  };
+
+  path(fn, n, x0, x1, y0, y1) {
+    let d = '';
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, x = x0 + (x1 - x0) * t, y = y1 - (y1 - y0) * fn(t);
+      d += (i ? 'L' : 'M') + this.fmt(x, 1) + ' ' + this.fmt(y, 1) + ' ';
+    }
+    return d;
+  }
+
+  renderVals() {
+    const A = this.accent, k = this.kind, w = this.W(), L = this.lesson;
+    const solvedInLesson = L.steps.filter((_, i) => this.state.solved[L.id + '.' + i]).length;
+    const v = {
+      accent: A, xp: this.state.xp, streakText: '6 day streak',
+      isMap: this.state.screen === 'map', isLesson: this.state.screen === 'lesson',
+      goMap: () => this.setState({ screen: 'map' }),
+      solvedCount: Object.keys(this.state.solved).length,
+      lessonUnit: L.unit, lessonTitle: L.title,
+      lessonPct: Math.round(100 * this.state.si / L.steps.length),
+      stepNum: Math.min(this.state.si + 1, L.steps.length), stepCount: L.steps.length,
+      stepKindLabel: this.KIND[k][0], prompt: this.PROMPTS[k][0], subPrompt: this.PROMPTS[k][1],
+      isTeach: k === 'teach', isFind: k === 'find' || k === 'find2', isGraph: k === 'graphdiv' || k === 'graphrc',
+      isMcq: k === 'mcq', isMatch: k === 'match', isFix: k === 'fix', isBuild: k === 'build',
+      isMcu: k === 'mcu', isWave: k === 'wave', isBread: k === 'bread', isC2c: k === 'c2c', isDone: k === 'done',
+      showBar: k !== 'done'
+    };
+
+    const UNITS = [
+      { n: '01', t: 'Charge, Current & Ohm\u2019s Law', b: 'The three quantities everything else is built from.', tag: 'done', pct: 100, id: null },
+      { n: '02', t: 'Voltage Dividers', b: 'Ratios, loading, and reading a node voltage on sight.', tag: 'open', pct: 100 * (this.state.solved['ohm.0'] ? 0 : 0) + 20 * Object.keys(this.state.solved).filter(x => x.startsWith('ohm')).length, id: 'ohm' },
+      { n: '03', t: 'LEDs, Limits & RC', b: 'Current limiting, failure modes, and time constants.', tag: 'open', pct: 25 * Object.keys(this.state.solved).filter(x => x.startsWith('led')).length, id: 'led' },
+      { n: '04', t: 'Transistors as Switches', b: 'Base current, saturation, and driving real loads.', tag: 'locked', pct: 0, id: null },
+      { n: '05', t: 'Op-Amp Basics', b: 'Virtual short, gain, and why feedback is not magic.', tag: 'locked', pct: 0, id: null },
+      { n: '06', t: 'Arduino PWM & I/O', b: 'Firmware, duty cycles and wiring a board you can trust.', tag: 'open', pct: 25 * Object.keys(this.state.solved).filter(x => x.startsWith('mcu')).length, id: 'mcu' },
+      { n: '07', t: 'Digital Logic & Timing', b: 'Gates, propagation delay and race conditions.', tag: 'locked', pct: 0, id: null }
+    ];
+    v.units = UNITS.map(u => {
+      const locked = u.tag === 'locked', done = u.tag === 'done';
+      return {
+        num: u.n, title: u.t, blurb: u.b, tag: locked ? 'locked' : (done ? 'complete' : 'available'),
+        pct: u.pct, progressText: locked ? '—' : Math.round(u.pct) + '% solved',
+        border: locked ? '#151C26' : '#232F41', bg: locked ? '#0A0D12' : '#0D1219',
+        cursor: locked ? 'default' : 'pointer',
+        hover: locked ? {} : { borderColor: A, transform: 'translateX(3px)' },
+        numColor: locked ? '#3A4557' : (done ? '#5BE58A' : A),
+        titleColor: locked ? '#5E6D80' : '#E6EDF5',
+        tagBg: locked ? '#151C26' : (done ? '#12291C' : '#2A210E'),
+        tagFg: locked ? '#4A586C' : (done ? '#5BE58A' : A),
+        barColor: done ? '#5BE58A' : A,
+        cta: locked ? 'Locked' : (u.pct >= 100 ? 'Review' : (u.pct > 0 ? 'Resume' : 'Start')),
+        ctaBg: locked ? 'transparent' : (done ? 'transparent' : A),
+        ctaFg: locked ? '#4A586C' : (done ? '#B9C5D4' : '#0A0D12'),
+        ctaBorder: locked ? '#1B2331' : (done ? '#2A3547' : A),
+        onOpen: u.id ? () => this.setState({ screen: 'lesson', lid: u.id, si: 0 }) : () => {}
+      };
+    });
+
+    v.rail = L.steps.map((sk, i) => {
+      const done = this.state.solved[L.id + '.' + i], active = i === this.state.si;
+      return {
+        mark: done ? '✓' : String(i + 1), label: this.KIND[sk][0], kindLabel: this.KIND[sk][1],
+        bg: active ? '#161D27' : 'transparent', fg: active ? '#E6EDF5' : '#8A97A8', weight: active ? '600' : '400',
+        dotBorder: done ? '#5BE58A' : (active ? A : '#2A3547'), dotBg: done ? '#12291C' : 'transparent',
+        dotFg: done ? '#5BE58A' : (active ? A : '#5E6D80'),
+        onClick: () => this.go(i)
+      };
+    });
+
+    if (v.isFind) {
+      const two = k === 'find2';
+      v.findVal = w.val ?? ''; v.findUnit = two ? 'Ω' : 'V';
+      v.findBorder = w.checked ? (w.ok ? '#5BE58A' : '#FF5C7A') : '#2A3547';
+      v.findSrc = two ? '9 V' : '5 V';
+      v.findR1 = two ? 'R = ?' : '1.0 kΩ';
+      v.findR2 = two ? 'LED' : '2.2 kΩ';
+      v.findGiven = two
+        ? [{ k: 'Supply', v: '9.0 V' }, { k: 'LED Vf', v: '2.0 V' }, { k: 'Target I', v: '15 mA' }]
+        : [{ k: 'Supply', v: '5.00 V' }, { k: 'R1', v: '1.00 kΩ' }, { k: 'R2', v: '2.20 kΩ' }, { k: 'Load', v: 'none' }];
+      v.findHint = this.hints ? (two ? 'The LED is not a resistor — treat its 2 V drop as fixed and give the resistor the rest.' : 'Nothing draws current from Vout, so the same current flows through both resistors.') : '';
+      v.onFind = e => this.setW({ val: e.target.value, checked: false });
+      if (w.revealed) v.findVal = two ? '466.7' : '3.44';
+    }
+
+    if (k === 'graphdiv') {
+      const r1 = w.r1 ?? 2200, r2 = w.r2 ?? 2200;
+      const vo = 5 * r2 / (r1 + r2), cur = 5000 / (r1 + r2), onT = Math.abs(vo - 3.3) <= 0.03 && cur <= 1;
+      v.gTitle = 'Vout vs R2  ·  R1 = ' + this.ohm(r1);
+      v.gAxisNote = 'R2 swept 100 Ω → 47 kΩ';
+      v.gYMax = '5 V'; v.gXMax = '47 k';
+      v.gPath = this.path(t => { const rr = 100 + t * 46900; return (5 * rr / (r1 + rr)) / 5; }, 90, 46, 548, 14, 190);
+      v.gTargetPath = 'M46 ' + this.fmt(190 - (3.3 / 5) * 176, 1) + ' H548';
+      v.gTargetLabel = 'target 3.30 V';
+      v.gColor = onT ? '#5BE58A' : '#34E3D6';
+      const mx = 46 + (Math.min(r2, 47000) - 100) / 46900 * 502;
+      v.gMarkX = this.fmt(mx, 1); v.gMarkY = this.fmt(190 - (vo / 5) * 176, 1);
+      v.gControls = [
+        { label: 'R1 (top)', display: this.ohm(r1), min: 100, max: 47000, step: 100, value: r1, pct: (r1 - 100) / 46900 * 100, fill: '#34E3D6', onChange: e => this.setW({ r1: +e.target.value, checked: false }) },
+        { label: 'R2 (bottom)', display: this.ohm(r2), min: 100, max: 47000, step: 100, value: r2, pct: (r2 - 100) / 46900 * 100, fill: A, onChange: e => this.setW({ r2: +e.target.value, checked: false }) }
+      ];
+      v.gReadouts = [
+        { k: 'Vout', v: this.fmt(vo, 3) + ' V', color: Math.abs(vo - 3.3) <= 0.03 ? '#5BE58A' : '#E6EDF5' },
+        { k: 'I total', v: this.fmt(cur, 3) + ' mA', color: cur <= 1 ? '#5BE58A' : '#FF5C7A' },
+        { k: 'Divider ratio', v: this.fmt(r2 / (r1 + r2), 3), color: '#B9C5D4' }
+      ];
+      v.gGoalText = onT ? 'Both constraints satisfied — hit Check.' : 'Vout = 3.30 V ± 0.03  and  I ≤ 1.00 mA';
+      v.gGoalBg = onT ? '#12291C' : '#141A23'; v.gGoalBorder = onT ? '#2B6B45' : '#2A3547'; v.gGoalFg = onT ? '#5BE58A' : '#8A97A8';
+    }
+
+    if (k === 'graphrc') {
+      const { R, C, tau } = this.rc(), onT = Math.abs(tau - 10) <= 0.5;
+      v.gTitle = 'Capacitor voltage after switch close';
+      v.gAxisNote = '5 V step · 50 ms sweep';
+      v.gYMax = '5 V'; v.gXMax = '50 ms';
+      v.gPath = this.path(t => 1 - Math.exp(-(t * 50) / tau), 120, 46, 548, 14, 190);
+      v.gTargetPath = 'M' + this.fmt(46 + (10 / 50) * 502, 1) + ' 14 V190 M46 ' + this.fmt(190 - 0.632 * 176, 1) + ' H548';
+      v.gTargetLabel = 'τ target = 10 ms';
+      v.gColor = onT ? '#5BE58A' : '#34E3D6';
+      v.gMarkX = this.fmt(46 + Math.min(tau, 50) / 50 * 502, 1); v.gMarkY = this.fmt(190 - 0.632 * 176, 1);
+      v.gControls = [
+        { label: 'R', display: this.ohm(R), min: 0, max: this.RVALS.length - 1, step: 1, value: w.ri ?? 1, pct: (w.ri ?? 1) / (this.RVALS.length - 1) * 100, fill: '#34E3D6', onChange: e => this.setW({ ri: +e.target.value, checked: false }) },
+        { label: 'C', display: C + ' µF', min: 0, max: this.CVALS.length - 1, step: 1, value: w.ci ?? 2, pct: (w.ci ?? 2) / (this.CVALS.length - 1) * 100, fill: A, onChange: e => this.setW({ ci: +e.target.value, checked: false }) }
+      ];
+      v.gReadouts = [
+        { k: 'τ = R·C', v: this.fmt(tau, 2) + ' ms', color: onT ? '#5BE58A' : '#E6EDF5' },
+        { k: '63 % point', v: '3.16 V', color: '#B9C5D4' },
+        { k: '99 % (5τ)', v: this.fmt(tau * 5, 1) + ' ms', color: '#B9C5D4' }
+      ];
+      v.gGoalText = onT ? 'τ is in range — hit Check.' : 'Target: τ = 10 ms ± 0.5. Watch the readout, not the curve.';
+      v.gGoalBg = onT ? '#12291C' : '#141A23'; v.gGoalBorder = onT ? '#2B6B45' : '#2A3547'; v.gGoalFg = onT ? '#5BE58A' : '#8A97A8';
+    }
+
+    if (v.isMcq) {
+      const opts = ['Stays at 2.50 V — the load is high enough not to matter', 'Drops to about 1.67 V', 'Rises to about 3.33 V', 'Drops to 0 V — the load shorts the output'];
+      v.mcqOptions = opts.map((t, i) => {
+        const sel = w.pick === i, right = w.checked && i === 1, wrongSel = w.checked && sel && i !== 1;
+        return {
+          key: 'ABCD'[i], text: t, onClick: () => this.setW({ pick: i, checked: false }),
+          border: right ? '#2B6B45' : wrongSel ? '#7A2A3C' : sel ? A : '#1B2331',
+          bg: right ? '#0F2016' : wrongSel ? '#1E1015' : sel ? '#161D27' : '#0D1219',
+          fg: sel || right ? '#E6EDF5' : '#B9C5D4',
+          keyBorder: right ? '#5BE58A' : sel ? A : '#2A3547',
+          keyBg: right ? '#12291C' : sel ? '#2A210E' : 'transparent',
+          keyFg: right ? '#5BE58A' : sel ? A : '#5E6D80'
+        };
+      });
+    }
+
+    if (v.isMatch) {
+      const a = w.assign || {}, used = Object.values(a), sel = w.sel;
+      v.matchChips = this.SYMS.map(s => s.name).map(n => {
+        const taken = used.indexOf(n) >= 0;
+        return {
+          label: n, onClick: () => { if (!taken) this.setW({ sel: sel === n ? null : n, checked: false }); },
+          border: sel === n ? A : taken ? '#151C26' : '#2A3547',
+          bg: sel === n ? '#2A210E' : taken ? '#0A0D12' : '#0D1219',
+          fg: sel === n ? A : taken ? '#3A4557' : '#B9C5D4',
+          cursor: taken ? 'default' : 'pointer', opacity: taken ? '0.45' : '1', strike: taken ? 'line-through' : 'none'
+        };
+      });
+      v.matchSlots = this.SYMS.map(s => {
+        const ans = a[s.id], right = w.checked && ans === s.name, bad = w.checked && ans !== s.name;
+        return {
+          sym: s.d, sym2: s.d2 || 'M0 0', answer: ans || '—',
+          fg: right ? '#5BE58A' : bad ? '#FF5C7A' : ans ? '#E6EDF5' : '#3A4557',
+          border: right ? '#2B6B45' : bad ? '#7A2A3C' : ans ? '#2A3547' : (sel ? A : '#1B2331'),
+          bg: right ? '#0F2016' : bad ? '#1E1015' : '#0D1219',
+          onClick: () => {
+            if (ans) { const na = { ...a }; delete na[s.id]; this.setW({ assign: na, checked: false }); return; }
+            if (sel) this.setW({ assign: { ...a, [s.id]: sel }, sel: null, checked: false });
+          }
+        };
+      });
+    }
+
+    if (v.isFix) {
+      const parts = [{ id: 'b', name: 'supply', value: '9 V' }, { id: 'r', name: 'series resistor', value: (w.fix && w.part === 'r' ? w.fix + ' Ω' : '10 Ω') }, { id: 'd', name: 'red LED', value: 'Vf 2 V' }, { id: 'w', name: 'jumper', value: 'wire' }];
+      v.fixParts = parts.map(p => ({
+        value: p.value, name: p.name, onClick: () => this.setW({ part: p.id, fix: null, checked: false }),
+        border: w.part === p.id ? A : '#2A3547', bg: w.part === p.id ? '#2A210E' : '#11161E',
+        fg: w.part === p.id ? A : '#E6EDF5'
+      }));
+      const Rnow = (w.part === 'r' && w.fix) ? w.fix : 10;
+      const I = (9 - 2) / Rnow * 1000;
+      v.fixMeters = [
+        { k: 'LED current', v: I > 999 ? this.fmt(I / 1000, 2) + ' A' : this.fmt(I, 0) + ' mA', color: I > 25 ? '#FF5C7A' : '#5BE58A' },
+        { k: 'Rated max', v: '20 mA', color: '#B9C5D4' },
+        { k: 'Verdict', v: I > 25 ? 'destroys LED' : 'safe', color: I > 25 ? '#FF5C7A' : '#5BE58A' }
+      ];
+      v.fixMeterBorder = I > 25 ? '#7A2A3C' : '#2B6B45';
+      v.fixPicked = w.part ? parts.find(p => p.id === w.part).name : 'Tap a part in the schematic';
+      v.fixStep2Color = w.part ? '#8A97A8' : '#3A4557';
+      v.fixOptions = [{ r: 47, n: '≈149 mA' }, { r: 470, n: '≈14.9 mA' }, { r: 4700, n: '≈1.5 mA' }].map(o => ({
+        label: this.ohm(o.r), note: o.n, onClick: () => { if (w.part) this.setW({ fix: o.r, checked: false }); },
+        border: w.fix === o.r ? A : '#2A3547', bg: w.fix === o.r ? '#2A210E' : '#11161E',
+        fg: w.fix === o.r ? A : '#B9C5D4', cursor: w.part ? 'pointer' : 'default', opacity: w.part ? '1' : '0.4'
+      }));
+    }
+
+    if (v.isBuild) {
+      const s = w.slots || {}, sel = w.sel;
+      const roles = [{ id: 'src', label: 'source' }, { id: 'lim', label: 'limiter' }, { id: 'load', label: 'load' }];
+      v.buildSlots = roles.map(r => {
+        const filled = s[r.id];
+        return {
+          role: r.label, label: filled || 'empty', fg: filled ? '#E6EDF5' : '#3A4557',
+          border: filled ? '#2A3547' : (sel ? A : '#232F41'), bg: filled ? '#11161E' : '#0A0E14',
+          onClick: () => {
+            if (filled) { const ns = { ...s }; delete ns[r.id]; this.setW({ slots: ns, checked: false }); return; }
+            if (sel) this.setW({ slots: { ...s, [r.id]: sel }, sel: null, checked: false });
+          }
+        };
+      });
+      const bin = [['9 V battery', 'DC source'], ['5 V rail', 'DC source'], ['470 Ω', 'resistor'], ['10 Ω', 'resistor'], ['LED (Vf 2 V)', 'diode'], ['1 µF', 'capacitor']];
+      const used = Object.values(s);
+      v.buildBin = bin.map(b => {
+        const taken = used.indexOf(b[0]) >= 0;
+        return {
+          label: b[0], tag: b[1], onClick: () => { if (!taken) this.setW({ sel: sel === b[0] ? null : b[0], checked: false }); },
+          border: sel === b[0] ? A : taken ? '#151C26' : '#2A3547', bg: sel === b[0] ? '#2A210E' : '#11161E',
+          fg: sel === b[0] ? A : taken ? '#3A4557' : '#B9C5D4', opacity: taken ? '0.4' : '1'
+        };
+      });
+      const src = s.src === '9 V battery' ? 9 : s.src === '5 V rail' ? 5 : 0;
+      const Rv = s.lim === '470 Ω' ? 470 : s.lim === '10 Ω' ? 10 : 0;
+      const vf = s.load === 'LED (Vf 2 V)' ? 2 : 0;
+      const cur = (src && Rv) ? Math.max(0, (src - vf)) / Rv * 1000 : 0;
+      v.buildMeters = [
+        { k: 'Loop current', v: cur ? (cur > 999 ? this.fmt(cur / 1000, 2) + ' A' : this.fmt(cur, 1) + ' mA') : '—', color: cur > 25 ? '#FF5C7A' : cur > 8 ? '#5BE58A' : '#B9C5D4' },
+        { k: 'R dissipation', v: (cur && Rv) ? this.fmt(Math.pow(cur / 1000, 2) * Rv * 1000, 1) + ' mW' : '—', color: '#B9C5D4' },
+        { k: 'Target', v: '15 mA ± 3', color: '#7C8A9C' }
+      ];
+      v.buildHint = this.hints ? 'Tap a part, then tap the position it belongs in. Tap a filled position to empty it.' : '';
+    }
+
+    if (v.isMcu) {
+      const b = w.blanks || {}, act = w.active;
+      const sets = { 1: ['pinMode', 'digitalWrite', 'analogRead'], 2: ['analogWrite', 'digitalWrite', 'tone'], 3: ['4', '40', '400'] };
+      const st = n => ({
+        border: act === n ? A : b[n] ? '#2A3547' : '#4A586C',
+        bg: act === n ? '#2A210E' : b[n] ? '#161D27' : 'transparent',
+        fg: b[n] ? (w.checked ? (this.evaluate().ok ? '#5BE58A' : '#E6EDF5') : '#E6EDF5') : '#5E6D80'
+      });
+      [1, 2, 3].forEach(n => {
+        const s = st(n);
+        v['b' + n] = b[n] || (n === 3 ? 'ms' : 'choose');
+        v['b' + n + 'Border'] = s.border; v['b' + n + 'Bg'] = s.bg; v['b' + n + 'Fg'] = s.fg;
+        v['onBlank' + n] = () => this.setW({ active: act === n ? null : n, checked: false });
+      });
+      v.mcuTokenLabel = act ? 'Tokens for blank ' + act : 'Tap a blank above to see its tokens';
+      v.mcuTokens = (sets[act] || []).map(t => ({
+        label: t, onClick: () => this.setW({ blanks: { ...b, [act]: t }, active: null, checked: false }),
+        border: b[act] === t ? A : '#2A3547', bg: b[act] === t ? '#2A210E' : '#11161E', fg: b[act] === t ? A : '#B9C5D4'
+      }));
+      const ok = b[1] === 'pinMode' && b[2] === 'analogWrite' && b[3] === '4';
+      const duty = this.state.running && ok ? this.state.phase : (ok ? 255 : 0);
+      v.ledColor = ok ? 'rgba(255,90,60,' + (0.12 + 0.88 * duty / 255) + ')' : '#1B2331';
+      v.ledGlow = ok ? Math.round(6 + 34 * duty / 255) : 0;
+      v.mcuReadouts = [
+        { k: 'PWM value', v: ok ? Math.round(duty) + ' / 255' : '—', color: '#E6EDF5' },
+        { k: 'Sweep time', v: b[3] ? this.fmt(256 * parseInt(b[3], 10) / 1000, 2) + ' s' : '—', color: b[3] === '4' ? '#5BE58A' : '#FF5C7A' },
+        { k: 'Target', v: '≈ 1.00 s', color: '#7C8A9C' }
+      ];
+      v.runLabel = !ok ? 'Fill the blanks to upload' : this.state.running ? 'Stop' : 'Upload & run';
+      v.runBg = ok ? (this.state.running ? '#161D27' : A) : '#0D1219';
+      v.runFg = ok ? (this.state.running ? '#B9C5D4' : '#0A0D12') : '#3A4557';
+      v.runBorder = ok ? (this.state.running ? '#2A3547' : A) : '#1B2331';
+      v.onRun = () => { if (ok) this.toggleRun(); };
+    }
+
+    if (v.isWave) {
+      const duty = w.duty ?? 50, fi = w.fi ?? 2, f = this.FREQS[fi];
+      const period = 1000 / f, cycles = 4 / period;
+      const sq = (t, dd, ff) => { const p = (t * 4 * ff / 1000) % 1; return p < dd / 100 ? 1 : 0; };
+      let d = 'M46 ' + (190 - sq(0, duty, f) * 176);
+      for (let i = 1; i <= 800; i++) {
+        const t = i / 800, x = 46 + 502 * t, y = 190 - sq(t, duty, f) * 176;
+        d += ' L' + this.fmt(x, 1) + ' ' + this.fmt(y, 1);
+      }
+      v.wPath = d;
+      let td = 'M46 14';
+      for (let i = 1; i <= 800; i++) {
+        const t = i / 800, x = 46 + 502 * t, y = 190 - sq(t, 30, 1000) * 176;
+        td += ' L' + this.fmt(x, 1) + ' ' + this.fmt(y, 1);
+      }
+      v.wTargetPath = td;
+      const avg = 5 * duty / 100;
+      v.wAvgPath = 'M46 ' + this.fmt(190 - (avg / 5) * 176, 1) + ' H548';
+      v.wAvgLabel = 'Vavg ' + this.fmt(avg, 2) + ' V';
+      v.wControls = [
+        { label: 'Duty cycle', display: duty + ' %', min: 0, max: 100, step: 1, value: duty, pct: duty, fill: '#34E3D6', onChange: e => this.setW({ duty: +e.target.value, checked: false }) },
+        { label: 'Frequency', display: f + ' Hz', min: 0, max: this.FREQS.length - 1, step: 1, value: fi, pct: fi / (this.FREQS.length - 1) * 100, fill: A, onChange: e => this.setW({ fi: +e.target.value, checked: false }) }
+      ];
+      const onT = f === 1000 && Math.abs(duty - 30) <= 1;
+      v.wReadouts = [
+        { k: 'Average V', v: this.fmt(avg, 2) + ' V', color: Math.abs(avg - 1.5) < 0.06 ? '#5BE58A' : '#E6EDF5' },
+        { k: 'Period', v: this.fmt(period, 2) + ' ms', color: f === 1000 ? '#5BE58A' : '#E6EDF5' },
+        { k: 'Cycles on screen', v: this.fmt(cycles, 1), color: '#B9C5D4' }
+      ];
+      v.wGoalText = onT ? 'Trace matches — hit Check.' : 'Overlay your trace on the dashed target: duty and frequency both.';
+      v.wGoalBg = onT ? '#12291C' : '#141A23'; v.wGoalBorder = onT ? '#2B6B45' : '#2A3547'; v.wGoalFg = onT ? '#5BE58A' : '#8A97A8';
+    }
+
+    if (v.isBread) {
+      const wires = w.wires || [], pending = w.pending;
+      const lit = this.bbHas('D9', 5) && this.bbHas('GND', 13) && !wires.some(x => x.a === '5V' || x.b === '5V');
+      const holes = [];
+      this.bbCols.rows.forEach(r => {
+        for (let c = 1; c <= 20; c++) {
+          const id = r + c;
+          const node = (this.isBot(id) && (c === 5 || c === 9 || c === 13));
+          holes.push({
+            x: this.holeX(c), y: this.holeY(r), onClick: this.onHole(id),
+            bg: pending === id ? A : node ? '#D6CFBE' : '#DCD6C8',
+            ring: pending === id ? A : node ? '#8A8271' : '#C0BAAB'
+          });
+        }
+      });
+      v.bbHoles = holes;
+      const pos = id => (id === 'D9' || id === '5V' || id === 'GND')
+        ? { x: this.padX(id) + 48, y: 385 }
+        : { x: this.holeX(this.colOf(id)) + 7, y: this.holeY(id[0]) + 7 };
+      v.bbWires = wires.map((x, i) => {
+        const a = pos(x.a), b = pos(x.b);
+        const len = Math.sqrt(Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2));
+        return { x: a.x, y: a.y - 2, len: this.fmt(len, 1), deg: this.fmt(Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI, 2), color: ['#E24B4B', '#3B7BE0', '#2FA84F'][i % 3] };
+      });
+      v.bbPads = ['D9', '5V', 'GND'].map(id => ({
+        label: id, x: this.padX(id), onClick: this.onHole(id),
+        border: pending === id ? A : '#2A3547', bg: pending === id ? '#2A210E' : '#11161E',
+        fg: pending === id ? A : '#B9C5D4'
+      }));
+      v.resLeft = this.holeX(5) + 7; v.resW = this.holeX(9) - this.holeX(5);
+      v.resBodyLeft = (this.holeX(5) + this.holeX(9)) / 2 - 26 + 7;
+      v.ledLeft = this.holeX(9) + 7; v.ledW = this.holeX(13) - this.holeX(9);
+      v.ledBodyLeft = (this.holeX(9) + this.holeX(13)) / 2 - 16 + 7;
+      v.bbLedColor = lit ? 'rgba(255,74,60,1)' : '#7A2A24';
+      v.bbLedGlow = lit ? 26 : 0;
+      v.bbNets = [
+        { mark: this.bbHas('D9', 5) ? '✓' : '·', text: 'D9 → col 5 (resistor leg)', color: this.bbHas('D9', 5) ? '#5BE58A' : '#5E6D80' },
+        { mark: '✓', text: 'col 9 — R / LED anode', color: '#7C8A9C' },
+        { mark: this.bbHas('GND', 13) ? '✓' : '·', text: 'GND → col 13 (cathode)', color: this.bbHas('GND', 13) ? '#5BE58A' : '#5E6D80' }
+      ];
+      v.bbStatus = pending ? 'Selected ' + pending + ' — now tap the other end.' : (lit ? 'Current flowing: 9.1 mA. The LED is lit.' : 'Open circuit. ' + wires.length + ' jumper' + (wires.length === 1 ? '' : 's') + ' placed.');
+      v.onClearWires = () => this.setW({ wires: [], pending: null, checked: false });
+    }
+
+    if (v.isC2c) {
+      const s = w.slots || {}, sel = w.sel;
+      v.c2cCode = 'void setup() {\n  pinMode(2, INPUT_PULLUP);\n  pinMode(13, OUTPUT);\n}\n\nvoid loop() {\n  bool pressed = !digitalRead(2);\n  digitalWrite(13, pressed);\n}';
+      const roles = [{ id: 'p2', r: 'pin 2 branch', n: 'the input' }, { id: 'lim', r: 'pin 13 · part A', n: 'in series' }, { id: 'led', r: 'pin 13 · part B', n: 'the output' }];
+      v.c2cSlots = roles.map(r => {
+        const filled = s[r.id], right = w.checked && ((r.id === 'p2' && filled === 'Button to GND') || (r.id === 'lim' && filled === '330 Ω') || (r.id === 'led' && filled === 'LED to GND'));
+        const bad = w.checked && !right;
+        return {
+          role: r.r, note: r.n, label: filled || 'empty',
+          fg: right ? '#5BE58A' : bad ? '#FF5C7A' : filled ? '#E6EDF5' : '#3A4557',
+          border: right ? '#2B6B45' : bad ? '#7A2A3C' : filled ? '#2A3547' : (sel ? A : '#232F41'),
+          bg: filled ? '#11161E' : '#0A0E14',
+          onClick: () => {
+            if (filled) { const ns = { ...s }; delete ns[r.id]; this.setW({ slots: ns, checked: false }); return; }
+            if (sel) this.setW({ slots: { ...s, [r.id]: sel }, sel: null, checked: false });
+          }
+        };
+      });
+      const bin = ['Button to GND', 'Button to 5 V', '10 kΩ pull-up', '330 Ω', 'LED to GND', 'LED to 5 V', '100 nF cap'];
+      const used = Object.values(s);
+      v.c2cBin = bin.map(b => {
+        const taken = used.indexOf(b) >= 0;
+        return {
+          label: b, onClick: () => { if (!taken) this.setW({ sel: sel === b ? null : b, checked: false }); },
+          border: sel === b ? A : taken ? '#151C26' : '#2A3547', bg: sel === b ? '#2A210E' : '#11161E',
+          fg: sel === b ? A : taken ? '#3A4557' : '#B9C5D4', opacity: taken ? '0.4' : '1'
+        };
+      });
+    }
+
+    if (k === 'done') {
+      v.doneText = 'Every task in this unit is a component of the capstone dimmer. Two more units and it unlocks.';
+      v.doneStats = [
+        { v: '+' + solvedInLesson * 50, k: 'XP earned', color: A },
+        { v: solvedInLesson + '/' + L.steps.length, k: 'solved first try', color: '#5BE58A' },
+        { v: this.state.xp, k: 'total XP', color: '#E6EDF5' }
+      ];
+    }
+
+    const res = this.calcVal(), resStr = this.calcFmt(res);
+    v.calcOpen = this.state.calcOpen;
+    v.onToggleCalc = () => { this._focusCalc = !this.state.calcOpen; this.setState(s => ({ calcOpen: !s.calcOpen })); };
+    v.calcRef = el => { if (el && this._focusCalc) { this._focusCalc = false; el.focus(); } };
+    v.onCalcType = e => this.setState({ expr: e.target.value });
+    v.onCalcKeyDown = e => { if (e.key === 'Enter') { const r = this.calcVal(); if (r !== null) this.setState({ expr: this.calcFmt(r) }); } };
+    v.calcBtnBg = this.state.calcOpen ? '#2A210E' : '#161D27';
+    v.calcBtnBorder = this.state.calcOpen ? A : '#2A3547';
+    v.calcBtnFg = this.state.calcOpen ? A : '#B9C5D4';
+    v.calcExpr = this.state.expr;
+    v.calcResult = resStr;
+    v.calcResultColor = res === null ? '#3A4557' : '#E6EDF5';
+    v.calcKeys = this.CKEYS.map(kk => ({
+      label: kk, onClick: this.ckey(kk),
+      bg: kk === '=' ? A : (kk === 'C' || kk === '⌫') ? '#161D27' : '#11161E',
+      fg: kk === '=' ? '#0A0D12' : (kk === 'C' || kk === '⌫') ? '#FF8FA3' : '#E6EDF5',
+      border: kk === '=' ? A : '#232F41'
+    }));
+    v.calcFormulas = this.CFORM.map(fm => ({ label: fm[0], onClick: () => this.setState({ expr: fm[1] }) }));
+    v.saveFg = res === null ? '#3A4557' : A;
+    v.onSaveSlot = () => { if (res !== null) this.setState(s => ({ slots: [...s.slots, { label: 'M' + (s.slots.length + 1), value: resStr }] })); };
+    const canUse = v.isFind;
+    v.calcSlots = this.state.slots.map((sl, i) => ({
+      label: sl.label, value: sl.value,
+      onLabel: e => { const val = e.target.value; this.setState(s => ({ slots: s.slots.map((x, j) => j === i ? { ...x, label: val } : x) })); },
+      onInsert: () => this.setState(s => ({ expr: s.expr + sl.value })),
+      useLabel: canUse ? 'use' : 'insert',
+      useFg: canUse ? '#34E3D6' : '#5E6D80',
+      useCursor: 'pointer',
+      onUse: canUse ? () => this.setW({ val: sl.value, checked: false }) : () => this.setState(s => ({ expr: s.expr + sl.value })),
+      onDelete: () => this.setState(s => ({ slots: s.slots.filter((x, j) => j !== i) }))
+    }));
+    v.calcTip = this.state.slots.length === 0
+      ? 'Type or tap. Suffixes k M m µ n p bind to their own number, so 470/10k = 0.047. Enter commits the result.'
+      : (canUse ? 'Tap a value to insert it, or “use” to drop it straight into the answer box.' : 'Tap a value to insert it into the expression.');
+
+    if (v.showBar) {
+      const checked = w.checked;
+      v.barBorder = checked ? (w.ok ? '#2B6B45' : '#7A2A3C') : '#1B2331';
+      v.fbColor = checked ? (w.ok ? '#5BE58A' : '#FF5C7A') : '#B9C5D4';
+      const readOk = k === 'teach' && this.state.solved[this.key()];
+      if (readOk) { v.fbColor = '#5BE58A'; v.barBorder = '#2B6B45'; }
+      v.fbTitle = checked ? w.title : (k === 'teach' ? (readOk ? 'Marked as read' : 'Reading counts too — mark it when you are done') : 'Solve it, then check your work');
+      v.fbText = checked ? w.msg : (k === 'teach' ? 'The next four tasks all lean on this one relationship.' : 'Partial credit does not exist in circuits — either it works or it smokes.');
+      v.ctaLabel = k === 'teach' ? (this.state.solved[this.key()] ? 'Continue' : 'Mark as read') : checked ? (w.ok ? 'Continue' : 'Try again') : 'Check';
+      v.onPrimary = k === 'teach' ? this.readDone : (checked && !w.ok ? () => this.setW({ checked: false }) : this.next);
+      v.ctaBg = checked && w.ok ? '#5BE58A' : A; v.ctaFg = '#0A0D12';
+      v.ctaBorder = checked && w.ok ? '#5BE58A' : A;
+      v.skipLabel = k === 'teach' ? '' : 'Skip for now';
+      v.onSkip = k === 'teach' ? () => {} : () => this.go(Math.min(this.state.si + 1, L.steps.length));
+    }
+    return v;
+  }
+
+  toggleRun() {
+    if (this.state.running) { clearInterval(this._t); this.setState({ running: false }); return; }
+    this.setState({ running: true, phase: 0 });
+    this._t = setInterval(() => this.setState(s => ({ phase: (s.phase + 12) % 256 })), 40);
+  }
+  componentWillUnmount() { clearInterval(this._t); }
+}
+
+</script>
+</body>
+</html>

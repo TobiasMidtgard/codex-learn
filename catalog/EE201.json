@@ -1,0 +1,1270 @@
+{
+ "id": "EE201",
+ "title": "Semiconductor Devices and Diodes",
+ "year": 2,
+ "level": "Intermediate",
+ "prereqs": [
+  "EE102"
+ ],
+ "stack": [
+  "Python",
+  "NumPy"
+ ],
+ "credits": 10,
+ "hours": 130,
+ "icon": "◈",
+ "summary": "Every component in the first year was linear: double the voltage and the current doubled. The diode is the first one that is not, and almost everything interesting in electronics follows from that. This course builds the diode from the crystal up — what doping does, why a junction develops a voltage across it with nothing attached, and where the exponential in the diode equation comes from — and then puts it to work turning alternating current into a usable supply rail. By the end you can size a rectifier and its reservoir capacitor to a stated ripple, design a Zener regulator that survives its worst case, and say precisely why a diode with 0.7 V across it and 10 mA through it is not a 70 Ω resistor.",
+ "outcomes": [
+  "Explain what doping does to silicon, and calculate the built-in potential and depletion width of a pn junction from the doping levels.",
+  "Use the Shockley diode equation quantitatively: find the current from the voltage, the voltage from the current, and the 60 mV per decade slope that connects them.",
+  "Find a diode's operating point by the load-line method and by numerical solution, and replace it with a piecewise-linear model that a linear solver can handle.",
+  "Distinguish a diode's static resistance from its dynamic resistance, and say which one governs which measurement.",
+  "Design a full-wave rectifier and reservoir capacitor to meet a stated ripple, and account for the diode drops, the peak inverse voltage and the peak repetitive current.",
+  "Design a Zener shunt regulator that holds its output across the full range of line and load, and compute its line regulation from the dynamic resistance."
+ ],
+ "assessment": "Four quizzes, one guided derivation, two circuits drawn and measured in the schematic editor, four Python labs checked by execution, and a capstone that designs a complete unregulated-plus-regulated supply and then proves it by time-stepped simulation.",
+ "reading": [
+  "*The Art of Electronics*, Horowitz & Hill — chapter 1, sections 1.6 to 1.8, on diodes and power supplies.",
+  "*Microelectronic Circuits*, Sedra & Smith — chapter 4, for the diode equation and every model built on it.",
+  "*Semiconductor Physics and Devices*, Neamen — chapters 4 to 7, for the physics behind the built-in potential.",
+  "Any manufacturer's 1N4148 and 1N4007 data sheets, side by side. The difference between them is the whole of module 3."
+ ],
+ "modules": [
+  {
+   "title": "Doping, the pn junction and the built-in potential",
+   "summary": "Where the diode's asymmetry comes from: two pieces of silicon that are different, and the voltage that appears where they meet.",
+   "concepts": [
+    "Pure silicon at room temperature has equal numbers of mobile electrons and holes, both about $n_i = 1.0\\times10^{16}$ m$^{-3}$. Silicon has about $5\\times10^{28}$ atoms per cubic metre, so that is one carrier per $5\\times10^{12}$ atoms, which is why pure silicon is a poor conductor.",
+    "**Doping** replaces a few silicon atoms with impurities. A group-V donor (phosphorus, arsenic) contributes a spare electron and makes **n-type** material; a group-III acceptor (boron) contributes a spare hole and makes **p-type**.",
+    "Doping levels are of order $10^{21}$ to $10^{24}$ m$^{-3}$ — still under one atom in a thousand, yet enough to raise the conductivity by many orders of magnitude. Doping is a control knob with an enormous range.",
+    "The **law of mass action** holds in any doped semiconductor in equilibrium: $np = n_i^2$, whatever the doping. Raising one carrier population suppresses the other in exact proportion.",
+    "So in n-type material with $N_d$ donors, $n \\approx N_d$ and $p \\approx n_i^2/N_d$. Electrons are the **majority** carriers and holes the **minority** carriers; in p-type it is the other way round.",
+    "Join p to n and the concentration gradient drives **diffusion**: holes cross into the n-side, electrons into the p-side. Each departure leaves behind a fixed, charged dopant ion.",
+    "Those exposed ions build an electric field that opposes further diffusion. Equilibrium is reached when the **drift** current the field produces exactly cancels the diffusion current — not when the currents are zero, but when they are equal and opposite.",
+    "The region stripped of mobile carriers is the **depletion region**, and the voltage across it is the **built-in potential** $V_{bi} = V_T \\ln(N_a N_d / n_i^2)$, typically 0.6 to 0.9 V in silicon.",
+    "The **thermal voltage** $V_T = kT/q$ is 25.85 mV at 300 K. It is not a fitted constant; it is the thermal energy per carrier expressed in volts, and it sets the scale of every exponential in this course.",
+    "You cannot measure $V_{bi}$ with a voltmeter. The contact potentials at the two probe junctions cancel it exactly — if they did not, a diode in a drawer would be a battery, and thermodynamics forbids that."
+   ],
+   "sandbox": null,
+   "quiz": {
+    "title": "Doping, mass action and the junction",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "Silicon is doped with $10^{22}$ m$^{-3}$ donors. Taking $n_i = 1.0\\times10^{16}$ m$^{-3}$, what is the equilibrium hole concentration?",
+      "opts": [
+       "$10^{22}$ m$^{-3}$",
+       "$10^{16}$ m$^{-3}$",
+       "$10^{10}$ m$^{-3}$",
+       "zero — there are no holes in n-type material"
+      ],
+      "a": 2,
+      "why": "Mass action: $np = n_i^2$, so $p = n_i^2/n = (10^{16})^2/10^{22} = 10^{10}$ m$^{-3}$.\nThe tempting answer is the last one. n-type material still has holes; it has a million\ntimes *fewer* than pure silicon, not none. Those surviving minority carriers are what\ncarries the reverse saturation current of a diode, so a number that looks negligible\nhere turns out to be the whole of $I_S$ in module 2."
+     },
+     {
+      "q": "What actually happens at the moment two doped regions are joined, before equilibrium is reached?",
+      "opts": [
+       "carriers diffuse across the junction, leaving behind charged dopant ions that build an opposing field",
+       "the two materials exchange dopant atoms until the doping is uniform",
+       "an external voltage must be applied before anything moves",
+       "nothing moves, because both pieces of silicon are electrically neutral"
+      ],
+      "a": 0,
+      "why": "Both pieces are neutral, but neutrality is not equilibrium: the concentration gradient\nis enormous, and carriers diffuse down it. Each hole that leaves the p-side strands a\nnegatively charged acceptor ion, and each electron that leaves the n-side strands a\npositive donor ion. Those fixed ions are the depletion region, and the field between\nthem grows until it stops any further net flow. Dopant atoms themselves never move —\nthey are substituted into the crystal lattice and stay where they were put."
+     },
+     {
+      "q": "In equilibrium, with nothing connected, what is the net current across a pn junction?",
+      "opts": [
+       "the diffusion current, flowing p to n",
+       "the drift current, flowing n to p",
+       "a small leakage current set by $I_S$",
+       "exactly zero, because drift and diffusion cancel"
+      ],
+      "a": 3,
+      "why": "Exactly zero — but not because nothing is happening. Both a diffusion current and a\ndrift current flow, and they are equal and opposite. That is the substance of\nequilibrium here, and it is what makes the algebra work: setting the two expressions\nequal is precisely how the built-in potential is derived, which you will do in the\nderivation below. A junction with a genuine net current in it would be dissipating\npower with no source, which is impossible."
+     },
+     {
+      "q": "A junction has $V_{bi} = 0.83$ V. You connect a voltmeter across the diode's two terminals. What does it read?",
+      "opts": [
+       "0.83 V",
+       "0 V",
+       "0.415 V, half the built-in potential",
+       "0.83 V, but only while the diode is warm"
+      ],
+      "a": 1,
+      "why": "Zero. The built-in potential is real and it is essential to how the device works, but\nit is not available at the terminals: the metal-to-silicon contacts at each end\ndevelop their own contact potentials, and going all the way round the loop they cancel\n$V_{bi}$ exactly. They must — a diode that read 0.83 V on a meter would deliver\ncurrent into the meter forever, which is a perpetual motion machine. The lesson is\ngeneral: an internal potential is not the same thing as a terminal voltage."
+     },
+     {
+      "q": "Both sides of a junction are doped ten times more heavily. What happens to the built-in potential?",
+      "opts": [
+       "it is multiplied by ten",
+       "it is multiplied by a hundred",
+       "it increases by about 119 mV",
+       "it is unchanged, because the ratio of the two dopings is the same"
+      ],
+      "a": 2,
+      "why": "$V_{bi} = V_T\\ln(N_aN_d/n_i^2)$, and the logarithm turns the factor of 100 in the\nproduct into an addition: $V_T\\ln(100) = 0.02585 \\times 4.605 = 0.119$ V. Doping is a\ncrude lever on $V_{bi}$ — a hundredfold change in the doping product buys about a\ntenth of a volt. Option D confuses this with the divider rule from EE101: the built-in\npotential depends on the *product* of the two dopings, not their ratio."
+     },
+     {
+      "q": "You apply 5 V of reverse bias to a junction whose built-in potential is 0.83 V. What happens to the depletion region?",
+      "opts": [
+       "it widens, because the total junction voltage rises from 0.83 V to 5.83 V",
+       "it narrows, because the applied field opposes the built-in field",
+       "it is unaffected — the depletion width depends only on the doping",
+       "it collapses, and the diode conducts"
+      ],
+      "a": 0,
+      "why": "Reverse bias adds to the built-in potential rather than opposing it, so the junction\nnow supports 5.83 V and must expose more ionised dopant to do it. The width goes as\n$\\sqrt{V}$, so 5.83/0.83 is a factor of seven in voltage and $\\sqrt{7} = 2.65$ in\nwidth — you compute exactly this in the lab below. Option B describes *forward* bias,\nwhich does narrow the region and is why forward current flows at all. A widening\ndepletion region also means less capacitance, which is the whole basis of the varactor\ndiode used to tune radios."
+     }
+    ]
+   },
+   "blanks": null,
+   "build": null,
+   "derive": {
+    "title": "The built-in potential, from mass action and Boltzmann",
+    "minutes": 14,
+    "brief": "The formula $V_{bi} = V_T\\ln(N_aN_d/n_i^2)$ looks like something to memorise. It is\nfour short steps from two facts you already have.\n\nThe first fact is **mass action**: in equilibrium, $np = n_i^2$ everywhere, whatever\nthe local doping. The second is the **Boltzmann relation**: when a population of\ncarriers sits in equilibrium across a potential difference, the concentration on the\nhigh-potential side is smaller by the factor $e^{-V/V_T}$. Holes are repelled by the\npositive n-side, so there are fewer of them there.\n\nWrite $p_p$ for the hole concentration on the p-side and $p_n$ for the hole\nconcentration on the n-side.",
+    "vars": [
+     "V_T",
+     "N_a",
+     "N_d",
+     "n_i",
+     "k",
+     "T",
+     "q",
+     "p_p",
+     "p_n",
+     "V_bi"
+    ],
+    "steps": [
+     {
+      "prompt": "The p-side is doped with $N_a$ acceptors per cubic metre, and at room temperature essentially every one of them has accepted an electron and left a hole. Write the equilibrium hole concentration $p_p$ in terms of the doping.",
+      "given": "",
+      "answer": "N_a",
+      "placeholder": "N_a",
+      "hint": "Holes are the majority carriers on the p-side, and each acceptor contributes exactly one.",
+      "deconstruct": [
+       "Each ionised acceptor leaves behind one mobile hole.",
+       "There are $N_a$ acceptors per cubic metre, so there are $N_a$ holes per cubic metre."
+      ]
+     },
+     {
+      "prompt": "On the n-side the electron concentration is $N_d$. Use mass action, $np = n_i^2$, to write the hole concentration $p_n$ there in terms of $N_d$ and $n_i$.",
+      "given": "Mass action holds in equilibrium at every point: $np = n_i^2$.",
+      "answer": "\\frac{n_i^2}{N_d}",
+      "placeholder": "\\frac{n_i^2}{N_d}",
+      "hint": "Put $n = N_d$ into $np = n_i^2$ and solve for $p$.",
+      "deconstruct": [
+       "Electrons are the majority carriers on the n-side, so $n = N_d$.",
+       "Then $N_d\\,p_n = n_i^2$, and dividing gives $p_n$."
+      ]
+     },
+     {
+      "prompt": "The Boltzmann relation for holes across the junction is $p_n = p_p\\,e^{-V_{bi}/V_T}$. Rearrange it to give the ratio $p_p/p_n$.",
+      "given": "$p_n = p_p\\,e^{-V_{bi}/V_T}$",
+      "answer": "exp(\\frac{V_bi}{V_T})",
+      "placeholder": "exp(V_bi/V_T)",
+      "hint": "Divide both sides by $p_n$ and by the exponential; a negative exponent inverts when it moves across.",
+      "deconstruct": [
+       "Divide both sides by $p_p$: $p_n/p_p = e^{-V_{bi}/V_T}$.",
+       "Take the reciprocal of both sides, and $e^{-x}$ becomes $e^{+x}$."
+      ]
+     },
+     {
+      "prompt": "Now substitute the two concentrations from steps 1 and 2 into that ratio. What does $p_p/p_n$ equal, in terms of $N_a$, $N_d$ and $n_i$?",
+      "given": "",
+      "answer": "\\frac{N_a N_d}{n_i^2}",
+      "placeholder": "\\frac{N_a N_d}{n_i^2}",
+      "hint": "Dividing by a fraction multiplies by its reciprocal: $N_a \\div (n_i^2/N_d)$.",
+      "deconstruct": [
+       "$p_p = N_a$ and $p_n = n_i^2/N_d$.",
+       "So $p_p/p_n = N_a \\times N_d/n_i^2$."
+      ]
+     },
+     {
+      "prompt": "One loose end. The thermal voltage is not a fitted constant — write $V_T$ in terms of Boltzmann's constant $k$, the absolute temperature $T$ and the electronic charge $q$.",
+      "given": "",
+      "answer": "\\frac{k T}{q}",
+      "placeholder": "\\frac{k T}{q}",
+      "hint": "$kT$ is an energy in joules; dividing an energy by a charge gives a voltage.",
+      "deconstruct": [
+       "$kT$ is the characteristic thermal energy per particle, in joules.",
+       "A volt is a joule per coulomb, so divide by the charge $q$ on one carrier."
+      ]
+     }
+    ],
+    "closing": "Taking the natural logarithm of step 4 finishes it:\n\n$$V_{bi} = V_T \\ln\\!\\left(\\frac{N_aN_d}{n_i^2}\\right)$$\n\nTwo things are worth keeping. First, the exponential arrived from Boltzmann, not from\nthe junction — it is a statement about carriers in a potential, and the same factor\nwill reappear in module 2 as the exponential of the diode equation. The device is not\nexponential because of anything clever in its construction; it is exponential because\nthat is what a thermal population does in a field.\n\nSecond, the logarithm is why device engineers get so little for so much. With\n$N_a = N_d = 10^{23}$ m$^{-3}$ and $n_i = 1.0\\times10^{16}$ m$^{-3}$ at 300 K, the\nargument is $10^{14}$ and $V_{bi} = 0.833$ V. Dropping both dopings to\n$10^{21}$ m$^{-3}$ — a factor of a hundred each — gives only 0.595 V."
+   },
+   "lab": {
+    "title": "The junction, from the doping upwards",
+    "runtime": "python",
+    "minutes": 30,
+    "brief": "Three functions that turn the physics of this module into numbers.\n\n- `thermal_voltage(kelvin)` returns $V_T = kT/q$ in volts.\n- `built_in_potential(n_a, n_d, n_i, kelvin)` returns\n  $V_{bi} = V_T\\ln(N_aN_d/n_i^2)$ in volts.\n- `depletion_width(n_a, n_d, v_junction)` returns the total width of the depletion\n  region in metres, from the standard abrupt-junction result\n\n```text\nW = sqrt( 2 * eps * v_junction / q * (1/n_a + 1/n_d) )\n```\n\nwhere `v_junction` is the *total* voltage the junction is supporting. With nothing\nconnected that is $V_{bi}$; under $V_R$ volts of reverse bias it is $V_{bi} + V_R$.\n\nThe constants `K_BOLTZMANN`, `Q_ELECTRON` and `EPS_SILICON` are defined for you.\nEverything is in SI units throughout: metres, not centimetres, and cubic metres, not\ncubic centimetres. Most textbooks use cm$^{-3}$, so a concentration you look up\nelsewhere will need multiplying by $10^6$ before it comes in here.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"The pn junction in equilibrium, computed from the doping.\"\"\"\n\nimport math\n\nK_BOLTZMANN = 1.380649e-23              # J/K\nQ_ELECTRON = 1.602176634e-19            # C\nEPS_SILICON = 11.7 * 8.8541878128e-12   # F/m, the permittivity of silicon\n\n\ndef thermal_voltage(kelvin):\n    \"\"\"Thermal voltage kT/q, in volts.\"\"\"\n    # TODO: one multiplication and one division.\n    return 0.0\n\n\ndef built_in_potential(n_a, n_d, n_i, kelvin):\n    \"\"\"Built-in potential of an abrupt pn junction, in volts.\"\"\"\n    # TODO: V_T times the natural log of (n_a * n_d) / n_i squared.\n    return 0.0\n\n\ndef depletion_width(n_a, n_d, v_junction):\n    \"\"\"Total depletion width in metres for a junction supporting v_junction volts.\"\"\"\n    # TODO: the square root given in the brief.\n    return 0.0\n\n\nif __name__ == \"__main__\":\n    vt = thermal_voltage(300.0)\n    print(\"thermal voltage at 300 K:\", vt, \"V\")\n    vbi = built_in_potential(1e23, 1e23, 1e16, 300.0)\n    print(\"built-in potential:\", vbi, \"V\")\n    print(\"depletion width, unbiased:\", depletion_width(1e23, 1e23, vbi), \"m\")\n    print(\"depletion width, 5 V reverse:\", depletion_width(1e23, 1e23, vbi + 5.0), \"m\")\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"The pn junction in equilibrium, computed from the doping.\"\"\"\n\nimport math\n\nK_BOLTZMANN = 1.380649e-23              # J/K\nQ_ELECTRON = 1.602176634e-19            # C\nEPS_SILICON = 11.7 * 8.8541878128e-12   # F/m, the permittivity of silicon\n\n\ndef thermal_voltage(kelvin):\n    \"\"\"Thermal voltage kT/q, in volts.\"\"\"\n    return K_BOLTZMANN * kelvin / Q_ELECTRON\n\n\ndef built_in_potential(n_a, n_d, n_i, kelvin):\n    \"\"\"Built-in potential of an abrupt pn junction, in volts.\"\"\"\n    return thermal_voltage(kelvin) * math.log(n_a * n_d / (n_i * n_i))\n\n\ndef depletion_width(n_a, n_d, v_junction):\n    \"\"\"Total depletion width in metres for a junction supporting v_junction volts.\"\"\"\n    return math.sqrt(2.0 * EPS_SILICON * v_junction / Q_ELECTRON\n                     * (1.0 / n_a + 1.0 / n_d))\n\n\nif __name__ == \"__main__\":\n    vt = thermal_voltage(300.0)\n    print(\"thermal voltage at 300 K:\", vt, \"V\")\n    vbi = built_in_potential(1e23, 1e23, 1e16, 300.0)\n    print(\"built-in potential:\", vbi, \"V\")\n    print(\"depletion width, unbiased:\", depletion_width(1e23, 1e23, vbi), \"m\")\n    print(\"depletion width, 5 V reverse:\", depletion_width(1e23, 1e23, vbi + 5.0), \"m\")\n"
+     }
+    ],
+    "hints": [
+     "`thermal_voltage` is `K_BOLTZMANN * kelvin / Q_ELECTRON`. At 300 K it must come out near 0.0259 V; if you get 4.14e-21 you have forgotten to divide by the charge and are still holding an energy.",
+     "`built_in_potential` should call `thermal_voltage` rather than repeat it. `math.log` in Python is the natural logarithm — `math.log10` is the base-ten one, and using it here gives an answer 2.3 times too small.",
+     "In `depletion_width`, keep the whole expression inside one `math.sqrt`. The result is of order $10^{-7}$ m, which is a tenth of a micrometre — if you get something near 1, the reciprocals of the dopings have gone in the wrong way up.",
+     "The two dopings enter as $1/N_a + 1/N_d$, so the *lightly* doped side dominates the sum and therefore the width. That is why real diodes are made with one side doped far more heavily than the other."
+    ],
+    "tests": [
+     {
+      "name": "the thermal voltage is 25.85 mV at 300 K",
+      "code": "vt = thermal_voltage(300.0)\nassert abs(vt - 0.025851999786435535) < 1e-12, \\\n    f\"kT/q at 300 K is 0.0258520 V, got {vt}\""
+     },
+     {
+      "name": "it scales with absolute temperature",
+      "code": "cold = thermal_voltage(233.15)\nhot = thermal_voltage(400.0)\nassert abs(cold - 0.020091312500691485) < 1e-12, f\"at -40 C expected 0.0200913 V, got {cold}\"\nassert abs(hot - 0.034469333048580714) < 1e-12, f\"at 400 K expected 0.0344693 V, got {hot}\"\nassert abs(hot / cold - 400.0 / 233.15) < 1e-9, \\\n    \"V_T is proportional to absolute temperature, so the ratio must be the ratio of the kelvins\""
+     },
+     {
+      "name": "the built-in potential of a symmetric junction",
+      "code": "v = built_in_potential(1e23, 1e23, 1e16, 300.0)\nassert abs(v - 0.833370010652644) < 1e-9, \\\n    f\"1e23 either side with n_i = 1e16 at 300 K gives 0.833370 V, got {v}\""
+     },
+     {
+      "name": "only the product of the dopings matters, and lighter doping means less",
+      "code": "a = built_in_potential(2e23, 5e21, 1e16, 300.0)\nassert abs(a - 0.7738435813203123) < 1e-9, f\"expected 0.7738436 V, got {a}\"\nlight = built_in_potential(1e21, 1e21, 1e16, 300.0)\nassert abs(light - 0.5952642933233172) < 1e-9, f\"expected 0.5952643 V, got {light}\"\nsame = built_in_potential(5e23, 2e22, 1e16, 300.0)\nassert abs(same - built_in_potential(1e23, 1e23, 1e16, 300.0)) < 1e-12, \\\n    \"1e23*1e23 and 5e23*2e22 are the same product, so the two must agree exactly\""
+     },
+     {
+      "name": "the depletion region is a fraction of a micrometre",
+      "code": "vbi = built_in_potential(1e23, 1e23, 1e16, 300.0)\nw = depletion_width(1e23, 1e23, vbi)\nassert abs(w - 1.4681182204947003e-07) < 1e-15, \\\n    f\"expected 1.4681e-07 m (0.147 um), got {w}\""
+     },
+     {
+      "name": "reverse bias widens it as the square root of the voltage",
+      "code": "vbi = built_in_potential(1e23, 1e23, 1e16, 300.0)\nw0 = depletion_width(1e23, 1e23, vbi)\nw5 = depletion_width(1e23, 1e23, vbi + 5.0)\nassert abs(w5 - 3.8842024415833636e-07) < 1e-15, f\"expected 3.8842e-07 m, got {w5}\"\nratio = w5 / w0\nassert abs(ratio - ((vbi + 5.0) / vbi) ** 0.5) < 1e-9, \\\n    f\"the width must go as sqrt(V), so the ratio should be sqrt(5.833/0.833) = 2.6457, got {ratio}\""
+     },
+     {
+      "name": "the lightly doped side sets the width",
+      "code": "va = built_in_potential(2e23, 5e21, 1e16, 300.0)\nwa = depletion_width(2e23, 5e21, va)\nassert abs(wa - 4.5292951227117876e-07) < 1e-15, f\"expected 4.5293e-07 m, got {wa}\"\nassert wa > depletion_width(1e23, 1e23, va), \\\n    \"the asymmetric junction is wider at the same voltage, because 1/N is dominated by the light side\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "The diode equation, the load line and dynamic resistance",
+   "summary": "One exponential, and the two quite different resistances it implies at any given operating point.",
+   "concepts": [
+    "Forward bias lowers the barrier the diffusing carriers must climb, and the Boltzmann factor turns that into the **Shockley equation** $I = I_S\\left(e^{V/nV_T} - 1\\right)$.",
+    "$I_S$ is the **reverse saturation current**, set by the minority carrier populations — typically $10^{-15}$ to $10^{-12}$ A for a small-signal silicon diode. $n$ is the **ideality factor**, between 1 and 2, and is 1 for an ideal junction.",
+    "In reverse bias the exponential vanishes and $I \\to -I_S$: a current that does not depend on the applied voltage at all, which is what *saturation* means here.",
+    "Forward, beyond about $4V_T \\approx 100$ mV, the $-1$ is negligible and $I \\approx I_S e^{V/nV_T}$. Inverting it gives $V = nV_T\\ln(I/I_S)$.",
+    "That logarithm is the origin of the **60 mV per decade** rule: every tenfold increase in current costs $nV_T\\ln 10 = 59.5$ mV at 300 K, for $n = 1$. Ten times the current, one more small step in voltage.",
+    "So there is no such thing as *the* forward drop. The familiar 0.7 V is simply where a small-signal silicon diode happens to sit at a few milliamps, and it moves by 60 mV for every decade you move away.",
+    "A diode in series with a resistor and a supply cannot be solved by algebra: $I$ appears inside an exponential and outside it. The **load line** solves it graphically — plot $I = (V_S - V)/R$ on the diode's own curve, and the operating point is where they cross.",
+    "Numerically, the same intersection is found by bisection or by Newton's method in a few iterations. Every circuit simulator does exactly this at every node, at every time step.",
+    "**Static resistance** $V/I$ and **dynamic resistance** $r_d = dV/dI = nV_T/I$ are different numbers for a diode, and they answer different questions. At 10 mA a 1N4148 has a static resistance of about 70 Ω and a dynamic resistance of 2.59 Ω.",
+    "Static resistance answers 'how much current at this voltage'. Dynamic resistance answers 'how much does the voltage move if the current wobbles'. Confusing them is the most expensive mistake in this course.",
+    "The **piecewise-linear model** replaces the diode by a fixed voltage $V_{D0}$ in series with $r_d$ — the tangent to the exponential at the chosen operating point. It is exact at that point and useful for a decade either side."
+   ],
+   "sandbox": null,
+   "quiz": {
+    "title": "The exponential, and the two resistances",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "A silicon diode drops 0.65 V at 1 mA, with $n = 1$ at 300 K. Roughly what does it drop at 10 mA?",
+      "opts": [
+       "0.65 V",
+       "0.71 V",
+       "1.30 V",
+       "6.5 V"
+      ],
+      "a": 1,
+      "why": "About 0.71 V. A decade of current costs $V_T\\ln 10 = 59.5$ mV, so 0.65 + 0.06 = 0.71 V.\nThe answer 1.30 V treats the diode as ohmic — ten times the current for ten times the\nvoltage — which is exactly what a diode does not do. That is the whole point: a\ntenfold change in current barely moves the voltage, which is what makes a diode useful\nas a reference and useless as a resistor."
+     },
+     {
+      "q": "In the reverse direction, an ideal diode's current is:",
+      "opts": [
+       "proportional to the reverse voltage",
+       "proportional to the square root of the reverse voltage",
+       "exponential in the reverse voltage",
+       "essentially $-I_S$, independent of the reverse voltage"
+      ],
+      "a": 3,
+      "why": "With $V$ negative and larger than a few $V_T$, $e^{V/nV_T}$ is negligible and the\nequation collapses to $I = -I_S$. The current saturates: doubling the reverse voltage\ndoes not double it. Physically, $I_S$ is set by how fast minority carriers are\ngenerated near the junction, and once the field is strong enough to sweep every one of\nthem across, making it stronger changes nothing. (Real diodes show some extra\nsurface leakage that does creep up with voltage, and eventually break down entirely —\nwhich module 4 turns into a feature.)"
+     },
+     {
+      "q": "A 5 V supply drives a 430 Ω resistor in series with a diode. Which method finds the operating point?",
+      "opts": [
+       "draw $I = (5 - V)/430$ on the diode's I–V curve and read off where the two cross",
+       "divide 5 V by 430 Ω",
+       "solve $5 = IR + nV_T\\ln(I/I_S)$ algebraically for $I$",
+       "assume the diode drops 0.7 V, since it always does"
+      ],
+      "a": 0,
+      "why": "The load line. Option C is the right equation but it has no closed-form solution —\n$I$ appears both linearly and inside a logarithm, so it needs a numerical method\n(which is what the lab below writes). Option B forgets the diode entirely. Option D is\na first estimate, not an answer: it gives 10.0 mA where the true value is 10.008 mA\nhere, which is close, but the same assumption at 100 µA or 1 A is out by a long way."
+     },
+     {
+      "q": "At 10 mA a diode drops 0.696 V. Its static resistance is 69.6 Ω. What is its dynamic resistance at that current, with $n = 1$ at 300 K?",
+      "opts": [
+       "69.6 Ω",
+       "34.8 Ω",
+       "2.59 Ω",
+       "0 Ω — an ideal diode has none"
+      ],
+      "a": 2,
+      "why": "$r_d = nV_T/I = 0.025852/0.01 = 2.59$ Ω, twenty-seven times smaller than the static\nresistance. Both numbers are correct and neither is *the* resistance of the diode: the\nstatic value tells you the DC drop, the dynamic value tells you how much that drop\nmoves when the current changes. A 1 mA wobble on top of the 10 mA moves the diode\nvoltage by 2.6 mV, not by 70 mV. Answering 69.6 Ω here is the error that makes people\nexpect a shunt regulator to be far worse than it is."
+     },
+     {
+      "q": "Two identical diodes are connected in parallel and the pair is fed 20 mA in total. Compared with one diode carrying 20 mA, the forward drop of the pair is:",
+      "opts": [
+       "twice as large",
+       "half as large",
+       "the same",
+       "smaller by about 18 mV"
+      ],
+      "a": 3,
+      "why": "Each diode carries 10 mA rather than 20 mA, which is half the current — and half is\n$\\log_{10}2 = 0.301$ of a decade, so the drop falls by $0.301 \\times 59.5 = 17.9$ mV.\nAnswering \"the same\" ignores the split; answering \"half\" applies the resistor rule to\na device that does not obey it. In practice diodes are rarely paralleled precisely\nbecause of this exponential: a 20 mV mismatch between two supposedly identical parts\nsends twice the current down one of them."
+     },
+     {
+      "q": "You replace a diode with its piecewise-linear model, $V_{D0}$ in series with $r_d$, taken as the tangent at 10 mA. Where is the model exact?",
+      "opts": [
+       "everywhere, since the model is linear",
+       "at 10 mA and nowhere else, though it stays useful for a decade either side",
+       "only in reverse bias",
+       "only above 100 mA"
+      ],
+      "a": 1,
+      "why": "A tangent touches the curve at one point. At 10 mA the model reproduces both the\nvoltage and the slope exactly; move far from there and the straight line and the\nexponential diverge, since one of them curves and the other does not. Between about\n1 mA and 100 mA the error stays small enough to design with, and that is what makes\nthe model worth having: it turns a circuit no linear solver can touch into one it\nsolves instantly. You build exactly this model in the schematic editor next."
+     }
+    ]
+   },
+   "blanks": null,
+   "build": {
+    "title": "A diode a linear solver can swallow",
+    "minutes": 28,
+    "brief": "The schematic editor solves linear circuits, and a diode is not linear. That is not an\nobstacle — it is the exercise. You are going to replace the diode by its\n**piecewise-linear equivalent** and then measure two things that prove the equivalent\nis doing the diode's job rather than a resistor's.\n\n## The device\n\nA small-signal silicon diode with $I_S = 2.0\\times10^{-14}$ A and $n = 1$, at 300 K\nwhere $V_T = 25.852$ mV. At 10 mA it drops\n\n$$V_D = nV_T\\ln\\!\\left(1 + \\frac{I}{I_S}\\right) = 0.6964\\ \\text{V},\n\\qquad r_d = \\frac{nV_T}{I} = 2.585\\ \\Omega$$\n\nThe tangent to the curve at that point passes through $V_D$ at 10 mA with slope\n$r_d$, so it meets the voltage axis at $V_{D0} = 0.6964 - 0.010\\times2.585 = 0.6705$ V.\nThe model is therefore a **0.6705 V source in series with 2.585 Ω**.\n\n## What to build\n\nThe canvas gives you a 5 V supply, a 100 µF capacitor from the output node to ground,\nand a probe on that node. Nothing works yet, because that node has no DC path anywhere.\nAdd:\n\n- a series resistor from the 5 V rail to the output node, sized so that **10 mA** flows,\n- the diode model — the 0.6705 V source and the 2.585 Ω resistor in series — from the\n  output node down to ground, with the source's **+ terminal facing the output**.\n\nLeave the capacitor alone; it is there for the last check.\n\n## The trap, and why the last check exists\n\nAt the operating point the diode's static resistance is $0.6964/0.010 = 69.6\\ \\Omega$.\nA single 69.6 Ω resistor in place of the whole model gives the *same* DC voltage and\nthe *same* DC current, and it passes the first three checks. It is wrong, and the\ncapacitor is what catches it. The capacitor charges through whatever incremental\nresistance it sees, which for the real model is $r_d$ in parallel with your series\nresistor — about 2.57 Ω, a time constant of 0.26 ms. For the 69.6 Ω impostor it is\nabout 60 Ω, a time constant of 6 ms, twenty-three times slower.\n\nA diode is not a resistor, and this is the measurement that says so.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 5
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p6",
+       "kind": "C",
+       "x": 17,
+       "y": 9,
+       "rot": 1,
+       "value": 0.0001
+      },
+      {
+       "id": "p7",
+       "kind": "GND",
+       "x": 17,
+       "y": 11
+      },
+      {
+       "id": "p8",
+       "kind": "OUT",
+       "x": 11,
+       "y": 8
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        11,
+        8
+       ],
+       "b": [
+        17,
+        8
+       ]
+      },
+      {
+       "a": [
+        17,
+        10
+       ],
+       "b": [
+        17,
+        11
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 5
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 430
+      },
+      {
+       "id": "p3",
+       "kind": "R",
+       "x": 13,
+       "y": 9,
+       "rot": 1,
+       "value": 2.5852
+      },
+      {
+       "id": "p4",
+       "kind": "V",
+       "x": 13,
+       "y": 11,
+       "rot": 1,
+       "value": 0.6705
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 13,
+       "y": 13
+      },
+      {
+       "id": "p6",
+       "kind": "C",
+       "x": 17,
+       "y": 9,
+       "rot": 1,
+       "value": 0.0001
+      },
+      {
+       "id": "p7",
+       "kind": "GND",
+       "x": 17,
+       "y": 11
+      },
+      {
+       "id": "p8",
+       "kind": "OUT",
+       "x": 11,
+       "y": 8
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        9,
+        8
+       ]
+      },
+      {
+       "a": [
+        9,
+        8
+       ],
+       "b": [
+        17,
+        8
+       ]
+      },
+      {
+       "a": [
+        13,
+        12
+       ],
+       "b": [
+        13,
+        13
+       ]
+      },
+      {
+       "a": [
+        17,
+        10
+       ],
+       "b": [
+        17,
+        11
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "the 5 V supply delivers 10 mA",
+      "code": "const sources = c.net.parts.filter(function (p) { return p.kind === 'V'; });\nconst supply = sources.filter(function (p) { return Math.abs(p.value - 5) < 0.5; });\nc.assert(supply.length === 1,\n  'Exactly one 5 V supply, so that \"the supply current\" means one thing. Found ' +\n  supply.length + ' source(s) near 5 V.');\nconst i = Math.abs(c.dc().currents[supply[0].id]);\nc.close(i, 0.010, 0.03,\n  'the current out of the 5 V supply — size the series resistor from (5 - 0.6964)/0.010');"
+     },
+     {
+      "name": "the diode model sits at 0.696 V",
+      "code": "c.close(c.vout(), 0.6964, 0.015,\n  'the voltage at the probed node. At 10 mA this diode drops 0.6964 V, so that is what ' +\n  'the top of the model must sit at; check the offset source is the right way up');"
+     },
+     {
+      "name": "the power splits 43 mW in the resistor, 7 mW in the diode",
+      "code": "const sources = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 5) < 0.5; });\nconst i = Math.abs(c.dc().currents[sources[0].id]);\nconst v = c.vout();\nc.close(v * i, 0.006969, 0.06, 'the power in the diode branch (its voltage times the current)');\nc.close((5 - v) * i, 0.04307, 0.06, 'the power in the series resistor');"
+     },
+     {
+      "name": "the capacitor charges with a 0.26 ms time constant, not 6 ms",
+      "code": "const s = c.step(1.0e-3);\nconst settled = s.v[s.v.length - 1];\nconst target = c.vout();\nc.assert(target > 0.05, 'The probed node should settle near 0.7 V; it is at ' + c.fmt(target, 'V') + '.');\nconst frac = settled / target;\nc.assert(frac > 0.90,\n  'After 1 ms the node has only reached ' + (100 * frac).toFixed(1) + '% of its final value. ' +\n  'With the real diode model the incremental resistance is about 2.6 ohms and 1 ms is nearly ' +\n  'four time constants, so it should be past 97%. A single resistor of the diode\\'s static ' +\n  'resistance gives the same DC answer but charges twenty-three times more slowly, which is ' +\n  'what this check is looking for.');"
+     }
+    ],
+    "hints": [
+     "The series resistor carries the same 10 mA and drops the rest of the supply: $(5 - 0.6964)/0.010 = 430.4\\ \\Omega$. Type `430` — the checks allow 3% on the current.",
+     "Build the model as a chain: output node, down through the 2.585 Ω resistor, then down through the 0.6705 V source, then to ground. Order does not matter electrically, but the polarity does.",
+     "For a vertical source the **+ terminal is the top pin**. The offset battery must push the output node upwards, so its + must face the output, not ground.",
+     "Type small values plainly: `2.585` for the resistor and `0.6705` for the source. The editor also understands `430` and `100u`.",
+     "If the last check fails but the first three pass, you have almost certainly used one resistor for the whole diode. Look at what the capacitor is charging through."
+    ]
+   },
+   "derive": null,
+   "lab": {
+    "title": "Solving the diode equation, both ways round",
+    "runtime": "python",
+    "minutes": 32,
+    "brief": "The Shockley equation, its inverse, its slope, and the numerical solve that a\nsimulator does for you.\n\n- `diode_current(v, i_s, n, v_t)` returns $I_S\\left(e^{V/nV_T} - 1\\right)$.\n- `diode_voltage(i, i_s, n, v_t)` returns $nV_T\\ln(1 + I/I_S)$, the inverse.\n- `dynamic_resistance(i, n, v_t)` returns $nV_T/I$.\n- `operating_point(v_s, r_s, i_s, n, v_t)` returns the tuple `(v_d, i_d)` where the\n  diode curve crosses the load line $I = (V_S - V)/R_S$.\n\nFor the last one, use **bisection**. The diode voltage is somewhere between 0 and\n`v_s`. At the true answer the diode current equals the load-line current; below it the\ndiode wants less current than the resistor offers, above it more. So:\n\n```text\nlo, hi = 0.0, v_s\nrepeat 200 times:\n    mid = (lo + hi) / 2\n    if diode_current(mid) > (v_s - mid) / r_s:   hi = mid\n    else:                                        lo = mid\n```\n\n200 halvings of a 5 V interval takes you far below floating-point resolution, so there\nis no need to be clever about a stopping rule. Return `(v, (v_s - v) / r_s)`.\n\nKeep the `+1` and the `-1` in the two exponential expressions. They cost nothing and\nthey keep the functions correct in reverse bias and at very small currents, where\ndropping them gives a logarithm of zero.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"The Shockley diode equation, forwards, backwards and solved on a load line.\"\"\"\n\nimport math\n\n\ndef diode_current(v, i_s, n, v_t):\n    \"\"\"Shockley: the current through a diode with `v` volts across it.\"\"\"\n    # TODO: i_s * (exp(v / (n * v_t)) - 1).\n    return 0.0\n\n\ndef diode_voltage(i, i_s, n, v_t):\n    \"\"\"The inverse: the voltage across a diode carrying `i` amps.\"\"\"\n    # TODO: n * v_t * log(1 + i / i_s).\n    return 0.0\n\n\ndef dynamic_resistance(i, n, v_t):\n    \"\"\"Small-signal resistance dV/dI at a bias current of `i` amps.\"\"\"\n    # TODO: differentiate the line above, or just remember n*v_t/i.\n    return 0.0\n\n\ndef operating_point(v_s, r_s, i_s, n, v_t):\n    \"\"\"Bisect for the (v_d, i_d) where the diode meets the load line.\"\"\"\n    lo, hi = 0.0, v_s\n    # TODO: 200 halvings, then return (v, (v_s - v) / r_s).\n    return (0.0, 0.0)\n\n\nif __name__ == \"__main__\":\n    vt = 0.025851999786435535\n    i_s = 2.0e-14\n    print(\"current at 0.7 V:\", diode_current(0.7, i_s, 1.0, vt), \"A\")\n    print(\"voltage at 10 mA:\", diode_voltage(0.01, i_s, 1.0, vt), \"V\")\n    print(\"a decade costs:\",\n          diode_voltage(0.01, i_s, 1.0, vt) - diode_voltage(0.001, i_s, 1.0, vt), \"V\")\n    v, i = operating_point(5.0, 430.0, i_s, 1.0, vt)\n    print(\"5 V through 430 ohms:\", v, \"V at\", i, \"A\")\n    print(\"static resistance:\", v / i if i else 0.0,\n          \"dynamic resistance:\", dynamic_resistance(i, 1.0, vt) if i else 0.0)\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"The Shockley diode equation, forwards, backwards and solved on a load line.\"\"\"\n\nimport math\n\n\ndef diode_current(v, i_s, n, v_t):\n    \"\"\"Shockley: the current through a diode with `v` volts across it.\"\"\"\n    return i_s * (math.exp(v / (n * v_t)) - 1.0)\n\n\ndef diode_voltage(i, i_s, n, v_t):\n    \"\"\"The inverse: the voltage across a diode carrying `i` amps.\"\"\"\n    return n * v_t * math.log(1.0 + i / i_s)\n\n\ndef dynamic_resistance(i, n, v_t):\n    \"\"\"Small-signal resistance dV/dI at a bias current of `i` amps.\"\"\"\n    return n * v_t / i\n\n\ndef operating_point(v_s, r_s, i_s, n, v_t):\n    \"\"\"Bisect for the (v_d, i_d) where the diode meets the load line.\"\"\"\n    lo, hi = 0.0, v_s\n    for _ in range(200):\n        mid = 0.5 * (lo + hi)\n        if diode_current(mid, i_s, n, v_t) > (v_s - mid) / r_s:\n            hi = mid\n        else:\n            lo = mid\n    v = 0.5 * (lo + hi)\n    return (v, (v_s - v) / r_s)\n\n\nif __name__ == \"__main__\":\n    vt = 0.025851999786435535\n    i_s = 2.0e-14\n    print(\"current at 0.7 V:\", diode_current(0.7, i_s, 1.0, vt), \"A\")\n    print(\"voltage at 10 mA:\", diode_voltage(0.01, i_s, 1.0, vt), \"V\")\n    print(\"a decade costs:\",\n          diode_voltage(0.01, i_s, 1.0, vt) - diode_voltage(0.001, i_s, 1.0, vt), \"V\")\n    v, i = operating_point(5.0, 430.0, i_s, 1.0, vt)\n    print(\"5 V through 430 ohms:\", v, \"V at\", i, \"A\")\n    print(\"static resistance:\", v / i if i else 0.0,\n          \"dynamic resistance:\", dynamic_resistance(i, 1.0, vt) if i else 0.0)\n"
+     }
+    ],
+    "hints": [
+     "`math.exp` and `math.log` are the two you need. `math.log(x)` is the natural logarithm; there is no need to pass a base.",
+     "In `diode_voltage`, write `1.0 + i / i_s` rather than `i / i_s`. For forward currents the difference is invisible, but it keeps the function finite at $i = 0$.",
+     "`dynamic_resistance` is one division. If it looks too simple to be worth a function, notice that it is the derivative of `diode_voltage` — differentiating $nV_T\\ln(I/I_S)$ with respect to $I$ gives $nV_T/I$, and every $I_S$ cancels.",
+     "In `operating_point`, the loop body is exactly the four lines in the brief. Do the halving 200 times unconditionally; the interval shrinks by $2^{200}$, so nothing is left to converge.",
+     "If bisection returns `v_s` or 0, the comparison is the wrong way round. When the diode's current *exceeds* the load line's, the guess is too high, so bring `hi` down."
+    ],
+    "tests": [
+     {
+      "name": "the forward current at 0.7 V",
+      "code": "vt = 0.025851999786435535\ni = diode_current(0.7, 2.0e-14, 1.0, vt)\nassert abs(i - 0.011495091382073667) < 1e-12, f\"expected 0.0114951 A, got {i}\""
+     },
+     {
+      "name": "reverse bias saturates at -I_S",
+      "code": "vt = 0.025851999786435535\ni = diode_current(-0.5, 2.0e-14, 1.0, vt)\nassert abs(i + 2.0e-14) < 1e-20, f\"expected about -2e-14 A, got {i}\"\nj = diode_current(-5.0, 2.0e-14, 1.0, vt)\nassert abs(j - i) < 1e-22, \\\n    f\"ten times the reverse voltage must give the same current: {i} vs {j}\"\nassert abs(diode_current(0.0, 2.0e-14, 1.0, vt)) < 1e-24, \"zero volts must give zero current\""
+     },
+     {
+      "name": "the inverse agrees with the forward equation",
+      "code": "vt = 0.025851999786435535\nv = diode_voltage(0.01, 2.0e-14, 1.0, vt)\nassert abs(v - 0.6963979112242282) < 1e-12, f\"expected 0.6963979 V at 10 mA, got {v}\"\nback = diode_current(v, 2.0e-14, 1.0, vt)\nassert abs(back - 0.01) < 1e-12, f\"round-tripping 10 mA should give 10 mA, got {back}\""
+     },
+     {
+      "name": "a decade of current costs 59.5 mV",
+      "code": "vt = 0.025851999786435535\nstep = (diode_voltage(0.01, 2.0e-14, 1.0, vt)\n        - diode_voltage(0.001, 2.0e-14, 1.0, vt))\nassert abs(step - 0.05952642933186636) < 1e-9, f\"expected 0.0595264 V per decade, got {step}\"\nbig = (diode_voltage(0.1, 2.0e-14, 1.0, vt)\n       - diode_voltage(0.01, 2.0e-14, 1.0, vt))\nassert abs(big - step) < 1e-6, \\\n    f\"every decade costs the same: {step} then {big}\""
+     },
+     {
+      "name": "static and dynamic resistance are twenty-seven times apart",
+      "code": "vt = 0.025851999786435535\nrd = dynamic_resistance(0.01, 1.0, vt)\nassert abs(rd - 2.5851999786435536) < 1e-12, f\"expected 2.5852 ohms at 10 mA, got {rd}\"\nassert abs(dynamic_resistance(0.001, 1.0, vt) - 25.851999786435535) < 1e-9, \\\n    \"a tenth of the current is ten times the dynamic resistance\"\nstatic = diode_voltage(0.01, 2.0e-14, 1.0, vt) / 0.01\nassert abs(static / rd - 26.93) < 0.05, \\\n    f\"the static resistance should be about 27 times the dynamic one, got {static / rd}\""
+     },
+     {
+      "name": "the load line, solved",
+      "code": "vt = 0.025851999786435535\nv, i = operating_point(5.0, 430.0, 2.0e-14, 1.0, vt)\nassert abs(v - 0.6964194289924417) < 1e-9, f\"expected 0.6964194 V, got {v}\"\nassert abs(i - 0.010008326909319902) < 1e-12, f\"expected 0.0100083 A, got {i}\"\nassert abs(diode_current(v, 2.0e-14, 1.0, vt) - i) < 1e-9, \\\n    \"at the operating point the diode current and the load-line current must be the same number\""
+     },
+     {
+      "name": "it works on other supplies, and on a non-ideal diode",
+      "code": "vt = 0.025851999786435535\nv, i = operating_point(12.0, 1000.0, 2.0e-14, 1.0, vt)\nassert abs(v - 0.6995584914972504) < 1e-9, f\"expected 0.6995585 V, got {v}\"\nassert abs(i - 0.01130044150850275) < 1e-12, f\"expected 0.0113004 A, got {i}\"\nv2, i2 = operating_point(5.0, 100.0, 2.0e-14, 1.0, vt)\nassert abs(v2 - 0.7339014004034561) < 1e-9, f\"expected 0.7339014 V, got {v2}\"\nassert v2 > v, \"more current means more volts, even though only a little more\"\nv3, i3 = operating_point(5.0, 430.0, 2.0e-14, 2.0, vt)\nassert abs(v3 - 1.383840561056358) < 1e-9, \\\n    f\"an ideality factor of 2 roughly doubles the drop; expected 1.3838406 V, got {v3}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Rectifiers, the reservoir capacitor and ripple",
+   "summary": "The diode's one-way behaviour, put to work: mains in, a rough DC rail out, and an arithmetic of ripple.",
+   "concepts": [
+    "A **half-wave rectifier** is one diode in series with the load: it passes the positive half-cycles and blocks the negative ones. The output ripples at the mains frequency and is idle for half of every cycle.",
+    "A **full-wave bridge** uses four diodes so that both half-cycles reach the load in the same direction. The ripple frequency is twice the mains frequency — 100 Hz from 50 Hz mains — and two diodes are in series with the load at all times, so the drop is $2V_D$, not $V_D$.",
+    "The **peak inverse voltage** (PIV) is the largest reverse voltage a diode must withstand. For a bridge it is about $V_{peak}$; for a half-wave rectifier with a reservoir capacitor it is about $2V_{peak}$, because the capacitor holds the cathode up while the input swings negative.",
+    "A **reservoir capacitor** across the output turns the rectified humps into a nearly steady voltage. It charges to the peak while the diodes conduct and discharges into the load while they do not.",
+    "Between peaks the capacitor supplies the whole load current, and it can only do that by falling: $-C\\,dV/dt = I_{load}$, so $dV/dt$ is negative and its size is set by the load. Over one ripple period that gives the working approximation $V_{ripple} \\approx I_{load}/(f_{ripple}C)$.",
+    "That formula assumes the capacitor discharges for the *whole* ripple period. It never does — the diodes conduct near each peak — so it always overestimates. How much depends on how wide that conduction window is: about five per cent when the ripple is a small fraction of the rail, ten to twenty per cent for an ordinary design, and more still when the ripple is large. It errs on the safe side either way, which is what makes it a usable design tool.",
+    "Doubling the capacitance halves the ripple; doubling the load current doubles it; going from half-wave to full-wave halves it, because the gaps between peaks are half as long.",
+    "The price of a large reservoir is a short, tall **peak repetitive current**. All the charge the load takes over a whole period must be replaced during the few degrees of conduction near each peak, so a 70 mA load can demand amps through the diodes.",
+    "Real diodes do not stop conducting instantly when the current reverses. **Reverse recovery** sweeps the stored minority charge out, and the loop inductance and junction capacitance then ring at tens of megahertz — the source of most of a supply's radiated noise.",
+    "A rectifier output is not a supply. It has ripple, it moves with the mains and with the load, and it needs either a filter, a regulator or both. Module 4 supplies the regulator."
+   ],
+   "sandbox": {
+    "title": "What happens the instant a diode stops conducting",
+    "visualiser": "switching",
+    "minutes": 10,
+    "brief": "The arithmetic of ripple treats a diode as a switch that opens the moment the current\ntries to reverse. It does not. The junction has capacitance, the wiring loop has\ninductance, and between them they hold a resonant circuit that gets kicked hard every\ntime the device turns off.\n\nThis visualiser plots one such turn-off. The **upper trace** is the voltage across the\nswitching device, normalised so that 1 means the full off-state voltage and 0 means\nfully conducting. The **lower, blue trace** is the current through it, also normalised\nto 1. The horizontal axis is 600 nanoseconds. Both traces are flat for the first\n100 ns; the transition happens there.\n\nThe three sliders are the loop inductance in nanohenries, the device capacitance in\npicofarads, and a **dead time** in nanoseconds — a delay before the device is allowed\nto take up current. Leave the dead time at zero for the first four readings; that is\nthe rectifier case, where nothing waits for anything.",
+    "initial": {
+     "ls": 30,
+     "coss": 150,
+     "dead": 0
+    },
+    "notice": [
+     "At the opening values — 30 nH and 150 pF — the voltage trace is amber and, at 100 ns, drops and then oscillates about zero, decaying to nothing by roughly 250 ns. The note beside the plot gives 75.0 MHz for that oscillation, which is $1/2\\pi\\sqrt{LC}$ with those two numbers, and one cycle of it is about 13 ns wide on the axis.",
+     "The blue current trace, over the same instant, goes straight from 0 to 1 with no slope at all and then stays there. Voltage and current are therefore both large at 100 ns, which is exactly the overlap that turns into heat in the device.",
+     "Drag the device capacitance from 150 pF to its maximum of 600 pF, leaving the inductance at 30 nH. The note now reads 37.5 MHz — exactly half, because four times the capacitance halves $1/\\sqrt{LC}$ — and the cycles on the plot visibly stretch to about 27 ns. Multiplying the capacitance did not remove the ringing; it only slowed it down.",
+     "Put the capacitance back to 150 pF and take the loop inductance from 30 nH to 80 nH. The frequency falls to 45.9 MHz and, more usefully, the oscillation now takes noticeably longer to die away. Loop inductance is the one term here you control with layout rather than with a part number.",
+     "Put the inductance back to 30 nH before this reading, or it will not work: the note then reads 3 ns for the swing, against 5 ns at 80 nH. Now push the dead time from 0 to 5 ns. Five nanoseconds covers a 3 ns swing, so the voltage trace changes colour, becomes a single smooth quarter-cosine from 1 down to 0 in those 3 ns, and stops ringing altogether, while the current trace stops jumping and ramps up over about 60 ns instead. The voltage is at zero long before the current is anywhere near 1, so the two barely overlap. That is what a switching converter buys with dead time — and what an ordinary mains rectifier, which has no controller to wait for anything, does not get.",
+     "Leave the dead time at 5 ns and drag the inductance back up to 80 nH. The trace reverts to amber and rings again. The note still rounds to 5 ns, but the swing at 80 nH is really 5.44 ns, and 5 ns of dead time does not cover it. Dead time is not a fixed number of nanoseconds; it has to be re-earned every time the layout changes."
+    ]
+   },
+   "quiz": {
+    "title": "Rectifiers, ripple and what the capacitor costs",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "A transformer secondary delivers 12 V RMS at 50 Hz into a bridge rectifier with a large reservoir capacitor. Roughly what DC voltage appears across the capacitor at light load?",
+      "opts": [
+       "12 V",
+       "10.6 V",
+       "8.5 V",
+       "15.6 V"
+      ],
+      "a": 3,
+      "why": "The capacitor charges towards the **peak**, not the RMS value:\n$12\\sqrt{2} = 16.97$ V, less two diode drops for a bridge, giving about 15.6 V.\nAnswering 12 V is the single most common error in power supply design, and it is\nalways in the direction that surprises you — the rail is 30% higher than the label on\nthe transformer. Answering 10.6 V subtracts the drops from the RMS value instead of\nfrom the peak."
+     },
+     {
+      "q": "The same supply now draws 50 mA from a 1000 µF reservoir. Estimate the peak-to-peak ripple.",
+      "opts": [
+       "1.0 V",
+       "0.5 V",
+       "0.05 V",
+       "5.0 V"
+      ],
+      "a": 1,
+      "why": "$V_{ripple} \\approx I/(f_{ripple}C) = 0.05/(100 \\times 1000\\times10^{-6}) = 0.5$ V.\nThe trap is the 1.0 V answer, which uses $f = 50$ Hz. A **bridge** delivers a hump\nevery half cycle, so the ripple frequency is 100 Hz and the capacitor only has to\ncoast for 10 ms, not 20 ms. Half-wave would indeed give 1.0 V from the same capacitor,\nwhich is the practical reason bridges are worth their two extra diodes."
+     },
+     {
+      "q": "You are unhappy with 0.5 V of ripple and want 0.1 V. What do you do?",
+      "opts": [
+       "use diodes with a lower forward drop",
+       "double the reservoir capacitor to 2200 µF",
+       "multiply the reservoir capacitor by about five, to 4700 µF",
+       "raise the transformer voltage"
+      ],
+      "a": 2,
+      "why": "Ripple is inversely proportional to capacitance, so a fivefold reduction in ripple\nwants a fivefold increase in capacitance. The nearest standard value is 4700 µF, which\nlands the ripple at $0.5/4.7 = 0.106$ V — near enough, and the honest way to design\nwith the E-series is to accept that last few per cent rather than chase it. Neither\nthe diode drop nor the transformer voltage\nappears anywhere in $I/(f C)$ — they set where the rail *sits*, not how much it\n*wiggles*. And note what the fivefold capacitor costs: the conduction angle narrows\nand the peak repetitive current through the diodes goes up sharply."
+     },
+     {
+      "q": "Why does the simple formula $V_{ripple} = I/(f_{ripple}C)$ always predict slightly more ripple than a simulation shows?",
+      "opts": [
+       "it assumes the capacitor discharges for the whole ripple period, when in fact the diodes conduct for part of it",
+       "it ignores the diode forward drops",
+       "it assumes the load is constant when in fact it varies",
+       "it uses the peak voltage where it should use the RMS value"
+      ],
+      "a": 0,
+      "why": "The capacitor only coasts between the point where the input falls below it and the\npoint on the next hump where the input catches it up again — which is less than a full\nripple period. The formula assumes the whole period, so it always errs on the\npessimistic side — by about ten per cent for the design in the lab below, and by more\nwhen the ripple is a larger fraction of the rail and the diodes therefore conduct for\nlonger. That is a good property for a design rule: you get slightly less ripple than\nyou budgeted for. The lab below measures both numbers and compares them."
+     },
+     {
+      "q": "A supply draws 70 mA average from a bridge and reservoir, and the diodes conduct for about 3 ms out of each 10 ms ripple period. Roughly what average current flows through a diode pair while it conducts?",
+      "opts": [
+       "70 mA",
+       "230 mA",
+       "23 mA",
+       "700 mA"
+      ],
+      "a": 1,
+      "why": "All the charge the load takes over the whole 10 ms has to be replaced in that 3 ms\nwindow, so the conducting current is larger by roughly $10/3$:\n$70 \\times 3.33 \\approx 230$ mA average during conduction, with an instantaneous peak\nhigher still. This is why rectifier diodes are rated for a surge current far above\ntheir average rating, and why a big reservoir capacitor is not a free improvement —\nit narrows the conduction window and pushes that peak higher."
+     },
+     {
+      "q": "In a half-wave rectifier with a reservoir capacitor, what is the peak inverse voltage the diode must survive?",
+      "opts": [
+       "about $V_{peak}$",
+       "about $V_{peak}/2$",
+       "about $V_{peak}/\\sqrt{2}$",
+       "about $2V_{peak}$"
+      ],
+      "a": 3,
+      "why": "About twice the peak. The capacitor holds the cathode near $+V_{peak}$ while the\ntransformer swings down to $-V_{peak}$, so the diode sees the sum across it. Sizing\nit for $V_{peak}$ is the classic way to destroy a rectifier the first time it is\nswitched on with no load. A bridge does not have this problem: its non-conducting\ndiodes are clamped by the conducting pair, and the PIV is about $V_{peak}$."
+     }
+    ]
+   },
+   "blanks": null,
+   "build": null,
+   "derive": null,
+   "lab": {
+    "title": "Ripple, predicted and measured",
+    "runtime": "python",
+    "minutes": 34,
+    "brief": "Two design formulas and one simulation, so you can see how far the formulas are from\nthe truth and in which direction.\n\n- `reservoir_ripple(i_load, f_ripple, c)` returns the peak-to-peak ripple predicted by\n  $I/(f_{ripple}C)$, in volts.\n- `capacitor_for_ripple(i_load, f_ripple, v_ripple)` is the same relation solved for\n  the capacitance you need, in farads.\n- `simulate(v_peak, f_mains, c, r_load, v_drop_total, cycles, per_cycle)` steps a\n  full-wave rectifier and reservoir forward in time and returns the output voltage at\n  every sample, as a list.\n- `measured_ripple(samples, per_cycle)` returns the peak-to-peak spread of the **last\n  `per_cycle` samples** — one whole mains cycle, well after the start-up transient.\n\n## The simulation model\n\nTime step `dt = 1 / (f_mains * per_cycle)`; run for `cycles * per_cycle` samples,\nstarting from an output of 0 V. At sample `k`, with `t = k * dt`:\n\n```text\nv_rect = v_peak * abs(sin(2*pi*f_mains*t)) - v_drop_total\nif v_rect > v:            # the diodes conduct and the capacitor follows the input\n    v = v_rect\nelse:                     # they are off, and the load discharges the capacitor\n    v -= (v / r_load) * dt / c\nrecord v\n```\n\nThe `abs` is the whole of the full-wave bridge: it folds the negative half-cycles up\ninto positive ones. `v_drop_total` is the sum of the drops of the diodes in series\nwith the load at any instant — 1.4 V for a bridge, 0.7 V for a half-wave rectifier.\nThe discharge line is $C\\,dV = -I\\,dt$ with $I = v/R$, applied one step at a time.\n\nUse a plain loop. The model is sequential — each sample depends on the one before —\nso vectorising it is not straightforward, and clarity is worth more here than speed.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"Rectifier ripple: the design formula, and what actually happens.\"\"\"\n\nimport math\n\n\ndef reservoir_ripple(i_load, f_ripple, c):\n    \"\"\"Peak-to-peak ripple in volts, from the standard I/(fC) estimate.\"\"\"\n    # TODO: one division.\n    return 0.0\n\n\ndef capacitor_for_ripple(i_load, f_ripple, v_ripple):\n    \"\"\"Capacitance in farads needed to hold the ripple to v_ripple volts.\"\"\"\n    # TODO: the same relation, solved for C.\n    return 0.0\n\n\ndef simulate(v_peak, f_mains, c, r_load, v_drop_total, cycles, per_cycle):\n    \"\"\"Step a full-wave rectifier and reservoir; return every output sample.\"\"\"\n    dt = 1.0 / (f_mains * per_cycle)\n    v = 0.0\n    out = []\n    # TODO: the loop from the brief, appending v every step.\n    return out\n\n\ndef measured_ripple(samples, per_cycle):\n    \"\"\"Peak-to-peak spread of the last per_cycle samples.\"\"\"\n    # TODO: slice the tail, then max minus min.\n    return 0.0\n\n\nif __name__ == \"__main__\":\n    print(\"predicted ripple:\", reservoir_ripple(0.05, 100.0, 1000e-6), \"V\")\n    print(\"C for 0.5 V at 50 mA:\", capacitor_for_ripple(0.05, 100.0, 0.5), \"F\")\n    s = simulate(17.0, 50.0, 1000e-6, 220.0, 1.4, 10, 2000)\n    if s:\n        tail = s[-2000:]\n        mean = sum(tail) / len(tail)\n        print(\"mean output:\", mean, \"V\")\n        print(\"measured ripple:\", measured_ripple(s, 2000), \"V\")\n        print(\"formula would say:\", reservoir_ripple(mean / 220.0, 100.0, 1000e-6), \"V\")\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"Rectifier ripple: the design formula, and what actually happens.\"\"\"\n\nimport math\n\n\ndef reservoir_ripple(i_load, f_ripple, c):\n    \"\"\"Peak-to-peak ripple in volts, from the standard I/(fC) estimate.\"\"\"\n    return i_load / (f_ripple * c)\n\n\ndef capacitor_for_ripple(i_load, f_ripple, v_ripple):\n    \"\"\"Capacitance in farads needed to hold the ripple to v_ripple volts.\"\"\"\n    return i_load / (f_ripple * v_ripple)\n\n\ndef simulate(v_peak, f_mains, c, r_load, v_drop_total, cycles, per_cycle):\n    \"\"\"Step a full-wave rectifier and reservoir; return every output sample.\"\"\"\n    dt = 1.0 / (f_mains * per_cycle)\n    v = 0.0\n    out = []\n    for k in range(cycles * per_cycle):\n        t = k * dt\n        v_rect = v_peak * abs(math.sin(2.0 * math.pi * f_mains * t)) - v_drop_total\n        if v_rect > v:\n            v = v_rect\n        else:\n            v -= (v / r_load) * dt / c\n        out.append(v)\n    return out\n\n\ndef measured_ripple(samples, per_cycle):\n    \"\"\"Peak-to-peak spread of the last per_cycle samples.\"\"\"\n    tail = samples[-per_cycle:]\n    return max(tail) - min(tail)\n\n\nif __name__ == \"__main__\":\n    print(\"predicted ripple:\", reservoir_ripple(0.05, 100.0, 1000e-6), \"V\")\n    print(\"C for 0.5 V at 50 mA:\", capacitor_for_ripple(0.05, 100.0, 0.5), \"F\")\n    s = simulate(17.0, 50.0, 1000e-6, 220.0, 1.4, 10, 2000)\n    if s:\n        tail = s[-2000:]\n        mean = sum(tail) / len(tail)\n        print(\"mean output:\", mean, \"V\")\n        print(\"measured ripple:\", measured_ripple(s, 2000), \"V\")\n        print(\"formula would say:\", reservoir_ripple(mean / 220.0, 100.0, 1000e-6), \"V\")\n"
+     }
+    ],
+    "hints": [
+     "`reservoir_ripple` is `i_load / (f_ripple * c)`, and `capacitor_for_ripple` is `i_load / (f_ripple * v_ripple)`. Watch the brackets: `i_load / f_ripple * c` multiplies where it should divide.",
+     "In `simulate`, build the list with `out.append(v)` at the **end** of each step, after `v` has been updated. Appending first shifts every sample by one step and moves the measured ripple slightly.",
+     "The discharge step is `v -= (v / r_load) * dt / c`. The current is taken at the start of the step, which is forward Euler — with 2000 samples per cycle the error is far below the ripple you are measuring.",
+     "`measured_ripple` is `max(tail) - min(tail)` where `tail = samples[-per_cycle:]`. Using the whole list instead of the tail includes the start-up ramp from 0 V and gives a wildly wrong answer.",
+     "The measured ripple should come out *below* the formula's prediction. If it comes out above, check that `abs` is around the sine — without it you have built a half-wave rectifier, whose gaps are twice as long."
+    ],
+    "tests": [
+     {
+      "name": "the design formulas invert each other",
+      "code": "v = reservoir_ripple(0.05, 100.0, 1000e-6)\nassert abs(v - 0.5) < 1e-12, f\"50 mA, 100 Hz, 1000 uF gives 0.5 V, got {v}\"\nc = capacitor_for_ripple(0.05, 100.0, 0.5)\nassert abs(c - 1000e-6) < 1e-12, f\"the same numbers back the other way give 1000 uF, got {c}\"\nassert abs(reservoir_ripple(0.10, 100.0, 1000e-6) - 1.0) < 1e-12, \\\n    \"twice the load current is twice the ripple\"\nassert abs(reservoir_ripple(0.05, 50.0, 1000e-6) - 1.0) < 1e-12, \\\n    \"half the ripple frequency is twice the ripple, which is half-wave against full-wave\""
+     },
+     {
+      "name": "the simulation runs and settles near the peak",
+      "code": "s = simulate(17.0, 50.0, 1000e-6, 220.0, 1.4, 10, 2000)\nassert len(s) == 20000, f\"cycles * per_cycle samples expected, got {len(s)}\"\ntail = s[-2000:]\nassert abs(max(tail) - 15.6) < 1e-6, \\\n    f\"the peak is 17 V less 1.4 V of bridge drops, so 15.6 V; got {max(tail)}\"\nassert abs(min(tail) - 14.967554528595274) < 1e-6, f\"expected a trough of 14.9676 V, got {min(tail)}\""
+     },
+     {
+      "name": "the measured ripple, and how the formula compares",
+      "code": "s = simulate(17.0, 50.0, 1000e-6, 220.0, 1.4, 10, 2000)\nr = measured_ripple(s, 2000)\nassert abs(r - 0.6324454714047256) < 1e-6, f\"expected 0.632445 V of ripple, got {r}\"\nmean = sum(s[-2000:]) / 2000.0\nassert abs(mean - 15.291122418509982) < 1e-6, f\"expected a mean of 15.2911 V, got {mean}\"\npredicted = reservoir_ripple(mean / 220.0, 100.0, 1000e-6)\nassert predicted > r, \\\n    f\"the formula must be the pessimistic one: it says {predicted}, the simulation says {r}\"\nassert 1.0 < predicted / r < 1.3, \\\n    f\"and pessimistic by about a tenth at these values, not by a factor; ratio was {predicted / r}\""
+     },
+     {
+      "name": "more capacitance and less load both cut the ripple",
+      "code": "big = measured_ripple(simulate(17.0, 50.0, 2200e-6, 220.0, 1.4, 10, 2000), 2000)\nassert abs(big - 0.3000551163785552) < 1e-6, f\"2200 uF should give 0.300055 V, got {big}\"\nlight = measured_ripple(simulate(17.0, 50.0, 1000e-6, 1000.0, 1.4, 10, 2000), 2000)\nassert abs(light - 0.14858065050918867) < 1e-6, f\"a 1 k load should give 0.148581 V, got {light}\"\nsmall = measured_ripple(simulate(17.0, 50.0, 470e-6, 220.0, 1.4, 10, 2000), 2000)\nassert abs(small - 1.2613201973354027) < 1e-6, f\"470 uF should give 1.26132 V, got {small}\"\nassert small > 2.0 * big, \\\n    \"roughly a fifth of the capacitance should give roughly five times the ripple\""
+     },
+     {
+      "name": "the two diode drops of a bridge really are subtracted",
+      "code": "s = simulate(17.0, 50.0, 1000e-6, 220.0, 1.4, 10, 2000)\nhalf = simulate(17.0, 50.0, 1000e-6, 220.0, 0.7, 10, 2000)\nassert abs(max(half[-2000:]) - 16.3) < 1e-6, \\\n    f\"with a single 0.7 V drop the peak is 16.3 V, got {max(half[-2000:])}\"\nassert abs(max(half[-2000:]) - max(s[-2000:]) - 0.7) < 1e-9, \\\n    \"the difference between the two peaks must be exactly the extra diode drop\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Zener regulation, and why a diode is not a resistor",
+   "summary": "Reverse breakdown made useful, and the sharpest statement of the difference between static and dynamic resistance.",
+   "concepts": [
+    "Pushed far enough in reverse, every junction breaks down and conducts hard. **Zener breakdown** (below about 5 V) is quantum tunnelling through a thin depletion region; **avalanche breakdown** (above about 6 V) is impact ionisation. Both are non-destructive if the current is limited.",
+    "The two mechanisms have opposite temperature coefficients, which is why a 5.6 V Zener has almost none and is the value to pick when stability matters more than the number.",
+    "A **Zener shunt regulator** is a series resistor $R_S$ from the raw supply and a Zener across the load. The Zener takes whatever current the load does not, and the output stays near $V_Z$.",
+    "The Zener's own dynamic resistance $r_z$ — typically 5 to 30 Ω — is what limits how well it regulates. Modelled as a fixed source $V_{Z0}$ in series with $r_z$, the circuit is an ordinary linear network again.",
+    "**Line regulation** is $\\Delta V_{out}/\\Delta V_{in}$, and for this circuit it is simply the divider ratio $(r_z \\parallel R_L)/(R_S + r_z \\parallel R_L)$. A larger $R_S$ regulates better against the line, and burns less — the waste is $(V_{in}-V_{out})^2/R_S$, which falls as $R_S$ rises. What a larger $R_S$ costs is current in reserve: less is left over for the load, so the regulator drops out sooner.",
+    "**Load regulation** is how far the output moves between no load and full load. It is roughly $r_z\\Delta I_{load}$, because the Zener has to absorb every milliamp the load stops taking.",
+    "The design constraint that decides $R_S$ is a worst case, not a typical case: the Zener must still carry its minimum current when the supply is at its **lowest** and the load at its **heaviest**. That gives $R_S \\le (V_{in,min} - V_Z)/(I_{Z,min} + I_{load,max})$.",
+    "The opposite corner sets the power ratings: highest supply, lightest load, and the Zener absorbs the lot. A regulator that survives full load may still cook at no load.",
+    "A shunt regulator is deliberately wasteful: it draws its full current whether the load needs it or not. That is the price of a circuit with three components and no feedback loop.",
+    "Everything in this module rests on the same fact as module 2. The Zener's static resistance at 5.1 V and 20 mA is 255 Ω; its dynamic resistance is 8 Ω. The first number tells you what it costs to run; the second tells you how well it regulates. A resistor has only one number, which is exactly why a resistor cannot do this job."
+   ],
+   "sandbox": {
+    "title": "How much filtering the ripple actually needs",
+    "visualiser": "bode",
+    "minutes": 9,
+    "brief": "A reservoir capacitor leaves a rail with hundreds of millivolts of ripple on it at\n100 Hz. Everything downstream — a filter, a regulator, or both — is judged by how much\nof that 100 Hz it removes while leaving the DC alone.\n\nThis is a Bode plot of a low-pass filter with **two energy stores** — an inductor and a\ncapacitor, the second-order response EE102 put in front of you: **gain in decibels on top, phase in\ndegrees below, against angular frequency $\\omega$ on a logarithmic axis** running from\n0.1 to 2000 rad/s. The five ticks on that axis are labelled 0.1, 1, 14, 168 and 2000.\nThe amber dot marks the corner $\\omega_n$, and $\\zeta$ is the damping, which falls as\nthe resistance in the loop falls.\n\nTwo conversions are worth having to hand. A gain of $G$ is $20\\log_{10}G$ decibels, so\n$-20$ dB is a factor of ten and $-60$ dB a factor of a thousand. And 100 Hz — the\nripple frequency of a bridge on 50 Hz mains — is $2\\pi \\times 100 = 628$ rad/s, which\non this axis sits between the ticks marked 168 and 2000.",
+    "initial": {
+     "wn": 20,
+     "zeta": 1.5,
+     "K": 1
+    },
+    "notice": [
+     "The gain $K$ opens at 1, and the far left of the top plot sits exactly on the dashed 0 dB line. That is the first requirement on any smoothing filter: at DC it must pass its input untouched, because the DC is the rail you are trying to deliver.",
+     "The amber dot sits at $\\omega_n = 20$ rad/s, and with $\\zeta = 1.5$ it is at $-9.5$ dB — already well below the flat region. A heavily damped second-order filter has no peak at all, and its $-3$ dB point is not at the marker but a long way to its left, near 7.5 rad/s.",
+     "Read the top curve at 628 rad/s, between the 168 and 2000 ticks. It is close to $-60$ dB, a factor of a thousand: this filter turns 500 mV of ripple into 500 µV. Below it, the phase has already reached about $-175^\\circ$, so what little ripple survives comes out inverted.",
+     "Drag $\\zeta$ down to its minimum of 0.05, leaving everything else. The amber dot leaps from $-9.5$ dB to $+20$ dB — the filter now **amplifies** by ten at its own corner. An LC smoothing filter whose resonance lands anywhere near the ripple frequency makes the ripple worse, which is why real ones are damped or placed far below it.",
+     "Put $\\zeta$ back to 1.5 and drag the corner $\\omega_n$ from 20 up to its maximum of 200. The 628 rad/s point climbs from about $-60$ dB to about $-22$ dB: ten times the corner frequency costs nearly 40 dB of rejection, because a two-store roll-off falls as the square of the frequency ratio — 40 dB per decade, the figure from EE102. Filtering is bought with big, slow components, and there is no way around it."
+    ]
+   },
+   "quiz": {
+    "title": "Shunt regulation and its worst cases",
+    "minutes": 9,
+    "questions": [
+     {
+      "q": "Which corner of the operating range sets the **largest** series resistor a Zener shunt regulator may use?",
+      "opts": [
+       "lowest input voltage with the heaviest load",
+       "highest input voltage with the heaviest load",
+       "lowest input voltage with no load",
+       "highest input voltage with no load"
+      ],
+      "a": 0,
+      "why": "That is the corner where the series resistor has the least voltage across it to work\nwith *and* the load is taking the most, so it is where the Zener is closest to running\nout of current and dropping out of regulation. Sizing $R_S$ anywhere else leaves the\nregulator working on the bench and failing at the bottom of the mains cycle. The\nopposite corner — highest input, no load — is also a design case, but it sets the\n*power ratings* rather than the resistor value."
+     },
+     {
+      "q": "A 12 V rail feeds 220 Ω into a Zener modelled as 4.94 V in series with 8 Ω, with a 470 Ω load. The output is 5.104 V. If the rail moves to 14 V, roughly where does the output go?",
+      "opts": [
+       "5.95 V",
+       "5.30 V",
+       "5.17 V",
+       "5.104 V — that is what regulation means"
+      ],
+      "a": 2,
+      "why": "The line regulation is the divider ratio $(r_z \\parallel R_L)/(R_S + r_z \\parallel R_L)$.\nWith $8 \\parallel 470 = 7.87\\ \\Omega$, that is $7.87/227.87 = 0.0345$, so 2 V of input\nchange becomes $2 \\times 0.0345 = 69$ mV of output change: 5.104 V goes to 5.173 V.\nOption D is the seductive one — regulation is very good, but it is not perfect, and\nquoting a real number rather than \"regulated\" is what lets you decide whether it is\ngood enough. Option A is what you get if you assume the output simply scales with the\ninput, $5.104 \\times 14/12 = 5.95$ V. That is a plain divider's behaviour, and\npreventing it is the entire reason the Zener is in the circuit."
+     },
+     {
+      "q": "A Zener regulator is working correctly at full load. The load is then disconnected entirely. What happens to the Zener current?",
+      "opts": [
+       "it falls to zero",
+       "it is unchanged, because the series resistor sets it",
+       "it rises slightly",
+       "it rises by the whole of the load current the Zener now has to absorb"
+      ],
+      "a": 3,
+      "why": "The series resistor delivers roughly the same current whatever happens downstream,\nbecause the output barely moves; so every milliamp the load stops taking is a\nmilliamp the Zener must take instead. That is the defining behaviour of a *shunt*\nregulator, and it is why the no-load case sets the Zener's power rating. A 5.1 V Zener\ncarrying 20 mA at full load and 60 mA at no load dissipates 0.1 W and 0.31 W\nrespectively — a 0.4 W part is fine, a 0.25 W part is not."
+     },
+     {
+      "q": "Why does a Zener regulate at all, when a resistor to ground would not?",
+      "opts": [
+       "because its resistance is much lower than the load's",
+       "because its dynamic resistance is far smaller than its static resistance, so its voltage barely moves when its current changes",
+       "because it dissipates less power than a resistor would",
+       "because it conducts in only one direction"
+      ],
+      "a": 1,
+      "why": "This is module 2's lesson in its sharpest form. At 5.1 V and 20 mA the Zener's static\nresistance is 255 Ω and its dynamic resistance is 8 Ω — a factor of thirty apart. A\nresistor has one number for both, so a resistive divider set to 5.1 V at 20 mA has an\noutput impedance of tens of ohms and sags the instant the load changes. The Zener\nholds because the *slope* of its characteristic is nearly vertical, not because the\ncharacteristic passes through any particular point."
+     },
+     {
+      "q": "You need a 5 V reference whose voltage drifts as little as possible with temperature. Which Zener should you specify?",
+      "opts": [
+       "3.3 V, because tunnelling is the more stable mechanism",
+       "5.6 V, because the two breakdown mechanisms have opposite temperature coefficients and roughly cancel there",
+       "12 V, because avalanche has no temperature coefficient",
+       "any of them, since a Zener voltage does not depend on temperature"
+      ],
+      "a": 1,
+      "why": "Below about 5 V, breakdown is dominated by tunnelling, whose voltage *falls* with\ntemperature; above about 6 V, avalanche dominates and the voltage *rises*. Around\n5.6 V the two effects roughly cancel, and that is why 5.6 V parts have a temperature\ncoefficient near zero and turn up in reference circuits far more often than their odd\nvalue would suggest. It is also a good example of an engineering choice made for a\nphysical reason that has nothing to do with the number wanted."
+     }
+    ]
+   },
+   "blanks": null,
+   "build": {
+    "title": "A 5.1 V rail that holds under load",
+    "minutes": 30,
+    "brief": "A 12 V raw supply — the sort a bridge and reservoir produce — has to feed a load that\nbehaves like a **470 Ω resistor** and needs a rail near **5.1 V**. You have a 5.1 V\nZener whose data sheet quotes 5.1 V at 20 mA with a dynamic resistance of **8 Ω**, so\nits piecewise-linear model is a **4.94 V source in series with 8 Ω** — the same tangent\nconstruction as module 2, applied to the breakdown region instead of the forward one.\n\n## The specification\n\n- the output, **with the 470 Ω load connected**, must land between **4.98 V and 5.22 V**\n- the Zener current must be between **5 mA** and **40 mA**: below 5 mA it slides out of\n  breakdown and stops regulating, above 40 mA it overheats\n- the whole circuit may draw no more than **40 mA** from the 12 V rail\n- the series resistor must dissipate no more than **0.30 W**, so a half-watt part will do\n\n## What to add\n\nThe canvas gives you the 12 V supply, the 470 Ω load and a probe on the load's upper\nnode. Add the series resistor from the 12 V rail to that node, and the Zener model —\nthe 4.94 V source and the 8 Ω resistor in series — from that node to ground, with the\nsource's **+ terminal facing the output**.\n\n## How to choose the resistor\n\nWork at the node. Everything the series resistor delivers is shared between the load\nand the Zener:\n\n$$\\frac{12 - V}{R_S} = \\frac{V - 4.94}{8} + \\frac{V}{470}$$\n\nPick your target $V$, work out the two branch currents it implies, add them, and\ndivide the resistor's voltage by the total. The specification is deliberately loose\nenough that a whole range of standard values works — this is a design with a window,\nnot an equation with one root, and knowing how wide the window is matters more than\nhitting its centre.\n\n## The trap\n\nA design that lands at 5.104 V with 20.5 mA in the Zener puts the Zener's *static*\nresistance at $5.104/0.0205 = 249\\ \\Omega$. Put a plain 249 Ω resistor from the output\nnode to ground instead of the model and the DC answer does not move by a millivolt:\nsame output, same currents, same power dissipated in the same places.\n\nIt is not a regulator, and one line of arithmetic says so. Work out on paper what each\nversion does when the load is taken away. The impostor becomes a bare divider and its\noutput climbs from 5.10 V to 6.37 V; the real model climbs only to 5.19 V, because\n249 Ω is the only number the impostor has where the Zener answers with 8 Ω.\n\nYou cannot remove the load here — check one insists it stays — so the last check\nmeasures the Zener branch itself instead: the current in its offset source, and the\nvolts $r_z$ has to account for. That is what stops the impostor passing by landing on\nthe right point.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 12
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p6",
+       "kind": "R",
+       "x": 17,
+       "y": 9,
+       "rot": 1,
+       "value": 470
+      },
+      {
+       "id": "p7",
+       "kind": "GND",
+       "x": 17,
+       "y": 11
+      },
+      {
+       "id": "p8",
+       "kind": "OUT",
+       "x": 11,
+       "y": 8
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        11,
+        8
+       ],
+       "b": [
+        17,
+        8
+       ]
+      },
+      {
+       "a": [
+        17,
+        10
+       ],
+       "b": [
+        17,
+        11
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 12
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 220
+      },
+      {
+       "id": "p3",
+       "kind": "R",
+       "x": 13,
+       "y": 9,
+       "rot": 1,
+       "value": 8
+      },
+      {
+       "id": "p4",
+       "kind": "V",
+       "x": 13,
+       "y": 11,
+       "rot": 1,
+       "value": 4.94
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 13,
+       "y": 13
+      },
+      {
+       "id": "p6",
+       "kind": "R",
+       "x": 17,
+       "y": 9,
+       "rot": 1,
+       "value": 470
+      },
+      {
+       "id": "p7",
+       "kind": "GND",
+       "x": 17,
+       "y": 11
+      },
+      {
+       "id": "p8",
+       "kind": "OUT",
+       "x": 11,
+       "y": 8
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        9,
+        8
+       ]
+      },
+      {
+       "a": [
+        9,
+        8
+       ],
+       "b": [
+        17,
+        8
+       ]
+      },
+      {
+       "a": [
+        13,
+        12
+       ],
+       "b": [
+        13,
+        13
+       ]
+      },
+      {
+       "a": [
+        17,
+        10
+       ],
+       "b": [
+        17,
+        11
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "the load is connected and the 12 V rail is feeding it",
+      "code": "const out = c.outNode();\nconst load = c.net.parts.filter(function (p) {\n  return p.kind === 'R' && Math.abs(p.value - 470) <= 24 &&\n    ((p.n1 === out && p.n2 === 0) || (p.n2 === out && p.n1 === 0));\n});\nc.assert(load.length === 1,\n  'The 470 ohm load must run from the probed node to ground. A regulator measured ' +\n  'with its load disconnected is measuring nothing, and this circuit is entirely ' +\n  'about what happens when the load is there.');\nconst sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 12) < 0.5; });\nc.assert(sup.length === 1,\n  'Exactly one 12 V raw supply; found ' + sup.length + '.');\nconst isup = Math.abs(c.dc().currents[sup[0].id]);\nc.assert(isup > 0.001,\n  'The 12 V rail is delivering ' + c.fmt(isup, 'A') + ' — nothing. Until a series ' +\n  'resistor joins the rail to the probed node, the load sits at ground and every ' +\n  'other measurement here is meaningless.');"
+     },
+     {
+      "name": "the output lands between 4.98 V and 5.22 V",
+      "code": "const v = c.vout();\nc.assert(v >= 4.98 * 0.999 && v <= 5.22 * 1.001,\n  'The regulated rail is ' + c.fmt(v, 'V') + ', outside the 4.98 V to 5.22 V window. ' +\n  'Check the offset source is the right way up and the series resistor is in the range ' +\n  'the node equation asks for.');"
+     },
+     {
+      "name": "the Zener carries between 5 mA and 40 mA",
+      "code": "const sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 12) < 0.5; })[0];\nconst isup = Math.abs(c.dc().currents[sup.id]);\nconst v = c.vout();\nconst iz = isup - v / 470;\nc.assert(iz >= 0.005 * 0.99,\n  'The Zener is only carrying ' + c.fmt(iz, 'A') + '. Below about 5 mA it leaves the ' +\n  'breakdown knee and the output starts to follow the input; make the series resistor smaller.');\nc.assert(iz <= 0.040 * 1.01,\n  'The Zener is carrying ' + c.fmt(iz, 'A') + ', which will overheat it. Make the series ' +\n  'resistor larger so less current is wasted through the Zener.');"
+     },
+     {
+      "name": "the supply gives at most 40 mA and the resistor stays under 0.30 W",
+      "code": "const sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 12) < 0.5; })[0];\nconst isup = Math.abs(c.dc().currents[sup.id]);\nconst v = c.vout();\nc.assert(isup > 0.001,\n  'The raw supply is delivering ' + c.fmt(isup, 'A') + ', so there is no budget to ' +\n  'measure yet. Connect the series resistor from the 12 V rail to the probed node.');\nc.assert(isup <= 0.040 * 1.01,\n  'The raw supply is being asked for ' + c.fmt(isup, 'A') + ', over the 40 mA budget.');\nconst p = (12 - v) * isup;\nc.assert(p <= 0.30 * 1.01,\n  'The series resistor is dissipating ' + c.fmt(p, 'W') + ', over the 0.30 W allowed. ' +\n  'It drops about 7 V, so its power is 7 times whatever current you let through it.');"
+     },
+     {
+      "name": "the shunt branch is the Zener model, not a resistor of the same value",
+      "code": "const zs = c.net.parts.filter(function (p) {\n  return p.kind === 'V' && p.value > 3.0 && p.value < 6.0;\n});\nc.assert(zs.length === 1,\n  'Found ' + zs.length + ' offset source between 3 V and 6 V, and this circuit needs ' +\n  'exactly one: the 4.94 V source of the Zener model. A plain resistor to ground can ' +\n  'be picked to give the same 5.1 V at the same current — 249 ohms does it — and it ' +\n  'is not a regulator, because 249 ohms is the only number it has.');\nconst z = zs[0];\nc.close(z.value, 4.94, 0.02,\n  'the offset source of the Zener model. The tangent to the breakdown curve at 5.1 V ' +\n  'and 20 mA meets the axis at 5.1 - 0.020 * 8 = 4.94 V');\nconst iz = Math.abs(c.dc().currents[z.id]);\nconst v = c.vout();\nconst sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 12) < 0.5; })[0];\nconst shunt = Math.abs(c.dc().currents[sup.id]) - v / 470;\nc.close(iz, shunt, 0.02,\n  'the current in the offset source. It has to be the whole shunt current — everything ' +\n  'the series resistor delivers that the load does not take — so the source must sit ' +\n  'in series with r_z between the probed node and ground, not off to one side');\nc.close(v - z.value, iz * 8.0, 0.05,\n  'the volts left across r_z. The model says V_out = V_Z0 + r_z * I_Z, so the output ' +\n  'above the 4.94 V offset must be 8 ohms times the Zener current; if it is not, the ' +\n  'dynamic resistance is missing or is the wrong value');"
+     }
+    ],
+    "hints": [
+     "Start from the target. At 5.10 V the load takes $5.10/470 = 10.9$ mA, and a Zener current of 20 mA gives 30.9 mA in total, so $R_S = (12 - 5.10)/0.0309 = 223\\ \\Omega$. The standard value 220 Ω is the obvious pick.",
+     "Check the window before you build. 180 Ω gives 5.156 V with 27 mA in the Zener; 390 Ω gives 4.999 V with 7.3 mA. Both pass. 470 Ω leaves only 4.36 mA in the Zener and fails, and 150 Ω asks the supply for 45.2 mA and fails.",
+     "For a vertical source the + terminal is the **top** pin, so the 4.94 V offset source must sit below the 8 Ω resistor with its top facing the output node.",
+     "The Zener current is not measured directly — it is what is left of the supply current after the load has taken its share. If a check complains about it, work out $I_{supply} - V_{out}/470$ by hand and see which way you need to move."
+    ]
+   },
+   "derive": null,
+   "lab": {
+    "title": "Designing and grading a shunt regulator",
+    "runtime": "python",
+    "minutes": 32,
+    "brief": "The circuit you just drew, written down so that the next one is arithmetic rather than\na drawing.\n\nModel the Zener as `v_z0` in series with `r_z`, exactly as in the build. The node\nequation for the output is then\n\n$$V_{out} = \\frac{V_S/R_S + V_{Z0}/r_z}{1/R_S + 1/r_z + 1/R_L}$$\n\nwhich is nothing but the conductance form of the divider from EE101, with three\nbranches instead of two.\n\n- `zener_output(v_s, r_s, v_z0, r_z, r_load)` returns that voltage.\n- `zener_current(v_s, r_s, v_z0, r_z, r_load)` returns the current in the Zener,\n  $(V_{out} - V_{Z0})/r_z$. It should call `zener_output` rather than repeat it.\n- `line_regulation(v_lo, v_hi, r_s, v_z0, r_z, r_load)` returns\n  $\\Delta V_{out}/\\Delta V_{in}$ over that input range — a dimensionless number, small\n  is good.\n- `max_series_resistor(v_s_min, v_out, i_z_min, i_load_max)` returns the largest series\n  resistor that still leaves `i_z_min` in the Zener at the worst corner:\n  $(V_{S,min} - V_{out})/(I_{Z,min} + I_{load,max})$.\n\nFor \"no load\", pass a very large resistance such as `1e12` rather than special-casing\ninfinity. The formula handles it correctly and the code stays one line.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"A Zener shunt regulator, as four design functions.\"\"\"\n\n\ndef zener_output(v_s, r_s, v_z0, r_z, r_load):\n    \"\"\"Regulated output voltage with the Zener modelled as v_z0 in series with r_z.\"\"\"\n    # TODO: the three-branch conductance divider from the brief.\n    return 0.0\n\n\ndef zener_current(v_s, r_s, v_z0, r_z, r_load):\n    \"\"\"Current through the Zener, in amps.\"\"\"\n    # TODO: call zener_output, then (v_out - v_z0) / r_z.\n    return 0.0\n\n\ndef line_regulation(v_lo, v_hi, r_s, v_z0, r_z, r_load):\n    \"\"\"Change in output per volt of change in input, dimensionless.\"\"\"\n    # TODO: the output at v_hi minus the output at v_lo, over the input change.\n    return 0.0\n\n\ndef max_series_resistor(v_s_min, v_out, i_z_min, i_load_max):\n    \"\"\"Largest series resistor that still holds i_z_min at the worst corner.\"\"\"\n    # TODO: the voltage the resistor has left, over the current it must carry.\n    return 0.0\n\n\nif __name__ == \"__main__\":\n    v = zener_output(12.0, 220.0, 4.94, 8.0, 470.0)\n    print(\"output:\", v, \"V\")\n    print(\"zener current:\", zener_current(12.0, 220.0, 4.94, 8.0, 470.0), \"A\")\n    print(\"no load:\", zener_output(12.0, 220.0, 4.94, 8.0, 1e12), \"V\")\n    print(\"line regulation:\", line_regulation(10.0, 14.0, 220.0, 4.94, 8.0, 470.0))\n    print(\"largest R_S for 5 mA at 10 V in and 11 mA out:\",\n          max_series_resistor(10.0, 5.1, 0.005, 0.011), \"ohms\")\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"A Zener shunt regulator, as four design functions.\"\"\"\n\n\ndef zener_output(v_s, r_s, v_z0, r_z, r_load):\n    \"\"\"Regulated output voltage with the Zener modelled as v_z0 in series with r_z.\"\"\"\n    return ((v_s / r_s + v_z0 / r_z)\n            / (1.0 / r_s + 1.0 / r_z + 1.0 / r_load))\n\n\ndef zener_current(v_s, r_s, v_z0, r_z, r_load):\n    \"\"\"Current through the Zener, in amps.\"\"\"\n    return (zener_output(v_s, r_s, v_z0, r_z, r_load) - v_z0) / r_z\n\n\ndef line_regulation(v_lo, v_hi, r_s, v_z0, r_z, r_load):\n    \"\"\"Change in output per volt of change in input, dimensionless.\"\"\"\n    hi = zener_output(v_hi, r_s, v_z0, r_z, r_load)\n    lo = zener_output(v_lo, r_s, v_z0, r_z, r_load)\n    return (hi - lo) / (v_hi - v_lo)\n\n\ndef max_series_resistor(v_s_min, v_out, i_z_min, i_load_max):\n    \"\"\"Largest series resistor that still holds i_z_min at the worst corner.\"\"\"\n    return (v_s_min - v_out) / (i_z_min + i_load_max)\n\n\nif __name__ == \"__main__\":\n    v = zener_output(12.0, 220.0, 4.94, 8.0, 470.0)\n    print(\"output:\", v, \"V\")\n    print(\"zener current:\", zener_current(12.0, 220.0, 4.94, 8.0, 470.0), \"A\")\n    print(\"no load:\", zener_output(12.0, 220.0, 4.94, 8.0, 1e12), \"V\")\n    print(\"line regulation:\", line_regulation(10.0, 14.0, 220.0, 4.94, 8.0, 470.0))\n    print(\"largest R_S for 5 mA at 10 V in and 11 mA out:\",\n          max_series_resistor(10.0, 5.1, 0.005, 0.011), \"ohms\")\n"
+     }
+    ],
+    "hints": [
+     "`zener_output` is one expression. Put the whole numerator in brackets and the whole denominator in brackets; a missing pair here is the only way to get this wrong.",
+     "A quick sanity check on `zener_output`: with `r_s` very large the answer should approach `v_z0`, and with `r_s` very small it should approach `v_s`. Both follow from the conductance form.",
+     "`zener_current` must call `zener_output`. Writing the divider out twice means fixing it twice when you find a bracket in the wrong place.",
+     "`line_regulation` returns a ratio, not a percentage. For the numbers in `main.py` it comes out around 0.035, meaning 35 mV of output movement per volt of input movement.",
+     "`max_series_resistor` has nothing to do with the Zener model — it is a worst-case budget. The resistor has $V_{S,min} - V_{out}$ volts across it and must pass the load's largest current plus the Zener's smallest."
+    ],
+    "tests": [
+     {
+      "name": "the regulated output of the circuit you drew",
+      "code": "v = zener_output(12.0, 220.0, 4.94, 8.0, 470.0)\nassert abs(v - 5.103892765332354) < 1e-9, f\"expected 5.1038928 V, got {v}\"\ni = zener_current(12.0, 220.0, 4.94, 8.0, 470.0)\nassert abs(i - 0.020486595666544205) < 1e-12, f\"expected 20.4866 mA in the Zener, got {i}\""
+     },
+     {
+      "name": "the two limiting cases of the series resistor",
+      "code": "tiny = zener_output(12.0, 1e-6, 4.94, 8.0, 470.0)\nassert abs(tiny - 12.0) < 1e-3, \\\n    f\"with almost no series resistance the output must follow the input, got {tiny}\"\nhuge = zener_output(12.0, 1e12, 4.94, 8.0, 1e12)\nassert abs(huge - 4.94) < 1e-3, \\\n    f\"starved of current and unloaded, the Zener sits at v_z0, got {huge}\"\nloaded = zener_output(12.0, 1e12, 4.94, 8.0, 470.0)\nassert abs(loaded - 4.94 * 470.0 / 478.0) < 1e-9, \\\n    f\"starved of current but still loaded, r_z and the load divide v_z0, got {loaded}\""
+     },
+     {
+      "name": "removing the load pushes the output up and the current into the Zener",
+      "code": "loaded = zener_output(12.0, 220.0, 4.94, 8.0, 470.0)\nfree = zener_output(12.0, 220.0, 4.94, 8.0, 1e12)\nassert abs(free - 5.187719298205569) < 1e-9, f\"expected 5.1877193 V with no load, got {free}\"\nassert abs(free - loaded - 0.08382653287321506) < 1e-9, \\\n    \"the load regulation should be 83.8 mV between full load and no load\"\niz_free = zener_current(12.0, 220.0, 4.94, 8.0, 1e12)\niz_loaded = zener_current(12.0, 220.0, 4.94, 8.0, 470.0)\nassert abs(iz_free - 0.030964912275696088) < 1e-12, f\"expected 30.96 mA with no load, got {iz_free}\"\nassert iz_free > iz_loaded, \"the Zener must absorb whatever the load stops taking\""
+     },
+     {
+      "name": "line regulation is the divider ratio of r_z against R_S",
+      "code": "reg = line_regulation(10.0, 14.0, 220.0, 4.94, 8.0, 470.0)\nassert abs(reg - 0.0345207491737054) < 1e-12, f\"expected 0.03452075, got {reg}\"\nparallel = 8.0 * 470.0 / (8.0 + 470.0)\nassert abs(reg - parallel / (220.0 + parallel)) < 1e-12, \\\n    \"the ratio must equal (r_z || R_L) / (R_S + r_z || R_L) exactly, because the circuit is linear\"\ntighter = line_regulation(10.0, 14.0, 1000.0, 4.94, 8.0, 470.0)\nassert tighter < reg, \\\n    \"a larger series resistor regulates better against the line; what it costs is not power but current in reserve for the load\""
+     },
+     {
+      "name": "the worst-case resistor budget",
+      "code": "r = max_series_resistor(10.0, 5.1, 0.005, 0.011)\nassert abs(r - 306.25) < 1e-9, f\"(10 - 5.1) / 0.016 is 306.25 ohms, got {r}\"\nr2 = max_series_resistor(15.0, 5.1, 0.010, 0.050)\nassert abs(r2 - 165.0) < 1e-9, f\"(15 - 5.1) / 0.060 is 165 ohms, got {r2}\"\nassert r2 < r, \"a heavier load needs a smaller series resistor, whatever the input voltage\""
+     },
+     {
+      "name": "the design survives its own worst corner",
+      "code": "r = max_series_resistor(9.0, 5.0, 0.005, 0.011)\niz = zener_current(9.0, r, 4.94, 8.0, 470.0)\nassert iz >= 0.005, \\\n    f\"a resistor sized at the worst corner must still leave at least 5 mA there, got {iz}\"\ntop = zener_current(14.0, r, 4.94, 8.0, 1e12)\nassert top > iz, \"and the opposite corner, highest input with no load, must be the hot one\"\nassert abs(r - 250.0) < 1e-9, f\"(9 - 5.0) / 0.016 is 250 ohms, got {r}\""
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "A whole supply: designed, then proved",
+  "brief": "Everything in this course has been one stage at a time. A real supply is four stages\nin series, and the interesting failures happen between them: a reservoir capacitor\nsized for the average load that cannot cope with the trough, a regulator that works at\nthe nominal mains voltage and drops out at the bottom of its tolerance, a Zener that\nsurvives full load and cooks at no load.\n\nYou are going to design a supply to a specification, and then prove it by stepping the\nwhole chain forward in time and measuring what comes out — the same two-part discipline\nevery one of these modules has used, applied to all of them at once.\n\n## The chain\n\n```text\nmains sinusoid  ->  bridge (2 diode drops)  ->  reservoir C  ->  R_S  ->  Zener || load\n```\n\nThe bridge and reservoir are module 3. The series resistor and Zener are module 4. The\nonly new idea is that the reservoir's ripple is now the *input* to the regulator, so\nthe two stages have to be judged together.\n\n## The specification\n\n- transformer secondary: 17 V peak, 50 Hz\n- bridge: two diodes in series with the load at all times, 0.7 V each\n- output: a rail near **5.1 V** into a 470 Ω load, anywhere from 5.0 V to 5.3 V\n- Zener: modelled as 4.94 V in series with 8 Ω\n- output ripple: no more than **20 mV** peak to peak\n\nThe output window is wider than a nominal figure because the 8 Ω is real. On the 12 V\nrail of module 4 the same $R_S$ gave 5.104 V; here the reservoir sits nearer 15.4 V, so\nmore current goes through the Zener and the rail climbs to about 5.22 V. Predict where\nyours lands before you run anything — the shift is the 8 Ω doing exactly what module 4\nsaid it would.\n\n## What you are building, in `main.py`\n\n1. `zener_output(v_c, r_s, v_z0, r_z, r_load)` — the regulator's output for a given\n   reservoir voltage, exactly as in module 4.\n2. `ripple_rejection(r_s, r_z, r_load)` — the fraction of the reservoir's ripple that\n   reaches the output, $(r_z \\parallel R_L)/(R_S + r_z \\parallel R_L)$. This is the\n   design tool: it tells you how much ripple the reservoir is allowed to have.\n3. `design_reservoir(i_draw, f_ripple, v_ripple_allowed)` — the capacitance in farads\n   that holds the *reservoir* ripple to the stated figure, from module 3's\n   $C = I/(f_{ripple}V_{ripple})$.\n4. `simulate_supply(v_peak, f_mains, c, r_s, v_z0, r_z, r_load, v_bridge, cycles, per_cycle)`\n   — steps the whole chain and returns the tuple `(reservoir_samples, output_samples)`,\n   two lists of equal length.\n5. `report(reservoir, output, per_cycle, r_load)` — returns a dict with the keys\n   `\"v_out_mean\"`, `\"v_out_ripple\"`, `\"v_c_mean\"`, `\"v_c_ripple\"`, `\"rejection\"` and\n   `\"p_load\"`, all measured over the **last `per_cycle` samples** and all floats.\n   `\"rejection\"` is the measured output ripple divided by the measured reservoir\n   ripple, and `\"p_load\"` is the mean output squared over `r_load`.\n\n## The simulation model\n\nTime step `dt = 1 / (f_mains * per_cycle)`, starting from `v_c = 0.0`. At each step,\nin this order:\n\n```text\nv_rect = v_peak * abs(sin(2*pi*f_mains*t)) - v_bridge\nv_out  = zener_output(v_c, r_s, v_z0, r_z, r_load)\ni_draw = (v_c - v_out) / r_s\nif v_rect > v_c:  v_c = v_rect          # diodes conduct\nelse:             v_c -= i_draw * dt / c\nrecord v_c and v_out\n```\n\nNote that the reservoir is not discharged by the load directly — it is discharged by\nwhatever the series resistor draws, and that is a smaller current than the load takes,\nbecause the Zener is also feeding the load. Getting that wrong is the most likely\nsource of a disagreement between your simulation and the design formulas.\n\n## Suggested order\n\nWrite `zener_output` and `ripple_rejection` first and check them against the module 4\nnumbers you already have. Then use `ripple_rejection` to work out how much reservoir\nripple 20 mV of output ripple allows, hand that to `design_reservoir`, and only then\nwrite the simulation to see whether the answer was right. The simulation is the proof,\nnot the design method — if you find yourself tuning the capacitor by running it, the\ndesign part has not been done.",
+  "deliverables": [
+   "`zener_output` and `ripple_rejection`, the two closed-form results the design rests on, agreeing with the module 4 figures to full floating-point precision.",
+   "`design_reservoir`, sizing the reservoir capacitor from a permitted reservoir ripple, and a comment in `main.py` giving the capacitance your own design calls for and the reasoning that produced it.",
+   "`simulate_supply`, stepping mains, bridge, reservoir, series resistor and Zener forward together and returning both node waveforms.",
+   "`report`, measuring mean, ripple, rejection and load power from the final cycle of a simulation, with every figure a float.",
+   "Evidence, in the same comment, that the designed capacitor meets the 20 mV output ripple specification when the simulation is run — the measured number, not an assertion that it should."
+  ],
+  "constraints": [
+   "The standard library only. NumPy is available but nothing here needs it, and the simulation is inherently sequential.",
+   "`simulate_supply` must use the update order given in the brief, including discharging the reservoir with the series resistor's current rather than the load's.",
+   "`report` must measure over the last `per_cycle` samples only. Including the start-up ramp from 0 V makes every figure meaningless.",
+   "Do not special-case the test values. The functions must work for any transformer voltage, any capacitance and any load.",
+   "No tuning loops. `design_reservoir` returns a capacitance from a formula; the simulation then confirms or refutes it."
+  ],
+  "rubric": [
+   {
+    "criterion": "Closed-form design",
+    "weight": 25,
+    "evidence": "zener_output and ripple_rejection reproduce the module 4 results exactly, including the limiting cases of a very large and a very small series resistor, and ripple_rejection equals the parallel-combination divider ratio to machine precision."
+   },
+   {
+    "criterion": "Reservoir sizing",
+    "weight": 20,
+    "evidence": "design_reservoir inverts the I/(fC) relation correctly, and the capacitance it returns for the stated specification is the one the candidate's comment justifies and the simulation then confirms."
+   },
+   {
+    "criterion": "Chain simulation",
+    "weight": 30,
+    "evidence": "simulate_supply produces two waveforms of the right length whose reservoir peak equals the transformer peak less the bridge drops, whose settled means match the closed-form predictions, and which respond correctly to changes in capacitance, load and transformer voltage."
+   },
+   {
+    "criterion": "Measurement and evidence",
+    "weight": 25,
+    "evidence": "report returns all six keys as floats measured over the final cycle only, the measured rejection agrees with the predicted rejection to within a per cent, and the candidate's comment quotes real measured numbers rather than expected ones."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 150,
+  "files": [
+   {
+    "name": "main.py",
+    "content": "\"\"\"A complete unregulated-plus-regulated supply, designed and then simulated.\n\nDesign record:\n    TODO: state the reservoir capacitance your design calls for, how you arrived at\n    it from the 20 mV output ripple specification, and the output ripple the\n    simulation actually measured.\n\"\"\"\n\nimport math\n\n\ndef zener_output(v_c, r_s, v_z0, r_z, r_load):\n    \"\"\"Regulated output for a reservoir voltage of v_c.\"\"\"\n    # TODO: the three-branch conductance divider from module 4.\n    return 0.0\n\n\ndef ripple_rejection(r_s, r_z, r_load):\n    \"\"\"Fraction of the reservoir's ripple that reaches the output.\"\"\"\n    # TODO: (r_z parallel r_load) / (r_s + r_z parallel r_load).\n    return 0.0\n\n\ndef design_reservoir(i_draw, f_ripple, v_ripple_allowed):\n    \"\"\"Capacitance in farads that holds the reservoir ripple to the stated figure.\"\"\"\n    # TODO: invert I / (f * C).\n    return 0.0\n\n\ndef simulate_supply(v_peak, f_mains, c, r_s, v_z0, r_z, r_load, v_bridge,\n                    cycles, per_cycle):\n    \"\"\"Step the whole chain; return (reservoir_samples, output_samples).\"\"\"\n    dt = 1.0 / (f_mains * per_cycle)\n    v_c = 0.0\n    reservoir, output = [], []\n    # TODO: the update order from the brief, appending both lists every step.\n    return (reservoir, output)\n\n\ndef report(reservoir, output, per_cycle, r_load):\n    \"\"\"Measure the last per_cycle samples. Returns a dict of six floats.\"\"\"\n    # TODO: slice both tails, then mean, peak-to-peak, rejection and load power.\n    return {\"v_out_mean\": 0.0, \"v_out_ripple\": 0.0, \"v_c_mean\": 0.0,\n            \"v_c_ripple\": 0.0, \"rejection\": 0.0, \"p_load\": 0.0}\n\n\nif __name__ == \"__main__\":\n    C = 1000e-6\n    res, out = simulate_supply(17.0, 50.0, C, 220.0, 4.94, 8.0, 470.0, 1.4, 12, 2000)\n    if res:\n        r = report(res, out, 2000, 470.0)\n        for key in (\"v_c_mean\", \"v_c_ripple\", \"v_out_mean\", \"v_out_ripple\",\n                    \"rejection\", \"p_load\"):\n            print(key, \"=\", r[key])\n        print(\"predicted rejection =\", ripple_rejection(220.0, 8.0, 470.0))\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "main.py",
+    "content": "\"\"\"A complete unregulated-plus-regulated supply, designed and then simulated.\n\nDesign record:\n    The regulator's ripple rejection with R_S = 220, r_z = 8 and R_L = 470 is\n    0.034521, so 20 mV of output ripple permits 20e-3 / 0.034521 = 0.579 V of\n    reservoir ripple. The series resistor draws about (15.4 - 5.2) / 220 = 46 mA\n    from the reservoir, so design_reservoir(0.046, 100.0, 0.579) asks for 794 uF\n    and the nearest standard value above that is 1000 uF.\n\n    Simulated at 1000 uF: the reservoir settles at a mean of 15.3899 V with\n    0.42814 V of ripple, and the output at a mean of 5.22091 V with 0.014780 V —\n    14.8 mV, inside the 20 mV specification with room to spare. The measured\n    rejection is 0.0345207, which matches the predicted 0.0345207 to seven\n    figures, as it must for a linear stage.\n\n    The rail sits at 5.221 V rather than the 5.104 V module 4 measured, and the\n    reason is the 8 ohms: the reservoir is at 15.39 V instead of 12 V, so R_S\n    pushes 46.2 mA rather than 31.3 mA into the node. Of that extra 14.9 mA the\n    load takes 0.25 mA and the Zener absorbs the other 14.6 mA, and 8 ohms times\n    14.6 mA is 0.117 V — exactly the 5.221 - 5.104 observed. Inside the 5.0 V to\n    5.3 V window, and it is 8 ohms of dynamic resistance, not drift.\n\"\"\"\n\nimport math\n\n\ndef zener_output(v_c, r_s, v_z0, r_z, r_load):\n    \"\"\"Regulated output for a reservoir voltage of v_c.\"\"\"\n    return ((v_c / r_s + v_z0 / r_z)\n            / (1.0 / r_s + 1.0 / r_z + 1.0 / r_load))\n\n\ndef ripple_rejection(r_s, r_z, r_load):\n    \"\"\"Fraction of the reservoir's ripple that reaches the output.\"\"\"\n    par = r_z * r_load / (r_z + r_load)\n    return par / (r_s + par)\n\n\ndef design_reservoir(i_draw, f_ripple, v_ripple_allowed):\n    \"\"\"Capacitance in farads that holds the reservoir ripple to the stated figure.\"\"\"\n    return i_draw / (f_ripple * v_ripple_allowed)\n\n\ndef simulate_supply(v_peak, f_mains, c, r_s, v_z0, r_z, r_load, v_bridge,\n                    cycles, per_cycle):\n    \"\"\"Step the whole chain; return (reservoir_samples, output_samples).\"\"\"\n    dt = 1.0 / (f_mains * per_cycle)\n    v_c = 0.0\n    reservoir, output = [], []\n    for k in range(cycles * per_cycle):\n        t = k * dt\n        v_rect = v_peak * abs(math.sin(2.0 * math.pi * f_mains * t)) - v_bridge\n        v_out = zener_output(v_c, r_s, v_z0, r_z, r_load)\n        i_draw = (v_c - v_out) / r_s\n        if v_rect > v_c:\n            v_c = v_rect\n        else:\n            v_c -= i_draw * dt / c\n        reservoir.append(v_c)\n        output.append(v_out)\n    return (reservoir, output)\n\n\ndef report(reservoir, output, per_cycle, r_load):\n    \"\"\"Measure the last per_cycle samples. Returns a dict of six floats.\"\"\"\n    rc = reservoir[-per_cycle:]\n    ro = output[-per_cycle:]\n    vc_mean = sum(rc) / len(rc)\n    vo_mean = sum(ro) / len(ro)\n    vc_ripple = max(rc) - min(rc)\n    vo_ripple = max(ro) - min(ro)\n    return {\n        \"v_out_mean\": float(vo_mean),\n        \"v_out_ripple\": float(vo_ripple),\n        \"v_c_mean\": float(vc_mean),\n        \"v_c_ripple\": float(vc_ripple),\n        \"rejection\": float(vo_ripple / vc_ripple),\n        \"p_load\": float(vo_mean * vo_mean / r_load),\n    }\n\n\nif __name__ == \"__main__\":\n    C = 1000e-6\n    res, out = simulate_supply(17.0, 50.0, C, 220.0, 4.94, 8.0, 470.0, 1.4, 12, 2000)\n    if res:\n        r = report(res, out, 2000, 470.0)\n        for key in (\"v_c_mean\", \"v_c_ripple\", \"v_out_mean\", \"v_out_ripple\",\n                    \"rejection\", \"p_load\"):\n            print(key, \"=\", r[key])\n        print(\"predicted rejection =\", ripple_rejection(220.0, 8.0, 470.0))\n"
+   }
+  ],
+  "hints": [
+   "`ripple_rejection` is `par / (r_s + par)` where `par = r_z * r_load / (r_z + r_load)`. With 8 Ω, 470 Ω and 220 Ω it comes to 0.0345.",
+   "To hit 20 mV of output ripple at a rejection of 0.0345 the reservoir may ripple by 20 mV / 0.0345 = 0.58 V. The current the series resistor draws is about (15.4 − 5.2)/220 = 46 mA, so `design_reservoir(0.046, 100.0, 0.58)` gives about 790 µF, and the nearest standard value above it is 1000 µF.",
+   "In `simulate_supply`, compute `v_out` from `v_c` **before** updating `v_c`, and append both afterwards. Reordering those two lines shifts everything by one sample and changes the measured ripple.",
+   "`report` should slice both lists with `[-per_cycle:]` once, at the top, and work from the slices. Six separate slices of the same data is six chances to type the wrong sign.",
+   "If the measured rejection does not match `ripple_rejection`, look at the discharge line. Using `v_out / r_load` there instead of `(v_c - v_out) / r_s` discharges the reservoir too slowly and quietly changes the ripple.",
+   "The whole chain is linear once the diodes have decided what they are doing, so the measured rejection should agree with the predicted one to several decimal places, not just approximately. If it agrees only to within ten per cent, something is genuinely wrong rather than merely imprecise."
+  ],
+  "tests": [
+   {
+    "name": "the regulator's closed form matches module 4",
+    "code": "v = zener_output(12.0, 220.0, 4.94, 8.0, 470.0)\nassert abs(v - 5.103892765332354) < 1e-9, f\"expected 5.1038928 V, got {v}\"\nassert abs(zener_output(12.0, 1e12, 4.94, 8.0, 1e12) - 4.94) < 1e-3, \\\n    \"starved of current and unloaded, the output must sit at v_z0\"\nassert abs(zener_output(12.0, 1e-6, 4.94, 8.0, 470.0) - 12.0) < 1e-3, \\\n    \"with almost no series resistance the output must follow the input\""
+   },
+   {
+    "name": "ripple rejection is the parallel divider ratio",
+    "code": "rr = ripple_rejection(220.0, 8.0, 470.0)\npar = 8.0 * 470.0 / 478.0\nassert abs(rr - par / (220.0 + par)) < 1e-15, f\"expected {par / (220.0 + par)}, got {rr}\"\nassert abs(rr - 0.03452074917370547) < 1e-12, f\"expected 0.034520749, got {rr}\"\nassert ripple_rejection(1000.0, 8.0, 470.0) < rr, \\\n    \"a larger series resistor must reject more ripple\""
+   },
+   {
+    "name": "the reservoir design formula inverts I/(fC)",
+    "code": "c = design_reservoir(0.046, 100.0, 0.579)\nassert abs(c - 0.046 / 57.9) < 1e-15, f\"expected {0.046 / 57.9} F, got {c}\"\nassert abs(c - 7.944732297063903e-4) < 1e-12, f\"expected 794.47 uF, got {c}\"\nassert abs(design_reservoir(0.05, 100.0, 0.5) - 1000e-6) < 1e-15, \\\n    \"50 mA and 0.5 V at 100 Hz is exactly 1000 uF\""
+   },
+   {
+    "name": "the chain simulates, and the reservoir peaks where it should",
+    "code": "res, out = simulate_supply(17.0, 50.0, 1000e-6, 220.0, 4.94, 8.0, 470.0, 1.4, 12, 2000)\nassert len(res) == 24000 and len(out) == 24000, \\\n    f\"expected 24000 samples in each list, got {len(res)} and {len(out)}\"\ntail = res[-2000:]\nassert abs(max(tail) - 15.6) < 1e-6, \\\n    f\"17 V peak less two 0.7 V drops is 15.6 V, got {max(tail)}\"\nassert abs(min(tail) - 15.171860231825638) < 1e-6, \\\n    f\"expected a reservoir trough of 15.17186 V, got {min(tail)}\""
+   },
+   {
+    "name": "the report measures the final cycle and meets the 20 mV specification",
+    "code": "res, out = simulate_supply(17.0, 50.0, 1000e-6, 220.0, 4.94, 8.0, 470.0, 1.4, 12, 2000)\nr = report(res, out, 2000, 470.0)\nfor key in (\"v_out_mean\", \"v_out_ripple\", \"v_c_mean\", \"v_c_ripple\", \"rejection\", \"p_load\"):\n    assert key in r, f\"the report is missing the key {key!r}\"\n    assert isinstance(r[key], float), f\"{key} should be a float, got {type(r[key])}\"\nassert abs(r[\"v_c_mean\"] - 15.389864402136372) < 1e-6, f\"expected 15.389864 V, got {r['v_c_mean']}\"\nassert abs(r[\"v_c_ripple\"] - 0.42813977031073414) < 1e-6, f\"expected 0.4281398 V, got {r['v_c_ripple']}\"\nassert abs(r[\"v_out_mean\"] - 5.2209134240913775) < 1e-6, f\"expected 5.2209134 V, got {r['v_out_mean']}\"\nassert abs(r[\"v_out_ripple\"] - 0.014779705622185446) < 1e-9, \\\n    f\"expected 0.01477971 V, got {r['v_out_ripple']}\"\nassert r[\"v_out_ripple\"] <= 0.020, \\\n    f\"the specification is 20 mV peak to peak; this design gives {r['v_out_ripple']}\"\nassert abs(r[\"p_load\"] - 5.2209134240913775 ** 2 / 470.0) < 1e-12, \\\n    f\"p_load should be the mean output squared over the load, got {r['p_load']}\""
+   },
+   {
+    "name": "the measured rejection matches the predicted one",
+    "code": "res, out = simulate_supply(17.0, 50.0, 1000e-6, 220.0, 4.94, 8.0, 470.0, 1.4, 12, 2000)\nr = report(res, out, 2000, 470.0)\npredicted = ripple_rejection(220.0, 8.0, 470.0)\nassert abs(predicted - 0.03452074917370547) < 1e-12, \\\n    f\"the predicted rejection should be 0.034520749, got {predicted}\"\nassert abs(r[\"rejection\"] - predicted) < 1e-6, \\\n    f\"the stage is linear, so the measured {r['rejection']} must match the predicted {predicted}\""
+   },
+   {
+    "name": "a bigger capacitor halves the ripple at both nodes",
+    "code": "res, out = simulate_supply(17.0, 50.0, 2200e-6, 220.0, 4.94, 8.0, 470.0, 1.4, 12, 2000)\nr = report(res, out, 2000, 470.0)\nassert abs(r[\"v_c_ripple\"] - 0.2016645099362524) < 1e-6, \\\n    f\"expected 0.2016645 V at the reservoir, got {r['v_c_ripple']}\"\nassert abs(r[\"v_out_ripple\"] - 0.006961609964748483) < 1e-9, \\\n    f\"expected 0.00696161 V at the output, got {r['v_out_ripple']}\"\nassert abs(r[\"v_out_mean\"] - 5.224729843189422) < 1e-6, f\"expected 5.2247298 V, got {r['v_out_mean']}\"\nassert abs(r[\"rejection\"] - ripple_rejection(220.0, 8.0, 470.0)) < 1e-6, \\\n    \"the rejection does not depend on the capacitor at all\""
+   },
+   {
+    "name": "it works on a different transformer and a different resistor",
+    "code": "res, out = simulate_supply(24.0, 50.0, 1000e-6, 330.0, 4.94, 8.0, 470.0, 1.4, 12, 2000)\nr = report(res, out, 2000, 470.0)\nassert abs(max(res[-2000:]) - 22.6) < 1e-6, \\\n    f\"24 V peak less 1.4 V is 22.6 V, got {max(res[-2000:])}\"\nassert abs(r[\"v_c_mean\"] - 22.362272428188597) < 1e-6, f\"expected 22.362272 V, got {r['v_c_mean']}\"\nassert abs(r[\"v_out_mean\"] - 5.264867766749159) < 1e-6, f\"expected 5.2648678 V, got {r['v_out_mean']}\"\nassert abs(r[\"v_out_ripple\"] - 0.011261835317746716) < 1e-9, \\\n    f\"expected 0.01126184 V, got {r['v_out_ripple']}\"\nassert abs(r[\"rejection\"] - ripple_rejection(330.0, 8.0, 470.0)) < 1e-6, \\\n    \"the measured rejection must track the larger series resistor\""
+   }
+  ]
+ }
+}

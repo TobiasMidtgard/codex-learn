@@ -55,6 +55,15 @@ function newestPerKey(a, b) {
   return out;
 }
 
+function mergeSlots(a, b) {
+  const out = {};
+  a = obj(a); b = obj(b);
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    out[k] = Object.assign({}, obj(a[k]), obj(b[k]));
+  }
+  return out;
+}
+
 function newestWhole(a, b) {
   const out = {};
   a = obj(a); b = obj(b);
@@ -87,6 +96,8 @@ export function mergeProgress(stored, incoming) {
     derive: furthestStep(a.derive, b.derive),
     /* a schematic is whole; the more recently edited one wins outright */
     build: newestWhole(a.build, b.build),
+    /* a filled blank stays filled; the union keeps whichever side answered one */
+    blanks: mergeSlots(a.blanks, b.blanks),
     activity: maxNumbers(a.activity, b.activity),
     code: newestPerKey(a.code, b.code),
     xp: Math.max(Number(a.xp) || 0, Number(b.xp) || 0),
