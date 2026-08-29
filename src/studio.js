@@ -1718,3 +1718,95 @@ Sandbox.define({
       ' A mispredict costs the whole front end.';
   },
 });
+
+const CACHE_MEMO = {};
+/* a cache you can starve: capacity against associativity, on a real trace */
+Sandbox.define({
+  id: 'cache',
+  title: 'Capacity, associativity and the miss rate',
+  params: [
+    { k: 'kb', label: 'cache size', min: 1, max: 64, step: 1, def: 8, unit: 'KB' },
+    { k: 'ways', label: 'associativity', min: 1, max: 16, step: 1, def: 1,
+      fmt: function (x) { return x === 1 ? 'direct' : x + '-way'; } },
+    { k: 'stride', label: 'access stride', min: 1, max: 512, step: 1, def: 64, unit: 'B' },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const LINE = 64;
+    const ways = Math.max(1, Math.round(v.ways));
+    const lines = Math.max(ways, Math.floor(v.kb * 1024 / LINE));
+    const sets = Math.max(1, Math.floor(lines / ways));
+
+    /* LRU over a strided walk through a working set four times the cache */
+    function run(setCount, assoc, stride) {
+      const tags = [];
+      for (let i = 0; i < setCount; i++) tags.push([]);
+      const span = setCount * assoc * LINE * 4;
+      let hits = 0, total = 0;
+      for (let pass = 0; pass < 3; pass++) {
+        for (let addr = 0; addr < span; addr += stride) {
+          const line = Math.floor(addr / LINE);
+          const set = line % setCount;
+          const tag = Math.floor(line / setCount);
+          const arr = tags[set];
+          const at = arr.indexOf(tag);
+          total++;
+          if (at !== -1) { hits++; arr.splice(at, 1); arr.push(tag); }
+          else { arr.push(tag); if (arr.length > assoc) arr.shift(); }
+        }
+      }
+      return total ? hits / total : 0;
+    }
+
+    /* A curve depends only on (associativity, stride) — dragging the size slider
+       moves the marker along one that is already computed. Without the memo every
+       frame re-simulated four full sweeps and the slider felt broken. */
+    function sweep(assoc) {
+      const key = assoc + ':' + v.stride;
+      if (CACHE_MEMO[key]) return CACHE_MEMO[key];
+      const out = [];
+      for (let k = 1; k <= 64; k++) {
+        const ln = Math.max(assoc, Math.floor(k * 1024 / LINE));
+        const st = Math.max(1, Math.floor(ln / assoc));
+        out.push([k, (1 - run(st, assoc, v.stride)) * 100]);
+      }
+      if (Object.keys(CACHE_MEMO).length > 60) for (const k in CACHE_MEMO) delete CACHE_MEMO[k];
+      CACHE_MEMO[key] = out;
+      return out;
+    }
+    const pts = sweep(ways);
+    const here = (1 - run(sets, ways, v.stride)) * 100;
+
+    const f = kit.frame(ctx, w, h, {
+      xRange: [1, 64], yRange: [0, 105], xTicks: 4, yTicks: 4,
+      margin: { l: 46, r: 14, t: 14, b: 30 },
+    });
+    /* the other associativities, faintly, for comparison */
+    ctx.save();
+    ctx.globalAlpha = 0.32;
+    [1, 4, 16].forEach(function (a, i) {
+      if (a === ways) return;
+      f.line(sweep(a), [f.P.blue, f.P.purple, f.P.amber][i], 1.2);
+    });
+    ctx.restore();
+    f.line(pts, f.P.accent, 2);
+    f.dot(v.kb, here, f.P.accent, 5);
+    f.text('miss rate %', f.x0 + 6, f.y0 + 13, f.P.faint);
+    f.text('cache size KB', f.x1 - 6, f.y1 + 20, f.P.faint, 'right');
+  },
+  explain: function (v) {
+    const LINE = 64;
+    const ways = Math.max(1, Math.round(v.ways));
+    const perSet = v.stride * 1 / LINE;
+    const conflict = v.stride >= LINE && (v.stride / LINE) >= 1 &&
+      Math.floor(v.kb * 1024 / LINE / ways) > 0 &&
+      ((v.stride / LINE) % Math.max(1, Math.floor(v.kb * 1024 / LINE / ways)) === 0);
+    if (conflict && ways < 16) {
+      return 'This stride maps every access onto the <b>same set</b>. A direct-mapped cache then ' +
+        'holds one line no matter how large it is \u2014 which is why the curve is flat, and why ' +
+        'associativity, not capacity, is the fix.';
+    }
+    return 'Capacity misses fall as the working set starts to fit. Associativity only helps where ' +
+      'the curve is flat: a flat region means lines are evicting each other by address, not by ' +
+      'volume, and a wider set is the only thing that changes it.';
+  },
+});
