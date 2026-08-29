@@ -126,6 +126,95 @@ step, and that nothing forced you to pick position and velocity — momentum $m\
 would have worked equally well and given a different, equally valid `A`.
 ''',
             },
+            "quiz": {
+                "title": "What a state is, and what it is not",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "Which of these is the state of a system?",
+                        "opts": [
+                            "Every signal that appears anywhere in the block diagram",
+                            "The smallest set of numbers that, together with the future input, determines the future output",
+                            "The input and the output measured at the present instant",
+                            "The eigenvalues of $A$",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The state is a *sufficient summary of the past*. Give me the state now and the input
+from now on, and I can tell you everything the system will do — I never need to know
+how it got there. "Every signal in the diagram" is too much: many of those are
+determined by the others. "The input and output right now" is too little: an RC
+circuit with 0 V in and 0 V out could be sitting still or could be halfway through
+discharging. And the eigenvalues describe the *system*, not the situation it is in.
+""",
+                    },
+                    {
+                        "q": "An $n$-th order linear ODE is rewritten in state space. How many first-order equations does it become?",
+                        "opts": ["$n$", "$n - 1$", "$2n$", "One, always — that is the point of matrix notation"],
+                        "a": 0,
+                        "why": r"""
+One per order, because you need $n$ initial conditions to pin down the solution of an
+$n$-th order ODE and each state carries exactly one of them. The matrix notation makes
+it *look* like one equation, which is convenient, but $\dot{x} = Ax + Bu$ with $x$ in
+$\mathbb{R}^n$ is $n$ scalar equations stacked up — and that is why $A$ is $n \times n$.
+""",
+                    },
+                    {
+                        "q": "For $\\ddot{y} + 4\\dot{y} + 3y = u$ with $x_1 = y$ and $x_2 = \\dot{y}$, what is $A$?",
+                        "opts": [
+                            "$\\begin{bmatrix}0 & 1\\\\ -3 & -4\\end{bmatrix}$",
+                            "$\\begin{bmatrix}0 & 1\\\\ -4 & -3\\end{bmatrix}$",
+                            "$\\begin{bmatrix}1 & 0\\\\ 3 & 4\\end{bmatrix}$",
+                            "$\\begin{bmatrix}-3 & -4\\\\ 0 & 1\\end{bmatrix}$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The first row is the definition $\dot{x}_1 = x_2$, which is where the $0$ and the $1$
+come from — it carries no physics at all. The second row is the ODE rearranged:
+$\dot{x}_2 = \ddot{y} = u - 4\dot{y} - 3y = -3x_1 - 4x_2 + u$. So the bottom row is
+the coefficients, negated, in the order $y$ then $\dot{y}$ — and swapping them to
+$-4, -3$ is the slip to watch for, because it silently builds a different system with
+eigenvalues $-1$ and $-3$ replaced by... well, run it and see.
+""",
+                    },
+                    {
+                        "q": "Why is $D$ zero for almost every physical plant?",
+                        "opts": [
+                            "Because a real plant cannot pass an input straight to its output with no delay",
+                            "Because $D$ plays no part in stability",
+                            "Because $C$ already accounts for it",
+                            "Because $D$ has to be square and usually cannot be",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$D$ is the instantaneous feed-through: it says a jolt on the input appears on the
+output in the same instant, through no state at all. Mass does not move that fast, and
+neither does charge through an inductor. It is true that $D$ does not affect stability
+— the eigenvalues live in $A$ — but that is a consequence, not the reason. Where $D$
+*is* non-zero is a genuine signal: a resistive divider straight from input to output,
+or a model that has quietly been algebraically simplified.
+""",
+                    },
+                    {
+                        "q": "Two realisations are related by $\\bar{A} = TAT^{-1}$ with $T$ invertible. What do they share?",
+                        "opts": [
+                            "The entries of $A$, just relabelled",
+                            "Their eigenvalues, and their input-output behaviour",
+                            "Their state trajectories, point for point",
+                            "Nothing — a change of $T$ is a change of system",
+                        ],
+                        "a": 1,
+                        "why": r"""
+A similarity transform is a change of coordinates for the state, not a change of
+system. The eigenvalues are invariant under it (that is a standard fact worth knowing
+by name), and since the eigenvalues are the poles, the transfer function is untouched.
+What *does* change is the trajectory in state space, because you are now describing
+the same motion in different axes — which is exactly what makes controllability and
+observability forms possible. The realisation is a choice; the behaviour is not.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Build and simulate a state-space model",
                 "runtime": "python",
@@ -318,6 +407,137 @@ $v$ with eigenvalue $\lambda$. Start the system exactly on that eigenvector.
 So the whole stability question reduces to one thing: is every $\sigma$ negative?
 The oscillation carried by $\omega$ is a detail of *how* it settles, never *whether*.
 ''',
+            },
+            "build": {
+                "title": "An eigenvalue pair you can put a probe on",
+                "minutes": 26,
+                "brief": r"""
+Everything in this module has been an eigenvalue of a matrix. Here it is a resonance
+you can measure, because a series RLC driven at one end and read across the capacitor
+*is* the mass-spring-damper of the derivations, with a different set of units on it.
+
+## What you are asked for
+
+Build a **series RLC** from the 1 V source to ground, with the probe on the capacitor,
+whose poles sit at
+
+$$s = -500 \pm j1936\ \text{rad/s}$$
+
+Those are the poles of $\omega_n = 2000$ rad/s at $\zeta = 0.25$: check for yourself
+that $-\zeta\omega_n = -500$ and $\omega_n\sqrt{1-\zeta^2} = 1936$, and that the pair
+sits exactly $\omega_n$ from the origin.
+
+The **100 mH inductor is already on the canvas** and is the one you have. That fixes
+the arithmetic: with $L$ chosen, $C$ follows from $\omega_n = 1/\sqrt{LC}$ and then
+$R$ follows from $\zeta = \frac{R}{2}\sqrt{C/L}$. Add the resistor and the capacitor,
+wire the loop, and put the probe on the node the capacitor is on.
+
+## How it is marked
+
+Nothing here compares your drawing to a reference — it is measured, the way you would
+measure it on a bench, so any wiring that behaves correctly passes.
+
+- At DC the capacitor is an open circuit, so the probe must sit at the full 1 V. That
+  is the check that says you built a *series* loop and not a divider.
+- At $\omega_n$ the two reactances cancel and the response is $1/(2\zeta)$ — a gain of
+  **2**, from three passive components. That single number pins $\zeta$.
+- Two poles means the response falls at 40 dB per decade far above resonance: a factor
+  of 100 per decade, not 10. That is the check a first-order circuit cannot pass.
+- Driven with a step it must overshoot and ring before it settles, which is the
+  time-domain face of the same complex pair.
+
+## The trap
+
+A single resistor and capacitor also sits at 1 V at DC and also falls off with
+frequency. It has one real pole, no resonance, no overshoot, and it fails the last two
+checks — which is the whole distinction this module is about.
+""",
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 9},
+                        {"id": "p3", "kind": "L", "x": 15, "y": 5, "rot": 0, "value": 0.1},
+                        {"id": "p5", "kind": "GND", "x": 19, "y": 10},
+                    ],
+                    "wires": [
+                        {"a": [3, 7], "b": [3, 9]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 9},
+                        {"id": "p2", "kind": "R", "x": 11, "y": 5, "rot": 0, "value": 100},
+                        {"id": "p3", "kind": "L", "x": 15, "y": 5, "rot": 0, "value": 0.1},
+                        {"id": "p4", "kind": "C", "x": 19, "y": 7, "rot": 1, "value": 2.5e-6},
+                        {"id": "p5", "kind": "GND", "x": 19, "y": 10},
+                        {"id": "p6", "kind": "OUT", "x": 19, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 7], "b": [3, 9]},
+                        {"a": [3, 5], "b": [10, 5]},
+                        {"a": [12, 5], "b": [14, 5]},
+                        {"a": [16, 5], "b": [19, 5]},
+                        {"a": [19, 5], "b": [19, 6]},
+                        {"a": [19, 8], "b": [19, 10]},
+                    ],
+                },
+                "checks": [
+                    {
+                        "name": "one R, one L, one C in a loop that reaches 1 V at DC",
+                        "code": r"""
+c.assert(c.count('R') === 1, 'Use exactly one resistor; there are ' + c.count('R') + '.');
+c.assert(c.count('L') === 1, 'Use exactly one inductor; there are ' + c.count('L') + '.');
+c.assert(c.count('C') === 1, 'Use exactly one capacitor; there are ' + c.count('C') + '.');
+c.close(c.vout(), 1.0, 0.02,
+  'the probed node at DC. A capacitor is an open circuit at DC and an inductor is a ' +
+  'short, so a series loop puts the whole 1 V across the capacitor. Anything less ' +
+  'means there is a DC path to ground in parallel with it');
+""",
+                    },
+                    {
+                        "name": "the gain at 2000 rad/s is 1/(2ζ) = 2",
+                        "code": r"""
+const fn = 2000 / (2 * Math.PI);            /* 318.31 Hz */
+c.close(c.gain(fn), 2.0, 0.06,
+  'the gain at the natural frequency. There the inductor and capacitor cancel exactly ' +
+  'and only the resistor is left, so |H| = 1/(2*zeta). A gain above 2 means zeta is ' +
+  'too small (R too low); below 2 means R is too high');
+""",
+                    },
+                    {
+                        "name": "two poles: 40 dB per decade, not 20",
+                        "code": r"""
+const a = c.gain(10e3), b = c.gain(100e3);
+c.assert(a > 0, 'The response at 10 kHz is zero; check the probe is on the capacitor.');
+c.close(a / b, 100, 0.12,
+  'the fall over one decade far above resonance. Two poles give a factor of 100 per ' +
+  'decade. A factor near 10 means the circuit is first order — an R and a C with no ' +
+  'inductor in the path, or the inductor shorted out by a wire');
+""",
+                    },
+                    {
+                        "name": "a step makes it overshoot and ring before settling",
+                        "code": r"""
+const s = c.step(0.02);
+let peak = 0;
+for (let i = 0; i < s.v.length; i++) if (s.v[i] > peak) peak = s.v[i];
+const settled = s.v[s.v.length - 1];
+c.close(settled, 1.0, 0.03, 'the final value after the ringing has died away');
+c.assert(peak > 1.3,
+  'The step response only reached ' + c.fmt(peak, 'V') + ' — it never overshoots. ' +
+  'A complex pole pair must overshoot: at zeta = 0.25 the first peak is 1.44 V in ' +
+  'theory, and a little under that here because the transient solver is backward ' +
+  'Euler and loses a few percent of the ringing. ' +
+  'An overdamped circuit (R too large) creeps up to 1 V and never passes it.');
+""",
+                    },
+                ],
+                "hints": [
+                    "Work $C$ out first. $\\omega_n = 1/\\sqrt{LC}$ with $\\omega_n = 2000$ and $L = 0.1$ H gives $C = 1/(\\omega_n^2 L)$.",
+                    "Then $R = 2\\zeta\\omega_n L$. Both forms of $\\zeta$ agree; use whichever you find easier to remember.",
+                    "The loop runs source $\\to$ R $\\to$ L $\\to$ capacitor $\\to$ ground, and the source's own bottom terminal goes to ground too. The probe belongs on the node shared by the inductor's right-hand end and the top of the capacitor.",
+                ],
             },
             "lab": {
                 "title": "Classify a system from its matrix alone",
@@ -533,6 +753,99 @@ Apply state feedback $u = -k_1 x_1 - k_2 x_2$ and choose the gains.
 Both gains came from matching two coefficients, and both grow with $\omega_n$ — $k_1$
 as its square. That is the algebraic reason a fast controller is an expensive one.
 ''',
+            },
+            "quiz": {
+                "title": "Reaching every state, and paying for it",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A system is controllable. What does that guarantee?",
+                        "opts": [
+                            "Some finite input can drive the state from any starting point to any target point",
+                            "The system is stable",
+                            "Every state can be measured",
+                            "The input is bounded",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Controllability is a reachability statement and nothing else: there *exists* an input
+that gets you there in finite time. It says nothing about whether the system settles
+on its own — an unstable system can be perfectly controllable, which is precisely why
+pole placement is worth doing. Being able to *measure* every state is observability,
+its mirror image. And nothing here bounds the input; a nearly-uncontrollable system is
+controllable on paper and asks for an input you cannot supply, which is what the
+sandbox in this module is showing you.
+""",
+                    },
+                    {
+                        "q": "For a two-state system, the controllability matrix is $\\mathcal{C} = [\\,B \\;\\; AB\\,]$. The system is controllable exactly when:",
+                        "opts": [
+                            "$\\mathcal{C}$ has rank 2",
+                            "$\\mathcal{C}$ is symmetric",
+                            "$B$ is non-zero",
+                            "$A$ is invertible",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Full rank — for two states, rank 2, equivalently a non-zero determinant. The columns
+of $\mathcal{C}$ span the directions the input can push the state in; if they only
+span a line, there is a direction in state space you can never reach no matter what
+you do. A non-zero $B$ is necessary but nowhere near sufficient: with
+$A = \begin{bmatrix}1&0\\0&2\end{bmatrix}$ and $B = \begin{bmatrix}1\\0\end{bmatrix}$,
+$B$ is non-zero and the second state is untouchable. And $A$ being invertible is
+unrelated — a double integrator has a singular $A$ and is perfectly controllable.
+""",
+                    },
+                    {
+                        "q": "State feedback $u = -Kx$ is applied. Which matrix has its eigenvalues moved?",
+                        "opts": ["$A - BK$", "$A - LC$", "$A + BK$", "$A$ itself, entry by entry"],
+                        "a": 0,
+                        "why": r"""
+Substitute: $\dot{x} = Ax + B(-Kx) = (A - BK)x$. The closed loop is a new autonomous
+system and $K$ is chosen to put *its* eigenvalues where you want them. $A - LC$ is the
+observer's error dynamics, which is the next module and is deliberately the same shape
+— that duality is why one piece of algebra does both jobs. $A$ is a property of the
+plant and feedback cannot reach inside it; what feedback changes is what the loop does
+around it.
+""",
+                    },
+                    {
+                        "q": "You move the closed-loop poles twice as far into the left half-plane. What goes up?",
+                        "opts": [
+                            "The control effort, roughly as the square of the pole distance",
+                            "The steady-state error",
+                            "The system's order",
+                            "Nothing — pole placement is free",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Faster poles mean larger gains in $K$, and the input is $-Kx$, so the demanded effort
+grows quickly — for a double integrator, placing both poles at $-\omega$ needs a gain
+that grows as $\omega^2$. On paper it is free; on hardware the actuator saturates, the
+linear design stops describing what is happening, and the response gets *slower* than
+a modest design would have been. The order is fixed by the plant and feedback cannot
+change it, and steady-state error is a separate question about the reference path.
+""",
+                    },
+                    {
+                        "q": "One mode of a plant turns out to be uncontrollable. What can pole placement do with it?",
+                        "opts": [
+                            "Nothing — that eigenvalue stays exactly where it is",
+                            "Move it, but only slowly",
+                            "Move it, provided $K$ is large enough",
+                            "Remove it from the system",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An uncontrollable mode is invisible to the input, so no choice of $K$ touches its
+eigenvalue: it appears unchanged in $A - BK$. This is the practical reason the rank
+test comes before the design and not after. It also sets the bar for what a real plant
+needs — if the stuck eigenvalue is in the left half-plane the system is *stabilisable*
+and you can still build a working controller, and if it is not, no amount of feedback
+will save it and the honest answer is to change the hardware.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Test controllability and place the poles",
@@ -755,6 +1068,85 @@ Notice what is *not* in the error equation: no $u$, and no reference. The estima
 converges regardless of what the controller is doing — which is precisely why the
 controller and the observer can be designed separately.
 ''',
+            },
+            "blanks": {
+                "title": "The observer, line by line",
+                "minutes": 9,
+                "caption": "luenberger.py — one step, four holes",
+                "lang": "python",
+                "brief": r"""
+The observer is four symbols arranged carefully, and every one of them is somewhere a
+sign or a matrix can go in wrong. Fill the holes and read the result back as a
+sentence: *predict what the sensor should say, compare it with what the sensor did
+say, and push the estimate in proportion to the disagreement.*
+
+Nothing is executed here — you are choosing symbols, not writing code.
+""",
+                "listing": """# One step of a Luenberger observer.
+#   plant     xdot = A @ x + B @ u,   y = C @ x     (x is not available to us)
+#   estimate  xhat, corrected by the observer gain L
+
+y_hat      = ___ @ xhat
+innovation = ___
+xhat       = xhat + dt * (A @ xhat + B @ u + ___)
+
+# and the estimation error e = x - xhat then obeys
+#   edot = ___ @ e
+""",
+                "blanks": [
+                    {
+                        "prompt": "What does the observer have to predict before it can compare anything?",
+                        "hole": "?",
+                        "opts": ["C", "A", "L", "B"],
+                        "a": 0,
+                        "why": "`C` is the sensor. `y_hat = C @ xhat` is the observer asking *if my estimate were right, what would the meter read?* — and that is the only quantity it can legitimately compare against reality.",
+                        "whys": [
+                            "`C` is the sensor. `y_hat = C @ xhat` is the observer asking *if my estimate were right, what would the meter read?* — and that is the only quantity it can legitimately compare against reality.",
+                            "`A` propagates the state forward in time; it says nothing about what is measurable. Using it here would compare a predicted *state* against a scalar measurement, and the shapes would not even match.",
+                            "`L` is the correction gain, and it belongs on the far side of the comparison — it decides how hard to act on the disagreement, not what the disagreement is.",
+                            "`B` is how the input enters. The input is already accounted for in the prediction step; it is not part of what the sensor reads.",
+                        ],
+                    },
+                    {
+                        "prompt": "The innovation is the one piece of genuinely new information each step.",
+                        "hole": "?",
+                        "opts": ["y - y_hat", "y_hat - y", "y + y_hat", "xhat - x"],
+                        "a": 0,
+                        "why": "Measurement minus prediction. When the estimate is already right the innovation is zero and the correction switches itself off, which is exactly the behaviour you want.",
+                        "whys": [
+                            "Measurement minus prediction. When the estimate is already right the innovation is zero and the correction switches itself off, which is exactly the behaviour you want.",
+                            "The sign is inverted, so every correction pushes the estimate further from the measurement. The error dynamics become $A + LC$ and a gain chosen to make the observer fast makes it diverge instead.",
+                            "A sum has no zero at agreement: a correct estimate would still demand a large correction, and the observer would never settle anywhere.",
+                            "`x` is the true state. If you had it there would be nothing to estimate — this line is the one thing an observer is not allowed to write.",
+                        ],
+                    },
+                    {
+                        "prompt": "How does the disagreement get back into the estimate?",
+                        "hole": "?",
+                        "opts": ["L @ innovation", "innovation @ L", "C @ innovation", "L @ y"],
+                        "a": 0,
+                        "why": "`L` maps a measurement-sized disagreement back into a state-sized correction. It is the one free choice in the whole observer, and making it larger trusts the sensor more and the model less.",
+                        "whys": [
+                            "`L` maps a measurement-sized disagreement back into a state-sized correction. It is the one free choice in the whole observer, and making it larger trusts the sensor more and the model less.",
+                            "The order is wrong: `L` is $n \\times p$ and the innovation is $p \\times 1$, so this multiplies in the only order that does not conform. The mistake is worth making once in NumPy, where the error message says so plainly.",
+                            "`C` goes the other way — state to measurement. Using it here would try to correct the state with something already in measurement units, and shrink the correction instead of applying it.",
+                            "Correcting by the raw measurement rather than the disagreement never converges: even a perfect estimate keeps getting pushed, because `y` does not go to zero.",
+                        ],
+                    },
+                    {
+                        "prompt": "Subtract the estimate's dynamics from the plant's. What is left?",
+                        "hole": "?",
+                        "opts": ["(A - L @ C)", "(A - B @ K)", "A", "(A + L @ C)"],
+                        "a": 0,
+                        "why": "Subtracting the two lines cancels `B @ u` entirely — the input drives both equally — and leaves $\\dot{e} = (A - LC)e$. The error forgets the input, which is why an observer works while the plant is being driven.",
+                        "whys": [
+                            "Subtracting the two lines cancels `B @ u` entirely — the input drives both equally — and leaves $\\dot{e} = (A - LC)e$. The error forgets the input, which is why an observer works while the plant is being driven.",
+                            "That is the *controller's* closed loop, from the previous module. The two look alike on purpose, and the separation principle says you may design them independently — but they are not the same matrix and swapping them silently designs the wrong thing.",
+                            "Plain `A` is the error dynamics of an observer with no correction at all: a simulation running open-loop beside the plant, drifting apart on any initial mismatch. `L` is the entire point.",
+                            "The sign is flipped, which is what you get from the inverted innovation above. Eigenvalues chosen to sit safely in the left half-plane end up in the right one.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Build a Luenberger observer",
