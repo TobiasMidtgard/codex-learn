@@ -10180,6 +10180,367 @@ Sandbox.define({
   },
 });
 
+/* ---- signal, power, field and architecture visualisers ---- */
+
+/* sampling and aliasing: the one picture that makes Nyquist obvious */
+Sandbox.define({
+  id: 'spectrum',
+  title: 'Sampling, aliasing and the Nyquist limit',
+  params: [
+    { k: 'fsig', label: 'signal f', min: 1, max: 240, step: 1, def: 30, unit: 'Hz' },
+    { k: 'fs', label: 'sample rate', min: 20, max: 400, step: 5, def: 200, unit: 'Hz' },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const topH = Math.round(h * 0.56);
+    const T = 0.1;
+
+    /* time domain: the true wave, the samples, and the alias they imply */
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, w, topH); ctx.clip();
+    const f = kit.frame(ctx, w, topH, {
+      xRange: [0, T], yRange: [-1.35, 1.35], xTicks: 4, yTicks: 2,
+      margin: { l: 40, r: 12, t: 12, b: 20 },
+      xLabel: function (x) { return (x * 1000).toFixed(0); },
+    });
+    const truth = [];
+    for (let i = 0; i <= 600; i++) {
+      const t = i / 600 * T;
+      truth.push([t, Math.sin(2 * Math.PI * v.fsig * t)]);
+    }
+    f.line(truth, f.P.dim, 1.2);
+
+    /* where the alias lands: fold the signal about multiples of fs */
+    let fa = Math.abs(v.fsig % v.fs);
+    if (fa > v.fs / 2) fa = v.fs - fa;
+    const alias = [];
+    for (let i = 0; i <= 600; i++) {
+      const t = i / 600 * T;
+      alias.push([t, Math.sin(2 * Math.PI * fa * t)]);
+    }
+    const aliased = Math.abs(fa - v.fsig) > 0.5;
+    if (aliased) f.line(alias, f.P.amber, 2);
+
+    const n = Math.floor(T * v.fs);
+    for (let i = 0; i <= n; i++) {
+      const t = i / v.fs;
+      f.dot(t, Math.sin(2 * Math.PI * v.fsig * t), f.P.accent, 3);
+    }
+    f.text('ms', f.x1 - 6, f.y1 + 16, f.P.faint, 'right');
+    ctx.restore();
+
+    /* frequency domain: signal, Nyquist line, and the folded image */
+    ctx.save();
+    ctx.translate(0, topH + 4);
+    const g = kit.frame(ctx, w, h - topH - 4, {
+      xRange: [0, 260], yRange: [0, 1.25], xTicks: 4, yTicks: 2,
+      margin: { l: 40, r: 12, t: 12, b: 28 },
+    });
+    const spike = function (x, colour, label) {
+      if (x < 0 || x > 260) return;
+      ctx.beginPath();
+      ctx.moveTo(g.fx(x), g.fy(0));
+      ctx.lineTo(g.fx(x), g.fy(1));
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      g.text(label, g.fx(x) + 4, g.fy(1) - 4, colour);
+    };
+    const nyq = v.fs / 2;
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(g.fx(nyq), g.y0); ctx.lineTo(g.fx(nyq), g.y1);
+    ctx.strokeStyle = g.P.purple; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.restore();
+    g.text('f\u209b/2', g.fx(nyq) + 4, g.y0 + 12, g.P.purple);
+    spike(v.fsig, g.P.dim, 'signal');
+    if (aliased) spike(fa, g.P.amber, 'alias');
+    g.text('Hz', g.x1 - 6, g.y1 + 20, g.P.faint, 'right');
+    ctx.restore();
+  },
+  explain: function (v) {
+    let fa = Math.abs(v.fsig % v.fs);
+    if (fa > v.fs / 2) fa = v.fs - fa;
+    if (Math.abs(fa - v.fsig) < 0.5) {
+      return 'Below the Nyquist limit of <b>' + (v.fs / 2).toFixed(0) + ' Hz</b>, so the samples ' +
+        'determine the wave uniquely. Nothing is lost.';
+    }
+    return 'Above Nyquist: the samples are indistinguishable from a <b>' + fa.toFixed(1) +
+      ' Hz</b> wave. Nothing downstream can undo this \u2014 the information is gone at the ' +
+      'converter, which is why the anti-alias filter is analogue and comes first.';
+  },
+});
+
+/* noise: the 1/f corner, and why it decides your architecture */
+Sandbox.define({
+  id: 'noise-corner',
+  title: 'Flicker noise, thermal noise and the corner between them',
+  params: [
+    { k: 'fc', label: '1/f corner', min: 1, max: 100000, step: 100, def: 10000, unit: 'Hz' },
+    { k: 'nth', label: 'thermal floor', min: 1, max: 40, step: 0.5, def: 8, unit: 'nV/\u221aHz' },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const lo = 1, hi = 1e7;
+    const pts = [];
+    let maxv = 0;
+    for (let i = 0; i <= 400; i++) {
+      const fq = Math.pow(10, Math.log10(lo) + i / 400 * (Math.log10(hi) - Math.log10(lo)));
+      const val = v.nth * Math.sqrt(1 + v.fc / fq);
+      maxv = Math.max(maxv, val);
+      pts.push([fq, 20 * Math.log10(val)]);
+    }
+    const f = kit.frame(ctx, w, h, {
+      xRange: [lo, hi], yRange: [20 * Math.log10(v.nth) - 6, 20 * Math.log10(maxv) + 6],
+      logX: true, xTicks: 7, yTicks: 4, margin: { l: 52, r: 14, t: 14, b: 30 },
+      xLabel: function (x) {
+        if (x >= 1e6) return (x / 1e6) + 'M';
+        if (x >= 1e3) return (x / 1e3) + 'k';
+        return String(Math.round(x));
+      },
+    });
+    f.hline(20 * Math.log10(v.nth), f.P.faint, [4, 4]);
+    f.line(pts, f.P.accent, 2);
+    ctx.save();
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(f.fx(v.fc), f.y0); ctx.lineTo(f.fx(v.fc), f.y1);
+    ctx.strokeStyle = f.P.purple; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.restore();
+    f.text('corner', f.fx(v.fc) + 5, f.y0 + 13, f.P.purple);
+    f.text('thermal floor', f.x0 + 6, f.fy(20 * Math.log10(v.nth)) - 6, f.P.faint);
+    f.text('dB re 1 nV/\u221aHz', f.x0 + 6, f.y0 + 13, f.P.faint);
+    f.text('Hz', f.x1 - 6, f.y1 + 20, f.P.faint, 'right');
+  },
+  explain: function (v) {
+    return 'Below the corner the noise rises as 1/f and integrating for longer stops helping \u2014 ' +
+      'this is the region chopping and correlated double sampling exist for. Above it the floor ' +
+      'is flat at <b>' + v.nth.toFixed(1) + ' nV/\u221aHz</b>, set by resistance and temperature, ' +
+      'and the only lever left is a wider device or more current.';
+  },
+});
+
+/* hard versus soft switching, and the ringing that decides your losses */
+Sandbox.define({
+  id: 'switching',
+  title: 'Hard switching, ringing and ZVS',
+  params: [
+    { k: 'ls', label: 'loop inductance', min: 1, max: 80, step: 1, def: 30, unit: 'nH' },
+    { k: 'coss', label: 'device C\u2092\u209b\u209b', min: 20, max: 600, step: 10, def: 150, unit: 'pF' },
+    { k: 'dead', label: 'dead time', min: 0, max: 300, step: 5, def: 0, unit: 'ns' },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const L = v.ls * 1e-9, C = v.coss * 1e-12;
+    const wr = 1 / Math.sqrt(L * C);
+    const fr = wr / (2 * Math.PI);
+    const Tspan = 600e-9;
+    const zeta = 0.06;
+    /* resonant time to swing Vds fully: a quarter period */
+    const tSwing = (Math.PI / 2) / wr;
+    const dead = v.dead * 1e-9;
+    const soft = dead >= tSwing * 0.95;
+
+    const vds = [], isw = [];
+    for (let i = 0; i <= 700; i++) {
+      const t = i / 700 * Tspan;
+      let y;
+      if (t < 100e-9) y = 1;
+      else {
+        const td = t - 100e-9;
+        if (soft) {
+          /* the tank swings Vds down to zero before the device turns on */
+          y = td < tSwing ? Math.cos(wr * td) : 0;
+          if (y < 0) y = 0;
+        } else {
+          const env = Math.exp(-zeta * wr * td);
+          y = env * Math.cos(wr * td) * 0.9;
+          if (td > dead) y = y * Math.exp(-(td - dead) * 6e6);
+        }
+      }
+      vds.push([t * 1e9, y]);
+      const cur = t < 100e-9 ? 0 : (soft ? Math.min(1, (t - 100e-9) / 60e-9) : 1);
+      isw.push([t * 1e9, cur]);
+    }
+
+    const f = kit.frame(ctx, w, h, {
+      xRange: [0, Tspan * 1e9], yRange: [-0.6, 1.5], xTicks: 4, yTicks: 4,
+      margin: { l: 44, r: 14, t: 14, b: 30 },
+    });
+    f.hline(0, f.P.line);
+    f.line(isw, f.P.blue, 1.6);
+    f.line(vds, soft ? f.P.accent : f.P.amber, 2);
+    f.text('V\u2091\u209b', f.x0 + 6, f.y0 + 13, soft ? f.P.accent : f.P.amber);
+    f.text('I\u209b\u1d65\u1d65', f.x0 + 44, f.y0 + 13, f.P.blue);
+    f.text('ns', f.x1 - 6, f.y1 + 20, f.P.faint, 'right');
+  },
+  explain: function (v) {
+    const L = v.ls * 1e-9, C = v.coss * 1e-12;
+    const fr = 1 / (2 * Math.PI * Math.sqrt(L * C));
+    const tSwing = (Math.PI / 2) / (1 / Math.sqrt(L * C));
+    const soft = v.dead * 1e-9 >= tSwing * 0.95;
+    return 'The parasitic tank rings at <b>' + (fr / 1e6).toFixed(1) + ' MHz</b> and needs <b>' +
+      (tSwing * 1e9).toFixed(0) + ' ns</b> to swing the drain to zero. ' +
+      (soft
+        ? 'Your dead time covers it, so the device turns on at zero volts \u2014 no CV\u00b2f loss and no ringing.'
+        : 'Your dead time is shorter than that, so the device turns on into a charged capacitance: the energy \u00bdCV\u00b2 is dissipated every cycle and the loop rings.');
+  },
+});
+
+/* the Smith chart: impedance matching as motion on a circle */
+Sandbox.define({
+  id: 'smith',
+  title: 'Matching on the Smith chart',
+  params: [
+    { k: 'rl', label: 'load R', min: 2, max: 300, step: 1, def: 100, unit: '\u03a9' },
+    { k: 'xl', label: 'load X', min: -200, max: 200, step: 1, def: 60, unit: '\u03a9' },
+    { k: 'len', label: 'line length', min: 0, max: 0.5, step: 0.005, def: 0, unit: '\u03bb' },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const P = kit.palette();
+    const Z0 = 50;
+    const R = Math.min(w, h) / 2 - 22;
+    const cx = w / 2, cy = h / 2;
+
+    function plot(re, im) { return [cx + re * R, cy - im * R]; }
+
+    /* constant-resistance and constant-reactance circles */
+    ctx.strokeStyle = P.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+    [0.2, 0.5, 1, 2, 5].forEach(function (r) {
+      const c = r / (1 + r), rad = 1 / (1 + r);
+      ctx.beginPath();
+      ctx.arc(cx + c * R, cy, rad * R, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+    [0.2, 0.5, 1, 2, 5].forEach(function (x) {
+      [1, -1].forEach(function (sgn) {
+        const rad = R / x;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx + R, cy - sgn * rad, rad, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.beginPath();
+        ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.beginPath();
+        ctx.arc(cx + R, cy - sgn * rad, rad, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      });
+    });
+    ctx.strokeStyle = P.dim;
+    ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.stroke();
+
+    /* the load, and where a length of line moves it */
+    const zr = v.rl / Z0, zi = v.xl / Z0;
+    const den = (zr + 1) * (zr + 1) + zi * zi;
+    let gr = ((zr - 1) * (zr + 1) + zi * zi) / den;
+    let gi = (2 * zi) / den;
+    const mag = Math.hypot(gr, gi);
+    const ang0 = Math.atan2(gi, gr);
+    const ang = ang0 - 4 * Math.PI * v.len;
+    const mr = mag * Math.cos(ang), mi = mag * Math.sin(ang);
+
+    /* the constant-VSWR circle the line travels along */
+    ctx.save();
+    ctx.setLineDash([3, 4]);
+    ctx.strokeStyle = P.purple;
+    ctx.beginPath(); ctx.arc(cx, cy, mag * R, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+
+    const a = plot(gr, gi), b = plot(mr, mi);
+    ctx.fillStyle = P.dim;
+    ctx.beginPath(); ctx.arc(a[0], a[1], 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = P.accent;
+    ctx.beginPath(); ctx.arc(b[0], b[1], 5.5, 0, Math.PI * 2); ctx.fill();
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillStyle = P.faint;
+    ctx.fillText('centre = 50 \u03a9', 8, h - 8);
+  },
+  explain: function (v) {
+    const Z0 = 50;
+    const zr = v.rl / Z0, zi = v.xl / Z0;
+    const den = (zr + 1) * (zr + 1) + zi * zi;
+    const gr = ((zr - 1) * (zr + 1) + zi * zi) / den;
+    const gi = (2 * zi) / den;
+    const mag = Math.hypot(gr, gi);
+    const vswr = (1 + mag) / (1 - mag);
+    return '|\u0393| = <b>' + mag.toFixed(3) + '</b>, VSWR <b>' + vswr.toFixed(2) + ':1</b>, ' +
+      'return loss ' + (-20 * Math.log10(Math.max(mag, 1e-6))).toFixed(1) + ' dB. ' +
+      'A length of lossless line rotates you clockwise on the dashed circle without ever ' +
+      'changing its radius \u2014 line alone can never match a load, only move where the mismatch sits.';
+  },
+});
+
+/* a pipeline you can watch stall */
+Sandbox.define({
+  id: 'pipeline',
+  title: 'Pipeline hazards and what they cost',
+  params: [
+    { k: 'dep', label: 'dependent pairs', min: 0, max: 6, step: 1, def: 3 },
+    { k: 'fwd', label: 'forwarding on', min: 0, max: 1, step: 1, def: 0, fmt: function (x) { return x ? 'yes' : 'no'; } },
+    { k: 'miss', label: 'branch mispredicts', min: 0, max: 4, step: 1, def: 1 },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const P = kit.palette();
+    const STAGES = ['IF', 'ID', 'EX', 'ME', 'WB'];
+    const N = 9;
+    /* build a schedule: each instruction starts one cycle after the last, plus stalls */
+    const start = [];
+    let t = 0, stalls = 0, flushes = 0;
+    for (let i = 0; i < N; i++) {
+      let extra = 0;
+      if (i > 0 && i <= v.dep) extra = v.fwd ? 0 : 2;
+      if (v.miss && i > 0 && i % 3 === 0 && flushes < v.miss) { extra += 2; flushes++; }
+      stalls += extra;
+      t += 1 + extra;
+      start.push(t);
+    }
+    const total = start[N - 1] + STAGES.length;
+    const cellW = Math.max(14, Math.min(30, (w - 92) / total));
+    const cellH = Math.max(13, Math.min(22, (h - 46) / N));
+    const x0 = 78, y0 = 28;
+
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < N; i++) {
+      const y = y0 + i * (cellH + 3);
+      ctx.fillStyle = P.faint;
+      ctx.textAlign = 'right';
+      ctx.fillText('i' + i, x0 - 8, y + cellH / 2);
+      for (let sIdx = 0; sIdx < STAGES.length; sIdx++) {
+        const c = start[i] + sIdx;
+        const x = x0 + c * cellW;
+        const stalled = i > 0 && i <= v.dep && !v.fwd && sIdx === 0;
+        ctx.fillStyle = sIdx === 2 ? 'rgba(199,247,81,.22)' : 'rgba(255,255,255,.06)';
+        ctx.fillRect(x, y, cellW - 2, cellH);
+        ctx.fillStyle = sIdx === 2 ? P.accent : P.dim;
+        ctx.textAlign = 'center';
+        if (cellW > 18) ctx.fillText(STAGES[sIdx], x + (cellW - 2) / 2, y + cellH / 2);
+      }
+    }
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.faint;
+    ctx.fillText('cycles \u2192', x0, 14);
+  },
+  explain: function (v) {
+    const N = 9;
+    const dep = v.fwd ? 0 : v.dep * 2;
+    const br = Math.min(v.miss, 2) * 2;
+    const cycles = N + 4 + dep + br;
+    const cpi = cycles / N;
+    return '<b>' + cycles + ' cycles</b> for ' + N + ' instructions \u2014 CPI ' + cpi.toFixed(2) + '. ' +
+      (v.fwd
+        ? 'Forwarding removes the data hazard entirely: the value goes EX\u2192EX without ever visiting the register file.'
+        : 'Each dependent pair costs two bubbles, because the register write happens in WB and the read in ID.') +
+      ' A mispredict costs the whole front end.';
+  },
+});
+
 /* ============ Codewright app: state, routing, views ============ */
 
 /* ---------- app state ---------- */
