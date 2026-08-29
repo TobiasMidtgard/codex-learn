@@ -8,6 +8,7 @@
  *   src/index.head.html   doctype, styles, theme bootstrap, <body> openers
  *   src/lang.js           language model, inference, completion, highlighting
  *   src/studio.js         maths rendering, symbolic checking, sandboxes
+ *   src/circuit.js        schematic editor and the MNA circuit solver
  *   src/bundle.*.txt      the "@@ key" content bundle for the foundation tracks
  *   src/tracks.js         the TRACKS array
  *   src/engine.js         utilities, highlighter, markdown, editor, runners, store
@@ -167,6 +168,7 @@ const langJs = read(join(SRC, 'lang.js'));
 const tracksJs = read(join(SRC, 'tracks.js'));
 const engineJs = read(join(SRC, 'engine.js'));
 const studioJs = read(join(SRC, 'studio.js'));
+const circuitJs = read(join(SRC, 'circuit.js'));
 const appJs = read(join(SRC, 'app.js'));
 
 const appScript = [
@@ -176,6 +178,7 @@ const appScript = [
   'const DEGREE_DATA = ' + degreeJson + ';\n',
   engineJs,
   studioJs,
+  circuitJs,
   appJs,
 ].join('\n');
 

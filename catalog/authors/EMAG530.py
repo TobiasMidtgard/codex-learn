@@ -76,7 +76,7 @@ face looking into air.
                 "notice": [
                     "The readout gives $|\\Gamma| = 0.187$ and 14.6 dB return loss. Square the reflection coefficient and you have 3.5 per cent of the power coming straight back out of a bare fibre facet — the number every connector data sheet is quietly fighting.",
                     "Drag load $R$ down to 50 $\\Omega$. The dot collapses onto the centre and $|\\Gamma|$ reads zero: that is index-matching gel, chosen so the two media present the same wave impedance.",
-                    "Now set load $R$ to its minimum and push load $X$ to +200 $\\Omega$. The dot climbs to the rim, where $|\\Gamma| = 0.995$ and 99 per cent of the power returns. A reactive load reflects everything and keeps only the phase — that is exactly what an interface does beyond the critical angle.",
+                    "Now set load $R$ to its minimum and push load $X$ to +200 $\\Omega$. The dot climbs to the rim, where $|\\Gamma| = 0.995$ and 99 per cent of the power returns. A purely reactive load would reflect all of it and keep only the phase, and the last 1 per cent is only the $R = 2\\ \\Omega$ the slider cannot dial away — that is exactly what an interface does beyond the critical angle.",
                     "Move the line-length slider anywhere you like. The dot travels clockwise around the dashed circle and the reported $|\\Gamma|$ never changes. Propagation moves the phase of a reflection and never its magnitude, which is why you cannot fix a mismatch by adding fibre.",
                 ],
             },
@@ -162,9 +162,10 @@ Five functions, all of them one line once you have the derivation in front of yo
   carries one mode per polarisation, which is $\lambda_0/(4\,\mathrm{NA})$. Module 2
   derives that bound; here just use it.
 
-Work in radians throughout. `np.arcsin` will raise on an argument above 1, which can
-happen for a large NA launched from air, so clip the argument into $[-1, 1]$ before
-calling it.
+Work in radians throughout. `np.arcsin` returns `nan` for an argument above 1 rather
+than raising, which can happen for a large NA launched from air, so clip the argument
+into $[-1, 1]$ before calling it and the failure becomes a saturated angle instead of
+a silent `nan`.
 ''',
                 "files": [{"name": "main.py", "content": r'''
 import numpy as np
@@ -255,13 +256,13 @@ if __name__ == "__main__":
                     "`fresnel_normal` squares a ratio, so it does not care which index you pass first. Check that your version agrees.",
                 ],
                 "tests": [
-                    {"name": "the critical angle tightens as the index step grows", "code": r'''
+                    {"name": "a bigger index step lowers the critical angle", "code": r'''
 _a = critical_angle(1.48, 1.46)
 assert abs(_a - 1.406211640313002) < 1e-9, \
     f"arcsin(1.46/1.48) is 1.406212 rad measured from the normal, got {_a}"
 _b = critical_angle(1.48, 1.40)
 assert _b < _a, \
-    "a larger index step should let steeper rays stay trapped, so theta_c falls"
+    "rays beyond theta_c are the trapped ones, so a bigger index step lowers theta_c and widens the guided range"
 '''},
                     {"name": "the numerical aperture uses the difference of squares", "code": r'''
 _na = numerical_aperture(1.48, 1.46)
@@ -329,7 +330,7 @@ The chart opens on a nearly reactive load: $R$ at its minimum, $X$ at 120 $\Omeg
 The line-length slider is now the transverse crossing, not distance down the fibre.
 ''',
                 "notice": [
-                    "The readout gives $|\\Gamma| = 0.988$ and a VSWR near 169:1, so about 98 per cent of the power returns from the wall and the rest is stored, not lost. Beyond the critical angle a wall behaves like a reactance — it cannot absorb, only delay.",
+                    "The readout gives $|\\Gamma| = 0.988$ and a VSWR near 169:1, so about 98 per cent of the power returns from the wall. The missing 2 per cent is the residual $R = 2\\ \\Omega$ the slider cannot go below; a real wall beyond the critical angle is purely reactive, returning all of it and keeping only the phase.",
                     "Take the line length from 0 to 0.5 $\\lambda$. The accent dot makes exactly one full circuit and lands back on the grey load dot: half a wavelength of line is $360°$ of *round-trip* phase, because the wave crosses it twice. A guided mode exists only at the transverse angles where that circuit closes.",
                     "Stop at 0.25 $\\lambda$. The dot is now diametrically opposite the load, which is the same as inverting the normalised impedance. That inversion is the quarter-wave transformer, and it is how an anti-reflection coating on an end face is designed.",
                     "Raise load $R$ towards 50 $\\Omega$ with $X$ still at 120. The dashed circle shrinks from 0.988 to 0.768: the wall is now letting power through. A leaky wall cannot support a mode, which is the whole reason guiding needs total internal reflection rather than merely strong reflection.",
@@ -615,7 +616,9 @@ assert _b > _a, \
 Modulate the optical power, detect it, and plot the received amplitude against
 modulation frequency. Pulse spreading is a low-pass: the wider the spread, the lower
 the corner. Read $\omega$ here as modulation frequency in whatever units suit the
-link, and $\omega_n$ as its 3 dB bandwidth.
+link, and $\omega_n$ as the corner — the frequency where the phase passes $-90°$. It
+is not the 3 dB point: at $\zeta = 0.9$, the damping the chart opens on, the magnitude
+at $\omega_n$ is already 5.1 dB down and the 3 dB point sits back at $0.75\,\omega_n$.
 
 Two poles, because a real link has at least two independent band limits — the fibre
 and the receiver front end.
@@ -895,7 +898,7 @@ crosses the line is the fastest the link can run.
                     "$K = 6$ puts the low-frequency magnitude at $20\\log_{10} 6 = 15.6$ dB above the dashed line. That gap is the whole power budget: subtract fibre, splices, connectors and ageing from it and whatever remains is your margin.",
                     "Lower $K$ to 1. The curve now starts exactly on the dashed line, so the margin is zero before the link has done anything at all — the state a budget with no margin term actually describes.",
                     "Read where the curve crosses the dashed line. At $K = 6$ and $\\zeta = 0.7$ that happens near $2.4\\,\\omega_n$; at $K = 1$ it collapses to $0.2\\,\\omega_n$. Adding fibre lowers $K$, so the same link runs slower as it gets longer — reach and bit rate are the same trade seen twice.",
-                    "Push $\\zeta$ down to 0.05. The curve rises 20 dB above the line near the corner and the crossing moves out slightly, to about $2.6\\,\\omega_n$. A resonant peak buys a little bandwidth on paper and pays for it with overshoot in the eye diagram.",
+                    "Push $\\zeta$ down to 0.05. The amber dot at the corner jumps to 35.6 dB above the dashed line — 20 dB above the 15.6 dB the curve started at — and the crossing moves out only slightly, to about $2.6\\,\\omega_n$. A resonant peak buys a little bandwidth on paper and pays for it with overshoot in the eye diagram.",
                 ],
             },
             "derive": {
@@ -1292,8 +1295,11 @@ from fibre import spec_10g, spec_1g
 
 # The 10 Gb/s link is limited by dispersion at 29.4 km against a 74.8 km loss
 # limit, and the single change that would move that limit furthest is a narrower
-# source: the reach goes inversely with spectral width, so a 0.01 nm laser buys
-# a factor of ten where a lower-loss fibre would buy nothing at all.
+# source: the dispersion limit goes inversely with spectral width, so a 0.01 nm
+# laser pushes it from 29.4 km to 294 km, while a lower-loss fibre moves only the
+# 74.8 km term and buys nothing at all. Note what that does to the verdict — with
+# the dispersion limit out at 294 km the link becomes loss-limited, so the reach
+# itself only goes from 29.4 km to 74.8 km, and the next thing to fix is loss.
 
 SINGLE_MODE_V = 2.405
 

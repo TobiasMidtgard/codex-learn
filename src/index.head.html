@@ -564,6 +564,50 @@ math[display=block]{display:block;margin:14px 0;overflow-x:auto;overflow-y:hidde
   .dv-given,.dv-answer,.dv-work{margin-left:0}
 }
 
+/* ---------- circuit editor ---------- */
+.ckt{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+.ckt-bar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);
+  background:var(--sunk);flex-wrap:wrap}
+.ckt-bar .spacer{flex:1}
+.ckt-tools{display:flex;gap:4px;flex-wrap:wrap}
+.ckt-t{height:28px;min-width:32px;padding:0 10px;border-radius:var(--r);border:1px solid var(--line-2);
+  background:transparent;color:var(--ink-3);font:600 11.5px var(--mono);cursor:pointer;
+  transition:background .14s,color .14s,border-color .14s}
+.ckt-t:hover{color:var(--ink);border-color:var(--line-3)}
+.ckt-t.on{background:var(--lime);border-color:var(--lime);color:var(--on-lime)}
+.ckt-main{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:340px}
+.ckt-canvas{position:relative;background:var(--editor);min-height:340px;cursor:crosshair}
+.ckt-canvas canvas{display:block}
+.ckt-side{border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.ckt-panel{padding:12px 14px;border-bottom:1px solid var(--line)}
+.ckt-panel h4{margin:0 0 9px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--lime)}
+.ckt-hint{margin:0;font-size:11.5px;line-height:1.55;color:var(--ink-4);text-wrap:pretty}
+.ckt-f{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px;margin-bottom:8px}
+.ckt-f span{font-family:var(--mono);font-size:10.5px;color:var(--ink-4);white-space:nowrap}
+.ckt-f input{height:28px;padding:0 8px;border-radius:var(--r);border:1px solid var(--line-2);
+  background:var(--editor);color:var(--ink);font:12px var(--mono);outline:none;min-width:0}
+.ckt-f input:focus{border-color:var(--lime)}
+.ckt-modes{margin-bottom:10px;flex-wrap:wrap}
+.ckt-modes button{font-size:10.5px;padding:0 8px}
+.ckt-opts{margin-bottom:10px}
+.ckt-run{width:100%;height:32px}
+.ckt-out{padding:12px 14px;overflow:auto;flex:1;min-height:0}
+.ckt-tab{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+.ckt-tab td{padding:3px 0;color:var(--ink-2)}
+.ckt-tab td:first-child{color:var(--ink-5)}
+.ckt-tab td:last-child{text-align:right;color:var(--lime)}
+.ckt-nodes{flex-wrap:wrap}
+.ckt-nodes button{font-size:10.5px;padding:0 8px}
+.ckt-err{font-size:12px;line-height:1.6;color:var(--amber);text-wrap:pretty}
+.ckt-plot{border-top:1px solid var(--line);background:var(--editor);padding:8px}
+.ckt-plot canvas{display:block}
+.ckt-note{margin:12px 2px 0;font-size:12px;line-height:1.6;color:var(--ink-4);max-width:70ch;text-wrap:pretty}
+@media (max-width:860px){
+  .ckt-main{grid-template-columns:1fr}
+  .ckt-side{border-left:0;border-top:1px solid var(--line)}
+}
+
 /* ---------- the majors ---------- */
 .page-head{margin-bottom:26px}
 .page-head h1{margin:0 0 8px;font-size:30px;font-weight:600;letter-spacing:-0.03em;text-wrap:balance}

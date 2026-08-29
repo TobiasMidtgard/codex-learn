@@ -1,8 +1,12 @@
 # Codex Learn — learn by building
 
-A zero-install code learning platform that runs entirely in one HTML file: a real
-editor with syntax highlighting and autocomplete, a Python runtime (Pyodide), a
-sandboxed web preview, and automated checks on every exercise.
+A zero-install learning platform that runs entirely in one HTML file. It started as a
+code platform and is no longer only that: alongside the editor, the Python runtime and
+the sandboxed web preview, there is a schematic editor with a real circuit solver,
+interactive visualisers you drive with your hands, mathematics rendered as
+mathematics, and answers checked as algebra rather than as strings.
+
+Every exercise is checked by something that executes.
 
 The interface implements the **Codex Learn** design from Claude Design
 (`design/Codex Learn.dc.html`, kept in the repo for reference): a dark
@@ -278,6 +282,28 @@ needs to tell apart:
   attribute values from attribute names
 
 Both themes are defined token by token; the light palette is not an inversion.
+
+## Circuits
+
+The Playground has a fourth mode. Place resistors, capacitors, inductors and sources
+on a grid, wire them up, and solve:
+
+- **Operating point** — writes each node voltage onto the schematic where it belongs
+- **Frequency** — an AC sweep, plotted in dB against a log axis
+- **Transient** — backward Euler, so a step response shows the physics rather than
+  the integrator ringing
+
+The solver is modified nodal analysis with the same stamps a SPICE engine uses,
+assembled into a complex matrix and solved by Gaussian elimination with partial
+pivoting. It is checked against eighteen analytical results — a divider's midpoint, a
+capacitor blocking DC, an inductor shorting it, the RC corner at exactly 1/√2 and
+−45°, 20 dB per decade, 63.2 % after one time constant, series resonance at
+1/(2π√(LC)).
+
+What it will not do is non-linear devices. There is no Newton loop, so no diodes and
+no transistors, and the interface says so rather than quietly producing a number that
+is wrong. A learner who trusts a wrong answer is worse off than one who knows where
+the tool stops.
 
 ## Programmes
 

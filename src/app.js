@@ -2436,11 +2436,16 @@ const PLAY_DEFAULTS = {
     'style.css': 'body { font-family: system-ui, sans-serif; padding: 24px; background: #f5f6f8; }\nh1 { color: #f26a1b; }\nbutton { padding: 8px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }\n',
     'app.js': 'let clicks = 0;\ndocument.querySelector("#go").addEventListener("click", () => {\n  clicks += 1;\n  document.querySelector("#go").textContent = "Clicked " + clicks + "x";\n});\n',
   } },
+  /* the schematic lives as JSON in the same per-mode file slot the code modes use,
+     so it is saved, synced and reset by exactly the same machinery */
+  circuit: { main: 'circuit.json', files: { 'circuit.json': '' } },
 };
 function playState() {
   if (!P.playground) P.playground = { mode: 'python', files: {} };
   const st = P.playground;
-  for (const mode of ['python', 'js', 'web']) {
+  /* every mode PLAY_DEFAULTS declares, not a list that has to be remembered twice:
+     a mode missing from here gets no file slot, and its edits fail silently */
+  for (const mode of Object.keys(PLAY_DEFAULTS)) {
     if (!st.files[mode]) st.files[mode] = Object.assign({}, PLAY_DEFAULTS[mode].files);
   }
   return st;
@@ -2618,9 +2623,56 @@ function openInPlayground(code, lang) {
   toast('Opened in the Playground — press Run');
 }
 
+/* ---------- playground: circuits ----------
+   A schematic instead of a text editor. It shares the playground's per-mode file
+   slot, so saving, syncing and Reset all work without knowing what is inside. */
+function renderCircuitPlayground(main, st) {
+  let saved = null;
+  const slot = st.files.circuit || (st.files.circuit = {});
+  try { saved = JSON.parse(slot['circuit.json'] || 'null'); } catch (e) { saved = null; }
+  const model = (saved && saved.parts && saved.parts.length) ? saved : CIRCUIT_EXAMPLE;
+
+  main.innerHTML =
+    '<div class="play">' +
+      '<div class="play-head"><h1>Playground</h1>' +
+        '<div class="seg" id="seg">' +
+          '<button data-m="python">Python</button><button data-m="js">JavaScript</button>' +
+          '<button data-m="web">Web page</button><button data-m="circuit" class="active">Circuit</button>' +
+        '</div>' +
+        '<span class="hint">Draw a circuit and solve it \u2014 saved automatically.</span>' +
+        (route.from ? '<span class="sp"></span><button class="btn dark sm" id="play-back">\u2190 Back to ' +
+          esc(screenMeta(route.from).title) + '</button>' : '') +
+      '</div>' +
+      '<div id="ckt-mount"></div>' +
+      '<p class="ckt-note">Linear components only: resistors, capacitors, inductors and ideal sources. ' +
+      'There is no Newton loop, so no diodes or transistors \u2014 the solver would have to lie about them.</p>' +
+    '</div>';
+
+  $all('#seg button', main).forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.dataset.m === 'circuit') return;
+      st.mode = b.dataset.m;
+      saveSoon();
+      go({ view: 'play' });
+    });
+  });
+  const back = $('#play-back', main);
+  if (back) back.addEventListener('click', function () { go(route.from); });
+
+  const handle = createCircuit($('#ckt-mount', main), {
+    model: model,
+    onChange: function (m) {
+      slot['circuit.json'] = JSON.stringify(m);
+      saveSoon();
+    },
+  });
+  teardown = function () { handle.dispose(); };
+}
+
 function renderPlayground(main) {
   const st = playState();
   let mode = st.mode || 'python';
+  if (mode === 'circuit') { renderCircuitPlayground(main, st); return; }
   let names = Object.keys(st.files[mode]);
   let active = 0;
   let running = false;
@@ -2629,7 +2681,8 @@ function renderPlayground(main) {
   '<div class="play">' +
     '<div class="play-head"><h1>Playground</h1>' +
       '<div class="seg" id="seg">' +
-        '<button data-m="python">Python</button><button data-m="js">JavaScript</button><button data-m="web">Web page</button>' +
+        '<button data-m="python">Python</button><button data-m="js">JavaScript</button>' +
+        '<button data-m="web">Web page</button><button data-m="circuit">Circuit</button>' +
       '</div>' +
       '<span class="hint">A scratchpad — saved automatically, no checks.</span>' +
       (route.from ? '<span class="sp"></span><button class="btn dark sm" id="play-back">← Back to ' +
