@@ -1,0 +1,746 @@
+{
+ "id": "DSP520",
+ "title": "Adaptive Filters",
+ "year": 3,
+ "level": "Advanced",
+ "prereqs": [
+  "DSP510"
+ ],
+ "stack": [
+  "Python",
+  "NumPy"
+ ],
+ "credits": 10,
+ "hours": 130,
+ "icon": "◊",
+ "summary": "A fixed filter needs you to know the signal in advance. An adaptive filter works it out from the data while it runs, and every practical one is a cheap approximation to the same optimal answer. This course starts at that answer — the Wiener solution — then descends towards it by gradient, replaces the gradient with a one-sample guess to get LMS, normalises the step so it stops depending on how loud the input is, and finally pays for exact least squares with RLS. The recurring question is the honest one: how fast, and how much excess error is that speed costing you.",
+ "outcomes": [
+  "Form the correlation matrix and cross-correlation vector from data, and solve the normal equations for the Wiener filter.",
+  "Predict the convergence of steepest descent mode by mode, and derive the step-size bound from the largest eigenvalue.",
+  "Implement LMS and normalised LMS, and say precisely what normalisation buys and what it does not.",
+  "Implement RLS with a forgetting factor, and trade convergence speed against misadjustment with numbers rather than adjectives."
+ ],
+ "assessment": "Four labs, each checked by execution, and a capstone that cancels an acoustic echo through a room that changes halfway through the call.",
+ "reading": [
+  "*Adaptive Filter Theory*, Haykin — chapters 2, 5, 6 and 9 cover this course almost exactly.",
+  "*Statistical Digital Signal Processing and Modeling*, Hayes — chapter 9, for a gentler route to the same equations.",
+  "*Fundamentals of Adaptive Filtering*, Sayed — for the least-squares view of RLS."
+ ],
+ "modules": [
+  {
+   "title": "Correlation and the Wiener solution",
+   "summary": "The optimal filter is the solution of one linear system. Everything later is a way of solving it without ever forming it.",
+   "concepts": [
+    "The mean-square error $J(w) = \\sigma_d^2 - 2w^\\top p + w^\\top R w$ is a quadratic bowl — one minimum, no local traps.",
+    "$R = E[xx^\\top]$ is symmetric, positive semi-definite and Toeplitz for a stationary input; $p = E[dx]$ is the cross-correlation.",
+    "The normal equations $Rw = p$, and the Wiener solution $w_o = R^{-1}p$.",
+    "The orthogonality principle: at the optimum the residual is uncorrelated with every input sample the filter can see.",
+    "Eigenvalue spread $\\chi = \\lambda_{max}/\\lambda_{min}$ measures how badly conditioned the bowl is, and it is set by the input spectrum, not by the filter."
+   ],
+   "sandbox": {
+    "title": "How fast you sample decides how correlated the input looks",
+    "visualiser": "spectrum",
+    "minutes": 8,
+    "brief": "An adaptive filter never sees a waveform. It sees a sequence of numbers, and the\nonly thing it can exploit is how those numbers are correlated with each other.\n\nFor a sinusoid sampled at $f_s$, the normalised one-lag correlation is exactly\n$r(1)/r(0) = \\cos(2\\pi f_{sig}/f_s)$. That single number is what decides whether\nthe correlation matrix is well conditioned or nearly singular — so move the two\nsliders and watch the sample dots, not the underlying curve.",
+    "initial": {
+     "fsig": 30,
+     "fs": 200
+    },
+    "notice": [
+     "Drop $f_{sig}$ to 5 Hz with $f_s$ at 200. Consecutive dots are almost identical: $r(1)/r(0) \\approx 0.99$, which is exactly the strongly correlated input that gives a large eigenvalue spread.",
+     "Set $f_{sig}$ to 100 Hz, exactly half the sample rate. Every sampling instant now falls on a zero crossing, so the dots lie flat on the axis while the curve behind them keeps swinging. The statistic behind that picture is $r(1)/r(0) = \\cos(\\pi) = -1$: whatever the sampling phase, the two-tap correlation matrix is singular and the Wiener solution stops being unique.",
+     "Set $f_{sig} = 50$ with $f_s = 200$: a quarter cycle per sample, so $r(1)/r(0) = 0$. To a two-tap filter this input is white, and its bowl is a perfect circle."
+    ]
+   },
+   "derive": {
+    "title": "The Wiener solution, one tap at a time",
+    "minutes": 14,
+    "brief": "Take the smallest possible adaptive filter: a single tap $w$, forming $y = wx$ and\ntrying to match a desired signal $d$. Write\n\n$$r = E[x^2], \\qquad p = E[dx], \\qquad \\sigma_d^2 = E[d^2]$$\n\nEverything the general case does, this case does with scalars.",
+    "vars": [
+     "J",
+     "w",
+     "w_o",
+     "r",
+     "p",
+     "sigma_d",
+     "rho",
+     "chi",
+     "d",
+     "x"
+    ],
+    "steps": [
+     {
+      "prompt": "Expand the mean-square error $J(w) = E[(d - wx)^2]$ in terms of $\\sigma_d$, $p$, $r$ and $w$.",
+      "given": "",
+      "answer": "\\sigma_d^2 - 2 w p + w^2 r",
+      "placeholder": "\\sigma_d^2 - 2wp + w^2 r",
+      "hint": "Square the bracket first, then take the expectation term by term. $w$ is a constant, so it comes outside.",
+      "deconstruct": [
+       "$(d - wx)^2 = d^2 - 2wdx + w^2x^2$.",
+       "Take expectations: $E[d^2] = \\sigma_d^2$, $E[dx] = p$, $E[x^2] = r$."
+      ]
+     },
+     {
+      "prompt": "Differentiate $J$ with respect to $w$.",
+      "given": "",
+      "answer": "2 w r - 2 p",
+      "placeholder": "2wr - 2p",
+      "hint": "It is a quadratic in one variable; $\\sigma_d^2$ does not depend on $w$ at all.",
+      "deconstruct": [
+       "The constant term differentiates to zero.",
+       "$-2wp$ gives $-2p$, and $w^2 r$ gives $2wr$."
+      ]
+     },
+     {
+      "prompt": "Set the derivative to zero and write the optimal tap $w_o$.",
+      "given": "",
+      "answer": "\\frac{p}{r}",
+      "placeholder": "\\frac{p}{r}",
+      "hint": "This is the one-dimensional version of $w_o = R^{-1}p$.",
+      "deconstruct": [
+       "$2wr - 2p$ vanishes when $wr = p$.",
+       "Divide by $r$, which is a power and so is strictly positive for any real input."
+      ]
+     },
+     {
+      "prompt": "Substitute $w_o$ back into $J$ and write the minimum mean-square error.",
+      "given": "",
+      "answer": "\\sigma_d^2 - \\frac{p^2}{r}",
+      "placeholder": "\\sigma_d^2 - \\frac{p^2}{r}",
+      "hint": "Put $p/r$ in place of $w$ in $\\sigma_d^2 - 2wp + w^2r$ and collect the two $p^2/r$ terms.",
+      "deconstruct": [
+       "$-2wp$ becomes $-2p^2/r$ and $w^2 r$ becomes $p^2/r$.",
+       "Those two sum to $-p^2/r$, which is the part of the desired signal the filter managed to explain."
+      ]
+     },
+     {
+      "prompt": "Now two taps, with a unit-power input whose one-lag correlation is $\\rho$: $R$ has $1$ on the diagonal and $\\rho$ off it, so its eigenvalues are $1 + \\rho$ and $1 - \\rho$. Write the eigenvalue spread $\\chi$ for $0 < \\rho < 1$.",
+      "given": "",
+      "answer": "\\frac{1+\\rho}{1-\\rho}",
+      "placeholder": "\\frac{1+\\rho}{1-\\rho}",
+      "hint": "Spread is the largest eigenvalue divided by the smallest, and for $0 < \\rho < 1$ the larger one is $1 + \\rho$.",
+      "deconstruct": [
+       "The eigenvectors are $[1, 1]$ and $[1, -1]$, giving eigenvalues $1 + \\rho$ and $1 - \\rho$.",
+       "Divide the larger by the smaller."
+      ]
+     }
+    ],
+    "closing": "Two things to carry forward. First, the optimum needs only second-order statistics —\nno distribution, no model of the signal, just $R$ and $p$. Second, that spread\n$\\chi$ heads for infinity as $\\rho \\to 1$, and every gradient method in this course\nslows down in direct proportion to it."
+   },
+   "lab": {
+    "title": "Solve the normal equations from a block of data",
+    "runtime": "python",
+    "minutes": 32,
+    "brief": "Estimate $R$ and $p$ from data and solve $Rw = p$.\n\n- `autocorr(x, M)` returns `[r(0), r(1), ..., r(M-1)]` using the **biased**\n  estimate $r(k) = \\frac{1}{N}\\sum_{n=k}^{N-1} x(n)x(n-k)$. Divide by `N` every\n  time, not by `N - k`: the biased estimate is the one that keeps $R$ positive\n  semi-definite.\n- `toeplitz_R(r)` builds the $M \\times M$ symmetric matrix whose $(i, j)$ entry is\n  `r[abs(i - j)]`.\n- `cross_corr(x, d, M)` returns `p`, with $p(k) = \\frac{1}{N}\\sum_{n=k}^{N-1} d(n)x(n-k)$.\n- `wiener(x, d, M)` puts those together and solves the system with\n  `np.linalg.solve`.\n- `predict(x, w)` runs the FIR filter: $y(n) = \\sum_k w_k x(n-k)$, returning an\n  array the same length as `x` and treating samples before the start as zero.\n\n`main.py` prints a summary; run it, and the checks read your functions directly.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import numpy as np\n\n\ndef autocorr(x, M):\n    \"\"\"Biased autocorrelation estimate: r(k) = (1/N) * sum x(n) x(n-k), k = 0..M-1.\"\"\"\n    x = np.asarray(x, dtype=float)\n    r = np.zeros(M)\n    # TODO: fill r[k] with the lag-k product sum divided by N.\n    return r\n\n\ndef toeplitz_R(r):\n    \"\"\"Build the MxM symmetric Toeplitz matrix whose (i, j) entry is r[|i - j|].\"\"\"\n    r = np.asarray(r, dtype=float)\n    M = r.size\n    # TODO: build the matrix.\n    return np.zeros((M, M))\n\n\ndef cross_corr(x, d, M):\n    \"\"\"p(k) = (1/N) * sum d(n) x(n-k), for k = 0..M-1.\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    p = np.zeros(M)\n    # TODO\n    return p\n\n\ndef wiener(x, d, M):\n    \"\"\"Solve R w = p for the M-tap Wiener filter.\"\"\"\n    # TODO: build R and p, then np.linalg.solve.\n    return np.zeros(M)\n\n\ndef predict(x, w):\n    \"\"\"FIR output y(n) = sum_k w[k] x(n-k), zero before the start of the record.\"\"\"\n    x = np.asarray(x, dtype=float)\n    w = np.asarray(w, dtype=float)\n    y = np.zeros(x.size)\n    # TODO\n    return y\n\n\nif __name__ == \"__main__\":\n    rng = np.random.default_rng(7)\n    x = rng.standard_normal(20000)\n    h = np.array([1.0, -0.5, 0.25])\n    d = np.convolve(x, h)[:20000] + 0.01 * rng.standard_normal(20000)\n    w = wiener(x, d, 3)\n    print(\"estimated taps:\", np.round(w, 4).tolist())\n    print(\"residual power:\", round(float(np.mean((d - predict(x, w)) ** 2)), 8))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import numpy as np\n\n\ndef autocorr(x, M):\n    \"\"\"Biased autocorrelation estimate: r(k) = (1/N) * sum x(n) x(n-k), k = 0..M-1.\"\"\"\n    x = np.asarray(x, dtype=float)\n    N = x.size\n    r = np.zeros(M)\n    for k in range(M):\n        r[k] = float(np.dot(x[k:], x[:N - k]) / N)\n    return r\n\n\ndef toeplitz_R(r):\n    \"\"\"Build the MxM symmetric Toeplitz matrix whose (i, j) entry is r[|i - j|].\"\"\"\n    r = np.asarray(r, dtype=float)\n    M = r.size\n    idx = np.abs(np.subtract.outer(np.arange(M), np.arange(M)))\n    return r[idx]\n\n\ndef cross_corr(x, d, M):\n    \"\"\"p(k) = (1/N) * sum d(n) x(n-k), for k = 0..M-1.\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    N = x.size\n    p = np.zeros(M)\n    for k in range(M):\n        p[k] = float(np.dot(d[k:], x[:N - k]) / N)\n    return p\n\n\ndef wiener(x, d, M):\n    \"\"\"Solve R w = p for the M-tap Wiener filter.\"\"\"\n    R = toeplitz_R(autocorr(x, M))\n    p = cross_corr(x, d, M)\n    return np.linalg.solve(R, p)\n\n\ndef predict(x, w):\n    \"\"\"FIR output y(n) = sum_k w[k] x(n-k), zero before the start of the record.\"\"\"\n    x = np.asarray(x, dtype=float)\n    w = np.asarray(w, dtype=float)\n    N = x.size\n    y = np.zeros(N)\n    for k in range(w.size):\n        y[k:] += w[k] * x[:N - k]\n    return y\n\n\nif __name__ == \"__main__\":\n    rng = np.random.default_rng(7)\n    x = rng.standard_normal(20000)\n    h = np.array([1.0, -0.5, 0.25])\n    d = np.convolve(x, h)[:20000] + 0.01 * rng.standard_normal(20000)\n    w = wiener(x, d, 3)\n    print(\"estimated taps:\", np.round(w, 4).tolist())\n    print(\"residual power:\", round(float(np.mean((d - predict(x, w)) ** 2)), 8))\n"
+     }
+    ],
+    "hints": [
+     "`np.dot(x[k:], x[:N - k])` is the whole lag-$k$ sum; no Python loop over samples is needed.",
+     "For the Toeplitz matrix, `np.abs(np.subtract.outer(np.arange(M), np.arange(M)))` is the matrix of $|i - j|$, and indexing `r` with it does the rest.",
+     "In `predict`, adding `w[k] * x[:N - k]` into `y[k:]` shifts by $k$ and pads the front with zeros in one line."
+    ],
+    "tests": [
+     {
+      "name": "white noise has no correlation beyond lag zero",
+      "code": "import numpy as np\n_rng = np.random.default_rng(7)\n_x = _rng.standard_normal(20000)\n_r = autocorr(_x, 4)\nassert _r.shape == (4,), f\"autocorr should return M values, got shape {_r.shape}\"\nassert abs(_r[0] - 1.0) < 0.05, \\\n    f\"r(0) is the signal power, which is 1 for this input; got {_r[0]:.4f}\"\nassert abs(_r[1]) < 0.03 and abs(_r[2]) < 0.03, \\\n    f\"white noise is uncorrelated, so r(1) and r(2) should be near zero; got {_r[1]:.4f}, {_r[2]:.4f}\""
+     },
+     {
+      "name": "the correlation matrix is symmetric and Toeplitz",
+      "code": "import numpy as np\n_R = toeplitz_R(np.array([2.0, 1.0, 0.5]))\nassert _R.shape == (3, 3), f\"expected a 3x3 matrix, got {_R.shape}\"\nassert np.allclose(_R, _R.T), \"R is symmetric by construction — check your index expression\"\nassert abs(_R[0, 0] - 2.0) < 1e-12 and abs(_R[0, 1] - 1.0) < 1e-12 and abs(_R[0, 2] - 0.5) < 1e-12, \\\n    f\"the first row should be r(0), r(1), r(2); got {_R[0].tolist()}\"\nassert abs(_R[2, 0] - 0.5) < 1e-12, \\\n    f\"entry (2,0) is lag 2, so r(2) = 0.5; got {_R[2,0]} — the entry depends on |i-j| only\""
+     },
+     {
+      "name": "the Wiener filter recovers a known channel",
+      "code": "import numpy as np\n_rng = np.random.default_rng(7)\n_x = _rng.standard_normal(20000)\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:20000] + 0.01 * _rng.standard_normal(20000)\n_w = wiener(_x, _d, 3)\nassert np.max(np.abs(_w - _h)) < 0.01, \\\n    f\"with white input the Wiener taps are the channel taps; expected {_h.tolist()}, got {np.round(_w, 4).tolist()}\""
+     },
+     {
+      "name": "the residual is orthogonal to the input",
+      "code": "import numpy as np\n_rng = np.random.default_rng(7)\n_x = _rng.standard_normal(20000)\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:20000] + 0.01 * _rng.standard_normal(20000)\n_w = wiener(_x, _d, 3)\n_e = _d - predict(_x, _w)\n_N = _x.size\nfor _k in range(3):\n    _c = float(np.dot(_e[_k:], _x[:_N - _k]) / _N)\n    assert abs(_c) < 1e-3, \\\n        f\"at the optimum the residual carries no information the filter could still use, so the lag-{_k} correlation should vanish; got {_c:.6f}\""
+     },
+     {
+      "name": "correlated input is badly conditioned and white input is not",
+      "code": "import numpy as np\n_rng = np.random.default_rng(3)\n_v = _rng.standard_normal(40000)\n_xa = np.zeros(40000)\nfor _n in range(1, 40000):\n    _xa[_n] = 0.9 * _xa[_n - 1] + _v[_n]\n_Ra = toeplitz_R(autocorr(_xa, 8))\n_ea = np.linalg.eigvalsh(_Ra)\n_spread_ar = float(_ea[-1] / _ea[0])\n_rng2 = np.random.default_rng(7)\n_Rw = toeplitz_R(autocorr(_rng2.standard_normal(20000), 8))\n_ew = np.linalg.eigvalsh(_Rw)\n_spread_w = float(_ew[-1] / _ew[0])\nassert _spread_ar > 20.0, \\\n    f\"an AR(1) input with rho=0.9 should give a spread near 115; got {_spread_ar:.2f}\"\nassert _spread_w < 2.0, \\\n    f\"white input should give a spread near 1; got {_spread_w:.2f}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Steepest descent and the step-size bound",
+   "summary": "Walk downhill on the error surface. The eigenvalues of R decide both how far you may step and how long the walk takes.",
+   "concepts": [
+    "The gradient $\\nabla J = 2(Rw - p)$, and the update $w(n+1) = w(n) + \\mu(p - Rw(n))$.",
+    "In the eigenvector coordinates the update decouples into scalar recursions with factor $1 - \\mu\\lambda_i$.",
+    "Convergence needs $|1 - \\mu\\lambda_i| < 1$ for every mode, so $0 < \\mu < 2/\\lambda_{max}$.",
+    "The slowest mode belongs to $\\lambda_{min}$, so the time to converge scales with the eigenvalue spread.",
+    "Steepest descent is deterministic: it needs $R$ and $p$, which is exactly what a real system does not have."
+   ],
+   "sandbox": {
+    "title": "One mode of the descent as a single pole",
+    "visualiser": "z-plane",
+    "minutes": 8,
+    "brief": "Along one eigenvector of $R$, steepest descent is nothing but a one-pole recursion:\n\n$$v(n+1) = (1 - \\mu\\lambda)\\,v(n)$$\n\nwhere $v$ is the distance from the Wiener solution in that direction. So set the\npole radius to $|1 - \\mu\\lambda|$ and read the impulse response as the weight error\ndying away — or not.\n\nAngle $\\theta = 0$ means $1 - \\mu\\lambda$ is positive; $\\theta = \\pi$ means it has\ngone negative.",
+    "initial": {
+     "r": 0.85,
+     "th": 0
+    },
+    "notice": [
+     "With $\\theta = 0$, drag $r$ from 0.99 down to 0.2. The same algebra, a hundredfold difference in iterations — and $r$ is only $|1 - \\mu\\lambda|$, so this is entirely a statement about $\\mu\\lambda$.",
+     "Push $r$ just past 1. The response grows without bound: that is $\\mu > 2/\\lambda$, the step-size bound being violated by the fastest mode.",
+     "Set $\\theta = \\pi$ with $r$ around 0.7. The response alternates sign — $1 - \\mu\\lambda$ is negative, so the filter overshoots the Wiener solution every single iteration and still converges."
+    ]
+   },
+   "derive": {
+    "title": "Why the step size is bounded by the largest eigenvalue",
+    "minutes": 14,
+    "brief": "The cost is the quadratic bowl from module 1,\n\n$$J(w) = \\sigma_d^2 - 2w^\\top p + w^\\top R w$$\n\nwith $R$ symmetric and positive definite. Steepest descent steps against the\ngradient with a fixed step size $\\mu$.",
+    "vars": [
+     "J",
+     "w",
+     "w_o",
+     "mu",
+     "lambda",
+     "lambda_max",
+     "n",
+     "v",
+     "v_0",
+     "R",
+     "p",
+     "sigma_d",
+     "tau"
+    ],
+    "steps": [
+     {
+      "prompt": "Write the gradient $\\nabla J$ with respect to $w$, in terms of $R$, $w$ and $p$.",
+      "given": "",
+      "answer": "2 R w - 2 p",
+      "placeholder": "2Rw - 2p",
+      "hint": "Treat it exactly like the scalar case: $\\sigma_d^2$ is constant, the linear term gives $-2p$, and the quadratic term gives $2Rw$ because $R$ is symmetric.",
+      "deconstruct": [
+       "$\\nabla(w^\\top R w) = 2Rw$ when $R = R^\\top$.",
+       "$\\nabla(-2w^\\top p) = -2p$."
+      ]
+     },
+     {
+      "prompt": "The update is $w(n+1) = w(n) - \\frac{\\mu}{2}\\nabla J$. Write $w(n+1)$ in terms of $w$, $\\mu$, $R$ and $p$.",
+      "given": "",
+      "answer": "w + \\mu (p - R w)",
+      "placeholder": "w + \\mu(p - Rw)",
+      "hint": "The factor of one half is there purely to cancel the 2 in the gradient.",
+      "deconstruct": [
+       "$-\\frac{\\mu}{2}(2Rw - 2p) = -\\mu(Rw - p)$.",
+       "Add that to $w$ and reverse the sign inside the bracket."
+      ]
+     },
+     {
+      "prompt": "Let $v = w - w_o$, where $Rw_o = p$. Along an eigenvector of $R$ with eigenvalue $\\lambda$, the update becomes $v(n+1) = c\\,v(n)$. Write the scalar $c$.",
+      "given": "",
+      "answer": "1 - \\mu\\lambda",
+      "placeholder": "1 - \\mu\\lambda",
+      "hint": "Substitute $w = w_o + v$ and use $p - Rw_o = 0$; you are left with $v - \\mu R v$, and $Rv = \\lambda v$ along an eigenvector.",
+      "deconstruct": [
+       "$w(n+1) - w_o = v + \\mu(p - R(w_o + v)) = v - \\mu Rv$.",
+       "Along an eigenvector $Rv = \\lambda v$, so the bracket collapses to $(1 - \\mu\\lambda)v$."
+      ]
+     },
+     {
+      "prompt": "Write $v$ after $n$ iterations, in terms of $v_0$, $\\mu$, $\\lambda$ and $n$.",
+      "given": "",
+      "answer": "v_0 (1 - \\mu\\lambda)^n",
+      "placeholder": "v_0 (1 - \\mu\\lambda)^n",
+      "hint": "Multiplying by the same scalar $n$ times is that scalar to the power $n$.",
+      "deconstruct": [
+       "$v_1 = c v_0$, $v_2 = c^2 v_0$, and so on.",
+       "Substitute $c = 1 - \\mu\\lambda$."
+      ]
+     },
+     {
+      "prompt": "Every mode must decay, which needs $|1 - \\mu\\lambda| < 1$ for all eigenvalues. Write the upper bound on $\\mu$.",
+      "given": "",
+      "answer": "\\frac{2}{\\lambda_{max}}",
+      "placeholder": "\\frac{2}{\\lambda_{max}}",
+      "hint": "$|1 - \\mu\\lambda| < 1$ means $0 < \\mu\\lambda < 2$; the binding constraint comes from the largest eigenvalue.",
+      "deconstruct": [
+       "For each mode, $\\mu < 2/\\lambda$.",
+       "All of those must hold at once, so the smallest of them wins."
+      ]
+     },
+     {
+      "prompt": "The mode decays as $(1 - \\mu\\lambda)^n = e^{n\\ln(1-\\mu\\lambda)}$. For small $\\mu\\lambda$, $\\ln(1 - \\mu\\lambda) \\approx -\\mu\\lambda$. Write the time constant $\\tau$ in iterations.",
+      "given": "",
+      "answer": "\\frac{1}{\\mu\\lambda}",
+      "placeholder": "\\frac{1}{\\mu\\lambda}",
+      "hint": "The time constant is the $n$ at which the exponent reaches $-1$.",
+      "deconstruct": [
+       "$e^{-n\\mu\\lambda}$ falls to $1/e$ when $n\\mu\\lambda = 1$.",
+       "Solve that for $n$."
+      ]
+     }
+    ],
+    "closing": "Put the last two results together. The step is capped by $2/\\lambda_{max}$, and the\nslowest mode takes $1/(\\mu\\lambda_{min})$ iterations. Choose $\\mu$ as large as the\nbound allows and the slowest mode still needs about $\\lambda_{max}/(2\\lambda_{min})$\niterations — the eigenvalue spread, unchanged and unavoidable. No choice of step\nsize removes it; only a different algorithm does."
+   },
+   "lab": {
+    "title": "Descend a known error surface",
+    "runtime": "python",
+    "minutes": 30,
+    "brief": "Here $R$ and $p$ are handed to you, so this is the deterministic algorithm — no\ndata, no noise, just the recursion.\n\n- `max_step(R)` returns $2/\\lambda_{max}$, using `np.linalg.eigvalsh` because $R$ is\n  symmetric.\n- `mse(R, p, var_d, w)` returns $J(w) = \\sigma_d^2 - 2p^\\top w + w^\\top R w$.\n- `descend(R, p, mu, iters, w0=None)` runs $w \\leftarrow w + \\mu(p - Rw)$ and\n  returns a **list of length `iters + 1`**: the starting weights first, then the\n  weights after each iteration. Start from zeros when `w0` is `None`.\n\nReturning the whole trajectory rather than the final answer is the point — the\nchecks look at how it got there.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import numpy as np\n\n\ndef max_step(R):\n    \"\"\"Largest step size that keeps every mode of steepest descent convergent.\"\"\"\n    R = np.asarray(R, dtype=float)\n    # TODO: 2 divided by the largest eigenvalue.\n    return 0.0\n\n\ndef mse(R, p, var_d, w):\n    \"\"\"J(w) = var_d - 2 p.w + w.R.w\"\"\"\n    R = np.asarray(R, dtype=float)\n    p = np.asarray(p, dtype=float).ravel()\n    w = np.asarray(w, dtype=float).ravel()\n    # TODO\n    return 0.0\n\n\ndef descend(R, p, mu, iters, w0=None):\n    \"\"\"Return [w0, w1, ..., w_iters] for w <- w + mu (p - R w).\"\"\"\n    R = np.asarray(R, dtype=float)\n    p = np.asarray(p, dtype=float).ravel()\n    w = np.zeros(p.size) if w0 is None else np.array(w0, dtype=float).ravel()\n    traj = [w.copy()]\n    # TODO: append a copy of the weights after every update.\n    return traj\n\n\nif __name__ == \"__main__\":\n    R = np.array([[1.0, 0.9], [0.9, 1.0]])\n    p = np.array([0.5, 0.25])\n    mu = 0.5 * max_step(R)\n    traj = descend(R, p, mu, 200)\n    print(\"mu =\", round(mu, 6))\n    print(\"final weights:\", np.round(traj[-1], 6).tolist())\n    print(\"final J:\", round(mse(R, p, 1.0, traj[-1]), 8))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import numpy as np\n\n\ndef max_step(R):\n    \"\"\"Largest step size that keeps every mode of steepest descent convergent.\"\"\"\n    R = np.asarray(R, dtype=float)\n    lam_max = float(np.max(np.linalg.eigvalsh(R)))\n    return 2.0 / lam_max\n\n\ndef mse(R, p, var_d, w):\n    \"\"\"J(w) = var_d - 2 p.w + w.R.w\"\"\"\n    R = np.asarray(R, dtype=float)\n    p = np.asarray(p, dtype=float).ravel()\n    w = np.asarray(w, dtype=float).ravel()\n    return float(var_d - 2.0 * (p @ w) + w @ R @ w)\n\n\ndef descend(R, p, mu, iters, w0=None):\n    \"\"\"Return [w0, w1, ..., w_iters] for w <- w + mu (p - R w).\"\"\"\n    R = np.asarray(R, dtype=float)\n    p = np.asarray(p, dtype=float).ravel()\n    w = np.zeros(p.size) if w0 is None else np.array(w0, dtype=float).ravel()\n    traj = [w.copy()]\n    for _ in range(iters):\n        w = w + mu * (p - R @ w)\n        traj.append(w.copy())\n    return traj\n\n\nif __name__ == \"__main__\":\n    R = np.array([[1.0, 0.9], [0.9, 1.0]])\n    p = np.array([0.5, 0.25])\n    mu = 0.5 * max_step(R)\n    traj = descend(R, p, mu, 200)\n    print(\"mu =\", round(mu, 6))\n    print(\"final weights:\", np.round(traj[-1], 6).tolist())\n    print(\"final J:\", round(mse(R, p, 1.0, traj[-1]), 8))\n"
+     }
+    ],
+    "hints": [
+     "`np.linalg.eigvalsh` returns the eigenvalues of a symmetric matrix in ascending order, so the last one is $\\lambda_{max}$.",
+     "`w @ R @ w` is the quadratic form; no transposes are needed for a one-dimensional array.",
+     "Append `w.copy()`, not `w` — appending the same array object repeatedly gives a trajectory in which every entry is the final answer."
+    ],
+    "tests": [
+     {
+      "name": "the step bound comes from the largest eigenvalue",
+      "code": "import numpy as np\n_R = np.array([[1.0, 0.9], [0.9, 1.0]])\n_ms = max_step(_R)\nassert abs(_ms - 1.0526315789473684) < 1e-9, \\\n    f\"eigenvalues are 0.1 and 1.9, so the bound is 2/1.9 = 1.05263; got {_ms}\"\n_R2 = np.diag([4.0, 1.0])\nassert abs(max_step(_R2) - 0.5) < 1e-12, \\\n    f\"the bound is set by the largest eigenvalue alone, here 2/4 = 0.5; got {max_step(_R2)}\""
+     },
+     {
+      "name": "the cost function reads correctly at both ends",
+      "code": "import numpy as np\n_R = np.array([[1.0, 0.9], [0.9, 1.0]])\n_p = np.array([0.5, 0.25])\nassert abs(mse(_R, _p, 1.0, np.zeros(2)) - 1.0) < 1e-12, \\\n    \"with zero weights the filter outputs nothing, so J is just the desired-signal power\"\n_wo = np.linalg.solve(_R, _p)\nassert abs(mse(_R, _p, 1.0, _wo) - 0.5394736842105263) < 1e-9, \\\n    f\"at the Wiener solution J should be var_d - p.wo = 0.53947; got {mse(_R, _p, 1.0, _wo)}\""
+     },
+     {
+      "name": "descent reaches the Wiener solution",
+      "code": "import numpy as np\n_R = np.array([[1.0, 0.9], [0.9, 1.0]])\n_p = np.array([0.5, 0.25])\n_traj = descend(_R, _p, 0.5 * max_step(_R), 200)\nassert len(_traj) == 201, f\"the trajectory should hold the start plus 200 updates, got {len(_traj)}\"\nassert np.max(np.abs(_traj[0])) < 1e-12, \"with w0 unset the walk starts at the origin\"\n_wo = np.linalg.solve(_R, _p)\nassert np.linalg.norm(_traj[-1] - _wo) < 1e-3, \\\n    f\"below the bound the walk must end at R^-1 p = {np.round(_wo, 4).tolist()}, got {np.round(_traj[-1], 4).tolist()}\""
+     },
+     {
+      "name": "the cost falls at every single iteration",
+      "code": "import numpy as np\n_R = np.array([[1.0, 0.9], [0.9, 1.0]])\n_p = np.array([0.5, 0.25])\n_traj = descend(_R, _p, 0.5 * max_step(_R), 200)\n_J = [mse(_R, _p, 1.0, _w) for _w in _traj]\nfor _i in range(len(_J) - 1):\n    assert _J[_i + 1] <= _J[_i] + 1e-12, \\\n        f\"J rose from {_J[_i]:.6f} to {_J[_i+1]:.6f} at iteration {_i} — below the bound the surface is descended monotonically\"\nassert abs(_J[-1] - 0.5394736842105263) < 1e-6, \\\n    f\"J should settle on the minimum 0.53947; got {_J[-1]}\""
+     },
+     {
+      "name": "past the bound it diverges",
+      "code": "import numpy as np\n_R = np.array([[1.0, 0.9], [0.9, 1.0]])\n_p = np.array([0.5, 0.25])\n_traj = descend(_R, _p, 1.05 * max_step(_R), 200)\nassert np.linalg.norm(_traj[-1]) > 1e3, \\\n    f\"5 per cent past 2/lambda_max the fastest mode has |1 - mu lambda| > 1 and must blow up; ended at {np.round(_traj[-1], 3).tolist()}\""
+     },
+     {
+      "name": "eigenvalue spread sets the number of iterations",
+      "code": "import numpy as np\n_p = np.array([0.5, 0.25])\n\n\ndef _iters(rho, tol=1e-3):\n    _R = np.array([[1.0, rho], [rho, 1.0]])\n    _wo = np.linalg.solve(_R, _p)\n    _traj = descend(_R, _p, 0.5 * max_step(_R), 4000)\n    for _n, _w in enumerate(_traj):\n        if np.linalg.norm(_w - _wo) < tol * np.linalg.norm(_wo):\n            return _n\n    return 10 ** 9\n\n\n_n_mild = _iters(0.5)\n_n_hard = _iters(0.9)\nassert _n_mild < 40, f\"spread 3 should converge in a few dozen iterations, took {_n_mild}\"\nassert _n_hard > 4 * _n_mild, \\\n    f\"spread 19 should cost several times more iterations than spread 3; got {_n_hard} against {_n_mild}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "LMS and its normalised cousin",
+   "summary": "Replace the expectation with one sample. The algorithm becomes implementable, and gains a noise floor of its own.",
+   "concepts": [
+    "The instantaneous gradient $-2e(n)x(n)$: an unbiased but extremely noisy estimate of $\\nabla J$.",
+    "The LMS update $w(n+1) = w(n) + \\mu e(n)x(n)$ — $2M$ multiplications per sample and nothing else.",
+    "Convergence in the mean needs the same bound as steepest descent; in practice $0 < \\mu < 2/\\text{trace}(R)$, because the trace is measurable and $\\lambda_{max}$ is not.",
+    "Gradient noise never vanishes, so LMS hovers above $J_{min}$: misadjustment $\\approx \\mu\\,\\text{trace}(R)/2$.",
+    "NLMS divides the step by the instantaneous input energy, making the stable range of $\\mu$ independent of input power — it does not fix the eigenvalue spread."
+   ],
+   "sandbox": {
+    "title": "The samples an echo canceller is actually handed",
+    "visualiser": "spectrum",
+    "minutes": 8,
+    "brief": "LMS has no model of the world. It correlates the numbers it is given, and adapts\nuntil the residual is uncorrelated with them — whatever those numbers happen to\nmean.\n\nThe sandbox opens with an interference tone at 190 Hz sampled at 200 Hz, which is\nthe situation an echo canceller is in when the reference channel is sampled too\nslowly.",
+    "initial": {
+     "fsig": 190,
+     "fs": 200
+    },
+    "notice": [
+     "The dots trace a slow 10 Hz wave that is nowhere in the true signal. LMS fed this reference converges perfectly happily — on the alias. Nothing in the algorithm can detect the error.",
+     "Raise $f_s$ above $2f_{sig}$ and the samples follow the true tone again. Sampling rate is a system decision the adaptive filter cannot make for you.",
+     "Set $f_{sig}$ to exactly $f_s/2$: the sampling instants land on the zero crossings and every dot drops onto the axis. The reference channel carries a full-amplitude tone and hands the filter an input window of no energy at all — which is why the NLMS step is $\\mu/(\\varepsilon + \\lVert x\\rVert^2)$ and not $\\mu/\\lVert x\\rVert^2$."
+    ]
+   },
+   "derive": {
+    "title": "From the true gradient to LMS, and the price of the substitution",
+    "minutes": 15,
+    "brief": "Steepest descent needs $R$ and $p$, which require expectations you do not have.\nLMS drops the expectation entirely: it minimises the *instantaneous* squared error\n\n$$\\hat{J}(n) = e(n)^2, \\qquad e(n) = d(n) - w^\\top x(n)$$\n\nand takes one gradient step per sample.",
+    "vars": [
+     "w",
+     "mu",
+     "e",
+     "x",
+     "d",
+     "M",
+     "sigma_x",
+     "E_x",
+     "R",
+     "lambda_max",
+     "n",
+     "misadj"
+    ],
+    "steps": [
+     {
+      "prompt": "Write the gradient of $\\hat{J} = e^2$ with respect to $w$, in terms of $e$ and $x$.",
+      "given": "",
+      "answer": "-2 e x",
+      "placeholder": "-2ex",
+      "hint": "Chain rule: $\\nabla e^2 = 2e\\nabla e$, and $e = d - w^\\top x$ depends on $w$ only through that inner product.",
+      "deconstruct": [
+       "$\\nabla_w e = \\nabla_w (d - w^\\top x) = -x$.",
+       "So $\\nabla \\hat{J} = 2e \\cdot (-x)$."
+      ]
+     },
+     {
+      "prompt": "Step against half that gradient with step size $\\mu$. Write $w(n+1)$ in terms of $w$, $\\mu$, $e$ and $x$.",
+      "given": "",
+      "answer": "w + \\mu e x",
+      "placeholder": "w + \\mu e x",
+      "hint": "The half is chosen precisely so the 2 disappears, as it did in module 2.",
+      "deconstruct": [
+       "$w - \\frac{\\mu}{2}(-2ex)$.",
+       "The two factors of 2 cancel and the sign flips to a plus."
+      ]
+     },
+     {
+      "prompt": "The stability bound wants $\\lambda_{max}$, which you cannot measure cheaply, so the trace is used instead. For $M$ taps of a stationary input with power $\\sigma_x^2$, write $\\text{trace}(R)$.",
+      "given": "",
+      "answer": "M \\sigma_x^2",
+      "placeholder": "M\\sigma_x^2",
+      "hint": "Every diagonal entry of $R$ is $r(0)$, and $r(0)$ is the input power.",
+      "deconstruct": [
+       "$R$ has $M$ diagonal entries, each equal to $E[x^2] = \\sigma_x^2$.",
+       "The trace is their sum."
+      ]
+     },
+     {
+      "prompt": "The trace is the sum of the eigenvalues, so it is at least $\\lambda_{max}$ and the resulting bound is conservative. Write the practical upper bound on $\\mu$ in terms of $M$ and $\\sigma_x$.",
+      "given": "",
+      "answer": "\\frac{2}{M \\sigma_x^2}",
+      "placeholder": "\\frac{2}{M\\sigma_x^2}",
+      "hint": "Take the bound from module 2 and put the trace where $\\lambda_{max}$ was.",
+      "deconstruct": [
+       "The bound was $2/\\lambda_{max}$.",
+       "Replacing $\\lambda_{max}$ by the larger quantity $\\text{trace}(R)$ gives a smaller, safer step."
+      ]
+     },
+     {
+      "prompt": "NLMS picks the step that drives the *a posteriori* error $d - w(n+1)^\\top x$ to zero. Writing the instantaneous input energy as $E_x = x^\\top x$, write the step size $\\mu$ that achieves it.",
+      "given": "",
+      "answer": "\\frac{1}{E_x}",
+      "placeholder": "\\frac{1}{E_x}",
+      "hint": "Substitute $w(n+1) = w + \\mu e x$ into $d - w(n+1)^\\top x$; you get $e(1 - \\mu E_x)$.",
+      "deconstruct": [
+       "$d - (w + \\mu ex)^\\top x = e - \\mu e\\,x^\\top x = e(1 - \\mu E_x)$.",
+       "That vanishes when $\\mu E_x = 1$."
+      ]
+     },
+     {
+      "prompt": "The gradient noise never dies, so LMS settles above $J_{min}$ by a fraction $\\mu\\,\\text{trace}(R)/2$. Write that misadjustment in terms of $\\mu$, $M$ and $\\sigma_x$.",
+      "given": "",
+      "answer": "\\frac{\\mu M \\sigma_x^2}{2}",
+      "placeholder": "\\frac{\\mu M\\sigma_x^2}{2}",
+      "hint": "You already wrote the trace two steps ago; substitute it.",
+      "deconstruct": [
+       "$\\text{trace}(R) = M\\sigma_x^2$.",
+       "Multiply by $\\mu$ and halve it."
+      ]
+     }
+    ],
+    "closing": "Look at the last result next to the time constant $1/(\\mu\\lambda)$ from module 2.\nMisadjustment is proportional to $\\mu$; convergence time is proportional to\n$1/\\mu$. Their product does not contain $\\mu$ at all. You are not choosing between\na good filter and a bad one — you are choosing where on a fixed curve to sit."
+   },
+   "lab": {
+    "title": "LMS, NLMS and what normalisation actually buys",
+    "runtime": "python",
+    "minutes": 34,
+    "brief": "Both algorithms are one loop over the samples.\n\n- `window(x, n, M)` returns the input vector $[x(n), x(n-1), \\dots, x(n-M+1)]$ as a\n  length-`M` array, zero-padded where the index would go negative. Most-recent\n  sample first.\n- `lms(x, d, M, mu)` returns `(w, err)`: the final weights and an array of the\n  *a priori* errors $e(n) = d(n) - w(n)^\\top x(n)$, one per sample. The error is\n  computed **before** the update, from the weights the filter had at the time.\n- `nlms(x, d, M, mu, eps=1e-6)` is the same loop with the step divided by\n  $\\varepsilon + x^\\top x$.\n- `step_bound(x, M)` returns $2/(M\\hat{\\sigma}_x^2)$, using the measured mean square\n  of `x`.\n\nStart the weights at zero in both, so `err[0]` is exactly `d[0]`.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import numpy as np\n\n\ndef window(x, n, M):\n    \"\"\"[x(n), x(n-1), ..., x(n-M+1)], zeros where the index runs off the start.\"\"\"\n    x = np.asarray(x, dtype=float)\n    u = np.zeros(M)\n    # TODO\n    return u\n\n\ndef lms(x, d, M, mu):\n    \"\"\"Least mean squares. Return (final weights, a priori error per sample).\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    err = np.zeros(x.size)\n    # TODO: for each n, form the window, compute e, store it, then update w.\n    return w, err\n\n\ndef nlms(x, d, M, mu, eps=1e-6):\n    \"\"\"Normalised LMS: the same update with the step divided by the input energy.\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    err = np.zeros(x.size)\n    # TODO\n    return w, err\n\n\ndef step_bound(x, M):\n    \"\"\"The practical LMS bound 2 / (M * mean square of x).\"\"\"\n    x = np.asarray(x, dtype=float)\n    # TODO\n    return 0.0\n\n\nif __name__ == \"__main__\":\n    rng = np.random.default_rng(11)\n    x = rng.standard_normal(4000)\n    h = np.array([1.0, -0.5, 0.25])\n    d = np.convolve(x, h)[:4000] + 0.01 * rng.standard_normal(4000)\n    w, err = lms(x, d, 3, 0.01)\n    print(\"step bound:\", round(step_bound(x, 3), 6))\n    print(\"LMS taps: \", np.round(w, 4).tolist())\n    wn, errn = nlms(x, d, 3, 0.5)\n    print(\"NLMS taps:\", np.round(wn, 4).tolist())\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import numpy as np\n\n\ndef window(x, n, M):\n    \"\"\"[x(n), x(n-1), ..., x(n-M+1)], zeros where the index runs off the start.\"\"\"\n    x = np.asarray(x, dtype=float)\n    u = np.zeros(M)\n    lo = max(0, n - M + 1)\n    seg = x[lo:n + 1][::-1]\n    u[:seg.size] = seg\n    return u\n\n\ndef lms(x, d, M, mu):\n    \"\"\"Least mean squares. Return (final weights, a priori error per sample).\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    err = np.zeros(x.size)\n    for n in range(x.size):\n        u = window(x, n, M)\n        e = float(d[n] - w @ u)\n        err[n] = e\n        w = w + mu * e * u\n    return w, err\n\n\ndef nlms(x, d, M, mu, eps=1e-6):\n    \"\"\"Normalised LMS: the same update with the step divided by the input energy.\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    err = np.zeros(x.size)\n    for n in range(x.size):\n        u = window(x, n, M)\n        e = float(d[n] - w @ u)\n        err[n] = e\n        w = w + mu * e * u / (eps + float(u @ u))\n    return w, err\n\n\ndef step_bound(x, M):\n    \"\"\"The practical LMS bound 2 / (M * mean square of x).\"\"\"\n    x = np.asarray(x, dtype=float)\n    return float(2.0 / (M * np.mean(x * x)))\n\n\nif __name__ == \"__main__\":\n    rng = np.random.default_rng(11)\n    x = rng.standard_normal(4000)\n    h = np.array([1.0, -0.5, 0.25])\n    d = np.convolve(x, h)[:4000] + 0.01 * rng.standard_normal(4000)\n    w, err = lms(x, d, 3, 0.01)\n    print(\"step bound:\", round(step_bound(x, 3), 6))\n    print(\"LMS taps: \", np.round(w, 4).tolist())\n    wn, errn = nlms(x, d, 3, 0.5)\n    print(\"NLMS taps:\", np.round(wn, 4).tolist())\n"
+     }
+    ],
+    "hints": [
+     "`x[max(0, n - M + 1):n + 1][::-1]` is the window in the right order; write it into the front of a zero array so short windows pad at the back.",
+     "Store the error before updating the weights. Computing it after the update gives the a posteriori error, which is always smaller and hides divergence.",
+     "`float(u @ u)` is the instantaneous input energy that NLMS divides by."
+    ],
+    "tests": [
+     {
+      "name": "the input window is ordered and zero-padded",
+      "code": "import numpy as np\n_x = np.array([1.0, 2.0, 3.0, 4.0])\n_u = window(_x, 3, 3)\nassert _u.shape == (3,), f\"the window should have M entries, got {_u.shape}\"\nassert np.allclose(_u, [4.0, 3.0, 2.0]), \\\n    f\"the most recent sample comes first: expected [4, 3, 2], got {_u.tolist()}\"\n_u0 = window(_x, 0, 3)\nassert np.allclose(_u0, [1.0, 0.0, 0.0]), \\\n    f\"before the record starts the filter sees zeros: expected [1, 0, 0], got {_u0.tolist()}\""
+     },
+     {
+      "name": "LMS identifies a three-tap channel",
+      "code": "import numpy as np\n_rng = np.random.default_rng(11)\n_x = _rng.standard_normal(4000)\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:4000] + 0.01 * _rng.standard_normal(4000)\n_w, _e = lms(_x, _d, 3, 0.01)\nassert _e.shape == (4000,), f\"one error per sample, got {_e.shape}\"\nassert abs(_e[0] - _d[0]) < 1e-12, \\\n    f\"the weights start at zero, so the first a priori error is d[0] = {_d[0]:.6f}; got {_e[0]:.6f} (are you storing the error after the update?)\"\nassert np.max(np.abs(_w - _h)) < 0.02, \\\n    f\"LMS should land on the channel taps {_h.tolist()}; got {np.round(_w, 4).tolist()}\""
+     },
+     {
+      "name": "the step bound is read from the input power",
+      "code": "import numpy as np\n_rng = np.random.default_rng(11)\n_x = _rng.standard_normal(4000)\n_b = step_bound(_x, 3)\n_want = float(2.0 / (3 * np.mean(_x * _x)))\nassert abs(_b - _want) < 1e-12, f\"expected 2/(M * mean square) = {_want:.6f}, got {_b:.6f}\"\nassert abs(_b - 0.6668452909704738) < 1e-6, \\\n    f\"for this unit-power input with 3 taps the bound is about 0.6668; got {_b:.6f}\""
+     },
+     {
+      "name": "a step past the bound destroys the filter",
+      "code": "import numpy as np\n_rng = np.random.default_rng(11)\n_x = _rng.standard_normal(4000)\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:4000] + 0.01 * _rng.standard_normal(4000)\n_w, _e = lms(_x, _d, 3, 1.5 * step_bound(_x, 3))\n_blew_up = (not np.all(np.isfinite(_w))) or float(np.max(np.abs(_w))) > 1e3\nassert _blew_up, \\\n    f\"at 1.5x the bound the weight error grows every iteration and must run away; got {np.round(_w, 4).tolist()}\"\n_w2, _e2 = lms(_x, _d, 3, 0.5 * step_bound(_x, 3))\nassert np.max(np.abs(_w2 - _h)) < 0.05, \\\n    f\"at half the bound it should still converge; got {np.round(_w2, 4).tolist()}\""
+     },
+     {
+      "name": "NLMS does not care how loud the input is",
+      "code": "import numpy as np\n_rng = np.random.default_rng(11)\n_x = _rng.standard_normal(4000)\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:4000] + 0.01 * _rng.standard_normal(4000)\n_w1, _ = nlms(_x, _d, 3, 0.5)\n_w2, _ = nlms(10 * _x, 10 * _d, 3, 0.5)\nassert np.max(np.abs(_w1 - _w2)) < 1e-6, \\\n    f\"scaling input and desired signal together must leave the NLMS weights unchanged; they moved by {np.max(np.abs(_w1 - _w2)):.3e}\"\n_l1, _ = lms(_x, _d, 3, 0.05)\n_l2, _ = lms(10 * _x, 10 * _d, 3, 0.05)\nassert np.max(np.abs(_l1 - _h)) < 0.05, \"plain LMS at mu = 0.05 is stable at this input power\"\nassert (not np.all(np.isfinite(_l2))) or float(np.max(np.abs(_l2))) > 1e3, \\\n    \"the same LMS step size on a 10x louder input is 100x past the bound and must diverge — that is the whole point of normalising\""
+     },
+     {
+      "name": "a bigger step costs steady-state accuracy",
+      "code": "import numpy as np\n_rng = np.random.default_rng(5)\n_x = _rng.standard_normal(30000)\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:30000] + 0.3 * _rng.standard_normal(30000)\n_, _e_slow = lms(_x, _d, 3, 0.002)\n_, _e_fast = lms(_x, _d, 3, 0.2)\n_slow = float(np.mean(_e_slow[-15000:] ** 2))\n_fast = float(np.mean(_e_fast[-15000:] ** 2))\nassert _slow < 0.095, f\"with mu = 0.002 the tail MSE should sit just above the 0.09 noise floor; got {_slow:.5f}\"\nassert _fast > 1.3 * _slow, \\\n    f\"misadjustment grows with mu: the tail MSE at mu = 0.2 ({_fast:.5f}) should clearly exceed the one at mu = 0.002 ({_slow:.5f})\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "RLS, forgetting and misadjustment",
+   "summary": "Solve the least-squares problem exactly at every sample. It converges in a few taps' worth of data and costs you a matrix.",
+   "concepts": [
+    "Exponentially weighted least squares: minimise $\\sum_i \\lambda^{n-i}e(i)^2$ rather than an expectation.",
+    "The matrix inversion lemma turns the update of $R^{-1}$ into a rank-one correction, giving $O(M^2)$ per sample instead of $O(M^3)$.",
+    "The gain vector $k(n) = P(n-1)x(n)/(\\lambda + x^\\top P(n-1)x)$ is a Kalman gain in all but name.",
+    "$\\lambda$ sets the memory: about $1/(1-\\lambda)$ samples. Short memory tracks a changing system and raises misadjustment.",
+    "The covariance recursion loses symmetry to rounding and will diverge; symmetrising $P$ each step costs nothing and fixes it."
+   ],
+   "sandbox": {
+    "title": "The forgetting factor is a pole",
+    "visualiser": "z-plane",
+    "minutes": 8,
+    "brief": "RLS weights a sample $i$ steps into the past by $\\lambda^i$. That is the impulse\nresponse of a one-pole filter with the pole at $z = \\lambda$, so set the radius to\n$\\lambda$ and leave the angle at zero: the curve you see is literally how much the\nalgorithm still cares about each past sample.\n\nEffective memory is roughly $1/(1-\\lambda)$ samples.",
+    "initial": {
+     "r": 0.99,
+     "th": 0
+    },
+    "notice": [
+     "At $r = 0.99$ the response is still visible a hundred samples back: memory $1/(1-0.99) = 100$. That is a long average, so a quiet estimate — and a filter that will not notice the room changing.",
+     "Drop $r$ to 0.9. Memory collapses to ten samples. With eight taps to estimate from ten samples of data, the estimate rattles: this is misadjustment, seen directly.",
+     "Take $r$ to 1.0 exactly. Nothing is ever forgotten — growing-window least squares, the lowest misadjustment available and no tracking ability whatsoever."
+    ]
+   },
+   "derive": {
+    "title": "Memory, forgetting and the fixed price of speed",
+    "minutes": 13,
+    "brief": "RLS minimises the exponentially weighted sum of squared errors\n\n$$\\sum_{i=0}^{n} \\lambda^{\\,n-i} e(i)^2, \\qquad 0 < \\lambda \\le 1$$\n\nso a sample's influence decays geometrically as it recedes into the past.",
+    "vars": [
+     "lambda",
+     "i",
+     "n",
+     "N",
+     "M",
+     "mu",
+     "sigma_x",
+     "lambda_min",
+     "misadj",
+     "tau",
+     "R"
+    ],
+    "steps": [
+     {
+      "prompt": "Write the weight that the cost places on a sample $i$ steps in the past.",
+      "given": "",
+      "answer": "\\lambda^i",
+      "placeholder": "\\lambda^i",
+      "hint": "Set $i = n - $ (sample index) in the exponent above.",
+      "deconstruct": [
+       "The sample at time $n$ has exponent $n - n = 0$, so weight 1.",
+       "The one before it has exponent 1, and so on."
+      ]
+     },
+     {
+      "prompt": "Sum that weight over all past samples, for $0 < \\lambda < 1$. Write the total.",
+      "given": "",
+      "answer": "\\frac{1}{1-\\lambda}",
+      "placeholder": "\\frac{1}{1-\\lambda}",
+      "hint": "It is a geometric series with ratio $\\lambda$, starting at 1.",
+      "deconstruct": [
+       "$1 + \\lambda + \\lambda^2 + \\dots$",
+       "A geometric series with $|\\lambda| < 1$ sums to $1/(1-\\lambda)$."
+      ]
+     },
+     {
+      "prompt": "That total is the effective number of samples the filter is averaging over. If you want a memory of $N$ samples, write $\\lambda$.",
+      "given": "",
+      "answer": "1 - \\frac{1}{N}",
+      "placeholder": "1 - \\frac{1}{N}",
+      "hint": "Set the previous answer equal to $N$ and solve.",
+      "deconstruct": [
+       "$1/(1-\\lambda) = N$ gives $1 - \\lambda = 1/N$.",
+       "Rearrange for $\\lambda$."
+      ]
+     },
+     {
+      "prompt": "The correlation estimate obeys $R(n) = \\lambda R(n-1) + x(n)x(n)^\\top$. For white input of power $\\sigma_x^2$, write the value each diagonal entry settles on as $n \\to \\infty$.",
+      "given": "",
+      "answer": "\\frac{\\sigma_x^2}{1-\\lambda}",
+      "placeholder": "\\frac{\\sigma_x^2}{1-\\lambda}",
+      "hint": "Take expectations: the steady state satisfies $\\bar{R} = \\lambda\\bar{R} + \\sigma_x^2$.",
+      "deconstruct": [
+       "In steady state the diagonal entry stops changing, so $\\bar{r} = \\lambda\\bar{r} + \\sigma_x^2$.",
+       "Collect $\\bar{r}$ and divide."
+      ]
+     },
+     {
+      "prompt": "Back to LMS for the comparison. Its misadjustment is $\\mu M\\sigma_x^2/2$ and its slowest time constant is $1/(\\mu\\lambda_{min})$ iterations. Write the product of the two.",
+      "given": "",
+      "answer": "\\frac{M \\sigma_x^2}{2 \\lambda_{min}}",
+      "placeholder": "\\frac{M\\sigma_x^2}{2\\lambda_{min}}",
+      "hint": "Multiply them and watch what happens to $\\mu$.",
+      "deconstruct": [
+       "$\\left(\\frac{\\mu M\\sigma_x^2}{2}\\right)\\cdot\\frac{1}{\\mu\\lambda_{min}}$.",
+       "The step size cancels, leaving a quantity fixed by the problem alone."
+      ]
+     }
+    ],
+    "closing": "The last line is the sentence to remember from the whole course: for LMS, speed\ntimes misadjustment is a constant of the problem, not of your tuning. RLS does not\nrepeal that trade-off — $\\lambda$ moves along its own version of the same curve —\nbut it buys a much better curve, converging in roughly $2M$ samples regardless of\nthe eigenvalue spread, in exchange for $O(M^2)$ arithmetic and a covariance matrix\nthat must be kept symmetric or it will quietly destroy itself."
+   },
+   "lab": {
+    "title": "Recursive least squares, and what the forgetting factor does",
+    "runtime": "python",
+    "minutes": 36,
+    "brief": "`lms_weights` is written for you — the same algorithm as module 3, but returning\nthe whole weight history so the two can be compared iteration by iteration.\n\nWrite `rls(x, d, M, lam=0.99, delta=0.01)`, returning `(W, err)` where `W` has shape\n`(N, M)` and `W[n]` is the weight vector **after** the update at sample `n`.\n\nThe recursion, per sample:\n\n```text\nu  = window(x, n, M)\npi = P @ u\nk  = pi / (lam + u @ pi)\ne  = d[n] - w @ u\nw  = w + k * e\nP  = (P - outer(k, pi)) / lam\nP  = (P + P.T) / 2\n```\n\nstarting from `w = 0` and `P = I / delta`. That last line is not cosmetic: `P` is\nsymmetric in exact arithmetic, floating point does not respect that, and the\nasymmetry grows until the recursion diverges. One of the checks runs long enough to\nprove it.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import numpy as np\n\n\ndef window(x, n, M):\n    \"\"\"[x(n), x(n-1), ..., x(n-M+1)], zeros where the index runs off the start.\"\"\"\n    x = np.asarray(x, dtype=float)\n    u = np.zeros(M)\n    lo = max(0, n - M + 1)\n    seg = x[lo:n + 1][::-1]\n    u[:seg.size] = seg\n    return u\n\n\ndef lms_weights(x, d, M, mu):\n    \"\"\"Module 3's LMS, returning the full weight history for comparison.\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    W = np.zeros((x.size, M))\n    err = np.zeros(x.size)\n    for n in range(x.size):\n        u = window(x, n, M)\n        e = float(d[n] - w @ u)\n        err[n] = e\n        w = w + mu * e * u\n        W[n] = w\n    return W, err\n\n\ndef rls(x, d, M, lam=0.99, delta=0.01):\n    \"\"\"Recursive least squares. Return (weight history, a priori error per sample).\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    P = np.eye(M) / delta\n    W = np.zeros((x.size, M))\n    err = np.zeros(x.size)\n    # TODO: gain, error, weight update, covariance update, symmetrise.\n    return W, err\n\n\nif __name__ == \"__main__\":\n    rng = np.random.default_rng(21)\n    v = rng.standard_normal(3000)\n    x = np.zeros(3000)\n    for n in range(1, 3000):\n        x[n] = 0.95 * x[n - 1] + v[n]\n    h = np.array([1.0, -0.5, 0.25])\n    d = np.convolve(x, h)[:3000] + 0.01 * rng.standard_normal(3000)\n    W, err = rls(x, d, 3, 0.99)\n    print(\"RLS taps: \", np.round(W[-1], 5).tolist())\n    Wl, _ = lms_weights(x, d, 3, 0.002)\n    print(\"LMS taps: \", np.round(Wl[-1], 5).tolist())\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import numpy as np\n\n\ndef window(x, n, M):\n    \"\"\"[x(n), x(n-1), ..., x(n-M+1)], zeros where the index runs off the start.\"\"\"\n    x = np.asarray(x, dtype=float)\n    u = np.zeros(M)\n    lo = max(0, n - M + 1)\n    seg = x[lo:n + 1][::-1]\n    u[:seg.size] = seg\n    return u\n\n\ndef lms_weights(x, d, M, mu):\n    \"\"\"Module 3's LMS, returning the full weight history for comparison.\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    W = np.zeros((x.size, M))\n    err = np.zeros(x.size)\n    for n in range(x.size):\n        u = window(x, n, M)\n        e = float(d[n] - w @ u)\n        err[n] = e\n        w = w + mu * e * u\n        W[n] = w\n    return W, err\n\n\ndef rls(x, d, M, lam=0.99, delta=0.01):\n    \"\"\"Recursive least squares. Return (weight history, a priori error per sample).\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    P = np.eye(M) / delta\n    W = np.zeros((x.size, M))\n    err = np.zeros(x.size)\n    for n in range(x.size):\n        u = window(x, n, M)\n        pi = P @ u\n        k = pi / (lam + float(u @ pi))\n        e = float(d[n] - w @ u)\n        err[n] = e\n        w = w + k * e\n        P = (P - np.outer(k, pi)) / lam\n        P = 0.5 * (P + P.T)\n        W[n] = w\n    return W, err\n\n\nif __name__ == \"__main__\":\n    rng = np.random.default_rng(21)\n    v = rng.standard_normal(3000)\n    x = np.zeros(3000)\n    for n in range(1, 3000):\n        x[n] = 0.95 * x[n - 1] + v[n]\n    h = np.array([1.0, -0.5, 0.25])\n    d = np.convolve(x, h)[:3000] + 0.01 * rng.standard_normal(3000)\n    W, err = rls(x, d, 3, 0.99)\n    print(\"RLS taps: \", np.round(W[-1], 5).tolist())\n    Wl, _ = lms_weights(x, d, 3, 0.002)\n    print(\"LMS taps: \", np.round(Wl[-1], 5).tolist())\n"
+     }
+    ],
+    "hints": [
+     "`np.outer(k, pi)` is the rank-one correction; `pi` is `P @ u` computed *before* `P` is updated, so keep it in a variable.",
+     "The a priori error uses the old weights, exactly as in LMS — compute `e` before `w` is updated.",
+     "If a long run produces `nan`, the covariance has lost symmetry. `P = 0.5 * (P + P.T)` after every update is the standard remedy."
+    ],
+    "tests": [
+     {
+      "name": "RLS identifies a channel through correlated input",
+      "code": "import numpy as np\n_rng = np.random.default_rng(21)\n_v = _rng.standard_normal(3000)\n_x = np.zeros(3000)\nfor _n in range(1, 3000):\n    _x[_n] = 0.95 * _x[_n - 1] + _v[_n]\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:3000] + 0.01 * _rng.standard_normal(3000)\n_W, _e = rls(_x, _d, 3, 0.99)\nassert _W.shape == (3000, 3), f\"the history should be (N, M), got {_W.shape}\"\nassert abs(_e[0] - _d[0]) < 1e-12, \\\n    f\"the weights start at zero, so the first a priori error is d[0] = {_d[0]:.6f}; got {_e[0]:.6f}\"\nassert np.max(np.abs(_W[-1] - _h)) < 0.01, \\\n    f\"RLS should land on {_h.tolist()}; got {np.round(_W[-1], 4).tolist()}\""
+     },
+     {
+      "name": "RLS converges while LMS is still nowhere near",
+      "code": "import numpy as np\n_rng = np.random.default_rng(21)\n_v = _rng.standard_normal(3000)\n_x = np.zeros(3000)\nfor _n in range(1, 3000):\n    _x[_n] = 0.95 * _x[_n - 1] + _v[_n]\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:3000] + 0.01 * _rng.standard_normal(3000)\n_Wr, _ = rls(_x, _d, 3, 0.99)\n_Wl, _ = lms_weights(_x, _d, 3, 0.002)\n_rls_err = float(np.linalg.norm(_Wr[200] - _h))\n_lms_err = float(np.linalg.norm(_Wl[200] - _h))\nassert _rls_err < 0.05, \\\n    f\"after 200 samples RLS should be essentially converged; weight error {_rls_err:.4f}\"\nassert _lms_err > 0.5, \\\n    f\"LMS on input this correlated is still far away at 200 samples; if it is not ({_lms_err:.4f}), check the comparison is using the same data\""
+     },
+     {
+      "name": "a short memory tracks a change and a long one does not",
+      "code": "import numpy as np\n_h1 = np.array([1.0, -0.5, 0.25])\n_h2 = np.array([0.4, 0.8, -0.3])\n_rng = np.random.default_rng(4)\n_N = 8000\n_x = _rng.standard_normal(_N)\n_d = np.zeros(_N)\nfor _n in range(_N):\n    _u = window(_x, _n, 3)\n    _d[_n] = float((_h1 if _n < _N // 2 else _h2) @ _u)\n_d = _d + 0.02 * _rng.standard_normal(_N)\n_Wf, _ = rls(_x, _d, 3, 0.9)\n_Ws, _ = rls(_x, _d, 3, 0.9999)\n_fast = float(np.linalg.norm(_Wf[_N // 2 + 100] - _h2))\n_slow = float(np.linalg.norm(_Ws[_N // 2 + 100] - _h2))\nassert _fast < 0.1, \\\n    f\"lambda = 0.9 remembers about 10 samples, so 100 samples after the channel changes it should have followed; weight error {_fast:.4f}\"\nassert _slow > 1.0, \\\n    f\"lambda = 0.9999 remembers 10000 samples and cannot notice a change this recent; expected it to still be wrong, got {_slow:.4f}\""
+     },
+     {
+      "name": "the covariance recursion survives a long run",
+      "code": "import numpy as np\n_rng = np.random.default_rng(4)\n_N = 8000\n_x = _rng.standard_normal(_N)\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:_N] + 0.02 * _rng.standard_normal(_N)\n_W, _e = rls(_x, _d, 3, 0.9)\nassert np.all(np.isfinite(_W)), \\\n    \"the weights went to nan or inf: P has lost its symmetry to rounding — symmetrise it with P = 0.5 * (P + P.T) after every update\"\nassert np.max(np.abs(_W[-1] - _h)) < 0.05, \\\n    f\"even with a ten-sample memory the estimate should hover around the true taps; got {np.round(_W[-1], 4).tolist()}\""
+     },
+     {
+      "name": "delta sets the start, not the destination",
+      "code": "import numpy as np\n_rng = np.random.default_rng(21)\n_v = _rng.standard_normal(3000)\n_x = np.zeros(3000)\nfor _n in range(1, 3000):\n    _x[_n] = 0.95 * _x[_n - 1] + _v[_n]\n_h = np.array([1.0, -0.5, 0.25])\n_d = np.convolve(_x, _h)[:3000] + 0.01 * _rng.standard_normal(3000)\n_Wa, _ = rls(_x, _d, 3, 0.99, 0.001)\n_Wb, _ = rls(_x, _d, 3, 0.99, 0.1)\nassert np.max(np.abs(_Wa[-1] - _Wb[-1])) < 1e-3, \\\n    f\"delta only sets P(0) and its influence is forgotten; the two runs ended {np.max(np.abs(_Wa[-1] - _Wb[-1])):.2e} apart\"\nassert float(np.linalg.norm(_Wa[50] - _h)) < float(np.linalg.norm(_Wb[50] - _h)), \\\n    \"a smaller delta means a larger initial P, which means bigger early steps and a faster start\""
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "Cancel an echo through a room that changes",
+  "brief": "A hands-free call. The far-end signal `x` comes out of the loudspeaker, bounces\naround the room, and arrives back at the microphone as `d`. Your job is to model\nthe room with an 8-tap FIR filter and subtract its output, so the far end hears\nitself as little as possible.\n\nTwo things make it real. The far-end signal is **correlated** — an AR(1) process\nwith $\\rho = 0.8$, which is far closer to speech than white noise and gives a\nsubstantial eigenvalue spread. And halfway through the call the **room changes**:\n`signals.session()` switches to a different impulse response at the midpoint,\nbecause somebody moved.\n\nImplement, in `main.py`:\n\n1. `wiener(x, d, M)` — the block solution from module 1.\n2. `lms(x, d, M, mu)` and `nlms(x, d, M, mu, eps)` — returning `(w, err)`.\n3. `rls(x, d, M, lam, delta)` — returning `(w, err)`.\n4. `erle(d, err, tail)` — echo return loss enhancement over the last `tail`\n   samples, in decibels: $10\\log_{10}\\left(\\frac{E[d^2]}{E[e^2]}\\right)$.\n\n## Suggested order\n\nGet `wiener` working against a stationary session first — it is the only piece with\na closed-form answer to check against, and if it is wrong the rest will be too.\nThen LMS, then the one-line change that makes it NLMS, then RLS. `erle` is three\nlines and is what turns all of it into a number you can defend.\n\nThe checks run in that order, so they light up as you go.",
+  "deliverables": [
+   "`wiener(x, d, M)` solving the normal equations from a block of data, agreeing with the true room response of a stationary session to three decimal places.",
+   "`lms` and `nlms`, both returning the a priori error per sample, with NLMS demonstrably insensitive to the level of the far-end signal.",
+   "`rls` with a forgetting factor and a symmetrised covariance update, converging within a few hundred samples on the correlated far-end input.",
+   "`erle(d, err, tail)` in decibels, and a run of the switching session showing the canceller recovering after the room changes.",
+   "A comment at the top of `main.py` naming the step sizes and forgetting factor you chose, with the convergence-versus-misadjustment argument for each."
+  ],
+  "constraints": [
+   "NumPy and the standard library only — no SciPy, no DSP library.",
+   "`signals.py` is fixed. The adaptive filters may read `x` and `d` and nothing else; reading `echo_path()` inside an adaptive routine defeats the exercise.",
+   "Errors reported must be a priori: computed from the weights the filter held before the update at that sample.",
+   "Eight taps throughout. The room is exactly eight taps long, so this is an identification problem with no modelling error to hide behind."
+  ],
+  "rubric": [
+   {
+    "criterion": "Block solution",
+    "weight": 25,
+    "evidence": "The Wiener filter recovers the true eight-tap room response of a stationary session to within 0.01 per tap, using the biased autocorrelation estimate."
+   },
+   {
+    "criterion": "Gradient methods",
+    "weight": 30,
+    "evidence": "LMS and NLMS both converge on the room response, NLMS weights are unchanged when the far-end level is scaled, and LMS at a fixed step diverges under the same scaling."
+   },
+   {
+    "criterion": "Recursive least squares",
+    "weight": 25,
+    "evidence": "RLS reaches the room response within a few hundred samples of correlated input, an order of magnitude ahead of LMS on the same data, and stays finite over the whole call."
+   },
+   {
+    "criterion": "Trade-off argued with numbers",
+    "weight": 20,
+    "evidence": "ERLE after the room change exceeds 20 dB, and the measured tail error rises with the step size as the misadjustment result predicts."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 120,
+  "files": [
+   {
+    "name": "signals.py",
+    "content": "\"\"\"The far-end signal and the room that echoes it. Do not edit.\"\"\"\nimport numpy as np\n\nTAPS = 8\n\n\ndef echo_path(variant=0):\n    \"\"\"Two 8-tap room responses; the second is what the room becomes mid-call.\"\"\"\n    if variant == 0:\n        return np.array([0.60, -0.35, 0.22, -0.14, 0.09, -0.05, 0.03, -0.02])\n    return np.array([0.20, 0.50, -0.30, 0.18, -0.11, 0.07, -0.04, 0.02])\n\n\ndef far_end(N, seed=0, rho=0.8):\n    \"\"\"AR(1) far-end speech surrogate, unit variance, strongly correlated.\"\"\"\n    rng = np.random.default_rng(seed)\n    v = rng.standard_normal(N)\n    x = np.zeros(N)\n    scale = np.sqrt(1.0 - rho * rho)\n    for n in range(1, N):\n        x[n] = rho * x[n - 1] + scale * v[n]\n    return x\n\n\ndef session(N=12000, seed=3, switch=True, noise=0.01, rho=0.8):\n    \"\"\"Return (x, d): the far-end signal and the microphone signal it echoes into.\"\"\"\n    x = far_end(N, seed=seed, rho=rho)\n    rng = np.random.default_rng(seed + 1000)\n    h0 = echo_path(0)\n    h1 = echo_path(1) if switch else h0\n    half = N // 2\n    d = np.zeros(N)\n    for n in range(N):\n        h = h0 if n < half else h1\n        acc = 0.0\n        for k in range(TAPS):\n            if n - k >= 0:\n                acc += h[k] * x[n - k]\n        d[n] = acc\n    return x, d + noise * rng.standard_normal(N)\n",
+    "ro": true
+   },
+   {
+    "name": "main.py",
+    "content": "import numpy as np\nfrom signals import session, echo_path, TAPS\n\n# Chosen settings:\n#   LMS  mu     -> TODO, and the argument for it\n#   NLMS mu     -> TODO\n#   RLS  lambda -> TODO\n\n\ndef window(x, n, M):\n    \"\"\"[x(n), x(n-1), ..., x(n-M+1)], zeros where the index runs off the start.\"\"\"\n    x = np.asarray(x, dtype=float)\n    u = np.zeros(M)\n    lo = max(0, n - M + 1)\n    seg = x[lo:n + 1][::-1]\n    u[:seg.size] = seg\n    return u\n\n\ndef wiener(x, d, M):\n    \"\"\"Block Wiener solution: build R and p from the data, then solve R w = p.\"\"\"\n    # TODO\n    return np.zeros(M)\n\n\ndef lms(x, d, M, mu):\n    \"\"\"Return (final weights, a priori error per sample).\"\"\"\n    # TODO\n    return np.zeros(M), np.zeros(np.asarray(x).size)\n\n\ndef nlms(x, d, M, mu, eps=1e-6):\n    \"\"\"Return (final weights, a priori error per sample).\"\"\"\n    # TODO\n    return np.zeros(M), np.zeros(np.asarray(x).size)\n\n\ndef rls(x, d, M, lam=0.99, delta=0.01):\n    \"\"\"Return (final weights, a priori error per sample).\"\"\"\n    # TODO\n    return np.zeros(M), np.zeros(np.asarray(x).size)\n\n\ndef erle(d, err, tail=2000):\n    \"\"\"Echo return loss enhancement over the last `tail` samples, in dB.\"\"\"\n    # TODO\n    return 0.0\n\n\nif __name__ == \"__main__\":\n    x, d = session(12000, seed=3)\n    w, err = nlms(x, d, TAPS, 0.5)\n    print(\"NLMS taps:\", np.round(w, 4).tolist())\n    print(\"true room:\", echo_path(1).tolist())\n    print(\"ERLE:\", round(erle(d, err), 2), \"dB\")\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "main.py",
+    "content": "import numpy as np\nfrom signals import session, echo_path, TAPS\n\n# Chosen settings:\n#   LMS  mu     -> 0.01. The far end has unit power and there are 8 taps, so the\n#                  practical bound is 2/(8*1) = 0.25; a quarter of the way there\n#                  keeps misadjustment small while still tracking the room change.\n#   NLMS mu     -> 0.5. Normalised, so this is a fraction of the way to the a\n#                  posteriori zero at mu = 1: fast, and stable at any input level.\n#   RLS  lambda -> 0.99, a memory of about 100 samples. Long enough to average the\n#                  measurement noise, short enough to follow the room.\n\n\ndef window(x, n, M):\n    \"\"\"[x(n), x(n-1), ..., x(n-M+1)], zeros where the index runs off the start.\"\"\"\n    x = np.asarray(x, dtype=float)\n    u = np.zeros(M)\n    lo = max(0, n - M + 1)\n    seg = x[lo:n + 1][::-1]\n    u[:seg.size] = seg\n    return u\n\n\ndef wiener(x, d, M):\n    \"\"\"Block Wiener solution: build R and p from the data, then solve R w = p.\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    N = x.size\n    r = np.array([float(np.dot(x[k:], x[:N - k]) / N) for k in range(M)])\n    p = np.array([float(np.dot(d[k:], x[:N - k]) / N) for k in range(M)])\n    idx = np.abs(np.subtract.outer(np.arange(M), np.arange(M)))\n    return np.linalg.solve(r[idx], p)\n\n\ndef lms(x, d, M, mu):\n    \"\"\"Return (final weights, a priori error per sample).\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    err = np.zeros(x.size)\n    for n in range(x.size):\n        u = window(x, n, M)\n        e = float(d[n] - w @ u)\n        err[n] = e\n        w = w + mu * e * u\n    return w, err\n\n\ndef nlms(x, d, M, mu, eps=1e-6):\n    \"\"\"Return (final weights, a priori error per sample).\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    err = np.zeros(x.size)\n    for n in range(x.size):\n        u = window(x, n, M)\n        e = float(d[n] - w @ u)\n        err[n] = e\n        w = w + mu * e * u / (eps + float(u @ u))\n    return w, err\n\n\ndef rls(x, d, M, lam=0.99, delta=0.01):\n    \"\"\"Return (final weights, a priori error per sample).\"\"\"\n    x = np.asarray(x, dtype=float)\n    d = np.asarray(d, dtype=float)\n    w = np.zeros(M)\n    P = np.eye(M) / delta\n    err = np.zeros(x.size)\n    for n in range(x.size):\n        u = window(x, n, M)\n        pi = P @ u\n        k = pi / (lam + float(u @ pi))\n        e = float(d[n] - w @ u)\n        err[n] = e\n        w = w + k * e\n        P = (P - np.outer(k, pi)) / lam\n        P = 0.5 * (P + P.T)\n    return w, err\n\n\ndef erle(d, err, tail=2000):\n    \"\"\"Echo return loss enhancement over the last `tail` samples, in dB.\"\"\"\n    d = np.asarray(d, dtype=float)[-tail:]\n    e = np.asarray(err, dtype=float)[-tail:]\n    return float(10.0 * np.log10(float(np.mean(d * d)) / float(np.mean(e * e))))\n\n\nif __name__ == \"__main__\":\n    x, d = session(12000, seed=3)\n    w, err = nlms(x, d, TAPS, 0.5)\n    print(\"NLMS taps:\", np.round(w, 4).tolist())\n    print(\"true room:\", echo_path(1).tolist())\n    print(\"ERLE:\", round(erle(d, err), 2), \"dB\")\n"
+   }
+  ],
+  "hints": [
+   "`window(x, n, M)` from module 3 is the only helper all four algorithms need; write it once at the top.",
+   "For `wiener`, reuse the biased autocorrelation and the `r[abs(i-j)]` Toeplitz trick from module 1.",
+   "For `rls`, keep `pi = P @ u` in a variable — it appears in both the gain and the covariance update — and symmetrise `P` after every step.",
+   "`erle` should compare the microphone signal with the residual over the *same* tail window; averaging over the whole call hides the transient after the room changes."
+  ],
+  "tests": [
+   {
+    "name": "the block solution finds the room",
+    "code": "import numpy as np\nfrom signals import session, echo_path, TAPS\n_x, _d = session(6000, seed=3, switch=False)\n_w = wiener(_x, _d, TAPS)\nassert _w.shape == (TAPS,), f\"expected {TAPS} taps, got shape {_w.shape}\"\nassert np.max(np.abs(_w - echo_path(0))) < 0.01, \\\n    f\"on a stationary session the Wiener filter is the room response; expected {echo_path(0).tolist()}, got {np.round(_w, 4).tolist()}\""
+   },
+   {
+    "name": "the gradient methods converge and report a priori errors",
+    "code": "import numpy as np\nfrom signals import session, echo_path, TAPS\n_x, _d = session(6000, seed=3, switch=False)\n_wl, _el = lms(_x, _d, TAPS, 0.01)\n_wn, _en = nlms(_x, _d, TAPS, 0.5)\nassert _el.shape == (6000,) and _en.shape == (6000,), \"one error per sample from both\"\nassert abs(_el[0] - _d[0]) < 1e-12, \\\n    f\"weights start at zero, so the first a priori error is d[0] = {_d[0]:.6f}; got {_el[0]:.6f}\"\nassert np.max(np.abs(_wl - echo_path(0))) < 0.05, \\\n    f\"LMS should reach the room response; got {np.round(_wl, 4).tolist()}\"\nassert np.max(np.abs(_wn - echo_path(0))) < 0.05, \\\n    f\"NLMS should reach the room response; got {np.round(_wn, 4).tolist()}\""
+   },
+   {
+    "name": "normalisation makes the step independent of level",
+    "code": "import numpy as np\nfrom signals import session, TAPS\n_x, _d = session(6000, seed=3, switch=False)\n_w1, _ = nlms(_x, _d, TAPS, 0.5)\n_w2, _ = nlms(4 * _x, 4 * _d, TAPS, 0.5)\nassert np.max(np.abs(_w1 - _w2)) < 1e-6, \\\n    f\"turning the loudspeaker up must not change the NLMS solution; the weights moved by {np.max(np.abs(_w1 - _w2)):.2e}\"\n_l2, _ = lms(4 * _x, 4 * _d, TAPS, 0.05)\nassert (not np.all(np.isfinite(_l2))) or float(np.max(np.abs(_l2))) > 1e3, \\\n    \"a fixed LMS step that was stable at the old level is 16x past the bound at four times the amplitude, and must diverge\""
+   },
+   {
+    "name": "RLS converges an order of magnitude sooner",
+    "code": "import numpy as np\nfrom signals import session, echo_path, TAPS\n_x, _d = session(6000, seed=3, switch=False)\n_h = echo_path(0)\n_wr, _ = rls(_x[:800], _d[:800], TAPS, 0.99)\n_wn, _ = nlms(_x[:800], _d[:800], TAPS, 0.5)\n_wl, _ = lms(_x[:800], _d[:800], TAPS, 0.01)\n_er = float(np.linalg.norm(_wr - _h))\n_en = float(np.linalg.norm(_wn - _h))\n_el = float(np.linalg.norm(_wl - _h))\nassert _er < 0.05, f\"RLS should be converged after 800 samples of correlated input; weight error {_er:.4f}\"\nassert _en < 0.05, f\"NLMS should also be close after 800 samples; weight error {_en:.4f}\"\nassert _el > 0.1, \\\n    f\"LMS at mu = 0.01 should still be visibly behind at 800 samples ({_el:.4f}) — if it is not, the three are not being run on the same data\""
+   },
+   {
+    "name": "the canceller recovers after the room changes",
+    "code": "import numpy as np\nfrom signals import session, echo_path, TAPS\n_x, _d = session(12000, seed=3)\n_w, _e = nlms(_x, _d, TAPS, 0.5)\n_erle = erle(_d, _e, 2000)\nassert _erle > 20.0, \\\n    f\"over the last 2000 samples the residual should be more than 20 dB below the microphone signal; got {_erle:.2f} dB\"\nassert np.max(np.abs(_w - echo_path(1))) < 0.05, \\\n    f\"by the end of the call the filter should hold the *second* room response {echo_path(1).tolist()}; got {np.round(_w, 4).tolist()}\"\n_zero = erle(_d, _d, 2000)\nassert abs(_zero) < 1e-9, \\\n    f\"a canceller that subtracts nothing has 0 dB of ERLE by definition; got {_zero:.4f}\""
+   },
+   {
+    "name": "the step size buys speed and is charged for it",
+    "code": "import numpy as np\nfrom signals import session, TAPS\n_x, _d = session(20000, seed=9, switch=False, noise=0.05)\n_, _slow = lms(_x, _d, TAPS, 0.002)\n_, _fast = lms(_x, _d, TAPS, 0.05)\n_tail_slow = float(np.mean(_slow[-8000:] ** 2))\n_tail_fast = float(np.mean(_fast[-8000:] ** 2))\nassert np.isfinite(_tail_slow) and np.isfinite(_tail_fast), \"both step sizes are well inside the bound\"\nassert _tail_slow < 0.005, \\\n    f\"at mu = 0.002 the tail error should sit near the 0.0025 noise floor; got {_tail_slow:.5f}\"\nassert _tail_fast > 2.0 * _tail_slow, \\\n    f\"misadjustment is proportional to the step size, so mu = 0.05 must leave a clearly larger tail error; got {_tail_fast:.5f} against {_tail_slow:.5f}\""
+   }
+  ]
+ }
+}

@@ -11,9 +11,13 @@ Two notes specific to this course, both learned the hard way from the checker:
 
   * `lambda` is the natural symbol for a sliding-surface slope and a Python
     keyword. MathCheck rewrites it to `lambda_` before handing it to SymPy, so
-    `vars` must list *both* spellings or the symbol is split letter by letter.
-  * the LaTeX subset resolves \\frac before \\sqrt, so a \\sqrt inside a \\frac
-    silently becomes a product. No answer here nests them.
+    `vars` must list *both* spellings, or the symbol is split letter by letter and
+    every answer containing it is compared against nonsense. Module 4 lists both.
+  * SymPy compares without sign assumptions, so a symbol moved across a square root
+    is not recognised: x_0/sqrt(1 + 2 x_0^2 t) and 1/sqrt(1/x_0^2 + 2t) are equal
+    only for x_0 > 0, and the checker will not grant that. Answers here keep the
+    symbols they divide by out of the radicand, and where a root is unavoidable
+    (M1 step 3) the hint asks for a single root rather than a ratio of two.
 """
 
 COURSE = {
