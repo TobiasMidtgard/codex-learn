@@ -123,6 +123,38 @@ for (const file of spineFiles) {
   notes.push(`${prog.id}: ${bundled}/${order.length} courses bundled`);
 }
 
+/* A sandbox unit names a visualiser and the parameters it opens with. Neither is
+   checked by emit.py or verify_labs — a wrong id renders a "visualiser missing" card,
+   and a wrong parameter key is silently ignored, so the learner sees a sandbox that
+   opens somewhere other than the brief describes. Both are only visible here, where
+   the catalog and the visualiser registry are in the same place. */
+const studioSrc = read(join(SRC, 'studio.js'));
+const VIS = new Map();
+for (const block of studioSrc.split('Sandbox.define({').slice(1)) {
+  const id = (block.match(/id:\s*'([^']+)'/) || [])[1];
+  if (!id) continue;
+  const params = block.slice(0, block.indexOf('draw:'));
+  VIS.set(id, new Set([...params.matchAll(/\{\s*k:\s*'([^']+)'/g)].map((m) => m[1])));
+}
+for (const c of allCourses) {
+  for (const [mi, m] of c.modules.entries()) {
+    if (!m.sandbox) continue;
+    const id = m.sandbox.visualiser;
+    if (!VIS.has(id)) {
+      problems.push(`${c.id}/M${mi + 1}: sandbox names "${id}", which is not a registered ` +
+        `visualiser (have: ${[...VIS.keys()].join(', ')})`);
+      continue;
+    }
+    for (const k of Object.keys(m.sandbox.initial || {})) {
+      if (!VIS.get(id).has(k)) {
+        problems.push(`${c.id}/M${mi + 1}: sandbox sets "${k}", which is not a parameter of ` +
+          `"${id}" (it takes: ${[...VIS.get(id)].join(', ')})`);
+      }
+    }
+  }
+}
+notes.push(`visualisers: ${VIS.size} registered, every sandbox reference checked`);
+
 const degree = { programs, courses: allCourses };
 if (!programs.length) notes.push('catalog: no _spine*.json — building without any programme');
 

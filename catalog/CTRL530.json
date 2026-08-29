@@ -479,7 +479,7 @@
      },
      {
       "name": "the small-mu amplitude really is 2",
-      "code": "import numpy as np\n_a = amplitude(integrate(0.05, [1.9, 0.0], 0.002, 20000))\nassert abs(_a - 2.0) < 0.01, \\\n    f\"as mu goes to zero the averaging prediction a = 2 becomes exact; at mu = 0.05 the amplitude should be within a per cent of 2, got {_a:.6f}\""
+      "code": "import numpy as np\n_on = amplitude(integrate(0.05, [2.0, 0.0], 0.002, 20000))\nassert abs(_on - 2.0) < 1e-3, \\\n    f\"at mu = 0.05 the circle of radius 2 is very nearly invariant: start on it and the amplitude should not move, got {_on:.6f}\"\n_to = amplitude(integrate(0.05, [1.9, 0.0], 0.002, 40000))\nassert abs(_to - 2.0) < 5e-3, \\\n    f\"and it attracts: from 1.9 the amplitude should climb to within a few thousandths of 2 over 80 s, got {_to:.6f}. Convergence takes a time of order 1/mu, so a short run here proves nothing\""
      }
     ]
    }
@@ -507,7 +507,7 @@
     "notice": [
      "Follow one trajectory to the line and then along it. On the line the motion obeys $\\dot{x} = -\\lambda x$: first order, and set by your choice of slope rather than by the plant.",
      "Raise $\\eta$. The reaching phase gets shorter and straighter, because $|\\dot{s}| \\ge \\eta$ is the entire guarantee and the reaching time is at most $|s(0)|/\\eta$. Then look closely at what the trajectory does *on* the line: it is not travelling along it but crossing it, over and over.",
-     "Now lift $\\varphi$ off zero. The crossing disappears and the trajectories settle into the band between the two faint lines. That band is the price: the state no longer reaches the surface, only its neighbourhood, and the steady error is proportional to $\\varphi$."
+     "Now lift $\\phi$ off zero. The crossing disappears and the trajectories settle into the band between the two faint lines. That band is the price: the state no longer reaches the surface, only its neighbourhood, and the steady error is proportional to $\\phi$."
     ]
    },
    "derive": {
@@ -587,18 +587,18 @@
       ]
      },
      {
-      "prompt": "The boundary layer replaces $\\mathrm{sgn}(s)$ by $s/\\varphi$ while $|s| < \\varphi$, so inside the layer the law becomes $\\dot{s} = -\\frac{\\eta}{\\varphi}s$. Write the time constant of $s$ there.",
+      "prompt": "The boundary layer replaces $\\mathrm{sgn}(s)$ by $s/\\phi$ while $|s| < \\phi$, so inside the layer the law becomes $\\dot{s} = -\\frac{\\eta}{\\phi}s$. Write the time constant of $s$ there.",
       "given": "",
       "answer": "\\frac{\\phi}{\\eta}",
-      "placeholder": "\\frac{\\varphi}{\\eta}",
-      "hint": "For $\\dot{s} = -\\alpha s$ the time constant is $1/\\alpha$. Here $\\alpha = \\eta/\\varphi$.",
+      "placeholder": "\\frac{\\phi}{\\eta}",
+      "hint": "For $\\dot{s} = -\\alpha s$ the time constant is $1/\\alpha$. Here $\\alpha = \\eta/\\phi$.",
       "deconstruct": [
-       "Inside the layer the dynamics are linear: $\\dot{s} = -(\\eta/\\varphi)s$.",
-       "The time constant is the reciprocal of the rate, so $\\varphi/\\eta$."
+       "Inside the layer the dynamics are linear: $\\dot{s} = -(\\eta/\\phi)s$.",
+       "The time constant is the reciprocal of the rate, so $\\phi/\\eta$."
       ]
      }
     ],
-    "closing": "Compare the last two steps and the trade is exact. Outside the layer $s$ falls at a\nconstant rate and arrives at zero in finite time. Inside it, $s$ decays exponentially\nand never arrives at all — it converges to whatever value balances the disturbance,\nwhich for a disturbance bounded by $D$ and a switching gain $k$ is $|s| \\to D\\varphi/k$.\n\nTake $\\varphi$ to zero and the exactness returns along with the chatter. There is no\nsetting at which you get both, and choosing $\\varphi$ is choosing how much error to\naccept in exchange for an actuator that survives the week."
+    "closing": "Compare the last two steps and the trade is exact. Outside the layer $s$ falls at a\nconstant rate and arrives at zero in finite time. Inside it, $s$ decays exponentially\nand never arrives at all — it converges to whatever value balances the disturbance,\nwhich for a disturbance bounded by $D$ and a switching gain $k$ is $|s| \\to D\\phi/k$.\n\nTake $\\phi$ to zero and the exactness returns along with the chatter. There is no\nsetting at which you get both, and choosing $\\phi$ is choosing how much error to\naccept in exchange for an actuator that survives the week."
    },
    "lab": {
     "title": "Sliding-mode control of a disturbed double integrator",
@@ -659,9 +659,9 @@
   "deliverables": [
    "`jacobian(f, x0, h)` and `verdict(J, tol)`, applied to the uncontrolled plant, showing that the upright equilibrium is unstable and the damped hanging one is not.",
    "`gain_bound(x)` returning a bound on the unmodelled term that holds for every admissible damping and every admissible disturbance, and is a function of the state rather than a constant guess.",
-   "`sat`, `surface` and `control` implementing $u = -\\lambda x_2 - (\\text{gain\\_bound}(x) + \\eta)\\,\\mathrm{sat}(s/\\varphi)$.",
+   "`sat`, `surface` and `control` implementing $u = -\\lambda x_2 - (\\text{gain\\_bound}(x) + \\eta)\\,\\mathrm{sat}(s/\\phi)$.",
    "`simulate(x0, lam, eta, phi, dt, steps, d_amp, b)` closing the loop over `plant.step` and returning `(xs, ss, us)`.",
-   "A comment at the top of `main.py` naming the $\\lambda$, $\\eta$ and $\\varphi$ you chose, and what each one bought."
+   "A comment at the top of `main.py` naming the $\\lambda$, $\\eta$ and $\\phi$ you chose, and what each one bought."
   ],
   "constraints": [
    "NumPy only — no SciPy, and no control-systems library.",
