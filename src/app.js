@@ -1,7 +1,7 @@
 /* ============ Codewright app: state, routing, views ============ */
 
 /* ---------- app state ---------- */
-const XP = { read: 10, quiz: 25, code: 40, project: 120 };
+const XP = { read: 10, sandbox: 15, quiz: 25, derive: 35, code: 40, project: 120 };
 const LESSON_INDEX = {};
 const TRACK_LESSONS = {};
 const TRACK_OF = {};
@@ -71,6 +71,46 @@ function capstoneMd(c) {
     const flat = [];
 
     c.modules.forEach(function (m, mi) {
+      const mnum = 'M' + (mi + 1);
+      const modRef = { title: m.title };
+
+      /* The pedagogical loop is three units per module: look at it, derive it,
+         build it. Each is a lesson in its own right so progress, XP and the rail
+         all work unchanged. */
+      if (m.sandbox) {
+        const sbl = {
+          id: c.id + '-' + mnum + '-SB',
+          type: 'sandbox',
+          title: m.sandbox.title,
+          min: m.sandbox.minutes || 8,
+          mdText: m.sandbox.brief,
+          sandbox: m.sandbox.visualiser,
+          initial: m.sandbox.initial || {},
+          notice: m.sandbox.notice || [],
+          trackId: c.id, courseId: c.id, num: mnum + '\u00b7a',
+        };
+        LESSON_INDEX[sbl.id] = { lesson: sbl, track: c, module: modRef, mi: mi };
+        flat.push(sbl);
+        m.sandboxLessonId = sbl.id;
+      }
+
+      if (m.derive) {
+        const dvl = {
+          id: c.id + '-' + mnum + '-DV',
+          type: 'derive',
+          title: m.derive.title,
+          min: m.derive.minutes || 12,
+          mdText: m.derive.brief,
+          vars: m.derive.vars || [],
+          steps: m.derive.steps || [],
+          closing: m.derive.closing,
+          trackId: c.id, courseId: c.id, num: mnum + '\u00b7b',
+        };
+        LESSON_INDEX[dvl.id] = { lesson: dvl, track: c, module: modRef, mi: mi };
+        flat.push(dvl);
+        m.deriveLessonId = dvl.id;
+      }
+
       if (!m.lab) return;
       const lab = m.lab;
       const lesson = {
@@ -164,7 +204,7 @@ function degreeTotals(programId) {
            pct: units ? Math.round(done / units * 100) : 0 };
 }
 
-let P = { completed: {}, quiz: {}, code: {}, xp: 0, last: null, playground: null, activity: {}, name: '', railHidden: false };
+let P = { completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null, activity: {}, name: '', railHidden: false };
 let route = { view: 'home' };
 const openTracks = {};
 /* keyed "&lt;programId&gt;:&lt;band&gt;" — two programmes both have a band 1, and a bare
@@ -304,7 +344,7 @@ function firstIncomplete(tid) {
   return null;
 }
 function typeChip(type) {
-  const label = { read: 'Read', quiz: 'Quiz', code: 'Code', project: 'Project' }[type] || type;
+  const label = { read: 'Read', sandbox: 'Sandbox', quiz: 'Quiz', derive: 'Derive', code: 'Code', project: 'Project' }[type] || type;
   return '<span class="chip ' + type + '">' + label + '</span>';
 }
 
@@ -627,6 +667,8 @@ function go(r) {
     const l = LESSON_INDEX[route.id].lesson;
     if (l.type === 'read') renderRead(main, l);
     else if (l.type === 'quiz') renderQuiz(main, l);
+    else if (l.type === 'sandbox') renderSandbox(main, l);
+    else if (l.type === 'derive') renderDerive(main, l);
     else renderCode(main, l);
   }
 
@@ -883,7 +925,7 @@ function renderHome(main) {
 }
 
 function typeChipText(type) {
-  return { read: 'Reading', quiz: 'Quiz', code: 'Lab', project: 'Capstone' }[type] || type;
+  return { read: 'Reading', sandbox: 'Sandbox', quiz: 'Quiz', derive: 'Derivation', code: 'Lab', project: 'Capstone' }[type] || type;
 }
 
 /* ---------- progress ---------- */
@@ -1011,7 +1053,7 @@ function adopt(progress) {
   if (!progress || typeof progress !== 'object') return;
   adopting = true;
   try {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null,
                         activity: {}, name: '', railHidden: false }, progress);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
     recomputeXp();
@@ -1111,7 +1153,7 @@ function importProgress(file) {
       toast('That does not look like a Codex Learn progress file');
       return;
     }
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null,
                         activity: {}, name: '', railHidden: false }, inc);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
     applyTheme();
@@ -1125,7 +1167,7 @@ function importProgress(file) {
   fr.readAsText(file);
 }
 function resetProgress() {
-  P = { completed: {}, quiz: {}, code: {}, xp: 0, last: null, playground: null,
+  P = { completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null,
         activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme };
   updateXp();
   renderRail();
@@ -1873,6 +1915,178 @@ function currentFiles(l) {
   return base;
 }
 
+/* ---------- lesson: sandbox ----------
+   The intuition step. Nothing is graded: the learner moves a parameter and watches
+   what happens, and the unit is complete once they say they have seen it. Making it
+   scored would turn playing into guessing, which is the opposite of the point. */
+function renderSandbox(main, l) {
+  const spec = Sandbox.get(l.sandbox);
+  const done = !!P.completed[l.id];
+
+  main.innerHTML = '<div class="page reading">' +
+    lessonHeader(l) +
+    '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
+    (spec
+      ? '<div class="sbx-host" id="sbx-host"></div>' +
+        (l.notice && l.notice.length
+          ? '<div class="sbx-notice"><h4>Push on it</h4><ul>' +
+            l.notice.map(function (n) { return '<li>' + mdInline(n) + '</li>'; }).join('') +
+            '</ul></div>'
+          : '')
+      : '<div class="pcard warn"><div class="pcard-h"><span class="dot"></span><b>Visualiser missing</b></div>' +
+        '<p>This unit asks for the <code>' + esc(l.sandbox || '?') + '</code> visualiser, which is not in this build.</p></div>') +
+    footNav(l, done
+      ? '<span class="done-note">\u2713 Explored</span>'
+      : '<button class="btn success" id="mark-explored">I have seen it</button>') +
+  '</div>';
+
+  wireCrumb(main, l);
+  wireFootNav(main, l);
+
+  const host = $('#sbx-host', main);
+  if (spec && host) {
+    const handle = Sandbox.mount(host, spec, l.initial || {});
+    /* go() clears exactly one teardown slot; teardownFns is never drained, so the
+       canvas and its ResizeObserver have to be released here or they outlive the view */
+    teardown = function () { handle.dispose(); };
+  }
+
+  const mk = $('#mark-explored', main);
+  if (mk) {
+    mk.addEventListener('click', function () {
+      if (completeLesson(l.id)) toast('Explored \u00b7 +' + XP.sandbox + ' XP', true);
+      renderRail();
+      go({ view: 'lesson', id: l.id });
+    });
+  }
+}
+
+/* ---------- lesson: guided derivation ----------
+   The scaffolded middle step. Each stage asks for the next expression rather than
+   showing it; SymPy decides equivalence, so any correct algebra is accepted. A step
+   that will not come can be broken into smaller ones rather than surrendered. */
+function renderDerive(main, l) {
+  const steps = l.steps || [];
+  const state = (P.derive && P.derive[l.id]) || { done: 0 };
+  let reached = Math.min(state.done || 0, steps.length);
+
+  function stepHtml(st, i) {
+    const solved = i < reached;
+    const active = i === reached;
+    const locked = i > reached;
+    return '<section class="dv-step' + (solved ? ' solved' : active ? ' active' : ' locked') + '" data-i="' + i + '">' +
+      '<div class="dv-head">' +
+        '<span class="dv-n">' + (solved ? '\u2713' : (i + 1)) + '</span>' +
+        '<div class="dv-ask">' + (locked ? '<span class="dv-hidden">Unlocks when the step above is done</span>' : renderMd(st.prompt)) + '</div>' +
+      '</div>' +
+      (locked ? '' :
+        (st.given ? '<div class="dv-given">' + renderMd(st.given) + '</div>' : '') +
+        (solved
+          ? '<div class="dv-answer">' + MathML.render(st.answer, true) + '</div>'
+          : '<div class="dv-work">' +
+              '<label class="dv-in"><span>Your expression, in LaTeX</span>' +
+                '<input type="text" data-ans="' + i + '" placeholder="' + esc(st.placeholder || 'e.g. \\frac{1}{1 + sRC}') + '" autocomplete="off" spellcheck="false"></label>' +
+              '<div class="dv-preview" data-prev="' + i + '"></div>' +
+              '<div class="dv-acts">' +
+                '<button class="btn success" data-check="' + i + '">Check</button>' +
+                (st.deconstruct && st.deconstruct.length
+                  ? '<button class="btn dark" data-decon="' + i + '">Deconstruct this step</button>' : '') +
+                (st.hint ? '<button class="btn dark" data-hint="' + i + '">Hint</button>' : '') +
+              '</div>' +
+              '<div class="dv-msg" data-msg="' + i + '"></div>' +
+              '<div class="dv-sub" data-sub="' + i + '" hidden>' +
+                (st.deconstruct || []).map(function (d, k) {
+                  return '<div class="dv-substep"><b>' + (k + 1) + '</b><div>' + renderMd(d) + '</div></div>';
+                }).join('') +
+              '</div>' +
+            '</div>')) +
+    '</section>';
+  }
+
+  function paint() {
+    const allDone = reached >= steps.length;
+    main.innerHTML = '<div class="page reading">' +
+      lessonHeader(l) +
+      '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
+      '<div class="dv-prog"><div class="bar"><i style="width:' +
+        (steps.length ? Math.round(reached / steps.length * 100) : 0) + '%"></i></div>' +
+        '<span>' + reached + ' of ' + steps.length + ' steps</span></div>' +
+      '<div class="dv-steps">' + steps.map(stepHtml).join('') + '</div>' +
+      (allDone && l.closing ? '<div class="dv-closing">' + renderMd(l.closing) + '</div>' : '') +
+      footNav(l, allDone
+        ? '<span class="done-note">\u2713 Derived</span>'
+        : '<span class="dv-left">' + (steps.length - reached) + ' step' + (steps.length - reached === 1 ? '' : 's') + ' to go</span>') +
+    '</div>';
+
+    wireCrumb(main, l);
+    wireFootNav(main, l);
+    wire();
+  }
+
+  function wire() {
+    const i = reached;
+    const input = $('[data-ans="' + i + '"]', main);
+    if (!input) return;
+    const prev = $('[data-prev="' + i + '"]', main);
+    const msg = $('[data-msg="' + i + '"]', main);
+    const st = steps[i];
+
+    const preview = debounce(function () {
+      prev.innerHTML = input.value.trim() ? MathML.render(input.value, false) : '';
+    }, 140);
+    input.addEventListener('input', preview);
+    input.focus();
+
+    const decon = $('[data-decon="' + i + '"]', main);
+    if (decon) decon.addEventListener('click', function () {
+      const sub = $('[data-sub="' + i + '"]', main);
+      sub.hidden = !sub.hidden;
+      decon.textContent = sub.hidden ? 'Deconstruct this step' : 'Hide the breakdown';
+    });
+
+    const hint = $('[data-hint="' + i + '"]', main);
+    if (hint) hint.addEventListener('click', function () {
+      msg.className = 'dv-msg hint';
+      msg.innerHTML = mdInline(st.hint);
+    });
+
+    const btn = $('[data-check="' + i + '"]', main);
+    let busy = false;
+    async function check() {
+      if (busy) return;
+      const typed = input.value.trim();
+      if (!typed) { msg.className = 'dv-msg bad'; msg.textContent = 'Type an expression first.'; return; }
+      busy = true;
+      btn.disabled = true;
+      msg.className = 'dv-msg';
+      msg.textContent = 'Checking\u2026';
+      const r = await MathCheck.check(typed, st.answer, { vars: l.vars || [], tol: st.tol });
+      busy = false;
+      btn.disabled = false;
+      if (r.ok) {
+        reached = i + 1;
+        P.derive = P.derive || {};
+        P.derive[l.id] = { done: reached, t: Date.now() };
+        saveSoon();
+        if (reached >= steps.length) {
+          if (completeLesson(l.id)) toast('Derivation complete \u00b7 +' + XP.derive + ' XP', true);
+          renderRail();
+        }
+        paint();
+        return;
+      }
+      msg.className = 'dv-msg bad';
+      msg.innerHTML = esc(r.message);
+    }
+    btn.addEventListener('click', check);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') check(); });
+  }
+
+  paint();
+  /* SymPy is a large download; start it while the learner reads the first step */
+  MathCheck.warm();
+}
+
 function renderCode(main, l) {
   const files = currentFiles(l);
   let active = 0;
@@ -2602,7 +2816,7 @@ async function boot() {
   BUNDLE = parseBundle(bundleEl ? bundleEl.textContent : '');
   const saved = await Store.load();
   if (saved && typeof saved === 'object') {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null,
                        activity: {}, name: '', railHidden: false }, saved);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
   }

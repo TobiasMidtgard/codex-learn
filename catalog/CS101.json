@@ -36,6 +36,8 @@
     "Comments explain *why*; the code already says what",
     "Reading a NameError / TypeError traceback from the bottom up"
    ],
+   "sandbox": null,
+   "derive": null,
    "lab": {
     "title": "Trip cost calculator",
     "runtime": "python",
@@ -90,6 +92,8 @@
     "Accumulator patterns: running total, running best, counter",
     "`break` and `continue`, and why an unreachable base case hangs the tab"
    ],
+   "sandbox": null,
+   "derive": null,
    "lab": {
     "title": "Collatz chains",
     "runtime": "python",
@@ -144,6 +148,8 @@
     "Local scope: names created inside a function do not escape it",
     "Docstrings, and building one function out of another"
    ],
+   "sandbox": null,
+   "derive": null,
    "lab": {
     "title": "Text statistics",
     "runtime": "python",
@@ -203,6 +209,8 @@
     "`json.dump` / `json.load` for structure that survives a restart",
     "Handling `FileNotFoundError` instead of crashing on a first run"
    ],
+   "sandbox": null,
+   "derive": null,
    "lab": {
     "title": "Score records",
     "runtime": "python",

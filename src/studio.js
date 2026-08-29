@@ -600,3 +600,456 @@ const MathCheck = (function () {
 
   return { check: check, warm: warm, latexToPy: latexToPy };
 })();
+
+/* ---------------------------------------------------------------- Sandbox
+ *
+ * The intuition step: move a parameter, watch the consequence, before any algebra.
+ * A visualiser declares its parameters and how to draw itself; the framework owns
+ * the canvas, the device-pixel scaling, the sliders and the teardown.
+ *
+ * Nothing here animates on a timer. Redrawing happens when a value changes, which
+ * means there is no loop to leak — and the one case that does want motion
+ * (a travelling wave) asks for it explicitly and is stopped by dispose().
+ */
+const Sandbox = (function () {
+  const REG = {};
+
+  function define(spec) { REG[spec.id] = spec; return spec; }
+  function get(id) { return REG[id] || null; }
+
+  /* ---- drawing helpers shared by every visualiser ---- */
+  function palette() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = function (n, fallback) { return (cs.getPropertyValue(n) || '').trim() || fallback; };
+    return {
+      ink: v('--ink', '#EDEFF3'),
+      dim: v('--ink-4', '#565C68'),
+      faint: v('--ink-5', '#3A3F49'),
+      line: v('--line-2', 'rgba(255,255,255,.1)'),
+      accent: v('--lime', '#C7F751'),
+      blue: v('--blue', '#6E9BFF'),
+      purple: v('--purple', '#A78BFA'),
+      amber: v('--amber', '#FFC66D'),
+      surface: v('--editor', '#0A0B0E'),
+    };
+  }
+
+  /* A plotting frame with margins, axes and a value->pixel mapping. */
+  function frame(ctx, w, h, opts) {
+    opts = opts || {};
+    const P = palette();
+    const m = Object.assign({ l: 46, r: 14, t: 14, b: 30 }, opts.margin || {});
+    const x0 = m.l, y0 = m.t, x1 = w - m.r, y1 = h - m.b;
+    const xr = opts.xRange || [0, 1];
+    const yr = opts.yRange || [0, 1];
+    const logX = !!opts.logX;
+
+    function fx(v) {
+      if (logX) {
+        const a = Math.log10(Math.max(xr[0], 1e-12)), b = Math.log10(Math.max(xr[1], 1e-12));
+        return x0 + (Math.log10(Math.max(v, 1e-12)) - a) / (b - a) * (x1 - x0);
+      }
+      return x0 + (v - xr[0]) / (xr[1] - xr[0]) * (x1 - x0);
+    }
+    function fy(v) { return y1 - (v - yr[0]) / (yr[1] - yr[0]) * (y1 - y0); }
+
+    ctx.clearRect(0, 0, w, h);
+
+    /* grid */
+    ctx.strokeStyle = P.line;
+    ctx.lineWidth = 1;
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.fillStyle = P.faint;
+    const xt = opts.xTicks || 5, yt = opts.yTicks || 4;
+    for (let i = 0; i <= xt; i++) {
+      const v = logX
+        ? Math.pow(10, Math.log10(xr[0]) + i / xt * (Math.log10(xr[1]) - Math.log10(xr[0])))
+        : xr[0] + i / xt * (xr[1] - xr[0]);
+      const X = Math.round(fx(v)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(X, y0); ctx.lineTo(X, y1); ctx.stroke();
+      const lab = opts.xLabel ? opts.xLabel(v) : fmt(v);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(lab, X, y1 + 6);
+    }
+    for (let i = 0; i <= yt; i++) {
+      const v = yr[0] + i / yt * (yr[1] - yr[0]);
+      const Y = Math.round(fy(v)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x0, Y); ctx.lineTo(x1, Y); ctx.stroke();
+      const lab = opts.yLabel ? opts.yLabel(v) : fmt(v);
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(lab, x0 - 7, Y);
+    }
+    /* axes */
+    ctx.strokeStyle = P.dim;
+    ctx.beginPath();
+    ctx.moveTo(x0 + 0.5, y0); ctx.lineTo(x0 + 0.5, y1); ctx.lineTo(x1, y1 + 0.5);
+    ctx.stroke();
+
+    return {
+      P: P, x0: x0, y0: y0, x1: x1, y1: y1, fx: fx, fy: fy,
+      line: function (pts, colour, width) {
+        ctx.beginPath();
+        pts.forEach(function (pt, i) {
+          const X = fx(pt[0]), Y = fy(pt[1]);
+          if (!isFinite(X) || !isFinite(Y)) return;
+          if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+        });
+        ctx.strokeStyle = colour || P.accent;
+        ctx.lineWidth = width || 2;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      },
+      dot: function (x, y, colour, r) {
+        ctx.beginPath();
+        ctx.arc(fx(x), fy(y), r || 4, 0, Math.PI * 2);
+        ctx.fillStyle = colour || P.accent;
+        ctx.fill();
+      },
+      hline: function (y, colour, dash) {
+        ctx.save();
+        if (dash) ctx.setLineDash(dash);
+        ctx.beginPath();
+        ctx.moveTo(x0, Math.round(fy(y)) + 0.5);
+        ctx.lineTo(x1, Math.round(fy(y)) + 0.5);
+        ctx.strokeStyle = colour || P.dim;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      },
+      text: function (str, x, y, colour, align) {
+        ctx.font = '11px ui-monospace, monospace';
+        ctx.fillStyle = colour || P.dim;
+        ctx.textAlign = align || 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(str, x, y);
+      },
+    };
+  }
+
+  function fmt(v) {
+    if (v === 0) return '0';
+    const a = Math.abs(v);
+    if (a >= 1000 || a < 0.01) return v.toExponential(0).replace('e+', 'e');
+    if (a >= 100) return v.toFixed(0);
+    if (a >= 10) return v.toFixed(1);
+    return v.toFixed(2);
+  }
+
+  /* ---- mount ----
+     Returns a handle with dispose(); the caller must put that in `teardown`,
+     because go() clears exactly one slot and nothing drains teardownFns. */
+  function mount(host, spec, initial, onChange) {
+    const values = Object.assign({}, initial || {});
+    spec.params.forEach(function (p) {
+      if (values[p.k] === undefined) values[p.k] = p.def;
+    });
+
+    host.innerHTML =
+      '<div class="sbx">' +
+        '<div class="sbx-canvas"><canvas></canvas></div>' +
+        '<div class="sbx-side">' +
+          '<div class="sbx-params">' +
+            spec.params.map(function (p) {
+              return '<label class="sbx-p" data-k="' + p.k + '">' +
+                '<span class="sbx-l">' + (p.label || p.k) + '</span>' +
+                '<span class="sbx-v" data-v="' + p.k + '"></span>' +
+                '<input type="range" min="' + p.min + '" max="' + p.max + '" ' +
+                  'step="' + (p.step || (p.max - p.min) / 100) + '" value="' + values[p.k] + '">' +
+              '</label>';
+            }).join('') +
+          '</div>' +
+          '<div class="sbx-read" data-read></div>' +
+        '</div>' +
+      '</div>';
+
+    const cv = host.querySelector('canvas');
+    const ctx = cv.getContext('2d');
+    const readout = host.querySelector('[data-read]');
+    let raf = 0, ro = null, disposed = false;
+
+    function paint() {
+      if (disposed) return;
+      const box = cv.parentElement.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.max(240, Math.round(box.width));
+      const h = Math.max(160, Math.round(box.height));
+      if (cv.width !== w * dpr || cv.height !== h * dpr) {
+        cv.width = w * dpr; cv.height = h * dpr;
+        cv.style.width = w + 'px'; cv.style.height = h + 'px';
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      try { spec.draw(ctx, w, h, values, { frame: frame, palette: palette, fmt: fmt }); }
+      catch (e) {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = palette().dim;
+        ctx.font = '12px ui-monospace, monospace';
+        ctx.fillText('This visualiser failed: ' + String(e && e.message || e).slice(0, 60), 14, 24);
+      }
+      spec.params.forEach(function (p) {
+        const el = host.querySelector('[data-v="' + p.k + '"]');
+        if (el) el.textContent = (p.fmt ? p.fmt(values[p.k]) : fmt(values[p.k])) + (p.unit ? ' ' + p.unit : '');
+      });
+      if (readout && spec.explain) {
+        try { readout.innerHTML = spec.explain(values, MathML); } catch (e) { readout.textContent = ''; }
+      }
+      if (onChange) onChange(values);
+    }
+
+    function schedule() {
+      if (raf || disposed) return;
+      raf = requestAnimationFrame(function () { raf = 0; paint(); });
+    }
+
+    host.querySelectorAll('input[type=range]').forEach(function (inp) {
+      const k = inp.closest('.sbx-p').dataset.k;
+      inp.addEventListener('input', function () { values[k] = parseFloat(inp.value); schedule(); });
+    });
+
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(schedule);
+      ro.observe(cv.parentElement);
+    } else {
+      window.addEventListener('resize', schedule);
+    }
+
+    paint();
+
+    return {
+      values: values,
+      repaint: schedule,
+      dispose: function () {
+        disposed = true;
+        if (raf) cancelAnimationFrame(raf);
+        if (ro) ro.disconnect(); else window.removeEventListener('resize', schedule);
+        host.innerHTML = '';
+      },
+    };
+  }
+
+  return { define: define, get: get, mount: mount, frame: frame, palette: palette, fmt: fmt, all: REG };
+})();
+
+/* ---------------------------------------------------------------- visualisers
+ *
+ * Each one is the thing the PRD calls an intuition sandbox: a parameter you can
+ * move and a consequence you can watch, before any equation is introduced. They
+ * compute honestly — the step response is an actual second-order solution, the
+ * Bode plot an actual frequency sweep — so what the learner sees is what the
+ * mathematics they are about to derive really says.
+ */
+
+/* poles ↔ step response: the single most useful picture in control */
+Sandbox.define({
+  id: 'pole-step',
+  title: 'Poles and the step response',
+  params: [
+    { k: 'zeta', label: 'damping ζ', min: 0, max: 1.6, step: 0.01, def: 0.35 },
+    { k: 'wn', label: 'natural ω\u2099', min: 0.5, max: 12, step: 0.1, def: 4, unit: 'rad/s' },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const zeta = v.zeta, wn = v.wn;
+    const half = Math.floor(w / 2) - 8;
+
+    /* left: the s-plane */
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, half, h); ctx.clip();
+    const sp = kit.frame(ctx, half, h, {
+      xRange: [-14, 4], yRange: [-14, 14], xTicks: 4, yTicks: 4, margin: { l: 40, r: 10, t: 14, b: 28 },
+    });
+    sp.hline(0, sp.P.line);
+    ctx.save();
+    ctx.strokeStyle = sp.P.line;
+    ctx.beginPath();
+    ctx.moveTo(sp.fx(0), sp.y0); ctx.lineTo(sp.fx(0), sp.y1);
+    ctx.stroke();
+    ctx.restore();
+    const sigma = -zeta * wn;
+    if (zeta < 1) {
+      const wd = wn * Math.sqrt(1 - zeta * zeta);
+      sp.dot(sigma, wd, sp.P.accent, 5);
+      sp.dot(sigma, -wd, sp.P.accent, 5);
+      sp.text('ω_d = ' + kit.fmt(wd), sp.x0 + 6, sp.y0 + 14, sp.P.dim);
+    } else {
+      const r = wn * Math.sqrt(zeta * zeta - 1);
+      sp.dot(sigma + r, 0, sp.P.amber, 5);
+      sp.dot(sigma - r, 0, sp.P.amber, 5);
+      sp.text('both poles real', sp.x0 + 6, sp.y0 + 14, sp.P.dim);
+    }
+    sp.text('s-plane', sp.x1 - 6, sp.y0 + 14, sp.P.faint, 'right');
+    ctx.restore();
+
+    /* right: the step response those poles produce */
+    ctx.save();
+    ctx.translate(half + 16, 0);
+    const T = 12 / Math.max(wn * Math.max(zeta, 0.15), 0.6);
+    const pts = [];
+    let peak = 0;
+    for (let i = 0; i <= 400; i++) {
+      const t = i / 400 * T;
+      let y;
+      if (zeta < 1 - 1e-9) {
+        const wd = wn * Math.sqrt(1 - zeta * zeta);
+        const phi = Math.acos(Math.min(1, Math.max(-1, zeta)));
+        y = 1 - Math.exp(-zeta * wn * t) / Math.sqrt(1 - zeta * zeta) * Math.sin(wd * t + phi);
+      } else if (Math.abs(zeta - 1) < 1e-9) {
+        y = 1 - Math.exp(-wn * t) * (1 + wn * t);
+      } else {
+        const r = wn * Math.sqrt(zeta * zeta - 1);
+        const a = -zeta * wn + r, b = -zeta * wn - r;
+        y = 1 + (b * Math.exp(a * t) - a * Math.exp(b * t)) / (a - b);
+      }
+      peak = Math.max(peak, y);
+      pts.push([t, y]);
+    }
+    const st = kit.frame(ctx, w - half - 16, h, {
+      xRange: [0, T], yRange: [0, Math.max(1.7, peak * 1.12)], xTicks: 4, yTicks: 4,
+      margin: { l: 40, r: 12, t: 14, b: 28 },
+    });
+    st.hline(1, st.P.faint, [3, 4]);
+    st.line(pts, st.P.accent, 2);
+    st.text('step response', st.x1 - 6, st.y0 + 14, st.P.faint, 'right');
+    ctx.restore();
+  },
+  explain: function (v) {
+    const zeta = v.zeta, wn = v.wn;
+    if (zeta < 1) {
+      const os = Math.exp(-Math.PI * zeta / Math.sqrt(1 - zeta * zeta)) * 100;
+      return '<b>' + os.toFixed(1) + '%</b> overshoot, settling in about <b>' +
+        (4 / (zeta * wn)).toFixed(2) + ' s</b>. The poles sit at an angle of ' +
+        (Math.acos(zeta) * 180 / Math.PI).toFixed(0) + '° from the negative real axis \u2014 ' +
+        'that angle <em>is</em> the damping.';
+    }
+    if (Math.abs(zeta - 1) < 0.02) return 'Critically damped: the fastest approach with no overshoot at all.';
+    return 'Overdamped \u2014 two real poles, no overshoot, and the slower pole sets the pace.';
+  },
+});
+
+/* Bode: gain and phase of a first- or second-order plant */
+Sandbox.define({
+  id: 'bode',
+  title: 'Bode magnitude and phase',
+  params: [
+    { k: 'wn', label: 'corner ω\u2099', min: 0.5, max: 200, step: 0.5, def: 20, unit: 'rad/s' },
+    { k: 'zeta', label: 'damping ζ', min: 0.05, max: 1.5, step: 0.01, def: 0.5 },
+    { k: 'K', label: 'gain K', min: 0.1, max: 20, step: 0.1, def: 1 },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const lo = 0.1, hi = 2000;
+    const mag = [], pha = [];
+    for (let i = 0; i <= 300; i++) {
+      const wv = Math.pow(10, Math.log10(lo) + i / 300 * (Math.log10(hi) - Math.log10(lo)));
+      const x = wv / v.wn;
+      const re = 1 - x * x, im = 2 * v.zeta * x;
+      const m = v.K / Math.sqrt(re * re + im * im);
+      mag.push([wv, 20 * Math.log10(Math.max(m, 1e-9))]);
+      pha.push([wv, -Math.atan2(im, re) * 180 / Math.PI]);
+    }
+    const topH = Math.round(h * 0.56);
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, w, topH); ctx.clip();
+    const g = kit.frame(ctx, w, topH, {
+      xRange: [lo, hi], yRange: [-80, 40], logX: true, xTicks: 4, yTicks: 3,
+      margin: { l: 46, r: 14, t: 12, b: 22 },
+      xLabel: function (x) { return x >= 1 ? String(Math.round(x)) : x.toFixed(1); },
+    });
+    g.hline(0, g.P.faint, [3, 4]);
+    g.line(mag, g.P.accent, 2);
+    g.dot(v.wn, 20 * Math.log10(v.K / (2 * v.zeta)), g.P.amber, 4);
+    g.text('dB', g.x0 + 4, g.y0 + 12, g.P.faint);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(0, topH + 4);
+    const ph = kit.frame(ctx, w, h - topH - 4, {
+      xRange: [lo, hi], yRange: [-190, 10], logX: true, xTicks: 4, yTicks: 3,
+      margin: { l: 46, r: 14, t: 10, b: 28 },
+      xLabel: function (x) { return x >= 1 ? String(Math.round(x)) : x.toFixed(1); },
+    });
+    ph.hline(-90, ph.P.faint, [3, 4]);
+    ph.line(pha, ph.P.blue, 2);
+    ph.text('degrees', ph.x0 + 4, ph.y0 + 12, ph.P.faint);
+    ph.text('ω rad/s', ph.x1 - 6, ph.y1 + 20, ph.P.faint, 'right');
+    ctx.restore();
+  },
+  explain: function (v) {
+    const peak = v.zeta < 0.707
+      ? 20 * Math.log10(v.K / (2 * v.zeta * Math.sqrt(1 - v.zeta * v.zeta)))
+      : null;
+    return 'At the corner the phase is exactly \u221290°, whatever the damping. ' +
+      (peak === null
+        ? 'With ζ above 0.707 there is no resonant peak at all.'
+        : 'The peak here is <b>' + peak.toFixed(1) + ' dB</b>, and it grows without bound as ζ → 0.');
+  },
+});
+
+/* the z-plane and its impulse response — the discrete counterpart */
+Sandbox.define({
+  id: 'z-plane',
+  title: 'Pole radius and the impulse response',
+  params: [
+    { k: 'r', label: 'radius |z|', min: 0.05, max: 1.25, step: 0.01, def: 0.85 },
+    { k: 'th', label: 'angle θ', min: 0, max: 3.14159, step: 0.01, def: 0.6, unit: 'rad' },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const P = kit.palette();
+    const half = Math.floor(w / 2) - 8;
+
+    /* unit circle */
+    ctx.save();
+    const cx = half / 2, cy = h / 2, R = Math.min(half, h) / 2 - 26;
+    ctx.strokeStyle = P.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - R - 12, cy); ctx.lineTo(cx + R + 12, cy);
+    ctx.moveTo(cx, cy - R - 12); ctx.lineTo(cx, cy + R + 12);
+    ctx.stroke();
+    const inside = v.r < 1;
+    ctx.fillStyle = inside ? P.accent : P.amber;
+    [v.th, -v.th].forEach(function (t) {
+      ctx.beginPath();
+      ctx.arc(cx + v.r * R * Math.cos(t), cy - v.r * R * Math.sin(t), 5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.fillStyle = P.faint;
+    ctx.fillText('z-plane', 8, 18);
+    ctx.restore();
+
+    /* impulse response */
+    ctx.save();
+    ctx.translate(half + 16, 0);
+    const N = 44, pts = [];
+    let mx = 0;
+    for (let n = 0; n <= N; n++) {
+      const y = Math.pow(v.r, n) * Math.cos(v.th * n);
+      mx = Math.max(mx, Math.abs(y));
+      pts.push([n, y]);
+    }
+    const lim = Math.max(1.05, mx * 1.1);
+    const f = kit.frame(ctx, w - half - 16, h, {
+      xRange: [0, N], yRange: [-lim, lim], xTicks: 4, yTicks: 4, margin: { l: 42, r: 12, t: 14, b: 28 },
+    });
+    f.hline(0, f.P.line);
+    pts.forEach(function (pt) {
+      ctx.beginPath();
+      ctx.moveTo(f.fx(pt[0]), f.fy(0));
+      ctx.lineTo(f.fx(pt[0]), f.fy(pt[1]));
+      ctx.strokeStyle = inside ? f.P.accent : f.P.amber;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      f.dot(pt[0], pt[1], inside ? f.P.accent : f.P.amber, 2.4);
+    });
+    f.text('h[n]', f.x0 + 4, f.y0 + 12, f.P.faint);
+    ctx.restore();
+  },
+  explain: function (v) {
+    if (v.r < 0.999) {
+      return 'Inside the unit circle, so the response decays \u2014 to 1% after about <b>' +
+        Math.ceil(Math.log(0.01) / Math.log(v.r)) + ' samples</b>. Stability in discrete time is ' +
+        'a radius, not a half-plane.';
+    }
+    if (v.r < 1.001) return 'Exactly on the circle: it oscillates forever and never settles. Marginally stable.';
+    return 'Outside the circle. Every sample is larger than the last \u2014 this filter diverges.';
+  },
+});

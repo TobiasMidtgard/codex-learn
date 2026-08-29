@@ -92,6 +92,72 @@ def norm_lab(lab, ctx):
     return out
 
 
+def norm_sandbox(sb, ctx):
+    """The intuition step: a visualiser id and the parameters it opens with.
+
+    Nothing is graded here, so validation is only about not shipping a unit that
+    points at a visualiser the build does not contain."""
+    if not sb:
+        return None
+    for key in ("title", "visualiser"):
+        if not sb.get(key):
+            raise ValueError(f"{ctx}/sandbox: missing {key}")
+    notice = [clean_md(n) for n in sb.get("notice", [])]
+    if len(notice) < 2:
+        raise ValueError(f"{ctx}/sandbox: give at least 2 things to notice, "
+                         "or the learner has nothing to look for")
+    return {
+        "title": sb["title"],
+        "visualiser": sb["visualiser"],
+        "minutes": int(sb.get("minutes", 8)),
+        "brief": clean_md(sb.get("brief", "")),
+        "initial": sb.get("initial", {}),
+        "notice": notice,
+    }
+
+
+def norm_derive(dv, ctx):
+    """The guided derivation. Every step is checked symbolically, so every step
+    needs an answer; a step with no way forward when stuck is a dead end, so a
+    hint or a deconstruction is required too."""
+    if not dv:
+        return None
+    if not dv.get("title"):
+        raise ValueError(f"{ctx}/derive: missing title")
+    steps = dv.get("steps") or []
+    if not 2 <= len(steps) <= 8:
+        raise ValueError(f"{ctx}/derive: {len(steps)} steps (need 2-8)")
+    out_steps = []
+    for i, st in enumerate(steps, 1):
+        where = f"{ctx}/derive/step{i}"
+        if not st.get("prompt"):
+            raise ValueError(f"{where}: no prompt")
+        if not st.get("answer"):
+            raise ValueError(f"{where}: no answer to check against")
+        if not st.get("hint") and not st.get("deconstruct"):
+            raise ValueError(f"{where}: needs a hint or a deconstruction, "
+                             "otherwise a stuck learner has nowhere to go")
+        out_steps.append({
+            "prompt": clean_md(st["prompt"]),
+            "given": clean_md(st.get("given", "")),
+            "answer": st["answer"].strip(),
+            "placeholder": st.get("placeholder", ""),
+            "hint": clean_md(st.get("hint", "")),
+            "deconstruct": [clean_md(d) for d in st.get("deconstruct", [])],
+        })
+    if not dv.get("vars"):
+        raise ValueError(f"{ctx}/derive: list the symbols in `vars`, or multi-letter "
+                         "names like V_out are split into single symbols")
+    return {
+        "title": dv["title"],
+        "minutes": int(dv.get("minutes", 12)),
+        "brief": clean_md(dv.get("brief", "")),
+        "vars": list(dv["vars"]),
+        "steps": out_steps,
+        "closing": clean_md(dv.get("closing", "")),
+    }
+
+
 def normalise(course):
     cid = course["id"]
     for key in ("id", "title", "year", "level", "summary", "modules", "capstone"):
@@ -109,6 +175,8 @@ def normalise(course):
             "title": m["title"],
             "summary": clean_md(m.get("summary", "")),
             "concepts": [clean_md(c) for c in m["concepts"]],
+            "sandbox": norm_sandbox(m.get("sandbox"), ctx),
+            "derive": norm_derive(m.get("derive"), ctx),
             "lab": norm_lab(m.get("lab"), ctx),
         })
     if not 3 <= len(mods) <= 5:

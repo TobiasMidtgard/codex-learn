@@ -62,12 +62,13 @@ design/
 src/
   index.head.html    doctype, design tokens, all styles, theme bootstrap
   lang.js            language model, type inference, completion, highlighting
+  studio.js          LaTeX->MathML, symbolic answer checking, sandbox visualisers
   bundle.1-3.txt     foundation-track content ("@@ key" sections)
   tracks.js          the TRACKS array — foundation curriculum
   engine.js          utilities, highlighter, markdown, editor, runners, storage
   app.js             state, routing, and every view
 catalog/
-  _spine.json        the degree table: ids, titles, years, levels, prereqs, stack
+  _spine*.json       one per programme: bands, and the course table
   authors/<ID>.py    one authoring module per course (source of truth)
   <ID>.json          emitted, validated course data (generated)
 server/
@@ -277,6 +278,58 @@ needs to tell apart:
   attribute values from attribute names
 
 Both themes are defined token by token; the light palette is not an inversion.
+
+## Programmes
+
+Two majors: a five-year **Computer Science** degree and a graduate **Electrical
+Engineering** M.S. A course is placed by `(program, band)`, where a band is a *year*
+in CS and a *track* in EE — one neutral word so a track is never labelled "Year 1".
+Each programme is a `catalog/_spine*.json`; the build stamps `program` and `band` onto
+every course and refuses duplicate ids, because the lesson keyspace is flat and shared
+with the foundation track ids.
+
+## The graduate teaching loop
+
+An EE module is three units rather than one, following the shape the curriculum was
+specified with:
+
+| Unit | Type | What it is |
+|---|---|---|
+| Look at it | `sandbox` | a parameter you can move and a consequence you can watch, before any algebra |
+| Derive it | `derive` | scaffolded steps, each gated on an answer you type |
+| Build it | `code` / `project` | the lab, unchanged from the rest of the platform |
+
+**Mathematics** is written as LaTeX in `$…$` and `$$…$$` and rendered to native
+**MathML** — no library, no fonts, nothing fetched. The supported subset is
+fractions, scripts, radicals, accents, Greek, matrices, `\text` and the operators this
+curriculum uses; anything outside it renders as its own source in monospace, so it is
+visibly not understood rather than silently wrong. Markdown pulls maths out before
+parsing and puts it back after, because an expression is full of the `_` and `*` that
+emphasis wants to eat.
+
+**Answers are checked as mathematics, not as strings.** SymPy runs in Pyodide and
+decides equivalence, so `1/(1+sRC)` and `(1/RC)/(s+1/RC)` both pass. Three things had
+to be right for that to hold:
+
+- implicit multiplication binds tighter than division. Written maths reads `1/RC` as
+  `1/(RC)`; Python reads it as `(1/R)*C`, so the first thing anyone types for a
+  first-order pole was being marked wrong.
+- a `{…}` pattern cannot nest, so `\sqrt{1-\zeta^{2}}` lost its root entirely.
+  Scripts are collapsed first and every argument pass iterates innermost-out.
+- symbols the lesson declares are matched whole, so `V_out` stays one symbol while
+  `RC` becomes `R*C`.
+
+**Diagnostics are the point.** A wrong answer is tested against the usual mistakes, so
+the learner is told *"that is the reciprocal"*, *"those are hertz, the question asked
+in rad/s"*, or *"nothing in your answer depends on C"* — rather than being shown the
+answer and learning nothing. A step that will not come can be broken into smaller
+ones instead of surrendered.
+
+**Sandboxes** are canvas visualisers with declared parameters. They compute honestly
+— the step response is a real second-order solution, the Bode plot a real sweep — so
+what the learner sees is what the mathematics they are about to derive actually says.
+Each one releases its canvas and observers through the view's `teardown`; the
+`teardownFns` array that looks like a cleanup registry is never drained.
 
 ## Verification status
 

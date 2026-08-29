@@ -1117,11 +1117,15 @@ const PyRunner = (function () {
   let loadingPromise = null;
   let status = 'idle';
   const listeners = [];
+  /* jsdelivr leads because it is the only mirror that serves the *packages*:
+     cdnjs has the runtime but 404s pyodide-lock.json and CORS-blocks the wheels, so
+     anything importing numpy or sympy failed there first and fell back anyway,
+     costing a round trip and filling the console with errors on every lesson. */
   const SOURCES = [
-    'https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.27.7/',
     'https://cdn.jsdelivr.net/pyodide/v0.27.7/full/',
-    'https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.26.4/',
+    'https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.27.7/',
     'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
+    'https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.26.4/',
     'https://cdn.jsdelivr.net/pyodide/v0.25.1/full/',
   ];
   /* Sandboxed previews (e.g. artifact panes) relay fetch() to the host page via

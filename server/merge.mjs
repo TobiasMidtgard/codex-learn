@@ -7,6 +7,7 @@
  *
  *   completed  union            — a finished unit never becomes unfinished
  *   quiz       max per lesson   — the best score stands
+ *   derive     furthest step    — progress through a derivation never rewinds
  *   activity   max per day      — each device counts its own work; max under-counts
  *                                 rather than double-counting a re-sync
  *   code       newest per lesson (by its `t` stamp)
@@ -54,6 +55,17 @@ function newestPerKey(a, b) {
   return out;
 }
 
+function furthestStep(a, b) {
+  const out = {};
+  a = obj(a); b = obj(b);
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const x = Number((a[k] || {}).done) || 0;
+    const y = Number((b[k] || {}).done) || 0;
+    out[k] = y > x ? b[k] : (a[k] || b[k]);
+  }
+  return out;
+}
+
 export function mergeProgress(stored, incoming) {
   const a = obj(stored);
   const b = obj(incoming);
@@ -64,6 +76,8 @@ export function mergeProgress(stored, incoming) {
   const out = {
     completed: unionTrue(a.completed, b.completed),
     quiz: maxNumbers(a.quiz, b.quiz),
+    /* a derivation only ever moves forward, so the furthest step wins */
+    derive: furthestStep(a.derive, b.derive),
     activity: maxNumbers(a.activity, b.activity),
     code: newestPerKey(a.code, b.code),
     xp: Math.max(Number(a.xp) || 0, Number(b.xp) || 0),
