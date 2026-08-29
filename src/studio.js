@@ -330,6 +330,9 @@ const MathCheck = (function () {
     'iota','kappa','lambda','mu','nu','xi','rho','sigma','tau','upsilon','phi','chi',
     'psi','omega','Gamma','Delta','Theta','Lambda','Xi','Pi','Sigma','Phi','Psi','Omega'];
 
+  /* returned instead of a mangled expression when the LaTeX is outside the subset */
+  const UNSUPPORTED = '\u0000unsupported';
+
   function latexToPy(src, vars) {
     let t = String(src == null ? '' : src);
 
@@ -351,23 +354,25 @@ const MathCheck = (function () {
       t = next;
     }
 
-    /* now the argument-taking commands, innermost first so nesting resolves */
-    for (let g = 0; g < 12; g++) {
-      const next = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, ' (($1)/($2)) ');
-      if (next === t) break;
-      t = next;
+    /* The argument-taking commands, to a fixpoint — as one group, not one after
+       another. Each pattern is brace-free by necessity, so \frac{a}{\sqrt{b}} cannot
+       match until the radical inside it has been resolved. Running the passes
+       sequentially left that fraction unresolved, and the catch-all below then
+       stripped the command and its braces, turning a division into an implicit
+       multiplication: \frac{\sqrt{a}}{b} came out as sqrt(a)*b. A wrong answer that
+       looks like a right one is the worst possible failure here, so the loop repeats
+       until nothing changes and anything still unresolved is reported instead. */
+    for (let pass = 0; pass < 24; pass++) {
+      const before = t;
+      t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, ' (($1)/($2)) ');
+      t = t.replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g, ' (($2)**(1/($1))) ');
+      t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, ' sqrt($1) ');
+      t = t.replace(/\\(?:mathrm|mathbf|mathit|text|operatorname)\s*\{([^{}]*)\}/g, ' $1 ');
+      if (t === before) break;
     }
-    for (let g = 0; g < 12; g++) {
-      const next = t
-        .replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g, ' (($2)**(1/($1))) ')
-        .replace(/\\sqrt\s*\{([^{}]*)\}/g, ' sqrt($1) ');
-      if (next === t) break;
-      t = next;
-    }
-    for (let g = 0; g < 8; g++) {
-      const next = t.replace(/\\(?:mathrm|mathbf|mathit|text|operatorname)\s*\{([^{}]*)\}/g, ' $1 ');
-      if (next === t) break;
-      t = next;
+    /* Anything left is nesting the subset does not cover. Fail loudly. */
+    if (/\\(?:[dt]?frac|sqrt|mathrm|mathbf|mathit|text|operatorname)\b/.test(t)) {
+      return UNSUPPORTED;
     }
 
     t = t.replace(/\\left|\\right/g, ' ');
@@ -597,6 +602,16 @@ const MathCheck = (function () {
     const student = latexToPy(studentLatex, opts.vars);
     const expected = latexToPy(expectedLatex, opts.vars);
     if (!student) return { ok: false, kind: 'empty', message: 'Nothing to check yet.' };
+    if (expected === UNSUPPORTED) {
+      return { ok: false, kind: 'internal',
+               message: 'This step\u2019s reference answer uses LaTeX nesting the checker does not support. ' +
+                        'That is a fault in the lesson, not in your answer.' };
+    }
+    if (student === UNSUPPORTED) {
+      return { ok: false, kind: 'unparsed',
+               message: 'That nesting is outside the supported LaTeX subset. Try writing it flatter \u2014 ' +
+                        'for example a\u2044b as \\frac{a}{b} with simple contents on each side.' };
+    }
 
     let out = '';
     try {
