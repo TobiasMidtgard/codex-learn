@@ -129,6 +129,88 @@ noise volts. The *available power* does not, which is why an antenna, a cable an
 component without naming the source impedance.
 ''',
             },
+            "quiz": {
+                "title": "A resistor, and the noise it makes for free",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "What is the one-sided thermal noise voltage density of a resistor?",
+                        "opts": ["$4k_BTR$ in V²/Hz", "$2k_BTR$ in V²/Hz", "$k_BT/R$ in V²/Hz", "$4k_BTR^2$ in V²/Hz"],
+                        "a": 0,
+                        "why": r"""
+$S_v = 4k_BTR$, and the density in V/√Hz is its square root — for 1 kΩ at room
+temperature, about 4 nV/√Hz, which is worth memorising as an anchor. Notice what is
+*not* in it: no current, no voltage, no frequency. Thermal noise is flat to frequencies
+far beyond any circuit you will build, and it is present in an unpowered resistor
+sitting in a drawer.
+""",
+                    },
+                    {
+                        "q": "Does a resistor need current flowing through it to generate thermal noise?",
+                        "opts": [
+                            "No — it is an equilibrium fluctuation and exists with no bias at all",
+                            "Yes, the noise is proportional to the current",
+                            "Yes, but only above the flicker corner",
+                            "Only if the resistor is non-linear",
+                        ],
+                        "a": 0,
+                        "why": r"""
+None at all. Thermal noise is the carriers jostling about at temperature $T$, and it
+would be there in a resistor connected to nothing. That is exactly what distinguishes it
+from flicker noise in the next module, which is a *non*-equilibrium effect and does need
+current — and from shot noise, which needs a current crossing a barrier. Three
+mechanisms, three different dependences, and telling them apart is most of noise
+analysis.
+""",
+                    },
+                    {
+                        "q": "You double the resistance. What happens to the noise voltage density in V/√Hz?",
+                        "opts": [
+                            "It rises by $\\sqrt{2}$",
+                            "It doubles",
+                            "It quadruples",
+                            "It is unchanged",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The *power* density goes as $R$, so the voltage density goes as $\sqrt{R}$. This is the
+reason noise arguments are almost always easier in V²/Hz: powers add, and the square
+roots only come out at the end. It also explains why raising a bias resistor to save
+current costs less noise than the intuition suggests — a hundredfold increase in $R$ is
+only tenfold in nV/√Hz.
+""",
+                    },
+                    {
+                        "q": "Two uncorrelated noise sources reach the same node. How do they combine?",
+                        "opts": [
+                            "Their power densities add",
+                            "Their voltage densities add",
+                            "The larger one wins and the other is ignored",
+                            "They partly cancel",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Powers add for uncorrelated sources, so the voltages add in quadrature. A practical
+consequence worth internalising: a source 3× smaller than the dominant one adds about 5%
+to the total, which is usually not worth engineering away. It also means "the larger one
+wins" is a decent approximation and a poor habit — when two contributions are comparable
+the quadrature sum is 1.41× either, not 2×.
+""",
+                    },
+                    {
+                        "q": "What is $k_BT$ at 290 K, expressed as an available noise power density?",
+                        "opts": ["−174 dBm/Hz", "−114 dBm/Hz", "−204 dBm/Hz", "−90 dBm/Hz"],
+                        "a": 0,
+                        "why": r"""
+$-174$ dBm/Hz is the reference every noise figure in radio is quoted against, and it is
+worth knowing cold: the noise floor of a 1 MHz channel is $-174 + 60 = -114$ dBm, and a
+receiver with a 3 dB noise figure has a floor of $-111$ dBm. That chain — floor plus
+bandwidth in dB plus noise figure — is the entire link budget on the noise side, and
+$-114$ dBm/MHz is the other number people carry around.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Thermal noise of a resistive network",
                 "runtime": "python",
@@ -369,6 +451,94 @@ capacitance, which the previous stage has to drive. Transconductance buys you a 
 thermal floor and costs current — which also pushes the corner *up*, because the floor
 it is measured against has just dropped. Neither lever moves one number in isolation.
 ''',
+            },
+            "blanks": {
+                "title": "The corner, and why waiting stops helping",
+                "minutes": 8,
+                "caption": "flicker.py — one over f, one over area",
+                "lang": "python",
+                "brief": r"""
+Below the flicker corner the spectrum is no longer flat, and one of the most reliable
+instincts in measurement — average for longer — stops paying. Fill in why.
+""",
+                "listing": """# Gate-referred flicker density of a MOSFET:
+#
+#     S_fl(f) = K_f / (C_ox * W * L * ___ )
+#
+# The corner is where flicker equals the thermal contribution,
+# which for a MOSFET referred to the gate is
+#
+#     S_th = ___
+#
+# Making the device physically larger moves the corner ___ .
+#
+# And averaging for longer stops helping below the corner because
+# ___ .
+""",
+                "blanks": [
+                    {
+                        "prompt": "The defining dependence.",
+                        "hole": "?",
+                        "opts": ["f", "f ** 2", "sqrt(f)", "1"],
+                        "a": 0,
+                        "why": "One over $f$ — hence the name. It means the density is unbounded as $f \\to 0$, which sounds alarming and is not, because what any real measurement sees is the *integral* over a band, and $\\int df/f$ grows only logarithmically.",
+                        "whys": [
+                            "One over $f$ — hence the name. It means the density is unbounded as $f \\to 0$, which sounds alarming and is not, because what any real measurement sees is the *integral* over a band, and $\\int df/f$ grows only logarithmically.",
+                            "$1/f^2$ is random-walk noise, a different and much more violent process. Real devices show slopes near 1, sometimes 0.9 or 1.2, but not 2.",
+                            "A gentler slope than any measured device shows, and it would make flicker negligible far sooner than it is.",
+                            "A constant is white noise, which is the thermal term this one is being compared against.",
+                        ],
+                    },
+                    {
+                        "prompt": "What is the flat floor it is being compared with?",
+                        "hole": "?",
+                        "opts": [
+                            "4 * k * T * gamma / g_m",
+                            "4 * k * T * R",
+                            "K_f / (C_ox * W * L)",
+                            "0",
+                        ],
+                        "a": 0,
+                        "why": "A MOSFET's channel thermal noise referred back to the gate is $4k_BT\\gamma/g_m$, with $\\gamma$ around 2/3 for a long device. Referring it to the gate is what makes the comparison fair — both terms are then voltages at the same node, and the frequency where they cross is the corner.",
+                        "whys": [
+                            "A MOSFET's channel thermal noise referred back to the gate is $4k_BT\\gamma/g_m$, with $\\gamma$ around 2/3 for a long device. Referring it to the gate is what makes the comparison fair — both terms are then voltages at the same node, and the frequency where they cross is the corner.",
+                            "That is a resistor's noise. The channel is a resistor of sorts, but it is not in equilibrium and the gate-referred form carries $1/g_m$ rather than $R$.",
+                            "That is the flicker term with the $1/f$ removed, so comparing it against flicker would just give $f = 1$ Hz regardless of the device.",
+                            "Zero would put the corner at infinity and make flicker the only noise at every frequency.",
+                        ],
+                    },
+                    {
+                        "prompt": "W and L both go up. Which way does the corner move?",
+                        "hole": "?",
+                        "opts": ["down in frequency", "up in frequency", "not at all", "down, but only if L is fixed"],
+                        "a": 0,
+                        "why": "Flicker density falls as $1/WL$, so a bigger device has less of it and the crossing with the flat thermal floor happens lower. This is the standard fix and it is expensive: area, and the capacitance that comes with it. It is why input devices in low-frequency analog are enormous compared with anything in a digital gate.",
+                        "whys": [
+                            "Flicker density falls as $1/WL$, so a bigger device has less of it and the crossing with the flat thermal floor happens lower. This is the standard fix and it is expensive: area, and the capacitance that comes with it. It is why input devices in low-frequency analog are enormous compared with anything in a digital gate.",
+                            "Backwards: a larger gate averages over more trapping sites, which reduces flicker rather than increasing it.",
+                            "$W$ and $L$ appear explicitly in the denominator of the flicker term, so the corner certainly moves.",
+                            "Both dimensions appear as a product, so the area is what matters and there is nothing special about fixing $L$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Why does a longer average stop paying?",
+                        "hole": "?",
+                        "opts": [
+                            "every decade below the corner contributes the same noise power",
+                            "the noise is white there, so it never averages down",
+                            "the signal falls at the same rate",
+                            "the corner itself moves during the measurement",
+                        ],
+                        "a": 0,
+                        "why": "$\\int_{f}^{10f} df/f = \\ln 10$ whatever $f$ is — equal power per decade. Averaging longer opens the band downward by decades and each one hands back as much noise as the last, so the total creeps up logarithmically instead of falling. This is why slow drift cannot be averaged away, and why chopping and correlated double sampling exist: they move the signal up above the corner instead.",
+                        "whys": [
+                            "$\\int_{f}^{10f} df/f = \\ln 10$ whatever $f$ is — equal power per decade. Averaging longer opens the band downward by decades and each one hands back as much noise as the last, so the total creeps up logarithmically instead of falling. This is why slow drift cannot be averaged away, and why chopping and correlated double sampling exist: they move the signal up above the corner instead.",
+                            "It is the opposite of white — white noise is exactly the case where averaging *does* work, falling as the square root of the time.",
+                            "The signal is a DC quantity and does not fall with frequency; if it did, no measurement technique would help.",
+                            "The corner is a property of the device and the bias, not of how long you look.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Fit a corner frequency to a measured spectrum",
@@ -643,6 +813,89 @@ with a 9 dB noise figure can sit behind a 1.4 dB LNA and cost you only a few ten
 a decibel — but put the same mixer first, and nothing downstream can ever repair it.
 ''',
             },
+            "quiz": {
+                "title": "Friis, and why only the first stage matters",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "Why is noise always referred to the input?",
+                        "opts": [
+                            "Output noise alone says nothing until you know the gain that produced it",
+                            "Because the input impedance is known",
+                            "Because noise is generated only at the input",
+                            "It is a convention with no technical content",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An amplifier with 100 dB of gain has enormous output noise and may be exquisitely quiet;
+one with 0 dB has almost none and may be dreadful. Dividing by the gain removes the
+question of how much amplification happened and leaves the only thing that matters: how
+much noise the stage added, in the same units as the signal it was handed. Noise is
+generated throughout the circuit — referring it to the input is a bookkeeping choice
+that makes comparison possible.
+""",
+                    },
+                    {
+                        "q": "What is the noise factor $F$ of a perfectly noiseless amplifier?",
+                        "opts": ["1, which is 0 dB", "0, which is $-\\infty$ dB", "$\\infty$", "It depends on the gain"],
+                        "a": 0,
+                        "why": r"""
+$F$ is the ratio of input SNR to output SNR, so a stage that adds nothing leaves the SNR
+alone and scores exactly 1. It can never be less than 1 — an amplifier cannot improve the
+signal-to-noise ratio of what it is given, because it amplifies the source's own noise
+along with the signal. A quoted noise figure below 0 dB is a measurement error, not a
+breakthrough.
+""",
+                    },
+                    {
+                        "q": "In $F = F_1 + \\frac{F_2-1}{G_1} + \\dots$, what divides the second stage's contribution?",
+                        "opts": [
+                            "The first stage's available gain",
+                            "The first stage's noise factor",
+                            "The total gain of the chain",
+                            "The bandwidth",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$G_1$, and that division is the whole content of Friis. By the time the signal reaches
+stage 2 it has been amplified, so stage 2's own noise is measured against a much larger
+signal and matters proportionally less. With 20 dB in the first stage, the second's
+excess noise is divided by 100 — which is why the front end gets the expensive
+low-noise device and the rest of the chain does not.
+""",
+                    },
+                    {
+                        "q": "An LNA with 10 dB gain and 1 dB noise figure feeds a mixer with a 10 dB noise figure. What is the cascade noise figure, roughly?",
+                        "opts": ["About 3.3 dB", "About 1 dB", "About 5.5 dB", "About 11 dB"],
+                        "a": 0,
+                        "why": r"""
+In linear terms: $F_1 = 1.26$, $F_2 = 10$, $G_1 = 10$, so
+$F = 1.26 + 9/10 = 2.16$, which is 3.3 dB. Two things are worth noticing. The mixer's
+dreadful 10 dB has been reduced to a 2 dB penalty by the LNA in front of it — and it is
+still the *larger* of the two contributions, because 10 dB of gain is not much. Push the
+LNA to 20 dB and the cascade drops to about 1.6 dB.
+""",
+                    },
+                    {
+                        "q": "A colleague proposes putting a lossy filter before the LNA. What does Friis say?",
+                        "opts": [
+                            "Its loss adds to the system noise figure almost decibel for decibel",
+                            "It has no effect, since it is passive",
+                            "It helps, by rejecting out-of-band noise",
+                            "It only matters if it is narrower than the signal",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A passive lossy element at the front has a noise factor equal to its loss and a gain
+equal to its inverse, so 2 dB of insertion loss is 2 dB straight onto the system figure —
+with no amplification in front of it to divide the penalty down. This is the single most
+consequential practical reading of Friis, and it is why front-end filter loss is fought
+over so hard. The filter may still be necessary for other reasons; it is simply never
+free.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Cascade a receiver and find the ordering that wins",
                 "runtime": "python",
@@ -908,6 +1161,145 @@ as $1/\sqrt{C}$ — so each further factor of two in noise costs four times the
 capacitance, and roughly four times the current to drive it at the same settling speed.
 That quadratic wall is the reason precision converters are expensive.
 ''',
+            },
+            "build": {
+                "title": "Let the check do the integral",
+                "minutes": 24,
+                "brief": r"""
+Equivalent noise bandwidth is defined by an integral:
+
+$$B_n = \frac{1}{|H|^2_{max}}\int_0^{\infty}|H(f)|^2\,df$$
+
+which is a rectangle of the same area as the whole squared response. Nothing about that
+definition mentions the $-3$ dB point, and the number it produces is not the $-3$ dB
+point — a fact that is easy to nod at and hard to believe until you have watched the
+area accumulate past the corner.
+
+## What to build
+
+A one-pole RC low-pass with $f_{3dB} = 1.00$ MHz, probed across the capacitor. The
+**1 kΩ resistor is on the canvas**; choose the capacitor.
+
+## What the checks do
+
+The third check evaluates $|H(f)|$ at four thousand frequencies out to 400 MHz and
+trapezoidally integrates $|H|^2$. It is doing the definition, numerically, on the
+circuit you drew. Then it compares the answer with $\tfrac{\pi}{2}f_{3dB}$.
+
+The result is $1.571$ MHz — **fifty-seven per cent more noise power** than a designer
+who stopped at the corner frequency would have budgeted for. That surplus is entirely
+in the tail: past the corner the response is falling at 20 dB per decade, which is not
+nearly fast enough to stop contributing.
+
+## Why $\pi/2$, and why only here
+
+$\int_0^{\infty}\frac{df}{1+(f/f_c)^2} = \frac{\pi}{2}f_c$ — the integral of a
+Lorentzian, and the $\pi$ arrives from $\arctan$. It is specific to one pole. Two poles
+bring the ratio down to about 1.11, and a brick wall would give exactly 1. Sharper
+filters converge on $B_n = f_{3dB}$ from above, and never from below: the noise
+bandwidth of a real filter is always the wider number.
+""",
+                "start": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "r", "kind": "R", "x": 6, "y": 5, "rot": 0, "value": 1000},
+                        {"id": "g1", "kind": "GND", "x": 10, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 10, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]},
+                        {"a": [2, 5], "b": [5, 5]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "r", "kind": "R", "x": 6, "y": 5, "rot": 0, "value": 1000},
+                        {"id": "c", "kind": "C", "x": 10, "y": 7, "rot": 1, "value": 159.155e-12},
+                        {"id": "g1", "kind": "GND", "x": 10, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 10, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]},
+                        {"a": [2, 5], "b": [5, 5]},
+                        {"a": [7, 5], "b": [10, 5]},
+                        {"a": [10, 5], "b": [10, 6]},
+                        {"a": [10, 8], "b": [10, 9]},
+                    ],
+                },
+                "checks": [
+                    {
+                        "name": "one pole, unity gain at DC",
+                        "code": r"""
+c.assert(c.count('R') === 1, 'One resistor; there are ' + c.count('R') + '.');
+c.assert(c.count('C') === 1, 'One capacitor; there are ' + c.count('C') + '.');
+c.assert(c.count('L') === 0, 'No inductors — this is deliberately a single-pole filter.');
+c.close(c.vout(), 1.0, 0.01,
+  'the output at DC. The capacitor draws no current there, so no voltage is dropped ' +
+  'across the resistor and the whole source appears at the probe');
+""",
+                    },
+                    {
+                        "name": "the corner is at 1.00 MHz",
+                        "code": r"""
+const f3 = c.corner(1e3, 1e9);
+c.close(f3, 1.0e6, 0.03,
+  'the measured -3 dB frequency. With R fixed at 1 kohm this is a statement about C ' +
+  'alone: C = 1/(2*pi*R*f_3dB)');
+""",
+                    },
+                    {
+                        "name": "the integral of |H|^2 comes to 1.571 MHz",
+                        "code": r"""
+/* the definition, evaluated on the circuit you drew */
+const hmax = c.vout();
+const N = 4000, fmax = 400e6, df = fmax / N;
+let area = 0, prev = hmax * hmax;
+for (let i = 1; i <= N; i++) {
+  const g = c.gain(i * df);
+  const cur = g * g;
+  area += 0.5 * (prev + cur) * df;
+  prev = cur;
+}
+const bn = area / (hmax * hmax);
+c.close(bn, 1.5708e6, 0.04,
+  'the equivalent noise bandwidth, integrated numerically out to 400 MHz. For one ' +
+  'pole it is (pi/2) * f_3dB. If this comes out near f_3dB itself the response is ' +
+  'falling far faster than one pole, which means there is a second reactance in there');
+""",
+                    },
+                    {
+                        "name": "and it is 57% more than the corner frequency",
+                        "code": r"""
+const f3 = c.corner(1e3, 1e9);
+const hmax = c.vout();
+const N = 2000, fmax = 400e6, df = fmax / N;
+let area = 0, prev = hmax * hmax;
+for (let i = 1; i <= N; i++) {
+  const g = c.gain(i * df);
+  const cur = g * g;
+  area += 0.5 * (prev + cur) * df;
+  prev = cur;
+}
+const ratio = (area / (hmax * hmax)) / f3;
+c.close(ratio, Math.PI / 2, 0.05,
+  'the ratio B_n / f_3dB. This is the number worth carrying away: budgeting noise at ' +
+  'the corner frequency understates the power by a factor of pi/2, and the missing ' +
+  '57% is all in the tail above the corner');
+c.assert(ratio > 1.4,
+  'B_n came out at ' + ratio.toFixed(3) + ' times f_3dB. For a single pole it must be ' +
+  'noticeably greater than 1 — the response past the corner falls at only 20 dB per ' +
+  'decade and keeps contributing area for decades.');
+""",
+                    },
+                ],
+                "hints": [
+                    "$C = 1/(2\\pi R f_{3dB})$ with $R = 1$ kΩ and $f_{3dB} = 1$ MHz. The answer is about 159 pF, and the 159 is $10^6/2\\pi$ — a number worth recognising.",
+                    "The capacitor goes from the output node to ground, not in series with the resistor.",
+                    "The probe belongs on the node between the resistor and the capacitor, which is the filter's output.",
+                ],
             },
             "lab": {
                 "title": "Noise bandwidth by integration, and kT/C",

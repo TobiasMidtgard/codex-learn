@@ -155,6 +155,86 @@ almost everywhere, which is why the *phase* of the
 reflection — the thing $S$ has thrown away — is usually the part that hurts.
 ''',
             },
+            "quiz": {
+                "title": "A length of line moves the number in a circle",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "You move away from the load along a lossless line. What happens to $\\Gamma$?",
+                        "opts": [
+                            "Its phase rotates and its magnitude stays the same",
+                            "Its magnitude falls and its phase is unchanged",
+                            "Both magnitude and phase are unchanged",
+                            "It rotates and shrinks",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$\Gamma(\ell) = \Gamma_L e^{-2j\beta\ell}$ — pure rotation, because a lossless line
+returns every bit of what it reflects. That is why the Smith chart is drawn as a set of
+circles about the origin: moving along a line traces one of them. On a *lossy* line the
+magnitude does shrink and the path spirals inward, which is why a badly matched load can
+look deceptively well matched at the far end of a long cable.
+""",
+                    },
+                    {
+                        "q": "How much line corresponds to one full trip round the chart?",
+                        "opts": ["Half a wavelength", "A full wavelength", "A quarter wavelength", "Two wavelengths"],
+                        "a": 0,
+                        "why": r"""
+The phase term is $e^{-2j\beta\ell}$ and that factor of 2 — the wave goes out and comes
+back — means $\ell = \lambda/2$ gives $2\beta\ell = 2\pi$. So impedance repeats every half
+wavelength along a line, which is a genuinely useful fact: a half-wave section is
+invisible, and a quarter-wave section is exactly the inverter used for matching.
+""",
+                    },
+                    {
+                        "q": "$\\Gamma = (Z_L - Z_0)/(Z_L + Z_0)$ maps the right half of the $Z$ plane to what?",
+                        "opts": [
+                            "The unit disc",
+                            "The upper half plane",
+                            "The whole plane",
+                            "The unit circle only",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Every passive load has $\text{Re}(Z) \geq 0$ and lands inside the unit disc, with the
+boundary reserved for lossless loads that reflect everything. This is what makes the
+Smith chart possible at all — an unbounded plane has been folded into a finite picture,
+so you can draw an open circuit, a short and 50 Ω on the same sheet of paper. A point
+outside the circle means $|\Gamma| > 1$, which requires an active device.
+""",
+                    },
+                    {
+                        "q": "Is VSWR a property of the load?",
+                        "opts": [
+                            "No — it describes the interference pattern on a particular line",
+                            "Yes, it is fixed by $Z_L$ alone",
+                            "Yes, but only for real loads",
+                            "No, it is a property of the source",
+                        ],
+                        "a": 0,
+                        "why": r"""
+VSWR depends on $|\Gamma|$, and $\Gamma$ depends on both the load *and* the $Z_0$ it is
+being compared against. The same 100 Ω load is a VSWR of 2 on a 50 Ω line and a perfect
+1 on a 100 Ω one. Quoting a VSWR without naming the reference impedance is the same
+mistake as quoting a reflection coefficient without one — and it is why 50 Ω has to be
+stated as often as it is.
+""",
+                    },
+                    {
+                        "q": "A quarter wavelength of line is placed in front of a short circuit. What does the input look like?",
+                        "opts": ["An open circuit", "Still a short", "The line's own $Z_0$", "A pure resistance of $Z_0/2$"],
+                        "a": 0,
+                        "why": r"""
+$Z_{in} = Z_0^2/Z_L$, and with $Z_L = 0$ that is infinite. A quarter-wave section is an
+impedance inverter, and this is its most dramatic case: a dead short becomes an open. It
+is not a curiosity — it is how a shorted stub becomes a usable open circuit, how bias
+tees keep RF out of a supply line, and how a quarter-wave short is used as a mechanically
+robust open at frequencies where a real open radiates.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Reflection, VSWR and a length of line",
                 "runtime": "python",
@@ -436,6 +516,109 @@ the output, the whole matrix is involved. And a lossless two-port cannot be made
 better at transmitting without being made better at not reflecting — there is only
 one unit of power, and unitarity spends it.
 ''',
+            },
+            "blanks": {
+                "title": "What the S matrix actually promises",
+                "minutes": 8,
+                "caption": "sparams.py — waves in, waves out, everything else terminated",
+                "lang": "text",
+                "brief": r"""
+At microwave frequencies you cannot reliably measure a terminal voltage, but you can
+measure a travelling wave. The scattering matrix is built entirely out of what you *can*
+measure, and its conditions are worth stating precisely.
+""",
+                "listing": """Incident wave amplitudes a, reflected b, and the definition
+
+        b = ___ a
+
+Every S_ij is measured with all the OTHER ports terminated in ___ .
+The terminations are part of the definition, not an experimental detail.
+
+So S_11 is the ___ of port 1
+while port 2 is terminated.
+
+A reciprocal network -- no ferrites, no active devices -- has an S that is ___ .
+
+And a lossless network's S satisfies ___ ,
+which is the statement that whatever goes in must come out somewhere.
+""",
+                "blanks": [
+                    {
+                        "prompt": "Which matrix relates them?",
+                        "hole": "?",
+                        "opts": ["S", "Z", "Y", "S transposed"],
+                        "a": 0,
+                        "why": "$b = Sa$ is the definition. $Z$ and $Y$ relate voltages and currents, which is exactly what becomes impossible to measure once the device is comparable in size to a wavelength — the whole reason S-parameters exist.",
+                        "whys": [
+                            "$b = Sa$ is the definition. $Z$ and $Y$ relate voltages and currents, which is exactly what becomes impossible to measure once the device is comparable in size to a wavelength — the whole reason S-parameters exist.",
+                            "The impedance matrix needs open-circuit terminations, which at microwave frequencies are neither achievable nor stable.",
+                            "The admittance matrix needs short circuits, with the same problem: a real short has inductance and stops being a short.",
+                            "The transpose reverses the roles of the ports, which for a non-reciprocal device gives a different and wrong answer.",
+                        ],
+                    },
+                    {
+                        "prompt": "How are the other ports terminated during a measurement?",
+                        "hole": "?",
+                        "opts": ["Z0", "an open circuit", "a short circuit", "their own impedance"],
+                        "a": 0,
+                        "why": "In the reference impedance, so nothing reflects back off them and each measurement isolates one path. This is the practical genius of the definition: matched loads are easy to build accurately at microwave frequencies, and opens and shorts are not.",
+                        "whys": [
+                            "In the reference impedance, so nothing reflects back off them and each measurement isolates one path. This is the practical genius of the definition: matched loads are easy to build accurately at microwave frequencies, and opens and shorts are not.",
+                            "Opens are the Z-parameter condition, and a real open radiates rather than reflecting cleanly.",
+                            "Shorts are the Y-parameter condition, and a real short has series inductance that grows with frequency.",
+                            "Terminating in the port's own impedance would make every reflection zero by construction and measure nothing.",
+                        ],
+                    },
+                    {
+                        "prompt": "So what is S_11?",
+                        "hole": "?",
+                        "opts": [
+                            "input reflection coefficient",
+                            "forward gain",
+                            "reverse isolation",
+                            "output reflection coefficient",
+                        ],
+                        "a": 0,
+                        "why": "$b_1/a_1$ with port 2 matched — the reflection looking into port 1, and the same $\\Gamma$ from module 1 measured under a stated condition. $S_{21}$ is the forward gain, $S_{12}$ the reverse isolation, $S_{22}$ the output reflection: the four entries of a two-port are the four questions you would want to ask.",
+                        "whys": [
+                            "$b_1/a_1$ with port 2 matched — the reflection looking into port 1, and the same $\\Gamma$ from module 1 measured under a stated condition. $S_{21}$ is the forward gain, $S_{12}$ the reverse isolation, $S_{22}$ the output reflection: the four entries of a two-port are the four questions you would want to ask.",
+                            "That is $S_{21}$: out of port 2, in at port 1. The index order is destination-then-source, which is the opposite of the reading order and catches everyone once.",
+                            "Isolation is $S_{12}$ — backwards through the device.",
+                            "The output reflection is $S_{22}$, measured with port 1 matched instead.",
+                        ],
+                    },
+                    {
+                        "prompt": "What does reciprocity impose?",
+                        "hole": "?",
+                        "opts": ["symmetric", "diagonal", "unitary", "zero"],
+                        "a": 0,
+                        "why": "$S_{ij} = S_{ji}$: the device behaves the same in both directions. Any passive network of ordinary materials is reciprocal. What breaks it is a magnetised ferrite — which is precisely how isolators and circulators work, and their whole usefulness lies in being the exception.",
+                        "whys": [
+                            "$S_{ij} = S_{ji}$: the device behaves the same in both directions. Any passive network of ordinary materials is reciprocal. What breaks it is a magnetised ferrite — which is precisely how isolators and circulators work, and their whole usefulness lies in being the exception.",
+                            "A diagonal $S$ would mean no transmission between ports at all — every port reflecting into itself and nothing getting through.",
+                            "Unitarity is the losslessness condition, which is the next blank and a separate property. A network can be reciprocal and lossy, or lossless and non-reciprocal.",
+                            "A zero matrix would absorb everything and reflect nothing, which is a perfectly matched load rather than a network.",
+                        ],
+                    },
+                    {
+                        "prompt": "And losslessness?",
+                        "hole": "?",
+                        "opts": [
+                            "S conjugate-transpose times S equals the identity",
+                            "S equals its own transpose",
+                            "the determinant of S is zero",
+                            "the trace of S is 1",
+                        ],
+                        "a": 0,
+                        "why": "$S^{\\dagger}S = I$ — unitary, which says the total outgoing power equals the total incoming power however the input is distributed. For a two-port it gives the familiar $|S_{11}|^2 + |S_{21}|^2 = 1$: whatever is not reflected is transmitted.",
+                        "whys": [
+                            "$S^{\\dagger}S = I$ — unitary, which says the total outgoing power equals the total incoming power however the input is distributed. For a two-port it gives the familiar $|S_{11}|^2 + |S_{21}|^2 = 1$: whatever is not reflected is transmitted.",
+                            "That is reciprocity, the previous blank, and it is a statement about direction rather than energy.",
+                            "A singular $S$ says one combination of inputs produces no output at all, which is a property some networks have and is unrelated to loss.",
+                            "The trace has no energy interpretation here.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Build and interrogate scattering matrices",
@@ -735,6 +918,87 @@ was derived.
 The stub design that follows in the lab is the shunt version of the same argument,
 carried out in admittance because a shunt element adds susceptances.
 ''',
+            },
+            "quiz": {
+                "title": "Inverters and stubs",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A quarter-wave line of impedance $Z_1$ is placed in front of a load $Z_L$. What is the input impedance?",
+                        "opts": ["$Z_1^2/Z_L$", "$Z_1Z_L$", "$Z_1 + Z_L$", "$Z_L$"],
+                        "a": 0,
+                        "why": r"""
+An impedance inverter: it reflects the load about $Z_1$ on a logarithmic scale, so a
+load above $Z_1$ comes out below it and vice versa. Setting $Z_{in} = Z_0$ and solving
+gives $Z_1 = \sqrt{Z_0Z_L}$, which is where the transformer's geometric mean comes from —
+it is a consequence of the inversion rather than a separate formula to memorise.
+""",
+                    },
+                    {
+                        "q": "Why does a quarter-wave transformer only work directly on a *real* load?",
+                        "opts": [
+                            "$\\sqrt{Z_0Z_L}$ must come out real to be a line impedance",
+                            "Complex loads reflect more",
+                            "The line would have to be lossy",
+                            "It works on any load — the restriction is a myth",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A transmission line's characteristic impedance is real for any practical low-loss line,
+so a complex $\sqrt{Z_0Z_L}$ is not something you can build. The standard fix is to add a
+length of line first, moving along the chart until the impedance crosses the real axis,
+and *then* apply the transformer to the real value you find there — which is the same
+two-move structure as stub matching.
+""",
+                    },
+                    {
+                        "q": "In single-stub matching, what does the length of line before the stub accomplish?",
+                        "opts": [
+                            "It rotates the load until the real part is right, leaving only a reactance to cancel",
+                            "It cancels the reactance directly",
+                            "It transforms the impedance to the geometric mean",
+                            "It absorbs the reflected wave",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Two moves, two jobs. The line section rotates around the chart until you land on the
+circle where the normalised conductance is 1 — the real part is now correct and cannot be
+improved further by more line. Whatever susceptance is left over is then cancelled by the
+stub, which contributes reactance and nothing else. Separating the two is what makes the
+procedure mechanical rather than a search.
+""",
+                    },
+                    {
+                        "q": "A short-circuited stub shorter than a quarter wavelength looks like what?",
+                        "opts": ["An inductor", "A capacitor", "A resistor", "An open circuit"],
+                        "a": 0,
+                        "why": r"""
+$Z_{in} = jZ_0\tan(\beta\ell)$, and for $\ell < \lambda/4$ the tangent is positive, so the
+reactance is positive — inductive. It passes through infinity at exactly a quarter wave,
+which is the shorted-stub-as-open trick, and turns capacitive beyond it. An *open* stub
+is the mirror image: capacitive when short, inductive past a quarter wave. Which one you
+build is usually decided by whether you can get a good ground at that point.
+""",
+                    },
+                    {
+                        "q": "What is the practical advantage of a stub over a lumped inductor at 10 GHz?",
+                        "opts": [
+                            "It is a piece of the same metal as the line, with no parasitics or assembly",
+                            "It has lower loss at every frequency",
+                            "It works over a wider bandwidth",
+                            "It can produce reactances a lumped part cannot",
+                        ],
+                        "a": 0,
+                        "why": r"""
+At 10 GHz a surface-mount inductor is a coil with self-resonance nearby, package
+parasitics comparable to the part value, and a solder joint that has to be modelled. A
+stub is etched from the same copper as the line, is exactly as repeatable as the
+photolithography, and costs nothing to place. Its bandwidth is generally *worse* than a
+lumped part's, and it takes real board area — which is why the crossover between the two
+approaches sits somewhere around a gigahertz rather than being a rule.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Design a quarter-wave transformer and a single-stub match",
@@ -1039,6 +1303,141 @@ multi-section transformer of the lab — and each section costs length, loss and
 The Bode–Fano bound says the same thing for reactive loads and says it as an
 inequality that no network of any complexity can beat.
 ''',
+            },
+            "build": {
+                "title": "An L-match, and the bandwidth it costs",
+                "minutes": 26,
+                "brief": r"""
+A quarter-wave transformer needs a line. A two-element L-match needs an inductor and a
+capacitor, works at any frequency you like, and prices its bandwidth by exactly the same
+rule — so it is the version you can build here and measure.
+
+## The job
+
+Match a **200 Ω** load to a **50 Ω** source at **100 MHz**.
+
+## What is on the canvas
+
+A 1 V source behind 50 Ω, and the 200 Ω load with a probe on it. As it stands the load
+is mismatched: at DC it forms a plain divider and takes $200/250 = 0.8$ of the source.
+
+## What to add
+
+A shunt capacitor across the load and a series inductor between the source and it. The
+node $Q$ of a two-element match is set entirely by the ratio being matched:
+
+$$Q = \sqrt{\frac{R_L}{R_0} - 1} = \sqrt{3} = 1.732$$
+
+and from it, $X_C = R_L/Q$ and $X_L = QR_0$. Convert both to components at 100 MHz.
+
+## What the checks measure
+
+- At 100 MHz the source sees 50 Ω, so it delivers all of its available power and the
+  load voltage rises to **1.0 V** — *higher* than the 0.8 V of the unmatched divider,
+  which is worth pausing on. The match did not add energy; it stopped reflecting it.
+- The response must peak at 100 MHz and fall either side. A match is a null in
+  $|\Gamma|$, and this is that null seen from the load's side.
+- The width of the peak is $Q$'s doing. A higher transformation ratio forces a higher
+  $Q$ and a narrower match, and no choice of components escapes it — which is why wide
+  matches are built as several low-$Q$ sections in cascade rather than one clever one.
+""",
+                "start": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "rs", "kind": "R", "x": 4, "y": 5, "rot": 0, "value": 50},
+                        {"id": "g1", "kind": "GND", "x": 12, "y": 9},
+                        {"id": "rl", "kind": "R", "x": 16, "y": 7, "rot": 1, "value": 200},
+                        {"id": "g2", "kind": "GND", "x": 16, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 16, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]},
+                        {"a": [2, 5], "b": [3, 5]},
+                        {"a": [16, 5], "b": [16, 6]},
+                        {"a": [16, 8], "b": [16, 9]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "rs", "kind": "R", "x": 4, "y": 5, "rot": 0, "value": 50},
+                        {"id": "l", "kind": "L", "x": 8, "y": 5, "rot": 0, "value": 137.832e-9},
+                        {"id": "cm", "kind": "C", "x": 12, "y": 7, "rot": 1, "value": 13.7832e-12},
+                        {"id": "g1", "kind": "GND", "x": 12, "y": 9},
+                        {"id": "rl", "kind": "R", "x": 16, "y": 7, "rot": 1, "value": 200},
+                        {"id": "g2", "kind": "GND", "x": 16, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 16, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]},
+                        {"a": [2, 5], "b": [3, 5]},
+                        {"a": [5, 5], "b": [7, 5]},
+                        {"a": [9, 5], "b": [12, 5]},
+                        {"a": [12, 5], "b": [12, 6]},
+                        {"a": [12, 8], "b": [12, 9]},
+                        {"a": [12, 5], "b": [16, 5]},
+                        {"a": [16, 5], "b": [16, 6]},
+                        {"a": [16, 8], "b": [16, 9]},
+                    ],
+                },
+                "checks": [
+                    {
+                        "name": "two reactances added, and the unmatched DC divider still there",
+                        "code": r"""
+c.assert(c.count('L') === 1, 'One series inductor; there are ' + c.count('L') + '.');
+c.assert(c.count('C') === 1, 'One shunt capacitor; there are ' + c.count('C') + '.');
+c.assert(c.count('R') === 2, 'Two resistors: the 50 ohm source and the 200 ohm load.');
+c.close(c.vout(), 0.8, 0.02,
+  'the load at DC, where the inductor is a wire and the capacitor is a gap. The ' +
+  'matching network does nothing at DC, so this must still be the plain 200/250 ' +
+  'divider — if it is not, one of the two components is in the wrong branch');
+""",
+                    },
+                    {
+                        "name": "at 100 MHz the load takes all the available power",
+                        "code": r"""
+c.close(c.gain(100e6), 1.0, 0.03,
+  'the load voltage at the match frequency. With the source seeing 50 ohms it ' +
+  'delivers its full available power, and 5 mW into 200 ohms is 1.0 V. Note this is ' +
+  'ABOVE the 0.8 V of the unmatched divider: nothing was added, reflection was removed');
+""",
+                    },
+                    {
+                        "name": "it is a peak, not a plateau",
+                        "code": r"""
+const at = c.gain(100e6), lo = c.gain(70e6), hi = c.gain(140e6);
+c.assert(at > lo && at > hi,
+  'The response must peak at the match frequency. It reads ' + at.toFixed(3) + ' V at ' +
+  '100 MHz against ' + lo.toFixed(3) + ' at 70 MHz and ' + hi.toFixed(3) + ' at ' +
+  '140 MHz. A flat response means no resonance was formed and the two components are ' +
+  'not doing the job together.');
+c.assert(lo < 0.97 * at && hi < 0.97 * at,
+  'The peak is real but very broad, which a Q of 1.73 does not give. Check both ' +
+  'reactance values against X_C = R_L/Q and X_L = Q*R_0.');
+""",
+                    },
+                    {
+                        "name": "the match is exact at one frequency and nowhere else",
+                        "code": r"""
+const pk = c.gain(100e6);
+c.close(c.gain(50e6) / pk, 0.8716, 0.05,
+  'the response an octave BELOW the match. Down here the inductor is nearly a wire ' +
+  'and the capacitor nearly a gap, so the network fades back towards the plain 0.8 ' +
+  'divider rather than collapsing');
+c.close(c.gain(200e6) / pk, 0.4061, 0.06,
+  'and an octave ABOVE. This L-match is a low-pass, so it falls away hard on the high ' +
+  'side and only sags on the low side — the match is not symmetric in frequency, and ' +
+  'which side you have margin on is a design choice you make when you pick the topology');
+""",
+                    },
+                ],
+                "hints": [
+                    "$Q = \\sqrt{R_L/R_0 - 1} = \\sqrt{200/50 - 1} = \\sqrt{3}$.",
+                    "$X_C = R_L/Q = 200/1.732 = 115.5\\ \\Omega$, so $C = 1/(2\\pi f X_C)$. $X_L = QR_0 = 86.6\\ \\Omega$, so $L = X_L/(2\\pi f)$.",
+                    "The capacitor goes across the load — the *high* side of the transformation — and the inductor in series toward the source. Swapping them matches 50 Ω up to 200 Ω instead, which is a different problem.",
+                ],
             },
             "lab": {
                 "title": "Measure what a match costs in bandwidth",

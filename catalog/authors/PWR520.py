@@ -142,6 +142,91 @@ longer equalling $i_a$. Every drive firmware picks one. Mixing them silently sca
 every torque estimate by $\sqrt{3/2}$.
 ''',
             },
+            "quiz": {
+                "title": "Three numbers that are really two",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "In a wye machine with no neutral connection, $i_a + i_b + i_c = 0$. How many independent quantities do the three currents carry?",
+                        "opts": ["Two", "Three", "One", "Three, but only two are measurable"],
+                        "a": 0,
+                        "why": r"""
+The constraint removes one degree of freedom, so the three phase currents live in a
+two-dimensional plane. Everything that follows is a consequence: two sensors are enough
+(the third current is the negative sum of the other two), the Clarke transform is a
+change of basis in that plane rather than a projection that loses something, and a
+two-axis controller is not an approximation.
+""",
+                    },
+                    {
+                        "q": "What does the Clarke transform produce?",
+                        "opts": [
+                            "A stationary two-axis frame in which a balanced set becomes a rotating vector",
+                            "A rotating frame in which balanced quantities are constant",
+                            "The DC component of each phase",
+                            "The magnitude of the current, with the phase discarded",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Clarke names the plane: $\alpha\beta$, still stationary with respect to the stator, in
+which a balanced three-phase set traces a circle at electrical speed. It is only half the
+job. Park then rotates *with* that circle so it stops moving — and it is the stopping
+that a PI controller needs, which is the next question.
+""",
+                    },
+                    {
+                        "q": "Why rotate into the dq frame at all?",
+                        "opts": [
+                            "A PI controller has zero steady-state error only on a constant, and dq makes the currents constant",
+                            "It reduces the number of sensors needed",
+                            "It removes the need for a model of the machine",
+                            "It eliminates the switching harmonics",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An integrator drives the error to zero for a step and not for a sinusoid — chase a
+50 Hz current with a PI and you will always be behind it, by a phase and an amplitude
+that both grow with speed. Rotating with the rotor turns the target into DC, and then the
+integrator does what integrators are good at. Everything else about field-oriented
+control follows from wanting that one property.
+""",
+                    },
+                    {
+                        "q": "With the amplitude-invariant Clarke transform, what is the power?",
+                        "opts": [
+                            "$\\tfrac{3}{2}(v_di_d + v_qi_q)$",
+                            "$v_di_d + v_qi_q$",
+                            "$\\tfrac{2}{3}(v_di_d + v_qi_q)$",
+                            "$3(v_di_d + v_qi_q)$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The amplitude-invariant scaling keeps peak values recognisable — a 10 A peak phase
+current reads as 10 in dq, which is what you want on a scope — and pays for it with a
+factor of 3/2 in every power and torque expression. The power-invariant scaling with
+$\sqrt{2/3}$ makes the 3/2 disappear and makes the amplitudes unfamiliar. Neither is
+wrong; mixing them is, and it produces a torque constant that is off by exactly 3/2.
+""",
+                    },
+                    {
+                        "q": "Two current sensors have failed on a three-phase drive, leaving one. What can you still do?",
+                        "opts": [
+                            "Not enough — two independent measurements are needed to fix the vector",
+                            "Everything, since the currents sum to zero",
+                            "Everything, provided the machine is balanced",
+                            "Nothing at all",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The plane is two-dimensional and one measurement fixes only one coordinate. The
+zero-sum constraint is what lets you get away with *two* sensors instead of three; it
+cannot get you down to one. There are single-sensor schemes in real drives, and they work
+by reconstructing the currents from the DC-link current at specific instants of the
+switching period — extra information in time, not extra information from the constraint.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Clarke and Park from first principles",
                 "runtime": "python",
@@ -409,6 +494,98 @@ changes how hard the current is to control, never how much torque it makes. On a
 salient rotor the reluctance term reopens the question, because it makes $i_d$ worth
 having for torque as well as for flux — that is what MTPA exploits.
 ''',
+            },
+            "blanks": {
+                "title": "The dq model, and where the speed terms come from",
+                "minutes": 9,
+                "caption": "pmsm.py — two lags and a cross-coupling that grows with speed",
+                "lang": "python",
+                "brief": r"""
+Four equations describe a permanent-magnet machine in the rotating frame, and the two
+terms that make them interesting both carry $\omega_e$. Fill them in, then read the last
+line — because misreading those terms as losses is the most common way to get
+field-oriented control wrong.
+""",
+                "listing": """# Flux linkages. The magnet contributes to the d axis only.
+lambda_d = L_d * i_d + ___
+lambda_q = L_q * i_q
+
+# Voltages.
+v_d = R * i_d + L_d * did_dt - ___
+v_q = R * i_q + L_q * diq_dt + ___
+
+# Both omega_e terms arise from ___ ,
+# so they store and return energy rather than dissipating it.
+""",
+                "blanks": [
+                    {
+                        "prompt": "What does the magnet add?",
+                        "hole": "?",
+                        "opts": ["lambda_m", "0", "L_q * i_q", "R * i_d"],
+                        "a": 0,
+                        "why": "The magnet's own flux linkage, a constant, and it sits on the d axis by definition — the d axis is *defined* as the direction the magnet points. That single constant is where the back-EMF and the torque both come from, and it is why $i_q$ produces torque and $i_d$ does not.",
+                        "whys": [
+                            "The magnet's own flux linkage, a constant, and it sits on the d axis by definition — the d axis is *defined* as the direction the magnet points. That single constant is where the back-EMF and the torque both come from, and it is why $i_q$ produces torque and $i_d$ does not.",
+                            "Zero would describe an induction machine or a synchronous reluctance machine — no magnet, no back-EMF, and torque from saliency alone.",
+                            "The q-axis flux belongs in the q-axis equation; the two axes are orthogonal and do not share terms.",
+                            "A resistance times a current is a voltage, not a flux linkage. The units do not match.",
+                        ],
+                    },
+                    {
+                        "prompt": "The d-axis equation is coupled to the q-axis current.",
+                        "hole": "?",
+                        "opts": [
+                            "omega_e * L_q * i_q",
+                            "omega_e * L_d * i_d",
+                            "omega_e * lambda_m",
+                            "0",
+                        ],
+                        "a": 0,
+                        "why": "The q-axis flux, rotated into the d axis by the frame's own motion. Note it involves the *other* axis's inductance and current — that crossing is what makes the two loops interfere, and feeding it forward is what uncouples them in module 3.",
+                        "whys": [
+                            "The q-axis flux, rotated into the d axis by the frame's own motion. Note it involves the *other* axis's inductance and current — that crossing is what makes the two loops interfere, and feeding it forward is what uncouples them in module 3.",
+                            "The d-axis flux does not couple into its own equation this way; the rotation always brings in the perpendicular component.",
+                            "The magnet term appears in the q-axis equation, not the d-axis one — it is the d-axis flux rotating into q.",
+                            "Zero would mean the two axes are independent at all speeds, which is exactly the illusion the feedforward creates and the machine does not have.",
+                        ],
+                    },
+                    {
+                        "prompt": "And the q-axis equation is coupled to the whole d-axis flux.",
+                        "hole": "?",
+                        "opts": [
+                            "omega_e * (L_d * i_d + lambda_m)",
+                            "omega_e * L_q * i_q",
+                            "omega_e * lambda_m",
+                            "0",
+                        ],
+                        "a": 0,
+                        "why": "The entire d-axis flux linkage, magnet included. The $\\omega_e\\lambda_m$ part is the back-EMF, which grows with speed and is what eventually runs out of bus voltage and forces field weakening; the $\\omega_eL_di_d$ part is why negative $i_d$ *reduces* the required voltage, which is exactly how field weakening works.",
+                        "whys": [
+                            "The entire d-axis flux linkage, magnet included. The $\\omega_e\\lambda_m$ part is the back-EMF, which grows with speed and is what eventually runs out of bus voltage and forces field weakening; the $\\omega_eL_di_d$ part is why negative $i_d$ *reduces* the required voltage, which is exactly how field weakening works.",
+                            "The q-axis flux rotates into the d-axis equation, not into its own.",
+                            "The magnet alone is the back-EMF but omits $L_di_d$, and dropping it removes the mechanism field weakening depends on.",
+                            "Zero would mean no back-EMF at any speed, and a machine that never runs out of voltage.",
+                        ],
+                    },
+                    {
+                        "prompt": "Where do the omega_e terms come from?",
+                        "hole": "?",
+                        "opts": [
+                            "differentiating a vector in a rotating frame",
+                            "iron loss in the stator",
+                            "the PWM switching",
+                            "the winding resistance",
+                        ],
+                        "a": 0,
+                        "why": "They are the $\\omega \\times \\lambda$ of differentiating in a rotating coordinate system — the same term that produces Coriolis and centrifugal forces in mechanics. Which means they are not losses: they store and return energy, and cancelling them with a feedforward costs nothing and is not cheating. Reading them as loss leads to trying to minimise them, which is the wrong instinct entirely.",
+                        "whys": [
+                            "They are the $\\omega \\times \\lambda$ of differentiating in a rotating coordinate system — the same term that produces Coriolis and centrifugal forces in mechanics. Which means they are not losses: they store and return energy, and cancelling them with a feedforward costs nothing and is not cheating. Reading them as loss leads to trying to minimise them, which is the wrong instinct entirely.",
+                            "Iron loss is real and it is nowhere in this model — it would appear as a resistance, not as a speed-dependent coupling between the axes.",
+                            "The model is written in continuous time about an averaged inverter; the switching does not appear in it at all.",
+                            "The resistance is already there, as $Ri_d$ and $Ri_q$, and it carries no $\\omega_e$.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Build the dq plant and its torque",
@@ -683,6 +860,129 @@ comes out of voltage saturation, which is the one place a current loop is asked 
 behave.
 ''',
             },
+            "build": {
+                "title": "The winding is the filter",
+                "minutes": 22,
+                "brief": r"""
+A field-oriented controller commands a voltage and expects a current. Between the two
+sits the winding, and once the cross-coupling is fed forward each axis really is nothing
+more than $i/v = 1/(Ls + R)$ — a first-order lag you can put on a canvas.
+
+## What to build
+
+One phase of a machine: $R = 0.5\ \Omega$ in series with $L = 2$ mH, driven from a 1 V
+source. The **10 mΩ sense resistor is already there**, at the ground end, and the probe
+is across it — that is how you measure a current with a voltmeter, and it is how the
+drive does it too. A reading of 19.6 mV means 1.96 A.
+
+## What the checks measure
+
+- The DC current, which is just $V/(R + R_{sense})$ and confirms the resistance.
+- The electrical pole at $(R + R_{sense})/L$, which lands at **40.6 Hz**. That is the
+  bandwidth the plant gives you for free, and it is embarrassingly low — which is the
+  entire motivation for the PI controller in this module. Pole-zero cancellation puts
+  the PI zero right on top of this pole and replaces it with whatever bandwidth you
+  chose.
+- The attenuation at the **10 kHz switching frequency**, which comes out at about 250×.
+  This is why PWM works at all: the inverter applies a square wave that slams between
+  the rails, and the winding's own inductance turns it into a current with a few tenths
+  of a per cent of ripple. Nothing was filtered on purpose. The load was already a
+  filter, and that is what makes the whole technique practical.
+
+## The thing worth noticing
+
+The same inductance appears in both results with opposite sign of usefulness: it makes
+the plant slow, which costs you control bandwidth, and it makes the ripple small, which
+is what lets you switch. Every winding design is that trade.
+""",
+                "start": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "rsen", "kind": "R", "x": 14, "y": 7, "rot": 1, "value": 0.01},
+                        {"id": "g1", "kind": "GND", "x": 14, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 14, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]},
+                        {"a": [14, 5], "b": [14, 6]},
+                        {"a": [14, 8], "b": [14, 9]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 2, "y": 6, "rot": 1, "value": 1},
+                        {"id": "g0", "kind": "GND", "x": 2, "y": 9},
+                        {"id": "rw", "kind": "R", "x": 6, "y": 5, "rot": 0, "value": 0.5},
+                        {"id": "lw", "kind": "L", "x": 10, "y": 5, "rot": 0, "value": 2e-3},
+                        {"id": "rsen", "kind": "R", "x": 14, "y": 7, "rot": 1, "value": 0.01},
+                        {"id": "g1", "kind": "GND", "x": 14, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 14, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [2, 7], "b": [2, 9]},
+                        {"a": [2, 5], "b": [5, 5]},
+                        {"a": [7, 5], "b": [9, 5]},
+                        {"a": [11, 5], "b": [14, 5]},
+                        {"a": [14, 5], "b": [14, 6]},
+                        {"a": [14, 8], "b": [14, 9]},
+                    ],
+                },
+                "checks": [
+                    {
+                        "name": "1.96 A at DC through 0.51 ohms",
+                        "code": r"""
+c.assert(c.count('L') === 1, 'One winding inductance; there are ' + c.count('L') + '.');
+c.assert(c.count('R') === 2, 'Two resistors: the winding and the sense resistor.');
+c.close(c.vout(), 0.019608, 0.03,
+  'the sense voltage at DC. The inductor is a short at DC, so the current is ' +
+  '1 V / (0.5 + 0.01) = 1.96 A, and across 10 milliohms that is 19.6 mV. A reading ' +
+  'near 1 V means the probe is on the wrong side of the sense resistor');
+""",
+                    },
+                    {
+                        "name": "the electrical pole sits at 40.6 Hz",
+                        "code": r"""
+const fc = c.corner(0.1, 1e6);
+c.close(fc, 40.58, 0.05,
+  'the measured corner. It is (R + R_sense)/(2*pi*L) = 0.51/(2*pi*0.002). This is the ' +
+  'plant bandwidth before any controller touches it, and it is the number the PI ' +
+  'zero is placed on top of');
+""",
+                    },
+                    {
+                        "name": "10 kHz ripple is attenuated about 250 times",
+                        "code": r"""
+const dc = c.vout(), sw = c.gain(10e3);
+c.close(dc / sw, 246.4, 0.06,
+  'the ratio of DC response to the response at the 10 kHz switching frequency. The ' +
+  'winding reactance there is 2*pi*10kHz*2mH = 126 ohms against 0.51 ohms of ' +
+  'resistance, so the current ripple is smaller than the DC current by that ratio. ' +
+  'This is why PWM produces a smooth current from a square voltage');
+c.close(sw, 79.58e-6, 0.06,
+  'the sense voltage at the switching frequency, in absolute terms — 80 microvolts ' +
+  'against 19.6 millivolts of signal, which is the ripple a current sensor has to see ' +
+  'past');
+""",
+                    },
+                    {
+                        "name": "first order, and only first order",
+                        "code": r"""
+c.close(c.phase(40.58), -45, 0.12,
+  'the phase at the corner. A single pole gives exactly -45 degrees there; a second ' +
+  'reactance anywhere in the loop would push it past that');
+c.close(c.gain(1e3) / c.gain(10e3), 10.0, 0.06,
+  'the fall over one decade well above the pole. A first-order lag gives a factor of ' +
+  '10 per decade — 20 dB. A factor near 100 would mean a second pole');
+""",
+                    },
+                ],
+                "hints": [
+                    "Both the winding resistance and the winding inductance go in series between the source and the sense resistor.",
+                    "The sense resistor is deliberately tiny so that it barely disturbs the circuit it measures — but it is not zero, and the checks include it in the 0.51 Ω.",
+                    "The probe stays where it is, on the node between the inductor and the sense resistor. That node's voltage is the current, scaled by 10 mΩ.",
+                ],
+            },
             "lab": {
                 "title": "Tune and simulate a PI current loop",
                 "runtime": "python",
@@ -922,6 +1222,85 @@ matters as much as the first — $i_d$ is bounded below by the current circle,
 $i_d \ge -\sqrt{I_{max}^2 - i_q^2}$, and past the speed where those two bounds meet
 there is no torque left to command.
 ''',
+            },
+            "quiz": {
+                "title": "Six states, and what to do past base speed",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A three-phase inverter has how many *active* switch states?",
+                        "opts": ["Six", "Eight", "Three", "Twelve"],
+                        "a": 0,
+                        "why": r"""
+Eight states in total — $2^3$, one bit per leg — of which six put a non-zero voltage
+vector on the machine and two short all three phases together, to the top rail or the
+bottom. Those two zero states are not wasted: they are how the modulator sets the
+*magnitude* of the average vector, by spending part of the period producing nothing.
+""",
+                    },
+                    {
+                        "q": "How is a reference vector between two active states produced?",
+                        "opts": [
+                            "By time-averaging the two neighbouring active vectors and the zero states over one period",
+                            "By switching to the nearest active vector only",
+                            "By adding a third harmonic to the reference",
+                            "By reducing the bus voltage",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The inverter can only ever produce one of eight vectors, so the reference is synthesised
+*on average*: spend $t_1$ in one neighbour, $t_2$ in the other, and the remainder in a
+zero state. The machine's inductance does the averaging, which connects directly back to
+module 3 — the winding is the filter that makes this legitimate.
+""",
+                    },
+                    {
+                        "q": "For linear operation, where must the reference vector stay?",
+                        "opts": [
+                            "Inside the circle inscribed in the hexagon",
+                            "Inside the hexagon",
+                            "On the hexagon's boundary",
+                            "Anywhere, since the modulator saturates gracefully",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The hexagon is the set of averages the inverter can reach, but only the inscribed circle
+of radius $V_{dc}/\sqrt{3}$ can be reached at *every angle*. Push beyond it and the
+achievable magnitude depends on where the vector is pointing, so a circular reference gets
+flattened at the corners and the current acquires low-order harmonics. That is
+overmodulation: usable, sometimes deliberate, and no longer linear.
+""",
+                    },
+                    {
+                        "q": "How much more bus voltage does space-vector modulation use than sinusoidal PWM?",
+                        "opts": ["About 15%", "About 50%", "About 5%", "None — the two are equivalent"],
+                        "a": 0,
+                        "why": r"""
+$2/\sqrt{3} = 1.155$. Sinusoidal PWM limits each phase to $V_{dc}/2$, while SVM reaches
+$V_{dc}/\sqrt{3}$, because the zero states can be distributed to shift all three phases
+together — a common-mode offset the machine cannot see, since with no neutral connection
+only differences matter. Fifteen per cent more voltage is fifteen per cent more speed
+from the same battery, for a change in software alone.
+""",
+                    },
+                    {
+                        "q": "Past base speed the back-EMF exceeds what the bus can supply. What does field weakening do?",
+                        "opts": [
+                            "Injects negative $i_d$ to oppose the magnet flux",
+                            "Injects positive $i_d$ to reinforce it",
+                            "Reduces $i_q$ until the voltage fits",
+                            "Raises the switching frequency",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Negative $i_d$ makes $L_di_d$ subtract from $\lambda_m$, shrinking the total d-axis flux
+and with it the back-EMF, so the machine keeps accelerating on the same bus. It is not
+free: that current produces no torque and full $I^2R$ loss, and the available $i_q$
+shrinks because the total current is limited. Reducing $i_q$ would also fit the voltage —
+by giving up the torque, which is the thing you were trying to keep.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Dwell times, the linear limit, and the weakening command",

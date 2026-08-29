@@ -52,7 +52,67 @@
      "Put one pole at $-0.2$ and the other at $-10$. The slow pole sets the settling time on its own, so every unit of effort spent on the fast one buys nothing. No cost functional would ever return this pair."
     ]
    },
-   "quiz": null,
+   "quiz": {
+    "title": "Pricing an error against an effort",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "In $J = \\int_0^\\infty (x^\\top Qx + u^\\top Ru)\\,dt$, what does $R$ price?",
+      "opts": [
+       "Control effort",
+       "State deviation",
+       "Measurement noise",
+       "The settling time"
+      ],
+      "a": 0,
+      "why": "$R$ multiplies $u$, so it is the price of *acting*. Raise it and the optimal controller\nbecomes reluctant, moves the poles closer to the imaginary axis and lets errors persist\nlonger. $Q$ prices the deviation itself. Measurement noise does not appear here at all —\nthat is the estimation problem, with its own pair of weights, in module 3."
+     },
+     {
+      "q": "Why must $R \\succ 0$ while $Q \\succeq 0$ is enough?",
+      "opts": [
+       "A free actuator would let the optimal gain grow without bound",
+       "$R$ has to be invertible for the matrix dimensions to work",
+       "$Q$ is always diagonal in practice",
+       "It is a convention with no consequence"
+      ],
+      "a": 0,
+      "why": "If some direction of $u$ costs nothing, the optimiser will use an infinite amount of it\n— the cost has no minimum and the gain runs away. A *state* may legitimately be free:\nyou often do not care about an internal variable at all, and $Q$ is allowed to be\nsingular. Invertibility is indeed needed for $R^{-1}$ in the Riccati equation, but that\nis the symptom, not the reason: the equation asks for the inverse precisely because\nzero cost is meaningless."
+     },
+     {
+      "q": "You double both $Q$ and $R$. What happens to the optimal gain $K$?",
+      "opts": [
+       "Nothing — only the ratio matters",
+       "It doubles",
+       "It halves",
+       "It scales by $\\sqrt{2}$"
+      ],
+      "a": 0,
+      "why": "$P$ doubles and $K = R^{-1}B^\\top P$ has the factor cancel, so the controller is\nunchanged. That is worth knowing before you start tuning: there is one fewer knob than\nthere appear to be, and sweeping a single scalar $\\rho$ in $Q$ versus $\\rho R$ traces\nthe whole family. It also means the units of $J$ are arbitrary — its *value* is not\nmeaningful, only its minimiser."
+     },
+     {
+      "q": "What has LQR replaced, compared with the previous course?",
+      "opts": [
+       "Choosing pole locations directly — you choose weights and the algebra chooses the poles",
+       "The need for state feedback",
+       "The need for a model of the plant",
+       "The stability requirement"
+      ],
+      "a": 0,
+      "why": "Pole placement asks you to name $n$ complex numbers, which for anything above second\norder is a guess dressed up as a specification. LQR asks a question you can actually\nanswer — what is a unit of error worth against a unit of effort — and derives the poles\nfrom it. It is still full state feedback and it still needs the model; what has changed\nis where the engineering judgement is applied."
+     },
+     {
+      "q": "What robustness does an LQR loop come with, for free?",
+      "opts": [
+       "Infinite gain margin and at least 60° of phase margin",
+       "Guaranteed rejection of any disturbance",
+       "Immunity to modelling error in $A$",
+       "None — LQR says nothing about margins"
+      ],
+      "a": 0,
+      "why": "A remarkable result: any LQR state-feedback loop tolerates arbitrary gain increase, a\nhalving of the gain, and 60° of phase lag, whatever weights you picked. It is one of the\nstrongest guarantees in control — and it is worth knowing precisely because it evaporates\nthe moment you put an observer in the loop, which is what makes module 4's LQG story more\ndelicate than the separation principle alone suggests."
+     }
+    ]
+   },
    "blanks": null,
    "build": null,
    "derive": {
@@ -197,7 +257,88 @@
     ]
    },
    "quiz": null,
-   "blanks": null,
+   "blanks": {
+    "title": "The Riccati equation, term by term",
+    "minutes": 9,
+    "brief": "A matrix quadratic cannot be solved the way a scalar one can, so it is solved by running\ninto it. Fill the four holes and the whole method is on one screen.",
+    "caption": "lqr.py — the quadratic that has no formula",
+    "lang": "python",
+    "listing": "# The algebraic Riccati equation:\n#\n#     A.T @ P + P @ A - ___ + Q = 0\n#\n# No closed form. Integrate in time-to-go until it stops moving:\n#\n#     Pdot = A.T @ P + P @ A - P @ B @ inv(R) @ B.T @ P + Q\n#     P    = P + dt * Pdot\n#\n# The optimal gain that falls out is\n#\n#     K = ___\n#\n# Stop when the ___ is below tolerance,\n# and check that the P you converged on is ___ .\n",
+    "blanks": [
+     {
+      "prompt": "The term that makes it quadratic.",
+      "hole": "?",
+      "opts": [
+       "P @ B @ inv(R) @ B.T @ P",
+       "P @ B @ R @ B.T @ P",
+       "B @ inv(R) @ B.T",
+       "P @ P"
+      ],
+      "a": 0,
+      "why": "$P$ appears on both sides of $BR^{-1}B^\\top$, which is what makes this a quadratic rather than a Lyapunov equation. The $R^{-1}$ is the price of effort entering *inversely*: expensive control means a small term, which means less of the stabilising correction.",
+      "whys": [
+       "$P$ appears on both sides of $BR^{-1}B^\\top$, which is what makes this a quadratic rather than a Lyapunov equation. The $R^{-1}$ is the price of effort entering *inversely*: expensive control means a small term, which means less of the stabilising correction.",
+       "$R$ rather than $R^{-1}$ inverts the meaning of the weight: raising the price of control would then make the controller more aggressive, not less.",
+       "Without the two $P$ factors this is linear in $P$ — a Lyapunov equation, which does have a closed-form solution and answers a different question.",
+       "Quadratic in $P$, but with no $B$ in it the input never enters, so the answer would not depend on what the actuator can do."
+      ]
+     },
+     {
+      "prompt": "From P to the gain.",
+      "hole": "?",
+      "opts": [
+       "inv(R) @ B.T @ P",
+       "inv(R) @ B @ P",
+       "R @ B.T @ P",
+       "P @ B @ inv(R)"
+      ],
+      "a": 0,
+      "why": "$K = R^{-1}B^\\top P$, and $u = -Kx$. Check the shapes: $P$ is $n \\times n$, $B^\\top$ is $m \\times n$, $R^{-1}$ is $m \\times m$, so $K$ is $m \\times n$ and $Kx$ is an input. Any other ordering fails to conform.",
+      "whys": [
+       "$K = R^{-1}B^\\top P$, and $u = -Kx$. Check the shapes: $P$ is $n \\times n$, $B^\\top$ is $m \\times n$, $R^{-1}$ is $m \\times m$, so $K$ is $m \\times n$ and $Kx$ is an input. Any other ordering fails to conform.",
+       "$B$ rather than $B^\\top$: the dimensions do not conform unless the system happens to be square, and where they do the result is not the minimiser.",
+       "Multiplying by $R$ instead of its inverse makes the gain grow with the price of control, which is backwards.",
+       "The factors are in an order that does not produce an $m \\times n$ matrix, so $Kx$ is not an input vector."
+      ]
+     },
+     {
+      "prompt": "How do you know it has actually converged?",
+      "hole": "?",
+      "opts": [
+       "residual of the algebraic equation",
+       "change in P over the last step",
+       "number of iterations completed",
+       "sign of the eigenvalues of P"
+      ],
+      "a": 0,
+      "why": "Substitute your $P$ back into $A^\\top P + PA - PBR^{-1}B^\\top P + Q$ and look at the norm. That is the only test that checks the answer rather than the process — a small step change proves the iteration has slowed down, which it also does when it stalls short of the solution or when `dt` is too small.",
+      "whys": [
+       "Substitute your $P$ back into $A^\\top P + PA - PBR^{-1}B^\\top P + Q$ and look at the norm. That is the only test that checks the answer rather than the process — a small step change proves the iteration has slowed down, which it also does when it stalls short of the solution or when `dt` is too small.",
+       "A tempting proxy and a genuinely misleading one: halve `dt` and the step change halves too, with no improvement in the answer at all. It measures your integrator, not your solution.",
+       "A fixed iteration count is a hope, not a test. It gives no signal when the problem is badly conditioned and the run needed ten times longer.",
+       "$P$ being positive semi-definite is necessary but nowhere near sufficient — plenty of wrong matrices are."
+      ]
+     },
+     {
+      "prompt": "What must the converged P look like?",
+      "hole": "?",
+      "opts": [
+       "symmetric and positive semi-definite",
+       "skew-symmetric",
+       "diagonal",
+       "orthogonal"
+      ],
+      "a": 0,
+      "why": "$x^\\top Px$ is the cost-to-go from state $x$, and a cost cannot be negative — so $P \\succeq 0$, and only its symmetric part contributes to the quadratic form anyway. A visibly asymmetric result after integration means a transpose has been dropped somewhere.",
+      "whys": [
+       "$x^\\top Px$ is the cost-to-go from state $x$, and a cost cannot be negative — so $P \\succeq 0$, and only its symmetric part contributes to the quadratic form anyway. A visibly asymmetric result after integration means a transpose has been dropped somewhere.",
+       "A skew-symmetric matrix gives $x^\\top Px = 0$ for every $x$, so the cost-to-go would be zero from everywhere.",
+       "Diagonal only in special cases. Off-diagonal entries are how the cost couples the states, and a plant with any cross-coupling produces them.",
+       "Orthogonality is unrelated to the cost interpretation and is not implied by the equation."
+      ]
+     }
+    ]
+   },
    "build": null,
    "derive": {
     "title": "One step of the recursion, in one dimension",
@@ -342,7 +483,67 @@
      "Multiply $Q$ and $R$ by the same factor — $Q = 0.08$, $R = 2$. The picture does not change. The gain depends on the ratio alone, which is the same statement as the regulator depending only on $Q/R$."
     ]
    },
-   "quiz": null,
+   "quiz": {
+    "title": "The filter, and the regulator it is a transpose of",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "The Kalman filter carries an estimate and a covariance. What does the covariance say?",
+      "opts": [
+       "How much to trust the estimate — and therefore how hard to correct it",
+       "How much noise the sensor has",
+       "How far the estimate is from the truth",
+       "How long the filter has been running"
+      ],
+      "a": 0,
+      "why": "$P$ is the filter's own opinion of its uncertainty, and it is what turns a fixed\nobserver gain into a scheduled one: a large $P$ means \"I am unsure, take the measurement\nseriously\", a small $P$ means \"I know where I am, ignore the noise\". It cannot be the\nactual error — that would require knowing the truth, which is the thing being estimated.\nThe sensor noise is $R$, an input to the calculation rather than its state."
+     },
+     {
+      "q": "What does the predict step do to the covariance?",
+      "opts": [
+       "Inflates it by the process noise",
+       "Deflates it by the measurement noise",
+       "Leaves it unchanged",
+       "Resets it"
+      ],
+      "a": 0,
+      "why": "Time passing makes you less certain: $P \\leftarrow APA^\\top + W$, propagating the old\nuncertainty through the dynamics and adding what the process noise contributed in the\ninterval. Correct is the opposite motion — it is the only step that ever reduces $P$.\nThe two alternating is the whole filter, and a filter that stops receiving measurements\nhas a covariance that grows without bound, which is exactly the right behaviour."
+     },
+     {
+      "q": "The gain $K = PC^\\top(CPC^\\top + R)^{-1}$ is chosen to minimise what?",
+      "opts": [
+       "The trace of the covariance after the correction",
+       "The measurement residual",
+       "The control effort",
+       "The number of iterations to convergence"
+      ],
+      "a": 0,
+      "why": "The trace is the total variance across all states, and the gain is the unique choice\nthat makes it smallest after the update — which is what \"optimal\" means here, and it is\noptimal only under the assumptions of linearity and zero-mean noise. Minimising the\n*residual* would be a different and worse objective: it would drive the estimate to\nmatch a noisy measurement exactly, which is precisely what the filter exists to avoid."
+     },
+     {
+      "q": "The measurement noise $R$ is very large. What does the filter do?",
+      "opts": [
+       "Uses a small gain and leans on the model",
+       "Uses a large gain to average the noise away",
+       "Stops updating entirely",
+       "Increases the process noise to compensate"
+      ],
+      "a": 0,
+      "why": "$R$ sits in the denominator, so a noisy sensor produces a small gain and the estimate\ncoasts on the model between useful measurements. That is the filter's central bargain,\nand reading $Q$ and $R$ as a *ratio* — which do you trust — is far more useful than\ntrying to identify their absolute values. It never stops updating: even a very noisy\nmeasurement carries a little information, and the gain reflects exactly how much."
+     },
+     {
+      "q": "In what sense is the filter the dual of LQR?",
+      "opts": [
+       "Its Riccati equation is the regulator's with $A \\to A^\\top$ and $B \\to C^\\top$",
+       "It minimises the same cost functional",
+       "It uses the same gain matrix",
+       "It is the inverse operation, so the two cancel"
+      ],
+      "a": 0,
+      "why": "The same equation, transposed, with the noise covariances playing the roles of the\nweights. That is why one solver does both jobs and why every result about one has a\nmirror image in the other — controllability becomes observability, $A - BK$ becomes\n$A - LC$. It is a structural correspondence, not a shared objective: the regulator\nminimises a cost, the filter minimises a variance, and they happen to reduce to the\nsame algebra."
+     }
+    ]
+   },
    "blanks": null,
    "build": null,
    "derive": {
@@ -489,7 +690,88 @@
     ]
    },
    "quiz": null,
-   "blanks": null,
+   "blanks": {
+    "title": "Why separation survives",
+    "minutes": 8,
+    "brief": "LQG is not a third design. It is the regulator and the estimator, bolted together — and\nthe reason that is allowed is one structural fact about a matrix. Fill it in.",
+    "caption": "lqg.py — two designs that turn out not to interfere",
+    "lang": "python",
+    "listing": "K = lqr(A, B, Q, R)          # regulator, from the cost weights\nL = lqe(A, C, W, V)          # estimator, from the noise covariances\n\n# Write the closed loop in the coordinates (x, e) with e = x - xhat:\n#\n#     [[ A - B @ K ,   ___      ],\n#      [     0     ,  A - L @ C ]]\n#\n# The zero block makes this ___ ,\n# so its 2n eigenvalues are exactly the union of\n#\n#     eig(A - B @ K)   and   eig( ___ )\n#\n# which is why the two designs ___ .\n",
+    "blanks": [
+     {
+      "prompt": "The estimation error feeds the plant through the controller.",
+      "hole": "?",
+      "opts": [
+       "B @ K",
+       "0",
+       "-L @ C",
+       "A"
+      ],
+      "a": 0,
+      "why": "The controller acts on $\\hat{x} = x - e$, so $u = -K(x - e)$ and the $+BKe$ term lands in the top-right block. It is non-zero and it matters — a bad estimate really does disturb the plant. What saves the design is only that the coupling is one-way.",
+      "whys": [
+       "The controller acts on $\\hat{x} = x - e$, so $u = -K(x - e)$ and the $+BKe$ term lands in the top-right block. It is non-zero and it matters — a bad estimate really does disturb the plant. What saves the design is only that the coupling is one-way.",
+       "If this block were zero the two halves would be completely decoupled, which is stronger than what is true: the estimation error does reach the plant, it just does not come back.",
+       "This is the estimator's own dynamics, which belongs on the diagonal rather than in the coupling block.",
+       "$A$ appears on both diagonal blocks, modified; it is not the coupling term."
+      ]
+     },
+     {
+      "prompt": "One block is zero. What does that make the matrix?",
+      "hole": "?",
+      "opts": [
+       "block upper triangular",
+       "block diagonal",
+       "block lower triangular",
+       "symmetric"
+      ],
+      "a": 0,
+      "why": "The zero is in the bottom-left, so the matrix is upper triangular in blocks — and the eigenvalues of a block triangular matrix are the union of the blocks' own. The zero is the load-bearing part: the *plant* state does not appear in the error dynamics, which is the content of the previous module's result that the error forgets the input.",
+      "whys": [
+       "The zero is in the bottom-left, so the matrix is upper triangular in blocks — and the eigenvalues of a block triangular matrix are the union of the blocks' own. The zero is the load-bearing part: the *plant* state does not appear in the error dynamics, which is the content of the previous module's result that the error forgets the input.",
+       "Block diagonal would need the coupling term to vanish too. It does not — the estimation error genuinely perturbs the plant.",
+       "The zero block is below the diagonal, not above it, which is what makes this upper rather than lower.",
+       "The two diagonal blocks are different matrices entirely, so there is no symmetry here."
+      ]
+     },
+     {
+      "prompt": "The second set of eigenvalues.",
+      "hole": "?",
+      "opts": [
+       "A - L @ C",
+       "A - B @ K",
+       "A",
+       "A + L @ C"
+      ],
+      "a": 0,
+      "why": "The observer's error dynamics, designed entirely from $(A, C, W, V)$ and untouched by the choice of $K$. A useful design rule falls straight out: make the observer poles a few times faster than the regulator's, so the estimate has settled before the controller needs it.",
+      "whys": [
+       "The observer's error dynamics, designed entirely from $(A, C, W, V)$ and untouched by the choice of $K$. A useful design rule falls straight out: make the observer poles a few times faster than the regulator's, so the estimate has settled before the controller needs it.",
+       "That is the first set, already listed. The point of the result is that the two sets are *different* and independent.",
+       "Plain $A$ is the open-loop plant, which appears nowhere in the closed loop.",
+       "The sign is flipped, which would place the error poles by mirroring them into the right half-plane."
+      ]
+     },
+     {
+      "prompt": "So what is the practical consequence?",
+      "hole": "?",
+      "opts": [
+       "they may be designed independently",
+       "they must be designed together",
+       "they must use the same weights",
+       "they cancel each other out"
+      ],
+      "a": 0,
+      "why": "Design $K$ as if you had every state; design $L$ as if there were no controller; bolt them together and the closed-loop poles are exactly what each design asked for. Worth one caveat the algebra does not show: the guaranteed LQR margins from module 1 do not survive this, which is why LQG designs get checked for robustness rather than assumed to have it.",
+      "whys": [
+       "Design $K$ as if you had every state; design $L$ as if there were no controller; bolt them together and the closed-loop poles are exactly what each design asked for. Worth one caveat the algebra does not show: the guaranteed LQR margins from module 1 do not survive this, which is why LQG designs get checked for robustness rather than assumed to have it.",
+       "The whole result is that you need not — which is what makes the method tractable, since a joint optimisation over both would be far harder.",
+       "The cost weights and the noise covariances describe different things and are chosen from different evidence. They are unrelated.",
+       "They do not cancel; both sets of poles are present in the closed loop, and both must be stable."
+      ]
+     }
+    ]
+   },
    "build": null,
    "derive": {
     "title": "The closed loop in error coordinates",

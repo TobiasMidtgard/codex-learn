@@ -142,6 +142,90 @@ $\chi$ heads for infinity as $\rho \to 1$, and every gradient method in this cou
 slows down in direct proportion to it.
 ''',
             },
+            "quiz": {
+                "title": "One linear system, and every later algorithm solving it",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "$J(w) = \\sigma_d^2 - 2w^\\top p + w^\\top Rw$. What shape is it?",
+                        "opts": [
+                            "A bowl with a single minimum",
+                            "A surface with many local minima",
+                            "A saddle",
+                            "A plane",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Quadratic with $R \succeq 0$, so it is convex: one minimum, no local traps, and gradient
+descent cannot get stuck. This is why adaptive filtering works as reliably as it does,
+and it is exactly what is lost the moment the filter becomes non-linear. The bowl's
+*shape* still matters enormously — an elongated one is what makes convergence slow, which
+is module 2.
+""",
+                    },
+                    {
+                        "q": "For a stationary input, what structure does $R = E[xx^\\top]$ have?",
+                        "opts": [
+                            "Symmetric, positive semi-definite and Toeplitz",
+                            "Diagonal",
+                            "Skew-symmetric",
+                            "Upper triangular",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Toeplitz because $E[x(n-i)x(n-j)]$ depends only on $i-j$ when the input is stationary —
+constant along every diagonal, so the whole matrix is described by one autocorrelation
+sequence rather than $M^2$ numbers. That structure is what makes fast solvers such as
+Levinson–Durbin possible. It is diagonal only for white input, which is the special case
+where every eigenvalue is equal and convergence is fastest.
+""",
+                    },
+                    {
+                        "q": "Setting the gradient to zero gives which equations?",
+                        "opts": ["$Rw = p$", "$Rp = w$", "$w = R + p$", "$R^\\top R w = p$"],
+                        "a": 0,
+                        "why": r"""
+The normal equations, and $w_o = R^{-1}p$ is the Wiener solution. Everything later in
+this course is a way of reaching that same $w_o$ *without* forming $R$, inverting it, or
+even knowing it — because in practice the statistics are unknown and non-stationary, and
+an $M \times M$ inverse per sample is not affordable.
+""",
+                    },
+                    {
+                        "q": "What is $p = E[d\\,x]$?",
+                        "opts": [
+                            "The cross-correlation between the desired signal and the input",
+                            "The autocorrelation of the input",
+                            "The power of the desired signal",
+                            "The prediction error",
+                        ],
+                        "a": 0,
+                        "why": r"""
+It is the only place the *desired* signal enters the problem, and it is what makes the
+solution a solution to your problem rather than a generic property of the input. Read the
+normal equations that way and they say something plain: undo the input's own correlation
+structure ($R^{-1}$) and keep what the input shares with the target ($p$).
+""",
+                    },
+                    {
+                        "q": "Why is the Wiener solution unique when $R \\succ 0$?",
+                        "opts": [
+                            "The cost is strictly convex, so there is exactly one stationary point",
+                            "Because $R$ is Toeplitz",
+                            "Because the filter is FIR",
+                            "It is not — any $w$ with $J(w)$ small enough will do",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Strict positive definiteness makes the bowl curve upward in *every* direction, so there
+is one stationary point and it is the minimum. If $R$ is merely semi-definite — which
+happens when the input does not excite every direction, a narrowband tone into a long
+filter, say — there is a flat valley of equally optimal solutions, and the algorithms
+will wander along it without the error getting any worse.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Solve the normal equations from a block of data",
                 "runtime": "python",
@@ -462,6 +546,91 @@ iterations — the eigenvalue spread, unchanged and unavoidable. No choice of st
 size removes it; only a different algorithm does.
 ''',
             },
+            "blanks": {
+                "title": "How far you may step, and how long it takes",
+                "minutes": 9,
+                "caption": "steepest_descent.py — the eigenvalues decide both",
+                "lang": "python",
+                "brief": r"""
+Steepest descent has one parameter and the eigenvalues of $R$ decide everything about it:
+how large it may be, and how long the walk takes once it is. Fill in the chain.
+""",
+                "listing": """grad = 2 * (R @ w - p)
+w    = w - (mu / 2) * grad          # i.e.  w = w + mu * (p - R @ w)
+
+# Change to the eigenvector coordinates of R and the update decouples
+# into M independent scalar recursions, one per mode:
+#
+#     v_i(n+1) = ___ * v_i(n)
+#
+# Every mode converges only if all M factors are inside the unit circle:
+#
+#     0 < mu < ___
+#
+# The step is capped by the largest eigenvalue, but the time taken is set
+# by ___ , so the walk is slow whenever the
+# eigenvalue spread ___ is large.
+""",
+                "blanks": [
+                    {
+                        "prompt": "One mode, one factor per iteration.",
+                        "hole": "?",
+                        "opts": ["(1 - mu * lambda_i)", "(1 - mu)", "mu * lambda_i", "(1 + mu * lambda_i)"],
+                        "a": 0,
+                        "why": "Each mode shrinks by $(1 - \\mu\\lambda_i)$ every step — a geometric sequence, so convergence is exponential and the rate differs from mode to mode. This single expression contains the whole of the next two blanks.",
+                        "whys": [
+                            "Each mode shrinks by $(1 - \\mu\\lambda_i)$ every step — a geometric sequence, so convergence is exponential and the rate differs from mode to mode. This single expression contains the whole of the next two blanks.",
+                            "Without $\\lambda_i$ every mode would converge at the same rate and the eigenvalue spread would not matter — which would be pleasant and is not what happens.",
+                            "Missing the 1, so a small step size would make the modes vanish instantly rather than barely move.",
+                            "The sign is wrong: this grows without bound for any positive $\\mu$ and $\\lambda$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Which eigenvalue binds the step size?",
+                        "hole": "?",
+                        "opts": ["2 / lambda_max", "2 / lambda_min", "1 / lambda_max", "2 / trace(R)"],
+                        "a": 0,
+                        "why": "$|1 - \\mu\\lambda_i| < 1$ needs $\\mu < 2/\\lambda_i$ for every mode, so the *largest* eigenvalue sets the tightest constraint. Exceed it and the strongest mode diverges first — the algorithm blows up in the direction the input energy is concentrated in.",
+                        "whys": [
+                            "$|1 - \\mu\\lambda_i| < 1$ needs $\\mu < 2/\\lambda_i$ for every mode, so the *largest* eigenvalue sets the tightest constraint. Exceed it and the strongest mode diverges first — the algorithm blows up in the direction the input energy is concentrated in.",
+                            "The smallest eigenvalue gives the loosest bound, which every other mode then violates. Using it guarantees divergence.",
+                            "Safe, but a factor of two conservative — it halves the achievable convergence rate for no reason.",
+                            "$\\text{trace}(R) = \\sum\\lambda_i$ is a usable *conservative* bound, since it is at least $\\lambda_{max}$, and it has the practical virtue of being measurable as the input power without an eigendecomposition. It is not the exact condition.",
+                        ],
+                    },
+                    {
+                        "prompt": "And which one decides how long you wait?",
+                        "hole": "?",
+                        "opts": ["lambda_min", "lambda_max", "trace(R)", "mu"],
+                        "a": 0,
+                        "why": "The slowest mode is the one with the smallest $\\lambda$, since its factor $(1 - \\mu\\lambda_{min})$ is closest to 1. So the largest eigenvalue caps the step and the smallest sets the finish line — the two ends of the spectrum pulling against each other.",
+                        "whys": [
+                            "The slowest mode is the one with the smallest $\\lambda$, since its factor $(1 - \\mu\\lambda_{min})$ is closest to 1. So the largest eigenvalue caps the step and the smallest sets the finish line — the two ends of the spectrum pulling against each other.",
+                            "The largest eigenvalue converges *fastest* — it is the one that limits how big a step you may take, not the one you end up waiting for.",
+                            "The trace is a sum over all modes and does not identify the slow one.",
+                            "$\\mu$ is what you choose; the question is what constrains the choice.",
+                        ],
+                    },
+                    {
+                        "prompt": "Name the ratio that predicts a slow walk.",
+                        "hole": "?",
+                        "opts": [
+                            "lambda_max / lambda_min",
+                            "lambda_max * lambda_min",
+                            "lambda_min / lambda_max",
+                            "trace(R)",
+                        ],
+                        "a": 0,
+                        "why": "The eigenvalue spread, which is the condition number of $R$. It is a purely geometric statement: a highly correlated input makes the error bowl a long narrow valley, and steepest descent zig-zags across it instead of running down it. That is what RLS in module 4 buys its way out of.",
+                        "whys": [
+                            "The eigenvalue spread, which is the condition number of $R$. It is a purely geometric statement: a highly correlated input makes the error bowl a long narrow valley, and steepest descent zig-zags across it instead of running down it. That is what RLS in module 4 buys its way out of.",
+                            "A product does not measure spread: scaling the input scales every eigenvalue and changes the product without changing the difficulty at all.",
+                            "Inverted, so a perfectly conditioned white input would score worst.",
+                            "The trace measures total input power, not how unevenly it is distributed. Two very different inputs can share a trace.",
+                        ],
+                    },
+                ],
+            },
             "lab": {
                 "title": "Descend a known error surface",
                 "runtime": "python",
@@ -748,6 +917,97 @@ Misadjustment is proportional to $\mu$; convergence time is proportional to
 $1/\mu$. Their product does not contain $\mu$ at all. You are not choosing between
 a good filter and a bad one — you are choosing where on a fixed curve to sit.
 ''',
+            },
+            "quiz": {
+                "title": "One sample instead of an expectation",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "What does LMS substitute for the true gradient?",
+                        "opts": [
+                            "$-2e(n)x(n)$ — the gradient of the instantaneous squared error",
+                            "A running average of past gradients",
+                            "A finite difference of the cost",
+                            "The Wiener solution",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Drop the expectation and use the single most recent sample. It is an unbiased estimate —
+its mean is the true gradient — and it is extremely noisy, which is the entire character
+of the algorithm: it works because the noise averages out over many steps, and it never
+settles exactly because the noise never stops. The step size controls that trade
+directly.
+""",
+                    },
+                    {
+                        "q": "What does one LMS update cost, for an $M$-tap filter?",
+                        "opts": [
+                            "About $2M$ multiplications",
+                            "About $M^2$",
+                            "About $M^3$",
+                            "About $M\\log M$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$M$ to compute the output, $M$ to apply the update, no division and no matrix anywhere.
+That is the reason LMS is in every echo canceller and equaliser ever shipped: it is
+about as cheap as an FIR filter you were running anyway. RLS gets the same answer far
+faster and costs $M^2$ per sample, and choosing between them is almost always a budget
+question rather than a statistical one.
+""",
+                    },
+                    {
+                        "q": "What is misadjustment?",
+                        "opts": [
+                            "The excess error left over because the weights keep jittering around the optimum",
+                            "The bias of the converged solution",
+                            "The error caused by too few taps",
+                            "The delay before convergence begins",
+                        ],
+                        "a": 0,
+                        "why": r"""
+LMS never stops moving: the gradient noise keeps kicking the weights around $w_o$, and
+the resulting excess mean-square error is proportional to $\mu$. So the step size buys
+speed with accuracy, in a straight trade — and that is why practical implementations
+start with a large $\mu$ and reduce it once the filter has converged. It is not bias:
+the *mean* of the weights is correct.
+""",
+                    },
+                    {
+                        "q": "What does NLMS divide the step size by?",
+                        "opts": [
+                            "The input power $\\|x(n)\\|^2$",
+                            "The number of taps",
+                            "The error magnitude",
+                            "The time index",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$\mu/(\varepsilon + \|x\|^2)$, which makes the effective step independent of the input
+level. It matters because the stability bound depends on the input power, so a fixed
+$\mu$ tuned on quiet speech diverges on loud speech. Normalising turns the tuning
+parameter into a dimensionless number between 0 and 2, which is the real practical win.
+The $\varepsilon$ is there to survive silence.
+""",
+                    },
+                    {
+                        "q": "How does LMS's stability bound compare with steepest descent's?",
+                        "opts": [
+                            "The same in the mean, but practice needs a good deal less",
+                            "Much larger, because the update is noisier",
+                            "Identical in every respect",
+                            "There is no bound for LMS",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Convergence *in the mean* gives the same $0 < \mu < 2/\lambda_{max}$, because the
+expected update is the steepest-descent update. But the mean is not the whole story:
+convergence in mean *square* is a stricter condition, and a $\mu$ that satisfies the
+first can still let the variance grow. In practice people use a small fraction of the
+bound, often $2/(3\,\text{tr}\,R)$ or less.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "LMS, NLMS and what normalisation actually buys",
@@ -1064,6 +1324,82 @@ but it buys a much better curve, converging in roughly $2M$ samples regardless o
 the eigenvalue spread, in exchange for $O(M^2)$ arithmetic and a covariance matrix
 that must be kept symmetric or it will quietly destroy itself.
 ''',
+            },
+            "blanks": {
+                "title": "RLS, and what forgetting costs",
+                "minutes": 9,
+                "caption": "rls.py — exact least squares, one sample at a time",
+                "lang": "python",
+                "brief": r"""
+RLS solves the least-squares problem *exactly* at every sample, which is why it converges
+in a couple of filter lengths' worth of data rather than a few thousand. The matrix
+inversion lemma is what makes that affordable. Fill in the four places $\lambda$ and the
+gain appear.
+""",
+                "listing": """# Minimise  sum_i  lam**(n-i) * e(i)**2   -- exponentially weighted.
+
+k = P @ x / (___ + x.T @ P @ x)      # gain vector
+e = d - w.T @ x                      # a priori error, before the update
+w = w + ___                          # weight update
+P = (P - np.outer(k, x.T @ P)) / ___ # rank-one update of the inverse
+
+# Choosing lam < 1 gives the algorithm an effective memory of
+# roughly ___ samples.
+""",
+                "blanks": [
+                    {
+                        "prompt": "The forgetting factor appears in the denominator of the gain.",
+                        "hole": "?",
+                        "opts": ["lam", "1", "1 - lam", "x.T @ x"],
+                        "a": 0,
+                        "why": "$k = Px/(\\lambda + x^\\top Px)$. With $\\lambda = 1$ this is the growing-window least-squares gain, which shrinks steadily as data accumulates; $\\lambda < 1$ stops it shrinking to nothing and keeps the filter responsive.",
+                        "whys": [
+                            "$k = Px/(\\lambda + x^\\top Px)$. With $\\lambda = 1$ this is the growing-window least-squares gain, which shrinks steadily as data accumulates; $\\lambda < 1$ stops it shrinking to nothing and keeps the filter responsive.",
+                            "A fixed 1 is the special case $\\lambda = 1$ — correct arithmetic for an infinite window, but then the algorithm eventually stops adapting altogether.",
+                            "$1 - \\lambda$ is a small number near 0.01, which would make the gain enormous and the recursion unstable.",
+                            "The input's own energy without $P$ is the NLMS normaliser, not the RLS one. RLS weights by the inverse correlation matrix, which is where its speed comes from.",
+                        ],
+                    },
+                    {
+                        "prompt": "Gain times error.",
+                        "hole": "?",
+                        "opts": ["k * e", "mu * e * x", "k * d", "e * x"],
+                        "a": 0,
+                        "why": "$w \\leftarrow w + ke$ — identical in shape to a Kalman correction, which is exactly what it is: $k$ is a Kalman gain and $P$ is an inverse covariance. Seeing that connection makes both algorithms easier to remember.",
+                        "whys": [
+                            "$w \\leftarrow w + ke$ — identical in shape to a Kalman correction, which is exactly what it is: $k$ is a Kalman gain and $P$ is an inverse covariance. Seeing that connection makes both algorithms easier to remember.",
+                            "That is the LMS update. Substituting it here gives up everything RLS was paying for — the whole point is that $k$ already contains the input's correlation structure, and $\\mu x$ does not.",
+                            "Correcting by the desired signal rather than the error never converges: even a perfect filter would keep being pushed.",
+                            "Missing the gain entirely, so the correlation structure never enters and the update is unscaled.",
+                        ],
+                    },
+                    {
+                        "prompt": "And in the P recursion.",
+                        "hole": "?",
+                        "opts": ["lam", "1 - lam", "1", "x.T @ P @ x"],
+                        "a": 0,
+                        "why": "Dividing by $\\lambda$ inflates $P$ a little every step, which is what keeps the algorithm willing to move. It is the direct analogue of the Kalman filter's predict step adding process noise — both are the same idea: deliberately forget, so that you can still learn.",
+                        "whys": [
+                            "Dividing by $\\lambda$ inflates $P$ a little every step, which is what keeps the algorithm willing to move. It is the direct analogue of the Kalman filter's predict step adding process noise — both are the same idea: deliberately forget, so that you can still learn.",
+                            "Dividing by $1 - \\lambda$ would multiply $P$ by about 100 every sample and the recursion would explode within a few dozen steps.",
+                            "Leaving $P$ undivided is the $\\lambda = 1$ case: $P$ shrinks monotonically and the filter freezes, which is correct only if the statistics never change.",
+                            "That scalar is already accounted for inside $k$; applying it again double-counts the update.",
+                        ],
+                    },
+                    {
+                        "prompt": "How far back does lambda let it remember?",
+                        "hole": "?",
+                        "opts": ["1 / (1 - lam)", "lam", "1 - lam", "M"],
+                        "a": 0,
+                        "why": "$\\lambda = 0.99$ gives a memory of about 100 samples, $\\lambda = 0.999$ about 1000. It is the same $1/(1-\\lambda)$ that governs any exponential average, and it is the knob for the fundamental trade: a short memory tracks a changing environment and a long one rejects noise, and you cannot have both.",
+                        "whys": [
+                            "$\\lambda = 0.99$ gives a memory of about 100 samples, $\\lambda = 0.999$ about 1000. It is the same $1/(1-\\lambda)$ that governs any exponential average, and it is the knob for the fundamental trade: a short memory tracks a changing environment and a long one rejects noise, and you cannot have both.",
+                            "$\\lambda$ itself is just under 1 and does not measure a number of samples.",
+                            "This is the reciprocal of the answer — about 0.01 samples, which is not a memory.",
+                            "The filter length sets how many taps there are, not how much history the weighting retains.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Recursive least squares, and what the forgetting factor does",

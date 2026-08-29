@@ -143,6 +143,91 @@ piles several live blocks onto one index while other sets sit empty. Module 2 gi
 that surplus a name: the conflict miss.
 ''',
             },
+            "quiz": {
+                "title": "An address is three fields",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "How does a cache split an address?",
+                        "opts": [
+                            "Tag, index, block offset",
+                            "Tag, way, offset",
+                            "Index, way, offset",
+                            "Tag, set, byte",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The offset picks a byte inside the block, the index picks the *set*, and the tag is
+everything left over — checked against the stored tags of that set to see whether the
+block is one of the ones present. Note what is absent: the way is not part of the
+address. Which way a block lands in is decided by the replacement policy at fill time,
+not by the address, and that is exactly the freedom associativity buys.
+""",
+                    },
+                    {
+                        "q": "A 32 KiB cache has 64-byte blocks and is 4-way set associative. How many sets?",
+                        "opts": ["128", "512", "64", "256"],
+                        "a": 0,
+                        "why": r"""
+$32768/64 = 512$ blocks, and $512/4 = 128$ sets — so 7 index bits and 6 offset bits, with
+the tag taking the rest. 512 is the block count, which is the number you get by
+forgetting to divide by the associativity, and it is the single most common slip in this
+arithmetic. A quick check: sets $\times$ ways $\times$ block size must equal capacity.
+""",
+                    },
+                    {
+                        "q": "Direct-mapped and fully associative are the two corners of the same geometry. Which is which?",
+                        "opts": [
+                            "Direct-mapped is one way; fully associative is one set",
+                            "Direct-mapped is one set; fully associative is one way",
+                            "Both have one set",
+                            "Neither fits the set-associative model",
+                        ],
+                        "a": 0,
+                        "why": r"""
+One way means every block has exactly one place it may live, so the index is as wide as
+it can be and there is no choice to make. One set means the index disappears entirely and
+any block may live anywhere, which needs a comparator per block. Seeing them as endpoints
+of one parameter rather than three separate designs is what makes the miss taxonomy in
+the next module work.
+""",
+                    },
+                    {
+                        "q": "You keep capacity and block size fixed and halve the associativity. What happens?",
+                        "opts": [
+                            "More sets, a wider index, and more conflict misses",
+                            "Fewer sets and fewer conflict misses",
+                            "Nothing — capacity is what matters",
+                            "The tag gets wider",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Halving the ways doubles the sets, which takes one bit from the tag and gives it to the
+index. The cache holds the same number of bytes and has become fussier about *where*
+they go, so blocks that map to the same set now evict each other sooner. That is a
+conflict miss, and it is the one kind of miss that depends on the shape rather than the
+size — which is precisely what the next module measures.
+""",
+                    },
+                    {
+                        "q": "What does widening the block buy, and what does it cost?",
+                        "opts": [
+                            "Better spatial locality, at the cost of more traffic per miss and fewer blocks",
+                            "Fewer compulsory misses with no cost",
+                            "More associativity",
+                            "A narrower tag with no other effect",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A wider block prefetches its neighbours for free, which helps whenever the program walks
+through memory in order. It also means each miss drags more bytes across the bus, and the
+same capacity now holds fewer blocks, so unrelated data gets evicted sooner. The miss
+rate falls with block size and then rises again — and the turning point depends on the
+program, which is why block size is measured rather than reasoned about.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "A set-associative cache with true LRU",
                 "runtime": "python",
@@ -484,6 +569,92 @@ holds, which pushes capacity and conflict misses up. That trade is the reason bl
 size is a measured choice rather than a derived one.
 ''',
             },
+            "blanks": {
+                "title": "Three Cs, measured rather than argued",
+                "minutes": 8,
+                "caption": "three_cs.py — a decomposition you get by running three caches",
+                "lang": "python",
+                "brief": r"""
+The taxonomy is often taught as three definitions to memorise. It is better understood as
+a *subtraction*: run the same trace through three caches and difference the results. Fill
+in which three.
+""",
+                "listing": """# Same trace, three caches, three miss counts.
+
+compulsory = misses_of( ___ )
+
+capacity   = misses_of( ___ ) - compulsory
+
+conflict   = misses_of(the real cache) - ___
+
+# Which means: doubling the associativity can only remove
+# ___ misses, and none of the others.
+""",
+                "blanks": [
+                    {
+                        "prompt": "Which cache still misses on a block it has never seen?",
+                        "hole": "?",
+                        "opts": [
+                            "an infinite fully-associative cache",
+                            "the real cache",
+                            "a direct-mapped cache of the same size",
+                            "a cache holding one block",
+                        ],
+                        "a": 0,
+                        "why": "An infinite cache never evicts anything, so every miss it takes is a first reference — and no cache of any size or shape can avoid those. That is the floor: the only ways to reduce compulsory misses are prefetching and larger blocks, both of which fetch data before it is asked for.",
+                        "whys": [
+                            "An infinite cache never evicts anything, so every miss it takes is a first reference — and no cache of any size or shape can avoid those. That is the floor: the only ways to reduce compulsory misses are prefetching and larger blocks, both of which fetch data before it is asked for.",
+                            "The real cache's misses are all three categories mixed together — which is the thing being decomposed.",
+                            "A direct-mapped cache adds the maximum number of conflict misses, which is the opposite of isolating the compulsory ones.",
+                            "A one-block cache misses on almost everything and separates nothing.",
+                        ],
+                    },
+                    {
+                        "prompt": "Which cache has the right size but no conflicts?",
+                        "hole": "?",
+                        "opts": [
+                            "a fully-associative cache of the same capacity",
+                            "an infinite cache",
+                            "a direct-mapped cache of the same capacity",
+                            "the real cache with a bigger block",
+                        ],
+                        "a": 0,
+                        "why": "Fully associative removes conflict misses by construction — any block may live anywhere, so nothing is evicted because of where its address happened to land. What is left over the compulsory count is caused purely by the program's own working set exceeding the capacity.",
+                        "whys": [
+                            "Fully associative removes conflict misses by construction — any block may live anywhere, so nothing is evicted because of where its address happened to land. What is left over the compulsory count is caused purely by the program's own working set exceeding the capacity.",
+                            "Already used, for compulsory. An infinite cache has no capacity misses either, so it cannot measure them.",
+                            "Direct-mapped is maximally conflict-prone, so its extra misses are precisely the ones this step is trying to exclude.",
+                            "Changing the block size changes the compulsory count too, so the three measurements would no longer be comparable.",
+                        ],
+                    },
+                    {
+                        "prompt": "Subtract what has already been accounted for.",
+                        "hole": "?",
+                        "opts": ["compulsory + capacity", "compulsory", "capacity", "zero"],
+                        "a": 0,
+                        "why": "Whatever the real cache misses on beyond what an equally-sized fully-associative cache would is, by definition, the cost of its restricted placement. The three numbers are defined to sum to the total, which is what makes it a decomposition rather than three independent measurements.",
+                        "whys": [
+                            "Whatever the real cache misses on beyond what an equally-sized fully-associative cache would is, by definition, the cost of its restricted placement. The three numbers are defined to sum to the total, which is what makes it a decomposition rather than three independent measurements.",
+                            "Subtracting only the compulsory count leaves capacity misses miscounted as conflicts, which would blame the shape for a problem caused by the size.",
+                            "Subtracting only capacity leaves the first references in, inflating conflict by the compulsory count.",
+                            "Would make conflict equal to the total misses, which is true only for a cache with no capacity pressure at all.",
+                        ],
+                    },
+                    {
+                        "prompt": "So what does more associativity actually fix?",
+                        "hole": "?",
+                        "opts": ["conflict", "capacity", "compulsory", "all three"],
+                        "a": 0,
+                        "why": "Only conflict, and that is the practical value of the decomposition: measure first, and if the misses are mostly capacity then adding ways is spending area and hit time on nothing. A bigger cache, or a program that touches less data, is the fix for capacity.",
+                        "whys": [
+                            "Only conflict, and that is the practical value of the decomposition: measure first, and if the misses are mostly capacity then adding ways is spending area and hit time on nothing. A bigger cache, or a program that touches less data, is the fix for capacity.",
+                            "Capacity misses come from the working set exceeding the size; rearranging where blocks may sit inside the same number of bytes does not create room.",
+                            "A first reference misses in any cache. Associativity cannot help with data that has never been fetched.",
+                            "If associativity fixed everything, every cache would be fully associative — and the reason they are not is hit time and comparator cost.",
+                        ],
+                    },
+                ],
+            },
             "lab": {
                 "title": "Classify every miss in a trace",
                 "runtime": "python",
@@ -814,6 +985,88 @@ then sends $V$ bytes for each of $k$ writes: $B + kV$. So write-back is the chea
 the two exactly once $k$ exceeds $B/V$ — with 64-byte blocks and 8-byte words, eight
 writes per block. Easy for a stack or an array being filled, impossible for a scatter.
 ''',
+            },
+            "quiz": {
+                "title": "From a miss rate to cycles, and to bytes",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "L1 hits in 1 cycle with a 5% miss rate. L2 takes 12 cycles and misses 20% of the time it is reached. Memory costs 200 cycles. What is the AMAT?",
+                        "opts": ["3.6 cycles", "2.6 cycles", "11.6 cycles", "1.6 cycles"],
+                        "a": 0,
+                        "why": r"""
+Compose the levels: the L1 penalty is the whole L2 experience,
+$12 + 0.20 \times 200 = 52$ cycles. Then
+$\text{AMAT} = 1 + 0.05 \times 52 = 3.6$. Note how heavily the memory term dominates
+despite being reached on only 1% of accesses — 40 of those 52 cycles are memory. That is
+the shape of every memory hierarchy calculation: rare events with enormous penalties.
+""",
+                    },
+                    {
+                        "q": "With those numbers, what is L2's *global* miss rate?",
+                        "opts": ["1%", "20%", "25%", "5%"],
+                        "a": 0,
+                        "why": r"""
+$0.05 \times 0.20 = 0.01$. The local rate, 20%, is measured against the accesses that
+reach L2; the global rate is measured against all accesses the processor makes. Local
+rates always look alarming at the lower levels because L1 has already filtered out
+everything easy — quoting one without saying which is the most common way to make a
+memory system sound worse or better than it is.
+""",
+                    },
+                    {
+                        "q": "What distinguishes write-back from write-through in bus traffic?",
+                        "opts": [
+                            "Write-back moves a block only when a dirty one is evicted",
+                            "Write-back never writes to memory",
+                            "Write-through generates less traffic",
+                            "They generate identical traffic",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Write-through sends every store to the next level; write-back absorbs repeated stores to
+the same block and pays once, at eviction, for the whole block. For code that writes the
+same cache line several times — which is most code — that is a large reduction. The price
+is complexity: a dirty bit per block, a writeback buffer, and a coherence protocol that
+has to know some other cache may hold the only current copy.
+""",
+                    },
+                    {
+                        "q": "What does write-allocate do on a write miss?",
+                        "opts": [
+                            "Fetches the block into the cache first, then writes into it",
+                            "Writes straight to memory and leaves the cache alone",
+                            "Allocates a block without fetching it",
+                            "Stalls until the block is evicted",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Fetch first, then write — which pairs naturally with write-back, since the block has to
+be present for later stores to be absorbed. It looks wasteful when the program is about
+to overwrite the entire block, and that case is real enough that architectures provide
+non-temporal stores to bypass it. No-write-allocate pairs with write-through instead, and
+the two pairings are what you almost always see.
+""",
+                    },
+                    {
+                        "q": "Which single change to a two-level hierarchy usually helps AMAT most?",
+                        "opts": [
+                            "Reducing the L1 miss rate, because it multiplies the entire lower hierarchy",
+                            "Reducing the L2 hit time",
+                            "Reducing the L1 hit time",
+                            "Increasing the block size everywhere",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The L1 miss rate multiplies everything below it — in the numbers above, halving it from
+5% to 2.5% takes the AMAT from 3.6 to 2.3 cycles, which nothing else on the list comes
+close to. The L1 hit time is paid on every access and so it matters too, but it is
+already one cycle and there is nowhere for it to go. Being able to see which term
+dominates, rather than optimising the one that is easiest to change, is what the formula
+is for.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Write policy, byte for byte",
@@ -1229,6 +1482,81 @@ cycles. Let false sharing push $f$ to 0.1 and it becomes 9 — an eighty per cen
 slowdown bought by a data layout, with no change to the algorithm, the cache size or
 the miss rate the uniprocessor tools would report.
 ''',
+            },
+            "blanks": {
+                "title": "MESI, one transaction at a time",
+                "minutes": 8,
+                "caption": "mesi.py — four states, and what each transition costs the bus",
+                "lang": "python",
+                "brief": r"""
+Every state in MESI exists to save a bus transaction, and the E state exists to save
+exactly one. Fill in the four decisions and the protocol's whole economy is visible.
+""",
+                "listing": """# Two private caches, one address.
+
+# A read miss brings the block in as ___
+#   if no other cache has it,
+# and as ___
+#   if another cache responds.
+
+# The first write to a block held in E costs ___ .
+
+# A write to a block held in S must first put ___ on the bus.
+""",
+                "blanks": [
+                    {
+                        "prompt": "Nobody else has it. What state?",
+                        "hole": "?",
+                        "opts": ["E", "S", "M", "I"],
+                        "a": 0,
+                        "why": "Exclusive: mine, clean, and nobody else's. The cache learns this from the absence of a response on the bus, and remembering it is what lets the next write be free.",
+                        "whys": [
+                            "Exclusive: mine, clean, and nobody else's. The cache learns this from the absence of a response on the bus, and remembering it is what lets the next write be free.",
+                            "Shared is the safe answer and the wasteful one — it forgets that nobody else has the block, so the next write has to ask permission it did not need. A protocol that does exactly this is MSI, and E is the entire difference.",
+                            "Modified means dirty, and nothing has been written yet.",
+                            "Invalid means not present, which is the state it just left.",
+                        ],
+                    },
+                    {
+                        "prompt": "Somebody else answered. What state?",
+                        "hole": "?",
+                        "opts": ["S", "E", "M", "I"],
+                        "a": 0,
+                        "why": "Shared: readable, clean, and known to exist elsewhere. Both caches end in S — the responder demotes from E or M to S as it supplies the data, which is why a read by one core can slow the next write by another.",
+                        "whys": [
+                            "Shared: readable, clean, and known to exist elsewhere. Both caches end in S — the responder demotes from E or M to S as it supplies the data, which is why a read by one core can slow the next write by another.",
+                            "Exclusive would be a lie: another cache has just proved it holds the block, and acting on that lie would let two caches write without either noticing.",
+                            "Modified requires being the only copy and having written it.",
+                            "Invalid would discard the block that was just fetched.",
+                        ],
+                    },
+                    {
+                        "prompt": "You already know you are the only holder.",
+                        "hole": "?",
+                        "opts": ["no bus transaction at all", "a BusRdX", "a BusUpgr", "a writeback"],
+                        "a": 0,
+                        "why": "Nothing. The cache silently changes E to M and writes. This is the entire reason E exists, and it is worth a lot: a read followed by a write to the same line is one of the most common patterns in real code, and MSI pays a bus transaction for it every time.",
+                        "whys": [
+                            "Nothing. The cache silently changes E to M and writes. This is the entire reason E exists, and it is worth a lot: a read followed by a write to the same line is one of the most common patterns in real code, and MSI pays a bus transaction for it every time.",
+                            "BusRdX asks for the data *and* for exclusivity. The data is already here and the exclusivity is already known, so it would fetch a copy of what the cache is holding.",
+                            "BusUpgr asks other caches to invalidate — but E already means there are none to ask.",
+                            "A writeback moves a dirty block out. Nothing is dirty yet, and the block is not being evicted.",
+                        ],
+                    },
+                    {
+                        "prompt": "Others may hold it. What must you send?",
+                        "hole": "?",
+                        "opts": ["BusUpgr", "BusRd", "nothing", "a writeback"],
+                        "a": 0,
+                        "why": "BusUpgr invalidates the other copies without transferring any data — the cache already has the block, it just needs permission to be the only one with it. Using BusRdX here would work and would drag a redundant copy across the bus, which is precisely the waste BusUpgr exists to avoid.",
+                        "whys": [
+                            "BusUpgr invalidates the other copies without transferring any data — the cache already has the block, it just needs permission to be the only one with it. Using BusRdX here would work and would drag a redundant copy across the bus, which is precisely the waste BusUpgr exists to avoid.",
+                            "BusRd is a read request; it does not invalidate anything, so the other copies would survive and two caches would disagree.",
+                            "Writing silently from S is the bug the whole protocol exists to prevent: another cache would keep serving a stale value with no way to know.",
+                            "A writeback pushes dirty data out and says nothing to the other caches about their copies.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "MESI between two snooping caches",
