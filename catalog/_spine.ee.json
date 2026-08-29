@@ -79,8 +79,7 @@
       ],
       "stack": [
         "Python",
-        "NumPy",
-        "SciPy"
+        "NumPy"
       ],
       "runtime": "python",
       "credits": 10,
@@ -97,8 +96,7 @@
       ],
       "stack": [
         "Python",
-        "NumPy",
-        "SciPy"
+        "NumPy"
       ],
       "runtime": "python",
       "credits": 12,
@@ -131,8 +129,7 @@
       ],
       "stack": [
         "Python",
-        "NumPy",
-        "SciPy"
+        "NumPy"
       ],
       "runtime": "python",
       "credits": 12,
@@ -165,8 +162,7 @@
       "prereqs": [],
       "stack": [
         "Python",
-        "NumPy",
-        "SciPy"
+        "NumPy"
       ],
       "runtime": "python",
       "credits": 10,
@@ -301,8 +297,7 @@
       ],
       "stack": [
         "Python",
-        "NumPy",
-        "SciPy"
+        "NumPy"
       ],
       "runtime": "python",
       "credits": 12,
@@ -318,7 +313,8 @@
       "stack": [
         "Verilog",
         "JavaScript",
-        "Python"
+        "Python",
+        "NumPy"
       ],
       "runtime": "python",
       "credits": 10,
@@ -352,7 +348,8 @@
       ],
       "stack": [
         "Verilog",
-        "Python"
+        "Python",
+        "NumPy"
       ],
       "runtime": "python",
       "credits": 10,

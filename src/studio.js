@@ -321,6 +321,11 @@ const MathCheck = (function () {
 
   /* LaTeX the learner typed -> something SymPy can parse. Deliberately small: the
      same subset MathML renders, so anything that displays can also be checked. */
+  /* Python keywords that are also perfectly ordinary symbol names in engineering */
+  const PY_RESERVED = ['lambda', 'is', 'in', 'not', 'or', 'and', 'if', 'else', 'for',
+    'while', 'class', 'def', 'from', 'import', 'as', 'return', 'None', 'True',
+    'False', 'del', 'pass', 'global', 'assert', 'raise', 'with', 'yield'];
+
   const GREEK_NAMES = ['alpha','beta','gamma','delta','epsilon','zeta','eta','theta',
     'iota','kappa','lambda','mu','nu','xi','rho','sigma','tau','upsilon','phi','chi',
     'psi','omega','Gamma','Delta','Theta','Lambda','Xi','Pi','Sigma','Phi','Psi','Omega'];
@@ -374,6 +379,11 @@ const MathCheck = (function () {
       t = t.replace(new RegExp('\\\\' + g + '(?![A-Za-z])', 'g'), ' ' + g);
     });
     t = t.replace(/_\s*([A-Za-z0-9])/g, '_$1');
+    /* lambda is the obvious symbol for an eigenvalue and a syntax error in Python.
+       Both sides get the same rewrite, so equivalence is unaffected. */
+    PY_RESERVED.forEach(function (kw) {
+      t = t.replace(new RegExp('\\b' + kw + '\\b', 'g'), kw + '_');
+    });
     t = t.replace(/\^/g, '**');
     t = t.replace(/\\,|\\;|\\!|\\quad|\\qquad/g, ' ');
     t = t.replace(/\\[A-Za-z]+/g, ' ');            /* anything left is unsupported */
@@ -390,7 +400,12 @@ const MathCheck = (function () {
      one symbol while RC becomes R*C. */
   const KEEP_WHOLE = ['sqrt', 'exp', 'log', 'ln', 'sin', 'cos', 'tan', 'sinh', 'cosh',
     'tanh', 'asin', 'acos', 'atan', 'atan2', 'abs', 'Abs', 're', 'im', 'conjugate',
-    'pi', 'oo', 'I', 'E'];
+    'pi', 'oo', 'I', 'E']
+    /* A name that arrived as \sigma is one symbol whether or not the lesson
+       remembered to declare it. Splitting it into s*i*g*m*a is never what was
+       meant, and the failure looks like a broken answer rather than a missing
+       declaration. */
+    .concat(GREEK_NAMES);
 
   function explicitMul(text, vars) {
     const names = (vars || []).filter(Boolean).concat(KEEP_WHOLE)
@@ -479,7 +494,9 @@ const MathCheck = (function () {
       'from sympy.parsing.sympy_parser import (parse_expr, standard_transformations,',
       '    implicit_multiplication_application, convert_xor, split_symbols)',
       '',
-      '_names = ' + JSON.stringify(vars || []),
+      '_names = ' + JSON.stringify((vars || []).map(function (v) {
+        return PY_RESERVED.indexOf(v) === -1 ? v : v + '_';
+      })),
       '_local = {n: sp.Symbol(n) for n in _names}',
       '_T = standard_transformations + (convert_xor, split_symbols, implicit_multiplication_application)',
       '',
@@ -497,6 +514,14 @@ const MathCheck = (function () {
       '    print(json.dumps({"ok": False, "kind": "unparsed", "detail": str(e)})); raise SystemExit',
       '',
       'def _same(a, b):',
+      '    # a relation cannot be subtracted; compare it as a relation',
+      '    if isinstance(a, sp.core.relational.Relational) or isinstance(b, sp.core.relational.Relational):',
+      '        if not (isinstance(a, sp.core.relational.Relational) and isinstance(b, sp.core.relational.Relational)):',
+      '            return False',
+      '        try:',
+      '            return bool(sp.simplify(a) == sp.simplify(b))',
+      '        except Exception:',
+      '            return False',
       '    try:',
       '        d = sp.simplify(sp.together(a - b))',
       '        if d == 0:',
@@ -1051,5 +1076,245 @@ Sandbox.define({
     }
     if (v.r < 1.001) return 'Exactly on the circle: it oscillates forever and never settles. Marginally stable.';
     return 'Outside the circle. Every sample is larger than the last \u2014 this filter diverges.';
+  },
+});
+
+/* ---- control-track visualisers ---- */
+
+/* the phase portrait: what a 2x2 A matrix does to the state, drawn as trajectories */
+Sandbox.define({
+  id: 'phase-portrait',
+  title: 'State-space trajectories',
+  params: [
+    { k: 'a11', label: 'a\u2081\u2081', min: -3, max: 3, step: 0.05, def: 0 },
+    { k: 'a12', label: 'a\u2081\u2082', min: -3, max: 3, step: 0.05, def: 1 },
+    { k: 'a21', label: 'a\u2082\u2081', min: -6, max: 3, step: 0.05, def: -2 },
+    { k: 'a22', label: 'a\u2082\u2082', min: -4, max: 2, step: 0.05, def: -0.6 },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const L = 3.2;
+    const f = kit.frame(ctx, w, h, {
+      xRange: [-L, L], yRange: [-L, L], xTicks: 4, yTicks: 4, margin: { l: 42, r: 14, t: 14, b: 28 },
+    });
+    const A = [[v.a11, v.a12], [v.a21, v.a22]];
+
+    /* direction field */
+    ctx.save();
+    ctx.strokeStyle = f.P.line;
+    ctx.lineWidth = 1;
+    for (let i = -3; i <= 3; i++) {
+      for (let j = -3; j <= 3; j++) {
+        const x = i * L / 3.4, y = j * L / 3.4;
+        let dx = A[0][0] * x + A[0][1] * y, dy = A[1][0] * x + A[1][1] * y;
+        const m = Math.hypot(dx, dy) || 1;
+        dx = dx / m * 0.28; dy = dy / m * 0.28;
+        ctx.beginPath();
+        ctx.moveTo(f.fx(x), f.fy(y));
+        ctx.lineTo(f.fx(x + dx), f.fy(y + dy));
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    /* trajectories from a ring of starts */
+    const cols = [f.P.accent, f.P.blue, f.P.purple, f.P.amber];
+    for (let k = 0; k < 8; k++) {
+      const th = k / 8 * Math.PI * 2;
+      let x = 2.7 * Math.cos(th), y = 2.7 * Math.sin(th);
+      const pts = [[x, y]];
+      const dt = 0.012;
+      for (let n = 0; n < 1400; n++) {
+        const dx = A[0][0] * x + A[0][1] * y, dy = A[1][0] * x + A[1][1] * y;
+        x += dx * dt; y += dy * dt;
+        if (Math.abs(x) > L * 1.6 || Math.abs(y) > L * 1.6) break;
+        if (n % 4 === 0) pts.push([x, y]);
+      }
+      f.line(pts, cols[k % cols.length], 1.4);
+    }
+    f.dot(0, 0, f.P.ink, 3.5);
+    f.text('x\u2081', f.x1 - 6, f.y1 + 20, f.P.faint, 'right');
+    f.text('x\u2082', f.x0 + 4, f.y0 + 12, f.P.faint);
+  },
+  explain: function (v) {
+    const tr = v.a11 + v.a22;
+    const det = v.a11 * v.a22 - v.a12 * v.a21;
+    const disc = tr * tr - 4 * det;
+    let kind;
+    if (det < 0) kind = 'a <b>saddle</b> \u2014 unstable whatever you do to the gains';
+    else if (disc < 0) kind = tr < 0 ? 'a <b>stable spiral</b>' : (tr > 0 ? 'an <b>unstable spiral</b>' : 'a <b>centre</b> \u2014 it orbits forever');
+    else kind = tr < 0 ? 'a <b>stable node</b>' : 'an <b>unstable node</b>';
+    return 'trace = ' + tr.toFixed(2) + ', det = ' + det.toFixed(2) + ' \u2014 ' + kind +
+      '. Stability is decided entirely by those two numbers, never by the individual entries.';
+  },
+});
+
+/* pole placement by state feedback: move the closed-loop poles, watch the effort */
+Sandbox.define({
+  id: 'pole-place',
+  title: 'Pole placement and control effort',
+  params: [
+    { k: 'p1', label: 'pole 1', min: -12, max: -0.2, step: 0.1, def: -1.5 },
+    { k: 'p2', label: 'pole 2', min: -12, max: -0.2, step: 0.1, def: -3 },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    /* plant: double integrator, x'' = u. desired char poly (s-p1)(s-p2) */
+    const k1 = v.p1 * v.p2;            /* position gain */
+    const k2 = -(v.p1 + v.p2);         /* velocity gain */
+    const T = 8, dt = 0.004;
+    let x = 1, xd = 0;
+    const xs = [], us = [];
+    let peakU = 0;
+    for (let t = 0; t <= T; t += dt) {
+      const u = -k1 * x - k2 * xd;
+      peakU = Math.max(peakU, Math.abs(u));
+      xd += u * dt;
+      x += xd * dt;
+      if (Math.round(t / dt) % 6 === 0) { xs.push([t, x]); us.push([t, u]); }
+    }
+    const topH = Math.round(h * 0.54);
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, w, topH); ctx.clip();
+    const a = kit.frame(ctx, w, topH, {
+      xRange: [0, T], yRange: [-0.45, 1.15], xTicks: 4, yTicks: 3, margin: { l: 44, r: 14, t: 12, b: 20 },
+    });
+    a.hline(0, a.P.faint, [3, 4]);
+    a.line(xs, a.P.accent, 2);
+    a.text('position', a.x0 + 4, a.y0 + 12, a.P.faint);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(0, topH + 4);
+    const lim = Math.max(2, peakU * 1.15);
+    const b = kit.frame(ctx, w, h - topH - 4, {
+      xRange: [0, T], yRange: [-lim, lim], xTicks: 4, yTicks: 3, margin: { l: 44, r: 14, t: 10, b: 28 },
+    });
+    b.hline(0, b.P.line);
+    b.line(us, b.P.amber, 2);
+    b.text('control effort u', b.x0 + 4, b.y0 + 12, b.P.faint);
+    b.text('seconds', b.x1 - 6, b.y1 + 20, b.P.faint, 'right');
+    ctx.restore();
+  },
+  explain: function (v) {
+    const k1 = (v.p1 * v.p2).toFixed(2), k2 = (-(v.p1 + v.p2)).toFixed(2);
+    const fast = Math.max(Math.abs(v.p1), Math.abs(v.p2));
+    return 'K = [' + k1 + ', ' + k2 + ']. Settling goes as 1/|p|, but the peak effort grows ' +
+      'roughly as |p|\u00b2 \u2014 push the poles to \u2212' + fast.toFixed(1) +
+      ' and you are asking for an actuator that can deliver it. That trade is the whole of LQR.';
+  },
+});
+
+/* a scalar Kalman filter: truth, noisy measurement, and the estimate between them */
+Sandbox.define({
+  id: 'kalman',
+  title: 'Trusting the model against the measurement',
+  params: [
+    { k: 'q', label: 'process noise Q', min: 0.0005, max: 0.2, step: 0.0005, def: 0.01 },
+    { k: 'r', label: 'measurement noise R', min: 0.005, max: 2, step: 0.005, def: 0.35 },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    /* a fixed pseudo-random stream so the picture is stable while a slider moves */
+    let seed = 12345;
+    const rnd = function () {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    const gauss = function () {
+      const u = Math.max(rnd(), 1e-9), t = rnd();
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * t);
+    };
+    const N = 120;
+    const truth = [], meas = [], est = [];
+    let x = 0, xh = 0, P0 = 1;
+    let sumErrM = 0, sumErrE = 0;
+    for (let n = 0; n < N; n++) {
+      x = x + 0.03 * Math.cos(n / 9) + Math.sqrt(v.q) * gauss();
+      const z = x + Math.sqrt(v.r) * gauss();
+      /* predict then correct */
+      P0 = P0 + v.q;
+      const K = P0 / (P0 + v.r);
+      xh = xh + K * (z - xh);
+      P0 = (1 - K) * P0;
+      truth.push([n, x]); meas.push([n, z]); est.push([n, xh]);
+      sumErrM += (z - x) * (z - x);
+      sumErrE += (xh - x) * (xh - x);
+    }
+    const all = truth.concat(meas).map(function (p) { return p[1]; });
+    const lo = Math.min.apply(null, all) - 0.3, hi = Math.max.apply(null, all) + 0.3;
+    const f = kit.frame(ctx, w, h, {
+      xRange: [0, N], yRange: [lo, hi], xTicks: 4, yTicks: 4, margin: { l: 44, r: 14, t: 14, b: 28 },
+    });
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    meas.forEach(function (p) { f.dot(p[0], p[1], f.P.dim, 1.8); });
+    ctx.restore();
+    f.line(truth, f.P.blue, 2);
+    f.line(est, f.P.accent, 2);
+    f.text('truth', f.x0 + 6, f.y0 + 12, f.P.blue);
+    f.text('estimate', f.x0 + 52, f.y0 + 12, f.P.accent);
+    f.text('measurements', f.x0 + 128, f.y0 + 12, f.P.dim);
+    ctx._err = [Math.sqrt(sumErrM / N), Math.sqrt(sumErrE / N)];
+  },
+  explain: function (v) {
+    const ratio = v.q / v.r;
+    const K = Math.sqrt(ratio * ratio / 4 + ratio) - ratio / 2;
+    return 'The steady-state gain settles near <b>K = ' + K.toFixed(3) + '</b>. It depends only on ' +
+      'the <em>ratio</em> Q/R, not on either alone: raise Q and the filter believes the sensor, ' +
+      'raise R and it believes the model.';
+  },
+});
+
+/* sliding mode: the switching surface, and the chatter that comes with it */
+Sandbox.define({
+  id: 'sliding-mode',
+  title: 'Sliding surfaces and chatter',
+  params: [
+    { k: 'lam', label: 'surface slope \u03bb', min: 0.4, max: 6, step: 0.05, def: 2 },
+    { k: 'eta', label: 'switching gain \u03b7', min: 0.2, max: 8, step: 0.05, def: 2.5 },
+    { k: 'bl', label: 'boundary layer \u03c6', min: 0, max: 0.6, step: 0.005, def: 0 },
+  ],
+  draw: function (ctx, w, h, v, kit) {
+    const L = 2.4;
+    const f = kit.frame(ctx, w, h, {
+      xRange: [-L, L], yRange: [-L * 1.6, L * 1.6], xTicks: 4, yTicks: 4, margin: { l: 44, r: 14, t: 14, b: 28 },
+    });
+    /* the sliding surface s = xd + lam*x = 0 */
+    f.line([[-L, L * v.lam], [L, -L * v.lam]], f.P.purple, 1.6);
+    if (v.bl > 0) {
+      [v.bl, -v.bl].forEach(function (o) {
+        ctx.save(); ctx.globalAlpha = 0.45;
+        f.line([[-L, L * v.lam + o], [L, -L * v.lam + o]], f.P.purple, 1);
+        ctx.restore();
+      });
+    }
+    /* trajectories reaching the surface then sliding down it */
+    [[2, 2.6], [-2, -2.6], [1.6, -2.2], [-1.6, 2.2]].forEach(function (start, i) {
+      let x = start[0], xd = start[1];
+      const pts = [[x, xd]];
+      const dt = 0.0025;
+      for (let n = 0; n < 6000; n++) {
+        const sVal = xd + v.lam * x;
+        const sat = v.bl > 0 ? Math.max(-1, Math.min(1, sVal / v.bl)) : (sVal > 0 ? 1 : (sVal < 0 ? -1 : 0));
+        const u = -v.eta * sat;
+        xd += u * dt;
+        x += xd * dt;
+        if (Math.abs(x) > L * 1.4 || Math.abs(xd) > L * 2.4) break;
+        if (n % 6 === 0) pts.push([x, xd]);
+      }
+      f.line(pts, [f.P.accent, f.P.blue, f.P.amber, f.P.ink][i], 1.5);
+    });
+    f.dot(0, 0, f.P.ink, 3.5);
+    f.text('x', f.x1 - 6, f.y1 + 20, f.P.faint, 'right');
+    f.text('\u1e8b', f.x0 + 4, f.y0 + 12, f.P.faint);
+  },
+  explain: function (v) {
+    if (v.bl === 0) {
+      return 'With no boundary layer the control switches infinitely fast on the surface \u2014 ideal in ' +
+        'the mathematics, <b>chatter</b> in any real actuator. Once on the surface the dynamics are ' +
+        '\u1e8b = \u2212' + v.lam.toFixed(2) + 'x, first order and independent of the plant.';
+    }
+    return 'A boundary layer of ' + v.bl.toFixed(3) + ' trades exactness for smoothness: the switching ' +
+      'becomes a saturation, the chatter goes, and the state settles into a band around the surface ' +
+      'rather than onto it.';
   },
 });

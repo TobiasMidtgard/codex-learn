@@ -160,6 +160,9 @@ def norm_derive(dv, ctx):
 
 def normalise(course):
     cid = course["id"]
+    # `band` is the current name; `year` is still accepted from older modules
+    if "band" in course and "year" not in course:
+        course["year"] = course["band"]
     for key in ("id", "title", "year", "level", "summary", "modules", "capstone"):
         if key not in course:
             raise ValueError(f"{cid}: missing {key!r}")

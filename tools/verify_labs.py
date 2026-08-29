@@ -41,13 +41,29 @@ SENTINEL = "<<<CW-LAB-RESULT>>>"  # not whitespace: str.strip() must not eat it
 
 # Anything outside this set is unavailable (or ruinously slow) in the browser
 # sandbox, so a lab that reaches for it would pass here and fail for a student.
+# The old list lumped three different things together under one reason. They are
+# not the same, and conflating them cost the EE curriculum its numerics.
+#
+#   1. absent from Pyodide entirely — a lab reaching for these dies in the browser
+#   2. structurally impossible in WASM — no processes, no sockets, no native UI
+#   3. present in the Pyodide distribution and auto-installed by
+#      loadPackagesFromImports (engine.js) — these are FINE in a lab, provided the
+#      local gate has them too, or this script would bless code it never ran.
+#
+# Anything in group 3 must be importable here. ALLOWED_HEAVY is checked at startup
+# so a missing local install fails loudly instead of silently skipping the check.
 BANNED_IMPORTS = {
-    "numpy", "scipy", "pandas", "matplotlib", "sklearn", "torch", "tensorflow",
-    "requests", "httpx", "aiohttp", "django", "flask", "fastapi", "pydantic",
-    "sympy", "networkx", "PIL", "cv2", "numba", "polars", "pyarrow", "z3",
-    "qiskit", "gym", "gymnasium", "gmpy2", "cryptography", "nacl", "pytest",
+    # 1. not in the distribution
+    "torch", "tensorflow", "sklearn", "django", "flask", "fastapi", "pydantic",
+    "cv2", "numba", "z3", "qiskit", "gym", "gymnasium", "gmpy2", "polars",
+    "pyarrow", "nacl", "pytest",
+    # 2. impossible in the browser sandbox
     "multiprocessing", "subprocess", "socket", "ctypes", "curses", "tkinter",
+    "requests", "httpx", "aiohttp",
 }
+
+# group 3: allowed, but only because both gates can run them
+ALLOWED_HEAVY = {"numpy", "sympy"}
 
 
 # ---------------------------------------------------------------- dedent
@@ -261,7 +277,26 @@ def check_course(path) -> dict:
     return report
 
 
+def check_local_env() -> None:
+    """The two-gate property only holds if this gate can run what the browser runs.
+    A lab importing numpy would otherwise be silently unverifiable here."""
+    import importlib
+    missing = []
+    for mod in sorted(ALLOWED_HEAVY):
+        try:
+            importlib.import_module(mod)
+        except Exception:
+            missing.append(mod)
+    if missing:
+        raise SystemExit(
+            "verify_labs needs " + ", ".join(missing) + " locally, because labs are "
+            "allowed to import them and the browser can.\n"
+            "  python -m pip install " + " ".join(missing)
+        )
+
+
 def main():
+    check_local_env()
     ap = argparse.ArgumentParser()
     ap.add_argument("paths", nargs="*")
     ap.add_argument("--run", help=argparse.SUPPRESS)
