@@ -1,0 +1,438 @@
+{
+ "id": "MA112",
+ "title": "Calculus II — Integration & Series",
+ "year": 1,
+ "level": "Intermediate",
+ "prereqs": [
+  "MA111"
+ ],
+ "stack": [
+  "Python"
+ ],
+ "credits": 10,
+ "hours": 110,
+ "icon": "∑",
+ "summary": "Integration and infinite series, built numerically so that every theorem leaves a measurable trace. You implement the Newton-Cotes rules and watch their error orders appear in the data, drive an adaptive integrator to a requested tolerance, tame improper integrals by substitution, and turn Taylor's theorem and the convergence tests into code that reports how wrong it might be.",
+ "outcomes": [
+  "Derive and implement the left, right, midpoint, trapezoid and Simpson rules",
+  "Measure an observed error order and match it against the theoretical one",
+  "Drive an adaptive quadrature to a caller-supplied tolerance with a depth guard",
+  "Convert an improper integral into a proper one by a change of variable",
+  "Construct Taylor coefficients and bound the truncation error with the Lagrange remainder",
+  "Apply the ratio and integral tests, and estimate a radius of convergence numerically",
+  "Report a numerical answer together with a defensible error bound"
+ ],
+ "assessment": "4 lab checkpoints (10% each) + capstone library (60%).",
+ "reading": [
+  "Stewart, *Calculus: Early Transcendentals*, 9th ed. — chapters 5-8 and 11",
+  "Burden, Faires & Burden, *Numerical Analysis*, 10th ed. — chapter 4",
+  "Spivak, *Calculus*, 4th ed. — chapters 13-14 and 22-24"
+ ],
+ "modules": [
+  {
+   "title": "Riemann sums and the Newton-Cotes rules",
+   "summary": "From the definition of the integral to the rules that make it computable.",
+   "concepts": [
+    "The Riemann integral as the common limit of left, right and midpoint sums",
+    "The Fundamental Theorem of Calculus links antiderivatives to areas",
+    "Trapezoid rule = average of the left and right sums; error term -(b-a)h^2 f''(c)/12",
+    "Midpoint rule has the same order but half the constant, and the opposite sign",
+    "Simpson's rule integrates the interpolating parabola exactly, and is exact for cubics",
+    "Composite error orders: O(h) for left/right, O(h^2) for midpoint/trapezoid, O(h^4) for Simpson",
+    "Observed order p = log2(E(n) / E(2n)) — halving h should divide the error by 2^p"
+   ],
+   "lab": {
+    "title": "Quadrature rules and their error orders",
+    "runtime": "python",
+    "minutes": 40,
+    "brief": "Implement the five classical rules on `n` equal panels of width `h = (b - a) / n`,\nthen *measure* the error order each one actually achieves.\n\n**`left_sum(f, a, b, n)`**, **`right_sum(f, a, b, n)`**, **`midpoint_sum(f, a, b, n)`**\n— the three Riemann sums, sampling each panel at its left edge, right edge and\ncentre respectively.\n\n**`trapezoid(f, a, b, n)`** — `h * (f(a)/2 + f(x_1) + ... + f(x_{n-1}) + f(b)/2)`.\n\n**`simpson(f, a, b, n)`** — the 1-4-2-4-...-4-1 pattern, scaled by `h / 3`.\n\nAll five raise `ValueError` for `n < 1`; `simpson` additionally raises for odd `n`,\nbecause it consumes panels in pairs.\n\n```text\nf(x) = x**2 on [0, 1] with n = 4\nleft_sum      -> 0.21875\nright_sum     -> 0.46875\nmidpoint_sum  -> 0.328125\ntrapezoid     -> 0.34375\nsimpson       -> 0.3333333333333333\n```\n\n**`observed_order(rule, f, a, b, exact, n)`** — the empirical convergence order\n\n```text\np = log2( |rule(f,a,b,n) - exact| / |rule(f,a,b,2n) - exact| )\n```\n\nReturn `math.inf` when the finer error is exactly zero (the rule is exact for\nthat integrand, as Simpson is for any cubic).\n\nNothing here depends on the sign of `b - a`: with `b < a` the width `h` is\nnegative and every rule returns the negated integral automatically.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef left_sum(f, a, b, n):\n    \"\"\"Riemann sum sampling each of n panels at its left edge.\"\"\"\n    # your code here\n\n\ndef right_sum(f, a, b, n):\n    \"\"\"Riemann sum sampling each of n panels at its right edge.\"\"\"\n    # your code here\n\n\ndef midpoint_sum(f, a, b, n):\n    \"\"\"Riemann sum sampling each of n panels at its centre.\"\"\"\n    # your code here\n\n\ndef trapezoid(f, a, b, n):\n    \"\"\"Composite trapezoid rule on n panels.\"\"\"\n    # your code here\n\n\ndef simpson(f, a, b, n):\n    \"\"\"Composite Simpson rule; n must be even and at least 2.\"\"\"\n    # your code here\n\n\ndef observed_order(rule, f, a, b, exact, n):\n    \"\"\"log2 of the error ratio between n panels and 2n panels.\"\"\"\n    # your code here\n\n\nprint(trapezoid(lambda x: x * x, 0.0, 1.0, 4))\nprint(simpson(math.exp, 0.0, 1.0, 100))\nprint(observed_order(simpson, math.exp, 0.0, 1.0, math.e - 1.0, 32))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef left_sum(f, a, b, n):\n    \"\"\"Riemann sum sampling each of n panels at its left edge.\"\"\"\n    if n < 1:\n        raise ValueError(\"n must be at least 1\")\n    h = (b - a) / n\n    return h * sum(f(a + i * h) for i in range(n))\n\n\ndef right_sum(f, a, b, n):\n    \"\"\"Riemann sum sampling each of n panels at its right edge.\"\"\"\n    if n < 1:\n        raise ValueError(\"n must be at least 1\")\n    h = (b - a) / n\n    return h * sum(f(a + i * h) for i in range(1, n + 1))\n\n\ndef midpoint_sum(f, a, b, n):\n    \"\"\"Riemann sum sampling each of n panels at its centre.\"\"\"\n    if n < 1:\n        raise ValueError(\"n must be at least 1\")\n    h = (b - a) / n\n    return h * sum(f(a + (i + 0.5) * h) for i in range(n))\n\n\ndef trapezoid(f, a, b, n):\n    \"\"\"Composite trapezoid rule on n panels.\"\"\"\n    if n < 1:\n        raise ValueError(\"n must be at least 1\")\n    h = (b - a) / n\n    total = 0.5 * (f(a) + f(b))\n    for i in range(1, n):\n        total += f(a + i * h)\n    return h * total\n\n\ndef simpson(f, a, b, n):\n    \"\"\"Composite Simpson rule; n must be even and at least 2.\"\"\"\n    if n < 2 or n % 2 != 0:\n        raise ValueError(\"n must be an even integer of at least 2\")\n    h = (b - a) / n\n    total = f(a) + f(b)\n    for i in range(1, n):\n        total += (4 if i % 2 == 1 else 2) * f(a + i * h)\n    return h * total / 3.0\n\n\ndef observed_order(rule, f, a, b, exact, n):\n    \"\"\"log2 of the error ratio between n panels and 2n panels.\"\"\"\n    coarse = abs(rule(f, a, b, n) - exact)\n    fine = abs(rule(f, a, b, 2 * n) - exact)\n    if fine == 0.0:\n        return math.inf\n    return math.log2(coarse / fine)\n\n\nprint(trapezoid(lambda x: x * x, 0.0, 1.0, 4))\nprint(simpson(math.exp, 0.0, 1.0, 100))\nprint(observed_order(simpson, math.exp, 0.0, 1.0, math.e - 1.0, 32))\n"
+     }
+    ],
+    "hints": [
+     "Compute `h = (b - a) / n` once, then the sample points are `a + i * h`. The left sum uses `i` from 0 to n-1, the right sum 1 to n, the midpoint `a + (i + 0.5) * h`.",
+     "Trapezoid: start the accumulator at `0.5 * (f(a) + f(b))`, add every interior point at full weight, and multiply by `h` at the end.",
+     "Simpson's weights alternate: interior index `i` gets 4 when `i` is odd and 2 when it is even. `(4 if i % 2 == 1 else 2)` inside the loop is the whole trick.",
+     "`observed_order` must guard against a zero denominator *before* calling `math.log2` — a rule that is exact at 2n panels has infinite observed order."
+    ],
+    "tests": [
+     {
+      "name": "The three Riemann sums on x^2",
+      "code": "_f = lambda x: x * x\nfor _name, _rule, _want in [(\"left_sum\", left_sum, 0.21875),\n                            (\"right_sum\", right_sum, 0.46875),\n                            (\"midpoint_sum\", midpoint_sum, 0.328125)]:\n    _got = _rule(_f, 0.0, 1.0, 4)\n    assert abs(_got - _want) < 1e-12, f\"{_name}(x^2, 0, 1, 4) gave {_got!r}, expected {_want}\"\n_got = left_sum(_f, 0.0, 1.0, 1)\nassert abs(_got - 0.0) < 1e-12, f\"left_sum with n=1 gave {_got!r}, expected 0.0\"\n_got = midpoint_sum(_f, 0.0, 1.0, 1)\nassert abs(_got - 0.25) < 1e-12, f\"midpoint_sum with n=1 gave {_got!r}, expected 0.25\""
+     },
+     {
+      "name": "Trapezoid is the mean of left and right",
+      "code": "_f = lambda x: math.exp(-x) + x ** 3\nfor _n in (1, 3, 7, 20):\n    _mean = 0.5 * (left_sum(_f, 0.0, 2.0, _n) + right_sum(_f, 0.0, 2.0, _n))\n    _got = trapezoid(_f, 0.0, 2.0, _n)\n    assert abs(_got - _mean) < 1e-12, \\\n        f\"trapezoid(n={_n}) gave {_got!r}, but (left+right)/2 is {_mean!r}\"\n_got = trapezoid(lambda x: 2.0 * x + 1.0, 0.0, 3.0, 3)\nassert abs(_got - 12.0) < 1e-12, f\"trapezoid is exact on straight lines; got {_got!r}, expected 12.0\""
+     },
+     {
+      "name": "Simpson is exact for cubics",
+      "code": "_got = simpson(lambda x: x ** 3, 0.0, 1.0, 2)\nassert abs(_got - 0.25) < 1e-14, f\"simpson(x^3, 0, 1, 2) gave {_got!r}, expected 0.25\"\n_got = simpson(lambda x: 4.0 * x ** 3 - 3.0 * x + 5.0, -1.0, 2.0, 4)\nassert abs(_got - 25.5) < 1e-12, f\"simpson on a cubic gave {_got!r}, expected 25.5\"\n_got = simpson(lambda x: x * x, 0.0, 1.0, 4)\nassert abs(_got - 1.0 / 3.0) < 1e-14, f\"simpson(x^2, 0, 1, 4) gave {_got!r}, expected 1/3\""
+     },
+     {
+      "name": "Bad panel counts are refused",
+      "code": "for _name, _rule in [(\"left_sum\", left_sum), (\"right_sum\", right_sum),\n                     (\"midpoint_sum\", midpoint_sum), (\"trapezoid\", trapezoid),\n                     (\"simpson\", simpson)]:\n    for _bad in (0, -1, -8):\n        try:\n            _rule(math.sin, 0.0, 1.0, _bad)\n            assert False, f\"{_name} with n={_bad} should raise ValueError\"\n        except ValueError:\n            pass\nfor _odd in (1, 3, 15):\n    try:\n        simpson(math.sin, 0.0, 1.0, _odd)\n        assert False, f\"simpson with n={_odd} should raise ValueError (odd panel count)\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "Refinement really does converge",
+      "code": "_exact = math.e - 1.0\n_e_trap = abs(trapezoid(math.exp, 0.0, 1.0, 1000) - _exact)\nassert _e_trap < 1e-6, f\"trapezoid with n=1000 was off by {_e_trap!r}, expected under 1e-6\"\n_e_mid = abs(midpoint_sum(math.exp, 0.0, 1.0, 1000) - _exact)\nassert _e_mid < 1e-6, f\"midpoint_sum with n=1000 was off by {_e_mid!r}, expected under 1e-6\"\n_e_simp = abs(simpson(math.exp, 0.0, 1.0, 100) - _exact)\nassert _e_simp < 1e-9, f\"simpson with n=100 was off by {_e_simp!r}, expected under 1e-9\""
+     },
+     {
+      "name": "Observed orders match the theory",
+      "code": "_exact = math.e - 1.0\nfor _name, _rule, _want in [(\"left_sum\", left_sum, 1.0), (\"right_sum\", right_sum, 1.0),\n                            (\"midpoint_sum\", midpoint_sum, 2.0), (\"trapezoid\", trapezoid, 2.0)]:\n    _p = observed_order(_rule, math.exp, 0.0, 1.0, _exact, 64)\n    assert abs(_p - _want) < 0.05, f\"observed_order for {_name} gave {_p!r}, expected about {_want}\"\n_p = observed_order(simpson, math.exp, 0.0, 1.0, _exact, 32)\nassert abs(_p - 4.0) < 0.05, f\"observed_order for simpson gave {_p!r}, expected about 4.0\""
+     },
+     {
+      "name": "An exact rule has infinite order",
+      "code": "_p = observed_order(simpson, lambda x: x ** 3, 0.0, 1.0, 0.25, 4)\nassert _p == math.inf, f\"observed_order gave {_p!r}; a zero fine error should give math.inf\""
+     },
+     {
+      "name": "A reversed interval flips the sign",
+      "code": "for _name, _rule in [(\"trapezoid\", trapezoid), (\"midpoint_sum\", midpoint_sum)]:\n    _fwd = _rule(math.sin, 0.0, math.pi, 8)\n    _bwd = _rule(math.sin, math.pi, 0.0, 8)\n    assert abs(_fwd + _bwd) < 1e-12, \\\n        f\"{_name} over [pi, 0] gave {_bwd!r}, expected the negation of {_fwd!r}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Adaptive quadrature and improper integrals",
+   "summary": "Spending effort where the integrand is difficult, and taming infinite domains.",
+   "concepts": [
+    "A fixed panel count wastes work on smooth stretches and starves the hard ones",
+    "Richardson extrapolation: comparing S(a,b) with S(a,c)+S(c,b) estimates the error",
+    "The 1/15 factor comes from Simpson's h^4 order — halving h divides the error by 16",
+    "Recursive bisection with a per-half tolerance of tol/2 keeps the global budget",
+    "A depth limit is mandatory: a singularity would otherwise recurse forever",
+    "Improper integrals of the first kind (infinite limit) yield to x = a + t/(1-t)",
+    "Improper integrals of the second kind (endpoint blow-up) often yield to x = a + u^2"
+   ],
+   "lab": {
+    "title": "Adaptive Simpson to a requested tolerance",
+    "runtime": "python",
+    "minutes": 45,
+    "brief": "## Adaptive Simpson\n\n**`adaptive_simpson(f, a, b, tol, max_depth=30)`**\n\nOne Simpson panel over `[a, b]` is `(b - a) / 6 * (f(a) + 4 f(m) + f(b))` with\n`m` the midpoint. Split the interval, compute the two half panels, and compare:\n\n```text\ndelta = left + right - whole\n```\n\nAccept `left + right + delta / 15` when `abs(delta) <= 15 * tol` or the depth\nbudget is exhausted; otherwise recurse into each half with tolerance `tol / 2`.\n\n`tol <= 0` raises `ValueError`. `a == b` returns `0.0`. `b < a` returns the\nnegation of the forward integral.\n\n## Improper integrals\n\nEach of the three below rewrites the integral as a proper one over a finite\ninterval and then calls `adaptive_simpson`. The substituted integrand is only\n*removably* singular at the endpoint, so clamp the variable to `CLAMP = 1e-12`\naway from it rather than evaluating the limit symbolically.\n\n**`integrate_to_infinity(f, a, tol)`** — with `x = a + t/(1-t)` and\n`dx = dt/(1-t)^2`,\n\n```text\n∫[a, ∞) f(x) dx  =  ∫[0, 1) f(a + t/(1-t)) / (1-t)^2 dt\n```\n\n**`integrate_real_line(f, tol)`** — split at 0 and reflect: the left half is\n`integrate_to_infinity(lambda x: f(-x), 0, tol/2)`.\n\n**`integrate_endpoint_singular(f, a, b, tol)`** — for an integrable blow-up at\n`a`, substitute `x = a + u^2`, `dx = 2u du`:\n\n```text\n∫[a, b] f(x) dx  =  ∫[0, sqrt(b-a)] 2u f(a + u^2) du\n```\n\nThe factor `2u` is exactly what kills a `1/sqrt(x - a)` singularity. Raise\n`ValueError` unless `a < b`.\n\n```text\nintegrate_to_infinity(lambda x: math.exp(-x), 0.0, 1e-10)      -> 1.0\nintegrate_real_line(lambda x: math.exp(-x*x), 1e-10)           -> sqrt(pi)\nintegrate_endpoint_singular(lambda x: 1/math.sqrt(x), 0, 1, 1e-10) -> 2.0\n```",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nCLAMP = 1e-12\n\n\ndef _panel(f, a, b):\n    \"\"\"One Simpson panel over [a, b].\"\"\"\n    # your code here\n\n\ndef adaptive_simpson(f, a, b, tol, max_depth=30):\n    \"\"\"Recursive Simpson refinement to an absolute tolerance.\"\"\"\n    # your code here\n\n\ndef integrate_to_infinity(f, a, tol):\n    \"\"\"Integral of f from a to +infinity, via x = a + t/(1-t).\"\"\"\n    # your code here\n\n\ndef integrate_real_line(f, tol):\n    \"\"\"Integral of f over the whole real line.\"\"\"\n    # your code here\n\n\ndef integrate_endpoint_singular(f, a, b, tol):\n    \"\"\"Integral of f over [a, b] with an integrable singularity at a.\"\"\"\n    # your code here\n\n\nprint(adaptive_simpson(math.sin, 0.0, math.pi, 1e-10))\nprint(integrate_real_line(lambda x: math.exp(-x * x), 1e-10))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nCLAMP = 1e-12\n\n\ndef _panel(f, a, b):\n    \"\"\"One Simpson panel over [a, b].\"\"\"\n    c = 0.5 * (a + b)\n    return (b - a) / 6.0 * (f(a) + 4.0 * f(c) + f(b))\n\n\ndef _refine(f, a, b, tol, whole, depth):\n    \"\"\"Bisect until the Richardson estimate of the panel error is small enough.\"\"\"\n    c = 0.5 * (a + b)\n    left = _panel(f, a, c)\n    right = _panel(f, c, b)\n    delta = left + right - whole\n    if depth <= 0 or abs(delta) <= 15.0 * tol:\n        return left + right + delta / 15.0\n    return (_refine(f, a, c, tol / 2.0, left, depth - 1)\n            + _refine(f, c, b, tol / 2.0, right, depth - 1))\n\n\ndef adaptive_simpson(f, a, b, tol, max_depth=30):\n    \"\"\"Recursive Simpson refinement to an absolute tolerance.\"\"\"\n    if tol <= 0:\n        raise ValueError(\"tol must be positive\")\n    if a == b:\n        return 0.0\n    if b < a:\n        return -adaptive_simpson(f, b, a, tol, max_depth)\n    return _refine(f, a, b, tol, _panel(f, a, b), max_depth)\n\n\ndef integrate_to_infinity(f, a, tol):\n    \"\"\"Integral of f from a to +infinity, via x = a + t/(1-t).\"\"\"\n    def g(t):\n        u = 1.0 - t\n        if u < CLAMP:\n            u = CLAMP\n        return f(a + (1.0 - u) / u) / (u * u)\n    return adaptive_simpson(g, 0.0, 1.0, tol)\n\n\ndef integrate_real_line(f, tol):\n    \"\"\"Integral of f over the whole real line.\"\"\"\n    return (integrate_to_infinity(f, 0.0, tol / 2.0)\n            + integrate_to_infinity(lambda x: f(-x), 0.0, tol / 2.0))\n\n\ndef integrate_endpoint_singular(f, a, b, tol):\n    \"\"\"Integral of f over [a, b] with an integrable singularity at a.\"\"\"\n    if b <= a:\n        raise ValueError(\"need a < b\")\n\n    def g(u):\n        if u < CLAMP:\n            u = CLAMP\n        return 2.0 * u * f(a + u * u)\n    return adaptive_simpson(g, 0.0, math.sqrt(b - a), tol)\n\n\nprint(adaptive_simpson(math.sin, 0.0, math.pi, 1e-10))\nprint(integrate_real_line(lambda x: math.exp(-x * x), 1e-10))\n"
+     }
+    ],
+    "hints": [
+     "Put the recursion in a helper that already knows the value of the whole panel, so no point is ever evaluated twice for the same reason: `_refine(f, a, b, tol, whole, depth)`.",
+     "The accepted value is `left + right + delta / 15`, not `left + right` — that extra term is the Richardson correction and it buys you two extra orders for free.",
+     "For the infinite tail, work with `u = 1 - t` so the clamp is a single `if u < CLAMP: u = CLAMP`, and then `x = a + (1 - u) / u` and the Jacobian is `1 / u**2`.",
+     "`integrate_endpoint_singular` needs no clamp for `1/sqrt(x)` — `2u * f(u**2)` is the constant 2 — but `log` still needs one, so keep it."
+    ],
+    "tests": [
+     {
+      "name": "Proper integrals to ten digits",
+      "code": "for _name, _f, _a, _b, _want in [(\"sin on [0, pi]\", math.sin, 0.0, math.pi, 2.0),\n                                 (\"exp on [0, 1]\", math.exp, 0.0, 1.0, math.e - 1.0),\n                                 (\"x^3 on [0, 1]\", lambda x: x ** 3, 0.0, 1.0, 0.25)]:\n    _got = adaptive_simpson(_f, _a, _b, 1e-10)\n    assert abs(_got - _want) < 1e-9, f\"adaptive_simpson({_name}) gave {_got!r}, expected {_want!r}\"\n_got = adaptive_simpson(lambda x: 1.0 / (1.0 + 25.0 * x * x), -1.0, 1.0, 1e-10)\n_want = 2.0 * math.atan(5.0) / 5.0\nassert abs(_got - _want) < 1e-9, f\"Runge integral gave {_got!r}, expected {_want!r}\""
+     },
+     {
+      "name": "Degenerate and reversed intervals",
+      "code": "_got = adaptive_simpson(math.sin, 1.0, 1.0, 1e-10)\nassert _got == 0.0, f\"adaptive_simpson over an empty interval gave {_got!r}, expected 0.0\"\n_fwd = adaptive_simpson(math.sin, 0.0, math.pi, 1e-10)\n_bwd = adaptive_simpson(math.sin, math.pi, 0.0, 1e-10)\nassert abs(_fwd + _bwd) < 1e-12, f\"Reversed limits gave {_bwd!r}, expected the negation of {_fwd!r}\""
+     },
+     {
+      "name": "A non-positive tolerance is refused",
+      "code": "for _bad in (0.0, -1e-6, -3.0):\n    try:\n        adaptive_simpson(math.sin, 0.0, 1.0, _bad)\n        assert False, f\"adaptive_simpson with tol={_bad} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "The tolerance is actually honoured",
+      "code": "_exact = math.e - 1.0\n_loose = abs(adaptive_simpson(math.exp, 0.0, 1.0, 1e-3) - _exact)\n_tight = abs(adaptive_simpson(math.exp, 0.0, 1.0, 1e-12) - _exact)\nassert _loose < 1e-3, f\"tol=1e-3 left an error of {_loose!r}\"\nassert _tight < 1e-11, f\"tol=1e-12 left an error of {_tight!r}\"\nassert _tight <= _loose, f\"Tightening the tolerance made things worse: {_tight!r} vs {_loose!r}\""
+     },
+     {
+      "name": "Infinite upper limit",
+      "code": "for _name, _f, _a, _want in [(\"exp(-x) from 0\", lambda x: math.exp(-x), 0.0, 1.0),\n                             (\"1/(1+x^2) from 0\", lambda x: 1.0 / (1.0 + x * x), 0.0, math.pi / 2.0),\n                             (\"x^2 exp(-x) from 0\", lambda x: x * x * math.exp(-x), 0.0, 2.0),\n                             (\"x^-3 from 1\", lambda x: x ** -3.0, 1.0, 0.5)]:\n    _got = integrate_to_infinity(_f, _a, 1e-10)\n    assert abs(_got - _want) < 1e-8, f\"integrate_to_infinity({_name}) gave {_got!r}, expected {_want!r}\""
+     },
+     {
+      "name": "The whole real line",
+      "code": "_got = integrate_real_line(lambda x: math.exp(-x * x), 1e-10)\nassert abs(_got - math.sqrt(math.pi)) < 1e-8, \\\n    f\"Gaussian integral gave {_got!r}, expected {math.sqrt(math.pi)!r}\"\n_got = integrate_real_line(lambda x: 1.0 / (1.0 + x * x), 1e-10)\nassert abs(_got - math.pi) < 1e-8, f\"Cauchy integral gave {_got!r}, expected {math.pi!r}\""
+     },
+     {
+      "name": "Endpoint singularities",
+      "code": "_got = integrate_endpoint_singular(lambda x: 1.0 / math.sqrt(x), 0.0, 1.0, 1e-10)\nassert abs(_got - 2.0) < 1e-9, f\"Integral of x^-1/2 over [0, 1] gave {_got!r}, expected 2.0\"\n_got = integrate_endpoint_singular(math.log, 0.0, 1.0, 1e-10)\nassert abs(_got + 1.0) < 1e-8, f\"Integral of log over [0, 1] gave {_got!r}, expected -1.0\"\n_got = integrate_endpoint_singular(lambda x: x * x, 0.0, 1.0, 1e-10)\nassert abs(_got - 1.0 / 3.0) < 1e-9, \\\n    f\"The substitution must also work on smooth integrands; got {_got!r}, expected 1/3\"\nfor _bad in [(1.0, 1.0), (2.0, 1.0)]:\n    try:\n        integrate_endpoint_singular(math.log, _bad[0], _bad[1], 1e-8)\n        assert False, f\"integrate_endpoint_singular{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Taylor and Maclaurin series",
+   "summary": "Replacing a function by a polynomial, and knowing exactly what that costs.",
+   "concepts": [
+    "The Taylor coefficient c_k = f^(k)(a) / k!, and the Maclaurin case a = 0",
+    "Maclaurin series for exp, sin and cos, and the parity that zeroes half their coefficients",
+    "Horner evaluation costs n multiplications and is far better conditioned than powers",
+    "Taylor's theorem with Lagrange remainder: R_n(x) = f^(n+1)(c) x^(n+1) / (n+1)!",
+    "Bounding the remainder means bounding the derivative on the interval, not at a point",
+    "Factorial growth beats any fixed power, so exp/sin/cos converge for every x",
+    "Catastrophic cancellation: exp(-20) by Maclaurin series loses every significant digit"
+   ],
+   "lab": {
+    "title": "Series coefficients and the Lagrange remainder",
+    "runtime": "python",
+    "minutes": 40,
+    "brief": "Work with `kind` drawn from `\"exp\"`, `\"sin\"`, `\"cos\"`. Anything else raises\n`ValueError`, as does a negative `n`.\n\n**`taylor_coefficients(kind, n)`** — the Maclaurin coefficients `c_0 .. c_n`\nas a list of `n + 1` floats.\n\n```text\ntaylor_coefficients(\"exp\", 4)  ->  [1.0, 1.0, 0.5, 1/6, 1/24]\ntaylor_coefficients(\"sin\", 5)  ->  [0.0, 1.0, 0.0, -1/6, 0.0, 1/120]\ntaylor_coefficients(\"cos\", 5)  ->  [1.0, 0.0, -0.5, 0.0, 1/24, 0.0]\n```\n\n**`evaluate(coeffs, x)`** — Horner's scheme: start from the last coefficient\nand repeatedly multiply by `x` and add the next one down. An empty list raises\n`ValueError`.\n\n**`remainder_bound(kind, x, n)`** — the Lagrange bound on `|f(x) - P_n(x)|`:\n\n```text\nM * |x|^(n+1) / (n+1)!\n```\n\nwhere `M` bounds `|f^(n+1)|` between 0 and `x`. Every derivative of sin and cos\nis bounded by 1; for exp the largest value on that interval is `exp(|x|)`.\n\n```text\nremainder_bound(\"sin\", 0.5, 3)  ->  0.0026041666666666665\nremainder_bound(\"exp\", 1.0, 5)  ->  0.0037753914284153404\n```\n\n**`terms_for_tolerance(kind, x, tol, max_n=400)`** — the smallest `n` whose\nremainder bound is `<= tol`. `tol <= 0` raises `ValueError`, and so does a\ntolerance still unreached at `max_n`.\n\n```text\nterms_for_tolerance(\"sin\", 1.0, 1e-6)   ->  9\nterms_for_tolerance(\"cos\", 0.5, 1e-12)  ->  11\n```",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nKINDS = (\"exp\", \"sin\", \"cos\")\n\n\ndef taylor_coefficients(kind, n):\n    \"\"\"Maclaurin coefficients c_0 .. c_n for exp, sin or cos.\"\"\"\n    # your code here\n\n\ndef evaluate(coeffs, x):\n    \"\"\"Evaluate the polynomial with these coefficients at x, by Horner.\"\"\"\n    # your code here\n\n\ndef remainder_bound(kind, x, n):\n    \"\"\"Lagrange bound on the error of the degree-n Maclaurin polynomial at x.\"\"\"\n    # your code here\n\n\ndef terms_for_tolerance(kind, x, tol, max_n=400):\n    \"\"\"Smallest n whose remainder bound at x is at most tol.\"\"\"\n    # your code here\n\n\nprint(taylor_coefficients(\"cos\", 6))\nprint(evaluate(taylor_coefficients(\"exp\", 20), 1.0), math.e)\nprint(terms_for_tolerance(\"sin\", 1.0, 1e-6))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nKINDS = (\"exp\", \"sin\", \"cos\")\n\n\ndef taylor_coefficients(kind, n):\n    \"\"\"Maclaurin coefficients c_0 .. c_n for exp, sin or cos.\"\"\"\n    if kind not in KINDS:\n        raise ValueError(\"kind must be one of exp, sin, cos\")\n    if n < 0:\n        raise ValueError(\"n must not be negative\")\n    coeffs = []\n    for k in range(n + 1):\n        if kind == \"exp\":\n            coeffs.append(1.0 / math.factorial(k))\n        elif kind == \"sin\":\n            if k % 2 == 0:\n                coeffs.append(0.0)\n            else:\n                coeffs.append((-1.0) ** ((k - 1) // 2) / math.factorial(k))\n        else:\n            if k % 2 == 1:\n                coeffs.append(0.0)\n            else:\n                coeffs.append((-1.0) ** (k // 2) / math.factorial(k))\n    return coeffs\n\n\ndef evaluate(coeffs, x):\n    \"\"\"Evaluate the polynomial with these coefficients at x, by Horner.\"\"\"\n    if not coeffs:\n        raise ValueError(\"need at least one coefficient\")\n    total = 0.0\n    for c in reversed(coeffs):\n        total = total * x + c\n    return total\n\n\ndef remainder_bound(kind, x, n):\n    \"\"\"Lagrange bound on the error of the degree-n Maclaurin polynomial at x.\"\"\"\n    if kind not in KINDS:\n        raise ValueError(\"kind must be one of exp, sin, cos\")\n    if n < 0:\n        raise ValueError(\"n must not be negative\")\n    m = math.exp(abs(x)) if kind == \"exp\" else 1.0\n    return m * abs(x) ** (n + 1) / math.factorial(n + 1)\n\n\ndef terms_for_tolerance(kind, x, tol, max_n=400):\n    \"\"\"Smallest n whose remainder bound at x is at most tol.\"\"\"\n    if tol <= 0:\n        raise ValueError(\"tol must be positive\")\n    for n in range(max_n + 1):\n        if remainder_bound(kind, x, n) <= tol:\n            return n\n    raise ValueError(\"tolerance not reachable below max_n\")\n\n\nprint(taylor_coefficients(\"cos\", 6))\nprint(evaluate(taylor_coefficients(\"exp\", 20), 1.0), math.e)\nprint(terms_for_tolerance(\"sin\", 1.0, 1e-6))\n"
+     }
+    ],
+    "hints": [
+     "Validate `kind` and `n` first; every one of these functions shares the same two guards.",
+     "For sin, only odd k survives and the sign alternates with `(k - 1) // 2`; for cos only even k survives, alternating with `k // 2`.",
+     "Horner is three lines: `total = 0.0`, then `for c in reversed(coeffs): total = total * x + c`, then return.",
+     "`terms_for_tolerance` is a linear search over n calling `remainder_bound` — do not re-derive the factorial by hand."
+    ],
+    "tests": [
+     {
+      "name": "Coefficients for the three kinds",
+      "code": "_got = taylor_coefficients(\"exp\", 4)\n_want = [1.0, 1.0, 0.5, 1.0 / 6.0, 1.0 / 24.0]\nassert len(_got) == 5, f\"taylor_coefficients('exp', 4) gave {len(_got)} entries, expected 5\"\nfor _i, (_g, _w) in enumerate(zip(_got, _want)):\n    assert abs(_g - _w) < 1e-15, f\"exp coefficient {_i} is {_g!r}, expected {_w!r}\"\n_got = taylor_coefficients(\"sin\", 5)\n_want = [0.0, 1.0, 0.0, -1.0 / 6.0, 0.0, 1.0 / 120.0]\nfor _i, (_g, _w) in enumerate(zip(_got, _want)):\n    assert abs(_g - _w) < 1e-15, f\"sin coefficient {_i} is {_g!r}, expected {_w!r}\"\n_got = taylor_coefficients(\"cos\", 5)\n_want = [1.0, 0.0, -0.5, 0.0, 1.0 / 24.0, 0.0]\nfor _i, (_g, _w) in enumerate(zip(_got, _want)):\n    assert abs(_g - _w) < 1e-15, f\"cos coefficient {_i} is {_g!r}, expected {_w!r}\""
+     },
+     {
+      "name": "Degree zero and bad arguments",
+      "code": "assert taylor_coefficients(\"exp\", 0) == [1.0], f\"Got {taylor_coefficients('exp', 0)!r}, expected [1.0]\"\nassert taylor_coefficients(\"sin\", 0) == [0.0], f\"Got {taylor_coefficients('sin', 0)!r}, expected [0.0]\"\nfor _args in [(\"tan\", 3), (\"EXP\", 3), (\"exp\", -1), (\"sin\", -4)]:\n    try:\n        taylor_coefficients(*_args)\n        assert False, f\"taylor_coefficients{_args!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "Horner evaluation",
+      "code": "_got = evaluate([5.0], 12.0)\nassert _got == 5.0, f\"A constant polynomial gave {_got!r}, expected 5.0\"\n_got = evaluate([1.0, -2.0, 3.0], 2.0)\nassert abs(_got - 9.0) < 1e-12, f\"1 - 2x + 3x^2 at x=2 gave {_got!r}, expected 9.0\"\n_got = evaluate([1.0, 1.0, 0.5], 0.0)\nassert _got == 1.0, f\"Any polynomial at x=0 is its constant term; got {_got!r}\"\ntry:\n    evaluate([], 1.0)\n    assert False, \"evaluate([], 1.0) should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "The polynomials really approximate",
+      "code": "for _kind, _fn, _n, _x in [(\"exp\", math.exp, 20, 1.0), (\"exp\", math.exp, 25, -2.0),\n                           (\"sin\", math.sin, 15, 0.7), (\"sin\", math.sin, 25, 3.0),\n                           (\"cos\", math.cos, 25, 2.0), (\"cos\", math.cos, 10, -0.4)]:\n    _got = evaluate(taylor_coefficients(_kind, _n), _x)\n    _want = _fn(_x)\n    assert abs(_got - _want) < 1e-10, \\\n        f\"{_kind} series of degree {_n} at {_x} gave {_got!r}, expected {_want!r}\""
+     },
+     {
+      "name": "Known remainder bounds",
+      "code": "_got = remainder_bound(\"sin\", 0.5, 3)\n_want = 0.5 ** 4 / 24.0\nassert abs(_got - _want) < 1e-18, f\"remainder_bound('sin', 0.5, 3) gave {_got!r}, expected {_want!r}\"\n_got = remainder_bound(\"exp\", 1.0, 5)\n_want = math.e / 720.0\nassert abs(_got - _want) < 1e-15, f\"remainder_bound('exp', 1.0, 5) gave {_got!r}, expected {_want!r}\"\nassert remainder_bound(\"cos\", 0.0, 0) == 0.0, \"At x=0 the remainder bound is exactly 0\"\nfor _args in [(\"tan\", 1.0, 3), (\"sin\", 1.0, -1)]:\n    try:\n        remainder_bound(*_args)\n        assert False, f\"remainder_bound{_args!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "The bound is never violated",
+      "code": "for _kind, _fn in [(\"exp\", math.exp), (\"sin\", math.sin), (\"cos\", math.cos)]:\n    for _x in (-2.0, -0.3, 0.0, 0.75, 3.0):\n        for _n in (2, 5, 9, 14):\n            _err = abs(evaluate(taylor_coefficients(_kind, _n), _x) - _fn(_x))\n            _bound = remainder_bound(_kind, _x, _n)\n            assert _err <= _bound + 1e-14, \\\n                f\"{_kind} at x={_x}, n={_n}: error {_err!r} exceeds the bound {_bound!r}\""
+     },
+     {
+      "name": "terms_for_tolerance is the smallest such n",
+      "code": "for _kind, _x, _tol, _want in [(\"sin\", 1.0, 1e-6, 9), (\"exp\", 1.0, 1e-6, 9),\n                               (\"cos\", 0.5, 1e-12, 11), (\"exp\", 0.0, 1e-12, 0)]:\n    _got = terms_for_tolerance(_kind, _x, _tol)\n    assert _got == _want, f\"terms_for_tolerance({_kind!r}, {_x}, {_tol}) gave {_got!r}, expected {_want}\"\n    assert remainder_bound(_kind, _x, _got) <= _tol, \"The returned n must satisfy the tolerance\"\n    if _got > 0:\n        assert remainder_bound(_kind, _x, _got - 1) > _tol, \"n-1 must NOT satisfy it\"\nfor _bad in (0.0, -1e-9):\n    try:\n        terms_for_tolerance(\"sin\", 1.0, _bad)\n        assert False, f\"terms_for_tolerance with tol={_bad} should raise ValueError\"\n    except ValueError:\n        pass\ntry:\n    terms_for_tolerance(\"exp\", 5.0, 1e-9, max_n=3)\n    assert False, \"An unreachable tolerance within max_n should raise ValueError\"\nexcept ValueError:\n    pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Sequences, series and convergence tests",
+   "summary": "Deciding whether an infinite sum exists, and pinning down its value.",
+   "concepts": [
+    "A series converges exactly when its sequence of partial sums converges",
+    "The n-th term test is necessary, not sufficient — the harmonic series is the counterexample",
+    "Ratio test: L < 1 converges absolutely, L > 1 diverges, L = 1 says nothing",
+    "Numerically the ratio approaches its limit like L + c/n, so extrapolate with 2r(2n) - r(n)",
+    "Integral test: for f positive and decreasing, the tail is squeezed between two integrals",
+    "That squeeze is a computable error bar, which is what makes the test practically useful",
+    "Radius of convergence R = 1/limsup |c_n|^(1/n), estimated from consecutive non-zero coefficients"
+   ],
+   "lab": {
+    "title": "Convergence tests and the radius of convergence",
+    "runtime": "python",
+    "minutes": 45,
+    "brief": "Throughout, `term(k)` supplies the k-th term of a series indexed from `k = 1`.\n\n**`partial_sums(term, n)`** — the list `[S_1, S_2, ..., S_n]`. `n < 1` raises\n`ValueError`.\n\n```text\npartial_sums(lambda k: 0.5 ** k, 3)  ->  [0.5, 0.75, 0.875]\n```\n\n**`ratio_test(term, n=200)`** — returns `(verdict, limit)`. Estimate the ratio\n`r(m) = abs(term(m+1) / term(m))` at `m = n` and `m = 2n`, then extrapolate:\n\n```text\nlimit = max(0.0, 2 * r(2n) - r(n))\n```\n\n`verdict` is `\"converges\"` below `1 - 1e-3`, `\"diverges\"` above `1 + 1e-3`, and\n`\"inconclusive\"` in between. A zero term makes the ratio undefined — raise\n`ValueError`. `n < 1` also raises.\n\n```text\nratio_test(lambda k: 0.5 ** k)      ->  (\"converges\", 0.5)\nratio_test(lambda k: 1.0 / k ** 2)  ->  (\"inconclusive\", ~1.0)\nratio_test(lambda k: 2.0 ** k)      ->  (\"diverges\", 2.0)\n```\n\n**`estimate_sum(term, tail_integral, tol, max_terms=200000)`** — the integral\ntest turned into an answer with an error bar. `tail_integral(x)` supplies the\nexact value of the improper integral of the underlying positive decreasing `f`\nfrom `x` to infinity. After summing `n` terms,\n\n```text\ntail_integral(n+1)  <=  sum of the remaining terms  <=  tail_integral(n)\n```\n\nso take the midpoint of that bracket and half its width. Grow `n` until the\nhalf-width is `<= tol`, then return `(estimate, half_width, n)`. `tol <= 0`\nraises, and so does exhausting `max_terms`.\n\n```text\nestimate_sum(lambda k: 1/k**2, lambda x: 1/x, 1e-6)  ->  (~1.6449340678, ~1e-6, 707)\n```\n\n**`radius_of_convergence(coeff, n_max=60)`** — `coeff(k)` gives the k-th power\nseries coefficient. Define one estimate from the last two non-zero indices\n`n < m` at or below a cut-off:\n\n```text\nrho = (abs(coeff(m)) / abs(coeff(n))) ** (1 / (m - n)),   R = 1 / rho\n```\n\nCompute `R_full` at `n_max` and `R_half` at `n_max // 2`. Return `math.inf`\nwhen `R_full >= 1.9 * R_half` (shrinking faster than any geometric rate),\n`0.0` when `R_full <= 0.55 * R_half`, and `R_full` otherwise. Fewer than two\nnon-zero coefficients at either cut-off raises `ValueError`.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef partial_sums(term, n):\n    \"\"\"[S_1, ..., S_n] for a series indexed from k = 1.\"\"\"\n    # your code here\n\n\ndef ratio_test(term, n=200):\n    \"\"\"(verdict, extrapolated ratio limit) for the ratio test.\"\"\"\n    # your code here\n\n\ndef estimate_sum(term, tail_integral, tol, max_terms=200000):\n    \"\"\"(estimate, half_width, terms_used) from the integral-test bracket.\"\"\"\n    # your code here\n\n\ndef radius_of_convergence(coeff, n_max=60):\n    \"\"\"Estimated radius of convergence of the power series with these coefficients.\"\"\"\n    # your code here\n\n\nprint(partial_sums(lambda k: 1.0 / k, 4))\nprint(ratio_test(lambda k: 0.5 ** k))\nprint(estimate_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, 1e-6))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef partial_sums(term, n):\n    \"\"\"[S_1, ..., S_n] for a series indexed from k = 1.\"\"\"\n    if n < 1:\n        raise ValueError(\"n must be at least 1\")\n    sums = []\n    total = 0.0\n    for k in range(1, n + 1):\n        total += term(k)\n        sums.append(total)\n    return sums\n\n\ndef ratio_test(term, n=200):\n    \"\"\"(verdict, extrapolated ratio limit) for the ratio test.\"\"\"\n    if n < 1:\n        raise ValueError(\"n must be at least 1\")\n\n    def ratio(m):\n        below = term(m)\n        if below == 0:\n            raise ValueError(\"the ratio test needs non-zero terms\")\n        return abs(term(m + 1) / below)\n\n    limit = 2.0 * ratio(2 * n) - ratio(n)\n    if limit < 0.0:\n        limit = 0.0\n    if limit < 1.0 - 1e-3:\n        return (\"converges\", limit)\n    if limit > 1.0 + 1e-3:\n        return (\"diverges\", limit)\n    return (\"inconclusive\", limit)\n\n\ndef estimate_sum(term, tail_integral, tol, max_terms=200000):\n    \"\"\"(estimate, half_width, terms_used) from the integral-test bracket.\"\"\"\n    if tol <= 0:\n        raise ValueError(\"tol must be positive\")\n    total = 0.0\n    for n in range(1, max_terms + 1):\n        total += term(n)\n        upper = tail_integral(n)\n        lower = tail_integral(n + 1)\n        half = 0.5 * (upper - lower)\n        if half <= tol:\n            return (total + 0.5 * (upper + lower), half, n)\n    raise ValueError(\"tolerance not reached within max_terms\")\n\n\ndef radius_of_convergence(coeff, n_max=60):\n    \"\"\"Estimated radius of convergence of the power series with these coefficients.\"\"\"\n    def estimate(top):\n        live = [k for k in range(top + 1) if coeff(k) != 0]\n        if len(live) < 2:\n            raise ValueError(\"need at least two non-zero coefficients\")\n        n, m = live[-2], live[-1]\n        rho = (abs(coeff(m)) / abs(coeff(n))) ** (1.0 / (m - n))\n        if rho == 0.0:\n            return math.inf\n        return 1.0 / rho\n\n    full = estimate(n_max)\n    half = estimate(n_max // 2)\n    if full == math.inf or full >= 1.9 * half:\n        return math.inf\n    if full <= 0.55 * half:\n        return 0.0\n    return full\n\n\nprint(partial_sums(lambda k: 1.0 / k, 4))\nprint(ratio_test(lambda k: 0.5 ** k))\nprint(estimate_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, 1e-6))\n"
+     }
+    ],
+    "hints": [
+     "`partial_sums` is the running-total pattern: one accumulator, one append per step. Do not re-sum from k=1 for every entry.",
+     "Write the ratio as a small inner function `ratio(m)` so you can call it twice; check `term(m) == 0` inside it and raise there.",
+     "In `estimate_sum` the bracket is `[tail_integral(n+1), tail_integral(n)]`. The midpoint is the estimate and half the width is the guaranteed bound — return both.",
+     "For `radius_of_convergence`, build the list of indices with non-zero coefficients first, then work with its last two entries; the `1 / (m - n)` exponent is what handles series such as sin whose coefficients skip every other index."
+    ],
+    "tests": [
+     {
+      "name": "Partial sums accumulate",
+      "code": "_got = partial_sums(lambda k: 0.5 ** k, 3)\nassert len(_got) == 3, f\"partial_sums(..., 3) gave {len(_got)} entries, expected 3\"\nfor _i, _w in enumerate([0.5, 0.75, 0.875]):\n    assert abs(_got[_i] - _w) < 1e-12, f\"S_{_i + 1} is {_got[_i]!r}, expected {_w}\"\n_got = partial_sums(lambda k: 1.0 / k, 4)\n_want = [1.0, 1.5, 1.0 + 0.5 + 1.0 / 3.0, 1.0 + 0.5 + 1.0 / 3.0 + 0.25]\nfor _i in range(4):\n    assert abs(_got[_i] - _want[_i]) < 1e-12, f\"S_{_i + 1} is {_got[_i]!r}, expected {_want[_i]!r}\"\nassert partial_sums(lambda k: 7.0, 1) == [7.0], \"A single-term run returns one entry\"\nfor _bad in (0, -3):\n    try:\n        partial_sums(lambda k: 1.0, _bad)\n        assert False, f\"partial_sums with n={_bad} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "Ratio test on geometric series",
+      "code": "_v, _L = ratio_test(lambda k: 0.5 ** k)\nassert _v == \"converges\", f\"Geometric with ratio 1/2 gave verdict {_v!r}\"\nassert abs(_L - 0.5) < 1e-6, f\"Ratio limit was {_L!r}, expected 0.5\"\n_v, _L = ratio_test(lambda k: 2.0 ** k)\nassert _v == \"diverges\", f\"Geometric with ratio 2 gave verdict {_v!r}\"\nassert abs(_L - 2.0) < 1e-6, f\"Ratio limit was {_L!r}, expected 2.0\"\n_v, _L = ratio_test(lambda k: (-1.0) ** k / 3.0 ** k)\nassert _v == \"converges\", f\"Alternating geometric gave verdict {_v!r}\"\nassert abs(_L - 1.0 / 3.0) < 1e-6, f\"Ratio limit was {_L!r}, expected 1/3\""
+     },
+     {
+      "name": "Ratio test is honest about L = 1",
+      "code": "for _name, _term in [(\"1/k\", lambda k: 1.0 / k), (\"1/k^2\", lambda k: 1.0 / k ** 2),\n                     (\"1/k^3\", lambda k: 1.0 / k ** 3)]:\n    _v, _L = ratio_test(_term)\n    assert _v == \"inconclusive\", f\"ratio_test on {_name} gave {_v!r}, expected 'inconclusive'\"\n    assert abs(_L - 1.0) < 1e-3, f\"ratio_test on {_name} gave limit {_L!r}, expected about 1.0\"\n_v, _L = ratio_test(lambda k: 1.0 / math.factorial(k), 40)\nassert _v == \"converges\" and _L < 1e-2, f\"1/k! gave {(_v, _L)!r}, expected a ratio near 0\""
+     },
+     {
+      "name": "Ratio test refuses degenerate input",
+      "code": "try:\n    ratio_test(lambda k: 0.0)\n    assert False, \"A series of zero terms should raise ValueError\"\nexcept ValueError:\n    pass\nfor _bad in (0, -5):\n    try:\n        ratio_test(lambda k: 0.5 ** k, _bad)\n        assert False, f\"ratio_test with n={_bad} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "estimate_sum hits the Basel problem",
+      "code": "_est, _half, _n = estimate_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, 1e-6)\nassert _n == 707, f\"estimate_sum used {_n} terms, expected 707\"\nassert _half <= 1e-6, f\"Returned half-width {_half!r} exceeds the tolerance\"\nassert abs(_est - math.pi ** 2 / 6.0) <= _half, \\\n    f\"Estimate {_est!r} is further than {_half!r} from pi^2/6 = {math.pi ** 2 / 6.0!r}\"\n_est, _half, _n = estimate_sum(lambda k: 1.0 / k ** 3, lambda x: 0.5 / x ** 2, 1e-8)\nassert abs(_est - 1.2020569031595943) <= _half, \\\n    f\"Apery estimate {_est!r} is outside its own bound {_half!r}\""
+     },
+     {
+      "name": "estimate_sum guards its arguments",
+      "code": "for _bad in (0.0, -1e-9):\n    try:\n        estimate_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, _bad)\n        assert False, f\"estimate_sum with tol={_bad} should raise ValueError\"\n    except ValueError:\n        pass\ntry:\n    estimate_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, 1e-9, max_terms=10)\n    assert False, \"Running out of terms before the tolerance should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "Radius of convergence, finite cases",
+      "code": "_got = radius_of_convergence(lambda k: 2.0 ** k)\nassert abs(_got - 0.5) < 1e-9, f\"Coefficients 2^k give R = 0.5; got {_got!r}\"\n_got = radius_of_convergence(lambda k: 0.0 if k == 0 else 1.0 / k)\nassert abs(_got - 1.0) < 0.05, f\"Coefficients 1/k give R = 1; got {_got!r}\"\n_got = radius_of_convergence(lambda k: 0.0 if k == 0 else 1.0 / (3.0 ** k * k * k))\nassert abs(_got - 3.0) < 0.2, f\"Coefficients 1/(3^k k^2) give R = 3; got {_got!r}\""
+     },
+     {
+      "name": "Radius of convergence, degenerate cases",
+      "code": "_got = radius_of_convergence(lambda k: 1.0 / math.factorial(k))\nassert _got == math.inf, f\"The exp series has an infinite radius; got {_got!r}\"\n_sin = lambda k: 0.0 if k % 2 == 0 else (-1.0) ** ((k - 1) // 2) / math.factorial(k)\n_got = radius_of_convergence(_sin)\nassert _got == math.inf, f\"The sin series has an infinite radius; got {_got!r}\"\n_got = radius_of_convergence(lambda k: float(math.factorial(k)))\nassert _got == 0.0, f\"Coefficients k! give R = 0; got {_got!r}\"\ntry:\n    radius_of_convergence(lambda k: 1.0 if k == 0 else 0.0)\n    assert False, \"A series with one non-zero coefficient should raise ValueError\"\nexcept ValueError:\n    pass"
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "Capstone — quadrature and series library with error guarantees",
+  "brief": "Fold the four labs into one library. `quadlib.py` holds every routine and is\nwhat the checks import; `main.py` is a demo that integrates a handful of\nawkward integrals, sums a series and prints an error report.\n\nEvery numerical routine returns the same record, so callers never have to guess\nwhat a bare float means.\n\n## `Result`\n\nA dataclass with three fields, in this order:\n\n- `value` — the number\n- `error` — the routine's own estimate of how wrong it might be\n- `evaluations` — how many times the integrand or term was called\n\n## Integration\n\n- `simpson(f, a, b, n)` — composite Simpson on `n` even panels; `ValueError`\n  for odd `n` or `n < 2`. Returns a plain float, not a `Result`.\n- `adaptive(f, a, b, tol, max_depth=30)` — the recursive Simpson of lab 2,\n  returning a `Result`. `error` is the sum of `abs(delta) / 15` over the\n  accepted panels; `evaluations` counts every call made to `f`. An empty\n  interval gives `Result(0.0, 0.0, 0)`; a reversed one negates `value` only.\n- `integrate(f, a, b, tol=1e-9)` — the front door. `a` or `b` may be\n  `math.inf` / `-math.inf`, handled by the substitutions from lab 2 (split the\n  doubly infinite case at 0 and give each half `tol / 2`). `tol <= 0` and any\n  NaN bound raise `ValueError`.\n\n## Series\n\n- `taylor_coefficients(kind, n)`, `taylor_eval(coeffs, x)`,\n  `taylor_bound(kind, x, n)` — exactly as in lab 3.\n- `series_sum(term, tail_integral, tol, max_terms=200000)` — lab 4's\n  `estimate_sum`, returning a `Result` whose `evaluations` is the number of\n  terms used.\n\n## Reporting\n\n`error_report(entries)` takes a list of `(name, result, exact_or_None)` and\nreturns a string of exactly `len(entries) + 2` lines:\n\n1. a header line beginning with `quantity`\n2. one line per entry, starting with `name`, containing the value, the claimed\n   bound and — when `exact` is given — the actual error\n3. a final line starting with `TOTAL EVALUATIONS` and ending with the summed\n   evaluation count\n\n## Suggested order\n\n`Result` and `simpson`, then `adaptive` with its counter, then `integrate`'s\ndispatch on infinite bounds, then the series half, and `error_report` last.",
+  "deliverables": [
+   "`quadlib.py` — the whole library, importable with no output and no side effects",
+   "`main.py` — a demo integrating a proper, an infinite and an oscillatory integral, then summing a series",
+   "A `Result` record carrying value, error estimate and evaluation count from every routine",
+   "`integrate` dispatching correctly on finite, semi-infinite and doubly infinite domains",
+   "`series_sum` returning an integral-test bracket that provably contains the true sum",
+   "`error_report` producing a table a marker can read without running anything"
+  ],
+  "constraints": [
+   "Standard library only; `math` and `dataclasses` are all you need",
+   "`quadlib.py` must define names only — importing it must print nothing",
+   "No global mutable state: two concurrent integrations must not share an evaluation counter",
+   "Every public routine validates its arguments and raises `ValueError` rather than returning nonsense",
+   "The whole demo must finish in well under a second"
+  ],
+  "rubric": [
+   {
+    "criterion": "Correctness",
+    "weight": 40,
+    "evidence": "All automated checks pass, including the infinite-domain, reversed-interval and empty-interval cases."
+   },
+   {
+    "criterion": "Error control",
+    "weight": 25,
+    "evidence": "Reported error estimates actually bound the observed error on the tested integrals, and tightening tol tightens the answer."
+   },
+   {
+    "criterion": "Argument validation",
+    "weight": 15,
+    "evidence": "Non-positive tolerances, odd Simpson panel counts and NaN bounds all raise ValueError."
+   },
+   {
+    "criterion": "Design",
+    "weight": 12,
+    "evidence": "integrate dispatches onto shared helpers rather than duplicating the refinement loop, and the counter is per-call."
+   },
+   {
+    "criterion": "Readability",
+    "weight": 8,
+    "evidence": "Docstrings on every public routine, no dead code, no debug prints left in quadlib.py."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 260,
+  "files": [
+   {
+    "name": "quadlib.py",
+    "content": "import math\nfrom dataclasses import dataclass\n\nCLAMP = 1e-12\nKINDS = (\"exp\", \"sin\", \"cos\")\n\n\n@dataclass\nclass Result:\n    value: float\n    error: float\n    evaluations: int\n\n\ndef simpson(f, a, b, n):\n    \"\"\"Composite Simpson rule on n even panels. Returns a float.\"\"\"\n    # your code here\n\n\ndef adaptive(f, a, b, tol, max_depth=30):\n    \"\"\"Adaptive Simpson to an absolute tolerance. Returns a Result.\"\"\"\n    # your code here\n\n\ndef integrate(f, a, b, tol=1e-9):\n    \"\"\"Integral of f over [a, b], where either bound may be infinite.\"\"\"\n    # your code here\n\n\ndef taylor_coefficients(kind, n):\n    \"\"\"Maclaurin coefficients c_0 .. c_n for exp, sin or cos.\"\"\"\n    # your code here\n\n\ndef taylor_eval(coeffs, x):\n    \"\"\"Horner evaluation of a coefficient list at x.\"\"\"\n    # your code here\n\n\ndef taylor_bound(kind, x, n):\n    \"\"\"Lagrange remainder bound for the degree-n Maclaurin polynomial.\"\"\"\n    # your code here\n\n\ndef series_sum(term, tail_integral, tol, max_terms=200000):\n    \"\"\"Sum a positive decreasing series to a tolerance. Returns a Result.\"\"\"\n    # your code here\n\n\ndef error_report(entries):\n    \"\"\"Table of (name, result, exact_or_None) rows plus a totals line.\"\"\"\n    # your code here\n"
+   },
+   {
+    "name": "main.py",
+    "content": "import math\nfrom quadlib import integrate, series_sum, error_report\n\nrows = [\n    (\"exp on [0,1]\", integrate(math.exp, 0.0, 1.0, 1e-10), math.e - 1.0),\n    (\"exp(-x) to inf\", integrate(lambda x: math.exp(-x), 0.0, math.inf, 1e-10), 1.0),\n    (\"gaussian\", integrate(lambda x: math.exp(-x * x), -math.inf, math.inf, 1e-10), math.sqrt(math.pi)),\n    (\"basel series\", series_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, 1e-8), math.pi ** 2 / 6.0),\n]\n\nprint(error_report(rows))\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "quadlib.py",
+    "content": "import math\nfrom dataclasses import dataclass\n\nCLAMP = 1e-12\nKINDS = (\"exp\", \"sin\", \"cos\")\n\n\n@dataclass\nclass Result:\n    value: float\n    error: float\n    evaluations: int\n\n\ndef _counted(f):\n    \"\"\"Wrap f so every call is tallied in a private one-element box.\"\"\"\n    box = [0]\n\n    def wrapped(x):\n        box[0] += 1\n        return f(x)\n\n    return wrapped, box\n\n\ndef _merge(parts):\n    \"\"\"Add up a list of Results field by field.\"\"\"\n    return Result(sum(p.value for p in parts),\n                  sum(p.error for p in parts),\n                  sum(p.evaluations for p in parts))\n\n\ndef simpson(f, a, b, n):\n    \"\"\"Composite Simpson rule on n even panels. Returns a float.\"\"\"\n    if n < 2 or n % 2 != 0:\n        raise ValueError(\"n must be an even integer of at least 2\")\n    h = (b - a) / n\n    total = f(a) + f(b)\n    for i in range(1, n):\n        total += (4 if i % 2 == 1 else 2) * f(a + i * h)\n    return h * total / 3.0\n\n\ndef _panel(f, a, b):\n    \"\"\"One Simpson panel over [a, b].\"\"\"\n    c = 0.5 * (a + b)\n    return (b - a) / 6.0 * (f(a) + 4.0 * f(c) + f(b))\n\n\ndef _refine(f, a, b, tol, whole, depth):\n    \"\"\"Return (value, error estimate) for the refined panel.\"\"\"\n    c = 0.5 * (a + b)\n    left = _panel(f, a, c)\n    right = _panel(f, c, b)\n    delta = left + right - whole\n    if depth <= 0 or abs(delta) <= 15.0 * tol:\n        return (left + right + delta / 15.0, abs(delta) / 15.0)\n    lv, le = _refine(f, a, c, tol / 2.0, left, depth - 1)\n    rv, re = _refine(f, c, b, tol / 2.0, right, depth - 1)\n    return (lv + rv, le + re)\n\n\ndef adaptive(f, a, b, tol, max_depth=30):\n    \"\"\"Adaptive Simpson to an absolute tolerance. Returns a Result.\"\"\"\n    if tol <= 0:\n        raise ValueError(\"tol must be positive\")\n    if a == b:\n        return Result(0.0, 0.0, 0)\n    sign = 1.0\n    if b < a:\n        a, b, sign = b, a, -1.0\n    counted, box = _counted(f)\n    value, error = _refine(counted, a, b, tol, _panel(counted, a, b), max_depth)\n    return Result(sign * value, error, box[0])\n\n\ndef _tail(f, a, tol):\n    \"\"\"Integral of f from a to +infinity, via x = a + t/(1-t).\"\"\"\n    def g(t):\n        u = 1.0 - t\n        if u < CLAMP:\n            u = CLAMP\n        return f(a + (1.0 - u) / u) / (u * u)\n    return adaptive(g, 0.0, 1.0, tol)\n\n\ndef integrate(f, a, b, tol=1e-9):\n    \"\"\"Integral of f over [a, b], where either bound may be infinite.\"\"\"\n    if tol <= 0:\n        raise ValueError(\"tol must be positive\")\n    if math.isnan(a) or math.isnan(b):\n        raise ValueError(\"bounds must not be nan\")\n    if a == b:\n        return Result(0.0, 0.0, 0)\n    if b < a:\n        flipped = integrate(f, b, a, tol)\n        return Result(-flipped.value, flipped.error, flipped.evaluations)\n    if a == -math.inf and b == math.inf:\n        return _merge([_tail(f, 0.0, tol / 2.0),\n                       _tail(lambda x: f(-x), 0.0, tol / 2.0)])\n    if b == math.inf:\n        return _tail(f, a, tol)\n    if a == -math.inf:\n        return _tail(lambda x: f(-x), -b, tol)\n    return adaptive(f, a, b, tol)\n\n\ndef taylor_coefficients(kind, n):\n    \"\"\"Maclaurin coefficients c_0 .. c_n for exp, sin or cos.\"\"\"\n    if kind not in KINDS:\n        raise ValueError(\"kind must be one of exp, sin, cos\")\n    if n < 0:\n        raise ValueError(\"n must not be negative\")\n    coeffs = []\n    for k in range(n + 1):\n        if kind == \"exp\":\n            coeffs.append(1.0 / math.factorial(k))\n        elif kind == \"sin\":\n            if k % 2 == 0:\n                coeffs.append(0.0)\n            else:\n                coeffs.append((-1.0) ** ((k - 1) // 2) / math.factorial(k))\n        else:\n            if k % 2 == 1:\n                coeffs.append(0.0)\n            else:\n                coeffs.append((-1.0) ** (k // 2) / math.factorial(k))\n    return coeffs\n\n\ndef taylor_eval(coeffs, x):\n    \"\"\"Horner evaluation of a coefficient list at x.\"\"\"\n    if not coeffs:\n        raise ValueError(\"need at least one coefficient\")\n    total = 0.0\n    for c in reversed(coeffs):\n        total = total * x + c\n    return total\n\n\ndef taylor_bound(kind, x, n):\n    \"\"\"Lagrange remainder bound for the degree-n Maclaurin polynomial.\"\"\"\n    if kind not in KINDS:\n        raise ValueError(\"kind must be one of exp, sin, cos\")\n    if n < 0:\n        raise ValueError(\"n must not be negative\")\n    m = math.exp(abs(x)) if kind == \"exp\" else 1.0\n    return m * abs(x) ** (n + 1) / math.factorial(n + 1)\n\n\ndef series_sum(term, tail_integral, tol, max_terms=200000):\n    \"\"\"Sum a positive decreasing series to a tolerance. Returns a Result.\"\"\"\n    if tol <= 0:\n        raise ValueError(\"tol must be positive\")\n    total = 0.0\n    for n in range(1, max_terms + 1):\n        total += term(n)\n        upper = tail_integral(n)\n        lower = tail_integral(n + 1)\n        half = 0.5 * (upper - lower)\n        if half <= tol:\n            return Result(total + 0.5 * (upper + lower), half, n)\n    raise ValueError(\"tolerance not reached within max_terms\")\n\n\ndef error_report(entries):\n    \"\"\"Table of (name, result, exact_or_None) rows plus a totals line.\"\"\"\n    lines = [f\"{'quantity':<22}{'value':>18}{'bound':>12}{'actual':>12}\"]\n    for name, result, exact in entries:\n        actual = \"-\" if exact is None else f\"{abs(result.value - exact):.2e}\"\n        lines.append(f\"{name:<22}{result.value:>18.12f}\"\n                     f\"{result.error:>12.2e}{actual:>12}\")\n    total = sum(entry[1].evaluations for entry in entries)\n    lines.append(f\"{'TOTAL EVALUATIONS':<22}{total:>18d}\")\n    return \"\\n\".join(lines)\n"
+   },
+   {
+    "name": "main.py",
+    "content": "import math\nfrom quadlib import integrate, series_sum, error_report\n\nrows = [\n    (\"exp on [0,1]\", integrate(math.exp, 0.0, 1.0, 1e-10), math.e - 1.0),\n    (\"exp(-x) to inf\", integrate(lambda x: math.exp(-x), 0.0, math.inf, 1e-10), 1.0),\n    (\"gaussian\", integrate(lambda x: math.exp(-x * x), -math.inf, math.inf, 1e-10), math.sqrt(math.pi)),\n    (\"basel series\", series_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, 1e-8), math.pi ** 2 / 6.0),\n]\n\nprint(error_report(rows))\n\nrunge = integrate(lambda x: 1.0 / (1.0 + 25.0 * x * x), -1.0, 1.0, 1e-10)\nprint(\"Runge integral:\", runge.value, \"in\", runge.evaluations, \"evaluations\")\n"
+   }
+  ],
+  "hints": [
+   "Wrap the integrand in a small closure that increments a list-of-one counter; returning `(wrapped, box)` from a helper keeps the state local to one call.",
+   "Have `_refine` return the pair `(value, error)` and add the two halves' errors on the way back up — that is the whole error budget.",
+   "`integrate` is a dispatch table, not an algorithm: empty interval, reversed interval, both infinite, upper infinite, lower infinite, otherwise `adaptive`. Reflect the lower-infinite case with `lambda x: f(-x)` and negated bounds.",
+   "Merge sub-results with one helper that sums values, sums errors and sums evaluation counts, so every branch of `integrate` returns the same shape."
+  ],
+  "tests": [
+   {
+    "name": "Result carries value, error and evaluations",
+    "code": "import math as _m\nfrom quadlib import Result, adaptive\n_r = Result(1.5, 1e-9, 42)\nassert (_r.value, _r.error, _r.evaluations) == (1.5, 1e-9, 42), f\"Result fields came back as {_r!r}\"\n_got = adaptive(_m.sin, 0.0, _m.pi, 1e-10)\nassert isinstance(_got, Result), f\"adaptive returned {type(_got).__name__}, expected Result\"\nassert abs(_got.value - 2.0) < 1e-9, f\"adaptive(sin, 0, pi) gave {_got.value!r}, expected 2.0\"\nassert _got.evaluations > 0, \"adaptive must count its integrand calls\""
+   },
+   {
+    "name": "Composite Simpson",
+    "code": "import math as _m\nfrom quadlib import simpson\n_got = simpson(lambda x: x ** 3, 0.0, 1.0, 2)\nassert abs(_got - 0.25) < 1e-14, f\"simpson(x^3, 0, 1, 2) gave {_got!r}, expected 0.25\"\n_got = simpson(_m.exp, 0.0, 1.0, 100)\nassert abs(_got - (_m.e - 1.0)) < 1e-9, f\"simpson(exp, 0, 1, 100) gave {_got!r}\"\nfor _bad in (1, 3, 0, -2):\n    try:\n        simpson(_m.sin, 0.0, 1.0, _bad)\n        assert False, f\"simpson with n={_bad} should raise ValueError\"\n    except ValueError:\n        pass"
+   },
+   {
+    "name": "adaptive hits proper integrals",
+    "code": "import math as _m\nfrom quadlib import adaptive\nfor _name, _f, _a, _b, _want in [(\"sin\", _m.sin, 0.0, _m.pi, 2.0),\n                                 (\"exp\", _m.exp, 0.0, 1.0, _m.e - 1.0),\n                                 (\"runge\", lambda x: 1.0 / (1.0 + 25.0 * x * x), -1.0, 1.0,\n                                  2.0 * _m.atan(5.0) / 5.0)]:\n    _r = adaptive(_f, _a, _b, 1e-10)\n    assert abs(_r.value - _want) < 1e-9, f\"adaptive on {_name} gave {_r.value!r}, expected {_want!r}\"\n    assert abs(_r.value - _want) <= _r.error + 1e-12, \\\n        f\"On {_name} the actual error beat the claimed bound {_r.error!r}\""
+   },
+   {
+    "name": "Empty, reversed and invalid intervals",
+    "code": "import math as _m\nfrom quadlib import adaptive, integrate\n_r = adaptive(_m.sin, 2.0, 2.0, 1e-9)\nassert (_r.value, _r.error, _r.evaluations) == (0.0, 0.0, 0), f\"Empty interval gave {_r!r}\"\n_f = adaptive(_m.sin, 0.0, _m.pi, 1e-10)\n_b = adaptive(_m.sin, _m.pi, 0.0, 1e-10)\nassert abs(_f.value + _b.value) < 1e-12, f\"Reversed interval gave {_b.value!r}, expected -{_f.value!r}\"\nassert _b.error >= 0.0, \"The error estimate must stay non-negative when the limits are swapped\"\nfor _bad in (0.0, -1.0):\n    try:\n        integrate(_m.sin, 0.0, 1.0, _bad)\n        assert False, f\"integrate with tol={_bad} should raise ValueError\"\n    except ValueError:\n        pass\ntry:\n    integrate(_m.sin, float(\"nan\"), 1.0)\n    assert False, \"A NaN bound should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "Evaluation counters do not leak between calls",
+    "code": "import math as _m\nfrom quadlib import adaptive\n_one = adaptive(_m.sin, 0.0, _m.pi, 1e-10)\n_two = adaptive(_m.sin, 0.0, _m.pi, 1e-10)\nassert _one.evaluations == _two.evaluations, \\\n    f\"Two identical calls counted {_one.evaluations} and {_two.evaluations} evaluations — the counter is shared\""
+   },
+   {
+    "name": "integrate on semi-infinite domains",
+    "code": "import math as _m\nfrom quadlib import integrate\nfor _name, _f, _a, _b, _want in [(\"exp(-x) from 0\", lambda x: _m.exp(-x), 0.0, _m.inf, 1.0),\n                                 (\"x^-3 from 1\", lambda x: x ** -3.0, 1.0, _m.inf, 0.5),\n                                 (\"lorentz to 0\", lambda x: 1.0 / (1.0 + x * x), -_m.inf, 0.0, _m.pi / 2.0)]:\n    _r = integrate(_f, _a, _b, 1e-10)\n    assert abs(_r.value - _want) < 1e-8, f\"integrate({_name}) gave {_r.value!r}, expected {_want!r}\"\n    assert _r.evaluations > 0, f\"integrate({_name}) reported no evaluations\""
+   },
+   {
+    "name": "integrate on the whole real line",
+    "code": "import math as _m\nfrom quadlib import integrate\n_r = integrate(lambda x: _m.exp(-x * x), -_m.inf, _m.inf, 1e-10)\nassert abs(_r.value - _m.sqrt(_m.pi)) < 1e-8, \\\n    f\"Gaussian integral gave {_r.value!r}, expected {_m.sqrt(_m.pi)!r}\"\n_r = integrate(lambda x: 1.0 / (1.0 + x * x), -_m.inf, _m.inf, 1e-10)\nassert abs(_r.value - _m.pi) < 1e-8, f\"Cauchy integral gave {_r.value!r}, expected {_m.pi!r}\"\n_r = integrate(_m.sin, 3.0, 3.0)\nassert _r.value == 0.0 and _r.evaluations == 0, f\"A degenerate interval gave {_r!r}\""
+   },
+   {
+    "name": "Tightening the tolerance tightens the answer",
+    "code": "import math as _m\nfrom quadlib import integrate\n_exact = _m.e - 1.0\n_loose = integrate(_m.exp, 0.0, 1.0, 1e-3)\n_tight = integrate(_m.exp, 0.0, 1.0, 1e-12)\nassert abs(_loose.value - _exact) < 1e-3, f\"tol=1e-3 left an error of {abs(_loose.value - _exact)!r}\"\nassert abs(_tight.value - _exact) < 1e-11, f\"tol=1e-12 left an error of {abs(_tight.value - _exact)!r}\"\nassert _tight.evaluations > _loose.evaluations, \\\n    f\"A tighter tolerance used {_tight.evaluations} evaluations vs {_loose.evaluations} — it should cost more\""
+   },
+   {
+    "name": "Taylor half of the library",
+    "code": "import math as _m\nfrom quadlib import taylor_coefficients, taylor_eval, taylor_bound\nassert taylor_coefficients(\"exp\", 3) == [1.0, 1.0, 0.5, 1.0 / 6.0], \\\n    f\"Got {taylor_coefficients('exp', 3)!r}\"\nassert taylor_coefficients(\"cos\", 4)[1] == 0.0 and abs(taylor_coefficients(\"cos\", 4)[2] + 0.5) < 1e-15, \\\n    f\"cos coefficients came back as {taylor_coefficients('cos', 4)!r}\"\n_got = taylor_eval(taylor_coefficients(\"sin\", 15), 0.7)\nassert abs(_got - _m.sin(0.7)) < 1e-12, f\"sin series at 0.7 gave {_got!r}, expected {_m.sin(0.7)!r}\"\nassert abs(taylor_bound(\"sin\", 0.5, 3) - 0.5 ** 4 / 24.0) < 1e-18, \\\n    f\"taylor_bound('sin', 0.5, 3) gave {taylor_bound('sin', 0.5, 3)!r}\"\nfor _kind, _fn in [(\"exp\", _m.exp), (\"cos\", _m.cos)]:\n    for _x in (-1.5, 0.4, 2.0):\n        _err = abs(taylor_eval(taylor_coefficients(_kind, 8), _x) - _fn(_x))\n        assert _err <= taylor_bound(_kind, _x, 8) + 1e-14, \\\n            f\"{_kind} at {_x}: error {_err!r} exceeds its bound\"\nfor _args in [(\"tanh\", 3), (\"exp\", -1)]:\n    try:\n        taylor_coefficients(*_args)\n        assert False, f\"taylor_coefficients{_args!r} should raise ValueError\"\n    except ValueError:\n        pass"
+   },
+   {
+    "name": "series_sum brackets the true sum",
+    "code": "import math as _m\nfrom quadlib import series_sum, Result\n_r = series_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, 1e-6)\nassert isinstance(_r, Result), f\"series_sum returned {type(_r).__name__}, expected Result\"\nassert _r.evaluations == 707, f\"series_sum used {_r.evaluations} terms, expected 707\"\nassert _r.error <= 1e-6, f\"Claimed bound {_r.error!r} exceeds the tolerance\"\nassert abs(_r.value - _m.pi ** 2 / 6.0) <= _r.error, \\\n    f\"Estimate {_r.value!r} lies outside its own bound of {_r.error!r} around pi^2/6\"\n_r = series_sum(lambda k: 1.0 / k ** 3, lambda x: 0.5 / x ** 2, 1e-8)\nassert abs(_r.value - 1.2020569031595943) <= _r.error, f\"Apery estimate {_r.value!r} is outside its bound\"\nfor _bad in (0.0, -1e-9):\n    try:\n        series_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, _bad)\n        assert False, f\"series_sum with tol={_bad} should raise ValueError\"\n    except ValueError:\n        pass"
+   },
+   {
+    "name": "error_report shapes the table",
+    "code": "import math as _m\nfrom quadlib import integrate, series_sum, error_report\n_rows = [(\"exp on [0,1]\", integrate(_m.exp, 0.0, 1.0, 1e-10), _m.e - 1.0),\n         (\"basel\", series_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, 1e-8), _m.pi ** 2 / 6.0),\n         (\"no exact\", integrate(_m.sin, 0.0, 1.0, 1e-10), None)]\n_rep = error_report(_rows)\nassert isinstance(_rep, str), \"error_report returns a string, it does not print\"\n_lines = _rep.split(\"\\n\")\nassert len(_lines) == 5, f\"Expected 1 header + 3 rows + 1 total = 5 lines, got {len(_lines)}\"\nassert _lines[0].startswith(\"quantity\"), f\"Header line was {_lines[0]!r}\"\nfor _i, _row in enumerate(_rows):\n    assert _lines[_i + 1].startswith(_row[0]), f\"Line {_i + 1} was {_lines[_i + 1]!r}, expected to start with {_row[0]!r}\"\nassert _lines[3].rstrip().endswith(\"-\"), f\"A row with no exact value should end in a dash; got {_lines[3]!r}\"\nassert _lines[-1].startswith(\"TOTAL EVALUATIONS\"), f\"Last line was {_lines[-1]!r}\"\n_total = sum(_row[1].evaluations for _row in _rows)\nassert _lines[-1].rstrip().endswith(str(_total)), \\\n    f\"Totals line {_lines[-1]!r} should end with {_total}\""
+   },
+   {
+    "name": "quadlib.py is import-clean and fast",
+    "code": "import time as _t\n_src = open(\"quadlib.py\").read()\nassert \"print(\" not in _src, \"quadlib.py defines routines; the printing belongs in main.py\"\nfor _banned in (\"numpy\", \"scipy\"):\n    assert _banned not in _src, f\"quadlib.py must not reach for {_banned}\"\nimport math as _m\nfrom quadlib import integrate, series_sum\n_start = _t.time()\nintegrate(lambda x: _m.exp(-x * x), -_m.inf, _m.inf, 1e-10)\nseries_sum(lambda k: 1.0 / k ** 2, lambda x: 1.0 / x, 1e-8)\n_elapsed = _t.time() - _start\nassert _elapsed < 5.0, f\"The demo workload took {_elapsed:.2f}s, which is far too slow\""
+   }
+  ]
+ }
+}

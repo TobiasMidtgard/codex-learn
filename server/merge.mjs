@@ -1,0 +1,82 @@
+/**
+ * merge.mjs — combine two progress documents without losing anything.
+ *
+ * Two devices are edited independently and neither is "the truth", so last-write-wins
+ * would silently throw away whichever side synced first. Every field here has a rule
+ * chosen so that a merge can only ever move progress forward:
+ *
+ *   completed  union            — a finished unit never becomes unfinished
+ *   quiz       max per lesson   — the best score stands
+ *   activity   max per day      — each device counts its own work; max under-counts
+ *                                 rather than double-counting a re-sync
+ *   code       newest per lesson (by its `t` stamp)
+ *   xp         max as a floor — the client recomputes the exact figure from
+ *              `completed`, which it can do because it knows the XP table
+ *   scalars    from whichever document was saved more recently
+ *
+ * The result is order-independent: merge(a, b) and merge(b, a) agree on everything
+ * except the scalars, which are decided by `updatedAt`.
+ */
+
+const SCALARS = ['name', 'theme', 'railHidden', 'last'];
+
+function obj(v) {
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+}
+
+function unionTrue(a, b) {
+  const out = {};
+  for (const k of Object.keys(obj(a))) if (a[k]) out[k] = true;
+  for (const k of Object.keys(obj(b))) if (b[k]) out[k] = true;
+  return out;
+}
+
+function maxNumbers(a, b) {
+  const out = {};
+  a = obj(a); b = obj(b);
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const x = Number(a[k]) || 0;
+    const y = Number(b[k]) || 0;
+    out[k] = Math.max(x, y);
+  }
+  return out;
+}
+
+function newestPerKey(a, b) {
+  const out = {};
+  a = obj(a); b = obj(b);
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const x = a[k], y = b[k];
+    if (!x) { out[k] = y; continue; }
+    if (!y) { out[k] = x; continue; }
+    out[k] = (Number(y.t) || 0) >= (Number(x.t) || 0) ? y : x;
+  }
+  return out;
+}
+
+export function mergeProgress(stored, incoming) {
+  const a = obj(stored);
+  const b = obj(incoming);
+  const aTime = Number(a.updatedAt) || 0;
+  const bTime = Number(b.updatedAt) || 0;
+  const newer = bTime >= aTime ? b : a;
+
+  const out = {
+    completed: unionTrue(a.completed, b.completed),
+    quiz: maxNumbers(a.quiz, b.quiz),
+    activity: maxNumbers(a.activity, b.activity),
+    code: newestPerKey(a.code, b.code),
+    xp: Math.max(Number(a.xp) || 0, Number(b.xp) || 0),
+    playground: newer.playground ?? a.playground ?? b.playground ?? null,
+    updatedAt: Math.max(aTime, bTime),
+  };
+  /* A device signing in for the first time carries a blank name and a fresh
+     `updatedAt`, so "newest wins" alone would let its emptiness erase a real value.
+     An unset field never overwrites a set one; `false` and `0` count as set. */
+  const older = newer === b ? a : b;
+  const isSet = (v) => v !== undefined && v !== null && v !== '';
+  for (const k of SCALARS) {
+    out[k] = isSet(newer[k]) ? newer[k] : (isSet(older[k]) ? older[k] : (newer[k] ?? older[k] ?? null));
+  }
+  return out;
+}

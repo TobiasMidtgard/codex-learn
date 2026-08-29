@@ -1,0 +1,426 @@
+{
+ "id": "MA201",
+ "title": "Probability & Statistics for Computing",
+ "year": 2,
+ "level": "Intermediate",
+ "prereqs": [
+  "MA112"
+ ],
+ "stack": [
+  "Python"
+ ],
+ "credits": 10,
+ "hours": 120,
+ "icon": "σ",
+ "summary": "Randomness is the working material of hashing, load balancing, benchmarking and machine learning, and every claim made about it is a statistical claim. You build the distributions, estimators and tests from their definitions — no statistics library — and finish with an A/B-test analyser that states its own assumptions.",
+ "outcomes": [
+  "Derive pmf, cdf, expectation and variance for Bernoulli, binomial and geometric variables",
+  "Implement exact binomial coefficients without floating-point overflow or a library call",
+  "Run reproducible Monte Carlo experiments from a seeded generator",
+  "Demonstrate the law of large numbers and the central limit theorem empirically",
+  "Compute sample statistics, a Welch two-sample t statistic and a chi-square goodness-of-fit test by hand",
+  "Read a critical-value table correctly and state what rejecting the null does and does not mean",
+  "Update beliefs with Bayes' rule and build a Laplace-smoothed naive Bayes classifier"
+ ],
+ "assessment": "4 lab checkpoints (10% each) + capstone build (60%).",
+ "reading": [
+  "Ross, *A First Course in Probability*, 10th ed. — chapters 4, 5, 7 and 8",
+  "Wasserman, *All of Statistics* — chapters 6-10",
+  "Mitzenmacher & Upfal, *Probability and Computing*, 2nd ed. — chapters 1-4"
+ ],
+ "modules": [
+  {
+   "title": "Discrete distributions from first principles",
+   "summary": "Three distributions, built from their definitions rather than imported.",
+   "concepts": [
+    "A pmf assigns non-negative mass summing to one; a cdf is its running total",
+    "Bernoulli(p) as the single-trial atom that binomial and geometric are built from",
+    "Binomial(n, p) counts successes in n independent trials: C(n,k) p^k (1-p)^(n-k)",
+    "Geometric(p) counts trials up to and including the first success — memoryless",
+    "Expectation is linear whether or not the variables are independent",
+    "Var(X) = E[(X - mu)^2] = E[X^2] - mu^2, and why the centred form loses less precision",
+    "Exact integer binomial coefficients: multiply then divide, never factorial then divide"
+   ],
+   "lab": {
+    "title": "pmf, cdf and the first two moments",
+    "runtime": "python",
+    "minutes": 40,
+    "brief": "No `math.comb`, no `statistics` module. Build these from the definitions.\n\n**`choose(n, k)`** — the exact integer binomial coefficient. `0` when `k` is\nnegative or larger than `n`; `ValueError` when `n` is negative. Build it up\nmultiplicatively — `result = result * (n - i) // (i + 1)` stays exact and never\ntouches a huge factorial.\n\n**`bernoulli_pmf(p, k)`** — `1 - p` at `k = 0`, `p` at `k = 1`, `0.0` elsewhere.\n\n**`binomial_pmf(n, p, k)`** and **`binomial_cdf(n, p, k)`** — mass and running\ntotal. Both return `0.0` below the support and the cdf returns `1.0` at or above\n`n`.\n\n**`geometric_pmf(p, k)`** and **`geometric_cdf(p, k)`** — trials up to and\nincluding the first success, so the support starts at `k = 1`:\n\n```text\ngeometric_pmf(0.5, 3)  ->  0.125\ngeometric_cdf(0.5, 3)  ->  0.875\n```\n\nEvery one of these raises `ValueError` for a probability outside its range —\n`[0, 1]` for Bernoulli and binomial, `(0, 1]` for geometric, where `p = 0` would\nmean waiting for ever.\n\n**`binomial_table(n, p)`** and **`geometric_table(p, kmax)`** — dicts from\noutcome to probability, over `0..n` and `1..kmax` respectively.\n\n**`expectation(pmf)`** and **`variance(pmf)`** — over any such dict. Both raise\n`ValueError` if a mass is negative or the masses do not sum to 1 within `1e-9`.\nUse the centred form for the variance.\n\nThe tables let you check the closed forms you were taught: a binomial table\nshould give back `n p` and `n p (1 - p)`, and a geometric table `1 / p` and\n`(1 - p) / p^2`.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "def choose(n, k):\n    \"\"\"Exact integer C(n, k). 0 outside the support, ValueError for n < 0.\"\"\"\n    # your code here\n\n\ndef bernoulli_pmf(p, k):\n    \"\"\"P(X = k) for a single trial with success probability p.\"\"\"\n    # your code here\n\n\ndef binomial_pmf(n, p, k):\n    \"\"\"P(X = k) for k successes in n independent trials.\"\"\"\n    # your code here\n\n\ndef binomial_cdf(n, p, k):\n    \"\"\"P(X <= k).\"\"\"\n    # your code here\n\n\ndef geometric_pmf(p, k):\n    \"\"\"P(X = k), trials up to and including the first success.\"\"\"\n    # your code here\n\n\ndef geometric_cdf(p, k):\n    \"\"\"P(X <= k).\"\"\"\n    # your code here\n\n\ndef binomial_table(n, p):\n    \"\"\"{k: P(X = k)} for k in 0..n.\"\"\"\n    # your code here\n\n\ndef geometric_table(p, kmax):\n    \"\"\"{k: P(X = k)} for k in 1..kmax.\"\"\"\n    # your code here\n\n\ndef expectation(pmf):\n    \"\"\"E[X] over a {value: probability} dict.\"\"\"\n    # your code here\n\n\ndef variance(pmf):\n    \"\"\"Var(X), computed about the mean.\"\"\"\n    # your code here\n\n\ntable = binomial_table(10, 0.3)\nprint(\"E[X] =\", expectation(table), \" Var(X) =\", variance(table))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "def choose(n, k):\n    \"\"\"Exact integer C(n, k). 0 outside the support, ValueError for n < 0.\"\"\"\n    if n < 0:\n        raise ValueError(\"n must be non-negative\")\n    if k < 0 or k > n:\n        return 0\n    k = min(k, n - k)                     # C(n, k) == C(n, n - k), fewer terms\n    result = 1\n    for i in range(k):\n        # the running product is always divisible, so // keeps this exact\n        result = result * (n - i) // (i + 1)\n    return result\n\n\ndef _check_prob(p, strict_low=False):\n    if p < 0 or p > 1 or (strict_low and p == 0):\n        raise ValueError(f\"probability out of range: {p!r}\")\n\n\ndef bernoulli_pmf(p, k):\n    \"\"\"P(X = k) for a single trial with success probability p.\"\"\"\n    _check_prob(p)\n    if k == 0:\n        return 1.0 - p\n    if k == 1:\n        return float(p)\n    return 0.0\n\n\ndef binomial_pmf(n, p, k):\n    \"\"\"P(X = k) for k successes in n independent trials.\"\"\"\n    _check_prob(p)\n    if n < 0:\n        raise ValueError(\"n must be non-negative\")\n    if k < 0 or k > n:\n        return 0.0\n    return choose(n, k) * p ** k * (1 - p) ** (n - k)\n\n\ndef binomial_cdf(n, p, k):\n    \"\"\"P(X <= k).\"\"\"\n    _check_prob(p)\n    if k < 0:\n        return 0.0\n    return sum(binomial_pmf(n, p, j) for j in range(0, min(k, n) + 1))\n\n\ndef geometric_pmf(p, k):\n    \"\"\"P(X = k), trials up to and including the first success.\"\"\"\n    _check_prob(p, strict_low=True)\n    if k < 1:\n        return 0.0\n    return (1 - p) ** (k - 1) * p\n\n\ndef geometric_cdf(p, k):\n    \"\"\"P(X <= k).\"\"\"\n    _check_prob(p, strict_low=True)\n    if k < 1:\n        return 0.0\n    return 1.0 - (1 - p) ** k             # closed form: the complement of k failures\n\n\ndef binomial_table(n, p):\n    \"\"\"{k: P(X = k)} for k in 0..n.\"\"\"\n    return {k: binomial_pmf(n, p, k) for k in range(n + 1)}\n\n\ndef geometric_table(p, kmax):\n    \"\"\"{k: P(X = k)} for k in 1..kmax.\"\"\"\n    return {k: geometric_pmf(p, k) for k in range(1, kmax + 1)}\n\n\ndef _check_pmf(pmf):\n    if any(mass < 0 for mass in pmf.values()):\n        raise ValueError(\"a probability mass cannot be negative\")\n    total = sum(pmf.values())\n    if abs(total - 1.0) > 1e-9:\n        raise ValueError(f\"masses sum to {total!r}, not 1\")\n\n\ndef expectation(pmf):\n    \"\"\"E[X] over a {value: probability} dict.\"\"\"\n    _check_pmf(pmf)\n    return sum(value * mass for value, mass in pmf.items())\n\n\ndef variance(pmf):\n    \"\"\"Var(X), computed about the mean.\"\"\"\n    _check_pmf(pmf)\n    mu = sum(value * mass for value, mass in pmf.items())\n    return sum(mass * (value - mu) ** 2 for value, mass in pmf.items())\n\n\ntable = binomial_table(10, 0.3)\nprint(\"E[X] =\", expectation(table), \" Var(X) =\", variance(table))\n"
+     }
+    ],
+    "hints": [
+     "`result = result * (n - i) // (i + 1)` is exact at every step because the partial product of i+1 consecutive integers is always divisible by (i+1)!.",
+     "Write one private validator for the probability argument and call it from every public function, so the error message is identical everywhere.",
+     "`geometric_cdf` does not need a loop: k failures then anything has probability (1-p)^k, so the cdf is 1 minus that.",
+     "Compute the mean once inside `variance` and reuse it; recomputing it inside the sum is both slower and easier to get wrong."
+    ],
+    "tests": [
+     {
+      "name": "choose is exact and bounded",
+      "code": "for _n, _k, _want in [(5, 2, 10), (0, 0, 1), (10, 5, 252), (52, 5, 2598960), (5, 5, 1)]:\n    _got = choose(_n, _k)\n    assert _got == _want, f\"choose({_n}, {_k}) gave {_got!r}, expected {_want}\"\nassert isinstance(choose(52, 5), int), \"choose returns an exact integer, not a float\"\nassert choose(5, 6) == 0 and choose(5, -1) == 0, \"Outside the support the count is 0\"\ntry:\n    choose(-1, 0)\n    assert False, \"choose(-1, 0) should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "Bernoulli and binomial masses",
+      "code": "assert bernoulli_pmf(0.3, 1) == 0.3 and abs(bernoulli_pmf(0.3, 0) - 0.7) < 1e-12\nassert bernoulli_pmf(0.3, 2) == 0.0, \"Only 0 and 1 carry mass\"\nassert abs(binomial_pmf(5, 0.5, 2) - 0.3125) < 1e-12, f\"Got {binomial_pmf(5, 0.5, 2)!r}\"\nassert binomial_pmf(5, 0.5, 6) == 0.0 and binomial_pmf(5, 0.5, -1) == 0.0\nassert binomial_pmf(4, 0.0, 0) == 1.0, \"With p = 0 all the mass sits at k = 0\"\nassert binomial_pmf(4, 1.0, 4) == 1.0, \"With p = 1 all the mass sits at k = n\"\nassert abs(sum(binomial_table(9, 0.37).values()) - 1.0) < 1e-12, \"A pmf must sum to 1\"\nfor _bad in (-0.1, 1.4):\n    try:\n        binomial_pmf(5, _bad, 2)\n        assert False, f\"binomial_pmf with p={_bad} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "The binomial cdf accumulates",
+      "code": "assert binomial_cdf(5, 0.5, -1) == 0.0, \"Below the support the cdf is 0\"\nassert abs(binomial_cdf(5, 0.5, 5) - 1.0) < 1e-12, \"At n the cdf is 1\"\nassert abs(binomial_cdf(5, 0.5, 99) - 1.0) < 1e-12, \"Above n the cdf stays 1\"\nassert abs(binomial_cdf(5, 0.5, 2) - 0.5) < 1e-12, f\"Got {binomial_cdf(5, 0.5, 2)!r}\"\n_prev = -1.0\nfor _k in range(-1, 7):\n    _now = binomial_cdf(6, 0.4, _k)\n    assert _now >= _prev - 1e-15, f\"The cdf dipped at k={_k}\"\n    _prev = _now"
+     },
+     {
+      "name": "Geometric mass and its closed-form cdf",
+      "code": "assert abs(geometric_pmf(0.5, 3) - 0.125) < 1e-12, f\"Got {geometric_pmf(0.5, 3)!r}\"\nassert geometric_pmf(0.5, 0) == 0.0, \"The support starts at one trial\"\nassert abs(geometric_cdf(0.5, 3) - 0.875) < 1e-12, f\"Got {geometric_cdf(0.5, 3)!r}\"\nassert geometric_cdf(0.5, 0) == 0.0\nfor _k in range(1, 12):\n    _summed = sum(geometric_pmf(0.31, _j) for _j in range(1, _k + 1))\n    assert abs(geometric_cdf(0.31, _k) - _summed) < 1e-12, \\\n        f\"cdf and the summed pmf disagree at k={_k}\"\nassert geometric_pmf(1.0, 1) == 1.0, \"A certain success always lands on the first trial\"\ntry:\n    geometric_pmf(0.0, 3)\n    assert False, \"p = 0 never succeeds, so it should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "Binomial moments match n p and n p (1 - p)",
+      "code": "for _n, _p in [(10, 0.3), (7, 0.5), (20, 0.15)]:\n    _t = binomial_table(_n, _p)\n    assert abs(expectation(_t) - _n * _p) < 1e-9, \\\n        f\"E[X] for Binomial({_n}, {_p}) is {expectation(_t)!r}, expected {_n * _p}\"\n    assert abs(variance(_t) - _n * _p * (1 - _p)) < 1e-9, \\\n        f\"Var(X) for Binomial({_n}, {_p}) is {variance(_t)!r}, expected {_n * _p * (1 - _p)}\""
+     },
+     {
+      "name": "Geometric moments match 1/p and (1-p)/p^2",
+      "code": "for _p, _kmax in [(0.25, 400), (0.5, 80)]:\n    _t = geometric_table(_p, _kmax)\n    assert abs(expectation(_t) - 1 / _p) < 1e-6, \\\n        f\"E[X] for Geometric({_p}) is {expectation(_t)!r}, expected {1 / _p}\"\n    assert abs(variance(_t) - (1 - _p) / _p ** 2) < 1e-6, \\\n        f\"Var(X) for Geometric({_p}) is {variance(_t)!r}, expected {(1 - _p) / _p ** 2}\""
+     },
+     {
+      "name": "The moment functions refuse a non-distribution",
+      "code": "for _bad in ({0: 0.5, 1: 0.2}, {0: 1.2, 1: -0.2}, {}):\n    for _fn in (expectation, variance):\n        try:\n            _fn(_bad)\n            assert False, f\"{_fn.__name__}({_bad!r}) should raise ValueError\"\n        except ValueError:\n            pass\nassert abs(variance({0: 0.5, 1: 0.5}) - 0.25) < 1e-12, \"A fair coin has variance 1/4\"\nassert variance({4: 1.0}) == 0.0, \"A point mass has no spread\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Simulation, the law of large numbers and the CLT",
+   "summary": "Seeded Monte Carlo, and the two limit theorems that make it trustworthy.",
+   "concepts": [
+    "A pseudo-random generator is a deterministic function of its seed — reproducibility is a choice",
+    "The weak law of large numbers: the sample mean converges in probability to E[X]",
+    "Convergence is in probability, not monotone — a curve that wobbles is not a bug",
+    "The central limit theorem: sample means approach a normal shape whatever the parent distribution",
+    "The standard error of the mean is sigma / sqrt(n), so precision costs quadratically",
+    "The unbiased sample variance divides by n - 1; dividing by n underestimates systematically",
+    "Binning a sample into a histogram, and what its shape can and cannot tell you"
+   ],
+   "lab": {
+    "title": "Convergence you can watch",
+    "runtime": "python",
+    "minutes": 40,
+    "brief": "Every experiment here takes a seed, so two runs of the same call produce\nidentical numbers. Use `random.Random(seed)` — a private generator — and never\nthe module-level `random.random`, which shares global state.\n\n**`sample_mean(xs)`** — `ValueError` on an empty sample.\n\n**`sample_variance(xs)`** — the **unbiased** estimator, dividing by `n - 1`.\n`ValueError` for fewer than two values, since one observation says nothing about\nspread. **`sample_sd(xs)`** is its square root.\n\n**`standardise(xs)`** — the z-scores `(x - mean) / sd`. `ValueError` when the sd\nis zero.\n\n**`lln_curve(seed, p, checkpoints)`** — draw Bernoulli(p) values from **one**\nstream and record the running mean at each checkpoint, returning\n`[(n, mean_after_n), ...]` in ascending order of `n`. `ValueError` for an empty\ncheckpoint list or a checkpoint below 1.\n\n**`clt_means(seed, trials, n)`** — `trials` sample means, each of `n` draws from\n`Uniform(0, 1)`. `ValueError` when either count is below 1.\n\n**`histogram(values, lo, hi, bins)`** — counts per equal-width bin over\n`[lo, hi)`. Values outside the range are ignored; a value exactly equal to `lo`\nlands in bin 0. `ValueError` when `bins < 1` or `hi <= lo`.\n\nUniform(0, 1) has mean 1/2 and variance 1/12, so the means of `n` draws should\nscatter around 0.5 with standard deviation `sqrt(1/12) / sqrt(n)`. Quadrupling\n`n` should halve that scatter — the checks verify exactly this.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\nimport random\n\n\ndef sample_mean(xs):\n    \"\"\"Arithmetic mean. ValueError on an empty sample.\"\"\"\n    # your code here\n\n\ndef sample_variance(xs):\n    \"\"\"Unbiased sample variance, dividing by n - 1.\"\"\"\n    # your code here\n\n\ndef sample_sd(xs):\n    \"\"\"Square root of the unbiased variance.\"\"\"\n    # your code here\n\n\ndef standardise(xs):\n    \"\"\"z-scores. ValueError when the sample has no spread.\"\"\"\n    # your code here\n\n\ndef lln_curve(seed, p, checkpoints):\n    \"\"\"Running mean of Bernoulli(p) draws at each checkpoint.\"\"\"\n    # your code here\n\n\ndef clt_means(seed, trials, n):\n    \"\"\"`trials` sample means, each of n Uniform(0, 1) draws.\"\"\"\n    # your code here\n\n\ndef histogram(values, lo, hi, bins):\n    \"\"\"Counts per equal-width bin over [lo, hi).\"\"\"\n    # your code here\n\n\nfor n, mean in lln_curve(7, 0.3, [10, 100, 1000, 10000, 50000]):\n    print(f\"{n:>6}  {mean:.5f}\")\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\nimport random\n\n\ndef sample_mean(xs):\n    \"\"\"Arithmetic mean. ValueError on an empty sample.\"\"\"\n    if not xs:\n        raise ValueError(\"the mean of an empty sample is undefined\")\n    return sum(xs) / len(xs)\n\n\ndef sample_variance(xs):\n    \"\"\"Unbiased sample variance, dividing by n - 1.\"\"\"\n    if len(xs) < 2:\n        raise ValueError(\"need at least two observations to estimate spread\")\n    mu = sample_mean(xs)\n    return sum((x - mu) ** 2 for x in xs) / (len(xs) - 1)\n\n\ndef sample_sd(xs):\n    \"\"\"Square root of the unbiased variance.\"\"\"\n    return math.sqrt(sample_variance(xs))\n\n\ndef standardise(xs):\n    \"\"\"z-scores. ValueError when the sample has no spread.\"\"\"\n    sd = sample_sd(xs)\n    if sd == 0:\n        raise ValueError(\"a constant sample cannot be standardised\")\n    mu = sample_mean(xs)\n    return [(x - mu) / sd for x in xs]\n\n\ndef lln_curve(seed, p, checkpoints):\n    \"\"\"Running mean of Bernoulli(p) draws at each checkpoint.\"\"\"\n    if not checkpoints:\n        raise ValueError(\"need at least one checkpoint\")\n    marks = sorted(checkpoints)\n    if marks[0] < 1:\n        raise ValueError(\"checkpoints must be positive\")\n    rng = random.Random(seed)\n    curve = []\n    successes = 0\n    wanted = set(marks)\n    for i in range(1, marks[-1] + 1):\n        successes += 1 if rng.random() < p else 0\n        if i in wanted:\n            curve.append((i, successes / i))\n    return curve\n\n\ndef clt_means(seed, trials, n):\n    \"\"\"`trials` sample means, each of n Uniform(0, 1) draws.\"\"\"\n    if trials < 1 or n < 1:\n        raise ValueError(\"trials and n must both be positive\")\n    rng = random.Random(seed)\n    # one stream for the whole experiment keeps the run reproducible\n    return [sum(rng.random() for _ in range(n)) / n for _ in range(trials)]\n\n\ndef histogram(values, lo, hi, bins):\n    \"\"\"Counts per equal-width bin over [lo, hi).\"\"\"\n    if bins < 1:\n        raise ValueError(\"need at least one bin\")\n    if hi <= lo:\n        raise ValueError(\"hi must be greater than lo\")\n    counts = [0] * bins\n    width = (hi - lo) / bins\n    for value in values:\n        if value < lo or value >= hi:\n            continue\n        index = int((value - lo) / width)\n        counts[min(index, bins - 1)] += 1   # guard the top edge against rounding\n    return counts\n\n\nfor n, mean in lln_curve(7, 0.3, [10, 100, 1000, 10000, 50000]):\n    print(f\"{n:>6}  {mean:.5f}\")\n"
+     }
+    ],
+    "hints": [
+     "`sample_variance` should call `sample_mean` rather than recomputing the mean, so the two can never disagree.",
+     "`lln_curve` must draw from a single stream: loop once to the largest checkpoint, keep a running count of successes, and record when the index is a checkpoint.",
+     "`random.Random(seed)` gives an isolated generator; two calls with the same seed produce the same sequence, which is what makes these checks possible.",
+     "In `histogram`, `int((value - lo) / width)` can land on `bins` for a value a hair under `hi` — clamp with `min(index, bins - 1)`."
+    ],
+    "tests": [
+     {
+      "name": "The estimators are unbiased and guarded",
+      "code": "_xs = [2, 4, 4, 4, 5, 5, 7, 9]\nassert sample_mean(_xs) == 5.0, f\"sample_mean gave {sample_mean(_xs)!r}, expected 5.0\"\nassert abs(sample_variance(_xs) - 32 / 7) < 1e-12, \\\n    f\"sample_variance gave {sample_variance(_xs)!r}, expected 32/7 — divide by n - 1\"\nassert abs(sample_sd(_xs) - (32 / 7) ** 0.5) < 1e-12\nassert sample_variance([3, 5]) == 2.0, f\"Got {sample_variance([3, 5])!r}, expected 2.0\"\ntry:\n    sample_mean([])\n    assert False, \"sample_mean([]) should raise ValueError\"\nexcept ValueError:\n    pass\nfor _bad in ([], [4]):\n    try:\n        sample_variance(_bad)\n        assert False, f\"sample_variance({_bad!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "standardise centres and scales",
+      "code": "_z = standardise([2, 4, 4, 4, 5, 5, 7, 9])\nassert abs(sample_mean(_z)) < 1e-12, f\"z-scores should average 0, got {sample_mean(_z)!r}\"\nassert abs(sample_sd(_z) - 1.0) < 1e-12, f\"z-scores should have sd 1, got {sample_sd(_z)!r}\"\ntry:\n    standardise([3, 3, 3])\n    assert False, \"A constant sample has no spread and should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "histogram bins and clamps",
+      "code": "assert histogram([0.0, 0.1, 0.5, 0.9], 0.0, 1.0, 2) == [2, 2], \\\n    f\"Got {histogram([0.0, 0.1, 0.5, 0.9], 0.0, 1.0, 2)!r}\"\nassert histogram([1.0, -0.5, 3.0], 0.0, 1.0, 4) == [0, 0, 0, 0], \\\n    \"hi is exclusive and values outside the range are dropped\"\nassert histogram([0.999999999], 0.0, 1.0, 4) == [0, 0, 0, 1], \"The top bin must not overflow\"\nassert sum(histogram([0.2] * 7, 0.0, 1.0, 5)) == 7, \"Every in-range value is counted once\"\nfor _bad in ((0.0, 1.0, 0), (1.0, 1.0, 4), (1.0, 0.0, 4)):\n    try:\n        histogram([0.5], *_bad)\n        assert False, f\"histogram(..., {_bad!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "The law of large numbers, watched",
+      "code": "_curve = lln_curve(7, 0.3, [10, 100, 1000, 10000, 50000])\nassert [n for n, _ in _curve] == [10, 100, 1000, 10000, 50000], f\"Got {_curve!r}\"\nassert lln_curve(7, 0.3, [10, 100]) == _curve[:2], \\\n    \"The same seed and prefix must reproduce the same running means\"\nassert abs(_curve[-1][1] - 0.3) < 0.01, \\\n    f\"After 50000 draws the mean is {_curve[-1][1]!r}, it should be within 0.01 of 0.3\"\nassert abs(_curve[-1][1] - 0.3) < abs(_curve[0][1] - 0.3), \\\n    \"The estimate at 50000 draws should beat the one at 10 draws\"\nfor _bad in ([], [0], [5, -1]):\n    try:\n        lln_curve(7, 0.3, _bad)\n        assert False, f\"lln_curve with checkpoints {_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "Sample means centre on the true mean",
+      "code": "_means = clt_means(11, 400, 50)\nassert len(_means) == 400, f\"Expected 400 sample means, got {len(_means)}\"\nassert all(0.0 <= m <= 1.0 for m in _means), \"A mean of Uniform(0, 1) draws stays in [0, 1]\"\nassert abs(sample_mean(_means) - 0.5) < 0.01, \\\n    f\"The means average {sample_mean(_means)!r}; Uniform(0, 1) has mean 0.5\"\nassert clt_means(11, 5, 3) == clt_means(11, 5, 3), \"The same seed must give the same experiment\"\nassert clt_means(11, 5, 3) != clt_means(12, 5, 3), \"A different seed must give a different run\"\nfor _bad in ((0, 5), (5, 0), (-1, 5)):\n    try:\n        clt_means(1, *_bad)\n        assert False, f\"clt_means(1, {_bad[0]}, {_bad[1]}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "The standard error scales as 1/sqrt(n)",
+      "code": "import math as _math\n_theory = _math.sqrt(1 / 12) / _math.sqrt(50)\n_sd = sample_sd(clt_means(11, 400, 50))\nassert abs(_sd - _theory) / _theory < 0.20, \\\n    f\"Spread of the sample means is {_sd!r}, theory says about {_theory!r}\"\n_sd25 = sample_sd(clt_means(3, 500, 25))\n_sd100 = sample_sd(clt_means(3, 500, 100))\nassert _sd100 < _sd25, \"Four times as many draws must reduce the scatter\"\nassert 1.6 < _sd25 / _sd100 < 2.5, \\\n    f\"The ratio of the two spreads is {_sd25 / _sd100!r}; sqrt(4) = 2 is the prediction\""
+     },
+     {
+      "name": "The sampling distribution is bell-shaped",
+      "code": "_z = standardise(clt_means(5, 600, 40))\n_counts = histogram(_z, -3.0, 3.0, 6)\nassert sum(_counts) > 570, f\"Almost every z-score should fall within 3 sd, got {sum(_counts)}\"\nassert _counts[2] + _counts[3] > _counts[0] + _counts[5] * 3, \\\n    f\"The centre bins should dominate the tails, counts were {_counts!r}\"\nassert _counts[2] > _counts[1] and _counts[3] > _counts[4], \\\n    f\"The histogram should fall away from the centre, counts were {_counts!r}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Estimation and hypothesis testing",
+   "summary": "Two-sample comparison and goodness of fit, done by hand against a printed table.",
+   "concepts": [
+    "Point estimate, standard error and confidence interval as three views of one estimate",
+    "The null hypothesis is the claim you try to reject, never the one you try to prove",
+    "The two-sample t statistic as a signal-to-noise ratio: mean difference over its standard error",
+    "Welch's variant drops the equal-variance assumption at the cost of a fractional degrees of freedom",
+    "The Welch-Satterthwaite formula, and reading a table conservatively by rounding df down",
+    "Chi-square goodness of fit: summed squared residuals scaled by expected counts, with k - 1 df",
+    "A rejected null is not a large effect, and a p-value is not the probability of the hypothesis"
+   ],
+   "lab": {
+    "title": "A t test and a chi-square test, by hand",
+    "runtime": "python",
+    "minutes": 45,
+    "brief": "The two critical-value tables are given to you at the top of `main.py`, both at\nthe 5% level. Write everything else.\n\n**`summarise(xs)`** — `(n, mean, variance)` with the unbiased variance.\n`ValueError` for fewer than two observations.\n\n**`welch_t(a, b)`** — returns `(t, df)` where\n\n```text\nt  = (mean_a - mean_b) / sqrt(var_a/n_a + var_b/n_b)\ndf = (var_a/n_a + var_b/n_b)^2\n     / ( (var_a/n_a)^2/(n_a-1) + (var_b/n_b)^2/(n_b-1) )\n```\n\n**`t_critical(df)`** — the two-sided 5% critical value. Real degrees of freedom\nare fractional, and the table is not; round **down** to the largest tabulated\nentry that does not exceed `df`. That is the conservative reading. `ValueError`\nfor `df < 1`.\n\n**`t_decision(a, b)`** — `{\"t\", \"df\", \"critical\", \"reject\"}`, rejecting when\n`abs(t)` exceeds the critical value.\n\n**`expected_uniform(total, k)`** — `k` equal expected counts summing to `total`.\n\n**`chi_square(observed, expected)`** — the statistic. `ValueError` when the two\nlists differ in length, hold fewer than two categories, contain a negative\nobservation, or contain an expected count that is not strictly positive.\n\n**`chi_square_decision(observed, expected)`** — `{\"statistic\", \"df\", \"critical\",\n\"reject\"}` with `df = k - 1`; `ValueError` when that df is not in the table.\n\nThe die in `main.py` was rolled 120 times. Its statistic is 6.1 against a\ncritical value of 11.070, so the data give no reason to call it loaded.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n# two-sided critical values of Student's t at alpha = 0.05\nT_CRITICAL_95 = {\n    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,\n    8: 2.306, 9: 2.262, 10: 2.228, 12: 2.179, 15: 2.131, 20: 2.086, 24: 2.064,\n    30: 2.042, 40: 2.021, 60: 2.000, 120: 1.980, 1000: 1.962,\n}\n\n# upper-tail critical values of chi-square at alpha = 0.05\nCHI2_CRITICAL_95 = {\n    1: 3.841, 2: 5.991, 3: 7.815, 4: 9.488, 5: 11.070, 6: 12.592, 7: 14.067,\n    8: 15.507, 9: 16.919, 10: 18.307, 11: 19.675, 12: 21.026, 15: 24.996,\n    20: 31.410,\n}\n\nCONTROL = [12, 15, 14, 10, 13]\nTREATMENT = [22, 19, 25, 21, 23]\nDIE_ROLLS = [22, 17, 20, 26, 12, 23]\n\n\ndef summarise(xs):\n    \"\"\"(n, mean, unbiased variance). ValueError for fewer than two values.\"\"\"\n    # your code here\n\n\ndef welch_t(a, b):\n    \"\"\"(t, df) for the Welch two-sample t statistic.\"\"\"\n    # your code here\n\n\ndef t_critical(df):\n    \"\"\"Two-sided 5% critical value, rounding df down to the table.\"\"\"\n    # your code here\n\n\ndef t_decision(a, b):\n    \"\"\"{t, df, critical, reject}.\"\"\"\n    # your code here\n\n\ndef expected_uniform(total, k):\n    \"\"\"k equal expected counts summing to total.\"\"\"\n    # your code here\n\n\ndef chi_square(observed, expected):\n    \"\"\"Sum of (O - E)^2 / E.\"\"\"\n    # your code here\n\n\ndef chi_square_decision(observed, expected):\n    \"\"\"{statistic, df, critical, reject}.\"\"\"\n    # your code here\n\n\nprint(t_decision(CONTROL, TREATMENT))\nprint(chi_square_decision(DIE_ROLLS, expected_uniform(sum(DIE_ROLLS), 6)))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n# two-sided critical values of Student's t at alpha = 0.05\nT_CRITICAL_95 = {\n    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,\n    8: 2.306, 9: 2.262, 10: 2.228, 12: 2.179, 15: 2.131, 20: 2.086, 24: 2.064,\n    30: 2.042, 40: 2.021, 60: 2.000, 120: 1.980, 1000: 1.962,\n}\n\n# upper-tail critical values of chi-square at alpha = 0.05\nCHI2_CRITICAL_95 = {\n    1: 3.841, 2: 5.991, 3: 7.815, 4: 9.488, 5: 11.070, 6: 12.592, 7: 14.067,\n    8: 15.507, 9: 16.919, 10: 18.307, 11: 19.675, 12: 21.026, 15: 24.996,\n    20: 31.410,\n}\n\nCONTROL = [12, 15, 14, 10, 13]\nTREATMENT = [22, 19, 25, 21, 23]\nDIE_ROLLS = [22, 17, 20, 26, 12, 23]\n\n\ndef summarise(xs):\n    \"\"\"(n, mean, unbiased variance). ValueError for fewer than two values.\"\"\"\n    n = len(xs)\n    if n < 2:\n        raise ValueError(\"need at least two observations\")\n    mean = sum(xs) / n\n    variance = sum((x - mean) ** 2 for x in xs) / (n - 1)\n    return n, mean, variance\n\n\ndef welch_t(a, b):\n    \"\"\"(t, df) for the Welch two-sample t statistic.\"\"\"\n    na, ma, va = summarise(a)\n    nb, mb, vb = summarise(b)\n    sa, sb = va / na, vb / nb            # the two squared standard errors\n    se = math.sqrt(sa + sb)\n    if se == 0:\n        raise ValueError(\"both samples are constant, so the statistic is undefined\")\n    t = (ma - mb) / se\n    df = (sa + sb) ** 2 / (sa ** 2 / (na - 1) + sb ** 2 / (nb - 1))\n    return t, df\n\n\ndef t_critical(df):\n    \"\"\"Two-sided 5% critical value, rounding df down to the table.\"\"\"\n    if df < 1:\n        raise ValueError(\"degrees of freedom must be at least 1\")\n    usable = [k for k in T_CRITICAL_95 if k <= df]\n    return T_CRITICAL_95[max(usable)]    # rounding down is the safe direction\n\n\ndef t_decision(a, b):\n    \"\"\"{t, df, critical, reject}.\"\"\"\n    t, df = welch_t(a, b)\n    critical = t_critical(df)\n    return {\"t\": t, \"df\": df, \"critical\": critical, \"reject\": abs(t) > critical}\n\n\ndef expected_uniform(total, k):\n    \"\"\"k equal expected counts summing to total.\"\"\"\n    if k < 1:\n        raise ValueError(\"need at least one category\")\n    return [total / k] * k\n\n\ndef chi_square(observed, expected):\n    \"\"\"Sum of (O - E)^2 / E.\"\"\"\n    if len(observed) != len(expected):\n        raise ValueError(\"observed and expected must have the same length\")\n    if len(observed) < 2:\n        raise ValueError(\"goodness of fit needs at least two categories\")\n    if any(o < 0 for o in observed):\n        raise ValueError(\"counts cannot be negative\")\n    if any(e <= 0 for e in expected):\n        raise ValueError(\"every expected count must be strictly positive\")\n    return sum((o - e) ** 2 / e for o, e in zip(observed, expected))\n\n\ndef chi_square_decision(observed, expected):\n    \"\"\"{statistic, df, critical, reject}.\"\"\"\n    statistic = chi_square(observed, expected)\n    df = len(observed) - 1\n    if df not in CHI2_CRITICAL_95:\n        raise ValueError(f\"no tabulated critical value for df = {df}\")\n    critical = CHI2_CRITICAL_95[df]\n    return {\"statistic\": statistic, \"df\": df, \"critical\": critical,\n            \"reject\": statistic > critical}\n\n\nprint(t_decision(CONTROL, TREATMENT))\nprint(chi_square_decision(DIE_ROLLS, expected_uniform(sum(DIE_ROLLS), 6)))\n"
+     }
+    ],
+    "hints": [
+     "Name the two squared standard errors `va/na` and `vb/nb` once; both the statistic and the Welch-Satterthwaite denominator reuse them.",
+     "`max(k for k in T_CRITICAL_95 if k <= df)` is the whole of the conservative table lookup.",
+     "Validate `chi_square` before summing: a zero expected count would divide by zero, and the error message is far more useful than the traceback.",
+     "`df` for goodness of fit is the number of categories minus one — no parameters were estimated from the data here."
+    ],
+    "tests": [
+     {
+      "name": "summarise reports n, mean and unbiased variance",
+      "code": "assert summarise(CONTROL) == (5, 12.8, 3.7), f\"Got {summarise(CONTROL)!r}, expected (5, 12.8, 3.7)\"\n_n, _m, _v = summarise(TREATMENT)\nassert (_n, _m) == (5, 22.0) and abs(_v - 5.0) < 1e-12, f\"Got {(_n, _m, _v)!r}\"\nfor _bad in ([], [3]):\n    try:\n        summarise(_bad)\n        assert False, f\"summarise({_bad!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "The Welch statistic and its degrees of freedom",
+      "code": "_t, _df = welch_t(CONTROL, TREATMENT)\nassert abs(_t - (-6.974502000925911)) < 1e-9, f\"t is {_t!r}, expected about -6.9745\"\nassert abs(_df - 7.825277849573533) < 1e-9, f\"df is {_df!r}, expected about 7.8253\"\n_t2, _df2 = welch_t(TREATMENT, CONTROL)\nassert abs(_t2 + _t) < 1e-12, \"Swapping the samples flips the sign of t\"\nassert abs(_df2 - _df) < 1e-12, \"The degrees of freedom are symmetric in the two samples\""
+     },
+     {
+      "name": "The table is read conservatively",
+      "code": "assert t_critical(7.825277849573533) == 2.365, \\\n    f\"df 7.83 must round down to the df 7 row, got {t_critical(7.825277849573533)!r}\"\nassert t_critical(1) == 12.706 and t_critical(60) == 2.000\nassert t_critical(11.9) == 2.228, \"There is no df 11 row, so df 10 is used\"\nassert t_critical(500) == 1.980, \"df 500 falls back to the df 120 row\"\nfor _bad in (0, 0.5, -3):\n    try:\n        t_critical(_bad)\n        assert False, f\"t_critical({_bad}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "The t test separates and refuses to over-claim",
+      "code": "_d = t_decision(CONTROL, TREATMENT)\nassert _d[\"reject\"] is True, f\"These groups differ by nine points; got {_d!r}\"\nassert _d[\"critical\"] == 2.365 and abs(_d[\"t\"] + 6.9745) < 1e-3, f\"Got {_d!r}\"\n_similar = t_decision(CONTROL, [13, 14, 12, 15, 11])\nassert _similar[\"reject\"] is False, \\\n    f\"Two overlapping samples must not be declared different; got {_similar!r}\"\nassert abs(_similar[\"t\"]) < _similar[\"critical\"], \"reject must agree with the comparison\""
+     },
+     {
+      "name": "The chi-square statistic",
+      "code": "assert expected_uniform(120, 6) == [20.0] * 6, f\"Got {expected_uniform(120, 6)!r}\"\n_stat = chi_square(DIE_ROLLS, expected_uniform(120, 6))\nassert abs(_stat - 6.1) < 1e-9, f\"The statistic is {_stat!r}, expected 6.1\"\nassert chi_square([20, 20, 20], [20, 20, 20]) == 0.0, \"A perfect fit scores zero\"\nassert abs(chi_square([40, 10, 20, 20, 20, 10], expected_uniform(120, 6)) - 30.0) < 1e-9, \\\n    \"A badly skewed table should score 30.0\""
+     },
+     {
+      "name": "chi_square validates its inputs",
+      "code": "for _obs, _exp in [([1, 2], [1]), ([5], [5]), ([1, -2], [2, 2]), ([1, 2], [0, 3]),\n                   ([1, 2], [2, -1])]:\n    try:\n        chi_square(_obs, _exp)\n        assert False, f\"chi_square({_obs!r}, {_exp!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "The goodness-of-fit decision",
+      "code": "_fair = chi_square_decision(DIE_ROLLS, expected_uniform(120, 6))\nassert _fair[\"df\"] == 5 and _fair[\"critical\"] == 11.070, f\"Got {_fair!r}\"\nassert _fair[\"reject\"] is False, \"6.1 is well under 11.070, so the die survives the test\"\n_loaded = chi_square_decision([40, 10, 20, 20, 20, 10], expected_uniform(120, 6))\nassert _loaded[\"reject\"] is True, f\"A statistic of 30 must reject; got {_loaded!r}\"\ntry:\n    chi_square_decision([1] * 14, [1] * 14)\n    assert False, \"df 13 is not in the table, so this should raise ValueError\"\nexcept ValueError:\n    pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Bayesian reasoning and naive Bayes",
+   "summary": "Turning a prior and a likelihood into a posterior, then scaling that up to a classifier.",
+   "concepts": [
+    "Bayes' rule as prior times likelihood, renormalised over the hypotheses",
+    "The base-rate fallacy: a 99% accurate test on a rare condition still yields mostly false positives",
+    "Sequential updating — yesterday's posterior is today's prior, and the order does not matter",
+    "The naive conditional-independence assumption, and why it works despite being false",
+    "Working in log space so a hundred-word document does not underflow to zero",
+    "Laplace (add-alpha) smoothing: an unseen word must not annihilate a whole class",
+    "The MAP decision rule, and how the prior shows up as a constant additive term"
+   ],
+   "lab": {
+    "title": "Posterior updates and a spam filter",
+    "runtime": "python",
+    "minutes": 45,
+    "brief": "## Part 1 — Bayes' rule\n\n**`bayes_posterior(prior, likelihood)`** — both are dicts keyed by hypothesis.\nReturns the renormalised posterior. `ValueError` when the prior does not sum to 1\nwithin `1e-9`, when a hypothesis is missing from `likelihood`, or when the total\nevidence probability is zero — that last case means the observation was\nimpossible under every hypothesis, which is a modelling error, not a number.\n\n**`sequential_update(prior, observations)`** — fold a list of likelihood dicts in\nleft to right, each posterior becoming the next prior.\n\nThe screening example: a condition affecting 1 in 1000, a test that catches 99%\nof cases and gives a false positive 5% of the time. One positive result takes\nyou from 0.001 to about 0.0194 — a nineteenfold jump that still leaves the\nanswer almost certainly \"no\".\n\n## Part 2 — naive Bayes\n\n`NaiveBayes(alpha=1.0)` with add-alpha smoothing over the shared vocabulary.\n\n- `tokenise(text)` — a static method: lowercase, then every run of letters and\n  digits, so `\"Buy CHEAP pills!\"` gives `[\"buy\", \"cheap\", \"pills\"]`.\n- `train(docs)` — `docs` is a list of `(text, label)`. `ValueError` when empty.\n- `log_prob(text, label)` — `log P(label) + sum of log P(word | label)`, where\n\n```text\nP(word | label) = (count(word, label) + alpha) / (total(label) + alpha * |V|)\n```\n\n  and `|V|` is the size of the vocabulary seen in training. `ValueError` before\n  training or for an unknown label.\n- `classify(text)` — the label with the highest `log_prob`; ties go to the\n  alphabetically first label, so an all-unseen document has a defined answer.\n\nWork in logs throughout. A product of two hundred small probabilities underflows\nto exactly zero in double precision, and a comparison of zeros decides nothing.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\nimport re\n\nCORPUS = [\n    (\"buy cheap pills\", \"spam\"),\n    (\"cheap deal now\", \"spam\"),\n    (\"meet me for lunch\", \"ham\"),\n    (\"lunch tomorrow\", \"ham\"),\n]\n\n\ndef bayes_posterior(prior, likelihood):\n    \"\"\"Prior times likelihood, renormalised.\"\"\"\n    # your code here\n\n\ndef sequential_update(prior, observations):\n    \"\"\"Fold a list of likelihood dicts into the prior, left to right.\"\"\"\n    # your code here\n\n\nclass NaiveBayes:\n    \"\"\"Multinomial naive Bayes with add-alpha smoothing.\"\"\"\n\n    def __init__(self, alpha=1.0):\n        self.alpha = alpha\n        self.counts = {}      # label -> {word: count}\n        self.totals = {}      # label -> tokens seen\n        self.docs = {}        # label -> documents seen\n        self.total_docs = 0\n        self.vocab = set()\n\n    @staticmethod\n    def tokenise(text):\n        \"\"\"Lowercased runs of letters and digits.\"\"\"\n        # your code here\n\n    def train(self, docs):\n        \"\"\"Count words per label. ValueError on an empty corpus.\"\"\"\n        # your code here\n\n    def log_prob(self, text, label):\n        \"\"\"log P(label) + sum of log P(word | label).\"\"\"\n        # your code here\n\n    def classify(self, text):\n        \"\"\"The most probable label; ties break alphabetically.\"\"\"\n        # your code here\n\n\nprint(bayes_posterior({\"ill\": 0.001, \"well\": 0.999},\n                      {\"ill\": 0.99, \"well\": 0.05}))\nmodel = NaiveBayes()\nmodel.train(CORPUS)\nprint(model.classify(\"cheap pills\"), model.classify(\"lunch tomorrow\"))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\nimport re\n\nCORPUS = [\n    (\"buy cheap pills\", \"spam\"),\n    (\"cheap deal now\", \"spam\"),\n    (\"meet me for lunch\", \"ham\"),\n    (\"lunch tomorrow\", \"ham\"),\n]\n\n\ndef bayes_posterior(prior, likelihood):\n    \"\"\"Prior times likelihood, renormalised.\"\"\"\n    if abs(sum(prior.values()) - 1.0) > 1e-9:\n        raise ValueError(f\"the prior sums to {sum(prior.values())!r}, not 1\")\n    if any(mass < 0 for mass in prior.values()):\n        raise ValueError(\"a prior probability cannot be negative\")\n    missing = set(prior) - set(likelihood)\n    if missing:\n        raise ValueError(f\"no likelihood given for {sorted(missing)}\")\n    joint = {h: prior[h] * likelihood[h] for h in prior}\n    evidence = sum(joint.values())\n    if evidence == 0:\n        raise ValueError(\"the observation is impossible under every hypothesis\")\n    return {h: value / evidence for h, value in joint.items()}\n\n\ndef sequential_update(prior, observations):\n    \"\"\"Fold a list of likelihood dicts into the prior, left to right.\"\"\"\n    posterior = dict(prior)\n    for likelihood in observations:\n        posterior = bayes_posterior(posterior, likelihood)\n    return posterior\n\n\nclass NaiveBayes:\n    \"\"\"Multinomial naive Bayes with add-alpha smoothing.\"\"\"\n\n    def __init__(self, alpha=1.0):\n        self.alpha = alpha\n        self.counts = {}      # label -> {word: count}\n        self.totals = {}      # label -> tokens seen\n        self.docs = {}        # label -> documents seen\n        self.total_docs = 0\n        self.vocab = set()\n\n    @staticmethod\n    def tokenise(text):\n        \"\"\"Lowercased runs of letters and digits.\"\"\"\n        return re.findall(r\"[a-z0-9]+\", text.lower())\n\n    def train(self, docs):\n        \"\"\"Count words per label. ValueError on an empty corpus.\"\"\"\n        if not docs:\n            raise ValueError(\"cannot train on an empty corpus\")\n        for text, label in docs:\n            self.counts.setdefault(label, {})\n            self.totals.setdefault(label, 0)\n            self.docs[label] = self.docs.get(label, 0) + 1\n            self.total_docs += 1\n            for word in self.tokenise(text):\n                self.counts[label][word] = self.counts[label].get(word, 0) + 1\n                self.totals[label] += 1\n                self.vocab.add(word)\n        return self\n\n    def log_prob(self, text, label):\n        \"\"\"log P(label) + sum of log P(word | label).\"\"\"\n        if not self.total_docs:\n            raise ValueError(\"the model has not been trained\")\n        if label not in self.counts:\n            raise ValueError(f\"unknown label {label!r}\")\n        denominator = self.totals[label] + self.alpha * len(self.vocab)\n        score = math.log(self.docs[label] / self.total_docs)\n        for word in self.tokenise(text):\n            count = self.counts[label].get(word, 0)\n            # every word gets alpha of imaginary evidence, so nothing is impossible\n            score += math.log((count + self.alpha) / denominator)\n        return score\n\n    def classify(self, text):\n        \"\"\"The most probable label; ties break alphabetically.\"\"\"\n        if not self.total_docs:\n            raise ValueError(\"the model has not been trained\")\n        best_label = None\n        best_score = None\n        for label in sorted(self.counts):        # sorted, so ties go alphabetically\n            score = self.log_prob(text, label)\n            if best_score is None or score > best_score:\n                best_label, best_score = label, score\n        return best_label\n\n\nprint(bayes_posterior({\"ill\": 0.001, \"well\": 0.999},\n                      {\"ill\": 0.99, \"well\": 0.05}))\nmodel = NaiveBayes()\nmodel.train(CORPUS)\nprint(model.classify(\"cheap pills\"), model.classify(\"lunch tomorrow\"))\n"
+     }
+    ],
+    "hints": [
+     "`bayes_posterior` is three lines of arithmetic and four of validation: multiply, sum, divide.",
+     "`sequential_update` should call `bayes_posterior` in a loop rather than reimplementing it — that also inherits the validation.",
+     "Accumulate the vocabulary across *all* labels; the smoothing denominator uses the shared |V|, not the per-label word count.",
+     "Iterate the labels in `sorted()` order inside `classify` and compare with a strict `>`; the first-seen label then wins any tie."
+    ],
+    "tests": [
+     {
+      "name": "The base-rate fallacy, in numbers",
+      "code": "_post = bayes_posterior({\"ill\": 0.001, \"well\": 0.999}, {\"ill\": 0.99, \"well\": 0.05})\nassert abs(_post[\"ill\"] - 0.019434628975265017) < 1e-12, \\\n    f\"P(ill | positive) is {_post['ill']!r}, expected about 0.01943\"\nassert abs(sum(_post.values()) - 1.0) < 1e-12, \"A posterior is still a distribution\"\nassert _post[\"ill\"] > 0.001, \"One positive test should still raise the probability nineteenfold\""
+     },
+     {
+      "name": "bayes_posterior validates its inputs",
+      "code": "for _prior, _like in [({\"a\": 0.5, \"b\": 0.2}, {\"a\": 1.0, \"b\": 1.0}),\n                      ({\"a\": 0.5, \"b\": 0.5}, {\"a\": 1.0}),\n                      ({\"a\": 0.5, \"b\": 0.5}, {\"a\": 0.0, \"b\": 0.0}),\n                      ({\"a\": 1.5, \"b\": -0.5}, {\"a\": 1.0, \"b\": 1.0})]:\n    try:\n        bayes_posterior(_prior, _like)\n        assert False, f\"bayes_posterior({_prior!r}, {_like!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "Evidence accumulates across observations",
+      "code": "_prior = {\"ill\": 0.001, \"well\": 0.999}\n_test = {\"ill\": 0.99, \"well\": 0.05}\n_one = sequential_update(_prior, [_test])\n_two = sequential_update(_prior, [_test, _test])\nassert abs(_one[\"ill\"] - bayes_posterior(_prior, _test)[\"ill\"]) < 1e-12, \\\n    \"One observation is just a single Bayes update\"\nassert _two[\"ill\"] > _one[\"ill\"] > _prior[\"ill\"], \"A second positive must raise it further\"\nassert abs(_two[\"ill\"] - 0.2818323) < 1e-6, f\"After two positives: {_two['ill']!r}\"\n_negative = {\"ill\": 0.01, \"well\": 0.95}\nassert abs(sequential_update(_prior, [_test, _negative])[\"ill\"]\n           - sequential_update(_prior, [_negative, _test])[\"ill\"]) < 1e-12, \\\n    \"Independent evidence gives the same posterior in either order\"\nassert sequential_update(_prior, []) == _prior, \"No evidence leaves the prior alone\""
+     },
+     {
+      "name": "tokenise normalises text",
+      "code": "assert NaiveBayes.tokenise(\"Buy CHEAP pills!\") == [\"buy\", \"cheap\", \"pills\"], \\\n    f'Got {NaiveBayes.tokenise(\"Buy CHEAP pills!\")!r}'\nassert NaiveBayes.tokenise(\"\") == [], \"No words, no tokens\"\nassert NaiveBayes.tokenise(\"...!!!\") == [], \"Punctuation alone yields nothing\"\nassert NaiveBayes.tokenise(\"win 100 now\") == [\"win\", \"100\", \"now\"], \"Digits are kept\""
+     },
+     {
+      "name": "Smoothed conditional probabilities are exact",
+      "code": "import math as _math\n_nb = NaiveBayes()\n_nb.train(CORPUS)\nassert len(_nb.vocab) == 10, f\"The shared vocabulary has {len(_nb.vocab)} words, expected 10\"\nassert _nb.totals[\"spam\"] == 6 and _nb.totals[\"ham\"] == 6, f\"totals: {_nb.totals!r}\"\n_want = _math.log(0.5) + _math.log(3 / 16)\nassert abs(_nb.log_prob(\"cheap\", \"spam\") - _want) < 1e-12, \\\n    f\"log_prob('cheap', 'spam') is {_nb.log_prob('cheap', 'spam')!r}, expected {_want!r}\"\n_want_ham = _math.log(0.5) + _math.log(1 / 16)\nassert abs(_nb.log_prob(\"cheap\", \"ham\") - _want_ham) < 1e-12, \\\n    \"An unseen word still gets alpha / (total + alpha |V|), never zero\""
+     },
+     {
+      "name": "The classifier separates the two classes",
+      "code": "_nb = NaiveBayes()\n_nb.train(CORPUS)\nassert _nb.classify(\"cheap pills\") == \"spam\", \"Both words appear only in spam\"\nassert _nb.classify(\"lunch tomorrow\") == \"ham\", \"Both words appear only in ham\"\nassert _nb.classify(\"cheap cheap cheap lunch\") == \"spam\", \"Repeated evidence should compound\"\nassert _nb.classify(\"zzz\") == \"ham\", \\\n    \"An all-unseen document ties, and the tie breaks to the alphabetically first label\"\nassert _nb.log_prob(\"zzz qqq\", \"spam\") > float(\"-inf\"), \\\n    \"Smoothing must keep the score finite for unseen words\""
+     },
+     {
+      "name": "The model refuses to guess before it is trained",
+      "code": "_fresh = NaiveBayes()\nfor _call in (lambda: _fresh.classify(\"anything\"), lambda: _fresh.log_prob(\"x\", \"spam\")):\n    try:\n        _call()\n        assert False, \"Using an untrained model should raise ValueError\"\n    except ValueError:\n        pass\ntry:\n    _fresh.train([])\n    assert False, \"Training on an empty corpus should raise ValueError\"\nexcept ValueError:\n    pass\n_nb = NaiveBayes()\n_nb.train(CORPUS)\ntry:\n    _nb.log_prob(\"cheap\", \"banana\")\n    assert False, \"An unknown label should raise ValueError\"\nexcept ValueError:\n    pass"
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "Capstone — an A/B test analyser",
+  "brief": "An experiment produced two samples of a continuous metric — session length,\nlatency, basket value. Turn them into a decision that survives being questioned.\n`abtest.py` holds the statistics and is what the checks import; `main.py` runs\none analysis and prints the report.\n\nBoth critical-value tables are given at the top of the starter.\n\n## Descriptives\n\n`summarise(xs)` — `{\"n\", \"mean\", \"var\", \"sd\"}` with the unbiased variance;\n`ValueError` for fewer than two observations.\n\n## Classical inference\n\n- `welch_t(a, b)` — `(t, df)`, exactly as in the inference lab, with\n  `t = (mean_a - mean_b) / sqrt(var_a/n_a + var_b/n_b)`.\n- `t_critical(df)` — the two-sided 5% value, rounding `df` **down** to the\n  largest tabulated entry; `ValueError` for `df < 1`.\n- `mean_diff_ci(a, b)` — the interval for `mean_b - mean_a`, that difference plus\n  and minus `t_critical(df)` standard errors. Returned low end first.\n- `cohens_d(a, b)` — `(mean_b - mean_a)` over the pooled standard deviation\n  `sqrt(((n_a-1) var_a + (n_b-1) var_b) / (n_a + n_b - 2))`. `ValueError` when\n  that pooled deviation is zero.\n\n## Resampling\n\n- `percentile(values, q)` — the `q` quantile by linear interpolation between\n  order statistics: index `q * (n - 1)`, interpolating between its neighbours.\n  `ValueError` on an empty sample or `q` outside `[0, 1]`.\n- `bootstrap_diffs(a, b, trials=2000, seed=7)` — resample each group **with\n  replacement** to its own size, `trials` times, and return the list of\n  `mean_b - mean_a`. Use one `random.Random(seed)`, drawing `a` before `b` in\n  each trial, so the output is reproducible. `ValueError` for `trials < 1`.\n- `bootstrap_ci(a, b, trials=2000, seed=7)` — the 2.5th and 97.5th percentiles of\n  those differences.\n\n## The decision\n\n`analyse(a, b, trials=2000, seed=7)` returns a dict with `n_control`,\n`n_treatment`, `mean_control`, `mean_treatment`, `diff`, `t`, `df`, `critical`,\n`significant`, `effect_size`, `ci`, `bootstrap_ci`, `decision` and\n`assumptions`.\n\n`decision` is `\"ship\"` when the result is significant and the difference is\npositive, `\"roll back\"` when significant and negative, and `\"hold\"` otherwise.\n`assumptions` is a list of at least three plain sentences naming what the\nanalysis takes on trust — independence, what the test does and does not say, and\nwhat a confidence interval means.\n\n## Suggested order\n\nDescriptives, then the t machinery, then `percentile` (test it against a list you\ncan check by eye), then the bootstrap, and `analyse` last as pure assembly.",
+  "deliverables": [
+   "`abtest.py` — descriptives, Welch t, effect size, both intervals and `analyse`, importable with no side effects",
+   "A conservative critical-value lookup that rounds fractional degrees of freedom down",
+   "A percentile function built on linear interpolation between order statistics",
+   "A seeded bootstrap whose output is bit-identical across runs",
+   "`analyse` returning one dict that carries the estimate, the interval and the decision together",
+   "`main.py` — a worked analysis of two samples, printed as a readable report"
+  ],
+  "constraints": [
+   "Standard library only: `math` and `random` are the two imports you need",
+   "`abtest.py` defines functions only — importing it must print nothing",
+   "Every random draw comes from a `random.Random(seed)` instance, never the module-level functions",
+   "No hard-coded critical values outside the two tables given",
+   "`analyse` must not print or decide anything it cannot also report as a number"
+  ],
+  "rubric": [
+   {
+    "criterion": "Statistical correctness",
+    "weight": 40,
+    "evidence": "Welch t, degrees of freedom, effect size and both intervals reproduce the reference values to nine decimal places."
+   },
+   {
+    "criterion": "Reproducibility",
+    "weight": 20,
+    "evidence": "The bootstrap gives identical output for a given seed and different output for a different one; nothing touches global random state."
+   },
+   {
+    "criterion": "Edge cases and validation",
+    "weight": 20,
+    "evidence": "Single-observation samples, constant samples, empty percentile input and non-positive trial counts all raise ValueError."
+   },
+   {
+    "criterion": "Reporting",
+    "weight": 12,
+    "evidence": "analyse returns every required field, decision agrees with significance and sign, and the assumptions are stated in the output."
+   },
+   {
+    "criterion": "Readability",
+    "weight": 8,
+    "evidence": "Docstrings on every public function, no duplicated variance code, and main.py free of statistics logic."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 300,
+  "files": [
+   {
+    "name": "abtest.py",
+    "content": "import math\nimport random\n\n# two-sided critical values of Student's t at alpha = 0.05\nT_CRITICAL_95 = {\n    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,\n    8: 2.306, 9: 2.262, 10: 2.228, 12: 2.179, 15: 2.131, 20: 2.086, 24: 2.064,\n    30: 2.042, 40: 2.021, 60: 2.000, 120: 1.980, 1000: 1.962,\n}\n\n\ndef summarise(xs):\n    \"\"\"{n, mean, var, sd} with the unbiased variance.\"\"\"\n    # your code here\n\n\ndef welch_t(a, b):\n    \"\"\"(t, df) for the Welch two-sample t statistic.\"\"\"\n    # your code here\n\n\ndef t_critical(df):\n    \"\"\"Two-sided 5% critical value, rounding df down to the table.\"\"\"\n    # your code here\n\n\ndef mean_diff_ci(a, b):\n    \"\"\"Confidence interval for mean(b) - mean(a), low end first.\"\"\"\n    # your code here\n\n\ndef cohens_d(a, b):\n    \"\"\"Standardised mean difference, using the pooled standard deviation.\"\"\"\n    # your code here\n\n\ndef percentile(values, q):\n    \"\"\"The q quantile by linear interpolation between order statistics.\"\"\"\n    # your code here\n\n\ndef bootstrap_diffs(a, b, trials=2000, seed=7):\n    \"\"\"Resampled values of mean(b) - mean(a).\"\"\"\n    # your code here\n\n\ndef bootstrap_ci(a, b, trials=2000, seed=7):\n    \"\"\"The middle 95% of the bootstrap distribution.\"\"\"\n    # your code here\n\n\ndef analyse(a, b, trials=2000, seed=7):\n    \"\"\"Estimate, intervals, effect size and a decision, in one dict.\"\"\"\n    # your code here\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from abtest import analyse\n\nCONTROL = [12, 15, 14, 10, 13, 11, 14, 12]\nTREATMENT = [22, 19, 25, 21, 23, 20, 24, 22]\n\nreport = analyse(CONTROL, TREATMENT)\nprint(f\"control    n={report['n_control']} mean={report['mean_control']:.3f}\")\nprint(f\"treatment  n={report['n_treatment']} mean={report['mean_treatment']:.3f}\")\nprint(f\"difference {report['diff']:.3f}  effect size {report['effect_size']:.3f}\")\nprint(f\"t={report['t']:.3f} df={report['df']:.2f} critical={report['critical']}\")\nprint(\"decision:\", report[\"decision\"])\nfor line in report[\"assumptions\"]:\n    print(\" -\", line)\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "abtest.py",
+    "content": "import math\nimport random\n\n# two-sided critical values of Student's t at alpha = 0.05\nT_CRITICAL_95 = {\n    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,\n    8: 2.306, 9: 2.262, 10: 2.228, 12: 2.179, 15: 2.131, 20: 2.086, 24: 2.064,\n    30: 2.042, 40: 2.021, 60: 2.000, 120: 1.980, 1000: 1.962,\n}\n\n\ndef summarise(xs):\n    \"\"\"{n, mean, var, sd} with the unbiased variance.\"\"\"\n    n = len(xs)\n    if n < 2:\n        raise ValueError(\"need at least two observations\")\n    mean = sum(xs) / n\n    var = sum((x - mean) ** 2 for x in xs) / (n - 1)\n    return {\"n\": n, \"mean\": mean, \"var\": var, \"sd\": math.sqrt(var)}\n\n\ndef _standard_error(a, b):\n    \"\"\"The Welch standard error of the difference, and its two components.\"\"\"\n    sa = summarise(a)\n    sb = summarise(b)\n    va = sa[\"var\"] / sa[\"n\"]\n    vb = sb[\"var\"] / sb[\"n\"]\n    return sa, sb, va, vb, math.sqrt(va + vb)\n\n\ndef welch_t(a, b):\n    \"\"\"(t, df) for the Welch two-sample t statistic.\"\"\"\n    sa, sb, va, vb, se = _standard_error(a, b)\n    if se == 0:\n        raise ValueError(\"both samples are constant, so the statistic is undefined\")\n    t = (sa[\"mean\"] - sb[\"mean\"]) / se\n    df = (va + vb) ** 2 / (va ** 2 / (sa[\"n\"] - 1) + vb ** 2 / (sb[\"n\"] - 1))\n    return t, df\n\n\ndef t_critical(df):\n    \"\"\"Two-sided 5% critical value, rounding df down to the table.\"\"\"\n    if df < 1:\n        raise ValueError(\"degrees of freedom must be at least 1\")\n    return T_CRITICAL_95[max(k for k in T_CRITICAL_95 if k <= df)]\n\n\ndef mean_diff_ci(a, b):\n    \"\"\"Confidence interval for mean(b) - mean(a), low end first.\"\"\"\n    sa, sb, _va, _vb, se = _standard_error(a, b)\n    _t, df = welch_t(a, b)\n    margin = t_critical(df) * se\n    diff = sb[\"mean\"] - sa[\"mean\"]\n    return diff - margin, diff + margin\n\n\ndef cohens_d(a, b):\n    \"\"\"Standardised mean difference, using the pooled standard deviation.\"\"\"\n    sa = summarise(a)\n    sb = summarise(b)\n    pooled_var = ((sa[\"n\"] - 1) * sa[\"var\"] + (sb[\"n\"] - 1) * sb[\"var\"]) \\\n        / (sa[\"n\"] + sb[\"n\"] - 2)\n    pooled = math.sqrt(pooled_var)\n    if pooled == 0:\n        raise ValueError(\"both samples are constant, so the effect size is undefined\")\n    return (sb[\"mean\"] - sa[\"mean\"]) / pooled\n\n\ndef percentile(values, q):\n    \"\"\"The q quantile by linear interpolation between order statistics.\"\"\"\n    if not values:\n        raise ValueError(\"no values to take a percentile of\")\n    if q < 0 or q > 1:\n        raise ValueError(\"q must lie in [0, 1]\")\n    ordered = sorted(values)\n    position = q * (len(ordered) - 1)\n    low = int(position)\n    high = min(low + 1, len(ordered) - 1)\n    weight = position - low\n    return ordered[low] * (1 - weight) + ordered[high] * weight\n\n\ndef bootstrap_diffs(a, b, trials=2000, seed=7):\n    \"\"\"Resampled values of mean(b) - mean(a).\"\"\"\n    if trials < 1:\n        raise ValueError(\"need at least one bootstrap trial\")\n    if len(a) < 2 or len(b) < 2:\n        raise ValueError(\"need at least two observations in each group\")\n    rng = random.Random(seed)              # private stream: reproducible\n    diffs = []\n    for _ in range(trials):\n        # control first, then treatment — the draw order is part of the seed contract\n        resample_a = [rng.choice(a) for _ in range(len(a))]\n        resample_b = [rng.choice(b) for _ in range(len(b))]\n        diffs.append(sum(resample_b) / len(b) - sum(resample_a) / len(a))\n    return diffs\n\n\ndef bootstrap_ci(a, b, trials=2000, seed=7):\n    \"\"\"The middle 95% of the bootstrap distribution.\"\"\"\n    diffs = bootstrap_diffs(a, b, trials, seed)\n    return percentile(diffs, 0.025), percentile(diffs, 0.975)\n\n\ndef analyse(a, b, trials=2000, seed=7):\n    \"\"\"Estimate, intervals, effect size and a decision, in one dict.\"\"\"\n    sa = summarise(a)\n    sb = summarise(b)\n    t, df = welch_t(a, b)\n    critical = t_critical(df)\n    significant = abs(t) > critical\n    diff = sb[\"mean\"] - sa[\"mean\"]\n    if significant:\n        decision = \"ship\" if diff > 0 else \"roll back\"\n    else:\n        decision = \"hold\"\n    return {\n        \"n_control\": sa[\"n\"], \"n_treatment\": sb[\"n\"],\n        \"mean_control\": sa[\"mean\"], \"mean_treatment\": sb[\"mean\"],\n        \"diff\": diff,\n        \"t\": t, \"df\": df, \"critical\": critical, \"significant\": significant,\n        \"effect_size\": cohens_d(a, b),\n        \"ci\": mean_diff_ci(a, b),\n        \"bootstrap_ci\": bootstrap_ci(a, b, trials, seed),\n        \"decision\": decision,\n        \"assumptions\": [\n            \"Observations are independent within and between the two groups.\",\n            \"The two groups may have different variances, which is why Welch's t is used \"\n            \"rather than the pooled-variance form.\",\n            \"A significant result means the data would be unusual if the groups were \"\n            \"identical; it is not the probability that the treatment works.\",\n            \"The confidence interval covers the true difference in 95% of repeated \"\n            \"experiments, not with 95% probability for this one.\",\n            \"The bootstrap assumes each sample represents its population well, which is \"\n            \"a strong assumption at these sample sizes.\",\n        ],\n    }\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from abtest import analyse\n\nCONTROL = [12, 15, 14, 10, 13, 11, 14, 12]\nTREATMENT = [22, 19, 25, 21, 23, 20, 24, 22]\n\nreport = analyse(CONTROL, TREATMENT)\nprint(f\"control    n={report['n_control']} mean={report['mean_control']:.3f}\")\nprint(f\"treatment  n={report['n_treatment']} mean={report['mean_treatment']:.3f}\")\nprint(f\"difference {report['diff']:.3f}  effect size {report['effect_size']:.3f}\")\nprint(f\"t={report['t']:.3f} df={report['df']:.2f} critical={report['critical']}\")\nprint(f\"95% CI     [{report['ci'][0]:.3f}, {report['ci'][1]:.3f}]\")\nprint(f\"bootstrap  [{report['bootstrap_ci'][0]:.3f}, {report['bootstrap_ci'][1]:.3f}]\")\nprint(\"decision:\", report[\"decision\"])\nfor line in report[\"assumptions\"]:\n    print(\" -\", line)\n"
+   }
+  ],
+  "hints": [
+   "`summarise` is the only place that computes a mean or a variance; everything else consumes its dict.",
+   "For `percentile`, `position = q * (n - 1)`, `low = int(position)`, and the weight is `position - low`; the top edge needs `min(low + 1, n - 1)`.",
+   "Draw the control resample before the treatment resample inside each bootstrap trial, and take both from the same generator — that ordering is what makes the seed reproduce.",
+   "`analyse` should call the other functions rather than recompute anything; if a number appears twice in your file, one of the two is wrong."
+  ],
+  "tests": [
+   {
+    "name": "summarise reports the four descriptives",
+    "code": "from abtest import summarise\n_s = summarise([12, 15, 14, 10, 13])\nassert _s[\"n\"] == 5 and _s[\"mean\"] == 12.8, f\"Got {_s!r}\"\nassert abs(_s[\"var\"] - 3.7) < 1e-12, f\"var is {_s['var']!r}, expected 3.7 — divide by n - 1\"\nassert abs(_s[\"sd\"] - 3.7 ** 0.5) < 1e-12, \"sd is the square root of the variance\"\nfor _bad in ([], [4]):\n    try:\n        summarise(_bad)\n        assert False, f\"summarise({_bad!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+   },
+   {
+    "name": "The Welch statistic matches the reference",
+    "code": "from abtest import welch_t\n_a = [12, 15, 14, 10, 13]\n_b = [22, 19, 25, 21, 23]\n_t, _df = welch_t(_a, _b)\nassert abs(_t - (-6.974502000925911)) < 1e-9, f\"t is {_t!r}, expected about -6.9745\"\nassert abs(_df - 7.825277849573533) < 1e-9, f\"df is {_df!r}, expected about 7.8253\"\ntry:\n    welch_t([5, 5, 5], [5, 5, 5])\n    assert False, \"Two constant samples give a zero standard error and should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "The critical-value lookup rounds down",
+    "code": "from abtest import t_critical\nassert t_critical(7.825277849573533) == 2.365, f\"Got {t_critical(7.825277849573533)!r}\"\nassert t_critical(1) == 12.706 and t_critical(11.9) == 2.228 and t_critical(500) == 1.980\nfor _bad in (0, 0.99, -4):\n    try:\n        t_critical(_bad)\n        assert False, f\"t_critical({_bad}) should raise ValueError\"\n    except ValueError:\n        pass"
+   },
+   {
+    "name": "The confidence interval brackets the difference",
+    "code": "from abtest import mean_diff_ci\n_a = [12, 15, 14, 10, 13]\n_b = [22, 19, 25, 21, 23]\n_lo, _hi = mean_diff_ci(_a, _b)\nassert _lo < 9.2 < _hi, f\"The interval {(_lo, _hi)!r} should contain the observed difference 9.2\"\nassert abs(_lo - 6.080350742) < 1e-6, f\"Lower bound is {_lo!r}, expected about 6.0804\"\nassert abs(_hi - 12.319649258) < 1e-6, f\"Upper bound is {_hi!r}, expected about 12.3196\"\nassert _lo > 0, \"The whole interval is above zero, which is why the result is significant\""
+   },
+   {
+    "name": "Cohen's d standardises the difference",
+    "code": "from abtest import cohens_d\n_a = [12, 15, 14, 10, 13]\n_b = [22, 19, 25, 21, 23]\nassert abs(cohens_d(_a, _b) - 4.411062373665534) < 1e-9, f\"Got {cohens_d(_a, _b)!r}\"\nassert cohens_d(_b, _a) == -cohens_d(_a, _b), \"Swapping the groups flips the sign\"\nassert abs(cohens_d(_a, _a)) < 1e-12, \"A group against itself has no effect\"\ntry:\n    cohens_d([5, 5, 5], [7, 7, 7])\n    assert False, \"A zero pooled deviation should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "percentile interpolates between order statistics",
+    "code": "from abtest import percentile\nassert percentile([1, 2, 3, 4, 5], 0.5) == 3, f\"Got {percentile([1, 2, 3, 4, 5], 0.5)!r}\"\nassert percentile([1, 2, 3, 4], 0.5) == 2.5, \"The median of four values sits between the middle two\"\nassert percentile([5, 1, 3], 0.0) == 1 and percentile([5, 1, 3], 1.0) == 5, \\\n    \"The extremes are the smallest and largest values, whatever the input order\"\nassert abs(percentile([0, 10], 0.25) - 2.5) < 1e-12, f\"Got {percentile([0, 10], 0.25)!r}\"\nfor _bad in (-0.1, 1.1):\n    try:\n        percentile([1, 2, 3], _bad)\n        assert False, f\"percentile(values, {_bad}) should raise ValueError\"\n    except ValueError:\n        pass\ntry:\n    percentile([], 0.5)\n    assert False, \"percentile([], 0.5) should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "The bootstrap is reproducible",
+    "code": "from abtest import bootstrap_diffs\n_a = [12, 15, 14, 10, 13]\n_b = [22, 19, 25, 21, 23]\n_one = bootstrap_diffs(_a, _b, trials=200, seed=7)\nassert len(_one) == 200, f\"Expected 200 resampled differences, got {len(_one)}\"\nassert _one == bootstrap_diffs(_a, _b, trials=200, seed=7), \\\n    \"The same seed must reproduce the same bootstrap exactly\"\nassert _one != bootstrap_diffs(_a, _b, trials=200, seed=8), \\\n    \"A different seed must give a different bootstrap\"\nassert all(min(_b) - max(_a) <= d <= max(_b) - min(_a) for d in _one), \\\n    \"A resampled mean cannot leave the range of its own sample\"\nfor _bad in ((0, 7), (-5, 7)):\n    try:\n        bootstrap_diffs(_a, _b, trials=_bad[0], seed=_bad[1])\n        assert False, f\"bootstrap_diffs with trials={_bad[0]} should raise ValueError\"\n    except ValueError:\n        pass\ntry:\n    bootstrap_diffs([1], _b)\n    assert False, \"A one-observation group should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "The bootstrap interval agrees with the t interval",
+    "code": "from abtest import bootstrap_ci, mean_diff_ci\n_a = [12, 15, 14, 10, 13]\n_b = [22, 19, 25, 21, 23]\n_blo, _bhi = bootstrap_ci(_a, _b, trials=1000, seed=7)\nassert _blo < 9.2 < _bhi, f\"The bootstrap interval {(_blo, _bhi)!r} should contain 9.2\"\nassert _blo > 0, \"The bootstrap should also place the whole interval above zero\"\n_tlo, _thi = mean_diff_ci(_a, _b)\nassert abs(_blo - _tlo) < 4 and abs(_bhi - _thi) < 4, \\\n    f\"The two intervals {(_blo, _bhi)!r} and {(_tlo, _thi)!r} should broadly agree\""
+   },
+   {
+    "name": "analyse reports a significant difference",
+    "code": "from abtest import analyse\n_r = analyse([12, 15, 14, 10, 13], [22, 19, 25, 21, 23], trials=500, seed=7)\nfor _key in (\"n_control\", \"n_treatment\", \"mean_control\", \"mean_treatment\", \"diff\",\n             \"t\", \"df\", \"critical\", \"significant\", \"effect_size\", \"ci\",\n             \"bootstrap_ci\", \"decision\", \"assumptions\"):\n    assert _key in _r, f\"analyse is missing the {_key!r} field\"\nassert _r[\"significant\"] is True and _r[\"decision\"] == \"ship\", f\"Got {_r['decision']!r}\"\nassert abs(_r[\"diff\"] - 9.2) < 1e-12, f\"diff is {_r['diff']!r}, expected 9.2\"\nassert _r[\"critical\"] == 2.365, f\"critical is {_r['critical']!r}\"\nassert len(_r[\"assumptions\"]) >= 3, \"State at least three assumptions in plain sentences\"\nassert all(isinstance(s, str) and len(s) > 20 for s in _r[\"assumptions\"]), \\\n    \"Each assumption should be a readable sentence, not a keyword\""
+   },
+   {
+    "name": "analyse holds when the groups overlap",
+    "code": "from abtest import analyse\n_r = analyse([12, 15, 14, 10, 13], [13, 14, 12, 15, 11], trials=500, seed=7)\nassert _r[\"significant\"] is False, f\"Overlapping groups must not be called different: {_r['t']!r}\"\nassert _r[\"decision\"] == \"hold\", f\"decision is {_r['decision']!r}, expected 'hold'\"\nassert _r[\"ci\"][0] < 0 < _r[\"ci\"][1], \\\n    f\"An interval that straddles zero is the whole point here: {_r['ci']!r}\"\n_down = analyse([22, 19, 25, 21, 23], [12, 15, 14, 10, 13], trials=500, seed=7)\nassert _down[\"decision\"] == \"roll back\", \\\n    f\"A significant drop should roll back, got {_down['decision']!r}\"\nassert _down[\"effect_size\"] < 0, \"A drop has a negative effect size\""
+   },
+   {
+    "name": "abtest.py is import-clean and main.py reports",
+    "code": "_src = open(\"abtest.py\").read()\nassert \"print(\" not in _src, \"abtest.py defines functions; the printing belongs in main.py\"\nassert \"random.random(\" not in _src and \"random.choice(\" not in _src, \\\n    \"Use a random.Random(seed) instance, never the module-level generator\"\nassert \"decision:\" in _out, f\"main.py should print the decision; stdout was {_out!r}\"\nassert \"difference\" in _out and \"bootstrap\" in _out, \\\n    \"main.py should report the difference and the bootstrap interval\""
+   }
+  ]
+ }
+}

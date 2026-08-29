@@ -1,0 +1,431 @@
+{
+ "id": "FM501",
+ "title": "Formal Methods & Program Verification",
+ "year": 5,
+ "level": "Expert",
+ "prereqs": [
+  "CS310",
+  "CS330"
+ ],
+ "stack": [
+  "Python",
+  "Z3 / Dafny (reference)"
+ ],
+ "credits": 10,
+ "hours": 150,
+ "icon": "⊨",
+ "summary": "Programs are mathematical objects, and this course treats them as such. You build the four engines that industrial verification rests on — a DPLL satisfiability solver, a weakest-precondition calculator, an explicit-state model checker and a property-based testing framework with shrinking — and then apply all three verification styles to one data structure to see exactly what each one can and cannot catch.",
+ "outcomes": [
+  "Convert an arbitrary propositional formula to conjunctive normal form and decide it with DPLL",
+  "Explain why unit propagation and pure-literal elimination change the complexity in practice, not in theory",
+  "Compute weakest preconditions for assignment, sequencing, conditionals and assertions",
+  "State a loop invariant and discharge the two verification conditions it generates",
+  "Model a concurrent protocol as a Kripke structure and extract a counterexample trace",
+  "Build generators and shrinkers that reduce a random failure to a minimal one",
+  "Choose deliberately between deductive proof, model checking and testing for a given obligation"
+ ],
+ "assessment": "4 lab checkpoints (10% each) + capstone build (60%).",
+ "reading": [
+  "Huth & Ryan, *Logic in Computer Science: Modelling and Reasoning about Systems*, 2nd ed. — chapters 1-3",
+  "Clarke, Grumberg, Kroening, Peled & Veith, *Model Checking*, 2nd ed. — chapters 2-4",
+  "Biere, Heule, van Maaren & Walsh (eds), *Handbook of Satisfiability*, 2nd ed. — chapter 3 (CDCL)"
+ ],
+ "modules": [
+  {
+   "title": "Propositional reasoning and DPLL",
+   "summary": "From an arbitrary formula to clauses, and from clauses to a decision.",
+   "concepts": [
+    "Syntax versus semantics: a formula, a valuation, and the satisfaction relation ⊨",
+    "Negation normal form, then distribution of ∨ over ∧ to reach CNF",
+    "Clause form: a set of clauses, each a set of literals; the empty clause is false, the empty set is true",
+    "Davis-Putnam-Logemann-Loveland: propagate, eliminate, split, backtrack",
+    "Unit propagation is the Boolean constraint propagation that makes SAT tractable in practice",
+    "Pure-literal elimination is sound because a pure literal can always be set true",
+    "Validating an optimised solver against exhaustive enumeration on random instances"
+   ],
+   "lab": {
+    "title": "CNF conversion and a DPLL solver",
+    "runtime": "python",
+    "minutes": 60,
+    "brief": "A formula is a nested tuple. A variable is a lowercase name.\n\n```text\n(\"var\", \"p\")            p\n(\"not\", f)              ¬f\n(\"and\", f, g)           f ∧ g\n(\"or\",  f, g)           f ∨ g\n(\"imp\", f, g)           f → g\n(\"iff\", f, g)           f ↔ g\n```\n\nA **literal** is the string `\"p\"` or `\"-p\"`. A **clause** is a `frozenset` of\nliterals, read disjunctively. A **CNF** is a list of clauses, read conjunctively.\n\nImplement five functions.\n\n**`to_nnf(f)`** — negation normal form: no `imp`, no `iff`, and every `not`\napplied directly to a variable. Use `f → g ≡ ¬f ∨ g`, `f ↔ g ≡ (f → g) ∧ (g → f)`,\nDe Morgan, and double-negation elimination. Raise `ValueError` for an unknown\nconnective.\n\n**`to_cnf(f)`** — the clause list. Convert to NNF first, then distribute:\n`a ∨ (b ∧ c) ≡ (a ∨ b) ∧ (a ∨ c)`.\n\n```text\nto_cnf((\"or\", (\"var\", \"p\"), (\"and\", (\"var\", \"q\"), (\"var\", \"r\"))))\n    ->  [{\"p\", \"q\"}, {\"p\", \"r\"}]      as frozensets, in any order\n```\n\n**`satisfies(clauses, model)`** — does the model, a dict from variable name to\n`bool`, satisfy every clause?\n\n**`brute_force(clauses)`** — the reference decision procedure: try all `2^n`\nvaluations in order and return the first satisfying model, or `None`.\n\n**`dpll(clauses)`** — the same verdict, computed properly. Loop over unit\npropagation and pure-literal elimination until neither applies, then split on a\nvariable and recurse. Return a model that gives a value to **every** variable of\nthe input (unconstrained variables may be `False`), or `None` when unsatisfiable.\n\nAn empty clause list is satisfiable by the empty model. A clause list containing\nthe empty clause is unsatisfiable.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "def negate(lit):\n    \"\"\"The complement of a literal: \"p\" <-> \"-p\".\"\"\"\n    return lit[1:] if lit.startswith(\"-\") else \"-\" + lit\n\n\ndef variables(clauses):\n    \"\"\"Sorted list of the variable names appearing in a clause list.\"\"\"\n    return sorted({lit.lstrip(\"-\") for clause in clauses for lit in clause})\n\n\ndef to_nnf(f):\n    \"\"\"Negation normal form. ValueError on an unknown connective.\"\"\"\n    # your code here\n\n\ndef to_cnf(f):\n    \"\"\"A list of frozenset clauses equivalent to f.\"\"\"\n    # your code here\n\n\ndef satisfies(clauses, model):\n    \"\"\"True when every clause has a literal made true by model.\"\"\"\n    # your code here\n\n\ndef brute_force(clauses):\n    \"\"\"First satisfying model by exhaustive enumeration, or None.\"\"\"\n    # your code here\n\n\ndef dpll(clauses):\n    \"\"\"A total satisfying model found by DPLL, or None.\"\"\"\n    # your code here\n\n\nformula = (\"imp\", (\"and\", (\"var\", \"p\"), (\"var\", \"q\")), (\"or\", (\"var\", \"q\"), (\"var\", \"r\")))\nprint(to_cnf(formula))\nprint(dpll(to_cnf((\"and\", (\"var\", \"p\"), (\"not\", (\"var\", \"p\"))))))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import itertools\n\n\ndef negate(lit):\n    \"\"\"The complement of a literal: \"p\" <-> \"-p\".\"\"\"\n    return lit[1:] if lit.startswith(\"-\") else \"-\" + lit\n\n\ndef variables(clauses):\n    \"\"\"Sorted list of the variable names appearing in a clause list.\"\"\"\n    return sorted({lit.lstrip(\"-\") for clause in clauses for lit in clause})\n\n\ndef to_nnf(f):\n    \"\"\"Negation normal form. ValueError on an unknown connective.\"\"\"\n    op = f[0]\n    if op == \"var\":\n        return f\n    if op == \"and\" or op == \"or\":\n        return (op, to_nnf(f[1]), to_nnf(f[2]))\n    if op == \"imp\":\n        return to_nnf((\"or\", (\"not\", f[1]), f[2]))\n    if op == \"iff\":\n        return to_nnf((\"and\", (\"imp\", f[1], f[2]), (\"imp\", f[2], f[1])))\n    if op == \"not\":\n        g = f[1]\n        gop = g[0]\n        if gop == \"var\":\n            return f\n        if gop == \"not\":\n            return to_nnf(g[1])          # double negation\n        if gop == \"and\":                 # De Morgan\n            return (\"or\", to_nnf((\"not\", g[1])), to_nnf((\"not\", g[2])))\n        if gop == \"or\":\n            return (\"and\", to_nnf((\"not\", g[1])), to_nnf((\"not\", g[2])))\n        if gop == \"imp\":                 # ¬(a → b) ≡ a ∧ ¬b\n            return (\"and\", to_nnf(g[1]), to_nnf((\"not\", g[2])))\n        if gop == \"iff\":\n            return to_nnf((\"not\", (\"and\", (\"imp\", g[1], g[2]), (\"imp\", g[2], g[1]))))\n        raise ValueError(f\"unknown connective {gop!r}\")\n    raise ValueError(f\"unknown connective {op!r}\")\n\n\ndef _clauses(f):\n    \"\"\"f is already in NNF.\"\"\"\n    op = f[0]\n    if op == \"var\":\n        return [frozenset({f[1]})]\n    if op == \"not\":\n        return [frozenset({\"-\" + f[1][1]})]\n    if op == \"and\":\n        return _clauses(f[1]) + _clauses(f[2])\n    if op == \"or\":\n        # distribute: every left clause joined with every right clause\n        return [a | b for a in _clauses(f[1]) for b in _clauses(f[2])]\n    raise ValueError(f\"unknown connective {op!r}\")\n\n\ndef to_cnf(f):\n    \"\"\"A list of frozenset clauses equivalent to f.\"\"\"\n    return _clauses(to_nnf(f))\n\n\ndef satisfies(clauses, model):\n    \"\"\"True when every clause has a literal made true by model.\"\"\"\n    for clause in clauses:\n        ok = False\n        for lit in clause:\n            value = model[lit.lstrip(\"-\")]\n            if lit.startswith(\"-\"):\n                value = not value\n            if value:\n                ok = True\n                break\n        if not ok:\n            return False\n    return True\n\n\ndef brute_force(clauses):\n    \"\"\"First satisfying model by exhaustive enumeration, or None.\"\"\"\n    names = variables(clauses)\n    for combo in itertools.product((False, True), repeat=len(names)):\n        model = dict(zip(names, combo))\n        if satisfies(clauses, model):\n            return model\n    return None\n\n\ndef _simplify(clauses, lit):\n    \"\"\"Assume lit is true: drop satisfied clauses, shrink the rest.\"\"\"\n    opposite = negate(lit)\n    out = []\n    for clause in clauses:\n        if lit in clause:\n            continue\n        if opposite in clause:\n            out.append(clause - {opposite})\n        else:\n            out.append(clause)\n    return out\n\n\ndef _assign(model, lit):\n    model[lit.lstrip(\"-\")] = not lit.startswith(\"-\")\n\n\ndef _dpll(clauses, model):\n    while True:\n        if not clauses:\n            return True\n        if any(len(c) == 0 for c in clauses):\n            return False\n        unit = None\n        for clause in clauses:\n            if len(clause) == 1:\n                unit = next(iter(clause))\n                break\n        if unit is not None:\n            _assign(model, unit)\n            clauses = _simplify(clauses, unit)\n            continue\n        lits = {lit for clause in clauses for lit in clause}\n        pure = next((lit for lit in sorted(lits) if negate(lit) not in lits), None)\n        if pure is not None:\n            _assign(model, pure)\n            clauses = _simplify(clauses, pure)\n            continue\n        break\n\n    branch = sorted({lit for clause in clauses for lit in clause})[0]\n    for choice in (branch, negate(branch)):\n        saved = dict(model)\n        _assign(model, choice)\n        if _dpll(_simplify(clauses, choice), model):\n            return True\n        model.clear()\n        model.update(saved)\n    return False\n\n\ndef dpll(clauses):\n    \"\"\"A total satisfying model found by DPLL, or None.\"\"\"\n    clauses = [frozenset(c) for c in clauses]\n    model = {}\n    if not _dpll(clauses, model):\n        return None\n    for name in variables(clauses):\n        model.setdefault(name, False)\n    return model\n\n\nformula = (\"imp\", (\"and\", (\"var\", \"p\"), (\"var\", \"q\")), (\"or\", (\"var\", \"q\"), (\"var\", \"r\")))\nprint(to_cnf(formula))\nprint(dpll(to_cnf((\"and\", (\"var\", \"p\"), (\"not\", (\"var\", \"p\"))))))\n"
+     }
+    ],
+    "hints": [
+     "Write `to_nnf` as one recursion with a nested case split on the operand of `not`; every De Morgan rewrite recurses again rather than returning directly.",
+     "Distribution is a cross product: `[a | b for a in left for b in right]` where `left` and `right` are the clause lists of the two disjuncts.",
+     "`_simplify(clauses, lit)` is the whole engine — drop every clause containing `lit`, and remove `negate(lit)` from the others. A clause that shrinks to the empty set is a conflict.",
+     "Save and restore the model dict around each branch, otherwise a failed left branch leaves stale assignments behind."
+    ],
+    "tests": [
+     {
+      "name": "to_nnf removes implications and pushes negations",
+      "code": "def _ops(f):\n    _found = set()\n    _stack = [f]\n    while _stack:\n        _n = _stack.pop()\n        _found.add(_n[0])\n        for _k in _n[1:]:\n            if isinstance(_k, tuple):\n                _stack.append(_k)\n    return _found\n\n_n = to_nnf((\"not\", (\"imp\", (\"var\", \"p\"), (\"and\", (\"var\", \"q\"), (\"var\", \"r\")))))\nassert \"imp\" not in _ops(_n) and \"iff\" not in _ops(_n), f\"NNF still holds imp/iff: {_n!r}\"\n_bad = [_x for _x in [_n] if False]\ndef _walk(f):\n    if f[0] == \"not\":\n        assert f[1][0] == \"var\", f\"not applied to {f[1][0]!r}, expected a variable\"\n        return\n    for _k in f[1:]:\n        if isinstance(_k, tuple):\n            _walk(_k)\n_walk(_n)\nassert to_nnf((\"not\", (\"not\", (\"var\", \"p\")))) == (\"var\", \"p\"), \"double negation should collapse\""
+     },
+     {
+      "name": "to_cnf distributes correctly",
+      "code": "_got = set(to_cnf((\"or\", (\"var\", \"p\"), (\"and\", (\"var\", \"q\"), (\"var\", \"r\")))))\n_want = {frozenset({\"p\", \"q\"}), frozenset({\"p\", \"r\"})}\nassert _got == _want, f\"to_cnf gave {_got!r}, expected {_want!r}\"\nassert set(to_cnf((\"var\", \"p\"))) == {frozenset({\"p\"})}, \"a bare variable is one unit clause\"\nassert set(to_cnf((\"not\", (\"var\", \"p\")))) == {frozenset({\"-p\"})}, \"a negated variable is one unit clause\"\n_imp = set(to_cnf((\"imp\", (\"var\", \"p\"), (\"var\", \"q\"))))\nassert _imp == {frozenset({\"-p\", \"q\"})}, f\"p -> q should be one clause, got {_imp!r}\""
+     },
+     {
+      "name": "Unknown connectives are rejected",
+      "code": "for _bad in [(\"nand\", (\"var\", \"p\"), (\"var\", \"q\")), (\"not\", (\"xor\", (\"var\", \"p\"), (\"var\", \"q\")))]:\n    try:\n        to_nnf(_bad)\n        assert False, f\"to_nnf({_bad!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "satisfies and brute_force agree on small cases",
+      "code": "_cl = [frozenset({\"p\", \"q\"}), frozenset({\"-p\"})]\n_m = brute_force(_cl)\nassert _m is not None and satisfies(_cl, _m), f\"brute_force gave {_m!r} for a satisfiable set\"\nassert _m[\"p\"] is False and _m[\"q\"] is True, f\"expected p=False q=True, got {_m!r}\"\nassert brute_force([frozenset({\"p\"}), frozenset({\"-p\"})]) is None, \"p and -p is unsatisfiable\"\nassert brute_force([]) == {}, \"no clauses means the empty model satisfies everything\""
+     },
+     {
+      "name": "dpll decides the boundary cases",
+      "code": "assert dpll([]) == {}, \"an empty clause list is satisfiable by the empty model\"\nassert dpll([frozenset()]) is None, \"a clause list holding the empty clause is unsatisfiable\"\n_all4 = [frozenset({\"p\", \"q\"}), frozenset({\"p\", \"-q\"}),\n         frozenset({\"-p\", \"q\"}), frozenset({\"-p\", \"-q\"})]\nassert dpll(_all4) is None, \"all four clauses over p, q cannot be satisfied together\"\n_m = dpll([frozenset({\"p\", \"q\", \"r\"})])\nassert _m is not None and sorted(_m) == [\"p\", \"q\", \"r\"], f\"the model must be total, got {_m!r}\"\nassert satisfies([frozenset({\"p\", \"q\", \"r\"})], _m), f\"{_m!r} does not satisfy the clause\""
+     },
+     {
+      "name": "dpll matches brute force on random 3-CNF",
+      "code": "import random as _random\n_rng = _random.Random(7)\n_names = [\"p\", \"q\", \"r\", \"s\", \"t\"]\nfor _trial in range(60):\n    _cl = []\n    for _i in range(_rng.randint(1, 14)):\n        _vs = _rng.sample(_names, 3)\n        _cl.append(frozenset((_v if _rng.random() < 0.5 else \"-\" + _v) for _v in _vs))\n    _d = dpll(_cl)\n    _b = brute_force(_cl)\n    assert (_d is None) == (_b is None), f\"dpll says {_d!r} but brute force says {_b!r} for {_cl!r}\"\n    if _d is not None:\n        assert satisfies(_cl, _d), f\"dpll model {_d!r} does not satisfy {_cl!r}\""
+     },
+     {
+      "name": "Propagation beats enumeration on a long chain",
+      "code": "_n = 40\n_chain = [frozenset({\"x0\"})] + [frozenset({\"-x%d\" % _i, \"x%d\" % (_i + 1)}) for _range in [0] for _i in range(_n)]\n_m = dpll(_chain)\nassert _m is not None, \"the implication chain is satisfiable\"\nassert all(_m[\"x%d\" % _i] for _i in range(_n + 1)), \\\n    \"unit propagation should force every variable in the chain to True\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Axiomatic semantics and weakest preconditions",
+   "summary": "Hoare triples, computed backwards, with loops handled by annotation.",
+   "concepts": [
+    "The Hoare triple {P} S {Q} and the difference between partial and total correctness",
+    "Dijkstra's predicate transformer: wp(S, Q) is the weakest P making the triple valid",
+    "Assignment is substitution: wp(x := e, Q) = Q[x := e], read backwards, not forwards",
+    "Sequencing composes transformers: wp(S1; S2, Q) = wp(S1, wp(S2, Q))",
+    "A conditional splits into two guarded implications; an assert conjoins its condition",
+    "A loop is opaque: the annotated invariant is the precondition, and it owes two verification conditions",
+    "Discharging obligations: a decision procedure, or — here — bounded enumeration that returns a concrete counterexample"
+   ],
+   "lab": {
+    "title": "A weakest-precondition calculator",
+    "runtime": "python",
+    "minutes": 60,
+    "brief": "Expressions, formulas and statements are nested tuples.\n\n```text\nexpressions   (\"num\", 5) (\"var\", \"x\") (\"add\", a, b) (\"sub\", a, b) (\"mul\", a, b)\nformulas      (\"true\",) (\"false\",) (\"eq\", a, b) (\"le\", a, b) (\"lt\", a, b)\n              (\"not\", p) (\"and\", p, q) (\"or\", p, q) (\"imp\", p, q)\nstatements    (\"skip\",) (\"assign\", x, e) (\"seq\", s1, s2) (\"assert\", b)\n              (\"if\", b, s1, s2) (\"while\", b, inv, body)\n```\n\nImplement six functions.\n\n**`eval_expr(e, state)`** and **`eval_formula(f, state)`** — `state` maps variable\nnames to integers. Unknown node tags raise `ValueError`; an unbound variable\nraises `KeyError`.\n\n**`free_vars(node)`** — the sorted variable names in an expression or formula.\n\n**`subst(node, name, expr)`** — replace every `(\"var\", name)` inside `node` with\n`expr`. Everything else is copied unchanged.\n\n**`wp(stmt, post)`** — the weakest precondition:\n\n```text\nwp(skip, Q)              = Q\nwp(x := e, Q)            = Q[x := e]\nwp(S1; S2, Q)            = wp(S1, wp(S2, Q))\nwp(assert b, Q)          = b ∧ Q\nwp(if b then S1 else S2, Q) = (b → wp(S1,Q)) ∧ (¬b → wp(S2,Q))\nwp(while b inv I do S, Q) = I\n```\n\n**`vcs(stmt, post)`** — the verification conditions the loops leave behind, in\nsource order. Each `while b inv I do S` contributes exactly two, and then the\nbody's own obligations against `I`:\n\n```text\n(I ∧ b)  →  wp(S, I)          the invariant is preserved\n(I ∧ ¬b) →  Q                 the invariant plus the negated guard gives the post\n```\n\n**`bounded_check(formula, lo, hi)`** — try every integer assignment to the free\nvariables with each value in `range(lo, hi + 1)`, in sorted-name order. Return the\nfirst state where the formula is false, or `None` when it holds throughout the\nbox. This is not a proof, only a refutation attempt — say so when you report it.\nRaise `ValueError` when `lo > hi`.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "SUM_PROGRAM = (\"seq\",\n               (\"assign\", \"s\", (\"num\", 0)),\n               (\"seq\",\n                (\"assign\", \"i\", (\"num\", 0)),\n                (\"while\",\n                 (\"lt\", (\"var\", \"i\"), (\"var\", \"n\")),\n                 (\"and\", (\"le\", (\"var\", \"i\"), (\"var\", \"n\")),\n                  (\"eq\", (\"mul\", (\"num\", 2), (\"var\", \"s\")),\n                   (\"mul\", (\"var\", \"i\"), (\"add\", (\"var\", \"i\"), (\"num\", 1))))),\n                 (\"seq\",\n                  (\"assign\", \"i\", (\"add\", (\"var\", \"i\"), (\"num\", 1))),\n                  (\"assign\", \"s\", (\"add\", (\"var\", \"s\"), (\"var\", \"i\")))))))\n\nSUM_POST = (\"eq\", (\"mul\", (\"num\", 2), (\"var\", \"s\")),\n            (\"mul\", (\"var\", \"n\"), (\"add\", (\"var\", \"n\"), (\"num\", 1))))\n\n\ndef eval_expr(e, state):\n    \"\"\"Integer value of an expression under state.\"\"\"\n    # your code here\n\n\ndef eval_formula(f, state):\n    \"\"\"Truth value of a formula under state.\"\"\"\n    # your code here\n\n\ndef free_vars(node):\n    \"\"\"Sorted variable names occurring in an expression or formula.\"\"\"\n    # your code here\n\n\ndef subst(node, name, expr):\n    \"\"\"node with every occurrence of the variable `name` replaced by `expr`.\"\"\"\n    # your code here\n\n\ndef wp(stmt, post):\n    \"\"\"Weakest precondition of stmt with respect to post.\"\"\"\n    # your code here\n\n\ndef vcs(stmt, post):\n    \"\"\"Loop verification conditions, in source order.\"\"\"\n    # your code here\n\n\ndef bounded_check(formula, lo, hi):\n    \"\"\"First falsifying state in the box [lo, hi], or None.\"\"\"\n    # your code here\n\n\nfor obligation in vcs(SUM_PROGRAM, SUM_POST):\n    print(bounded_check(obligation, 0, 6))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import itertools\n\nSUM_PROGRAM = (\"seq\",\n               (\"assign\", \"s\", (\"num\", 0)),\n               (\"seq\",\n                (\"assign\", \"i\", (\"num\", 0)),\n                (\"while\",\n                 (\"lt\", (\"var\", \"i\"), (\"var\", \"n\")),\n                 (\"and\", (\"le\", (\"var\", \"i\"), (\"var\", \"n\")),\n                  (\"eq\", (\"mul\", (\"num\", 2), (\"var\", \"s\")),\n                   (\"mul\", (\"var\", \"i\"), (\"add\", (\"var\", \"i\"), (\"num\", 1))))),\n                 (\"seq\",\n                  (\"assign\", \"i\", (\"add\", (\"var\", \"i\"), (\"num\", 1))),\n                  (\"assign\", \"s\", (\"add\", (\"var\", \"s\"), (\"var\", \"i\")))))))\n\nSUM_POST = (\"eq\", (\"mul\", (\"num\", 2), (\"var\", \"s\")),\n            (\"mul\", (\"var\", \"n\"), (\"add\", (\"var\", \"n\"), (\"num\", 1))))\n\n\ndef eval_expr(e, state):\n    \"\"\"Integer value of an expression under state.\"\"\"\n    tag = e[0]\n    if tag == \"num\":\n        return e[1]\n    if tag == \"var\":\n        return state[e[1]]\n    if tag == \"add\":\n        return eval_expr(e[1], state) + eval_expr(e[2], state)\n    if tag == \"sub\":\n        return eval_expr(e[1], state) - eval_expr(e[2], state)\n    if tag == \"mul\":\n        return eval_expr(e[1], state) * eval_expr(e[2], state)\n    raise ValueError(f\"unknown expression tag {tag!r}\")\n\n\ndef eval_formula(f, state):\n    \"\"\"Truth value of a formula under state.\"\"\"\n    tag = f[0]\n    if tag == \"true\":\n        return True\n    if tag == \"false\":\n        return False\n    if tag == \"eq\":\n        return eval_expr(f[1], state) == eval_expr(f[2], state)\n    if tag == \"le\":\n        return eval_expr(f[1], state) <= eval_expr(f[2], state)\n    if tag == \"lt\":\n        return eval_expr(f[1], state) < eval_expr(f[2], state)\n    if tag == \"not\":\n        return not eval_formula(f[1], state)\n    if tag == \"and\":\n        return eval_formula(f[1], state) and eval_formula(f[2], state)\n    if tag == \"or\":\n        return eval_formula(f[1], state) or eval_formula(f[2], state)\n    if tag == \"imp\":\n        return (not eval_formula(f[1], state)) or eval_formula(f[2], state)\n    raise ValueError(f\"unknown formula tag {tag!r}\")\n\n\ndef free_vars(node):\n    \"\"\"Sorted variable names occurring in an expression or formula.\"\"\"\n    found = set()\n    stack = [node]\n    while stack:\n        n = stack.pop()\n        if n[0] == \"var\":\n            found.add(n[1])\n            continue\n        for kid in n[1:]:\n            if isinstance(kid, tuple):\n                stack.append(kid)\n    return sorted(found)\n\n\ndef subst(node, name, expr):\n    \"\"\"node with every occurrence of the variable `name` replaced by `expr`.\"\"\"\n    if node[0] == \"var\":\n        return expr if node[1] == name else node\n    if node[0] in (\"num\", \"true\", \"false\"):\n        return node\n    parts = [subst(k, name, expr) if isinstance(k, tuple) else k for k in node[1:]]\n    return (node[0],) + tuple(parts)\n\n\ndef wp(stmt, post):\n    \"\"\"Weakest precondition of stmt with respect to post.\"\"\"\n    tag = stmt[0]\n    if tag == \"skip\":\n        return post\n    if tag == \"assign\":\n        return subst(post, stmt[1], stmt[2])\n    if tag == \"seq\":\n        return wp(stmt[1], wp(stmt[2], post))\n    if tag == \"assert\":\n        return (\"and\", stmt[1], post)\n    if tag == \"if\":\n        guard = stmt[1]\n        return (\"and\", (\"imp\", guard, wp(stmt[2], post)),\n                (\"imp\", (\"not\", guard), wp(stmt[3], post)))\n    if tag == \"while\":\n        # The loop is opaque: the annotation is all we assume going in.\n        return stmt[2]\n    raise ValueError(f\"unknown statement tag {tag!r}\")\n\n\ndef vcs(stmt, post):\n    \"\"\"Loop verification conditions, in source order.\"\"\"\n    tag = stmt[0]\n    if tag in (\"skip\", \"assign\", \"assert\"):\n        return []\n    if tag == \"seq\":\n        return vcs(stmt[1], wp(stmt[2], post)) + vcs(stmt[2], post)\n    if tag == \"if\":\n        return vcs(stmt[2], post) + vcs(stmt[3], post)\n    if tag == \"while\":\n        guard, inv, body = stmt[1], stmt[2], stmt[3]\n        preserved = (\"imp\", (\"and\", inv, guard), wp(body, inv))\n        exits = (\"imp\", (\"and\", inv, (\"not\", guard)), post)\n        return [preserved, exits] + vcs(body, inv)\n    raise ValueError(f\"unknown statement tag {tag!r}\")\n\n\ndef bounded_check(formula, lo, hi):\n    \"\"\"First falsifying state in the box [lo, hi], or None.\"\"\"\n    if lo > hi:\n        raise ValueError(\"lo must not exceed hi\")\n    names = free_vars(formula)\n    for values in itertools.product(range(lo, hi + 1), repeat=len(names)):\n        state = dict(zip(names, values))\n        if not eval_formula(formula, state):\n            return state\n    return None\n\n\nfor obligation in vcs(SUM_PROGRAM, SUM_POST):\n    print(bounded_check(obligation, 0, 6))\n"
+     }
+    ],
+    "hints": [
+     "`subst` is a structural copy: only the `(\"var\", name)` node changes, and `(\"num\", k)` has no children to walk.",
+     "wp for assignment goes backwards. wp(x := x+1, x ≤ 5) is x+1 ≤ 5, not x ≤ 6 rewritten by hand — build the substituted tree.",
+     "In `vcs` for a sequence, the first statement's obligations are taken against `wp(s2, post)`, not against `post`.",
+     "`itertools.product(range(lo, hi + 1), repeat=len(names))` walks the box; zip the tuple back onto the sorted names to make a state."
+    ],
+    "tests": [
+     {
+      "name": "Evaluation and free variables",
+      "code": "_st = {\"x\": 3, \"y\": 4}\nassert eval_expr((\"add\", (\"var\", \"x\"), (\"mul\", (\"num\", 2), (\"var\", \"y\"))), _st) == 11, \"3 + 2*4 = 11\"\nassert eval_formula((\"imp\", (\"lt\", (\"var\", \"x\"), (\"var\", \"y\")), (\"le\", (\"num\", 0), (\"var\", \"x\"))), _st) is True\nassert eval_formula((\"and\", (\"true\",), (\"false\",)), {}) is False\nassert free_vars((\"and\", (\"le\", (\"var\", \"y\"), (\"var\", \"x\")), (\"eq\", (\"var\", \"x\"), (\"num\", 1)))) == [\"x\", \"y\"]\nassert free_vars((\"num\", 3)) == [], \"a literal has no free variables\"\ntry:\n    eval_expr((\"div\", (\"num\", 1), (\"num\", 2)), {})\n    assert False, \"an unknown expression tag should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "subst replaces only the named variable",
+      "code": "_got = subst((\"and\", (\"le\", (\"var\", \"x\"), (\"num\", 5)), (\"eq\", (\"var\", \"y\"), (\"var\", \"x\"))),\n             \"x\", (\"add\", (\"var\", \"y\"), (\"num\", 1)))\nfor _y in range(0, 6):\n    for _x in range(0, 6):\n        _want = (_y + 1 <= 5) and (_y == _y + 1)\n        assert eval_formula(_got, {\"x\": _x, \"y\": _y}) == _want, \\\n            f\"substituted formula disagrees at x={_x} y={_y}\""
+     },
+     {
+      "name": "wp of assignment and sequencing",
+      "code": "_p = wp((\"assign\", \"x\", (\"add\", (\"var\", \"x\"), (\"num\", 1))), (\"le\", (\"var\", \"x\"), (\"num\", 5)))\nfor _x in range(-3, 9):\n    assert eval_formula(_p, {\"x\": _x}) == (_x + 1 <= 5), f\"wp(x := x+1, x<=5) wrong at x={_x}\"\n_seq = (\"seq\", (\"assign\", \"x\", (\"num\", 2)), (\"assign\", \"y\", (\"mul\", (\"var\", \"x\"), (\"num\", 3))))\n_q = wp(_seq, (\"eq\", (\"var\", \"y\"), (\"num\", 6)))\nassert bounded_check(_q, 0, 3) is None, \"after x:=2; y:=3x the postcondition y=6 always holds\"\nassert wp((\"skip\",), (\"true\",)) == (\"true\",), \"skip is the identity transformer\""
+     },
+     {
+      "name": "wp of conditionals and asserts",
+      "code": "_ifs = (\"if\", (\"lt\", (\"var\", \"x\"), (\"num\", 0)),\n        (\"assign\", \"y\", (\"sub\", (\"num\", 0), (\"var\", \"x\"))),\n        (\"assign\", \"y\", (\"var\", \"x\")))\n_q = wp(_ifs, (\"le\", (\"num\", 0), (\"var\", \"y\")))\nfor _x in range(-5, 6):\n    assert eval_formula(_q, {\"x\": _x, \"y\": 0}) is True, f\"abs is non-negative, but wp failed at x={_x}\"\n_a = wp((\"assert\", (\"lt\", (\"num\", 0), (\"var\", \"x\"))), (\"le\", (\"var\", \"x\"), (\"num\", 3)))\nfor _x in range(-2, 6):\n    assert eval_formula(_a, {\"x\": _x}) == (0 < _x and _x <= 3), f\"wp(assert 0<x, x<=3) wrong at x={_x}\"\ntry:\n    wp((\"goto\", \"L1\"), (\"true\",))\n    assert False, \"an unknown statement tag should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "The loop annotation is the precondition",
+      "code": "_loop = SUM_PROGRAM[2][2]\nassert _loop[0] == \"while\", \"SUM_PROGRAM should end in the while statement\"\nassert wp(_loop, SUM_POST) == _loop[2], \"wp of a while is exactly its annotated invariant\""
+     },
+     {
+      "name": "Both obligations of the sum program hold in the box",
+      "code": "_obs = vcs(SUM_PROGRAM, SUM_POST)\nassert len(_obs) == 2, f\"one loop owes exactly two verification conditions, got {len(_obs)}\"\nfor _i, _ob in enumerate(_obs):\n    _cex = bounded_check(_ob, 0, 6)\n    assert _cex is None, f\"obligation {_i} was falsified at {_cex!r} — check the wp rules\""
+     },
+     {
+      "name": "A weak invariant is refuted with a concrete state",
+      "code": "_bad = (\"seq\",\n        (\"assign\", \"s\", (\"num\", 0)),\n        (\"seq\",\n         (\"assign\", \"i\", (\"num\", 0)),\n         (\"while\",\n          (\"lt\", (\"var\", \"i\"), (\"var\", \"n\")),\n          (\"eq\", (\"mul\", (\"num\", 2), (\"var\", \"s\")),\n           (\"mul\", (\"var\", \"i\"), (\"add\", (\"var\", \"i\"), (\"num\", 1)))),\n          (\"seq\",\n           (\"assign\", \"i\", (\"add\", (\"var\", \"i\"), (\"num\", 1))),\n           (\"assign\", \"s\", (\"add\", (\"var\", \"s\"), (\"var\", \"i\")))))))\n_obs = vcs(_bad, SUM_POST)\n_cex = bounded_check(_obs[1], 0, 6)\nassert _cex is not None, \"dropping i <= n from the invariant must break the exit obligation\"\nassert eval_formula(_obs[1], _cex) is False, f\"{_cex!r} is reported as a counterexample but satisfies the obligation\"\nassert bounded_check(_obs[0], 0, 6) is None, \"the preservation obligation still holds\"\ntry:\n    bounded_check((\"true\",), 5, 1)\n    assert False, \"lo > hi should raise ValueError\"\nexcept ValueError:\n    pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Kripke structures and explicit-state model checking",
+   "summary": "Search a transition system for a violation, and hand back the trace that proves it.",
+   "concepts": [
+    "A Kripke structure: states, a transition relation, initial states, and an atomic labelling",
+    "Interleaving semantics turns a concurrent protocol into a single non-deterministic transition system",
+    "Reachability by breadth-first search settles all invariants of a finite system — completely",
+    "Bounded search settles nothing negative, but every counterexample it does return is real",
+    "The linear-time operators G (always) and F (eventually), and what a counterexample to each looks like",
+    "A counterexample to G p is a finite prefix; a counterexample to F p is a path with no witness inside the bound",
+    "State explosion: the reachable set of a protocol grows as the product of its components"
+   ],
+   "lab": {
+    "title": "Model checking a mutual-exclusion protocol",
+    "runtime": "python",
+    "minutes": 55,
+    "brief": "`mutex_model(safe)` is supplied. It builds a two-process lock protocol as a\nKripke structure: each process moves `idle -> wait -> crit -> idle`, and the\n`safe` version only enters `crit` when the lock is free. Atoms are `crit1`,\n`crit2`, `wait1`, `wait2`, `locked`.\n\nBuild the checker as a class `Kripke(initial, transitions, labels)`.\n\n- `transitions` maps every state to a list of successor states, in a fixed order.\n- `labels` maps every state to a `frozenset` of atoms.\n- The constructor raises `ValueError` when a transition names a state that has no\n  entry in `transitions`, or when a state has no label.\n\nPredicates take the atom set, so `lambda ap: \"crit1\" not in ap` is a property of a\nstate.\n\n**`successors(state)`** — the successor list. `KeyError` for an unknown state.\n\n**`reachable()`** — the set of states reachable from the initial states.\n\n**`check_invariant(pred)`** — is `pred` true in every reachable state? Return\n`None` when it is, otherwise a **shortest** path — a list of states from an\ninitial state to a violating one. Breadth-first, exploring successors in the\ngiven order.\n\n**`check_always(pred, bound)`** — the same question restricted to paths of at\nmost `bound` transitions. Same return shape.\n\n**`check_eventually(pred, bound)`** — does every path satisfy `F pred` within\n`bound` transitions? A counterexample is a path from an initial state along which\n`pred` never holds and which either uses all `bound` transitions or ends in a\ndeadlocked state. Return the first such path found by depth-first search in\nsuccessor order, or `None`.\n\nRaise `ValueError` when `bound` is negative.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "from collections import deque\n\nMODES = (\"idle\", \"wait\", \"crit\")\n\n\ndef _replace(state, index, value):\n    parts = list(state)\n    parts[index] = value\n    return tuple(parts)\n\n\ndef mutex_model(safe=True):\n    \"\"\"Two processes, one lock. Returns (initial, transitions, labels).\"\"\"\n    states = [(a, b, lock) for a in MODES for b in MODES for lock in (0, 1)]\n    transitions = {}\n    for state in states:\n        nxt = []\n        for i in (0, 1):\n            mode = state[i]\n            if mode == \"idle\":\n                nxt.append(_replace(state, i, \"wait\"))\n            elif mode == \"wait\":\n                if state[2] == 0 or not safe:\n                    nxt.append(_replace(_replace(state, i, \"crit\"), 2, 1))\n            else:\n                nxt.append(_replace(_replace(state, i, \"idle\"), 2, 0))\n        transitions[state] = nxt\n    labels = {}\n    for state in states:\n        atoms = set()\n        for i, tag in ((0, \"1\"), (1, \"2\")):\n            if state[i] == \"crit\":\n                atoms.add(\"crit\" + tag)\n            elif state[i] == \"wait\":\n                atoms.add(\"wait\" + tag)\n        if state[2] == 1:\n            atoms.add(\"locked\")\n        labels[state] = frozenset(atoms)\n    return [(\"idle\", \"idle\", 0)], transitions, labels\n\n\nclass Kripke:\n    \"\"\"A finite transition system with atomic labels.\"\"\"\n\n    def __init__(self, initial, transitions, labels):\n        # your code here\n        pass\n\n    def successors(self, state):\n        \"\"\"Successors of state, in order. KeyError when the state is unknown.\"\"\"\n        # your code here\n\n    def reachable(self):\n        \"\"\"Every state reachable from an initial state.\"\"\"\n        # your code here\n\n    def check_invariant(self, pred):\n        \"\"\"None, or a shortest path to a state where pred fails.\"\"\"\n        # your code here\n\n    def check_always(self, pred, bound):\n        \"\"\"None, or a shortest path of at most `bound` steps to a failure.\"\"\"\n        # your code here\n\n    def check_eventually(self, pred, bound):\n        \"\"\"None, or a path within `bound` steps along which pred never holds.\"\"\"\n        # your code here\n\n\nsafe = Kripke(*mutex_model(True))\nunsafe = Kripke(*mutex_model(False))\nboth = lambda ap: not (\"crit1\" in ap and \"crit2\" in ap)\nprint(len(safe.reachable()), safe.check_invariant(both))\nprint(unsafe.check_invariant(both))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "from collections import deque\n\nMODES = (\"idle\", \"wait\", \"crit\")\n\n\ndef _replace(state, index, value):\n    parts = list(state)\n    parts[index] = value\n    return tuple(parts)\n\n\ndef mutex_model(safe=True):\n    \"\"\"Two processes, one lock. Returns (initial, transitions, labels).\"\"\"\n    states = [(a, b, lock) for a in MODES for b in MODES for lock in (0, 1)]\n    transitions = {}\n    for state in states:\n        nxt = []\n        for i in (0, 1):\n            mode = state[i]\n            if mode == \"idle\":\n                nxt.append(_replace(state, i, \"wait\"))\n            elif mode == \"wait\":\n                if state[2] == 0 or not safe:\n                    nxt.append(_replace(_replace(state, i, \"crit\"), 2, 1))\n            else:\n                nxt.append(_replace(_replace(state, i, \"idle\"), 2, 0))\n        transitions[state] = nxt\n    labels = {}\n    for state in states:\n        atoms = set()\n        for i, tag in ((0, \"1\"), (1, \"2\")):\n            if state[i] == \"crit\":\n                atoms.add(\"crit\" + tag)\n            elif state[i] == \"wait\":\n                atoms.add(\"wait\" + tag)\n        if state[2] == 1:\n            atoms.add(\"locked\")\n        labels[state] = frozenset(atoms)\n    return [(\"idle\", \"idle\", 0)], transitions, labels\n\n\nclass Kripke:\n    \"\"\"A finite transition system with atomic labels.\"\"\"\n\n    def __init__(self, initial, transitions, labels):\n        self.initial = list(initial)\n        self.transitions = dict(transitions)\n        self.labels = dict(labels)\n        for state, nxt in self.transitions.items():\n            if state not in self.labels:\n                raise ValueError(f\"state {state!r} has no label\")\n            for target in nxt:\n                if target not in self.transitions:\n                    raise ValueError(f\"transition to unknown state {target!r}\")\n        for state in self.initial:\n            if state not in self.transitions:\n                raise ValueError(f\"initial state {state!r} is unknown\")\n\n    def successors(self, state):\n        \"\"\"Successors of state, in order. KeyError when the state is unknown.\"\"\"\n        return self.transitions[state]\n\n    def reachable(self):\n        \"\"\"Every state reachable from an initial state.\"\"\"\n        seen = set(self.initial)\n        queue = deque(self.initial)\n        while queue:\n            state = queue.popleft()\n            for target in self.successors(state):\n                if target not in seen:\n                    seen.add(target)\n                    queue.append(target)\n        return seen\n\n    def _bfs(self, pred, bound=None):\n        \"\"\"Shortest path to a pred-violating reachable state, or None.\"\"\"\n        parent = {}\n        seen = set()\n        queue = deque()\n        for state in self.initial:\n            if state not in seen:\n                seen.add(state)\n                parent[state] = None\n                queue.append((state, 0))\n        while queue:\n            state, depth = queue.popleft()\n            if not pred(self.labels[state]):\n                path = []\n                node = state\n                while node is not None:\n                    path.append(node)\n                    node = parent[node]\n                path.reverse()\n                return path\n            if bound is not None and depth == bound:\n                continue\n            for target in self.successors(state):\n                if target not in seen:\n                    seen.add(target)\n                    parent[target] = state\n                    queue.append((target, depth + 1))\n        return None\n\n    def check_invariant(self, pred):\n        \"\"\"None, or a shortest path to a state where pred fails.\"\"\"\n        return self._bfs(pred, None)\n\n    def check_always(self, pred, bound):\n        \"\"\"None, or a shortest path of at most `bound` steps to a failure.\"\"\"\n        if bound < 0:\n            raise ValueError(\"bound must not be negative\")\n        return self._bfs(pred, bound)\n\n    def check_eventually(self, pred, bound):\n        \"\"\"None, or a path within `bound` steps along which pred never holds.\"\"\"\n        if bound < 0:\n            raise ValueError(\"bound must not be negative\")\n        # A pair (state, steps left) that yielded nothing will never yield\n        # anything, so memoising it keeps the search linear in the bound.\n        dead = set()\n\n        def walk(path, left):\n            state = path[-1]\n            if pred(self.labels[state]):\n                return None            # this path already satisfies F pred\n            if (state, left) in dead:\n                return None\n            nxt = self.successors(state)\n            if left == 0 or not nxt:\n                return list(path)      # bound exhausted, or deadlocked\n            for target in nxt:\n                found = walk(path + [target], left - 1)\n                if found is not None:\n                    return found\n            dead.add((state, left))\n            return None\n\n        for state in self.initial:\n            found = walk([state], bound)\n            if found is not None:\n                return found\n        return None\n\n\nsafe = Kripke(*mutex_model(True))\nunsafe = Kripke(*mutex_model(False))\nboth = lambda ap: not (\"crit1\" in ap and \"crit2\" in ap)\nprint(len(safe.reachable()), safe.check_invariant(both))\nprint(unsafe.check_invariant(both))\n"
+     }
+    ],
+    "hints": [
+     "Reachability and `check_invariant` are the same breadth-first walk; the only addition is a `parent` dict so you can rebuild the path once you stop.",
+     "Test the predicate when you dequeue a state, not when you enqueue it, or the initial states escape unchecked.",
+     "For `check_always`, carry the depth alongside the state in the queue and simply stop expanding once `depth == bound`.",
+     "`check_eventually` is a depth-first walk that prunes as soon as `pred` holds — that branch is satisfied. Memoise `(state, steps_left)` pairs that failed to produce a counterexample."
+    ],
+    "tests": [
+     {
+      "name": "Construction validates the transition relation",
+      "code": "_init, _trans, _labs = mutex_model(True)\n_k = Kripke(_init, _trans, _labs)\nassert _k.successors((\"idle\", \"idle\", 0)) == _trans[(\"idle\", \"idle\", 0)], \"successors should preserve order\"\ntry:\n    _k.successors((\"nope\", \"nope\", 9))\n    assert False, \"an unknown state should raise KeyError\"\nexcept KeyError:\n    pass\ntry:\n    Kripke([(\"a\",)], {(\"a\",): [(\"b\",)]}, {(\"a\",): frozenset()})\n    assert False, \"a dangling transition target should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "Reachability is a proper subset of the state space",
+      "code": "_k = Kripke(*mutex_model(True))\n_r = _k.reachable()\nassert (\"idle\", \"idle\", 0) in _r, \"the initial state is reachable\"\nassert (\"crit\", \"crit\", 1) not in _r, \"the safe protocol never reaches both-critical\"\nassert (\"crit\", \"idle\", 0) not in _r, \"a process in crit always holds the lock\"\nassert 0 < len(_r) < 18, f\"reachable set has {len(_r)} states, the full space has 18\""
+     },
+     {
+      "name": "The safe protocol satisfies mutual exclusion",
+      "code": "_k = Kripke(*mutex_model(True))\n_both = lambda ap: not (\"crit1\" in ap and \"crit2\" in ap)\nassert _k.check_invariant(_both) is None, \"the safe protocol should have no violation\"\nassert _k.check_always(_both, 12) is None, \"and no violation within twelve steps either\""
+     },
+     {
+      "name": "The unsafe protocol yields a shortest counterexample",
+      "code": "_k = Kripke(*mutex_model(False))\n_both = lambda ap: not (\"crit1\" in ap and \"crit2\" in ap)\n_path = _k.check_invariant(_both)\nassert _path is not None, \"dropping the lock test must break mutual exclusion\"\nassert _path[0] == (\"idle\", \"idle\", 0), f\"the trace must start at the initial state, got {_path[0]!r}\"\nassert _path[-1][0] == \"crit\" and _path[-1][1] == \"crit\", f\"the trace ends at {_path[-1]!r}\"\nfor _a, _b in zip(_path, _path[1:]):\n    assert _b in _k.successors(_a), f\"{_a!r} -> {_b!r} is not a transition\"\nassert len(_path) == 5, f\"the shortest violating trace has five states, got {len(_path)}\""
+     },
+     {
+      "name": "Bounded always is incomplete but sound",
+      "code": "_k = Kripke(*mutex_model(False))\n_both = lambda ap: not (\"crit1\" in ap and \"crit2\" in ap)\nassert _k.check_always(_both, 3) is None, \"four transitions are needed, so a bound of three finds nothing\"\n_p = _k.check_always(_both, 4)\nassert _p is not None and len(_p) == 5, f\"a bound of four should find the trace, got {_p!r}\"\ntry:\n    _k.check_always(_both, -1)\n    assert False, \"a negative bound should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "Eventually, on a hand-made chain",
+      "code": "_t = {\"a\": [\"b\"], \"b\": [\"c\"], \"c\": [\"c\"]}\n_l = {\"a\": frozenset(), \"b\": frozenset(), \"c\": frozenset({\"p\"})}\n_m = Kripke([\"a\"], _t, _l)\n_p = lambda ap: \"p\" in ap\n_cex = _m.check_eventually(_p, 1)\nassert _cex == [\"a\", \"b\"], f\"within one step p never holds, expected ['a', 'b'], got {_cex!r}\"\nassert _m.check_eventually(_p, 2) is None, \"two steps reach c, where p holds\"\nassert _m.check_eventually(_p, 0) == [\"a\"], \"at zero steps only the initial state is inspected\""
+     },
+     {
+      "name": "Deadlock and starvation are counterexamples too",
+      "code": "_dead = Kripke([\"s\"], {\"s\": []}, {\"s\": frozenset()})\nassert _dead.check_eventually(lambda ap: \"p\" in ap, 5) == [\"s\"], \\\n    \"a deadlocked state with no witness is a counterexample regardless of the bound\"\n_k = Kripke(*mutex_model(True))\n_cex = _k.check_eventually(lambda ap: \"crit1\" in ap, 8)\nassert _cex is not None, \"the lock protocol does not guarantee that process 1 ever enters\"\nassert all(\"crit1\" not in _k.labels[_s] for _s in _cex), \"the trace must avoid crit1 throughout\"\nassert _cex[0] == (\"idle\", \"idle\", 0), \"the trace starts at the initial state\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Property-based testing and shrinking",
+   "summary": "Random search for a counterexample, then automatic reduction to the smallest one.",
+   "concepts": [
+    "A property is a universally quantified claim; a test is one witness that it has not yet failed",
+    "Generators as data: a sampling function plus a shrinking function travel together",
+    "Metamorphic and round-trip properties find bugs no example-based test was written for",
+    "Greedy shrinking: repeatedly replace the counterexample with a smaller one that still fails",
+    "A shrunk input is locally minimal, not globally minimal — know which claim you are making",
+    "Seeding the generator makes a random failure reproducible, which is what makes it a bug report",
+    "Testing refutes; it never verifies. Its coverage is the distribution the generator happens to have"
+   ],
+   "lab": {
+    "title": "A generator and shrinker framework",
+    "runtime": "python",
+    "minutes": 50,
+    "brief": "`Gen` and the deliberately wrong `dedup` are supplied. Do not fix `dedup` — the\npoint of the lab is to have the framework find and minimise its failure.\n\nA property is a function from a value to a bool. It **fails** when it returns a\nfalsy value or raises.\n\n**`fails(prop, value)`** — `True` when `prop(value)` is falsy or raises anything.\n\n**`ints(lo, hi)`** — a `Gen` of integers.\n`generate` draws uniformly from `[lo, hi]`. `shrink(v)` returns candidates that\nare strictly closer to the target — 0, clamped into `[lo, hi]` — ordered most\naggressive first. `shrink(target)` is empty. Raise `ValueError` when `lo > hi`.\n\n**`lists(element, max_len)`** — a `Gen` of lists.\n`generate` draws a length in `[0, max_len]` and then that many elements.\n`shrink(v)` offers, in this order: the empty list, each half, each single-element\ndeletion, and each list with one element replaced by one of its own shrinks.\nNever offer `v` itself. Raise `ValueError` when `max_len` is negative.\n\n**`shrink_value(gen, value, prop)`** — greedy reduction. Repeatedly take the\nfirst shrink candidate that still fails and continue from it. Stop when no\ncandidate fails, and return that locally minimal value.\n\n**`check(gen, prop, trials, seed)`** — draw `trials` values from a\n`random.Random(seed)`, and return the shrunk counterexample for the first failure,\nor `None` when all trials pass.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import random\n\n\nclass Gen:\n    \"\"\"A generator: how to draw a value, and how to make one smaller.\"\"\"\n\n    def __init__(self, draw, reduce_fn):\n        self._draw = draw\n        self._reduce = reduce_fn\n\n    def generate(self, rng):\n        return self._draw(rng)\n\n    def shrink(self, value):\n        return self._reduce(value)\n\n\ndef dedup(xs):\n    \"\"\"Claims to remove duplicates. It only removes adjacent ones. Do not fix it.\"\"\"\n    out = []\n    for x in xs:\n        if not out or out[-1] != x:\n            out.append(x)\n    return out\n\n\ndef fails(prop, value):\n    \"\"\"True when prop(value) is falsy or raises.\"\"\"\n    # your code here\n\n\ndef ints(lo, hi):\n    \"\"\"A Gen of integers in [lo, hi] that shrinks towards zero.\"\"\"\n    # your code here\n\n\ndef lists(element, max_len=8):\n    \"\"\"A Gen of lists of values drawn from `element`.\"\"\"\n    # your code here\n\n\ndef shrink_value(gen, value, prop):\n    \"\"\"Greedily reduce a failing value to a locally minimal failing value.\"\"\"\n    # your code here\n\n\ndef check(gen, prop, trials=200, seed=7):\n    \"\"\"A minimal counterexample, or None when every trial passes.\"\"\"\n    # your code here\n\n\nunique = lambda xs: len(dedup(xs)) == len(set(dedup(xs)))\nprint(check(lists(ints(0, 3), 6), unique))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import random\n\n\nclass Gen:\n    \"\"\"A generator: how to draw a value, and how to make one smaller.\"\"\"\n\n    def __init__(self, draw, reduce_fn):\n        self._draw = draw\n        self._reduce = reduce_fn\n\n    def generate(self, rng):\n        return self._draw(rng)\n\n    def shrink(self, value):\n        return self._reduce(value)\n\n\ndef dedup(xs):\n    \"\"\"Claims to remove duplicates. It only removes adjacent ones. Do not fix it.\"\"\"\n    out = []\n    for x in xs:\n        if not out or out[-1] != x:\n            out.append(x)\n    return out\n\n\ndef fails(prop, value):\n    \"\"\"True when prop(value) is falsy or raises.\"\"\"\n    try:\n        return not prop(value)\n    except Exception:\n        return True\n\n\ndef ints(lo, hi):\n    \"\"\"A Gen of integers in [lo, hi] that shrinks towards zero.\"\"\"\n    if lo > hi:\n        raise ValueError(\"lo must not exceed hi\")\n    target = min(max(0, lo), hi)\n\n    def draw(rng):\n        return rng.randint(lo, hi)\n\n    def reduce_fn(value):\n        candidates = []\n        # jump to the target, then halve the gap, then step by one\n        for c in (target, value - (value - target) // 2,\n                  value - 1 if value > target else value + 1):\n            if lo <= c <= hi and abs(c - target) < abs(value - target) and c not in candidates:\n                candidates.append(c)\n        return candidates\n\n    return Gen(draw, reduce_fn)\n\n\ndef lists(element, max_len=8):\n    \"\"\"A Gen of lists of values drawn from `element`.\"\"\"\n    if max_len < 0:\n        raise ValueError(\"max_len must not be negative\")\n\n    def draw(rng):\n        n = rng.randint(0, max_len)\n        return [element.generate(rng) for _ in range(n)]\n\n    def reduce_fn(value):\n        candidates = []\n        if value:\n            candidates.append([])\n            half = len(value) // 2\n            if half:\n                candidates.append(value[:half])\n                candidates.append(value[half:])\n            for i in range(len(value)):\n                candidates.append(value[:i] + value[i + 1:])\n            for i, item in enumerate(value):\n                for smaller in element.shrink(item):\n                    candidates.append(value[:i] + [smaller] + value[i + 1:])\n        out = []\n        for c in candidates:\n            if c != value and c not in out:\n                out.append(c)\n        return out\n\n    return Gen(draw, reduce_fn)\n\n\ndef shrink_value(gen, value, prop):\n    \"\"\"Greedily reduce a failing value to a locally minimal failing value.\"\"\"\n    current = value\n    while True:\n        for candidate in gen.shrink(current):\n            if fails(prop, candidate):\n                current = candidate\n                break\n        else:\n            return current\n\n\ndef check(gen, prop, trials=200, seed=7):\n    \"\"\"A minimal counterexample, or None when every trial passes.\"\"\"\n    rng = random.Random(seed)\n    for _ in range(trials):\n        value = gen.generate(rng)\n        if fails(prop, value):\n            return shrink_value(gen, value, prop)\n    return None\n\n\nunique = lambda xs: len(dedup(xs)) == len(set(dedup(xs)))\nprint(check(lists(ints(0, 3), 6), unique))\n"
+     }
+    ],
+    "hints": [
+     "`fails` must catch the exception too — a property that raises has failed just as surely as one that returns False.",
+     "For `ints`, the guard `abs(c - target) < abs(value - target)` is what stops the shrinker looping forever; without it a candidate can equal the value it came from.",
+     "Order matters in `lists.shrink`: putting `[]` and the halves before the single deletions makes the reduction converge in far fewer steps.",
+     "`shrink_value` is a `while True` loop around a `for ... else`: the `else` branch runs when no candidate failed, which is exactly the fixed point."
+    ],
+    "tests": [
+     {
+      "name": "fails handles falsy results and exceptions",
+      "code": "assert fails(lambda v: False, 1) is True\nassert fails(lambda v: True, 1) is False\ndef _boom(v):\n    raise ZeroDivisionError(\"nope\")\nassert fails(_boom, 1) is True, \"a property that raises has failed\""
+     },
+     {
+      "name": "ints draws in range and shrinks towards zero",
+      "code": "import random as _random\n_g = ints(-4, 9)\n_rng = _random.Random(1)\nfor _ in range(300):\n    _v = _g.generate(_rng)\n    assert -4 <= _v <= 9, f\"ints(-4, 9) produced {_v!r}\"\nassert _g.shrink(0) == [], \"zero is already minimal inside [-4, 9]\"\nfor _v in (-4, -1, 1, 5, 9):\n    _c = _g.shrink(_v)\n    assert _c, f\"shrink({_v}) offered nothing\"\n    assert 0 in _c, f\"shrink({_v}) should offer the target 0, got {_c!r}\"\n    for _x in _c:\n        assert -4 <= _x <= 9 and abs(_x) < abs(_v), f\"shrink({_v}) offered {_x!r}\"\n_h = ints(3, 8)\nassert _h.shrink(3) == [], \"the target is clamped to lo when lo > 0\"\nassert 3 in _h.shrink(8), \"shrink should aim at the clamped target\"\ntry:\n    ints(5, 1)\n    assert False, \"lo > hi should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "lists draws within the length bound and shrinks",
+      "code": "import random as _random\n_g = lists(ints(0, 3), 5)\n_rng = _random.Random(2)\nfor _ in range(200):\n    _v = _g.generate(_rng)\n    assert 0 <= len(_v) <= 5, f\"lists(..., 5) produced a list of length {len(_v)}\"\n    assert all(0 <= _x <= 3 for _x in _v), f\"element out of range in {_v!r}\"\nassert _g.shrink([]) == [], \"the empty list is minimal\"\n_c = _g.shrink([2, 3])\nassert [] == _c[0], f\"the empty list should be the first candidate, got {_c[0]!r}\"\nassert [2] in _c and [3] in _c, f\"single deletions missing from {_c!r}\"\nassert [0, 3] in _c, \"element-wise shrinking should be offered too\"\nassert [2, 3] not in _c, \"a shrinker must never offer the value it was given\"\ntry:\n    lists(ints(0, 1), -1)\n    assert False, \"a negative max_len should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "shrink_value reaches the minimal failing list",
+      "code": "_g = lists(ints(0, 9), 8)\n_got = shrink_value(_g, [5, 5, 5, 5, 5], lambda xs: len(xs) < 3)\nassert _got == [0, 0, 0], f\"expected [0, 0, 0], got {_got!r}\"\n_same = shrink_value(_g, [0, 0, 0], lambda xs: len(xs) < 3)\nassert _same == [0, 0, 0], \"an already minimal value comes back unchanged\""
+     },
+     {
+      "name": "check returns None when the property holds",
+      "code": "_g = lists(ints(0, 5), 6)\nassert check(_g, lambda xs: list(reversed(list(reversed(xs)))) == xs, 200, 7) is None, \\\n    \"double reversal is an identity, so no counterexample exists\"\nassert check(_g, lambda xs: dedup(xs) == dedup(dedup(xs)), 200, 7) is None, \\\n    \"dedup is idempotent even though it is wrong\""
+     },
+     {
+      "name": "check minimises the dedup counterexample",
+      "code": "_unique = lambda xs: len(dedup(xs)) == len(set(dedup(xs)))\n_got = check(lists(ints(0, 3), 6), _unique, 200, 7)\nassert _got is not None, \"dedup only removes adjacent duplicates, so a failure exists\"\nassert len(_got) == 3, f\"the smallest failing list has three elements, got {_got!r}\"\nassert fails(_unique, _got), f\"{_got!r} is reported as a counterexample but passes\"\nfor _i in range(len(_got)):\n    assert not fails(_unique, _got[:_i] + _got[_i + 1:]), \\\n        f\"{_got!r} is not minimal: deleting index {_i} still fails\""
+     },
+     {
+      "name": "The same seed gives the same counterexample",
+      "code": "_unique = lambda xs: len(dedup(xs)) == len(set(dedup(xs)))\n_a = check(lists(ints(0, 3), 6), _unique, 120, 11)\n_b = check(lists(ints(0, 3), 6), _unique, 120, 11)\nassert _a == _b, f\"seeded runs must agree: {_a!r} then {_b!r}\"\nassert check(lists(ints(0, 0), 6), _unique, 200, 7) is None, \\\n    \"with a single possible element every list is a run, so dedup is correct\""
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "Capstone — one ring buffer, verified three ways",
+  "brief": "A bounded circular buffer is small enough to verify completely and interesting\nenough that the three techniques disagree about it. You build the structure, then\nthree independent verifiers, and finally a report that says which technique caught\nwhat.\n\n`ringbuf.py` holds the data structure. `verify.py` holds the verifiers.\n`main.py` runs everything.\n\n## `ringbuf.py`\n\n`RingBuffer(capacity)` — `ValueError` when `capacity < 1`. Attributes\n`capacity`, `items` (a list of length `capacity`), `tail` (index of the oldest\nitem) and `size`.\n\n- `push(item)` — appends. `ValueError(\"buffer is full\")` when there is no room.\n- `pop()` — removes and returns the oldest. `ValueError(\"buffer is empty\")` when\n  there is none.\n- `__len__`, `is_empty()`, `is_full()`\n- `to_list()` — the contents, oldest first.\n- `invariant()` — the representation invariant, as a bool:\n  `len(items) == capacity`, `0 <= size <= capacity`, `0 <= tail < capacity`.\n- `from_state(capacity, tail, size)` — a **classmethod** building an arbitrary\n  legal state, so the inductive check can start anywhere. `ValueError` for a\n  `tail` or `size` outside its range.\n\n`BuggyRingBuffer` is supplied. Its `is_full` is off by one. Leave it alone.\n\n## `verify.py`\n\n**`run_sequence(cls, capacity, ops)`** — replay a list of `\"push\"` / `\"pop\"`\nstrings against both a `cls(capacity)` and a plain-list reference model. At every\nstep: an operation the model says is legal must succeed and leave matching\ncontents; one the model says is illegal must raise `ValueError`; and\n`invariant()` must hold afterwards. Return `None` when the run is clean, or a\nstring naming the first divergence. `ValueError` for an unknown operation name.\n\n**`inductive_check(cls, capacity)`** — the proof leg. The initial state must\nsatisfy the invariant, and every enabled operation applied to every legal state\nmust preserve it. Return `None`, or a dict `{\"tail\": t, \"size\": n, \"op\": name}`.\n\n**`bounded_check(cls, capacity, depth)`** — the model-checking leg. Breadth-first\nover all operation sequences of length at most `depth`, `\"push\"` before `\"pop\"`.\nReturn the shortest failing sequence, or `None`.\n\n**`property_check(cls, capacity, trials, max_len, seed)`** — the testing leg.\nRandom sequences, then greedy shrinking of the first failure by single deletions.\nReturn the minimal failing sequence, or `None`.\n\n**`report(cls, capacity, depth, trials, max_len, seed)`** — five lines:\n\n```text\ntarget: <class name>(capacity=<n>)\ninductive: <verdict>\nbounded: <verdict>\nproperty: <verdict>\nverdict: clean            or   verdict: defect found by inductive, property\n```\n\nA clean inductive line reads `inductive: invariant preserved by every operation`;\na clean bounded line reads `bounded: no counterexample within <depth> operations`;\na clean property line reads `property: <trials> random sequences passed`.\n\nRun `report(BuggyRingBuffer, 3, depth=3)` and read it: induction catches the\ndefect in one step, bounded search at depth three does not reach it, and random\ntesting does. That gap is the deliverable.",
+  "deliverables": [
+   "`ringbuf.py` — a correct bounded circular buffer with an explicit representation invariant and a `from_state` constructor",
+   "`verify.py` — `run_sequence` conformance replay against a list model, plus the three verifiers",
+   "`inductive_check` that establishes the invariant by induction over the abstract state space rather than by search from the initial state",
+   "`bounded_check` that returns the shortest failing operation sequence within a depth",
+   "`property_check` that shrinks a random failure to a minimal one, deterministically for a fixed seed",
+   "`main.py` — a demo that reports on both the correct and the buggy class and prints the two reports side by side"
+  ],
+  "constraints": [
+   "Standard library only; `random` must be seeded through `random.Random(seed)`",
+   "`ringbuf.py` and `verify.py` must import cleanly and print nothing",
+   "`BuggyRingBuffer` must not be repaired — it is the specimen the verifiers are measured against",
+   "`inductive_check` must not simulate from the initial state; it enumerates states and takes one step",
+   "The reference model inside `run_sequence` is a plain list; do not compare a ring buffer against another ring buffer"
+  ],
+  "rubric": [
+   {
+    "criterion": "Correctness of the structure",
+    "weight": 25,
+    "evidence": "FIFO order survives wrap-around, both guards raise ValueError, and the invariant holds after every operation."
+   },
+   {
+    "criterion": "Soundness of the three verifiers",
+    "weight": 35,
+    "evidence": "Every verifier returns None for RingBuffer and a genuine witness for BuggyRingBuffer at an adequate depth."
+   },
+   {
+    "criterion": "Minimality and determinism",
+    "weight": 20,
+    "evidence": "bounded_check returns a shortest sequence; property_check shrinks to four pushes and repeats exactly for a fixed seed."
+   },
+   {
+    "criterion": "The report",
+    "weight": 20,
+    "evidence": "report() names each technique, its verdict and the depth used, and the buggy run visibly shows bounded search missing what induction caught."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 300,
+  "files": [
+   {
+    "name": "ringbuf.py",
+    "content": "class RingBuffer:\n    \"\"\"A bounded FIFO queue over a fixed-size circular array.\"\"\"\n\n    def __init__(self, capacity):\n        # your code here\n        pass\n\n    def __len__(self):\n        # your code here\n        pass\n\n    def is_empty(self):\n        # your code here\n        pass\n\n    def is_full(self):\n        # your code here\n        pass\n\n    def push(self, item):\n        \"\"\"Append item. ValueError when the buffer is full.\"\"\"\n        # your code here\n\n    def pop(self):\n        \"\"\"Remove and return the oldest item. ValueError when empty.\"\"\"\n        # your code here\n\n    def to_list(self):\n        \"\"\"Contents, oldest first.\"\"\"\n        # your code here\n\n    def invariant(self):\n        \"\"\"The representation invariant, as a bool.\"\"\"\n        # your code here\n\n    @classmethod\n    def from_state(cls, capacity, tail, size):\n        \"\"\"A buffer holding `size` placeholder items with the oldest at `tail`.\"\"\"\n        # your code here\n\n\nclass BuggyRingBuffer(RingBuffer):\n    \"\"\"Supplied specimen: is_full is off by one. Do not repair it.\"\"\"\n\n    def is_full(self):\n        return len(self) > self.capacity\n"
+   },
+   {
+    "name": "verify.py",
+    "content": "import random\nfrom collections import deque\n\nfrom ringbuf import RingBuffer, BuggyRingBuffer\n\nOPS = (\"push\", \"pop\")\n\n\ndef run_sequence(cls, capacity, ops):\n    \"\"\"Replay ops against cls(capacity) and a list model. None, or a message.\"\"\"\n    # your code here\n\n\ndef inductive_check(cls, capacity):\n    \"\"\"None, or {\"tail\": t, \"size\": n, \"op\": name} for a state that breaks the invariant.\"\"\"\n    # your code here\n\n\ndef bounded_check(cls, capacity, depth):\n    \"\"\"Shortest failing operation sequence of length <= depth, or None.\"\"\"\n    # your code here\n\n\ndef shrink(cls, capacity, ops):\n    \"\"\"Greedily delete operations while the sequence still fails.\"\"\"\n    # your code here\n\n\ndef property_check(cls, capacity, trials=200, max_len=10, seed=7):\n    \"\"\"A minimal failing random sequence, or None.\"\"\"\n    # your code here\n\n\ndef report(cls, capacity, depth=3, trials=200, max_len=10, seed=7):\n    \"\"\"A five-line summary of the three verification legs.\"\"\"\n    # your code here\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from ringbuf import RingBuffer, BuggyRingBuffer\nfrom verify import report\n\nprint(report(RingBuffer, 3, depth=6))\nprint()\nprint(report(BuggyRingBuffer, 3, depth=3))\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "ringbuf.py",
+    "content": "class RingBuffer:\n    \"\"\"A bounded FIFO queue over a fixed-size circular array.\"\"\"\n\n    def __init__(self, capacity):\n        if capacity < 1:\n            raise ValueError(\"capacity must be at least 1\")\n        self.capacity = capacity\n        self.items = [None] * capacity\n        self.tail = 0          # index of the oldest item\n        self.size = 0\n\n    def __len__(self):\n        return self.size\n\n    def is_empty(self):\n        return len(self) == 0\n\n    def is_full(self):\n        return len(self) == self.capacity\n\n    def push(self, item):\n        \"\"\"Append item. ValueError when the buffer is full.\"\"\"\n        if self.is_full():\n            raise ValueError(\"buffer is full\")\n        self.items[(self.tail + self.size) % self.capacity] = item\n        self.size += 1\n\n    def pop(self):\n        \"\"\"Remove and return the oldest item. ValueError when empty.\"\"\"\n        if self.is_empty():\n            raise ValueError(\"buffer is empty\")\n        item = self.items[self.tail]\n        self.items[self.tail] = None\n        self.tail = (self.tail + 1) % self.capacity\n        self.size -= 1\n        return item\n\n    def to_list(self):\n        \"\"\"Contents, oldest first.\"\"\"\n        return [self.items[(self.tail + k) % self.capacity] for k in range(self.size)]\n\n    def invariant(self):\n        \"\"\"The representation invariant, as a bool.\"\"\"\n        return (len(self.items) == self.capacity\n                and 0 <= self.size <= self.capacity\n                and 0 <= self.tail < self.capacity)\n\n    @classmethod\n    def from_state(cls, capacity, tail, size):\n        \"\"\"A buffer holding `size` placeholder items with the oldest at `tail`.\"\"\"\n        buf = cls(capacity)\n        if not 0 <= tail < capacity:\n            raise ValueError(\"tail out of range\")\n        if not 0 <= size <= capacity:\n            raise ValueError(\"size out of range\")\n        buf.tail = tail\n        buf.size = size\n        for k in range(size):\n            buf.items[(tail + k) % capacity] = k\n        return buf\n\n\nclass BuggyRingBuffer(RingBuffer):\n    \"\"\"Supplied specimen: is_full is off by one. Do not repair it.\"\"\"\n\n    def is_full(self):\n        return len(self) > self.capacity\n"
+   },
+   {
+    "name": "verify.py",
+    "content": "import random\nfrom collections import deque\n\nfrom ringbuf import RingBuffer, BuggyRingBuffer\n\nOPS = (\"push\", \"pop\")\n\n\ndef run_sequence(cls, capacity, ops):\n    \"\"\"Replay ops against cls(capacity) and a list model. None, or a message.\"\"\"\n    buf = cls(capacity)\n    model = []\n    for i, op in enumerate(ops):\n        if op == \"push\":\n            legal = len(model) < capacity\n            item = i\n            try:\n                buf.push(item)\n                refused = False\n            except ValueError:\n                refused = True\n            if legal and refused:\n                return f\"step {i}: push refused although the buffer had room\"\n            if not legal and not refused:\n                return f\"step {i}: push accepted although the buffer was full\"\n            if legal:\n                model.append(item)\n        elif op == \"pop\":\n            legal = len(model) > 0\n            got = None\n            try:\n                got = buf.pop()\n                refused = False\n            except ValueError:\n                refused = True\n            if legal and refused:\n                return f\"step {i}: pop refused although the buffer held items\"\n            if not legal and not refused:\n                return f\"step {i}: pop returned {got!r} from an empty buffer\"\n            if legal:\n                want = model.pop(0)\n                if got != want:\n                    return f\"step {i}: pop gave {got!r}, the model expected {want!r}\"\n        else:\n            raise ValueError(f\"unknown operation {op!r}\")\n        if not buf.invariant():\n            return f\"step {i}: representation invariant broken after {op}\"\n        if buf.to_list() != model:\n            return f\"step {i}: contents {buf.to_list()!r} differ from the model {model!r}\"\n    return None\n\n\ndef inductive_check(cls, capacity):\n    \"\"\"None, or the state and operation that break the invariant in one step.\"\"\"\n    if not cls(capacity).invariant():\n        return {\"tail\": 0, \"size\": 0, \"op\": \"init\"}\n    for tail in range(capacity):\n        for size in range(capacity + 1):\n            for op in OPS:\n                buf = cls.from_state(capacity, tail, size)\n                try:\n                    if op == \"push\":\n                        buf.push(\"x\")\n                    else:\n                        buf.pop()\n                except ValueError:\n                    continue          # the guard refused: nothing changed\n                if not buf.invariant():\n                    return {\"tail\": tail, \"size\": size, \"op\": op}\n    return None\n\n\ndef bounded_check(cls, capacity, depth):\n    \"\"\"Shortest failing operation sequence of length <= depth, or None.\"\"\"\n    if depth < 0:\n        raise ValueError(\"depth must not be negative\")\n    queue = deque([[]])\n    while queue:\n        seq = queue.popleft()\n        if run_sequence(cls, capacity, seq) is not None:\n            return seq\n        if len(seq) < depth:\n            for op in OPS:\n                queue.append(seq + [op])\n    return None\n\n\ndef shrink(cls, capacity, ops):\n    \"\"\"Greedily delete operations while the sequence still fails.\"\"\"\n    current = list(ops)\n    changed = True\n    while changed:\n        changed = False\n        for i in range(len(current)):\n            candidate = current[:i] + current[i + 1:]\n            if run_sequence(cls, capacity, candidate) is not None:\n                current = candidate\n                changed = True\n                break\n    return current\n\n\ndef property_check(cls, capacity, trials=200, max_len=10, seed=7):\n    \"\"\"A minimal failing random sequence, or None.\"\"\"\n    rng = random.Random(seed)\n    for _ in range(trials):\n        n = rng.randint(0, max_len)\n        seq = [rng.choice(OPS) for _ in range(n)]\n        if run_sequence(cls, capacity, seq) is not None:\n            return shrink(cls, capacity, seq)\n    return None\n\n\ndef report(cls, capacity, depth=3, trials=200, max_len=10, seed=7):\n    \"\"\"A five-line summary of the three verification legs.\"\"\"\n    ind = inductive_check(cls, capacity)\n    bnd = bounded_check(cls, capacity, depth)\n    prp = property_check(cls, capacity, trials, max_len, seed)\n\n    lines = [\"target: \" + cls.__name__ + \"(capacity=\" + str(capacity) + \")\"]\n    if ind is None:\n        lines.append(\"inductive: invariant preserved by every operation\")\n    else:\n        lines.append(\"inductive: violation at \" + str(ind))\n    if bnd is None:\n        lines.append(\"bounded: no counterexample within \" + str(depth) + \" operations\")\n    else:\n        lines.append(\"bounded: counterexample \" + str(bnd))\n    if prp is None:\n        lines.append(\"property: \" + str(trials) + \" random sequences passed\")\n    else:\n        lines.append(\"property: minimal failing sequence \" + str(prp))\n\n    caught = [name for name, result\n              in ((\"inductive\", ind), (\"bounded\", bnd), (\"property\", prp))\n              if result is not None]\n    lines.append(\"verdict: \" + (\"clean\" if not caught\n                                else \"defect found by \" + \", \".join(caught)))\n    return \"\\n\".join(lines)\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from ringbuf import RingBuffer, BuggyRingBuffer\nfrom verify import report\n\nprint(report(RingBuffer, 3, depth=6))\nprint()\nprint(report(BuggyRingBuffer, 3, depth=3))\n"
+   }
+  ],
+  "hints": [
+   "Store `tail` and `size` rather than `head` and `tail`; the empty and full states are then distinguishable without a spare slot.",
+   "`run_sequence` should ask the model first — `legal = len(model) < capacity` — and only then try the buffer, so you can compare what should have happened with what did.",
+   "`inductive_check` never runs a program: it builds `cls.from_state(capacity, tail, size)` for every legal pair, applies one operation, and re-checks the invariant. A guard that refuses is a pass, not a failure.",
+   "Greedy shrinking is a `while changed` loop: for each index, try the sequence with that index removed, and restart the sweep the moment a shorter sequence still fails."
+  ],
+  "tests": [
+   {
+    "name": "The buffer is a FIFO queue that wraps",
+    "code": "from ringbuf import RingBuffer\n_b = RingBuffer(3)\nassert len(_b) == 0 and _b.is_empty() and not _b.is_full(), \"a fresh buffer is empty\"\nfor _x in (\"a\", \"b\", \"c\"):\n    _b.push(_x)\nassert _b.is_full() and _b.to_list() == [\"a\", \"b\", \"c\"], f\"got {_b.to_list()!r}\"\nassert _b.pop() == \"a\", \"pop returns the oldest item\"\n_b.push(\"d\")\nassert _b.to_list() == [\"b\", \"c\", \"d\"], f\"after wrapping the contents are {_b.to_list()!r}\"\nassert [_b.pop(), _b.pop(), _b.pop()] == [\"b\", \"c\", \"d\"], \"order survives the wrap\"\nassert _b.is_empty(), \"the buffer should be empty again\""
+   },
+   {
+    "name": "Both guards raise, and so does a bad capacity",
+    "code": "from ringbuf import RingBuffer\ntry:\n    RingBuffer(0)\n    assert False, \"capacity 0 should raise ValueError\"\nexcept ValueError:\n    pass\n_b = RingBuffer(1)\ntry:\n    _b.pop()\n    assert False, \"popping an empty buffer should raise ValueError\"\nexcept ValueError:\n    pass\n_b.push(1)\ntry:\n    _b.push(2)\n    assert False, \"pushing to a full buffer should raise ValueError\"\nexcept ValueError:\n    pass\nassert _b.to_list() == [1], \"a refused push must leave the buffer untouched\""
+   },
+   {
+    "name": "from_state builds any legal state",
+    "code": "from ringbuf import RingBuffer\n_b = RingBuffer.from_state(4, 3, 2)\nassert _b.tail == 3 and len(_b) == 2 and _b.invariant(), f\"state is tail={_b.tail} size={len(_b)}\"\nassert len(_b.to_list()) == 2, \"to_list must respect the size\"\nassert RingBuffer.from_state(4, 0, 4).is_full(), \"size == capacity means full\"\nfor _bad in ((4, 4, 0), (4, -1, 0), (4, 0, 5), (4, 0, -1)):\n    try:\n        RingBuffer.from_state(*_bad)\n        assert False, f\"from_state{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+   },
+   {
+    "name": "run_sequence accepts a correct run and names a divergence",
+    "code": "from ringbuf import RingBuffer, BuggyRingBuffer\nfrom verify import run_sequence\n_ok = [\"push\", \"push\", \"push\", \"pop\", \"push\", \"pop\", \"pop\", \"pop\", \"pop\"]\nassert run_sequence(RingBuffer, 3, _ok) is None, \\\n    f\"the correct buffer should replay cleanly, got {run_sequence(RingBuffer, 3, _ok)!r}\"\nassert run_sequence(RingBuffer, 3, []) is None, \"an empty sequence is trivially clean\"\n_msg = run_sequence(BuggyRingBuffer, 3, [\"push\"] * 4)\nassert isinstance(_msg, str), \"a fourth push into a capacity-3 buffer must be reported\"\nassert \"step 3\" in _msg, f\"the divergence is at step 3, the message said {_msg!r}\"\ntry:\n    run_sequence(RingBuffer, 3, [\"peek\"])\n    assert False, \"an unknown operation should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "Induction proves the invariant, and refutes the buggy guard",
+    "code": "from ringbuf import RingBuffer, BuggyRingBuffer\nfrom verify import inductive_check\nfor _cap in (1, 2, 3, 5):\n    assert inductive_check(RingBuffer, _cap) is None, \\\n        f\"the invariant should be inductive at capacity {_cap}\"\n_w = inductive_check(BuggyRingBuffer, 3)\nassert _w is not None, \"the off-by-one guard breaks the invariant in one step\"\nassert _w[\"op\"] == \"push\" and _w[\"size\"] == 3, f\"witness was {_w!r}, expected a push from size 3\""
+   },
+   {
+    "name": "Bounded search is shortest-first and depth-limited",
+    "code": "from ringbuf import RingBuffer, BuggyRingBuffer\nfrom verify import bounded_check\nassert bounded_check(RingBuffer, 3, 7) is None, \"the correct buffer has no counterexample\"\nassert bounded_check(BuggyRingBuffer, 3, 3) is None, \\\n    \"three operations cannot fill a capacity-3 buffer and overflow it\"\n_seq = bounded_check(BuggyRingBuffer, 3, 4)\nassert _seq == [\"push\", \"push\", \"push\", \"push\"], f\"expected four pushes, got {_seq!r}\"\nassert bounded_check(BuggyRingBuffer, 3, 8) == [\"push\"] * 4, \"deeper search must still return the shortest\""
+   },
+   {
+    "name": "Shrinking reduces a long failure to the minimal one",
+    "code": "from ringbuf import RingBuffer, BuggyRingBuffer\nfrom verify import shrink, run_sequence\n_long = [\"pop\", \"push\", \"push\", \"pop\", \"push\", \"push\", \"push\", \"pop\", \"push\", \"push\"]\nassert run_sequence(BuggyRingBuffer, 3, _long) is not None, \"the long sequence should already fail\"\n_min = shrink(BuggyRingBuffer, 3, _long)\nassert _min == [\"push\"] * 4, f\"expected four pushes, got {_min!r}\"\nfor _i in range(len(_min)):\n    assert run_sequence(BuggyRingBuffer, 3, _min[:_i] + _min[_i + 1:]) is None, \\\n        f\"{_min!r} is not minimal: deleting index {_i} still fails\""
+   },
+   {
+    "name": "Property testing is deterministic and finds the defect",
+    "code": "from ringbuf import RingBuffer, BuggyRingBuffer\nfrom verify import property_check\nassert property_check(RingBuffer, 3, 200, 10, 7) is None, \"no random sequence should break the correct buffer\"\n_a = property_check(BuggyRingBuffer, 3, 200, 10, 7)\n_b = property_check(BuggyRingBuffer, 3, 200, 10, 7)\nassert _a == [\"push\"] * 4, f\"expected the minimal four-push sequence, got {_a!r}\"\nassert _a == _b, \"a fixed seed must give the same answer twice\"\nassert property_check(BuggyRingBuffer, 3, 200, 2, 7) is None, \\\n    \"sequences of at most two operations can never reach the defect\""
+   },
+   {
+    "name": "The report states each verdict",
+    "code": "from ringbuf import RingBuffer, BuggyRingBuffer\nfrom verify import report\n_clean = report(RingBuffer, 3, depth=6)\n_lines = _clean.split(\"\\n\")\nassert len(_lines) == 5, f\"the report has five lines, got {len(_lines)}\"\nassert _lines[0] == \"target: RingBuffer(capacity=3)\", f\"first line was {_lines[0]!r}\"\nassert _lines[1] == \"inductive: invariant preserved by every operation\", f\"got {_lines[1]!r}\"\nassert _lines[2] == \"bounded: no counterexample within 6 operations\", f\"got {_lines[2]!r}\"\nassert _lines[3] == \"property: 200 random sequences passed\", f\"got {_lines[3]!r}\"\nassert _lines[4] == \"verdict: clean\", f\"got {_lines[4]!r}\""
+   },
+   {
+    "name": "The buggy report shows bounded search missing the defect",
+    "code": "from ringbuf import BuggyRingBuffer\nfrom verify import report\n_lines = report(BuggyRingBuffer, 3, depth=3).split(\"\\n\")\nassert _lines[1].startswith(\"inductive: violation at\"), f\"got {_lines[1]!r}\"\nassert _lines[2] == \"bounded: no counterexample within 3 operations\", f\"got {_lines[2]!r}\"\nassert _lines[3].startswith(\"property: minimal failing sequence\"), f\"got {_lines[3]!r}\"\nassert _lines[4] == \"verdict: defect found by inductive, property\", f\"got {_lines[4]!r}\""
+   },
+   {
+    "name": "The modules are import-clean",
+    "code": "for _name in (\"ringbuf.py\", \"verify.py\"):\n    _src = open(_name).read()\n    assert \"print(\" not in _src, f\"{_name} should define things, not print — move output to main.py\""
+   }
+  ]
+ }
+}

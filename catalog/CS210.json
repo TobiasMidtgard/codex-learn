@@ -1,0 +1,436 @@
+{
+ "id": "CS210",
+ "title": "Operating Systems",
+ "year": 2,
+ "level": "Intermediate",
+ "prereqs": [
+  "CE201",
+  "CS201"
+ ],
+ "stack": [
+  "C (reference)",
+  "Python"
+ ],
+ "credits": 15,
+ "hours": 150,
+ "icon": "◱",
+ "summary": "An operating system is the policy layer between hardware and programs: who gets the processor, which pages stay in memory, which thread may enter a critical section, and where bytes land on disk. You build simulators for each of those four decisions and measure them, rather than reading about them.",
+ "outcomes": [
+  "Simulate FCFS, SJF, priority and round-robin scheduling and derive waiting and turnaround times",
+  "Implement FIFO, LRU and OPT page replacement and explain why only some are stack algorithms",
+  "Demonstrate Belady's anomaly experimentally rather than quoting it",
+  "Reason about interleavings by executing them explicitly, and detect a deadlock from the trace",
+  "Apply the banker's algorithm to decide whether a resource request may safely be granted",
+  "Build an inode-and-free-list allocator and quantify the fragmentation it produces",
+  "Assemble scheduling, paging and syscalls into one kernel simulator with an auditable trace"
+ ],
+ "assessment": "4 lab checkpoints (10% each) + capstone build (60%).",
+ "reading": [
+  "Silberschatz, Galvin & Gagne, *Operating System Concepts*, 10th ed. — chapters 5, 6, 8, 10, 13",
+  "Arpaci-Dusseau & Arpaci-Dusseau, *Operating Systems: Three Easy Pieces* — virtualisation and concurrency parts",
+  "Tanenbaum & Bos, *Modern Operating Systems*, 4th ed. — chapters 2 and 3"
+ ],
+ "modules": [
+  {
+   "title": "Processes and CPU scheduling",
+   "summary": "Deciding which runnable process owns the processor, and what that decision costs.",
+   "concepts": [
+    "The process control block, and the ready / running / blocked states",
+    "A context switch is pure overhead: saved registers, a new page-table base, a cold cache",
+    "Non-preemptive policies (FCFS, SJF, priority) versus preemptive round robin",
+    "Turnaround = completion − arrival; waiting = turnaround − burst; both are derived, never measured twice",
+    "The convoy effect: one long burst at the head of an FCFS queue delays everything behind it",
+    "Starvation under strict priority, and ageing as the usual remedy",
+    "Quantum choice: too large degenerates to FCFS, too small drowns in switch overhead"
+   ],
+   "lab": {
+    "title": "Four schedulers over one workload",
+    "runtime": "python",
+    "minutes": 45,
+    "brief": "A workload is a list of process dicts:\n\n```python\n{\"pid\": \"A\", \"arrival\": 0, \"burst\": 5, \"priority\": 2}\n```\n\nEvery scheduler returns the same shape — a **Gantt timeline**, a list of\n`(pid, start, end)` segments in the order the CPU actually ran them. Metrics are\nderived from that timeline afterwards, never computed inside a scheduler.\n\n**`fcfs(procs)`** — run in arrival order, ties broken by `pid`. When the CPU\nwould be idle, jump the clock forward to the next arrival; emit no segment for\nthe idle gap.\n\n**`sjf(procs)`** — non-preemptive shortest-job-first. At each dispatch point,\nchoose the shortest burst among the processes that have already arrived; ties\nbreak on arrival, then on `pid`.\n\n**`priority_schedule(procs)`** — the same, but the key is `priority`, where a\n**smaller number means more urgent**.\n\n**`round_robin(procs, quantum)`** — preemptive, one slice of at most `quantum`\nticks per dispatch. A process that arrives at exactly the tick another process\nis preempted joins the ready queue **before** the preempted one. Emit one\nsegment per dispatch — do not merge adjacent slices of the same process. Raise\n`ValueError` when `quantum` is not positive.\n\n**`metrics(procs, timeline)`** — `{pid: {\"completion\", \"turnaround\", \"waiting\"}}`,\nwhere completion is the end of that process's **last** segment. Raise\n`ValueError` if the timeline names a process that is not in `procs`, or if some\nprocess never ran.\n\n**`averages(stats)`** — `{\"waiting\": float, \"turnaround\": float}`; both `0.0`\nfor an empty workload.\n\nFor the table in `main.py` the round-robin timeline with `quantum = 3` begins:\n\n```text\nA 0-3, B 3-6, C 6-9, D 9-12, A 12-14, ...\n```",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "WORKLOAD = [\n    {\"pid\": \"A\", \"arrival\": 0, \"burst\": 5, \"priority\": 2},\n    {\"pid\": \"B\", \"arrival\": 1, \"burst\": 3, \"priority\": 3},\n    {\"pid\": \"C\", \"arrival\": 2, \"burst\": 8, \"priority\": 1},\n    {\"pid\": \"D\", \"arrival\": 3, \"burst\": 6, \"priority\": 1},\n]\n\n\ndef fcfs(procs):\n    \"\"\"Arrival order, ties on pid. Returns [(pid, start, end), ...].\"\"\"\n    # your code here\n\n\ndef sjf(procs):\n    \"\"\"Non-preemptive shortest job first among the arrived processes.\"\"\"\n    # your code here\n\n\ndef priority_schedule(procs):\n    \"\"\"Non-preemptive, smallest priority number wins.\"\"\"\n    # your code here\n\n\ndef round_robin(procs, quantum):\n    \"\"\"Preemptive round robin, one segment per dispatch.\"\"\"\n    # your code here\n\n\ndef metrics(procs, timeline):\n    \"\"\"pid -> {completion, turnaround, waiting}, derived from the timeline.\"\"\"\n    # your code here\n\n\ndef averages(stats):\n    \"\"\"Mean waiting and turnaround over every process.\"\"\"\n    # your code here\n\n\nfor name, timeline in [(\"FCFS\", fcfs(WORKLOAD)),\n                       (\"RR/3\", round_robin(WORKLOAD, 3))]:\n    print(name, timeline)\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "WORKLOAD = [\n    {\"pid\": \"A\", \"arrival\": 0, \"burst\": 5, \"priority\": 2},\n    {\"pid\": \"B\", \"arrival\": 1, \"burst\": 3, \"priority\": 3},\n    {\"pid\": \"C\", \"arrival\": 2, \"burst\": 8, \"priority\": 1},\n    {\"pid\": \"D\", \"arrival\": 3, \"burst\": 6, \"priority\": 1},\n]\n\n\ndef fcfs(procs):\n    \"\"\"Arrival order, ties on pid. Returns [(pid, start, end), ...].\"\"\"\n    timeline = []\n    clock = 0\n    for p in sorted(procs, key=lambda p: (p[\"arrival\"], p[\"pid\"])):\n        start = max(clock, p[\"arrival\"])\n        timeline.append((p[\"pid\"], start, start + p[\"burst\"]))\n        clock = start + p[\"burst\"]\n    return timeline\n\n\ndef _non_preemptive(procs, key):\n    \"\"\"Shared engine: repeatedly dispatch the best arrived process to completion.\"\"\"\n    pending = list(range(len(procs)))\n    timeline = []\n    clock = 0\n    while pending:\n        ready = [i for i in pending if procs[i][\"arrival\"] <= clock]\n        if not ready:\n            # CPU idle: fast-forward to the next arrival rather than busy-wait\n            clock = min(procs[i][\"arrival\"] for i in pending)\n            continue\n        chosen = min(ready, key=lambda i: key(procs[i]))\n        p = procs[chosen]\n        start = max(clock, p[\"arrival\"])\n        timeline.append((p[\"pid\"], start, start + p[\"burst\"]))\n        clock = start + p[\"burst\"]\n        pending.remove(chosen)\n    return timeline\n\n\ndef sjf(procs):\n    \"\"\"Non-preemptive shortest job first among the arrived processes.\"\"\"\n    return _non_preemptive(procs, lambda p: (p[\"burst\"], p[\"arrival\"], p[\"pid\"]))\n\n\ndef priority_schedule(procs):\n    \"\"\"Non-preemptive, smallest priority number wins.\"\"\"\n    return _non_preemptive(procs, lambda p: (p[\"priority\"], p[\"arrival\"], p[\"pid\"]))\n\n\ndef round_robin(procs, quantum):\n    \"\"\"Preemptive round robin, one segment per dispatch.\"\"\"\n    if quantum <= 0:\n        raise ValueError(\"quantum must be positive\")\n    arrivals = sorted(procs, key=lambda p: (p[\"arrival\"], p[\"pid\"]))\n    remaining = {p[\"pid\"]: p[\"burst\"] for p in procs}\n    queue = []\n    timeline = []\n    clock = 0\n    nxt = 0\n\n    def admit(now):\n        nonlocal nxt\n        while nxt < len(arrivals) and arrivals[nxt][\"arrival\"] <= now:\n            queue.append(arrivals[nxt][\"pid\"])\n            nxt += 1\n\n    while nxt < len(arrivals) or queue:\n        if not queue:\n            clock = max(clock, arrivals[nxt][\"arrival\"])\n        admit(clock)\n        pid = queue.pop(0)\n        slice_len = min(quantum, remaining[pid])\n        timeline.append((pid, clock, clock + slice_len))\n        clock += slice_len\n        remaining[pid] -= slice_len\n        # arrivals during the slice are admitted before the preempted process\n        admit(clock)\n        if remaining[pid] > 0:\n            queue.append(pid)\n    return timeline\n\n\ndef metrics(procs, timeline):\n    \"\"\"pid -> {completion, turnaround, waiting}, derived from the timeline.\"\"\"\n    by_pid = {p[\"pid\"]: p for p in procs}\n    completion = {}\n    for pid, start, end in timeline:\n        if pid not in by_pid:\n            raise ValueError(f\"timeline names unknown process {pid!r}\")\n        completion[pid] = max(completion.get(pid, end), end)\n    stats = {}\n    for pid, p in by_pid.items():\n        if pid not in completion:\n            raise ValueError(f\"process {pid!r} never ran\")\n        turnaround = completion[pid] - p[\"arrival\"]\n        stats[pid] = {\"completion\": completion[pid],\n                      \"turnaround\": turnaround,\n                      \"waiting\": turnaround - p[\"burst\"]}\n    return stats\n\n\ndef averages(stats):\n    \"\"\"Mean waiting and turnaround over every process.\"\"\"\n    if not stats:\n        return {\"waiting\": 0.0, \"turnaround\": 0.0}\n    n = len(stats)\n    return {\"waiting\": sum(s[\"waiting\"] for s in stats.values()) / n,\n            \"turnaround\": sum(s[\"turnaround\"] for s in stats.values()) / n}\n\n\nfor name, timeline in [(\"FCFS\", fcfs(WORKLOAD)),\n                       (\"RR/3\", round_robin(WORKLOAD, 3))]:\n    print(name, timeline)\n"
+     }
+    ],
+    "hints": [
+     "Write `fcfs` first and keep the idle rule in one place: `start = max(clock, arrival)`.",
+     "SJF and priority differ only in the sort key — factor the dispatch loop out and pass the key in.",
+     "Round robin needs two admission points: before the dispatch, and again at the end of the slice, so a process arriving at the preemption tick queues ahead of the preempted one.",
+     "`metrics` must never look at bursts to find completion times — take the maximum `end` over each pid's segments."
+    ],
+    "tests": [
+     {
+      "name": "FCFS runs in arrival order",
+      "code": "_got = fcfs(WORKLOAD)\n_want = [(\"A\", 0, 5), (\"B\", 5, 8), (\"C\", 8, 16), (\"D\", 16, 22)]\nassert _got == _want, f\"fcfs gave {_got!r}, expected {_want}\"\nassert fcfs([]) == [], \"An empty workload has an empty timeline\""
+     },
+     {
+      "name": "FCFS leaves the CPU idle until the first arrival",
+      "code": "_late = [{\"pid\": \"X\", \"arrival\": 5, \"burst\": 2, \"priority\": 1}]\nassert fcfs(_late) == [(\"X\", 5, 7)], f\"fcfs gave {fcfs(_late)!r}, expected [('X', 5, 7)]\"\n_st = metrics(_late, fcfs(_late))\nassert _st[\"X\"][\"waiting\"] == 0, f\"X waited {_st['X']['waiting']}, it arrived to an idle CPU\""
+     },
+     {
+      "name": "SJF prefers the shortest arrived burst",
+      "code": "_got = sjf(WORKLOAD)\n_want = [(\"A\", 0, 5), (\"B\", 5, 8), (\"D\", 8, 14), (\"C\", 14, 22)]\nassert _got == _want, f\"sjf gave {_got!r}, expected {_want}\""
+     },
+     {
+      "name": "Priority uses the priority field, not the burst",
+      "code": "_got = priority_schedule(WORKLOAD)\n_want = [(\"A\", 0, 5), (\"C\", 5, 13), (\"D\", 13, 19), (\"B\", 19, 22)]\nassert _got == _want, f\"priority_schedule gave {_got!r}, expected {_want}\""
+     },
+     {
+      "name": "Round robin slices and requeues",
+      "code": "_got = round_robin(WORKLOAD, 3)\n_want = [(\"A\", 0, 3), (\"B\", 3, 6), (\"C\", 6, 9), (\"D\", 9, 12), (\"A\", 12, 14),\n         (\"C\", 14, 17), (\"D\", 17, 20), (\"C\", 20, 22)]\nassert _got == _want, f\"round_robin(WORKLOAD, 3) gave {_got!r}, expected {_want}\"\n_solo = [{\"pid\": \"X\", \"arrival\": 0, \"burst\": 5, \"priority\": 1}]\nassert round_robin(_solo, 3) == [(\"X\", 0, 3), (\"X\", 3, 5)], \\\n    \"One segment per dispatch, even when the same process is redispatched\"\nfor _bad in (0, -1):\n    try:\n        round_robin(WORKLOAD, _bad)\n        assert False, f\"round_robin(..., {_bad}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "metrics derives waiting and turnaround",
+      "code": "_st = metrics(WORKLOAD, fcfs(WORKLOAD))\nassert _st[\"A\"] == {\"completion\": 5, \"turnaround\": 5, \"waiting\": 0}, f\"A: {_st['A']!r}\"\nassert _st[\"D\"] == {\"completion\": 22, \"turnaround\": 19, \"waiting\": 13}, f\"D: {_st['D']!r}\"\n_rr = metrics(WORKLOAD, round_robin(WORKLOAD, 3))\nassert _rr[\"C\"][\"completion\"] == 22 and _rr[\"C\"][\"waiting\"] == 12, f\"C under RR: {_rr['C']!r}\"\nassert metrics([], []) == {}, \"No processes, no statistics\""
+     },
+     {
+      "name": "metrics rejects an inconsistent timeline",
+      "code": "try:\n    metrics(WORKLOAD, [(\"Z\", 0, 1)])\n    assert False, \"A timeline naming an unknown pid should raise ValueError\"\nexcept ValueError:\n    pass\ntry:\n    metrics(WORKLOAD, [(\"A\", 0, 5)])\n    assert False, \"A process that never ran should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "averages compare the policies",
+      "code": "assert averages({}) == {\"waiting\": 0.0, \"turnaround\": 0.0}, \"Empty workload averages 0.0\"\n_a = averages(metrics(WORKLOAD, sjf(WORKLOAD)))\nassert abs(_a[\"waiting\"] - 5.25) < 1e-9, f\"SJF mean waiting is {_a['waiting']!r}, expected 5.25\"\n_f = averages(metrics(WORKLOAD, fcfs(WORKLOAD)))\nassert abs(_f[\"waiting\"] - 5.75) < 1e-9, f\"FCFS mean waiting is {_f['waiting']!r}, expected 5.75\"\nassert _a[\"waiting\"] < _f[\"waiting\"], \"SJF is optimal for mean waiting time — it must beat FCFS here\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Virtual memory and page replacement",
+   "summary": "Which resident page to evict, and how badly the wrong answer hurts.",
+   "concepts": [
+    "Paging: a virtual address splits into page number and offset; the page table maps the former",
+    "A page fault is a trap, not an error — the handler fetches the page and restarts the instruction",
+    "FIFO, LRU and OPT: implementable, approximable, and unimplementable respectively",
+    "OPT is the offline lower bound used to judge the other two",
+    "Stack algorithms: the resident set with m frames is a subset of the set with m+1 frames",
+    "Belady's anomaly — FIFO is not a stack algorithm, so more frames can mean more faults",
+    "Thrashing, the working-set model, and why fault rate not utilisation is the signal to watch"
+   ],
+   "lab": {
+    "title": "Page replacement and Belady's anomaly",
+    "runtime": "python",
+    "minutes": 45,
+    "brief": "Model physical memory as a fixed list of `nframes` slots, each holding a page\nnumber or `None`. Every policy has the same signature and returns\n`(faults, frames)`:\n\n- `faults` — a list of booleans, one per reference, `True` where that reference\n  faulted\n- `frames` — the frame list as it stands after the last reference\n\nChoosing a victim is the only thing that differs. In every policy, a **free\nframe is always preferred**, lowest index first; only a full memory evicts.\n\n**`fifo(refs, nframes)`** — evict the frame whose page was loaded longest ago.\nNote that re-referencing a page does *not* refresh it.\n\n**`lru(refs, nframes)`** — evict the frame whose page was referenced longest ago.\n\n**`opt(refs, nframes)`** — evict the resident page whose next use lies furthest\nin the future; a page never used again is evicted first. Ties break on the\nlowest frame index.\n\nAll three raise `ValueError` when `nframes < 1`.\n\n**`fault_curve(policy, refs, max_frames)`** — `[faults with 1 frame, ..., faults\nwith max_frames frames]`.\n\n**`belady_pairs(policy, refs, max_frames)`** — every `(m, m + 1)` where giving\nthe policy one more frame produced *more* faults.\n\nThe classic string is in `main.py`. Under FIFO it faults 9 times with three\nframes and 10 times with four; under LRU the curve never rises.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "CLASSIC = [1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5]\n\n\ndef fifo(refs, nframes):\n    \"\"\"Evict the page loaded longest ago. Returns (faults, frames).\"\"\"\n    # your code here\n\n\ndef lru(refs, nframes):\n    \"\"\"Evict the page referenced longest ago. Returns (faults, frames).\"\"\"\n    # your code here\n\n\ndef opt(refs, nframes):\n    \"\"\"Evict the page whose next use is furthest away. Returns (faults, frames).\"\"\"\n    # your code here\n\n\ndef fault_curve(policy, refs, max_frames):\n    \"\"\"Fault counts for 1..max_frames frames.\"\"\"\n    # your code here\n\n\ndef belady_pairs(policy, refs, max_frames):\n    \"\"\"(m, m+1) pairs where an extra frame made things worse.\"\"\"\n    # your code here\n\n\nprint(\"FIFO\", fault_curve(fifo, CLASSIC, 5))\nprint(\"LRU \", fault_curve(lru, CLASSIC, 5))\nprint(\"anomaly\", belady_pairs(fifo, CLASSIC, 5))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "CLASSIC = [1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5]\n\n\ndef _free_slot(frames):\n    \"\"\"Lowest-numbered empty frame, or None when memory is full.\"\"\"\n    for i, page in enumerate(frames):\n        if page is None:\n            return i\n    return None\n\n\ndef _check(nframes):\n    if nframes < 1:\n        raise ValueError(\"need at least one frame\")\n\n\ndef fifo(refs, nframes):\n    \"\"\"Evict the page loaded longest ago. Returns (faults, frames).\"\"\"\n    _check(nframes)\n    frames = [None] * nframes\n    loaded_at = [0] * nframes          # tick at which each frame was filled\n    faults = []\n    for tick, page in enumerate(refs):\n        if page in frames:\n            faults.append(False)\n            continue\n        slot = _free_slot(frames)\n        if slot is None:\n            slot = min(range(nframes), key=lambda i: (loaded_at[i], i))\n        frames[slot] = page\n        loaded_at[slot] = tick\n        faults.append(True)\n    return faults, frames\n\n\ndef lru(refs, nframes):\n    \"\"\"Evict the page referenced longest ago. Returns (faults, frames).\"\"\"\n    _check(nframes)\n    frames = [None] * nframes\n    used_at = [0] * nframes\n    faults = []\n    for tick, page in enumerate(refs):\n        if page in frames:\n            used_at[frames.index(page)] = tick   # a hit refreshes recency\n            faults.append(False)\n            continue\n        slot = _free_slot(frames)\n        if slot is None:\n            slot = min(range(nframes), key=lambda i: (used_at[i], i))\n        frames[slot] = page\n        used_at[slot] = tick\n        faults.append(True)\n    return faults, frames\n\n\ndef _next_use(refs, page, after):\n    \"\"\"Index of the next reference to page strictly after `after`, or infinity.\"\"\"\n    for j in range(after + 1, len(refs)):\n        if refs[j] == page:\n            return j\n    return float(\"inf\")\n\n\ndef opt(refs, nframes):\n    \"\"\"Evict the page whose next use is furthest away. Returns (faults, frames).\"\"\"\n    _check(nframes)\n    frames = [None] * nframes\n    faults = []\n    for tick, page in enumerate(refs):\n        if page in frames:\n            faults.append(False)\n            continue\n        slot = _free_slot(frames)\n        if slot is None:\n            # negate nothing: max on (next use, -index) would break ties high,\n            # so sort ascending on (-next_use, index) instead\n            slot = min(range(nframes),\n                       key=lambda i: (-_next_use(refs, frames[i], tick), i))\n        frames[slot] = page\n        faults.append(True)\n    return faults, frames\n\n\ndef fault_curve(policy, refs, max_frames):\n    \"\"\"Fault counts for 1..max_frames frames.\"\"\"\n    return [sum(policy(refs, n)[0]) for n in range(1, max_frames + 1)]\n\n\ndef belady_pairs(policy, refs, max_frames):\n    \"\"\"(m, m+1) pairs where an extra frame made things worse.\"\"\"\n    curve = fault_curve(policy, refs, max_frames)\n    return [(m + 1, m + 2) for m in range(len(curve) - 1)\n            if curve[m + 1] > curve[m]]\n\n\nprint(\"FIFO\", fault_curve(fifo, CLASSIC, 5))\nprint(\"LRU \", fault_curve(lru, CLASSIC, 5))\nprint(\"anomaly\", belady_pairs(fifo, CLASSIC, 5))\n"
+     }
+    ],
+    "hints": [
+     "Keep two parallel lists: the frame contents and one integer per frame (load time for FIFO, last-use time for LRU). `min(range(n), key=...)` then picks the victim.",
+     "The only difference between FIFO and LRU is whether a hit updates that integer.",
+     "For OPT, a helper returning the next index at which a page is referenced — `float('inf')` when there is none — turns the victim choice into another `min` with a negated key.",
+     "`sum(list_of_bools)` counts the True values, which is exactly the fault count."
+    ],
+    "tests": [
+     {
+      "name": "FIFO on the classic string",
+      "code": "_f, _fr = fifo(CLASSIC, 3)\nassert sum(_f) == 9, f\"FIFO with 3 frames faulted {sum(_f)} times, expected 9\"\nassert _f[:4] == [True, True, True, True], \"The first touch of each page must fault\"\nassert _f[7] is False and _f[8] is False, \"Pages 1 and 2 are still resident at references 8 and 9\"\nassert sorted(_fr) == [3, 4, 5], f\"Frames ended as {_fr!r}, expected pages 3, 4 and 5 resident\""
+     },
+     {
+      "name": "LRU refreshes on a hit, FIFO does not",
+      "code": "_l, _ = lru(CLASSIC, 3)\nassert sum(_l) == 10, f\"LRU with 3 frames faulted {sum(_l)} times, expected 10\"\n_refs = [1, 2, 3, 1, 4, 1]\nassert sum(fifo(_refs, 3)[0]) == 5, \\\n    \"FIFO ignores the hit on page 1 and evicts it for page 4, so the last reference faults\"\nassert sum(lru(_refs, 3)[0]) == 4, \"LRU keeps the freshly used page 1 and evicts page 2 instead\"\nassert fifo(_refs, 3)[1] != lru(_refs, 3)[1], \\\n    \"The two policies must end with different resident sets on this string\""
+     },
+     {
+      "name": "OPT is the lower bound",
+      "code": "_o, _ = opt(CLASSIC, 3)\nassert sum(_o) == 7, f\"OPT with 3 frames faulted {sum(_o)} times, expected 7\"\nfor _n in (1, 2, 3, 4, 5):\n    _best = sum(opt(CLASSIC, _n)[0])\n    for _policy in (fifo, lru):\n        assert _best <= sum(_policy(CLASSIC, _n)[0]), \\\n            f\"OPT faulted more than {_policy.__name__} with {_n} frames — check the victim rule\""
+     },
+     {
+      "name": "Free frames are filled before anything is evicted",
+      "code": "for _policy in (fifo, lru, opt):\n    _faults, _frames = _policy([7, 7, 7], 3)\n    assert _faults == [True, False, False], f\"{_policy.__name__} on [7,7,7]: {_faults!r}\"\n    assert _frames == [7, None, None], \\\n        f\"{_policy.__name__} left {_frames!r}; fill frame 0 first and leave the rest free\"\n    assert _policy([], 2) == ([], [None, None]), \"No references means no faults\""
+     },
+     {
+      "name": "Every policy rejects a memory with no frames",
+      "code": "for _policy in (fifo, lru, opt):\n    for _bad in (0, -3):\n        try:\n            _policy([1, 2], _bad)\n            assert False, f\"{_policy.__name__}(refs, {_bad}) should raise ValueError\"\n        except ValueError:\n            pass"
+     },
+     {
+      "name": "fault_curve measures the whole memory range",
+      "code": "assert fault_curve(fifo, CLASSIC, 5) == [12, 12, 9, 10, 5], \\\n    f\"FIFO curve is {fault_curve(fifo, CLASSIC, 5)!r}, expected [12, 12, 9, 10, 5]\"\nassert fault_curve(lru, CLASSIC, 5) == [12, 12, 10, 8, 5], \\\n    f\"LRU curve is {fault_curve(lru, CLASSIC, 5)!r}, expected [12, 12, 10, 8, 5]\""
+     },
+     {
+      "name": "Belady's anomaly, demonstrated",
+      "code": "assert belady_pairs(fifo, CLASSIC, 5) == [(3, 4)], \\\n    f\"FIFO anomaly pairs are {belady_pairs(fifo, CLASSIC, 5)!r}, expected [(3, 4)]\"\nassert belady_pairs(lru, CLASSIC, 5) == [], \"LRU is a stack algorithm — it cannot show the anomaly\"\nassert belady_pairs(opt, CLASSIC, 5) == [], \"OPT is also a stack algorithm\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Concurrency, synchronisation and deadlock",
+   "summary": "Interleavings made explicit, semaphores that block, and a safety check for resource requests.",
+   "concepts": [
+    "A race condition is a property of the *set* of interleavings, not of any one run",
+    "Critical sections and the three requirements: mutual exclusion, progress, bounded waiting",
+    "Counting semaphores: wait blocks on zero, signal is always non-blocking",
+    "The bounded-buffer solution needs three semaphores — empty, full and a mutex",
+    "Coffman's four conditions: mutual exclusion, hold-and-wait, no preemption, circular wait",
+    "Acquiring the mutex before the counting semaphore breaks the third and deadlocks the pair",
+    "Deadlock avoidance: the banker's algorithm grants only requests that leave a safe state"
+   ],
+   "lab": {
+    "title": "Interleaving simulator and the banker's algorithm",
+    "runtime": "python",
+    "minutes": 55,
+    "brief": "No threads. Each \"thread\" is a list of atomic operations, and *you* choose the\ninterleaving — which makes every run reproducible.\n\n## Part 1 — the bounded buffer\n\nAn operation is a tuple: `(\"wait\", name)`, `(\"signal\", name)`,\n`(\"insert\", item)` or `(\"remove\", None)`.\n\n**`new_state(capacity)`** — `{\"capacity\", \"buffer\": [], \"consumed\": [],\n\"sem\": {\"empty\": capacity, \"full\": 0, \"mutex\": 1}}`. `ValueError` when capacity\nis below 1.\n\n**`try_step(state, op)`** — perform one atomic operation. Returns `True` when it\ncompleted, `False` when a `wait` found its semaphore at zero (the semaphore is\n**not** decremented in that case). `insert` past the capacity raises\n`RuntimeError`, as does `remove` from an empty buffer — those are the invariant\nviolations the simulator exists to catch. An unknown kind raises `ValueError`.\n\n**`producer(items)` / `consumer(count)`** — build the standard programs:\n\n```text\nproducer, per item:  wait empty, wait mutex, insert, signal mutex, signal full\nconsumer, per item:  wait full,  wait mutex, remove, signal mutex, signal empty\n```\n\n**`bad_producer(items)`** — the same, with `wait mutex` moved in front of\n`wait empty`.\n\n**`run(state, programs, schedule, pcs=None)`** — execute the given interleaving.\n`programs` maps a thread name to its operation list, `schedule` is a list of\nthread names. Returns `(trace, pcs)`, where the trace holds\n`(tid, index, \"ran\" | \"blocked\" | \"done\")` per scheduled turn and `pcs` maps each\nthread to its next instruction. A blocked thread does not advance. An unknown\nthread name raises `ValueError`.\n\n**`round_robin(state, programs, max_rounds=1000)`** — cycle over the threads in\nsorted name order. Returns `(\"done\", trace)` when every program finishes,\n`(\"deadlock\", trace)` when a whole cycle passes with nothing advancing, and\n`(\"timeout\", trace)` if `max_rounds` runs out.\n\n## Part 2 — the banker's algorithm\n\nMatrices are lists of rows, one row per process.\n\n**`need(maximum, allocation)`** — the remaining-claim matrix.\n\n**`is_safe(available, maximum, allocation)`** — `(safe, order)`. Scan from\nprocess 0, take the first process whose need fits the work vector, release its\nallocation into the work vector, and **restart the scan from 0**. `order` is the\nsafe sequence found; it is partial when `safe` is `False`.\n\n**`request(available, maximum, allocation, pid, req)`** — `(granted, reason)`.\nA request above the declared claim, or a negative amount, raises `ValueError`.\nA request above what is available returns `(False, \"resources unavailable\")`.\nOtherwise grant it tentatively and test safety; deny with\n`\"would leave an unsafe state\"` if the pretend state is unsafe.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "def new_state(capacity):\n    \"\"\"Fresh bounded buffer with its three semaphores.\"\"\"\n    # your code here\n\n\ndef try_step(state, op):\n    \"\"\"One atomic operation. True if it ran, False if a wait blocked.\"\"\"\n    # your code here\n\n\ndef producer(items):\n    \"\"\"wait empty, wait mutex, insert, signal mutex, signal full — per item.\"\"\"\n    # your code here\n\n\ndef consumer(count):\n    \"\"\"wait full, wait mutex, remove, signal mutex, signal empty — per item.\"\"\"\n    # your code here\n\n\ndef bad_producer(items):\n    \"\"\"The producer with the two waits in the wrong order.\"\"\"\n    # your code here\n\n\ndef run(state, programs, schedule, pcs=None):\n    \"\"\"Execute one interleaving. Returns (trace, pcs).\"\"\"\n    # your code here\n\n\ndef round_robin(state, programs, max_rounds=1000):\n    \"\"\"Cycle the threads in sorted order. Returns (outcome, trace).\"\"\"\n    # your code here\n\n\ndef need(maximum, allocation):\n    \"\"\"maximum - allocation, elementwise.\"\"\"\n    # your code here\n\n\ndef is_safe(available, maximum, allocation):\n    \"\"\"(safe, order) from the banker's safety check.\"\"\"\n    # your code here\n\n\ndef request(available, maximum, allocation, pid, req):\n    \"\"\"(granted, reason) for one resource request.\"\"\"\n    # your code here\n\n\nAVAILABLE = [3, 3, 2]\nMAXIMUM = [[7, 5, 3], [3, 2, 2], [9, 0, 2], [2, 2, 2], [4, 3, 3]]\nALLOCATION = [[0, 1, 0], [2, 0, 0], [3, 0, 2], [2, 1, 1], [0, 0, 2]]\n\nprint(round_robin(new_state(2), {\"P\": producer([\"a\", \"b\"]), \"C\": consumer(2)})[0])\nprint(is_safe(AVAILABLE, MAXIMUM, ALLOCATION))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "def new_state(capacity):\n    \"\"\"Fresh bounded buffer with its three semaphores.\"\"\"\n    if capacity < 1:\n        raise ValueError(\"capacity must be at least 1\")\n    return {\"capacity\": capacity, \"buffer\": [], \"consumed\": [],\n            \"sem\": {\"empty\": capacity, \"full\": 0, \"mutex\": 1}}\n\n\ndef try_step(state, op):\n    \"\"\"One atomic operation. True if it ran, False if a wait blocked.\"\"\"\n    kind = op[0]\n    if kind == \"wait\":\n        if state[\"sem\"][op[1]] > 0:\n            state[\"sem\"][op[1]] -= 1\n            return True\n        return False                      # blocked: nothing is consumed\n    if kind == \"signal\":\n        state[\"sem\"][op[1]] += 1\n        return True\n    if kind == \"insert\":\n        if len(state[\"buffer\"]) >= state[\"capacity\"]:\n            raise RuntimeError(\"buffer overflow — a producer wrote past the capacity\")\n        state[\"buffer\"].append(op[1])\n        return True\n    if kind == \"remove\":\n        if not state[\"buffer\"]:\n            raise RuntimeError(\"buffer underflow — a consumer read an empty buffer\")\n        state[\"consumed\"].append(state[\"buffer\"].pop(0))\n        return True\n    raise ValueError(f\"unknown operation {kind!r}\")\n\n\ndef producer(items):\n    \"\"\"wait empty, wait mutex, insert, signal mutex, signal full — per item.\"\"\"\n    ops = []\n    for item in items:\n        ops += [(\"wait\", \"empty\"), (\"wait\", \"mutex\"), (\"insert\", item),\n                (\"signal\", \"mutex\"), (\"signal\", \"full\")]\n    return ops\n\n\ndef consumer(count):\n    \"\"\"wait full, wait mutex, remove, signal mutex, signal empty — per item.\"\"\"\n    ops = []\n    for _ in range(count):\n        ops += [(\"wait\", \"full\"), (\"wait\", \"mutex\"), (\"remove\", None),\n                (\"signal\", \"mutex\"), (\"signal\", \"empty\")]\n    return ops\n\n\ndef bad_producer(items):\n    \"\"\"The producer with the two waits in the wrong order.\"\"\"\n    ops = []\n    for item in items:\n        ops += [(\"wait\", \"mutex\"), (\"wait\", \"empty\"), (\"insert\", item),\n                (\"signal\", \"mutex\"), (\"signal\", \"full\")]\n    return ops\n\n\ndef run(state, programs, schedule, pcs=None):\n    \"\"\"Execute one interleaving. Returns (trace, pcs).\"\"\"\n    pcs = {tid: 0 for tid in programs} if pcs is None else dict(pcs)\n    trace = []\n    for tid in schedule:\n        if tid not in programs:\n            raise ValueError(f\"schedule names unknown thread {tid!r}\")\n        pc = pcs[tid]\n        if pc >= len(programs[tid]):\n            trace.append((tid, pc, \"done\"))\n            continue\n        if try_step(state, programs[tid][pc]):\n            trace.append((tid, pc, \"ran\"))\n            pcs[tid] = pc + 1\n        else:\n            trace.append((tid, pc, \"blocked\"))\n    return trace, pcs\n\n\ndef round_robin(state, programs, max_rounds=1000):\n    \"\"\"Cycle the threads in sorted order. Returns (outcome, trace).\"\"\"\n    order = sorted(programs)\n    pcs = {tid: 0 for tid in programs}\n    trace = []\n    for _ in range(max_rounds):\n        if all(pcs[tid] >= len(programs[tid]) for tid in order):\n            return \"done\", trace\n        cycle, new_pcs = run(state, programs, order, pcs)\n        trace.extend(cycle)\n        if new_pcs == pcs:                # a whole cycle with no progress\n            return \"deadlock\", trace\n        pcs = new_pcs\n    return \"timeout\", trace\n\n\ndef need(maximum, allocation):\n    \"\"\"maximum - allocation, elementwise.\"\"\"\n    return [[maximum[i][j] - allocation[i][j] for j in range(len(maximum[i]))]\n            for i in range(len(maximum))]\n\n\ndef is_safe(available, maximum, allocation):\n    \"\"\"(safe, order) from the banker's safety check.\"\"\"\n    remaining = need(maximum, allocation)\n    work = list(available)\n    finished = [False] * len(maximum)\n    order = []\n    progress = True\n    while progress:\n        progress = False\n        for i in range(len(maximum)):\n            if finished[i]:\n                continue\n            if all(remaining[i][j] <= work[j] for j in range(len(work))):\n                for j in range(len(work)):\n                    work[j] += allocation[i][j]\n                finished[i] = True\n                order.append(i)\n                progress = True\n                break                     # restart the scan from process 0\n    return all(finished), order\n\n\ndef request(available, maximum, allocation, pid, req):\n    \"\"\"(granted, reason) for one resource request.\"\"\"\n    remaining = need(maximum, allocation)\n    if any(r < 0 for r in req):\n        raise ValueError(\"a request cannot be negative\")\n    if any(req[j] > remaining[pid][j] for j in range(len(req))):\n        raise ValueError(f\"process {pid} asked for more than its declared maximum\")\n    if any(req[j] > available[j] for j in range(len(req))):\n        return False, \"resources unavailable\"\n    pretend_available = [available[j] - req[j] for j in range(len(req))]\n    pretend_allocation = [list(row) for row in allocation]\n    for j in range(len(req)):\n        pretend_allocation[pid][j] += req[j]\n    safe, _ = is_safe(pretend_available, maximum, pretend_allocation)\n    return (True, \"granted\") if safe else (False, \"would leave an unsafe state\")\n\n\nAVAILABLE = [3, 3, 2]\nMAXIMUM = [[7, 5, 3], [3, 2, 2], [9, 0, 2], [2, 2, 2], [4, 3, 3]]\nALLOCATION = [[0, 1, 0], [2, 0, 0], [3, 0, 2], [2, 1, 1], [0, 0, 2]]\n\nprint(round_robin(new_state(2), {\"P\": producer([\"a\", \"b\"]), \"C\": consumer(2)})[0])\nprint(is_safe(AVAILABLE, MAXIMUM, ALLOCATION))\n"
+     }
+    ],
+    "hints": [
+     "`try_step` is the whole synchronisation model: a `wait` that finds zero must return False *without* touching the counter, otherwise the semaphore leaks.",
+     "`run` should never advance the program counter of a blocked thread — that is precisely what makes the deadlock visible.",
+     "`round_robin` detects deadlock by comparing the program counters before and after a full cycle: identical means nothing can move.",
+     "In `is_safe`, `break` out of the scan after each success so the next scan starts at process 0 again; that is what makes the safe sequence deterministic."
+    ],
+    "tests": [
+     {
+      "name": "Semaphores block instead of going negative",
+      "code": "_s = new_state(2)\nassert _s[\"sem\"] == {\"empty\": 2, \"full\": 0, \"mutex\": 1}, f\"Initial semaphores: {_s['sem']!r}\"\nassert try_step(_s, (\"wait\", \"full\")) is False, \"wait on a zero semaphore must return False\"\nassert _s[\"sem\"][\"full\"] == 0, \"A blocked wait must leave the counter alone, not go negative\"\nassert try_step(_s, (\"wait\", \"empty\")) is True and _s[\"sem\"][\"empty\"] == 1\ntry:\n    new_state(0)\n    assert False, \"new_state(0) should raise ValueError\"\nexcept ValueError:\n    pass\ntry:\n    try_step(_s, (\"frobnicate\", \"empty\"))\n    assert False, \"An unknown operation should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "The buffer invariants are enforced",
+      "code": "_s = new_state(1)\ntry_step(_s, (\"insert\", \"a\"))\ntry:\n    try_step(_s, (\"insert\", \"b\"))\n    assert False, \"Inserting past the capacity should raise RuntimeError\"\nexcept RuntimeError:\n    pass\ntry_step(_s, (\"remove\", None))\nassert _s[\"consumed\"] == [\"a\"], f\"consumed is {_s['consumed']!r}, expected ['a']\"\ntry:\n    try_step(_s, (\"remove\", None))\n    assert False, \"Removing from an empty buffer should raise RuntimeError\"\nexcept RuntimeError:\n    pass"
+     },
+     {
+      "name": "A hand-picked interleaving runs and blocks",
+      "code": "_s = new_state(1)\n_progs = {\"P\": producer([\"a\"]), \"C\": consumer(1)}\n_trace, _pcs = run(_s, _progs, [\"C\", \"P\", \"P\", \"P\"])\nassert _trace[0] == (\"C\", 0, \"blocked\"), f\"First turn was {_trace[0]!r}; C must block on full=0\"\nassert _pcs[\"C\"] == 0, \"A blocked thread does not advance its program counter\"\nassert _pcs[\"P\"] == 3 and _s[\"buffer\"] == [\"a\"], f\"P reached {_pcs['P']}, buffer {_s['buffer']!r}\"\n_trace2, _pcs2 = run(_s, _progs, [\"P\", \"P\", \"C\"], _pcs)\nassert _trace2[-1] == (\"C\", 0, \"blocked\") or _pcs2[\"C\"] == 1, \"C may proceed once full is signalled\"\ntry:\n    run(_s, _progs, [\"Q\"])\n    assert False, \"An unknown thread name should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "The correct programs always terminate",
+      "code": "for _cap in (1, 2, 5):\n    _s = new_state(_cap)\n    _outcome, _trace = round_robin(_s, {\"P\": producer([\"a\", \"b\", \"c\"]), \"C\": consumer(3)})\n    assert _outcome == \"done\", f\"capacity {_cap}: round_robin returned {_outcome!r}\"\n    assert _s[\"consumed\"] == [\"a\", \"b\", \"c\"], f\"capacity {_cap}: consumed {_s['consumed']!r}\"\n    assert _s[\"buffer\"] == [], \"Everything produced was consumed, so the buffer ends empty\"\n    assert _s[\"sem\"] == {\"empty\": _cap, \"full\": 0, \"mutex\": 1}, \\\n        f\"capacity {_cap}: semaphores ended at {_s['sem']!r}, they should be back where they started\""
+     },
+     {
+      "name": "The wrong wait order deadlocks",
+      "code": "_s = new_state(1)\n_outcome, _trace = round_robin(_s, {\"P\": bad_producer([\"a\", \"b\"]), \"C\": consumer(2)})\nassert _outcome == \"deadlock\", f\"round_robin returned {_outcome!r}, expected 'deadlock'\"\nassert _s[\"sem\"][\"mutex\"] == 0, \"The producer is holding the mutex while it waits for a free slot\"\nassert _s[\"buffer\"] == [\"a\"], f\"The buffer is full at one item: {_s['buffer']!r}\"\nassert _trace[-1][2] == \"blocked\" and _trace[-2][2] == \"blocked\", \\\n    \"The final cycle should show every thread blocked\""
+     },
+     {
+      "name": "The safety check finds the safe sequence",
+      "code": "_safe, _order = is_safe(AVAILABLE, MAXIMUM, ALLOCATION)\nassert _safe is True, \"The textbook state is safe\"\nassert _order == [1, 3, 0, 2, 4], f\"Safe sequence was {_order!r}, expected [1, 3, 0, 2, 4]\"\nassert need(MAXIMUM, ALLOCATION)[0] == [7, 4, 3], \\\n    f\"need row 0 is {need(MAXIMUM, ALLOCATION)[0]!r}, expected [7, 4, 3]\"\n_unsafe, _partial = is_safe([0, 0, 0], [[2, 2, 2], [2, 2, 2]], [[1, 0, 0], [0, 1, 0]])\nassert _unsafe is False, \"Nothing available and both processes still needing resources is unsafe\"\nassert _partial == [], f\"No process could finish, so the order is empty, got {_partial!r}\""
+     },
+     {
+      "name": "Requests are granted only when the state stays safe",
+      "code": "assert request(AVAILABLE, MAXIMUM, ALLOCATION, 1, [1, 0, 2]) == (True, \"granted\"), \\\n    f\"P1 asking for [1,0,2] should be granted, got {request(AVAILABLE, MAXIMUM, ALLOCATION, 1, [1, 0, 2])!r}\"\n_g, _why = request(AVAILABLE, MAXIMUM, ALLOCATION, 4, [3, 3, 0])\nassert _g is False and _why == \"would leave an unsafe state\", f\"P4 request gave {(_g, _why)!r}\"\nassert request(AVAILABLE, MAXIMUM, ALLOCATION, 0, [7, 4, 3]) == (False, \"resources unavailable\"), \\\n    \"A request larger than what is on hand must wait, not be refused outright\"\ntry:\n    request(AVAILABLE, MAXIMUM, ALLOCATION, 1, [9, 0, 0])\n    assert False, \"Asking above the declared maximum should raise ValueError\"\nexcept ValueError:\n    pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "File systems and storage allocation",
+   "summary": "An inode, a free list, and the fragmentation that block allocation leaves behind.",
+   "concepts": [
+    "The inode holds metadata and block pointers; the directory maps a name to an inode",
+    "Contiguous, linked and indexed allocation, and the trade-off each one makes",
+    "Free-space management: bitmap versus free list, and the cost of each operation",
+    "Internal fragmentation is the slack in the last block; external fragmentation is scattered free space",
+    "A file's blocks become non-contiguous when writers interleave — the seek cost of that on rotating media",
+    "Deletion returns blocks to the free list; only that makes reuse possible",
+    "Failing an allocation atomically: check the space first, so a full disk leaves no half-written file"
+   ],
+   "lab": {
+    "title": "An inode allocator with a free list",
+    "runtime": "python",
+    "minutes": 50,
+    "brief": "Build a block-structured file system in memory. The disk is `nblocks` blocks of\n`block_size` bytes; content is plain text, one character per byte.\n\n`FileSystem(nblocks, block_size=8)` starts with every block free and no files.\n`ValueError` if either argument is below 1.\n\n- `create(name)` — a fresh inode `{\"name\", \"size\": 0, \"blocks\": []}`, returned.\n  `FileExistsError` if the name is taken.\n- `append(name, data)` — write `data` at the end of the file. Fill the slack in\n  the current last block first, then take new blocks from the free list,\n  **lowest block number first**. `FileNotFoundError` for an unknown name.\n  If the free list cannot cover the write, raise `OSError` and change **nothing** —\n  no partial write, no leaked block.\n- `read(name)` — the file's whole content as one string.\n- `delete(name)` — return every block to the free list (kept sorted) and drop the\n  inode. `FileNotFoundError` for an unknown name.\n- `stats()` — a dict:\n\n```python\n{\"blocks_total\", \"blocks_used\", \"blocks_free\", \"files\",\n \"internal_fragmentation\",   # bytes of slack in the last block of every file\n \"fragmented_files\"}         # files whose block numbers are not consecutive\n```\n\nA 20-byte file on 8-byte blocks occupies three blocks and wastes four bytes.\nTwo files appended in turn interleave their blocks, and `fragmented_files`\ncounts the result.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import bisect\n\n\nclass FileSystem:\n    \"\"\"A block-structured file system with inodes and a sorted free list.\"\"\"\n\n    def __init__(self, nblocks, block_size=8):\n        if nblocks < 1 or block_size < 1:\n            raise ValueError(\"nblocks and block_size must both be positive\")\n        self.nblocks = nblocks\n        self.block_size = block_size\n        self.blocks = [\"\"] * nblocks       # the platter\n        self.free = list(range(nblocks))   # sorted free list\n        self.inodes = {}                   # name -> inode dict\n\n    def create(self, name):\n        \"\"\"A new empty inode. FileExistsError when the name is taken.\"\"\"\n        # your code here\n\n    def append(self, name, data):\n        \"\"\"Write data at the end of the file, or raise OSError and change nothing.\"\"\"\n        # your code here\n\n    def read(self, name):\n        \"\"\"The whole file as one string.\"\"\"\n        # your code here\n\n    def delete(self, name):\n        \"\"\"Free every block and drop the inode.\"\"\"\n        # your code here\n\n    def stats(self):\n        \"\"\"Usage and fragmentation counters.\"\"\"\n        # your code here\n\n\nfs = FileSystem(16, block_size=8)\nfs.create(\"notes\")\nfs.append(\"notes\", \"x\" * 20)\nprint(fs.read(\"notes\"))\nprint(fs.stats())\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import bisect\n\n\nclass FileSystem:\n    \"\"\"A block-structured file system with inodes and a sorted free list.\"\"\"\n\n    def __init__(self, nblocks, block_size=8):\n        if nblocks < 1 or block_size < 1:\n            raise ValueError(\"nblocks and block_size must both be positive\")\n        self.nblocks = nblocks\n        self.block_size = block_size\n        self.blocks = [\"\"] * nblocks       # the platter\n        self.free = list(range(nblocks))   # sorted free list\n        self.inodes = {}                   # name -> inode dict\n\n    def _inode(self, name):\n        if name not in self.inodes:\n            raise FileNotFoundError(f\"no such file: {name}\")\n        return self.inodes[name]\n\n    def create(self, name):\n        \"\"\"A new empty inode. FileExistsError when the name is taken.\"\"\"\n        if name in self.inodes:\n            raise FileExistsError(f\"file already exists: {name}\")\n        self.inodes[name] = {\"name\": name, \"size\": 0, \"blocks\": []}\n        return self.inodes[name]\n\n    def append(self, name, data):\n        \"\"\"Write data at the end of the file, or raise OSError and change nothing.\"\"\"\n        inode = self._inode(name)\n        slack = len(inode[\"blocks\"]) * self.block_size - inode[\"size\"]\n        overflow = max(0, len(data) - slack)\n        # ceiling division without importing math\n        needed = -(-overflow // self.block_size)\n        if needed > len(self.free):\n            raise OSError(\"no space left on device\")\n        position = inode[\"size\"]\n        for char in data:\n            index = position // self.block_size\n            if index >= len(inode[\"blocks\"]):\n                inode[\"blocks\"].append(self.free.pop(0))\n            self.blocks[inode[\"blocks\"][index]] += char\n            position += 1\n        inode[\"size\"] = position\n        return len(data)\n\n    def read(self, name):\n        \"\"\"The whole file as one string.\"\"\"\n        inode = self._inode(name)\n        return \"\".join(self.blocks[b] for b in inode[\"blocks\"])\n\n    def delete(self, name):\n        \"\"\"Free every block and drop the inode.\"\"\"\n        inode = self._inode(name)\n        for block in inode[\"blocks\"]:\n            self.blocks[block] = \"\"\n            bisect.insort(self.free, block)   # the free list stays sorted\n        del self.inodes[name]\n\n    @staticmethod\n    def _contiguous(blocks):\n        return all(blocks[i + 1] == blocks[i] + 1 for i in range(len(blocks) - 1))\n\n    def stats(self):\n        \"\"\"Usage and fragmentation counters.\"\"\"\n        used = sum(len(i[\"blocks\"]) for i in self.inodes.values())\n        internal = sum(len(i[\"blocks\"]) * self.block_size - i[\"size\"]\n                       for i in self.inodes.values())\n        fragmented = sum(1 for i in self.inodes.values()\n                         if not self._contiguous(i[\"blocks\"]))\n        return {\"blocks_total\": self.nblocks, \"blocks_used\": used,\n                \"blocks_free\": len(self.free), \"files\": len(self.inodes),\n                \"internal_fragmentation\": internal, \"fragmented_files\": fragmented}\n\n\nfs = FileSystem(16, block_size=8)\nfs.create(\"notes\")\nfs.append(\"notes\", \"x\" * 20)\nprint(fs.read(\"notes\"))\nprint(fs.stats())\n"
+     }
+    ],
+    "hints": [
+     "The slack in the last block is `len(blocks) * block_size - size`; only the bytes beyond that need new blocks.",
+     "`-(-overflow // self.block_size)` is ceiling division with no import.",
+     "Check `needed > len(self.free)` *before* writing a single character — that is what makes a failed append atomic.",
+     "`bisect.insort(self.free, block)` puts a freed block back in order, so the next allocation still takes the lowest number."
+    ],
+    "tests": [
+     {
+      "name": "Create, append, read back",
+      "code": "_fs = FileSystem(16, block_size=8)\n_fs.create(\"a\")\nassert _fs.read(\"a\") == \"\", \"A fresh file is empty\"\n_fs.append(\"a\", \"hello world\")\nassert _fs.read(\"a\") == \"hello world\", f\"read gave {_fs.read('a')!r}\"\n_fs.append(\"a\", \"!!\")\nassert _fs.read(\"a\") == \"hello world!!\", f\"read gave {_fs.read('a')!r} after the second append\"\nassert _fs.inodes[\"a\"][\"size\"] == 13, f\"size is {_fs.inodes['a']['size']!r}, expected 13\""
+     },
+     {
+      "name": "Blocks are allocated lowest first, and slack is reused",
+      "code": "_fs = FileSystem(8, block_size=4)\n_fs.create(\"a\")\n_fs.append(\"a\", \"ab\")\nassert _fs.inodes[\"a\"][\"blocks\"] == [0], f\"blocks are {_fs.inodes['a']['blocks']!r}, expected [0]\"\n_fs.append(\"a\", \"cd\")\nassert _fs.inodes[\"a\"][\"blocks\"] == [0], \"Two spare bytes remained in block 0 — fill them first\"\n_fs.append(\"a\", \"e\")\nassert _fs.inodes[\"a\"][\"blocks\"] == [0, 1], f\"blocks are {_fs.inodes['a']['blocks']!r}\"\nassert _fs.read(\"a\") == \"abcde\", f\"read gave {_fs.read('a')!r}\""
+     },
+     {
+      "name": "Errors on unknown and duplicate names",
+      "code": "_fs = FileSystem(8, block_size=4)\n_fs.create(\"a\")\ntry:\n    _fs.create(\"a\")\n    assert False, \"Creating an existing name should raise FileExistsError\"\nexcept FileExistsError:\n    pass\nfor _call in (lambda: _fs.read(\"ghost\"), lambda: _fs.append(\"ghost\", \"x\"),\n              lambda: _fs.delete(\"ghost\")):\n    try:\n        _call()\n        assert False, \"Operating on a missing file should raise FileNotFoundError\"\n    except FileNotFoundError:\n        pass\nfor _bad in ((0, 4), (4, 0), (-1, 4)):\n    try:\n        FileSystem(*_bad)\n        assert False, f\"FileSystem{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "Deleting returns blocks to the free list in order",
+      "code": "_fs = FileSystem(8, block_size=4)\n_fs.create(\"a\"); _fs.append(\"a\", \"aaaa\")\n_fs.create(\"b\"); _fs.append(\"b\", \"bbbb\")\n_fs.create(\"c\"); _fs.append(\"c\", \"cccc\")\nassert _fs.free == [3, 4, 5, 6, 7], f\"free list is {_fs.free!r}\"\n_fs.delete(\"b\")\nassert _fs.free == [1, 3, 4, 5, 6, 7], f\"free list after deleting b is {_fs.free!r} — keep it sorted\"\nassert \"b\" not in _fs.inodes, \"The inode goes too\"\n_fs.create(\"d\"); _fs.append(\"d\", \"dddd\")\nassert _fs.inodes[\"d\"][\"blocks\"] == [1], \"The freed block is the lowest, so it is reused first\"\nassert _fs.read(\"a\") == \"aaaa\" and _fs.read(\"c\") == \"cccc\", \"The other files are untouched\""
+     },
+     {
+      "name": "A full disk fails atomically",
+      "code": "_fs = FileSystem(2, block_size=4)\n_fs.create(\"a\")\n_fs.append(\"a\", \"xxxxxxxx\")\nassert _fs.free == [], \"Both blocks are taken\"\ntry:\n    _fs.append(\"a\", \"y\")\n    assert False, \"Appending to a full disk should raise OSError\"\nexcept OSError:\n    pass\nassert _fs.read(\"a\") == \"xxxxxxxx\", f\"The failed append changed the file: {_fs.read('a')!r}\"\nassert _fs.inodes[\"a\"][\"size\"] == 8 and _fs.inodes[\"a\"][\"blocks\"] == [0, 1], \\\n    \"A failed append must leave the inode exactly as it was\""
+     },
+     {
+      "name": "Internal fragmentation is the slack in the last block",
+      "code": "_fs = FileSystem(16, block_size=8)\n_fs.create(\"notes\")\n_fs.append(\"notes\", \"x\" * 20)\n_s = _fs.stats()\nassert _s[\"blocks_used\"] == 3, f\"20 bytes over 8-byte blocks needs 3 blocks, got {_s['blocks_used']}\"\nassert _s[\"internal_fragmentation\"] == 4, \\\n    f\"internal_fragmentation is {_s['internal_fragmentation']}, expected 4\"\nassert _s[\"blocks_free\"] == 13 and _s[\"blocks_total\"] == 16, f\"stats: {_s!r}\"\nassert FileSystem(4, block_size=4).stats()[\"internal_fragmentation\"] == 0, \\\n    \"An empty file system wastes nothing\""
+     },
+     {
+      "name": "Interleaved writers fragment their files",
+      "code": "_fs = FileSystem(16, block_size=4)\nfor _name in (\"a\", \"b\"):\n    _fs.create(_name)\nfor _round in range(2):\n    _fs.append(\"a\", \"aaaa\")\n    _fs.append(\"b\", \"bbbb\")\nassert _fs.inodes[\"a\"][\"blocks\"] == [0, 2], f\"a holds {_fs.inodes['a']['blocks']!r}\"\nassert _fs.inodes[\"b\"][\"blocks\"] == [1, 3], f\"b holds {_fs.inodes['b']['blocks']!r}\"\nassert _fs.stats()[\"fragmented_files\"] == 2, \\\n    f\"fragmented_files is {_fs.stats()['fragmented_files']}, expected 2\"\n_fs.create(\"c\")\n_fs.append(\"c\", \"cccccccc\")\nassert _fs.stats()[\"fragmented_files\"] == 2, \"c got blocks 4 and 5, which are consecutive\"\nassert _fs.read(\"a\") == \"aaaaaaaa\" and _fs.read(\"b\") == \"bbbbbbbb\", \"Content survives fragmentation\""
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "Capstone — a miniature kernel simulator",
+  "brief": "The four labs become one kernel. `kernel.py` holds the machinery and is what the\nchecks import; `main.py` boots a small workload and prints the trace.\n\nA process is a list of operations, executed in order:\n\n```python\n(\"compute\", n)          # n ticks of user-mode work\n(\"mem\", page)           # one reference to virtual page `page`\n(\"write\", name, data)   # a syscall appending to a file\n(\"read\", name)          # a syscall reading a file\n```\n\n## `MemoryManager(frames)`\n\nA single global frame table shared by every process, so a frame holds the pair\n`(pid, page)`. `ValueError` when `frames < 1`.\n\n`access(pid, page)` returns `(fault, frame_index)`. A hit refreshes recency. A\nmiss takes the lowest free frame if there is one, otherwise evicts the least\nrecently used frame, ties going to the lowest index. It counts faults in\n`self.faults`.\n\n## `FileStore()`\n\n`write(name, data)` appends and returns the byte count. `read(name)` returns the\ncontent or raises `FileNotFoundError`.\n\n## `Kernel(frames=3, quantum=2)`\n\n`ValueError` when the quantum is below 1. `spawn(pid, program)` registers a\nprocess in arrival order and raises `ValueError` on a duplicate pid.\n\n`run()` is round robin over a ready queue seeded with the spawn order. On each\ndispatch the process gets at most `quantum` ticks:\n\n- `compute` burns ticks; a burst longer than the remaining quantum is **split**,\n  and the rest resumes on the next dispatch. `n < 1` raises `ValueError`.\n- `mem` costs one tick. A **page fault yields the CPU immediately** — the process\n  goes to the back of the queue as though it had blocked on the disk.\n- `write` and `read` each cost one tick and also yield. A read of a missing file\n  is logged and the process carries on; the kernel does not crash on a bad\n  syscall.\n- An unknown operation raises `ValueError`.\n\nA process whose program is exhausted logs `EXIT`; otherwise it logs `PREEMPT`\nand rejoins the queue.\n\nEvery event appends one line to `self.trace`, formatted\n`f\"{tick:>4} {pid} {event}\"`, with events `DISPATCH`, `COMPUTE n`,\n`MEMHIT page p in frame f`, `PAGEFAULT page p -> frame f`,\n`SYSCALL write name`, `SYSCALL read name (n bytes)`,\n`SYSCALL read name ENOENT`, `PREEMPT`, `EXIT`.\n\n`run()` returns the report:\n\n```python\n{\"ticks\", \"switches\", \"completed\": {pid: tick}, \"faults\": {pid: count},\n \"page_faults\", \"trace\": [...]}\n```\n\n## Suggested order\n\n`MemoryManager` and `FileStore` first — both are testable on their own. Then the\ndispatch loop with `compute` only, then `mem`, then the two syscalls, and the\ntrace formatting last.",
+  "deliverables": [
+   "`kernel.py` — `MemoryManager`, `FileStore` and `Kernel`, importable with no side effects",
+   "A global LRU frame table keyed by `(pid, page)`, with its own fault counter",
+   "A round-robin dispatcher that splits an over-long compute burst across dispatches",
+   "Page faults and syscalls that yield the CPU, so the trace shows real interleaving",
+   "A tick-stamped trace log that accounts for every tick the kernel charged",
+   "`main.py` — a demo workload, the printed trace, and the summary report"
+  ],
+  "constraints": [
+   "Standard library only; `collections.deque` is the one import you need",
+   "`kernel.py` defines classes only — importing it must print nothing",
+   "No global mutable state: two `Kernel` objects must not share memory, files or traces",
+   "A failed syscall is logged and survived, never raised out of `run()`",
+   "The tick counter only ever advances by the cost of work actually performed"
+  ],
+  "rubric": [
+   {
+    "criterion": "Correctness of the simulation",
+    "weight": 40,
+    "evidence": "Every automated check passes, including the exact tick, switch and fault counts for the reference workload."
+   },
+   {
+    "criterion": "Replacement policy",
+    "weight": 20,
+    "evidence": "MemoryManager reproduces textbook LRU fault counts standalone, prefers free frames, and breaks ties on the lowest index."
+   },
+   {
+    "criterion": "Scheduling and preemption",
+    "weight": 20,
+    "evidence": "Long bursts split across dispatches, faults and syscalls yield, and the ready queue preserves round-robin order."
+   },
+   {
+    "criterion": "Trace and reporting",
+    "weight": 12,
+    "evidence": "Trace lines carry the tick, pid and event in the stated format, and the report totals agree with the trace."
+   },
+   {
+    "criterion": "Robustness",
+    "weight": 8,
+    "evidence": "Bad quanta, duplicate pids, unknown operations and missing files are handled exactly as specified."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 300,
+  "files": [
+   {
+    "name": "kernel.py",
+    "content": "from collections import deque\n\n\nclass MemoryManager:\n    \"\"\"A global LRU frame table. A frame holds the pair (pid, page).\"\"\"\n\n    def __init__(self, frames):\n        if frames < 1:\n            raise ValueError(\"need at least one frame\")\n        self.nframes = frames\n        self.frames = [None] * frames\n        self.used_at = [-1] * frames\n        self.clock = 0\n        self.faults = 0\n\n    def access(self, pid, page):\n        \"\"\"Reference one page. Returns (fault, frame_index).\"\"\"\n        # your code here\n\n\nclass FileStore:\n    \"\"\"A flat namespace of append-only text files.\"\"\"\n\n    def __init__(self):\n        self.files = {}\n\n    def write(self, name, data):\n        \"\"\"Append data, returning how many bytes were written.\"\"\"\n        # your code here\n\n    def read(self, name):\n        \"\"\"The file content, or FileNotFoundError.\"\"\"\n        # your code here\n\n\nclass Kernel:\n    \"\"\"Round-robin dispatcher over paged processes that make syscalls.\"\"\"\n\n    def __init__(self, frames=3, quantum=2):\n        if quantum < 1:\n            raise ValueError(\"quantum must be at least one tick\")\n        self.memory = MemoryManager(frames)\n        self.files = FileStore()\n        self.quantum = quantum\n        self.procs = {}\n        self.order = []\n        self.trace = []\n        self.tick = 0\n        self.switches = 0\n\n    def log(self, pid, event):\n        \"\"\"Append one tick-stamped trace line.\"\"\"\n        self.trace.append(f\"{self.tick:>4} {pid} {event}\")\n\n    def spawn(self, pid, program):\n        \"\"\"Register a process. ValueError on a duplicate pid.\"\"\"\n        # your code here\n\n    def run(self):\n        \"\"\"Dispatch until every process has exited. Returns the report.\"\"\"\n        # your code here\n\n    def report(self):\n        \"\"\"Totals for the whole run.\"\"\"\n        # your code here\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from kernel import Kernel\n\nk = Kernel(frames=2, quantum=2)\nk.spawn(\"P1\", [(\"compute\", 3), (\"mem\", 0), (\"write\", \"log\", \"started\")])\nk.spawn(\"P2\", [(\"mem\", 0), (\"mem\", 1), (\"read\", \"log\")])\n\nresult = k.run()\nfor line in result[\"trace\"]:\n    print(line)\nprint(result[\"ticks\"], \"ticks,\", result[\"switches\"], \"dispatches,\",\n      result[\"page_faults\"], \"page faults\")\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "kernel.py",
+    "content": "from collections import deque\n\n\nclass MemoryManager:\n    \"\"\"A global LRU frame table. A frame holds the pair (pid, page).\"\"\"\n\n    def __init__(self, frames):\n        if frames < 1:\n            raise ValueError(\"need at least one frame\")\n        self.nframes = frames\n        self.frames = [None] * frames\n        self.used_at = [-1] * frames\n        self.clock = 0\n        self.faults = 0\n\n    def access(self, pid, page):\n        \"\"\"Reference one page. Returns (fault, frame_index).\"\"\"\n        self.clock += 1\n        key = (pid, page)\n        for i, held in enumerate(self.frames):\n            if held == key:\n                self.used_at[i] = self.clock       # a hit refreshes recency\n                return False, i\n        victim = None\n        for i, held in enumerate(self.frames):     # free frames first\n            if held is None:\n                victim = i\n                break\n        if victim is None:                         # otherwise the LRU frame\n            victim = min(range(self.nframes), key=lambda i: (self.used_at[i], i))\n        self.frames[victim] = key\n        self.used_at[victim] = self.clock\n        self.faults += 1\n        return True, victim\n\n\nclass FileStore:\n    \"\"\"A flat namespace of append-only text files.\"\"\"\n\n    def __init__(self):\n        self.files = {}\n\n    def write(self, name, data):\n        \"\"\"Append data, returning how many bytes were written.\"\"\"\n        self.files[name] = self.files.get(name, \"\") + data\n        return len(data)\n\n    def read(self, name):\n        \"\"\"The file content, or FileNotFoundError.\"\"\"\n        if name not in self.files:\n            raise FileNotFoundError(f\"no such file: {name}\")\n        return self.files[name]\n\n\nclass Kernel:\n    \"\"\"Round-robin dispatcher over paged processes that make syscalls.\"\"\"\n\n    def __init__(self, frames=3, quantum=2):\n        if quantum < 1:\n            raise ValueError(\"quantum must be at least one tick\")\n        self.memory = MemoryManager(frames)\n        self.files = FileStore()\n        self.quantum = quantum\n        self.procs = {}\n        self.order = []\n        self.trace = []\n        self.tick = 0\n        self.switches = 0\n\n    def log(self, pid, event):\n        \"\"\"Append one tick-stamped trace line.\"\"\"\n        self.trace.append(f\"{self.tick:>4} {pid} {event}\")\n\n    def spawn(self, pid, program):\n        \"\"\"Register a process. ValueError on a duplicate pid.\"\"\"\n        if pid in self.procs:\n            raise ValueError(f\"pid {pid!r} already exists\")\n        self.procs[pid] = {\"pid\": pid, \"program\": list(program), \"pc\": 0,\n                           \"left\": None, \"faults\": 0, \"finished\": None}\n        self.order.append(pid)\n        return self.procs[pid]\n\n    def _step(self, proc, budget):\n        \"\"\"Run one operation. Returns (ticks_spent, yielded).\"\"\"\n        pid = proc[\"pid\"]\n        op = proc[\"program\"][proc[\"pc\"]]\n        kind = op[0]\n\n        if kind == \"compute\":\n            if proc[\"left\"] is None:\n                if op[1] < 1:\n                    raise ValueError(\"compute needs a positive tick count\")\n                proc[\"left\"] = op[1]\n            spent = min(budget, proc[\"left\"])\n            self.tick += spent\n            proc[\"left\"] -= spent\n            self.log(pid, f\"COMPUTE {spent}\")\n            if proc[\"left\"] == 0:               # burst finished, move on\n                proc[\"left\"] = None\n                proc[\"pc\"] += 1\n            return spent, False\n\n        if kind == \"mem\":\n            fault, frame = self.memory.access(pid, op[1])\n            self.tick += 1\n            proc[\"pc\"] += 1\n            if fault:\n                proc[\"faults\"] += 1\n                self.log(pid, f\"PAGEFAULT page {op[1]} -> frame {frame}\")\n                return 1, True                  # a fault blocks on the disk\n            self.log(pid, f\"MEMHIT page {op[1]} in frame {frame}\")\n            return 1, False\n\n        if kind == \"write\":\n            self.files.write(op[1], op[2])\n            self.tick += 1\n            proc[\"pc\"] += 1\n            self.log(pid, f\"SYSCALL write {op[1]}\")\n            return 1, True\n\n        if kind == \"read\":\n            self.tick += 1\n            proc[\"pc\"] += 1\n            try:\n                data = self.files.read(op[1])\n            except FileNotFoundError:\n                self.log(pid, f\"SYSCALL read {op[1]} ENOENT\")\n            else:\n                self.log(pid, f\"SYSCALL read {op[1]} ({len(data)} bytes)\")\n            return 1, True\n\n        raise ValueError(f\"unknown operation {kind!r}\")\n\n    def run(self):\n        \"\"\"Dispatch until every process has exited. Returns the report.\"\"\"\n        ready = deque(self.order)\n        while ready:\n            pid = ready.popleft()\n            proc = self.procs[pid]\n            self.switches += 1\n            self.log(pid, \"DISPATCH\")\n            budget = self.quantum\n            while budget > 0 and proc[\"pc\"] < len(proc[\"program\"]):\n                spent, yielded = self._step(proc, budget)\n                budget -= spent\n                if yielded:\n                    break\n            if proc[\"pc\"] >= len(proc[\"program\"]):\n                proc[\"finished\"] = self.tick\n                self.log(pid, \"EXIT\")\n            else:\n                self.log(pid, \"PREEMPT\")\n                ready.append(pid)\n        return self.report()\n\n    def report(self):\n        \"\"\"Totals for the whole run.\"\"\"\n        return {\"ticks\": self.tick,\n                \"switches\": self.switches,\n                \"completed\": {pid: self.procs[pid][\"finished\"] for pid in self.order},\n                \"faults\": {pid: self.procs[pid][\"faults\"] for pid in self.order},\n                \"page_faults\": self.memory.faults,\n                \"trace\": list(self.trace)}\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from kernel import Kernel\n\nk = Kernel(frames=2, quantum=2)\nk.spawn(\"P1\", [(\"compute\", 3), (\"mem\", 0), (\"write\", \"log\", \"started\")])\nk.spawn(\"P2\", [(\"mem\", 0), (\"mem\", 1), (\"read\", \"log\")])\n\nresult = k.run()\nfor line in result[\"trace\"]:\n    print(line)\nprint(result[\"ticks\"], \"ticks,\", result[\"switches\"], \"dispatches,\",\n      result[\"page_faults\"], \"page faults\")\nprint(\"completed:\", result[\"completed\"])\n"
+   }
+  ],
+  "hints": [
+   "Keep one dict per process: program, pc, and `left` — the ticks still owed by a half-finished compute burst. `left is None` means the next burst has not started.",
+   "The dispatch loop has two exits: the quantum ran out (PREEMPT) or the program ran out (EXIT). Decide by looking at the pc after the loop, not inside it.",
+   "A yielding operation (fault, read, write) should `break` out of the inner loop with the pc already advanced, so the process resumes at the next operation.",
+   "`min(range(self.nframes), key=lambda i: (self.used_at[i], i))` gives the LRU victim with the lowest-index tie-break in one line."
+  ],
+  "tests": [
+   {
+    "name": "MemoryManager fills free frames before evicting",
+    "code": "from kernel import MemoryManager\n_m = MemoryManager(3)\nassert _m.access(\"P\", 7) == (True, 0), f\"First access gave {_m.access('P', 7)!r}\"\n_m2 = MemoryManager(3)\nassert _m2.access(\"P\", 7) == (True, 0)\nassert _m2.access(\"P\", 8) == (True, 1), \"The second page takes the next free frame\"\nassert _m2.access(\"P\", 7) == (False, 0), \"Page 7 is still resident, so this is a hit\"\nassert _m2.faults == 2, f\"faults is {_m2.faults}, expected 2\"\ntry:\n    MemoryManager(0)\n    assert False, \"MemoryManager(0) should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "MemoryManager reproduces textbook LRU",
+    "code": "from kernel import MemoryManager\n_m = MemoryManager(3)\nfor _page in [1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5]:\n    _m.access(\"P\", _page)\nassert _m.faults == 10, f\"LRU with 3 frames faulted {_m.faults} times, expected 10\"\n_m4 = MemoryManager(4)\nfor _page in [1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5]:\n    _m4.access(\"P\", _page)\nassert _m4.faults == 8, f\"LRU with 4 frames faulted {_m4.faults} times, expected 8\""
+   },
+   {
+    "name": "Frames are keyed by process as well as page",
+    "code": "from kernel import MemoryManager\n_m = MemoryManager(2)\nassert _m.access(\"P1\", 0)[0] is True\nassert _m.access(\"P2\", 0)[0] is True, \"Page 0 of another process is a different frame\"\nassert _m.access(\"P1\", 0) == (False, 0), \"P1's page 0 is still in frame 0\""
+   },
+   {
+    "name": "FileStore appends and reports missing files",
+    "code": "from kernel import FileStore\n_f = FileStore()\nassert _f.write(\"log\", \"abc\") == 3, \"write returns the byte count\"\n_f.write(\"log\", \"de\")\nassert _f.read(\"log\") == \"abcde\", f\"read gave {_f.read('log')!r}\"\ntry:\n    _f.read(\"ghost\")\n    assert False, \"Reading a missing file should raise FileNotFoundError\"\nexcept FileNotFoundError:\n    pass"
+   },
+   {
+    "name": "The kernel rejects bad configuration",
+    "code": "from kernel import Kernel\nfor _bad in (0, -2):\n    try:\n        Kernel(frames=2, quantum=_bad)\n        assert False, f\"Kernel(quantum={_bad}) should raise ValueError\"\n    except ValueError:\n        pass\n_k = Kernel(frames=2, quantum=2)\n_k.spawn(\"A\", [(\"compute\", 1)])\ntry:\n    _k.spawn(\"A\", [(\"compute\", 1)])\n    assert False, \"A duplicate pid should raise ValueError\"\nexcept ValueError:\n    pass\nassert Kernel(frames=1, quantum=1).run()[\"ticks\"] == 0, \"No processes means no ticks\""
+   },
+   {
+    "name": "A long burst is split across dispatches",
+    "code": "from kernel import Kernel\n_k = Kernel(frames=2, quantum=2)\n_k.spawn(\"A\", [(\"compute\", 5)])\n_r = _k.run()\nassert _r[\"ticks\"] == 5, f\"ticks is {_r['ticks']}, expected 5\"\nassert _r[\"switches\"] == 3, f\"A 5-tick burst at quantum 2 needs 3 dispatches, got {_r['switches']}\"\nassert _r[\"completed\"] == {\"A\": 5}, f\"completed is {_r['completed']!r}\"\nassert [l for l in _r[\"trace\"] if \"COMPUTE\" in l] == \\\n    [\"   2 A COMPUTE 2\", \"   4 A COMPUTE 2\", \"   5 A COMPUTE 1\"], \\\n    f\"COMPUTE lines were {[l for l in _r['trace'] if 'COMPUTE' in l]!r}\""
+   },
+   {
+    "name": "Faults and syscalls yield the CPU",
+    "code": "from kernel import Kernel\n_k = Kernel(frames=2, quantum=2)\n_k.spawn(\"P1\", [(\"compute\", 3), (\"mem\", 0)])\n_k.spawn(\"P2\", [(\"mem\", 0), (\"compute\", 1)])\n_r = _k.run()\nassert _r[\"ticks\"] == 6, f\"ticks is {_r['ticks']}, expected 6\"\nassert _r[\"switches\"] == 4, f\"switches is {_r['switches']}, expected 4\"\nassert _r[\"completed\"] == {\"P1\": 5, \"P2\": 6}, f\"completed is {_r['completed']!r}\"\nassert _r[\"faults\"] == {\"P1\": 1, \"P2\": 1}, f\"faults is {_r['faults']!r}\"\nassert _r[\"page_faults\"] == 2, f\"page_faults is {_r['page_faults']}\""
+   },
+   {
+    "name": "Trace lines are tick-stamped and complete",
+    "code": "from kernel import Kernel\n_k = Kernel(frames=2, quantum=2)\n_k.spawn(\"P1\", [(\"compute\", 3), (\"mem\", 0)])\n_k.spawn(\"P2\", [(\"mem\", 0), (\"compute\", 1)])\n_r = _k.run()\nassert _r[\"trace\"][0] == \"   0 P1 DISPATCH\", f\"First line is {_r['trace'][0]!r}\"\nassert sum(1 for l in _r[\"trace\"] if l.endswith(\"DISPATCH\")) == _r[\"switches\"], \\\n    \"There is exactly one DISPATCH line per dispatch\"\nassert sum(1 for l in _r[\"trace\"] if l.endswith(\"EXIT\")) == 2, \"Both processes must log EXIT\"\nassert any(\"PAGEFAULT page 0 -> frame 0\" in l for l in _r[\"trace\"]), \\\n    f\"Expected a PAGEFAULT line, trace was {_r['trace']!r}\"\nassert any(l.endswith(\"PREEMPT\") for l in _r[\"trace\"]), \"P1 is preempted by the quantum\""
+   },
+   {
+    "name": "Syscalls reach the file store",
+    "code": "from kernel import Kernel\n_k = Kernel(frames=2, quantum=3)\n_k.spawn(\"W\", [(\"write\", \"log\", \"hello\"), (\"write\", \"log\", \"!\")])\n_k.spawn(\"R\", [(\"read\", \"log\"), (\"read\", \"ghost\")])\n_r = _k.run()\nassert _k.files.read(\"log\") == \"hello!\", f\"The file holds {_k.files.read('log')!r}\"\nassert any(\"SYSCALL read log\" in l for l in _r[\"trace\"]), \"The read syscall should be logged\"\nassert any(\"ENOENT\" in l for l in _r[\"trace\"]), \\\n    \"Reading a missing file is logged as ENOENT, not raised\"\nassert _r[\"completed\"][\"R\"] is not None, \"A failed syscall must not stop the process\""
+   },
+   {
+    "name": "An unknown operation is refused",
+    "code": "from kernel import Kernel\n_k = Kernel(frames=2, quantum=2)\n_k.spawn(\"A\", [(\"teleport\", 3)])\ntry:\n    _k.run()\n    assert False, \"An unknown operation should raise ValueError\"\nexcept ValueError:\n    pass\n_k2 = Kernel(frames=2, quantum=2)\n_k2.spawn(\"A\", [(\"compute\", 0)])\ntry:\n    _k2.run()\n    assert False, \"A compute burst of 0 ticks should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "Kernels are independent and import-clean",
+    "code": "from kernel import Kernel\n_a = Kernel(frames=2, quantum=2)\n_a.spawn(\"X\", [(\"mem\", 0)])\n_a.run()\n_b = Kernel(frames=2, quantum=2)\nassert _b.trace == [] and _b.tick == 0, \"A second Kernel starts empty\"\nassert _b.memory.faults == 0, \"Two kernels must not share a frame table\"\nassert _b.files.files == {}, \"Two kernels must not share a file store\"\n_src = open(\"kernel.py\").read()\nassert \"print(\" not in _src, \"kernel.py defines classes; the printing belongs in main.py\""
+   },
+   {
+    "name": "The demo in main.py runs and reports",
+    "code": "assert \"ticks\" in _out and \"dispatches\" in _out, \\\n    f\"main.py should print the summary line; stdout was {_out!r}\"\nassert \"DISPATCH\" in _out, \"main.py should print the trace\""
+   }
+  ]
+ }
+}

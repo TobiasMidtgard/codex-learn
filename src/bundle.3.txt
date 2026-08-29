@@ -1,0 +1,1293 @@
+@@ be-1-1
+## Client, server, and the conversation between them
+
+Every backend does the same job: receive a **request**, do some work, send back a **response**. HTTP is the protocol both sides agree on.
+
+A request has four parts:
+
+```text
+POST /todos HTTP/1.1              <- method and path
+Host: api.example.com             <- headers: metadata
+Content-Type: application/json
+                                  <- blank line
+{"title": "Order brake pads"}     <- body (optional)
+```
+
+A response mirrors it:
+
+```text
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{"id": 7, "title": "Order brake pads", "done": false}
+```
+
+The server keeps no memory of the conversation between requests — HTTP is **stateless**. Anything that must survive between requests lives in a database, a session store, or the token the client sends along.
+
+## Methods: the verbs
+
+| Method | Meaning | Body? | Safe to retry? |
+|---|---|---|---|
+| `GET` | read data | no | yes |
+| `POST` | create something new | yes | no — retrying creates duplicates |
+| `PUT` | replace something entirely | yes | yes |
+| `PATCH` | change part of something | yes | usually |
+| `DELETE` | remove something | no | yes |
+
+"Safe to retry" is called **idempotency**: sending the same `DELETE /todos/7` twice leaves the world in the same state.
+
+## Status codes: the one-glance answer
+
+| Code | Meaning | When |
+|---|---|---|
+| `200 OK` | here's your data | successful reads and updates |
+| `201 Created` | made it | successful `POST` |
+| `204 No Content` | done, nothing to say | successful `DELETE` |
+| `301` / `302` | it moved | redirects |
+| `400 Bad Request` | your request makes no sense | validation failures |
+| `401 Unauthorized` | who are you? | missing/bad credentials |
+| `403 Forbidden` | I know who you are — no | permissions |
+| `404 Not Found` | no such thing | wrong path or id |
+| `405 Method Not Allowed` | not that verb here | `DELETE /todos` on a collection |
+| `409 Conflict` | can't, current state forbids it | buying more stock than exists |
+| `500 Internal Server Error` | we crashed | your bug, not theirs |
+
+Rule of thumb: **4xx — the client got it wrong. 5xx — the server did.**
+
+## REST: naming things sensibly
+
+REST is a set of conventions for shaping URLs and verbs around **resources** (nouns), not actions:
+
+```text
+GET    /books           list books
+POST   /books           create a book
+GET    /books/42        one book
+PUT    /books/42        replace it
+DELETE /books/42        remove it
+GET    /books?author=le+guin&sort=title     filtering via query string
+```
+
+Not `GET /getBooks` or `POST /deleteBook` — the verb is already in the method.
+
+Path parameters (`/books/42`) identify a resource; query parameters (`?author=…`) filter or modify a listing.
+
+## JSON in, JSON out
+
+Modern APIs speak JSON both ways, declared with `Content-Type: application/json`. Try one from a terminal:
+
+```bash
+curl -X POST https://api.example.com/todos \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Order brake pads"}'
+```
+
+> You'll build exactly this shape of API in the next task — first as a plain Python function, so nothing hides how requests map to responses. Frameworks come later; they wrap this pattern, they don't replace it.
+
+@@ be-1-3.md
+Build the request handler for a to-do API — no framework, just the logic. Implement `handle_request(method, path, body=None)` returning a `(status, data)` tuple.
+
+The module-level list `TODOS` is the "database"; `next_id()` gives you ids. Each todo is a dict: `{"id": 1, "title": "...", "done": False}`.
+
+## Routes
+
+- `GET /todos` → `(200, [all todos])`
+- `POST /todos` with `body {"title": "..."}` → append `{"id", "title", "done": False}`, return `(201, the_new_todo)`. Missing/empty title → `(400, {"error": "title is required"})`
+- `GET /todos/<id>` → `(200, todo)` or `(404, {"error": "not found"})`
+- `PATCH /todos/<id>` with `body {"done": True}` → update `done`, return `(200, todo)`, or 404
+- `DELETE /todos/<id>` → remove it, return `(204, None)`, or 404
+- Any other path → `(404, {"error": "not found"})`
+- A known path with an unsupported method → `(405, {"error": "method not allowed"})`
+
+Split the path with `path.split("/")` and remember: the id arrives as a string.
+
+@@ be-1-3.starter.main.py
+TODOS = []
+_id_counter = 0
+
+
+def next_id():
+    global _id_counter
+    _id_counter += 1
+    return _id_counter
+
+
+def handle_request(method, path, body=None):
+    """Return a (status, data) tuple for the to-do API."""
+    # your code here
+    return (404, {"error": "not found"})
+
+
+print(handle_request("POST", "/todos", {"title": "Order brake pads"}))
+print(handle_request("GET", "/todos"))
+
+@@ be-1-3.solution.main.py
+TODOS = []
+_id_counter = 0
+
+
+def next_id():
+    global _id_counter
+    _id_counter += 1
+    return _id_counter
+
+
+def find_todo(todo_id):
+    for todo in TODOS:
+        if todo["id"] == todo_id:
+            return todo
+    return None
+
+
+def handle_request(method, path, body=None):
+    """Return a (status, data) tuple for the to-do API."""
+    parts = [p for p in path.split("/") if p]
+
+    if parts == ["todos"]:
+        if method == "GET":
+            return (200, TODOS)
+        if method == "POST":
+            title = (body or {}).get("title")
+            if not title:
+                return (400, {"error": "title is required"})
+            todo = {"id": next_id(), "title": title, "done": False}
+            TODOS.append(todo)
+            return (201, todo)
+        return (405, {"error": "method not allowed"})
+
+    if len(parts) == 2 and parts[0] == "todos" and parts[1].isdigit():
+        todo = find_todo(int(parts[1]))
+        if todo is None:
+            return (404, {"error": "not found"})
+        if method == "GET":
+            return (200, todo)
+        if method == "PATCH":
+            if body and "done" in body:
+                todo["done"] = bool(body["done"])
+            return (200, todo)
+        if method == "DELETE":
+            TODOS.remove(todo)
+            return (204, None)
+        return (405, {"error": "method not allowed"})
+
+    return (404, {"error": "not found"})
+
+
+print(handle_request("POST", "/todos", {"title": "Order brake pads"}))
+print(handle_request("GET", "/todos"))
+
+@@ be-2-1
+## Why a database and not a file?
+
+A JSON file works until two requests write it at the same time, or it grows past what fits in memory, or you need "all orders from Oslo over 500 kr, newest first" without reading everything. Databases exist to make those things safe and fast: **transactions** (all-or-nothing changes), **indexes** (fast lookups), and a **query language** so the database does the searching.
+
+**SQLite** is a full SQL database in a single file, built into Python. It's what you'll use here, and it's genuinely what many production apps ship with.
+
+## Tables, rows, columns
+
+```sql
+CREATE TABLE customers (
+  id    INTEGER PRIMARY KEY,
+  name  TEXT NOT NULL,
+  city  TEXT
+);
+```
+
+A **primary key** uniquely identifies each row. Other tables point at it with a **foreign key** — `orders.customer_id` refers to `customers.id`. That link is what makes it *relational*.
+
+## The queries you'll write every week
+
+```sql
+INSERT INTO customers (name, city) VALUES ('Ada', 'Oslo');
+
+SELECT * FROM customers;
+SELECT name, city FROM customers WHERE city = 'Oslo';
+SELECT * FROM orders WHERE amount > 100 ORDER BY amount DESC LIMIT 5;
+
+UPDATE customers SET city = 'Bergen' WHERE id = 2;
+DELETE FROM orders WHERE id = 7;
+```
+
+`WHERE` filters rows, `ORDER BY … DESC` sorts, `LIMIT` caps. Without a `WHERE`, `UPDATE` and `DELETE` hit **every row** — the classic Friday-afternoon incident.
+
+## Aggregates: let the database count
+
+```sql
+SELECT COUNT(*) FROM orders;
+SELECT SUM(amount) FROM orders;
+SELECT city, SUM(amount) AS total
+FROM customers JOIN orders ON orders.customer_id = customers.id
+GROUP BY city
+ORDER BY total DESC;
+```
+
+`GROUP BY` collapses rows that share a value so aggregates run per group. `JOIN … ON` stitches two tables together where the keys match.
+
+## SQLite from Python
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")        # or "shop.db" for a real file
+conn.execute("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT, price REAL)")
+conn.execute("INSERT INTO items (name, price) VALUES (?, ?)", ("Jack", 899.0))
+conn.commit()
+
+rows = conn.execute("SELECT name, price FROM items WHERE price > ?", (100,)).fetchall()
+for name, price in rows:                  # each row is a tuple
+    print(name, price)
+
+one = conn.execute("SELECT COUNT(*) FROM items").fetchone()
+print(one[0])                             # fetchone() -> a single tuple or None
+```
+
+The `?` placeholders are **parameters** — the only correct way to put Python values into SQL. Never build queries with f-strings; the security module shows you exactly why.
+
+## Indexes, in one paragraph
+
+`CREATE INDEX idx_orders_customer ON orders(customer_id);` builds a lookup structure so filtering by that column stops being a full-table scan. Index the columns you search and join on; every index slightly slows writes, so don't index everything.
+
+> Real projects version their schema with **migrations** (numbered scripts that evolve the database) and often wrap SQL in an **ORM** like SQLAlchemy or Prisma. Learn raw SQL first — it's what the ORM generates, and what you'll read when things go slow.
+
+@@ be-2-2.md
+The starter builds an in-memory shop database with two tables and seed data:
+
+- `customers(id, name, city)`
+- `orders(id, customer_id, amount)`
+
+Write four functions — each one is a single SQL query plus a little Python:
+
+- **`total_revenue(conn)`** → the sum of all order amounts, as a float
+- **`orders_by_city(conn)`** → a list of `(city, total)` tuples, highest total first (`JOIN` + `GROUP BY`)
+- **`top_customers(conn, n)`** → the `n` customers with the highest order totals as `(name, total)`, highest first
+- **`add_order(conn, customer_id, amount)`** → inserts a row using `?` parameters and returns the new row's id (`cursor.lastrowid`)
+
+Let SQL do the sorting and summing — the checks don't accept the right numbers in the wrong order.
+
+> Heads-up: `sqlite3` loads on demand in this browser sandbox. The first Run may take a few extra seconds.
+
+@@ be-2-2.starter.main.py
+import sqlite3
+
+
+def setup(conn):
+    conn.executescript("""
+        CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT, city TEXT);
+        CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount REAL);
+        INSERT INTO customers VALUES
+            (1, 'Ada', 'Oslo'), (2, 'Linus', 'Bergen'),
+            (3, 'Grace', 'Oslo'), (4, 'Ken', 'Trondheim');
+        INSERT INTO orders (customer_id, amount) VALUES
+            (1, 120.0), (1, 80.0), (2, 300.0), (3, 50.0),
+            (3, 75.5), (4, 20.0), (2, 10.0);
+    """)
+
+
+def total_revenue(conn):
+    """Sum of all order amounts."""
+    pass
+
+
+def orders_by_city(conn):
+    """[(city, total), ...] highest total first."""
+    pass
+
+
+def top_customers(conn, n):
+    """[(name, total), ...] for the n biggest spenders, highest first."""
+    pass
+
+
+def add_order(conn, customer_id, amount):
+    """Insert an order with ? parameters; return the new id."""
+    pass
+
+
+conn = sqlite3.connect(":memory:")
+setup(conn)
+print("Revenue:", total_revenue(conn))
+print("By city:", orders_by_city(conn))
+print("Top 2:", top_customers(conn, 2))
+
+@@ be-2-2.solution.main.py
+import sqlite3
+
+
+def setup(conn):
+    conn.executescript("""
+        CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT, city TEXT);
+        CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, amount REAL);
+        INSERT INTO customers VALUES
+            (1, 'Ada', 'Oslo'), (2, 'Linus', 'Bergen'),
+            (3, 'Grace', 'Oslo'), (4, 'Ken', 'Trondheim');
+        INSERT INTO orders (customer_id, amount) VALUES
+            (1, 120.0), (1, 80.0), (2, 300.0), (3, 50.0),
+            (3, 75.5), (4, 20.0), (2, 10.0);
+    """)
+
+
+def total_revenue(conn):
+    """Sum of all order amounts."""
+    return conn.execute("SELECT SUM(amount) FROM orders").fetchone()[0]
+
+
+def orders_by_city(conn):
+    """[(city, total), ...] highest total first."""
+    return conn.execute("""
+        SELECT c.city, SUM(o.amount) AS total
+        FROM customers c JOIN orders o ON o.customer_id = c.id
+        GROUP BY c.city
+        ORDER BY total DESC
+    """).fetchall()
+
+
+def top_customers(conn, n):
+    """[(name, total), ...] for the n biggest spenders, highest first."""
+    return conn.execute("""
+        SELECT c.name, SUM(o.amount) AS total
+        FROM customers c JOIN orders o ON o.customer_id = c.id
+        GROUP BY c.id
+        ORDER BY total DESC
+        LIMIT ?
+    """, (n,)).fetchall()
+
+
+def add_order(conn, customer_id, amount):
+    """Insert an order with ? parameters; return the new id."""
+    cursor = conn.execute(
+        "INSERT INTO orders (customer_id, amount) VALUES (?, ?)",
+        (customer_id, amount),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+conn = sqlite3.connect(":memory:")
+setup(conn)
+print("Revenue:", total_revenue(conn))
+print("By city:", orders_by_city(conn))
+print("Top 2:", top_customers(conn, 2))
+
+@@ be-3-1
+## Rule zero: never store the password
+
+When someone registers, you must be able to *check* their password later without being able to *read* it. That's what a **hash** is: a one-way fingerprint. Same input → same hash; hash → input is computationally infeasible.
+
+```python
+import hashlib
+hashlib.sha256("hunter2".encode()).hexdigest()
+# 'f52fbd32b2b3b86ff88ef6c490628285f482af15ddcb29541f94bcf526a3f6c7'
+```
+
+Verification is: hash what they typed, compare fingerprints. If your database leaks, attackers get fingerprints, not passwords.
+
+## Salt: same password, different hash
+
+Without salt, everyone using `hunter2` shares a hash, and attackers use precomputed tables to reverse common ones. A **salt** is a random value stored *next to* the hash and mixed into it, so every user's hash is unique:
+
+```python
+import secrets
+salt = secrets.token_hex(16)                 # cryptographically random
+digest = hashlib.sha256((salt + password).encode()).hexdigest()
+stored = f"{salt}${digest}"                  # store both, e.g. "a41f…$9c2e…"
+```
+
+`secrets` is the random module for security; plain `random` is predictable.
+
+One more upgrade for production: sha256 is *fast*, and fast is bad here — attackers can try billions of guesses per second. Real systems use deliberately slow hashes: **bcrypt**, **argon2**, or `hashlib.pbkdf2_hmac`. The salt-and-verify structure you build in the next task is identical; only the hash function swaps out.
+
+## Sessions and tokens: staying logged in
+
+HTTP forgets you between requests, so after login the server hands the client something to show next time:
+
+- **Session cookie** — the server stores "session `a8f3` = user 42" and the browser sends the cookie automatically. Easy to revoke; server keeps state.
+- **Token (JWT)** — the server signs `{"user": 42, "exp": …}` into a token the client sends in an `Authorization: Bearer …` header. The server verifies the signature instead of looking anything up; stateless, but revocation is harder.
+
+Either way: **401** when credentials are missing or wrong, **403** when the user is known but not allowed.
+
+## SQL injection: the classic
+
+Build queries by gluing strings and users can rewrite your SQL:
+
+```python
+# NEVER do this
+conn.execute(f"SELECT * FROM users WHERE name = '{username}'")
+```
+
+If `username` is `' OR '1'='1`, the query becomes `WHERE name = '' OR '1'='1'` — true for every row. Log in as anyone; with a `;` they can do worse. The fix is the parameter placeholder, which sends the value *separately* from the SQL so it can never become code:
+
+```python
+conn.execute("SELECT * FROM users WHERE name = ?", (username,))
+```
+
+## The rest of the checklist
+
+- **Validate input** at the boundary: types, lengths, ranges. Reject with `400` and a clear error.
+- **XSS**: never insert user text into HTML with `innerHTML` — that's injection in the browser.
+- **HTTPS always** — otherwise passwords and cookies cross the network readable.
+- **Secrets in environment variables**, never in code or git.
+- **Rate-limit** login endpoints; attackers script them.
+
+@@ be-3-2.md
+Implement password storage the way the reading describes: salted hashes in a `salt$hash` string.
+
+- **`hash_password(password)`** → generate a random salt with `secrets.token_hex(16)`, compute `sha256(salt + password)` as hex, and return `"salt$hash"`.
+- **`verify_password(password, stored)`** → split `stored` on `"$"`, redo the hash with that salt, and return `True`/`False`.
+
+Because the salt is random, hashing the same password twice must give **different** strings — and neither may contain the password itself.
+
+@@ be-3-2.starter.main.py
+import hashlib
+import secrets
+
+
+def hash_password(password):
+    """Return 'salt$hash' with a fresh random salt."""
+    pass
+
+
+def verify_password(password, stored):
+    """True if password matches the stored 'salt$hash'."""
+    pass
+
+
+stored = hash_password("hunter2")
+print(stored)
+print(verify_password("hunter2", stored))
+print(verify_password("wrong", stored))
+
+@@ be-3-2.solution.main.py
+import hashlib
+import secrets
+
+
+def hash_password(password):
+    """Return 'salt$hash' with a fresh random salt."""
+    salt = secrets.token_hex(16)
+    digest = hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"{salt}${digest}"
+
+
+def verify_password(password, stored):
+    """True if password matches the stored 'salt$hash'."""
+    salt, expected = stored.split("$", 1)
+    digest = hashlib.sha256((salt + password).encode()).hexdigest()
+    return digest == expected
+
+
+stored = hash_password("hunter2")
+print(stored)
+print(verify_password("hunter2", stored))
+print(verify_password("wrong", stored))
+
+@@ be-3-3.md
+The starter contains a login lookup written the vulnerable way — an f-string gluing the username straight into SQL. The demo at the bottom shows the attack working: `' OR '1'='1` returns a user without knowing any name.
+
+Your job:
+
+- **`find_user(conn, username)`** — rewrite it with a `?` parameter. Return the `(name, email)` tuple for an exact match, or `None`. The injection string must come back as `None`.
+- **`create_user(conn, username, email)`** — insert with parameters. Raise `ValueError` if the username is empty/whitespace or the email doesn't contain `"@"`. Return the new row id.
+
+Don't loosen the checks by filtering quotes out of the input — parameters make escaping unnecessary.
+
+@@ be-3-3.starter.main.py
+import sqlite3
+
+
+def setup(conn):
+    conn.executescript("""
+        CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);
+        INSERT INTO users (name, email) VALUES
+            ('ada', 'ada@example.com'),
+            ('grace', 'grace@example.com');
+    """)
+
+
+def find_user(conn, username):
+    """VULNERABLE — rewrite with a ? parameter."""
+    query = f"SELECT name, email FROM users WHERE name = '{username}'"
+    return conn.execute(query).fetchone()
+
+
+def create_user(conn, username, email):
+    """Insert a user with parameters; validate first."""
+    pass
+
+
+conn = sqlite3.connect(":memory:")
+setup(conn)
+print(find_user(conn, "ada"))
+print("Injection returns:", find_user(conn, "' OR '1'='1"))   # should be None when fixed
+
+@@ be-3-3.solution.main.py
+import sqlite3
+
+
+def setup(conn):
+    conn.executescript("""
+        CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);
+        INSERT INTO users (name, email) VALUES
+            ('ada', 'ada@example.com'),
+            ('grace', 'grace@example.com');
+    """)
+
+
+def find_user(conn, username):
+    """Safe: the value travels separately from the SQL."""
+    return conn.execute(
+        "SELECT name, email FROM users WHERE name = ?", (username,)
+    ).fetchone()
+
+
+def create_user(conn, username, email):
+    """Insert a user with parameters; validate first."""
+    if not username or not username.strip():
+        raise ValueError("username is required")
+    if "@" not in email:
+        raise ValueError("invalid email")
+    cursor = conn.execute(
+        "INSERT INTO users (name, email) VALUES (?, ?)", (username, email)
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+conn = sqlite3.connect(":memory:")
+setup(conn)
+print(find_user(conn, "ada"))
+print("Injection returns:", find_user(conn, "' OR '1'='1"))
+
+@@ be-4-1
+## You already wrote a framework's core
+
+Your `handle_request(method, path, body)` from module 1 *is* what web frameworks do — they parse the raw HTTP for you, route to your function, and serialise your return value. Compare the same to-do API in two popular frameworks.
+
+## FastAPI (Python)
+
+```python
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+app = FastAPI()
+TODOS = []
+
+class TodoIn(BaseModel):
+    title: str
+
+@app.get("/todos")
+def list_todos():
+    return TODOS
+
+@app.post("/todos", status_code=201)
+def create_todo(todo: TodoIn):
+    new = {"id": len(TODOS) + 1, "title": todo.title, "done": False}
+    TODOS.append(new)
+    return new
+
+@app.get("/todos/{todo_id}")
+def get_todo(todo_id: int):
+    for t in TODOS:
+        if t["id"] == todo_id:
+            return t
+    raise HTTPException(404, "not found")
+```
+
+Run it with `uvicorn main:app --reload` and FastAPI also generates interactive docs at `/docs`. The `BaseModel` gives you validation for free: a request without `title` becomes a 422 before your code runs. (Flask is the older, smaller sibling — same idea, `@app.route("/todos")` and you handle validation yourself.)
+
+## Express (JavaScript / Node)
+
+```js
+const express = require("express");
+const app = express();
+app.use(express.json());
+
+const TODOS = [];
+
+app.get("/todos", (req, res) => res.json(TODOS));
+
+app.post("/todos", (req, res) => {
+  if (!req.body.title) return res.status(400).json({ error: "title is required" });
+  const todo = { id: TODOS.length + 1, title: req.body.title, done: false };
+  TODOS.push(todo);
+  res.status(201).json(todo);
+});
+
+app.listen(3000);
+```
+
+Same verbs, same status codes, same shape. Pick the language your team already writes.
+
+## What production adds around this
+
+- **Environment variables** for anything that differs between machines: `DATABASE_URL`, `SECRET_KEY`, `PORT`. Read them with `os.environ` / `process.env`; keep a `.env` file locally and out of git.
+- **Logging** — every request, every error, with timestamps. When something breaks at 02:00, logs are all you have.
+- **A health check** — a `GET /health` returning 200, so load balancers and uptime monitors know you're alive.
+- **A reverse proxy** (nginx, Caddy) or the platform's router terminates HTTPS in front of your app.
+- **Docker** wraps your app and its exact dependencies into an image that runs the same everywhere: a `Dockerfile` lists the steps (`FROM python:3.12`, `COPY`, `RUN pip install…`, `CMD`), and hosts run the image.
+- **Hosting** — platforms like Fly.io, Railway and Render take a repo or an image, set env vars in their dashboard, and give you a URL. Deployment is `git push`.
+
+> The capstone next: the module-1 handler pattern plus the module-2 database plus the module-3 validation — one API, cleanly split across files.
+
+@@ be-5-1.md
+A bookstore API backed by SQLite, split the way a real service is: `db.py` owns the schema, `api.py` owns the routing, `main.py` is just a demo run. The checks import from your modules and call `handle_request(conn, method, path, body)` directly.
+
+## `db.py`
+
+- **`init_db(conn)`** — creates table `books (id INTEGER PRIMARY KEY, title TEXT, author TEXT, price REAL, stock INTEGER)`. Safe to call twice (`CREATE TABLE IF NOT EXISTS`).
+
+## `api.py` — `handle_request(conn, method, path, body=None)` → `(status, data)`
+
+Books travel as dicts: `{"id", "title", "author", "price", "stock"}`.
+
+- `GET /books` → `(200, [...])` ordered by id
+- `GET /books?author=X` → only that author, case-insensitive exact match — **with a parameter, not string-gluing** (one check runs an injection string and expects an empty list)
+- `POST /books` → validate: `title` and `author` non-empty strings, `price` a number ≥ 0, `stock` an int ≥ 0. Valid → insert, `(201, book)`. Invalid → `(400, {"error": "..."})`
+- `GET /books/<id>` → `(200, book)` or `(404, {"error": "not found"})`
+- `PUT /books/<id>` → same validation, replace all four fields → `(200, book)` or 404
+- `DELETE /books/<id>` → `(204, None)` or 404
+- `POST /books/<id>/purchase` with `{"quantity": n}` (int ≥ 1, else 400) → if `stock < n` → `(409, {"error": "insufficient stock"})`, otherwise reduce stock and `(200, book)`
+- unknown path → 404, known path with wrong method → 405
+
+## Suggested order
+
+`init_db` → a `row_to_book` helper → `POST` + `GET /books` → `GET/PUT/DELETE /books/<id>` → the author filter → `purchase`. Write one tiny validation helper and use it from both `POST` and `PUT`.
+
+@@ be-5-1.starter.db.py
+def init_db(conn):
+    """Create the books table (idempotent)."""
+    pass
+
+@@ be-5-1.starter.api.py
+def row_to_book(row):
+    """(id, title, author, price, stock) -> dict."""
+    pass
+
+
+def validate(body):
+    """Return an error string, or None if the body is a valid book."""
+    pass
+
+
+def handle_request(conn, method, path, body=None):
+    """Route a request to the right SQL and return (status, data)."""
+    return (404, {"error": "not found"})
+
+@@ be-5-1.starter.main.py
+import sqlite3
+from db import init_db
+from api import handle_request
+
+conn = sqlite3.connect(":memory:")
+init_db(conn)
+
+print(handle_request(conn, "POST", "/books",
+                     {"title": "The Dispossessed", "author": "Le Guin",
+                      "price": 129.0, "stock": 3}))
+print(handle_request(conn, "GET", "/books"))
+
+@@ be-5-1.solution.db.py
+def init_db(conn):
+    """Create the books table (idempotent)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS books (
+            id INTEGER PRIMARY KEY,
+            title TEXT,
+            author TEXT,
+            price REAL,
+            stock INTEGER
+        )
+    """)
+    conn.commit()
+
+@@ be-5-1.solution.api.py
+def row_to_book(row):
+    """(id, title, author, price, stock) -> dict."""
+    return {
+        "id": row[0], "title": row[1], "author": row[2],
+        "price": row[3], "stock": row[4],
+    }
+
+
+def validate(body):
+    """Return an error string, or None if the body is a valid book."""
+    body = body or {}
+    title = body.get("title")
+    author = body.get("author")
+    price = body.get("price")
+    stock = body.get("stock")
+    if not isinstance(title, str) or not title.strip():
+        return "title is required"
+    if not isinstance(author, str) or not author.strip():
+        return "author is required"
+    if not isinstance(price, (int, float)) or isinstance(price, bool) or price < 0:
+        return "price must be a number >= 0"
+    if not isinstance(stock, int) or isinstance(stock, bool) or stock < 0:
+        return "stock must be an integer >= 0"
+    return None
+
+
+def get_book(conn, book_id):
+    row = conn.execute(
+        "SELECT id, title, author, price, stock FROM books WHERE id = ?",
+        (book_id,),
+    ).fetchone()
+    return row_to_book(row) if row else None
+
+
+def handle_request(conn, method, path, body=None):
+    """Route a request to the right SQL and return (status, data)."""
+    path, _, query = path.partition("?")
+    parts = [p for p in path.split("/") if p]
+
+    if parts == ["books"]:
+        if method == "GET":
+            if query.startswith("author="):
+                author = query[len("author="):].replace("+", " ")
+                rows = conn.execute(
+                    "SELECT id, title, author, price, stock FROM books "
+                    "WHERE LOWER(author) = LOWER(?) ORDER BY id",
+                    (author,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, title, author, price, stock FROM books ORDER BY id"
+                ).fetchall()
+            return (200, [row_to_book(r) for r in rows])
+        if method == "POST":
+            error = validate(body)
+            if error:
+                return (400, {"error": error})
+            cursor = conn.execute(
+                "INSERT INTO books (title, author, price, stock) VALUES (?, ?, ?, ?)",
+                (body["title"], body["author"], body["price"], body["stock"]),
+            )
+            conn.commit()
+            return (201, get_book(conn, cursor.lastrowid))
+        return (405, {"error": "method not allowed"})
+
+    if len(parts) >= 2 and parts[0] == "books" and parts[1].isdigit():
+        book_id = int(parts[1])
+        book = get_book(conn, book_id)
+
+        if len(parts) == 3 and parts[2] == "purchase" and method == "POST":
+            if book is None:
+                return (404, {"error": "not found"})
+            quantity = (body or {}).get("quantity")
+            if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity < 1:
+                return (400, {"error": "quantity must be an integer >= 1"})
+            if book["stock"] < quantity:
+                return (409, {"error": "insufficient stock"})
+            conn.execute(
+                "UPDATE books SET stock = stock - ? WHERE id = ?",
+                (quantity, book_id),
+            )
+            conn.commit()
+            return (200, get_book(conn, book_id))
+
+        if len(parts) == 2:
+            if book is None:
+                return (404, {"error": "not found"})
+            if method == "GET":
+                return (200, book)
+            if method == "PUT":
+                error = validate(body)
+                if error:
+                    return (400, {"error": error})
+                conn.execute(
+                    "UPDATE books SET title = ?, author = ?, price = ?, stock = ? "
+                    "WHERE id = ?",
+                    (body["title"], body["author"], body["price"], body["stock"], book_id),
+                )
+                conn.commit()
+                return (200, get_book(conn, book_id))
+            if method == "DELETE":
+                conn.execute("DELETE FROM books WHERE id = ?", (book_id,))
+                conn.commit()
+                return (204, None)
+            return (405, {"error": "method not allowed"})
+
+    return (404, {"error": "not found"})
+
+@@ be-5-1.solution.main.py
+import sqlite3
+from db import init_db
+from api import handle_request
+
+conn = sqlite3.connect(":memory:")
+init_db(conn)
+
+print(handle_request(conn, "POST", "/books",
+                     {"title": "The Dispossessed", "author": "Le Guin",
+                      "price": 129.0, "stock": 3}))
+print(handle_request(conn, "GET", "/books"))
+print(handle_request(conn, "POST", "/books/1/purchase", {"quantity": 2}))
+print(handle_request(conn, "GET", "/books/1"))
+
+@@ cs-1-1
+## Counting the work, not the seconds
+
+Two correct programs can differ absurdly in speed. **Big O** notation describes how the amount of work grows as the input grows — the shape of the cost, ignoring constants.
+
+| Growth | Name | Feel at n = 1,000,000 |
+|---|---|---|
+| `O(1)` | constant | instant, always |
+| `O(log n)` | logarithmic | ~20 steps |
+| `O(n)` | linear | a million steps — fine |
+| `O(n log n)` | linearithmic | ~20 million — still fine |
+| `O(n²)` | quadratic | a trillion — minutes to hours |
+| `O(2ⁿ)` | exponential | forget it past n ≈ 40 |
+
+## Reading code for its shape
+
+```python
+def total(prices):            # O(n): one pass
+    result = 0
+    for p in prices:
+        result += p
+    return result
+
+def has_duplicate(items):     # O(n²): a pass inside a pass
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            if items[i] == items[j]:
+                return True
+    return False
+
+def has_duplicate_fast(items):   # O(n): one pass + O(1) set lookups
+    seen = set()
+    for item in items:
+        if item in seen:
+            return True
+        seen.add(item)
+    return False
+```
+
+A loop over the input is `O(n)`. A loop *inside* a loop over the same input is `O(n²)`. Halving the problem each step — like binary search — is `O(log n)`.
+
+## The lookup table every Python dev carries around
+
+| Operation | Cost |
+|---|---|
+| `my_list[i]`, `my_list.append(x)` | O(1) |
+| `x in my_list`, `my_list.remove(x)` | O(n) — scans |
+| `x in my_set`, `my_dict[key]` | O(1) — hashed |
+| `my_list.insert(0, x)` | O(n) — shifts everything |
+| `sorted(my_list)` | O(n log n) |
+
+The single most common real-world fix: a membership test inside a loop using a **list** (`O(n²)` overall) rewritten with a **set** (`O(n)`). Same code shape, thousand-fold speedup.
+
+## Space counts too
+
+`seen = set()` above trades `O(n)` extra memory for the speed. Most optimisations are exactly this trade; name it when you make it.
+
+> Big O is a ceiling for *growth*, not a stopwatch. For n = 10, the "slow" version is often faster and clearer. Reach for the analysis when inputs can get big — which, in real systems, they eventually do.
+
+@@ cs-1-2.md
+Implement **binary search**: find `target` in a **sorted** list by repeatedly halving the search window.
+
+**`binary_search(items, target)`** returns the index of `target`, or `-1` if it's absent.
+
+Keep two pointers, `low` and `high`. Look at the middle element: too small → search the right half; too big → the left half; equal → done. Loop while `low <= high`.
+
+One of the checks searches a list of 100,000 numbers through a wrapper that counts how many elements you look at — a linear scan reads thousands, binary search reads at most 17. Write it iteratively (no recursion needed).
+
+@@ cs-1-2.starter.main.py
+def binary_search(items, target):
+    """Return the index of target in the sorted list, or -1."""
+    low = 0
+    high = len(items) - 1
+    # your code here
+    return -1
+
+
+print(binary_search([1, 3, 5, 7, 9, 11], 7))    # 3
+print(binary_search([1, 3, 5, 7, 9, 11], 4))    # -1
+
+@@ cs-1-2.solution.main.py
+def binary_search(items, target):
+    """Return the index of target in the sorted list, or -1."""
+    low = 0
+    high = len(items) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        value = items[mid]
+        if value == target:
+            return mid
+        if value < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return -1
+
+
+print(binary_search([1, 3, 5, 7, 9, 11], 7))    # 3
+print(binary_search([1, 3, 5, 7, 9, 11], 4))    # -1
+
+@@ cs-1-3
+## Stack: last in, first out
+
+A stack is a pile — you only touch the top. Python lists already are one:
+
+```python
+stack = []
+stack.append("a")     # push
+stack.append("b")
+top = stack.pop()     # "b" — pop returns the most recent
+```
+
+Undo history, the browser's back button, matching brackets, and the *call stack* your functions live on — all stacks. When you see "most recent thing first", think stack.
+
+## Queue: first in, first out
+
+A queue is a line at the till. `list.pop(0)` works but is O(n); use `deque`:
+
+```python
+from collections import deque
+queue = deque()
+queue.append("first")        # join the back
+queue.append("second")
+next_up = queue.popleft()    # "first" — O(1)
+```
+
+Print jobs, message processing, breadth-first search. "Fairness / arrival order" → queue.
+
+## Hash maps: why dict is O(1)
+
+A dict runs the key through a **hash function** to compute *where* the value sits, so lookup doesn't scan — it jumps. That's why `in` on a dict or set is O(1) while `in` on a list is O(n), and why keys must be immutable (strings, numbers, tuples — not lists).
+
+```python
+index = {}
+for i, word in enumerate(words):
+    index.setdefault(word, []).append(i)   # word -> every position it appears
+```
+
+Grouping, counting, caching, de-duplicating: hash maps are the answer to most "make it faster" questions.
+
+## Recursion: functions that call themselves
+
+A recursive function solves a problem by solving a smaller version of it, until the version is trivial.
+
+```python
+def countdown(n):
+    if n == 0:            # base case: where it stops
+        print("Lift off")
+        return
+    print(n)
+    countdown(n - 1)      # recursive case: smaller problem
+```
+
+Two rules: there must be a **base case**, and every call must move **toward** it. Miss either and you get `RecursionError: maximum recursion depth exceeded` — the call stack's polite version of an infinite loop.
+
+Recursion shines on recursive *data*: trees, nested folders, JSON of unknown depth.
+
+## Memoization: don't solve the same subproblem twice
+
+Naive recursive Fibonacci recomputes the same values exponentially many times:
+
+```python
+def fib(n):                      # O(2^n) — fib(35) already crawls
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+```
+
+Cache results and it collapses to O(n):
+
+```python
+from functools import lru_cache
+
+@lru_cache(maxsize=None)
+def fib(n):
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+```
+
+Or skip recursion entirely and iterate with two variables. You'll do both in the next tasks — and *measure* the difference.
+
+@@ cs-1-4.md
+The classic stack exercise, and a real one — editors, linters and compilers all do this.
+
+**`is_balanced(text)`** returns `True` if every bracket in the string is properly opened and closed in the right order. Brackets: `()`, `[]`, `{}`. All other characters are ignored.
+
+| Input | Result | Why |
+|---|---|---|
+| `"(a[b]{c})"` | `True` | every bracket nests cleanly |
+| `"(]"` | `False` | wrong closer |
+| `"(()"` | `False` | one never closes |
+| `")("` | `False` | closes before opening |
+| `"no brackets"` | `True` | nothing to balance |
+
+Walk the string once. Push openers on a stack; on a closer, the top of the stack must be its partner — pop it. At the end the stack must be empty.
+
+@@ cs-1-4.starter.main.py
+def is_balanced(text):
+    """True if all (), [] and {} in text are balanced."""
+    pairs = {")": "(", "]": "[", "}": "{"}
+    stack = []
+    # your code here
+    return True
+
+
+print(is_balanced("(a[b]{c})"))   # True
+print(is_balanced("(]"))          # False
+
+@@ cs-1-4.solution.main.py
+def is_balanced(text):
+    """True if all (), [] and {} in text are balanced."""
+    pairs = {")": "(", "]": "[", "}": "{"}
+    stack = []
+    for char in text:
+        if char in "([{":
+            stack.append(char)
+        elif char in pairs:
+            if not stack or stack[-1] != pairs[char]:
+                return False
+            stack.pop()
+    return len(stack) == 0
+
+
+print(is_balanced("(a[b]{c})"))   # True
+print(is_balanced("(]"))          # False
+
+@@ cs-1-5.md
+Write Fibonacci twice and feel the difference. (`fib(0) = 0`, `fib(1) = 1`, then each number is the sum of the previous two.)
+
+- **`fib_naive(n)`** — the direct recursive version from the reading. Correct, and exponentially slow.
+- **`fib(n)`** — a fast version: iterate with two variables, or memoize with `@lru_cache`. It must handle `fib(90)` (a 19-digit number) instantly — one check times it and fails anything slower than half a second.
+
+The starter times both on `n = 25` so you can watch the gap. Try raising the naive one to 32 and watch it crawl; don't go much past that in a browser tab.
+
+@@ cs-1-5.starter.main.py
+import time
+
+
+def fib_naive(n):
+    """Recursive definition, no caching. O(2^n)."""
+    pass
+
+
+def fib(n):
+    """Fast version: iterative or memoized. O(n)."""
+    pass
+
+
+start = time.time()
+print("fib_naive(25) =", fib_naive(25))
+print(f"  took {time.time() - start:.3f}s")
+
+start = time.time()
+print("fib(90) =", fib(90))
+print(f"  took {time.time() - start:.4f}s")
+
+@@ cs-1-5.solution.main.py
+import time
+
+
+def fib_naive(n):
+    """Recursive definition, no caching. O(2^n)."""
+    if n < 2:
+        return n
+    return fib_naive(n - 1) + fib_naive(n - 2)
+
+
+def fib(n):
+    """Fast version: iterative. O(n)."""
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+
+
+start = time.time()
+print("fib_naive(25) =", fib_naive(25))
+print(f"  took {time.time() - start:.3f}s")
+
+start = time.time()
+print("fib(90) =", fib(90))
+print(f"  took {time.time() - start:.4f}s")
+
+@@ tools-1-1
+## Git: a save system for projects
+
+Git records snapshots (**commits**) of your whole project, with a message, an author and a timestamp. You can look back, compare, undo, and work on parallel versions without copying folders around.
+
+```bash
+git init                      # turn this folder into a repository (once)
+git status                    # what changed since the last commit?
+git add inventory.py          # stage: choose what goes in the next snapshot
+git add .                     # ...or stage everything
+git commit -m "Add low-stock report"
+git log --oneline             # history
+git diff                      # exactly what changed, line by line
+```
+
+The rhythm is `status → add → commit`, several times a day. Commit when one coherent thing works: "Add JSON persistence", not "stuff" and not a week of changes at once. Message convention: imperative mood, under ~60 characters, saying *what the commit does*.
+
+## .gitignore
+
+Some files don't belong in history: virtual environments, `node_modules/`, secrets, build output. List them in a `.gitignore` file at the repo root:
+
+```text
+venv/
+node_modules/
+__pycache__/
+.env
+dist/
+```
+
+`.env` in particular — that's where secrets live, and secrets in git history are practically public.
+
+## Branches: parallel versions
+
+A branch is a movable label on a line of commits. Work on features without touching the working version:
+
+```bash
+git switch -c report-feature   # create and switch to a branch
+# ...commits...
+git switch main
+git merge report-feature       # bring the work into main
+```
+
+If both branches changed the same lines, git stops and marks a **conflict** in the file between `<<<<<<<` and `>>>>>>>`. Edit it to what it should be, `git add`, commit. Conflicts are normal, not emergencies.
+
+## Remotes: GitHub and friends
+
+A remote is a copy of the repository on a server.
+
+```bash
+git clone https://github.com/user/repo.git   # get a project
+git pull                                     # fetch others' commits
+git push                                     # publish yours
+```
+
+Team flow on GitHub: push a branch, open a **pull request**, teammates review the diff, then it merges into `main`. Even solo, PRs give you a place to review your own work before it lands.
+
+## Undoing things
+
+```bash
+git restore file.py            # discard uncommitted changes to a file
+git restore --staged file.py   # unstage, keep the changes
+git revert abc123              # new commit that undoes an old one — safe on shared history
+git stash                      # shelve work-in-progress; git stash pop brings it back
+```
+
+> Commit early, commit often, push daily. The only unrecoverable mistakes in git are in work you never committed.
+
+@@ tools-1-2
+## The terminal: talking to the computer directly
+
+Every tool in this trade — git, package managers, servers, deploys — lives on the command line. The core moves:
+
+```bash
+pwd                # where am I?
+ls                 # what's here?  (dir on Windows)
+cd projects/shop   # go there;  cd .. goes up
+mkdir tools        # make a folder
+cat main.py        # print a file
+python main.py     # run a program
+node app.js
+```
+
+Two keys do half the work: **Tab** completes names, **↑** replays previous commands. `Ctrl+C` stops a running program.
+
+## Python projects: venv + pip
+
+Different projects need different library versions, so each project gets its own **virtual environment**:
+
+```bash
+python -m venv venv               # create it (once per project)
+source venv/bin/activate          # enter it (Windows: venv\Scripts\activate)
+pip install requests fastapi      # install into it
+pip freeze > requirements.txt     # write down exact versions
+pip install -r requirements.txt   # ...so others can recreate it
+```
+
+The `venv/` folder itself stays out of git; `requirements.txt` goes in.
+
+## JavaScript projects: npm
+
+```bash
+npm init -y                # creates package.json
+npm install express        # adds it to package.json, installs into node_modules/
+npm run dev                # runs a script defined in package.json
+```
+
+`package.json` is the project manifest: dependencies, scripts, metadata. `node_modules/` stays out of git; `package.json` and the lockfile go in.
+
+## Environment variables
+
+Configuration that changes between machines — database URLs, API keys, ports — lives in the **environment**, not in code:
+
+```bash
+export DATABASE_URL="sqlite:///shop.db"    # set for this shell
+```
+
+```python
+import os
+url = os.environ.get("DATABASE_URL", "sqlite:///dev.db")
+```
+
+Locally, a `.env` file (git-ignored) holds them and libraries like `python-dotenv` load it. In production, the hosting platform's dashboard sets them.
+
+## A layout that scales
+
+```text
+shop/
+├── README.md            what it is, how to run it
+├── .gitignore
+├── requirements.txt     (or package.json)
+├── src/                 the code
+│   ├── main.py
+│   ├── db.py
+│   └── api.py
+└── tests/
+    └── test_api.py
+```
+
+The README answers three questions in its first screen: what is this, how do I run it, how do I run the tests. Write it as if for a stranger — in six months, that stranger is you.
+
+@@ tools-1-3
+## Tests: code that checks your code
+
+You already know what tests feel like — every task on this platform runs them against your work. Writing your own is the same idea: for each behaviour, a tiny function that calls your code and asserts on the result.
+
+The standard Python tool is **pytest**. Files named `test_*.py`, functions named `test_*`, plain `assert` inside:
+
+```python
+# test_inventory.py
+from inventory import Inventory, Item
+
+def test_add_merges_duplicates():
+    inv = Inventory()
+    inv.add(Item("Torch", 249.0, 2))
+    inv.add(Item("Torch", 249.0, 3))
+    assert inv.items["Torch"].quantity == 5
+
+def test_remove_unknown_item_raises():
+    inv = Inventory()
+    with pytest.raises(KeyError):
+        inv.remove("Ghost", 1)
+```
+
+```bash
+pip install pytest
+pytest            # finds and runs everything, prints green dots or red details
+```
+
+Structure each test as **arrange, act, assert**: set up the world, do the one thing, check the outcome. One behaviour per test, named after the behaviour — a failing `test_remove_unknown_item_raises` tells you what broke before you read a line.
+
+Test the boundaries: empty input, zero, one, the maximum, the thing that should raise. Bugs live at edges.
+
+**The habit that compounds:** when you find a bug, first write a test that fails because of it, then fix the code until the test passes. That bug can never sneak back.
+
+## Debugging: a method, not a mood
+
+1. **Reproduce it.** Find the smallest input that triggers the problem, every time. Half of all bugs die during this step.
+2. **Read the traceback, bottom-up.** Last line: what went wrong. First frame that's *your* file: where. The error is honest; start from what it literally says.
+3. **Make the invisible visible.** `print(f"{order=}")` at suspicious points — the `=` inside f-strings prints name and value. Or run under a debugger (`breakpoint()` in Python, `debugger;` in JS with DevTools open) and step through, watching variables.
+4. **Isolate.** Cut the failing behaviour out into a five-line script. If the bug follows, you've cornered it; if it doesn't, the problem is in what you removed.
+5. **Explain it out loud** — to a colleague, or a rubber duck. Saying "it can't be the cache because—" is reliably the moment you hear it.
+
+When it's fixed: delete the debug prints, keep the regression test, and log properly instead — `logging.warning("stock below zero for %s", name)` with timestamps beats `print` the moment code runs anywhere but your machine.
+
+> Slow is smooth: guessing randomly at fixes feels fast and isn't. Every bug has a mechanism; your job is to see it, not to appease it.

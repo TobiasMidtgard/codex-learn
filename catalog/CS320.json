@@ -1,0 +1,439 @@
+{
+ "id": "CS320",
+ "title": "Computer Networks",
+ "year": 3,
+ "level": "Advanced",
+ "prereqs": [
+  "CS210"
+ ],
+ "stack": [
+  "Python",
+  "Go (reference)"
+ ],
+ "credits": 15,
+ "hours": 150,
+ "icon": "⛓",
+ "summary": "The internet is a stack of protocols, each one solving exactly the problem the layer below leaves behind. This course builds that stack from the wire upwards: framing and error detection on a byte channel, reliable delivery over a channel that loses and reorders, routing that converges without a central authority, and the request/response and naming protocols the application layer is made of. Every mechanism is implemented and measured against a deterministic simulated network, never merely described.",
+ "outcomes": [
+  "Frame a byte stream with escape stuffing and recover the payload from a damaged frame",
+  "Implement the internet checksum and CRC-32, and measure what each one fails to detect",
+  "Build stop-and-wait and sliding-window ARQ and compare their goodput on the same channel",
+  "Explain and reproduce count-to-infinity, then fix it with split horizon",
+  "Compute link-state routes with Dijkstra and show distance vector converges to the same distances",
+  "Parse HTTP/1.1 messages, including chunked transfer encoding, from raw bytes",
+  "Resolve a name through a delegating hierarchy with caching and expiry"
+ ],
+ "assessment": "4 lab checkpoints (10% each) + capstone build (60%).",
+ "reading": [
+  "Kurose & Ross, *Computer Networking: A Top-Down Approach*, 8th ed. (Pearson, 2020) — chapters 3-6",
+  "Peterson & Davie, *Computer Networks: A Systems Approach*, 6th ed. (Morgan Kaufmann, 2021) — chapters 2-3",
+  "Braden, Borman & Partridge, RFC 1071, *Computing the Internet Checksum* (IETF, 1988)"
+ ],
+ "modules": [
+  {
+   "title": "The link layer: framing and error detection",
+   "summary": "Turning a byte pipe into delimited frames, and noticing when one is damaged.",
+   "concepts": [
+    "Framing: how a receiver finds where one frame ends and the next begins",
+    "Byte stuffing (PPP, RFC 1662): escape the flag so data can never impersonate it",
+    "Stuffing costs bandwidth — the worst case doubles the payload",
+    "The internet checksum: 16-bit one's-complement sum, folded, then inverted (RFC 1071)",
+    "Why the checksum is weak: reordering whole words leaves the sum unchanged",
+    "CRC-32 as polynomial division over GF(2), computed with a reflected 256-entry table",
+    "Error *detection* is not correction — a detected frame is simply discarded"
+   ],
+   "lab": {
+    "title": "Framing, checksums and CRC-32",
+    "runtime": "python",
+    "minutes": 45,
+    "brief": "Build the bottom of the stack: a frame format, two integrity checks, and a\nmeasurement of how much each check actually catches.\n\n## Framing (PPP-style byte stuffing)\n\n`FLAG = 0x7E`, `ESC = 0x7D`, `MASK = 0x20`.\n\n- `stuff(payload)` returns `FLAG + escaped body + FLAG`. Inside the body every\n  `FLAG` or `ESC` byte becomes `ESC` followed by that byte XOR `MASK`.\n- `unstuff(frame)` reverses it, raising `FramingError` (a `ValueError`) when\n  the frame is shorter than two bytes, does not begin and end with `FLAG`,\n  contains an unescaped `FLAG`, or ends with a dangling `ESC`.\n\n```text\nstuff(b\"\\x7e\\x7d\\x01\")  ->  7e 7d 5e 7d 5d 01 7e\n```\n\n## The internet checksum (RFC 1071)\n\n`internet_checksum(data)` returns a 16-bit integer: pad `data` to an even\nlength with a zero byte, sum the 16-bit **big-endian** words, fold every carry\nback into the low 16 bits until none is left, and return the one's complement.\nAn empty input gives `0xFFFF`.\n\nThe RFC's worked example, `00 01 f2 03 f4 f5 f6 f7`, checksums to `0x220D`.\nThe defining property: appending the checksum to an even-length payload makes\nthe checksum of the result zero.\n\n## CRC-32\n\n`crc32(data)` returns the standard reflected CRC-32 (polynomial `0xEDB88320`,\ninitial value `0xFFFFFFFF`, final XOR `0xFFFFFFFF`) — the one `zlib.crc32`\nproduces. Build the 256-entry table once at import time. `crc32(b\"\")` is `0`\nand `crc32(b\"123456789\")` is `0xCBF43926`.\n\n## Measuring detection\n\n- `flip_bits(data, positions)` returns a copy with those **bit** positions\n  flipped; bit `p` is bit `p % 8` of byte `p // 8`.\n- `detection_rate(payload, detector, trials, bits, seed)` returns the fraction\n  of corruptions the detector notices. Use `rng = random.Random(seed)` and,\n  once per trial, `rng.sample(range(len(payload) * 8), bits)` to choose the\n  positions; a corruption counts as detected when the detector's value differs\n  from its value on the clean payload.\n\nBoth checks catch every single-bit error. Two-bit errors are where they part\ncompany.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import random\n\nFLAG = 0x7E\nESC = 0x7D\nMASK = 0x20\nCRC_POLY = 0xEDB88320\n\n\nclass FramingError(ValueError):\n    \"\"\"Raised when a byte sequence is not a well-formed frame.\"\"\"\n\n\ndef stuff(payload):\n    \"\"\"FLAG + escaped payload + FLAG.\"\"\"\n    # your code here\n\n\ndef unstuff(frame):\n    \"\"\"The payload inside a frame; FramingError when the frame is malformed.\"\"\"\n    # your code here\n\n\ndef internet_checksum(data):\n    \"\"\"The 16-bit one's-complement checksum of data (RFC 1071).\"\"\"\n    # your code here\n\n\ndef crc32(data):\n    \"\"\"The reflected CRC-32 of data, as an unsigned 32-bit integer.\"\"\"\n    # your code here\n\n\ndef flip_bits(data, positions):\n    \"\"\"A copy of data with those bit positions flipped.\"\"\"\n    # your code here\n\n\ndef detection_rate(payload, detector, trials=400, bits=1, seed=7):\n    \"\"\"The fraction of random bit corruptions the detector notices.\"\"\"\n    # your code here\n\n\nsample = b\"\\x00\\x01\\xf2\\x03\\xf4\\xf5\\xf6\\xf7\"\nprint(stuff(b\"\\x7e\\x7d\\x01\").hex())\nprint(hex(internet_checksum(sample)), hex(crc32(b\"123456789\")))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import random\n\nFLAG = 0x7E\nESC = 0x7D\nMASK = 0x20\nCRC_POLY = 0xEDB88320\n\n\nclass FramingError(ValueError):\n    \"\"\"Raised when a byte sequence is not a well-formed frame.\"\"\"\n\n\ndef stuff(payload):\n    \"\"\"FLAG + escaped payload + FLAG.\"\"\"\n    body = bytearray()\n    for byte in payload:\n        if byte in (FLAG, ESC):\n            body.append(ESC)\n            body.append(byte ^ MASK)\n        else:\n            body.append(byte)\n    return bytes([FLAG]) + bytes(body) + bytes([FLAG])\n\n\ndef unstuff(frame):\n    \"\"\"The payload inside a frame; FramingError when the frame is malformed.\"\"\"\n    if len(frame) < 2 or frame[0] != FLAG or frame[-1] != FLAG:\n        raise FramingError(\"a frame starts and ends with a flag\")\n    body = frame[1:-1]\n    out = bytearray()\n    index = 0\n    while index < len(body):\n        byte = body[index]\n        if byte == FLAG:\n            raise FramingError(\"unescaped flag inside a frame\")\n        if byte == ESC:\n            if index + 1 >= len(body):\n                raise FramingError(\"dangling escape at the end of a frame\")\n            out.append(body[index + 1] ^ MASK)\n            index += 2\n            continue\n        out.append(byte)\n        index += 1\n    return bytes(out)\n\n\ndef internet_checksum(data):\n    \"\"\"The 16-bit one's-complement checksum of data (RFC 1071).\"\"\"\n    padded = bytes(data) + (b\"\\x00\" if len(data) % 2 else b\"\")\n    total = 0\n    for index in range(0, len(padded), 2):\n        total += (padded[index] << 8) | padded[index + 1]\n        total = (total & 0xFFFF) + (total >> 16)\n    while total >> 16:\n        total = (total & 0xFFFF) + (total >> 16)\n    return (~total) & 0xFFFF\n\n\ndef _crc_table():\n    \"\"\"The 256-entry reflected CRC-32 table, built once.\"\"\"\n    table = []\n    for index in range(256):\n        value = index\n        for _ in range(8):\n            value = (value >> 1) ^ (CRC_POLY if value & 1 else 0)\n        table.append(value)\n    return tuple(table)\n\n\nCRC_TABLE = _crc_table()\n\n\ndef crc32(data):\n    \"\"\"The reflected CRC-32 of data, as an unsigned 32-bit integer.\"\"\"\n    crc = 0xFFFFFFFF\n    for byte in data:\n        crc = CRC_TABLE[(crc ^ byte) & 0xFF] ^ (crc >> 8)\n    return crc ^ 0xFFFFFFFF\n\n\ndef flip_bits(data, positions):\n    \"\"\"A copy of data with those bit positions flipped.\"\"\"\n    out = bytearray(data)\n    for position in positions:\n        out[position // 8] ^= 1 << (position % 8)\n    return bytes(out)\n\n\ndef detection_rate(payload, detector, trials=400, bits=1, seed=7):\n    \"\"\"The fraction of random bit corruptions the detector notices.\"\"\"\n    rng = random.Random(seed)\n    clean = detector(payload)\n    detected = 0\n    for _ in range(trials):\n        positions = rng.sample(range(len(payload) * 8), bits)\n        if detector(flip_bits(payload, positions)) != clean:\n            detected += 1\n    return detected / trials\n\n\nsample = b\"\\x00\\x01\\xf2\\x03\\xf4\\xf5\\xf6\\xf7\"\nprint(stuff(b\"\\x7e\\x7d\\x01\").hex())\nprint(hex(internet_checksum(sample)), hex(crc32(b\"123456789\")))\n"
+     }
+    ],
+    "hints": [
+     "Stuffing is a single pass: copy each byte, except that a FLAG or ESC becomes two bytes.",
+     "For the checksum, fold after every addition (`total = (total & 0xFFFF) + (total >> 16)`) and the running value never grows.",
+     "Build the CRC table with `value = (value >> 1) ^ (CRC_POLY if value & 1 else 0)`, eight times per entry.",
+     "`crc = TABLE[(crc ^ byte) & 0xFF] ^ (crc >> 8)` is the whole per-byte update; remember the initial and final XOR with 0xFFFFFFFF."
+    ],
+    "tests": [
+     {
+      "name": "Stuffing escapes the reserved bytes",
+      "code": "_got = stuff(b\"\\x7e\\x7d\\x01\")\nassert _got == bytes([0x7E, 0x7D, 0x5E, 0x7D, 0x5D, 0x01, 0x7E]), f\"Got {_got.hex()}\"\nassert stuff(b\"\") == b\"\\x7e\\x7e\", f\"an empty payload still needs both flags, got {stuff(b'').hex()}\"\nassert stuff(b\"hi\") == b\"\\x7ehi\\x7e\", f\"ordinary bytes pass through, got {stuff(b'hi').hex()}\"\nassert len(stuff(b\"\\x7e\" * 4)) == 10, \"four flag bytes stuff to eight, plus two delimiters\""
+     },
+     {
+      "name": "Unstuffing round-trips every payload",
+      "code": "for _p in [b\"\", b\"hi\", b\"\\x7e\", b\"\\x7d\", b\"\\x7e\\x7d\\x7e\", bytes(range(256))]:\n    _got = unstuff(stuff(_p))\n    assert _got == _p, f\"round trip of {_p!r} gave {_got!r}\""
+     },
+     {
+      "name": "Malformed frames are rejected",
+      "code": "for _bad in [b\"\", b\"\\x7e\", b\"abc\", b\"\\x7eabc\", b\"abc\\x7e\",\n             b\"\\x7e\\x7e\\x7e\", b\"\\x7eab\\x7d\\x7e\"]:\n    try:\n        unstuff(_bad)\n        assert False, f\"unstuff({_bad!r}) should raise FramingError\"\n    except FramingError:\n        pass\nassert issubclass(FramingError, ValueError), \"FramingError should be a ValueError\""
+     },
+     {
+      "name": "The internet checksum matches RFC 1071",
+      "code": "_sample = b\"\\x00\\x01\\xf2\\x03\\xf4\\xf5\\xf6\\xf7\"\n_got = internet_checksum(_sample)\nassert _got == 0x220D, f\"internet_checksum of the RFC example gave {hex(_got)}, expected 0x220d\"\nassert internet_checksum(b\"\") == 0xFFFF, f\"an empty input gives 0xffff, got {hex(internet_checksum(b''))}\"\nassert internet_checksum(b\"\\x01\\x02\\x03\") == internet_checksum(b\"\\x01\\x02\\x03\\x00\"), \\\n    \"an odd length is padded with a zero byte\"\nfor _data in [_sample, b\"\", b\"\\x01\\x02\", bytes(range(64))]:\n    _c = internet_checksum(_data)\n    assert internet_checksum(_data + _c.to_bytes(2, \"big\")) == 0, \\\n        f\"data plus its own checksum must check to 0, failed for {_data!r}\""
+     },
+     {
+      "name": "CRC-32 matches the standard check values",
+      "code": "assert crc32(b\"\") == 0, f\"crc32(b'') gave {crc32(b'')!r}, expected 0\"\nassert crc32(b\"123456789\") == 0xCBF43926, f\"crc32 of the check string gave {hex(crc32(b'123456789'))}\"\nassert crc32(b\"hello world\") == 0x0D4A1185, f\"crc32(b'hello world') gave {hex(crc32(b'hello world'))}\"\nassert crc32(b\"a\") != crc32(b\"b\"), \"different bytes must give different remainders here\"\nassert 0 <= crc32(bytes(range(256))) <= 0xFFFFFFFF, \"the result is an unsigned 32-bit integer\""
+     },
+     {
+      "name": "flip_bits touches exactly the named bits",
+      "code": "assert flip_bits(b\"\\x00\", [0]) == b\"\\x01\", f\"Got {flip_bits(b'\\x00', [0])!r}\"\nassert flip_bits(b\"\\x00\", [7]) == b\"\\x80\", f\"Got {flip_bits(b'\\x00', [7])!r}\"\nassert flip_bits(b\"\\x00\\x00\", [8]) == b\"\\x00\\x01\", \"bit 8 is the low bit of byte 1\"\nassert flip_bits(b\"\\xff\", [0, 1]) == b\"\\xfc\", \"flipping two set bits clears them\"\nassert flip_bits(b\"\\x00\", []) == b\"\\x00\", \"no positions means no change\""
+     },
+     {
+      "name": "Word reordering slips past the checksum, not the CRC",
+      "code": "_a, _b = b\"\\x12\\x34\\xab\\xcd\", b\"\\xab\\xcd\\x12\\x34\"\nassert internet_checksum(_a) == internet_checksum(_b), \\\n    \"swapping two 16-bit words leaves the one's-complement sum unchanged\"\nassert crc32(_a) != crc32(_b), \"CRC-32 is position sensitive and must notice the swap\""
+     },
+     {
+      "name": "Detection rates: both catch single bits, only CRC catches every pair",
+      "code": "_payload = bytes(range(64))\nassert detection_rate(_payload, crc32, 300, 1, 7) == 1.0, \"CRC-32 detects every single-bit error\"\nassert detection_rate(_payload, internet_checksum, 300, 1, 7) == 1.0, \\\n    \"the checksum also detects every single-bit error\"\nassert detection_rate(_payload, crc32, 400, 2, 7) == 1.0, \"CRC-32 detects every double-bit error here\"\n_chk2 = detection_rate(_payload, internet_checksum, 400, 2, 7)\nassert 0.9 < _chk2 < 1.0, \\\n    f\"the checksum should miss a few double-bit errors, got a rate of {_chk2!r}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Reliable transport over an unreliable channel",
+   "summary": "Sequence numbers, acknowledgements and windows, measured as goodput.",
+   "concepts": [
+    "The reliability problem: loss, duplication and delay, on top of a best-effort layer",
+    "Alternating-bit stop-and-wait: one outstanding frame, one sequence bit",
+    "Why the receiver must re-acknowledge a duplicate rather than ignore it",
+    "A lost acknowledgement is indistinguishable from a lost frame at the sender",
+    "Go-Back-N: a window of unacknowledged frames and a cumulative acknowledgement",
+    "Out-of-order frames are discarded by a Go-Back-N receiver, so one loss costs a window",
+    "Goodput = useful frames delivered / total transmissions; the bandwidth-delay product sets the window"
+   ],
+   "lab": {
+    "title": "Stop-and-wait and Go-Back-N on a deterministic channel",
+    "runtime": "python",
+    "minutes": 50,
+    "brief": "Randomised loss makes protocol behaviour impossible to reason about exactly,\nso this channel loses *precisely* the transmissions you name.\n\n## The channel\n\n`Link(data_drops=(), ack_drops=())` counts data and acknowledgement\ntransmissions separately, both from zero:\n\n- `send_data(seq)` increments `data_sends` and returns `False` when this\n  transmission's index is in `data_drops`, otherwise `True`.\n- `send_ack(seq)` does the same against `ack_sends` and `ack_drops`.\n\n## Stop-and-wait\n\n```text\nexpected_bit = 0\nfor index, frame in enumerate(frames):\n    seq = index % 2\n    loop forever:\n        arrived = link.send_data(seq)\n        if arrived:\n            if seq == expected_bit:          # a new frame\n                deliver it; flip expected_bit\n            if link.send_ack(seq):           # the receiver acks what it saw,\n                break                        # duplicate or not\n        timeouts += 1\n```\n\nReturn `{\"delivered\": [...], \"data_sends\": n, \"ack_sends\": n, \"timeouts\": n}`.\n\n## Go-Back-N\n\nOne round is one window burst followed by at most one cumulative\nacknowledgement:\n\n```text\nbase = 0; expected = 0\nwhile base < len(frames):\n    rounds += 1\n    for seq in range(base, min(base + window, len(frames))):\n        if link.send_data(seq) and seq == expected:\n            deliver frames[seq]; expected += 1\n    if expected > base and link.send_ack(expected - 1):\n        base = expected\n```\n\nA frame that arrives out of order is discarded, so the whole window is sent\nagain next round. Return\n`{\"delivered\": [...], \"data_sends\": n, \"ack_sends\": n, \"rounds\": n}`.\nA `window` below 1 raises `ValueError`. Both protocols raise `RuntimeError`\nrather than looping for ever once `MAX_ROUNDS` (1000) is exceeded.\n\n## Goodput\n\n`goodput(result, frames)` is `len(frames) / result[\"data_sends\"]`, and `0.0`\nwhen nothing was sent.\n\n```text\nframes = [b\"a\", b\"b\", b\"c\", b\"d\", b\"e\"]\nstop_and_wait(frames, Link())                  data_sends 5, timeouts 0\nstop_and_wait(frames, Link(ack_drops={0}))     data_sends 6, ack_sends 6\ngo_back_n(frames, Link(), 3)                   data_sends 5, ack_sends 2, rounds 2\ngo_back_n(frames, Link(data_drops={1}), 3)     data_sends 7, ack_sends 3, rounds 3\n```",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "MAX_ROUNDS = 1000\n\n\nclass Link:\n    \"\"\"A deterministic channel: it drops exactly the transmissions you name.\"\"\"\n\n    def __init__(self, data_drops=(), ack_drops=()):\n        self.data_drops = set(data_drops)\n        self.ack_drops = set(ack_drops)\n        self.data_sends = 0\n        self.ack_sends = 0\n\n    def send_data(self, seq):\n        \"\"\"True when this data transmission arrives.\"\"\"\n        # your code here\n\n    def send_ack(self, seq):\n        \"\"\"True when this acknowledgement arrives.\"\"\"\n        # your code here\n\n\ndef stop_and_wait(frames, link):\n    \"\"\"Alternating-bit ARQ. Returns delivered frames and the counters.\"\"\"\n    # your code here\n\n\ndef go_back_n(frames, link, window):\n    \"\"\"Sliding-window ARQ with cumulative acknowledgements.\"\"\"\n    # your code here\n\n\ndef goodput(result, frames):\n    \"\"\"Useful frames per transmission.\"\"\"\n    # your code here\n\n\ndata = [b\"a\", b\"b\", b\"c\", b\"d\", b\"e\"]\nprint(stop_and_wait(data, Link(data_drops={1, 4}, ack_drops={0, 3})))\nprint(go_back_n(data, Link(data_drops={1}), 3))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "MAX_ROUNDS = 1000\n\n\nclass Link:\n    \"\"\"A deterministic channel: it drops exactly the transmissions you name.\"\"\"\n\n    def __init__(self, data_drops=(), ack_drops=()):\n        self.data_drops = set(data_drops)\n        self.ack_drops = set(ack_drops)\n        self.data_sends = 0\n        self.ack_sends = 0\n\n    def send_data(self, seq):\n        \"\"\"True when this data transmission arrives.\"\"\"\n        index = self.data_sends\n        self.data_sends += 1\n        return index not in self.data_drops\n\n    def send_ack(self, seq):\n        \"\"\"True when this acknowledgement arrives.\"\"\"\n        index = self.ack_sends\n        self.ack_sends += 1\n        return index not in self.ack_drops\n\n\ndef stop_and_wait(frames, link):\n    \"\"\"Alternating-bit ARQ. Returns delivered frames and the counters.\"\"\"\n    delivered = []\n    expected_bit = 0\n    timeouts = 0\n    for index, frame in enumerate(frames):\n        seq = index % 2\n        while True:\n            if link.data_sends > MAX_ROUNDS:\n                raise RuntimeError(\"giving up: the channel never delivered\")\n            if link.send_data(seq):\n                if seq == expected_bit:\n                    delivered.append(frame)\n                    expected_bit ^= 1\n                if link.send_ack(seq):\n                    break\n            timeouts += 1\n    return {\"delivered\": delivered, \"data_sends\": link.data_sends,\n            \"ack_sends\": link.ack_sends, \"timeouts\": timeouts}\n\n\ndef go_back_n(frames, link, window):\n    \"\"\"Sliding-window ARQ with cumulative acknowledgements.\"\"\"\n    if window < 1:\n        raise ValueError(\"window must be at least 1\")\n    delivered = []\n    base = 0\n    expected = 0\n    rounds = 0\n    while base < len(frames):\n        rounds += 1\n        if rounds > MAX_ROUNDS:\n            raise RuntimeError(\"giving up: the channel never delivered\")\n        for seq in range(base, min(base + window, len(frames))):\n            if link.send_data(seq) and seq == expected:\n                delivered.append(frames[seq])\n                expected += 1\n        if expected > base and link.send_ack(expected - 1):\n            base = expected\n    return {\"delivered\": delivered, \"data_sends\": link.data_sends,\n            \"ack_sends\": link.ack_sends, \"rounds\": rounds}\n\n\ndef goodput(result, frames):\n    \"\"\"Useful frames per transmission.\"\"\"\n    if not result[\"data_sends\"]:\n        return 0.0\n    return len(frames) / result[\"data_sends\"]\n\n\ndata = [b\"a\", b\"b\", b\"c\", b\"d\", b\"e\"]\nprint(stop_and_wait(data, Link(data_drops={1, 4}, ack_drops={0, 3})))\nprint(go_back_n(data, Link(data_drops={1}), 3))\n"
+     }
+    ],
+    "hints": [
+     "`send_data` must increment the counter *before* it decides, so the very first transmission has index 0.",
+     "In stop-and-wait, the receiver acknowledges every frame that arrives — including a duplicate — otherwise a lost ack deadlocks the sender.",
+     "Only advance `expected_bit` when the arriving sequence bit is the one you were waiting for; otherwise you deliver the same frame twice.",
+     "In Go-Back-N the receiver never buffers: `seq == expected` is the whole acceptance test, and a gap makes the rest of the burst useless."
+    ],
+    "tests": [
+     {
+      "name": "The channel drops exactly what it was told to",
+      "code": "_link = Link(data_drops={0, 2}, ack_drops={1})\nassert _link.send_data(0) is False, \"transmission 0 is in data_drops\"\nassert _link.send_data(0) is True, \"transmission 1 is not\"\nassert _link.send_data(1) is False, \"transmission 2 is in data_drops\"\nassert _link.data_sends == 3, f\"data_sends is {_link.data_sends!r}, expected 3\"\nassert _link.send_ack(0) is True and _link.send_ack(1) is False, \"acks are counted separately\"\nassert _link.ack_sends == 2, f\"ack_sends is {_link.ack_sends!r}, expected 2\"\nassert Link().send_data(0) is True, \"a link with no drops delivers everything\""
+     },
+     {
+      "name": "Stop-and-wait on a clean channel",
+      "code": "_frames = [b\"a\", b\"b\", b\"c\", b\"d\", b\"e\"]\n_r = stop_and_wait(_frames, Link())\nassert _r[\"delivered\"] == _frames, f\"delivered {_r['delivered']!r}\"\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"timeouts\"]) == (5, 5, 0), \\\n    f\"counters were {(_r['data_sends'], _r['ack_sends'], _r['timeouts'])!r}, expected (5, 5, 0)\"\n_empty = stop_and_wait([], Link())\nassert _empty[\"delivered\"] == [] and _empty[\"data_sends\"] == 0, f\"Got {_empty!r}\""
+     },
+     {
+      "name": "Stop-and-wait retransmits and refuses duplicates",
+      "code": "_frames = [b\"a\", b\"b\", b\"c\", b\"d\", b\"e\"]\n_r = stop_and_wait(_frames, Link(data_drops={0}))\nassert _r[\"delivered\"] == _frames, f\"delivered {_r['delivered']!r}\"\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"timeouts\"]) == (6, 5, 1), \\\n    f\"one lost frame: counters were {(_r['data_sends'], _r['ack_sends'], _r['timeouts'])!r}, expected (6, 5, 1)\"\n_r = stop_and_wait(_frames, Link(ack_drops={0}))\nassert _r[\"delivered\"] == _frames, \\\n    f\"a lost ack must not duplicate a frame, delivered {_r['delivered']!r}\"\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"timeouts\"]) == (6, 6, 1), \\\n    f\"one lost ack: counters were {(_r['data_sends'], _r['ack_sends'], _r['timeouts'])!r}, expected (6, 6, 1)\"\n_r = stop_and_wait(_frames, Link(data_drops={1, 4}, ack_drops={0, 3}))\nassert _r[\"delivered\"] == _frames, f\"delivered {_r['delivered']!r}\"\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"timeouts\"]) == (9, 7, 4), \\\n    f\"mixed losses: counters were {(_r['data_sends'], _r['ack_sends'], _r['timeouts'])!r}, expected (9, 7, 4)\""
+     },
+     {
+      "name": "Go-Back-N bursts a window and acknowledges cumulatively",
+      "code": "_frames = [b\"a\", b\"b\", b\"c\", b\"d\", b\"e\"]\n_r = go_back_n(_frames, Link(), 3)\nassert _r[\"delivered\"] == _frames, f\"delivered {_r['delivered']!r}\"\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"rounds\"]) == (5, 2, 2), \\\n    f\"clean window of 3: counters were {(_r['data_sends'], _r['ack_sends'], _r['rounds'])!r}, expected (5, 2, 2)\"\n_r = go_back_n(_frames, Link(), 10)\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"rounds\"]) == (5, 1, 1), \\\n    f\"a window larger than the file needs one round, got {(_r['data_sends'], _r['ack_sends'], _r['rounds'])!r}\"\n_r = go_back_n(_frames, Link(), 1)\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"rounds\"]) == (5, 5, 5), \\\n    f\"a window of 1 degenerates to one frame per round, got {(_r['data_sends'], _r['ack_sends'], _r['rounds'])!r}\"\nassert go_back_n([], Link(), 3)[\"rounds\"] == 0, \"nothing to send means no rounds\""
+     },
+     {
+      "name": "One loss costs the rest of the window",
+      "code": "_frames = [b\"a\", b\"b\", b\"c\", b\"d\", b\"e\"]\n_r = go_back_n(_frames, Link(data_drops={1}), 3)\nassert _r[\"delivered\"] == _frames, f\"delivered {_r['delivered']!r}\"\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"rounds\"]) == (7, 3, 3), \\\n    f\"losing frame 1 of the first burst: got {(_r['data_sends'], _r['ack_sends'], _r['rounds'])!r}, expected (7, 3, 3)\"\n_r = go_back_n(_frames, Link(data_drops={0}), 3)\nassert _r[\"delivered\"] == _frames, f\"delivered {_r['delivered']!r}\"\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"rounds\"]) == (8, 2, 3), \\\n    f\"losing the base frame wastes the whole burst: got {(_r['data_sends'], _r['ack_sends'], _r['rounds'])!r}, expected (8, 2, 3)\"\n_r = go_back_n(_frames, Link(ack_drops={0}), 3)\nassert _r[\"delivered\"] == _frames, f\"a lost cumulative ack must not duplicate data: {_r['delivered']!r}\"\nassert (_r[\"data_sends\"], _r[\"ack_sends\"], _r[\"rounds\"]) == (8, 3, 3), \\\n    f\"losing the first ack: got {(_r['data_sends'], _r['ack_sends'], _r['rounds'])!r}, expected (8, 3, 3)\""
+     },
+     {
+      "name": "A window below one is refused",
+      "code": "for _bad in (0, -1):\n    try:\n        go_back_n([b\"a\"], Link(), _bad)\n        assert False, f\"go_back_n with window={_bad} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "Goodput quantifies the cost of loss",
+      "code": "_frames = [b\"a\", b\"b\", b\"c\", b\"d\", b\"e\"]\n_clean = go_back_n(_frames, Link(), 3)\nassert goodput(_clean, _frames) == 1.0, f\"a clean run has goodput 1.0, got {goodput(_clean, _frames)!r}\"\n_lossy = go_back_n(_frames, Link(data_drops={1}), 3)\n_got = goodput(_lossy, _frames)\nassert abs(_got - 5 / 7) < 1e-9, f\"goodput was {_got!r}, expected 5/7\"\nassert goodput({\"data_sends\": 0}, []) == 0.0, \"nothing sent means a goodput of 0.0\"\nassert goodput(stop_and_wait(_frames, Link(data_drops={0})), _frames) < 1.0, \\\n    \"any retransmission must push goodput below 1\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Routing: distance vector and link state",
+   "summary": "Two ways to find the same shortest paths, and what goes wrong with one of them.",
+   "concepts": [
+    "The routing problem: build a forwarding table with only local information",
+    "Bellman-Ford: D(x, y) = min over neighbours v of c(x, v) + D(v, y)",
+    "Distance vector is distributed, asynchronous and self-terminating — and slow to react to bad news",
+    "Count-to-infinity: a route that loops back through the sender rises one hop at a time",
+    "'Infinity' must be small (RIP uses 16) purely to bound how long the counting takes",
+    "Split horizon: never advertise a route back to the neighbour you learned it from",
+    "Link state: flood the topology, then run Dijkstra locally — same answer, different failure modes"
+   ],
+   "lab": {
+    "title": "Convergence, and how it fails",
+    "runtime": "python",
+    "minutes": 50,
+    "brief": "The same topology, routed two ways.\n\nA graph is `{node: {neighbour: cost}}`, symmetric. `INFINITY` is `16`.\n\n## Link state\n\n- `dijkstra(graph, source)` returns `(dist, prev)`. Every node appears in\n  both; unreachable nodes have `float(\"inf\")` distance and `None` predecessor.\n  An unknown source raises `KeyError`. Break ties by visiting neighbours in\n  sorted order so the result is reproducible.\n- `shortest_path(prev, source, dest)` returns the node list from `source` to\n  `dest`, `[source]` when they are the same node, and `[]` when there is no\n  path.\n\n## Distance vector\n\nA table is `{destination: (cost, next_hop)}`; the entry for the node itself is\n`(0, None)`, and an unreachable destination is `(INFINITY, None)`.\n\n- `initial_tables(graph)` — every node knows only itself and its direct links.\n- `dv_round(graph, tables, split_horizon=False)` returns **new** tables, one\n  synchronous exchange later. Each node recomputes every destination from\n  scratch: `min over neighbours v of cost(node, v) + tables[v][dest]`, capped\n  at `INFINITY`, taking neighbours in sorted order so ties resolve\n  reproducibly. With `split_horizon=True`, a neighbour `v` whose route to\n  `dest` has `next_hop == node` is skipped — you never learn a route back\n  through yourself.\n- `run_dv(graph, tables=None, split_horizon=False, max_rounds=100)` returns\n  `(tables, rounds)`, iterating until a round changes nothing. `rounds` counts\n  only the rounds that changed something.\n- `drop_link(graph, a, b)` returns a **copy** of the graph without that edge.\n\n## What you should see\n\nOn the five-node mesh in the starter, distance vector converges in 3 rounds to\nexactly the distances Dijkstra computes. On the three-node line `A-B-C` with\nunit costs, removing `A-B` sends the survivors counting to infinity — 15 rounds\n— while split horizon settles it in 2.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import heapq\n\nINFINITY = 16\n\nMESH = {\n    \"A\": {\"B\": 2, \"C\": 5},\n    \"B\": {\"A\": 2, \"C\": 1, \"D\": 4},\n    \"C\": {\"A\": 5, \"B\": 1, \"D\": 2, \"E\": 8},\n    \"D\": {\"B\": 4, \"C\": 2, \"E\": 3},\n    \"E\": {\"C\": 8, \"D\": 3},\n}\n\nLINE = {\"A\": {\"B\": 1}, \"B\": {\"A\": 1, \"C\": 1}, \"C\": {\"B\": 1}}\n\n\ndef dijkstra(graph, source):\n    \"\"\"(dist, prev) for every node, by shortest total cost from source.\"\"\"\n    # your code here\n\n\ndef shortest_path(prev, source, dest):\n    \"\"\"The node list from source to dest, or [] when there is no path.\"\"\"\n    # your code here\n\n\ndef initial_tables(graph):\n    \"\"\"Each node knowing only itself and its direct neighbours.\"\"\"\n    # your code here\n\n\ndef dv_round(graph, tables, split_horizon=False):\n    \"\"\"One synchronous exchange; returns new tables.\"\"\"\n    # your code here\n\n\ndef run_dv(graph, tables=None, split_horizon=False, max_rounds=100):\n    \"\"\"(tables, rounds) once the exchange stops changing anything.\"\"\"\n    # your code here\n\n\ndef drop_link(graph, a, b):\n    \"\"\"A copy of graph with the edge between a and b removed.\"\"\"\n    # your code here\n\n\nprint(dijkstra(MESH, \"A\")[0])\nprint(run_dv(MESH)[1])\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import heapq\n\nINFINITY = 16\n\nMESH = {\n    \"A\": {\"B\": 2, \"C\": 5},\n    \"B\": {\"A\": 2, \"C\": 1, \"D\": 4},\n    \"C\": {\"A\": 5, \"B\": 1, \"D\": 2, \"E\": 8},\n    \"D\": {\"B\": 4, \"C\": 2, \"E\": 3},\n    \"E\": {\"C\": 8, \"D\": 3},\n}\n\nLINE = {\"A\": {\"B\": 1}, \"B\": {\"A\": 1, \"C\": 1}, \"C\": {\"B\": 1}}\n\n\ndef dijkstra(graph, source):\n    \"\"\"(dist, prev) for every node, by shortest total cost from source.\"\"\"\n    if source not in graph:\n        raise KeyError(f\"unknown node {source!r}\")\n    dist = {node: float(\"inf\") for node in graph}\n    prev = {node: None for node in graph}\n    dist[source] = 0\n    seen = set()\n    queue = [(0, source)]\n    while queue:\n        cost, node = heapq.heappop(queue)\n        if node in seen:\n            continue\n        seen.add(node)\n        for neighbour, weight in sorted(graph[node].items()):\n            if cost + weight < dist[neighbour]:\n                dist[neighbour] = cost + weight\n                prev[neighbour] = node\n                heapq.heappush(queue, (cost + weight, neighbour))\n    return dist, prev\n\n\ndef shortest_path(prev, source, dest):\n    \"\"\"The node list from source to dest, or [] when there is no path.\"\"\"\n    if source == dest:\n        return [source]\n    path = [dest]\n    while path[-1] is not None and path[-1] != source:\n        path.append(prev[path[-1]])\n    if path[-1] is None:\n        return []\n    return list(reversed(path))\n\n\ndef initial_tables(graph):\n    \"\"\"Each node knowing only itself and its direct neighbours.\"\"\"\n    tables = {}\n    for node in graph:\n        table = {other: (INFINITY, None) for other in graph}\n        table[node] = (0, None)\n        for neighbour, weight in graph[node].items():\n            table[neighbour] = (min(weight, INFINITY), neighbour)\n        tables[node] = table\n    return tables\n\n\ndef dv_round(graph, tables, split_horizon=False):\n    \"\"\"One synchronous exchange; returns new tables.\"\"\"\n    updated = {}\n    for node in graph:\n        table = {other: (INFINITY, None) for other in graph}\n        table[node] = (0, None)\n        for dest in graph:\n            if dest == node:\n                continue\n            best, hop = INFINITY, None\n            for neighbour, weight in sorted(graph[node].items()):\n                cost, advertised_hop = tables[neighbour][dest]\n                if split_horizon and advertised_hop == node:\n                    continue\n                total = min(weight + cost, INFINITY)\n                if total < best:\n                    best, hop = total, neighbour\n            table[dest] = (best, hop) if best < INFINITY else (INFINITY, None)\n        updated[node] = table\n    return updated\n\n\ndef run_dv(graph, tables=None, split_horizon=False, max_rounds=100):\n    \"\"\"(tables, rounds) once the exchange stops changing anything.\"\"\"\n    tables = initial_tables(graph) if tables is None else tables\n    rounds = 0\n    while rounds < max_rounds:\n        nxt = dv_round(graph, tables, split_horizon)\n        if nxt == tables:\n            return tables, rounds\n        tables = nxt\n        rounds += 1\n    return tables, rounds\n\n\ndef drop_link(graph, a, b):\n    \"\"\"A copy of graph with the edge between a and b removed.\"\"\"\n    copy = {node: dict(edges) for node, edges in graph.items()}\n    copy[a].pop(b, None)\n    copy[b].pop(a, None)\n    return copy\n\n\nprint(dijkstra(MESH, \"A\")[0])\nprint(run_dv(MESH)[1])\n"
+     }
+    ],
+    "hints": [
+     "Dijkstra with a heap needs the lazy-deletion guard: pop, skip the node if you have already settled it, then relax its edges.",
+     "Walk `prev` backwards from the destination and reverse the list; a `None` before you reach the source means there is no path.",
+     "`dv_round` must build a whole new table per node from the *old* tables — updating in place makes one node's new route visible to the next in the same round.",
+     "Split horizon is one line: skip a neighbour whose advertised next hop for this destination is you."
+    ],
+    "tests": [
+     {
+      "name": "Dijkstra on the mesh",
+      "code": "_dist, _prev = dijkstra(MESH, \"A\")\nassert _dist == {\"A\": 0, \"B\": 2, \"C\": 3, \"D\": 5, \"E\": 8}, f\"distances from A were {_dist!r}\"\nassert dijkstra(MESH, \"E\")[0] == {\"A\": 8, \"B\": 6, \"C\": 5, \"D\": 3, \"E\": 0}, \\\n    f\"distances from E were {dijkstra(MESH, 'E')[0]!r}\"\ntry:\n    dijkstra(MESH, \"Z\")\n    assert False, \"an unknown source should raise KeyError\"\nexcept KeyError:\n    pass"
+     },
+     {
+      "name": "Paths are reconstructed from prev",
+      "code": "_dist, _prev = dijkstra(MESH, \"A\")\nassert shortest_path(_prev, \"A\", \"E\") == [\"A\", \"B\", \"C\", \"D\", \"E\"], \\\n    f\"Got {shortest_path(_prev, 'A', 'E')!r}\"\nassert shortest_path(_prev, \"A\", \"A\") == [\"A\"], \"a node reaches itself in one step\"\nassert shortest_path(_prev, \"A\", \"C\") == [\"A\", \"B\", \"C\"], \\\n    f\"the direct A-C link costs 5, so the cheap route goes via B: {shortest_path(_prev, 'A', 'C')!r}\"\n_split = {\"A\": {\"B\": 1}, \"B\": {\"A\": 1}, \"X\": {}}\n_d, _p = dijkstra(_split, \"A\")\nassert _d[\"X\"] == float(\"inf\"), f\"X is unreachable, distance was {_d['X']!r}\"\nassert shortest_path(_p, \"A\", \"X\") == [], \"an unreachable destination has no path\""
+     },
+     {
+      "name": "Initial tables know only the neighbours",
+      "code": "_t = initial_tables(MESH)\nassert _t[\"A\"] == {\"A\": (0, None), \"B\": (2, \"B\"), \"C\": (5, \"C\"),\n                   \"D\": (INFINITY, None), \"E\": (INFINITY, None)}, f\"Got {_t['A']!r}\"\nassert set(_t) == set(MESH), \"every node needs a table\"\nassert all(set(_t[n]) == set(MESH) for n in MESH), \"every table needs an entry per destination\""
+     },
+     {
+      "name": "Distance vector converges to the link-state answer",
+      "code": "_tables, _rounds = run_dv(MESH)\nassert _rounds == 3, f\"the mesh converged in {_rounds!r} rounds, expected 3\"\nfor _src in MESH:\n    _dist, _ = dijkstra(MESH, _src)\n    for _dst in MESH:\n        _got = _tables[_src][_dst][0]\n        assert _got == _dist[_dst], \\\n            f\"distance vector says {_src}->{_dst} costs {_got!r}, Dijkstra says {_dist[_dst]!r}\"\nassert _tables[\"A\"][\"E\"] == (8, \"B\"), f\"A should reach E via B at cost 8, got {_tables['A']['E']!r}\""
+     },
+     {
+      "name": "A round is synchronous, not in place",
+      "code": "_before = initial_tables(MESH)\n_snapshot = {n: dict(t) for n, t in _before.items()}\n_after = dv_round(MESH, _before)\nassert _before == _snapshot, \"dv_round must not mutate the tables it was given\"\nassert _after is not _before, \"dv_round returns new tables\"\nassert _after[\"A\"][\"D\"] == (6, \"B\"), \\\n    f\"after one round A reaches D via B at 2+4=6, got {_after['A']['D']!r}\"\nassert _after[\"A\"][\"E\"] == (13, \"C\"), \\\n    f\"after one round A only knows E via C at 5+8=13, got {_after['A']['E']!r}\""
+     },
+     {
+      "name": "Count-to-infinity, and split horizon",
+      "code": "_converged, _ = run_dv(LINE)\nassert _converged[\"C\"][\"A\"] == (2, \"B\"), f\"C reaches A via B at cost 2, got {_converged['C']['A']!r}\"\n_broken = drop_link(LINE, \"A\", \"B\")\nassert \"B\" not in _broken[\"A\"] and \"A\" not in _broken[\"B\"], \"drop_link removes both directions\"\nassert LINE[\"A\"] == {\"B\": 1}, \"drop_link must copy, not edit the original graph\"\n_naive, _slow = run_dv(_broken, {n: dict(t) for n, t in _converged.items()})\nassert _slow == 15, f\"without split horizon the count to infinity takes 15 rounds, got {_slow!r}\"\nassert _naive[\"B\"][\"A\"] == (INFINITY, None), f\"B should end up with no route to A, got {_naive['B']['A']!r}\"\nassert _naive[\"C\"][\"A\"] == (INFINITY, None), f\"C should end up with no route to A, got {_naive['C']['A']!r}\"\n_fast_tables, _fast = run_dv(_broken, {n: dict(t) for n, t in _converged.items()}, split_horizon=True)\nassert _fast == 2, f\"split horizon should settle it in 2 rounds, got {_fast!r}\"\nassert _fast_tables[\"B\"][\"A\"] == (INFINITY, None) and _fast_tables[\"C\"][\"A\"] == (INFINITY, None), \\\n    \"split horizon must reach the same final answer, only sooner\""
+     },
+     {
+      "name": "Split horizon does not break a healthy network",
+      "code": "_plain, _ = run_dv(MESH)\n_guarded, _rounds = run_dv(MESH, split_horizon=True)\nfor _src in MESH:\n    for _dst in MESH:\n        assert _guarded[_src][_dst][0] == _plain[_src][_dst][0], \\\n            f\"split horizon changed the cost {_src}->{_dst}: {_guarded[_src][_dst]!r} vs {_plain[_src][_dst]!r}\"\nassert _rounds <= 4, f\"split horizon should not slow convergence down, took {_rounds!r} rounds\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "The application layer: HTTP and naming",
+   "summary": "Parsing a text protocol from raw bytes, and walking a delegating name hierarchy.",
+   "concepts": [
+    "HTTP/1.1 message grammar: start line, header fields, CRLF CRLF, body (RFC 7230)",
+    "Header field names are case-insensitive; repeated fields join with a comma",
+    "Framing a body: Content-Length, or chunked transfer encoding when the length is unknown",
+    "A chunked body is a series of hex-sized pieces terminated by a zero-length chunk",
+    "Robustness: a parser that trusts its input is an attack surface",
+    "DNS as a delegating hierarchy — root, TLD, then authoritative name server",
+    "Caching with a TTL is what makes recursive resolution affordable; CNAME chains need a loop guard"
+   ],
+   "lab": {
+    "title": "An HTTP/1.1 parser and a recursive resolver",
+    "runtime": "python",
+    "minutes": 55,
+    "brief": "Two application-layer protocols, parsed and walked from first principles.\n\n## Part 1 — HTTP/1.1\n\nEverything is `bytes` on the wire; header names and values decode as\n`latin-1`. `HttpError` is a `ValueError`.\n\n- `split_head(raw)` returns `(head, body)` around the first `CRLF CRLF`, and\n  raises `HttpError` when there is none.\n- `parse_headers(lines)` returns `{lowercased name: value}`. Values are\n  stripped. A repeated field joins with `\", \"` in arrival order. A line with\n  no colon, an empty name, or whitespace between the name and the colon is an\n  `HttpError`.\n- `decode_chunked(body)` decodes `<hex size> CRLF <data> CRLF ...` up to a\n  zero-size chunk. Any parameters after a `;` on the size line are ignored.\n  A bad size, a chunk not followed by CRLF, or a truncated body is an\n  `HttpError`.\n- `parse_request(raw)` returns\n  `{\"method\", \"target\", \"version\", \"headers\", \"body\"}`. The request line has\n  exactly three space-separated tokens; the method must be alphabetic and\n  upper case; the version must start with `HTTP/`; the target must start with\n  `/` or be `*`.\n- `parse_response(raw)` returns\n  `{\"version\", \"status\", \"reason\", \"headers\", \"body\"}` with `status` an int.\n  A missing reason phrase gives `\"\"`.\n\nBoth take the body from `Transfer-Encoding: chunked` when present, else from\n`Content-Length` (an integer, and the body must be at least that long — a\nlonger body is truncated to it), else the body is `b\"\"`.\n\n## Part 2 — a recursive resolver\n\n- `NameServer(name, records=None, referrals=None)`. `records` maps a full name\n  to either an address string or a `(\"CNAME\", target)` tuple. `referrals` maps\n  a zone to the name of the server that owns it. `referral_for(name)` returns\n  the server for the **longest** zone that `name` equals or ends with\n  (`\".\", zone`), else `None`.\n- `Resolver(servers, root=\"root\", ttl=30)` with `resolve(name)` returning\n  `(address, trace)`, where `trace` lists the servers queried in order. Start\n  at the root and follow referrals until a server holds the record. A\n  `(\"CNAME\", target)` is followed by resolving `target` and appending its\n  trace. No record and no referral raises `NXDomain` (a `LookupError`); a\n  chain deeper than 8 raises `ResolutionError`.\n- Answers are cached until `clock + ttl`. A live cache hit returns\n  `(address, [\"cache\"])` and queries nobody. `tick(seconds)` advances the\n  logical clock, and an entry whose expiry is no longer in the future is stale.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "CRLF = b\"\\r\\n\"\n\n\nclass HttpError(ValueError):\n    \"\"\"Raised when a message does not follow the HTTP/1.1 grammar.\"\"\"\n\n\nclass NXDomain(LookupError):\n    \"\"\"Raised when no server in the hierarchy can name an address.\"\"\"\n\n\nclass ResolutionError(RuntimeError):\n    \"\"\"Raised when resolution cannot terminate.\"\"\"\n\n\ndef split_head(raw):\n    \"\"\"(head, body) around the first blank line.\"\"\"\n    # your code here\n\n\ndef parse_headers(lines):\n    \"\"\"Lowercased field names to stripped values, repeats joined with a comma.\"\"\"\n    # your code here\n\n\ndef decode_chunked(body):\n    \"\"\"The bytes carried by a chunked body.\"\"\"\n    # your code here\n\n\ndef extract_body(headers, body):\n    \"\"\"The message body implied by the framing headers.\"\"\"\n    # your code here\n\n\ndef parse_request(raw):\n    \"\"\"method, target, version, headers and body of a request.\"\"\"\n    # your code here\n\n\ndef parse_response(raw):\n    \"\"\"version, status, reason, headers and body of a response.\"\"\"\n    # your code here\n\n\nclass NameServer:\n    \"\"\"One server in the hierarchy: some records, some delegations.\"\"\"\n\n    def __init__(self, name, records=None, referrals=None):\n        self.name = name\n        self.records = dict(records or {})\n        self.referrals = dict(referrals or {})\n\n    def referral_for(self, name):\n        \"\"\"The server owning the longest matching zone, or None.\"\"\"\n        # your code here\n\n\nclass Resolver:\n    \"\"\"A recursive resolver with a TTL cache over a logical clock.\"\"\"\n\n    def __init__(self, servers, root=\"root\", ttl=30):\n        self.servers = dict(servers)\n        self.root = root\n        self.ttl = ttl\n        self.clock = 0\n        self.cache = {}\n\n    def tick(self, seconds=1):\n        \"\"\"Advance the logical clock and return it.\"\"\"\n        # your code here\n\n    def resolve(self, name, _depth=0):\n        \"\"\"(address, trace) for a name, walking down from the root.\"\"\"\n        # your code here\n\n\nREQUEST = (b\"POST /api/orders HTTP/1.1\\r\\nHost: shop.example.com\\r\\n\"\n           b\"Content-Length: 15\\r\\nX-Tag: a\\r\\nX-Tag: b\\r\\n\\r\\n\"\n           b'{\"units\": 4711}')\nprint(parse_request(REQUEST))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "CRLF = b\"\\r\\n\"\n\n\nclass HttpError(ValueError):\n    \"\"\"Raised when a message does not follow the HTTP/1.1 grammar.\"\"\"\n\n\nclass NXDomain(LookupError):\n    \"\"\"Raised when no server in the hierarchy can name an address.\"\"\"\n\n\nclass ResolutionError(RuntimeError):\n    \"\"\"Raised when resolution cannot terminate.\"\"\"\n\n\ndef split_head(raw):\n    \"\"\"(head, body) around the first blank line.\"\"\"\n    marker = raw.find(CRLF + CRLF)\n    if marker == -1:\n        raise HttpError(\"no blank line between the headers and the body\")\n    return raw[:marker], raw[marker + 4:]\n\n\ndef parse_headers(lines):\n    \"\"\"Lowercased field names to stripped values, repeats joined with a comma.\"\"\"\n    headers = {}\n    for line in lines:\n        if b\":\" not in line:\n            raise HttpError(\"header line without a colon: \" + repr(line))\n        raw_name, _, raw_value = line.partition(b\":\")\n        name = raw_name.decode(\"latin-1\")\n        if not name or name != name.strip():\n            raise HttpError(\"bad header field name: \" + repr(name))\n        key = name.lower()\n        value = raw_value.decode(\"latin-1\").strip()\n        headers[key] = headers[key] + \", \" + value if key in headers else value\n    return headers\n\n\ndef decode_chunked(body):\n    \"\"\"The bytes carried by a chunked body.\"\"\"\n    out = bytearray()\n    index = 0\n    while True:\n        end = body.find(CRLF, index)\n        if end == -1:\n            raise HttpError(\"chunk size line is not terminated\")\n        field = body[index:end].split(b\";\")[0].strip()\n        try:\n            size = int(field, 16)\n        except ValueError:\n            raise HttpError(\"bad chunk size: \" + repr(field))\n        if size < 0:\n            raise HttpError(\"negative chunk size\")\n        index = end + 2\n        if size == 0:\n            return bytes(out)\n        if index + size + 2 > len(body):\n            raise HttpError(\"chunk body is truncated\")\n        if body[index + size:index + size + 2] != CRLF:\n            raise HttpError(\"chunk is not terminated by CRLF\")\n        out += body[index:index + size]\n        index += size + 2\n\n\ndef extract_body(headers, body):\n    \"\"\"The message body implied by the framing headers.\"\"\"\n    if headers.get(\"transfer-encoding\", \"\").lower() == \"chunked\":\n        return decode_chunked(body)\n    if \"content-length\" in headers:\n        field = headers[\"content-length\"]\n        if not field.isdigit():\n            raise HttpError(\"Content-Length is not a number: \" + repr(field))\n        length = int(field)\n        if len(body) < length:\n            raise HttpError(\"body is shorter than Content-Length\")\n        return body[:length]\n    return b\"\"\n\n\ndef parse_request(raw):\n    \"\"\"method, target, version, headers and body of a request.\"\"\"\n    head, body = split_head(raw)\n    lines = head.split(CRLF)\n    parts = lines[0].split(b\" \")\n    if len(parts) != 3:\n        raise HttpError(\"malformed request line: \" + repr(lines[0]))\n    method, target, version = (part.decode(\"latin-1\") for part in parts)\n    if not method.isalpha() or method != method.upper():\n        raise HttpError(\"bad method: \" + repr(method))\n    if not target.startswith(\"/\") and target != \"*\":\n        raise HttpError(\"bad request target: \" + repr(target))\n    if not version.startswith(\"HTTP/\"):\n        raise HttpError(\"bad version: \" + repr(version))\n    headers = parse_headers(lines[1:])\n    return {\"method\": method, \"target\": target, \"version\": version,\n            \"headers\": headers, \"body\": extract_body(headers, body)}\n\n\ndef parse_response(raw):\n    \"\"\"version, status, reason, headers and body of a response.\"\"\"\n    head, body = split_head(raw)\n    lines = head.split(CRLF)\n    parts = lines[0].split(b\" \", 2)\n    if len(parts) < 2:\n        raise HttpError(\"malformed status line: \" + repr(lines[0]))\n    version = parts[0].decode(\"latin-1\")\n    if not version.startswith(\"HTTP/\"):\n        raise HttpError(\"bad version: \" + repr(version))\n    code = parts[1].decode(\"latin-1\")\n    if len(code) != 3 or not code.isdigit():\n        raise HttpError(\"bad status code: \" + repr(code))\n    reason = parts[2].decode(\"latin-1\") if len(parts) == 3 else \"\"\n    headers = parse_headers(lines[1:])\n    return {\"version\": version, \"status\": int(code), \"reason\": reason,\n            \"headers\": headers, \"body\": extract_body(headers, body)}\n\n\nclass NameServer:\n    \"\"\"One server in the hierarchy: some records, some delegations.\"\"\"\n\n    def __init__(self, name, records=None, referrals=None):\n        self.name = name\n        self.records = dict(records or {})\n        self.referrals = dict(referrals or {})\n\n    def referral_for(self, name):\n        \"\"\"The server owning the longest matching zone, or None.\"\"\"\n        best = None\n        for zone, server in self.referrals.items():\n            if name == zone or name.endswith(\".\" + zone):\n                if best is None or len(zone) > len(best[0]):\n                    best = (zone, server)\n        return best[1] if best else None\n\n\nclass Resolver:\n    \"\"\"A recursive resolver with a TTL cache over a logical clock.\"\"\"\n\n    def __init__(self, servers, root=\"root\", ttl=30):\n        self.servers = dict(servers)\n        self.root = root\n        self.ttl = ttl\n        self.clock = 0\n        self.cache = {}\n\n    def tick(self, seconds=1):\n        \"\"\"Advance the logical clock and return it.\"\"\"\n        self.clock += seconds\n        return self.clock\n\n    def resolve(self, name, _depth=0):\n        \"\"\"(address, trace) for a name, walking down from the root.\"\"\"\n        if _depth > 8:\n            raise ResolutionError(\"alias chain too long for \" + repr(name))\n        cached = self.cache.get(name)\n        if cached is not None and cached[1] > self.clock:\n            return cached[0], [\"cache\"]\n        trace = []\n        server = self.servers[self.root]\n        while True:\n            trace.append(server.name)\n            if name in server.records:\n                value = server.records[name]\n                if isinstance(value, tuple):\n                    address, rest = self.resolve(value[1], _depth + 1)\n                    self.cache[name] = (address, self.clock + self.ttl)\n                    return address, trace + rest\n                self.cache[name] = (value, self.clock + self.ttl)\n                return value, trace\n            nxt = server.referral_for(name)\n            if nxt is None:\n                raise NXDomain(name)\n            server = self.servers[nxt]\n\n\nREQUEST = (b\"POST /api/orders HTTP/1.1\\r\\nHost: shop.example.com\\r\\n\"\n           b\"Content-Length: 15\\r\\nX-Tag: a\\r\\nX-Tag: b\\r\\n\\r\\n\"\n           b'{\"units\": 4711}')\nprint(parse_request(REQUEST))\n"
+     }
+    ],
+    "hints": [
+     "`raw.find(b'\\r\\n\\r\\n')` locates the head/body boundary; everything four bytes past it is the body.",
+     "`line.partition(b':')` splits a header at the first colon and leaves colons in the value alone — which matters for `Host: a:8080`.",
+     "The chunk loop reads a size line, then exactly that many bytes, then the CRLF that follows them; a size of 0 ends the body.",
+     "For the resolver, keep the walk a `while True` over servers: answer, or refer, or NXDomain — and cache only once you have an address."
+    ],
+    "tests": [
+     {
+      "name": "A request parses into its parts",
+      "code": "_raw = (b\"POST /api/orders HTTP/1.1\\r\\nHost: shop.example.com\\r\\n\"\n        b\"Content-Length: 15\\r\\nX-Tag: a\\r\\nX-Tag: b\\r\\n\\r\\n\"\n        b'{\"units\": 4711}')\n_got = parse_request(_raw)\nassert _got[\"method\"] == \"POST\" and _got[\"target\"] == \"/api/orders\", f\"Got {_got!r}\"\nassert _got[\"version\"] == \"HTTP/1.1\", f\"version was {_got['version']!r}\"\nassert _got[\"headers\"][\"host\"] == \"shop.example.com\", \"field names are lowercased and values stripped\"\nassert _got[\"headers\"][\"x-tag\"] == \"a, b\", f\"repeated fields join with a comma, got {_got['headers']['x-tag']!r}\"\nassert _got[\"body\"] == b'{\"units\": 4711}', f\"body was {_got['body']!r}\"\n_bare = parse_request(b\"GET / HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n\")\nassert _bare[\"body\"] == b\"\", f\"no framing header means an empty body, got {_bare['body']!r}\""
+     },
+     {
+      "name": "Malformed requests are refused",
+      "code": "for _bad in [b\"GET / HTTP/1.1\\r\\nHost: x\\r\\n\",\n             b\"GET /\\r\\n\\r\\n\",\n             b\"GET / HTTP/1.1 extra\\r\\n\\r\\n\",\n             b\"get / HTTP/1.1\\r\\n\\r\\n\",\n             b\"GET / SPDY/1.1\\r\\n\\r\\n\",\n             b\"GET index.html HTTP/1.1\\r\\n\\r\\n\",\n             b\"GET / HTTP/1.1\\r\\nBroken\\r\\n\\r\\n\",\n             b\"GET / HTTP/1.1\\r\\nHost : x\\r\\n\\r\\n\",\n             b\"GET / HTTP/1.1\\r\\nContent-Length: ten\\r\\n\\r\\nabc\",\n             b\"GET / HTTP/1.1\\r\\nContent-Length: 99\\r\\n\\r\\nabc\"]:\n    try:\n        parse_request(_bad)\n        assert False, f\"parse_request({_bad!r}) should raise HttpError\"\n    except HttpError:\n        pass\nassert issubclass(HttpError, ValueError), \"HttpError should be a ValueError\""
+     },
+     {
+      "name": "Responses, with and without a reason phrase",
+      "code": "_got = parse_response(b\"HTTP/1.1 404 Not Found\\r\\nContent-Length: 3\\r\\n\\r\\nabcXX\")\nassert (_got[\"status\"], _got[\"reason\"]) == (404, \"Not Found\"), f\"Got {(_got['status'], _got['reason'])!r}\"\nassert _got[\"status\"] == 404 and isinstance(_got[\"status\"], int), \"status comes back as an int\"\nassert _got[\"body\"] == b\"abc\", f\"the body is truncated to Content-Length, got {_got['body']!r}\"\nassert parse_response(b\"HTTP/1.1 204\\r\\n\\r\\n\")[\"reason\"] == \"\", \"a missing reason phrase is an empty string\"\nfor _bad in [b\"HTTP/1.1\\r\\n\\r\\n\", b\"HTTP/1.1 20 OK\\r\\n\\r\\n\", b\"HTTP/1.1 abc OK\\r\\n\\r\\n\",\n             b\"ICY 200 OK\\r\\n\\r\\n\"]:\n    try:\n        parse_response(_bad)\n        assert False, f\"parse_response({_bad!r}) should raise HttpError\"\n    except HttpError:\n        pass"
+     },
+     {
+      "name": "Chunked bodies decode and validate",
+      "code": "_body = b\"7\\r\\nMozilla\\r\\n9\\r\\nDeveloper\\r\\n7\\r\\nNetwork\\r\\n0\\r\\n\\r\\n\"\nassert decode_chunked(_body) == b\"MozillaDeveloperNetwork\", f\"Got {decode_chunked(_body)!r}\"\nassert decode_chunked(b\"0\\r\\n\\r\\n\") == b\"\", \"a body of only the final chunk is empty\"\nassert decode_chunked(b\"3;ext=1\\r\\nabc\\r\\n0\\r\\n\\r\\n\") == b\"abc\", \"chunk extensions after ';' are ignored\"\nassert decode_chunked(b\"A\\r\\n0123456789\\r\\n0\\r\\n\\r\\n\") == b\"0123456789\", \"sizes are hexadecimal\"\nfor _bad in [b\"zz\\r\\nabc\\r\\n0\\r\\n\\r\\n\", b\"3\\r\\nabcd\\r\\n0\\r\\n\\r\\n\", b\"9\\r\\nabc\\r\\n0\\r\\n\\r\\n\", b\"3\"]:\n    try:\n        decode_chunked(_bad)\n        assert False, f\"decode_chunked({_bad!r}) should raise HttpError\"\n    except HttpError:\n        pass\n_resp = parse_response(b\"HTTP/1.1 200 OK\\r\\nTransfer-Encoding: chunked\\r\\n\\r\\n\" + _body)\nassert _resp[\"body\"] == b\"MozillaDeveloperNetwork\", f\"Got {_resp['body']!r}\""
+     },
+     {
+      "name": "Referrals pick the longest matching zone",
+      "code": "_ns = NameServer(\"gtld\", referrals={\"com\": \"com-ns\", \"example.com\": \"example-ns\"})\nassert _ns.referral_for(\"www.example.com\") == \"example-ns\", \\\n    f\"the longest zone wins, got {_ns.referral_for('www.example.com')!r}\"\nassert _ns.referral_for(\"other.com\") == \"com-ns\", f\"Got {_ns.referral_for('other.com')!r}\"\nassert _ns.referral_for(\"example.com\") == \"example-ns\", \"a name equal to the zone matches it\"\nassert _ns.referral_for(\"notexample.com\") == \"com-ns\", \\\n    \"a suffix must fall on a label boundary, not mid-label\"\nassert _ns.referral_for(\"example.org\") is None, \"no matching zone gives None\""
+     },
+     {
+      "name": "Resolution walks the hierarchy",
+      "code": "_servers = {\n    \"root\": NameServer(\"root\", referrals={\"com\": \"com-gtld\", \"org\": \"org-gtld\"}),\n    \"com-gtld\": NameServer(\"com-gtld\", referrals={\"example.com\": \"ns.example.com\",\n                                                  \"cdn.com\": \"ns.cdn.com\"}),\n    \"org-gtld\": NameServer(\"org-gtld\", referrals={\"ietf.org\": \"ns.ietf.org\"}),\n    \"ns.example.com\": NameServer(\"ns.example.com\", records={\n        \"example.com\": \"93.184.216.34\",\n        \"www.example.com\": (\"CNAME\", \"static.cdn.com\")}),\n    \"ns.cdn.com\": NameServer(\"ns.cdn.com\", records={\"static.cdn.com\": \"203.0.113.9\"}),\n    \"ns.ietf.org\": NameServer(\"ns.ietf.org\", records={\"ietf.org\": \"104.16.44.99\"}),\n}\n_r = Resolver(_servers)\nassert _r.resolve(\"ietf.org\") == (\"104.16.44.99\", [\"root\", \"org-gtld\", \"ns.ietf.org\"]), \\\n    f\"Got {_r.resolve('ietf.org')!r}\"\n_r2 = Resolver(_servers)\nassert _r2.resolve(\"example.com\") == (\"93.184.216.34\", [\"root\", \"com-gtld\", \"ns.example.com\"]), \\\n    f\"Got {_r2.resolve('example.com')!r}\"\n_r3 = Resolver(_servers)\n_address, _trace = _r3.resolve(\"www.example.com\")\nassert _address == \"203.0.113.9\", f\"the alias should resolve to the target address, got {_address!r}\"\nassert _trace == [\"root\", \"com-gtld\", \"ns.example.com\", \"root\", \"com-gtld\", \"ns.cdn.com\"], \\\n    f\"the alias trace should continue into the second walk, got {_trace!r}\"\nfor _bad in [\"nope.invalid\", \"missing.example.com\"]:\n    try:\n        Resolver(_servers).resolve(_bad)\n        assert False, f\"resolve({_bad!r}) should raise NXDomain\"\n    except NXDomain:\n        pass"
+     },
+     {
+      "name": "The cache answers, and then expires",
+      "code": "_servers = {\n    \"root\": NameServer(\"root\", referrals={\"org\": \"org-gtld\"}),\n    \"org-gtld\": NameServer(\"org-gtld\", referrals={\"ietf.org\": \"ns.ietf.org\"}),\n    \"ns.ietf.org\": NameServer(\"ns.ietf.org\", records={\"ietf.org\": \"104.16.44.99\"}),\n}\n_r = Resolver(_servers, ttl=30)\n_first = _r.resolve(\"ietf.org\")\nassert _first[1] == [\"root\", \"org-gtld\", \"ns.ietf.org\"], f\"the first lookup walks: {_first[1]!r}\"\nassert _r.resolve(\"ietf.org\") == (\"104.16.44.99\", [\"cache\"]), \\\n    f\"a warm cache answers without querying, got {_r.resolve('ietf.org')!r}\"\nassert _r.tick(29) == 29, \"tick returns the new clock\"\nassert _r.resolve(\"ietf.org\")[1] == [\"cache\"], \"the entry is still live one second before expiry\"\n_r.tick(1)\nassert _r.resolve(\"ietf.org\")[1] == [\"root\", \"org-gtld\", \"ns.ietf.org\"], \\\n    \"at the expiry instant the entry is stale and must be fetched again\""
+     },
+     {
+      "name": "An alias loop is stopped",
+      "code": "_looping = {\n    \"root\": NameServer(\"root\", referrals={\"test\": \"ns.test\"}),\n    \"ns.test\": NameServer(\"ns.test\", records={\"a.test\": (\"CNAME\", \"b.test\"),\n                                              \"b.test\": (\"CNAME\", \"a.test\")}),\n}\ntry:\n    Resolver(_looping).resolve(\"a.test\")\n    assert False, \"a CNAME loop should raise ResolutionError, not recurse for ever\"\nexcept ResolutionError:\n    pass"
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "Capstone — a layered stack delivering a message end to end",
+  "brief": "Assemble the whole course into one stack and push a message across a multi-hop\nnetwork that loses and corrupts frames. Two files: `stack.py` holds the layers\nand is what the checks import; `main.py` drives a demo.\n\n## Link layer — framing with an integrity trailer\n\n`FLAG = 0x7E`, `ESC = 0x7D`, `MASK = 0x20`, CRC polynomial `0xEDB88320`.\n\n- `crc32(data)` — the standard reflected CRC-32, table driven.\n- `frame(seq, payload)` — build the body as one sequence byte, then the\n  payload, then the CRC-32 **of that body so far** as four big-endian bytes;\n  byte-stuff the whole body and wrap it in flags. A `seq` outside `0..255`\n  raises `ValueError`.\n- `deframe(raw)` — `(seq, payload)` for an intact frame, and `None` for\n  anything damaged: bad framing, a body under five bytes, or a CRC mismatch.\n  It never raises on corrupt input; a receiver simply discards.\n- `FramingError(ValueError)` is raised by the internal unstuffing step.\n\n## Network layer — topology and routing\n\n`Topology(links)` where `links` is `{(a, b): cost}`, undirected. `route(source,\ndest)` returns the cheapest node-by-node path using Dijkstra, visiting\nneighbours in sorted order for reproducible ties, and raises\n`UnreachableError` (a `LookupError`) for an unknown or unreachable node.\n\n## The medium\n\n`Network(topology, drop_hops=(), corrupt_hops=())`. Every **hop** of every\ndelivery is one numbered event, counted in `network.hops` from zero.\n`deliver(path, raw)` walks `raw` along `path`:\n\n```text\nfor each of the len(path) - 1 hops:\n    index = self.hops; self.hops += 1\n    if index in drop_hops:    return None\n    if index in corrupt_hops: raw = raw[:1] + bytes([raw[1] ^ 0x01]) + raw[2:]\nreturn raw\n```\n\n## Transport — stop-and-wait over the path\n\n`chunk(data, size)` splits bytes into pieces of at most `size` (a size under 1\nraises `ValueError`). `send_message(network, source, dest, message,\nchunk_size=4)` routes once, splits the UTF-8 encoding of `message`, and for\neach piece:\n\n```text\nseq = index % 2\nloop:\n    data_frames += 1\n    arrived = network.deliver(path, frame(seq, piece))\n    parsed  = deframe(arrived) if arrived is not None else None\n    if parsed is None: continue                  # lost or damaged: resend\n    got_seq, payload = parsed\n    if got_seq == expected: append payload; expected ^= 1\n    ack_frames += 1\n    ack = network.deliver(reversed path, frame(got_seq, b\"\"))\n    if ack is not None and deframe(ack) is not None: break\n```\n\nMore than `MAX_ATTEMPTS` (200) attempts on one piece raises `RuntimeError`.\nIt returns `{\"text\", \"path\", \"data_frames\", \"ack_frames\", \"retransmissions\",\n\"hops\"}`, where `retransmissions` is `data_frames - len(pieces)` and `hops` is\nthe network's hop counter.",
+  "deliverables": [
+   "`stack.py` — link, network and transport layers, importable with no side effects",
+   "`main.py` — a demo routing a message across the sample topology, clean and lossy",
+   "A CRC-checked frame format whose receiver silently discards damage instead of raising",
+   "Dijkstra-based routing that reports unreachable destinations rather than guessing",
+   "A deterministic medium in which every hop is a numbered, reproducible event",
+   "Stop-and-wait transport that reassembles the exact message under loss and corruption"
+  ],
+  "constraints": [
+   "Standard library only — `heapq` is the only import you need",
+   "No `zlib`: the CRC is yours to implement",
+   "Importing `stack.py` must print nothing and open no files",
+   "The transport layer may not inspect frame bytes directly — it goes through frame/deframe",
+   "Every counter must be reproducible: no randomness anywhere in the stack"
+  ],
+  "rubric": [
+   {
+    "criterion": "Correctness",
+    "weight": 40,
+    "evidence": "Every automated check passes, including the empty message, single-hop and unreachable cases."
+   },
+   {
+    "criterion": "Layering",
+    "weight": 20,
+    "evidence": "Framing, routing, the medium and the transport loop are separable; each is testable without the others."
+   },
+   {
+    "criterion": "Error handling",
+    "weight": 20,
+    "evidence": "Corrupt frames are discarded rather than raised, unreachable routes raise UnreachableError, and a hopeless link fails loudly at MAX_ATTEMPTS."
+   },
+   {
+    "criterion": "Determinism",
+    "weight": 10,
+    "evidence": "Identical inputs give identical hop, frame and retransmission counts on every run."
+   },
+   {
+    "criterion": "Documented API",
+    "weight": 10,
+    "evidence": "Every public function and method carries a docstring stating its contract, including what it returns on damage."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 280,
+  "files": [
+   {
+    "name": "stack.py",
+    "content": "import heapq\n\nFLAG = 0x7E\nESC = 0x7D\nMASK = 0x20\nCRC_POLY = 0xEDB88320\nMAX_ATTEMPTS = 200\n\n\nclass FramingError(ValueError):\n    \"\"\"Raised when a byte sequence is not a well-formed frame.\"\"\"\n\n\nclass UnreachableError(LookupError):\n    \"\"\"Raised when the topology offers no path between two nodes.\"\"\"\n\n\ndef crc32(data):\n    \"\"\"The reflected CRC-32 of data, as an unsigned 32-bit integer.\"\"\"\n\n\ndef frame(seq, payload):\n    \"\"\"seq byte + payload + CRC-32 trailer, byte-stuffed between two flags.\"\"\"\n\n\ndef deframe(raw):\n    \"\"\"(seq, payload) for an intact frame, or None when it is damaged.\"\"\"\n\n\nclass Topology:\n    \"\"\"An undirected weighted graph with shortest-path routing.\"\"\"\n\n    def __init__(self, links):\n        self.graph = {}\n\n    def route(self, source, dest):\n        \"\"\"The cheapest node-by-node path, or UnreachableError.\"\"\"\n\n\nclass Network:\n    \"\"\"A deterministic medium. Every hop is one numbered transmission event.\"\"\"\n\n    def __init__(self, topology, drop_hops=(), corrupt_hops=()):\n        self.topology = topology\n        self.drop_hops = set(drop_hops)\n        self.corrupt_hops = set(corrupt_hops)\n        self.hops = 0\n\n    def deliver(self, path, raw):\n        \"\"\"Walk raw along path hop by hop; None when a hop drops it.\"\"\"\n\n\ndef chunk(data, size):\n    \"\"\"data split into consecutive pieces of at most size bytes.\"\"\"\n\n\ndef send_message(network, source, dest, message, chunk_size=4):\n    \"\"\"Deliver message end to end with stop-and-wait; text plus counters.\"\"\"\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from stack import Network, Topology, send_message\n\nLINKS = {\n    (\"host-a\", \"r1\"): 1,\n    (\"r1\", \"r2\"): 2,\n    (\"r1\", \"r3\"): 5,\n    (\"r2\", \"r3\"): 1,\n    (\"r3\", \"host-b\"): 1,\n    (\"r2\", \"host-b\"): 9,\n}\n\ntopology = Topology(LINKS)\n\n# route the message across a clean network, then across a lossy one,\n# and print the path, the text that arrived and the counters\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "stack.py",
+    "content": "import heapq\n\nFLAG = 0x7E\nESC = 0x7D\nMASK = 0x20\nCRC_POLY = 0xEDB88320\nMAX_ATTEMPTS = 200\n\n\nclass FramingError(ValueError):\n    \"\"\"Raised when a byte sequence is not a well-formed frame.\"\"\"\n\n\nclass UnreachableError(LookupError):\n    \"\"\"Raised when the topology offers no path between two nodes.\"\"\"\n\n\ndef _crc_table():\n    \"\"\"The 256-entry reflected CRC-32 table, built once at import time.\"\"\"\n    table = []\n    for index in range(256):\n        value = index\n        for _ in range(8):\n            value = (value >> 1) ^ (CRC_POLY if value & 1 else 0)\n        table.append(value)\n    return tuple(table)\n\n\nCRC_TABLE = _crc_table()\n\n\ndef crc32(data):\n    \"\"\"The reflected CRC-32 of data, as an unsigned 32-bit integer.\"\"\"\n    crc = 0xFFFFFFFF\n    for byte in data:\n        crc = CRC_TABLE[(crc ^ byte) & 0xFF] ^ (crc >> 8)\n    return crc ^ 0xFFFFFFFF\n\n\ndef _unstuff(raw):\n    \"\"\"The body between the flags with escapes resolved; FramingError on damage.\"\"\"\n    if len(raw) < 2 or raw[0] != FLAG or raw[-1] != FLAG:\n        raise FramingError(\"a frame starts and ends with a flag\")\n    body = raw[1:-1]\n    out = bytearray()\n    index = 0\n    while index < len(body):\n        byte = body[index]\n        if byte == FLAG:\n            raise FramingError(\"unescaped flag inside a frame\")\n        if byte == ESC:\n            if index + 1 >= len(body):\n                raise FramingError(\"dangling escape at the end of a frame\")\n            out.append(body[index + 1] ^ MASK)\n            index += 2\n            continue\n        out.append(byte)\n        index += 1\n    return bytes(out)\n\n\ndef frame(seq, payload):\n    \"\"\"seq byte + payload + CRC-32 trailer, byte-stuffed between two flags.\"\"\"\n    if not 0 <= seq <= 255:\n        raise ValueError(\"seq must fit in one byte\")\n    body = bytes([seq]) + bytes(payload)\n    body = body + crc32(body).to_bytes(4, \"big\")\n    stuffed = bytearray()\n    for byte in body:\n        if byte in (FLAG, ESC):\n            stuffed.append(ESC)\n            stuffed.append(byte ^ MASK)\n        else:\n            stuffed.append(byte)\n    return bytes([FLAG]) + bytes(stuffed) + bytes([FLAG])\n\n\ndef deframe(raw):\n    \"\"\"(seq, payload) for an intact frame, or None when it is damaged.\"\"\"\n    try:\n        body = _unstuff(raw)\n    except FramingError:\n        return None\n    if len(body) < 5:\n        return None\n    protected, trailer = body[:-4], body[-4:]\n    if crc32(protected) != int.from_bytes(trailer, \"big\"):\n        return None\n    return protected[0], protected[1:]\n\n\nclass Topology:\n    \"\"\"An undirected weighted graph with shortest-path routing.\"\"\"\n\n    def __init__(self, links):\n        self.graph = {}\n        for (left, right), weight in links.items():\n            self.graph.setdefault(left, {})[right] = weight\n            self.graph.setdefault(right, {})[left] = weight\n\n    def route(self, source, dest):\n        \"\"\"The cheapest node-by-node path, or UnreachableError.\"\"\"\n        if source not in self.graph or dest not in self.graph:\n            raise UnreachableError(f\"unknown node in {source!r} -> {dest!r}\")\n        dist = {node: float(\"inf\") for node in self.graph}\n        prev = {node: None for node in self.graph}\n        dist[source] = 0\n        seen = set()\n        queue = [(0, source)]\n        while queue:\n            cost, node = heapq.heappop(queue)\n            if node in seen:\n                continue\n            seen.add(node)\n            for neighbour, weight in sorted(self.graph[node].items()):\n                if cost + weight < dist[neighbour]:\n                    dist[neighbour] = cost + weight\n                    prev[neighbour] = node\n                    heapq.heappush(queue, (cost + weight, neighbour))\n        if dist[dest] == float(\"inf\"):\n            raise UnreachableError(f\"no path from {source!r} to {dest!r}\")\n        path = [dest]\n        while path[-1] != source:\n            path.append(prev[path[-1]])\n        return list(reversed(path))\n\n\nclass Network:\n    \"\"\"A deterministic medium. Every hop is one numbered transmission event.\"\"\"\n\n    def __init__(self, topology, drop_hops=(), corrupt_hops=()):\n        self.topology = topology\n        self.drop_hops = set(drop_hops)\n        self.corrupt_hops = set(corrupt_hops)\n        self.hops = 0\n\n    def deliver(self, path, raw):\n        \"\"\"Walk raw along path hop by hop; None when a hop drops it.\"\"\"\n        for _ in range(len(path) - 1):\n            index = self.hops\n            self.hops += 1\n            if index in self.drop_hops:\n                return None\n            if index in self.corrupt_hops:\n                raw = raw[:1] + bytes([raw[1] ^ 0x01]) + raw[2:]\n        return raw\n\n\ndef chunk(data, size):\n    \"\"\"data split into consecutive pieces of at most size bytes.\"\"\"\n    if size < 1:\n        raise ValueError(\"chunk size must be at least 1\")\n    return [data[start:start + size] for start in range(0, len(data), size)]\n\n\ndef send_message(network, source, dest, message, chunk_size=4):\n    \"\"\"Deliver message end to end with stop-and-wait; text plus counters.\"\"\"\n    path = network.topology.route(source, dest)\n    back = list(reversed(path))\n    pieces = chunk(message.encode(\"utf-8\"), chunk_size)\n    received = bytearray()\n    expected = 0\n    data_frames = 0\n    ack_frames = 0\n    for index, piece in enumerate(pieces):\n        seq = index % 2\n        attempts = 0\n        while True:\n            attempts += 1\n            if attempts > MAX_ATTEMPTS:\n                raise RuntimeError(\"the link never delivered this piece\")\n            data_frames += 1\n            arrived = network.deliver(path, frame(seq, piece))\n            parsed = deframe(arrived) if arrived is not None else None\n            if parsed is None:\n                continue\n            got_seq, payload = parsed\n            if got_seq == expected:\n                received += payload\n                expected ^= 1\n            ack_frames += 1\n            ack = network.deliver(back, frame(got_seq, b\"\"))\n            if ack is not None and deframe(ack) is not None:\n                break\n    return {\"text\": received.decode(\"utf-8\"), \"path\": path,\n            \"data_frames\": data_frames, \"ack_frames\": ack_frames,\n            \"retransmissions\": data_frames - len(pieces), \"hops\": network.hops}\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from stack import Network, Topology, deframe, frame, send_message\n\nLINKS = {\n    (\"host-a\", \"r1\"): 1,\n    (\"r1\", \"r2\"): 2,\n    (\"r1\", \"r3\"): 5,\n    (\"r2\", \"r3\"): 1,\n    (\"r3\", \"host-b\"): 1,\n    (\"r2\", \"host-b\"): 9,\n}\n\ntopology = Topology(LINKS)\nprint(\"route:\", topology.route(\"host-a\", \"host-b\"))\n\nclean = Network(topology)\nprint(\"clean:\", send_message(clean, \"host-a\", \"host-b\", \"hello networks\", 4))\n\nlossy = Network(topology, drop_hops={2, 3, 11}, corrupt_hops={17})\nprint(\"lossy:\", send_message(lossy, \"host-a\", \"host-b\", \"hello networks\", 4))\n\nsample = frame(1, b\"abc\")\nprint(\"frame:\", sample.hex(), deframe(sample))\nprint(\"damaged:\", deframe(sample[:1] + bytes([sample[1] ^ 0x01]) + sample[2:]))\n"
+   }
+  ],
+  "hints": [
+   "Build upwards and test each layer alone: framing first, then routing, then the medium, and only then the transport loop.",
+   "`deframe` must catch its own FramingError and return None — the whole point is that a receiver discards damage silently.",
+   "The corruption flips a bit in the sequence byte, so the CRC is what catches it; put the CRC over the sequence byte as well as the payload.",
+   "Count a data frame on every attempt, but an ack frame only when a data frame actually arrived — that asymmetry is what makes the counters reproducible."
+  ],
+  "tests": [
+   {
+    "name": "The CRC matches the standard check values",
+    "code": "from stack import crc32\nassert crc32(b\"\") == 0, f\"crc32(b'') gave {crc32(b'')!r}, expected 0\"\nassert crc32(b\"123456789\") == 0xCBF43926, f\"crc32 of the check string gave {hex(crc32(b'123456789'))}\"\nassert crc32(b\"hello world\") == 0x0D4A1185, f\"Got {hex(crc32(b'hello world'))}\""
+   },
+   {
+    "name": "Frames round-trip, including the reserved bytes",
+    "code": "from stack import FLAG, deframe, frame\nfor _seq in (0, 1, 255):\n    for _payload in [b\"\", b\"abc\", b\"\\x7e\\x7d\", bytes(range(64))]:\n        _got = deframe(frame(_seq, _payload))\n        assert _got == (_seq, _payload), f\"frame/deframe of ({_seq}, {_payload!r}) gave {_got!r}\"\n_f = frame(1, b\"abc\")\nassert _f[0] == FLAG and _f[-1] == FLAG, \"a frame is delimited by flags\"\nassert FLAG not in _f[1:-1], \"the body must not contain a bare flag byte\"\ntry:\n    frame(256, b\"x\")\n    assert False, \"a sequence number outside 0..255 should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "Damage is discarded, not raised",
+    "code": "from stack import deframe, frame\n_f = frame(0, b\"payload\")\nfor _bad in [b\"\", b\"\\x7e\", b\"abc\", _f[1:], _f[:-1],\n             _f[:1] + bytes([_f[1] ^ 0x01]) + _f[2:],\n             _f[:-2] + bytes([_f[-2] ^ 0x80]) + _f[-1:]]:\n    _got = deframe(_bad)\n    assert _got is None, f\"deframe({_bad!r}) gave {_got!r}, expected None\"\nassert deframe(frame(0, b\"payload\")) == (0, b\"payload\"), \"an intact frame still parses\""
+   },
+   {
+    "name": "Routing takes the cheapest path",
+    "code": "from stack import Topology, UnreachableError\n_links = {(\"host-a\", \"r1\"): 1, (\"r1\", \"r2\"): 2, (\"r1\", \"r3\"): 5,\n          (\"r2\", \"r3\"): 1, (\"r3\", \"host-b\"): 1, (\"r2\", \"host-b\"): 9}\n_t = Topology(_links)\nassert _t.route(\"host-a\", \"host-b\") == [\"host-a\", \"r1\", \"r2\", \"r3\", \"host-b\"], \\\n    f\"Got {_t.route('host-a', 'host-b')!r}\"\nassert _t.route(\"host-a\", \"host-a\") == [\"host-a\"], \"a node routes to itself in one step\"\nassert _t.route(\"host-b\", \"host-a\") == [\"host-b\", \"r3\", \"r2\", \"r1\", \"host-a\"], \\\n    f\"the reverse path should mirror the forward one, got {_t.route('host-b', 'host-a')!r}\"\nassert _t.route(\"r1\", \"r3\") == [\"r1\", \"r2\", \"r3\"], \\\n    f\"2+1 beats the direct link of 5, got {_t.route('r1', 'r3')!r}\"\nfor _pair in [(\"host-a\", \"nowhere\"), (\"nowhere\", \"host-a\")]:\n    try:\n        _t.route(*_pair)\n        assert False, f\"route{_pair!r} should raise UnreachableError\"\n    except UnreachableError:\n        pass\n_island = Topology({(\"a\", \"b\"): 1, (\"c\", \"d\"): 1})\ntry:\n    _island.route(\"a\", \"d\")\n    assert False, \"two disconnected components should raise UnreachableError\"\nexcept UnreachableError:\n    pass"
+   },
+   {
+    "name": "The medium counts hops and applies its events",
+    "code": "from stack import Network, Topology, deframe, frame\n_t = Topology({(\"a\", \"b\"): 1, (\"b\", \"c\"): 1})\n_path = _t.route(\"a\", \"c\")\nassert _path == [\"a\", \"b\", \"c\"], f\"Got {_path!r}\"\n_clean = Network(_t)\n_raw = frame(0, b\"hi\")\nassert _clean.deliver(_path, _raw) == _raw, \"a clean medium delivers the bytes unchanged\"\nassert _clean.hops == 2, f\"a two-hop path costs 2 events, got {_clean.hops!r}\"\n_lossy = Network(_t, drop_hops={0})\nassert _lossy.deliver(_path, _raw) is None, \"a dropping hop returns None\"\nassert _lossy.hops == 1, f\"the walk stops at the drop, so hops is {_lossy.hops!r}, expected 1\"\n_bad = Network(_t, corrupt_hops={1})\n_damaged = _bad.deliver(_path, _raw)\nassert _damaged is not None and _damaged != _raw, \"a corrupting hop delivers different bytes\"\nassert deframe(_damaged) is None, \"the CRC must catch the corruption the medium introduced\"\nassert _bad.hops == 2, f\"corruption does not stop the walk, hops was {_bad.hops!r}\""
+   },
+   {
+    "name": "chunk splits without losing bytes",
+    "code": "from stack import chunk\nassert chunk(b\"abcdefg\", 3) == [b\"abc\", b\"def\", b\"g\"], f\"Got {chunk(b'abcdefg', 3)!r}\"\nassert chunk(b\"\", 4) == [], \"no data means no pieces\"\nassert chunk(b\"ab\", 10) == [b\"ab\"], \"a short message is one piece\"\nassert b\"\".join(chunk(bytes(range(50)), 7)) == bytes(range(50)), \"chunking must be lossless\"\nfor _bad in (0, -1):\n    try:\n        chunk(b\"abc\", _bad)\n        assert False, f\"chunk size {_bad} should raise ValueError\"\n    except ValueError:\n        pass"
+   },
+   {
+    "name": "End to end across a clean network",
+    "code": "from stack import Network, Topology, send_message\n_t = Topology({(\"host-a\", \"r1\"): 1, (\"r1\", \"r2\"): 2, (\"r1\", \"r3\"): 5,\n               (\"r2\", \"r3\"): 1, (\"r3\", \"host-b\"): 1, (\"r2\", \"host-b\"): 9})\n_net = Network(_t)\n_r = send_message(_net, \"host-a\", \"host-b\", \"hello networks\", 4)\nassert _r[\"text\"] == \"hello networks\", f\"the message arrived as {_r['text']!r}\"\nassert _r[\"path\"] == [\"host-a\", \"r1\", \"r2\", \"r3\", \"host-b\"], f\"path was {_r['path']!r}\"\nassert (_r[\"data_frames\"], _r[\"ack_frames\"], _r[\"retransmissions\"]) == (4, 4, 0), \\\n    f\"clean counters were {(_r['data_frames'], _r['ack_frames'], _r['retransmissions'])!r}, expected (4, 4, 0)\"\nassert _r[\"hops\"] == 32, f\"8 deliveries over a 4-hop path is 32 events, got {_r['hops']!r}\""
+   },
+   {
+    "name": "An empty message and a single hop",
+    "code": "from stack import Network, Topology, send_message\n_t = Topology({(\"a\", \"b\"): 1})\n_net = Network(_t)\n_r = send_message(_net, \"a\", \"b\", \"\", 4)\nassert _r[\"text\"] == \"\" and _r[\"data_frames\"] == 0 and _r[\"hops\"] == 0, f\"Got {_r!r}\"\n_net2 = Network(_t)\n_r2 = send_message(_net2, \"a\", \"b\", \"ok\", 4)\nassert _r2[\"text\"] == \"ok\" and _r2[\"path\"] == [\"a\", \"b\"], f\"Got {_r2!r}\"\nassert _r2[\"hops\"] == 2, f\"one data frame and one ack over one hop is 2 events, got {_r2['hops']!r}\""
+   },
+   {
+    "name": "Loss and corruption cost retransmissions but not correctness",
+    "code": "from stack import Network, Topology, send_message\n_t = Topology({(\"host-a\", \"r1\"): 1, (\"r1\", \"r2\"): 2, (\"r1\", \"r3\"): 5,\n               (\"r2\", \"r3\"): 1, (\"r3\", \"host-b\"): 1, (\"r2\", \"host-b\"): 9})\n_net = Network(_t, drop_hops={2, 3, 11}, corrupt_hops={17})\n_r = send_message(_net, \"host-a\", \"host-b\", \"hello networks\", 4)\nassert _r[\"text\"] == \"hello networks\", f\"loss must not change the message, got {_r['text']!r}\"\nassert (_r[\"data_frames\"], _r[\"ack_frames\"], _r[\"retransmissions\"]) == (8, 6, 4), \\\n    f\"lossy counters were {(_r['data_frames'], _r['ack_frames'], _r['retransmissions'])!r}, expected (8, 6, 4)\"\nassert _r[\"hops\"] == 52, f\"hop count was {_r['hops']!r}, expected 52\""
+   },
+   {
+    "name": "A duplicate is acknowledged but never delivered twice",
+    "code": "from stack import Network, Topology, send_message\n_t = Topology({(\"a\", \"b\"): 1})\n_net = Network(_t, drop_hops={1})\n_r = send_message(_net, \"a\", \"b\", \"abcdefgh\", 4)\nassert _r[\"text\"] == \"abcdefgh\", \\\n    f\"the first ack was lost, so the first piece arrives twice — it must be delivered once: {_r['text']!r}\"\nassert _r[\"data_frames\"] == 3, f\"one retransmission means 3 data frames, got {_r['data_frames']!r}\"\nassert _r[\"retransmissions\"] == 1, f\"Got {_r['retransmissions']!r}\""
+   },
+   {
+    "name": "A hopeless link fails loudly",
+    "code": "from stack import MAX_ATTEMPTS, Network, Topology, send_message\n_t = Topology({(\"a\", \"b\"): 1})\n_net = Network(_t, drop_hops=set(range(MAX_ATTEMPTS + 10)))\ntry:\n    send_message(_net, \"a\", \"b\", \"never\", 4)\n    assert False, \"a link that drops everything should raise RuntimeError, not loop for ever\"\nexcept RuntimeError:\n    pass"
+   },
+   {
+    "name": "stack.py is import-clean and standard-library only",
+    "code": "_src = open(\"stack.py\").read()\nassert \"print(\" not in _src, \"stack.py is a library; the printing belongs in main.py\"\nassert \"import zlib\" not in _src and \"from zlib\" not in _src, \"the CRC is yours to implement\"\nassert \"random\" not in _src, \"the stack must be deterministic — no randomness anywhere\""
+   }
+  ]
+ }
+}

@@ -1,0 +1,438 @@
+{
+ "id": "CE101",
+ "title": "Digital Logic & Computer Systems",
+ "year": 1,
+ "level": "Beginner",
+ "prereqs": [],
+ "stack": [
+  "Verilog (reference)",
+  "Python"
+ ],
+ "credits": 10,
+ "hours": 120,
+ "icon": "⎓",
+ "summary": "Everything a processor does is built out of one switch that says 'not both'. This course climbs that ladder in software: Boolean algebra and canonical forms, gates assembled from NAND into adders, flip-flops that give a circuit memory, and finally an arithmetic-logic unit and a small datapath that fetches and executes instructions of your own encoding.",
+ "outcomes": [
+  "Derive a truth table, minterm list and sum-of-products form for a Boolean function",
+  "Reduce a function to its prime implicants and prove the reduction preserves behaviour",
+  "Construct NOT, AND, OR and XOR from NAND alone, and adders from those gates",
+  "Explain why edge-triggered storage makes a synchronous circuit predictable",
+  "Design a Moore finite-state machine and simulate it over discrete clock ticks",
+  "Compute two's-complement arithmetic and set the zero, negative, carry and overflow flags correctly",
+  "Assemble a register file, ALU and control FSM into a datapath that runs a micro-program"
+ ],
+ "assessment": "4 lab checkpoints (10% each) + capstone datapath build (60%).",
+ "reading": [
+  "Harris & Harris, *Digital Design and Computer Architecture*, 2nd ed. — chapters 1-5",
+  "Nisan & Schocken, *The Elements of Computing Systems*, 2nd ed. — chapters 1-3",
+  "Patterson & Hennessy, *Computer Organization and Design*, 5th ed. — appendix 'The Basics of Logic Design'"
+ ],
+ "modules": [
+  {
+   "title": "Boolean algebra and canonical forms",
+   "summary": "From a truth table to a minimal expression, with equivalence as the referee.",
+   "concepts": [
+    "The Boolean algebra axioms: identity, complement, distributivity, De Morgan's laws",
+    "A truth table is the complete specification of a combinational function",
+    "Minterms: each row where the function is 1 names one AND term",
+    "Canonical sum-of-products is unique; the minimal SOP normally is not",
+    "The adjacency rule `XY + XY' = X` is the single move behind all reduction",
+    "Prime implicants and the Quine-McCluskey merging procedure",
+    "Two expressions are equal only if they agree on all 2^n rows — check, do not assume"
+   ],
+   "lab": {
+    "title": "Truth tables, minterms and prime implicants",
+    "runtime": "python",
+    "minutes": 55,
+    "brief": "A Boolean function of `n` inputs is fully described by its `2**n` truth-table\nrows. This lab turns that table into algebra and then shrinks the algebra.\n\nInputs are always listed **most significant first**, so for `n = 3` row 5 is\n`(1, 0, 1)`.\n\n**`truth_table(fn, n)`** — every row as an `(inputs, output)` pair, in binary\ncounting order. `inputs` is a tuple of 0/1 and `output` is `1` or `0` (never\n`True`, never any other truthy value). Raise `ValueError` when `n < 1`.\n\n```text\ntruth_table(lambda a, b: a and b, 2)\n  -> [((0,0), 0), ((0,1), 0), ((1,0), 0), ((1,1), 1)]\n```\n\n**`minterms(fn, n)`** — the row numbers where the output is 1, ascending.\n\n**`minterm_patterns(ms, n)`** — each minterm as an `n`-character bit string.\nRaise `ValueError` if any minterm is negative or does not fit in `n` bits.\n\n```text\nminterm_patterns([3, 5], 3)  ->  [\"011\", \"101\"]\n```\n\n**`term_expression(pattern)`** — one *implicant* as a product term. A pattern\nis a string of `\"0\"`, `\"1\"` and `\"-\"`, one character per variable, and the\nvariables are named `A`, `B`, `C`, ... A `\"1\"` contributes the plain letter, a\n`\"0\"` the letter followed by `'`, and a `\"-\"` contributes nothing because that\nvariable has been eliminated. An all-`\"-\"` pattern is the constant `1`.\n\n```text\nterm_expression(\"101\")  ->  \"AB'C\"\nterm_expression(\"1-0\")  ->  \"AC'\"\nterm_expression(\"--\")   ->  \"1\"\n```\n\n**`sop_expression(patterns)`** — the terms joined with `\" + \"`, in the order\ngiven. An empty list is the constant `\"0\"`.\n\n**`prime_implicants(ms, n)`** — Quine-McCluskey. Start from the minterm\npatterns. Repeatedly merge every pair that differs in exactly one position (and\nonly where neither has a `\"-\"` there) into one pattern with `\"-\"` at that\nposition. Any pattern that merged with nothing in a round is prime. Return the\nprimes sorted, with no duplicates.\n\n```text\nprime_implicants([3, 5, 6, 7], 3)  ->  [\"-11\", \"1-1\", \"11-\"]   (majority: BC + AC + AB)\nprime_implicants([1, 2, 4, 7], 3)  ->  [\"001\", \"010\", \"100\", \"111\"]   (parity will not shrink)\nprime_implicants([], 2)            ->  []\n```\n\n**`from_patterns(patterns)`** — a *function* that evaluates the OR of those\nimplicants: it returns 1 when the argument bits match at least one pattern,\nignoring `\"-\"` positions.\n\n**`equivalent(f, g, n)`** — `True` when the two functions agree on every one of\nthe `2**n` rows. Compare truth values, not identities: `1` and `True` agree.\n\nTogether these let you reduce a function and then *prove* the reduction:\n`equivalent(f, from_patterns(prime_implicants(minterms(f, n), n)), n)`.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "NAMES = \"ABCDEFGH\"\n\n\ndef truth_table(fn, n):\n    \"\"\"Every (inputs, output) row for fn, MSB first. ValueError when n < 1.\"\"\"\n    # your code here\n\n\ndef minterms(fn, n):\n    \"\"\"Ascending row numbers where fn is 1.\"\"\"\n    # your code here\n\n\ndef minterm_patterns(ms, n):\n    \"\"\"Each minterm as an n-character bit string. ValueError if one will not fit.\"\"\"\n    # your code here\n\n\ndef term_expression(pattern):\n    \"\"\"One implicant pattern as a product term; all dashes means the constant 1.\"\"\"\n    # your code here\n\n\ndef sop_expression(patterns):\n    \"\"\"Product terms joined with ' + '; no patterns means the constant 0.\"\"\"\n    # your code here\n\n\ndef prime_implicants(ms, n):\n    \"\"\"Quine-McCluskey prime implicants of the minterm list, sorted.\"\"\"\n    # your code here\n\n\ndef from_patterns(patterns):\n    \"\"\"A function evaluating the OR of these implicants.\"\"\"\n    # your code here\n\n\ndef equivalent(f, g, n):\n    \"\"\"True when f and g agree on all 2**n rows.\"\"\"\n    # your code here\n\n\ndef majority(a, b, c):\n    return 1 if a + b + c >= 2 else 0\n\n\nms = minterms(majority, 3)\nprint(sop_expression(minterm_patterns(ms, 3)))\nprint(sop_expression(prime_implicants(ms, 3)))\nprint(equivalent(majority, from_patterns(prime_implicants(ms, 3)), 3))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "NAMES = \"ABCDEFGH\"\n\n\ndef truth_table(fn, n):\n    \"\"\"Every (inputs, output) row for fn, MSB first. ValueError when n < 1.\"\"\"\n    if n < 1:\n        raise ValueError(\"a function needs at least one input\")\n    rows = []\n    for index in range(1 << n):\n        bits = tuple((index >> (n - 1 - k)) & 1 for k in range(n))\n        rows.append((bits, 1 if fn(*bits) else 0))\n    return rows\n\n\ndef minterms(fn, n):\n    \"\"\"Ascending row numbers where fn is 1.\"\"\"\n    return [index for index, (_, out) in enumerate(truth_table(fn, n)) if out]\n\n\ndef minterm_patterns(ms, n):\n    \"\"\"Each minterm as an n-character bit string. ValueError if one will not fit.\"\"\"\n    if n < 1:\n        raise ValueError(\"a function needs at least one input\")\n    patterns = []\n    for m in ms:\n        if m < 0 or m >= (1 << n):\n            raise ValueError(f\"minterm {m} does not fit in {n} bits\")\n        patterns.append(format(m, \"0\" + str(n) + \"b\"))\n    return patterns\n\n\ndef term_expression(pattern):\n    \"\"\"One implicant pattern as a product term; all dashes means the constant 1.\"\"\"\n    literals = []\n    for position, char in enumerate(pattern):\n        if char == \"1\":\n            literals.append(NAMES[position])\n        elif char == \"0\":\n            literals.append(NAMES[position] + \"'\")\n    if not literals:\n        return \"1\"\n    return \"\".join(literals)\n\n\ndef sop_expression(patterns):\n    \"\"\"Product terms joined with ' + '; no patterns means the constant 0.\"\"\"\n    if not patterns:\n        return \"0\"\n    return \" + \".join(term_expression(p) for p in patterns)\n\n\ndef merge(left, right):\n    \"\"\"The merged pattern when the two differ in exactly one fixed bit, else None.\"\"\"\n    position = -1\n    for index, (a, b) in enumerate(zip(left, right)):\n        if a != b:\n            if position != -1 or a == \"-\" or b == \"-\":\n                return None\n            position = index\n    if position == -1:\n        return None\n    return left[:position] + \"-\" + left[position + 1:]\n\n\ndef prime_implicants(ms, n):\n    \"\"\"Quine-McCluskey prime implicants of the minterm list, sorted.\"\"\"\n    current = sorted(set(minterm_patterns(ms, n)))\n    primes = set()\n    while current:\n        used = set()\n        nxt = set()\n        for i in range(len(current)):\n            for j in range(i + 1, len(current)):\n                merged = merge(current[i], current[j])\n                if merged is not None:\n                    used.add(current[i])\n                    used.add(current[j])\n                    nxt.add(merged)\n        for pattern in current:\n            if pattern not in used:\n                primes.add(pattern)\n        current = sorted(nxt)\n    return sorted(primes)\n\n\ndef from_patterns(patterns):\n    \"\"\"A function evaluating the OR of these implicants.\"\"\"\n    def fn(*bits):\n        for pattern in patterns:\n            if all(int(char) == bit for char, bit in zip(pattern, bits) if char != \"-\"):\n                return 1\n        return 0\n    return fn\n\n\ndef equivalent(f, g, n):\n    \"\"\"True when f and g agree on all 2**n rows.\"\"\"\n    for bits, out in truth_table(f, n):\n        if out != (1 if g(*bits) else 0):\n            return False\n    return True\n\n\ndef majority(a, b, c):\n    return 1 if a + b + c >= 2 else 0\n\n\nms = minterms(majority, 3)\nprint(sop_expression(minterm_patterns(ms, 3)))\nprint(sop_expression(prime_implicants(ms, 3)))\nprint(equivalent(majority, from_patterns(prime_implicants(ms, 3)), 3))\n"
+     }
+    ],
+    "hints": [
+     "Row `index` has bit `k` equal to `(index >> (n - 1 - k)) & 1` when the first variable is the most significant.",
+     "`format(m, \"0\" + str(n) + \"b\")` pads a minterm to exactly n binary digits.",
+     "Two patterns merge only when they differ in one position *and* neither holds a dash there — check both conditions before returning the merged pattern.",
+     "Quine-McCluskey is a loop over rounds: collect every merge of the current list, mark the patterns that merged, promote the unmarked ones to primes, and repeat on the merged list until it is empty."
+    ],
+    "tests": [
+     {
+      "name": "truth_table shape, order and 0/1 outputs",
+      "code": "_got = truth_table(lambda a, b: a and b, 2)\n_want = [((0, 0), 0), ((0, 1), 0), ((1, 0), 0), ((1, 1), 1)]\nassert _got == _want, f\"truth_table(AND, 2) gave {_got!r}, expected {_want}\"\nassert all(_o in (0, 1) and type(_o) is int for _, _o in _got), \"outputs must be the ints 0 and 1\"\n_t3 = truth_table(lambda a, b, c: c, 3)\nassert len(_t3) == 8, f\"a 3-input table has 8 rows, got {len(_t3)}\"\nassert _t3[5][0] == (1, 0, 1), f\"row 5 should be (1, 0, 1), got {_t3[5][0]!r}\"\ntry:\n    truth_table(lambda a: a, 0)\n    assert False, \"truth_table(fn, 0) should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "minterms lists the rows that are 1",
+      "code": "assert minterms(lambda a, b: a or b, 2) == [1, 2, 3], f\"OR gave {minterms(lambda a, b: a or b, 2)!r}\"\nassert minterms(lambda a, b, c: a ^ b ^ c, 3) == [1, 2, 4, 7], \"odd parity is minterms 1, 2, 4, 7\"\nassert minterms(lambda a, b: 0, 2) == [], \"a constant-0 function has no minterms\"\nassert minterms(lambda a, b: 1, 2) == [0, 1, 2, 3], \"a constant-1 function has every minterm\""
+     },
+     {
+      "name": "minterm_patterns pads and validates",
+      "code": "assert minterm_patterns([3, 5], 3) == [\"011\", \"101\"], f\"Got {minterm_patterns([3, 5], 3)!r}\"\nassert minterm_patterns([], 4) == [], \"no minterms, no patterns\"\nfor _bad in ([8], [-1]):\n    try:\n        minterm_patterns(_bad, 3)\n        assert False, f\"minterm_patterns({_bad!r}, 3) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "term_expression and sop_expression",
+      "code": "assert term_expression(\"101\") == \"AB'C\", f'Got {term_expression(\"101\")!r}'\nassert term_expression(\"1-0\") == \"AC'\", f'Got {term_expression(\"1-0\")!r}'\nassert term_expression(\"--\") == \"1\", \"an implicant with no literals is the constant 1\"\nassert sop_expression([\"-11\", \"1-1\", \"11-\"]) == \"BC + AC + AB\", \\\n    f'Got {sop_expression([\"-11\", \"1-1\", \"11-\"])!r}'\nassert sop_expression([]) == \"0\", \"no implicants means the constant 0\"\nassert sop_expression([\"011\"]) == \"A'BC\", f'Got {sop_expression([\"011\"])!r}'"
+     },
+     {
+      "name": "prime_implicants merges adjacent minterms",
+      "code": "assert prime_implicants([3, 5, 6, 7], 3) == [\"-11\", \"1-1\", \"11-\"], \\\n    f\"majority gave {prime_implicants([3, 5, 6, 7], 3)!r}, expected ['-11', '1-1', '11-']\"\nassert prime_implicants([1, 2, 3], 2) == [\"-1\", \"1-\"], \\\n    f\"OR gave {prime_implicants([1, 2, 3], 2)!r}, expected ['-1', '1-']\"\nassert prime_implicants([0, 1, 2, 3], 2) == [\"--\"], \"a tautology reduces to the constant 1\"\nassert prime_implicants([], 2) == [], \"nothing to imply\"\nassert prime_implicants([1, 2, 4, 7], 3) == [\"001\", \"010\", \"100\", \"111\"], \\\n    \"three-input parity has no adjacent minterms, so every minterm is prime\""
+     },
+     {
+      "name": "from_patterns rebuilds a working function",
+      "code": "_f = from_patterns([\"-11\", \"1-1\", \"11-\"])\nfor _bits, _want in [((0, 0, 0), 0), ((0, 1, 1), 1), ((1, 0, 1), 1),\n                     ((1, 1, 0), 1), ((1, 1, 1), 1), ((1, 0, 0), 0)]:\n    _got = _f(*_bits)\n    assert _got == _want, f\"rebuilt majority{_bits} gave {_got!r}, expected {_want}\"\nassert from_patterns([])(0, 1) == 0, \"no implicants is the constant 0\"\nassert from_patterns([\"--\"])(0, 1) == 1, \"an all-dash implicant is the constant 1\""
+     },
+     {
+      "name": "equivalence proves the reduction",
+      "code": "def _maj(a, b, c):\n    return 1 if a + b + c >= 2 else 0\n_primes = prime_implicants(minterms(_maj, 3), 3)\nassert equivalent(_maj, from_patterns(_primes), 3), \"the reduced form must match the original\"\nassert equivalent(_maj, from_patterns(minterm_patterns(minterms(_maj, 3), 3)), 3), \\\n    \"the canonical form must match the original too\"\nassert equivalent(lambda a, b: a and b, lambda a, b: not (not a or not b), 2), \\\n    \"De Morgan: AB and (A'+B')' are the same function\"\nassert not equivalent(lambda a, b: a and b, lambda a, b: a or b, 2), \\\n    \"AND and OR differ on (0, 1), so equivalent() must be False\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Gates, universality and adders",
+   "summary": "NAND is enough for everything; build up to a ripple-carry adder.",
+   "concepts": [
+    "NAND (and NOR) are functionally complete — every gate reduces to them",
+    "NOT from a NAND with both inputs tied together; AND from NAND then NOT",
+    "OR from NAND by De Morgan: `A + B = (A'B')'`",
+    "XOR as a four-NAND network, and why it costs more than AND",
+    "The half adder: sum is XOR, carry is AND",
+    "The full adder chains two half adders and ORs the carries",
+    "Ripple-carry delay grows linearly with word width — the motivation for carry-lookahead"
+   ],
+   "lab": {
+    "title": "From one NAND to a 4-bit adder",
+    "runtime": "python",
+    "minutes": 50,
+    "brief": "`nand(a, b)` is already written for you. It is the **only** primitive you may\ncompute with: everything else in this file must be built from it, directly or\nindirectly. No `and`, `or`, `not`, `^`, `+` or `if` on the signal values\nthemselves — the checks watch how often `nand` is called.\n\n**`not_gate(a)`, `and_gate(a, b)`, `or_gate(a, b)`, `xor_gate(a, b)`** —\nthe four familiar gates, each returning 0 or 1.\n\n**`half_adder(a, b)`** — returns `(sum, carry)`.\n\n```text\nhalf_adder(1, 1)  ->  (0, 1)\nhalf_adder(1, 0)  ->  (1, 0)\n```\n\n**`full_adder(a, b, cin)`** — returns `(sum, cout)`. Build it from two half\nadders and one OR; do not write out a fresh truth table.\n\n**`to_bits(value, width)`** — the unsigned value as a list of 0/1,\n**most significant bit first**. Raise `ValueError` when the value is negative or\nwill not fit.\n\n**`from_bits(bits)`** — the reverse.\n\n```text\nto_bits(10, 4)          ->  [1, 0, 1, 0]\nfrom_bits([1, 0, 1, 0]) ->  10\n```\n\n**`ripple_add(a_bits, b_bits, cin=0)`** — returns `(sum_bits, cout)`. Chain one\nfull adder per bit position, starting at the least significant end and passing\neach carry along. Raise `ValueError` when the two operands have different\nwidths, or when they are empty.\n\n```text\nripple_add([0, 1, 1, 1], [0, 0, 0, 1])  ->  ([1, 0, 0, 0], 0)     7 + 1 = 8\nripple_add([1, 1, 1, 1], [0, 0, 0, 1])  ->  ([0, 0, 0, 0], 1)    15 + 1 = 16\n```\n\nThe width is whatever you pass, so the same function is a 4-bit adder and a\n16-bit adder.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "def nand(a, b):\n    \"\"\"The one primitive you are given: 0 only when both inputs are 1.\"\"\"\n    return 0 if (a and b) else 1\n\n\ndef not_gate(a):\n    \"\"\"NOT from a single NAND.\"\"\"\n    # your code here\n\n\ndef and_gate(a, b):\n    \"\"\"AND from NANDs.\"\"\"\n    # your code here\n\n\ndef or_gate(a, b):\n    \"\"\"OR from NANDs.\"\"\"\n    # your code here\n\n\ndef xor_gate(a, b):\n    \"\"\"XOR from NANDs.\"\"\"\n    # your code here\n\n\ndef half_adder(a, b):\n    \"\"\"(sum, carry) for two bits.\"\"\"\n    # your code here\n\n\ndef full_adder(a, b, cin):\n    \"\"\"(sum, cout) for two bits and a carry in.\"\"\"\n    # your code here\n\n\ndef to_bits(value, width):\n    \"\"\"Unsigned value as a width-long list of bits, MSB first.\"\"\"\n    # your code here\n\n\ndef from_bits(bits):\n    \"\"\"Bits, MSB first, back to an unsigned integer.\"\"\"\n    # your code here\n\n\ndef ripple_add(a_bits, b_bits, cin=0):\n    \"\"\"(sum_bits, cout) from a chain of full adders.\"\"\"\n    # your code here\n\n\nprint(half_adder(1, 1))\nprint(full_adder(1, 1, 1))\nprint(ripple_add(to_bits(7, 4), to_bits(9, 4)))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "def nand(a, b):\n    \"\"\"The one primitive you are given: 0 only when both inputs are 1.\"\"\"\n    return 0 if (a and b) else 1\n\n\ndef not_gate(a):\n    \"\"\"NOT from a single NAND.\"\"\"\n    return nand(a, a)\n\n\ndef and_gate(a, b):\n    \"\"\"AND from NANDs.\"\"\"\n    return not_gate(nand(a, b))\n\n\ndef or_gate(a, b):\n    \"\"\"OR from NANDs: De Morgan turns A + B into (A'B')'.\"\"\"\n    return nand(not_gate(a), not_gate(b))\n\n\ndef xor_gate(a, b):\n    \"\"\"XOR from NANDs: the classic four-gate network.\"\"\"\n    shared = nand(a, b)\n    return nand(nand(a, shared), nand(b, shared))\n\n\ndef half_adder(a, b):\n    \"\"\"(sum, carry) for two bits.\"\"\"\n    return xor_gate(a, b), and_gate(a, b)\n\n\ndef full_adder(a, b, cin):\n    \"\"\"(sum, cout) for two bits and a carry in.\"\"\"\n    sum1, carry1 = half_adder(a, b)\n    sum2, carry2 = half_adder(sum1, cin)\n    return sum2, or_gate(carry1, carry2)\n\n\ndef to_bits(value, width):\n    \"\"\"Unsigned value as a width-long list of bits, MSB first.\"\"\"\n    if width < 1:\n        raise ValueError(\"width must be at least 1\")\n    if value < 0 or value >= (1 << width):\n        raise ValueError(f\"{value} does not fit in {width} unsigned bits\")\n    return [(value >> (width - 1 - k)) & 1 for k in range(width)]\n\n\ndef from_bits(bits):\n    \"\"\"Bits, MSB first, back to an unsigned integer.\"\"\"\n    value = 0\n    for bit in bits:\n        value = value * 2 + bit\n    return value\n\n\ndef ripple_add(a_bits, b_bits, cin=0):\n    \"\"\"(sum_bits, cout) from a chain of full adders.\"\"\"\n    if len(a_bits) != len(b_bits):\n        raise ValueError(\"operands must be the same width\")\n    if not a_bits:\n        raise ValueError(\"width must be at least 1\")\n    carry = cin\n    out = []\n    for a, b in zip(reversed(a_bits), reversed(b_bits)):\n        bit, carry = full_adder(a, b, carry)\n        out.append(bit)\n    out.reverse()\n    return out, carry\n\n\nprint(half_adder(1, 1))\nprint(full_adder(1, 1, 1))\nprint(ripple_add(to_bits(7, 4), to_bits(9, 4)))\n"
+     }
+    ],
+    "hints": [
+     "`not_gate(a)` is `nand(a, a)`: tying both inputs together leaves NAND with nothing to do but invert.",
+     "AND is a NAND followed by an inverter; OR is an inverter on each input followed by a NAND.",
+     "XOR needs four NANDs. Compute `shared = nand(a, b)` once, then `nand(nand(a, shared), nand(b, shared))`.",
+     "`ripple_add` walks the operands with `zip(reversed(a_bits), reversed(b_bits))`, keeps the carry in a variable between iterations, and reverses the collected sum bits at the end."
+    ],
+    "tests": [
+     {
+      "name": "NOT, AND and OR",
+      "code": "assert (not_gate(0), not_gate(1)) == (1, 0), f\"not_gate gave {(not_gate(0), not_gate(1))!r}\"\nfor _a, _b, _want in [(0, 0, 0), (0, 1, 0), (1, 0, 0), (1, 1, 1)]:\n    _got = and_gate(_a, _b)\n    assert _got == _want, f\"and_gate({_a}, {_b}) gave {_got!r}, expected {_want}\"\nfor _a, _b, _want in [(0, 0, 0), (0, 1, 1), (1, 0, 1), (1, 1, 1)]:\n    _got = or_gate(_a, _b)\n    assert _got == _want, f\"or_gate({_a}, {_b}) gave {_got!r}, expected {_want}\""
+     },
+     {
+      "name": "XOR",
+      "code": "for _a, _b, _want in [(0, 0, 0), (0, 1, 1), (1, 0, 1), (1, 1, 0)]:\n    _got = xor_gate(_a, _b)\n    assert _got == _want, f\"xor_gate({_a}, {_b}) gave {_got!r}, expected {_want}\""
+     },
+     {
+      "name": "Every gate is built from nand",
+      "code": "_calls = []\n_real_nand = nand\ndef _spy(a, b):\n    _calls.append((a, b))\n    return _real_nand(a, b)\nnand = _spy\nfor _name, _fn, _args in [(\"not_gate\", not_gate, (1,)), (\"and_gate\", and_gate, (1, 0)),\n                          (\"or_gate\", or_gate, (1, 0)), (\"xor_gate\", xor_gate, (1, 0))]:\n    _before = len(_calls)\n    _fn(*_args)\n    assert len(_calls) > _before, f\"{_name} must be built from nand(), not from Python operators\"\nnand = _real_nand"
+     },
+     {
+      "name": "half_adder",
+      "code": "for _a, _b, _want in [(0, 0, (0, 0)), (0, 1, (1, 0)), (1, 0, (1, 0)), (1, 1, (0, 1))]:\n    _got = tuple(half_adder(_a, _b))\n    assert _got == _want, f\"half_adder({_a}, {_b}) gave {_got!r}, expected {_want}\""
+     },
+     {
+      "name": "full_adder, all eight rows",
+      "code": "for _a in (0, 1):\n    for _b in (0, 1):\n        for _c in (0, 1):\n            _s, _co = full_adder(_a, _b, _c)\n            _total = _a + _b + _c\n            assert (_s, _co) == (_total % 2, _total // 2), \\\n                f\"full_adder({_a}, {_b}, {_c}) gave {(_s, _co)!r}, expected {(_total % 2, _total // 2)}\""
+     },
+     {
+      "name": "to_bits / from_bits round-trip and limits",
+      "code": "assert to_bits(10, 4) == [1, 0, 1, 0], f\"to_bits(10, 4) gave {to_bits(10, 4)!r}\"\nassert to_bits(0, 1) == [0], f\"to_bits(0, 1) gave {to_bits(0, 1)!r}\"\nassert from_bits([1, 0, 1, 0]) == 10, f\"from_bits([1,0,1,0]) gave {from_bits([1, 0, 1, 0])!r}\"\nassert from_bits([0]) == 0, \"a single zero bit is 0\"\nfor _v in range(64):\n    assert from_bits(to_bits(_v, 6)) == _v, f\"round-trip failed for {_v}\"\nfor _bad in [(16, 4), (-1, 4), (2, 1)]:\n    try:\n        to_bits(*_bad)\n        assert False, f\"to_bits{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "ripple_add matches arithmetic on every 4-bit pair",
+      "code": "for _a in range(16):\n    for _b in range(16):\n        _bits, _cout = ripple_add(to_bits(_a, 4), to_bits(_b, 4))\n        _total = _a + _b\n        assert from_bits(_bits) == _total & 15, \\\n            f\"{_a} + {_b} gave sum bits {_bits!r} ({from_bits(_bits)}), expected {_total & 15}\"\n        assert _cout == (_total >> 4) & 1, \\\n            f\"{_a} + {_b} gave carry {_cout!r}, expected {(_total >> 4) & 1}\"\n_bits, _cout = ripple_add(to_bits(7, 4), to_bits(8, 4), 1)\nassert (from_bits(_bits), _cout) == (0, 1), \\\n    f\"7 + 8 + carry-in gave {(from_bits(_bits), _cout)!r}, expected (0, 1)\""
+     },
+     {
+      "name": "ripple_add rejects bad operands",
+      "code": "for _a, _b in [([1, 0], [1]), ([], [])]:\n    try:\n        ripple_add(_a, _b)\n        assert False, f\"ripple_add({_a!r}, {_b!r}) should raise ValueError\"\n    except ValueError:\n        pass\n_bits, _cout = ripple_add([1] * 16, [0] * 15 + [1])\nassert (from_bits(_bits), _cout) == (0, 1), \\\n    f\"the same function should add 16-bit words, got {(from_bits(_bits), _cout)!r}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Sequential logic and state machines",
+   "summary": "Storage, the clock edge, and a Moore machine that watches a bit stream.",
+   "concepts": [
+    "Combinational output depends on inputs alone; sequential output depends on history",
+    "A D flip-flop copies D to Q on the clock edge and holds it in between",
+    "Sampling then updating is what makes shift registers work — every flop reads the old values",
+    "A register is n flip-flops on a shared clock, usually with a load enable",
+    "Setup and hold times, and why glitches between edges do not matter",
+    "Moore machines output from the state; Mealy machines output from state and input",
+    "Overlapping pattern detection: the next state is the longest suffix that is still a prefix"
+   ],
+   "lab": {
+    "title": "Flip-flops, registers and a 1011 detector",
+    "runtime": "python",
+    "minutes": 50,
+    "brief": "Nothing here happens because you assigned a value. Things happen on a **clock\nedge**, and only then.\n\n## `DFlipFlop`\n\n- `DFlipFlop(q=0)` — starts holding `q`, with the D input equal to it. Raise\n  `ValueError` if `q` is not 0 or 1.\n- `set_d(value)` — drive the D input. `ValueError` for anything but 0 or 1.\n  **`q` must not change.**\n- `tick()` — the rising edge: copy D into `q` and return the new `q`.\n\nThat split is the whole point. Two flops wired in a chain both sample *before*\neither updates, so a value moves exactly one stage per tick rather than racing\nall the way down.\n\n## `Register`\n\n- `Register(width, value=0)` — `width` flip-flops, LSB at index 0. `ValueError`\n  for a width below 1 or a value that will not fit.\n- `read()` — the stored word as an unsigned integer.\n- `set_input(value, enable=1)` — with `enable` truthy, drive the D inputs from\n  `value` (`ValueError` if it does not fit in `width` bits). With `enable`\n  falsy, drive each flop's D from its own `q`, so the next tick keeps the word.\n- `tick()` — clock every flop and return the new `read()`.\n\n## `SequenceDetector`\n\nA Moore machine that raises its output for one cycle whenever the last four\nbits it has seen are `1, 0, 1, 1`. Occurrences may overlap.\n\nStates: `\"S0\"`, `\"S1\"`, `\"S10\"`, `\"S101\"`, `\"S1011\"` — each named for the part\nof the pattern matched so far.\n\n- `SequenceDetector(state=\"S0\")` — `ValueError` for a state not in `STATES`.\n- `next_state(state, bit)` — the transition table, as a pure function.\n- `output()` — 1 exactly in `\"S1011\"`, otherwise 0. It depends on the state\n  alone: that is what makes the machine Moore rather than Mealy.\n- `step(bit)` — advance one clock and return the new output. `ValueError` for a\n  bit that is not 0 or 1.\n- `run(bits)` — the output after each bit, as a list.\n\nThe transitions you need to get right are the ones that fail a partial match.\nFrom `\"S101\"` a `0` does not go back to `\"S0\"`: the stream now ends `1010`, and\n`10` is still a live prefix, so the machine lands in `\"S10\"`. From `\"S1011\"` a\n`1` leaves the stream ending `10111`, whose longest useful suffix is `1`.\n\n```text\nrun([1, 1, 0, 1, 0, 1, 1, 0, 1, 1])\n  -> [0, 0, 0, 0, 0, 0, 1, 0, 0, 1]\n```",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "class DFlipFlop:\n    \"\"\"One bit of edge-triggered storage.\"\"\"\n\n    def __init__(self, q=0):\n        # your code here\n        pass\n\n    def set_d(self, value):\n        \"\"\"Drive the D input. Q does not move until the next tick.\"\"\"\n        # your code here\n\n    def tick(self):\n        \"\"\"Rising clock edge: Q takes the value of D.\"\"\"\n        # your code here\n\n\nclass Register:\n    \"\"\"width flip-flops sharing one clock, with a load enable.\"\"\"\n\n    def __init__(self, width, value=0):\n        # your code here\n        pass\n\n    def read(self):\n        \"\"\"The stored word as an unsigned integer.\"\"\"\n        # your code here\n\n    def set_input(self, value, enable=1):\n        \"\"\"Drive the D inputs, or hold the current word when enable is falsy.\"\"\"\n        # your code here\n\n    def tick(self):\n        \"\"\"Clock every flip-flop, then return the new word.\"\"\"\n        # your code here\n\n\nclass SequenceDetector:\n    \"\"\"Moore machine: output 1 for one cycle on each (overlapping) 1011.\"\"\"\n\n    STATES = (\"S0\", \"S1\", \"S10\", \"S101\", \"S1011\")\n\n    def __init__(self, state=\"S0\"):\n        # your code here\n        pass\n\n    def next_state(self, state, bit):\n        \"\"\"The transition table.\"\"\"\n        # your code here\n\n    def output(self):\n        \"\"\"A function of the state only.\"\"\"\n        # your code here\n\n    def step(self, bit):\n        \"\"\"One clock: move state, return the new output.\"\"\"\n        # your code here\n\n    def run(self, bits):\n        \"\"\"The output after each bit.\"\"\"\n        # your code here\n\n\nreg = Register(4)\nreg.set_input(10)\nprint(reg.tick())\nprint(SequenceDetector().run([1, 1, 0, 1, 0, 1, 1, 0, 1, 1]))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "class DFlipFlop:\n    \"\"\"One bit of edge-triggered storage.\"\"\"\n\n    def __init__(self, q=0):\n        if q not in (0, 1):\n            raise ValueError(\"a flip-flop holds 0 or 1\")\n        self.q = q\n        self.d = q\n\n    def set_d(self, value):\n        \"\"\"Drive the D input. Q does not move until the next tick.\"\"\"\n        if value not in (0, 1):\n            raise ValueError(\"D must be 0 or 1\")\n        self.d = value\n\n    def tick(self):\n        \"\"\"Rising clock edge: Q takes the value of D.\"\"\"\n        self.q = self.d\n        return self.q\n\n\nclass Register:\n    \"\"\"width flip-flops sharing one clock, with a load enable.\"\"\"\n\n    def __init__(self, width, value=0):\n        if width < 1:\n            raise ValueError(\"a register needs at least one bit\")\n        if value < 0 or value >= (1 << width):\n            raise ValueError(f\"{value} does not fit in {width} bits\")\n        self.width = width\n        self.flops = [DFlipFlop((value >> i) & 1) for i in range(width)]\n\n    def read(self):\n        \"\"\"The stored word as an unsigned integer.\"\"\"\n        word = 0\n        for i, flop in enumerate(self.flops):\n            word |= flop.q << i\n        return word\n\n    def set_input(self, value, enable=1):\n        \"\"\"Drive the D inputs, or hold the current word when enable is falsy.\"\"\"\n        if not enable:\n            for flop in self.flops:\n                flop.set_d(flop.q)\n            return\n        if value < 0 or value >= (1 << self.width):\n            raise ValueError(f\"{value} does not fit in {self.width} bits\")\n        for i, flop in enumerate(self.flops):\n            flop.set_d((value >> i) & 1)\n\n    def tick(self):\n        \"\"\"Clock every flip-flop, then return the new word.\"\"\"\n        for flop in self.flops:\n            flop.tick()\n        return self.read()\n\n\nclass SequenceDetector:\n    \"\"\"Moore machine: output 1 for one cycle on each (overlapping) 1011.\"\"\"\n\n    STATES = (\"S0\", \"S1\", \"S10\", \"S101\", \"S1011\")\n\n    TABLE = {\n        (\"S0\", 0): \"S0\",\n        (\"S0\", 1): \"S1\",\n        (\"S1\", 0): \"S10\",\n        (\"S1\", 1): \"S1\",\n        (\"S10\", 0): \"S0\",\n        (\"S10\", 1): \"S101\",\n        (\"S101\", 0): \"S10\",\n        (\"S101\", 1): \"S1011\",\n        (\"S1011\", 0): \"S10\",\n        (\"S1011\", 1): \"S1\",\n    }\n\n    def __init__(self, state=\"S0\"):\n        if state not in self.STATES:\n            raise ValueError(f\"unknown state {state!r}\")\n        self.state = state\n\n    def next_state(self, state, bit):\n        \"\"\"The transition table.\"\"\"\n        if state not in self.STATES:\n            raise ValueError(f\"unknown state {state!r}\")\n        if bit not in (0, 1):\n            raise ValueError(\"the input bit must be 0 or 1\")\n        return self.TABLE[(state, bit)]\n\n    def output(self):\n        \"\"\"A function of the state only.\"\"\"\n        return 1 if self.state == \"S1011\" else 0\n\n    def step(self, bit):\n        \"\"\"One clock: move state, return the new output.\"\"\"\n        self.state = self.next_state(self.state, bit)\n        return self.output()\n\n    def run(self, bits):\n        \"\"\"The output after each bit.\"\"\"\n        return [self.step(bit) for bit in bits]\n\n\nreg = Register(4)\nreg.set_input(10)\nprint(reg.tick())\nprint(SequenceDetector().run([1, 1, 0, 1, 0, 1, 1, 0, 1, 1]))\n"
+     }
+    ],
+    "hints": [
+     "Keep `self.d` and `self.q` as separate attributes — `set_d` touches only the first, `tick` copies the first into the second.",
+     "Store the register's flops LSB first, so bit `i` of the word is `(value >> i) & 1` and reading back is `flop.q << i`.",
+     "Write the ten transitions out as a dict keyed by `(state, bit)`; it is easier to check against the pattern than a chain of ifs.",
+     "For a failed match, ask which suffix of the stream is still a prefix of 1011: after `S101` and a 0 the stream ends `...1010`, so the answer is `10`, not the start state."
+    ],
+    "tests": [
+     {
+      "name": "A flip-flop is not transparent",
+      "code": "_ff = DFlipFlop()\nassert _ff.q == 0, f\"a fresh flip-flop starts at 0, got {_ff.q!r}\"\n_ff.set_d(1)\nassert _ff.q == 0, \"set_d must not move Q — storage changes only on the clock edge\"\nassert _ff.tick() == 1, \"tick() should copy D into Q and return it\"\nassert _ff.q == 1, f\"after the edge Q is 1, got {_ff.q!r}\"\n_ff.tick()\nassert _ff.q == 1, \"with D unchanged, a second edge holds the same value\""
+     },
+     {
+      "name": "A flip-flop rejects non-binary values",
+      "code": "try:\n    DFlipFlop(2)\n    assert False, \"DFlipFlop(2) should raise ValueError\"\nexcept ValueError:\n    pass\ntry:\n    DFlipFlop().set_d(7)\n    assert False, \"set_d(7) should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "Two flops in a chain update together",
+      "code": "_a = DFlipFlop(1)\n_b = DFlipFlop(0)\n_a.set_d(0)\n_b.set_d(_a.q)\n_a.tick()\n_b.tick()\nassert (_a.q, _b.q) == (0, 1), \\\n    f\"after one edge the chain should read (0, 1), got {(_a.q, _b.q)!r} — sample before you update\""
+     },
+     {
+      "name": "Register loads, reads and holds",
+      "code": "_r = Register(4)\nassert _r.read() == 0, f\"a fresh register reads 0, got {_r.read()!r}\"\n_r.set_input(10)\nassert _r.read() == 0, \"set_input must not change the stored word\"\nassert _r.tick() == 10, f\"tick() should return the newly loaded word, got {_r.tick()!r}\"\n_r.set_input(5, enable=0)\n_r.tick()\nassert _r.read() == 10, f\"with enable 0 the register holds; got {_r.read()!r}, expected 10\"\n_r.set_input(5, enable=1)\n_r.tick()\nassert _r.read() == 5, f\"with enable 1 the register loads; got {_r.read()!r}\"\nassert Register(8, 200).read() == 200, \"a register may start with a value\""
+     },
+     {
+      "name": "Register widths and ranges are checked",
+      "code": "for _args in [(0,), (4, 16), (4, -1), (-3,)]:\n    try:\n        Register(*_args)\n        assert False, f\"Register{_args!r} should raise ValueError\"\n    except ValueError:\n        pass\ntry:\n    Register(4).set_input(16)\n    assert False, \"set_input(16) on a 4-bit register should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "The transition table handles failed matches",
+      "code": "_m = SequenceDetector()\nfor _state, _bit, _want in [(\"S0\", 0, \"S0\"), (\"S0\", 1, \"S1\"), (\"S1\", 1, \"S1\"),\n                            (\"S1\", 0, \"S10\"), (\"S10\", 0, \"S0\"), (\"S10\", 1, \"S101\"),\n                            (\"S101\", 0, \"S10\"), (\"S101\", 1, \"S1011\"),\n                            (\"S1011\", 0, \"S10\"), (\"S1011\", 1, \"S1\")]:\n    _got = _m.next_state(_state, _bit)\n    assert _got == _want, f\"next_state({_state!r}, {_bit}) gave {_got!r}, expected {_want!r}\"\nassert _m.output() == 0, \"S0 does not assert the output\"\nassert SequenceDetector(\"S1011\").output() == 1, \"S1011 asserts the output\"\ntry:\n    SequenceDetector(\"S99\")\n    assert False, \"an unknown start state should raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "The detector finds overlapping patterns",
+      "code": "for _stream in ([1, 1, 0, 1, 0, 1, 1, 0, 1, 1],\n                [1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1],\n                [0] * 6,\n                [1, 0, 1, 1, 1, 0, 1, 1]):\n    _want = [1 if _stream[max(0, _i - 3):_i + 1] == [1, 0, 1, 1] else 0\n             for _i in range(len(_stream))]\n    _got = SequenceDetector().run(_stream)\n    assert _got == _want, f\"run({_stream!r}) gave {_got!r}, expected {_want!r}\"\nassert SequenceDetector().run([]) == [], \"an empty stream produces no outputs\"\ntry:\n    SequenceDetector().step(2)\n    assert False, \"step(2) should raise ValueError\"\nexcept ValueError:\n    pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Two's complement and the ALU",
+   "summary": "One adder, several operations, and the four flags that interpret the result.",
+   "concepts": [
+    "Two's complement: negate by inverting every bit and adding one",
+    "The same adder serves signed and unsigned operands — only the flags differ",
+    "Subtraction is `a + (~b) + 1`, so one circuit does both",
+    "Zero and negative flags read the result; carry and overflow read the operation",
+    "Carry is the unsigned out-of-range signal; overflow is the signed one",
+    "Overflow for addition: both operands share a sign and the result does not",
+    "Logical shifts and their carry-out; why arithmetic right shift differs"
+   ],
+   "lab": {
+    "title": "An n-bit ALU with correct flags",
+    "runtime": "python",
+    "minutes": 50,
+    "brief": "Build the arithmetic-logic unit that the capstone datapath will use.\n\n## Helpers\n\n**`to_signed(value, width)`** — read an unsigned word as two's complement.\n**`from_signed(value, width)`** — the reverse, producing the raw word.\nBoth raise `ValueError` for a value outside the representable range.\n\n```text\nto_signed(0xFF, 8)   -> -1\nto_signed(0x80, 8)   -> -128\nfrom_signed(-1, 8)   ->  255\nfrom_signed(-128, 8) ->  128\nfrom_signed(128, 8)  ->  ValueError\n```\n\n## `ALU(width=8)`\n\n`execute(op, a, b=0)` returns `(result, flags)`. `op` is one of `\"ADD\"`,\n`\"SUB\"`, `\"AND\"`, `\"OR\"`, `\"XOR\"`, `\"SHL\"`, `\"SHR\"` — anything else is a\n`ValueError`, as is an operand outside `0 .. 2**width - 1`. `result` is always\nmasked back down to `width` bits.\n\n`flags` is a dict with exactly the keys `\"Z\"`, `\"N\"`, `\"C\"`, `\"V\"`, each 0 or 1:\n\n- **Z** — the result is zero.\n- **N** — the top bit of the result is set (negative when read as signed).\n- **C** — carry out. For `ADD` it is the bit that fell off the top. For `SUB`\n  it is the carry out of `a + (~b & mask) + 1`, so **1 means no borrow**. For\n  `SHL` it is the bit shifted out of the top, for `SHR` the bit shifted out of\n  the bottom, and for the logical operations it is 0.\n- **V** — signed overflow. Nonzero only for `ADD` and `SUB`. For addition it is\n  set when both operands have the same sign bit and the result does not; for\n  subtraction, when the operands differ in sign and the result differs from `a`.\n\nWorked examples for `width=8`:\n\n```text\nADD 0x7F, 0x01  ->  0x80  Z=0 N=1 C=0 V=1     127 + 1 overflows signed\nADD 0xFF, 0x01  ->  0x00  Z=1 N=0 C=1 V=0      -1 + 1 is fine, unsigned wraps\nSUB 0x05, 0x03  ->  0x02  Z=0 N=0 C=1 V=0     no borrow\nSUB 0x03, 0x05  ->  0xFE  Z=0 N=1 C=0 V=0     borrow; the answer is -2\nSUB 0x80, 0x01  ->  0x7F  Z=0 N=0 C=1 V=1    -128 - 1 overflows signed\nSHL 0x80        ->  0x00  Z=1 N=0 C=1 V=0\nSHR 0x01        ->  0x00  Z=1 N=0 C=1 V=0\n```\n\n`width` is a constructor argument, so the same class is a 4-bit or a 16-bit\nALU. Write the masks in terms of `self.width`; do not hard-code `0xFF`.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "def to_signed(value, width):\n    \"\"\"Read an unsigned word as two's complement.\"\"\"\n    # your code here\n\n\ndef from_signed(value, width):\n    \"\"\"Turn a signed integer into its raw width-bit word.\"\"\"\n    # your code here\n\n\nclass ALU:\n    \"\"\"An n-bit arithmetic-logic unit with Z, N, C and V flags.\"\"\"\n\n    OPS = (\"ADD\", \"SUB\", \"AND\", \"OR\", \"XOR\", \"SHL\", \"SHR\")\n\n    def __init__(self, width=8):\n        self.width = width\n        self.mask = (1 << width) - 1\n        self.sign_bit = 1 << (width - 1)\n\n    def execute(self, op, a, b=0):\n        \"\"\"(result, {\"Z\": .., \"N\": .., \"C\": .., \"V\": ..}).\"\"\"\n        # your code here\n\n\nalu = ALU(8)\nprint(alu.execute(\"ADD\", 0x7F, 0x01))\nprint(alu.execute(\"SUB\", 0x03, 0x05))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "def to_signed(value, width):\n    \"\"\"Read an unsigned word as two's complement.\"\"\"\n    if width < 1:\n        raise ValueError(\"width must be at least 1\")\n    if value < 0 or value >= (1 << width):\n        raise ValueError(f\"{value} is not a {width}-bit word\")\n    if value >= (1 << (width - 1)):\n        return value - (1 << width)\n    return value\n\n\ndef from_signed(value, width):\n    \"\"\"Turn a signed integer into its raw width-bit word.\"\"\"\n    if width < 1:\n        raise ValueError(\"width must be at least 1\")\n    low = -(1 << (width - 1))\n    high = (1 << (width - 1)) - 1\n    if value < low or value > high:\n        raise ValueError(f\"{value} is not representable in {width} signed bits\")\n    return value & ((1 << width) - 1)\n\n\nclass ALU:\n    \"\"\"An n-bit arithmetic-logic unit with Z, N, C and V flags.\"\"\"\n\n    OPS = (\"ADD\", \"SUB\", \"AND\", \"OR\", \"XOR\", \"SHL\", \"SHR\")\n\n    def __init__(self, width=8):\n        self.width = width\n        self.mask = (1 << width) - 1\n        self.sign_bit = 1 << (width - 1)\n\n    def execute(self, op, a, b=0):\n        \"\"\"(result, {\"Z\": .., \"N\": .., \"C\": .., \"V\": ..}).\"\"\"\n        if op not in self.OPS:\n            raise ValueError(f\"unknown operation {op!r}\")\n        for operand in (a, b):\n            if operand < 0 or operand > self.mask:\n                raise ValueError(f\"{operand} is not a {self.width}-bit word\")\n\n        carry = 0\n        overflow = 0\n        if op == \"ADD\":\n            total = a + b\n            result = total & self.mask\n            carry = 1 if total > self.mask else 0\n            overflow = 1 if (~(a ^ b)) & (a ^ result) & self.sign_bit else 0\n        elif op == \"SUB\":\n            total = a + (~b & self.mask) + 1\n            result = total & self.mask\n            carry = 1 if total > self.mask else 0\n            overflow = 1 if (a ^ b) & (a ^ result) & self.sign_bit else 0\n        elif op == \"AND\":\n            result = a & b\n        elif op == \"OR\":\n            result = a | b\n        elif op == \"XOR\":\n            result = a ^ b\n        elif op == \"SHL\":\n            result = (a << 1) & self.mask\n            carry = 1 if a & self.sign_bit else 0\n        else:\n            result = a >> 1\n            carry = a & 1\n\n        flags = {\n            \"Z\": 1 if result == 0 else 0,\n            \"N\": 1 if result & self.sign_bit else 0,\n            \"C\": carry,\n            \"V\": overflow,\n        }\n        return result, flags\n\n\nalu = ALU(8)\nprint(alu.execute(\"ADD\", 0x7F, 0x01))\nprint(alu.execute(\"SUB\", 0x03, 0x05))\n"
+     }
+    ],
+    "hints": [
+     "`to_signed` only has to subtract `1 << width` when the sign bit is set; everything below that is already the right number.",
+     "Do subtraction the way the hardware does: `total = a + (~b & self.mask) + 1`. The carry flag is then simply whether `total` exceeded the mask.",
+     "Signed overflow for ADD is `(~(a ^ b)) & (a ^ result) & self.sign_bit` — 'the operands agreed on sign and the result disagreed'. For SUB, drop the outer complement: `(a ^ b) & (a ^ result) & self.sign_bit`.",
+     "Set Z and N once at the end from `result`; only C and V depend on which operation ran."
+    ],
+    "tests": [
+     {
+      "name": "to_signed / from_signed",
+      "code": "for _v, _want in [(0, 0), (127, 127), (128, -128), (255, -1), (1, 1)]:\n    _got = to_signed(_v, 8)\n    assert _got == _want, f\"to_signed({_v}, 8) gave {_got!r}, expected {_want}\"\nfor _v, _want in [(0, 0), (-1, 255), (-128, 128), (127, 127)]:\n    _got = from_signed(_v, 8)\n    assert _got == _want, f\"from_signed({_v}, 8) gave {_got!r}, expected {_want}\"\nassert to_signed(8, 4) == -8, f\"to_signed(8, 4) gave {to_signed(8, 4)!r}, expected -8\"\nfor _v in range(256):\n    assert from_signed(to_signed(_v, 8), 8) == _v, f\"round-trip failed for {_v}\"\nfor _args in [(256, 8), (-1, 8)]:\n    try:\n        to_signed(*_args)\n        assert False, f\"to_signed{_args!r} should raise ValueError\"\n    except ValueError:\n        pass\nfor _args in [(128, 8), (-129, 8)]:\n    try:\n        from_signed(*_args)\n        assert False, f\"from_signed{_args!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "Logical operations and their flags",
+      "code": "_alu = ALU(8)\nfor _op, _a, _b, _want in [(\"AND\", 0xF0, 0x3C, 0x30), (\"OR\", 0xF0, 0x0F, 0xFF),\n                           (\"XOR\", 0xFF, 0x0F, 0xF0), (\"AND\", 0x0F, 0xF0, 0x00)]:\n    _r, _f = _alu.execute(_op, _a, _b)\n    assert _r == _want, f\"{_op} {_a:#04x}, {_b:#04x} gave {_r:#04x}, expected {_want:#04x}\"\n    assert _f[\"C\"] == 0 and _f[\"V\"] == 0, f\"{_op} must leave C and V clear, got {_f!r}\"\n_r, _f = _alu.execute(\"OR\", 0xF0, 0x0F)\nassert _f == {\"Z\": 0, \"N\": 1, \"C\": 0, \"V\": 0}, f\"OR 0xF0, 0x0F flags were {_f!r}\"\n_r, _f = _alu.execute(\"AND\", 0x0F, 0xF0)\nassert _f == {\"Z\": 1, \"N\": 0, \"C\": 0, \"V\": 0}, f\"AND 0x0F, 0xF0 flags were {_f!r}\""
+     },
+     {
+      "name": "ADD, with carry and overflow",
+      "code": "_alu = ALU(8)\nfor _a, _b, _wr, _wf in [\n        (0x7F, 0x01, 0x80, {\"Z\": 0, \"N\": 1, \"C\": 0, \"V\": 1}),\n        (0xFF, 0x01, 0x00, {\"Z\": 1, \"N\": 0, \"C\": 1, \"V\": 0}),\n        (0x01, 0x02, 0x03, {\"Z\": 0, \"N\": 0, \"C\": 0, \"V\": 0}),\n        (0x80, 0x80, 0x00, {\"Z\": 1, \"N\": 0, \"C\": 1, \"V\": 1}),\n        (0x00, 0x00, 0x00, {\"Z\": 1, \"N\": 0, \"C\": 0, \"V\": 0})]:\n    _r, _f = _alu.execute(\"ADD\", _a, _b)\n    assert _r == _wr, f\"ADD {_a:#04x}, {_b:#04x} gave {_r:#04x}, expected {_wr:#04x}\"\n    assert _f == _wf, f\"ADD {_a:#04x}, {_b:#04x} flags were {_f!r}, expected {_wf!r}\""
+     },
+     {
+      "name": "SUB, with borrow and overflow",
+      "code": "_alu = ALU(8)\nfor _a, _b, _wr, _wf in [\n        (0x05, 0x03, 0x02, {\"Z\": 0, \"N\": 0, \"C\": 1, \"V\": 0}),\n        (0x03, 0x05, 0xFE, {\"Z\": 0, \"N\": 1, \"C\": 0, \"V\": 0}),\n        (0x80, 0x01, 0x7F, {\"Z\": 0, \"N\": 0, \"C\": 1, \"V\": 1}),\n        (0x07, 0x07, 0x00, {\"Z\": 1, \"N\": 0, \"C\": 1, \"V\": 0}),\n        (0x00, 0x01, 0xFF, {\"Z\": 0, \"N\": 1, \"C\": 0, \"V\": 0})]:\n    _r, _f = _alu.execute(\"SUB\", _a, _b)\n    assert _r == _wr, f\"SUB {_a:#04x}, {_b:#04x} gave {_r:#04x}, expected {_wr:#04x}\"\n    assert _f == _wf, f\"SUB {_a:#04x}, {_b:#04x} flags were {_f!r}, expected {_wf!r}\""
+     },
+     {
+      "name": "Shifts and their carry-out",
+      "code": "_alu = ALU(8)\nfor _op, _a, _wr, _wc in [(\"SHL\", 0x01, 0x02, 0), (\"SHL\", 0x80, 0x00, 1),\n                          (\"SHL\", 0xC0, 0x80, 1), (\"SHR\", 0x01, 0x00, 1),\n                          (\"SHR\", 0xFF, 0x7F, 1), (\"SHR\", 0x02, 0x01, 0)]:\n    _r, _f = _alu.execute(_op, _a)\n    assert _r == _wr, f\"{_op} {_a:#04x} gave {_r:#04x}, expected {_wr:#04x}\"\n    assert _f[\"C\"] == _wc, f\"{_op} {_a:#04x} gave C={_f['C']}, expected {_wc}\"\n    assert _f[\"V\"] == 0, f\"{_op} must leave V clear, got {_f!r}\"\n_r, _f = _alu.execute(\"SHL\", 0x40)\nassert (_r, _f[\"N\"]) == (0x80, 1), f\"SHL 0x40 gave {(_r, _f['N'])!r}, expected (128, 1)\""
+     },
+     {
+      "name": "ADD and SUB agree with plain arithmetic",
+      "code": "_alu = ALU(8)\nfor _a in range(0, 256, 7):\n    for _b in range(0, 256, 5):\n        _r, _f = _alu.execute(\"ADD\", _a, _b)\n        assert _r == (_a + _b) & 0xFF, f\"ADD {_a}, {_b} gave {_r}, expected {(_a + _b) & 0xFF}\"\n        assert _f[\"C\"] == (1 if _a + _b > 255 else 0), f\"ADD {_a}, {_b} carry was {_f['C']}\"\n        _signed = to_signed(_a, 8) + to_signed(_b, 8)\n        _wantv = 0 if -128 <= _signed <= 127 else 1\n        assert _f[\"V\"] == _wantv, f\"ADD {_a}, {_b} gave V={_f['V']}, expected {_wantv}\"\n        _r, _f = _alu.execute(\"SUB\", _a, _b)\n        assert _r == (_a - _b) & 0xFF, f\"SUB {_a}, {_b} gave {_r}, expected {(_a - _b) & 0xFF}\"\n        assert _f[\"C\"] == (1 if _a >= _b else 0), f\"SUB {_a}, {_b} carry was {_f['C']}\"\n        _signed = to_signed(_a, 8) - to_signed(_b, 8)\n        _wantv = 0 if -128 <= _signed <= 127 else 1\n        assert _f[\"V\"] == _wantv, f\"SUB {_a}, {_b} gave V={_f['V']}, expected {_wantv}\""
+     },
+     {
+      "name": "Bad operations and operands are refused",
+      "code": "_alu = ALU(8)\nfor _args in [(\"MUL\", 1, 2), (\"add\", 1, 2), (\"ADD\", 256, 0), (\"ADD\", 0, -1)]:\n    try:\n        _alu.execute(*_args)\n        assert False, f\"execute{_args!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "The same class works at other widths",
+      "code": "_alu4 = ALU(4)\n_r, _f = _alu4.execute(\"ADD\", 0b1111, 0b0001)\nassert (_r, _f) == (0, {\"Z\": 1, \"N\": 0, \"C\": 1, \"V\": 0}), \\\n    f\"4-bit ADD 15, 1 gave {(_r, _f)!r}, expected (0, Z=1 C=1)\"\n_r, _f = _alu4.execute(\"ADD\", 0b0111, 0b0001)\nassert (_r, _f[\"V\"], _f[\"N\"]) == (8, 1, 1), \\\n    f\"4-bit ADD 7, 1 gave {(_r, _f['V'], _f['N'])!r}, expected (8, 1, 1)\"\n_r, _f = _alu4.execute(\"SHL\", 0b1000)\nassert (_r, _f[\"C\"], _f[\"Z\"]) == (0, 1, 1), f\"4-bit SHL 8 gave {(_r, _f['C'], _f['Z'])!r}\"\ntry:\n    _alu4.execute(\"ADD\", 16, 0)\n    assert False, \"16 is not a 4-bit word\"\nexcept ValueError:\n    pass"
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "Capstone — an 8-bit datapath simulator",
+  "brief": "Put the four labs together into a machine that executes instructions.\n`datapath.py` holds the hardware and is what the checks import; `main.py` is a\ndemo that loads a program and runs it.\n\n## Memory and encoding\n\n256 bytes of memory, byte-addressed. Every instruction is **two bytes**:\n\n```text\nbyte 0:  opcode (4 bits) | rd (2 bits) | rs (2 bits)\nbyte 1:  operand — an immediate or an address\n```\n\nThe sixteen opcodes are already named as module constants:\n\n```text\n0 NOP                 8  XOR rd, rs\n1 LDI rd, imm         9  SHL rd\n2 LD  rd, addr        10 SHR rd\n3 ST  rs, addr        11 JMP addr\n4 ADD rd, rs          12 JZ  addr     (taken when the Z flag is set)\n5 SUB rd, rs          13 JNZ addr\n6 AND rd, rs          14 MOV rd, rs\n7 OR  rd, rs          15 HLT\n```\n\n`encode(op, rd=0, rs=0, operand=0)` returns the two bytes and raises\n`ValueError` for a field that will not fit. `decode(byte0, byte1)` returns\n`(op, rd, rs, operand)`. `assemble(instructions)` flattens a list of tuples into\na flat list of bytes, padding short tuples with zeros.\n\n## `RegisterFile(count=4, width=8)`\n\n`read(index)` and `write(index, value)`. Writes are masked to `width` bits;\nan index outside `0 .. count - 1` is a `ValueError`.\n\n## `ALU(width=8)`\n\nExactly the unit from module 4: `execute(op, a, b=0) -> (result, flags)` with\n`\"Z\"`, `\"N\"`, `\"C\"`, `\"V\"`.\n\n## `CPU(program=None, start=0)`\n\nA Moore control FSM over the states `\"FETCH\"`, `\"DECODE\"`, `\"EXECUTE\"` and\n`\"HALTED\"`, plus `pc`, `mem`, `regs`, `flags` and the instruction register `ir`.\n\n- `load_program(program, start=0)` — assemble and write the bytes into memory.\n  `ValueError` if the program does not fit.\n- `tick()` — advance **one** control state and return the new state.\n  - FETCH: latch `mem[pc]` and `mem[pc + 1]` into `ir`, advance `pc` by 2\n    (wrapping at 256), go to DECODE.\n  - DECODE: split `ir` into `op`, `rd`, `rs`, `operand`, go to EXECUTE.\n  - EXECUTE: perform the operation, then go back to FETCH — or to HALTED\n    for `HLT`. A tick in HALTED does nothing.\n- `step()` — tick until the machine is back in FETCH or has HALTED.\n- `run(max_steps=10000)` — step until HALTED, returning the number of\n  instructions executed. Raise `RuntimeError` if the limit is reached first:\n  a simulator that hangs the browser tab is not a simulator.\n\nOnly ADD, SUB, AND, OR, XOR, SHL and SHR touch `flags`; loads, stores, moves\nand jumps leave them alone, which is what makes `OR rd, rd` a useful way to\ntest a register before a branch.\n\n## The micro-program\n\nFinish `SUM_PROGRAM`: it must read `n` from address `0x40`, compute\n`n + (n-1) + ... + 1` and store the total at `0x41`, then halt. Remember that\njump targets are **byte** addresses, so instruction `k` sits at address `2 * k`.\nThe sketch below is one correct shape; the loop needs a flag-setting\ninstruction before its branch.\n\n```text\naddr 0   LD  R0, 0x40      R0 = n\naddr 2   LDI R1, 0         R1 = running total\naddr 4   LDI R3, 1         R3 = the constant 1\naddr 6   OR  R0, R0        set Z from R0 without changing it\naddr 8   JZ  16            n reached zero, go and store\naddr 10  ADD R1, R0        total += n\naddr 12  SUB R0, R3        n -= 1\naddr 14  JMP 6             back to the test\naddr 16  ST  R1, 0x41      store the total\naddr 18  HLT\n```",
+  "deliverables": [
+   "`datapath.py` — `encode`/`decode`/`assemble`, `RegisterFile`, `ALU` and `CPU`, importable with no side effects",
+   "A control FSM whose `tick()` exposes FETCH, DECODE, EXECUTE and HALTED as separate observable states",
+   "All sixteen opcodes implemented, with flags updated only by the arithmetic and logic operations",
+   "`SUM_PROGRAM` — a working micro-program that reads `n` from 0x40 and leaves the triangular number at 0x41",
+   "`main.py` — a demo that loads the program for a couple of values of `n` and prints the results",
+   "Termination safety: `run()` raises `RuntimeError` rather than looping forever"
+  ],
+  "constraints": [
+   "Standard library only, and no imports are needed at all",
+   "`datapath.py` must define constants, classes and functions only — running it prints nothing",
+   "Memory is exactly 256 bytes and every stored value stays in `0 .. 255`",
+   "The program counter wraps at 256 rather than running off the end of memory",
+   "Two `CPU()` objects must not share memory or registers"
+  ],
+  "rubric": [
+   {
+    "criterion": "Instruction set correctness",
+    "weight": 35,
+    "evidence": "Every opcode moves the right data, and encode/decode round-trip for all valid field combinations."
+   },
+   {
+    "criterion": "Control FSM",
+    "weight": 20,
+    "evidence": "tick() exposes the three-phase cycle, HLT parks the machine, and step()/run() are built on tick() rather than duplicating it."
+   },
+   {
+    "criterion": "Flags and branching",
+    "weight": 20,
+    "evidence": "Z, N, C and V follow the module 4 rules, only arithmetic and logic write them, and JZ/JNZ branch on the latched Z."
+   },
+   {
+    "criterion": "Micro-program",
+    "weight": 15,
+    "evidence": "SUM_PROGRAM returns the correct total for n = 0, 1 and larger values, using byte addresses for its jump targets."
+   },
+   {
+    "criterion": "Robustness and readability",
+    "weight": 10,
+    "evidence": "Bad opcodes, registers and addresses raise ValueError; run() refuses to hang; every public method carries a docstring."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 260,
+  "files": [
+   {
+    "name": "datapath.py",
+    "content": "NOP, LDI, LD, ST, ADD, SUB, AND, OR, XOR, SHL, SHR, JMP, JZ, JNZ, MOV, HLT = range(16)\n\nOPNAMES = {\n    NOP: \"NOP\", LDI: \"LDI\", LD: \"LD\", ST: \"ST\", ADD: \"ADD\", SUB: \"SUB\",\n    AND: \"AND\", OR: \"OR\", XOR: \"XOR\", SHL: \"SHL\", SHR: \"SHR\", JMP: \"JMP\",\n    JZ: \"JZ\", JNZ: \"JNZ\", MOV: \"MOV\", HLT: \"HLT\",\n}\n\nMEM_SIZE = 256\n\n\ndef encode(op, rd=0, rs=0, operand=0):\n    \"\"\"(byte0, byte1) for one instruction. ValueError on a field that will not fit.\"\"\"\n    # your code here\n\n\ndef decode(byte0, byte1):\n    \"\"\"(op, rd, rs, operand).\"\"\"\n    # your code here\n\n\ndef assemble(instructions):\n    \"\"\"A list of (op, rd, rs, operand) tuples as a flat list of bytes.\"\"\"\n    # your code here\n\n\nclass RegisterFile:\n    \"\"\"A small bank of width-bit registers.\"\"\"\n\n    def __init__(self, count=4, width=8):\n        # your code here\n        pass\n\n    def read(self, index):\n        \"\"\"The value in register `index`.\"\"\"\n        # your code here\n\n    def write(self, index, value):\n        \"\"\"Store `value`, masked to the register width.\"\"\"\n        # your code here\n\n\nclass ALU:\n    \"\"\"The unit from module 4, reused unchanged.\"\"\"\n\n    OPS = (\"ADD\", \"SUB\", \"AND\", \"OR\", \"XOR\", \"SHL\", \"SHR\")\n\n    def __init__(self, width=8):\n        self.width = width\n        self.mask = (1 << width) - 1\n        self.sign_bit = 1 << (width - 1)\n\n    def execute(self, op, a, b=0):\n        \"\"\"(result, {\"Z\": .., \"N\": .., \"C\": .., \"V\": ..}).\"\"\"\n        # your code here\n\n\nclass CPU:\n    \"\"\"Memory, registers, an ALU and a three-phase control FSM.\"\"\"\n\n    STATES = (\"FETCH\", \"DECODE\", \"EXECUTE\", \"HALTED\")\n\n    def __init__(self, program=None, start=0):\n        # your code here\n        pass\n\n    def load_program(self, program, start=0):\n        \"\"\"Assemble the instructions into memory at `start`.\"\"\"\n        # your code here\n\n    def tick(self):\n        \"\"\"Advance one control state and return the new state.\"\"\"\n        # your code here\n\n    def step(self):\n        \"\"\"Run one whole instruction.\"\"\"\n        # your code here\n\n    def run(self, max_steps=10000):\n        \"\"\"Step until HALTED; RuntimeError if the machine will not stop.\"\"\"\n        # your code here\n\n\n# n at 0x40, the sum 1..n at 0x41. Finish it.\nSUM_PROGRAM = [\n    (LD, 0, 0, 0x40),\n    (LDI, 1, 0, 0),\n]\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from datapath import CPU, SUM_PROGRAM\n\nfor n in (0, 1, 5, 10):\n    cpu = CPU(SUM_PROGRAM)\n    cpu.mem[0x40] = n\n    steps = cpu.run()\n    print(f\"n={n:>3}  sum={cpu.mem[0x41]:>3}  instructions={steps}\")\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "datapath.py",
+    "content": "NOP, LDI, LD, ST, ADD, SUB, AND, OR, XOR, SHL, SHR, JMP, JZ, JNZ, MOV, HLT = range(16)\n\nOPNAMES = {\n    NOP: \"NOP\", LDI: \"LDI\", LD: \"LD\", ST: \"ST\", ADD: \"ADD\", SUB: \"SUB\",\n    AND: \"AND\", OR: \"OR\", XOR: \"XOR\", SHL: \"SHL\", SHR: \"SHR\", JMP: \"JMP\",\n    JZ: \"JZ\", JNZ: \"JNZ\", MOV: \"MOV\", HLT: \"HLT\",\n}\n\nMEM_SIZE = 256\n\nALU_OP = {ADD: \"ADD\", SUB: \"SUB\", AND: \"AND\", OR: \"OR\", XOR: \"XOR\",\n          SHL: \"SHL\", SHR: \"SHR\"}\n\n\ndef encode(op, rd=0, rs=0, operand=0):\n    \"\"\"(byte0, byte1) for one instruction. ValueError on a field that will not fit.\"\"\"\n    if not 0 <= op <= 15:\n        raise ValueError(f\"opcode {op} does not fit in 4 bits\")\n    if not 0 <= rd <= 3:\n        raise ValueError(f\"no register R{rd}\")\n    if not 0 <= rs <= 3:\n        raise ValueError(f\"no register R{rs}\")\n    if not 0 <= operand <= 255:\n        raise ValueError(f\"operand {operand} does not fit in a byte\")\n    return (op << 4) | (rd << 2) | rs, operand\n\n\ndef decode(byte0, byte1):\n    \"\"\"(op, rd, rs, operand).\"\"\"\n    return byte0 >> 4, (byte0 >> 2) & 3, byte0 & 3, byte1\n\n\ndef assemble(instructions):\n    \"\"\"A list of (op, rd, rs, operand) tuples as a flat list of bytes.\"\"\"\n    out = []\n    for instruction in instructions:\n        fields = tuple(instruction) + (0,) * (4 - len(instruction))\n        byte0, byte1 = encode(*fields)\n        out.append(byte0)\n        out.append(byte1)\n    return out\n\n\nclass RegisterFile:\n    \"\"\"A small bank of width-bit registers.\"\"\"\n\n    def __init__(self, count=4, width=8):\n        self.count = count\n        self.width = width\n        self.mask = (1 << width) - 1\n        self.values = [0] * count\n\n    def _check(self, index):\n        if not 0 <= index < self.count:\n            raise ValueError(f\"no register R{index}\")\n\n    def read(self, index):\n        \"\"\"The value in register `index`.\"\"\"\n        self._check(index)\n        return self.values[index]\n\n    def write(self, index, value):\n        \"\"\"Store `value`, masked to the register width.\"\"\"\n        self._check(index)\n        self.values[index] = value & self.mask\n\n\nclass ALU:\n    \"\"\"The unit from module 4, reused unchanged.\"\"\"\n\n    OPS = (\"ADD\", \"SUB\", \"AND\", \"OR\", \"XOR\", \"SHL\", \"SHR\")\n\n    def __init__(self, width=8):\n        self.width = width\n        self.mask = (1 << width) - 1\n        self.sign_bit = 1 << (width - 1)\n\n    def execute(self, op, a, b=0):\n        \"\"\"(result, {\"Z\": .., \"N\": .., \"C\": .., \"V\": ..}).\"\"\"\n        if op not in self.OPS:\n            raise ValueError(f\"unknown operation {op!r}\")\n        for operand in (a, b):\n            if operand < 0 or operand > self.mask:\n                raise ValueError(f\"{operand} is not a {self.width}-bit word\")\n\n        carry = 0\n        overflow = 0\n        if op == \"ADD\":\n            total = a + b\n            result = total & self.mask\n            carry = 1 if total > self.mask else 0\n            overflow = 1 if (~(a ^ b)) & (a ^ result) & self.sign_bit else 0\n        elif op == \"SUB\":\n            total = a + (~b & self.mask) + 1\n            result = total & self.mask\n            carry = 1 if total > self.mask else 0\n            overflow = 1 if (a ^ b) & (a ^ result) & self.sign_bit else 0\n        elif op == \"AND\":\n            result = a & b\n        elif op == \"OR\":\n            result = a | b\n        elif op == \"XOR\":\n            result = a ^ b\n        elif op == \"SHL\":\n            result = (a << 1) & self.mask\n            carry = 1 if a & self.sign_bit else 0\n        else:\n            result = a >> 1\n            carry = a & 1\n\n        return result, {\n            \"Z\": 1 if result == 0 else 0,\n            \"N\": 1 if result & self.sign_bit else 0,\n            \"C\": carry,\n            \"V\": overflow,\n        }\n\n\nclass CPU:\n    \"\"\"Memory, registers, an ALU and a three-phase control FSM.\"\"\"\n\n    STATES = (\"FETCH\", \"DECODE\", \"EXECUTE\", \"HALTED\")\n\n    def __init__(self, program=None, start=0):\n        self.mem = [0] * MEM_SIZE\n        self.regs = RegisterFile(4, 8)\n        self.alu = ALU(8)\n        self.flags = {\"Z\": 0, \"N\": 0, \"C\": 0, \"V\": 0}\n        self.pc = start\n        self.state = \"FETCH\"\n        self.ir = (0, 0)\n        self.op = NOP\n        self.rd = 0\n        self.rs = 0\n        self.operand = 0\n        if program:\n            self.load_program(program, start)\n\n    def load_program(self, program, start=0):\n        \"\"\"Assemble the instructions into memory at `start`.\"\"\"\n        code = assemble(program)\n        if start < 0 or start + len(code) > MEM_SIZE:\n            raise ValueError(\"the program does not fit in memory\")\n        for offset, byte in enumerate(code):\n            self.mem[start + offset] = byte\n\n    def tick(self):\n        \"\"\"Advance one control state and return the new state.\"\"\"\n        if self.state == \"FETCH\":\n            self.ir = (self.mem[self.pc], self.mem[(self.pc + 1) % MEM_SIZE])\n            self.pc = (self.pc + 2) % MEM_SIZE\n            self.state = \"DECODE\"\n        elif self.state == \"DECODE\":\n            self.op, self.rd, self.rs, self.operand = decode(*self.ir)\n            self.state = \"EXECUTE\"\n        elif self.state == \"EXECUTE\":\n            self._execute()\n        return self.state\n\n    def _execute(self):\n        \"\"\"Carry out the decoded instruction and choose the next control state.\"\"\"\n        op, rd, rs, operand = self.op, self.rd, self.rs, self.operand\n        if op == HLT:\n            self.state = \"HALTED\"\n            return\n        if op == NOP:\n            pass\n        elif op == LDI:\n            self.regs.write(rd, operand)\n        elif op == LD:\n            self.regs.write(rd, self.mem[operand])\n        elif op == ST:\n            self.mem[operand] = self.regs.read(rs)\n        elif op == MOV:\n            self.regs.write(rd, self.regs.read(rs))\n        elif op in (ADD, SUB, AND, OR, XOR):\n            result, flags = self.alu.execute(ALU_OP[op], self.regs.read(rd),\n                                             self.regs.read(rs))\n            self.regs.write(rd, result)\n            self.flags = flags\n        elif op in (SHL, SHR):\n            result, flags = self.alu.execute(ALU_OP[op], self.regs.read(rd))\n            self.regs.write(rd, result)\n            self.flags = flags\n        elif op == JMP:\n            self.pc = operand\n        elif op == JZ:\n            if self.flags[\"Z\"]:\n                self.pc = operand\n        elif op == JNZ:\n            if not self.flags[\"Z\"]:\n                self.pc = operand\n        else:\n            raise ValueError(f\"unknown opcode {op}\")\n        self.state = \"FETCH\"\n\n    def step(self):\n        \"\"\"Run one whole instruction.\"\"\"\n        if self.state == \"HALTED\":\n            return self.state\n        while True:\n            self.tick()\n            if self.state in (\"FETCH\", \"HALTED\"):\n                return self.state\n\n    def run(self, max_steps=10000):\n        \"\"\"Step until HALTED; RuntimeError if the machine will not stop.\"\"\"\n        steps = 0\n        while self.state != \"HALTED\":\n            if steps >= max_steps:\n                raise RuntimeError(f\"no HLT within {max_steps} instructions\")\n            self.step()\n            steps += 1\n        return steps\n\n\n# n at 0x40, the sum 1..n at 0x41.\nSUM_PROGRAM = [\n    (LD, 0, 0, 0x40),\n    (LDI, 1, 0, 0),\n    (LDI, 3, 0, 1),\n    (OR, 0, 0, 0),\n    (JZ, 0, 0, 16),\n    (ADD, 1, 0, 0),\n    (SUB, 0, 3, 0),\n    (JMP, 0, 0, 6),\n    (ST, 0, 1, 0x41),\n    (HLT, 0, 0, 0),\n]\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from datapath import CPU, SUM_PROGRAM\n\nfor n in (0, 1, 5, 10):\n    cpu = CPU(SUM_PROGRAM)\n    cpu.mem[0x40] = n\n    steps = cpu.run()\n    print(f\"n={n:>3}  sum={cpu.mem[0x41]:>3}  instructions={steps}\")\n"
+   }
+  ],
+  "hints": [
+   "Write `encode` and `decode` first and test them against each other — every later bug looks like an encoding bug until you rule it out.",
+   "Keep `tick()` as a single `if`/`elif` over `self.state`; `step()` should then be nothing but `while True: self.tick()` with a stop condition.",
+   "Dispatch the opcode inside EXECUTE from a plain chain of comparisons against the module constants, and map the arithmetic opcodes to their ALU operation names with one dict.",
+   "The jump instructions assign to `self.pc` *after* FETCH has already advanced it, so the branch simply overwrites the sequential address.",
+   "In `SUM_PROGRAM`, remember that `SUB R0, R3` sets Z but `JMP` does not — the `OR R0, R0` at the top of the loop is what makes the test at address 8 meaningful."
+  ],
+  "tests": [
+   {
+    "name": "encode / decode round-trip",
+    "code": "from datapath import encode, decode, assemble, LDI, ADD, JMP, HLT\n_b0, _b1 = encode(ADD, 2, 3, 0)\nassert (_b0, _b1) == ((4 << 4) | (2 << 2) | 3, 0), f\"encode(ADD, 2, 3) gave {(_b0, _b1)!r}\"\nfor _op in range(16):\n    for _rd in range(4):\n        for _rs in range(4):\n            for _operand in (0, 1, 128, 255):\n                assert decode(*encode(_op, _rd, _rs, _operand)) == (_op, _rd, _rs, _operand), \\\n                    f\"round-trip failed for {(_op, _rd, _rs, _operand)!r}\"\nassert assemble([(LDI, 1, 0, 7), (HLT,)]) == [(1 << 4) | (1 << 2), 7, 15 << 4, 0], \\\n    f\"assemble gave {assemble([(LDI, 1, 0, 7), (HLT,)])!r}\"\nfor _bad in [(16, 0, 0, 0), (-1, 0, 0, 0), (ADD, 4, 0, 0), (ADD, 0, 4, 0), (JMP, 0, 0, 256)]:\n    try:\n        encode(*_bad)\n        assert False, f\"encode{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+   },
+   {
+    "name": "RegisterFile masks and checks",
+    "code": "from datapath import RegisterFile\n_rf = RegisterFile(4, 8)\nassert _rf.read(0) == 0, \"registers start at zero\"\n_rf.write(2, 300)\nassert _rf.read(2) == 300 & 0xFF, f\"R2 is {_rf.read(2)!r}, expected {300 & 0xFF} after masking\"\n_rf.write(3, -1)\nassert _rf.read(3) == 255, f\"R3 is {_rf.read(3)!r}, expected 255\"\nfor _bad in (4, -1, 99):\n    try:\n        _rf.read(_bad)\n        assert False, f\"read({_bad}) should raise ValueError\"\n    except ValueError:\n        pass\ntry:\n    _rf.write(4, 0)\n    assert False, \"write to R4 should raise ValueError\"\nexcept ValueError:\n    pass"
+   },
+   {
+    "name": "The ALU still sets the module 4 flags",
+    "code": "from datapath import ALU\n_alu = ALU(8)\nfor _op, _a, _b, _wr, _wf in [\n        (\"ADD\", 0x7F, 0x01, 0x80, {\"Z\": 0, \"N\": 1, \"C\": 0, \"V\": 1}),\n        (\"ADD\", 0xFF, 0x01, 0x00, {\"Z\": 1, \"N\": 0, \"C\": 1, \"V\": 0}),\n        (\"SUB\", 0x03, 0x05, 0xFE, {\"Z\": 0, \"N\": 1, \"C\": 0, \"V\": 0}),\n        (\"SUB\", 0x80, 0x01, 0x7F, {\"Z\": 0, \"N\": 0, \"C\": 1, \"V\": 1}),\n        (\"OR\", 0x00, 0x00, 0x00, {\"Z\": 1, \"N\": 0, \"C\": 0, \"V\": 0})]:\n    _r, _f = _alu.execute(_op, _a, _b)\n    assert (_r, _f) == (_wr, _wf), \\\n        f\"{_op} {_a:#04x}, {_b:#04x} gave {(_r, _f)!r}, expected {(_wr, _wf)!r}\""
+   },
+   {
+    "name": "The control FSM runs three phases per instruction",
+    "code": "from datapath import CPU, LDI, HLT\n_cpu = CPU([(LDI, 1, 0, 7), (HLT,)])\nassert _cpu.state == \"FETCH\", f\"a fresh CPU starts in FETCH, got {_cpu.state!r}\"\nassert _cpu.pc == 0, f\"pc starts at 0, got {_cpu.pc!r}\"\nassert _cpu.tick() == \"DECODE\", \"FETCH is followed by DECODE\"\nassert _cpu.pc == 2, f\"FETCH advances the pc by 2, got {_cpu.pc!r}\"\nassert _cpu.tick() == \"EXECUTE\", \"DECODE is followed by EXECUTE\"\nassert _cpu.regs.read(1) == 0, \"the write happens in EXECUTE, not in DECODE\"\nassert _cpu.tick() == \"FETCH\", \"EXECUTE returns to FETCH\"\nassert _cpu.regs.read(1) == 7, f\"R1 is {_cpu.regs.read(1)!r}, expected 7\"\nassert _cpu.step() == \"HALTED\", \"the second instruction is HLT\"\nassert _cpu.tick() == \"HALTED\", \"a halted machine stays halted\""
+   },
+   {
+    "name": "Data movement: LDI, MOV, ST and LD",
+    "code": "from datapath import CPU, LDI, MOV, ST, LD, HLT\n_cpu = CPU([(LDI, 0, 0, 0x2A), (MOV, 1, 0, 0), (ST, 0, 1, 0x80),\n            (LD, 2, 0, 0x80), (HLT,)])\n_cpu.run()\nassert _cpu.regs.read(0) == 0x2A, f\"R0 is {_cpu.regs.read(0)!r}, expected 42\"\nassert _cpu.regs.read(1) == 0x2A, f\"MOV left R1 at {_cpu.regs.read(1)!r}, expected 42\"\nassert _cpu.mem[0x80] == 0x2A, f\"ST wrote {_cpu.mem[0x80]!r} to 0x80, expected 42\"\nassert _cpu.regs.read(2) == 0x2A, f\"LD left R2 at {_cpu.regs.read(2)!r}, expected 42\"\n_other = CPU()\nassert _other.mem[0x80] == 0 and _other.regs.read(0) == 0, \\\n    \"two CPUs must not share memory or registers\""
+   },
+   {
+    "name": "Arithmetic and logic write back and set flags",
+    "code": "from datapath import CPU, LDI, ADD, SUB, AND, XOR, SHL, SHR, HLT\n_cpu = CPU([(LDI, 0, 0, 200), (LDI, 1, 0, 100), (ADD, 0, 1, 0), (HLT,)])\n_cpu.run()\nassert _cpu.regs.read(0) == 44, f\"200 + 100 in 8 bits is 44, got {_cpu.regs.read(0)!r}\"\nassert _cpu.flags[\"C\"] == 1, f\"that addition carries; flags were {_cpu.flags!r}\"\n_cpu = CPU([(LDI, 0, 0, 5), (LDI, 1, 0, 5), (SUB, 0, 1, 0), (HLT,)])\n_cpu.run()\nassert _cpu.regs.read(0) == 0 and _cpu.flags[\"Z\"] == 1, \\\n    f\"5 - 5 should leave 0 with Z set, got {_cpu.regs.read(0)!r} and {_cpu.flags!r}\"\n_cpu = CPU([(LDI, 0, 0, 0xF0), (LDI, 1, 0, 0x3C), (AND, 0, 1, 0),\n            (LDI, 2, 0, 0x81), (SHL, 2, 0, 0), (LDI, 3, 0, 0x05), (SHR, 3, 0, 0), (HLT,)])\n_cpu.run()\nassert _cpu.regs.read(0) == 0x30, f\"0xF0 AND 0x3C is 0x30, got {_cpu.regs.read(0):#04x}\"\nassert _cpu.regs.read(2) == 0x02, f\"SHL 0x81 is 0x02, got {_cpu.regs.read(2):#04x}\"\nassert _cpu.regs.read(3) == 0x02, f\"SHR 0x05 is 0x02, got {_cpu.regs.read(3):#04x}\"\n_cpu = CPU([(LDI, 0, 0, 9), (XOR, 0, 0, 0), (HLT,)])\n_cpu.run()\nassert _cpu.regs.read(0) == 0, \"XOR of a register with itself clears it\""
+   },
+   {
+    "name": "Loads and jumps leave the flags alone",
+    "code": "from datapath import CPU, LDI, SUB, LD, MOV, HLT\n_cpu = CPU([(LDI, 0, 0, 4), (LDI, 1, 0, 4), (SUB, 0, 1, 0),\n            (LDI, 2, 0, 99), (MOV, 3, 2, 0), (LD, 1, 0, 0x90), (HLT,)])\n_cpu.run()\nassert _cpu.flags[\"Z\"] == 1, \\\n    f\"only ALU operations touch the flags, so Z should still be 1; got {_cpu.flags!r}\""
+   },
+   {
+    "name": "Branches",
+    "code": "from datapath import CPU, LDI, SUB, JZ, JNZ, JMP, HLT\n_taken = CPU([(LDI, 0, 0, 3), (LDI, 1, 0, 3), (SUB, 0, 1, 0), (JZ, 0, 0, 10),\n              (LDI, 2, 0, 111), (LDI, 3, 0, 222), (HLT,)])\n_taken.run()\nassert _taken.regs.read(2) == 0, \"JZ with Z set must skip the instruction at address 8\"\nassert _taken.regs.read(3) == 222, f\"execution should resume at address 10, got R3={_taken.regs.read(3)!r}\"\n_nottaken = CPU([(LDI, 0, 0, 3), (LDI, 1, 0, 1), (SUB, 0, 1, 0), (JZ, 0, 0, 10),\n                 (LDI, 2, 0, 111), (LDI, 3, 0, 222), (HLT,)])\n_nottaken.run()\nassert _nottaken.regs.read(2) == 111, \"with Z clear the JZ falls through\"\n_jnz = CPU([(LDI, 0, 0, 3), (LDI, 1, 0, 1), (SUB, 0, 1, 0), (JNZ, 0, 0, 10),\n            (LDI, 2, 0, 111), (LDI, 3, 0, 222), (HLT,)])\n_jnz.run()\nassert _jnz.regs.read(2) == 0 and _jnz.regs.read(3) == 222, \"JNZ branches when Z is clear\"\n_jmp = CPU([(JMP, 0, 0, 4), (LDI, 2, 0, 111), (LDI, 3, 0, 222), (HLT,)])\n_jmp.run()\nassert _jmp.regs.read(2) == 0 and _jmp.regs.read(3) == 222, \"JMP is unconditional\""
+   },
+   {
+    "name": "SUM_PROGRAM computes the triangular numbers",
+    "code": "from datapath import CPU, SUM_PROGRAM\nfor _n in (0, 1, 2, 5, 10, 22):\n    _cpu = CPU(SUM_PROGRAM)\n    _cpu.mem[0x40] = _n\n    _cpu.run()\n    _want = _n * (_n + 1) // 2\n    _got = _cpu.mem[0x41]\n    assert _got == _want, f\"n={_n} left {_got!r} at 0x41, expected {_want}\""
+   },
+   {
+    "name": "SUM_PROGRAM halts and does not scribble on itself",
+    "code": "from datapath import CPU, SUM_PROGRAM, assemble\n_code = assemble(SUM_PROGRAM)\n_cpu = CPU(SUM_PROGRAM)\n_cpu.mem[0x40] = 6\n_steps = _cpu.run()\nassert _cpu.state == \"HALTED\", f\"the program must end in HALTED, got {_cpu.state!r}\"\nassert _steps < 100, f\"summing to 6 took {_steps} instructions — the loop should be tight\"\nassert _cpu.mem[:len(_code)] == _code, \"the program must not overwrite its own instructions\""
+   },
+   {
+    "name": "run() refuses to hang",
+    "code": "from datapath import CPU, JMP, NOP\n_cpu = CPU([(JMP, 0, 0, 0)])\ntry:\n    _cpu.run(max_steps=50)\n    assert False, \"an endless loop should raise RuntimeError, not spin forever\"\nexcept RuntimeError:\n    pass\n_cpu = CPU([(NOP,)])\ntry:\n    _cpu.run(max_steps=200)\n    assert False, \"a program with no HLT should also raise RuntimeError\"\nexcept RuntimeError:\n    pass"
+   },
+   {
+    "name": "datapath.py is import-clean",
+    "code": "_src = open(\"datapath.py\").read()\nassert \"print(\" not in _src, \"datapath.py is the hardware; the printing belongs in main.py\"\nassert \"import \" not in _src, \"no imports are needed — the standard library is not required here\""
+   }
+  ]
+ }
+}

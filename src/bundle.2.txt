@@ -1,0 +1,805 @@
+@@ web-3-1
+## Where JavaScript goes
+
+```html
+<script src="app.js"><\/script>   <\!-- just before </body>, so the page exists when it runs -->
+```
+
+Open the browser console (F12 → Console) — `console.log(...)` prints there, and errors show up with line numbers.
+
+## Variables
+
+```js
+const taxRate = 0.25;      // cannot be reassigned — use this by default
+let total = 0;             // can be reassigned
+total = total + 10;
+```
+
+Forget `var`; it exists for old code.
+
+## Types and strings
+
+```js
+typeof 42          // "number"   (integers and decimals are the same type)
+typeof "hi"        // "string"
+typeof true        // "boolean"
+typeof undefined   // "undefined" — a variable with no value yet
+null               // "no value", on purpose
+
+const name = "Ada";
+console.log(`Hello, ${name}! Total: ${total * 2}`);   // template literal: backticks + ${}
+```
+
+Always compare with `===` (and `!==`). The two-equals version converts types and surprises people: `"5" == 5` is `true`.
+
+## Functions
+
+```js
+function greet(name) {
+  return `Hello, ${name}`;
+}
+
+const double = (n) => n * 2;                 // arrow function: implicit return for one expression
+const describe = (item) => {                 // braces when you need statements
+  const label = item.name.toUpperCase();
+  return `${label}: ${item.price}`;
+};
+```
+
+## Conditionals and loops
+
+```js
+if (score >= 90) {
+  grade = "A";
+} else if (score >= 80) {
+  grade = "B";
+} else {
+  grade = "F";
+}
+
+for (let i = 0; i < 3; i++) { console.log(i); }        // 0 1 2
+for (const tool of ["wrench", "jack"]) { console.log(tool); }
+while (attempts < 3) { attempts++; }
+```
+
+## Arrays
+
+```js
+const prices = [120, 899, 249];
+prices.push(15);
+prices.length;                          // 4
+prices.includes(899);                   // true
+
+prices.map(p => p * 1.25);              // new array, each transformed
+prices.filter(p => p > 200);            // new array, only those that pass
+prices.reduce((sum, p) => sum + p, 0);  // fold into one value: 1283
+prices.find(p => p > 200);              // first match or undefined
+prices.forEach(p => console.log(p));    // loop with no result
+```
+
+`map`, `filter` and `reduce` return new arrays and never change the original. Chain them.
+
+## Objects
+
+```js
+const item = { name: "Jack", price: 899, qty: 2 };
+item.price;                 // 899
+item["name"];               // "Jack"
+item.qty = 3;               // update
+const { name, price } = item;   // destructuring into variables
+
+for (const [key, value] of Object.entries(item)) { console.log(key, value); }
+```
+
+## Common mistakes
+
+- `Uncaught ReferenceError: x is not defined` — typo or the variable isn't in scope.
+- `Cannot read properties of undefined` — you called `.something` on a value that doesn't exist yet (often a `querySelector` that found nothing).
+- Forgetting `return` in a function with braces.
+
+@@ web-3-2.md
+Implement four functions in `cart.js`. Each item in a cart looks like `{ name: "Jack", price: 899, qty: 2 }`.
+
+- **`cartTotal(items)`** — sum of `price * qty` over all items. Empty cart → `0`.
+- **`formatPrice(amount)`** — a string with a `$` and exactly two decimals: `formatPrice(12.5)` → `"$12.50"`.
+- **`applyDiscount(total, code)`** — `"SAVE10"` takes 10% off, `"HALF"` takes 50% off, anything else (including `undefined`) returns the total unchanged. Codes are case-insensitive.
+- **`inStock(items)`** — an array of the **names** of items whose `qty` is greater than 0, in the original order.
+
+Use `reduce`, `filter` and `map` — they're built for this. The `console.log` calls at the bottom help you see results in the Console tab.
+
+@@ web-3-2.starter.cart.js
+function cartTotal(items) {
+  // sum of price * qty
+}
+
+function formatPrice(amount) {
+  // "$12.50"
+}
+
+function applyDiscount(total, code) {
+  // SAVE10 -> 10% off, HALF -> 50% off, otherwise unchanged
+}
+
+function inStock(items) {
+  // names of items with qty > 0
+}
+
+const cart = [
+  { name: "Wiper blades", price: 120, qty: 2 },
+  { name: "Jack", price: 899, qty: 0 },
+  { name: "Torch", price: 249, qty: 1 },
+];
+
+console.log(cartTotal(cart));
+console.log(formatPrice(cartTotal(cart)));
+console.log(applyDiscount(100, "save10"));
+console.log(inStock(cart));
+
+@@ web-3-2.solution.cart.js
+function cartTotal(items) {
+  return items.reduce((sum, item) => sum + item.price * item.qty, 0);
+}
+
+function formatPrice(amount) {
+  return `$${amount.toFixed(2)}`;
+}
+
+function applyDiscount(total, code) {
+  const normalized = (code || "").toUpperCase();
+  if (normalized === "SAVE10") return total * 0.9;
+  if (normalized === "HALF") return total * 0.5;
+  return total;
+}
+
+function inStock(items) {
+  return items.filter(item => item.qty > 0).map(item => item.name);
+}
+
+const cart = [
+  { name: "Wiper blades", price: 120, qty: 2 },
+  { name: "Jack", price: 899, qty: 0 },
+  { name: "Torch", price: 249, qty: 1 },
+];
+
+console.log(cartTotal(cart));
+console.log(formatPrice(cartTotal(cart)));
+console.log(applyDiscount(100, "save10"));
+console.log(inStock(cart));
+
+@@ web-3-3
+## Finding elements
+
+The DOM is the browser's live model of your HTML. JavaScript reads and changes it.
+
+```js
+const title = document.querySelector("h1");          // first match, CSS selector syntax
+const button = document.querySelector("#add");       // by id
+const items = document.querySelectorAll(".item");    // all matches (a NodeList — loop with forEach or for...of)
+```
+
+`querySelector` returns `null` when nothing matches. Guard against it while you're getting a page set up.
+
+## Reading and changing content
+
+```js
+title.textContent = "Inventory";          // text only — safe for anything a user typed
+title.innerHTML = "<em>Inventory</em>";   // parses HTML — never put user input here
+input.value                               // what's typed in an <input>
+img.src = "photo.jpg";                    // attributes are properties
+el.classList.add("done");                 // add / remove / toggle / contains
+el.style.color = "tomato";                // inline style (prefer classes)
+el.dataset.id                             // data-id="…" attributes
+```
+
+## Creating and removing elements
+
+```js
+const li = document.createElement("li");
+li.textContent = "Torch";
+list.append(li);          // add to the end (prepend for the start)
+li.remove();              // delete it
+list.innerHTML = "";      // empty a container
+```
+
+## Events
+
+```js
+button.addEventListener("click", () => {
+  count += 1;
+  render();
+});
+
+input.addEventListener("input", (event) => {
+  console.log(event.target.value);   // the element that fired the event
+});
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();            // stop the page from reloading
+  addTask(input.value);
+});
+```
+
+Listen for `click` on buttons, `input` on text fields as the user types, `change` on selects and checkboxes, `submit` on forms, `keydown` for keyboard shortcuts.
+
+## The state → render pattern
+
+Keep your data in plain JavaScript variables and write one function that draws the page from that data. Events change the data and call `render()`. This scales from a counter to a whole app.
+
+```js
+let tasks = [];
+
+function render() {
+  list.innerHTML = "";
+  for (const task of tasks) {
+    const li = document.createElement("li");
+    li.textContent = task.title;
+    li.classList.toggle("done", task.done);
+    list.append(li);
+  }
+  remaining.textContent = tasks.filter(t => !t.done).length;
+}
+```
+
+## Event delegation
+
+Instead of a listener per item, put one on the container and look at `event.target`:
+
+```js
+list.addEventListener("click", (event) => {
+  const li = event.target.closest("li");
+  if (!li) return;
+  toggle(li.dataset.id);
+});
+```
+
+This keeps working for elements you add later.
+
+@@ web-3-4.md
+Make the counter work. The HTML is given; write `app.js`.
+
+- `#count` starts at **0**
+- `#increment` adds one, `#decrement` subtracts one — but the count never goes below 0
+- `#reset` sets it back to 0
+- the number on screen updates after every click
+
+Keep the count in a variable and write a `render()` function that puts it on the page — that habit pays off in the next tasks.
+
+@@ web-3-4.starter.index.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Counter</title>
+  <style>
+    body { font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; }
+    .counter { text-align: center; }
+    #count { font-size: 64px; font-weight: 700; margin: 0 0 12px; }
+    button { font-size: 18px; padding: 8px 18px; margin: 0 4px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+    button:hover { background: #f4f4f4; }
+  </style>
+</head>
+<body>
+  <div class="counter">
+    <p id="count">0</p>
+    <button id="decrement">−</button>
+    <button id="increment">+</button>
+    <button id="reset">Reset</button>
+  </div>
+  <script src="app.js"><\/script>
+</body>
+</html>
+
+@@ web-3-4.starter.app.js
+let count = 0;
+
+const countEl = document.querySelector("#count");
+
+function render() {
+  // show the count
+}
+
+// wire up the three buttons
+
+@@ web-3-4.solution.app.js
+let count = 0;
+
+const countEl = document.querySelector("#count");
+
+function render() {
+  countEl.textContent = count;
+}
+
+document.querySelector("#increment").addEventListener("click", () => {
+  count += 1;
+  render();
+});
+
+document.querySelector("#decrement").addEventListener("click", () => {
+  if (count > 0) count -= 1;
+  render();
+});
+
+document.querySelector("#reset").addEventListener("click", () => {
+  count = 0;
+  render();
+});
+
+render();
+
+@@ web-3-5.md
+A to-do list with real interaction. HTML is given; write `app.js`.
+
+- Submitting the `#task-form` (pressing Enter or clicking **Add**) adds the text from `#new-task` as a new `<li>` inside `#tasks`, then clears the input.
+- Empty or whitespace-only input is ignored.
+- Clicking an `<li>` toggles the class `done` on it.
+- `#remaining` always shows how many tasks are **not** done.
+
+Use `event.preventDefault()` in the submit handler, keep tasks in an array, and render from it.
+
+@@ web-3-5.starter.index.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>To-do</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 40px auto; padding: 0 16px; }
+    form { display: flex; gap: 8px; }
+    input { flex: 1; padding: 8px 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
+    button { padding: 8px 14px; border-radius: 6px; border: 0; background: #f26a1b; color: #fff; font-weight: 600; cursor: pointer; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 10px 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+    li.done { text-decoration: line-through; color: #999; }
+    .meta { color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Today</h1>
+  <form id="task-form">
+    <input id="new-task" placeholder="What needs doing?" autocomplete="off">
+    <button type="submit">Add</button>
+  </form>
+  <ul id="tasks"></ul>
+  <p class="meta"><span id="remaining">0</span> left</p>
+  <script src="app.js"><\/script>
+</body>
+</html>
+
+@@ web-3-5.starter.app.js
+const form = document.querySelector("#task-form");
+const input = document.querySelector("#new-task");
+const list = document.querySelector("#tasks");
+const remaining = document.querySelector("#remaining");
+
+let tasks = [];   // { title: "...", done: false }
+
+function render() {
+  // rebuild the list from tasks, update remaining
+}
+
+// handle submit, handle clicks on items
+
+@@ web-3-5.solution.app.js
+const form = document.querySelector("#task-form");
+const input = document.querySelector("#new-task");
+const list = document.querySelector("#tasks");
+const remaining = document.querySelector("#remaining");
+
+let tasks = [];   // { title: "...", done: false }
+
+function render() {
+  list.innerHTML = "";
+  tasks.forEach((task, index) => {
+    const li = document.createElement("li");
+    li.textContent = task.title;
+    li.dataset.index = index;
+    li.classList.toggle("done", task.done);
+    list.append(li);
+  });
+  remaining.textContent = tasks.filter(t => !t.done).length;
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const title = input.value.trim();
+  if (!title) return;
+  tasks.push({ title, done: false });
+  input.value = "";
+  render();
+});
+
+list.addEventListener("click", (event) => {
+  const li = event.target.closest("li");
+  if (!li) return;
+  const task = tasks[Number(li.dataset.index)];
+  task.done = !task.done;
+  render();
+});
+
+render();
+
+@@ web-3-6
+## Some things take time
+
+Reading a file, asking a server, waiting for a timer — the browser refuses to freeze the page while it waits. Instead the work runs *asynchronously*: you hand over a function to call **later**.
+
+```js
+setTimeout(() => console.log("two seconds later"), 2000);
+console.log("this prints first");
+```
+
+## Promises
+
+A **Promise** is an object standing in for a value that isn't ready yet. It will either *resolve* with the value or *reject* with an error.
+
+```js
+fetch("/api/users")
+  .then(response => response.json())
+  .then(users => console.log(users))
+  .catch(error => console.error("Failed:", error));
+```
+
+Each `.then` runs when the previous step finishes and passes its result along.
+
+## async / await: the readable version
+
+```js
+async function loadUsers() {
+  try {
+    const response = await fetch("/api/users");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const users = await response.json();
+    return users;
+  } catch (error) {
+    console.error("Failed:", error);
+    return [];
+  }
+}
+```
+
+- `await` pauses *this function* until the promise settles, without freezing the page.
+- `await` only works inside a function marked `async`.
+- An `async` function always returns a promise — so callers `await loadUsers()` too.
+
+## fetch and JSON
+
+`fetch(url)` sends an HTTP request and resolves with a `Response`. `response.json()` parses the body — it is *also* asynchronous. A 404 does **not** reject the promise; check `response.ok` yourself.
+
+Sending data:
+
+```js
+await fetch("/api/todos", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ title: "Buy oil" }),
+});
+```
+
+## The UI pattern
+
+1. Show a loading state.
+2. Await the data.
+3. Render it — or render the error.
+
+```js
+status.textContent = "Loading…";
+const users = await loadUsers();
+render(users);
+status.textContent = `Loaded ${users.length} users`;
+```
+
+## CORS, in one paragraph
+
+Browsers only let a page call servers that explicitly allow it (via the `Access-Control-Allow-Origin` header). When a `fetch` to someone else's API fails with a CORS error, it isn't your code — the server hasn't opted in. You'll learn to set that header in the backend track.
+
+> This sandbox can't reach the internet, so the next task gives you `fakeFetch`, a stand-in that behaves like `fetch` but answers from memory after a short delay.
+
+@@ web-3-7.md
+The page has a **Load users** button and an empty list. `fakeFetch(url)` is already defined in the HTML: it returns a promise that resolves after 200 ms with a `Response`-like object (`ok`, `status`, `json()`), and for `"/api/users"` the JSON is an array of users with `name` fields.
+
+Write `app.js` so that:
+
+- an `async function loadUsers()` fetches `"/api/users"` and **returns the array** of users
+- clicking `#load` sets `#status` to `Loading…`, awaits `loadUsers()`, renders one `<li>` per user name into `#users`, and sets `#status` to `Loaded 3 users`
+- if the request fails (`response.ok` is false or the promise rejects), `#status` shows `Could not load users` and the list stays empty
+
+Try `fakeFetch("/api/missing")` in your code to see the failure path.
+
+@@ web-3-7.starter.index.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Users</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 40px auto; padding: 0 16px; }
+    button { padding: 8px 14px; border-radius: 6px; border: 0; background: #2f6fed; color: #fff; font-weight: 600; cursor: pointer; }
+    #status { color: #666; min-height: 1.4em; }
+    li { padding: 6px 0; border-bottom: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <h1>Team</h1>
+  <button id="load">Load users</button>
+  <p id="status"></p>
+  <ul id="users"></ul>
+
+  <script>
+    // A stand-in for fetch(). Do not edit — write your code in app.js.
+    const FAKE_DB = {
+      "/api/users": [
+        { id: 1, name: "Ada Lovelace", role: "Analyst" },
+        { id: 2, name: "Grace Hopper", role: "Compiler engineer" },
+        { id: 3, name: "Linus Torvalds", role: "Kernel maintainer" }
+      ]
+    };
+    function fakeFetch(url) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          const data = FAKE_DB[url];
+          resolve({
+            ok: data !== undefined,
+            status: data !== undefined ? 200 : 404,
+            json: () => Promise.resolve(data !== undefined ? data : { error: "Not found" })
+          });
+        }, 200);
+      });
+    }
+  <\/script>
+  <script src="app.js"><\/script>
+</body>
+</html>
+
+@@ web-3-7.starter.app.js
+const loadButton = document.querySelector("#load");
+const statusEl = document.querySelector("#status");
+const list = document.querySelector("#users");
+
+async function loadUsers() {
+  // fetch "/api/users" with fakeFetch and return the array
+}
+
+// click handler: Loading… -> render -> "Loaded 3 users" (or "Could not load users")
+
+@@ web-3-7.solution.app.js
+const loadButton = document.querySelector("#load");
+const statusEl = document.querySelector("#status");
+const list = document.querySelector("#users");
+
+async function loadUsers() {
+  const response = await fakeFetch("/api/users");
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.json();
+}
+
+function render(users) {
+  list.innerHTML = "";
+  for (const user of users) {
+    const li = document.createElement("li");
+    li.textContent = user.name;
+    list.append(li);
+  }
+}
+
+loadButton.addEventListener("click", async () => {
+  statusEl.textContent = "Loading…";
+  try {
+    const users = await loadUsers();
+    render(users);
+    statusEl.textContent = `Loaded ${users.length} users`;
+  } catch (error) {
+    render([]);
+    statusEl.textContent = "Could not load users";
+  }
+});
+
+@@ web-4-1.md
+A three-column task board — the kind of thing every team tool has. You get a minimal skeleton in three files; the structure below is what the checks look for, the rest is yours.
+
+## Required structure
+
+- a `.board` container laid out with **grid or flex**
+- three `.column` elements with `data-status="todo"`, `"doing"` and `"done"`, each containing an `<h2>` with a `.count` span and a `<ul class="cards">`
+- a form `#new-card` with a text input `#card-title` and a submit button
+
+## Required behaviour
+
+- Submitting the form adds a `.card` to the **todo** column showing the title. Empty titles are ignored and the input is cleared afterwards.
+- Every card has a `.move` button that moves it to the next column (todo → doing → done). Cards in **done** have no `.move` button.
+- Every card has a `.delete` button that removes it.
+- Each column's `.count` shows the number of cards in it, e.g. `2`.
+- The board should look like a board: columns side by side with visible headers and card styling.
+
+## Approach
+
+Keep an array of `{ id, title, status }` objects and a single `render()` that rebuilds all three columns. Use event delegation on `.board` for the move and delete buttons (store the id on the card with `data-id`).
+
+@@ web-4-1.starter.index.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Task board</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Task board</h1>
+    <form id="new-card">
+      <input id="card-title" placeholder="New task" autocomplete="off">
+      <button type="submit">Add</button>
+    </form>
+  </header>
+
+  <main class="board">
+    <\!-- Three .column sections go here. Each needs data-status, an h2 with a .count span, and ul.cards -->
+  </main>
+
+  <script src="app.js"><\/script>
+</body>
+</html>
+
+@@ web-4-1.starter.style.css
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #f0f2f5; color: #171a21; }
+header { display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: #fff; border-bottom: 1px solid #ddd; }
+h1 { margin: 0; font-size: 20px; }
+
+/* Layout the .board, style .column, .cards and .card */
+
+@@ web-4-1.starter.app.js
+const board = document.querySelector(".board");
+const form = document.querySelector("#new-card");
+const input = document.querySelector("#card-title");
+
+const ORDER = ["todo", "doing", "done"];
+let cards = [];       // { id, title, status }
+let nextId = 1;
+
+function render() {
+  // for each column: fill ul.cards with .card elements, update .count
+}
+
+// submit -> add card to "todo"
+// click .move -> next status; click .delete -> remove
+
+render();
+
+@@ web-4-1.solution.index.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Task board</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Task board</h1>
+    <form id="new-card">
+      <input id="card-title" placeholder="New task" autocomplete="off">
+      <button type="submit">Add</button>
+    </form>
+  </header>
+
+  <main class="board">
+    <section class="column" data-status="todo">
+      <h2>To do <span class="count">0</span></h2>
+      <ul class="cards"></ul>
+    </section>
+    <section class="column" data-status="doing">
+      <h2>Doing <span class="count">0</span></h2>
+      <ul class="cards"></ul>
+    </section>
+    <section class="column" data-status="done">
+      <h2>Done <span class="count">0</span></h2>
+      <ul class="cards"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"><\/script>
+</body>
+</html>
+
+@@ web-4-1.solution.style.css
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: #f0f2f5; color: #171a21; }
+header { display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: #fff; border-bottom: 1px solid #ddd; }
+h1 { margin: 0; font-size: 20px; }
+#new-card { display: flex; gap: 8px; margin-left: auto; }
+#card-title { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; min-width: 220px; }
+#new-card button { padding: 8px 14px; border: 0; border-radius: 6px; background: #f26a1b; color: #fff; font-weight: 600; cursor: pointer; }
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 20px;
+  align-items: start;
+}
+.column { background: #e4e7ec; border-radius: 12px; padding: 12px; }
+.column h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .05em; margin: 4px 4px 12px; color: #4e5766; display: flex; justify-content: space-between; }
+.count { background: #fff; border-radius: 999px; padding: 0 8px; font-size: 12px; }
+.cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
+.card { background: #fff; border-radius: 8px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); display: flex; align-items: center; gap: 8px; }
+.card .title { flex: 1; }
+.card button { border: 0; background: #f0f2f5; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 13px; }
+.card button:hover { background: #ddd; }
+.card .delete { color: #c93b36; }
+
+@media (max-width: 700px) {
+  .board { grid-template-columns: 1fr; }
+  header { flex-wrap: wrap; }
+  #new-card { margin-left: 0; width: 100%; }
+}
+
+@@ web-4-1.solution.app.js
+const board = document.querySelector(".board");
+const form = document.querySelector("#new-card");
+const input = document.querySelector("#card-title");
+
+const ORDER = ["todo", "doing", "done"];
+let cards = [];       // { id, title, status }
+let nextId = 1;
+
+function render() {
+  for (const status of ORDER) {
+    const column = board.querySelector(`.column[data-status="${status}"]`);
+    const list = column.querySelector(".cards");
+    const inColumn = cards.filter(c => c.status === status);
+    list.innerHTML = "";
+    for (const card of inColumn) {
+      const li = document.createElement("li");
+      li.className = "card";
+      li.dataset.id = card.id;
+
+      const title = document.createElement("span");
+      title.className = "title";
+      title.textContent = card.title;
+      li.append(title);
+
+      if (status !== "done") {
+        const move = document.createElement("button");
+        move.className = "move";
+        move.textContent = "→";
+        move.title = "Move to next column";
+        li.append(move);
+      }
+
+      const del = document.createElement("button");
+      del.className = "delete";
+      del.textContent = "✕";
+      del.title = "Delete";
+      li.append(del);
+
+      list.append(li);
+    }
+    column.querySelector(".count").textContent = inColumn.length;
+  }
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const title = input.value.trim();
+  if (!title) return;
+  cards.push({ id: nextId++, title, status: "todo" });
+  input.value = "";
+  render();
+});
+
+board.addEventListener("click", (event) => {
+  const cardEl = event.target.closest(".card");
+  if (!cardEl) return;
+  const card = cards.find(c => c.id === Number(cardEl.dataset.id));
+  if (!card) return;
+
+  if (event.target.closest(".move")) {
+    const next = ORDER[ORDER.indexOf(card.status) + 1];
+    if (next) card.status = next;
+  } else if (event.target.closest(".delete")) {
+    cards = cards.filter(c => c !== card);
+  }
+  render();
+});
+
+render();

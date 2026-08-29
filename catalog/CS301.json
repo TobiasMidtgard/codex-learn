@@ -1,0 +1,516 @@
+{
+ "id": "CS301",
+ "title": "Design & Analysis of Algorithms",
+ "year": 3,
+ "level": "Advanced",
+ "prereqs": [
+  "CS201",
+  "MA101"
+ ],
+ "stack": [
+  "Python"
+ ],
+ "credits": 15,
+ "hours": 160,
+ "icon": "⌘",
+ "summary": "A design course, not a catalogue. Each module takes one paradigm — divide and conquer, greedy, dynamic programming, graph search, approximation — and asks for a working implementation together with the argument that it is correct and the recurrence that gives its running time. Every lab is checked against a brute-force reference and, where it matters, against the clock.",
+ "outcomes": [
+  "Derive the running time of a divide-and-conquer algorithm from its recurrence",
+  "State and discharge the exchange argument that justifies a greedy choice",
+  "Design a dynamic program by naming its subproblem, and recover the witness from the table",
+  "Implement Dijkstra, Bellman-Ford and Kruskal with the data structures their bounds assume",
+  "Detect negative cycles and unreachable vertices instead of returning nonsense",
+  "Bound an approximation algorithm by exhibiting a lower-bound certificate",
+  "Measure an optimisation empirically rather than asserting that it helped"
+ ],
+ "assessment": "5 lab checkpoints (8% each) + capstone build (60%).",
+ "reading": [
+  "Cormen, Leiserson, Rivest & Stein, *Introduction to Algorithms*, 4th ed. — chapters 4, 15, 16, 22-24, 35",
+  "Kleinberg & Tardos, *Algorithm Design*, 1st ed. — chapters 4-6, 11",
+  "Dasgupta, Papadimitriou & Vazirani, *Algorithms*, 1st ed. — chapters 2 and 9"
+ ],
+ "modules": [
+  {
+   "title": "Divide and conquer, and the recurrences it produces",
+   "summary": "Split, recurse, and pay for the combine step — then price the whole thing.",
+   "concepts": [
+    "The three-line template: divide into a subproblems of size n/b, recurse, combine in Theta(n^d)",
+    "The master theorem as a comparison between n^d and n^(log_b a)",
+    "Counting inversions: the merge step already knows how many pairs are out of order",
+    "The closest-pair sweep: after the recursive calls, only a strip of width 2d can hold an improvement",
+    "The seven-neighbour argument that makes the strip scan linear, not quadratic",
+    "Maintaining a y-sorted order across the recursion instead of re-sorting at every level",
+    "Why an O(n log^2 n) implementation is a defect and not a variant"
+   ],
+   "lab": {
+    "title": "Inversions and the closest pair",
+    "runtime": "python",
+    "minutes": 70,
+    "brief": "Three functions. Two of them are algorithms; the third prices them.\n\n**`count_inversions(xs)`** — the number of index pairs `i < j` with\n`xs[i] > xs[j]`. The quadratic version is one line and is not acceptable here:\nthe checks feed it twelve thousand values and time it. Piggy-back the count on\na merge sort — when the right-hand element wins the merge comparison, it jumps\nover everything still left in the left half.\n\n```text\ncount_inversions([])              -> 0\ncount_inversions([1, 2, 3])       -> 0\ncount_inversions([5, 4, 3, 2, 1]) -> 10\ncount_inversions([2, 4, 1, 3, 5]) -> 3\n```\n\nEqual values are not an inversion.\n\n**`closest_pair(points)`** — the two closest points in the plane, returned as\n`(distance, (p, q))` with the pair in sorted order so the answer is unique.\nRaise `ValueError` for fewer than two points. Duplicated points are legal and\ngive a distance of 0.\n\n```text\nclosest_pair([(0, 0), (3, 4), (1, 1)]) -> (1.4142135623730951, ((0, 0), (1, 1)))\n```\n\nSort by x once, sort by y once, then recurse: solve both halves, take the\nbetter distance `d`, and only compare points inside the vertical strip of\nhalf-width `d` around the split line, in y-order, against the next seven\npoints. Six thousand points are timed.\n\n**`master_case(a, b, d)`** — for `T(n) = a T(n/b) + Theta(n^d)`, return\n`(case, exponent)`:\n\n- case 1 when `d < log_b a`, exponent `log_b a` (the leaves dominate)\n- case 2 when `d == log_b a`, exponent `d` (every level costs the same; a\n  `log n` factor joins the bound)\n- case 3 when `d > log_b a`, exponent `d` (the root dominates)\n\nRound the exponent to 6 decimal places and compare with a tolerance of `1e-9`.\nRaise `ValueError` unless `a >= 1`, `b > 1` and `d >= 0`.\n\n```text\nmaster_case(2, 2, 1) -> (2, 1.0)         merge sort\nmaster_case(3, 2, 1) -> (1, 1.584963)    Karatsuba\nmaster_case(2, 2, 2) -> (3, 2.0)         a linear-work split with a quadratic combine\n```",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef count_inversions(xs):\n    \"\"\"Pairs i < j with xs[i] > xs[j], in O(n log n) via merge sort.\"\"\"\n    # your code here\n\n\ndef closest_pair(points):\n    \"\"\"(distance, (p, q)) for the closest pair. ValueError when len(points) < 2.\"\"\"\n    # your code here\n\n\ndef master_case(a, b, d):\n    \"\"\"T(n) = a T(n/b) + Theta(n^d)  ->  (case, exponent).\"\"\"\n    # your code here\n\n\nprint(count_inversions([2, 4, 1, 3, 5]))\nprint(closest_pair([(0, 0), (3, 4), (1, 1)]))\nprint(master_case(2, 2, 1))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef count_inversions(xs):\n    \"\"\"Pairs i < j with xs[i] > xs[j], in O(n log n) via merge sort.\"\"\"\n    _, total = _sort_and_count(list(xs))\n    return total\n\n\ndef _sort_and_count(xs):\n    \"\"\"Return (sorted copy, inversion count) for xs.\"\"\"\n    if len(xs) <= 1:\n        return xs, 0\n    mid = len(xs) // 2\n    left, li = _sort_and_count(xs[:mid])\n    right, ri = _sort_and_count(xs[mid:])\n    merged = []\n    total = li + ri\n    i = j = 0\n    while i < len(left) and j < len(right):\n        if left[i] <= right[j]:\n            merged.append(left[i])\n            i += 1\n        else:\n            # right[j] is smaller than every remaining element of the left half,\n            # so it is on the wrong side of all len(left) - i of them at once.\n            merged.append(right[j])\n            j += 1\n            total += len(left) - i\n    merged.extend(left[i:])\n    merged.extend(right[j:])\n    return merged, total\n\n\ndef _dist(p, q):\n    return math.hypot(p[0] - q[0], p[1] - q[1])\n\n\ndef _brute(pts):\n    \"\"\"Quadratic closest pair over tagged points; used at the recursion base.\"\"\"\n    best = (float(\"inf\"), None, None)\n    for i in range(len(pts)):\n        for j in range(i + 1, len(pts)):\n            d = _dist(pts[i], pts[j])\n            if d < best[0]:\n                best = (d, pts[i], pts[j])\n    return best\n\n\ndef _closest(px, py):\n    \"\"\"px sorted by x, py the same tagged points sorted by y.\"\"\"\n    n = len(px)\n    if n <= 3:\n        return _brute(px)\n    mid = n // 2\n    left_ids = {t[2] for t in px[:mid]}\n    lpy = [t for t in py if t[2] in left_ids]\n    rpy = [t for t in py if t[2] not in left_ids]\n    best = min(_closest(px[:mid], lpy), _closest(px[mid:], rpy), key=lambda r: r[0])\n    split_x = px[mid][0]\n    # Only points within best[0] of the split line can beat the recursive answer.\n    strip = [t for t in py if abs(t[0] - split_x) < best[0]]\n    for i in range(len(strip)):\n        # Geometry bounds the number of strip points within best[0] in y by 8.\n        for j in range(i + 1, min(i + 8, len(strip))):\n            if strip[j][1] - strip[i][1] >= best[0]:\n                break\n            d = _dist(strip[i], strip[j])\n            if d < best[0]:\n                best = (d, strip[i], strip[j])\n    return best\n\n\ndef closest_pair(points):\n    \"\"\"(distance, (p, q)) for the closest pair. ValueError when len(points) < 2.\"\"\"\n    if len(points) < 2:\n        raise ValueError(\"closest_pair needs at least two points\")\n    # Tag with the original index so duplicate coordinates still split cleanly.\n    tagged = [(p[0], p[1], i) for i, p in enumerate(points)]\n    px = sorted(tagged)\n    py = sorted(tagged, key=lambda t: (t[1], t[0], t[2]))\n    d, a, b = _closest(px, py)\n    pair = tuple(sorted(((a[0], a[1]), (b[0], b[1]))))\n    return d, pair\n\n\ndef master_case(a, b, d):\n    \"\"\"T(n) = a T(n/b) + Theta(n^d)  ->  (case, exponent).\"\"\"\n    if a < 1 or b <= 1 or d < 0:\n        raise ValueError(\"need a >= 1, b > 1, d >= 0\")\n    crit = math.log(a) / math.log(b)\n    if d < crit - 1e-9:\n        return 1, round(crit, 6)\n    if d > crit + 1e-9:\n        return 3, round(float(d), 6)\n    return 2, round(float(d), 6)\n\n\nprint(count_inversions([2, 4, 1, 3, 5]))\nprint(closest_pair([(0, 0), (3, 4), (1, 1)]))\nprint(master_case(2, 2, 1))\n"
+     }
+    ],
+    "hints": [
+     "Write a helper that returns both the sorted list and the count; `count_inversions` is then a one-line wrapper around it.",
+     "In the merge, the whole increment happens on the branch where the right element is emitted: add `len(left) - i`.",
+     "Tag each point with its original index before sorting. Without a tag you cannot split a y-sorted list containing duplicate coordinates.",
+     "`log_b a` is `math.log(a) / math.log(b)`; compare against `d` with a tolerance, never with `==` on floats."
+    ],
+    "tests": [
+     {
+      "name": "count_inversions on the small cases",
+      "code": "for _xs, _want in [([], 0), ([7], 0), ([1, 2, 3], 0), ([5, 4, 3, 2, 1], 10),\n                   ([2, 4, 1, 3, 5], 3), ([1, 1, 1], 0), ([2, 1], 1)]:\n    _got = count_inversions(_xs)\n    assert _got == _want, f\"count_inversions({_xs!r}) gave {_got!r}, expected {_want}\""
+     },
+     {
+      "name": "count_inversions agrees with the quadratic reference",
+      "code": "import random as _random\n\n\ndef _ref_inv(xs):\n    return sum(1 for _i in range(len(xs)) for _j in range(_i + 1, len(xs)) if xs[_i] > xs[_j])\n\n\n_rng = _random.Random(7)\nfor _trial in range(25):\n    _xs = [_rng.randrange(12) for _ in range(_rng.randrange(0, 60))]\n    _got, _want = count_inversions(_xs), _ref_inv(_xs)\n    assert _got == _want, f\"count_inversions({_xs!r}) gave {_got!r}, expected {_want}\""
+     },
+     {
+      "name": "count_inversions is O(n log n), not O(n^2)",
+      "code": "import random as _random\nimport time as _time\n\n_rng = _random.Random(11)\n_big = [_rng.randrange(10 ** 6) for _ in range(12000)]\n_t0 = _time.perf_counter()\n_got = count_inversions(_big)\n_elapsed = _time.perf_counter() - _t0\nassert isinstance(_got, int), f\"count_inversions returned {_got!r}, expected an int\"\nassert _elapsed < 5.0, (\n    f\"12000 values took {_elapsed:.2f}s — that is a quadratic double loop, \"\n    \"count the inversions inside a merge sort instead\")"
+     },
+     {
+      "name": "closest_pair on hand-checkable inputs",
+      "code": "_d, _p = closest_pair([(0, 0), (3, 4), (1, 1)])\nassert abs(_d - 1.4142135623730951) < 1e-9, f\"distance {_d!r}, expected sqrt(2)\"\nassert _p == ((0, 0), (1, 1)), f\"pair {_p!r}, expected ((0, 0), (1, 1))\"\n_d2, _p2 = closest_pair([(2, 2), (2, 2), (9, 9)])\nassert _d2 == 0.0, f\"duplicated points are distance 0, got {_d2!r}\"\nassert _p2 == ((2, 2), (2, 2)), f\"pair {_p2!r}\"\n_d3, _p3 = closest_pair([(0, 0), (10, 0)])\nassert abs(_d3 - 10.0) < 1e-9 and _p3 == ((0, 0), (10, 0)), f\"got {(_d3, _p3)!r}\""
+     },
+     {
+      "name": "closest_pair refuses fewer than two points",
+      "code": "for _bad in ([], [(1, 1)]):\n    try:\n        closest_pair(_bad)\n        assert False, f\"closest_pair({_bad!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "closest_pair agrees with the quadratic reference",
+      "code": "import math as _math\nimport random as _random\n\n\ndef _ref_closest(pts):\n    _best = (float(\"inf\"), None)\n    for _i in range(len(pts)):\n        for _j in range(_i + 1, len(pts)):\n            _dd = _math.hypot(pts[_i][0] - pts[_j][0], pts[_i][1] - pts[_j][1])\n            if _dd < _best[0]:\n                _best = (_dd, tuple(sorted((pts[_i], pts[_j]))))\n    return _best\n\n\n_rng = _random.Random(7)\nfor _trial in range(12):\n    _pts = [(_rng.randrange(40), _rng.randrange(40)) for _ in range(_rng.randrange(2, 90))]\n    _got = closest_pair(_pts)\n    _want = _ref_closest(_pts)\n    assert abs(_got[0] - _want[0]) < 1e-9, (\n        f\"closest_pair over {len(_pts)} points gave distance {_got[0]!r}, expected {_want[0]!r}\")\n    _a, _b = _got[1]\n    assert abs(_math.hypot(_a[0] - _b[0], _a[1] - _b[1]) - _got[0]) < 1e-9, (\n        f\"the returned pair {_got[1]!r} is not {_got[0]!r} apart\")"
+     },
+     {
+      "name": "closest_pair is O(n log n)",
+      "code": "import random as _random\nimport time as _time\n\n_rng = _random.Random(13)\n_pts = [(_rng.random() * 1000.0, _rng.random() * 1000.0) for _ in range(6000)]\n_t0 = _time.perf_counter()\n_d, _pair = closest_pair(_pts)\n_elapsed = _time.perf_counter() - _t0\nassert _d > 0.0, f\"distinct random points should not coincide, got {_d!r}\"\nassert _elapsed < 6.0, (\n    f\"6000 points took {_elapsed:.2f}s — recurse on the two halves and scan only \"\n    \"the strip, do not compare every pair\")"
+     },
+     {
+      "name": "master_case classifies the standard recurrences",
+      "code": "for _args, _want in [((2, 2, 1), (2, 1.0)), ((1, 2, 0), (2, 0.0)),\n                     ((3, 2, 1), (1, 1.584963)), ((7, 2, 2), (1, 2.807355)),\n                     ((2, 2, 2), (3, 2.0)), ((4, 2, 3), (3, 3.0)),\n                     ((9, 3, 2), (2, 2.0)), ((1, 2, 1), (3, 1.0))]:\n    _got = master_case(*_args)\n    assert _got[0] == _want[0], f\"master_case{_args!r} gave case {_got[0]!r}, expected {_want[0]}\"\n    assert abs(_got[1] - _want[1]) < 1e-6, (\n        f\"master_case{_args!r} gave exponent {_got[1]!r}, expected {_want[1]}\")\nfor _bad in [(0, 2, 1), (2, 1, 1), (2, 0, 1), (2, 2, -1)]:\n    try:\n        master_case(*_bad)\n        assert False, f\"master_case{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Greedy algorithms and their proof obligation",
+   "summary": "A greedy rule is a claim; the exchange argument is the payment.",
+   "concepts": [
+    "Greedy-stays-ahead and the exchange argument as the two standard proof shapes",
+    "Interval scheduling: earliest finishing time is optimal, earliest start and shortest duration are not",
+    "Huffman coding as repeated merging of the two least frequent symbols",
+    "Optimality invariant: a symbol with higher frequency never gets a longer codeword",
+    "The Kraft equality as a structural check on a prefix-free code",
+    "Canonical versus non-canonical coin systems, and why greedy change-making is system-specific",
+    "Searching for the smallest counterexample is a legitimate way to refute a proposed greedy rule"
+   ],
+   "lab": {
+    "title": "Scheduling, Huffman, and where greedy breaks",
+    "runtime": "python",
+    "minutes": 65,
+    "brief": "**`schedule(intervals)`** — the largest set of pairwise non-overlapping\nintervals `(start, end)`, returned in finishing order. Intervals are half-open,\nso `(0, 2)` and `(2, 3)` are compatible. Raise `ValueError` if any interval has\n`start >= end`.\n\n```text\nschedule([(0, 10), (1, 2), (3, 4)]) -> [(1, 2), (3, 4)]\nschedule([(0, 3), (2, 4), (3, 6)])  -> [(0, 3), (3, 6)]\n```\n\nThe second example is the one that refutes \"always take the shortest\".\n\n**`huffman_codes(freqs)`** — a prefix-free binary code for a `symbol -> count`\nmapping. Repeatedly merge the two least frequent subtrees, label the lighter\nbranch `0` and the heavier `1`, and read the codes off the leaves. A single\nsymbol gets `\"0\"`; an empty mapping gives `{}`. Raise `ValueError` for a\nfrequency that is not positive.\n\n**`huffman_cost(freqs)`** — the total encoded length, `sum(count * len(code))`.\nFor the CLRS frequencies `a:45 b:13 c:12 d:16 e:9 f:5` this is `224`.\n\n**`greedy_coin_count(coins, amount)`** — take the largest coin that still fits,\nrepeatedly. Return the number of coins, or `None` when this rule strands a\nnon-zero remainder. `amount = 0` gives `0`.\n\n**`optimal_coin_count(coins, amount)`** — the true minimum by dynamic\nprogramming, or `None` when the amount cannot be made at all.\n\n**`greedy_failure(coins, limit)`** — the smallest amount in `1..limit` where\nthe greedy rule is strictly worse than the optimum, counting \"greedy strands a\nremainder but the amount is makeable\" as worse. Return `None` when greedy is\noptimal throughout the range.\n\n```text\ngreedy_failure([1, 3, 4], 20)     -> 6      greedy 4+1+1, optimal 3+3\ngreedy_failure([1, 5, 10, 25], 99) -> None  a canonical system\ngreedy_failure([2, 5], 20)        -> 6      greedy takes 5 and strands 1\n```",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import heapq\nimport itertools\n\n\ndef schedule(intervals):\n    \"\"\"Largest pairwise-compatible set of half-open intervals, in finishing order.\"\"\"\n    # your code here\n\n\ndef huffman_codes(freqs):\n    \"\"\"symbol -> prefix-free bit string. {} for no symbols, \"0\" for one.\"\"\"\n    # your code here\n\n\ndef huffman_cost(freqs):\n    \"\"\"Total encoded length under huffman_codes(freqs).\"\"\"\n    # your code here\n\n\ndef greedy_coin_count(coins, amount):\n    \"\"\"Largest-coin-first count, or None when that rule strands a remainder.\"\"\"\n    # your code here\n\n\ndef optimal_coin_count(coins, amount):\n    \"\"\"True minimum number of coins, or None when the amount is unreachable.\"\"\"\n    # your code here\n\n\ndef greedy_failure(coins, limit):\n    \"\"\"Smallest amount in 1..limit where greedy loses to the optimum, else None.\"\"\"\n    # your code here\n\n\nprint(schedule([(0, 10), (1, 2), (3, 4)]))\nprint(huffman_cost({\"a\": 45, \"b\": 13, \"c\": 12, \"d\": 16, \"e\": 9, \"f\": 5}))\nprint(greedy_failure([1, 3, 4], 20))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import heapq\nimport itertools\n\n\ndef schedule(intervals):\n    \"\"\"Largest pairwise-compatible set of half-open intervals, in finishing order.\"\"\"\n    for start, end in intervals:\n        if start >= end:\n            raise ValueError(f\"interval {(start, end)!r} has start >= end\")\n    chosen = []\n    last_end = None\n    # Earliest finishing time first: the exchange argument says any optimal\n    # solution can be rewritten to start with this interval without shrinking.\n    for start, end in sorted(intervals, key=lambda iv: (iv[1], iv[0])):\n        if last_end is None or start >= last_end:\n            chosen.append((start, end))\n            last_end = end\n    return chosen\n\n\ndef huffman_codes(freqs):\n    \"\"\"symbol -> prefix-free bit string. {} for no symbols, \"0\" for one.\"\"\"\n    for symbol, count in freqs.items():\n        if count <= 0:\n            raise ValueError(f\"frequency for {symbol!r} must be positive\")\n    if not freqs:\n        return {}\n    if len(freqs) == 1:\n        return {next(iter(freqs)): \"0\"}\n    tick = itertools.count()\n    # The counter keeps the heap total-ordered without ever comparing subtrees.\n    heap = [(freqs[s], next(tick), (\"leaf\", s)) for s in sorted(freqs)]\n    heapq.heapify(heap)\n    while len(heap) > 1:\n        w1, _, n1 = heapq.heappop(heap)\n        w2, _, n2 = heapq.heappop(heap)\n        heapq.heappush(heap, (w1 + w2, next(tick), (\"node\", n1, n2)))\n    codes = {}\n    stack = [(heap[0][2], \"\")]\n    while stack:\n        node, prefix = stack.pop()\n        if node[0] == \"leaf\":\n            codes[node[1]] = prefix\n        else:\n            stack.append((node[1], prefix + \"0\"))\n            stack.append((node[2], prefix + \"1\"))\n    return codes\n\n\ndef huffman_cost(freqs):\n    \"\"\"Total encoded length under huffman_codes(freqs).\"\"\"\n    codes = huffman_codes(freqs)\n    return sum(freqs[s] * len(codes[s]) for s in codes)\n\n\ndef greedy_coin_count(coins, amount):\n    \"\"\"Largest-coin-first count, or None when that rule strands a remainder.\"\"\"\n    if amount < 0:\n        raise ValueError(\"amount must not be negative\")\n    used = 0\n    left = amount\n    for coin in sorted(coins, reverse=True):\n        if coin <= 0:\n            raise ValueError(\"coins must be positive\")\n        take = left // coin\n        used += take\n        left -= take * coin\n    return used if left == 0 else None\n\n\ndef optimal_coin_count(coins, amount):\n    \"\"\"True minimum number of coins, or None when the amount is unreachable.\"\"\"\n    if amount < 0:\n        raise ValueError(\"amount must not be negative\")\n    best = [0] + [None] * amount\n    for value in range(1, amount + 1):\n        for coin in coins:\n            if coin <= value and best[value - coin] is not None:\n                candidate = best[value - coin] + 1\n                if best[value] is None or candidate < best[value]:\n                    best[value] = candidate\n    return best[amount]\n\n\ndef greedy_failure(coins, limit):\n    \"\"\"Smallest amount in 1..limit where greedy loses to the optimum, else None.\"\"\"\n    for amount in range(1, limit + 1):\n        best = optimal_coin_count(coins, amount)\n        if best is None:\n            continue  # not makeable at all — greedy is not at fault\n        got = greedy_coin_count(coins, amount)\n        if got is None or got > best:\n            return amount\n    return None\n\n\nprint(schedule([(0, 10), (1, 2), (3, 4)]))\nprint(huffman_cost({\"a\": 45, \"b\": 13, \"c\": 12, \"d\": 16, \"e\": 9, \"f\": 5}))\nprint(greedy_failure([1, 3, 4], 20))\n"
+     }
+    ],
+    "hints": [
+     "Sort by finishing time and keep a single `last_end`; an interval joins the answer when `start >= last_end`.",
+     "Push `(weight, counter, node)` triples onto the heap. Without the counter Python will try to compare two subtrees when weights tie.",
+     "`optimal_coin_count` is a one-dimensional table over `0..amount`; `None` marks an unreachable value so it never contributes.",
+     "In `greedy_failure`, an amount that neither rule can make is not a counterexample — skip it before comparing."
+    ],
+    "tests": [
+     {
+      "name": "schedule picks by finishing time",
+      "code": "assert schedule([]) == [], \"no intervals, no schedule\"\nassert schedule([(3, 9)]) == [(3, 9)], f\"got {schedule([(3, 9)])!r}\"\n_got = schedule([(0, 10), (1, 2), (3, 4)])\nassert _got == [(1, 2), (3, 4)], f\"got {_got!r} — earliest start would pick only (0, 10)\"\n_got = schedule([(0, 3), (2, 4), (3, 6)])\nassert _got == [(0, 3), (3, 6)], f\"got {_got!r} — shortest duration would pick only (2, 4)\"\n_got = schedule([(1, 4), (3, 5), (0, 6), (5, 7), (3, 9), (5, 9), (6, 10), (8, 11), (8, 12), (2, 14), (12, 16)])\nassert len(_got) == 4, f\"got {_got!r}, the optimum has 4 intervals\""
+     },
+     {
+      "name": "schedule respects half-open touching and rejects bad input",
+      "code": "assert schedule([(0, 2), (2, 3)]) == [(0, 2), (2, 3)], \"touching endpoints are compatible\"\nassert schedule([(0, 5), (1, 4), (2, 3)]) == [(2, 3)], \"nested intervals: the innermost finishes first\"\nfor _bad in [[(3, 3)], [(5, 1)], [(0, 2), (4, 4)]]:\n    try:\n        schedule(_bad)\n        assert False, f\"schedule({_bad!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "schedule is verified as a compatible set",
+      "code": "import random as _random\n\n_rng = _random.Random(7)\nfor _trial in range(20):\n    _ivs = []\n    for _ in range(_rng.randrange(0, 14)):\n        _s = _rng.randrange(0, 20)\n        _ivs.append((_s, _s + _rng.randrange(1, 6)))\n    _got = schedule(_ivs)\n    for _iv in _got:\n        assert _iv in _ivs, f\"{_iv!r} is not one of the supplied intervals\"\n    for _i in range(len(_got) - 1):\n        assert _got[_i][1] <= _got[_i + 1][0], f\"{_got!r} contains an overlap\""
+     },
+     {
+      "name": "huffman_codes is prefix-free and satisfies Kraft equality",
+      "code": "_f = {\"a\": 45, \"b\": 13, \"c\": 12, \"d\": 16, \"e\": 9, \"f\": 5}\n_codes = huffman_codes(_f)\nassert set(_codes) == set(_f), f\"every symbol needs a code, got {sorted(_codes)}\"\nassert all(set(_c) <= {\"0\", \"1\"} and _c for _c in _codes.values()), f\"got {_codes!r}\"\n_vals = sorted(_codes.values())\nfor _i, _x in enumerate(_vals):\n    for _y in _vals[_i + 1:]:\n        assert not _y.startswith(_x), f\"{_y!r} has {_x!r} as a prefix — the code is not prefix-free\"\n_kraft = sum(2.0 ** -len(_c) for _c in _codes.values())\nassert abs(_kraft - 1.0) < 1e-9, f\"Kraft sum is {_kraft!r}, a full Huffman tree gives exactly 1\""
+     },
+     {
+      "name": "huffman_cost hits the optimum, and the frequency invariant holds",
+      "code": "_f = {\"a\": 45, \"b\": 13, \"c\": 12, \"d\": 16, \"e\": 9, \"f\": 5}\n_got = huffman_cost(_f)\nassert _got == 224, f\"huffman_cost of the CLRS example gave {_got!r}, the optimum is 224\"\n_codes = huffman_codes(_f)\nfor _s in _codes:\n    for _t in _codes:\n        if _f[_s] > _f[_t]:\n            assert len(_codes[_s]) <= len(_codes[_t]), (\n                f\"{_s!r} is more frequent than {_t!r} but got the longer code — not optimal\")\nassert huffman_cost({\"z\": 4}) == 4, \"one symbol still needs one bit per occurrence\""
+     },
+     {
+      "name": "huffman edge cases and validation",
+      "code": "assert huffman_codes({}) == {}, \"no symbols, no codes\"\nassert huffman_cost({}) == 0, \"an empty alphabet encodes to nothing\"\nassert huffman_codes({\"q\": 3}) == {\"q\": \"0\"}, f\"got {huffman_codes({'q': 3})!r}\"\nassert huffman_codes({\"a\": 1, \"b\": 1}) in ({\"a\": \"0\", \"b\": \"1\"}, {\"a\": \"1\", \"b\": \"0\"}), \\\n    f\"two equal symbols need one bit each, got {huffman_codes({'a': 1, 'b': 1})!r}\"\nfor _bad in [{\"a\": 0}, {\"a\": 2, \"b\": -1}]:\n    try:\n        huffman_codes(_bad)\n        assert False, f\"huffman_codes({_bad!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "the two coin counters",
+      "code": "assert greedy_coin_count([1, 5, 10, 25], 0) == 0, \"zero costs no coins\"\nassert greedy_coin_count([1, 5, 10, 25], 30) == 2, f\"got {greedy_coin_count([1, 5, 10, 25], 30)!r}\"\nassert greedy_coin_count([1, 3, 4], 6) == 3, \"greedy takes 4 then 1 then 1\"\nassert greedy_coin_count([2, 5], 3) is None, \"greedy takes 2 and strands 1\"\nassert optimal_coin_count([1, 3, 4], 6) == 2, f\"got {optimal_coin_count([1, 3, 4], 6)!r} — 3 + 3\"\nassert optimal_coin_count([2, 5], 3) is None, \"3 cannot be made from 2s and 5s\"\nassert optimal_coin_count([2, 5], 0) == 0, \"zero is always reachable\"\nassert optimal_coin_count([7], 21) == 3, f\"got {optimal_coin_count([7], 21)!r}\""
+     },
+     {
+      "name": "greedy_failure finds the smallest counterexample",
+      "code": "assert greedy_failure([1, 3, 4], 20) == 6, f\"got {greedy_failure([1, 3, 4], 20)!r}, expected 6\"\nassert greedy_failure([1, 5, 10, 25], 99) is None, \"US-style coins are canonical for greedy\"\nassert greedy_failure([1, 2, 5, 10, 20, 50], 200) is None, \"so is the euro system\"\nassert greedy_failure([2, 5], 20) == 6, f\"got {greedy_failure([2, 5], 20)!r}, expected 6\"\nassert greedy_failure([1, 7, 10], 20) == 14, f\"got {greedy_failure([1, 7, 10], 20)!r} — 10+1+1+1+1 versus 7+7\"\nassert greedy_failure([1, 3, 4], 5) is None, \"no counterexample below 6\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Dynamic programming and witness reconstruction",
+   "summary": "Name the subproblem, fill the table, then walk it backwards for the answer itself.",
+   "concepts": [
+    "Optimal substructure and overlapping subproblems as the two preconditions",
+    "Edit distance: three predecessors per cell, and unit costs for insert, delete and substitute",
+    "Longest common subsequence, and its relation to the deletion-only edit distance",
+    "0/1 knapsack over a weight axis, and why fractional greedy fails on it",
+    "Reconstruction by back-pointer walk versus recomputation from the table",
+    "The value of an optimum is unique; the witness rarely is, so verify the witness rather than compare it",
+    "Space-for-time: rolling rows give the value but destroy the reconstruction"
+   ],
+   "lab": {
+    "title": "Three tables, three witnesses",
+    "runtime": "python",
+    "minutes": 75,
+    "brief": "Each function returns the optimal value **and** the object that achieves it.\nThe checks never compare your witness against one fixed answer — ties are real\n— they replay it and confirm that it does what you claim.\n\n**`edit_distance(a, b)`** — returns `(cost, script)` for unit-cost Levenshtein\ndistance. The script is a list of operations applied left to right:\n\n```text\n(\"match\", ch)          consume ch from a, emit it        cost 0\n(\"sub\", ch_a, ch_b)    consume ch_a from a, emit ch_b    cost 1\n(\"del\", ch_a)          consume ch_a from a, emit nothing cost 1\n(\"ins\", ch_b)          consume nothing, emit ch_b        cost 1\n```\n\nReplaying the script on `a` must produce exactly `b`, and the number of\nnon-`match` operations must equal `cost`.\n\n```text\nedit_distance(\"kitten\", \"sitting\") -> (3, [...])\nedit_distance(\"\", \"abc\")           -> (3, [(\"ins\", \"a\"), (\"ins\", \"b\"), (\"ins\", \"c\")])\nedit_distance(\"abc\", \"abc\")        -> (0, [(\"match\", \"a\"), (\"match\", \"b\"), (\"match\", \"c\")])\n```\n\n**`lcs(a, b)`** — returns the longest common subsequence as a string. Any\nlongest one is accepted; the checks confirm it is a subsequence of both and\nthat its length matches an independent table.\n\n**`knapsack(items, capacity)`** — `items` is a list of `(weight, value)` pairs\nwith non-negative integer weights. Returns `(best_value, indices)` where\n`indices` is a sorted list of chosen positions. Raise `ValueError` for a\nnegative capacity or a negative weight.\n\n```text\nknapsack([(2, 3), (3, 4), (4, 5), (5, 6)], 5) -> (7, [0, 1])\nknapsack([], 10)                              -> (0, [])\nknapsack([(11, 99)], 10)                      -> (0, [])\n```",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "def edit_distance(a, b):\n    \"\"\"(cost, script) for unit-cost Levenshtein distance from a to b.\"\"\"\n    # your code here\n\n\ndef lcs(a, b):\n    \"\"\"A longest common subsequence of a and b, as a string.\"\"\"\n    # your code here\n\n\ndef knapsack(items, capacity):\n    \"\"\"(best_value, chosen indices) for 0/1 knapsack over (weight, value) items.\"\"\"\n    # your code here\n\n\nprint(edit_distance(\"kitten\", \"sitting\")[0])\nprint(lcs(\"AGGTAB\", \"GXTXAYB\"))\nprint(knapsack([(2, 3), (3, 4), (4, 5), (5, 6)], 5))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "def edit_distance(a, b):\n    \"\"\"(cost, script) for unit-cost Levenshtein distance from a to b.\"\"\"\n    n, m = len(a), len(b)\n    # table[i][j] = distance between a[:i] and b[:j]\n    table = [[0] * (m + 1) for _ in range(n + 1)]\n    for i in range(1, n + 1):\n        table[i][0] = i\n    for j in range(1, m + 1):\n        table[0][j] = j\n    for i in range(1, n + 1):\n        for j in range(1, m + 1):\n            if a[i - 1] == b[j - 1]:\n                table[i][j] = table[i - 1][j - 1]\n            else:\n                table[i][j] = 1 + min(table[i - 1][j - 1], table[i - 1][j], table[i][j - 1])\n\n    # Walk back from the corner, preferring match, then substitute, then delete.\n    script = []\n    i, j = n, m\n    while i > 0 or j > 0:\n        if i > 0 and j > 0 and a[i - 1] == b[j - 1] and table[i][j] == table[i - 1][j - 1]:\n            script.append((\"match\", a[i - 1]))\n            i -= 1\n            j -= 1\n        elif i > 0 and j > 0 and table[i][j] == table[i - 1][j - 1] + 1:\n            script.append((\"sub\", a[i - 1], b[j - 1]))\n            i -= 1\n            j -= 1\n        elif i > 0 and table[i][j] == table[i - 1][j] + 1:\n            script.append((\"del\", a[i - 1]))\n            i -= 1\n        else:\n            script.append((\"ins\", b[j - 1]))\n            j -= 1\n    script.reverse()\n    return table[n][m], script\n\n\ndef lcs(a, b):\n    \"\"\"A longest common subsequence of a and b, as a string.\"\"\"\n    n, m = len(a), len(b)\n    table = [[0] * (m + 1) for _ in range(n + 1)]\n    for i in range(1, n + 1):\n        for j in range(1, m + 1):\n            if a[i - 1] == b[j - 1]:\n                table[i][j] = table[i - 1][j - 1] + 1\n            else:\n                table[i][j] = max(table[i - 1][j], table[i][j - 1])\n    out = []\n    i, j = n, m\n    while i > 0 and j > 0:\n        if a[i - 1] == b[j - 1]:\n            out.append(a[i - 1])\n            i -= 1\n            j -= 1\n        elif table[i - 1][j] >= table[i][j - 1]:\n            i -= 1\n        else:\n            j -= 1\n    out.reverse()\n    return \"\".join(out)\n\n\ndef knapsack(items, capacity):\n    \"\"\"(best_value, chosen indices) for 0/1 knapsack over (weight, value) items.\"\"\"\n    if capacity < 0:\n        raise ValueError(\"capacity must not be negative\")\n    for weight, _value in items:\n        if weight < 0:\n            raise ValueError(\"weights must not be negative\")\n    n = len(items)\n    # table[i][c] = best value using the first i items under capacity c\n    table = [[0] * (capacity + 1) for _ in range(n + 1)]\n    for i in range(1, n + 1):\n        weight, value = items[i - 1]\n        row, prev = table[i], table[i - 1]\n        for c in range(capacity + 1):\n            row[c] = prev[c]\n            if weight <= c:\n                candidate = prev[c - weight] + value\n                if candidate > row[c]:\n                    row[c] = candidate\n    chosen = []\n    c = capacity\n    for i in range(n, 0, -1):\n        if table[i][c] != table[i - 1][c]:\n            chosen.append(i - 1)\n            c -= items[i - 1][0]\n    chosen.reverse()\n    return table[n][capacity], chosen\n\n\nprint(edit_distance(\"kitten\", \"sitting\")[0])\nprint(lcs(\"AGGTAB\", \"GXTXAYB\"))\nprint(knapsack([(2, 3), (3, 4), (4, 5), (5, 6)], 5))\n"
+     }
+    ],
+    "hints": [
+     "Allocate the table with `(len(a) + 1)` rows and `(len(b) + 1)` columns, and fill row 0 and column 0 with the pure-insert and pure-delete costs.",
+     "Reconstruct by walking from `(n, m)` back to `(0, 0)`, appending operations and reversing at the end. The loop condition is `i > 0 or j > 0`, not `and`.",
+     "For the knapsack back-walk: item `i-1` was taken exactly when `table[i][c] != table[i-1][c]`; subtract its weight from `c` and carry on.",
+     "A zero-weight item with positive value is always worth taking — make sure your table does not silently exclude it."
+    ],
+    "tests": [
+     {
+      "name": "edit_distance values",
+      "code": "for _a, _b, _want in [(\"kitten\", \"sitting\", 3), (\"\", \"\", 0), (\"\", \"abc\", 3),\n                      (\"abc\", \"\", 3), (\"abc\", \"abc\", 0), (\"flaw\", \"lawn\", 2),\n                      (\"a\", \"b\", 1), (\"intention\", \"execution\", 5)]:\n    _got = edit_distance(_a, _b)[0]\n    assert _got == _want, f\"edit_distance({_a!r}, {_b!r}) cost {_got!r}, expected {_want}\""
+     },
+     {
+      "name": "the edit script actually transforms a into b",
+      "code": "import random as _random\n\n\ndef _replay(a, script):\n    _i = 0\n    _out = []\n    for _op in script:\n        if _op[0] == \"match\":\n            assert _i < len(a) and a[_i] == _op[1], f\"match {_op[1]!r} does not line up in {a!r}\"\n            _out.append(a[_i])\n            _i += 1\n        elif _op[0] == \"sub\":\n            assert _i < len(a) and a[_i] == _op[1], f\"sub {_op!r} does not line up in {a!r}\"\n            _out.append(_op[2])\n            _i += 1\n        elif _op[0] == \"del\":\n            assert _i < len(a) and a[_i] == _op[1], f\"del {_op!r} does not line up in {a!r}\"\n            _i += 1\n        elif _op[0] == \"ins\":\n            _out.append(_op[1])\n        else:\n            assert False, f\"unknown operation {_op!r}\"\n    assert _i == len(a), f\"the script consumed {_i} of {len(a)} characters of {a!r}\"\n    return \"\".join(_out)\n\n\n_rng = _random.Random(7)\n_words = [\"kitten\", \"sitting\", \"\", \"a\", \"abc\", \"flaw\", \"lawn\", \"banana\", \"ananas\",\n          \"algorithm\", \"logarithm\", \"aaaa\", \"abab\"]\nfor _a in _words:\n    for _b in _words:\n        _cost, _script = edit_distance(_a, _b)\n        assert _replay(_a, _script) == _b, (\n            f\"replaying the script for ({_a!r} -> {_b!r}) did not give {_b!r}\")\n        _paid = sum(1 for _op in _script if _op[0] != \"match\")\n        assert _paid == _cost, (\n            f\"({_a!r} -> {_b!r}) claims cost {_cost} but the script pays {_paid}\")"
+     },
+     {
+      "name": "edit_distance matches an independent recurrence",
+      "code": "import random as _random\nfrom functools import lru_cache as _lru\n\n\ndef _ref_ed(a, b):\n    @_lru(maxsize=None)\n    def _go(i, j):\n        if i == 0:\n            return j\n        if j == 0:\n            return i\n        if a[i - 1] == b[j - 1]:\n            return _go(i - 1, j - 1)\n        return 1 + min(_go(i - 1, j - 1), _go(i - 1, j), _go(i, j - 1))\n    return _go(len(a), len(b))\n\n\n_rng = _random.Random(7)\nfor _trial in range(30):\n    _a = \"\".join(_rng.choice(\"abc\") for _ in range(_rng.randrange(0, 9)))\n    _b = \"\".join(_rng.choice(\"abc\") for _ in range(_rng.randrange(0, 9)))\n    _got, _want = edit_distance(_a, _b)[0], _ref_ed(_a, _b)\n    assert _got == _want, f\"edit_distance({_a!r}, {_b!r}) gave {_got}, expected {_want}\""
+     },
+     {
+      "name": "lcs returns a genuine common subsequence of the right length",
+      "code": "import random as _random\n\n\ndef _is_sub(s, t):\n    _it = iter(t)\n    return all(_ch in _it for _ch in s)\n\n\ndef _ref_len(a, b):\n    _tab = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]\n    for _i in range(1, len(a) + 1):\n        for _j in range(1, len(b) + 1):\n            if a[_i - 1] == b[_j - 1]:\n                _tab[_i][_j] = _tab[_i - 1][_j - 1] + 1\n            else:\n                _tab[_i][_j] = max(_tab[_i - 1][_j], _tab[_i][_j - 1])\n    return _tab[len(a)][len(b)]\n\n\nassert lcs(\"\", \"abc\") == \"\", f\"got {lcs('', 'abc')!r}\"\nassert lcs(\"abc\", \"\") == \"\", f\"got {lcs('abc', '')!r}\"\nassert lcs(\"abc\", \"xyz\") == \"\", f\"got {lcs('abc', 'xyz')!r}\"\nassert lcs(\"AGGTAB\", \"GXTXAYB\") == \"GTAB\", f\"got {lcs('AGGTAB', 'GXTXAYB')!r}\"\n_rng = _random.Random(7)\nfor _trial in range(30):\n    _a = \"\".join(_rng.choice(\"abcd\") for _ in range(_rng.randrange(0, 12)))\n    _b = \"\".join(_rng.choice(\"abcd\") for _ in range(_rng.randrange(0, 12)))\n    _got = lcs(_a, _b)\n    assert _is_sub(_got, _a) and _is_sub(_got, _b), (\n        f\"lcs({_a!r}, {_b!r}) gave {_got!r}, which is not a subsequence of both\")\n    assert len(_got) == _ref_len(_a, _b), (\n        f\"lcs({_a!r}, {_b!r}) gave {_got!r} of length {len(_got)}, expected {_ref_len(_a, _b)}\")"
+     },
+     {
+      "name": "knapsack values and edge cases",
+      "code": "_v, _idx = knapsack([(2, 3), (3, 4), (4, 5), (5, 6)], 5)\nassert _v == 7, f\"best value {_v!r}, expected 7\"\nassert sorted(_idx) == _idx, f\"indices {_idx!r} should come back sorted\"\nassert knapsack([], 10) == (0, []), f\"got {knapsack([], 10)!r}\"\nassert knapsack([(11, 99)], 10) == (0, []), \"an item that does not fit is not taken\"\nassert knapsack([(2, 3)], 0) == (0, []), \"zero capacity carries nothing\"\n_v0, _i0 = knapsack([(0, 5), (3, 1)], 2)\nassert _v0 == 5 and _i0 == [0], f\"a zero-weight item is free value, got {(_v0, _i0)!r}\"\nfor _bad in [([(1, 1)], -1), ([(-1, 1)], 5)]:\n    try:\n        knapsack(*_bad)\n        assert False, f\"knapsack{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "the chosen indices fit and are worth what is claimed",
+      "code": "import itertools as _it\nimport random as _random\n\n_rng = _random.Random(7)\nfor _trial in range(25):\n    _items = [(_rng.randrange(0, 9), _rng.randrange(1, 15)) for _ in range(_rng.randrange(0, 11))]\n    _cap = _rng.randrange(0, 20)\n    _best, _idx = knapsack(_items, _cap)\n    assert len(set(_idx)) == len(_idx), f\"indices {_idx!r} repeat an item\"\n    assert all(0 <= _i < len(_items) for _i in _idx), f\"indices {_idx!r} out of range\"\n    _w = sum(_items[_i][0] for _i in _idx)\n    _val = sum(_items[_i][1] for _i in _idx)\n    assert _w <= _cap, f\"chosen weight {_w} exceeds capacity {_cap}\"\n    assert _val == _best, f\"claimed value {_best} but the indices are worth {_val}\"\n    _opt = 0\n    for _r in range(len(_items) + 1):\n        for _combo in _it.combinations(range(len(_items)), _r):\n            if sum(_items[_i][0] for _i in _combo) <= _cap:\n                _opt = max(_opt, sum(_items[_i][1] for _i in _combo))\n    assert _best == _opt, f\"knapsack({_items!r}, {_cap}) gave {_best}, the optimum is {_opt}\""
+     },
+     {
+      "name": "knapsack beats the value-density greedy where greedy fails",
+      "code": "# Density greedy takes item 0 (1.5 per unit) and then nothing else fits.\n_items = [(6, 9), (5, 7), (5, 7)]\n_best, _idx = knapsack(_items, 10)\nassert _best == 14, f\"got {_best!r}; the optimum takes both size-5 items\"\nassert sorted(_idx) == [1, 2], f\"got indices {_idx!r}, expected [1, 2]\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Shortest paths and spanning trees",
+   "summary": "Three graph algorithms, each with the data structure its bound depends on.",
+   "concepts": [
+    "Dijkstra's invariant: once a vertex is extracted, its distance is final — and why that needs non-negative weights",
+    "Lazy deletion in a binary heap gives O((V + E) log V) without a decrease-key operation",
+    "Bellman-Ford as V-1 rounds of relaxation, with the V-th round as the negative-cycle test",
+    "A negative cycle unreachable from the source is not an error",
+    "The cut property, and Kruskal as its repeated application in weight order",
+    "Union-find with path compression and union by size: near-constant amortised cost",
+    "Parent arrays as a compressed representation of a whole shortest-path tree"
+   ],
+   "lab": {
+    "title": "Dijkstra, Bellman-Ford, Kruskal",
+    "runtime": "python",
+    "minutes": 80,
+    "brief": "Graphs are adjacency maps: `{node: [(neighbour, weight), ...]}`. A node that\nappears only as a neighbour is still a node of the graph.\n\n**`dijkstra(graph, source)`** — returns `(dist, parent)`. Unreachable nodes get\n`math.inf` and a parent of `None`; the source gets `0` and `None`. Raise\n`ValueError` on a negative weight — Dijkstra's extraction invariant does not\nsurvive one. Use `heapq` with lazy deletion: push a new entry on improvement\nand discard an entry whose recorded distance is stale. The checks build a\n100 x 100 grid and time you.\n\n**`shortest_path(graph, source, target)`** — `(cost, path)` built from\n`dijkstra`. An unreachable target gives `(math.inf, [])`; `source == target`\ngives `(0, [source])`.\n\n**`bellman_ford(graph, source)`** — returns the same `dist` dict but tolerates\nnegative edges. Raise `ValueError` when a negative cycle is **reachable from\nthe source**. A negative cycle sitting in a component the source cannot reach\nmust not raise.\n\n**`DisjointSet(n)`** — `find(x)` with path compression, `union(a, b)` returning\n`True` when two distinct sets were merged and `False` when they were already\none, and `components` as the current number of sets.\n\n**`kruskal(n, edges)`** — nodes are `0..n-1` and `edges` is a list of\n`(u, v, w)`. Returns `(total_weight, tree_edges)`, where each tree edge is\nnormalised to `(min(u, v), max(u, v), w)` and the list is sorted by\n`(w, u, v)`. A disconnected graph yields a spanning forest, so check\n`len(tree_edges) == n - components` rather than assuming `n - 1`.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import heapq\nimport math\n\n\ndef dijkstra(graph, source):\n    \"\"\"(dist, parent) over a non-negative weighted graph. ValueError on a negative weight.\"\"\"\n    # your code here\n\n\ndef shortest_path(graph, source, target):\n    \"\"\"(cost, path) from source to target; (math.inf, []) when unreachable.\"\"\"\n    # your code here\n\n\ndef bellman_ford(graph, source):\n    \"\"\"dist dict allowing negative weights. ValueError on a reachable negative cycle.\"\"\"\n    # your code here\n\n\nclass DisjointSet:\n    \"\"\"Union-find over 0..n-1 with path compression and union by size.\"\"\"\n\n    def __init__(self, n):\n        self.parent = list(range(n))\n        self.size = [1] * n\n        self.components = n\n\n    def find(self, x):\n        # your code here\n        pass\n\n    def union(self, a, b):\n        # your code here\n        pass\n\n\ndef kruskal(n, edges):\n    \"\"\"(total_weight, tree_edges) for a minimum spanning forest.\"\"\"\n    # your code here\n\n\nGRAPH = {\n    \"a\": [(\"b\", 7), (\"c\", 9), (\"f\", 14)],\n    \"b\": [(\"a\", 7), (\"c\", 10), (\"d\", 15)],\n    \"c\": [(\"a\", 9), (\"b\", 10), (\"d\", 11), (\"f\", 2)],\n    \"d\": [(\"b\", 15), (\"c\", 11), (\"e\", 6)],\n    \"e\": [(\"d\", 6), (\"f\", 9)],\n    \"f\": [(\"a\", 14), (\"c\", 2), (\"e\", 9)],\n}\n\nprint(dijkstra(GRAPH, \"a\"))\nprint(shortest_path(GRAPH, \"a\", \"e\"))\nprint(kruskal(4, [(0, 1, 1), (1, 2, 2), (0, 2, 3), (2, 3, 4)]))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import heapq\nimport math\n\n\ndef _all_nodes(graph):\n    \"\"\"Every node, including ones that only appear as a neighbour.\"\"\"\n    nodes = set(graph)\n    for edges in graph.values():\n        for v, _w in edges:\n            nodes.add(v)\n    return nodes\n\n\ndef dijkstra(graph, source):\n    \"\"\"(dist, parent) over a non-negative weighted graph. ValueError on a negative weight.\"\"\"\n    for u, edges in graph.items():\n        for v, w in edges:\n            if w < 0:\n                raise ValueError(f\"negative weight {w} on edge {u!r} -> {v!r}\")\n    nodes = _all_nodes(graph)\n    if source not in nodes:\n        raise ValueError(f\"source {source!r} is not a node of the graph\")\n    dist = {n: math.inf for n in nodes}\n    parent = {n: None for n in nodes}\n    dist[source] = 0\n    heap = [(0, source)]\n    settled = set()\n    while heap:\n        d, u = heapq.heappop(heap)\n        # Lazy deletion: an entry left behind by an improvement is simply skipped.\n        if u in settled or d > dist[u]:\n            continue\n        settled.add(u)\n        for v, w in graph.get(u, ()):\n            nd = d + w\n            if nd < dist[v]:\n                dist[v] = nd\n                parent[v] = u\n                heapq.heappush(heap, (nd, v))\n    return dist, parent\n\n\ndef shortest_path(graph, source, target):\n    \"\"\"(cost, path) from source to target; (math.inf, []) when unreachable.\"\"\"\n    dist, parent = dijkstra(graph, source)\n    if target not in dist or dist[target] == math.inf:\n        return math.inf, []\n    path = []\n    node = target\n    while node is not None:\n        path.append(node)\n        node = parent[node]\n    path.reverse()\n    return dist[target], path\n\n\ndef bellman_ford(graph, source):\n    \"\"\"dist dict allowing negative weights. ValueError on a reachable negative cycle.\"\"\"\n    nodes = _all_nodes(graph)\n    if source not in nodes:\n        raise ValueError(f\"source {source!r} is not a node of the graph\")\n    edges = [(u, v, w) for u, out in graph.items() for v, w in out]\n    dist = {n: math.inf for n in nodes}\n    dist[source] = 0\n    for _round in range(len(nodes) - 1):\n        changed = False\n        for u, v, w in edges:\n            if dist[u] != math.inf and dist[u] + w < dist[v]:\n                dist[v] = dist[u] + w\n                changed = True\n        if not changed:\n            break\n    # One more round: any further improvement means a reachable negative cycle.\n    for u, v, w in edges:\n        if dist[u] != math.inf and dist[u] + w < dist[v]:\n            raise ValueError(\"negative cycle reachable from the source\")\n    return dist\n\n\nclass DisjointSet:\n    \"\"\"Union-find over 0..n-1 with path compression and union by size.\"\"\"\n\n    def __init__(self, n):\n        self.parent = list(range(n))\n        self.size = [1] * n\n        self.components = n\n\n    def find(self, x):\n        root = x\n        while self.parent[root] != root:\n            root = self.parent[root]\n        while self.parent[x] != root:  # second pass flattens the path\n            self.parent[x], x = root, self.parent[x]\n        return root\n\n    def union(self, a, b):\n        ra, rb = self.find(a), self.find(b)\n        if ra == rb:\n            return False\n        if self.size[ra] < self.size[rb]:\n            ra, rb = rb, ra\n        self.parent[rb] = ra\n        self.size[ra] += self.size[rb]\n        self.components -= 1\n        return True\n\n\ndef kruskal(n, edges):\n    \"\"\"(total_weight, tree_edges) for a minimum spanning forest.\"\"\"\n    dsu = DisjointSet(n)\n    chosen = []\n    total = 0\n    for u, v, w in sorted(edges, key=lambda e: (e[2], min(e[0], e[1]), max(e[0], e[1]))):\n        if dsu.union(u, v):\n            chosen.append((min(u, v), max(u, v), w))\n            total += w\n    chosen.sort(key=lambda e: (e[2], e[0], e[1]))\n    return total, chosen\n\n\nGRAPH = {\n    \"a\": [(\"b\", 7), (\"c\", 9), (\"f\", 14)],\n    \"b\": [(\"a\", 7), (\"c\", 10), (\"d\", 15)],\n    \"c\": [(\"a\", 9), (\"b\", 10), (\"d\", 11), (\"f\", 2)],\n    \"d\": [(\"b\", 15), (\"c\", 11), (\"e\", 6)],\n    \"e\": [(\"d\", 6), (\"f\", 9)],\n    \"f\": [(\"a\", 14), (\"c\", 2), (\"e\", 9)],\n}\n\nprint(dijkstra(GRAPH, \"a\"))\nprint(shortest_path(GRAPH, \"a\", \"e\"))\nprint(kruskal(4, [(0, 1, 1), (1, 2, 2), (0, 2, 3), (2, 3, 4)]))\n"
+     }
+    ],
+    "hints": [
+     "Collect the node set from both the keys and the neighbour lists before you initialise `dist`, or an unreachable sink will be missing from the answer.",
+     "The lazy-deletion guard is `if d > dist[u]: continue` right after the pop — that is what lets you skip a decrease-key operation.",
+     "Bellman-Ford relaxes over a flat edge list `V - 1` times; the `V`-th pass is a test, not a relaxation. Guard every relaxation with `dist[u] != math.inf` so an unreachable negative cycle stays silent.",
+     "`find` twice: walk up to the root, then walk the same path again reassigning parents to the root."
+    ],
+    "tests": [
+     {
+      "name": "dijkstra on the standard six-node graph",
+      "code": "import math as _math\n\n_dist, _parent = dijkstra(GRAPH, \"a\")\nassert _dist == {\"a\": 0, \"b\": 7, \"c\": 9, \"d\": 20, \"e\": 20, \"f\": 11}, f\"got {_dist!r}\"\nassert _parent[\"a\"] is None, f\"the source has no parent, got {_parent['a']!r}\"\nassert _parent[\"f\"] == \"c\", f\"parent of f is {_parent['f']!r}, expected c\""
+     },
+     {
+      "name": "dijkstra handles unreachable nodes and rejects negative weights",
+      "code": "import math as _math\n\n_g = {\"a\": [(\"b\", 1)], \"b\": [], \"z\": [(\"y\", 1)], \"y\": []}\n_d, _p = dijkstra(_g, \"a\")\nassert _d[\"z\"] == _math.inf and _d[\"y\"] == _math.inf, f\"unreachable nodes need inf, got {_d!r}\"\nassert _p[\"z\"] is None, f\"unreachable parent should be None, got {_p['z']!r}\"\n_solo = dijkstra({\"a\": []}, \"a\")[0]\nassert _solo == {\"a\": 0}, f\"got {_solo!r}\"\ntry:\n    dijkstra({\"a\": [(\"b\", -1)], \"b\": []}, \"a\")\n    assert False, \"a negative weight must raise ValueError in dijkstra\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "shortest_path returns a walkable path",
+      "code": "import math as _math\n\n_cost, _path = shortest_path(GRAPH, \"a\", \"e\")\nassert _cost == 20, f\"cost {_cost!r}, expected 20\"\nassert _path[0] == \"a\" and _path[-1] == \"e\", f\"path {_path!r} does not run from a to e\"\n_walk = 0\nfor _i in range(len(_path) - 1):\n    _step = [_w for _v, _w in GRAPH[_path[_i]] if _v == _path[_i + 1]]\n    assert _step, f\"{_path[_i]!r} -> {_path[_i + 1]!r} is not an edge\"\n    _walk += _step[0]\nassert _walk == _cost, f\"the path costs {_walk} but you reported {_cost}\"\nassert shortest_path(GRAPH, \"a\", \"a\") == (0, [\"a\"]), f\"got {shortest_path(GRAPH, 'a', 'a')!r}\"\n_g = {\"a\": [], \"b\": []}\nassert shortest_path(_g, \"a\", \"b\") == (_math.inf, []), f\"got {shortest_path(_g, 'a', 'b')!r}\""
+     },
+     {
+      "name": "dijkstra scales to a 100 x 100 grid",
+      "code": "import random as _random\nimport time as _time\n\n_rng = _random.Random(7)\n_N = 100\n_grid = {}\nfor _r in range(_N):\n    for _c in range(_N):\n        _out = []\n        if _r + 1 < _N:\n            _out.append(((_r + 1, _c), _rng.randrange(1, 10)))\n        if _c + 1 < _N:\n            _out.append(((_r, _c + 1), _rng.randrange(1, 10)))\n        _grid[(_r, _c)] = _out\n_t0 = _time.perf_counter()\n_d, _p = dijkstra(_grid, (0, 0))\n_elapsed = _time.perf_counter() - _t0\nassert len(_d) == _N * _N, f\"got {len(_d)} distances for {_N * _N} nodes\"\nassert _d[(_N - 1, _N - 1)] > 0\nassert _elapsed < 8.0, (\n    f\"10000 nodes took {_elapsed:.2f}s — use a heap, not a linear scan for the minimum\")"
+     },
+     {
+      "name": "bellman_ford handles negative edges",
+      "code": "import math as _math\n\n_g = {\"s\": [(\"a\", 4), (\"b\", 5)], \"a\": [(\"c\", -3)], \"b\": [(\"c\", 2)], \"c\": []}\n_d = bellman_ford(_g, \"s\")\nassert _d == {\"s\": 0, \"a\": 4, \"b\": 5, \"c\": 1}, f\"got {_d!r}\"\n_d2 = bellman_ford({\"a\": [(\"b\", 1)], \"b\": [], \"z\": []}, \"a\")\nassert _d2[\"z\"] == _math.inf, f\"unreachable node should be inf, got {_d2!r}\"\nassert bellman_ford({\"a\": []}, \"a\") == {\"a\": 0}, \"a lone source is 0 away from itself\""
+     },
+     {
+      "name": "bellman_ford detects only reachable negative cycles",
+      "code": "_bad = {\"s\": [(\"a\", 1)], \"a\": [(\"b\", 1)], \"b\": [(\"a\", -3)]}\ntry:\n    bellman_ford(_bad, \"s\")\n    assert False, \"a negative cycle reachable from s must raise ValueError\"\nexcept ValueError:\n    pass\n_far = {\"s\": [(\"t\", 1)], \"t\": [], \"x\": [(\"y\", 1)], \"y\": [(\"x\", -3)]}\n_d = bellman_ford(_far, \"s\")\nassert _d[\"t\"] == 1, f\"got {_d!r}\"\nassert _d[\"x\"] == float(\"inf\"), \"an unreachable negative cycle is not an error and stays at inf\""
+     },
+     {
+      "name": "bellman_ford agrees with dijkstra when weights are non-negative",
+      "code": "import random as _random\n\n_rng = _random.Random(7)\nfor _trial in range(15):\n    _n = _rng.randrange(2, 9)\n    _g = {_i: [] for _i in range(_n)}\n    for _u in range(_n):\n        for _v in range(_n):\n            if _u != _v and _rng.random() < 0.4:\n                _g[_u].append((_v, _rng.randrange(0, 12)))\n    _a = dijkstra(_g, 0)[0]\n    _b = bellman_ford(_g, 0)\n    assert _a == _b, f\"on {_g!r} dijkstra gave {_a!r} but bellman_ford gave {_b!r}\""
+     },
+     {
+      "name": "DisjointSet merges and reports components",
+      "code": "_ds = DisjointSet(5)\nassert _ds.components == 5, f\"got {_ds.components!r}\"\nassert _ds.find(3) == 3, \"every element starts as its own root\"\nassert _ds.union(0, 1) is True, \"union of two distinct sets returns True\"\nassert _ds.union(1, 0) is False, \"a repeated union returns False\"\nassert _ds.union(1, 2) is True\nassert _ds.find(0) == _ds.find(2), \"0 and 2 are now in one set\"\nassert _ds.find(0) != _ds.find(4), \"4 was never merged\"\nassert _ds.components == 3, f\"got {_ds.components!r}, expected 3\"\n_big = DisjointSet(2000)\nfor _i in range(1999):\n    _big.union(_i, _i + 1)\nassert _big.components == 1 and _big.find(0) == _big.find(1999), \"a long chain must collapse\""
+     },
+     {
+      "name": "kruskal builds a minimum spanning forest",
+      "code": "_total, _tree = kruskal(4, [(0, 1, 1), (1, 2, 2), (0, 2, 3), (2, 3, 4)])\nassert _total == 7, f\"total {_total!r}, expected 7\"\nassert _tree == [(0, 1, 1), (1, 2, 2), (2, 3, 4)], f\"got {_tree!r}\"\nassert kruskal(3, []) == (0, []), \"no edges, no tree\"\nassert kruskal(1, []) == (0, []), \"a single node needs no edges\"\n_t2, _e2 = kruskal(4, [(0, 1, 5), (2, 3, 1)])\nassert _t2 == 6 and len(_e2) == 2, f\"a forest over two components, got {(_t2, _e2)!r}\"\n_t3, _e3 = kruskal(2, [(1, 0, 9)])\nassert _e3 == [(0, 1, 9)], f\"tree edges are normalised to (min, max, w), got {_e3!r}\""
+     },
+     {
+      "name": "kruskal matches an exhaustive minimum over random graphs",
+      "code": "import itertools as _it\nimport random as _random\n\n_rng = _random.Random(7)\nfor _trial in range(15):\n    _n = _rng.randrange(2, 7)\n    _pool = list(_it.combinations(range(_n), 2))\n    _rng.shuffle(_pool)\n    _edges = [(_u, _v, _rng.randrange(1, 20)) for _u, _v in _pool[:_rng.randrange(1, len(_pool) + 1)]]\n    _total, _tree = kruskal(_n, _edges)\n    _ds = DisjointSet(_n)\n    for _u, _v, _w in _edges:\n        _ds.union(_u, _v)\n    _want_size = _n - _ds.components\n    assert len(_tree) == _want_size, f\"forest of {len(_tree)} edges, expected {_want_size}\"\n    assert sum(_w for _, _, _w in _tree) == _total, \"the reported total must match the chosen edges\"\n    _best = None\n    for _combo in _it.combinations(range(len(_edges)), _want_size):\n        _d2 = DisjointSet(_n)\n        if all(_d2.union(_edges[_i][0], _edges[_i][1]) for _i in _combo):\n            _cost = sum(_edges[_i][2] for _i in _combo)\n            _best = _cost if _best is None else min(_best, _cost)\n    assert _total == _best, f\"kruskal gave {_total}, the true minimum is {_best}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Intractability and approximation",
+   "summary": "When the exact answer is out of reach, bound the inexact one and prove the bound.",
+   "concepts": [
+    "NP-completeness as a statement about reductions, not about difficulty in the informal sense",
+    "Vertex cover: the decision problem is NP-complete, the optimisation problem is NP-hard",
+    "The maximal-matching 2-approximation, and why taking both endpoints is not wasteful",
+    "Lower-bound certificates: any vertex cover must contain a distinct vertex per matching edge",
+    "Approximation ratio as a worst-case guarantee, measured against a certificate rather than against OPT",
+    "Exhaustive search as a testing oracle for small instances only, and the 2^n wall behind it",
+    "Why the greedy highest-degree heuristic has no constant ratio at all"
+   ],
+   "lab": {
+    "title": "A vertex cover you can vouch for",
+    "runtime": "python",
+    "minutes": 60,
+    "brief": "An undirected graph is a list of edges `(u, v)` with `u != v`; nodes are\nwhatever appears in it.\n\n**`is_vertex_cover(edges, cover)`** — `True` when every edge has at least one\nendpoint in `cover`.\n\n**`vertex_cover_2approx(edges)`** — the classical algorithm: repeatedly pick\nany still-uncovered edge, add **both** its endpoints, and discard every edge\nthey cover. Process edges in the order given so the result is deterministic.\nReturn `(cover, matching)` where `cover` is a `set` and `matching` is the list\nof edges you picked, each normalised to `(min(u, v), max(u, v))`.\n\nThe matching is the proof. Its edges share no vertex, so any vertex cover\ncontains at least one endpoint of each: `OPT >= len(matching)`. Your cover has\nexactly `2 * len(matching)` vertices, hence `|C| <= 2 * OPT`.\n\n**`min_vertex_cover(edges)`** — the exact optimum by exhaustive search over\nsubsets, smallest first. Only ever called on small graphs. Return a `set`. Any\ncover of minimum size is accepted; the checks verify size and validity, never\nidentity. Raise `ValueError` when the graph has more than 18 distinct nodes.\n\n**`ratio(edges)`** — `len(approx cover) / len(optimum)` as a float, and `1.0`\nfor a graph with no edges.\n\n```text\nvertex_cover_2approx([(0, 1), (1, 2), (2, 3)]) -> ({0, 1, 2, 3}, [(0, 1), (2, 3)])\nlen(min_vertex_cover([(0, 1), (1, 2), (2, 3)])) -> 2\nratio([(0, 1), (1, 2), (2, 3)])                -> 2.0\n```\n\nThat last graph is the tight case: the guarantee of 2 is achieved, not merely\napproached.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import itertools\n\n\ndef is_vertex_cover(edges, cover):\n    \"\"\"True when every edge has an endpoint in cover.\"\"\"\n    # your code here\n\n\ndef vertex_cover_2approx(edges):\n    \"\"\"(cover set, matching list) from the maximal-matching algorithm.\"\"\"\n    # your code here\n\n\ndef min_vertex_cover(edges):\n    \"\"\"The exact smallest vertex cover, as a set. ValueError above 18 nodes.\"\"\"\n    # your code here\n\n\ndef ratio(edges):\n    \"\"\"Size of the approximation over the size of the optimum; 1.0 with no edges.\"\"\"\n    # your code here\n\n\nprint(vertex_cover_2approx([(0, 1), (1, 2), (2, 3)]))\nprint(min_vertex_cover([(0, 1), (1, 2), (2, 3)]))\nprint(ratio([(0, 1), (1, 2), (2, 3)]))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import itertools\n\n\ndef _nodes(edges):\n    seen = []\n    for u, v in edges:\n        for x in (u, v):\n            if x not in seen:\n                seen.append(x)\n    return seen\n\n\ndef is_vertex_cover(edges, cover):\n    \"\"\"True when every edge has an endpoint in cover.\"\"\"\n    return all(u in cover or v in cover for u, v in edges)\n\n\ndef vertex_cover_2approx(edges):\n    \"\"\"(cover set, matching list) from the maximal-matching algorithm.\"\"\"\n    cover = set()\n    matching = []\n    for u, v in edges:\n        if u in cover or v in cover:\n            continue  # already covered by an earlier pick\n        matching.append((min(u, v), max(u, v)))\n        cover.add(u)\n        cover.add(v)\n    return cover, matching\n\n\ndef min_vertex_cover(edges):\n    \"\"\"The exact smallest vertex cover, as a set. ValueError above 18 nodes.\"\"\"\n    nodes = _nodes(edges)\n    if len(nodes) > 18:\n        raise ValueError(f\"exhaustive search refuses {len(nodes)} nodes\")\n    if not edges:\n        return set()\n    # Smallest first, so the first cover found is optimal.\n    for size in range(1, len(nodes) + 1):\n        for combo in itertools.combinations(nodes, size):\n            if is_vertex_cover(edges, set(combo)):\n                return set(combo)\n    return set(nodes)\n\n\ndef ratio(edges):\n    \"\"\"Size of the approximation over the size of the optimum; 1.0 with no edges.\"\"\"\n    if not edges:\n        return 1.0\n    cover, _matching = vertex_cover_2approx(edges)\n    return len(cover) / len(min_vertex_cover(edges))\n\n\nprint(vertex_cover_2approx([(0, 1), (1, 2), (2, 3)]))\nprint(min_vertex_cover([(0, 1), (1, 2), (2, 3)]))\nprint(ratio([(0, 1), (1, 2), (2, 3)]))\n"
+     }
+    ],
+    "hints": [
+     "The approximation is a single pass: skip an edge whose endpoints are already covered, otherwise record it in the matching and add both endpoints.",
+     "`itertools.combinations(nodes, size)` inside a loop over increasing `size` gives you smallest-first exhaustive search for free.",
+     "Collect the node list in first-appearance order rather than through a set, so exhaustive search is reproducible.",
+     "A graph with no edges has an empty optimum — return 1.0 from `ratio` before you divide by zero."
+    ],
+    "tests": [
+     {
+      "name": "is_vertex_cover checks every edge",
+      "code": "assert is_vertex_cover([], set()) is True, \"an empty graph is covered by nothing\"\nassert is_vertex_cover([(0, 1), (1, 2)], {1}) is True, f\"got {is_vertex_cover([(0, 1), (1, 2)], {1})!r}\"\nassert is_vertex_cover([(0, 1), (2, 3)], {1}) is False, \"edge (2, 3) is uncovered\"\nassert is_vertex_cover([(0, 1)], {0, 1}) is True"
+     },
+     {
+      "name": "the 2-approximation on the path of four nodes",
+      "code": "_cover, _match = vertex_cover_2approx([(0, 1), (1, 2), (2, 3)])\nassert _cover == {0, 1, 2, 3}, f\"got {_cover!r}\"\nassert _match == [(0, 1), (2, 3)], f\"got {_match!r}\"\nassert vertex_cover_2approx([]) == (set(), []), f\"got {vertex_cover_2approx([])!r}\"\n_c1, _m1 = vertex_cover_2approx([(5, 9)])\nassert _c1 == {5, 9} and _m1 == [(5, 9)], f\"got {(_c1, _m1)!r}\""
+     },
+     {
+      "name": "the returned matching really is a matching",
+      "code": "import random as _random\n\n_rng = _random.Random(7)\nfor _trial in range(30):\n    _n = _rng.randrange(2, 9)\n    _edges = sorted({(min(_a, _b), max(_a, _b))\n                     for _a, _b in ((_rng.randrange(_n), _rng.randrange(_n))\n                                    for _ in range(_rng.randrange(0, 14))) if _a != _b})\n    _cover, _match = vertex_cover_2approx(_edges)\n    _seen = set()\n    for _u, _v in _match:\n        assert _u not in _seen and _v not in _seen, f\"matching {_match!r} reuses a vertex\"\n        _seen.add(_u)\n        _seen.add(_v)\n    assert len(_cover) == 2 * len(_match), (\n        f\"cover {_cover!r} should hold both endpoints of each of {len(_match)} matched edges\")\n    assert is_vertex_cover(_edges, _cover), f\"{_cover!r} does not cover {_edges!r}\""
+     },
+     {
+      "name": "min_vertex_cover is exact on small graphs",
+      "code": "assert min_vertex_cover([]) == set(), f\"got {min_vertex_cover([])!r}\"\n_path4 = [(0, 1), (1, 2), (2, 3)]\n_opt4 = min_vertex_cover(_path4)\nassert len(_opt4) == 2, f\"the path on four nodes needs two vertices, got {_opt4!r}\"\nassert is_vertex_cover(_path4, _opt4), f\"{_opt4!r} does not cover {_path4!r}\"\n_star = [(0, 1), (0, 2), (0, 3), (0, 4)]\nassert min_vertex_cover(_star) == {0}, f\"a star is covered by its centre, got {min_vertex_cover(_star)!r}\"\n_tri = [(0, 1), (1, 2), (0, 2)]\nassert len(min_vertex_cover(_tri)) == 2, f\"a triangle needs two vertices, got {min_vertex_cover(_tri)!r}\"\nassert is_vertex_cover(_tri, min_vertex_cover(_tri))\ntry:\n    min_vertex_cover([(_i, _i + 1) for _i in range(0, 40, 2)])\n    assert False, \"20 nodes should be refused by the exhaustive search\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "the ratio never exceeds 2 and the certificate bounds OPT",
+      "code": "import random as _random\n\n_rng = _random.Random(7)\n_worst = 0.0\nfor _trial in range(40):\n    _n = _rng.randrange(2, 8)\n    _edges = sorted({(min(_a, _b), max(_a, _b))\n                     for _a, _b in ((_rng.randrange(_n), _rng.randrange(_n))\n                                    for _ in range(_rng.randrange(1, 12))) if _a != _b})\n    if not _edges:\n        continue\n    _cover, _match = vertex_cover_2approx(_edges)\n    _opt = min_vertex_cover(_edges)\n    assert len(_match) <= len(_opt), (\n        f\"the matching has {len(_match)} disjoint edges, so OPT cannot be {len(_opt)}\")\n    _r = ratio(_edges)\n    assert abs(_r - len(_cover) / len(_opt)) < 1e-12, f\"ratio gave {_r!r} for {_edges!r}\"\n    assert _r <= 2.0 + 1e-12, f\"ratio {_r!r} on {_edges!r} breaks the guarantee of 2\"\n    _worst = max(_worst, _r)\nassert _worst > 1.0, \"over 40 random graphs the approximation should be suboptimal at least once\""
+     },
+     {
+      "name": "the bound is tight, and the empty graph is handled",
+      "code": "assert ratio([]) == 1.0, f\"got {ratio([])!r}\"\nassert ratio([(0, 1)]) == 2.0, f\"one edge: the approximation takes both ends, got {ratio([(0, 1)])!r}\"\nassert ratio([(0, 1), (1, 2), (2, 3)]) == 2.0, (\n    f\"got {ratio([(0, 1), (1, 2), (2, 3)])!r}; a perfect matching is the tight case\")\n_disjoint = [(0, 1), (2, 3), (4, 5)]\nassert ratio(_disjoint) == 2.0, f\"got {ratio(_disjoint)!r}\""
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "Capstone — a route planner with a preprocessed heuristic",
+  "brief": "Build a road-network route planner in `router.py` and drive it from `main.py`.\nThe point is not that A* finds the shortest path — Dijkstra already does — but\nthat a **preprocessed, admissible** heuristic makes it settle far fewer\nvertices while returning provably the same cost.\n\n## `Graph`\n\n- `add_node(name, x, y)` — a named vertex at a point in the plane.\n- `add_edge(u, v, weight=None)` — undirected. A weight of `None` means the\n  straight-line distance between the two endpoints. Raise `ValueError` for an\n  unknown endpoint, or for a weight strictly below the straight-line distance:\n  the heuristics below are only admissible on a graph where no road is shorter\n  than the crow flies.\n- `nodes()` — the node names, in insertion order.\n- `neighbours(u)` — a list of `(v, weight)`.\n- `straight_line(u, v)` — Euclidean distance between two nodes.\n\n## Search\n\n- `dijkstra(graph, source, goal=None)` — returns `(dist, parent, expanded)`,\n  where `expanded` counts vertices settled (popped and accepted). With a\n  `goal`, stop as soon as it is settled.\n- `reconstruct(parent, source, goal)` — the node list, or `[]` when there is no\n  parent chain back to the source.\n- `astar(graph, source, goal, heuristic)` — returns `(cost, path, expanded)`.\n  `heuristic` is a callable from node name to a lower bound on the remaining\n  distance. Unreachable goal gives `(math.inf, [], expanded)`.\n- `zero_heuristic(graph, goal)` and `euclidean_heuristic(graph, goal)` — both\n  return callables. The zero one turns A* back into Dijkstra, which is the\n  cheapest possible correctness check you can run on your own search.\n\n## Preprocessing: ALT landmarks\n\n`Landmarks(graph, k=4)` runs one Dijkstra from each of `k` landmark nodes and\nstores the resulting distance tables. Choose landmarks by farthest-point\nselection starting from the first node, so the choice is deterministic. Then\n\n```text\nh(u) = max over landmarks L of abs(dist[L][goal] - dist[L][u])\n```\n\nis admissible by the triangle inequality on an undirected graph, and is\nconsistent. Skip any landmark whose table has no finite entry for `u` or the\ngoal. `Landmarks.heuristic(goal)` returns the callable.\n\n## Measurement\n\n`compare(graph, source, goal)` returns a dict with keys `cost`, `dijkstra`,\n`euclidean` and `landmark`, the last three being expansion counts. The costs\nmust agree; the counts are the result you are actually reporting.\n\n`grid_graph(width, height, seed=7)` builds the test network: a grid whose edge\nweights are the straight-line distance times a random factor in `[1.0, 1.6]`,\nso straight-line distance stays a valid lower bound.",
+  "deliverables": [
+   "`router.py` — `Graph`, `dijkstra`, `astar`, `reconstruct`, the three heuristics, `Landmarks`, `compare` and `grid_graph`, importable with no side effects",
+   "`main.py` — builds a grid, routes a corner-to-corner journey and prints the three expansion counts side by side",
+   "A binary heap search with lazy deletion in both `dijkstra` and `astar`, and an expansion counter that counts settled vertices only",
+   "An `add_edge` that refuses a weight below the straight-line distance, with the admissibility argument in its docstring",
+   "Landmark preprocessing whose cost is paid once and reused across queries",
+   "A measured comparison: identical costs, strictly fewer expansions for the landmark heuristic on a grid"
+  ],
+  "constraints": [
+   "Standard library only — `heapq`, `math` and `random` are all you need",
+   "`router.py` must define things only; importing it must print nothing and build no graph",
+   "Every heuristic must be admissible on the graphs the module builds; do not scale one to win the measurement",
+   "A* must stop when the goal is settled, not when the queue empties",
+   "No global caches — two `Landmarks` objects over different graphs must not interfere"
+  ],
+  "rubric": [
+   {
+    "criterion": "Correctness of the searches",
+    "weight": 35,
+    "evidence": "Dijkstra, A* with each heuristic and the reconstructed paths all agree on cost over randomised source/goal pairs, including unreachable and self-routes."
+   },
+   {
+    "criterion": "Admissibility and consistency",
+    "weight": 25,
+    "evidence": "Both heuristics are checked exhaustively against true distances on a small grid; add_edge rejects a sub-Euclidean weight."
+   },
+   {
+    "criterion": "Preprocessing quality",
+    "weight": 20,
+    "evidence": "Landmark selection is deterministic, tables are built once, and the landmark heuristic expands strictly fewer vertices than plain Dijkstra."
+   },
+   {
+    "criterion": "Measurement discipline",
+    "weight": 12,
+    "evidence": "compare() reports one cost and three expansion counts drawn from real runs, not from re-derived estimates."
+   },
+   {
+    "criterion": "Structure and readability",
+    "weight": 8,
+    "evidence": "router.py is import-clean, every public function has a docstring, and the heap invariants are commented where they are subtle."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 300,
+  "files": [
+   {
+    "name": "router.py",
+    "content": "import heapq\nimport math\nimport random\n\n\nclass Graph:\n    \"\"\"An undirected road network whose nodes sit at points in the plane.\"\"\"\n\n    def __init__(self):\n        self.pos = {}\n        self.adj = {}\n        self.order = []\n\n    def add_node(self, name, x, y):\n        \"\"\"Place a node. Re-adding a name moves it.\"\"\"\n        # your code here\n\n    def straight_line(self, u, v):\n        \"\"\"Euclidean distance between two nodes.\"\"\"\n        # your code here\n\n    def add_edge(self, u, v, weight=None):\n        \"\"\"Undirected edge. None means the straight-line distance.\"\"\"\n        # your code here\n\n    def nodes(self):\n        \"\"\"Node names in insertion order.\"\"\"\n        # your code here\n\n    def neighbours(self, u):\n        \"\"\"[(neighbour, weight), ...] for u.\"\"\"\n        # your code here\n\n\ndef dijkstra(graph, source, goal=None):\n    \"\"\"(dist, parent, expanded) — settles vertices until the queue or the goal runs out.\"\"\"\n    # your code here\n\n\ndef reconstruct(parent, source, goal):\n    \"\"\"The path source..goal as a list of node names, or [] when there is none.\"\"\"\n    # your code here\n\n\ndef zero_heuristic(graph, goal):\n    \"\"\"A heuristic that is always 0, turning A* into Dijkstra.\"\"\"\n    # your code here\n\n\ndef euclidean_heuristic(graph, goal):\n    \"\"\"Straight-line distance to the goal.\"\"\"\n    # your code here\n\n\ndef astar(graph, source, goal, heuristic):\n    \"\"\"(cost, path, expanded) with the given admissible heuristic.\"\"\"\n    # your code here\n\n\nclass Landmarks:\n    \"\"\"ALT preprocessing: one Dijkstra per landmark, reused by every query.\"\"\"\n\n    def __init__(self, graph, k=4):\n        self.graph = graph\n        self.chosen = []\n        self.tables = {}\n        # your code here\n\n    def heuristic(self, goal):\n        \"\"\"A callable node -> lower bound on the distance from that node to goal.\"\"\"\n        # your code here\n\n\ndef compare(graph, source, goal):\n    \"\"\"{cost, dijkstra, euclidean, landmark} — one cost, three expansion counts.\"\"\"\n    # your code here\n\n\ndef grid_graph(width, height, seed=7):\n    \"\"\"A width x height lattice with weights >= the straight-line distance.\"\"\"\n    rng = random.Random(seed)\n    g = Graph()\n    for r in range(height):\n        for c in range(width):\n            g.add_node((r, c), float(c), float(r))\n    for r in range(height):\n        for c in range(width):\n            if c + 1 < width:\n                g.add_edge((r, c), (r, c + 1), 1.0 + rng.random() * 0.6)\n            if r + 1 < height:\n                g.add_edge((r, c), (r + 1, c), 1.0 + rng.random() * 0.6)\n    return g\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from router import grid_graph, compare\n\nnet = grid_graph(20, 20)\nresult = compare(net, (0, 0), (19, 19))\n\nprint(\"cost      \", round(result[\"cost\"], 4))\nprint(\"dijkstra  \", result[\"dijkstra\"])\nprint(\"euclidean \", result[\"euclidean\"])\nprint(\"landmark  \", result[\"landmark\"])\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "router.py",
+    "content": "import heapq\nimport math\nimport random\n\n\nclass Graph:\n    \"\"\"An undirected road network whose nodes sit at points in the plane.\"\"\"\n\n    def __init__(self):\n        self.pos = {}\n        self.adj = {}\n        self.order = []\n\n    def add_node(self, name, x, y):\n        \"\"\"Place a node. Re-adding a name moves it.\"\"\"\n        if name not in self.pos:\n            self.order.append(name)\n            self.adj[name] = []\n        self.pos[name] = (float(x), float(y))\n\n    def straight_line(self, u, v):\n        \"\"\"Euclidean distance between two nodes.\"\"\"\n        if u not in self.pos or v not in self.pos:\n            raise ValueError(f\"unknown node in ({u!r}, {v!r})\")\n        ux, uy = self.pos[u]\n        vx, vy = self.pos[v]\n        return math.hypot(ux - vx, uy - vy)\n\n    def add_edge(self, u, v, weight=None):\n        \"\"\"Undirected edge. None means the straight-line distance.\n\n        A weight below the straight-line distance would break admissibility:\n        euclidean_heuristic could then over-estimate and A* could return a\n        path that is not shortest. Such an edge is refused outright.\n        \"\"\"\n        if u not in self.pos or v not in self.pos:\n            raise ValueError(f\"unknown node in ({u!r}, {v!r})\")\n        if u == v:\n            raise ValueError(\"self loops are not roads\")\n        line = self.straight_line(u, v)\n        if weight is None:\n            weight = line\n        weight = float(weight)\n        if weight < line - 1e-9:\n            raise ValueError(\n                f\"weight {weight} is below the straight-line distance {line}\")\n        self.adj[u].append((v, weight))\n        self.adj[v].append((u, weight))\n\n    def nodes(self):\n        \"\"\"Node names in insertion order.\"\"\"\n        return list(self.order)\n\n    def neighbours(self, u):\n        \"\"\"[(neighbour, weight), ...] for u.\"\"\"\n        if u not in self.adj:\n            raise ValueError(f\"unknown node {u!r}\")\n        return list(self.adj[u])\n\n\ndef dijkstra(graph, source, goal=None):\n    \"\"\"(dist, parent, expanded) — settles vertices until the queue or the goal runs out.\"\"\"\n    if source not in graph.pos:\n        raise ValueError(f\"unknown source {source!r}\")\n    if goal is not None and goal not in graph.pos:\n        raise ValueError(f\"unknown goal {goal!r}\")\n    dist = {n: math.inf for n in graph.nodes()}\n    parent = {n: None for n in graph.nodes()}\n    dist[source] = 0.0\n    heap = [(0.0, source)]\n    settled = set()\n    expanded = 0\n    while heap:\n        d, u = heapq.heappop(heap)\n        # Lazy deletion: an improvement left an older, larger entry behind.\n        if u in settled or d > dist[u]:\n            continue\n        settled.add(u)\n        expanded += 1\n        if goal is not None and u == goal:\n            break\n        for v, w in graph.adj[u]:\n            nd = d + w\n            if nd < dist[v]:\n                dist[v] = nd\n                parent[v] = u\n                heapq.heappush(heap, (nd, v))\n    return dist, parent, expanded\n\n\ndef reconstruct(parent, source, goal):\n    \"\"\"The path source..goal as a list of node names, or [] when there is none.\"\"\"\n    if goal not in parent:\n        return []\n    if goal == source:\n        return [source]\n    path = []\n    node = goal\n    while node is not None:\n        path.append(node)\n        if node == source:\n            path.reverse()\n            return path\n        node = parent.get(node)\n    return []\n\n\ndef zero_heuristic(graph, goal):\n    \"\"\"A heuristic that is always 0, turning A* into Dijkstra.\"\"\"\n    def h(_node):\n        return 0.0\n    return h\n\n\ndef euclidean_heuristic(graph, goal):\n    \"\"\"Straight-line distance to the goal.\"\"\"\n    def h(node):\n        return graph.straight_line(node, goal)\n    return h\n\n\ndef astar(graph, source, goal, heuristic):\n    \"\"\"(cost, path, expanded) with the given admissible heuristic.\"\"\"\n    if source not in graph.pos:\n        raise ValueError(f\"unknown source {source!r}\")\n    if goal not in graph.pos:\n        raise ValueError(f\"unknown goal {goal!r}\")\n    g_score = {n: math.inf for n in graph.nodes()}\n    parent = {n: None for n in graph.nodes()}\n    g_score[source] = 0.0\n    heap = [(heuristic(source), 0.0, source)]\n    settled = set()\n    expanded = 0\n    while heap:\n        _f, g, u = heapq.heappop(heap)\n        # The key is g + h, but the value relaxed and stored is always g.\n        if u in settled or g > g_score[u]:\n            continue\n        settled.add(u)\n        expanded += 1\n        if u == goal:\n            return g, reconstruct(parent, source, goal), expanded\n        for v, w in graph.adj[u]:\n            ng = g + w\n            if ng < g_score[v]:\n                g_score[v] = ng\n                parent[v] = u\n                heapq.heappush(heap, (ng + heuristic(v), ng, v))\n    return math.inf, [], expanded\n\n\nclass Landmarks:\n    \"\"\"ALT preprocessing: one Dijkstra per landmark, reused by every query.\"\"\"\n\n    def __init__(self, graph, k=4):\n        self.graph = graph\n        self.chosen = []\n        self.tables = {}\n        names = graph.nodes()\n        if not names or k <= 0:\n            return\n        current = names[0]\n        for _ in range(min(k, len(names))):\n            table = dijkstra(graph, current)[0]\n            self.chosen.append(current)\n            self.tables[current] = table\n            # Farthest-point selection: the next landmark is the node whose\n            # smallest distance to the chosen set is largest.\n            best, best_d = None, -1.0\n            for n in names:\n                if n in self.tables:\n                    continue\n                spread = min(self.tables[L][n] for L in self.chosen)\n                if spread != math.inf and spread > best_d:\n                    best, best_d = n, spread\n            if best is None:\n                break\n            current = best\n\n    def heuristic(self, goal):\n        \"\"\"A callable node -> lower bound on the distance from that node to goal.\"\"\"\n        tables = self.tables\n        chosen = self.chosen\n\n        def h(node):\n            best = 0.0\n            for L in chosen:\n                table = tables[L]\n                du = table.get(node, math.inf)\n                dg = table.get(goal, math.inf)\n                if du == math.inf or dg == math.inf:\n                    continue\n                # Reverse triangle inequality on an undirected graph.\n                bound = abs(dg - du)\n                if bound > best:\n                    best = bound\n            return best\n\n        return h\n\n\ndef compare(graph, source, goal):\n    \"\"\"{cost, dijkstra, euclidean, landmark} — one cost, three expansion counts.\"\"\"\n    dist, parent, dij_expanded = dijkstra(graph, source, goal)\n    cost = dist[goal]\n    e_cost, _e_path, e_expanded = astar(\n        graph, source, goal, euclidean_heuristic(graph, goal))\n    marks = Landmarks(graph)\n    l_cost, _l_path, l_expanded = astar(\n        graph, source, goal, marks.heuristic(goal))\n    if not (math.isinf(cost) and math.isinf(e_cost)):\n        assert abs(e_cost - cost) < 1e-9, \"euclidean A* disagreed with Dijkstra\"\n    if not (math.isinf(cost) and math.isinf(l_cost)):\n        assert abs(l_cost - cost) < 1e-9, \"landmark A* disagreed with Dijkstra\"\n    return {\n        \"cost\": cost,\n        \"dijkstra\": dij_expanded,\n        \"euclidean\": e_expanded,\n        \"landmark\": l_expanded,\n    }\n\n\ndef grid_graph(width, height, seed=7):\n    \"\"\"A width x height lattice with weights >= the straight-line distance.\"\"\"\n    rng = random.Random(seed)\n    g = Graph()\n    for r in range(height):\n        for c in range(width):\n            g.add_node((r, c), float(c), float(r))\n    for r in range(height):\n        for c in range(width):\n            if c + 1 < width:\n                g.add_edge((r, c), (r, c + 1), 1.0 + rng.random() * 0.6)\n            if r + 1 < height:\n                g.add_edge((r, c), (r + 1, c), 1.0 + rng.random() * 0.6)\n    return g\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from router import grid_graph, compare\n\nnet = grid_graph(20, 20)\nresult = compare(net, (0, 0), (19, 19))\n\nprint(\"cost      \", round(result[\"cost\"], 4))\nprint(\"dijkstra  \", result[\"dijkstra\"])\nprint(\"euclidean \", result[\"euclidean\"])\nprint(\"landmark  \", result[\"landmark\"])\n"
+   }
+  ],
+  "hints": [
+   "Keep one search loop shape for both algorithms: push `(priority, node)`, pop, skip when the recorded distance is stale, then count the expansion.",
+   "In A* the heap key is `g + h`, but the value you relax and store is `g`. Mixing the two is the classic bug and shows up as a wrong cost.",
+   "Farthest-point selection: start from `nodes()[0]`, run Dijkstra, take the finite-distance node that is farthest, and repeat using the minimum distance to the landmarks chosen so far.",
+   "`abs(dist[L][goal] - dist[L][u])` is a lower bound because `d(u, goal) >= abs(d(L, goal) - d(L, u))` — that is the reverse triangle inequality, and it needs the graph to be undirected.",
+   "If A* ever expands more vertices than Dijkstra, your heuristic is not consistent — check that `h(goal)` is exactly 0."
+  ],
+  "tests": [
+   {
+    "name": "Graph stores nodes, edges and distances",
+    "code": "from router import Graph\n\n_g = Graph()\n_g.add_node(\"a\", 0, 0)\n_g.add_node(\"b\", 3, 4)\n_g.add_node(\"c\", 3, 0)\nassert _g.nodes() == [\"a\", \"b\", \"c\"], f\"nodes() gave {_g.nodes()!r}, expected insertion order\"\nassert abs(_g.straight_line(\"a\", \"b\") - 5.0) < 1e-9, f\"got {_g.straight_line('a', 'b')!r}\"\n_g.add_edge(\"a\", \"b\")\nassert abs(_g.neighbours(\"a\")[0][1] - 5.0) < 1e-9, \"a weight of None means the straight line\"\nassert (\"a\", 5.0) in [(_n, round(_w, 9)) for _n, _w in _g.neighbours(\"b\")], \\\n    f\"edges are undirected, b sees {_g.neighbours('b')!r}\"\n_g.add_edge(\"a\", \"c\", 7.5)\nassert (\"c\", 7.5) in _g.neighbours(\"a\"), f\"got {_g.neighbours('a')!r}\""
+   },
+   {
+    "name": "add_edge refuses what would break admissibility",
+    "code": "from router import Graph\n\n_g = Graph()\n_g.add_node(\"a\", 0, 0)\n_g.add_node(\"b\", 3, 4)\nfor _bad in [(\"a\", \"b\", 4.9), (\"a\", \"zz\", 1.0), (\"a\", \"a\", 1.0)]:\n    try:\n        _g.add_edge(*_bad)\n        assert False, f\"add_edge{_bad!r} should raise ValueError\"\n    except ValueError:\n        pass\n_g.add_edge(\"a\", \"b\", 5.0)\nassert len(_g.neighbours(\"a\")) == 1, \"a weight equal to the straight line is legal\""
+   },
+   {
+    "name": "dijkstra and reconstruct on a hand-checkable network",
+    "code": "import math as _math\nfrom router import Graph, dijkstra, reconstruct\n\n_g = Graph()\nfor _n, _x, _y in [(\"a\", 0, 0), (\"b\", 1, 0), (\"c\", 2, 0), (\"d\", 3, 0), (\"z\", 9, 9)]:\n    _g.add_node(_n, _x, _y)\n_g.add_edge(\"a\", \"b\", 1.0)\n_g.add_edge(\"b\", \"c\", 1.0)\n_g.add_edge(\"c\", \"d\", 1.0)\n_g.add_edge(\"a\", \"d\", 10.0)\n_dist, _parent, _exp = dijkstra(_g, \"a\")\nassert abs(_dist[\"d\"] - 3.0) < 1e-9, f\"dist to d is {_dist['d']!r}, expected 3.0\"\nassert _dist[\"z\"] == _math.inf, f\"z is unreachable, got {_dist['z']!r}\"\nassert _exp == 4, f\"four reachable vertices should be settled, got {_exp!r}\"\nassert reconstruct(_parent, \"a\", \"d\") == [\"a\", \"b\", \"c\", \"d\"], \\\n    f\"got {reconstruct(_parent, 'a', 'd')!r}\"\nassert reconstruct(_parent, \"a\", \"a\") == [\"a\"], \"the source is its own path\"\nassert reconstruct(_parent, \"a\", \"z\") == [], \"no path means an empty list\""
+   },
+   {
+    "name": "A* returns Dijkstra's cost with every heuristic",
+    "code": "import random as _random\nfrom router import grid_graph, dijkstra, astar, zero_heuristic, euclidean_heuristic, Landmarks\n\n_net = grid_graph(12, 12)\n_marks = Landmarks(_net)\n_names = _net.nodes()\n_rng = _random.Random(7)\nfor _trial in range(25):\n    _s = _rng.choice(_names)\n    _t = _rng.choice(_names)\n    _want = dijkstra(_net, _s, _t)[0][_t]\n    for _label, _h in [(\"zero\", zero_heuristic(_net, _t)),\n                       (\"euclidean\", euclidean_heuristic(_net, _t)),\n                       (\"landmark\", _marks.heuristic(_t))]:\n        _cost, _path, _exp = astar(_net, _s, _t, _h)\n        assert abs(_cost - _want) < 1e-9, (\n            f\"{_label} A* from {_s!r} to {_t!r} gave {_cost!r}, Dijkstra says {_want!r}\")\n        assert _path[0] == _s and _path[-1] == _t, f\"{_label} path {_path!r} is wrong at the ends\""
+   },
+   {
+    "name": "the returned path is walkable and costs what is claimed",
+    "code": "import random as _random\nfrom router import grid_graph, astar, euclidean_heuristic\n\n_net = grid_graph(10, 10)\n_names = _net.nodes()\n_rng = _random.Random(11)\nfor _trial in range(15):\n    _s, _t = _rng.choice(_names), _rng.choice(_names)\n    _cost, _path, _exp = astar(_net, _s, _t, euclidean_heuristic(_net, _t))\n    _walk = 0.0\n    for _i in range(len(_path) - 1):\n        _step = [_w for _v, _w in _net.neighbours(_path[_i]) if _v == _path[_i + 1]]\n        assert _step, f\"{_path[_i]!r} -> {_path[_i + 1]!r} is not an edge\"\n        _walk += min(_step)\n    assert abs(_walk - _cost) < 1e-9, f\"path {_path!r} walks {_walk!r} but you reported {_cost!r}\""
+   },
+   {
+    "name": "both heuristics are admissible, checked exhaustively",
+    "code": "from router import grid_graph, dijkstra, euclidean_heuristic, Landmarks\n\n_net = grid_graph(7, 7)\n_marks = Landmarks(_net)\nfor _goal in [(0, 0), (3, 4), (6, 6)]:\n    _true = dijkstra(_net, _goal)[0]\n    _he = euclidean_heuristic(_net, _goal)\n    _hl = _marks.heuristic(_goal)\n    assert abs(_he(_goal)) < 1e-12, f\"h(goal) must be 0, euclidean gave {_he(_goal)!r}\"\n    assert abs(_hl(_goal)) < 1e-12, f\"h(goal) must be 0, landmark gave {_hl(_goal)!r}\"\n    for _n in _net.nodes():\n        assert _he(_n) <= _true[_n] + 1e-9, (\n            f\"euclidean h({_n!r}) = {_he(_n)!r} over-estimates the true {_true[_n]!r}\")\n        assert _hl(_n) <= _true[_n] + 1e-9, (\n            f\"landmark h({_n!r}) = {_hl(_n)!r} over-estimates the true {_true[_n]!r}\")"
+   },
+   {
+    "name": "landmark preprocessing is deterministic and reusable",
+    "code": "from router import grid_graph, Landmarks\n\n_net = grid_graph(8, 8)\n_a = Landmarks(_net, 4)\n_b = Landmarks(_net, 4)\nassert _a.chosen == _b.chosen, f\"landmark choice must be deterministic: {_a.chosen!r} vs {_b.chosen!r}\"\nassert len(_a.chosen) == 4, f\"asked for 4 landmarks, got {_a.chosen!r}\"\nassert len(set(_a.chosen)) == 4, f\"landmarks repeat: {_a.chosen!r}\"\nassert all(len(_t) == 64 for _t in _a.tables.values()), \"each table covers every node\"\n_small = Landmarks(grid_graph(2, 2), 10)\nassert len(_small.chosen) <= 4, f\"cannot choose more landmarks than nodes: {_small.chosen!r}\"\n_other = Landmarks(grid_graph(5, 5), 2)\nassert _a.chosen != _other.chosen or len(_other.chosen) == 2, \"two Landmarks must not share state\"\nassert len(_a.chosen) == 4, \"building a second Landmarks must not disturb the first\""
+   },
+   {
+    "name": "a heuristic pays for itself in expansions",
+    "code": "import random as _random\nfrom router import grid_graph, dijkstra, astar, euclidean_heuristic, Landmarks\n\n_net = grid_graph(16, 16)\n_marks = Landmarks(_net)\n_names = _net.nodes()\n_rng = _random.Random(7)\n_wins = 0\n_pairs = 0\nfor _trial in range(12):\n    _s, _t = _rng.choice(_names), _rng.choice(_names)\n    if _s == _t:\n        continue\n    _pairs += 1\n    _dij = dijkstra(_net, _s, _t)[2]\n    _euc = astar(_net, _s, _t, euclidean_heuristic(_net, _t))[2]\n    _lan = astar(_net, _s, _t, _marks.heuristic(_t))[2]\n    assert _euc <= _dij, f\"euclidean A* expanded {_euc} against Dijkstra's {_dij}\"\n    assert _lan <= _dij, f\"landmark A* expanded {_lan} against Dijkstra's {_dij}\"\n    if _lan < _dij:\n        _wins += 1\nassert _pairs > 0\nassert _wins >= _pairs - 1, (\n    f\"the landmark heuristic beat Dijkstra on only {_wins} of {_pairs} routes — \"\n    \"check that the bound is the max over landmarks, not the first one\")"
+   },
+   {
+    "name": "degenerate routes",
+    "code": "import math as _math\nfrom router import Graph, astar, euclidean_heuristic, zero_heuristic, grid_graph, compare\n\n_net = grid_graph(5, 5)\n_cost, _path, _exp = astar(_net, (2, 2), (2, 2), euclidean_heuristic(_net, (2, 2)))\nassert _cost == 0.0 and _path == [(2, 2)], f\"routing to yourself gave {(_cost, _path)!r}\"\n_split = Graph()\n_split.add_node(\"a\", 0, 0)\n_split.add_node(\"b\", 1, 0)\n_split.add_node(\"x\", 50, 50)\n_split.add_edge(\"a\", \"b\")\n_c, _p, _e = astar(_split, \"a\", \"x\", euclidean_heuristic(_split, \"x\"))\nassert _c == _math.inf and _p == [], f\"an unreachable goal gives (inf, []), got {(_c, _p)!r}\"\nfor _bad in [(\"a\", \"nope\"), (\"nope\", \"a\")]:\n    try:\n        astar(_split, _bad[0], _bad[1], zero_heuristic(_split, _bad[1]))\n        assert False, f\"astar with unknown node {_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+   },
+   {
+    "name": "compare reports one cost and three real counts",
+    "code": "import math as _math\nfrom router import grid_graph, dijkstra, compare\n\n_net = grid_graph(14, 14)\n_r = compare(_net, (0, 0), (13, 13))\nassert set(_r) == {\"cost\", \"dijkstra\", \"euclidean\", \"landmark\"}, f\"keys were {sorted(_r)}\"\n_want = dijkstra(_net, (0, 0), (13, 13))[0][(13, 13)]\nassert abs(_r[\"cost\"] - _want) < 1e-9, f\"cost {_r['cost']!r}, expected {_want!r}\"\nfor _k in (\"dijkstra\", \"euclidean\", \"landmark\"):\n    assert isinstance(_r[_k], int) and _r[_k] > 0, f\"{_k} count was {_r[_k]!r}\"\nassert _r[\"euclidean\"] <= _r[\"dijkstra\"], f\"got {_r!r}\"\nassert _r[\"landmark\"] < _r[\"dijkstra\"], (\n    f\"the whole point is fewer expansions: {_r!r}\")"
+   },
+   {
+    "name": "grid_graph weights never undercut the straight line",
+    "code": "from router import grid_graph\n\n_net = grid_graph(6, 6)\nassert len(_net.nodes()) == 36, f\"got {len(_net.nodes())} nodes\"\nfor _u in _net.nodes():\n    for _v, _w in _net.neighbours(_u):\n        assert _w >= _net.straight_line(_u, _v) - 1e-9, (\n            f\"edge {_u!r}-{_v!r} weighs {_w!r}, below the straight line \"\n            f\"{_net.straight_line(_u, _v)!r}\")\nassert len(_net.neighbours((0, 0))) == 2, f\"a corner has two roads, got {_net.neighbours((0, 0))!r}\"\nassert len(_net.neighbours((3, 3))) == 4, \"an interior node has four\""
+   },
+   {
+    "name": "router.py is import-clean",
+    "code": "_src = open(\"router.py\").read()\nassert \"print(\" not in _src, \"router.py defines the library; the printing belongs in main.py\"\nassert \"cost\" in _out and \"landmark\" in _out, (\n    f\"main.py should print the comparison; stdout was {_out!r}\")"
+   }
+  ]
+ }
+}

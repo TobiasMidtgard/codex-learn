@@ -1,0 +1,438 @@
+{
+ "id": "MA111",
+ "title": "Calculus I — Limits & Derivatives",
+ "year": 1,
+ "level": "Beginner",
+ "prereqs": [],
+ "stack": [
+  "Python"
+ ],
+ "credits": 10,
+ "hours": 110,
+ "icon": "∫",
+ "summary": "Limits, derivatives and their numerical shadows. Every definition in the course is turned into a procedure that a machine can run, so you see where the epsilon-delta bookkeeping actually bites and where floating point quietly ruins an otherwise correct formula.",
+ "outcomes": [
+  "Estimate a limit numerically and recognise when no limit exists",
+  "Produce a delta witness for a given epsilon and check it by sampling",
+  "Derive and implement forward and central difference quotients",
+  "Measure the observed convergence order of a numerical rule and match it to theory",
+  "Implement Newton-Raphson with derivative, divergence and iteration guards",
+  "Locate critical points by a sign change of the derivative and classify them",
+  "Report the global extrema of a function on a closed interval"
+ ],
+ "assessment": "4 lab checkpoints (10% each) + capstone build (60%).",
+ "reading": [
+  "Stewart, *Calculus: Early Transcendentals*, 8th ed. — chapters 1-4",
+  "Spivak, *Calculus*, 4th ed. — chapters 5-11",
+  "Burden & Faires, *Numerical Analysis*, 10th ed. — sections 2.3 and 4.1"
+ ],
+ "modules": [
+  {
+   "title": "Limits and continuity",
+   "summary": "What a limit asserts, and how to probe one with a finite machine.",
+   "concepts": [
+    "The limit of f at a describes the punctured neighbourhood, never f(a) itself",
+    "One-sided limits; a two-sided limit exists only when both agree",
+    "The epsilon-delta definition: for every eps > 0 there is a delta > 0",
+    "Failure modes: a jump, an unbounded blow-up, and endless oscillation",
+    "Continuity at a means the limit exists and equals f(a)",
+    "Numerical probing is evidence, not proof — catastrophic cancellation lies"
+   ],
+   "lab": {
+    "title": "Numerical limits and an epsilon-delta witness",
+    "runtime": "python",
+    "minutes": 40,
+    "brief": "Three functions that turn the definition of a limit into something executable.\n\n## `limit_table(f, a, hs)`\n\nFor each step `h` in `hs`, record the pair of values either side of `a`.\nReturn a list of triples `(h, f(a - h), f(a + h))`, in the order `hs` gives.\nRaise `ValueError` if any `h` is zero or negative — a step must shrink towards\n`a` from somewhere.\n\n```text\nlimit_table(lambda x: x * x, 3, [0.1]) -> [(0.1, 8.41, 9.61)]\n```\n\n## `estimate_limit(f, a, tol=1e-4, hs=HS)`\n\nTake the **smallest** step in `hs`, evaluate `left = f(a - h)` and\n`right = f(a + h)`, and then decide:\n\n- if calling `f` raises `ArithmeticError` or `ValueError`, return `None`\n- if either value is not finite, or exceeds `HUGE` in magnitude, return `None`\n- if `abs(left - right) > tol * max(1.0, abs(left), abs(right))`, return `None`\n- otherwise return `(left + right) / 2`\n\nThe third rule is *relative*: a steep but continuous function has a genuinely\nlarge gap between the two sides, and must not be mistaken for a jump.\n\n```text\nestimate_limit(lambda x: math.sin(x) / x, 0.0)  ->  0.9999999999998333\nestimate_limit(lambda x: abs(x) / x, 0.0)       ->  None\nestimate_limit(lambda x: 1 / (x * x), 0.0)      ->  None\n```\n\n## `delta_for(f, a, L, eps, deltas)`\n\nThe witness checker. Return the **largest** `delta` in `deltas` for which every\nsampled point of the punctured interval satisfies `abs(f(x) - L) < eps`, or\n`None` when no candidate works. `deltas` may arrive in any order.\n\nSample `x = a + delta * k / SAMPLES` and `x = a - delta * k / SAMPLES` for\n`k = 1 .. SAMPLES`; `k` never reaches 0, so `a` itself is never evaluated.\nRaise `ValueError` when `eps` is zero or negative.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nHS = (1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6)\nHUGE = 1e8\nSAMPLES = 50\n\n\ndef limit_table(f, a, hs):\n    \"\"\"[(h, f(a - h), f(a + h)) for h in hs]. ValueError if any h <= 0.\"\"\"\n    # your code here\n\n\ndef estimate_limit(f, a, tol=1e-4, hs=HS):\n    \"\"\"Two-sided estimate at the smallest step, or None when no limit is seen.\"\"\"\n    # your code here\n\n\ndef delta_for(f, a, L, eps, deltas):\n    \"\"\"Largest delta in deltas that witnesses the eps claim, else None.\"\"\"\n    # your code here\n\n\nprint(estimate_limit(lambda x: math.sin(x) / x, 0.0))\nprint(delta_for(lambda x: 3 * x + 1, 2.0, 7.0, 0.1, [1.0, 0.5, 0.05, 0.01]))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nHS = (1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6)\nHUGE = 1e8\nSAMPLES = 50\n\n\ndef limit_table(f, a, hs):\n    \"\"\"[(h, f(a - h), f(a + h)) for h in hs]. ValueError if any h <= 0.\"\"\"\n    rows = []\n    for h in hs:\n        if h <= 0:\n            raise ValueError(\"every step h must be strictly positive\")\n        rows.append((h, f(a - h), f(a + h)))\n    return rows\n\n\ndef estimate_limit(f, a, tol=1e-4, hs=HS):\n    \"\"\"Two-sided estimate at the smallest step, or None when no limit is seen.\"\"\"\n    h = min(hs)\n    try:\n        left = f(a - h)\n        right = f(a + h)\n    except (ArithmeticError, ValueError):\n        # f is not even defined on one side of a, so nothing two-sided exists.\n        return None\n    if not (math.isfinite(left) and math.isfinite(right)):\n        return None\n    if abs(left) > HUGE or abs(right) > HUGE:\n        return None\n    # Relative gap: a steep continuous function must not read as a jump.\n    scale = max(1.0, abs(left), abs(right))\n    if abs(left - right) > tol * scale:\n        return None\n    return (left + right) / 2\n\n\ndef delta_for(f, a, L, eps, deltas):\n    \"\"\"Largest delta in deltas that witnesses the eps claim, else None.\"\"\"\n    if eps <= 0:\n        raise ValueError(\"eps must be strictly positive\")\n    for delta in sorted(deltas, reverse=True):\n        ok = True\n        for k in range(1, SAMPLES + 1):\n            offset = delta * k / SAMPLES\n            for x in (a - offset, a + offset):\n                if abs(f(x) - L) >= eps:\n                    ok = False\n                    break\n            if not ok:\n                break\n        if ok:\n            return delta\n    return None\n\n\nprint(estimate_limit(lambda x: math.sin(x) / x, 0.0))\nprint(delta_for(lambda x: 3 * x + 1, 2.0, 7.0, 0.1, [1.0, 0.5, 0.05, 0.01]))\n"
+     }
+    ],
+    "hints": [
+     "Validate before you compute: loop over `hs` once, raise on the first bad step.",
+     "`min(hs)` picks the smallest step; the table order does not matter for the estimate.",
+     "`math.isfinite(v)` is False for both `inf` and `nan`, which is exactly the blow-up test.",
+     "`sorted(deltas, reverse=True)` gives you the candidates largest-first, so the first success is the answer."
+    ],
+    "tests": [
+     {
+      "name": "limit_table records both sides",
+      "code": "_rows = limit_table(lambda x: x * x, 3, [0.1, 0.01])\nassert len(_rows) == 2, f\"limit_table gave {len(_rows)} rows, expected 2\"\nassert abs(_rows[0][0] - 0.1) < 1e-12, f\"first row step is {_rows[0][0]!r}, expected 0.1\"\nassert abs(_rows[0][1] - 8.41) < 1e-9, f\"f(a-h) is {_rows[0][1]!r}, expected 8.41\"\nassert abs(_rows[0][2] - 9.61) < 1e-9, f\"f(a+h) is {_rows[0][2]!r}, expected 9.61\"\nassert abs(_rows[1][1] - 8.9401) < 1e-9, f\"second row f(a-h) is {_rows[1][1]!r}\""
+     },
+     {
+      "name": "limit_table refuses a non-positive step",
+      "code": "for _bad in ([0.1, 0.0], [-0.5], [0.0]):\n    try:\n        limit_table(lambda x: x, 1.0, _bad)\n        assert False, f\"limit_table with hs={_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "estimate_limit finds removable and ordinary limits",
+      "code": "import math as _math\n_got = estimate_limit(lambda x: _math.sin(x) / x, 0.0)\nassert _got is not None and abs(_got - 1.0) < 1e-9, f\"sin(x)/x at 0 gave {_got!r}, expected ~1\"\n_got = estimate_limit(lambda x: (x * x - 1) / (x - 1), 1.0)\nassert _got is not None and abs(_got - 2.0) < 1e-5, f\"(x^2-1)/(x-1) at 1 gave {_got!r}, expected ~2\"\n_got = estimate_limit(lambda x: x * x + 3 * x, 2.0)\nassert _got is not None and abs(_got - 10.0) < 1e-6, f\"x^2+3x at 2 gave {_got!r}, expected ~10\""
+     },
+     {
+      "name": "A steep continuous function still has a limit",
+      "code": "_got = estimate_limit(lambda x: 1000.0 * x, 1.0)\nassert _got is not None, \"1000x is continuous — the gap test must be relative, not absolute\"\nassert abs(_got - 1000.0) < 1e-6, f\"1000x at 1 gave {_got!r}, expected ~1000\""
+     },
+     {
+      "name": "estimate_limit rejects jumps, blow-ups and undefined sides",
+      "code": "import math as _math\nassert estimate_limit(lambda x: abs(x) / x, 0.0) is None, \"|x|/x jumps at 0 — expected None\"\nassert estimate_limit(lambda x: 1.0 / x, 0.0) is None, \"1/x is unbounded at 0 — expected None\"\nassert estimate_limit(lambda x: 1.0 / (x * x), 0.0) is None, \"1/x^2 blows up at 0 — expected None\"\nassert estimate_limit(_math.log, 0.0) is None, \"log is undefined left of 0 — expected None\""
+     },
+     {
+      "name": "delta_for returns the largest witness",
+      "code": "_f = lambda x: 3 * x + 1\nassert delta_for(_f, 2.0, 7.0, 0.1, [0.01, 1.0, 0.05, 0.5]) == 0.01, \\\n    f\"Got {delta_for(_f, 2.0, 7.0, 0.1, [0.01, 1.0, 0.05, 0.5])!r}, expected 0.01\"\nassert delta_for(_f, 2.0, 7.0, 10.0, [0.01, 1.0, 0.05, 0.5]) == 1.0, \\\n    \"With eps=10 even delta=1 works, and it is the largest candidate\"\n_g = lambda x: (x * x - 1) / (x - 1)\nassert delta_for(_g, 1.0, 2.0, 0.01, [0.1, 0.02, 0.005]) == 0.005, \\\n    \"The punctured neighbourhood must never evaluate f at a itself\""
+     },
+     {
+      "name": "delta_for gives up, and refuses a non-positive eps",
+      "code": "_f = lambda x: 3 * x + 1\nassert delta_for(_f, 2.0, 7.0, 1e-9, [0.01, 1.0, 0.05]) is None, \\\n    \"No candidate delta is small enough, so the answer is None\"\nassert delta_for(_f, 2.0, 7.0, 1.0, []) is None, \"No candidates at all means None\"\nfor _bad in (0.0, -1.0):\n    try:\n        delta_for(_f, 2.0, 7.0, _bad, [1.0])\n        assert False, f\"eps={_bad!r} should raise ValueError\"\n    except ValueError:\n        pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "The derivative as a limit",
+   "summary": "Difference quotients, their truncation error, and the order that error obeys.",
+   "concepts": [
+    "The derivative is the limit of a difference quotient, not a formula to memorise",
+    "Forward difference: f'(x) = (f(x+h) - f(x))/h + O(h)",
+    "Central difference: f'(x) = (f(x+h) - f(x-h))/(2h) + O(h^2)",
+    "Taylor expansion is where both error terms come from",
+    "Observed order p from a pair of steps: p = log(e1/e2) / log(h1/h2)",
+    "Richardson extrapolation cancels the leading error term and buys two orders",
+    "Roundoff sets a floor: shrinking h forever makes the answer worse"
+   ],
+   "lab": {
+    "title": "Finite differences and their error order",
+    "runtime": "python",
+    "minutes": 45,
+    "brief": "Four functions. The last two measure how fast the first two converge.\n\n## `forward_diff(f, x, h)` and `central_diff(f, x, h)`\n\nThe two standard quotients. Both raise `ValueError` when `h <= 0`.\n\n```text\nf(x) = x*x + 3x,  x = 2,  h = 0.5\nforward_diff -> 7.5     central_diff -> 7.0     exact f'(2) = 7\n```\n\nCentral difference is exact for any quadratic; forward difference is off by\nroughly `f''(x) * h / 2`. That is the whole point of the module.\n\n## `richardson(f, x, h)`\n\nCombine two central differences to cancel the `h^2` term:\n\n```text\nrichardson(f, x, h) = (4 * central_diff(f, x, h/2) - central_diff(f, x, h)) / 3\n```\n\nThe remaining error is `O(h^4)`.\n\n## `errors_for(rule, f, x, exact, hs)` and `error_order(errors, hs)`\n\n`errors_for` returns `[abs(rule(f, x, h) - exact) for h in hs]`.\n\n`error_order` turns that list into a single observed order: the **mean** of\n\n```text\nlog(e_i / e_{i+1}) / log(h_i / h_{i+1})\n```\n\nover every consecutive pair. Raise `ValueError` if the two lists differ in\nlength, hold fewer than two points, contain an error that is not strictly\npositive, or contain two equal steps.\n\nWith `hs = (0.4, 0.2, 0.1, 0.05)` and `f = sin` at `x = 1` you should observe\nabout `1.03` for forward, `2.00` for central and `4.00` for Richardson.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef forward_diff(f, x, h):\n    \"\"\"(f(x+h) - f(x)) / h. ValueError when h <= 0.\"\"\"\n    # your code here\n\n\ndef central_diff(f, x, h):\n    \"\"\"(f(x+h) - f(x-h)) / (2h). ValueError when h <= 0.\"\"\"\n    # your code here\n\n\ndef richardson(f, x, h):\n    \"\"\"(4 * central_diff(f, x, h/2) - central_diff(f, x, h)) / 3.\"\"\"\n    # your code here\n\n\ndef errors_for(rule, f, x, exact, hs):\n    \"\"\"Absolute error of rule at each step in hs.\"\"\"\n    # your code here\n\n\ndef error_order(errors, hs):\n    \"\"\"Mean observed convergence order over consecutive (h, error) pairs.\"\"\"\n    # your code here\n\n\nHS = (0.4, 0.2, 0.1, 0.05)\nfor name, rule in [(\"forward\", forward_diff), (\"central\", central_diff),\n                   (\"richardson\", richardson)]:\n    errs = errors_for(rule, math.sin, 1.0, math.cos(1.0), HS)\n    print(name, round(error_order(errs, HS), 3))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\n\ndef forward_diff(f, x, h):\n    \"\"\"(f(x+h) - f(x)) / h. ValueError when h <= 0.\"\"\"\n    if h <= 0:\n        raise ValueError(\"h must be strictly positive\")\n    return (f(x + h) - f(x)) / h\n\n\ndef central_diff(f, x, h):\n    \"\"\"(f(x+h) - f(x-h)) / (2h). ValueError when h <= 0.\"\"\"\n    if h <= 0:\n        raise ValueError(\"h must be strictly positive\")\n    return (f(x + h) - f(x - h)) / (2 * h)\n\n\ndef richardson(f, x, h):\n    \"\"\"(4 * central_diff(f, x, h/2) - central_diff(f, x, h)) / 3.\"\"\"\n    # The h^2 terms of the two central differences cancel exactly, leaving O(h^4).\n    return (4 * central_diff(f, x, h / 2) - central_diff(f, x, h)) / 3\n\n\ndef errors_for(rule, f, x, exact, hs):\n    \"\"\"Absolute error of rule at each step in hs.\"\"\"\n    return [abs(rule(f, x, h) - exact) for h in hs]\n\n\ndef error_order(errors, hs):\n    \"\"\"Mean observed convergence order over consecutive (h, error) pairs.\"\"\"\n    errors = list(errors)\n    hs = list(hs)\n    if len(errors) != len(hs):\n        raise ValueError(\"errors and hs must have the same length\")\n    if len(hs) < 2:\n        raise ValueError(\"need at least two points to observe an order\")\n    if any(e <= 0 for e in errors):\n        raise ValueError(\"an error of zero has no order — the rule is exact here\")\n    if any(h <= 0 for h in hs):\n        raise ValueError(\"every step h must be strictly positive\")\n    orders = []\n    for i in range(len(hs) - 1):\n        if hs[i] == hs[i + 1]:\n            raise ValueError(\"two equal steps give no information\")\n        orders.append(math.log(errors[i] / errors[i + 1])\n                      / math.log(hs[i] / hs[i + 1]))\n    return sum(orders) / len(orders)\n\n\nHS = (0.4, 0.2, 0.1, 0.05)\nfor name, rule in [(\"forward\", forward_diff), (\"central\", central_diff),\n                   (\"richardson\", richardson)]:\n    errs = errors_for(rule, math.sin, 1.0, math.cos(1.0), HS)\n    print(name, round(error_order(errs, HS), 3))\n"
+     }
+    ],
+    "hints": [
+     "Guard `h` first in both quotients, then return the one-line expression.",
+     "`richardson` must call `central_diff`, not re-derive it: `(4 * central_diff(f, x, h/2) - central_diff(f, x, h)) / 3`.",
+     "`errors_for` is a single list comprehension over `hs`.",
+     "Do every validation in `error_order` before the loop, so a bad input never reaches `math.log`."
+    ],
+    "tests": [
+     {
+      "name": "Both quotients on a quadratic",
+      "code": "_f = lambda x: x * x + 3 * x\nassert abs(forward_diff(_f, 2.0, 0.5) - 7.5) < 1e-12, \\\n    f\"forward_diff gave {forward_diff(_f, 2.0, 0.5)!r}, expected 7.5\"\nassert abs(central_diff(_f, 2.0, 0.5) - 7.0) < 1e-12, \\\n    f\"central_diff gave {central_diff(_f, 2.0, 0.5)!r}, expected 7.0 exactly\"\nassert abs(central_diff(_f, 2.0, 1e-3) - 7.0) < 1e-9, \\\n    \"central difference is exact for quadratics at every step size\""
+     },
+     {
+      "name": "Both quotients refuse a non-positive step",
+      "code": "for _rule in (forward_diff, central_diff):\n    for _bad in (0.0, -0.1):\n        try:\n            _rule(lambda x: x, 1.0, _bad)\n            assert False, f\"{_rule.__name__} with h={_bad!r} should raise ValueError\"\n        except ValueError:\n            pass"
+     },
+     {
+      "name": "richardson is far sharper than central",
+      "code": "import math as _math\n_exact = _math.cos(1.0)\n_c = abs(central_diff(_math.sin, 1.0, 0.1) - _exact)\n_r = abs(richardson(_math.sin, 1.0, 0.1) - _exact)\nassert _r < _c / 1000, f\"richardson error {_r!r} should be far below central error {_c!r}\"\nassert _r < 1e-6, f\"richardson error at h=0.1 is {_r!r}, expected below 1e-6\""
+     },
+     {
+      "name": "errors_for lines the errors up with the steps",
+      "code": "import math as _math\n_hs = (0.4, 0.2, 0.1, 0.05)\n_e = errors_for(central_diff, _math.sin, 1.0, _math.cos(1.0), _hs)\nassert len(_e) == 4, f\"errors_for gave {len(_e)} entries, expected 4\"\nassert all(_e[i] > _e[i + 1] for i in range(3)), f\"Errors should shrink with h: {_e!r}\"\nassert abs(_e[0] - 0.0142932) < 1e-4, f\"error at h=0.4 is {_e[0]!r}, expected about 0.014293\""
+     },
+     {
+      "name": "Observed orders match the theory",
+      "code": "import math as _math\n_hs = (0.4, 0.2, 0.1, 0.05)\n_p = error_order(errors_for(forward_diff, _math.sin, 1.0, _math.cos(1.0), _hs), _hs)\nassert abs(_p - 1.0) < 0.1, f\"forward difference observed order {_p!r}, expected about 1\"\n_p = error_order(errors_for(central_diff, _math.sin, 1.0, _math.cos(1.0), _hs), _hs)\nassert abs(_p - 2.0) < 0.05, f\"central difference observed order {_p!r}, expected about 2\"\n_p = error_order(errors_for(richardson, _math.sin, 1.0, _math.cos(1.0), _hs), _hs)\nassert abs(_p - 4.0) < 0.1, f\"richardson observed order {_p!r}, expected about 4\""
+     },
+     {
+      "name": "error_order on a clean synthetic sequence",
+      "code": "_hs = [0.1, 0.05, 0.025]\n_errs = [3.0 * h ** 2 for h in _hs]\nassert abs(error_order(_errs, _hs) - 2.0) < 1e-9, \\\n    f\"A pure h^2 sequence must read exactly 2, got {error_order(_errs, _hs)!r}\""
+     },
+     {
+      "name": "error_order rejects unusable input",
+      "code": "for _errs, _hs in [([1.0], [0.1]),\n                   ([1.0, 0.5], [0.1]),\n                   ([1.0, 0.0], [0.1, 0.05]),\n                   ([1.0, -0.5], [0.1, 0.05]),\n                   ([1.0, 0.5], [0.1, 0.1]),\n                   ([1.0, 0.5], [0.1, 0.0])]:\n    try:\n        error_order(_errs, _hs)\n        assert False, f\"error_order({_errs!r}, {_hs!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Newton-Raphson and the failure modes of iteration",
+   "summary": "Tangent-line root finding, and the three ways it goes wrong.",
+   "concepts": [
+    "Newton's step is the root of the tangent line: x - f(x)/f'(x)",
+    "Quadratic convergence near a simple root, and what breaks it",
+    "A vanishing derivative leaves the tangent horizontal — no next point exists",
+    "Divergence: iterates can run away, as they do for arctan from a large start",
+    "Attracting cycles: x^3 - 2x + 2 from 0 alternates between 0 and 1 forever",
+    "A relative step h * max(1, |x|) keeps the numerical derivative usable at large x",
+    "Every iteration needs a cap; a browser tab has no Ctrl-C"
+   ],
+   "lab": {
+    "title": "Newton's method with guards",
+    "runtime": "python",
+    "minutes": 45,
+    "brief": "The two exception classes at the top of `main.py` are given. Use them.\n\n## `numeric_derivative(f, x, h=1e-6)`\n\nA central difference with a **relative** step: `step = h * max(1.0, abs(x))`.\nAt `x = 120000` an absolute step of `1e-6` is smaller than one unit in the last\nplace of `x`, so `f(x+h)` and `f(x-h)` become the same number and the quotient\ncollapses to zero. Scaling the step with `x` avoids that.\n\n## `newton(f, x0, tol=1e-12, max_iter=50, h=1e-6)`\n\nReturn `(root, iterations)`, where `iterations` counts the Newton steps taken.\n\nThe loop, in order:\n\n1. `fx = f(x)`. If `abs(fx) <= tol`, return `(x, iterations)`.\n2. If the cap is reached, raise `Diverged`.\n3. `d = numeric_derivative(f, x, h)`. If `abs(d) < DERIV_FLOOR`, raise\n   `ZeroDerivative`.\n4. `x = x - fx / d`.\n5. If `x` is not finite, or `abs(x) > DIVERGE_LIMIT`, raise `Diverged`.\n\nRaise `ValueError` for `tol <= 0` or `max_iter < 1` — those are caller mistakes,\nnot iteration failures.\n\n```text\nnewton(lambda x: x*x - 2, 1.0)          -> (1.4142135623730951, 5)\nnewton(lambda x: x*x + 1, 0.0)          -> ZeroDerivative   f'(0) = 0\nnewton(lambda x: x**3 - 2*x + 2, 0.0)   -> Diverged         a 2-cycle: 0, 1, 0, 1, ...\nnewton(math.atan, 2.0)                  -> Diverged         the iterates run away\n```",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nDERIV_FLOOR = 1e-14\nDIVERGE_LIMIT = 1e9\n\n\nclass ZeroDerivative(RuntimeError):\n    \"\"\"The tangent is horizontal, so Newton has no next point.\"\"\"\n\n\nclass Diverged(RuntimeError):\n    \"\"\"The iterates ran away, or the iteration cap was reached.\"\"\"\n\n\ndef numeric_derivative(f, x, h=1e-6):\n    \"\"\"Central difference with a step scaled by max(1, |x|).\"\"\"\n    # your code here\n\n\ndef newton(f, x0, tol=1e-12, max_iter=50, h=1e-6):\n    \"\"\"(root, iterations). ZeroDerivative / Diverged on failure.\"\"\"\n    # your code here\n\n\nprint(newton(lambda x: x * x - 2, 1.0))\nprint(newton(lambda x: math.cos(x) - x, 1.0))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nDERIV_FLOOR = 1e-14\nDIVERGE_LIMIT = 1e9\n\n\nclass ZeroDerivative(RuntimeError):\n    \"\"\"The tangent is horizontal, so Newton has no next point.\"\"\"\n\n\nclass Diverged(RuntimeError):\n    \"\"\"The iterates ran away, or the iteration cap was reached.\"\"\"\n\n\ndef numeric_derivative(f, x, h=1e-6):\n    \"\"\"Central difference with a step scaled by max(1, |x|).\"\"\"\n    step = h * max(1.0, abs(x))\n    return (f(x + step) - f(x - step)) / (2 * step)\n\n\ndef newton(f, x0, tol=1e-12, max_iter=50, h=1e-6):\n    \"\"\"(root, iterations). ZeroDerivative / Diverged on failure.\"\"\"\n    if tol <= 0:\n        raise ValueError(\"tol must be strictly positive\")\n    if max_iter < 1:\n        raise ValueError(\"max_iter must be at least 1\")\n\n    x = float(x0)\n    for taken in range(max_iter + 1):\n        fx = f(x)\n        if abs(fx) <= tol:\n            return (x, taken)\n        if taken == max_iter:\n            raise Diverged(f\"no convergence in {max_iter} iterations\")\n        d = numeric_derivative(f, x, h)\n        if abs(d) < DERIV_FLOOR:\n            raise ZeroDerivative(f\"derivative vanished at x={x!r}\")\n        x = x - fx / d\n        # Check the magnitude before the next derivative: a runaway iterate\n        # makes the difference quotient meaningless as well as useless.\n        if not math.isfinite(x) or abs(x) > DIVERGE_LIMIT:\n            raise Diverged(f\"iterates left the useful range at x={x!r}\")\n    raise Diverged(\"unreachable\")\n\n\nprint(newton(lambda x: x * x - 2, 1.0))\nprint(newton(lambda x: math.cos(x) - x, 1.0))\n"
+     }
+    ],
+    "hints": [
+     "`step = h * max(1.0, abs(x))` — then divide by `2 * step`, not by `2 * h`.",
+     "Validate `tol` and `max_iter` before the loop starts; those are argument errors, not iteration failures.",
+     "Use `for taken in range(max_iter + 1)` so the convergence test gets one look at the final iterate before the cap fires.",
+     "Raise `Diverged` immediately after updating `x`, before the next derivative is taken."
+    ],
+    "tests": [
+     {
+      "name": "numeric_derivative is accurate",
+      "code": "import math as _math\nassert abs(numeric_derivative(_math.sin, 1.0) - _math.cos(1.0)) < 1e-8, \\\n    f\"d/dx sin at 1 gave {numeric_derivative(_math.sin, 1.0)!r}, expected {_math.cos(1.0)!r}\"\nassert abs(numeric_derivative(_math.exp, 2.0) - _math.exp(2.0)) < 1e-6, \\\n    f\"d/dx exp at 2 gave {numeric_derivative(_math.exp, 2.0)!r}\"\nassert abs(numeric_derivative(lambda x: x * x, 3.0) - 6.0) < 1e-8, \"d/dx x^2 at 3 is 6\""
+     },
+     {
+      "name": "The relative step survives a large x",
+      "code": "import math as _math\n_d = numeric_derivative(_math.atan, 121977.0)\nassert _d != 0.0, \"An absolute step of 1e-6 vanishes at x=121977 — scale it by |x|\"\nassert abs(_d - 1.0 / (1.0 + 121977.0 ** 2)) < 1e-14, f\"Got {_d!r}\""
+     },
+     {
+      "name": "newton finds simple roots quickly",
+      "code": "import math as _math\n_r, _n = newton(lambda x: x * x - 2, 1.0)\nassert abs(_r - _math.sqrt(2)) < 1e-10, f\"sqrt(2) came out as {_r!r}\"\nassert _n <= 10, f\"Newton took {_n} iterations for sqrt(2), expected under 10\"\n_r, _n = newton(lambda x: _math.cos(x) - x, 1.0)\nassert abs(_r - 0.7390851332151607) < 1e-9, f\"cos(x)=x root came out as {_r!r}\"\n_r, _n = newton(lambda x: x ** 3 - 2 * x - 5, 2.0)\nassert abs(_r - 2.0945514815423265) < 1e-9, f\"cubic root came out as {_r!r}\""
+     },
+     {
+      "name": "The starting point decides which root you get",
+      "code": "import math as _math\n_r, _n = newton(lambda x: x * x - 2, -1.0)\nassert abs(_r + _math.sqrt(2)) < 1e-10, f\"From x0=-1 the root should be -sqrt(2), got {_r!r}\""
+     },
+     {
+      "name": "Starting on the root costs no iterations",
+      "code": "import math as _math\n_r, _n = newton(lambda x: x * x - 2, _math.sqrt(2))\nassert _n == 0, f\"Already at the root, so 0 steps — got {_n}\"\nassert abs(_r - _math.sqrt(2)) < 1e-15, f\"Got {_r!r}\""
+     },
+     {
+      "name": "A horizontal tangent raises ZeroDerivative",
+      "code": "try:\n    newton(lambda x: x * x + 1, 0.0)\n    assert False, \"f'(0) = 0 for x^2 + 1, so this must raise ZeroDerivative\"\nexcept ZeroDerivative:\n    pass"
+     },
+     {
+      "name": "Cycles and runaways raise Diverged",
+      "code": "import math as _math\ntry:\n    newton(lambda x: x ** 3 - 2 * x + 2, 0.0)\n    assert False, \"x^3 - 2x + 2 from 0 cycles forever, so this must raise Diverged\"\nexcept Diverged:\n    pass\ntry:\n    newton(_math.atan, 2.0)\n    assert False, \"arctan from x0=2 runs away, so this must raise Diverged\"\nexcept Diverged:\n    pass\ntry:\n    newton(lambda x: x ** 3 - 2 * x - 5, 2.0, max_iter=1)\n    assert False, \"One iteration is not enough here, so this must raise Diverged\"\nexcept Diverged:\n    pass"
+     },
+     {
+      "name": "Bad arguments raise ValueError, not Diverged",
+      "code": "for _kw in ({\"tol\": 0.0}, {\"tol\": -1e-9}, {\"max_iter\": 0}, {\"max_iter\": -3}):\n    try:\n        newton(lambda x: x * x - 2, 1.0, **_kw)\n        assert False, f\"newton(..., {_kw!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     }
+    ]
+   }
+  },
+  {
+   "title": "Critical points and optimisation",
+   "summary": "Finding where the derivative changes sign, and deciding what happens there.",
+   "concepts": [
+    "Fermat's theorem: an interior extremum forces f'(x) = 0",
+    "A sign change of f' brackets a critical point; bisection then locates it",
+    "The second derivative test, and the cases where it is silent",
+    "The first derivative test as the fallback when f''(x) is zero",
+    "The extreme value theorem: on a closed interval the candidates are the critical points plus the two endpoints",
+    "Grid-based search misses anything narrower than the grid — state the limitation",
+    "A sample that lands exactly on a root produces no sign change and must be handled separately"
+   ],
+   "lab": {
+    "title": "Locating and classifying critical points",
+    "runtime": "python",
+    "minutes": 50,
+    "brief": "`derivative` and `second_derivative` are given at the top of `main.py`. You\nwrite the four functions below.\n\n## `bracket_sign_changes(g, a, b, n)`\n\nEvaluate `g` at the `n + 1` points `x_k = a + k * (b - a) / n`. Walk the\nsamples in order and emit:\n\n- `(x_k, x_k)` — a *degenerate* bracket — whenever `g(x_k)` is exactly `0.0`\n- `(x_k, x_{k+1})` when `g(x_k) * g(x_{k+1}) < 0`\n\nCheck every index once, including the last point. Raise `ValueError` when\n`n < 1` or `a >= b`.\n\nThe degenerate case is not pedantry: for `f(x) = x^4 - 2x^2` on `[-2, 2]` with\n`n = 400` the grid lands exactly on `-1`, `0` and `1`, where `f'` is zero and\nnever changes sign across a pair.\n\n## `bisect(g, lo, hi, tol=1e-12, max_iter=200)`\n\nBisection. Return `lo` immediately when `lo == hi`. Raise `ValueError` when\n`g(lo) * g(hi) > 0`. Otherwise halve until the bracket is no wider than `tol`\nor the cap is reached, then return the midpoint.\n\n## `critical_points(f, a, b, n=400)`\n\nBracket the sign changes of `derivative(f, ·)`, bisect each one, round the\nroots to 9 decimal places, drop duplicates, and return a list of `(x, kind)`\nsorted by `x`. Classify with the second derivative test, threshold `1e-5`:\n\n```text\nf''(x) >  1e-5   -> \"minimum\"\nf''(x) < -1e-5   -> \"maximum\"\notherwise        -> first derivative test one grid step either side:\n                    negative then positive -> \"minimum\"\n                    positive then negative -> \"maximum\"\n                    anything else          -> \"inflection\"\n```\n\n## `optimise(f, a, b, n=400)`\n\nThe extreme value theorem, mechanised. Consider the endpoints and every\ncritical point, and return `{\"min\": (x, f(x)), \"max\": (x, f(x))}`. Ties in the\nvalue are broken by the smaller `x`.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nCLASSIFY_TOL = 1e-5\n\n\ndef derivative(f, x, h=1e-6):\n    \"\"\"Given. Central difference with a step scaled by max(1, |x|).\"\"\"\n    step = h * max(1.0, abs(x))\n    return (f(x + step) - f(x - step)) / (2 * step)\n\n\ndef second_derivative(f, x, h=1e-4):\n    \"\"\"Given. Second-order central difference.\"\"\"\n    step = h * max(1.0, abs(x))\n    return (f(x + step) - 2 * f(x) + f(x - step)) / (step * step)\n\n\ndef bracket_sign_changes(g, a, b, n):\n    \"\"\"Brackets where g changes sign, plus degenerate (x, x) for exact zeros.\"\"\"\n    # your code here\n\n\ndef bisect(g, lo, hi, tol=1e-12, max_iter=200):\n    \"\"\"Bisect a bracket down to width tol. ValueError if the signs agree.\"\"\"\n    # your code here\n\n\ndef critical_points(f, a, b, n=400):\n    \"\"\"Sorted [(x, kind)] with kind in minimum / maximum / inflection.\"\"\"\n    # your code here\n\n\ndef optimise(f, a, b, n=400):\n    \"\"\"{\"min\": (x, f(x)), \"max\": (x, f(x))} over endpoints and critical points.\"\"\"\n    # your code here\n\n\nprint(critical_points(lambda x: x ** 3 - 3 * x, -3.0, 3.0))\nprint(optimise(lambda x: x * (30 - 2 * x) * (16 - 2 * x), 0.0, 8.0))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "import math\n\nCLASSIFY_TOL = 1e-5\n\n\ndef derivative(f, x, h=1e-6):\n    \"\"\"Given. Central difference with a step scaled by max(1, |x|).\"\"\"\n    step = h * max(1.0, abs(x))\n    return (f(x + step) - f(x - step)) / (2 * step)\n\n\ndef second_derivative(f, x, h=1e-4):\n    \"\"\"Given. Second-order central difference.\"\"\"\n    step = h * max(1.0, abs(x))\n    return (f(x + step) - 2 * f(x) + f(x - step)) / (step * step)\n\n\ndef bracket_sign_changes(g, a, b, n):\n    \"\"\"Brackets where g changes sign, plus degenerate (x, x) for exact zeros.\"\"\"\n    if n < 1:\n        raise ValueError(\"n must be at least 1\")\n    if a >= b:\n        raise ValueError(\"need a < b\")\n    step = (b - a) / n\n    xs = [a + step * k for k in range(n + 1)]\n    vals = [g(x) for x in xs]\n    out = []\n    for i in range(n):\n        if vals[i] == 0.0:\n            out.append((xs[i], xs[i]))\n        elif vals[i] * vals[i + 1] < 0.0:\n            out.append((xs[i], xs[i + 1]))\n    if vals[n] == 0.0:\n        out.append((xs[n], xs[n]))\n    return out\n\n\ndef bisect(g, lo, hi, tol=1e-12, max_iter=200):\n    \"\"\"Bisect a bracket down to width tol. ValueError if the signs agree.\"\"\"\n    if lo == hi:\n        return lo\n    g_lo, g_hi = g(lo), g(hi)\n    if g_lo * g_hi > 0.0:\n        raise ValueError(\"g does not change sign across the bracket\")\n    for _ in range(max_iter):\n        if hi - lo <= tol:\n            break\n        mid = 0.5 * (lo + hi)\n        g_mid = g(mid)\n        if g_mid == 0.0:\n            return mid\n        if g_lo * g_mid < 0.0:\n            hi, g_hi = mid, g_mid\n        else:\n            lo, g_lo = mid, g_mid\n    return 0.5 * (lo + hi)\n\n\ndef critical_points(f, a, b, n=400):\n    \"\"\"Sorted [(x, kind)] with kind in minimum / maximum / inflection.\"\"\"\n    slope = lambda x: derivative(f, x)\n    step = (b - a) / n\n    roots = []\n    for lo, hi in bracket_sign_changes(slope, a, b, n):\n        roots.append(round(bisect(slope, lo, hi), 9) + 0.0)\n    out = []\n    for x in sorted(set(roots)):\n        out.append((x, _classify(f, x, step)))\n    return out\n\n\ndef _classify(f, x, step):\n    \"\"\"Second derivative test, falling back to the first derivative test.\"\"\"\n    d2 = second_derivative(f, x)\n    if d2 > CLASSIFY_TOL:\n        return \"minimum\"\n    if d2 < -CLASSIFY_TOL:\n        return \"maximum\"\n    left = derivative(f, x - step)\n    right = derivative(f, x + step)\n    if left < 0.0 < right:\n        return \"minimum\"\n    if left > 0.0 > right:\n        return \"maximum\"\n    return \"inflection\"\n\n\ndef optimise(f, a, b, n=400):\n    \"\"\"Endpoints plus critical points; ties in the value keep the smaller x.\"\"\"\n    xs = sorted(set([a, b] + [x for x, _ in critical_points(f, a, b, n)]))\n    pairs = [(x, f(x)) for x in xs]\n    lowest = min(pairs, key=lambda pair: (pair[1], pair[0]))\n    highest = max(pairs, key=lambda pair: (pair[1], -pair[0]))\n    return {\"min\": lowest, \"max\": highest}\n\n\nprint(critical_points(lambda x: x ** 3 - 3 * x, -3.0, 3.0))\nprint(optimise(lambda x: x * (30 - 2 * x) * (16 - 2 * x), 0.0, 8.0))\n"
+     }
+    ],
+    "hints": [
+     "Evaluate `g` once per grid point into a list; calling it again inside the loop doubles the work and invites inconsistency.",
+     "In `bisect`, keep the sign of `g(lo)` in a variable and update it with the bracket — one evaluation per halving.",
+     "`round(x, 9) + 0.0` both deduplicates near-identical roots and turns `-0.0` into `0.0`.",
+     "`min(pairs, key=lambda p: (p[1], p[0]))` and `max(pairs, key=lambda p: (p[1], -p[0]))` give the tie rule in one line each."
+    ],
+    "tests": [
+     {
+      "name": "bracket_sign_changes finds ordinary crossings",
+      "code": "_b = bracket_sign_changes(lambda x: x * x - 2, 0.0, 3.0, 30)\nassert len(_b) == 1, f\"x^2-2 crosses once on [0,3], got {_b!r}\"\n_lo, _hi = _b[0]\nassert _lo < 1.4142135623730951 < _hi, f\"Bracket {_b[0]!r} should straddle sqrt(2)\"\nassert bracket_sign_changes(lambda x: x * x + 1, -1.0, 1.0, 20) == [], \\\n    \"x^2+1 has no zero, so there is nothing to bracket\""
+     },
+     {
+      "name": "An exact zero on the grid gives a degenerate bracket",
+      "code": "_b = bracket_sign_changes(lambda x: x * (x - 1), -1.0, 2.0, 30)\nassert (0.0, 0.0) in _b, f\"g(0) is exactly 0 on this grid, expected (0.0, 0.0) in {_b!r}\"\n_deg = [p for p in _b if p[0] == p[1]]\nassert len(_deg) == 2, f\"Both 0 and 1 sit on the grid, expected 2 degenerate brackets, got {_deg!r}\""
+     },
+     {
+      "name": "bracket_sign_changes validates its interval",
+      "code": "for _args in [(0.0, 1.0, 0), (0.0, 1.0, -5), (1.0, 1.0, 10), (2.0, 1.0, 10)]:\n    try:\n        bracket_sign_changes(lambda x: x, *_args)\n        assert False, f\"bracket_sign_changes(g, {_args!r}) should raise ValueError\"\n    except ValueError:\n        pass"
+     },
+     {
+      "name": "bisect converges, and refuses a bad bracket",
+      "code": "import math as _math\n_g = lambda x: x * x - 2\nassert abs(bisect(_g, 1.0, 2.0) - _math.sqrt(2)) < 1e-10, \\\n    f\"bisect gave {bisect(_g, 1.0, 2.0)!r}, expected sqrt(2)\"\nassert bisect(_g, 1.5, 1.5) == 1.5, \"A degenerate bracket returns its own point\"\ntry:\n    bisect(_g, 2.0, 3.0)\n    assert False, \"g has the same sign at both ends, so this must raise ValueError\"\nexcept ValueError:\n    pass"
+     },
+     {
+      "name": "critical_points of x^3 - 3x",
+      "code": "_cp = critical_points(lambda x: x ** 3 - 3 * x, -3.0, 3.0)\nassert len(_cp) == 2, f\"Expected two critical points, got {_cp!r}\"\nassert abs(_cp[0][0] + 1.0) < 1e-6 and _cp[0][1] == \"maximum\", f\"Got {_cp[0]!r}, expected (-1, maximum)\"\nassert abs(_cp[1][0] - 1.0) < 1e-6 and _cp[1][1] == \"minimum\", f\"Got {_cp[1]!r}, expected (1, minimum)\""
+     },
+     {
+      "name": "critical_points of the double well, grid points and all",
+      "code": "_cp = critical_points(lambda x: x ** 4 - 2 * x * x, -2.0, 2.0)\nassert len(_cp) == 3, f\"x^4-2x^2 has three critical points on [-2,2], got {_cp!r}\"\n_kinds = [k for _, k in _cp]\nassert _kinds == [\"minimum\", \"maximum\", \"minimum\"], f\"Got {_kinds!r}\"\nassert abs(_cp[0][0] + 1.0) < 1e-6 and abs(_cp[1][0]) < 1e-6 and abs(_cp[2][0] - 1.0) < 1e-6, \\\n    f\"Critical points should sit at -1, 0, 1 — got {[x for x, _ in _cp]!r}\""
+     },
+     {
+      "name": "The first derivative fallback catches a flat minimum",
+      "code": "_cp = critical_points(lambda x: x ** 4, -1.0, 1.0)\nassert len(_cp) == 1, f\"x^4 has one critical point on [-1,1], got {_cp!r}\"\nassert abs(_cp[0][0]) < 1e-6, f\"It sits at 0, got {_cp[0][0]!r}\"\nassert _cp[0][1] == \"minimum\", \\\n    \"f''(0) is zero for x^4, so the first derivative test must decide — expected minimum\""
+     },
+     {
+      "name": "optimise solves the open-box problem",
+      "code": "_V = lambda x: x * (30 - 2 * x) * (16 - 2 * x)\n_r = optimise(_V, 0.0, 8.0)\n_x, _y = _r[\"max\"]\nassert abs(_x - 10.0 / 3.0) < 1e-6, f\"The box is largest at x=10/3, got {_x!r}\"\nassert abs(_y - 19600.0 / 27.0) < 1e-4, f\"Maximum volume is 19600/27, got {_y!r}\"\nassert _r[\"min\"] == (0.0, 0.0), f\"Both endpoints give volume 0; ties keep the smaller x — got {_r['min']!r}\""
+     },
+     {
+      "name": "optimise weighs endpoints against interior points",
+      "code": "_r = optimise(lambda x: x ** 3 - 3 * x, -3.0, 3.0)\nassert abs(_r[\"min\"][0] + 3.0) < 1e-9 and abs(_r[\"min\"][1] + 18.0) < 1e-6, \\\n    f\"Global minimum is the left endpoint (-3, -18), got {_r['min']!r}\"\nassert abs(_r[\"max\"][0] - 3.0) < 1e-9 and abs(_r[\"max\"][1] - 18.0) < 1e-6, \\\n    f\"Global maximum is the right endpoint (3, 18), got {_r['max']!r}\""
+     }
+    ]
+   }
+  }
+ ],
+ "capstone": {
+  "title": "Capstone — single-variable function analyser",
+  "brief": "Everything in the course, assembled into one reusable object. `analyser.py`\nholds the class and is what the checks import; `main.py` is a demo that\nanalyses two functions and prints their reports.\n\n## `FunctionAnalyser(f, a, b, samples=400)`\n\nStores `f`, the closed interval `[a, b]` as floats, the sample count, and the\ngrid step `(b - a) / samples`. It refuses bad input at construction time with\n`ValueError`: a non-callable `f`, an interval where `a >= b`, or fewer than two\nsamples.\n\n## Numerical primitives\n\n- `derivative(x, h=1e-6)` — central difference, step `h * max(1, abs(x))`\n- `second_derivative(x, h=1e-4)` — `(f(x+s) - 2f(x) + f(x-s)) / s^2`, same\n  relative step\n\n## Structure\n\n- `roots()` — sorted `x` values in `[a, b]` where `f` crosses zero, or where a\n  grid sample lands exactly on a zero. Round each to 9 decimals and deduplicate.\n- `critical_points()` — sorted `(x, kind)` pairs from the zeros of the\n  derivative, `kind` in `\"minimum\"`, `\"maximum\"`, `\"inflection\"`. Classify with\n  the second derivative test at threshold `1e-5`, falling back to the sign of\n  the derivative one grid step either side.\n- `inflection_points()` — zeros of the second derivative, kept **only** when\n  the second derivative genuinely changes sign one grid step either side. A\n  touch that does not cross is not an inflection.\n- `monotonic_intervals()` — cut `[a, b]` at the critical points and label each\n  piece `\"increasing\"`, `\"decreasing\"` or `\"constant\"` by the sign of the\n  derivative at its midpoint. Returns `(lo, hi, label)` triples.\n- `extrema()` — `{\"min\": (x, f(x)), \"max\": (x, f(x))}` over the endpoints and\n  the critical points, ties broken by the smaller `x`.\n\n## `report()`\n\nA nine-line string, in this order, values formatted to six decimals and an\nempty list written as `none`:\n\n```text\ninterval: [-3.000000, 3.000000]\nroots: -1.732051, 0.000000, 1.732051\nminima: 1.000000\nmaxima: -1.000000\ninflections: 0.000000\nincreasing: [-3.000000, -1.000000], [1.000000, 3.000000]\ndecreasing: [-1.000000, 1.000000]\nglobal min: f(-3.000000) = -18.000000\nglobal max: f(3.000000) = 18.000000\n```\n\n## Known limitations, which you should state in a docstring\n\nA grid search cannot see a feature narrower than one grid step, and a double\nroot where `f` touches zero without crossing is only found when a sample lands\non it exactly. Say so rather than pretending otherwise.",
+  "deliverables": [
+   "`analyser.py` — the `FunctionAnalyser` class, importable with no side effects",
+   "`main.py` — a demo that builds two analysers and prints both reports",
+   "Constructor validation that raises `ValueError` instead of storing a broken interval",
+   "A shared bracket-and-bisect helper reused by roots, critical points and inflections",
+   "Classification that falls back to the first derivative test when the second is silent",
+   "A `report()` string a human can read in a terminal"
+  ],
+  "constraints": [
+   "Standard library only; `math` is the only import you need",
+   "`analyser.py` must define the class only — importing it must print nothing",
+   "No global mutable state: two analysers must not share any cached result",
+   "Every public method returns a value; none of them print",
+   "Bisection must be capped, so no input can hang the browser tab"
+  ],
+  "rubric": [
+   {
+    "criterion": "Correctness",
+    "weight": 40,
+    "evidence": "All automated checks pass, including the empty-result and validation cases."
+   },
+   {
+    "criterion": "Numerical robustness",
+    "weight": 25,
+    "evidence": "Relative step sizes, exact-zero grid samples handled, bisection capped, inflections confirmed by an actual sign change."
+   },
+   {
+    "criterion": "Decomposition and reuse",
+    "weight": 20,
+    "evidence": "One bracketing helper and one bisection helper serve roots, critical points and inflections; nothing is copied three times."
+   },
+   {
+    "criterion": "Readability and documentation",
+    "weight": 15,
+    "evidence": "Docstrings on every public method, the grid limitation stated honestly, no dead code or debug prints."
+   }
+  ],
+  "runtime": "python",
+  "minutes": 240,
+  "files": [
+   {
+    "name": "analyser.py",
+    "content": "import math\n\nCLASSIFY_TOL = 1e-5\n\n\nclass FunctionAnalyser:\n    \"\"\"Numerical shape analysis of one real function on a closed interval.\"\"\"\n\n    def __init__(self, f, a, b, samples=400):\n        # validate, then store f, a, b, samples and the grid step\n        pass\n\n    def derivative(self, x, h=1e-6):\n        pass\n\n    def second_derivative(self, x, h=1e-4):\n        pass\n\n    def roots(self):\n        pass\n\n    def critical_points(self):\n        pass\n\n    def inflection_points(self):\n        pass\n\n    def monotonic_intervals(self):\n        pass\n\n    def extrema(self):\n        pass\n\n    def report(self):\n        pass\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from analyser import FunctionAnalyser\n\ncubic = FunctionAnalyser(lambda x: x ** 3 - 3 * x, -3.0, 3.0)\nprint(cubic.report())\nprint()\n\nbox = FunctionAnalyser(lambda x: x * (30 - 2 * x) * (16 - 2 * x), 0.0, 8.0)\nprint(box.report())\n"
+   }
+  ],
+  "main": "main.py",
+  "solution": [
+   {
+    "name": "analyser.py",
+    "content": "import math\n\nCLASSIFY_TOL = 1e-5\n\n\ndef _fmt(value):\n    \"\"\"Six decimals, with anything within half an ulp of zero snapped to 0.0.\"\"\"\n    return f\"{0.0 if abs(value) < 5e-10 else value:.6f}\"\n\n\ndef _join(values):\n    return \", \".join(_fmt(v) for v in values) if values else \"none\"\n\n\ndef _join_intervals(items):\n    if not items:\n        return \"none\"\n    return \", \".join(f\"[{_fmt(lo)}, {_fmt(hi)}]\" for lo, hi, _ in items)\n\n\nclass FunctionAnalyser:\n    \"\"\"Numerical shape analysis of one real function on a closed interval.\n\n    The search is grid based: features narrower than one grid step are\n    invisible, and a double root where f touches zero without crossing is only\n    reported when a sample happens to land on it exactly. Raise the sample\n    count when that matters.\n    \"\"\"\n\n    def __init__(self, f, a, b, samples=400):\n        if not callable(f):\n            raise ValueError(\"f must be callable\")\n        if not a < b:\n            raise ValueError(\"need a < b\")\n        if samples < 2:\n            raise ValueError(\"samples must be at least 2\")\n        self.f = f\n        self.a = float(a)\n        self.b = float(b)\n        self.samples = int(samples)\n        self.step = (self.b - self.a) / self.samples\n\n    # ------------------------------------------------------------- primitives\n    def derivative(self, x, h=1e-6):\n        \"\"\"Central difference with a step scaled by max(1, |x|).\"\"\"\n        step = h * max(1.0, abs(x))\n        return (self.f(x + step) - self.f(x - step)) / (2 * step)\n\n    def second_derivative(self, x, h=1e-4):\n        \"\"\"Second-order central difference, same relative step.\"\"\"\n        step = h * max(1.0, abs(x))\n        return (self.f(x + step) - 2 * self.f(x) + self.f(x - step)) / (step * step)\n\n    # ------------------------------------------------------------- machinery\n    def _brackets(self, g):\n        \"\"\"Sign-change brackets of g on the grid; exact zeros give (x, x).\"\"\"\n        xs = [self.a + self.step * k for k in range(self.samples + 1)]\n        vals = [g(x) for x in xs]\n        out = []\n        for i in range(self.samples):\n            if vals[i] == 0.0:\n                out.append((xs[i], xs[i]))\n            elif vals[i] * vals[i + 1] < 0.0:\n                out.append((xs[i], xs[i + 1]))\n        if vals[self.samples] == 0.0:\n            out.append((xs[self.samples], xs[self.samples]))\n        return out\n\n    @staticmethod\n    def _bisect(g, lo, hi, tol=1e-12, max_iter=200):\n        \"\"\"Capped bisection. A degenerate bracket returns its own point.\"\"\"\n        if lo == hi:\n            return lo\n        g_lo, g_hi = g(lo), g(hi)\n        if g_lo * g_hi > 0.0:\n            raise ValueError(\"g does not change sign across the bracket\")\n        for _ in range(max_iter):\n            if hi - lo <= tol:\n                break\n            mid = 0.5 * (lo + hi)\n            g_mid = g(mid)\n            if g_mid == 0.0:\n                return mid\n            if g_lo * g_mid < 0.0:\n                hi, g_hi = mid, g_mid\n            else:\n                lo, g_lo = mid, g_mid\n        return 0.5 * (lo + hi)\n\n    def _roots_of(self, g):\n        \"\"\"Every zero of g on the grid, rounded to 9 decimals and deduplicated.\"\"\"\n        found = [round(self._bisect(g, lo, hi), 9) + 0.0\n                 for lo, hi in self._brackets(g)]\n        return sorted(set(found))\n\n    # ------------------------------------------------------------- structure\n    def roots(self):\n        \"\"\"Sorted zeros of f on [a, b].\"\"\"\n        return self._roots_of(self.f)\n\n    def critical_points(self):\n        \"\"\"Sorted (x, kind) pairs from the zeros of the derivative.\"\"\"\n        return [(x, self._classify(x)) for x in self._roots_of(self.derivative)]\n\n    def _classify(self, x):\n        \"\"\"Second derivative test, falling back to the first derivative test.\"\"\"\n        d2 = self.second_derivative(x)\n        if d2 > CLASSIFY_TOL:\n            return \"minimum\"\n        if d2 < -CLASSIFY_TOL:\n            return \"maximum\"\n        left = self.derivative(x - self.step)\n        right = self.derivative(x + self.step)\n        if left < 0.0 < right:\n            return \"minimum\"\n        if left > 0.0 > right:\n            return \"maximum\"\n        return \"inflection\"\n\n    def inflection_points(self):\n        \"\"\"Zeros of f'' that are genuine sign changes, not mere touches.\"\"\"\n        keep = []\n        for x in self._roots_of(self.second_derivative):\n            left = self.second_derivative(x - self.step)\n            right = self.second_derivative(x + self.step)\n            if left * right < 0.0:\n                keep.append(x)\n        return keep\n\n    def monotonic_intervals(self):\n        \"\"\"(lo, hi, label) pieces cut at the critical points.\"\"\"\n        cuts = sorted(set([self.a, self.b]\n                          + [x for x, _ in self.critical_points()]))\n        out = []\n        for lo, hi in zip(cuts, cuts[1:]):\n            slope = self.derivative(0.5 * (lo + hi))\n            if slope > 0.0:\n                label = \"increasing\"\n            elif slope < 0.0:\n                label = \"decreasing\"\n            else:\n                label = \"constant\"\n            out.append((lo, hi, label))\n        return out\n\n    def extrema(self):\n        \"\"\"Global min and max over endpoints and critical points.\"\"\"\n        xs = sorted(set([self.a, self.b]\n                        + [x for x, _ in self.critical_points()]))\n        pairs = [(x, self.f(x)) for x in xs]\n        lowest = min(pairs, key=lambda pair: (pair[1], pair[0]))\n        highest = max(pairs, key=lambda pair: (pair[1], -pair[0]))\n        return {\"min\": lowest, \"max\": highest}\n\n    # ------------------------------------------------------------- reporting\n    def report(self):\n        \"\"\"A nine-line human-readable summary of everything above.\"\"\"\n        crit = self.critical_points()\n        mono = self.monotonic_intervals()\n        ext = self.extrema()\n        lines = [\n            f\"interval: [{_fmt(self.a)}, {_fmt(self.b)}]\",\n            \"roots: \" + _join(self.roots()),\n            \"minima: \" + _join([x for x, kind in crit if kind == \"minimum\"]),\n            \"maxima: \" + _join([x for x, kind in crit if kind == \"maximum\"]),\n            \"inflections: \" + _join(self.inflection_points()),\n            \"increasing: \" + _join_intervals([i for i in mono if i[2] == \"increasing\"]),\n            \"decreasing: \" + _join_intervals([i for i in mono if i[2] == \"decreasing\"]),\n            f\"global min: f({_fmt(ext['min'][0])}) = {_fmt(ext['min'][1])}\",\n            f\"global max: f({_fmt(ext['max'][0])}) = {_fmt(ext['max'][1])}\",\n        ]\n        return \"\\n\".join(lines)\n"
+   },
+   {
+    "name": "main.py",
+    "content": "from analyser import FunctionAnalyser\n\ncubic = FunctionAnalyser(lambda x: x ** 3 - 3 * x, -3.0, 3.0)\nprint(cubic.report())\nprint()\n\nbox = FunctionAnalyser(lambda x: x * (30 - 2 * x) * (16 - 2 * x), 0.0, 8.0)\nprint(box.report())\nprint()\nprint(\"largest box:\", box.extrema()[\"max\"])\n"
+   }
+  ],
+  "hints": [
+   "Write `_brackets(g)` and `_bisect(g, lo, hi)` first — every structural method is then three lines on top of `_roots_of(g)`.",
+   "`self.derivative` and `self.second_derivative` are bound methods, so you can pass them straight into `_roots_of` as the callable `g`.",
+   "`round(x, 9) + 0.0` deduplicates and kills `-0.0`; `sorted(set(...))` then finishes the job.",
+   "Format with a helper that snaps anything below `5e-10` to `0.0`, otherwise a root at zero prints as `-0.000000`."
+  ],
+  "tests": [
+   {
+    "name": "The constructor validates its interval",
+    "code": "from analyser import FunctionAnalyser\nfor _args in [(None, 0.0, 1.0), (lambda x: x, 1.0, 1.0), (lambda x: x, 2.0, 1.0),\n              (lambda x: x, 0.0, 1.0, 1), (lambda x: x, 0.0, 1.0, 0)]:\n    try:\n        FunctionAnalyser(*_args)\n        assert False, f\"FunctionAnalyser{_args!r} should raise ValueError\"\n    except ValueError:\n        pass\n_fa = FunctionAnalyser(lambda x: x, 0.0, 4.0, samples=8)\nassert abs(_fa.step - 0.5) < 1e-12, f\"step is {_fa.step!r}, expected 0.5\""
+   },
+   {
+    "name": "The numerical primitives are accurate",
+    "code": "import math as _math\nfrom analyser import FunctionAnalyser\n_fa = FunctionAnalyser(_math.sin, 0.0, 6.0)\nassert abs(_fa.derivative(1.0) - _math.cos(1.0)) < 1e-8, f\"f'(1) gave {_fa.derivative(1.0)!r}\"\nassert abs(_fa.second_derivative(1.0) + _math.sin(1.0)) < 1e-6, \\\n    f\"f''(1) gave {_fa.second_derivative(1.0)!r}, expected {-_math.sin(1.0)!r}\"\n_q = FunctionAnalyser(lambda x: 5 * x * x, -1.0, 1.0)\nassert abs(_q.second_derivative(0.3) - 10.0) < 1e-5, f\"f'' of 5x^2 is 10, got {_q.second_derivative(0.3)!r}\""
+   },
+   {
+    "name": "roots of a cubic, and a function with none",
+    "code": "import math as _math\nfrom analyser import FunctionAnalyser\n_r = FunctionAnalyser(lambda x: x ** 3 - 3 * x, -3.0, 3.0).roots()\nassert len(_r) == 3, f\"x^3-3x has three roots on [-3,3], got {_r!r}\"\nfor _got, _want in zip(_r, [-_math.sqrt(3), 0.0, _math.sqrt(3)]):\n    assert abs(_got - _want) < 1e-6, f\"root {_got!r}, expected {_want!r}\"\nassert FunctionAnalyser(lambda x: x * x + 1, -2.0, 2.0).roots() == [], \\\n    \"x^2+1 has no real root, so the list is empty\""
+   },
+   {
+    "name": "critical_points classifies a cubic and a double well",
+    "code": "from analyser import FunctionAnalyser\n_cp = FunctionAnalyser(lambda x: x ** 3 - 3 * x, -3.0, 3.0).critical_points()\nassert len(_cp) == 2, f\"Expected two critical points, got {_cp!r}\"\nassert abs(_cp[0][0] + 1.0) < 1e-6 and _cp[0][1] == \"maximum\", f\"Got {_cp[0]!r}\"\nassert abs(_cp[1][0] - 1.0) < 1e-6 and _cp[1][1] == \"minimum\", f\"Got {_cp[1]!r}\"\n_cp = FunctionAnalyser(lambda x: x ** 4 - 2 * x * x, -2.0, 2.0).critical_points()\nassert [k for _, k in _cp] == [\"minimum\", \"maximum\", \"minimum\"], f\"Got {_cp!r}\""
+   },
+   {
+    "name": "The first derivative fallback still decides",
+    "code": "from analyser import FunctionAnalyser\n_cp = FunctionAnalyser(lambda x: x ** 4, -1.0, 1.0).critical_points()\nassert len(_cp) == 1 and abs(_cp[0][0]) < 1e-6, f\"Got {_cp!r}\"\nassert _cp[0][1] == \"minimum\", \\\n    \"f''(0) is zero for x^4, so the first derivative test must call it a minimum\""
+   },
+   {
+    "name": "inflection_points needs a real sign change",
+    "code": "from analyser import FunctionAnalyser\n_i = FunctionAnalyser(lambda x: x ** 3 - 3 * x, -3.0, 3.0).inflection_points()\nassert len(_i) == 1 and abs(_i[0]) < 1e-6, f\"x^3-3x inflects only at 0, got {_i!r}\"\nassert FunctionAnalyser(lambda x: x ** 4, -1.0, 1.0).inflection_points() == [], \\\n    \"f'' of x^4 touches zero at 0 without crossing, so it is not an inflection\"\nassert FunctionAnalyser(lambda x: x * x, -2.0, 2.0).inflection_points() == [], \\\n    \"A parabola has no inflection point\""
+   },
+   {
+    "name": "monotonic_intervals cuts at the critical points",
+    "code": "from analyser import FunctionAnalyser\n_m = FunctionAnalyser(lambda x: x ** 3 - 3 * x, -3.0, 3.0).monotonic_intervals()\nassert len(_m) == 3, f\"Two critical points cut [-3,3] into three pieces, got {_m!r}\"\nassert [t[2] for t in _m] == [\"increasing\", \"decreasing\", \"increasing\"], f\"Got {_m!r}\"\nassert abs(_m[0][0] + 3.0) < 1e-9 and abs(_m[-1][1] - 3.0) < 1e-9, \\\n    f\"The pieces must span the whole interval, got {_m!r}\"\nassert abs(_m[0][1] + 1.0) < 1e-6 and abs(_m[1][1] - 1.0) < 1e-6, f\"Got {_m!r}\""
+   },
+   {
+    "name": "monotonic_intervals on a function with no critical point",
+    "code": "from analyser import FunctionAnalyser\n_m = FunctionAnalyser(lambda x: 2 * x + 1, 0.0, 1.0).monotonic_intervals()\nassert len(_m) == 1, f\"A straight line gives one piece, got {_m!r}\"\nassert _m[0][2] == \"increasing\", f\"Got {_m[0]!r}\""
+   },
+   {
+    "name": "extrema weighs endpoints against interior points",
+    "code": "from analyser import FunctionAnalyser\n_e = FunctionAnalyser(lambda x: x ** 3 - 3 * x, -3.0, 3.0).extrema()\nassert abs(_e[\"min\"][0] + 3.0) < 1e-9 and abs(_e[\"min\"][1] + 18.0) < 1e-6, f\"Got {_e['min']!r}\"\nassert abs(_e[\"max\"][0] - 3.0) < 1e-9 and abs(_e[\"max\"][1] - 18.0) < 1e-6, f\"Got {_e['max']!r}\"\n_box = FunctionAnalyser(lambda x: x * (30 - 2 * x) * (16 - 2 * x), 0.0, 8.0)\n_e = _box.extrema()\nassert abs(_e[\"max\"][0] - 10.0 / 3.0) < 1e-6, f\"The box is largest at 10/3, got {_e['max'][0]!r}\"\nassert abs(_e[\"max\"][1] - 19600.0 / 27.0) < 1e-4, f\"Got {_e['max'][1]!r}\"\nassert _e[\"min\"] == (0.0, 0.0), f\"Ties keep the smaller x, so (0.0, 0.0) — got {_e['min']!r}\""
+   },
+   {
+    "name": "Two analysers share nothing",
+    "code": "from analyser import FunctionAnalyser\n_a = FunctionAnalyser(lambda x: x ** 3 - 3 * x, -3.0, 3.0)\n_b = FunctionAnalyser(lambda x: x * x + 1, -2.0, 2.0)\n_a.roots()\nassert _b.roots() == [], \"The second analyser must not see the first one's results\"\nassert len(_a.roots()) == 3, \"And the first must be unchanged by the second\""
+   },
+   {
+    "name": "report has nine labelled lines",
+    "code": "from analyser import FunctionAnalyser\n_rep = FunctionAnalyser(lambda x: x ** 3 - 3 * x, -3.0, 3.0).report()\nassert isinstance(_rep, str), \"report() returns a string, it does not print\"\n_lines = _rep.strip().split(\"\\n\")\nassert len(_lines) == 9, f\"Expected nine lines, got {len(_lines)}: {_lines!r}\"\n_labels = [\"interval:\", \"roots:\", \"minima:\", \"maxima:\", \"inflections:\",\n           \"increasing:\", \"decreasing:\", \"global min:\", \"global max:\"]\nfor _line, _label in zip(_lines, _labels):\n    assert _line.startswith(_label), f\"Expected a line starting {_label!r}, got {_line!r}\"\nassert \"-18.000000\" in _lines[7], f\"Global minimum line was {_lines[7]!r}\"\nassert \"18.000000\" in _lines[8], f\"Global maximum line was {_lines[8]!r}\""
+   },
+   {
+    "name": "An empty list is written as none",
+    "code": "from analyser import FunctionAnalyser\n_rep = FunctionAnalyser(lambda x: x * x + 1, -2.0, 2.0).report()\n_lines = _rep.strip().split(\"\\n\")\nassert _lines[1] == \"roots: none\", f\"No roots, so the line reads 'roots: none' — got {_lines[1]!r}\"\nassert _lines[4] == \"inflections: none\", f\"Got {_lines[4]!r}\""
+   },
+   {
+    "name": "analyser.py is import-clean",
+    "code": "_src = open(\"analyser.py\").read()\nassert \"print(\" not in _src, \"analyser.py defines the class; the printing belongs in main.py\"\nassert \"class FunctionAnalyser\" in _src, \"The class must live in analyser.py\""
+   }
+  ]
+ }
+}
