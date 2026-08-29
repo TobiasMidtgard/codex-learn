@@ -277,9 +277,33 @@ const Highlight = (function () {
 })();
 
 /* ---------- markdown ---------- */
+/* Mathematics is pulled out before markdown runs and put back after: an expression
+   is full of the characters markdown wants to eat (_ for emphasis, * for bold,
+   backslashes for escapes), and MathML is markup markdown must not touch either. */
+const MATH_SLOTS = [];
+function protectMath(text) {
+  if (typeof MathML === 'undefined') return String(text);
+  return String(text)
+    .replace(/(^|[^\\])\$\$([\s\S]+?)\$\$/g, function (m, pre, body) {
+      MATH_SLOTS.push(MathML.render(body, true));
+      return pre + '\u0001M' + (MATH_SLOTS.length - 1) + '\u0001';
+    })
+    .replace(/(^|[^\\])\$([^$\n]+?)\$/g, function (m, pre, body) {
+      MATH_SLOTS.push(MathML.render(body, false));
+      return pre + '\u0001M' + (MATH_SLOTS.length - 1) + '\u0001';
+    });
+}
+function restoreMath(html) {
+  return String(html)
+    .replace(/\u0001M(\d+)\u0001/g, function (m, i) { return MATH_SLOTS[+i] || ''; })
+    .replace(/\\\$/g, '$');
+}
+
+
 let _cbSeq = 0;
 const CB_STORE = {};
-function mdInline(s) {
+function mdInline(s) { return restoreMath(mdInlineInner(protectMath(s))); }
+function mdInlineInner(s) {
   let t = esc(s);
   t = t.replace(/`([^`]+)`/g, function (_, c) { return '<code>' + c + '</code>'; });
   t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -307,7 +331,8 @@ function mdCodeBlock(code, lang) {
     '<pre class="md-code"><code>' + Highlight.render(code, norm) + '</code></pre>' +
   '</div>';
 }
-function renderMd(src) {
+function renderMd(src) { return restoreMath(renderMdInner(protectMath(src))); }
+function renderMdInner(src) {
   const lines = String(src).replace(/\r/g, '').split('\n');
   let out = '', i = 0;
   while (i < lines.length) {
