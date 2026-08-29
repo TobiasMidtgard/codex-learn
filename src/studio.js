@@ -384,11 +384,6 @@ const MathCheck = (function () {
       t = t.replace(new RegExp('\\\\' + g + '(?![A-Za-z])', 'g'), ' ' + g);
     });
     t = t.replace(/_\s*([A-Za-z0-9])/g, '_$1');
-    /* lambda is the obvious symbol for an eigenvalue and a syntax error in Python.
-       Both sides get the same rewrite, so equivalence is unaffected. */
-    PY_RESERVED.forEach(function (kw) {
-      t = t.replace(new RegExp('\\b' + kw + '\\b', 'g'), kw + '_');
-    });
     t = t.replace(/\^/g, '**');
     t = t.replace(/\\,|\\;|\\!|\\quad|\\qquad/g, ' ');
     t = t.replace(/\\[A-Za-z]+/g, ' ');            /* anything left is unsupported */
@@ -431,10 +426,20 @@ const MathCheck = (function () {
         for (const n of names) {
           if (text.startsWith(n, i) && !/[A-Za-z0-9_]/.test(text[i + n.length] || '')) { name = n; break; }
         }
-        if (!name) name = (/^[A-Za-z](?:_[A-Za-z0-9]+)?/.exec(text.slice(i)) || ['x'])[0];
+        if (!name) {
+          const guess = /^[A-Za-z](?:_[A-Za-z0-9]+)?/.exec(text.slice(i));
+          if (!guess) { i++; continue; }        /* a stray underscore, not a symbol */
+          name = guess[0];
+        }
         const rest = text.slice(i + name.length);
         const isFn = KEEP_WHOLE.indexOf(name) !== -1 && /^\s*\(/.test(rest);
-        toks.push({ t: isFn ? 'fn' : 'val', v: name });
+        /* `lambda` is the obvious name for an eigenvalue and a Python keyword. Rename
+           it here, once the whole name is known — doing it earlier, on the raw text,
+           left `lambda_` in place of a name the matcher knew, so it fell through to
+           the single-letter path and \lambda became l*a*m*b*d*a. Both sides of a
+           comparison get the same rewrite, so equivalence is unaffected. */
+        const safe = PY_RESERVED.indexOf(name) === -1 ? name : name + '_';
+        toks.push({ t: isFn ? 'fn' : 'val', v: safe });
         i += name.length;
         continue;
       }
@@ -548,6 +553,25 @@ const MathCheck = (function () {
       '',
       'if _same(_got, _exp):',
       '    _res = {"ok": True, "kind": "exact", "detail": ""}',
+      'elif isinstance(_got, sp.core.relational.Relational) or isinstance(_exp, sp.core.relational.Relational):',
+      '    # A relation cannot be negated, inverted or scaled the way the probes below',
+      '    # assume, and running them on one throws rather than diagnosing anything.',
+      '    if not isinstance(_got, sp.core.relational.Relational):',
+      '        _res = {"ok": False, "kind": "notrelation",',
+      '                "detail": "This step wants a condition (something with <, > or =), not a plain expression."}',
+      '    else:',
+      '        _flip = {"<": ">", ">": "<", "<=": ">=", ">=": "<="}',
+      '        _same_sides = False',
+      '        try:',
+      '            _same_sides = sp.simplify(_got.lhs - _got.rhs - (_exp.lhs - _exp.rhs)) == 0',
+      '        except Exception:',
+      '            _same_sides = False',
+      '        if _same_sides and _flip.get(_got.rel_op) == _exp.rel_op:',
+      '            _res = {"ok": False, "kind": "direction",',
+      '                    "detail": "Right quantity, wrong direction \u2014 the inequality points the other way."}',
+      '        else:',
+      '            _res = {"ok": False, "kind": "wrong",',
+      '                    "detail": "That condition is not the one being asked for."}',
       'else:',
       '    _pi = sp.pi',
       '    _probes = [',
