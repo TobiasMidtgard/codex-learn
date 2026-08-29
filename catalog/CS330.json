@@ -43,6 +43,11 @@
     "Whitespace and comments are skipped, but they still advance the position counters",
     "A synthetic EOF token lets every later pass peek without a bounds check"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A lexer with positions and honest errors",
     "runtime": "python",
@@ -111,6 +116,11 @@
     "One token of lookahead distinguishes assignment from an expression statement",
     "A parse error names the token it found and the position it found it at"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A Pratt parser for the whole grammar",
     "runtime": "python",
@@ -179,6 +189,11 @@
     "An error message is only useful with a position, so every node carries one",
     "Fail fast on the first error: cascading errors from a poisoned type are noise"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A scoped symbol table and a type checker",
     "runtime": "python",
@@ -247,6 +262,11 @@
     "Short-circuit `&&` and `||` are control flow, not operators — they compile to jumps",
     "An interpreter loop needs a step budget: a compiler must not be able to hang the machine forever"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Compile to bytecode and run it",
     "runtime": "python",
@@ -315,6 +335,11 @@
     "Transformations feed each other, so the pass is iterated to a fixed point",
     "A corpus with expected outputs is the cheapest available proof of semantics preservation"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A fold / simplify / DCE pass with a corpus check",
     "runtime": "python",

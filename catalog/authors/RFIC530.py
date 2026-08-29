@@ -96,7 +96,6 @@ $\omega_{if} = \omega_{rf} - \omega_{lo}$.
                     {
                         "prompt": "The transconductance stage sees an input of amplitude $A$. Write the amplitude of the signal current it produces.",
                         "answer": "g_m A",
-                        "placeholder": "g_m A",
                         "hint": "Transconductance is current out per volt in, and nothing here is nonlinear yet.",
                         "deconstruct": [
                             "By definition $i = g_m v$ for a small signal.",
@@ -106,7 +105,6 @@ $\omega_{if} = \omega_{rf} - \omega_{lo}$.
                     {
                         "prompt": "The switching pair multiplies that current by a square wave of $\\pm 1$. Write the amplitude of the fundamental component of a unit square wave.",
                         "answer": "\\frac{4}{\\pi}",
-                        "placeholder": "\\frac{4}{\\pi}",
                         "hint": "The Fourier series of a $\\pm 1$ square wave is $\\frac{4}{\\pi}\\left(\\sin\\theta + \\frac{1}{3}\\sin 3\\theta + \\dots\\right)$.",
                         "deconstruct": [
                             "The square wave is odd, so only sine terms survive and only odd harmonics.",
@@ -117,7 +115,6 @@ $\omega_{if} = \omega_{rf} - \omega_{lo}$.
                         "prompt": "Multiplying two tones splits the product into a sum and a difference term, each carrying half the amplitude. Write the amplitude of the current at $\\omega_{if}$.",
                         "given": "You have a current of amplitude $g_m A$ multiplied by a fundamental of amplitude $\\frac{4}{\\pi}$.",
                         "answer": "\\frac{2 g_m A}{\\pi}",
-                        "placeholder": "\\frac{2 g_m A}{\\pi}",
                         "hint": "Multiply the two amplitudes, then halve the result.",
                         "deconstruct": [
                             "The product amplitude is $\\frac{4}{\\pi} g_m A$.",
@@ -127,7 +124,6 @@ $\omega_{if} = \omega_{rf} - \omega_{lo}$.
                     {
                         "prompt": "That current flows in the load $R_L$. Write the voltage conversion gain $G_c$ — output amplitude at $\\omega_{if}$ divided by input amplitude at $\\omega_{rf}$.",
                         "answer": "\\frac{2 g_m R_L}{\\pi}",
-                        "placeholder": "\\frac{2 g_m R_L}{\\pi}",
                         "hint": "Ohm's law, then divide by $A$ — which cancels.",
                         "deconstruct": [
                             "The output amplitude is $\\frac{2 g_m A}{\\pi} R_L$.",
@@ -137,7 +133,6 @@ $\omega_{if} = \omega_{rf} - \omega_{lo}$.
                     {
                         "prompt": "Suppose the LO were too small to switch the pair hard, so the upper stage multiplied by a *sinusoid* of unit amplitude instead. Write the conversion gain in that case.",
                         "answer": "\\frac{g_m R_L}{2}",
-                        "placeholder": "\\frac{g_m R_L}{2}",
                         "hint": "Repeat the last two steps with a fundamental amplitude of 1 instead of $\\frac{4}{\\pi}$.",
                         "deconstruct": [
                             "A unit sinusoid has fundamental amplitude 1, not $4/\\pi$.",
@@ -401,7 +396,6 @@ characteristic polynomial.
                     {
                         "prompt": "The pump sources $I_{cp}$ for the fraction of each reference period that the phase error lasts. Averaged over a cycle, write its gain in amperes per radian of phase error.",
                         "answer": "\\frac{I_{cp}}{2 \\pi}",
-                        "placeholder": "\\frac{I_{cp}}{2 \\pi}",
                         "hint": "A full reference period is $2\\pi$ radians of phase error, and over that period the pump would be on the whole time.",
                         "deconstruct": [
                             "For a phase error $\\theta_e$ the pump is on for a fraction $\\theta_e / 2\\pi$ of the period.",
@@ -411,7 +405,6 @@ characteristic polynomial.
                     {
                         "prompt": "Write the impedance $Z$ of the loop filter — a resistor $R$ in series with a capacitor $C$.",
                         "answer": "R + \\frac{1}{s C}",
-                        "placeholder": "R + \\frac{1}{s C}",
                         "hint": "Series impedances add, and a capacitor is $1/sC$.",
                         "deconstruct": [
                             "The capacitor contributes $1/sC$.",
@@ -422,7 +415,6 @@ characteristic polynomial.
                         "prompt": "Multiply the four blocks — pump gain, filter impedance, VCO $K_{vco}/s$, divider $1/N$ — to get the open-loop gain. Write it in terms of $s$, $I_{cp}$, $K_{vco}$, $R$, $C$ and $N$.",
                         "given": "The pump current flows into the filter impedance, producing the tuning voltage.",
                         "answer": "\\frac{I_{cp} K_{vco} \\left( R + \\frac{1}{s C} \\right)}{2 \\pi N s}",
-                        "placeholder": "\\frac{I_{cp} K_{vco} \\left( R + \\frac{1}{s C} \\right)}{2 \\pi N s}",
                         "hint": "Cascaded blocks multiply. Keep the filter impedance as a factor rather than expanding it yet.",
                         "deconstruct": [
                             "Pump times filter is $\\frac{I_{cp}}{2\\pi} Z$, a voltage per radian.",
@@ -432,7 +424,6 @@ characteristic polynomial.
                     {
                         "prompt": "Setting $1 + T(s) = 0$ and clearing denominators gives $s^2 + \\frac{I_{cp}K_{vco}R}{2\\pi N}s + \\frac{I_{cp}K_{vco}}{2\\pi N C}$. Compare with $s^2 + 2\\zeta\\omega_n s + \\omega_n^2$ and write $\\omega_n$.",
                         "answer": "\\sqrt{\\frac{I_{cp} K_{vco}}{2 \\pi N C}}",
-                        "placeholder": "\\sqrt{\\frac{I_{cp} K_{vco}}{2 \\pi N C}}",
                         "hint": "Match the constant terms, then take the square root.",
                         "deconstruct": [
                             "The constant term of your polynomial is $I_{cp}K_{vco}/2\\pi N C$.",
@@ -442,7 +433,6 @@ characteristic polynomial.
                     {
                         "prompt": "Now match the coefficient of $s$ and write $\\zeta$ in terms of $R$, $I_{cp}$, $K_{vco}$, $C$ and $N$.",
                         "answer": "\\frac{R}{2}\\sqrt{\\frac{I_{cp} K_{vco} C}{2 \\pi N}}",
-                        "placeholder": "\\frac{R}{2}\\sqrt{\\frac{I_{cp} K_{vco} C}{2 \\pi N}}",
                         "hint": "You need $\\zeta = \\frac{I_{cp}K_{vco}R}{4\\pi N \\omega_n}$; substitute the $\\omega_n$ you just found and simplify.",
                         "deconstruct": [
                             "Matching gives $2\\zeta\\omega_n = I_{cp}K_{vco}R/2\\pi N$.",
@@ -690,7 +680,6 @@ output as $1/(1+T)$.
                     {
                         "prompt": "Substitute $T = \\omega_c/s$ into $N\\,T/(1+T)$ and simplify. Write the transfer from reference phase to output phase.",
                         "answer": "\\frac{N \\omega_c}{s + \\omega_c}",
-                        "placeholder": "\\frac{N \\omega_c}{s + \\omega_c}",
                         "hint": "Multiply numerator and denominator by $s$ to clear the inner fraction.",
                         "deconstruct": [
                             "$\\frac{N\\omega_c/s}{1 + \\omega_c/s}$ — multiply top and bottom by $s$.",
@@ -700,7 +689,6 @@ output as $1/(1+T)$.
                     {
                         "prompt": "Do the same for the VCO path, $1/(1+T)$.",
                         "answer": "\\frac{s}{s + \\omega_c}",
-                        "placeholder": "\\frac{s}{s + \\omega_c}",
                         "hint": "Same trick — clear the fraction inside the denominator.",
                         "deconstruct": [
                             "$\\frac{1}{1 + \\omega_c/s}$ — multiply top and bottom by $s$.",
@@ -710,7 +698,6 @@ output as $1/(1+T)$.
                     {
                         "prompt": "Put $s = j\\omega$ in that high-pass and take the magnitude for $\\omega \\ll \\omega_c$. Write the result.",
                         "answer": "\\frac{\\omega}{\\omega_c}",
-                        "placeholder": "\\frac{\\omega}{\\omega_c}",
                         "hint": "When $\\omega$ is far below $\\omega_c$, the denominator is essentially $\\omega_c$.",
                         "deconstruct": [
                             "The magnitude is $\\omega/\\sqrt{\\omega^2 + \\omega_c^2}$.",
@@ -994,7 +981,6 @@ spectrum of the error it leaves behind.
                     {
                         "prompt": "The accumulator overflows on a fraction $K/2^m$ of the reference cycles. Write the average divide ratio.",
                         "answer": "N + \\frac{K}{2^m}",
-                        "placeholder": "N + \\frac{K}{2^m}",
                         "hint": "Average the two integers with weights $1 - K/2^m$ and $K/2^m$.",
                         "deconstruct": [
                             "The divider spends a fraction $K/2^m$ of cycles at $N+1$ and the rest at $N$.",
@@ -1004,7 +990,6 @@ spectrum of the error it leaves behind.
                     {
                         "prompt": "Increment $K$ by one. Write the resulting change in output frequency, given $f_{out} = f_{ref}\\left(N + \\frac{K}{2^m}\\right)$.",
                         "answer": "\\frac{f_{ref}}{2^m}",
-                        "placeholder": "\\frac{f_{ref}}{2^m}",
                         "hint": "Only the fractional term changes, and it changes by $1/2^m$.",
                         "deconstruct": [
                             "$\\Delta(K/2^m) = 1/2^m$.",
@@ -1014,7 +999,6 @@ spectrum of the error it leaves behind.
                     {
                         "prompt": "The divide error is the first difference of the accumulator contents, so its spectrum carries a factor $\\left|1 - e^{-j 2\\pi f/f_{ref}}\\right|$. Write that magnitude for $f \\ll f_{ref}$.",
                         "answer": "\\frac{2 \\pi f}{f_{ref}}",
-                        "placeholder": "\\frac{2 \\pi f}{f_{ref}}",
                         "hint": "For a small angle $\\theta$, $\\left|1 - e^{-j\\theta}\\right| \\approx \\theta$.",
                         "deconstruct": [
                             "Exactly, the magnitude is $2\\left|\\sin(\\pi f/f_{ref})\\right|$.",
@@ -1024,7 +1008,6 @@ spectrum of the error it leaves behind.
                     {
                         "prompt": "An $L$-th order modulator applies that difference $L$ times. Write the amplitude shaping factor at low offsets.",
                         "answer": "\\left( \\frac{2 \\pi f}{f_{ref}} \\right)^{L}",
-                        "placeholder": "\\left( \\frac{2 \\pi f}{f_{ref}} \\right)^{L}",
                         "hint": "Applying the same filter $L$ times multiplies the magnitudes.",
                         "deconstruct": [
                             "One difference contributes $2\\pi f/f_{ref}$.",
@@ -1035,7 +1018,6 @@ spectrum of the error it leaves behind.
                         "prompt": "That noise reaches the output through the loop's low-pass, which above $\\omega_c$ falls as $\\omega_c/\\omega$. Write the frequency dependence of the output noise amplitude above the loop bandwidth, in terms of $\\omega$, $\\omega_c$ and $L$.",
                         "given": "Below the bandwidth the output noise amplitude follows $\\omega^L$.",
                         "answer": "\\omega_c \\omega^{L-1}",
-                        "placeholder": "\\omega_c \\omega^{L-1}",
                         "hint": "Multiply the shaping $\\omega^L$ by the roll-off $\\omega_c/\\omega$.",
                         "deconstruct": [
                             "The shaping gives $\\omega^L$ and the loop gives $\\omega_c/\\omega$.",

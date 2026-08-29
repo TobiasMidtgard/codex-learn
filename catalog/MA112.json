@@ -41,6 +41,11 @@
     "Composite error orders: O(h) for left/right, O(h^2) for midpoint/trapezoid, O(h^4) for Simpson",
     "Observed order p = log2(E(n) / E(2n)) — halving h should divide the error by 2^p"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Quadrature rules and their error orders",
     "runtime": "python",
@@ -113,6 +118,11 @@
     "Improper integrals of the first kind (infinite limit) yield to x = a + t/(1-t)",
     "Improper integrals of the second kind (endpoint blow-up) often yield to x = a + u^2"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Adaptive Simpson to a requested tolerance",
     "runtime": "python",
@@ -181,6 +191,11 @@
     "Factorial growth beats any fixed power, so exp/sin/cos converge for every x",
     "Catastrophic cancellation: exp(-20) by Maclaurin series loses every significant digit"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Series coefficients and the Lagrange remainder",
     "runtime": "python",
@@ -249,6 +264,11 @@
     "That squeeze is a computable error bar, which is what makes the test practically useful",
     "Radius of convergence R = 1/limsup |c_n|^(1/n), estimated from consecutive non-zero coefficients"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Convergence tests and the radius of convergence",
     "runtime": "python",

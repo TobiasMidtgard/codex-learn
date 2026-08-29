@@ -73,7 +73,7 @@
        "$\\sum_{n=0}^{\\infty} f(nT)z^{-n}$"
       ],
       "a": 2,
-      "why": "The kernel is $e^{-st}$, with a minus sign, and the integral runs from 0, not from\n$-\\infty$. Option A has the sign wrong, and with it the convergence: $e^{+st}$ makes\nthe integral diverge for every ordinary signal. Option B is the **Fourier** transform,\nwhich is this one restricted to $s = j\\omega$ — a genuinely useful thing to notice\nrather than a trap, because it is why phasors are a special case of what you are\nlearning. Option D is the z-transform, for sampled signals."
+      "why": "The kernel is $e^{-st}$, with a minus sign, and the integral runs from 0, not from\n$-\\infty$. The version with $e^{+st}$ has the sign wrong, and with it the convergence: it makes the\nintegral diverge for every ordinary signal. The integral from $-\\infty$ with kernel\n$e^{-j\\omega t}$ is the **Fourier** transform,\nwhich is this one restricted to $s = j\\omega$ — a genuinely useful thing to notice\nrather than a trap, because it is why phasors are a special case of what you are\nlearning. The sum in powers of $z^{-n}$ is the z-transform, for sampled signals."
      },
      {
       "q": "With $F(s) = \\mathcal{L}\\{f(t)\\}$, the transform of $\\dfrac{df}{dt}$ is:",
@@ -84,7 +84,7 @@
        "$sF(s) + f(0)$"
       ],
       "a": 0,
-      "why": "$sF(s) - f(0)$. The $-f(0)$ falls out of integrating by parts, and dropping it is the\nsingle most common error in the whole subject — it silently assumes every capacitor\nstarts empty and every inductor starts with no current. When a question says\n\"the capacitor is initially charged to 2 V\", that 2 V enters the algebra through\nexactly this term and nowhere else. Option C is the *integration* rule."
+      "why": "$sF(s) - f(0)$. The $-f(0)$ falls out of integrating by parts, and dropping it is the\nsingle most common error in the whole subject — it silently assumes every capacitor\nstarts empty and every inductor starts with no current. When a question says\n\"the capacitor is initially charged to 2 V\", that 2 V enters the algebra through\nexactly this term and nowhere else. $F(s)/s$ is the *integration* rule."
      },
      {
       "q": "A 1 V step is applied at $t=0$ to a series RC with the output taken across the capacitor. What is $V_c(s)$?",
@@ -95,7 +95,7 @@
        "$\\dfrac{1}{s(1+sRC)}$"
       ],
       "a": 3,
-      "why": "Two factors multiply: the circuit's transfer function $1/(1+sRC)$ and the input's own\ntransform $1/s$. Option A is the transfer function on its own — which is what you get\nby forgetting that the step also has to be transformed. That distinction matters: the\ntransfer function belongs to the circuit and never changes, while the $1/s$ belongs to\nthe signal you chose to apply."
+      "why": "Two factors multiply: the circuit's transfer function $1/(1+sRC)$ and the input's own\ntransform $1/s$. $1/(1+sRC)$ on its own is the transfer function — which is what you get by forgetting\nthat the step also has to be transformed. That distinction matters: the\ntransfer function belongs to the circuit and never changes, while the $1/s$ belongs to\nthe signal you chose to apply."
      },
      {
       "q": "Four systems have the pole pairs below. Which one's response takes longest to die away?",
@@ -106,7 +106,7 @@
        "$-3 \\pm j100$"
       ],
       "a": 1,
-      "why": "Decay is governed by the **real part** alone: the envelope is $e^{\\sigma t}$, so the\npole closest to the imaginary axis, here $\\sigma = -0.5$, lingers longest. The\nimaginary part sets how fast the response *oscillates*, not how fast it dies, which is\nwhy option D — the most dramatic-looking pair, ringing at 100 rad/s — actually settles\nsix times faster than option B. Distance from the imaginary axis is speed; height\nabove it is ringing."
+      "why": "Decay is governed by the **real part** alone: the envelope is $e^{\\sigma t}$, so the\npole closest to the imaginary axis, here $\\sigma = -0.5$, lingers longest. The\nimaginary part sets how fast the response *oscillates*, not how fast it dies, which is why $-3 \\pm j100$ — the most dramatic-looking pair, ringing at 100 rad/s —\nactually settles six times faster than $-0.5 \\pm j2$. Distance from the imaginary axis is speed; height\nabove it is ringing."
      },
      {
       "q": "The final value theorem gives $\\lim_{t\\to\\infty} f(t) = \\lim_{s\\to 0} sF(s)$. For $F(s) = \\dfrac{10}{s(s+4)}$, what is the final value?",
@@ -132,6 +132,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": {
     "title": "An RC circuit solved in the s-domain",
@@ -153,7 +154,7 @@
       "prompt": "Apply the divider rule with impedances. Write $V_c(s)$ as a multiple of $V_{in}(s)$, in terms of $s$, $R$, $C$ and $V_{in}$.",
       "given": "The divider is $V_c = V_{in} \\, Z_C / (Z_R + Z_C)$, with $Z_C = 1/(sC)$.",
       "answer": "\\frac{V_in}{1 + sRC}",
-      "placeholder": "\\frac{V_in}{1 + sRC}",
+      "placeholder": "",
       "hint": "Put $1/(sC)$ over $R + 1/(sC)$, then multiply top and bottom by $sC$ to clear the inner fraction.",
       "deconstruct": [
        "The ratio is $\\dfrac{1/(sC)}{R + 1/(sC)}$.",
@@ -165,7 +166,7 @@
       "prompt": "The input is a 1 V step, so $V_{in}(s) = 1/s$. Substitute it and write $V_c(s)$ in terms of $s$, $R$ and $C$ only.",
       "given": "",
       "answer": "\\frac{1}{s(1 + sRC)}",
-      "placeholder": "\\frac{1}{s(1 + sRC)}",
+      "placeholder": "",
       "hint": "You are multiplying the previous answer by $1/s$. Nothing cancels.",
       "deconstruct": [
        "The step contributes a factor $1/s$.",
@@ -176,7 +177,7 @@
       "prompt": "Split it: $V_c(s) = \\dfrac{A}{s} + \\dfrac{B}{1 + sRC}$. Multiply both sides by $s$, then set $s = 0$. What is $A$?",
       "given": "",
       "answer": "1",
-      "placeholder": "1",
+      "placeholder": "",
       "hint": "Multiplying by $s$ leaves $\\dfrac{1}{1+sRC}$ on the left. Now put $s = 0$ into that.",
       "deconstruct": [
        "$s \\cdot V_c(s) = \\dfrac{1}{1+sRC}$, and the second term picks up a factor $s$ which kills it at $s=0$.",
@@ -187,7 +188,7 @@
       "prompt": "Now multiply both sides by $(1 + sRC)$ and set $s = -1/(RC)$, which is where that factor vanishes. What is $B$?",
       "given": "",
       "answer": "-RC",
-      "placeholder": "-RC",
+      "placeholder": "",
       "hint": "The left-hand side becomes $1/s$. Evaluate it at $s = -1/(RC)$.",
       "deconstruct": [
        "$(1+sRC)\\,V_c(s) = \\dfrac{1}{s}$, and the $A/s$ term picks up the factor $(1+sRC)$, which is zero at this $s$.",
@@ -198,7 +199,7 @@
       "prompt": "The second term is now $\\dfrac{-RC}{1 + sRC}$. Divide top and bottom by $RC$ so it reads $\\dfrac{-1}{s + a}$, and write $a$ in terms of $R$ and $C$.",
       "given": "",
       "answer": "\\frac{1}{RC}",
-      "placeholder": "\\frac{1}{RC}",
+      "placeholder": "",
       "hint": "Dividing $1 + sRC$ by $RC$ gives $s + 1/(RC)$.",
       "deconstruct": [
        "$\\dfrac{-RC}{1+sRC} = \\dfrac{-RC/(RC)}{(1+sRC)/(RC)} = \\dfrac{-1}{s + 1/(RC)}$.",
@@ -209,7 +210,7 @@
       "prompt": "Using $1/s \\to 1$ and $1/(s+a) \\to e^{-at}$, the answer is $v_c(t) = 1 - e^{-t/\\tau}$. Write the time constant $\\tau$ in terms of $R$ and $C$.",
       "given": "",
       "answer": "R C",
-      "placeholder": "RC",
+      "placeholder": "",
       "hint": "$\\tau = 1/a$, and you have just written $a$.",
       "deconstruct": [
        "The pole is at $-1/(RC)$, so the decaying exponential is $e^{-t/(RC)}$.",
@@ -315,7 +316,7 @@
        "poles at $-2$ and $-1$, a zero at $-5$"
       ],
       "a": 1,
-      "why": "Zeros come from the **numerator**, poles from the **denominator**, and each is the\nvalue of $s$ that makes its own factor vanish — so $s+2$ gives a zero at $-2$, not at\n$+2$. Option C is the sign error that catches everyone once: the root of $s + a$ is\n$-a$. Getting the zeros and poles the wrong way round, as in option A, inverts the\nsystem: it would rise with frequency instead of falling."
+      "why": "Zeros come from the **numerator**, poles from the **denominator**, and each is the\nvalue of $s$ that makes its own factor vanish — so $s+2$ gives a zero at $-2$, not at\n$+2$. Reading $s+2$ as a zero at $+2$ is the sign error that catches everyone once: the root\nof $s + a$ is $-a$. Getting the zeros and poles the wrong way round inverts the\nsystem: it would rise with frequency instead of falling."
      },
      {
       "q": "A system has poles at $-1$ and $-20$. Which term dominates the late part of the step response?",
@@ -326,7 +327,7 @@
        "the $e^{-t}$ term"
       ],
       "a": 3,
-      "why": "$e^{-20t}$ has fallen to under a thousandth of its starting value by $t = 0.35$, while\n$e^{-t}$ is still at 70% then. The **slow** pole — the one closest to the imaginary\naxis — is the one still visible when everything else has gone, and it is what a\ndesigner means by \"the dominant pole\". Reaching for the bigger number, as in option A,\nis the reflex worth unlearning: in the s-plane it is distance from the *imaginary axis*\nthat sets the speed, so the pole nearest that axis is the slow one and therefore the\none that matters. (Distance from the origin is a different measurement, and a pair like\n$-1 \\pm j100$ is far from the origin while still decaying slowly.)"
+      "why": "$e^{-20t}$ has fallen to under a thousandth of its starting value by $t = 0.35$, while\n$e^{-t}$ is still at 70% then. The **slow** pole — the one closest to the imaginary\naxis — is the one still visible when everything else has gone, and it is what a\ndesigner means by \"the dominant pole\". Reaching for the bigger number is the reflex worth unlearning: in the s-plane it is distance from the *imaginary axis*\nthat sets the speed, so the pole nearest that axis is the slow one and therefore the\none that matters. (Distance from the origin is a different measurement, and a pair like\n$-1 \\pm j100$ is far from the origin while still decaying slowly.)"
      },
      {
       "q": "In $\\dfrac{6}{(s+1)(s+3)} = \\dfrac{A}{s+1} + \\dfrac{B}{s+3}$, what is $A$?",
@@ -359,7 +360,7 @@
        "$K/(2\\zeta)$"
       ],
       "a": 3,
-      "why": "At $s = j\\omega_n$ the terms $s^2$ and $\\omega_n^2$ cancel exactly, leaving only\n$2\\zeta\\omega_n \\cdot j\\omega_n$ on the bottom, so $|H| = K/(2\\zeta)$ and the phase is\nexactly $-90°$. Option B is the tempting one: $\\omega_n$ is *not* the $-3$ dB point\nunless $\\zeta$ happens to be $1/\\sqrt{2}$. With $\\zeta = 0.25$ the gain there is 2 —\na gain of *two*, above the input, from a circuit containing nothing but a resistor, an\ninductor and a capacitor."
+      "why": "At $s = j\\omega_n$ the terms $s^2$ and $\\omega_n^2$ cancel exactly, leaving only\n$2\\zeta\\omega_n \\cdot j\\omega_n$ on the bottom, so $|H| = K/(2\\zeta)$ and the phase is\nexactly $-90°$. $K/\\sqrt{2}$ is the tempting one: $\\omega_n$ is *not* the $-3$ dB point\nunless $\\zeta$ happens to be $1/\\sqrt{2}$. With $\\zeta = 0.25$ the gain there is 2 —\na gain of *two*, above the input, from a circuit containing nothing but a resistor, an\ninductor and a capacitor."
      },
      {
       "q": "Where are the poles of a system with $\\omega_n = 2000$ rad/s and $\\zeta = 0.25$?",
@@ -370,10 +371,11 @@
        "$\\pm j2000$"
       ],
       "a": 1,
-      "why": "The real part is $-\\zeta\\omega_n = -500$ and the imaginary part is\n$\\omega_n\\sqrt{1-\\zeta^2} = 2000\\sqrt{0.9375} = 1936$. Option C is the common slip of\nusing $\\omega_n$ itself as the imaginary part — an easy mistake to forgive, since at\n$\\zeta = 0.25$ the difference is only 3%, but one that grows fast as the damping does.\nA useful check: the poles must be exactly $\\omega_n = 2000$ from the origin, and\n$\\sqrt{500^2 + 1936^2} = 2000$."
+      "why": "The real part is $-\\zeta\\omega_n = -500$ and the imaginary part is\n$\\omega_n\\sqrt{1-\\zeta^2} = 2000\\sqrt{0.9375} = 1936$. $-500 \\pm j2000$ is the common slip of using $\\omega_n$ itself as the imaginary\npart — an easy mistake to forgive, since at\n$\\zeta = 0.25$ the difference is only 3%, but one that grows fast as the damping does.\nA useful check: the poles must be exactly $\\omega_n = 2000$ from the origin, and\n$\\sqrt{500^2 + 1936^2} = 2000$."
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "Placing a pole pair with real components",
     "minutes": 26,
@@ -602,7 +604,7 @@
       "prompt": "Write $H(s) = V_{out}/V_{in}$ as an impedance divider, leaving $Z_C$ as $1/(sC)$ for now.",
       "given": "",
       "answer": "\\frac{\\frac{1}{sC}}{R + sL + \\frac{1}{sC}}",
-      "placeholder": "\\frac{\\frac{1}{sC}}{R + sL + \\frac{1}{sC}}",
+      "placeholder": "",
       "hint": "The output impedance goes on top, the total series impedance on the bottom.",
       "deconstruct": [
        "In series the three impedances add: $Z_{total} = R + sL + 1/(sC)$.",
@@ -613,7 +615,7 @@
       "prompt": "Multiply top and bottom by $sC$ to clear the inner fraction, and write $H(s)$ as a single ratio of polynomials in $s$.",
       "given": "",
       "answer": "\\frac{1}{s^2 LC + sRC + 1}",
-      "placeholder": "\\frac{1}{s^2 LC + sRC + 1}",
+      "placeholder": "",
       "hint": "$sC \\times 1/(sC) = 1$ on top; on the bottom every term picks up a factor $sC$.",
       "deconstruct": [
        "Top: $sC \\cdot \\dfrac{1}{sC} = 1$.",
@@ -624,7 +626,7 @@
       "prompt": "Divide top and bottom by $LC$ to reach the standard form $\\dfrac{K\\omega_n^2}{s^2 + 2\\zeta\\omega_n s + \\omega_n^2}$. Comparing the constant terms gives $\\omega_n^2 = 1/(LC)$. Write $\\omega_n$ itself.",
       "given": "",
       "answer": "\\frac{1}{\\sqrt{LC}}",
-      "placeholder": "\\frac{1}{\\sqrt{LC}}",
+      "placeholder": "",
       "hint": "Take the positive square root of $1/(LC)$.",
       "deconstruct": [
        "After dividing through, the constant term of the denominator is $1/(LC)$.",
@@ -635,7 +637,7 @@
       "prompt": "Comparing the $s$ coefficients gives $2\\zeta\\omega_n = R/L$. Substitute your $\\omega_n$ and write $\\zeta$ in terms of $R$, $L$ and $C$.",
       "given": "",
       "answer": "\\frac{R}{2}\\sqrt{\\frac{C}{L}}",
-      "placeholder": "\\frac{R}{2}\\sqrt{\\frac{C}{L}}",
+      "placeholder": "",
       "hint": "$\\zeta = \\dfrac{R}{2L\\omega_n} = \\dfrac{R\\sqrt{LC}}{2L}$, and $\\sqrt{LC}/L = \\sqrt{C/L}$.",
       "deconstruct": [
        "From $2\\zeta\\omega_n = R/L$, $\\zeta = \\dfrac{R}{2L\\omega_n}$.",
@@ -647,7 +649,7 @@
       "prompt": "Now design. With $L = 0.1$ H and $C = 2.5\\ \\mu$F, $\\omega_n$ comes to 2000 rad/s. What resistance, in ohms, gives $\\zeta = 0.25$?",
       "given": "",
       "answer": "100",
-      "placeholder": "100",
+      "placeholder": "",
       "hint": "Rearrange to $R = 2\\zeta\\sqrt{L/C}$, then put the numbers in. $\\sqrt{0.1/2.5\\times10^{-6}} = 200$.",
       "deconstruct": [
        "$\\zeta = \\dfrac{R}{2}\\sqrt{\\dfrac{C}{L}}$ rearranges to $R = 2\\zeta\\sqrt{\\dfrac{L}{C}}$.",
@@ -745,7 +747,7 @@
        "take the $j$-th eigenvector"
       ],
       "a": 1,
-      "why": "$Ae_j$ selects column $j$ exactly, so if $A$ is to represent $T$ then column $j$ must\nbe $T(e_j)$. This is the entire recipe for turning a map into a matrix, and it is what\nthe lab does. Option A discards the information: $T$ applied to $(1,1,\\dots)$ gives one\nvector, the sum of all the columns, from which the individual columns cannot be\nrecovered."
+      "why": "$Ae_j$ selects column $j$ exactly, so if $A$ is to represent $T$ then column $j$ must\nbe $T(e_j)$. This is the entire recipe for turning a map into a matrix, and it is what\nthe lab does. Applying $T$ to the vector of all ones discards the information: it gives one\nvector, the sum of all the columns, from which the individual columns cannot be\nrecovered."
      },
      {
       "q": "Nodal analysis of a resistor network with $n$ unknown node voltages produces:",
@@ -756,7 +758,7 @@
        "$n$ linear equations, one per loop, each of them KVL round that loop"
       ],
       "a": 2,
-      "why": "One unknown per node, one equation per node, and each equation says that the currents\nleaving that node sum to zero — Kirchhoff's current law. They are linear because Ohm's\nlaw is. The loop-based alternative in option D is mesh analysis, which is a real method\nbut a different one, with one unknown per loop instead. Counting equations against\nunknowns before starting is the cheapest way to catch a mistake in the setup."
+      "why": "One unknown per node, one equation per node, and each equation says that the currents\nleaving that node sum to zero — Kirchhoff's current law. They are linear because Ohm's\nlaw is. The loop-based alternative, one KVL equation per loop, is mesh analysis, which is a real method\nbut a different one, with one unknown per loop instead. Counting equations against\nunknowns before starting is the cheapest way to catch a mistake in the setup."
      },
      {
       "q": "Why is the conductance matrix $G$ symmetric?",
@@ -782,6 +784,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "A matched 600 Ω attenuator",
     "minutes": 28,
@@ -1129,7 +1132,7 @@
        "$\\lambda$ is the determinant of $A$"
       ],
       "a": 0,
-      "why": "An eigenvector is a direction the map does not turn. Everything else is consequence:\nalong that direction the matrix behaves like a single number, which is why writing a\nsystem in its eigenvector coordinates decouples it into independent first-order pieces.\nOption B is the special case $\\lambda = 0$, not the definition. The determinant is the\n*product* of all the eigenvalues, and the trace is their sum."
+      "why": "An eigenvector is a direction the map does not turn. Everything else is consequence:\nalong that direction the matrix behaves like a single number, which is why writing a\nsystem in its eigenvector coordinates decouples it into independent first-order pieces.\n\"$v$ is in the null space of $A$\" is the special case $\\lambda = 0$, not the\ndefinition. The determinant is the\n*product* of all the eigenvalues, and the trace is their sum."
      },
      {
       "q": "What are the eigenvalues of $A = \\begin{bmatrix}0 & 1\\\\ -3 & -4\\end{bmatrix}$?",
@@ -1140,7 +1143,7 @@
        "1 and 3"
       ],
       "a": 2,
-      "why": "The characteristic polynomial is $\\lambda^2 - (\\text{trace})\\lambda + \\det =\n\\lambda^2 + 4\\lambda + 3$, whose roots are $-1$ and $-3$. Option A reads the diagonal\nstraight off, which is correct only for a triangular matrix and wrong here. Notice what\nthis matrix is: the companion form of $\\ddot{y}+4\\dot{y}+3y=0$, and its eigenvalues are\nexactly the poles of $1/(s^2+4s+3)$ from module 2."
+      "why": "The characteristic polynomial is $\\lambda^2 - (\\text{trace})\\lambda + \\det =\n\\lambda^2 + 4\\lambda + 3$, whose roots are $-1$ and $-3$. Answering 0 and $-4$ reads the diagonal straight off, which is correct only for a\ntriangular matrix and wrong here. Notice what\nthis matrix is: the companion form of $\\ddot{y}+4\\dot{y}+3y=0$, and its eigenvalues are\nexactly the poles of $1/(s^2+4s+3)$ from module 2."
      },
      {
       "q": "For $\\dot{x} = Ax$, the state returns to zero from every starting point exactly when:",
@@ -1151,7 +1154,7 @@
        "$A$ is invertible"
       ],
       "a": 1,
-      "why": "Each eigenvalue contributes $e^{\\lambda t}$, whose size is $e^{(\\text{Re}\\lambda)t}$,\nso only the real part decides decay. Option A is not even well formed — a magnitude is\nnever negative, and eigenvalues are routinely complex. An invertible $A$ merely has no\nzero eigenvalue, which does not stop the others sitting in the right half-plane; an\nundamped oscillator has purely imaginary eigenvalues, a zero trace, and never settles."
+      "why": "Each eigenvalue contributes $e^{\\lambda t}$, whose size is $e^{(\\text{Re}\\lambda)t}$,\nso only the real part decides decay. \"Negative in magnitude\" is not even well formed — a magnitude is never negative, and eigenvalues are routinely complex. An invertible $A$ merely has no\nzero eigenvalue, which does not stop the others sitting in the right half-plane; an\nundamped oscillator has purely imaginary eigenvalues, a zero trace, and never settles."
      },
      {
       "q": "Least squares fits $Ac \\approx y$ when $A$ is tall by:",
@@ -1162,7 +1165,7 @@
        "minimising the sum of the squared residuals, which gives $A^\\top A c = A^\\top y$"
       ],
       "a": 3,
-      "why": "A tall $A$ has no inverse, which is precisely why the problem needs a different idea.\nMinimising $\\|Ac-y\\|^2$ is a smooth problem with a closed-form answer: differentiate,\nset to zero, and out come the normal equations. Geometrically, it projects $y$ onto the\ncolumn space of $A$ and leaves the residual perpendicular to it. Minimising the largest\nerror, option B, is a real and useful alternative criterion — but it is a different\nmethod with no such formula."
+      "why": "A tall $A$ has no inverse, which is precisely why the problem needs a different idea.\nMinimising $\\|Ac-y\\|^2$ is a smooth problem with a closed-form answer: differentiate,\nset to zero, and out come the normal equations. Geometrically, it projects $y$ onto the\ncolumn space of $A$ and leaves the residual perpendicular to it. Minimising the largest single error is a real and useful alternative criterion — but it is a different\nmethod with no such formula."
      },
      {
       "q": "You fit a straight line to 50 measured (I, V) pairs. The residuals are small, but plotted against I they trace a smooth curve rather than scattering about zero. What does that tell you?",
@@ -1177,6 +1180,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": null,
    "lab": {

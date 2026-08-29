@@ -46,6 +46,11 @@
     "Adding a required field or narrowing an enum breaks callers; adding an optional field does not",
     "`isinstance(True, int)` is True — booleans need checking before integers"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Contract, validator and generated conformance suite",
     "runtime": "python",
@@ -114,6 +119,11 @@
     "Python's sqlite3 in autocommit mode (`isolation_level = None`) makes those boundaries explicit",
     "LIMIT/OFFSET pagination needs a deterministic ORDER BY or pages overlap"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Migrations and a note repository",
     "runtime": "python",
@@ -182,6 +192,11 @@
     "An exception hierarchy carrying `status` and `code` maps the domain onto HTTP in one place",
     "Unexpected exceptions become a generic 500: internals never travel to the caller"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Credentials, authorisation and error mapping",
     "runtime": "python",
@@ -250,6 +265,11 @@
     "A health check reports on dependencies and never raises — a broken check is a result",
     "A performance budget only means something when a test fails on breaching it"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Structured logging, metrics, health and a budget",
     "runtime": "python",

@@ -95,7 +95,6 @@ several codes between samples.
                     {
                         "prompt": "Write the step size $q$ in terms of $X_m$ and $B$.",
                         "answer": "\\frac{2 X_m}{2^{B}}",
-                        "placeholder": "\\frac{2X_m}{2^{B}}",
                         "hint": "The span is $2X_m$ wide and there are $2^B$ steps across it.",
                         "deconstruct": [
                             "The full-scale span runs from $-X_m$ to $+X_m$, a width of $2X_m$.",
@@ -105,7 +104,6 @@ several codes between samples.
                     {
                         "prompt": "The rounding error is uniform on $\\left(-\\frac{q}{2}, \\frac{q}{2}\\right)$. Write its mean square, $P_e$.",
                         "answer": "\\frac{q^{2}}{12}",
-                        "placeholder": "\\frac{q^{2}}{12}",
                         "hint": "The variance of a uniform distribution on an interval of width $w$ is $w^2/12$.",
                         "deconstruct": [
                             "The interval has width $q$, and the distribution is centred on zero, so the mean square is the variance.",
@@ -115,7 +113,6 @@ several codes between samples.
                     {
                         "prompt": "Write the mean square $P_x$ of a full-scale sine of amplitude $X_m$.",
                         "answer": "\\frac{X_m^{2}}{2}",
-                        "placeholder": "\\frac{X_m^{2}}{2}",
                         "hint": "The average of $\\sin^2$ over a whole number of cycles is one half.",
                         "deconstruct": [
                             "The instantaneous power is $X_m^2$ times the square of the sine.",
@@ -126,7 +123,6 @@ several codes between samples.
                         "prompt": "Form the ratio $P_x / P_e$ and substitute your expression for $q$. Write the result in terms of $B$ alone.",
                         "given": "You have $P_x = \\frac{X_m^{2}}{2}$, $P_e = \\frac{q^{2}}{12}$ and $q = \\frac{2X_m}{2^{B}}$.",
                         "answer": "\\frac{3}{2}\\cdot 2^{2B}",
-                        "placeholder": "\\frac{3}{2}\\cdot 2^{2B}",
                         "hint": "Substitute $q$ into $P_e$ first: the $X_m^2$ then cancels against the one in $P_x$.",
                         "deconstruct": [
                             "$P_e = \\frac{1}{12}\\cdot\\frac{4X_m^{2}}{2^{2B}} = \\frac{X_m^{2}}{3\\cdot 2^{2B}}$.",
@@ -373,7 +369,6 @@ its stored grid — and find out how far $p_1$ travels.
                     {
                         "prompt": "Write $a_2$ in terms of the two poles.",
                         "answer": "p_1 p_2",
-                        "placeholder": "p_1 p_2",
                         "hint": "For a monic quadratic the constant term is the product of the roots.",
                         "deconstruct": [
                             "$p^{2} + a_1 p + a_2$ factors as $\\left(p - p_1\\right)\\left(p - p_2\\right)$.",
@@ -383,7 +378,6 @@ its stored grid — and find out how far $p_1$ travels.
                     {
                         "prompt": "Hold $a_1$ fixed and differentiate $p^{2} + a_1 p + a_2 = 0$ implicitly with respect to $a_2$. Write the derivative of $p_1$ with respect to $a_2$, in terms of $p_1$ and $a_1$.",
                         "answer": "-\\frac{1}{2 p_1 + a_1}",
-                        "placeholder": "-\\frac{1}{2p_1 + a_1}",
                         "hint": "Differentiating term by term gives $2p_1 \\frac{dp_1}{da_2} + a_1 \\frac{dp_1}{da_2} + 1 = 0$.",
                         "deconstruct": [
                             "The first two terms each carry a factor $\\frac{dp_1}{da_2}$; the last term differentiates to 1.",
@@ -393,7 +387,6 @@ its stored grid — and find out how far $p_1$ travels.
                     {
                         "prompt": "Substitute $a_1 = -\\left(p_1 + p_2\\right)$ and simplify. Write the derivative in terms of the two poles alone.",
                         "answer": "-\\frac{1}{p_1 - p_2}",
-                        "placeholder": "-\\frac{1}{p_1 - p_2}",
                         "hint": "$2p_1 - p_1 - p_2$ collapses to a single difference.",
                         "deconstruct": [
                             "The denominator becomes $2p_1 - \\left(p_1 + p_2\\right)$.",
@@ -403,7 +396,6 @@ its stored grid — and find out how far $p_1$ travels.
                     {
                         "prompt": "Rounding $a_2$ onto a grid of spacing $\\delta$ moves it by at most $\\frac{\\delta}{2}$. Taking $p_1 > p_2$ and both real, write the resulting bound on how far $p_1$ moves.",
                         "answer": "\\frac{\\delta}{2\\left(p_1 - p_2\\right)}",
-                        "placeholder": "\\frac{\\delta}{2\\left(p_1 - p_2\\right)}",
                         "hint": "Multiply the worst-case coefficient error by the magnitude of the sensitivity you just found.",
                         "deconstruct": [
                             "The coefficient moves by at most $\\delta/2$.",
@@ -657,7 +649,6 @@ inside the same format. Work out what that costs.
                     {
                         "prompt": "Write the largest value $y[n]$ can reach, in terms of $X_m$ and the taps.",
                         "answer": "X_m \\left( b_0 + b_1 + b_2 \\right)",
-                        "placeholder": "X_m \\left( b_0+b_1+b_2 \\right)",
                         "hint": "The worst case is the input that is at full scale, with the right sign, in every tap at once.",
                         "deconstruct": [
                             "Each term is at most $b_k X_m$ because the taps are positive.",
@@ -667,7 +658,6 @@ inside the same format. Work out what that costs.
                     {
                         "prompt": "Scale the input by a factor $s$ before the filter so that the output can never exceed $X_m$. Write the largest such $s$.",
                         "answer": "\\frac{1}{b_0 + b_1 + b_2}",
-                        "placeholder": "\\frac{1}{b_0+b_1+b_2}",
                         "hint": "Set your previous answer, with $X_m$ replaced by $s X_m$, equal to $X_m$ and solve.",
                         "deconstruct": [
                             "The bound becomes $s X_m \\left( b_0 + b_1 + b_2 \\right)$.",
@@ -677,7 +667,6 @@ inside the same format. Work out what that costs.
                     {
                         "prompt": "That scaling shrinks the signal but not the quantisation floor beneath it. Write the factor by which the signal-to-noise ratio falls, in terms of the taps.",
                         "answer": "\\frac{1}{\\left( b_0 + b_1 + b_2 \\right)^{2}}",
-                        "placeholder": "\\frac{1}{\\left(b_0+b_1+b_2\\right)^{2}}",
                         "hint": "Power goes as the square of amplitude, and the noise power is unchanged by scaling the input.",
                         "deconstruct": [
                             "The signal amplitude is multiplied by $s$, so the signal power is multiplied by $s^{2}$.",
@@ -687,7 +676,6 @@ inside the same format. Work out what that costs.
                     {
                         "prompt": "Each of the three products is rounded to the data step $q$ before it is accumulated, and the three errors are independent. Write the total mean-square error at the output.",
                         "answer": "\\frac{q^{2}}{4}",
-                        "placeholder": "\\frac{q^{2}}{4}",
                         "hint": "Independent errors add in power, and you found the power of one of them in module 1.",
                         "deconstruct": [
                             "Each rounding contributes $\\frac{q^{2}}{12}$.",
@@ -942,7 +930,6 @@ instead of decaying to zero.
                     {
                         "prompt": "Write the largest amount by which rounding to the nearest multiple of $q$ can change a value.",
                         "answer": "\\frac{q}{2}",
-                        "placeholder": "\\frac{q}{2}",
                         "hint": "The grid points are $q$ apart, and nearest-neighbour rounding never has to travel more than halfway.",
                         "deconstruct": [
                             "Any value lies between two adjacent grid points, $q$ apart.",
@@ -952,7 +939,6 @@ instead of decaying to zero.
                     {
                         "prompt": "Before rounding, a stored value of magnitude $Y$ becomes $aY$. Write the amount by which it shrank.",
                         "answer": "Y\\left(1 - a\\right)",
-                        "placeholder": "Y\\left(1-a\\right)",
                         "hint": "Subtract the new magnitude from the old one and factor.",
                         "deconstruct": [
                             "The shrink is $Y - aY$.",
@@ -963,7 +949,6 @@ instead of decaying to zero.
                         "prompt": "The value stays put whenever rounding can undo that shrink entirely. Set the shrink equal to the largest rounding step and solve for $Y$: write the edge of the deadband.",
                         "given": "The shrink is $Y\\left(1-a\\right)$ and rounding can move a value by at most $\\frac{q}{2}$.",
                         "answer": "\\frac{q}{2\\left(1 - a\\right)}",
-                        "placeholder": "\\frac{q}{2\\left(1-a\\right)}",
                         "hint": "Divide both sides by $1 - a$.",
                         "deconstruct": [
                             "$Y\\left(1-a\\right) = \\frac{q}{2}$.",
@@ -973,7 +958,6 @@ instead of decaying to zero.
                     {
                         "prompt": "Evaluate that edge for $a = 0.8$, as a multiple of $q$.",
                         "answer": "\\frac{5}{2}",
-                        "placeholder": "\\frac{5}{2}",
                         "hint": "Put $a = 0.8$ into $\\frac{1}{2\\left(1-a\\right)}$.",
                         "deconstruct": [
                             "$1 - a = 0.2$, so the denominator is $0.4$.",

@@ -102,7 +102,7 @@ def main(argv):
         if not os.path.basename(p).startswith("_")
     )
 
-    jobs, where = [], []
+    jobs, where, leaks = [], [], []
     for path in files:
         with open(path, encoding="utf-8") as f:
             course = json.load(f)
@@ -114,6 +114,13 @@ def main(argv):
             for si, st in enumerate(dv.get("steps", []), 1):
                 jobs.append({"answer": st["answer"], "vars": names})
                 where.append((course["id"], mi, si, st["answer"], names, dv["title"]))
+                # A placeholder showing the answer turns the exercise into a
+                # transcription task. The app refuses to render one, but a course
+                # should not ship it either.
+                ph = "".join((st.get("placeholder") or "").split())
+                an = "".join((st.get("answer") or "").split())
+                if ph and ph == an:
+                    leaks.append(f"{course['id']}/M{mi} step {si}: the placeholder is the answer")
 
     if not jobs:
         print("no derivations found")
@@ -154,6 +161,14 @@ def main(argv):
         ok, total = by_course[cid]
         mark = "ok  " if ok == total else "FAIL"
         print(f"[{mark}] {cid:8} {ok}/{total} derivation steps self-check")
+
+    if leaks:
+        print("\nPLACEHOLDERS SHOWING THE ANSWER")
+        for l in leaks[:20]:
+            print("  !", l)
+        if len(leaks) > 20:
+            print(f"  ... and {len(leaks) - 20} more")
+        problems.extend(leaks)
 
     if problems:
         print("\nPROBLEMS")

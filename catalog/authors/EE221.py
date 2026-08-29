@@ -404,8 +404,8 @@ c.assert(rp >= 9e6 && rp <= 11e6,
                 "Each arm of the divider is therefore $R$ in parallel with $C$, of impedance $R/(1+j\\omega RC)$. The ratio is frequency independent only if the two arms have the same time constant.",
                 "The compensation condition is $R_1C_1 = R_2C_2$. Satisfy it and the divider gives $R_2/(R_1+R_2)$ at every frequency, which is also $C_1/(C_1+C_2)$ — the resistive and capacitive dividers agree.",
                 "Leave it unsatisfied and the probe is a filter. With $C_1 = 0$, a 9 MΩ/1 MΩ probe into 20 pF rolls off at $1/(2\\pi(R_1\\|R_2)C_2) = 8.8$ kHz: useless above the audio band.",
-                "On a square wave, under-compensation ($R_1C_1 < R_2C_2$) rounds the top of each edge and the trace droops up to the flat level; over-compensation spikes and settles back down. The trimmer in the probe body adjusts $C_1$ until the corners are square.",
-                "A first-order system's 10–90% rise time and its −3 dB bandwidth are locked together: $t_r = \\ln(9)\\tau$ and $f_{3dB} = 1/(2\\pi\\tau)$, so $t_r f_{3dB} = \\ln(9)/2\\pi = 0.35$.",
+                "On a square wave, under-compensation ($R_1C_1 < R_2C_2$) rounds the top of each edge and the trace creeps up to the flat level; over-compensation spikes and settles back down. The trimmer in the probe body adjusts $C_1$ until the corners are square.",
+                "A first-order system's 10–90% rise time and its −3 dB bandwidth are locked together: $t_r = \\ln(9)\\tau$ and $f_{3dB} = 1/(2\\pi\\tau)$, so $t_r f_{3dB} = \\ln(9)/2\\pi = 0.3497$, which everyone rounds to 0.35 and this course does too.",
                 "Cascaded stages add rise times in quadrature: $t_{measured}^2 \\approx t_{signal}^2 + t_{scope}^2$. A 1 ns edge on a 350 MHz scope (1 ns of its own) displays as 1.41 ns, and reading 1.41 ns off the screen as though it were the signal is a 41% error.",
                 "The probe's ground lead is an inductor — roughly 1 nH per millimetre — and with the tip capacitance it forms a resonant tank. Every fast edge rings it, and the ringing is on the screen, not in the circuit.",
             ],
@@ -590,7 +590,7 @@ Import `math` and use `math.sqrt`. Nothing here needs NumPy.
 
 import math
 
-BW_RISE_PRODUCT = 0.35  # ln(9) / (2 pi), for a first-order response
+BW_RISE_PRODUCT = 0.35  # ln(9)/(2 pi) = 0.3497, rounded as everyone rounds it
 
 
 def rise_time(bandwidth_hz):
@@ -639,7 +639,7 @@ if __name__ == "__main__":
 
 import math
 
-BW_RISE_PRODUCT = 0.35  # ln(9) / (2 pi), for a first-order response
+BW_RISE_PRODUCT = 0.35  # ln(9)/(2 pi) = 0.3497, rounded as everyone rounds it
 
 
 def rise_time(bandwidth_hz):
@@ -1509,7 +1509,7 @@ between operating an instrument and understanding one.
             "`sensor_resistance`, inverting the exact quarter-bridge relation — not the linear approximation — to recover the sensor's resistance from the corrected output.",
             "`temperature`, converting a sensor resistance to a temperature through the linear platinum model.",
             "`budget`, returning one contribution in kelvin for each named input, each evaluated as a numerical sensitivity coefficient times that input's standard uncertainty.",
-            "`combine` and `report`, giving the combined standard uncertainty and the final published string, with the uncertainty at two significant figures, the value at the same decimal place, and the coverage factor stated.",
+            "`combine` and `report`, giving the combined standard uncertainty and the final published string, with the uncertainty at two significant figures, the value at the same decimal place, the coverage factor stated, and the unit the chain actually produced — the result is a Celsius temperature, not a kelvin one.",
             "One sentence in the module docstring of `main.py` naming the dominant contribution and saying what would and would not be worth improving.",
         ],
         "constraints": [
@@ -1533,8 +1533,9 @@ between operating an instrument and understanding one.
             "Write `temperature_from(v_out, vex, rc, r0)` as a single function composing steps 2 and 3. `budget` then needs to perturb only that one function, which is what makes the numerical derivative easy.",
             "For the perturbation size, `h = abs(x) * 1e-6` works for every input here. Guard against a zero input with a small floor, or a budget entry for a quantity that happens to be zero will divide by nothing.",
             "Build the perturbed argument lists with `dict(args)` copies and keyword expansion — `temperature_from(**hi)` — rather than four `if` branches. The result is shorter and does not have to be rewritten when the model gains a fifth input.",
-            "The completion resistance enters twice over: it scales the sensor resistance directly, and it is the thing the sensor is being compared against. Its sensitivity coefficient comes out near 0.26 K per ohm, so 0.577 Ω of standard uncertainty is 0.15 K.",
+            "The completion resistance is what the sensor is measured against: the chain returns $R_s = R_c(1+x)$, so a 1 Ω error in it is very nearly a 1 Ω error in the sensor. Its sensitivity coefficient comes out near 0.26 K per ohm, so 0.577 Ω of standard uncertainty is 0.15 K — and $R_0$ has a coefficient of the same size and the opposite sign.",
             "For `report`, the number of decimals is `max(0, 1 - math.floor(math.log10(abs(u))))`, and `\"%.*f\" % (places, value)` takes the count as an argument. The clamp at zero matters: an uncertainty of 21 would otherwise ask for minus one decimal place and raise.",
+            "Pass the unit you are actually reporting. The chain returns degrees Celsius, and 1.00 °C is not 1.00 K — the interval is 0.35 kelvin wide either way, but the value is not a thermodynamic temperature and must not be labelled as one.",
         ],
         "files": [
             {"name": "bench.py", "ro": True, "content": r'''
@@ -1661,7 +1662,7 @@ if __name__ == "__main__":
         print("   %-6s %s" % (name, b[name]))
     uc = combine(list(b.values()))
     print("combined standard uncertainty", uc, "K")
-    print("reported:", report(t, 2.0 * uc, 2, "K"))
+    print("reported:", report(t, 2.0 * uc, 2, "°C"))
 '''},
         ],
         "main": "main.py",
@@ -1671,7 +1672,7 @@ if __name__ == "__main__":
 
 The completion resistors dominate: their 0.1% tolerance contributes 0.151 K of the
 0.176 K combined standard uncertainty, with the sensor's own 0.6 ohm tolerance next at
-0.090 K. Measuring the four completion resistors once against a calibrated standard,
+0.090 K. Measuring the three completion resistors once against a calibrated standard,
 and using the measured values, would remove most of the budget; buying a better
 multimeter would not, because the twelve readings contribute 0.00005 K and averaging
 more of them would be effort spent on the smallest term in the sum.
@@ -1775,7 +1776,7 @@ if __name__ == "__main__":
         print("   %-6s %s" % (name, b[name]))
     uc = combine(list(b.values()))
     print("combined standard uncertainty", uc, "K")
-    print("reported:", report(t, 2.0 * uc, 2, "K"))
+    print("reported:", report(t, 2.0 * uc, 2, "°C"))
 '''},
         ],
         "tests": [
@@ -1853,8 +1854,9 @@ c = combine([0.15053847137212684, 0.09032308282327609,
              0.0005784739432217952, 5.291301263200489e-05])
 assert abs(c - 0.1755574780111828) < 1e-9, \
     f"those four combine to 0.17556 K, got {c}"
-line = report(1.0000211828144399, 2.0 * 0.1755574780111828, 2, "K")
-assert line == "1.00 K ± 0.35 K (k = 2)", f"got {line!r}"
+line = report(1.0000211828144399, 2.0 * 0.1755574780111828, 2, "°C")
+assert line == "1.00 °C ± 0.35 °C (k = 2)", \
+    f"the chain returns a Celsius temperature, and 1.00 °C is not 1.00 K; got {line!r}"
 volts = report(9.901016666666667, 0.0034738707197847322, 2, "V")
 assert volts == "9.9010 V ± 0.0035 V (k = 2)", f"got {volts!r}"
 coarse = report(1234.5678, 21.3, 2, "V")

@@ -43,6 +43,11 @@
     "A convergence trace is the cheapest diagnostic you will ever write",
     "Divergence, oscillation and crawling are three distinct learning-rate failures"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Normal equation versus gradient descent",
     "runtime": "python",
@@ -111,6 +116,11 @@
     "F1 as the harmonic mean, and what a zero denominator should mean",
     "ROC-AUC as the probability a random positive outscores a random negative"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Logistic regression and the metrics that judge it",
     "runtime": "python",
@@ -179,6 +189,11 @@
     "Bootstrap aggregation averages away variance without touching bias",
     "Random feature subsets at each split decorrelate the trees, which is why forests beat bagging"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A decision tree, then a forest around it",
     "runtime": "python",
@@ -247,6 +262,11 @@
     "Hotelling deflation, A - lambda v v^T, exposes the next component",
     "Explained variance ratio is an eigenvalue divided by the trace"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "k-means++ and PCA from first principles",
     "runtime": "python",
@@ -315,6 +335,11 @@
     "Model capacity moves bias down and variance up; the sum has an interior minimum",
     "Selecting on the test set is the most common way to fool yourself"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Cross-validation, ridge, and a bias-variance decomposition",
     "runtime": "python",

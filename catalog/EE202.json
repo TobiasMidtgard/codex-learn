@@ -88,7 +88,7 @@
        "it depends on $V_{DS}$"
       ],
       "a": 1,
-      "why": "$g_m = \\sqrt{2kI_D}$, so at equal current the wider device wins by $\\sqrt{10} \\approx 3.2$\ntimes. Read the other way, $g_m = 2I_D/V_{ov}$: device B reaches 1 mA at an overdrive\nof only 0.316 V rather than 1.0 V, and a smaller overdrive for the same current is\nexactly what a larger $g_m$ means. Option C is the common misreading — $g_m$ depends on\nthe current *and* on the device."
+      "why": "$g_m = \\sqrt{2kI_D}$, so at equal current the wider device wins by $\\sqrt{10} \\approx 3.2$\ntimes. Read the other way, $g_m = 2I_D/V_{ov}$: device B reaches 1 mA at an overdrive\nof only 0.316 V rather than 1.0 V, and a smaller overdrive for the same current is\nexactly what a larger $g_m$ means. \"Identical, because $g_m$ depends only on $I_D$\" is the common misreading — $g_m$\ndepends on the current *and* on the device."
      },
      {
       "q": "$r_o = V_A/I_D$ with $V_A = 45$ V. A designer halves the bias current to 0.5 mA. What happens to the intrinsic gain $g_m r_o$?",
@@ -114,6 +114,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": {
     "title": "Where $g_m$ comes from, and its three faces",
@@ -132,7 +133,7 @@
       "prompt": "The overdrive is what the gate has to spare above the threshold. Write $V_{ov}$ in terms of $V_{GS}$ and $V_{th}$.",
       "given": "",
       "answer": "V_{GS} - V_{th}",
-      "placeholder": "V_{GS} - V_{th}",
+      "placeholder": "",
       "hint": "It is a definition, not a result: the gate-source voltage minus the threshold.",
       "deconstruct": [
        "Below $V_{th}$ the channel does not exist and no current flows.",
@@ -143,7 +144,7 @@
       "prompt": "Substitute that into the square law. Write $I_D$ in terms of $k$, $V_{GS}$ and $V_{th}$.",
       "given": "Start from $I_D = \\tfrac{1}{2}k V_{ov}^{2}$.",
       "answer": "\\frac{k}{2}(V_{GS} - V_{th})^{2}",
-      "placeholder": "\\frac{k}{2}(V_{GS} - V_{th})^{2}",
+      "placeholder": "",
       "hint": "Replace $V_{ov}$ with the expression you just wrote, and keep the whole bracket squared.",
       "deconstruct": [
        "The square applies to the entire overdrive, not just to $V_{GS}$.",
@@ -154,7 +155,7 @@
       "prompt": "Transconductance is $g_m = \\partial I_D / \\partial V_{GS}$. Differentiate that expression and write $g_m$ in terms of $k$ and $V_{ov}$.",
       "given": "",
       "answer": "k V_{ov}",
-      "placeholder": "k V_{ov}",
+      "placeholder": "",
       "hint": "The chain rule on $(V_{GS}-V_{th})^2$ brings down a 2, which cancels the one half. The inner derivative is 1.",
       "deconstruct": [
        "$\\frac{d}{dV_{GS}}\\left[\\frac{k}{2}(V_{GS}-V_{th})^2\\right] = \\frac{k}{2}\\cdot 2(V_{GS}-V_{th})$.",
@@ -165,7 +166,7 @@
       "prompt": "In a working amplifier you set the current, not the overdrive. Use $I_D = \\tfrac{1}{2}kV_{ov}^{2}$ to eliminate $k$, and write $g_m$ in terms of $I_D$ and $V_{ov}$.",
       "given": "",
       "answer": "\\frac{2 I_D}{V_{ov}}",
-      "placeholder": "\\frac{2 I_D}{V_{ov}}",
+      "placeholder": "",
       "hint": "Rearrange the square law for $k$, then substitute into $g_m = kV_{ov}$.",
       "deconstruct": [
        "From the square law, $k = 2I_D/V_{ov}^{2}$.",
@@ -176,7 +177,7 @@
       "prompt": "Now eliminate the overdrive instead, and write $g_m$ in terms of $k$ and $I_D$.",
       "given": "",
       "answer": "\\sqrt{2 k I_D}",
-      "placeholder": "\\sqrt{2 k I_D}",
+      "placeholder": "",
       "hint": "The square law gives $V_{ov} = \\sqrt{2I_D/k}$. Put that into $g_m = kV_{ov}$ and tidy the roots.",
       "deconstruct": [
        "$g_m = k\\sqrt{2I_D/k}$.",
@@ -324,6 +325,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "A four-resistor bias for 1 mA",
     "minutes": 28,
@@ -723,6 +725,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -847,7 +850,7 @@
        "$g_mr_o$"
       ],
       "a": 1,
-      "why": "Multiply $A_0 = g_mR_{out}$ by $f_{3dB} = 1/(2\\pi R_{out}C_L)$ and $R_{out}$ cancels,\nleaving $g_m/(2\\pi C_L)$. Option A is the bandwidth alone and option C the gain alone —\nthe point of the product is precisely that it contains neither $R_D$ nor $r_o$. For this\nstage: $2\\text{ mA/V}/(2\\pi\\times 354\\text{ pF}) = 900$ kHz, which is $9.0\\times 100$ kHz,\nas it must be."
+      "why": "Multiply $A_0 = g_mR_{out}$ by $f_{3dB} = 1/(2\\pi R_{out}C_L)$ and $R_{out}$ cancels,\nleaving $g_m/(2\\pi C_L)$. $1/(2\\pi R_{out}C_L)$ is the bandwidth alone and $g_mR_{out}$ the gain alone —\nthe point of the product is precisely that it contains neither $R_D$ nor $r_o$. For this\nstage: $2\\text{ mA/V}/(2\\pi\\times 354\\text{ pF}) = 900$ kHz, which is $9.0\\times 100$ kHz,\nas it must be."
      },
      {
       "q": "A specification demands twice the gain-bandwidth product from the same device and the same load capacitance. What has to change?",
@@ -873,6 +876,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "The output pole, drawn and measured",
     "minutes": 30,

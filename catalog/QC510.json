@@ -42,6 +42,11 @@
     "Finite sampling error falls as 1/sqrt(shots), which is why quantum experiments are repeated",
     "The Bloch sphere: theta = 2*acos(|a0|) and phi = arg(a1) - arg(a0) for one qubit"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "State vectors and the Born rule",
     "runtime": "python",
@@ -109,6 +114,11 @@
     "CNOT is a permutation of basis states; combined with single-qubit rotations it is universal",
     "Circuit depth versus gate count, and why the simulator's cost is 2^n regardless"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A tensor-structured circuit simulator",
     "runtime": "python",
@@ -176,6 +186,11 @@
     "For |Phi+> the correlation is E(a, b) = cos(a - b), independent of the individual angles",
     "CHSH: any local hidden-variable model obeys |S| <= 2, while quantum mechanics reaches 2*sqrt(2)"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Violating the CHSH inequality",
     "runtime": "python",
@@ -248,6 +263,11 @@
     "Grover as a rotation in the two-dimensional span of the marked and unmarked states",
     "Amplitude after k iterations is sin((2k+1)*theta) with sin(theta) = sqrt(M/N): overshooting makes it worse"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "One query, and a quadratic search",
     "runtime": "python",
@@ -320,6 +340,11 @@
     "The transform of a comb of period r is a comb of period N/r, so peaks sit near multiples of N/r",
     "Continued fractions turn a measured k/N into the denominator r, which is the classical half of Shor's algorithm"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "QFT on three qubits, and finding a period",
     "runtime": "python",

@@ -41,6 +41,11 @@
     "Transposition reverses products: (AB)^T = B^T A^T",
     "Floating-point equality needs a tolerance, so `equals` takes one and `==` picks a default"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A Matrix type over lists of lists",
     "runtime": "python",
@@ -113,6 +118,11 @@
     "The determinant is the product of the pivots, negated once per row interchange",
     "A square system is solvable for every right-hand side exactly when it has full rank"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Elimination with partial pivoting",
     "runtime": "python",
@@ -181,6 +191,11 @@
     "The inverse is n solves against the columns of the identity — never how you should solve Ax = b",
     "A zero pivot in exact arithmetic means singular; in floating point it means a tolerance test"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "PA = LU, and what the factors buy you",
     "runtime": "python",
@@ -249,6 +264,11 @@
     "Power iteration converges to the dominant eigenvector at rate |lambda_2 / lambda_1|",
     "The Rayleigh quotient v^T A v is the best eigenvalue estimate for a given v"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Gram-Schmidt, QR and the power method",
     "runtime": "python",

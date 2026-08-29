@@ -37,6 +37,9 @@
     "Reading a NameError / TypeError traceback from the bottom up"
    ],
    "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": null,
    "lab": {
     "title": "Trip cost calculator",
@@ -93,6 +96,9 @@
     "`break` and `continue`, and why an unreachable base case hangs the tab"
    ],
    "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": null,
    "lab": {
     "title": "Collatz chains",
@@ -149,6 +155,9 @@
     "Docstrings, and building one function out of another"
    ],
    "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": null,
    "lab": {
     "title": "Text statistics",
@@ -210,6 +219,9 @@
     "Handling `FileNotFoundError` instead of crashing on a first run"
    ],
    "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": null,
    "lab": {
     "title": "Score records",

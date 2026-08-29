@@ -95,7 +95,6 @@ frequency — which is not what the $f^{\alpha}$ suggests.
                     {
                         "prompt": "First, Faraday. The flux density is sinusoidal, $B(t) = B_m \\sin(2\\pi f t)$. Write the peak induced voltage $V_{pk}$ in terms of $N$, $A_e$, $f$ and $B_m$.",
                         "answer": "2\\pi f N A_e B_m",
-                        "placeholder": "2\\pi f N A_e B_m",
                         "hint": "$V = N A_e \\frac{dB}{dt}$, and differentiating a sine brings down a factor $2\\pi f$.",
                         "deconstruct": [
                             "The flux linkage is $N A_e B(t)$.",
@@ -106,7 +105,6 @@ frequency — which is not what the $f^{\alpha}$ suggests.
                         "prompt": "Now the real case. The winding is driven by a square wave of amplitude $V$ at frequency $f$: $+V$ for half a period, then $-V$. The flux ramps linearly, and over the positive half it travels the full swing $2 B_m$. Write $B_m$ in terms of $V$, $N$, $A_e$ and $f$.",
                         "given": "Half a period is $\\frac{1}{2f}$.",
                         "answer": "\\frac{V}{4 f N A_e}",
-                        "placeholder": "\\frac{V}{4 f N A_e}",
                         "hint": "With a constant applied voltage, $\\Delta B = \\frac{V \\Delta t}{N A_e}$. Set that equal to $2 B_m$.",
                         "deconstruct": [
                             "$\\Delta B = \\frac{V}{N A_e} \\cdot \\frac{1}{2f}$ over the positive half period.",
@@ -116,7 +114,6 @@ frequency — which is not what the $f^{\alpha}$ suggests.
                     {
                         "prompt": "Substitute that $B_m$ into $P_v = k f^{\\alpha} B_m^{\\beta}$, holding $V$, $N$ and $A_e$ fixed. Write the resulting exponent of $f$.",
                         "answer": "\\alpha - \\beta",
-                        "placeholder": "\\alpha - \\beta",
                         "hint": "$B_m$ carries a factor $\\frac{1}{f}$, and it is raised to the power $\\beta$.",
                         "deconstruct": [
                             "$B_m^{\\beta}$ contributes $f^{-\\beta}$.",
@@ -126,7 +123,6 @@ frequency — which is not what the $f^{\alpha}$ suggests.
                     {
                         "prompt": "You double the switching frequency with the same applied voltage and the same turns. Write the factor by which $P_v$ changes, in terms of $\\alpha$ and $\\beta$.",
                         "answer": "2^{\\alpha - \\beta}",
-                        "placeholder": "2^{\\alpha - \\beta}",
                         "hint": "You already have the exponent. Doubling $f$ multiplies $f^{p}$ by $2^{p}$.",
                         "deconstruct": [
                             "$P_v$ depends on frequency only through $f^{\\alpha-\\beta}$.",
@@ -136,7 +132,6 @@ frequency — which is not what the $f^{\alpha}$ suggests.
                     {
                         "prompt": "Back at the original frequency, you instead double the number of turns, keeping $V$ and $f$ fixed. Write the factor by which $P_v$ changes, in terms of $\\beta$.",
                         "answer": "2^{-\\beta}",
-                        "placeholder": "2^{-\\beta}",
                         "hint": "$B_m$ carries a factor $\\frac{1}{N}$ and nothing else in $P_v$ depends on $N$.",
                         "deconstruct": [
                             "Doubling $N$ halves $B_m$.",
@@ -366,7 +361,6 @@ You will not derive that here. You will find out what it says.
                     {
                         "prompt": "Substitute $\\omega = 2\\pi f$ into the skin depth. Write $\\delta$ in terms of $\\rho$, $f$ and $\\mu$.",
                         "answer": "\\sqrt{\\frac{\\rho}{\\pi f \\mu}}",
-                        "placeholder": "\\sqrt{\\frac{\\rho}{\\pi f \\mu}}",
                         "hint": "The 2 in the numerator and the 2 in $2\\pi f$ cancel.",
                         "deconstruct": [
                             "$\\frac{2\\rho}{\\omega\\mu} = \\frac{2\\rho}{2\\pi f \\mu}$.",
@@ -376,7 +370,6 @@ You will not derive that here. You will find out what it says.
                     {
                         "prompt": "Write the factor by which $\\delta$ changes when the frequency goes up by a hundred.",
                         "answer": "\\frac{1}{10}",
-                        "placeholder": "\\frac{1}{10}",
                         "hint": "$\\delta$ depends on $f$ only through $\\frac{1}{\\sqrt{f}}$.",
                         "deconstruct": [
                             "$\\delta \\propto f^{-1/2}$.",
@@ -386,7 +379,6 @@ You will not derive that here. You will find out what it says.
                     {
                         "prompt": "For $\\Delta \\gg 1$ the bracket's first term tends to 1 and the second to $\\frac{2(m^2-1)}{3}$. Take the single-layer case $m = 1$ and write $\\frac{R_{ac}}{R_{dc}}$ for a thick foil, in terms of $h$ and $\\delta$.",
                         "answer": "\\frac{h}{\\delta}",
-                        "placeholder": "\\frac{h}{\\delta}",
                         "hint": "With $m = 1$ the proximity term vanishes and the bracket is just 1, leaving the $\\Delta$ that multiplies it.",
                         "deconstruct": [
                             "$\\frac{R_{ac}}{R_{dc}} \\to \\Delta \\cdot 1 = \\Delta$.",
@@ -396,7 +388,6 @@ You will not derive that here. You will find out what it says.
                     {
                         "prompt": "Keeping $\\Delta \\gg 1$ but letting $m$ be general, the whole factor becomes $\\Delta\\frac{2m^2+1}{3}$. Write the ratio of a four-layer winding's ac resistance to a one-layer winding's, at the same $\\Delta$ and the same $R_{dc}$.",
                         "answer": "11",
-                        "placeholder": "11",
                         "hint": "Evaluate $\\frac{2m^2+1}{3}$ at $m = 4$ and at $m = 1$, and divide.",
                         "deconstruct": [
                             "At $m = 4$: $\\frac{2 \\cdot 16 + 1}{3} = 11$.",
@@ -406,7 +397,6 @@ You will not derive that here. You will find out what it says.
                     {
                         "prompt": "Hold the foil thickness $h$ and the layer count $m$ fixed and raise the frequency, staying in the thick regime. Then $R_{ac} \\propto f^{p}$. Write $p$.",
                         "answer": "\\frac{1}{2}",
-                        "placeholder": "\\frac{1}{2}",
                         "hint": "$R_{dc}$ does not depend on frequency at all, and $\\Delta = \\frac{h}{\\delta}$ carries all of it.",
                         "deconstruct": [
                             "$\\delta \\propto f^{-1/2}$, so $\\Delta \\propto f^{1/2}$.",
@@ -627,7 +617,6 @@ window of area $A_w$ whose usable copper fraction is $K_u$.
                     {
                         "prompt": "Each turn needs a conductor cross-section $\\frac{I}{J}$, and only the fraction $K_u$ of the window is copper. Write $A_w$ in terms of $N$, $I$, $J$ and $K_u$.",
                         "answer": "\\frac{N I}{J K_u}",
-                        "placeholder": "\\frac{N I}{J K_u}",
                         "hint": "The copper area is $N \\frac{I}{J}$, and that equals $K_u A_w$.",
                         "deconstruct": [
                             "Total copper in the window: $N \\cdot \\frac{I}{J}$.",
@@ -637,7 +626,6 @@ window of area $A_w$ whose usable copper fraction is $K_u$.
                     {
                         "prompt": "From module 1, square-wave excitation gives $B_m = \\frac{V}{4 f N A_e}$. Solve that for $N$.",
                         "answer": "\\frac{V}{4 f A_e B_m}",
-                        "placeholder": "\\frac{V}{4 f A_e B_m}",
                         "hint": "Multiply both sides by $N$ and divide by $B_m$.",
                         "deconstruct": [
                             "$B_m N = \\frac{V}{4 f A_e}$.",
@@ -647,7 +635,6 @@ window of area $A_w$ whose usable copper fraction is $K_u$.
                     {
                         "prompt": "Form the area product $A_p = A_w A_e$ by substituting that $N$ into your expression for $A_w$. Write $A_p$ in terms of $V$, $I$, $f$, $B_m$, $J$ and $K_u$.",
                         "answer": "\\frac{V I}{4 f B_m J K_u}",
-                        "placeholder": "\\frac{V I}{4 f B_m J K_u}",
                         "hint": "$A_w$ now carries a $\\frac{1}{A_e}$, and you are multiplying by $A_e$.",
                         "deconstruct": [
                             "$A_w = \\frac{I}{J K_u} \\cdot \\frac{V}{4 f A_e B_m}$.",
@@ -657,7 +644,6 @@ window of area $A_w$ whose usable copper fraction is $K_u$.
                     {
                         "prompt": "Two designs handle the same $V I$ at the same $B_m$, $J$ and $K_u$, one at $f$ and the other at $4f$. Write the ratio of the second design's area product to the first's.",
                         "answer": "\\frac{1}{4}",
-                        "placeholder": "\\frac{1}{4}",
                         "hint": "$A_p$ depends on frequency only through $\\frac{1}{f}$.",
                         "deconstruct": [
                             "Every other symbol in $A_p$ is held fixed.",
@@ -667,7 +653,6 @@ window of area $A_w$ whose usable copper fraction is $K_u$.
                     {
                         "prompt": "A sinusoid instead of a square wave replaces the 4 by $4.44$, and other waveforms have their own constant. Writing that constant as $K_f$, rewrite $A_p$.",
                         "answer": "\\frac{V I}{K_f f B_m J K_u}",
-                        "placeholder": "\\frac{V I}{K_f f B_m J K_u}",
                         "hint": "The 4 came from Faraday and nothing else; replace it in place.",
                         "deconstruct": [
                             "The waveform constant entered only through $B_m = \\frac{V}{K_f f N A_e}$.",
@@ -950,7 +935,6 @@ temperature, which is what a ferrite actually does.
                     {
                         "prompt": "The junction must stay below $T_{max}$. Write the largest $P$ one device may dissipate, still with $n$ of them on the sink.",
                         "answer": "\\frac{T_{max} - T_a}{R_{jc} + R_{cs} + n R_{sa}}",
-                        "placeholder": "\\frac{T_{max} - T_a}{R_{jc} + R_{cs} + n R_{sa}}",
                         "hint": "Set $T_j = T_{max}$ in the previous answer and collect the $P$ terms.",
                         "deconstruct": [
                             "$T_{max} - T_a = P(R_{jc} + R_{cs}) + n P R_{sa}$.",
@@ -961,7 +945,6 @@ temperature, which is what a ferrite actually does.
                         "prompt": "Now let the dissipation itself depend on temperature: $P = P_0 \\left(1 + a (T_j - T_a)\\right)$ with $a > 0$, and collapse the whole path to a single $R_{ja}$ carrying one device. Substituting $T_j - T_a = P R_{ja}$, solve for $P$.",
                         "given": "You are solving one linear equation in $P$; $P$ appears on both sides.",
                         "answer": "\\frac{P_0}{1 - a P_0 R_{ja}}",
-                        "placeholder": "\\frac{P_0}{1 - a P_0 R_{ja}}",
                         "hint": "Expand to $P = P_0 + a P_0 R_{ja} P$, move both $P$ terms to the left, then factor.",
                         "deconstruct": [
                             "$P = P_0 + P_0 a P R_{ja}$.",
@@ -971,7 +954,6 @@ temperature, which is what a ferrite actually does.
                     {
                         "prompt": "That denominator can reach zero. Write the largest $R_{ja}$ for which a steady solution exists at all, in terms of $a$ and $P_0$.",
                         "answer": "\\frac{1}{a P_0}",
-                        "placeholder": "\\frac{1}{a P_0}",
                         "hint": "Set the denominator to zero and solve for $R_{ja}$.",
                         "deconstruct": [
                             "$1 - a P_0 R_{ja} = 0$.",

@@ -97,7 +97,6 @@ difference $t_{skew}$, positive when the capture clock is *late*.
                     {
                         "prompt": "Ignore skew for a moment. Write the smallest clock period $T$ for which the data arrives in time.",
                         "answer": "t_{cq} + t_{logic} + t_{setup}",
-                        "placeholder": "t_{cq} + t_{logic} + t_{setup}",
                         "hint": "The three delays happen one after another, and all three must fit inside one period.",
                         "deconstruct": [
                             "Data leaves the launching flop $t_{cq}$ after the edge.",
@@ -108,7 +107,6 @@ difference $t_{skew}$, positive when the capture clock is *late*.
                     {
                         "prompt": "Now let the capture clock arrive $t_{skew}$ late. The data has that much longer to get there. Write the smallest period again.",
                         "answer": "t_{cq} + t_{logic} + t_{setup} - t_{skew}",
-                        "placeholder": "t_{cq} + t_{logic} + t_{setup} - t_{skew}",
                         "hint": "A late capture edge lends time to this path. It is borrowed, not created — the next stage pays it back.",
                         "deconstruct": [
                             "The capture edge happens at $T + t_{skew}$ rather than at $T$.",
@@ -119,7 +117,6 @@ difference $t_{skew}$, positive when the capture clock is *late*.
                     {
                         "prompt": "For a period $T$ that is actually given to you, the setup slack is how much of it is left over. Write the slack.",
                         "answer": "T + t_{skew} - t_{cq} - t_{logic} - t_{setup}",
-                        "placeholder": "T + t_{skew} - t_{cq} - t_{logic} - t_{setup}",
                         "hint": "Slack is required-arrival minus actual-arrival, and a negative number is a violation.",
                         "deconstruct": [
                             "The data is required by $T + t_{skew} - t_{setup}$.",
@@ -130,7 +127,6 @@ difference $t_{skew}$, positive when the capture clock is *late*.
                     {
                         "prompt": "Write the highest frequency this path will run at, in terms of the delays.",
                         "answer": "\\frac{1}{t_{cq} + t_{logic} + t_{setup} - t_{skew}}",
-                        "placeholder": "\\frac{1}{t_{cq} + t_{logic} + t_{setup} - t_{skew}}",
                         "hint": "Frequency is the reciprocal of the smallest period you already wrote.",
                         "deconstruct": [
                             "You have $T_{min}$ from the second step.",
@@ -140,7 +136,6 @@ difference $t_{skew}$, positive when the capture clock is *late*.
                     {
                         "prompt": "Hold is the opposite failure: new data racing through the logic and overwriting the capture flop's input before it has finished sampling the old value. With $t_{short}$ the *fastest* path through the cloud, write the hold margin.",
                         "answer": "t_{cq} + t_{short} - t_{hold} - t_{skew}",
-                        "placeholder": "t_{cq} + t_{short} - t_{hold} - t_{skew}",
                         "hint": "New data must not arrive before $t_{hold}$ after the capture edge, and the capture edge is $t_{skew}$ late.",
                         "deconstruct": [
                             "The earliest new data can arrive is $t_{cq} + t_{short}$ after the launch edge.",
@@ -462,7 +457,6 @@ for the clock-to-output plus setup overhead of the register between cycles.
                     {
                         "prompt": "Write the number of clock cycles $C$ one division takes.",
                         "answer": "W + 2",
-                        "placeholder": "W + 2",
                         "hint": "Count the states the controller passes through for one operation: LOAD, then the iterations, then WRITEBACK.",
                         "deconstruct": [
                             "One cycle in LOAD.",
@@ -473,7 +467,6 @@ for the clock-to-output plus setup overhead of the register between cycles.
                     {
                         "prompt": "At clock frequency $f$, write the throughput in divisions per second.",
                         "answer": "\\frac{f}{W + 2}",
-                        "placeholder": "\\frac{f}{W + 2}",
                         "hint": "Divisions per second is cycles per second divided by cycles per division.",
                         "deconstruct": [
                             "The machine completes one operation every $C$ cycles.",
@@ -483,7 +476,6 @@ for the clock-to-output plus setup overhead of the register between cycles.
                     {
                         "prompt": "The longest path in this machine is one iteration. Write the clock period the iterative design can run at.",
                         "answer": "t_{it} + t_{reg}",
-                        "placeholder": "t_{it} + t_{reg}",
                         "hint": "One iteration's logic sits between two registers, and the register overhead is charged once per cycle.",
                         "deconstruct": [
                             "The path is register, one iteration of logic, register.",
@@ -493,7 +485,6 @@ for the clock-to-output plus setup overhead of the register between cycles.
                     {
                         "prompt": "Now unroll it completely: one combinational block doing all $W$ iterations, finishing in a single cycle. Write that design's clock period.",
                         "answer": "W \\cdot t_{it} + t_{reg}",
-                        "placeholder": "W \\cdot t_{it} + t_{reg}",
                         "hint": "The same register overhead, but now $W$ iterations of logic are in series between the two registers.",
                         "deconstruct": [
                             "Unrolling removes the registers between iterations, not the logic.",
@@ -788,7 +779,6 @@ because it has no pipeline at all.
                     {
                         "prompt": "Write the number of cycles the pipeline needs to retire all $n$ items.",
                         "answer": "n + k - 1",
-                        "placeholder": "n + k - 1",
                         "hint": "The first item takes $k$ cycles to come out. After that, one comes out every cycle.",
                         "deconstruct": [
                             "Item 1 emerges at cycle $k$.",
@@ -799,7 +789,6 @@ because it has no pipeline at all.
                     {
                         "prompt": "Write the speedup $S$ over the unpipelined machine, which needs $nk$ cycles.",
                         "answer": "\\frac{n \\cdot k}{n + k - 1}",
-                        "placeholder": "\\frac{n \\cdot k}{n + k - 1}",
                         "hint": "Speedup is old cycles over new cycles.",
                         "deconstruct": [
                             "Unpipelined: $nk$ cycles.",
@@ -810,7 +799,6 @@ because it has no pipeline at all.
                     {
                         "prompt": "Let $n$ grow without bound. Write the limit of $S$.",
                         "answer": "k",
-                        "placeholder": "k",
                         "hint": "Divide numerator and denominator by $n$ and see what survives.",
                         "deconstruct": [
                             "$S = k / \\left(1 + (k-1)/n\\right)$.",
@@ -821,7 +809,6 @@ because it has no pipeline at all.
                     {
                         "prompt": "Now let a fraction $p$ of the items stall for $b$ cycles each. Write the total cycles.",
                         "answer": "n + k - 1 + n \\cdot p \\cdot b",
-                        "placeholder": "n + k - 1 + n \\cdot p \\cdot b",
                         "hint": "$np$ items each cost $b$ extra cycles, on top of the ideal schedule.",
                         "deconstruct": [
                             "The ideal schedule is $n + k - 1$.",
@@ -832,7 +819,6 @@ because it has no pipeline at all.
                     {
                         "prompt": "For large $n$ the fill term stops mattering. Write the cycles per item, $CPI$.",
                         "answer": "1 + p \\cdot b",
-                        "placeholder": "1 + p \\cdot b",
                         "hint": "Divide the previous answer by $n$ and drop the $\\left(k-1\\right)/n$ term.",
                         "deconstruct": [
                             "Cycles per item is $\\left(n + k - 1 + npb\\right)/n$.",
@@ -1088,7 +1074,6 @@ random, independently each cycle.
                     {
                         "prompt": "Write the probability $p$ that one random vector is that exact pair.",
                         "answer": "\\frac{1}{2^{2 \\cdot W}}",
-                        "placeholder": "\\frac{1}{2^{2 \\cdot W}}",
                         "hint": "Each operand has $2^W$ possible values, and the two are drawn independently.",
                         "deconstruct": [
                             "There are $2^W \\cdot 2^W$ equally likely pairs.",
@@ -1098,7 +1083,6 @@ random, independently each cycle.
                     {
                         "prompt": "Write the probability that one random vector misses it.",
                         "answer": "1 - p",
-                        "placeholder": "1 - p",
                         "hint": "The vector either hits or it does not.",
                         "deconstruct": [
                             "The two outcomes are exhaustive and mutually exclusive.",
@@ -1107,7 +1091,6 @@ random, independently each cycle.
                     {
                         "prompt": "The vectors are independent. Write the probability that $n$ of them all miss.",
                         "answer": "\\left(1 - p\\right)^{n}",
-                        "placeholder": "\\left(1-p\\right)^{n}",
                         "hint": "Independent events multiply.",
                         "deconstruct": [
                             "Each vector misses with probability $1 - p$.",
@@ -1117,7 +1100,6 @@ random, independently each cycle.
                     {
                         "prompt": "Write the expected number of vectors drawn until the first hit.",
                         "answer": "\\frac{1}{p}",
-                        "placeholder": "\\frac{1}{p}",
                         "hint": "This is the mean of a geometric distribution — the answer is as simple as it looks.",
                         "deconstruct": [
                             "Each draw is an independent trial with success probability $p$.",

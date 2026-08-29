@@ -42,6 +42,11 @@
     "`__repr__` is for the programmer and should round-trip through `eval` where it can",
     "Immutability by convention (`_name`), by `__slots__`, and by overriding `__setattr__`"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "An immutable Vector2D",
     "runtime": "python",
@@ -114,6 +119,11 @@
     "Liskov substitution: a subtype must be usable wherever the supertype is",
     "`isinstance` for type questions, `type(self).__name__` for the dynamic class"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "An abstract Shape hierarchy",
     "runtime": "python",
@@ -186,6 +196,11 @@
     "Assigning to `self.attr` always creates an instance attribute that shadows the class one",
     "`@classmethod` receives the class (alternative constructors); `@staticmethod` receives nothing"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A bank account that defends itself",
     "runtime": "python",
@@ -254,6 +269,11 @@
     "`__contains__` makes `in` explicit — without it Python falls back to iteration",
     "Returning a new container from a slice or `__add__` keeps the type closed"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A Playlist that behaves like a sequence",
     "runtime": "python",

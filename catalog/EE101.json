@@ -65,7 +65,7 @@
        "one electron passing a point every second"
       ],
       "a": 0,
-      "why": "Current is a *rate*: $I = Q/t$, coulombs per second. Option B describes a quantity of\ncharge, not a flow of it. Option C is a watt, which is power. Option D is a flow, but\none electron per second is about $1.6\\times10^{-19}$ A — a fantastically small current."
+      "why": "Current is a *rate*: $I = Q/t$, coulombs per second. Charge *sitting* on a conductor is a quantity of charge, not a flow of it. A joule\nevery second is a watt, which is power. One electron per second is a flow, but it is\nabout $1.6\\times10^{-19}$ A — a fantastically small current."
      },
      {
       "q": "A torch bulb draws 0.5 A for 2 minutes. How much charge passes through it?",
@@ -124,6 +124,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -247,6 +248,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "One resistor, one current",
     "minutes": 20,
@@ -519,6 +521,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "Six kilohms from a drawer of four-kilohm resistors",
     "minutes": 25,
@@ -851,7 +854,7 @@
        "it depends on the supply voltage"
       ],
       "a": 1,
-      "why": "They carry the same current, being in series, so $P = I^2R$ makes the larger resistance\nthe hotter one — twice as hot here. Option A misreads series for parallel: the current\nthrough both is identical, which is exactly why $I^2R$ is the right form to reach for."
+      "why": "They carry the same current, being in series, so $P = I^2R$ makes the larger resistance\nthe hotter one — twice as hot here. Choosing the 10 kΩ because more current flows through it misreads series for\nparallel: the current through both is identical, which is exactly why $I^2R$ is the right form to reach for."
      },
      {
       "q": "A 9 V supply drives a divider drawing 0.3 mA, and the two resistors dissipate 1.8 mW and 0.9 mW. What must the supply be delivering?",
@@ -866,6 +869,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "A 3 V rail that survives its load",
     "minutes": 28,

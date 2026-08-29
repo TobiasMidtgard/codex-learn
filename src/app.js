@@ -2258,6 +2258,18 @@ function renderSandbox(main, l) {
    The scaffolded middle step. Each stage asks for the next expression rather than
    showing it; SymPy decides equivalence, so any correct algebra is accepted. A step
    that will not come can be broken into smaller ones rather than surrendered. */
+/* A placeholder is meant to show the *shape* of an answer, not the answer. Almost the
+   whole catalogue — 337 of 376 steps, including the first course, which every later
+   one copied — set it equal to the answer, so the thing being asked for was printed
+   in the box before the learner typed a character. Rejecting it here fixes every one
+   of them at once, and tools/verify_derivations.py fails the build if it comes back. */
+function placeholderFor(st) {
+  const ph = String(st.placeholder || '').replace(/\s+/g, '');
+  const an = String(st.answer || '').replace(/\s+/g, '');
+  if (ph && ph !== an) return st.placeholder;
+  return 'your expression in LaTeX, e.g. \\frac{a}{b + c}';
+}
+
 function renderDerive(main, l) {
   const steps = l.steps || [];
   const state = (P.derive && P.derive[l.id]) || { done: 0 };
@@ -2278,7 +2290,7 @@ function renderDerive(main, l) {
           ? '<div class="dv-answer">' + MathML.render(st.answer, true) + '</div>'
           : '<div class="dv-work">' +
               '<label class="dv-in"><span>Your expression, in LaTeX</span>' +
-                '<input type="text" data-ans="' + i + '" placeholder="' + esc(st.placeholder || 'e.g. \\frac{1}{1 + sRC}') + '" autocomplete="off" spellcheck="false"></label>' +
+                '<input type="text" data-ans="' + i + '" placeholder="' + esc(placeholderFor(st)) + '" autocomplete="off" spellcheck="false"></label>' +
               '<div class="dv-preview" data-prev="' + i + '"></div>' +
               '<div class="dv-acts">' +
                 '<button class="btn success" data-check="' + i + '">Check</button>' +

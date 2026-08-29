@@ -103,7 +103,6 @@ Everything below follows from that one series and from conservation of power.
                     {
                         "prompt": "Take $A = V_{in}/2$. Write the peak amplitude of the fundamental of the bridge voltage.",
                         "answer": "\\frac{2 V_{in}}{\\pi}",
-                        "placeholder": "\\frac{2 V_{in}}{\\pi}",
                         "hint": "The series has $4A/\\pi$ in front of the fundamental sine. Substitute the half-rail amplitude.",
                         "deconstruct": [
                             "The fundamental term is $(4A/\\pi)\\sin\\theta$, so its peak is $4A/\\pi$.",
@@ -113,7 +112,6 @@ Everything below follows from that one series and from conservation of power.
                     {
                         "prompt": "The tank sees a sinusoid, so what matters for power is its RMS value. Write the RMS of that fundamental.",
                         "answer": "\\frac{\\sqrt{2} V_{in}}{\\pi}",
-                        "placeholder": "\\frac{\\sqrt{2} V_{in}}{\\pi}",
                         "hint": "Divide a peak by $\\sqrt{2}$ to get the RMS of a sinusoid.",
                         "deconstruct": [
                             "RMS of a sinusoid is peak over $\\sqrt{2}$.",
@@ -123,7 +121,6 @@ Everything below follows from that one series and from conservation of power.
                     {
                         "prompt": "Now the output side. The tank current arriving at the rectifier is a sinusoid of peak $I_p$, and the rectifier passes its magnitude to the load. The average of a full-wave rectified sinusoid is $2I_p/\\pi$, and that average is the DC output current $I_o$. Write $I_p$ in terms of $I_o$.",
                         "answer": "\\frac{\\pi I_o}{2}",
-                        "placeholder": "\\frac{\\pi I_o}{2}",
                         "hint": "Set $2I_p/\\pi = I_o$ and solve for $I_p$.",
                         "deconstruct": [
                             "The capacitor holds the output voltage, so all the rectified current goes to the load on average.",
@@ -133,7 +130,6 @@ Everything below follows from that one series and from conservation of power.
                     {
                         "prompt": "Because the output capacitor holds $V_o$ steady and the diodes commutate with the current, the voltage the tank sees at the rectifier input is itself a square wave alternating between $+V_o$ and $-V_o$. Write the peak amplitude of its fundamental.",
                         "answer": "\\frac{4 V_o}{\\pi}",
-                        "placeholder": "\\frac{4 V_o}{\\pi}",
                         "hint": "Same Fourier series as step one, now with $A = V_o$.",
                         "deconstruct": [
                             "The rectifier input voltage is $\\pm V_o$ in phase with the current.",
@@ -410,7 +406,6 @@ divider; the work is in choosing the right variables so the answer is readable.
                     {
                         "prompt": "Write the reactance of the series $L_r$–$C_r$ branch at angular frequency $\\omega$ — the imaginary part of its impedance, in terms of $\\omega$, $L_r$ and $C_r$.",
                         "answer": "\\omega L_r - \\frac{1}{\\omega C_r}",
-                        "placeholder": "\\omega L_r - \\frac{1}{\\omega C_r}",
                         "hint": "An inductor contributes $+\\omega L$ and a capacitor $-1/(\\omega C)$ to the reactance.",
                         "deconstruct": [
                             "$Z_L = j\\omega L_r$ and $Z_C = 1/(j\\omega C_r) = -j/(\\omega C_r)$.",
@@ -420,7 +415,6 @@ divider; the work is in choosing the right variables so the answer is readable.
                     {
                         "prompt": "Write the $\\omega_r$ at which that reactance is zero.",
                         "answer": "\\frac{1}{\\sqrt{L_r C_r}}",
-                        "placeholder": "\\frac{1}{\\sqrt{L_r C_r}}",
                         "hint": "Set the two terms equal and solve for $\\omega$.",
                         "deconstruct": [
                             "$\\omega L_r = 1/(\\omega C_r)$ gives $\\omega^2 = 1/(L_rC_r)$.",
@@ -431,7 +425,6 @@ divider; the work is in choosing the right variables so the answer is readable.
                         "prompt": "Now normalise. With $Z_0 = \\sqrt{L_r/C_r}$ and $x = \\omega/\\omega_r$, rewrite that same reactance using only $Z_0$ and $x$.",
                         "given": "Note that $\\omega_r L_r = Z_0$ and $1/(\\omega_r C_r) = Z_0$ as well — that is what makes $Z_0$ the natural unit.",
                         "answer": "Z_0 \\left( x - \\frac{1}{x} \\right)",
-                        "placeholder": "Z_0 \\left( x - \\frac{1}{x} \\right)",
                         "hint": "Substitute $\\omega = x\\omega_r$ into both terms and factor $Z_0$ out.",
                         "deconstruct": [
                             "$\\omega L_r = x\\,\\omega_r L_r = xZ_0$.",
@@ -721,7 +714,6 @@ midpoint sees two of them: one charging as the other discharges.
                     {
                         "prompt": "Write the total charge that must be moved to swing the midpoint through the full rail voltage $V_{in}$.",
                         "answer": "2 C_{oss} V_{in}",
-                        "placeholder": "2 C_{oss} V_{in}",
                         "hint": "One capacitor goes from $0$ to $V_{in}$ and the other from $V_{in}$ to $0$; both cost $C_{oss}V_{in}$.",
                         "deconstruct": [
                             "Charge on a capacitor changing by $\\Delta V$ is $C\\,\\Delta V$.",
@@ -731,7 +723,6 @@ midpoint sees two of them: one charging as the other discharges.
                     {
                         "prompt": "Suppose the tank current is roughly constant at $I_d$ across the dead time. Write the shortest dead time that can deliver that charge.",
                         "answer": "\\frac{2 C_{oss} V_{in}}{I_d}",
-                        "placeholder": "\\frac{2 C_{oss} V_{in}}{I_d}",
                         "hint": "Constant current for a time $t$ delivers charge $I t$.",
                         "deconstruct": [
                             "Charge delivered is $I_d t_d$.",
@@ -742,7 +733,6 @@ midpoint sees two of them: one charging as the other discharges.
                         "prompt": "Now find that current. In an LLC at resonance the voltage across $L_m$ is clamped at half the rail, $V_{in}/2$, for each half-period $T_s/2$. The magnetising current is therefore a symmetric triangle. Write its peak value $I_m$.",
                         "given": "A constant voltage $V$ across an inductance $L$ for a time $\\Delta t$ changes its current by $V\\Delta t/L$.",
                         "answer": "\\frac{V_{in} T_s}{8 L_m}",
-                        "placeholder": "\\frac{V_{in} T_s}{8 L_m}",
                         "hint": "The half-period gives the peak-to-peak swing; the peak is half of that because the triangle is symmetric about zero.",
                         "deconstruct": [
                             "Over $T_s/2$ the current changes by $(V_{in}/2)(T_s/2)/L_m = V_{in}T_s/(4L_m)$.",
@@ -752,7 +742,6 @@ midpoint sees two of them: one charging as the other discharges.
                     {
                         "prompt": "Zero-voltage switching holds when the magnetising current is at least the current the charge budget demands. Set $I_m$ equal to that demand and solve for the largest magnetising inductance that still works.",
                         "answer": "\\frac{t_d T_s}{16 C_{oss}}",
-                        "placeholder": "\\frac{t_d T_s}{16 C_{oss}}",
                         "hint": "Equate $V_{in}T_s/(8L_m)$ with $2C_{oss}V_{in}/t_d$ and notice what cancels.",
                         "deconstruct": [
                             "$\\frac{V_{in}T_s}{8L_m} = \\frac{2C_{oss}V_{in}}{t_d}$.",
@@ -1011,7 +1000,6 @@ what follows.
                     {
                         "prompt": "Write the RMS value of a symmetric triangular waveform of peak value $I_m$.",
                         "answer": "\\frac{I_m}{\\sqrt{3}}",
-                        "placeholder": "\\frac{I_m}{\\sqrt{3}}",
                         "hint": "Over a rising ramp from $-I_m$ to $+I_m$ the mean square works out to $I_m^2/3$.",
                         "deconstruct": [
                             "Take one quarter period rising linearly from $0$ to $I_m$.",
@@ -1053,7 +1041,6 @@ what follows.
                     {
                         "prompt": "Core loss density follows Steinmetz, $P_v = k f_s^{\\alpha} B^{\\beta}$. For a fixed applied volt-second the peak flux density goes as $B \\propto 1/f_s$. Substituting that, write how $P_v$ scales with $f_s$ — as a power of $f_s$.",
                         "answer": "f_s^{\\alpha - \\beta}",
-                        "placeholder": "f_s^{\\alpha - \\beta}",
                         "hint": "Replace $B$ by $1/f_s$ and collect the exponents; the constants do not matter here.",
                         "deconstruct": [
                             "$B^{\\beta}$ becomes proportional to $f_s^{-\\beta}$.",

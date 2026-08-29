@@ -43,6 +43,11 @@
     "Arithmetic intensity = flops per byte moved; the roofline it implies",
     "Blocking changes the accumulation *order* of a sum, so verify equality deliberately"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Blocked matrix multiply and its traffic model",
     "runtime": "python",
@@ -115,6 +120,11 @@
     "The identity element is what lets you pad to a power of two without changing the answer",
     "Associativity is required; commutativity is not — the reduction order must stay left to right"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Blelloch scan as a task DAG",
     "runtime": "python",
@@ -187,6 +197,11 @@
     "Systematic exploration (model checking) beats stress testing: it either finds the bug or proves its absence",
     "Deadlock is a reachable state with no enabled transition and unfinished threads"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A deterministic interleaving explorer",
     "runtime": "python",
@@ -255,6 +270,11 @@
     "Latency-bound versus bandwidth-bound collectives, and why small messages need a different algorithm",
     "Instrumenting a simulated world is how you audit an implementation against its bound"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A simulated MPI world",
     "runtime": "python",

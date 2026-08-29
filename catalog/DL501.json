@@ -42,6 +42,11 @@
     "Local derivatives: `d(a*b)/da = b`, `d(tanh x)/dx = 1 - tanh²x`, `d(exp x)/dx = exp x`",
     "Central finite differences, `(f(x+h) - f(x-h)) / 2h`, as an independent oracle"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A scalar autodiff engine",
     "runtime": "python",
@@ -110,6 +115,11 @@
     "Forgetting `zero_grad` accumulates gradients across steps and diverges",
     "Learning rate as a step size: too small stalls, too large oscillates"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Training an MLP by hand",
     "runtime": "python",
@@ -191,6 +201,11 @@
     "An embedding table is a lookup: token id to a learned dense vector",
     "Cosine similarity measures direction, ignoring magnitude — undefined at the origin"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Byte-pair encoding and vector lookup",
     "runtime": "python",
@@ -263,6 +278,11 @@
     "Heads split the model dimension, attend independently, then concatenate",
     "Attention is permutation-equivariant, which is why positional information is added"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Scaled dot-product attention from scratch",
     "runtime": "python",
@@ -335,6 +355,11 @@
     "Inverse-transform sampling: one uniform draw against the cumulative distribution",
     "Perplexity is `exp` of the mean negative log-likelihood — the effective branching factor"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Four decoding strategies and a perplexity",
     "runtime": "python",

@@ -52,6 +52,9 @@
      "The phase plot is the switching test in disguise. The tank input impedance angle is $-(90^\\circ + \\varphi)$, where $\\varphi$ is the plotted phase. At the corner $\\varphi = -90^\\circ$ exactly, whatever the damping, so the tank is purely resistive there; anywhere the phase is *below* $-90^\\circ$ the tank looks inductive and the bridge can switch at zero volts. Check one: at $\\zeta = 0.5$ and one octave above the corner the phase reads $-146.3^\\circ$, so the impedance angle is $+56.3^\\circ$."
     ]
    },
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": {
     "title": "What the first-harmonic approximation replaces the converter with",
     "minutes": 14,
@@ -72,7 +75,7 @@
       "prompt": "Take $A = V_{in}/2$. Write the peak amplitude of the fundamental of the bridge voltage.",
       "given": "",
       "answer": "\\frac{2 V_{in}}{\\pi}",
-      "placeholder": "\\frac{2 V_{in}}{\\pi}",
+      "placeholder": "",
       "hint": "The series has $4A/\\pi$ in front of the fundamental sine. Substitute the half-rail amplitude.",
       "deconstruct": [
        "The fundamental term is $(4A/\\pi)\\sin\\theta$, so its peak is $4A/\\pi$.",
@@ -83,7 +86,7 @@
       "prompt": "The tank sees a sinusoid, so what matters for power is its RMS value. Write the RMS of that fundamental.",
       "given": "",
       "answer": "\\frac{\\sqrt{2} V_{in}}{\\pi}",
-      "placeholder": "\\frac{\\sqrt{2} V_{in}}{\\pi}",
+      "placeholder": "",
       "hint": "Divide a peak by $\\sqrt{2}$ to get the RMS of a sinusoid.",
       "deconstruct": [
        "RMS of a sinusoid is peak over $\\sqrt{2}$.",
@@ -94,7 +97,7 @@
       "prompt": "Now the output side. The tank current arriving at the rectifier is a sinusoid of peak $I_p$, and the rectifier passes its magnitude to the load. The average of a full-wave rectified sinusoid is $2I_p/\\pi$, and that average is the DC output current $I_o$. Write $I_p$ in terms of $I_o$.",
       "given": "",
       "answer": "\\frac{\\pi I_o}{2}",
-      "placeholder": "\\frac{\\pi I_o}{2}",
+      "placeholder": "",
       "hint": "Set $2I_p/\\pi = I_o$ and solve for $I_p$.",
       "deconstruct": [
        "The capacitor holds the output voltage, so all the rectified current goes to the load on average.",
@@ -105,7 +108,7 @@
       "prompt": "Because the output capacitor holds $V_o$ steady and the diodes commutate with the current, the voltage the tank sees at the rectifier input is itself a square wave alternating between $+V_o$ and $-V_o$. Write the peak amplitude of its fundamental.",
       "given": "",
       "answer": "\\frac{4 V_o}{\\pi}",
-      "placeholder": "\\frac{4 V_o}{\\pi}",
+      "placeholder": "",
       "hint": "Same Fourier series as step one, now with $A = V_o$.",
       "deconstruct": [
        "The rectifier input voltage is $\\pm V_o$ in phase with the current.",
@@ -224,6 +227,9 @@
      "The low-frequency end is the mirror image. Every curve leaves the same flat $20\\log_{10}K$ line, so far below resonance frequency buys you nothing at any load. A series-resonant converter meets the same wall at the other end of its own axis: at no load $Q \\to 0$, its gain sits at 1 for every frequency, and the controller can run the frequency up as far as it likes without pulling the output down. The LLC's extra inductor is the fix, and the next lab draws it."
     ]
    },
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": {
     "title": "The series-resonant gain, and inverting it",
     "minutes": 15,
@@ -244,7 +250,7 @@
       "prompt": "Write the reactance of the series $L_r$–$C_r$ branch at angular frequency $\\omega$ — the imaginary part of its impedance, in terms of $\\omega$, $L_r$ and $C_r$.",
       "given": "",
       "answer": "\\omega L_r - \\frac{1}{\\omega C_r}",
-      "placeholder": "\\omega L_r - \\frac{1}{\\omega C_r}",
+      "placeholder": "",
       "hint": "An inductor contributes $+\\omega L$ and a capacitor $-1/(\\omega C)$ to the reactance.",
       "deconstruct": [
        "$Z_L = j\\omega L_r$ and $Z_C = 1/(j\\omega C_r) = -j/(\\omega C_r)$.",
@@ -255,7 +261,7 @@
       "prompt": "Write the $\\omega_r$ at which that reactance is zero.",
       "given": "",
       "answer": "\\frac{1}{\\sqrt{L_r C_r}}",
-      "placeholder": "\\frac{1}{\\sqrt{L_r C_r}}",
+      "placeholder": "",
       "hint": "Set the two terms equal and solve for $\\omega$.",
       "deconstruct": [
        "$\\omega L_r = 1/(\\omega C_r)$ gives $\\omega^2 = 1/(L_rC_r)$.",
@@ -266,7 +272,7 @@
       "prompt": "Now normalise. With $Z_0 = \\sqrt{L_r/C_r}$ and $x = \\omega/\\omega_r$, rewrite that same reactance using only $Z_0$ and $x$.",
       "given": "Note that $\\omega_r L_r = Z_0$ and $1/(\\omega_r C_r) = Z_0$ as well — that is what makes $Z_0$ the natural unit.",
       "answer": "Z_0 \\left( x - \\frac{1}{x} \\right)",
-      "placeholder": "Z_0 \\left( x - \\frac{1}{x} \\right)",
+      "placeholder": "",
       "hint": "Substitute $\\omega = x\\omega_r$ into both terms and factor $Z_0$ out.",
       "deconstruct": [
        "$\\omega L_r = x\\,\\omega_r L_r = xZ_0$.",
@@ -386,6 +392,9 @@
      "Halve $C_{oss}$ to 200 pF and read the swing time: it falls to about 5 ns, not 4. The requirement goes as $\\sqrt{LC}$, so a device with half the output capacitance buys you about 30 per cent of the dead time, not 50 per cent."
     ]
    },
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": {
     "title": "Sizing the magnetising inductance for ZVS",
     "minutes": 15,
@@ -405,7 +414,7 @@
       "prompt": "Write the total charge that must be moved to swing the midpoint through the full rail voltage $V_{in}$.",
       "given": "",
       "answer": "2 C_{oss} V_{in}",
-      "placeholder": "2 C_{oss} V_{in}",
+      "placeholder": "",
       "hint": "One capacitor goes from $0$ to $V_{in}$ and the other from $V_{in}$ to $0$; both cost $C_{oss}V_{in}$.",
       "deconstruct": [
        "Charge on a capacitor changing by $\\Delta V$ is $C\\,\\Delta V$.",
@@ -416,7 +425,7 @@
       "prompt": "Suppose the tank current is roughly constant at $I_d$ across the dead time. Write the shortest dead time that can deliver that charge.",
       "given": "",
       "answer": "\\frac{2 C_{oss} V_{in}}{I_d}",
-      "placeholder": "\\frac{2 C_{oss} V_{in}}{I_d}",
+      "placeholder": "",
       "hint": "Constant current for a time $t$ delivers charge $I t$.",
       "deconstruct": [
        "Charge delivered is $I_d t_d$.",
@@ -427,7 +436,7 @@
       "prompt": "Now find that current. In an LLC at resonance the voltage across $L_m$ is clamped at half the rail, $V_{in}/2$, for each half-period $T_s/2$. The magnetising current is therefore a symmetric triangle. Write its peak value $I_m$.",
       "given": "A constant voltage $V$ across an inductance $L$ for a time $\\Delta t$ changes its current by $V\\Delta t/L$.",
       "answer": "\\frac{V_{in} T_s}{8 L_m}",
-      "placeholder": "\\frac{V_{in} T_s}{8 L_m}",
+      "placeholder": "",
       "hint": "The half-period gives the peak-to-peak swing; the peak is half of that because the triangle is symmetric about zero.",
       "deconstruct": [
        "Over $T_s/2$ the current changes by $(V_{in}/2)(T_s/2)/L_m = V_{in}T_s/(4L_m)$.",
@@ -438,7 +447,7 @@
       "prompt": "Zero-voltage switching holds when the magnetising current is at least the current the charge budget demands. Set $I_m$ equal to that demand and solve for the largest magnetising inductance that still works.",
       "given": "",
       "answer": "\\frac{t_d T_s}{16 C_{oss}}",
-      "placeholder": "\\frac{t_d T_s}{16 C_{oss}}",
+      "placeholder": "",
       "hint": "Equate $V_{in}T_s/(8L_m)$ with $2C_{oss}V_{in}/t_d$ and notice what cancels.",
       "deconstruct": [
        "$\\frac{V_{in}T_s}{8L_m} = \\frac{2C_{oss}V_{in}}{t_d}$.",
@@ -539,6 +548,9 @@
      "Drag the loop inductance down to its minimum of 1 nH and read the ring frequency: 318 MHz. The swing time falls to about 1 ns, so a tight layout makes ZVS cheap in dead time — but that same number is the frequency your board has to survive on any transition that does go hard. The loss is at 100 kHz; the electromagnetic interference is three orders of magnitude above it."
     ]
    },
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": {
     "title": "The price of circulating current",
     "minutes": 14,
@@ -559,7 +571,7 @@
       "prompt": "Write the RMS value of a symmetric triangular waveform of peak value $I_m$.",
       "given": "",
       "answer": "\\frac{I_m}{\\sqrt{3}}",
-      "placeholder": "\\frac{I_m}{\\sqrt{3}}",
+      "placeholder": "",
       "hint": "Over a rising ramp from $-I_m$ to $+I_m$ the mean square works out to $I_m^2/3$.",
       "deconstruct": [
        "Take one quarter period rising linearly from $0$ to $I_m$.",
@@ -605,7 +617,7 @@
       "prompt": "Core loss density follows Steinmetz, $P_v = k f_s^{\\alpha} B^{\\beta}$. For a fixed applied volt-second the peak flux density goes as $B \\propto 1/f_s$. Substituting that, write how $P_v$ scales with $f_s$ — as a power of $f_s$.",
       "given": "",
       "answer": "f_s^{\\alpha - \\beta}",
-      "placeholder": "f_s^{\\alpha - \\beta}",
+      "placeholder": "",
       "hint": "Replace $B$ by $1/f_s$ and collect the exponents; the constants do not matter here.",
       "deconstruct": [
        "$B^{\\beta}$ becomes proportional to $f_s^{-\\beta}$.",

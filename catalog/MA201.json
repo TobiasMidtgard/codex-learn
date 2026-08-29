@@ -41,6 +41,11 @@
     "Var(X) = E[(X - mu)^2] = E[X^2] - mu^2, and why the centred form loses less precision",
     "Exact integer binomial coefficients: multiply then divide, never factorial then divide"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "pmf, cdf and the first two moments",
     "runtime": "python",
@@ -109,6 +114,11 @@
     "The unbiased sample variance divides by n - 1; dividing by n underestimates systematically",
     "Binning a sample into a histogram, and what its shape can and cannot tell you"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Convergence you can watch",
     "runtime": "python",
@@ -177,6 +187,11 @@
     "Chi-square goodness of fit: summed squared residuals scaled by expected counts, with k - 1 df",
     "A rejected null is not a large effect, and a p-value is not the probability of the hypothesis"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A t test and a chi-square test, by hand",
     "runtime": "python",
@@ -245,6 +260,11 @@
     "Laplace (add-alpha) smoothing: an unseen word must not annihilate a whole class",
     "The MAP decision rule, and how the prior shows up as a constant additive term"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Posterior updates and a spam filter",
     "runtime": "python",

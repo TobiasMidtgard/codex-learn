@@ -118,7 +118,6 @@ applied to impedances that happen to contain $s$. Use $Z_R = R$ and $Z_C = 1/(sC
                         "prompt": "Apply the divider rule with impedances. Write $V_c(s)$ as a multiple of $V_{in}(s)$, in terms of $s$, $R$, $C$ and $V_{in}$.",
                         "given": "The divider is $V_c = V_{in} \\, Z_C / (Z_R + Z_C)$, with $Z_C = 1/(sC)$.",
                         "answer": "\\frac{V_in}{1 + sRC}",
-                        "placeholder": "\\frac{V_in}{1 + sRC}",
                         "hint": "Put $1/(sC)$ over $R + 1/(sC)$, then multiply top and bottom by $sC$ to clear the inner fraction.",
                         "deconstruct": [
                             "The ratio is $\\dfrac{1/(sC)}{R + 1/(sC)}$.",
@@ -129,7 +128,6 @@ applied to impedances that happen to contain $s$. Use $Z_R = R$ and $Z_C = 1/(sC
                     {
                         "prompt": "The input is a 1 V step, so $V_{in}(s) = 1/s$. Substitute it and write $V_c(s)$ in terms of $s$, $R$ and $C$ only.",
                         "answer": "\\frac{1}{s(1 + sRC)}",
-                        "placeholder": "\\frac{1}{s(1 + sRC)}",
                         "hint": "You are multiplying the previous answer by $1/s$. Nothing cancels.",
                         "deconstruct": [
                             "The step contributes a factor $1/s$.",
@@ -139,7 +137,6 @@ applied to impedances that happen to contain $s$. Use $Z_R = R$ and $Z_C = 1/(sC
                     {
                         "prompt": "Split it: $V_c(s) = \\dfrac{A}{s} + \\dfrac{B}{1 + sRC}$. Multiply both sides by $s$, then set $s = 0$. What is $A$?",
                         "answer": "1",
-                        "placeholder": "1",
                         "hint": "Multiplying by $s$ leaves $\\dfrac{1}{1+sRC}$ on the left. Now put $s = 0$ into that.",
                         "deconstruct": [
                             "$s \\cdot V_c(s) = \\dfrac{1}{1+sRC}$, and the second term picks up a factor $s$ which kills it at $s=0$.",
@@ -149,7 +146,6 @@ applied to impedances that happen to contain $s$. Use $Z_R = R$ and $Z_C = 1/(sC
                     {
                         "prompt": "Now multiply both sides by $(1 + sRC)$ and set $s = -1/(RC)$, which is where that factor vanishes. What is $B$?",
                         "answer": "-RC",
-                        "placeholder": "-RC",
                         "hint": "The left-hand side becomes $1/s$. Evaluate it at $s = -1/(RC)$.",
                         "deconstruct": [
                             "$(1+sRC)\\,V_c(s) = \\dfrac{1}{s}$, and the $A/s$ term picks up the factor $(1+sRC)$, which is zero at this $s$.",
@@ -159,7 +155,6 @@ applied to impedances that happen to contain $s$. Use $Z_R = R$ and $Z_C = 1/(sC
                     {
                         "prompt": "The second term is now $\\dfrac{-RC}{1 + sRC}$. Divide top and bottom by $RC$ so it reads $\\dfrac{-1}{s + a}$, and write $a$ in terms of $R$ and $C$.",
                         "answer": "\\frac{1}{RC}",
-                        "placeholder": "\\frac{1}{RC}",
                         "hint": "Dividing $1 + sRC$ by $RC$ gives $s + 1/(RC)$.",
                         "deconstruct": [
                             "$\\dfrac{-RC}{1+sRC} = \\dfrac{-RC/(RC)}{(1+sRC)/(RC)} = \\dfrac{-1}{s + 1/(RC)}$.",
@@ -169,7 +164,6 @@ applied to impedances that happen to contain $s$. Use $Z_R = R$ and $Z_C = 1/(sC
                     {
                         "prompt": "Using $1/s \\to 1$ and $1/(s+a) \\to e^{-at}$, the answer is $v_c(t) = 1 - e^{-t/\\tau}$. Write the time constant $\\tau$ in terms of $R$ and $C$.",
                         "answer": "R C",
-                        "placeholder": "RC",
                         "hint": "$\\tau = 1/a$, and you have just written $a$.",
                         "deconstruct": [
                             "The pole is at $-1/(RC)$, so the decaying exponential is $e^{-t/(RC)}$.",
@@ -358,11 +352,12 @@ assert abs(got - want) < 1e-9, \
                         "a": 2,
                         "why": r'''
 The kernel is $e^{-st}$, with a minus sign, and the integral runs from 0, not from
-$-\infty$. Option A has the sign wrong, and with it the convergence: $e^{+st}$ makes
-the integral diverge for every ordinary signal. Option B is the **Fourier** transform,
+$-\infty$. The version with $e^{+st}$ has the sign wrong, and with it the convergence: it makes the
+integral diverge for every ordinary signal. The integral from $-\infty$ with kernel
+$e^{-j\omega t}$ is the **Fourier** transform,
 which is this one restricted to $s = j\omega$ — a genuinely useful thing to notice
 rather than a trap, because it is why phasors are a special case of what you are
-learning. Option D is the z-transform, for sampled signals.
+learning. The sum in powers of $z^{-n}$ is the z-transform, for sampled signals.
 ''',
                     },
                     {
@@ -374,7 +369,7 @@ $sF(s) - f(0)$. The $-f(0)$ falls out of integrating by parts, and dropping it i
 single most common error in the whole subject — it silently assumes every capacitor
 starts empty and every inductor starts with no current. When a question says
 "the capacitor is initially charged to 2 V", that 2 V enters the algebra through
-exactly this term and nowhere else. Option C is the *integration* rule.
+exactly this term and nowhere else. $F(s)/s$ is the *integration* rule.
 ''',
                     },
                     {
@@ -388,8 +383,8 @@ exactly this term and nowhere else. Option C is the *integration* rule.
                         "a": 3,
                         "why": r'''
 Two factors multiply: the circuit's transfer function $1/(1+sRC)$ and the input's own
-transform $1/s$. Option A is the transfer function on its own — which is what you get
-by forgetting that the step also has to be transformed. That distinction matters: the
+transform $1/s$. $1/(1+sRC)$ on its own is the transfer function — which is what you get by forgetting
+that the step also has to be transformed. That distinction matters: the
 transfer function belongs to the circuit and never changes, while the $1/s$ belongs to
 the signal you chose to apply.
 ''',
@@ -406,9 +401,8 @@ the signal you chose to apply.
                         "why": r'''
 Decay is governed by the **real part** alone: the envelope is $e^{\sigma t}$, so the
 pole closest to the imaginary axis, here $\sigma = -0.5$, lingers longest. The
-imaginary part sets how fast the response *oscillates*, not how fast it dies, which is
-why option D — the most dramatic-looking pair, ringing at 100 rad/s — actually settles
-six times faster than option B. Distance from the imaginary axis is speed; height
+imaginary part sets how fast the response *oscillates*, not how fast it dies, which is why $-3 \pm j100$ — the most dramatic-looking pair, ringing at 100 rad/s —
+actually settles six times faster than $-0.5 \pm j2$. Distance from the imaginary axis is speed; height
 above it is ringing.
 ''',
                     },
@@ -504,7 +498,6 @@ current flows through all three, so the ordinary divider rule applies.
                     {
                         "prompt": "Write $H(s) = V_{out}/V_{in}$ as an impedance divider, leaving $Z_C$ as $1/(sC)$ for now.",
                         "answer": "\\frac{\\frac{1}{sC}}{R + sL + \\frac{1}{sC}}",
-                        "placeholder": "\\frac{\\frac{1}{sC}}{R + sL + \\frac{1}{sC}}",
                         "hint": "The output impedance goes on top, the total series impedance on the bottom.",
                         "deconstruct": [
                             "In series the three impedances add: $Z_{total} = R + sL + 1/(sC)$.",
@@ -514,7 +507,6 @@ current flows through all three, so the ordinary divider rule applies.
                     {
                         "prompt": "Multiply top and bottom by $sC$ to clear the inner fraction, and write $H(s)$ as a single ratio of polynomials in $s$.",
                         "answer": "\\frac{1}{s^2 LC + sRC + 1}",
-                        "placeholder": "\\frac{1}{s^2 LC + sRC + 1}",
                         "hint": "$sC \\times 1/(sC) = 1$ on top; on the bottom every term picks up a factor $sC$.",
                         "deconstruct": [
                             "Top: $sC \\cdot \\dfrac{1}{sC} = 1$.",
@@ -524,7 +516,6 @@ current flows through all three, so the ordinary divider rule applies.
                     {
                         "prompt": "Divide top and bottom by $LC$ to reach the standard form $\\dfrac{K\\omega_n^2}{s^2 + 2\\zeta\\omega_n s + \\omega_n^2}$. Comparing the constant terms gives $\\omega_n^2 = 1/(LC)$. Write $\\omega_n$ itself.",
                         "answer": "\\frac{1}{\\sqrt{LC}}",
-                        "placeholder": "\\frac{1}{\\sqrt{LC}}",
                         "hint": "Take the positive square root of $1/(LC)$.",
                         "deconstruct": [
                             "After dividing through, the constant term of the denominator is $1/(LC)$.",
@@ -534,7 +525,6 @@ current flows through all three, so the ordinary divider rule applies.
                     {
                         "prompt": "Comparing the $s$ coefficients gives $2\\zeta\\omega_n = R/L$. Substitute your $\\omega_n$ and write $\\zeta$ in terms of $R$, $L$ and $C$.",
                         "answer": "\\frac{R}{2}\\sqrt{\\frac{C}{L}}",
-                        "placeholder": "\\frac{R}{2}\\sqrt{\\frac{C}{L}}",
                         "hint": "$\\zeta = \\dfrac{R}{2L\\omega_n} = \\dfrac{R\\sqrt{LC}}{2L}$, and $\\sqrt{LC}/L = \\sqrt{C/L}$.",
                         "deconstruct": [
                             "From $2\\zeta\\omega_n = R/L$, $\\zeta = \\dfrac{R}{2L\\omega_n}$.",
@@ -545,7 +535,6 @@ current flows through all three, so the ordinary divider rule applies.
                     {
                         "prompt": "Now design. With $L = 0.1$ H and $C = 2.5\\ \\mu$F, $\\omega_n$ comes to 2000 rad/s. What resistance, in ohms, gives $\\zeta = 0.25$?",
                         "answer": "100",
-                        "placeholder": "100",
                         "hint": "Rearrange to $R = 2\\zeta\\sqrt{L/C}$, then put the numbers in. $\\sqrt{0.1/2.5\\times10^{-6}} = 200$.",
                         "deconstruct": [
                             "$\\zeta = \\dfrac{R}{2}\\sqrt{\\dfrac{C}{L}}$ rearranges to $R = 2\\zeta\\sqrt{\\dfrac{L}{C}}$.",
@@ -865,8 +854,8 @@ assert abs(area - 0.4) < 1e-6, \
                         "why": r'''
 Zeros come from the **numerator**, poles from the **denominator**, and each is the
 value of $s$ that makes its own factor vanish — so $s+2$ gives a zero at $-2$, not at
-$+2$. Option C is the sign error that catches everyone once: the root of $s + a$ is
-$-a$. Getting the zeros and poles the wrong way round, as in option A, inverts the
+$+2$. Reading $s+2$ as a zero at $+2$ is the sign error that catches everyone once: the root
+of $s + a$ is $-a$. Getting the zeros and poles the wrong way round inverts the
 system: it would rise with frequency instead of falling.
 ''',
                     },
@@ -883,8 +872,7 @@ system: it would rise with frequency instead of falling.
 $e^{-20t}$ has fallen to under a thousandth of its starting value by $t = 0.35$, while
 $e^{-t}$ is still at 70% then. The **slow** pole — the one closest to the imaginary
 axis — is the one still visible when everything else has gone, and it is what a
-designer means by "the dominant pole". Reaching for the bigger number, as in option A,
-is the reflex worth unlearning: in the s-plane it is distance from the *imaginary axis*
+designer means by "the dominant pole". Reaching for the bigger number is the reflex worth unlearning: in the s-plane it is distance from the *imaginary axis*
 that sets the speed, so the pole nearest that axis is the slow one and therefore the
 one that matters. (Distance from the origin is a different measurement, and a pair like
 $-1 \pm j100$ is far from the origin while still decaying slowly.)
@@ -921,7 +909,7 @@ falling exponential. The $\tfrac{1}{2}t^2$ form belongs to a pole repeated three
                         "why": r'''
 At $s = j\omega_n$ the terms $s^2$ and $\omega_n^2$ cancel exactly, leaving only
 $2\zeta\omega_n \cdot j\omega_n$ on the bottom, so $|H| = K/(2\zeta)$ and the phase is
-exactly $-90°$. Option B is the tempting one: $\omega_n$ is *not* the $-3$ dB point
+exactly $-90°$. $K/\sqrt{2}$ is the tempting one: $\omega_n$ is *not* the $-3$ dB point
 unless $\zeta$ happens to be $1/\sqrt{2}$. With $\zeta = 0.25$ the gain there is 2 —
 a gain of *two*, above the input, from a circuit containing nothing but a resistor, an
 inductor and a capacitor.
@@ -938,8 +926,8 @@ inductor and a capacitor.
                         "a": 1,
                         "why": r'''
 The real part is $-\zeta\omega_n = -500$ and the imaginary part is
-$\omega_n\sqrt{1-\zeta^2} = 2000\sqrt{0.9375} = 1936$. Option C is the common slip of
-using $\omega_n$ itself as the imaginary part — an easy mistake to forgive, since at
+$\omega_n\sqrt{1-\zeta^2} = 2000\sqrt{0.9375} = 1936$. $-500 \pm j2000$ is the common slip of using $\omega_n$ itself as the imaginary
+part — an easy mistake to forgive, since at
 $\zeta = 0.25$ the difference is only 3%, but one that grows fast as the damping does.
 A useful check: the poles must be exactly $\omega_n = 2000$ from the origin, and
 $\sqrt{500^2 + 1936^2} = 2000$.
@@ -1292,7 +1280,7 @@ maps, not what matrices are.
                         "why": r'''
 $Ae_j$ selects column $j$ exactly, so if $A$ is to represent $T$ then column $j$ must
 be $T(e_j)$. This is the entire recipe for turning a map into a matrix, and it is what
-the lab does. Option A discards the information: $T$ applied to $(1,1,\dots)$ gives one
+the lab does. Applying $T$ to the vector of all ones discards the information: it gives one
 vector, the sum of all the columns, from which the individual columns cannot be
 recovered.
 ''',
@@ -1309,7 +1297,7 @@ recovered.
                         "why": r'''
 One unknown per node, one equation per node, and each equation says that the currents
 leaving that node sum to zero — Kirchhoff's current law. They are linear because Ohm's
-law is. The loop-based alternative in option D is mesh analysis, which is a real method
+law is. The loop-based alternative, one KVL equation per loop, is mesh analysis, which is a real method
 but a different one, with one unknown per loop instead. Counting equations against
 unknowns before starting is the cheapest way to catch a mistake in the setup.
 ''',
@@ -1560,7 +1548,8 @@ assert abs(abs(z[0].imag) - 1936.4916731037085) < 1e-6, \
 An eigenvector is a direction the map does not turn. Everything else is consequence:
 along that direction the matrix behaves like a single number, which is why writing a
 system in its eigenvector coordinates decouples it into independent first-order pieces.
-Option B is the special case $\lambda = 0$, not the definition. The determinant is the
+"$v$ is in the null space of $A$" is the special case $\lambda = 0$, not the
+definition. The determinant is the
 *product* of all the eigenvalues, and the trace is their sum.
 ''',
                     },
@@ -1570,8 +1559,8 @@ Option B is the special case $\lambda = 0$, not the definition. The determinant 
                         "a": 2,
                         "why": r'''
 The characteristic polynomial is $\lambda^2 - (\text{trace})\lambda + \det =
-\lambda^2 + 4\lambda + 3$, whose roots are $-1$ and $-3$. Option A reads the diagonal
-straight off, which is correct only for a triangular matrix and wrong here. Notice what
+\lambda^2 + 4\lambda + 3$, whose roots are $-1$ and $-3$. Answering 0 and $-4$ reads the diagonal straight off, which is correct only for a
+triangular matrix and wrong here. Notice what
 this matrix is: the companion form of $\ddot{y}+4\dot{y}+3y=0$, and its eigenvalues are
 exactly the poles of $1/(s^2+4s+3)$ from module 2.
 ''',
@@ -1587,8 +1576,7 @@ exactly the poles of $1/(s^2+4s+3)$ from module 2.
                         "a": 1,
                         "why": r'''
 Each eigenvalue contributes $e^{\lambda t}$, whose size is $e^{(\text{Re}\lambda)t}$,
-so only the real part decides decay. Option A is not even well formed — a magnitude is
-never negative, and eigenvalues are routinely complex. An invertible $A$ merely has no
+so only the real part decides decay. "Negative in magnitude" is not even well formed — a magnitude is never negative, and eigenvalues are routinely complex. An invertible $A$ merely has no
 zero eigenvalue, which does not stop the others sitting in the right half-plane; an
 undamped oscillator has purely imaginary eigenvalues, a zero trace, and never settles.
 ''',
@@ -1606,8 +1594,7 @@ undamped oscillator has purely imaginary eigenvalues, a zero trace, and never se
 A tall $A$ has no inverse, which is precisely why the problem needs a different idea.
 Minimising $\|Ac-y\|^2$ is a smooth problem with a closed-form answer: differentiate,
 set to zero, and out come the normal equations. Geometrically, it projects $y$ onto the
-column space of $A$ and leaves the residual perpendicular to it. Minimising the largest
-error, option B, is a real and useful alternative criterion — but it is a different
+column space of $A$ and leaves the residual perpendicular to it. Minimising the largest single error is a real and useful alternative criterion — but it is a different
 method with no such formula.
 ''',
                     },

@@ -43,6 +43,11 @@
     "Distinguishing insert, update and exact duplicate is what makes replay auditable",
     "At-least-once delivery is the normal case; exactly-once is idempotency plus retries"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Schema-validating ingest with a dead-letter queue",
     "runtime": "python",
@@ -111,6 +116,11 @@
     "Selective scans read only the projected columns; projection pruning is a storage-level win",
     "Encoding choice is per column, not per table, and is a cost decision not a taste one"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Encodings and a selective-scan cost model",
     "runtime": "python",
@@ -179,6 +189,11 @@
     "Closing a window emits its aggregate and frees its state; reopening is not free",
     "A final flush is what turns an unbounded pipeline into a terminating batch job"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Windowed aggregation with watermarks",
     "runtime": "python",
@@ -247,6 +262,11 @@
     "Already-sorted inputs make sort-merge free of its sorts and keep the output ordered",
     "Two join algorithms must agree as multisets even when their row order differs"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Pushdown, pruning and two join algorithms",
     "runtime": "python",

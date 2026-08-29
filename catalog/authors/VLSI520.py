@@ -100,7 +100,6 @@ is asked to hold.
                     {
                         "prompt": "How many blocks does the cache hold in total? Write it in terms of $C$ and $B$.",
                         "answer": "\\frac{C}{B}",
-                        "placeholder": "\\frac{C}{B}",
                         "hint": "The data array is $C$ bytes and every block occupies $B$ of them.",
                         "deconstruct": [
                             "Capacity here means data bytes; the tag store is extra and is not counted in $C$.",
@@ -110,7 +109,6 @@ is asked to hold.
                     {
                         "prompt": "Those blocks are grouped $W$ to a set. Write the number of sets $S$ in terms of $C$, $B$ and $W$.",
                         "answer": "\\frac{C}{B \\cdot W}",
-                        "placeholder": "\\frac{C}{B \\cdot W}",
                         "hint": "Take the block count you just wrote and divide it among sets of $W$ blocks each.",
                         "deconstruct": [
                             "There are $C/B$ blocks and each set holds $W$ of them.",
@@ -121,7 +119,6 @@ is asked to hold.
                         "prompt": "A program touches a contiguous region of $M$ bytes. Assuming the index spreads blocks evenly, how many distinct memory blocks from that region map to one particular set?",
                         "given": "The region holds $M/B$ blocks, and they are shared out among the $S$ sets you just derived.",
                         "answer": "\\frac{M \\cdot W}{C}",
-                        "placeholder": "\\frac{M \\cdot W}{C}",
                         "hint": "Divide the region's block count by the number of sets, then substitute your expression for $S$.",
                         "deconstruct": [
                             "Blocks in the region: $M/B$. Sets available: $S = C/(BW)$.",
@@ -131,7 +128,6 @@ is asked to hold.
                     {
                         "prompt": "A set holds $W$ blocks. Set your last expression equal to $W$ and solve for $M$: how large may the region be before a set is over-subscribed?",
                         "answer": "C",
-                        "placeholder": "C",
                         "hint": "Write $MW/C = W$ and cancel.",
                         "deconstruct": [
                             "$\\frac{M W}{C} = W$ gives $M = C$ once $W$ cancels from both sides.",
@@ -438,7 +434,6 @@ class's rate in terms of those three measurements.
                     {
                         "prompt": "The compulsory rate. Which of the three measurements is it, unchanged?",
                         "answer": "m_{inf}",
-                        "placeholder": "m_{inf}",
                         "hint": "An infinite cache evicts nothing, so the only misses left in it are first references.",
                         "deconstruct": [
                             "$m_{inf}$ counts a miss only when the block has never been referenced before.",
@@ -448,7 +443,6 @@ class's rate in terms of those three measurements.
                     {
                         "prompt": "The capacity rate: misses the fully associative cache suffers that the infinite one does not. Write it.",
                         "answer": "m_{fa} - m_{inf}",
-                        "placeholder": "m_{fa} - m_{inf}",
                         "hint": "The fully associative cache has no index at all, so anything it misses beyond a first reference it missed on volume.",
                         "deconstruct": [
                             "$m_{fa}$ contains the compulsory misses plus whatever LRU had to throw out.",
@@ -458,7 +452,6 @@ class's rate in terms of those three measurements.
                     {
                         "prompt": "The conflict rate: what the real index costs you over a fully associative cache of the same size. Write it.",
                         "answer": "m_{dm} - m_{fa}",
-                        "placeholder": "m_{dm} - m_{fa}",
                         "hint": "Two caches, same capacity, same replacement policy, different placement. The difference is placement alone.",
                         "deconstruct": [
                             "$m_{dm}$ contains everything: compulsory, capacity and conflict.",
@@ -468,7 +461,6 @@ class's rate in terms of those three measurements.
                     {
                         "prompt": "What fraction of the real cache's misses could full associativity remove? Write it in terms of $m_{dm}$ and $m_{fa}$.",
                         "answer": "\\frac{m_{dm} - m_{fa}}{m_{dm}}",
-                        "placeholder": "\\frac{m_{dm} - m_{fa}}{m_{dm}}",
                         "hint": "Take the conflict rate you just wrote and express it as a share of the total miss rate.",
                         "deconstruct": [
                             "Conflict misses per access: $m_{dm} - m_{fa}$.",
@@ -478,7 +470,6 @@ class's rate in terms of those three measurements.
                     {
                         "prompt": "A program makes $N$ accesses over a region of $M$ bytes with blocks of $B$ bytes. Every block is touched at least once. Write the compulsory miss rate.",
                         "answer": "\\frac{M}{B \\cdot N}",
-                        "placeholder": "\\frac{M}{B \\cdot N}",
                         "hint": "Count the compulsory misses first — one per distinct block — then divide by the number of accesses.",
                         "deconstruct": [
                             "The region contains $M/B$ distinct blocks, and each costs exactly one first reference.",
@@ -772,7 +763,6 @@ $B$ bytes and a word is $V$ bytes.
                     {
                         "prompt": "With no L2 at all, write the average memory access time in terms of $t_1$, $m_1$ and $t_m$.",
                         "answer": "t_1 + m_1 \\cdot t_m",
-                        "placeholder": "t_1 + m_1 \\cdot t_m",
                         "hint": "You pay the hit time on every access, and the memory time on the fraction that miss.",
                         "deconstruct": [
                             "Every access costs $t_1$ whether it hits or not — the tag check happens regardless.",
@@ -782,7 +772,6 @@ $B$ bytes and a word is $V$ bytes.
                     {
                         "prompt": "Now insert the L2. Write the average access time in terms of $t_1$, $m_1$, $t_2$, $m_2$ and $t_m$.",
                         "answer": "t_1 + m_1 \\cdot \\left( t_2 + m_2 \\cdot t_m \\right)",
-                        "placeholder": "t_1 + m_1 \\cdot \\left( t_2 + m_2 \\cdot t_m \\right)",
                         "hint": "The L1 miss penalty is no longer $t_m$; it is the L2's own average access time.",
                         "deconstruct": [
                             "Replace $t_m$ in the previous answer by whatever an L1 miss actually costs.",
@@ -792,7 +781,6 @@ $B$ bytes and a word is $V$ bytes.
                     {
                         "prompt": "Write the L2 global miss rate — the fraction of *all* processor accesses that reach memory — in terms of $m_1$ and $m_2$.",
                         "answer": "m_1 \\cdot m_2",
-                        "placeholder": "m_1 \\cdot m_2",
                         "hint": "$m_2$ is measured against accesses that got past the L1, not against all of them.",
                         "deconstruct": [
                             "A fraction $m_1$ of accesses reach the L2 at all.",
@@ -802,7 +790,6 @@ $B$ bytes and a word is $V$ bytes.
                     {
                         "prompt": "A write-back, write-allocate cache misses at rate $m$, and a fraction $d$ of the blocks it evicts are dirty. Write the bytes moved to and from memory per access.",
                         "answer": "m \\cdot B \\cdot \\left( 1 + d \\right)",
-                        "placeholder": "m \\cdot B \\cdot \\left( 1 + d \\right)",
                         "hint": "A miss always fetches a block; it additionally writes a block out when the victim was dirty.",
                         "deconstruct": [
                             "Per miss: $B$ bytes in, always, because the policy allocates on writes as well as reads.",
@@ -812,7 +799,6 @@ $B$ bytes and a word is $V$ bytes.
                     {
                         "prompt": "Now a write-through, no-write-allocate cache. A fraction $w$ of accesses are writes and each sends $V$ bytes straight to memory; reads miss at rate $m$ and fetch a block. Write the bytes per access.",
                         "answer": "\\left( 1 - w \\right) \\cdot m \\cdot B + w \\cdot V",
-                        "placeholder": "\\left( 1 - w \\right) \\cdot m \\cdot B + w \\cdot V",
                         "hint": "Two independent contributions: the reads that miss, and every single write.",
                         "deconstruct": [
                             "A fraction $1-w$ of accesses are reads; of those, $m$ fetch $B$ bytes.",
@@ -1203,7 +1189,6 @@ miss served by the other cache costs $t_s$ on top.
                     {
                         "prompt": "Coherence is tracked per block, not per word. How many distinct words does one block cover?",
                         "answer": "\\frac{B}{V}",
-                        "placeholder": "\\frac{B}{V}",
                         "hint": "This is the number of independent variables that a single invalidation takes down with it.",
                         "deconstruct": [
                             "A block spans $B$ bytes and a word occupies $V$ of them.",
@@ -1213,7 +1198,6 @@ miss served by the other cache costs $t_s$ on top.
                     {
                         "prompt": "A fraction $w$ of accesses are writes. Of those writes, a fraction $e$ find the block already in state Modified or Exclusive and need no bus transaction. Write the rate, per access, at which a write has to put something on the bus.",
                         "answer": "w \\cdot \\left( 1 - e \\right)",
-                        "placeholder": "w \\cdot \\left( 1 - e \\right)",
                         "hint": "Only the writes that do not already hold the block in M or E reach the bus at all; whether each one becomes a BusUpgr or a BusRdX does not change how many there are.",
                         "deconstruct": [
                             "Writes happen at rate $w$ per access.",
@@ -1223,7 +1207,6 @@ miss served by the other cache costs $t_s$ on top.
                     {
                         "prompt": "A fraction $m$ of accesses miss and are served by memory; a further fraction $f$ miss and are served by the other cache. Write the average access time.",
                         "answer": "t_1 + m \\cdot t_m + f \\cdot t_s",
-                        "placeholder": "t_1 + m \\cdot t_m + f \\cdot t_s",
                         "hint": "Same shape as the AMAT you derived in module 3, with one more term for the misses the other cache answers.",
                         "deconstruct": [
                             "Every access costs $t_1$.",
@@ -1233,7 +1216,6 @@ miss served by the other cache costs $t_s$ on top.
                     {
                         "prompt": "Padding the data so the two cores never share a block drives $f$ to zero and leaves $m$ unchanged. Write the ratio of the shared access time to the padded one.",
                         "answer": "\\frac{t_1 + m \\cdot t_m + f \\cdot t_s}{t_1 + m \\cdot t_m}",
-                        "placeholder": "\\frac{t_1 + m \\cdot t_m + f \\cdot t_s}{t_1 + m \\cdot t_m}",
                         "hint": "Divide your last answer by the same expression with $f$ set to zero.",
                         "deconstruct": [
                             "Shared: $t_1 + m t_m + f t_s$.",

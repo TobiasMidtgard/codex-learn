@@ -58,7 +58,7 @@
        "`ODR = 5;`"
       ],
       "a": 2,
-      "why": "`|=` sets the named bit and leaves the other 31 untouched, taking `0x85` to `0xA5`,\nwhich is what \"leaving every other pin as it was\" demands. The tempting answer is\n`ODR = 1 << 5;`, and it is the single most common beginner defect in embedded code: it\nwrites `0x00000020` over the whole word, so pin 5 goes high and **pins 0, 2 and 7 go\nlow**. It will often appear to work, because during bring-up only one pin is in use.\nOption B clears bit 5, which was already clear, so nothing happens at all; option D\nwrites `0x00000005`, setting bits 0 and 2 and clearing everything else, because 5 is\n`0b101` rather than a pin number."
+      "why": "`|=` sets the named bit and leaves the other 31 untouched, taking `0x85` to `0xA5`,\nwhich is what \"leaving every other pin as it was\" demands. The tempting answer is\n`ODR = 1 << 5;`, and it is the single most common beginner defect in embedded code: it\nwrites `0x00000020` over the whole word, so pin 5 goes high and **pins 0, 2 and 7 go\nlow**. It will often appear to work, because during bring-up only one pin is in use.\nThe `&= ~(1 << 5)` line clears bit 5, which was already clear, so nothing happens at\nall; `ODR = 5;` writes `0x00000005`, setting bits 0 and 2 and clearing everything else, because 5 is\n`0b101` rather than a pin number."
      },
      {
       "q": "`MODER` holds two bits per pin, so pin 5's mode lives in bits 11 and 10. You want to write the mode `0b01` there without disturbing any other pin. What must happen first?",
@@ -113,10 +113,11 @@
        "neither — reserved bits require a special unlock sequence"
       ],
       "a": 0,
-      "why": "Read-modify-write carries the reserved bits across untouched, which is exactly what\n\"must be kept at reset value\" asks for. Writing a whole constant word forces them to\nwhatever the constant says, usually zero, which may or may not be their reset value —\nand on the next silicon revision, when the vendor gives one of those bits a meaning,\nthe code changes behaviour without being edited. Option C is the assumption that makes\nthis bug: reserved does not mean ignored, it means undefined, and undefined includes\n\"used by a chip you have not bought yet\"."
+      "why": "Read-modify-write carries the reserved bits across untouched, which is exactly what\n\"must be kept at reset value\" asks for. Writing a whole constant word forces them to\nwhatever the constant says, usually zero, which may or may not be their reset value —\nand on the next silicon revision, when the vendor gives one of those bits a meaning,\nthe code changes behaviour without being edited. \"Either, since reserved bits are ignored by the hardware\" is the assumption that\nmakes this bug: reserved does not mean ignored, it means undefined, and undefined includes\n\"used by a chip you have not bought yet\"."
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -250,6 +251,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "An indicator the pin can afford",
     "minutes": 22,
@@ -574,6 +576,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "Turning a PWM pin into a voltage",
     "minutes": 26,
@@ -854,6 +857,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": {
     "title": "From reference voltage to one bit of the answer",
@@ -872,7 +876,7 @@
       "prompt": "An $N$-bit converter reports a code made of $N$ binary digits. How many distinct codes is that?",
       "given": "",
       "answer": "2^{N}",
-      "placeholder": "2^{N}",
+      "placeholder": "",
       "hint": "Each bit doubles the number of patterns available.",
       "deconstruct": [
        "One bit gives 2 codes, two bits give 4, three give 8.",
@@ -883,7 +887,7 @@
       "prompt": "Those codes divide the reference into equal steps. Write the size $q$ of one step, in terms of $V_{ref}$ and $N$.",
       "given": "The full-scale span is $V_{ref}$, shared out among the codes you just counted.",
       "answer": "\\frac{V_{ref}}{2^{N}}",
-      "placeholder": "\\frac{V_{ref}}{2^{N}}",
+      "placeholder": "",
       "hint": "Divide the span by the number of steps. Nothing else is involved.",
       "deconstruct": [
        "The span is $V_{ref}$ and there are $2^N$ steps across it.",
@@ -894,7 +898,7 @@
       "prompt": "A converter that rounds to the nearest code is wrong by at most half a step. Write that worst-case error in terms of $V_{ref}$ and $N$ alone.",
       "given": "You have just shown that one step is $q = V_{ref}/2^{N}$.",
       "answer": "\\frac{V_{ref}}{2^{N+1}}",
-      "placeholder": "\\frac{V_{ref}}{2^{N+1}}",
+      "placeholder": "",
       "hint": "Halve $q$. Halving a power of two is the same as adding one to the exponent underneath.",
       "deconstruct": [
        "Half of $q$ is $\\frac{1}{2} \\cdot \\frac{V_{ref}}{2^{N}}$.",
@@ -905,7 +909,7 @@
       "prompt": "In Q$f$ format the real number $a$ is stored as the integer $A = a \\cdot 2^{f}$, and $b$ as $B = b \\cdot 2^{f}$. Write the integer that represents the product $ab$ in the same Q$f$ format, in terms of $A$, $B$ and $f$.",
       "given": "The stored integer for a real number $x$ is always $x \\cdot 2^{f}$, so the answer you want is $ab \\cdot 2^{f}$.",
       "answer": "\\frac{A B}{2^{f}}",
-      "placeholder": "\\frac{A B}{2^{f}}",
+      "placeholder": "",
       "hint": "Multiply $A$ by $B$ and see how many factors of $2^{f}$ you are left holding.",
       "deconstruct": [
        "$A B = a \\cdot 2^{f} \\cdot b \\cdot 2^{f} = ab \\cdot 2^{2f}$.",

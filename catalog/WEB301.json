@@ -45,6 +45,11 @@
     "`aria-describedby` attaches supplementary text without repeating the label",
     "Native elements first: a `<button>` is focusable, activatable and announced for free"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A booking form a screen reader can navigate",
     "runtime": "web",
@@ -114,6 +119,11 @@
     "Custom properties cascade and can be read from JavaScript with `getPropertyValue`",
     "Horizontal overflow is a layout bug: `scrollWidth` larger than `clientWidth`"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A gallery that survives a 360px phone",
     "runtime": "web",
@@ -187,6 +197,11 @@
     "`textContent` over `innerHTML`: the difference is whether user input can execute",
     "`localStorage` holds strings only, can be unavailable, and can contain junk"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A filterable reading list",
     "runtime": "web",
@@ -265,6 +280,11 @@
     "`role=\"alert\"` makes an error region announce itself when it gains content",
     "Never leave a spinner running: hide it on every exit path, including the failures"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Book search against a flaky API",
     "runtime": "web",

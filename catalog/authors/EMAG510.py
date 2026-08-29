@@ -94,7 +94,6 @@ Everything below follows from those two.
                     {
                         "prompt": "Differentiate the first equation with respect to $z$ and the second with respect to $t$, then eliminate $I$. You get $\\partial^2 V/\\partial z^2 = \\kappa\\,\\partial^2 V/\\partial t^2$. Write the constant $\\kappa$.",
                         "answer": "L C",
-                        "placeholder": "L C",
                         "hint": "Each equation contributes one factor. Nothing else in the pair can carry units.",
                         "deconstruct": [
                             "$\\partial^2 V/\\partial z^2 = -L\\,\\partial^2 I/\\partial z \\partial t$.",
@@ -105,7 +104,6 @@ Everything below follows from those two.
                         "prompt": "The wave equation $\\partial^2 V/\\partial z^2 = (1/v_p^2)\\,\\partial^2 V/\\partial t^2$ has solutions $V(z \\mp v_p t)$. Write the phase velocity $v_p$ in terms of $L$ and $C$.",
                         "given": "You just found that the constant in front of the time derivative is $LC$.",
                         "answer": "\\frac{1}{\\sqrt{L C}}",
-                        "placeholder": "\\frac{1}{\\sqrt{L C}}",
                         "hint": "Match the two forms of the same equation: $1/v_p^2 = LC$.",
                         "deconstruct": [
                             "Comparing coefficients, $1/v_p^2 = LC$.",
@@ -115,7 +113,6 @@ Everything below follows from those two.
                     {
                         "prompt": "For a wave travelling in $+z$ only, substitute $V = f(t - z/v_p)$ into the first telegrapher equation and you find $V/I$ is a constant. Write that characteristic impedance $Z_0$ in terms of $L$ and $C$.",
                         "answer": "\\sqrt{\\frac{L}{C}}",
-                        "placeholder": "\\sqrt{\\frac{L}{C}}",
                         "hint": "It has units of ohms, so $L$ must be over $C$, and $v_p$ has already used up the product.",
                         "deconstruct": [
                             "With $V = f(t - z/v_p)$, $\\partial V/\\partial z = -(1/v_p)f'$ and $\\partial I/\\partial t = g'$ where $I = g(t - z/v_p)$.",
@@ -125,7 +122,6 @@ Everything below follows from those two.
                     {
                         "prompt": "In practice you measure $Z_0$ and $v_p$ and want the line parameters back. Write $C$ in terms of $Z_0$ and $v_p$.",
                         "answer": "\\frac{1}{Z_0 v_p}",
-                        "placeholder": "\\frac{1}{Z_0 v_p}",
                         "hint": "Multiply $Z_0$ by $v_p$ and see which parameter cancels.",
                         "deconstruct": [
                             "$Z_0 v_p = \\sqrt{L/C}\\cdot 1/\\sqrt{LC} = 1/C$.",
@@ -363,7 +359,6 @@ The load imposes one condition: $V/I = Z_L$.
                     {
                         "prompt": "Impose $V/I = Z_L$ and solve for $\\Gamma = V_r/V_i$. Write $\\Gamma$ in terms of $Z_L$ and $Z_0$.",
                         "answer": "\\frac{Z_L - Z_0}{Z_L + Z_0}",
-                        "placeholder": "\\frac{Z_L - Z_0}{Z_L + Z_0}",
                         "hint": "Write $Z_L = Z_0 (V_i + V_r)/(V_i - V_r)$, then divide top and bottom by $V_i$ and solve.",
                         "deconstruct": [
                             "$Z_L(V_i - V_r)/Z_0 = V_i + V_r$.",
@@ -374,7 +369,6 @@ The load imposes one condition: $V/I = Z_L$.
                     {
                         "prompt": "Along the line the two waves interfere. Where they add the envelope reaches $|V_i|(1 + |\\Gamma|)$ and where they cancel it drops to $|V_i|(1 - |\\Gamma|)$. Write the standing wave ratio $s$ for a real $\\Gamma$ between 0 and 1.",
                         "answer": "\\frac{1 + \\Gamma}{1 - \\Gamma}",
-                        "placeholder": "\\frac{1 + \\Gamma}{1 - \\Gamma}",
                         "hint": "It is a ratio of the two envelope values, and $|V_i|$ cancels.",
                         "deconstruct": [
                             "The maximum is $|V_i|(1 + \\Gamma)$ and the minimum is $|V_i|(1 - \\Gamma)$.",
@@ -405,7 +399,6 @@ The load imposes one condition: $V/I = Z_L$.
                     {
                         "prompt": "Now use that backwards. You want a quarter-wave section of unknown impedance $Z_1$ to make a real load $Z_L$ look like $Z_0$. Write $Z_1$.",
                         "answer": "\\sqrt{Z_0 Z_L}",
-                        "placeholder": "\\sqrt{Z_0 Z_L}",
                         "hint": "The section transforms $Z_L$ into $Z_1^2/Z_L$, and you want that to equal $Z_0$.",
                         "deconstruct": [
                             "Set $Z_1^2/Z_L = Z_0$.",
@@ -642,7 +635,6 @@ four of them.
                     {
                         "prompt": "For the TE$_{m0}$ family the transverse field goes as $\\sin k_x x$, which must vanish at both $x = 0$ and $x = a$. Write $k_x$ in terms of the integer $m$ and the width $a$.",
                         "answer": "\\frac{m \\pi}{a}",
-                        "placeholder": "\\frac{m \\pi}{a}",
                         "hint": "A sine vanishes at zero automatically. The second wall says $k_x a$ must be a whole number of half-cycles.",
                         "deconstruct": [
                             "$\\sin k_x a = 0$ requires $k_x a = m\\pi$ for integer $m$.",
@@ -663,7 +655,6 @@ four of them.
                         "prompt": "Cutoff is where $\\beta = 0$, so the whole of $k$ is used up transversely: $\\omega_c/c = k_c$. For TE$_{10}$, with $m = 1$ and $n = 0$, write the cutoff frequency $f_c$ in terms of $c$ and $a$.",
                         "given": "Remember $\\omega = 2\\pi f$.",
                         "answer": "\\frac{c}{2 a}",
-                        "placeholder": "\\frac{c}{2a}",
                         "hint": "With $n = 0$ the transverse wavenumber is just $\\pi/a$. Divide out the $2\\pi$ that turns $\\omega$ into $f$.",
                         "deconstruct": [
                             "$2\\pi f_c/c = \\pi/a$.",

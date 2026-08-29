@@ -42,6 +42,11 @@
     "CRC-32 as polynomial division over GF(2), computed with a reflected 256-entry table",
     "Error *detection* is not correction — a detected frame is simply discarded"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Framing, checksums and CRC-32",
     "runtime": "python",
@@ -114,6 +119,11 @@
     "Out-of-order frames are discarded by a Go-Back-N receiver, so one loss costs a window",
     "Goodput = useful frames delivered / total transmissions; the bandwidth-delay product sets the window"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Stop-and-wait and Go-Back-N on a deterministic channel",
     "runtime": "python",
@@ -182,6 +192,11 @@
     "Split horizon: never advertise a route back to the neighbour you learned it from",
     "Link state: flood the topology, then run Dijkstra locally — same answer, different failure modes"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Convergence, and how it fails",
     "runtime": "python",
@@ -250,6 +265,11 @@
     "DNS as a delegating hierarchy — root, TLD, then authoritative name server",
     "Caching with a TTL is what makes recursive resolution affordable; CNAME chains need a loop guard"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "An HTTP/1.1 parser and a recursive resolver",
     "runtime": "python",

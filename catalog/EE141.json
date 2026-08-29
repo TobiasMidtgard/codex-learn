@@ -126,6 +126,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -284,6 +285,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -425,6 +427,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "A one-millisecond RC",
     "minutes": 25,
@@ -819,6 +822,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "An inductor that takes 159 microseconds",
     "minutes": 25,

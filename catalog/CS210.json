@@ -44,6 +44,9 @@
     "Quantum choice: too large degenerates to FCFS, too small drowns in switch overhead"
    ],
    "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": null,
    "lab": {
     "title": "Four schedulers over one workload",
@@ -118,6 +121,9 @@
     "Thrashing, the working-set model, and why fault rate not utilisation is the signal to watch"
    ],
    "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": null,
    "lab": {
     "title": "Page replacement and Belady's anomaly",
@@ -188,6 +194,9 @@
     "Deadlock avoidance: the banker's algorithm grants only requests that leave a safe state"
    ],
    "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": null,
    "lab": {
     "title": "Interleaving simulator and the banker's algorithm",
@@ -258,6 +267,9 @@
     "Failing an allocation atomically: check the space first, so a full disk leaves no half-written file"
    ],
    "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": null,
    "lab": {
     "title": "An inode allocator with a free list",

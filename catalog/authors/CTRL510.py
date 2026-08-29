@@ -84,7 +84,6 @@ Turn it into $\dot{x} = Ax + Bu$. Take $x_1 = y$ and $x_2 = \dot{y}$.
                     {
                         "prompt": "With $x_1 = y$ and $x_2 = \\dot{y}$, what is $\\dot{x_1}$?",
                         "answer": "x_2",
-                        "placeholder": "x_2",
                         "hint": "This one is definitional — you chose $x_2$ to *be* the derivative of $x_1$.",
                         "deconstruct": [
                             "$x_1$ was defined as $y$, so $\\dot{x_1} = \\dot{y}$.",
@@ -95,7 +94,6 @@ Turn it into $\dot{x} = Ax + Bu$. Take $x_1 = y$ and $x_2 = \dot{y}$.
                         "prompt": "Now solve the differential equation for $\\ddot{y}$, and write $\\dot{x_2}$ in terms of $x_1$, $x_2$ and $u$.",
                         "given": "Start from $m\\ddot{y} + b\\dot{y} + k y = u$.",
                         "answer": "\\frac{u - b x_2 - k x_1}{m}",
-                        "placeholder": "\\frac{u - b x_2 - k x_1}{m}",
                         "hint": "Move everything except $m\\ddot{y}$ to the right, then divide by $m$. Remember $\\dot{y} = x_2$ and $y = x_1$.",
                         "deconstruct": [
                             "Rearranged: $m\\ddot{y} = u - b\\dot{y} - k y$.",
@@ -105,7 +103,6 @@ Turn it into $\dot{x} = Ax + Bu$. Take $x_1 = y$ and $x_2 = \dot{y}$.
                     {
                         "prompt": "The system matrix is $A = \\begin{bmatrix} 0 & 1 \\\\ a & b' \\end{bmatrix}$. What is the entry $a$ — the coefficient multiplying $x_1$ in $\\dot{x_2}$?",
                         "answer": "-\\frac{k}{m}",
-                        "placeholder": "-\\frac{k}{m}",
                         "hint": "Read it straight off the expression you just derived.",
                         "deconstruct": [
                             "You wrote $\\dot{x_2} = (u - b x_2 - k x_1)/m$.",
@@ -290,7 +287,6 @@ $v$ with eigenvalue $\lambda$. Start the system exactly on that eigenvector.
                     {
                         "prompt": "Along an eigenvector the matrix acts like a single number. If $x(t) = c(t)v$, then $\\dot{c} = \\lambda c$. Write the solution $c(t)$ in terms of $c(0)$ and $\\lambda$.",
                         "answer": "c_0 e^{\\lambda t}",
-                        "placeholder": "c_0 e^{\\lambda t}",
                         "hint": "This is the scalar exponential, the one differential equation everybody knows.",
                         "deconstruct": [
                             "$\\dot{c} = \\lambda c$ separates: $dc/c = \\lambda\\, dt$.",
@@ -301,7 +297,6 @@ $v$ with eigenvalue $\lambda$. Start the system exactly on that eigenvector.
                     {
                         "prompt": "Write $\\lambda = \\sigma + j\\omega$. The magnitude of $e^{\\lambda t}$ is governed by only one of those two parts — write $|e^{\\lambda t}|$.",
                         "answer": "e^{\\sigma t}",
-                        "placeholder": "e^{\\sigma t}",
                         "hint": "$|e^{j\\omega t}| = 1$ for every real $\\omega$ — rotation does not change length.",
                         "deconstruct": [
                             "$e^{\\lambda t} = e^{\\sigma t}e^{j\\omega t}$.",
@@ -500,7 +495,6 @@ Apply state feedback $u = -k_1 x_1 - k_2 x_2$ and choose the gains.
                     {
                         "prompt": "With $u = -k_1 x_1 - k_2 x_2$, the closed-loop matrix is $A - BK$. Write its bottom-right entry.",
                         "answer": "-k_2",
-                        "placeholder": "-k_2",
                         "hint": "$BK$ has zeros in the top row, and $[k_1\\ k_2]$ in the bottom.",
                         "deconstruct": [
                             "$B = [0, 1]^\\top$, so $BK = \\begin{bmatrix} 0 & 0 \\\\ k_1 & k_2 \\end{bmatrix}$.",
@@ -510,7 +504,6 @@ Apply state feedback $u = -k_1 x_1 - k_2 x_2$ and choose the gains.
                     {
                         "prompt": "Write the characteristic polynomial $\\det(sI - (A - BK))$ in terms of $s$, $k_1$ and $k_2$.",
                         "answer": "s^2 + k_2 s + k_1",
-                        "placeholder": "s^2 + k_2 s + k_1",
                         "hint": "For a 2×2 matrix the characteristic polynomial is $s^2 - (\\text{trace})s + \\det$.",
                         "deconstruct": [
                             "The closed-loop matrix is $\\begin{bmatrix} 0 & 1 \\\\ -k_1 & -k_2 \\end{bmatrix}$.",
@@ -530,7 +523,6 @@ Apply state feedback $u = -k_1 x_1 - k_2 x_2$ and choose the gains.
                     {
                         "prompt": "And $k_2$?",
                         "answer": "2\\zeta\\omega_n",
-                        "placeholder": "2\\zeta\\omega_n",
                         "hint": "Match the coefficients of $s$.",
                         "deconstruct": [
                             "Your polynomial has $k_2 s$; the desired one has $2\\zeta\\omega_n s$.",
@@ -733,7 +725,6 @@ Define the estimation error $e = x - \hat{x}$.
                     {
                         "prompt": "Subtract the observer equation from the plant equation. Write $\\dot{e}$ before simplifying — in terms of $A$, $x$, $\\hat{x}$, $L$, $C$.",
                         "answer": "A x - A \\hat{x} - L C x + L C \\hat{x}",
-                        "placeholder": "Ax - A\\hat{x} - LCx + LC\\hat{x}",
                         "hint": "The $Bu$ terms are identical in both equations, so they cancel. Substitute $y = Cx$ before subtracting.",
                         "deconstruct": [
                             "Plant: $\\dot{x} = Ax + Bu$. Observer, with $y = Cx$ substituted: $\\dot{\\hat{x}} = A\\hat{x} + Bu + LCx - LC\\hat{x}$.",
@@ -743,7 +734,6 @@ Define the estimation error $e = x - \hat{x}$.
                     {
                         "prompt": "Factor that into a single matrix acting on $e = x - \\hat{x}$. Write the matrix.",
                         "answer": "A - L C",
-                        "placeholder": "A - LC",
                         "hint": "Group the $x$ terms and the $\\hat{x}$ terms; both give the same matrix times $e$.",
                         "deconstruct": [
                             "$Ax - A\\hat{x} = A(x - \\hat{x}) = Ae$.",
@@ -753,7 +743,6 @@ Define the estimation error $e = x - \hat{x}$.
                     {
                         "prompt": "The error therefore obeys $\\dot{e} = (A - LC)e$. For the estimate to converge, where must every eigenvalue of $A - LC$ lie? Write the condition on the real part $\\sigma$.",
                         "answer": "\\sigma < 0",
-                        "placeholder": "\\sigma < 0",
                         "hint": "Same condition as any free linear system — you proved it in module 2.",
                         "deconstruct": [
                             "$e(t)$ is a sum of modes $e^{\\lambda t}$.",

@@ -104,7 +104,6 @@ evaluated at whichever equilibrium you care about. Only the bottom-left entry mo
                     {
                         "prompt": "Differentiate $f_2 = -\\frac{g}{l}\\sin x_1 - b x_2$ with respect to $x_1$ and evaluate it at the hanging equilibrium $x_1 = 0$.",
                         "answer": "-\\frac{g}{l}",
-                        "placeholder": "-\\frac{g}{l}",
                         "hint": "The derivative of $\\sin x_1$ is $\\cos x_1$, and $\\cos 0 = 1$.",
                         "deconstruct": [
                             "$\\partial f_2/\\partial x_1 = -\\frac{g}{l}\\cos x_1$.",
@@ -114,7 +113,6 @@ evaluated at whichever equilibrium you care about. Only the bottom-left entry mo
                     {
                         "prompt": "Now the same entry at the upright equilibrium $x_1 = \\pi$.",
                         "answer": "\\frac{g}{l}",
-                        "placeholder": "\\frac{g}{l}",
                         "hint": "$\\cos \\pi = -1$, and that single sign is the whole difference between the two equilibria.",
                         "deconstruct": [
                             "The same expression $-\\frac{g}{l}\\cos x_1$ is evaluated at $x_1 = \\pi$.",
@@ -124,7 +122,6 @@ evaluated at whichever equilibrium you care about. Only the bottom-left entry mo
                     {
                         "prompt": "Set $b = 0$. The upright Jacobian is then $\\begin{bmatrix} 0 & 1 \\\\ g/l & 0 \\end{bmatrix}$, whose eigenvalues are real and opposite in sign. Write the positive one.",
                         "answer": "\\sqrt{\\frac{g}{l}}",
-                        "placeholder": "\\sqrt{\\frac{g}{l}}",
                         "hint": "The characteristic polynomial is $s^2 - g/l$. Keep the answer as one square root rather than a ratio of two.",
                         "deconstruct": [
                             "Trace is $0$ and determinant is $-g/l$, so the polynomial is $s^2 - g/l = 0$.",
@@ -134,7 +131,6 @@ evaluated at whichever equilibrium you care about. Only the bottom-left entry mo
                     {
                         "prompt": "Now a system where all of this fails. Take the scalar $\\dot{x} = -x^3$. Write its linearisation at the origin — that is, $\\mathrm{d}f/\\mathrm{d}x$ evaluated at $x = 0$.",
                         "answer": "0",
-                        "placeholder": "0",
                         "hint": "$\\mathrm{d}(-x^3)/\\mathrm{d}x = -3x^2$, and you are asked for its value at $x = 0$.",
                         "deconstruct": [
                             "The derivative of $-x^3$ is $-3x^2$.",
@@ -145,7 +141,6 @@ evaluated at whichever equilibrium you care about. Only the bottom-left entry mo
                         "prompt": "Solve the true system. The substitution $y = x^{-2}$ turns $\\dot{x} = -x^3$ into $\\dot{y} = 2$. Write $y(t)$ in terms of $x_0 = x(0)$ and $t$.",
                         "given": "Check the substitution first: $\\dot{y} = -2x^{-3}\\dot{x} = -2x^{-3}(-x^3) = 2$.",
                         "answer": "\\frac{1}{x_0^2} + 2 t",
-                        "placeholder": "\\frac{1}{x_0^2} + 2 t",
                         "hint": "$\\dot{y} = 2$ is a straight line in $t$. Its intercept is $y(0)$, which is $x_0^{-2}$.",
                         "deconstruct": [
                             "Integrating $\\dot{y} = 2$ gives $y(t) = y(0) + 2t$.",
@@ -431,7 +426,6 @@ and compute $\dot{V} = \dfrac{\partial V}{\partial x_1}\dot{x_1} + \dfrac{\parti
                     {
                         "prompt": "Start with the two partial derivatives. Write $\\partial V/\\partial x_1$.",
                         "answer": "k x_1",
-                        "placeholder": "k x_1",
                         "hint": "Differentiate $\\tfrac{1}{2}k x_1^2$ and treat $x_2$ as a constant.",
                         "deconstruct": [
                             "The $x_2$ term does not involve $x_1$, so it contributes nothing.",
@@ -442,7 +436,6 @@ and compute $\dot{V} = \dfrac{\partial V}{\partial x_1}\dot{x_1} + \dfrac{\parti
                         "prompt": "Now assemble $\\dot{V}$ and simplify it as far as it will go.",
                         "given": "$\\partial V/\\partial x_2 = x_2$, and the field is $\\dot{x_1} = x_2$, $\\dot{x_2} = -k x_1 - b x_2$.",
                         "answer": "-b x_2^2",
-                        "placeholder": "-b x_2^2",
                         "hint": "Two terms carry $k x_1 x_2$ with opposite signs. Everything the spring stores, it gives back.",
                         "deconstruct": [
                             "$\\dot{V} = (k x_1)(x_2) + (x_2)(-k x_1 - b x_2)$.",
@@ -452,7 +445,6 @@ and compute $\dot{V} = \dfrac{\partial V}{\partial x_1}\dot{x_1} + \dfrac{\parti
                     {
                         "prompt": "$\\dot{V} = -b x_2^2$ vanishes on the whole line $x_2 = 0$, not just at the origin — so it is negative *semi*-definite and asymptotic stability is not yet proved. On that line, write $\\dot{x_2}$.",
                         "answer": "-k x_1",
-                        "placeholder": "-k x_1",
                         "hint": "Put $x_2 = 0$ into $\\dot{x_2} = -k x_1 - b x_2$ and see what is left.",
                         "deconstruct": [
                             "The damping term $-b x_2$ is zero on this line.",
@@ -462,7 +454,6 @@ and compute $\dot{V} = \dfrac{\partial V}{\partial x_1}\dot{x_1} + \dfrac{\parti
                     {
                         "prompt": "Now the same $V$ idea on a genuinely non-linear plant: the pendulum $\\dot{x_1} = x_2$, $\\dot{x_2} = -\\frac{g}{l}\\sin x_1 - c\\, x_2$, with the true energy $V = \\frac{g}{l}(1 - \\cos x_1) + \\tfrac{1}{2}x_2^2$. Write $\\dot{V}$.",
                         "answer": "-c x_2^2",
-                        "placeholder": "-c x_2^2",
                         "hint": "$\\partial V/\\partial x_1 = \\frac{g}{l}\\sin x_1$. The same cancellation happens, and the sine never survives it.",
                         "deconstruct": [
                             "$\\dot{V} = \\left(\\frac{g}{l}\\sin x_1\\right)(x_2) + (x_2)\\left(-\\frac{g}{l}\\sin x_1 - c x_2\\right)$.",
@@ -734,7 +725,6 @@ large motions shrink. Something has to happen in between.
                     {
                         "prompt": "Bendixson's criterion needs the divergence of the field, $\\partial f_1/\\partial x_1 + \\partial f_2/\\partial x_2$. Write it.",
                         "answer": "\\mu\\left(1 - x_1^2\\right)",
-                        "placeholder": "\\mu\\left(1 - x_1^2\\right)",
                         "hint": "$f_1 = x_2$ does not involve $x_1$ at all, so the first term is zero.",
                         "deconstruct": [
                             "$\\partial f_1/\\partial x_1 = \\partial (x_2)/\\partial x_1 = 0$.",
@@ -744,7 +734,6 @@ large motions shrink. Something has to happen in between.
                     {
                         "prompt": "Bendixson says a region on which the divergence keeps one strict sign contains no closed orbit. Write the value of $|x_1|$ at which the divergence changes sign — the boundary any closed orbit is obliged to cross.",
                         "answer": "1",
-                        "placeholder": "1",
                         "hint": "The divergence is $\\mu(1 - x_1^2)$, and $\\mu > 0$, so the sign is decided by $1 - x_1^2$.",
                         "deconstruct": [
                             "$1 - x_1^2 = 0$ when $x_1^2 = 1$.",
@@ -754,7 +743,6 @@ large motions shrink. Something has to happen in between.
                     {
                         "prompt": "Now the energy argument. With $V = \\tfrac{1}{2}\\left(x_1^2 + x_2^2\\right)$, write $\\dot{V} = x_1\\dot{x_1} + x_2\\dot{x_2}$, simplified.",
                         "answer": "\\mu\\left(1 - x_1^2\\right)x_2^2",
-                        "placeholder": "\\mu\\left(1 - x_1^2\\right)x_2^2",
                         "hint": "The $x_1 x_2$ terms cancel, exactly as they did for the spring in module 2.",
                         "deconstruct": [
                             "$\\dot{V} = x_1 x_2 + x_2\\left(\\mu(1 - x_1^2)x_2 - x_1\\right)$.",
@@ -765,7 +753,6 @@ large motions shrink. Something has to happen in between.
                         "prompt": "For small $\\mu$ the cycle is nearly a circle of radius $a$, so put $x_1 = a\\cos t$ and $x_2 = -a\\sin t$. On the cycle the energy neither grows nor decays, so the average of $\\dot{V}$ over one period is zero. Write $a$.",
                         "given": "Over a full period, the average of $\\sin^2 t$ is $\\tfrac{1}{2}$ and the average of $\\cos^2 t\\,\\sin^2 t$ is $\\tfrac{1}{8}$.",
                         "answer": "2",
-                        "placeholder": "2",
                         "hint": "Substitute and average term by term: $\\tfrac{1}{2}a^2 - \\tfrac{1}{8}a^4 = 0$. Then divide out the root at $a = 0$.",
                         "deconstruct": [
                             "$\\dot{V} = \\mu(1 - a^2\\cos^2 t)a^2\\sin^2 t$, whose average is $\\mu\\left(\\tfrac{1}{2}a^2 - \\tfrac{1}{8}a^4\\right)$.",
@@ -1037,7 +1024,6 @@ $\dot{x_1} = -\lambda x_1$.
                     {
                         "prompt": "Differentiate $s = x_2 + \\lambda x_1$ along the trajectories. Write $\\dot{s}$ in terms of $u$, $\\lambda$ and $x_2$.",
                         "answer": "u + \\lambda x_2",
-                        "placeholder": "u + \\lambda x_2",
                         "hint": "$\\dot{x_2} = u$ and $\\dot{x_1} = x_2$. Substitute both.",
                         "deconstruct": [
                             "$\\dot{s} = \\dot{x_2} + \\lambda\\dot{x_1}$.",
@@ -1047,7 +1033,6 @@ $\dot{x_1} = -\lambda x_1$.
                     {
                         "prompt": "You want the reaching law $\\dot{s} = -\\eta\\,\\mathrm{sgn}(s)$. Take the branch where $s > 0$, so $\\mathrm{sgn}(s) = 1$, and solve for $u$.",
                         "answer": "-\\eta - \\lambda x_2",
-                        "placeholder": "-\\eta - \\lambda x_2",
                         "hint": "Set the expression from step 1 equal to $-\\eta$ and make $u$ the subject.",
                         "deconstruct": [
                             "$u + \\lambda x_2 = -\\eta$.",
@@ -1057,7 +1042,6 @@ $\dot{x_1} = -\lambda x_1$.
                     {
                         "prompt": "Take $V = \\tfrac{1}{2}s^2$ as a Lyapunov function for the reaching phase. Still on the branch $s > 0$, write $\\dot{V} = s\\dot{s}$ in terms of $\\eta$ and $s$.",
                         "answer": "-\\eta s",
-                        "placeholder": "-\\eta s",
                         "hint": "You arranged $\\dot{s} = -\\eta$ on this branch, so multiply by $s$.",
                         "deconstruct": [
                             "$\\dot{V} = s\\dot{s}$ by the chain rule on $\\tfrac{1}{2}s^2$.",
@@ -1067,7 +1051,6 @@ $\dot{x_1} = -\lambda x_1$.
                     {
                         "prompt": "On this branch $s$ falls at the constant rate $\\eta$ — not proportionally to $s$, but at a fixed rate. Starting from $s(0) = s_0 > 0$, write the time $t_r$ at which $s$ first reaches zero.",
                         "answer": "\\frac{s_0}{\\eta}",
-                        "placeholder": "\\frac{s_0}{\\eta}",
                         "hint": "Constant rate: distance over speed. Nothing exponential appears anywhere.",
                         "deconstruct": [
                             "$\\dot{s} = -\\eta$ integrates to $s(t) = s_0 - \\eta t$.",
@@ -1077,7 +1060,6 @@ $\dot{x_1} = -\lambda x_1$.
                     {
                         "prompt": "After $t_r$ the state is on the surface and stays there, so $s = 0$ and the motion obeys $\\dot{x_1} = -\\lambda x_1$. Write $x_1(t)$ in terms of $x_0$, $\\lambda$ and $t$.",
                         "answer": "x_0 e^{-\\lambda t}",
-                        "placeholder": "x_0 e^{-\\lambda t}",
                         "hint": "A first-order linear equation, with $\\lambda$ the decay rate you chose when you drew the surface.",
                         "deconstruct": [
                             "$\\dot{x_1} = -\\lambda x_1$ is the scalar exponential.",
@@ -1087,7 +1069,6 @@ $\dot{x_1} = -\lambda x_1$.
                     {
                         "prompt": "The boundary layer replaces $\\mathrm{sgn}(s)$ by $s/\\phi$ while $|s| < \\phi$, so inside the layer the law becomes $\\dot{s} = -\\frac{\\eta}{\\phi}s$. Write the time constant of $s$ there.",
                         "answer": "\\frac{\\phi}{\\eta}",
-                        "placeholder": "\\frac{\\phi}{\\eta}",
                         "hint": "For $\\dot{s} = -\\alpha s$ the time constant is $1/\\alpha$. Here $\\alpha = \\eta/\\phi$.",
                         "deconstruct": [
                             "Inside the layer the dynamics are linear: $\\dot{s} = -(\\eta/\\phi)s$.",

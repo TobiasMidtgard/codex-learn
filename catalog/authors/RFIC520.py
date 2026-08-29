@@ -88,7 +88,6 @@ asking what a load actually receives.
                         "prompt": "Connect a noiseless load of the same value $R$. The two resistances divide the source voltage in half. Write the mean-square voltage that appears across the load.",
                         "given": "The open-circuit mean-square voltage is $4k_BTRB$.",
                         "answer": "k_B T R B",
-                        "placeholder": "k_B T R B",
                         "hint": "Half the voltage is a quarter of the mean square — the divider acts on the amplitude, and mean square is amplitude squared.",
                         "deconstruct": [
                             "The divider gives $v_{load} = v_n / 2$.",
@@ -98,7 +97,6 @@ asking what a load actually receives.
                     {
                         "prompt": "That voltage sits across the load resistance $R$. Write the average power $P_n$ delivered to the load.",
                         "answer": "k_B T B",
-                        "placeholder": "k_B T B",
                         "hint": "Average power into a resistance is the mean-square voltage divided by that resistance.",
                         "deconstruct": [
                             "$P_n = \\overline{v_{load}^2} / R$.",
@@ -108,7 +106,6 @@ asking what a load actually receives.
                     {
                         "prompt": "Spectral density is mean square per hertz. Write the one-sided voltage spectral density $S_v$ of the resistor, in V²/Hz.",
                         "answer": "4 k_B T R",
-                        "placeholder": "4 k_B T R",
                         "hint": "The bandwidth $B$ appeared only as a multiplier, so removing it leaves the density.",
                         "deconstruct": [
                             "$\\overline{v_n^2} = 4k_BTRB$ is linear in $B$, which is what 'flat' means.",
@@ -118,7 +115,6 @@ asking what a load actually receives.
                     {
                         "prompt": "Two resistors $R_1$ and $R_2$ are connected in parallel. Their noise sources are independent. Write the mean-square open-circuit voltage across the pair, in bandwidth $B$.",
                         "answer": "4 k_B T B \\frac{R_1 R_2}{R_1 + R_2}",
-                        "placeholder": "4 k_B T B \\frac{R_1 R_2}{R_1 + R_2}",
                         "hint": "You do not have to add two sources. A resistive network at one temperature has the noise of the resistance you measure at its terminals.",
                         "deconstruct": [
                             "The resistance seen across the pair is $R_1R_2/(R_1+R_2)$.",
@@ -333,7 +329,6 @@ both in V²/Hz. The corner frequency is where they are equal.
                     {
                         "prompt": "Set the two densities equal and solve for the corner frequency. Write $f_c$.",
                         "answer": "\\frac{K_f g_m}{4 k_B T \\gamma C_{ox} W L}",
-                        "placeholder": "\\frac{K_f g_m}{4 k_B T \\gamma C_{ox} W L}",
                         "hint": "Put $f = f_c$ in the flicker expression, set it equal to the thermal one, then cross-multiply.",
                         "deconstruct": [
                             "$\\frac{K_f}{C_{ox}WLf_c} = \\frac{4k_BT\\gamma}{g_m}$.",
@@ -343,7 +338,6 @@ both in V²/Hz. The corner frequency is where they are equal.
                     {
                         "prompt": "The two contributions are independent, so their power densities add. Write the total density $S(f)$ as a multiple of the thermal density — that is, write $S(f)/S_{th}$ in terms of $f$ and $f_c$.",
                         "answer": "1 + \\frac{f_c}{f}",
-                        "placeholder": "1 + \\frac{f_c}{f}",
                         "hint": "By the definition of the corner, $S_{fl}(f) = S_{th} \\cdot f_c / f$.",
                         "deconstruct": [
                             "$S_{fl}(f_c) = S_{th}$, and $S_{fl}$ goes as $1/f$, so $S_{fl}(f) = S_{th}f_c/f$.",
@@ -353,7 +347,6 @@ both in V²/Hz. The corner frequency is where they are equal.
                     {
                         "prompt": "The device is redrawn with both $W$ and $L$ doubled, and the bias adjusted so that $g_m$ is unchanged. By what factor is $f_c$ multiplied?",
                         "answer": "\\frac{1}{4}",
-                        "placeholder": "\\frac{1}{4}",
                         "hint": "Only the product $WL$ appears in the corner expression, and it is in the denominator.",
                         "deconstruct": [
                             "Doubling $W$ and $L$ multiplies the gate area $WL$ by four.",
@@ -363,7 +356,6 @@ both in V²/Hz. The corner frequency is where they are equal.
                     {
                         "prompt": "At $f = f_c$ exactly, the total *voltage* density is what multiple of the thermal voltage density?",
                         "answer": "\\sqrt{2}",
-                        "placeholder": "\\sqrt{2}",
                         "hint": "Equal powers means the total power is twice the thermal power. Voltage density is the square root of power density.",
                         "deconstruct": [
                             "From the ratio you derived, $S(f_c)/S_{th} = 2$.",
@@ -607,7 +599,6 @@ Everything below follows from that line and from $N_o = GN_i + N_a$.
                     {
                         "prompt": "The output signal is $S_o = GS_i$ and the output noise is $N_o = GN_i + N_a$. Substitute both into the definition and write $F$ in terms of $G$, $N_i$ and $N_a$.",
                         "answer": "1 + \\frac{N_a}{G N_i}",
-                        "placeholder": "1 + \\frac{N_a}{G N_i}",
                         "hint": "The signal powers cancel completely, which is the point: $F$ is a property of the two-port, not of what you put through it.",
                         "deconstruct": [
                             "$F = \\frac{S_i}{N_i}\\cdot\\frac{N_o}{S_o} = \\frac{S_i(GN_i+N_a)}{N_iGS_i}$.",
@@ -618,7 +609,6 @@ Everything below follows from that line and from $N_o = GN_i + N_a$.
                         "prompt": "Now cascade two such stages. The second stage's own added noise, referred back to the input of the first, is divided by $G_1$. Write the cascade noise factor $F$ in terms of $F_1$, $F_2$ and $G_1$.",
                         "given": "From the previous step, stage two on its own contributes an input-referred excess of $F_2 - 1$ relative to $N_i$.",
                         "answer": "F_1 + \\frac{F_2 - 1}{G_1}",
-                        "placeholder": "F_1 + \\frac{F_2 - 1}{G_1}",
                         "hint": "Excess noise factors add once each has been divided by all the gain that precedes it. The first stage has no gain in front of it.",
                         "deconstruct": [
                             "Stage one contributes $F_1$, which already includes the source noise.",
@@ -638,7 +628,6 @@ Everything below follows from that line and from $N_o = GN_i + N_a$.
                     {
                         "prompt": "Rewrite the two-stage cascade in temperatures. Write the cascade $T_e$ in terms of $T_{e1}$, $T_{e2}$ and $G_1$.",
                         "answer": "T_{e1} + \\frac{T_{e2}}{G_1}",
-                        "placeholder": "T_{e1} + \\frac{T_{e2}}{G_1}",
                         "hint": "Substitute $F_i = 1 + T_{ei}/T_0$ into the Friis expression; every stray 1 cancels.",
                         "deconstruct": [
                             "$F = 1 + T_{e1}/T_0 + \\frac{(1 + T_{e2}/T_0) - 1}{G_1}$.",
@@ -878,7 +867,6 @@ You are given the value of that integral; the interesting part is what it turns 
                         "prompt": "Using the given integral, write $B_n$ in terms of $f_0$.",
                         "given": "$\\int_0^{\\infty} \\frac{df}{1 + \\left( f/f_0 \\right)^2} = \\frac{\\pi}{2} f_0$.",
                         "answer": "\\frac{\\pi}{2} f_0",
-                        "placeholder": "\\frac{\\pi}{2} f_0",
                         "hint": "The peak of $|H|^2$ is one, so no normalisation is needed and the integral is the answer.",
                         "deconstruct": [
                             "$B_n$ is defined as the integral divided by the peak of $|H|^2$.",
@@ -888,7 +876,6 @@ You are given the value of that integral; the interesting part is what it turns 
                     {
                         "prompt": "Substitute $f_0 = \\frac{1}{2\\pi RC}$ and write $B_n$ in terms of $R$ and $C$ alone.",
                         "answer": "\\frac{1}{4 R C}",
-                        "placeholder": "\\frac{1}{4 R C}",
                         "hint": "The $\\pi$ from the integral and the $\\pi$ in $f_0$ cancel exactly. That cancellation is the whole reason kT/C is such a clean result.",
                         "deconstruct": [
                             "$B_n = \\frac{\\pi}{2}\\cdot\\frac{1}{2\\pi RC}$.",
@@ -898,7 +885,6 @@ You are given the value of that integral; the interesting part is what it turns 
                     {
                         "prompt": "The resistor's density is $4k_BTR$ in V²/Hz, and the filter passes $B_n$ of it. Write the total mean-square output noise voltage.",
                         "answer": "\\frac{k_B T}{C}",
-                        "placeholder": "\\frac{k_B T}{C}",
                         "hint": "Multiply the density by the noise bandwidth you just derived, and watch what happens to $R$.",
                         "deconstruct": [
                             "$\\overline{v_o^2} = 4k_BTR \\cdot \\frac{1}{4RC}$.",
@@ -908,7 +894,6 @@ You are given the value of that integral; the interesting part is what it turns 
                     {
                         "prompt": "A designer holds $T$ fixed and multiplies $C$ by four. By what factor is the r.m.s. output noise voltage multiplied?",
                         "answer": "\\frac{1}{2}",
-                        "placeholder": "\\frac{1}{2}",
                         "hint": "The mean square goes as $1/C$, and r.m.s. is its square root.",
                         "deconstruct": [
                             "Mean square is $k_BT/C$, so four times the capacitance is a quarter of the mean square.",

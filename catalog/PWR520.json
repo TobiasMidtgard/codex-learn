@@ -56,6 +56,9 @@
      "With the diagonals still at zero, make the off-diagonals unequal: $a_{12} = -1$, $a_{21} = 2$. The rings become ellipses. In $\\alpha\\beta$ that is an unbalanced set, and after the Park rotation what should have been a dc quantity in $dq$ is instead a component pulsating at twice the electrical frequency."
     ]
    },
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": {
     "title": "Why the alpha axis is the a axis, and what a rotation preserves",
     "minutes": 14,
@@ -78,7 +81,7 @@
       "prompt": "The machine is wye-connected with no neutral return, so $i_a + i_b + i_c = 0$. Write $i_b + i_c$ in terms of $i_a$.",
       "given": "",
       "answer": "-i_a",
-      "placeholder": "-i_a",
+      "placeholder": "",
       "hint": "Move $i_a$ to the other side of the constraint. Nothing else is needed.",
       "deconstruct": [
        "The constraint is $i_a + i_b + i_c = 0$.",
@@ -89,7 +92,7 @@
       "prompt": "Substitute that into $i_\\alpha = \\frac{2}{3}\\left(i_a - \\frac{1}{2}i_b - \\frac{1}{2}i_c\\right)$ and simplify. Write $i_\\alpha$ in terms of $i_a$ alone.",
       "given": "You may use $i_b + i_c = -i_a$ from the previous step.",
       "answer": "i_a",
-      "placeholder": "i_a",
+      "placeholder": "",
       "hint": "The two halved terms are $-\\frac{1}{2}(i_b + i_c)$, which the constraint turns into $+\\frac{1}{2}i_a$.",
       "deconstruct": [
        "$i_a - \\frac{1}{2}(i_b + i_c) = i_a + \\frac{1}{2} i_a = \\frac{3}{2} i_a$.",
@@ -100,7 +103,7 @@
       "prompt": "So the $\\alpha$ axis lies along phase $a$, and the $\\frac{2}{3}$ is what makes that true. Park is a rotation, so it preserves the length of the current vector: $i_d^2 + i_q^2 = i_\\alpha^2 + i_\\beta^2 = I_s^2$. Write $i_q$ in terms of $I_s$ and $i_d$, taking the positive root.",
       "given": "",
       "answer": "\\sqrt{I_s^{2} - i_d^{2}}",
-      "placeholder": "\\sqrt{I_s^{2} - i_d^{2}}",
+      "placeholder": "",
       "hint": "Rearrange the length identity for $i_q^2$ and take the square root.",
       "deconstruct": [
        "$i_q^2 = I_s^2 - i_d^2$.",
@@ -111,7 +114,7 @@
       "prompt": "With the amplitude-invariant convention the instantaneous power is $p = \\frac{3}{2}\\left(v_d i_d + v_q i_q\\right)$. A surface machine is run with $i_d = 0$. Write the $i_q$ that delivers a demanded power $p$ at a terminal voltage $v_q$.",
       "given": "",
       "answer": "\\frac{2 p}{3 v_q}",
-      "placeholder": "\\frac{2 p}{3 v_q}",
+      "placeholder": "",
       "hint": "Drop the $v_d i_d$ term, then solve the remaining single equation for $i_q$.",
       "deconstruct": [
        "With $i_d = 0$ the power is $p = \\frac{3}{2} v_q i_q$.",
@@ -200,6 +203,9 @@
      "Hold the signs opposite as the physics requires ($a_{12} > 0$, $a_{21} < 0$) and sweep both as far as they go. The trace never moves and the determinant only grows, so the readout never leaves stable. Cross-coupling is not an instability; it is a disturbance, and disturbances are what loop gain is for."
     ]
    },
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": {
     "title": "From the voltage equation to the state matrix and the torque",
     "minutes": 15,
@@ -222,7 +228,7 @@
       "prompt": "Solve the $d$-axis voltage equation for $\\dot{i_d}$. Write it in terms of $v_d$, $R$, $i_d$, $\\omega$, $L_q$, $i_q$ and $L_d$.",
       "given": "",
       "answer": "\\frac{v_d - R i_d + \\omega L_q i_q}{L_d}",
-      "placeholder": "\\frac{v_d - R i_d + \\omega L_q i_q}{L_d}",
+      "placeholder": "",
       "hint": "Move every term except $L_d \\dot{i_d}$ to the other side, then divide by $L_d$. Watch the sign of the coupling term as it crosses over.",
       "deconstruct": [
        "$L_d \\dot{i_d} = v_d - R i_d + \\omega L_q i_q$.",
@@ -233,7 +239,7 @@
       "prompt": "Write the plant as $\\dot{x} = Ax + Bv + d$ with $x = [i_d,\\ i_q]$. What is the entry of $A$ in the first row, second column — the coefficient multiplying $i_q$ in $\\dot{i_d}$?",
       "given": "",
       "answer": "\\frac{\\omega L_q}{L_d}",
-      "placeholder": "\\frac{\\omega L_q}{L_d}",
+      "placeholder": "",
       "hint": "Read it off the expression you just derived, with $v_d$ set aside into $Bv$.",
       "deconstruct": [
        "The derived expression is $\\dot{i_d} = (v_d - R i_d + \\omega L_q i_q)/L_d$.",
@@ -244,7 +250,7 @@
       "prompt": "A surface-mount rotor has its magnets on the outside, so the airgap is uniform and $L_d = L_q$. Write $T_e$ for that machine.",
       "given": "",
       "answer": "\\frac{3}{2} P_p \\lambda_m i_q",
-      "placeholder": "\\frac{3}{2} P_p \\lambda_m i_q",
+      "placeholder": "",
       "hint": "The reluctance term carries the factor $(L_d - L_q)$. Set it to zero.",
       "deconstruct": [
        "With $L_d = L_q$ the factor $(L_d - L_q)$ is zero, so the whole second term vanishes.",
@@ -255,7 +261,7 @@
       "prompt": "That is a pure torque constant. Invert it: for a surface machine, write the $i_q$ that produces a demanded torque $T_e$.",
       "given": "",
       "answer": "\\frac{2 T_e}{3 P_p \\lambda_m}",
-      "placeholder": "\\frac{2 T_e}{3 P_p \\lambda_m}",
+      "placeholder": "",
       "hint": "Divide the demanded torque by everything multiplying $i_q$ in the previous answer.",
       "deconstruct": [
        "$T_e = \\frac{3}{2} P_p \\lambda_m i_q$.",
@@ -345,6 +351,9 @@
      "Push both poles to $-12$, the far end of both sliders. Settling drops to about half a second and the effort trace *starts* at $-144$: the peak demand is $k_1$ times the initial position, and it lands in the first sample. That number is an actuator specification, and if the current loop cannot supply it in a fraction of the settling time, none of this happens."
     ]
    },
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": {
     "title": "Tuning a PI current regulator by cancellation",
     "minutes": 14,
@@ -364,7 +373,7 @@
       "prompt": "Laplace-transform the plant with zero initial current. Write the transfer function from $v_d$ to $i_d$.",
       "given": "",
       "answer": "\\frac{1}{L_d s + R}",
-      "placeholder": "\\frac{1}{L_d s + R}",
+      "placeholder": "",
       "hint": "Replace $\\dot{i_d}$ with $s\\, i_d$, collect $i_d$, and divide.",
       "deconstruct": [
        "$v_d = R i_d + L_d s i_d = (L_d s + R) i_d$.",
@@ -375,7 +384,7 @@
       "prompt": "Written over a common denominator, $C(s) = \\frac{K_p s + K_i}{s}$, so the controller has a zero at $s = -K_i/K_p$. Choose $K_i$ so that this zero sits exactly on the plant pole $-R/L_d$. Write $K_i$ in terms of $K_p$, $R$ and $L_d$.",
       "given": "",
       "answer": "\\frac{K_p R}{L_d}",
-      "placeholder": "\\frac{K_p R}{L_d}",
+      "placeholder": "",
       "hint": "Set $K_i/K_p = R/L_d$ and solve for $K_i$.",
       "deconstruct": [
        "The zero is at $-K_i/K_p$; the pole is at $-R/L_d$.",
@@ -386,7 +395,7 @@
       "prompt": "With that choice the loop gain collapses to $L(s) = \\frac{K_p}{L_d s}$. Write the closed-loop transfer function $\\frac{L(s)}{1 + L(s)}$ as a ratio in $s$.",
       "given": "",
       "answer": "\\frac{K_p}{L_d s + K_p}",
-      "placeholder": "\\frac{K_p}{L_d s + K_p}",
+      "placeholder": "",
       "hint": "Multiply numerator and denominator by $L_d s$ to clear the inner fraction.",
       "deconstruct": [
        "$\\frac{K_p/(L_d s)}{1 + K_p/(L_d s)}$.",
@@ -397,7 +406,7 @@
       "prompt": "That is a first-order lag with a single pole at $-K_p/L_d$. For a closed-loop bandwidth $\\alpha$, write $K_p$.",
       "given": "",
       "answer": "\\alpha L_d",
-      "placeholder": "\\alpha L_d",
+      "placeholder": "",
       "hint": "Set $K_p/L_d = \\alpha$.",
       "deconstruct": [
        "The pole is at $-K_p/L_d$ and you want it at $-\\alpha$.",
@@ -408,7 +417,7 @@
       "prompt": "And substituting that back into the cancellation condition, write $K_i$ in terms of $\\alpha$ and $R$.",
       "given": "",
       "answer": "\\alpha R",
-      "placeholder": "\\alpha R",
+      "placeholder": "",
       "hint": "Put $K_p = \\alpha L_d$ into $K_i = K_p R / L_d$ and let $L_d$ cancel.",
       "deconstruct": [
        "$K_i = K_p R / L_d = (\\alpha L_d) R / L_d$.",
@@ -496,6 +505,9 @@
      "Leave the coupling at $\\pm 3$ and raise the bandwidth instead, dragging $a_{11}$ and $a_{22}$ to the far end of their sliders, $-3$ and $-4$. The spiral tightens back towards a straight line: the turn count roughly halves, from about one and an eighth to about six tenths. A faster loop rejects the coupling it cannot cancel, which is why current-loop bandwidth, not the decoupling algebra, is the thing that has to scale with speed."
     ]
    },
+   "quiz": null,
+   "blanks": null,
+   "build": null,
    "derive": {
     "title": "The inscribed circle, the 15 per cent, and where field weakening starts",
     "minutes": 15,
@@ -516,7 +528,7 @@
       "prompt": "The inscribed circle touches the middle of each side. Its radius is the vertex radius times the cosine of half the 60° between vertices. Write that radius in terms of $V_{dc}$.",
       "given": "The vertex radius is $\\frac{2}{3}V_{dc}$, and $\\cos 30^\\circ = \\frac{\\sqrt{3}}{2}$.",
       "answer": "\\frac{V_dc}{\\sqrt{3}}",
-      "placeholder": "\\frac{V_dc}{\\sqrt{3}}",
+      "placeholder": "",
       "hint": "Multiply $\\frac{2}{3}V_{dc}$ by $\\frac{\\sqrt{3}}{2}$ and tidy the result.",
       "deconstruct": [
        "$\\frac{2}{3}V_{dc} \\cdot \\frac{\\sqrt{3}}{2} = \\frac{V_{dc}\\sqrt{3}}{3}$.",
@@ -527,7 +539,7 @@
       "prompt": "Sine-triangle modulation with no injection is limited to a phase-voltage peak of $\\frac{V_{dc}}{2}$. Write the ratio of the space-vector limit to that one.",
       "given": "",
       "answer": "\\frac{2}{\\sqrt{3}}",
-      "placeholder": "\\frac{2}{\\sqrt{3}}",
+      "placeholder": "",
       "hint": "Divide the previous answer by $\\frac{V_{dc}}{2}$ and let the bus voltage cancel.",
       "deconstruct": [
        "$\\frac{V_{dc}/\\sqrt{3}}{V_{dc}/2} = \\frac{2}{\\sqrt{3}}$.",
@@ -538,7 +550,7 @@
       "prompt": "Call the inscribed radius $V_{max}$. At speed $\\omega$ with no current flowing at all, the machine already demands $\\omega\\lambda_m$ of it. Write the speed $\\omega_b$ at which that demand exactly exhausts the budget, in terms of $V_{dc}$ and $\\lambda_m$.",
       "given": "",
       "answer": "\\frac{V_dc}{\\sqrt{3}\\lambda_m}",
-      "placeholder": "\\frac{V_dc}{\\sqrt{3}\\lambda_m}",
+      "placeholder": "",
       "hint": "Set $\\omega \\lambda_m = V_{max}$ and substitute the $V_{max}$ you found in the first step.",
       "deconstruct": [
        "$\\omega_b \\lambda_m = V_{max} = V_{dc}/\\sqrt{3}$.",
@@ -549,7 +561,7 @@
       "prompt": "Above $\\omega_b$ the only way to keep operating is to reduce the flux. Ignoring the resistive drop, the $q$-axis voltage is $\\omega(L_d i_d + \\lambda_m)$. Write the $i_d$ that makes that exactly equal to $V_{max}$.",
       "given": "",
       "answer": "\\frac{V_max - \\omega\\lambda_m}{\\omega L_d}",
-      "placeholder": "\\frac{V_max - \\omega\\lambda_m}{\\omega L_d}",
+      "placeholder": "",
       "hint": "Set $\\omega(L_d i_d + \\lambda_m) = V_{max}$ and solve for $i_d$ — one division and one subtraction.",
       "deconstruct": [
        "$L_d i_d + \\lambda_m = V_{max}/\\omega$.",

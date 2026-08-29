@@ -102,7 +102,6 @@ out what the closed loop does — the last answer is the point of the whole modu
                         "prompt": "Write out the scalar Riccati equation: the expression in $a$, $b$, $p$, $q$ and $r$ that must equal zero.",
                         "given": "In one dimension every matrix is a number, so $A^\\top P$ and $P A$ are the same thing.",
                         "answer": "2 a p + q - \\frac{p^2 b^2}{r}",
-                        "placeholder": "2 a p + q - \\frac{p^2 b^2}{r}",
                         "hint": "$A^\\top P + P A$ becomes $ap + pa = 2ap$. The middle term $P B R^{-1} B^\\top P$ becomes $p b (1/r) b p$.",
                         "deconstruct": [
                             "The two linear terms collapse to $2ap$.",
@@ -112,7 +111,6 @@ out what the closed loop does — the last answer is the point of the whole modu
                     {
                         "prompt": "The gain is $K = R^{-1}B^\\top P$. Write $k$ in terms of $b$, $p$ and $r$.",
                         "answer": "\\frac{b p}{r}",
-                        "placeholder": "\\frac{b p}{r}",
                         "hint": "Read the matrix formula one factor at a time: $R^{-1}$ is $1/r$, $B^\\top$ is $b$, $P$ is $p$.",
                         "deconstruct": [
                             "$R^{-1} = 1/r$.",
@@ -122,7 +120,6 @@ out what the closed loop does — the last answer is the point of the whole modu
                     {
                         "prompt": "Under $u = -kx$ the closed loop is $\\dot{x} = (a - bk)x$. Write that pole in terms of $a$, $b$, $p$ and $r$.",
                         "answer": "a - \\frac{b^2 p}{r}",
-                        "placeholder": "a - \\frac{b^2 p}{r}",
                         "hint": "Substitute the $k$ you just wrote into $a - bk$.",
                         "deconstruct": [
                             "$bk = b \\cdot bp/r$.",
@@ -133,7 +130,6 @@ out what the closed loop does — the last answer is the point of the whole modu
                         "prompt": "Now eliminate $p$ between the last two results and write the closed-loop pole using only $a$, $b$, $q$ and $r$.",
                         "given": "Call the pole $\\lambda$. From the previous step $b^2 p / r = a - \\lambda$, so $p = r(a - \\lambda)/b^2$.",
                         "answer": "-\\sqrt{a^2 + \\frac{q b^2}{r}}",
-                        "placeholder": "-\\sqrt{a^2 + \\frac{q b^2}{r}}",
                         "hint": "Substituting into the Riccati equation and writing $d = a - \\lambda$ gives $d^2 - 2ad - qb^2/r = 0$. Take the root that leaves $\\lambda$ negative.",
                         "deconstruct": [
                             "Substituting $p = r(a-\\lambda)/b^2$ into $2ap + q - p^2b^2/r = 0$ and multiplying by $b^2/r$ gives $2a(a-\\lambda) + qb^2/r - (a-\\lambda)^2 = 0$.",
@@ -364,7 +360,6 @@ one step further back. Iterating that map is the whole algorithm.
                     {
                         "prompt": "Differentiate the bracket with respect to $u$, set it to zero, and write the gain $k$ for which $u = -kx$. Give it in terms of $a$, $b$, $p$ and $r$.",
                         "answer": "\\frac{a b p}{r + b^2 p}",
-                        "placeholder": "\\frac{a b p}{r + b^2 p}",
                         "hint": "The derivative is $2ru + 2bp(ax + bu)$. Collect the $u$ terms on one side.",
                         "deconstruct": [
                             "Setting the derivative to zero: $ru + bp(ax + bu) = 0$, so $u(r + b^2 p) = -abpx$.",
@@ -374,7 +369,6 @@ one step further back. Iterating that map is the whole algorithm.
                     {
                         "prompt": "Write the closed-loop factor $a - bk$ using the same symbols.",
                         "answer": "\\frac{a r}{r + b^2 p}",
-                        "placeholder": "\\frac{a r}{r + b^2 p}",
                         "hint": "Put $a$ over the common denominator $r + b^2p$ before subtracting.",
                         "deconstruct": [
                             "$a - bk = a - \\frac{ab^2p}{r + b^2p} = \\frac{a(r + b^2p) - ab^2p}{r + b^2p}$.",
@@ -385,7 +379,6 @@ one step further back. Iterating that map is the whole algorithm.
                         "prompt": "The new value is $q + rk^2 + p(a - bk)^2$. Substitute and simplify it to two terms.",
                         "given": "Both squares share the denominator $(r + b^2p)^2$, and their numerators add to $a^2 r p (b^2 p + r)$.",
                         "answer": "q + \\frac{a^2 r p}{r + b^2 p}",
-                        "placeholder": "q + \\frac{a^2 r p}{r + b^2 p}",
                         "hint": "$rk^2 = \\frac{a^2b^2rp^2}{(r+b^2p)^2}$ and $p(a-bk)^2 = \\frac{a^2r^2p}{(r+b^2p)^2}$. Add them and factor $a^2rp$ out of the numerator.",
                         "deconstruct": [
                             "The two numerators are $a^2 b^2 r p^2$ and $a^2 r^2 p$, which sum to $a^2 r p (b^2 p + r)$.",
@@ -395,7 +388,6 @@ one step further back. Iterating that map is the whole algorithm.
                     {
                         "prompt": "Switch the control off by setting $b = 0$, so the recursion is just $p_{new} = q + a^2 p$. Write the value $p$ settles at.",
                         "answer": "\\frac{q}{1 - a^2}",
-                        "placeholder": "\\frac{q}{1 - a^2}",
                         "hint": "A fixed point is a $p$ that the map returns unchanged. Set $p = q + a^2 p$ and solve.",
                         "deconstruct": [
                             "$p - a^2 p = q$.",
@@ -644,7 +636,6 @@ advance — it falls out of minimising the variance that survives.
                         "prompt": "The new error is $(1-k)e - kv$. Write its variance in terms of $k$, $p$ and $r$.",
                         "given": "$e$ and $v$ are independent, so the variance of the sum is the sum of the variances.",
                         "answer": "(1 - k)^2 p + k^2 r",
-                        "placeholder": "(1 - k)^2 p + k^2 r",
                         "hint": "Scaling a random variable by $c$ multiplies its variance by $c^2$, and the cross term vanishes by independence.",
                         "deconstruct": [
                             "$\\text{Var}((1-k)e) = (1-k)^2 p$.",
@@ -654,7 +645,6 @@ advance — it falls out of minimising the variance that survives.
                     {
                         "prompt": "Differentiate that with respect to $k$, set it to zero, and write the minimising $k$.",
                         "answer": "\\frac{p}{p + r}",
-                        "placeholder": "\\frac{p}{p + r}",
                         "hint": "The derivative is $-2(1-k)p + 2kr$.",
                         "deconstruct": [
                             "Setting it to zero: $(1-k)p = kr$.",
@@ -665,7 +655,6 @@ advance — it falls out of minimising the variance that survives.
                         "prompt": "Substitute that $k$ back and write the variance that survives the correction.",
                         "given": "It is worth checking the two limits afterwards: $r \\to 0$ and $r \\to \\infty$.",
                         "answer": "\\frac{p r}{p + r}",
-                        "placeholder": "\\frac{p r}{p + r}",
                         "hint": "The shortest route is $(1-k)p$ with $k = p/(p+r)$, since $1 - k = r/(p+r)$.",
                         "deconstruct": [
                             "$1 - k = r/(p+r)$.",
@@ -676,7 +665,6 @@ advance — it falls out of minimising the variance that survives.
                         "prompt": "Now close the loop in time. The state is a random walk, so the next prior variance is the posterior plus $q$. Write the $p$ that is unchanged by one full predict-and-correct cycle.",
                         "given": "Write the fixed-point condition as $p = \\frac{pr}{p+r} + q$, clear the denominator, and solve the quadratic for the positive root. Enter the answer as a sum of two fractions, not one fraction with a root in its numerator.",
                         "answer": "\\frac{q}{2} + \\frac{1}{2}\\sqrt{q^2 + 4 q r}",
-                        "placeholder": "\\frac{q}{2} + \\frac{1}{2}\\sqrt{q^2 + 4 q r}",
                         "hint": "Multiplying out gives $p^2 + pr = pr + qp + qr$, so $p^2 - qp - qr = 0$.",
                         "deconstruct": [
                             "Clearing the denominator: $p(p + r) = pr + q(p + r)$.",
@@ -997,7 +985,6 @@ argument becomes visible in three lines.
                     {
                         "prompt": "Since $\\hat{x} = x - e$, rewrite the control $u = -K\\hat{x}$ in terms of $K$, $x$ and $e$.",
                         "answer": "K e - K x",
-                        "placeholder": "K e - K x",
                         "hint": "Substitute and distribute the minus sign across both terms.",
                         "deconstruct": [
                             "$u = -K(x - e)$.",
@@ -1007,7 +994,6 @@ argument becomes visible in three lines.
                     {
                         "prompt": "Put that into $\\dot{x} = Ax + Bu$ (leave the noise out for now) and write $\\dot{x}$ in terms of $A$, $B$, $K$, $x$ and $e$.",
                         "answer": "A x - B K x + B K e",
-                        "placeholder": "A x - B K x + B K e",
                         "hint": "$B$ multiplies both terms of $u$.",
                         "deconstruct": [
                             "$Bu = -BKx + BKe$.",
@@ -1018,7 +1004,6 @@ argument becomes visible in three lines.
                         "prompt": "Subtracting the estimator from the plant gives $\\dot{e} = M e + w - Lv$ for some matrix $M$. Write $M$.",
                         "given": "This is the CTRL510 result, and it is worth noticing what changed: the noise terms are new, the matrix is not.",
                         "answer": "A - L C",
-                        "placeholder": "A - LC",
                         "hint": "The $Bu$ terms are identical in the two equations and cancel, whatever $u$ happens to be.",
                         "deconstruct": [
                             "Plant minus estimator: $\\dot{e} = Ax - A\\hat{x} - LCx + LC\\hat{x} + w - Lv$.",
@@ -1028,7 +1013,6 @@ argument becomes visible in three lines.
                     {
                         "prompt": "The two blocks are decoupled one way, so the poles are the union and the noise cannot move them — it only sets the size of the residual motion. For a scalar mode $\\dot{z} = \\mu z + n$ driven by white noise of intensity $s$, the stationary variance satisfies $2\\mu\\sigma^2 + s = 0$. Write $\\sigma^2$.",
                         "answer": "-\\frac{s}{2 \\mu}",
-                        "placeholder": "-\\frac{s}{2 \\mu}",
                         "hint": "Solve the one-line algebraic Lyapunov equation. The minus sign is what makes the answer positive, because $\\mu$ is negative for a stable mode.",
                         "deconstruct": [
                             "$2\\mu\\sigma^2 = -s$.",

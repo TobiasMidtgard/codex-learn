@@ -137,8 +137,8 @@ current buys twice the $g_m$.
 $g_m = \sqrt{2kI_D}$, so at equal current the wider device wins by $\sqrt{10} \approx 3.2$
 times. Read the other way, $g_m = 2I_D/V_{ov}$: device B reaches 1 mA at an overdrive
 of only 0.316 V rather than 1.0 V, and a smaller overdrive for the same current is
-exactly what a larger $g_m$ means. Option C is the common misreading — $g_m$ depends on
-the current *and* on the device.
+exactly what a larger $g_m$ means. "Identical, because $g_m$ depends only on $I_D$" is the common misreading — $g_m$
+depends on the current *and* on the device.
 ''',
                     },
                     {
@@ -195,7 +195,6 @@ $I_D$ on different days.
                     {
                         "prompt": "The overdrive is what the gate has to spare above the threshold. Write $V_{ov}$ in terms of $V_{GS}$ and $V_{th}$.",
                         "answer": "V_{GS} - V_{th}",
-                        "placeholder": "V_{GS} - V_{th}",
                         "hint": "It is a definition, not a result: the gate-source voltage minus the threshold.",
                         "deconstruct": [
                             "Below $V_{th}$ the channel does not exist and no current flows.",
@@ -206,7 +205,6 @@ $I_D$ on different days.
                         "prompt": "Substitute that into the square law. Write $I_D$ in terms of $k$, $V_{GS}$ and $V_{th}$.",
                         "given": "Start from $I_D = \\tfrac{1}{2}k V_{ov}^{2}$.",
                         "answer": "\\frac{k}{2}(V_{GS} - V_{th})^{2}",
-                        "placeholder": "\\frac{k}{2}(V_{GS} - V_{th})^{2}",
                         "hint": "Replace $V_{ov}$ with the expression you just wrote, and keep the whole bracket squared.",
                         "deconstruct": [
                             "The square applies to the entire overdrive, not just to $V_{GS}$.",
@@ -216,7 +214,6 @@ $I_D$ on different days.
                     {
                         "prompt": "Transconductance is $g_m = \\partial I_D / \\partial V_{GS}$. Differentiate that expression and write $g_m$ in terms of $k$ and $V_{ov}$.",
                         "answer": "k V_{ov}",
-                        "placeholder": "k V_{ov}",
                         "hint": "The chain rule on $(V_{GS}-V_{th})^2$ brings down a 2, which cancels the one half. The inner derivative is 1.",
                         "deconstruct": [
                             "$\\frac{d}{dV_{GS}}\\left[\\frac{k}{2}(V_{GS}-V_{th})^2\\right] = \\frac{k}{2}\\cdot 2(V_{GS}-V_{th})$.",
@@ -226,7 +223,6 @@ $I_D$ on different days.
                     {
                         "prompt": "In a working amplifier you set the current, not the overdrive. Use $I_D = \\tfrac{1}{2}kV_{ov}^{2}$ to eliminate $k$, and write $g_m$ in terms of $I_D$ and $V_{ov}$.",
                         "answer": "\\frac{2 I_D}{V_{ov}}",
-                        "placeholder": "\\frac{2 I_D}{V_{ov}}",
                         "hint": "Rearrange the square law for $k$, then substitute into $g_m = kV_{ov}$.",
                         "deconstruct": [
                             "From the square law, $k = 2I_D/V_{ov}^{2}$.",
@@ -236,7 +232,6 @@ $I_D$ on different days.
                     {
                         "prompt": "Now eliminate the overdrive instead, and write $g_m$ in terms of $k$ and $I_D$.",
                         "answer": "\\sqrt{2 k I_D}",
-                        "placeholder": "\\sqrt{2 k I_D}",
                         "hint": "The square law gives $V_{ov} = \\sqrt{2I_D/k}$. Put that into $g_m = kV_{ov}$ and tidy the roots.",
                         "deconstruct": [
                             "$g_m = k\\sqrt{2I_D/k}$.",
@@ -1258,7 +1253,7 @@ them from $R_D$; the only ways out are a bigger $g_m$ or a smaller $C_L$.
                         "a": 1,
                         "why": r'''
 Multiply $A_0 = g_mR_{out}$ by $f_{3dB} = 1/(2\pi R_{out}C_L)$ and $R_{out}$ cancels,
-leaving $g_m/(2\pi C_L)$. Option A is the bandwidth alone and option C the gain alone —
+leaving $g_m/(2\pi C_L)$. $1/(2\pi R_{out}C_L)$ is the bandwidth alone and $g_mR_{out}$ the gain alone —
 the point of the product is precisely that it contains neither $R_D$ nor $r_o$. For this
 stage: $2\text{ mA/V}/(2\pi\times 354\text{ pF}) = 900$ kHz, which is $9.0\times 100$ kHz,
 as it must be.

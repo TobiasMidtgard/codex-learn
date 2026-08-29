@@ -108,8 +108,8 @@ Squaring and taking a modulus both fail linearity; a pure delay is LTI.
 No. Put in $x = 0$ and you get 3 V out; put in twice any input and you do not get twice
 the output. "Linear" in this course is the algebraic property, not the shape of the
 graph, and the two part company exactly here — the technical name for $2x + 3$ is
-*affine*. Option D fails for a different reason worth being clear about: this amplifier
-*is* time invariant, because delaying the input delays $2x + 3$ by the same amount. The
+*affine*. Answering "it fails time invariance as well" is wrong for a different reason worth
+being clear about: this amplifier *is* time invariant, because delaying the input delays $2x + 3$ by the same amount. The
 two tests are independent and a system can fail either one alone. The practical fix is
 the one every instrumentation engineer uses: subtract the offset first, and what is left
 is genuinely linear and can be treated with everything in this course.
@@ -172,7 +172,8 @@ Stability is about the **sum** $\sum|h[n]|$, not about any individual sample.
 $\sum (0.5)^n = 2$, finite, so $h_1$ is stable — and that 2 is a real number you can
 use: no input bounded by 1 V can ever produce more than 2 V out. $\sum (1.1)^n$
 diverges, so a bounded input can drive $h_2$'s output arbitrarily large. Every sample of
-$h_2$ is finite, which is exactly the trap in option A: an infinite sum of finite terms
+$h_2$ is finite, which is exactly the trap in "both, because both responses are finite at every
+sample": an infinite sum of finite terms
 is what instability looks like.
 ''',
                     },
@@ -356,8 +357,8 @@ assert abs(slow - 5.0) < 1e-6, \
                         "why": r'''
 $f_0 = 1/T = 500$ Hz, and a periodic signal contains only the fundamental, its integer
 multiples, and a possible DC term. The spectrum is a picket fence of lines, not a
-continuous band — that is what makes it a *series* rather than a transform. Option A is
-the answer for an aperiodic signal, which is module 3, and the difference between the
+continuous band — that is what makes it a *series* rather than a transform. "Any frequency from 0 to 500 Hz" is the answer for an aperiodic signal, which is
+module 3, and the difference between the
 two pictures is the single most useful thing to keep straight in this course.
 ''',
                     },
@@ -374,7 +375,7 @@ two pictures is the single most useful thing to keep straight in this course.
 Cosine is even and sine is odd, so an even signal can be built entirely from cosines;
 formally, $b_n$ integrates an even function against an odd one over a symmetric interval
 and gets zero every time. This is worth exploiting before touching an integral, because
-it halves the work. Option C confuses two different symmetries: *half-wave* symmetry,
+it halves the work. Answering "odd harmonics only" confuses two different symmetries: *half-wave* symmetry,
 $x(t + T/2) = -x(t)$, is the one that kills the even harmonics, and the square wave has
 both properties at once.
 ''',
@@ -391,7 +392,8 @@ both properties at once.
                         "why": r'''
 The square wave jumps, so its coefficients fall only as $1/n$; the triangle is continuous
 and only its slope jumps, so its coefficients fall as $1/n^2$. Both contain the same set
-of frequencies — odd multiples of $f_0$ — which is what makes option A tempting, but
+of frequencies — odd multiples of $f_0$ — which is what makes "identical, because they contain the same frequencies"
+tempting, but
 containing a frequency and containing much of it are different things. The rule
 generalises: each extra derivative that stays continuous buys another factor of $1/n$.
 ''',
@@ -439,8 +441,8 @@ Orthogonality is the mechanism, and it is worth seeing once: $\cos(m\omega_0 t)\
 expands to half the sum of two cosines at frequencies $(m-n)\omega_0$ and $(m+n)\omega_0$,
 and any whole number of cycles of a cosine integrates to zero — unless $m = n$, when the
 first term becomes a constant $1/2$. That surviving constant is where the factor $2/T$ in
-the analysis formula comes from. Option A is too strong: many different products integrate
-to something non-zero; it is the harmonic relationship that makes them vanish.
+the analysis formula comes from. "The integral of any product over a period is zero unless the two factors are
+identical" is too strong: many different products integrate to something non-zero; it is the harmonic relationship that makes them vanish.
 ''',
                     },
                 ],
@@ -732,8 +734,8 @@ exist, and it is the reason so many first designs alias.
 The mechanism is the one this course keeps returning to: multiplication in one domain is
 convolution in the other. The impulse train's spectrum is another impulse train spaced
 $f_s$ apart, and convolving a spectrum with an impulse at $kf_s$ simply moves a copy
-there. Option C states a true fact — the spectrum of a sampled signal is periodic — but
-offers it as its own explanation. Note that none of this involves quantisation: aliasing
+there. "Any discrete signal has a periodic spectrum by construction" states a true fact —
+the spectrum of a sampled signal is periodic — but offers it as its own explanation. Note that none of this involves quantisation: aliasing
 happens even with a converter of infinite resolution.
 ''',
                     },
@@ -743,8 +745,8 @@ happens even with a converter of infinite resolution.
                         "a": 1,
                         "why": r'''
 $19 \bmod 20 = 19$ kHz, which exceeds $f_s/2 = 10$ kHz, so it folds to $20 - 19 = 1$ kHz
-and lands squarely in the wanted band. Nothing is rejected automatically — that is the
-belief option D encodes, and it is exactly backwards: frequencies above $f_s/2$ are not
+and lands squarely in the wanted band. Nothing is rejected automatically — that is the belief behind "rejected automatically, because it is above $f_s/2$", and
+it is exactly backwards: frequencies above $f_s/2$ are not
 discarded by the sampler, they are *relocated* by it. Interference close to a multiple of
 the sample rate is the worst case, because it folds to a low frequency where the wanted
 signal usually lives.
@@ -922,7 +924,7 @@ Three sliders: the corner $\omega_n$, the damping $\zeta$, and the gain $K$.
                         "why": r'''
 It is an eigenfunction: in goes $e^{j\omega t}$, out comes $H(j\omega)e^{j\omega t}$, the
 same shape at the same frequency. No other family of inputs behaves this way, and it is
-what reduces a convolution to a multiplication. Option C is true and beside the point —
+what reduces a convolution to a multiplication. "Real circuits are driven by sinusoids in practice" is true and beside the point:
 sinusoids are convenient in the laboratory, but the mathematical privilege belongs to the
 complex exponential, of which a sinusoid is a sum of two.
 ''',
@@ -973,7 +975,7 @@ above it, where the phase asymptotes to $-90^\circ$ without ever quite arriving.
                         "why": r'''
 Any $\zeta$ below $1/\sqrt{2} \approx 0.707$ gives a peak, and at $\zeta = 0.3$ it is
 about $1/(2\zeta\sqrt{1-\zeta^2}) = 1.75$, or $+4.9$ dB above the flat region. Beyond it
-the two poles give 40 dB per decade. Option C describes the *over*damped case, $\zeta > 1$
+the two poles give 40 dB per decade. A monotonic fall with a soft corner describes the *over*damped case, $\zeta > 1$
 — the two errors are mirror images, and the sandbox is the fastest way to stop confusing
 them.
 ''',
@@ -1032,7 +1034,6 @@ No new theory is needed. It is the impedance divider from EE102, written out and
                     {
                         "prompt": "Write the impedance of the capacitor at angular frequency $\\omega$.",
                         "answer": "\\frac{1}{j\\omega C}",
-                        "placeholder": "\\frac{1}{j\\omega C}",
                         "hint": "The current through a capacitor is $C\\,dv/dt$, and differentiating $e^{j\\omega t}$ multiplies by $j\\omega$.",
                         "deconstruct": [
                             "$i = C\\frac{dv}{dt}$ becomes $I = j\\omega C V$ for a complex exponential.",
@@ -1043,7 +1044,6 @@ No new theory is needed. It is the impedance divider from EE102, written out and
                         "prompt": "The three parts carry the same current, so this is an impedance divider. Write $H = V_{out}/V_{in}$ as the capacitor's impedance over the total, without simplifying.",
                         "given": "The three impedances are $R$, $j\\omega L$ and the one you just wrote.",
                         "answer": "\\frac{\\frac{1}{j\\omega C}}{R + j\\omega L + \\frac{1}{j\\omega C}}",
-                        "placeholder": "\\frac{\\frac{1}{j\\omega C}}{R + j\\omega L + \\frac{1}{j\\omega C}}",
                         "hint": "Exactly the resistive divider of EE101 with impedances in place of resistances: the part you measure across goes on top, the whole series chain underneath.",
                         "deconstruct": [
                             "In a series chain the same current flows, so voltages split in proportion to impedance.",
@@ -1053,7 +1053,6 @@ No new theory is needed. It is the impedance divider from EE102, written out and
                     {
                         "prompt": "Multiply top and bottom by $j\\omega C$ and write the tidied $H$.",
                         "answer": "\\frac{1}{1 - \\omega^{2} L C + j \\omega R C}",
-                        "placeholder": "\\frac{1}{1 - \\omega^{2} L C + j \\omega R C}",
                         "hint": "The numerator becomes 1. In the denominator, $j\\omega L \\cdot j\\omega C = j^2\\omega^2 LC = -\\omega^2 LC$.",
                         "deconstruct": [
                             "$\\frac{1}{j\\omega C}\\cdot j\\omega C = 1$, which clears the fraction on top.",
@@ -1063,7 +1062,6 @@ No new theory is needed. It is the impedance divider from EE102, written out and
                     {
                         "prompt": "The standard form is $H = \\dfrac{1}{1 - (\\omega/\\omega_n)^2 + j2\\zeta(\\omega/\\omega_n)}$. Matching the $\\omega^2$ terms, write $\\omega_n$ in terms of $L$ and $C$.",
                         "answer": "\\frac{1}{\\sqrt{L C}}",
-                        "placeholder": "\\frac{1}{\\sqrt{LC}}",
                         "hint": "You need $\\omega^2/\\omega_n^2 = \\omega^2 LC$, so $\\omega_n^2 = 1/(LC)$.",
                         "deconstruct": [
                             "Compare $(\\omega/\\omega_n)^2$ with $\\omega^2 LC$: they must be equal for all $\\omega$.",
@@ -1074,7 +1072,6 @@ No new theory is needed. It is the impedance divider from EE102, written out and
                         "prompt": "Now match the imaginary terms and write $\\zeta$ in terms of $R$, $L$ and $C$.",
                         "given": "You need $2\\zeta\\,\\omega/\\omega_n = \\omega R C$, with $\\omega_n = 1/\\sqrt{LC}$.",
                         "answer": "\\frac{R}{2}\\sqrt{\\frac{C}{L}}",
-                        "placeholder": "\\frac{R}{2}\\sqrt{\\frac{C}{L}}",
                         "hint": "The $\\omega$ cancels, leaving $2\\zeta = RC\\omega_n = RC/\\sqrt{LC}$. Simplify $C/\\sqrt{LC}$.",
                         "deconstruct": [
                             "Divide both sides by $\\omega$: $2\\zeta/\\omega_n = RC$, so $2\\zeta = RC\\omega_n$.",

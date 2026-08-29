@@ -43,6 +43,11 @@
     "Uncorrelated subqueries, `NOT IN` versus `NOT EXISTS`, and NULL's effect on both",
     "Bound parameters are not a style preference: string-built SQL is an injection hole"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A library schema, and questions asked of it",
     "runtime": "python",
@@ -111,6 +116,11 @@
     "3NF weakens BCNF to keep dependency preservation, which BCNF cannot always give you",
     "Projecting a dependency set onto a sub-relation is a closure computation over its subsets"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Closures, candidate keys and a BCNF decomposer",
     "runtime": "python",
@@ -179,6 +189,11 @@
     "An index lookup on an unclustered index costs about one page per matching row",
     "Covering indexes remove the heap fetch entirely, which changes the crossover point"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Index versus scan: a cost model that decides",
     "runtime": "python",
@@ -247,6 +262,11 @@
     "Two-phase locking: a growing phase then a shrinking phase, which guarantees serialisability",
     "Strict 2PL holds every lock to commit, so cascading aborts cannot happen — at the price of deadlock"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Precedence graphs and a two-phase-locking scheduler",
     "runtime": "python",

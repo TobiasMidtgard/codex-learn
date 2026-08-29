@@ -38,6 +38,11 @@
     "Continuity at a means the limit exists and equals f(a)",
     "Numerical probing is evidence, not proof — catastrophic cancellation lies"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Numerical limits and an epsilon-delta witness",
     "runtime": "python",
@@ -106,6 +111,11 @@
     "Richardson extrapolation cancels the leading error term and buys two orders",
     "Roundoff sets a floor: shrinking h forever makes the answer worse"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Finite differences and their error order",
     "runtime": "python",
@@ -174,6 +184,11 @@
     "A relative step h * max(1, |x|) keeps the numerical derivative usable at large x",
     "Every iteration needs a cap; a browser tab has no Ctrl-C"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Newton's method with guards",
     "runtime": "python",
@@ -246,6 +261,11 @@
     "Grid-based search misses anything narrower than the grid — state the limitation",
     "A sample that lands exactly on a root produces no sign change and must be handled separately"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Locating and classifying critical points",
     "runtime": "python",

@@ -42,6 +42,11 @@
     "Canonical renaming by breadth-first order makes the minimal DFA literally unique",
     "Equivalence by product construction: walk both machines in lock-step and look for disagreement"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Simulate, minimise, compare",
     "runtime": "python",
@@ -118,6 +123,11 @@
     "The 2^|Q| bound is tight in the worst case but almost never reached in practice",
     "Two machines agree on a language exactly when they agree on every word — which is why a bounded exhaustive check is a real test"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Epsilon closure and determinisation",
     "runtime": "python",
@@ -190,6 +200,11 @@
     "Catastrophic backtracking is a property of the algorithm, not of the notation",
     "Kleene's theorem in one direction: every regular expression denotes a language some finite automaton accepts"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "From pattern to automaton",
     "runtime": "python",
@@ -262,6 +277,11 @@
     "Ambiguity is a property of the grammar, not of the language; inherent ambiguity is a property of the language",
     "Searching words in length order gives the shortest ambiguous witness, if one exists within the bound"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A CYK parser that counts",
     "runtime": "python",
@@ -330,6 +350,11 @@
     "Why no sound *and* complete test exists: the diagonal argument on a supposed decider for HALT",
     "The busy beaver function grows faster than any computable function, so no budget is ever enough"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A Turing machine you can watch",
     "runtime": "python",

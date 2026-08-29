@@ -43,6 +43,11 @@
     "Pure-literal elimination is sound because a pure literal can always be set true",
     "Validating an optimised solver against exhaustive enumeration on random instances"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "CNF conversion and a DPLL solver",
     "runtime": "python",
@@ -111,6 +116,11 @@
     "A loop is opaque: the annotated invariant is the precondition, and it owes two verification conditions",
     "Discharging obligations: a decision procedure, or — here — bounded enumeration that returns a concrete counterexample"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A weakest-precondition calculator",
     "runtime": "python",
@@ -179,6 +189,11 @@
     "A counterexample to G p is a finite prefix; a counterexample to F p is a path with no witness inside the bound",
     "State explosion: the reachable set of a protocol grows as the product of its components"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Model checking a mutual-exclusion protocol",
     "runtime": "python",
@@ -247,6 +262,11 @@
     "Seeding the generator makes a random failure reproducible, which is what makes it a bug report",
     "Testing refutes; it never verifies. Its coverage is the distribution the generator happens to have"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A generator and shrinker framework",
     "runtime": "python",

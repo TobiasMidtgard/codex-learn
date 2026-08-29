@@ -43,6 +43,11 @@
     "The implicit leading 1, and how exponent 0 switches it off to give subnormals",
     "Round-to-nearest-even, and why 0.1 is not 0.1"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Bit patterns: two's complement and binary32",
     "runtime": "python",
@@ -111,6 +116,11 @@
     "Pseudo-instructions, and the hardwired zero register that makes them cheap",
     "Assembly-time errors are cheaper than run-time ones: range-check every immediate"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A two-pass assembler for CW-32",
     "runtime": "python",
@@ -179,6 +189,11 @@
     "Single-cycle timing is set by the slowest instruction, which is why CPI 1 is not fast",
     "Trapping bad opcodes and bad addresses rather than executing nonsense"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A single-cycle CW-32 simulator",
     "runtime": "python",
@@ -247,6 +262,11 @@
     "LRU replacement, its cost in hardware, and why real caches approximate it",
     "Average memory access time = hit time + miss rate x miss penalty"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A cache simulator over an access trace",
     "runtime": "python",

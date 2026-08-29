@@ -92,7 +92,6 @@ Everything the general case does, this case does with scalars.
                     {
                         "prompt": "Expand the mean-square error $J(w) = E[(d - wx)^2]$ in terms of $\\sigma_d$, $p$, $r$ and $w$.",
                         "answer": "\\sigma_d^2 - 2 w p + w^2 r",
-                        "placeholder": "\\sigma_d^2 - 2wp + w^2 r",
                         "hint": "Square the bracket first, then take the expectation term by term. $w$ is a constant, so it comes outside.",
                         "deconstruct": [
                             "$(d - wx)^2 = d^2 - 2wdx + w^2x^2$.",
@@ -102,7 +101,6 @@ Everything the general case does, this case does with scalars.
                     {
                         "prompt": "Differentiate $J$ with respect to $w$.",
                         "answer": "2 w r - 2 p",
-                        "placeholder": "2wr - 2p",
                         "hint": "It is a quadratic in one variable; $\\sigma_d^2$ does not depend on $w$ at all.",
                         "deconstruct": [
                             "The constant term differentiates to zero.",
@@ -112,7 +110,6 @@ Everything the general case does, this case does with scalars.
                     {
                         "prompt": "Set the derivative to zero and write the optimal tap $w_o$.",
                         "answer": "\\frac{p}{r}",
-                        "placeholder": "\\frac{p}{r}",
                         "hint": "This is the one-dimensional version of $w_o = R^{-1}p$.",
                         "deconstruct": [
                             "$2wr - 2p$ vanishes when $wr = p$.",
@@ -122,7 +119,6 @@ Everything the general case does, this case does with scalars.
                     {
                         "prompt": "Substitute $w_o$ back into $J$ and write the minimum mean-square error.",
                         "answer": "\\sigma_d^2 - \\frac{p^2}{r}",
-                        "placeholder": "\\sigma_d^2 - \\frac{p^2}{r}",
                         "hint": "Put $p/r$ in place of $w$ in $\\sigma_d^2 - 2wp + w^2r$ and collect the two $p^2/r$ terms.",
                         "deconstruct": [
                             "$-2wp$ becomes $-2p^2/r$ and $w^2 r$ becomes $p^2/r$.",
@@ -132,7 +128,6 @@ Everything the general case does, this case does with scalars.
                     {
                         "prompt": "Now two taps, with a unit-power input whose one-lag correlation is $\\rho$: $R$ has $1$ on the diagonal and $\\rho$ off it, so its eigenvalues are $1 + \\rho$ and $1 - \\rho$. Write the eigenvalue spread $\\chi$ for $0 < \\rho < 1$.",
                         "answer": "\\frac{1+\\rho}{1-\\rho}",
-                        "placeholder": "\\frac{1+\\rho}{1-\\rho}",
                         "hint": "Spread is the largest eigenvalue divided by the smallest, and for $0 < \\rho < 1$ the larger one is $1 + \\rho$.",
                         "deconstruct": [
                             "The eigenvectors are $[1, 1]$ and $[1, -1]$, giving eigenvalues $1 + \\rho$ and $1 - \\rho$.",
@@ -407,7 +402,6 @@ gradient with a fixed step size $\mu$.
                     {
                         "prompt": "Write the gradient $\\nabla J$ with respect to $w$, in terms of $R$, $w$ and $p$.",
                         "answer": "2 R w - 2 p",
-                        "placeholder": "2Rw - 2p",
                         "hint": "Treat it exactly like the scalar case: $\\sigma_d^2$ is constant, the linear term gives $-2p$, and the quadratic term gives $2Rw$ because $R$ is symmetric.",
                         "deconstruct": [
                             "$\\nabla(w^\\top R w) = 2Rw$ when $R = R^\\top$.",
@@ -417,7 +411,6 @@ gradient with a fixed step size $\mu$.
                     {
                         "prompt": "The update is $w(n+1) = w(n) - \\frac{\\mu}{2}\\nabla J$. Write $w(n+1)$ in terms of $w$, $\\mu$, $R$ and $p$.",
                         "answer": "w + \\mu (p - R w)",
-                        "placeholder": "w + \\mu(p - Rw)",
                         "hint": "The factor of one half is there purely to cancel the 2 in the gradient.",
                         "deconstruct": [
                             "$-\\frac{\\mu}{2}(2Rw - 2p) = -\\mu(Rw - p)$.",
@@ -427,7 +420,6 @@ gradient with a fixed step size $\mu$.
                     {
                         "prompt": "Let $v = w - w_o$, where $Rw_o = p$. Along an eigenvector of $R$ with eigenvalue $\\lambda$, the update becomes $v(n+1) = c\\,v(n)$. Write the scalar $c$.",
                         "answer": "1 - \\mu\\lambda",
-                        "placeholder": "1 - \\mu\\lambda",
                         "hint": "Substitute $w = w_o + v$ and use $p - Rw_o = 0$; you are left with $v - \\mu R v$, and $Rv = \\lambda v$ along an eigenvector.",
                         "deconstruct": [
                             "$w(n+1) - w_o = v + \\mu(p - R(w_o + v)) = v - \\mu Rv$.",
@@ -437,7 +429,6 @@ gradient with a fixed step size $\mu$.
                     {
                         "prompt": "Write $v$ after $n$ iterations, in terms of $v_0$, $\\mu$, $\\lambda$ and $n$.",
                         "answer": "v_0 (1 - \\mu\\lambda)^n",
-                        "placeholder": "v_0 (1 - \\mu\\lambda)^n",
                         "hint": "Multiplying by the same scalar $n$ times is that scalar to the power $n$.",
                         "deconstruct": [
                             "$v_1 = c v_0$, $v_2 = c^2 v_0$, and so on.",
@@ -447,7 +438,6 @@ gradient with a fixed step size $\mu$.
                     {
                         "prompt": "Every mode must decay, which needs $|1 - \\mu\\lambda| < 1$ for all eigenvalues. Write the upper bound on $\\mu$.",
                         "answer": "\\frac{2}{\\lambda_{max}}",
-                        "placeholder": "\\frac{2}{\\lambda_{max}}",
                         "hint": "$|1 - \\mu\\lambda| < 1$ means $0 < \\mu\\lambda < 2$; the binding constraint comes from the largest eigenvalue.",
                         "deconstruct": [
                             "For each mode, $\\mu < 2/\\lambda$.",
@@ -457,7 +447,6 @@ gradient with a fixed step size $\mu$.
                     {
                         "prompt": "The mode decays as $(1 - \\mu\\lambda)^n = e^{n\\ln(1-\\mu\\lambda)}$. For small $\\mu\\lambda$, $\\ln(1 - \\mu\\lambda) \\approx -\\mu\\lambda$. Write the time constant $\\tau$ in iterations.",
                         "answer": "\\frac{1}{\\mu\\lambda}",
-                        "placeholder": "\\frac{1}{\\mu\\lambda}",
                         "hint": "The time constant is the $n$ at which the exponent reaches $-1$.",
                         "deconstruct": [
                             "$e^{-n\\mu\\lambda}$ falls to $1/e$ when $n\\mu\\lambda = 1$.",
@@ -701,7 +690,6 @@ and takes one gradient step per sample.
                     {
                         "prompt": "Write the gradient of $\\hat{J} = e^2$ with respect to $w$, in terms of $e$ and $x$.",
                         "answer": "-2 e x",
-                        "placeholder": "-2ex",
                         "hint": "Chain rule: $\\nabla e^2 = 2e\\nabla e$, and $e = d - w^\\top x$ depends on $w$ only through that inner product.",
                         "deconstruct": [
                             "$\\nabla_w e = \\nabla_w (d - w^\\top x) = -x$.",
@@ -711,7 +699,6 @@ and takes one gradient step per sample.
                     {
                         "prompt": "Step against half that gradient with step size $\\mu$. Write $w(n+1)$ in terms of $w$, $\\mu$, $e$ and $x$.",
                         "answer": "w + \\mu e x",
-                        "placeholder": "w + \\mu e x",
                         "hint": "The half is chosen precisely so the 2 disappears, as it did in module 2.",
                         "deconstruct": [
                             "$w - \\frac{\\mu}{2}(-2ex)$.",
@@ -721,7 +708,6 @@ and takes one gradient step per sample.
                     {
                         "prompt": "The stability bound wants $\\lambda_{max}$, which you cannot measure cheaply, so the trace is used instead. For $M$ taps of a stationary input with power $\\sigma_x^2$, write $\\text{trace}(R)$.",
                         "answer": "M \\sigma_x^2",
-                        "placeholder": "M\\sigma_x^2",
                         "hint": "Every diagonal entry of $R$ is $r(0)$, and $r(0)$ is the input power.",
                         "deconstruct": [
                             "$R$ has $M$ diagonal entries, each equal to $E[x^2] = \\sigma_x^2$.",
@@ -731,7 +717,6 @@ and takes one gradient step per sample.
                     {
                         "prompt": "The trace is the sum of the eigenvalues, so it is at least $\\lambda_{max}$ and the resulting bound is conservative. Write the practical upper bound on $\\mu$ in terms of $M$ and $\\sigma_x$.",
                         "answer": "\\frac{2}{M \\sigma_x^2}",
-                        "placeholder": "\\frac{2}{M\\sigma_x^2}",
                         "hint": "Take the bound from module 2 and put the trace where $\\lambda_{max}$ was.",
                         "deconstruct": [
                             "The bound was $2/\\lambda_{max}$.",
@@ -741,7 +726,6 @@ and takes one gradient step per sample.
                     {
                         "prompt": "NLMS picks the step that drives the *a posteriori* error $d - w(n+1)^\\top x$ to zero. Writing the instantaneous input energy as $E_x = x^\\top x$, write the step size $\\mu$ that achieves it.",
                         "answer": "\\frac{1}{E_x}",
-                        "placeholder": "\\frac{1}{E_x}",
                         "hint": "Substitute $w(n+1) = w + \\mu e x$ into $d - w(n+1)^\\top x$; you get $e(1 - \\mu E_x)$.",
                         "deconstruct": [
                             "$d - (w + \\mu ex)^\\top x = e - \\mu e\\,x^\\top x = e(1 - \\mu E_x)$.",
@@ -751,7 +735,6 @@ and takes one gradient step per sample.
                     {
                         "prompt": "The gradient noise never dies, so LMS settles above $J_{min}$ by a fraction $\\mu\\,\\text{trace}(R)/2$. Write that misadjustment in terms of $\\mu$, $M$ and $\\sigma_x$.",
                         "answer": "\\frac{\\mu M \\sigma_x^2}{2}",
-                        "placeholder": "\\frac{\\mu M\\sigma_x^2}{2}",
                         "hint": "You already wrote the trace two steps ago; substitute it.",
                         "deconstruct": [
                             "$\\text{trace}(R) = M\\sigma_x^2$.",
@@ -1030,7 +1013,6 @@ so a sample's influence decays geometrically as it recedes into the past.
                     {
                         "prompt": "Write the weight that the cost places on a sample $i$ steps in the past.",
                         "answer": "\\lambda^i",
-                        "placeholder": "\\lambda^i",
                         "hint": "Set $i = n - $ (sample index) in the exponent above.",
                         "deconstruct": [
                             "The sample at time $n$ has exponent $n - n = 0$, so weight 1.",
@@ -1040,7 +1022,6 @@ so a sample's influence decays geometrically as it recedes into the past.
                     {
                         "prompt": "Sum that weight over all past samples, for $0 < \\lambda < 1$. Write the total.",
                         "answer": "\\frac{1}{1-\\lambda}",
-                        "placeholder": "\\frac{1}{1-\\lambda}",
                         "hint": "It is a geometric series with ratio $\\lambda$, starting at 1.",
                         "deconstruct": [
                             "$1 + \\lambda + \\lambda^2 + \\dots$",
@@ -1050,7 +1031,6 @@ so a sample's influence decays geometrically as it recedes into the past.
                     {
                         "prompt": "That total is the effective number of samples the filter is averaging over. If you want a memory of $N$ samples, write $\\lambda$.",
                         "answer": "1 - \\frac{1}{N}",
-                        "placeholder": "1 - \\frac{1}{N}",
                         "hint": "Set the previous answer equal to $N$ and solve.",
                         "deconstruct": [
                             "$1/(1-\\lambda) = N$ gives $1 - \\lambda = 1/N$.",
@@ -1060,7 +1040,6 @@ so a sample's influence decays geometrically as it recedes into the past.
                     {
                         "prompt": "The correlation estimate obeys $R(n) = \\lambda R(n-1) + x(n)x(n)^\\top$. For white input of power $\\sigma_x^2$, write the value each diagonal entry settles on as $n \\to \\infty$.",
                         "answer": "\\frac{\\sigma_x^2}{1-\\lambda}",
-                        "placeholder": "\\frac{\\sigma_x^2}{1-\\lambda}",
                         "hint": "Take expectations: the steady state satisfies $\\bar{R} = \\lambda\\bar{R} + \\sigma_x^2$.",
                         "deconstruct": [
                             "In steady state the diagonal entry stops changing, so $\\bar{r} = \\lambda\\bar{r} + \\sigma_x^2$.",
@@ -1070,7 +1049,6 @@ so a sample's influence decays geometrically as it recedes into the past.
                     {
                         "prompt": "Back to LMS for the comparison. Its misadjustment is $\\mu M\\sigma_x^2/2$ and its slowest time constant is $1/(\\mu\\lambda_{min})$ iterations. Write the product of the two.",
                         "answer": "\\frac{M \\sigma_x^2}{2 \\lambda_{min}}",
-                        "placeholder": "\\frac{M\\sigma_x^2}{2\\lambda_{min}}",
                         "hint": "Multiply them and watch what happens to $\\mu$.",
                         "deconstruct": [
                             "$\\left(\\frac{\\mu M\\sigma_x^2}{2}\\right)\\cdot\\frac{1}{\\mu\\lambda_{min}}$.",

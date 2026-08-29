@@ -43,6 +43,11 @@
     "A tail pointer is what makes appending to a singly linked list O(1)",
     "Big-O hides constants: cache locality is why arrays usually still win"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A growable array and a linked list, counted",
     "runtime": "python",
@@ -119,6 +124,11 @@
     "A monotonic deque holds only the candidates that can still become the answer",
     "Each index enters and leaves the deque once, so a sliding-window maximum is O(n), not O(nk)"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "An expression evaluator and a sliding-window maximum",
     "runtime": "python",
@@ -191,6 +201,11 @@
     "The two-child case promotes the in-order successor, the leftmost node of the right subtree",
     "Random insertion gives height ~1.39 log2 n; sorted insertion gives a linked list"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A binary search tree that can also delete",
     "runtime": "python",
@@ -259,6 +274,11 @@
     "Open addressing has no chains, so a deletion must leave a tombstone or break probe chains",
     "Tombstones are cleared only by rehashing, so they count towards the resize trigger"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Chaining, probing and the tombstone problem",
     "runtime": "python",
@@ -327,6 +347,11 @@
     "Three-way partitioning makes runs of equal keys cheap instead of quadratic",
     "Stability is a property of the algorithm, not the data — heap and quick sorts lose it"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A binary heap and three sorts",
     "runtime": "python",

@@ -43,6 +43,11 @@
     "det J = l1 l2 sin(theta2): the arm is singular fully stretched and fully folded",
     "Manipulability |det J| as a scalar score for how well-conditioned a pose is"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Forward and inverse kinematics of a 2R arm",
     "runtime": "python",
@@ -111,6 +116,11 @@
     "Particle filters represent an arbitrary posterior by weighted samples",
     "Systematic resampling and the effective sample size 1/sum(w^2) fight particle depletion"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Kalman and particle filters",
     "runtime": "python",
@@ -179,6 +189,11 @@
     "RRT trades optimality for probabilistic completeness in continuous space",
     "Goal biasing and step size govern how fast an RRT finds anything at all"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A* on an occupancy grid, then an RRT",
     "runtime": "python",
@@ -247,6 +262,11 @@
     "Conditional integration (anti-windup): only commit the integral when the output is unsaturated",
     "Step-response metrics: rise time, overshoot, settling time, steady-state error"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A PID loop with anti-windup",
     "runtime": "python",

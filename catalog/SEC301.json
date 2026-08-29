@@ -42,6 +42,11 @@
     "Key recovery beats brute force: 26 tests per column instead of 26^k over the whole key",
     "The lesson generalises: a cipher must be judged by the structure it leaves behind, not by its key space"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Vigenere, and a full key recovery",
     "runtime": "python",
@@ -110,6 +115,11 @@
     "A derived key longer than the hash needs several blocks, each with its own counter",
     "Comparing digests with `==` leaks how many bytes matched; the fix is an XOR accumulator"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "HMAC-SHA256 and PBKDF2 from scratch",
     "runtime": "python",
@@ -178,6 +188,11 @@
     "PKCS#7 padding is unambiguous because a full block of padding is added when the input already fits",
     "A CTR nonce must never repeat under one key: two messages with the same keystream XOR to each other"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "ECB versus CTR, and the pattern that leaks",
     "runtime": "python",
@@ -246,6 +261,11 @@
     "Signing is decryption applied to a hash: it is the hash, not the message, that is exponentiated",
     "Textbook RSA is deterministic and therefore not semantically secure — padding is not optional in practice"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "RSA with Miller-Rabin, encryption and signatures",
     "runtime": "python",
@@ -314,6 +334,11 @@
     "Unauthenticated key agreement authenticates nobody — the middle can answer both sides at once",
     "Comparing key fingerprints out of band is the cheapest detection; signed exchanges are the real fix"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Diffie-Hellman, and Mallory in the middle",
     "runtime": "python",

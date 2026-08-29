@@ -44,6 +44,11 @@
     "Vector clocks cost O(processes) per message — the reason Dynamo prunes them",
     "Total order by (Lamport, process id) is a tie-break, not a causal fact"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Lamport and vector clocks over an event log",
     "runtime": "python",
@@ -113,6 +118,11 @@
     "A leader may only commit an entry from its *own* term; earlier entries commit indirectly",
     "A split vote wastes a term; randomised timeouts, not cleverness, break the tie"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Raft election and log replication",
     "runtime": "python",
@@ -198,6 +208,11 @@
     "Read repair is opportunistic anti-entropy carried on the read path",
     "Availability versus staleness is a dial, not a binary — this is PACELC's ELC half"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A tunable quorum store",
     "runtime": "python",
@@ -274,6 +289,11 @@
     "`hash()` on a str is salted per process; partitioning needs a stable digest such as MD5",
     "Hot keys are not solved by hashing — they need a separate splitting or caching strategy"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A consistent-hashing ring",
     "runtime": "python",

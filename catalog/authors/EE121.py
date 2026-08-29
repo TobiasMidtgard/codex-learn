@@ -868,8 +868,9 @@ again: data moves on clock edges or not at all.
                         ],
                         "a": 0,
                         "why": (
-                            "Setup is before the edge; the second option describes **hold** time, and the "
-                            "third describes the clock-to-output delay. All three are separate numbers on a "
+                            "Setup is before the edge. \"Stable *after* the edge\" is **hold** time, and "
+                            "\"how long the output takes to change\" is the clock-to-output delay. All "
+                            "three are separate numbers on a "
                             "datasheet and all three appear in the timing budget. Missing setup does not "
                             "give the old value or the new one — the flip-flop can hang between the two, "
                             "which is called metastability."

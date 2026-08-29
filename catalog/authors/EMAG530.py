@@ -96,7 +96,6 @@ We want the largest $\theta_a$ that still leaves the ray trapped.
                         "prompt": "At the core–cladding boundary the refracted ray grazes along the interface when the transmission angle reaches 90°. Write $\\sin\\theta_c$ in terms of $n_1$ and $n_2$.",
                         "given": "Snell's law across that boundary reads $n_1\\sin\\theta_c = n_2\\sin 90°$.",
                         "answer": "\\frac{n_2}{n_1}",
-                        "placeholder": "\\frac{n_2}{n_1}",
                         "hint": "Put $\\sin 90° = 1$ and divide through by $n_1$.",
                         "deconstruct": [
                             "$n_1\\sin\\theta_c = n_2 \\cdot 1$.",
@@ -107,7 +106,6 @@ We want the largest $\theta_a$ that still leaves the ray trapped.
                         "prompt": "A ray entering at $\\theta_a$ refracts to $\\theta_r$ inside the core, and hits the boundary at $90° - \\theta_r$. Setting that equal to $\\theta_c$ gives the worst ray that still guides. Write $n_0\\sin\\theta_a$ in terms of $n_1$ and $n_2$.",
                         "given": "At the end face, $n_0\\sin\\theta_a = n_1\\sin\\theta_r$, and $\\sin\\theta_r = \\cos\\theta_c$.",
                         "answer": "\\sqrt{n_1^2 - n_2^2}",
-                        "placeholder": "\\sqrt{n_1^2 - n_2^2}",
                         "hint": "$\\cos\\theta_c = \\sqrt{1 - \\sin^2\\theta_c}$, and you already have $\\sin\\theta_c$.",
                         "deconstruct": [
                             "$\\cos\\theta_c = \\sqrt{1 - (n_2/n_1)^2}$.",
@@ -118,7 +116,6 @@ We want the largest $\theta_a$ that still leaves the ray trapped.
                     {
                         "prompt": "That quantity is the definition of the numerical aperture. Manufactured fibre is weakly guiding, so with $\\Delta = (n_1-n_2)/n_1$ and $n_1 + n_2 \\approx 2n_1$, write $\\mathrm{NA}$ in terms of $n_1$ and $\\Delta$.",
                         "answer": "n_1\\sqrt{2\\Delta}",
-                        "placeholder": "n_1\\sqrt{2\\Delta}",
                         "hint": "Factor the difference of two squares first: $n_1^2 - n_2^2 = (n_1-n_2)(n_1+n_2)$.",
                         "deconstruct": [
                             "$n_1 - n_2 = n_1\\Delta$ by the definition of $\\Delta$.",
@@ -130,7 +127,6 @@ We want the largest $\theta_a$ that still leaves the ray trapped.
                         "prompt": "None of that light gets in until it crosses the end face. Write the fraction $R$ of power reflected at normal incidence between the launch medium $n_0$ and the core $n_1$.",
                         "given": "The field reflection coefficient at normal incidence is $(\\eta_1 - \\eta_0)/(\\eta_1 + \\eta_0)$ with $\\eta = \\eta_0/n$, and power goes as the square of it.",
                         "answer": "\\frac{(n_1 - n_0)^2}{(n_1 + n_0)^2}",
-                        "placeholder": "\\frac{(n_1-n_0)^2}{(n_1+n_0)^2}",
                         "hint": "Substituting $\\eta = \\eta_0/n$ turns the impedance ratio into an index ratio with the sign flipped; then square it.",
                         "deconstruct": [
                             "$\\eta_1 - \\eta_0 = \\eta_0(1/n_1 - 1/n_0)$, and the common factor cancels in the ratio.",
@@ -353,7 +349,6 @@ outside it decays with rate $\gamma$.
                     {
                         "prompt": "The wave equation in the core requires $\\kappa^2 + \\beta^2 = k_0^2 n_1^2$. Write $\\kappa$ in terms of $k_0$, $n_1$ and $n_e$.",
                         "answer": "k_0\\sqrt{n_1^2 - n_e^2}",
-                        "placeholder": "k_0\\sqrt{n_1^2 - n_e^2}",
                         "hint": "Substitute $\\beta = k_0 n_e$, then take $k_0^2$ outside the root.",
                         "deconstruct": [
                             "$\\kappa^2 = k_0^2 n_1^2 - \\beta^2 = k_0^2 n_1^2 - k_0^2 n_e^2$.",
@@ -363,7 +358,6 @@ outside it decays with rate $\gamma$.
                     {
                         "prompt": "In the cladding the same equation holds with $n_2$, but the field decays instead of oscillating, so $\\beta^2 - k_0^2 n_2^2 = \\gamma^2$. Write $\\gamma$ in terms of $k_0$, $n_e$ and $n_2$.",
                         "answer": "k_0\\sqrt{n_e^2 - n_2^2}",
-                        "placeholder": "k_0\\sqrt{n_e^2 - n_2^2}",
                         "hint": "Identical algebra, with the subtraction the other way round. That ordering is what makes $\\gamma$ real only when $n_e > n_2$.",
                         "deconstruct": [
                             "$\\gamma^2 = k_0^2 n_e^2 - k_0^2 n_2^2$.",
@@ -373,7 +367,6 @@ outside it decays with rate $\gamma$.
                     {
                         "prompt": "Add the squares of those two. The effective index cancels. Write $\\kappa^2 + \\gamma^2$ in terms of $k_0$, $n_1$ and $n_2$.",
                         "answer": "k_0^2 \\cdot (n_1^2 - n_2^2)",
-                        "placeholder": "k_0^2 \\cdot (n_1^2 - n_2^2)",
                         "hint": "The $n_e^2$ terms appear with opposite signs.",
                         "deconstruct": [
                             "$\\kappa^2 = k_0^2(n_1^2 - n_e^2)$ and $\\gamma^2 = k_0^2(n_e^2 - n_2^2)$.",
@@ -383,7 +376,6 @@ outside it decays with rate $\gamma$.
                     {
                         "prompt": "Multiplying by $a^2$ gives $u^2 + w^2 = V^2$ with $u = \\kappa a$, $w = \\gamma a$ and $V = k_0 a\\,\\mathrm{NA}$. The slab stays single-mode while $V < \\pi/2$. Write the largest half-width $a$ that satisfies that, in terms of $\\lambda_0$ and $\\mathrm{NA}$.",
                         "answer": "\\frac{\\lambda_0}{4 \\cdot NA}",
-                        "placeholder": "\\frac{\\lambda_0}{4 \\cdot NA}",
                         "hint": "Put $k_0 = 2\\pi/\\lambda_0$ into $V = k_0 a\\,\\mathrm{NA} = \\pi/2$ and solve for $a$. The $\\pi$ cancels.",
                         "deconstruct": [
                             "$V = (2\\pi/\\lambda_0)\\, a\\,\\mathrm{NA}$.",
@@ -394,7 +386,6 @@ outside it decays with rate $\gamma$.
                     {
                         "prompt": "The normalised guide index is defined as $b = (w/V)^2$, which runs from 0 at cutoff to 1 far above it. Write $\\gamma$ in terms of $b$, $V$ and $a$.",
                         "answer": "\\frac{\\sqrt{b} \\cdot V}{a}",
-                        "placeholder": "\\frac{\\sqrt{b} \\cdot V}{a}",
                         "hint": "Invert the definition to get $w$, then remember $w$ is just $\\gamma a$.",
                         "deconstruct": [
                             "$b = (w/V)^2$ gives $w = V\\sqrt{b}$.",
@@ -648,7 +639,6 @@ be $D$.
                         "prompt": "The extreme ray meets the wall at $\\theta_c$ from the normal, so its path length is $L/\\sin\\theta_c$. Write its transit time in terms of $L$, $n_1$, $n_2$ and $c$.",
                         "given": "Recall $\\sin\\theta_c = n_2/n_1$, and the speed inside the core is $c/n_1$.",
                         "answer": "\\frac{L \\cdot n_1^2}{c \\cdot n_2}",
-                        "placeholder": "\\frac{L \\cdot n_1^2}{c \\cdot n_2}",
                         "hint": "Path length is $L n_1/n_2$; multiply by $n_1/c$ to turn distance into time.",
                         "deconstruct": [
                             "$L/\\sin\\theta_c = L n_1/n_2$.",
@@ -658,7 +648,6 @@ be $D$.
                     {
                         "prompt": "The axial ray takes $L n_1/c$. Write the spread $\\tau_m$ between the two, in terms of $L$, $n_1$, $n_2$ and $c$.",
                         "answer": "\\frac{L \\cdot n_1 \\cdot (n_1 - n_2)}{c \\cdot n_2}",
-                        "placeholder": "\\frac{L \\cdot n_1 \\cdot (n_1 - n_2)}{c \\cdot n_2}",
                         "hint": "Subtract, then take out the common factor $L n_1/c$.",
                         "deconstruct": [
                             "$\\tau_m = L n_1^2/(c n_2) - L n_1/c$.",
@@ -669,7 +658,6 @@ be $D$.
                     {
                         "prompt": "Weakly guiding fibre has $n_2 \\approx n_1$ in the denominator. With $\\Delta = (n_1-n_2)/n_1$, write $\\tau_m$ in terms of $L$, $n_1$, $\\Delta$ and $c$.",
                         "answer": "\\frac{L \\cdot n_1 \\cdot \\Delta}{c}",
-                        "placeholder": "\\frac{L \\cdot n_1 \\cdot \\Delta}{c}",
                         "hint": "Replace $n_1 - n_2$ by $n_1\\Delta$ and cancel one factor of $n_1$ against the $n_2$ in the denominator.",
                         "deconstruct": [
                             "$L n_1(n_1-n_2)/(c n_2) = L n_1 \\cdot n_1\\Delta/(c n_2)$.",
@@ -679,7 +667,6 @@ be $D$.
                     {
                         "prompt": "Chromatic dispersion is quoted as a coefficient: delay per unit length per unit spectral width. Write the chromatic spread $\\tau_c$ in terms of $D$, $L$ and $W$.",
                         "answer": "D \\cdot L \\cdot W",
-                        "placeholder": "D \\cdot L \\cdot W",
                         "hint": "Read the units of $D$ — ps per nm per km — and multiply until only picoseconds are left.",
                         "deconstruct": [
                             "$D$ has units of time per length per wavelength.",
@@ -689,7 +676,6 @@ be $D$.
                     {
                         "prompt": "Modal and chromatic spreading come from unrelated physics, so they add as independent widths. Write the total $\\tau_t$ in terms of $\\tau_m$ and $\\tau_c$.",
                         "answer": "\\sqrt{\\tau_m^2 + \\tau_c^2}",
-                        "placeholder": "\\sqrt{\\tau_m^2 + \\tau_c^2}",
                         "hint": "Independent variances add; standard deviations do not.",
                         "deconstruct": [
                             "Each mechanism contributes a variance $\\tau^2$.",
@@ -699,7 +685,6 @@ be $D$.
                     {
                         "prompt": "The usual engineering rule allows a pulse to spread over at most half a bit period. Write the maximum bit rate $B$ in terms of $\\tau_t$.",
                         "answer": "\\frac{1}{2 \\cdot \\tau_t}",
-                        "placeholder": "\\frac{1}{2 \\cdot \\tau_t}",
                         "hint": "The bit period is $1/B$; require $\\tau_t$ to be at most half of it.",
                         "deconstruct": [
                             "$\\tau_t \\le (1/B)/2$.",
@@ -916,7 +901,6 @@ receiver needs at least $S$ dBm to work.
                     {
                         "prompt": "Write the total loss between transmitter and receiver in terms of $\\alpha$, $L$, $N_c$, $A_c$, $N_s$ and $A_s$.",
                         "answer": "\\alpha \\cdot L + N_c \\cdot A_c + N_s \\cdot A_s",
-                        "placeholder": "\\alpha \\cdot L + N_c \\cdot A_c + N_s \\cdot A_s",
                         "hint": "Decibels add. Each category is a count times a per-item loss.",
                         "deconstruct": [
                             "The fibre contributes $\\alpha$ dB for every kilometre.",
@@ -926,7 +910,6 @@ receiver needs at least $S$ dBm to work.
                     {
                         "prompt": "The margin $M$ is what is left after the received power has cleared the sensitivity. Write $M$ in terms of $P_t$, $S$ and the loss terms.",
                         "answer": "P_t - S - \\alpha \\cdot L - N_c \\cdot A_c - N_s \\cdot A_s",
-                        "placeholder": "P_t - S - \\alpha \\cdot L - N_c \\cdot A_c - N_s \\cdot A_s",
                         "hint": "The received power is $P_t$ minus the total loss; the margin is that minus $S$.",
                         "deconstruct": [
                             "$P_r = P_t - (\\alpha L + N_c A_c + N_s A_s)$.",
@@ -936,7 +919,6 @@ receiver needs at least $S$ dBm to work.
                     {
                         "prompt": "A designer knows the margin they want and asks how far they can go. Solve the same relation for $L$.",
                         "answer": "\\frac{P_t - S - N_c \\cdot A_c - N_s \\cdot A_s - M}{\\alpha}",
-                        "placeholder": "\\frac{P_t - S - N_c \\cdot A_c - N_s \\cdot A_s - M}{\\alpha}",
                         "hint": "Isolate the $\\alpha L$ term on one side and divide.",
                         "deconstruct": [
                             "From the previous step, $\\alpha L = P_t - S - N_c A_c - N_s A_s - M$.",
@@ -946,7 +928,6 @@ receiver needs at least $S$ dBm to work.
                     {
                         "prompt": "One connector term deserves a closer look. A gap of index $n_g$ between two fibre ends of index $n_1$ reflects at each face. Write the power reflectance $R$ of one such face.",
                         "answer": "\\frac{(n_1 - n_g)^2}{(n_1 + n_g)^2}",
-                        "placeholder": "\\frac{(n_1-n_g)^2}{(n_1+n_g)^2}",
                         "hint": "The same normal-incidence result as module 1, with the gap material in place of air.",
                         "deconstruct": [
                             "The field coefficient is $(n_1 - n_g)/(n_1 + n_g)$.",
@@ -956,7 +937,6 @@ receiver needs at least $S$ dBm to work.
                     {
                         "prompt": "The light crosses two such faces on its way through the gap, and each passes a fraction $1 - R$. Write the transmitted power fraction in terms of $R$.",
                         "answer": "(1 - R)^2",
-                        "placeholder": "(1-R)^2",
                         "hint": "Two independent interfaces in series multiply their transmissions.",
                         "deconstruct": [
                             "The first face passes $1 - R$ of the incident power.",

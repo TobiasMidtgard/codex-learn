@@ -98,6 +98,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "Place value, built out of resistors",
     "minutes": 25,
@@ -434,6 +435,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -559,6 +561,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -683,7 +686,7 @@
        "The shortest clock period the flip-flop can be driven at"
       ],
       "a": 0,
-      "why": "Setup is before the edge; the second option describes **hold** time, and the third describes the clock-to-output delay. All three are separate numbers on a datasheet and all three appear in the timing budget. Missing setup does not give the old value or the new one — the flip-flop can hang between the two, which is called metastability."
+      "why": "Setup is before the edge. \"Stable *after* the edge\" is **hold** time, and \"how long the output takes to change\" is the clock-to-output delay. All three are separate numbers on a datasheet and all three appear in the timing budget. Missing setup does not give the old value or the new one — the flip-flop can hang between the two, which is called metastability."
      },
      {
       "q": "Logic between two flip-flops has a longest path of 6 ns. The flip-flops take 2 ns from clock edge to output and need 1 ns of setup. What is the shortest clock period that works?",
@@ -698,6 +701,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "Where the propagation delay comes from",
     "minutes": 25,

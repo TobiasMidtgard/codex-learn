@@ -19,6 +19,7 @@ import argparse
 import glob
 import importlib.util
 import json
+import re
 import os
 import sys
 import textwrap
@@ -121,6 +122,7 @@ def norm_blanks(b, ctx):
             raise ValueError(f"{where}: `a` must index one of the options")
         if not it.get("why"):
             raise ValueError(f"{where}: no `why` \u2014 the explanation is the teaching")
+        no_positional_refs(it["why"], where)
         whys = it.get("whys")
         if whys is not None and len(whys) != len(opts):
             raise ValueError(f"{where}: `whys` must have one entry per option")
@@ -207,6 +209,7 @@ def norm_quiz(q, ctx):
             raise ValueError(f"{where}: `a` must be the index 0-3 of the correct option")
         if not item.get("why"):
             raise ValueError(f"{where}: no `why` \u2014 an explanation is the point of asking")
+        no_positional_refs(item["why"], where)
         out.append({
             "q": clean_md(item["q"]),
             "opts": [clean_md(o) for o in opts],
@@ -240,6 +243,31 @@ def norm_sandbox(sb, ctx):
     }
 
 
+POSITIONAL = re.compile(
+    r"\b(?:[Oo]ption|[Cc]hoice|[Aa]nswer)s?\s+[A-E]\b"
+    r"|\b[Tt]he\s+(?:first|second|third|fourth|fifth|last|final)"
+    r"\s+(?:option|choice|answer)\b",
+)  # case-sensitive on purpose: "answers a question" is ordinary prose, not a pointer
+
+
+def no_positional_refs(text, where):
+    """Options are shuffled per learner, so "Option D" names nothing.
+
+    The shuffle exists because the generated quizzes park the answer in one slot far
+    too often — 61% of one course's answers sat in B. Prose that points at a position
+    was written before the shuffle and stopped being true the day it landed, so it is
+    rejected here rather than left to rot. Name the option by what it says."""
+    hit = POSITIONAL.search(text or "")
+    if hit:
+        raise ValueError(
+            f"{where}: the explanation says {hit.group(0)!r}, but the options are "
+            "shuffled per learner — name the option by its content instead"
+        )
+
+
+LEAKED = []  # derivation steps whose placeholder was the answer
+
+
 def norm_derive(dv, ctx):
     """The guided derivation. Every step is checked symbolically, so every step
     needs an answer; a step with no way forward when stuck is a dead end, so a
@@ -261,11 +289,19 @@ def norm_derive(dv, ctx):
         if not st.get("hint") and not st.get("deconstruct"):
             raise ValueError(f"{where}: needs a hint or a deconstruction, "
                              "otherwise a stuck learner has nowhere to go")
+        # A placeholder is a hint about the *shape* of the answer. Set equal to the
+        # answer it is not a hint, it is the answer, printed in the box the learner
+        # is supposed to fill. That is how the first course was written and how every
+        # course after it was written, so it is dropped here rather than in 337 places.
+        ph = st.get("placeholder", "")
+        if "".join(ph.split()) == "".join(st["answer"].split()):
+            LEAKED.append(where)
+            ph = ""
         out_steps.append({
             "prompt": clean_md(st["prompt"]),
             "given": clean_md(st.get("given", "")),
             "answer": st["answer"].strip(),
-            "placeholder": st.get("placeholder", ""),
+            "placeholder": ph,
             "hint": clean_md(st.get("hint", "")),
             "deconstruct": [clean_md(d) for d in st.get("deconstruct", [])],
         })
@@ -395,6 +431,16 @@ def main():
               f"{labs} labs, capstone "
               f"{'+tests' if course['capstone']['tests'] else '(spec only)'}"
               f" -> {os.path.relpath(dest, ROOT)}")
+
+    if LEAKED:
+        print("")
+        print(f"{len(LEAKED)} derivation step(s) had the answer as the placeholder; "
+              "dropped. Write a shape hint instead, or leave it out:")
+        for w in LEAKED[:8]:
+            print("   ", w)
+        if len(LEAKED) > 8:
+            print(f"    ... and {len(LEAKED) - 8} more")
+
     return 1 if failures else 0
 
 

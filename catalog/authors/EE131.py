@@ -130,10 +130,12 @@ COURSE = {
                         ],
                         "a": 1,
                         "why": (
-                            "The second. It asks the engineering question — is the gap small compared with "
-                            "the quantity — and it is symmetric, so a reading above and a reading below are "
-                            "treated alike. The third option drops the `abs`, so any measurement that is far "
-                            "too low passes. Rounding turns a tolerance into a step: 4.4 and 4.6 differ by "
+                            "The relative test, `abs(measured - expected) <= 0.01 * abs(expected)`. It "
+                            "asks the engineering question — is the gap small compared with the quantity — "
+                            "and it is symmetric, so a reading above and a reading below are treated alike. "
+                            "The version without `abs` lets the difference run as negative as it likes, so "
+                            "any measurement that is far too low passes. Rounding turns a tolerance into a "
+                            "step: 4.4 and 4.6 differ by "
                             "about 4% and round to 4 and 5, and 4.49 and 4.51 barely differ and round apart."
                         ),
                     },
@@ -744,8 +746,9 @@ is one of those dots, and nothing between them was ever recorded.
                             "About 1.414 V, the peak divided by the square root of 2. RMS is "
                             "`sqrt(mean(v**2))`: squaring removes the sign, so the negative half contributes "
                             "as much as the positive half, and the result is the DC voltage that would heat "
-                            "a resistor at the same rate. The *mean* really is 0 V, which is the trap in the "
-                            "last option — a mean of zero says nothing about how much signal is present."
+                            "a resistor at the same rate. The *mean* really is 0 V, which is the trap in "
+                            "the \"0 V, because it is symmetric\" answer — a mean of zero says nothing "
+                            "about how much signal is present."
                         ),
                     },
                 ],
@@ -1022,10 +1025,10 @@ Change one panel and watch the other.
                         "a": 0,
                         "why": (
                             "The rate is a change *per second*, so it must be multiplied by the length of "
-                            "the step before being added to the value. The second option leaves `dt` out, "
-                            "which makes the simulation's speed depend on how finely you chose to sample it "
-                            "— always a sign the timestep has gone missing. The last option overwrites the "
-                            "voltage with the rate, which is not even the right unit."
+                            "the step before being added to the value. Leaving `dt` out makes the "
+                            "simulation's speed depend on how finely you chose to sample it — always a "
+                            "sign the timestep has gone missing. Writing `v = (vin - v) / (R*C)` "
+                            "overwrites the voltage with the rate, which is not even the right unit."
                         ),
                     },
                     {

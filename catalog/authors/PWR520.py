@@ -98,7 +98,6 @@ look arbitrary. They are not.
                     {
                         "prompt": "The machine is wye-connected with no neutral return, so $i_a + i_b + i_c = 0$. Write $i_b + i_c$ in terms of $i_a$.",
                         "answer": "-i_a",
-                        "placeholder": "-i_a",
                         "hint": "Move $i_a$ to the other side of the constraint. Nothing else is needed.",
                         "deconstruct": [
                             "The constraint is $i_a + i_b + i_c = 0$.",
@@ -109,7 +108,6 @@ look arbitrary. They are not.
                         "prompt": "Substitute that into $i_\\alpha = \\frac{2}{3}\\left(i_a - \\frac{1}{2}i_b - \\frac{1}{2}i_c\\right)$ and simplify. Write $i_\\alpha$ in terms of $i_a$ alone.",
                         "given": "You may use $i_b + i_c = -i_a$ from the previous step.",
                         "answer": "i_a",
-                        "placeholder": "i_a",
                         "hint": "The two halved terms are $-\\frac{1}{2}(i_b + i_c)$, which the constraint turns into $+\\frac{1}{2}i_a$.",
                         "deconstruct": [
                             "$i_a - \\frac{1}{2}(i_b + i_c) = i_a + \\frac{1}{2} i_a = \\frac{3}{2} i_a$.",
@@ -119,7 +117,6 @@ look arbitrary. They are not.
                     {
                         "prompt": "So the $\\alpha$ axis lies along phase $a$, and the $\\frac{2}{3}$ is what makes that true. Park is a rotation, so it preserves the length of the current vector: $i_d^2 + i_q^2 = i_\\alpha^2 + i_\\beta^2 = I_s^2$. Write $i_q$ in terms of $I_s$ and $i_d$, taking the positive root.",
                         "answer": "\\sqrt{I_s^{2} - i_d^{2}}",
-                        "placeholder": "\\sqrt{I_s^{2} - i_d^{2}}",
                         "hint": "Rearrange the length identity for $i_q^2$ and take the square root.",
                         "deconstruct": [
                             "$i_q^2 = I_s^2 - i_d^2$.",
@@ -129,7 +126,6 @@ look arbitrary. They are not.
                     {
                         "prompt": "With the amplitude-invariant convention the instantaneous power is $p = \\frac{3}{2}\\left(v_d i_d + v_q i_q\\right)$. A surface machine is run with $i_d = 0$. Write the $i_q$ that delivers a demanded power $p$ at a terminal voltage $v_q$.",
                         "answer": "\\frac{2 p}{3 v_q}",
-                        "placeholder": "\\frac{2 p}{3 v_q}",
                         "hint": "Drop the $v_d i_d$ term, then solve the remaining single equation for $i_q$.",
                         "deconstruct": [
                             "With $i_d = 0$ the power is $p = \\frac{3}{2} v_q i_q$.",
@@ -371,7 +367,6 @@ where $P_p$ is the number of pole pairs.
                     {
                         "prompt": "Solve the $d$-axis voltage equation for $\\dot{i_d}$. Write it in terms of $v_d$, $R$, $i_d$, $\\omega$, $L_q$, $i_q$ and $L_d$.",
                         "answer": "\\frac{v_d - R i_d + \\omega L_q i_q}{L_d}",
-                        "placeholder": "\\frac{v_d - R i_d + \\omega L_q i_q}{L_d}",
                         "hint": "Move every term except $L_d \\dot{i_d}$ to the other side, then divide by $L_d$. Watch the sign of the coupling term as it crosses over.",
                         "deconstruct": [
                             "$L_d \\dot{i_d} = v_d - R i_d + \\omega L_q i_q$.",
@@ -381,7 +376,6 @@ where $P_p$ is the number of pole pairs.
                     {
                         "prompt": "Write the plant as $\\dot{x} = Ax + Bv + d$ with $x = [i_d,\\ i_q]$. What is the entry of $A$ in the first row, second column — the coefficient multiplying $i_q$ in $\\dot{i_d}$?",
                         "answer": "\\frac{\\omega L_q}{L_d}",
-                        "placeholder": "\\frac{\\omega L_q}{L_d}",
                         "hint": "Read it off the expression you just derived, with $v_d$ set aside into $Bv$.",
                         "deconstruct": [
                             "The derived expression is $\\dot{i_d} = (v_d - R i_d + \\omega L_q i_q)/L_d$.",
@@ -391,7 +385,6 @@ where $P_p$ is the number of pole pairs.
                     {
                         "prompt": "A surface-mount rotor has its magnets on the outside, so the airgap is uniform and $L_d = L_q$. Write $T_e$ for that machine.",
                         "answer": "\\frac{3}{2} P_p \\lambda_m i_q",
-                        "placeholder": "\\frac{3}{2} P_p \\lambda_m i_q",
                         "hint": "The reluctance term carries the factor $(L_d - L_q)$. Set it to zero.",
                         "deconstruct": [
                             "With $L_d = L_q$ the factor $(L_d - L_q)$ is zero, so the whole second term vanishes.",
@@ -401,7 +394,6 @@ where $P_p$ is the number of pole pairs.
                     {
                         "prompt": "That is a pure torque constant. Invert it: for a surface machine, write the $i_q$ that produces a demanded torque $T_e$.",
                         "answer": "\\frac{2 T_e}{3 P_p \\lambda_m}",
-                        "placeholder": "\\frac{2 T_e}{3 P_p \\lambda_m}",
                         "hint": "Divide the demanded torque by everything multiplying $i_q$ in the previous answer.",
                         "deconstruct": [
                             "$T_e = \\frac{3}{2} P_p \\lambda_m i_q$.",
@@ -636,7 +628,6 @@ first order with a single bandwidth $\alpha$ in radians per second.
                     {
                         "prompt": "Laplace-transform the plant with zero initial current. Write the transfer function from $v_d$ to $i_d$.",
                         "answer": "\\frac{1}{L_d s + R}",
-                        "placeholder": "\\frac{1}{L_d s + R}",
                         "hint": "Replace $\\dot{i_d}$ with $s\\, i_d$, collect $i_d$, and divide.",
                         "deconstruct": [
                             "$v_d = R i_d + L_d s i_d = (L_d s + R) i_d$.",
@@ -646,7 +637,6 @@ first order with a single bandwidth $\alpha$ in radians per second.
                     {
                         "prompt": "Written over a common denominator, $C(s) = \\frac{K_p s + K_i}{s}$, so the controller has a zero at $s = -K_i/K_p$. Choose $K_i$ so that this zero sits exactly on the plant pole $-R/L_d$. Write $K_i$ in terms of $K_p$, $R$ and $L_d$.",
                         "answer": "\\frac{K_p R}{L_d}",
-                        "placeholder": "\\frac{K_p R}{L_d}",
                         "hint": "Set $K_i/K_p = R/L_d$ and solve for $K_i$.",
                         "deconstruct": [
                             "The zero is at $-K_i/K_p$; the pole is at $-R/L_d$.",
@@ -656,7 +646,6 @@ first order with a single bandwidth $\alpha$ in radians per second.
                     {
                         "prompt": "With that choice the loop gain collapses to $L(s) = \\frac{K_p}{L_d s}$. Write the closed-loop transfer function $\\frac{L(s)}{1 + L(s)}$ as a ratio in $s$.",
                         "answer": "\\frac{K_p}{L_d s + K_p}",
-                        "placeholder": "\\frac{K_p}{L_d s + K_p}",
                         "hint": "Multiply numerator and denominator by $L_d s$ to clear the inner fraction.",
                         "deconstruct": [
                             "$\\frac{K_p/(L_d s)}{1 + K_p/(L_d s)}$.",
@@ -666,7 +655,6 @@ first order with a single bandwidth $\alpha$ in radians per second.
                     {
                         "prompt": "That is a first-order lag with a single pole at $-K_p/L_d$. For a closed-loop bandwidth $\\alpha$, write $K_p$.",
                         "answer": "\\alpha L_d",
-                        "placeholder": "\\alpha L_d",
                         "hint": "Set $K_p/L_d = \\alpha$.",
                         "deconstruct": [
                             "The pole is at $-K_p/L_d$ and you want it at $-\\alpha$.",
@@ -676,7 +664,6 @@ first order with a single bandwidth $\alpha$ in radians per second.
                     {
                         "prompt": "And substituting that back into the cancellation condition, write $K_i$ in terms of $\\alpha$ and $R$.",
                         "answer": "\\alpha R",
-                        "placeholder": "\\alpha R",
                         "hint": "Put $K_p = \\alpha L_d$ into $K_i = K_p R / L_d$ and let $L_d$ cancel.",
                         "deconstruct": [
                             "$K_i = K_p R / L_d = (\\alpha L_d) R / L_d$.",
@@ -893,7 +880,6 @@ angle — that is, inside the largest circle the hexagon contains.
                         "prompt": "The inscribed circle touches the middle of each side. Its radius is the vertex radius times the cosine of half the 60° between vertices. Write that radius in terms of $V_{dc}$.",
                         "given": "The vertex radius is $\\frac{2}{3}V_{dc}$, and $\\cos 30^\\circ = \\frac{\\sqrt{3}}{2}$.",
                         "answer": "\\frac{V_dc}{\\sqrt{3}}",
-                        "placeholder": "\\frac{V_dc}{\\sqrt{3}}",
                         "hint": "Multiply $\\frac{2}{3}V_{dc}$ by $\\frac{\\sqrt{3}}{2}$ and tidy the result.",
                         "deconstruct": [
                             "$\\frac{2}{3}V_{dc} \\cdot \\frac{\\sqrt{3}}{2} = \\frac{V_{dc}\\sqrt{3}}{3}$.",
@@ -903,7 +889,6 @@ angle — that is, inside the largest circle the hexagon contains.
                     {
                         "prompt": "Sine-triangle modulation with no injection is limited to a phase-voltage peak of $\\frac{V_{dc}}{2}$. Write the ratio of the space-vector limit to that one.",
                         "answer": "\\frac{2}{\\sqrt{3}}",
-                        "placeholder": "\\frac{2}{\\sqrt{3}}",
                         "hint": "Divide the previous answer by $\\frac{V_{dc}}{2}$ and let the bus voltage cancel.",
                         "deconstruct": [
                             "$\\frac{V_{dc}/\\sqrt{3}}{V_{dc}/2} = \\frac{2}{\\sqrt{3}}$.",
@@ -913,7 +898,6 @@ angle — that is, inside the largest circle the hexagon contains.
                     {
                         "prompt": "Call the inscribed radius $V_{max}$. At speed $\\omega$ with no current flowing at all, the machine already demands $\\omega\\lambda_m$ of it. Write the speed $\\omega_b$ at which that demand exactly exhausts the budget, in terms of $V_{dc}$ and $\\lambda_m$.",
                         "answer": "\\frac{V_dc}{\\sqrt{3}\\lambda_m}",
-                        "placeholder": "\\frac{V_dc}{\\sqrt{3}\\lambda_m}",
                         "hint": "Set $\\omega \\lambda_m = V_{max}$ and substitute the $V_{max}$ you found in the first step.",
                         "deconstruct": [
                             "$\\omega_b \\lambda_m = V_{max} = V_{dc}/\\sqrt{3}$.",
@@ -923,7 +907,6 @@ angle — that is, inside the largest circle the hexagon contains.
                     {
                         "prompt": "Above $\\omega_b$ the only way to keep operating is to reduce the flux. Ignoring the resistive drop, the $q$-axis voltage is $\\omega(L_d i_d + \\lambda_m)$. Write the $i_d$ that makes that exactly equal to $V_{max}$.",
                         "answer": "\\frac{V_max - \\omega\\lambda_m}{\\omega L_d}",
-                        "placeholder": "\\frac{V_max - \\omega\\lambda_m}{\\omega L_d}",
                         "hint": "Set $\\omega(L_d i_d + \\lambda_m) = V_{max}$ and solve for $i_d$ — one division and one subtraction.",
                         "deconstruct": [
                             "$L_d i_d + \\lambda_m = V_{max}/\\omega$.",

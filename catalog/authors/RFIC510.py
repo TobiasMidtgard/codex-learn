@@ -92,7 +92,6 @@ Everything in the hybrid-pi model is a partial derivative of that one expression
                     {
                         "prompt": "Ignore channel-length modulation for a moment ($\\lambda = 0$). Differentiate $I_D$ with respect to $V_{GS}$ to get $g_m$, in terms of $k_n$ and $V_{ov}$.",
                         "answer": "k_n V_{ov}",
-                        "placeholder": "k_n V_{ov}",
                         "hint": "$V_{TH}$ is a constant, so $\\partial V_{ov}/\\partial V_{GS} = 1$ and the chain rule is trivial.",
                         "deconstruct": [
                             "$I_D = \\tfrac{1}{2}k_n V_{ov}^2$ and $V_{ov} = V_{GS} - V_{TH}$.",
@@ -103,7 +102,6 @@ Everything in the hybrid-pi model is a partial derivative of that one expression
                         "prompt": "A bias circuit sets a current, not an overdrive. Eliminate $k_n$ using $I_D = \\tfrac{1}{2}k_n V_{ov}^2$ and write $g_m$ in terms of $I_D$ and $V_{ov}$.",
                         "given": "You have $g_m = k_n V_{ov}$ and $I_D = \\tfrac{1}{2} k_n V_{ov}^2$.",
                         "answer": "\\frac{2 I_D}{V_{ov}}",
-                        "placeholder": "\\frac{2 I_D}{V_{ov}}",
                         "hint": "Divide the current equation by the transconductance equation and see what survives.",
                         "deconstruct": [
                             "From the current equation, $k_n = 2I_D/V_{ov}^2$.",
@@ -113,7 +111,6 @@ Everything in the hybrid-pi model is a partial derivative of that one expression
                     {
                         "prompt": "Now eliminate $V_{ov}$ instead, and write $g_m$ in terms of $k_n$ and $I_D$.",
                         "answer": "\\sqrt{2 k_n I_D}",
-                        "placeholder": "\\sqrt{2 k_n I_D}",
                         "hint": "Solve the current equation for $V_{ov}$ first, then substitute into $g_m = k_n V_{ov}$.",
                         "deconstruct": [
                             "$V_{ov} = \\sqrt{2 I_D / k_n}$.",
@@ -123,7 +120,6 @@ Everything in the hybrid-pi model is a partial derivative of that one expression
                     {
                         "prompt": "Put $\\lambda$ back. The output resistance is $r_o = \\left(\\partial I_D/\\partial V_{DS}\\right)^{-1}$. Differentiate, then write $r_o$ in terms of $\\lambda$ and $I_D$, treating $\\lambda V_{DS} \\ll 1$ so that the current at the bias point is $I_D$.",
                         "answer": "\\frac{1}{\\lambda I_D}",
-                        "placeholder": "\\frac{1}{\\lambda I_D}",
                         "hint": "Only the bracket depends on $V_{DS}$, and its derivative is just $\\lambda$.",
                         "deconstruct": [
                             "$\\partial I_D/\\partial V_{DS} = \\tfrac{1}{2}k_n V_{ov}^2 \\lambda$, and $\\tfrac{1}{2}k_n V_{ov}^2$ is the current itself.",
@@ -133,7 +129,6 @@ Everything in the hybrid-pi model is a partial derivative of that one expression
                     {
                         "prompt": "The intrinsic gain is $A_0 = g_m r_o$. Combine the second and fourth results and write $A_0$ in terms of $\\lambda$ and $V_{ov}$ only.",
                         "answer": "\\frac{2}{\\lambda V_{ov}}",
-                        "placeholder": "\\frac{2}{\\lambda V_{ov}}",
                         "hint": "Multiply $2I_D/V_{ov}$ by $1/(\\lambda I_D)$ and watch the current disappear.",
                         "deconstruct": [
                             "$A_0 = \\frac{2 I_D}{V_{ov}} \\cdot \\frac{1}{\\lambda I_D}$.",
@@ -383,7 +378,6 @@ the input sees.
                     {
                         "prompt": "The current drawn from the input node through $C_{gd}$ is $s C_{gd}\\left(v_{in} - v_{out}\\right)$. Substitute $v_{out} = -A_v v_{in}$ and write that current in terms of $v_{in}$.",
                         "answer": "s C_{gd} \\left(1 + A_v\\right) v_{in}",
-                        "placeholder": "s C_{gd} \\left(1 + A_v\\right) v_{in}",
                         "hint": "Subtracting a negative number adds. The two ends of the capacitor move in opposite directions, so the voltage across it is larger than the input swing.",
                         "deconstruct": [
                             "$v_{in} - v_{out} = v_{in} - (-A_v v_{in}) = v_{in}(1 + A_v)$.",
@@ -393,7 +387,6 @@ the input sees.
                     {
                         "prompt": "Divide that current by $v_{in}$ to get the admittance the input sees, then read off the equivalent grounded capacitance $C_M$ in terms of $C_{gd}$ and $A_v$.",
                         "answer": "C_{gd} \\left(1 + A_v\\right)",
-                        "placeholder": "C_{gd} \\left(1 + A_v\\right)",
                         "hint": "An admittance of the form $sC$ is a capacitor of value $C$.",
                         "deconstruct": [
                             "The admittance is $s C_{gd}(1 + A_v)$.",
@@ -403,7 +396,6 @@ the input sees.
                     {
                         "prompt": "$C_{gs}$ already sits from gate to ground and is not multiplied. Write the total input capacitance $C_{in}$.",
                         "answer": "C_{gs} + C_{gd} \\left(1 + A_v\\right)",
-                        "placeholder": "C_{gs} + C_{gd} \\left(1 + A_v\\right)",
                         "hint": "Two capacitors from the same node to ground add.",
                         "deconstruct": [
                             "$C_{gs}$ contributes its own value, unmultiplied, because both of its terminals do not move relative to each other in the way $C_{gd}$'s do.",
@@ -423,7 +415,6 @@ the input sees.
                     {
                         "prompt": "At high enough frequency the current fed forward through $C_{gd}$ cancels the current $g_m v_{in}$ pulled by the transistor, and the output is zero. Set $s C_{gd} v_{in} = g_m v_{in}$ and write the zero location $s$.",
                         "answer": "\\frac{g_m}{C_{gd}}",
-                        "placeholder": "\\frac{g_m}{C_{gd}}",
                         "hint": "This is a positive value of $s$ — the zero is in the right half-plane, which subtracts phase like a pole while adding gain like a zero.",
                         "deconstruct": [
                             "Cancel $v_{in}$ from both sides: $s C_{gd} = g_m$.",
@@ -685,7 +676,6 @@ taking the feed-forward through $C_{gd}$ as negligible for now.
                     {
                         "prompt": "Form the short-circuit current gain magnitude $\\left|i_{out}/i_{in}\\right|$ at frequency $\\omega$, in terms of $g_m$, $\\omega$, $C_{gs}$ and $C_{gd}$.",
                         "answer": "\\frac{g_m}{\\omega \\left( C_{gs} + C_{gd} \\right)}",
-                        "placeholder": "\\frac{g_m}{\\omega \\left(C_{gs} + C_{gd}\\right)}",
                         "hint": "$|s| = \\omega$ on the imaginary axis, and $v_{gs}$ cancels.",
                         "deconstruct": [
                             "$i_{out}/i_{in} = g_m / \\left(s(C_{gs}+C_{gd})\\right)$.",
@@ -695,7 +685,6 @@ taking the feed-forward through $C_{gd}$ as negligible for now.
                     {
                         "prompt": "Set that magnitude to one and solve for the transit frequency $\\omega_T$ in rad/s.",
                         "answer": "\\frac{g_m}{C_{gs} + C_{gd}}",
-                        "placeholder": "\\frac{g_m}{C_{gs} + C_{gd}}",
                         "hint": "Multiply both sides by the denominator and read off $\\omega$.",
                         "deconstruct": [
                             "$g_m = \\omega_T (C_{gs}+C_{gd})$.",
@@ -705,7 +694,6 @@ taking the feed-forward through $C_{gd}$ as negligible for now.
                     {
                         "prompt": "Write the same thing in hertz as $f_T$.",
                         "answer": "\\frac{g_m}{2 \\pi \\left( C_{gs} + C_{gd} \\right)}",
-                        "placeholder": "\\frac{g_m}{2 \\pi \\left(C_{gs} + C_{gd}\\right)}",
                         "hint": "$f = \\omega/(2\\pi)$.",
                         "deconstruct": [
                             "Divide $\\omega_T$ by $2\\pi$.",
@@ -715,7 +703,6 @@ taking the feed-forward through $C_{gd}$ as negligible for now.
                         "prompt": "Now substitute the long-channel expressions $g_m = \\mu C_{ox}(W/L)V_{ov}$ and $C_{gs} = \\tfrac{2}{3}WLC_{ox}$, and neglect $C_{gd}$ entirely. Write $f_T$ in terms of $\\mu$, $V_{ov}$ and $L$.",
                         "given": "Use $f_T = g_m/\\left(2\\pi C_{gs}\\right)$ with those two substitutions.",
                         "answer": "\\frac{3 \\mu V_{ov}}{4 \\pi L^{2}}",
-                        "placeholder": "\\frac{3 \\mu V_{ov}}{4 \\pi L^{2}}",
                         "hint": "$W$ and $C_{ox}$ appear once on the top and once on the bottom, so both cancel. What is left is one $L$ from $g_m$ and one from $C_{gs}$.",
                         "deconstruct": [
                             "$\\frac{g_m}{C_{gs}} = \\frac{\\mu C_{ox}(W/L)V_{ov}}{\\tfrac{2}{3}WLC_{ox}} = \\frac{3\\mu V_{ov}}{2L^2}$.",
@@ -725,7 +712,6 @@ taking the feed-forward through $C_{gd}$ as negligible for now.
                     {
                         "prompt": "The standard result for the maximum oscillation frequency is $\\omega_{max} = \\sqrt{\\omega_T/\\left(8 R_g C_{gd}\\right)}$. Convert both frequencies to hertz and write $f_{max}$ in terms of $f_T$, $R_g$ and $C_{gd}$.",
                         "answer": "\\sqrt{\\frac{f_T}{16 \\pi R_g C_{gd}}}",
-                        "placeholder": "\\sqrt{\\frac{f_T}{16 \\pi R_g C_{gd}}}",
                         "hint": "Substitute $\\omega_T = 2\\pi f_T$, then divide the whole square root by $2\\pi$ — which means dividing what is inside it by $4\\pi^2$.",
                         "deconstruct": [
                             "$\\omega_{max} = \\sqrt{2\\pi f_T/(8R_gC_{gd})}$, so $f_{max} = \\frac{1}{2\\pi}\\sqrt{\\frac{2\\pi f_T}{8R_gC_{gd}}}$.",
@@ -951,7 +937,6 @@ of M2 as $1/g_{m2}$.
                     {
                         "prompt": "M1 drives a resistance of $1/g_{m2}$ at its drain. Write the magnitude of the gain $A_1$ from the input gate to that intermediate node, in terms of $g_{m1}$ and $g_{m2}$.",
                         "answer": "\\frac{g_{m1}}{g_{m2}}",
-                        "placeholder": "\\frac{g_{m1}}{g_{m2}}",
                         "hint": "A common-source gain magnitude is $g_m$ times whatever resistance the drain sees.",
                         "deconstruct": [
                             "$|A_1| = g_{m1} \\cdot R_{drain}$.",
@@ -961,7 +946,6 @@ of M2 as $1/g_{m2}$.
                     {
                         "prompt": "Apply Miller to $C_{gd1}$ using that gain. Write the total input capacitance $C_{in}$ in terms of $C_{gs1}$, $C_{gd1}$, $g_{m1}$ and $g_{m2}$.",
                         "answer": "C_{gs1} + C_{gd1} \\left(1 + \\frac{g_{m1}}{g_{m2}}\\right)",
-                        "placeholder": "C_{gs1} + C_{gd1} \\left(1 + \\frac{g_{m1}}{g_{m2}}\\right)",
                         "hint": "The Miller factor is still $1 + |A_1|$; only the value of $|A_1|$ has changed.",
                         "deconstruct": [
                             "From module 2, $C_{in} = C_{gs} + C_{gd}(1 + |A|)$ where $A$ is the gain across the bridging capacitor.",
@@ -972,7 +956,6 @@ of M2 as $1/g_{m2}$.
                         "prompt": "Now the output. Looking into the drain of M2, the source degeneration provided by $r_{o1}$ boosts the resistance. Write $R_{out}$ exactly, in terms of $r_{o1}$, $r_{o2}$ and $g_{m2}$.",
                         "given": "The standard degenerated-device result is $R_{out} = r_{o2}\\left(1 + g_{m2}r_{o1}\\right) + r_{o1}$.",
                         "answer": "r_{o1} + r_{o2} + g_{m2} r_{o1} r_{o2}",
-                        "placeholder": "r_{o1} + r_{o2} + g_{m2} r_{o1} r_{o2}",
                         "hint": "Expand the bracket in the given expression and collect the three terms.",
                         "deconstruct": [
                             "$r_{o2}(1 + g_{m2}r_{o1}) = r_{o2} + g_{m2}r_{o1}r_{o2}$.",
@@ -982,7 +965,6 @@ of M2 as $1/g_{m2}$.
                     {
                         "prompt": "One term dominates when $g_{m2}r_{o1} \\gg 1$. Write the approximation.",
                         "answer": "g_{m2} r_{o1} r_{o2}",
-                        "placeholder": "g_{m2} r_{o1} r_{o2}",
                         "hint": "Compare the third term with the first two: it is larger by the intrinsic gain of M2.",
                         "deconstruct": [
                             "$g_{m2}r_{o1}r_{o2}$ exceeds $r_{o2}$ by the factor $g_{m2}r_{o1}$, which is of order 100.",
@@ -992,7 +974,6 @@ of M2 as $1/g_{m2}$.
                     {
                         "prompt": "If the external load is much larger than $R_{out}$, the stage gain is $-g_{m1}R_{out}$. Write the magnitude of that gain in terms of $g_{m1}$, $g_{m2}$, $r_{o1}$ and $r_{o2}$.",
                         "answer": "g_{m1} g_{m2} r_{o1} r_{o2}",
-                        "placeholder": "g_{m1} g_{m2} r_{o1} r_{o2}",
                         "hint": "Multiply the previous answer by $g_{m1}$.",
                         "deconstruct": [
                             "$|A_v| = g_{m1} \\cdot g_{m2}r_{o1}r_{o2}$.",

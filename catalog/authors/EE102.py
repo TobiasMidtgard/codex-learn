@@ -924,8 +924,9 @@ than hertz — that combination is the time constant, and $f_c = 1/(2\pi\tau)$.
                         ],
                         "a": 2,
                         "why": r'''
-The reactance is the answer, and the first option is a true statement with a false
-conclusion attached: charge really does not cross the gap, at any frequency — yet
+The reactance is the answer. "Charge cannot cross the insulating gap, so no current
+can pass" is a true statement with a false conclusion attached: charge really does not
+cross the gap, at any frequency — yet
 alternating current flows in the wires perfectly well, because charge arriving on one
 plate pushes an equal charge off the other. Nothing leaks. What changes with frequency
 is how much voltage it takes to push a given current in and out of the plates, and

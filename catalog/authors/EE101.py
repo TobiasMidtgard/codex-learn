@@ -103,9 +103,9 @@ $\omega_n$ controls how fast.
                         ],
                         "a": 0,
                         "why": r'''
-Current is a *rate*: $I = Q/t$, coulombs per second. Option B describes a quantity of
-charge, not a flow of it. Option C is a watt, which is power. Option D is a flow, but
-one electron per second is about $1.6\times10^{-19}$ A — a fantastically small current.
+Current is a *rate*: $I = Q/t$, coulombs per second. Charge *sitting* on a conductor is a quantity of charge, not a flow of it. A joule
+every second is a watt, which is power. One electron per second is a flow, but it is
+about $1.6\times10^{-19}$ A — a fantastically small current.
 ''',
                     },
                     {
@@ -973,8 +973,8 @@ measures perfectly with a meter on it collapses the moment something real is att
                         "a": 1,
                         "why": r'''
 They carry the same current, being in series, so $P = I^2R$ makes the larger resistance
-the hotter one — twice as hot here. Option A misreads series for parallel: the current
-through both is identical, which is exactly why $I^2R$ is the right form to reach for.
+the hotter one — twice as hot here. Choosing the 10 kΩ because more current flows through it misreads series for
+parallel: the current through both is identical, which is exactly why $I^2R$ is the right form to reach for.
 ''',
                     },
                     {

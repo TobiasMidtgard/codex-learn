@@ -88,7 +88,6 @@ Work out where the tone ends up.
                     {
                         "prompt": "First, in the original sequence. Write the normalised angular frequency $\\omega$ of the tone in radians per sample, in terms of $f_0$ and $f_s$.",
                         "answer": "\\frac{2\\pi f_0}{f_s}",
-                        "placeholder": "\\frac{2\\pi f_0}{f_s}",
                         "hint": "One cycle is $2\\pi$ radians, and the tone completes $f_0/f_s$ cycles between one sample and the next.",
                         "deconstruct": [
                             "Cycles per sample is $f_0/f_s$.",
@@ -98,7 +97,6 @@ Work out where the tone ends up.
                     {
                         "prompt": "After keeping one sample in $M$, the sequence carries a new sample rate $f_2$. Write it in terms of $f_s$ and $M$.",
                         "answer": "\\frac{f_s}{M}",
-                        "placeholder": "\\frac{f_s}{M}",
                         "hint": "The samples are the same distance apart in time as before; there are simply $M$ times fewer of them per second.",
                         "deconstruct": [
                             "The spacing between kept samples is $M/f_s$ seconds.",
@@ -108,7 +106,6 @@ Work out where the tone ends up.
                     {
                         "prompt": "Write the Nyquist limit of the decimated sequence — the highest frequency it can represent — in terms of $f_s$ and $M$.",
                         "answer": "\\frac{f_s}{2 M}",
-                        "placeholder": "\\frac{f_s}{2M}",
                         "hint": "Half the new rate, and you already have the new rate.",
                         "deconstruct": [
                             "The new rate is $f_s/M$.",
@@ -119,7 +116,6 @@ Work out where the tone ends up.
                         "prompt": "Now suppose $f_0$ sits above that limit but below $f_2$. It folds about $f_2$. Write the apparent frequency in the decimated sequence, in terms of $f_s$, $M$ and $f_0$.",
                         "given": "The folding rule for a component between $f_2/2$ and $f_2$ is: apparent frequency $= f_2 - f_0$.",
                         "answer": "\\frac{f_s}{M} - f_0",
-                        "placeholder": "\\frac{f_s}{M} - f_0",
                         "hint": "Substitute the $f_2$ you found into the folding rule given above.",
                         "deconstruct": [
                             "The rule is $f_2 - f_0$.",
@@ -129,7 +125,6 @@ Work out where the tone ends up.
                     {
                         "prompt": "To stop that happening, a filter must run before the discard. Write its cutoff in normalised angular frequency, in terms of $M$.",
                         "answer": "\\frac{\\pi}{M}",
-                        "placeholder": "\\frac{\\pi}{M}",
                         "hint": "The new Nyquist limit is $f_s/2M$; express that as radians per sample of the *original* sequence, where $f_s/2$ maps to $\\pi$.",
                         "deconstruct": [
                             "In the original sequence, $f_s/2$ is $\\pi$ radians per sample.",
@@ -354,7 +349,6 @@ $V(\omega) = X(L\omega)$ — the same function, read $L$ times faster.
                     {
                         "prompt": "Write the sample rate of $v$ in terms of $L$ and $f_s$.",
                         "answer": "L f_s",
-                        "placeholder": "L f_s",
                         "hint": "The same span of time now holds $L$ times as many samples.",
                         "deconstruct": [
                             "One input sample became $L$ output samples.",
@@ -364,7 +358,6 @@ $V(\omega) = X(L\omega)$ — the same function, read $L$ times faster.
                     {
                         "prompt": "$V(\\omega) = X(L\\omega)$, so the tone appears wherever $L\\omega$ equals $\\omega_0$. Write that $\\omega$.",
                         "answer": "\\frac{\\omega_0}{L}",
-                        "placeholder": "\\frac{\\omega_0}{L}",
                         "hint": "Solve $L\\omega = \\omega_0$ for $\\omega$. Nothing more.",
                         "deconstruct": [
                             "The peak of $X$ is at argument $\\omega_0$.",
@@ -374,7 +367,6 @@ $V(\omega) = X(L\omega)$ — the same function, read $L$ times faster.
                     {
                         "prompt": "$X$ also repeats every $2\\pi$, so $X(L\\omega)$ has a peak wherever $L\\omega = 2\\pi - \\omega_0$ as well. Write that $\\omega$ — the first image.",
                         "answer": "\\frac{2\\pi - \\omega_0}{L}",
-                        "placeholder": "\\frac{2\\pi - \\omega_0}{L}",
                         "hint": "Same solve as before, with $2\\pi - \\omega_0$ on the right instead of $\\omega_0$.",
                         "deconstruct": [
                             "The negative-frequency copy of the tone sits at $2\\pi - \\omega_0$ in $X$.",
@@ -384,7 +376,6 @@ $V(\omega) = X(L\omega)$ — the same function, read $L$ times faster.
                     {
                         "prompt": "Every image lies above $\\omega_0/L$ and below $2\\pi$. Write the cutoff, in normalised angular frequency, of a filter that keeps the first copy and rejects every image, in terms of $L$.",
                         "answer": "\\frac{\\pi}{L}",
-                        "placeholder": "\\frac{\\pi}{L}",
                         "hint": "The original band ran from $0$ to $\\pi$; after the compression by $L$ it runs from $0$ to $\\pi/L$.",
                         "deconstruct": [
                             "The whole baseband copy occupies $\\omega < \\pi/L$.",
@@ -394,7 +385,6 @@ $V(\omega) = X(L\omega)$ — the same function, read $L$ times faster.
                     {
                         "prompt": "The zeros carry no energy, so the interpolated signal comes out $L$ times too small unless the filter compensates. Write the DC gain $\\sum_n h[n]$ the filter needs.",
                         "answer": "L",
-                        "placeholder": "L",
                         "hint": "One input sample in every $L$ output positions is non-zero, so the running average of $v$ is $1/L$ of the average of $x$.",
                         "deconstruct": [
                             "The mean of $v$ is the mean of $x$ divided by $L$.",
@@ -605,7 +595,6 @@ $$H(z) = \sum_{m=0}^{M-1} \ \sum_{n} h[nM + m]\, z^{-(nM+m)}$$
                     {
                         "prompt": "Branch $m$ is the subsequence $e_m[n] = h[?]$. Write that index in terms of $n$, $M$ and $m$.",
                         "answer": "n M + m",
-                        "placeholder": "nM + m",
                         "hint": "The taps whose index leaves remainder $m$ on division by $M$ are $m$, $m+M$, $m+2M$, and so on.",
                         "deconstruct": [
                             "The first tap of the branch is $h[m]$.",
@@ -615,7 +604,6 @@ $$H(z) = \sum_{m=0}^{M-1} \ \sum_{n} h[nM + m]\, z^{-(nM+m)}$$
                     {
                         "prompt": "Pull the common factor out of the inner sum, so that it becomes a polynomial in $z^{-M}$ multiplied by one delay. Write that delay factor as a power of $z$.",
                         "answer": "z^{-m}",
-                        "placeholder": "z^{-m}",
                         "hint": "$z^{-(nM+m)} = z^{-nM} \\cdot z^{-m}$, and only the second factor is free of $n$.",
                         "deconstruct": [
                             "Split the exponent: $-(nM+m) = -nM - m$.",
@@ -625,7 +613,6 @@ $$H(z) = \sum_{m=0}^{M-1} \ \sum_{n} h[nM + m]\, z^{-(nM+m)}$$
                     {
                         "prompt": "A filter of $N$ taps splits into $M$ branches of equal size when $M$ divides $N$. Write the number of taps in one branch.",
                         "answer": "\\frac{N}{M}",
-                        "placeholder": "\\frac{N}{M}",
                         "hint": "Every tap goes to exactly one branch, and the branches are the same size.",
                         "deconstruct": [
                             "There are $N$ taps in total.",
@@ -635,7 +622,6 @@ $$H(z) = \sum_{m=0}^{M-1} \ \sum_{n} h[nM + m]\, z^{-(nM+m)}$$
                     {
                         "prompt": "Now the noble identity. Downsampling by $M$ and then applying $G(z)$ gives the same sequence as applying $G$ first and then downsampling — provided $G$ is evaluated at a different argument. Write that argument in terms of $z$ and $M$.",
                         "answer": "z^{M}",
-                        "placeholder": "z^{M}",
                         "hint": "One sample of delay after the downsampler is $M$ samples of delay before it.",
                         "deconstruct": [
                             "A delay of one output sample corresponds to $M$ input samples.",
@@ -913,7 +899,6 @@ intermediate rate, so they are replaced by a single filter.
                     {
                         "prompt": "Write the output sample rate in terms of $f_s$, $L$ and $M$.",
                         "answer": "\\frac{L f_s}{M}",
-                        "placeholder": "\\frac{L f_s}{M}",
                         "hint": "Upsampling multiplies the rate by $L$; downsampling divides it by $M$.",
                         "deconstruct": [
                             "After the upsampler the rate is $L f_s$.",
@@ -923,7 +908,6 @@ intermediate rate, so they are replaced by a single filter.
                     {
                         "prompt": "Write the rate at which the single combined filter conceptually runs.",
                         "answer": "L f_s",
-                        "placeholder": "L f_s",
                         "hint": "It sits between the upsampler and the downsampler.",
                         "deconstruct": [
                             "The upsampler has already multiplied the rate by $L$.",
@@ -933,7 +917,6 @@ intermediate rate, so they are replaced by a single filter.
                     {
                         "prompt": "The filter must stop images (cutoff $\\pi/L$) and stop aliases (cutoff $\\pi/M$). For $L = 4$ and $M = 3$, write the cutoff that satisfies both, in normalised angular frequency.",
                         "answer": "\\frac{\\pi}{4}",
-                        "placeholder": "\\frac{\\pi}{4}",
                         "hint": "Two upper bounds on the same number; only the smaller one matters.",
                         "deconstruct": [
                             "The bounds are $\\pi/4$ and $\\pi/3$.",
@@ -943,7 +926,6 @@ intermediate rate, so they are replaced by a single filter.
                     {
                         "prompt": "Write the DC gain the combined filter needs.",
                         "answer": "L",
-                        "placeholder": "L",
                         "hint": "The downsampler changes no amplitudes at all; only the upsampler's zeros have to be paid for.",
                         "deconstruct": [
                             "Zero insertion divided the signal level by $L$.",
@@ -953,7 +935,6 @@ intermediate rate, so they are replaced by a single filter.
                     {
                         "prompt": "In the polyphase form, each output sample is produced by exactly one branch of the $N$-tap filter. Write the number of multiplications per output sample, in terms of $N$ and $L$.",
                         "answer": "\\frac{N}{L}",
-                        "placeholder": "\\frac{N}{L}",
                         "hint": "The filter is split into $L$ branches by the upsampler, and the downsampler chooses which one to use.",
                         "deconstruct": [
                             "There are $L$ branches, sharing $N$ taps equally.",

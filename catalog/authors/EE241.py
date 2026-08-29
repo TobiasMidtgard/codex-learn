@@ -91,8 +91,8 @@ which is what "leaving every other pin as it was" demands. The tempting answer i
 `ODR = 1 << 5;`, and it is the single most common beginner defect in embedded code: it
 writes `0x00000020` over the whole word, so pin 5 goes high and **pins 0, 2 and 7 go
 low**. It will often appear to work, because during bring-up only one pin is in use.
-Option B clears bit 5, which was already clear, so nothing happens at all; option D
-writes `0x00000005`, setting bits 0 and 2 and clearing everything else, because 5 is
+The `&= ~(1 << 5)` line clears bit 5, which was already clear, so nothing happens at
+all; `ODR = 5;` writes `0x00000005`, setting bits 0 and 2 and clearing everything else, because 5 is
 `0b101` rather than a pin number.
 ''',
                     },
@@ -186,8 +186,8 @@ Read-modify-write carries the reserved bits across untouched, which is exactly w
 "must be kept at reset value" asks for. Writing a whole constant word forces them to
 whatever the constant says, usually zero, which may or may not be their reset value —
 and on the next silicon revision, when the vendor gives one of those bits a meaning,
-the code changes behaviour without being edited. Option C is the assumption that makes
-this bug: reserved does not mean ignored, it means undefined, and undefined includes
+the code changes behaviour without being edited. "Either, since reserved bits are ignored by the hardware" is the assumption that
+makes this bug: reserved does not mean ignored, it means undefined, and undefined includes
 "used by a chip you have not bought yet".
 ''',
                     },
@@ -999,7 +999,6 @@ the size of one step.
                     {
                         "prompt": "An $N$-bit converter reports a code made of $N$ binary digits. How many distinct codes is that?",
                         "answer": "2^{N}",
-                        "placeholder": "2^{N}",
                         "hint": "Each bit doubles the number of patterns available.",
                         "deconstruct": [
                             "One bit gives 2 codes, two bits give 4, three give 8.",
@@ -1010,7 +1009,6 @@ the size of one step.
                         "prompt": "Those codes divide the reference into equal steps. Write the size $q$ of one step, in terms of $V_{ref}$ and $N$.",
                         "given": "The full-scale span is $V_{ref}$, shared out among the codes you just counted.",
                         "answer": "\\frac{V_{ref}}{2^{N}}",
-                        "placeholder": "\\frac{V_{ref}}{2^{N}}",
                         "hint": "Divide the span by the number of steps. Nothing else is involved.",
                         "deconstruct": [
                             "The span is $V_{ref}$ and there are $2^N$ steps across it.",
@@ -1021,7 +1019,6 @@ the size of one step.
                         "prompt": "A converter that rounds to the nearest code is wrong by at most half a step. Write that worst-case error in terms of $V_{ref}$ and $N$ alone.",
                         "given": "You have just shown that one step is $q = V_{ref}/2^{N}$.",
                         "answer": "\\frac{V_{ref}}{2^{N+1}}",
-                        "placeholder": "\\frac{V_{ref}}{2^{N+1}}",
                         "hint": "Halve $q$. Halving a power of two is the same as adding one to the exponent underneath.",
                         "deconstruct": [
                             "Half of $q$ is $\\frac{1}{2} \\cdot \\frac{V_{ref}}{2^{N}}$.",
@@ -1032,7 +1029,6 @@ the size of one step.
                         "prompt": "In Q$f$ format the real number $a$ is stored as the integer $A = a \\cdot 2^{f}$, and $b$ as $B = b \\cdot 2^{f}$. Write the integer that represents the product $ab$ in the same Q$f$ format, in terms of $A$, $B$ and $f$.",
                         "given": "The stored integer for a real number $x$ is always $x \\cdot 2^{f}$, so the answer you want is $ab \\cdot 2^{f}$.",
                         "answer": "\\frac{A B}{2^{f}}",
-                        "placeholder": "\\frac{A B}{2^{f}}",
                         "hint": "Multiply $A$ by $B$ and see how many factors of $2^{f}$ you are left holding.",
                         "deconstruct": [
                             "$A B = a \\cdot 2^{f} \\cdot b \\cdot 2^{f} = ab \\cdot 2^{2f}$.",

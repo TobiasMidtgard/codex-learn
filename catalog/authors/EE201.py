@@ -92,7 +92,8 @@ COURSE = {
                         "a": 2,
                         "why": r'''
 Mass action: $np = n_i^2$, so $p = n_i^2/n = (10^{16})^2/10^{22} = 10^{10}$ m$^{-3}$.
-The tempting answer is the last one. n-type material still has holes; it has a million
+The tempting answer is "zero — there are no holes in n-type material". n-type
+material still has holes; it has a million
 times *fewer* than pure silicon, not none. Those surviving minority carriers are what
 carries the reverse saturation current of a diode, so a number that looks negligible
 here turns out to be the whole of $I_S$ in module 2.
@@ -165,8 +166,8 @@ general: an internal potential is not the same thing as a terminal voltage.
 $V_{bi} = V_T\ln(N_aN_d/n_i^2)$, and the logarithm turns the factor of 100 in the
 product into an addition: $V_T\ln(100) = 0.02585 \times 4.605 = 0.119$ V. Doping is a
 crude lever on $V_{bi}$ — a hundredfold change in the doping product buys about a
-tenth of a volt. Option D confuses this with the divider rule from EE101: the built-in
-potential depends on the *product* of the two dopings, not their ratio.
+tenth of a volt. Answering "unchanged, because the ratio is the same" confuses this with the divider
+rule from EE101: the built-in potential depends on the *product* of the two dopings, not their ratio.
 ''',
                     },
                     {
@@ -182,8 +183,8 @@ potential depends on the *product* of the two dopings, not their ratio.
 Reverse bias adds to the built-in potential rather than opposing it, so the junction
 now supports 5.83 V and must expose more ionised dopant to do it. The width goes as
 $\sqrt{V}$, so 5.83/0.83 is a factor of seven in voltage and $\sqrt{7} = 2.65$ in
-width — you compute exactly this in the lab below. Option B describes *forward* bias,
-which does narrow the region and is why forward current flows at all. A widening
+width — you compute exactly this in the lab below. "It narrows, because the applied field opposes the built-in field" describes
+*forward* bias, which does narrow the region and is why forward current flows at all. A widening
 depletion region also means less capacitance, which is the whole basis of the varactor
 diode used to tune radios.
 ''',
@@ -211,7 +212,6 @@ concentration on the n-side.
                     {
                         "prompt": "The p-side is doped with $N_a$ acceptors per cubic metre, and at room temperature essentially every one of them has accepted an electron and left a hole. Write the equilibrium hole concentration $p_p$ in terms of the doping.",
                         "answer": "N_a",
-                        "placeholder": "N_a",
                         "hint": "Holes are the majority carriers on the p-side, and each acceptor contributes exactly one.",
                         "deconstruct": [
                             "Each ionised acceptor leaves behind one mobile hole.",
@@ -222,7 +222,6 @@ concentration on the n-side.
                         "prompt": "On the n-side the electron concentration is $N_d$. Use mass action, $np = n_i^2$, to write the hole concentration $p_n$ there in terms of $N_d$ and $n_i$.",
                         "given": "Mass action holds in equilibrium at every point: $np = n_i^2$.",
                         "answer": "\\frac{n_i^2}{N_d}",
-                        "placeholder": "\\frac{n_i^2}{N_d}",
                         "hint": "Put $n = N_d$ into $np = n_i^2$ and solve for $p$.",
                         "deconstruct": [
                             "Electrons are the majority carriers on the n-side, so $n = N_d$.",
@@ -243,7 +242,6 @@ concentration on the n-side.
                     {
                         "prompt": "Now substitute the two concentrations from steps 1 and 2 into that ratio. What does $p_p/p_n$ equal, in terms of $N_a$, $N_d$ and $n_i$?",
                         "answer": "\\frac{N_a N_d}{n_i^2}",
-                        "placeholder": "\\frac{N_a N_d}{n_i^2}",
                         "hint": "Dividing by a fraction multiplies by its reciprocal: $N_a \\div (n_i^2/N_d)$.",
                         "deconstruct": [
                             "$p_p = N_a$ and $p_n = n_i^2/N_d$.",
@@ -253,7 +251,6 @@ concentration on the n-side.
                     {
                         "prompt": "One loose end. The thermal voltage is not a fitted constant — write $V_T$ in terms of Boltzmann's constant $k$, the absolute temperature $T$ and the electronic charge $q$.",
                         "answer": "\\frac{k T}{q}",
-                        "placeholder": "\\frac{k T}{q}",
                         "hint": "$kT$ is an energy in joules; dividing an energy by a charge gives a voltage.",
                         "deconstruct": [
                             "$kT$ is the characteristic thermal energy per particle, in joules.",
@@ -496,10 +493,11 @@ which module 4 turns into a feature.)
                         ],
                         "a": 0,
                         "why": r'''
-The load line. Option C is the right equation but it has no closed-form solution —
+The load line. Solving $5 = IR + nV_T\ln(I/I_S)$ for $I$ is the right equation but it
+has no closed-form solution —
 $I$ appears both linearly and inside a logarithm, so it needs a numerical method
-(which is what the lab below writes). Option B forgets the diode entirely. Option D is
-a first estimate, not an answer: it gives 10.0 mA where the true value is 10.008 mA
+(which is what the lab below writes). Dividing 5 V by 430 Ω forgets the diode entirely. Assuming a flat 0.7 V is a first
+estimate, not an answer: it gives 10.0 mA where the true value is 10.008 mA
 here, which is close, but the same assumption at 100 µA or 1 A is out by a long way.
 ''',
                     },
@@ -1292,9 +1290,10 @@ opposite corner — highest input, no load — is also a design case, but it set
 The line regulation is the divider ratio $(r_z \parallel R_L)/(R_S + r_z \parallel R_L)$.
 With $8 \parallel 470 = 7.87\ \Omega$, that is $7.87/227.87 = 0.0345$, so 2 V of input
 change becomes $2 \times 0.0345 = 69$ mV of output change: 5.104 V goes to 5.173 V.
-Option D is the seductive one — regulation is very good, but it is not perfect, and
+"5.104 V — that is what regulation means" is the seductive one: regulation is very
+good, but it is not perfect, and
 quoting a real number rather than "regulated" is what lets you decide whether it is
-good enough. Option A is what you get if you assume the output simply scales with the
+good enough. The 5.95 V answer is what you get if you assume the output simply scales with the
 input, $5.104 \times 14/12 = 5.95$ V. That is a plain divider's behaviour, and
 preventing it is the entire reason the Zener is in the circuit.
 ''',

@@ -126,6 +126,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -266,6 +267,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "A capacitor that blocks DC and passes AC",
     "minutes": 22,
@@ -593,6 +595,7 @@
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "A low-pass filter with a 1 kHz corner",
     "minutes": 25,
@@ -932,10 +935,11 @@
        "The capacitor discharges itself between cycles"
       ],
       "a": 2,
-      "why": "The reactance is the answer, and the first option is a true statement with a false\nconclusion attached: charge really does not cross the gap, at any frequency — yet\nalternating current flows in the wires perfectly well, because charge arriving on one\nplate pushes an equal charge off the other. Nothing leaks. What changes with frequency\nis how much voltage it takes to push a given current in and out of the plates, and\nthat is exactly what $1/(\\omega C)$ measures."
+      "why": "The reactance is the answer. \"Charge cannot cross the insulating gap, so no current\ncan pass\" is a true statement with a false conclusion attached: charge really does not\ncross the gap, at any frequency — yet\nalternating current flows in the wires perfectly well, because charge arriving on one\nplate pushes an equal charge off the other. Nothing leaks. What changes with frequency\nis how much voltage it takes to push a given current in and out of the plates, and\nthat is exactly what $1/(\\omega C)$ measures."
      }
     ]
    },
+   "blanks": null,
    "build": {
     "title": "An RL circuit with a 100 µs time constant",
     "minutes": 25,

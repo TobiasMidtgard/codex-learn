@@ -43,6 +43,11 @@
     "Acceptance criteria belong to the requirement, not to the implementation that satisfies it",
     "Circular tests: an expected value computed by the code under test proves nothing"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "From an ambiguous rule to an executable specification",
     "runtime": "python",
@@ -111,6 +116,11 @@
     "Replace nested conditional with a lookup table when the branches are data",
     "Small steps: run the safety net after every single move, never at the end"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Untangling a shipping quote",
     "runtime": "python",
@@ -192,6 +202,11 @@
     "Isolating subscriber failures — one broken listener must not sink the publish",
     "Patterns are a vocabulary, not a goal; a pattern applied without a force to resolve is debt"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A pricing engine with a notification bus",
     "runtime": "python",
@@ -264,6 +279,11 @@
     "Widening a contract is compatible; narrowing it is not — required parameters are narrowing",
     "Gates must be explainable: report which function failed and by how much"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A complexity gate and a compatibility checker",
     "runtime": "python",

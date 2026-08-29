@@ -44,6 +44,11 @@
     "Perspective maps the near plane to -1 and the far plane to +1, non-linearly in between",
     "Depth precision is worst far from the eye, which is why the near plane must not be tiny"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "4x4 transforms and a projected cube",
     "runtime": "python",
@@ -112,6 +117,11 @@
     "A fill rule makes shared edges watertight: a boundary sample belongs to exactly one triangle",
     "The z-buffer resolves visibility per sample, so triangles may be submitted in any order"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Lines, triangles and the z-buffer",
     "runtime": "python",
@@ -180,6 +190,11 @@
     "Shading is linear-light arithmetic; a display expects roughly sRGB, so encode last",
     "Clamp before the gamma encode, never after, or you raise a negative number to a fractional power"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Lambert, Blinn-Phong and gamma",
     "runtime": "python",
@@ -244,6 +259,11 @@
     "A shadow ray must be occluded *before* the light, not merely occluded somewhere",
     "Recursion depth bounds the reflection series; each bounce contributes geometrically less"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Spheres, planes, shadows and one bounce",
     "runtime": "python",

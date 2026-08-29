@@ -39,6 +39,11 @@
     "Tautology, contradiction, contingency — and logical equivalence as identical columns",
     "De Morgan's laws, contraposition, and `P -> Q` as `~P | Q`"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "A propositional logic engine",
     "runtime": "python",
@@ -107,6 +112,11 @@
     "Symmetry C(n, k) = C(n, n-k) and the row sum 2^n",
     "Vandermonde's identity as a counting argument, not an algebraic one"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Counting from first principles",
     "runtime": "python",
@@ -175,6 +185,11 @@
     "The fundamental theorem of arithmetic: a unique multiset of prime factors",
     "Fast modular exponentiation: O(log e) multiplications, never a huge intermediate"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Euclid, inverses, sieves and fast powers",
     "runtime": "python",
@@ -243,6 +258,11 @@
     "Warshall's algorithm: O(n^3) with the intermediate vertex k on the outside",
     "A graph is bipartite exactly when it has no odd cycle — decided by two-colouring"
    ],
+   "sandbox": null,
+   "quiz": null,
+   "blanks": null,
+   "build": null,
+   "derive": null,
    "lab": {
     "title": "Relation properties, Warshall and bipartiteness",
     "runtime": "python",

@@ -331,7 +331,6 @@ let $t_{reg}$ be the clock-to-Q plus setup overhead of one pipeline register.
                     {
                         "prompt": "Write the shortest clock period a single-cycle machine can use, in terms of the five stage delays and $t_{reg}$.",
                         "answer": "t_{if} + t_{id} + t_{ex} + t_{me} + t_{wb} + t_{reg}",
-                        "placeholder": "t_{if} + t_{id} + t_{ex} + t_{me} + t_{wb} + t_{reg}",
                         "hint": "Everything is in series between one clock edge and the next, and the state elements at each end cost one $t_{reg}$ altogether.",
                         "deconstruct": [
                             "In a single-cycle machine one instruction occupies one clock period from fetch to write-back.",
@@ -342,7 +341,6 @@ let $t_{reg}$ be the clock-to-Q plus setup overhead of one pipeline register.
                         "prompt": "Take $t_{if}=180$, $t_{id}=120$, $t_{ex}=200$, $t_{me}=190$, $t_{wb}=90$ and $t_{reg}=30$, all in picoseconds. What is that period?",
                         "given": "Substitute into the expression you just wrote.",
                         "answer": "810",
-                        "placeholder": "810",
                         "hint": "Add the five delays, then add the register overhead once.",
                         "deconstruct": [
                             "$180 + 120 + 200 + 190 + 90 = 780$.",
@@ -352,7 +350,6 @@ let $t_{reg}$ be the clock-to-Q plus setup overhead of one pipeline register.
                     {
                         "prompt": "Now cut the path with four pipeline registers. Every stage is bounded by registers, so the period is the slowest stage plus one $t_{reg}$. What is it, in picoseconds?",
                         "answer": "230",
-                        "placeholder": "230",
                         "hint": "The slowest of the five delays is EX at 200 ps.",
                         "deconstruct": [
                             "The clock must satisfy every stage, so it is set by the largest, $t_{ex} = 200$.",
@@ -362,7 +359,6 @@ let $t_{reg}$ be the clock-to-Q plus setup overhead of one pipeline register.
                     {
                         "prompt": "On a long stream of instructions with no hazards, the pipelined machine retires one instruction per cycle. Write its speedup over the single-cycle machine.",
                         "answer": "\\frac{810}{230}",
-                        "placeholder": "\\frac{810}{230}",
                         "hint": "Both machines retire one instruction per clock; only the clock differs.",
                         "deconstruct": [
                             "Single-cycle: one instruction every 810 ps.",
@@ -373,7 +369,6 @@ let $t_{reg}$ be the clock-to-Q plus setup overhead of one pipeline register.
                     {
                         "prompt": "Generalise. With $k$ perfectly balanced stages of delay $t_{stage}$ each, write the speedup of the pipelined machine over the single-cycle one.",
                         "answer": "\\frac{k \\cdot t_{stage} + t_{reg}}{t_{stage} + t_{reg}}",
-                        "placeholder": "\\frac{k \\cdot t_{stage} + t_{reg}}{t_{stage} + t_{reg}}",
                         "hint": "Write both periods first: the unpipelined path is $k$ stages in series plus one register overhead.",
                         "deconstruct": [
                             "Single-cycle period: $k\\,t_{stage} + t_{reg}$.",
@@ -666,7 +661,6 @@ half of one, so a consumer may read in the *same* cycle its producer writes.
                     {
                         "prompt": "With no stalls at all, how many cycles does a $k$-stage pipeline take to retire $N$ instructions? Write it in terms of $N$ and $k$.",
                         "answer": "N + k - 1",
-                        "placeholder": "N + k - 1",
                         "hint": "The first instruction takes $k$ cycles on its own; each of the remaining $N-1$ adds one.",
                         "deconstruct": [
                             "Filling the pipeline costs $k$ cycles before the first instruction retires.",
@@ -677,7 +671,6 @@ half of one, so a consumer may read in the *same* cycle its producer writes.
                     {
                         "prompt": "Write the CPI that corresponds to it.",
                         "answer": "\\frac{N + k - 1}{N}",
-                        "placeholder": "\\frac{N + k - 1}{N}",
                         "hint": "CPI is cycles divided by instructions retired.",
                         "deconstruct": [
                             "Divide the cycle count by $N$.",
@@ -687,7 +680,6 @@ half of one, so a consumer may read in the *same* cycle its producer writes.
                     {
                         "prompt": "A producer enters IF in cycle $c$. In which cycle is it in WB, writing the register file?",
                         "answer": "c + 4",
-                        "placeholder": "c + 4",
                         "hint": "IF is stage 0 and WB is stage 4, one cycle each.",
                         "deconstruct": [
                             "The stages are IF, ID, EX, MEM, WB at cycles $c$, $c+1$, $c+2$, $c+3$, $c+4$.",
@@ -696,7 +688,6 @@ half of one, so a consumer may read in the *same* cycle its producer writes.
                     {
                         "prompt": "A consumer of that register must have its ID no earlier than cycle $c+4$. ID is one cycle after IF, so write the earliest cycle the consumer may enter IF.",
                         "answer": "c + 3",
-                        "placeholder": "c + 3",
                         "hint": "If ID must be at $c+4$ and ID is IF plus one, then IF is at $c+4-1$.",
                         "deconstruct": [
                             "The write happens in the first half of $c+4$ and the read in the second half of the same cycle, so ID at $c+4$ is legal.",
@@ -706,7 +697,6 @@ half of one, so a consumer may read in the *same* cycle its producer writes.
                     {
                         "prompt": "The instruction immediately behind the producer would otherwise have entered IF in cycle $c+1$. How many bubbles does the stall insert?",
                         "answer": "2",
-                        "placeholder": "2",
                         "hint": "Subtract the natural issue cycle from the earliest legal one.",
                         "deconstruct": [
                             "Earliest legal IF is $c+3$; the natural one is $c+1$.",
@@ -716,7 +706,6 @@ half of one, so a consumer may read in the *same* cycle its producer writes.
                     {
                         "prompt": "Let $f_1$ be the fraction of instructions whose nearest producer is one instruction ahead, and $f_2$ the fraction whose nearest producer is two ahead (worth one bubble). Write the CPI, ignoring the fill cost.",
                         "answer": "1 + 2 \\cdot f_1 + f_2",
-                        "placeholder": "1 + 2 \\cdot f_1 + f_2",
                         "hint": "Start from one cycle per instruction and add the average number of bubbles per instruction.",
                         "deconstruct": [
                             "Every instruction costs one cycle to begin with.",
@@ -726,7 +715,6 @@ half of one, so a consumer may read in the *same* cycle its producer writes.
                     {
                         "prompt": "Measurements on a compiled kernel give $f_1 = 0.30$ and $f_2 = 0.15$. What is the CPI?",
                         "answer": "1.75",
-                        "placeholder": "1.75",
                         "hint": "Substitute into the expression you just wrote.",
                         "deconstruct": [
                             "$2 \\times 0.30 = 0.60$ and $f_2 = 0.15$.",
@@ -1024,7 +1012,6 @@ value is there in time.
                     {
                         "prompt": "The producer's stage $r$ occupies one cycle. Which cycle is it?",
                         "answer": "c + r",
-                        "placeholder": "c + r",
                         "hint": "It entered IF (stage 0) in cycle $c$ and advances one stage per cycle.",
                         "deconstruct": [
                             "Stage 0 is cycle $c$, stage 1 is cycle $c+1$, and so on.",
@@ -1034,7 +1021,6 @@ value is there in time.
                     {
                         "prompt": "In which cycle does the consumer need the operand — that is, which cycle is its stage $u$?",
                         "answer": "c + d + u",
-                        "placeholder": "c + d + u",
                         "hint": "The consumer entered IF in cycle $c + d$; apply the same counting.",
                         "deconstruct": [
                             "Its stage 0 is cycle $c + d$.",
@@ -1044,7 +1030,6 @@ value is there in time.
                     {
                         "prompt": "The value is available to any stage that *starts* after the producer's stage $r$ has finished, so the no-stall condition is $c + d + u \\ge c + r + 1$. Solve it for the smallest distance $d$ that needs no stall.",
                         "answer": "r + 1 - u",
-                        "placeholder": "r + 1 - u",
                         "hint": "Cancel $c$ from both sides and rearrange for $d$.",
                         "deconstruct": [
                             "$c + d + u \\ge c + r + 1$ gives $d + u \\ge r + 1$.",
@@ -1054,7 +1039,6 @@ value is there in time.
                     {
                         "prompt": "An ALU instruction is ready at the end of EX and another ALU instruction needs its operands at the start of EX. Substitute $r = 2$, $u = 2$ and write the minimum distance.",
                         "answer": "1",
-                        "placeholder": "1",
                         "hint": "$r + 1 - u$ with both stages equal to 2.",
                         "deconstruct": [
                             "$2 + 1 - 2 = 1$.",
@@ -1064,7 +1048,6 @@ value is there in time.
                     {
                         "prompt": "A load is ready only at the end of MEM. With $r = 3$ and a consumer needing it in EX ($u = 2$), what is the minimum distance now?",
                         "answer": "2",
-                        "placeholder": "2",
                         "hint": "Same expression, one stage later.",
                         "deconstruct": [
                             "$3 + 1 - 2 = 2$.",
@@ -1074,7 +1057,6 @@ value is there in time.
                     {
                         "prompt": "Now let the consumer be a store using the loaded value as the data it writes, needed at the start of MEM ($u = 3$). What is the minimum distance?",
                         "answer": "1",
-                        "placeholder": "1",
                         "hint": "$r = 3$, $u = 3$.",
                         "deconstruct": [
                             "$3 + 1 - 3 = 1$: back-to-back is fine.",
@@ -1084,7 +1066,6 @@ value is there in time.
                     {
                         "prompt": "With full forwarding the only stalls left are load-use pairs, a fraction $f_{lu}$ of all instructions, one bubble each. Write the CPI.",
                         "answer": "1 + f_{lu}",
-                        "placeholder": "1 + f_{lu}",
                         "hint": "One cycle per instruction, plus the average bubble count.",
                         "deconstruct": [
                             "Every instruction costs one cycle.",
@@ -1399,7 +1380,6 @@ forwarding has removed the data hazards, so a correctly predicted branch is free
                     {
                         "prompt": "Write the CPI in terms of $f_{br}$, $a$ and $c_{mis}$.",
                         "answer": "1 + f_{br} \\cdot (1 - a) \\cdot c_{mis}",
-                        "placeholder": "1 + f_{br} \\cdot (1 - a) \\cdot c_{mis}",
                         "hint": "The fraction of instructions that are *mispredicted* branches is $f_{br}(1-a)$.",
                         "deconstruct": [
                             "Every instruction costs one cycle.",
@@ -1410,7 +1390,6 @@ forwarding has removed the data hazards, so a correctly predicted branch is free
                     {
                         "prompt": "A five-stage machine resolves branches in EX, so $c_{mis} = 2$. With $f_{br} = 0.20$ and $a = 0.90$, what is the CPI?",
                         "answer": "1.04",
-                        "placeholder": "1.04",
                         "hint": "$0.20 \\times 0.10 \\times 2$, then add one.",
                         "deconstruct": [
                             "Mispredicted branches are $0.20 \\times 0.10 = 0.02$ of all instructions.",
@@ -1421,7 +1400,6 @@ forwarding has removed the data hazards, so a correctly predicted branch is free
                     {
                         "prompt": "Now deepen the pipeline until a branch resolves ten cycles after fetch, so $c_{mis} = 10$. Same $f_{br} = 0.20$ and $a = 0.90$. What is the CPI?",
                         "answer": "1.2",
-                        "placeholder": "1.2",
                         "hint": "Only $c_{mis}$ changed, and it is a linear factor.",
                         "deconstruct": [
                             "$0.20 \\times 0.10 \\times 10 = 0.20$.",
@@ -1431,7 +1409,6 @@ forwarding has removed the data hazards, so a correctly predicted branch is free
                     {
                         "prompt": "Rearrange the CPI expression for the accuracy $a$ needed to hit a target CPI.",
                         "answer": "1 - \\frac{CPI - 1}{f_{br} \\cdot c_{mis}}",
-                        "placeholder": "1 - \\frac{CPI - 1}{f_{br} \\cdot c_{mis}}",
                         "hint": "Subtract 1 from both sides, divide by $f_{br} c_{mis}$, and solve for $a$.",
                         "deconstruct": [
                             "$CPI - 1 = f_{br}(1-a)c_{mis}$.",
@@ -1441,7 +1418,6 @@ forwarding has removed the data hazards, so a correctly predicted branch is free
                     {
                         "prompt": "On that deep machine, what accuracy brings the CPI back down to 1.04?",
                         "answer": "0.98",
-                        "placeholder": "0.98",
                         "hint": "Substitute $CPI = 1.04$, $f_{br} = 0.20$, $c_{mis} = 10$.",
                         "deconstruct": [
                             "$(1.04 - 1)/(0.20 \\times 10) = 0.04/2 = 0.02$.",

@@ -104,7 +104,6 @@ Write $\rho$ for $|\Gamma|$ and $S$ for the voltage standing-wave ratio.
                     {
                         "prompt": "At the load, $z = 0$, the ratio $V/I$ must be $Z_L$. Put $z = 0$ into both expressions and write $Z_L$ in terms of $Z_0$ and $\\Gamma$.",
                         "answer": "Z_0 \\frac{1 + \\Gamma}{1 - \\Gamma}",
-                        "placeholder": "Z_0 \\frac{1 + \\Gamma}{1 - \\Gamma}",
                         "hint": "Every exponential becomes 1, so the voltage is $V_0(1+\\Gamma)$ and the current is $(V_0/Z_0)(1-\\Gamma)$.",
                         "deconstruct": [
                             "$V(0) = V_0(1 + \\Gamma)$ and $I(0) = (V_0/Z_0)(1 - \\Gamma)$.",
@@ -114,7 +113,6 @@ Write $\rho$ for $|\Gamma|$ and $S$ for the voltage standing-wave ratio.
                     {
                         "prompt": "Solve that for $\\Gamma$. Write it in terms of $Z_L$ and $Z_0$.",
                         "answer": "\\frac{Z_L - Z_0}{Z_L + Z_0}",
-                        "placeholder": "\\frac{Z_L - Z_0}{Z_L + Z_0}",
                         "hint": "Cross-multiply, collect the two $\\Gamma$ terms on one side, and factor.",
                         "deconstruct": [
                             "$Z_L(1 - \\Gamma) = Z_0(1 + \\Gamma)$.",
@@ -124,7 +122,6 @@ Write $\rho$ for $|\Gamma|$ and $S$ for the voltage standing-wave ratio.
                     {
                         "prompt": "Away from the load the two travelling waves interfere. Their magnitudes add where they are in phase and subtract where they are out of phase, so $|V|$ runs between $|V_0|(1+\\rho)$ and $|V_0|(1-\\rho)$. The standing-wave ratio is the ratio of those two. Write $S$ in terms of $\\rho$.",
                         "answer": "\\frac{1 + \\rho}{1 - \\rho}",
-                        "placeholder": "\\frac{1 + \\rho}{1 - \\rho}",
                         "hint": "It is just maximum over minimum. $|V_0|$ divides out.",
                         "deconstruct": [
                             "$|V|_{\\max} = |V_0|(1 + \\rho)$ and $|V|_{\\min} = |V_0|(1 - \\rho)$.",
@@ -134,7 +131,6 @@ Write $\rho$ for $|\Gamma|$ and $S$ for the voltage standing-wave ratio.
                     {
                         "prompt": "A slotted line measures $S$, not $\\rho$. Invert the last result and write $\\rho$ in terms of $S$.",
                         "answer": "\\frac{S - 1}{S + 1}",
-                        "placeholder": "\\frac{S - 1}{S + 1}",
                         "hint": "The same algebra as step 2, with $S$ playing the part $Z_L/Z_0$ played there.",
                         "deconstruct": [
                             "$S(1 - \\rho) = 1 + \\rho$.",
@@ -144,7 +140,6 @@ Write $\rho$ for $|\Gamma|$ and $S$ for the voltage standing-wave ratio.
                     {
                         "prompt": "A fraction $\\rho^2$ of the incident power is reflected, so a fraction $1 - \\rho^2$ reaches the load. Substitute the previous answer and write the delivered fraction in terms of $S$ alone.",
                         "answer": "\\frac{4S}{(S+1)^2}",
-                        "placeholder": "\\frac{4S}{(S+1)^2}",
                         "hint": "$1 - \\rho^2 = (1-\\rho)(1+\\rho)$, and each bracket is easy once $\\rho = (S-1)/(S+1)$ is in place.",
                         "deconstruct": [
                             "$1 - \\rho = 2/(S+1)$ and $1 + \\rho = 2S/(S+1)$.",
@@ -390,7 +385,6 @@ Find $\Gamma_{in} = b_1/a_1$.
                     {
                         "prompt": "The load reflects whatever arrives at it. Write $a_2$ in terms of $\\Gamma_L$ and $b_2$.",
                         "answer": "\\Gamma_L b_2",
-                        "placeholder": "\\Gamma_L b_2",
                         "hint": "From the two-port's point of view $b_2$ is outgoing and $a_2$ is incoming; the load turns one into the other.",
                         "deconstruct": [
                             "A reflection coefficient is by definition reflected over incident, at the plane where it is quoted.",
@@ -401,7 +395,6 @@ Find $\Gamma_{in} = b_1/a_1$.
                         "prompt": "Substitute that into the equation for $b_2$ and solve for $b_2$ in terms of $a_1$.",
                         "given": "Start from $b_2 = S_{21}a_1 + S_{22}a_2$.",
                         "answer": "\\frac{S_21 a_1}{1 - S_22 \\Gamma_L}",
-                        "placeholder": "\\frac{S_21 a_1}{1 - S_22 \\Gamma_L}",
                         "hint": "$b_2$ appears on both sides once you substitute; collect it.",
                         "deconstruct": [
                             "$b_2 = S_{21}a_1 + S_{22}\\Gamma_L b_2$.",
@@ -411,7 +404,6 @@ Find $\Gamma_{in} = b_1/a_1$.
                     {
                         "prompt": "Now put $a_2 = \\Gamma_L b_2$ into the equation for $b_1$ and divide by $a_1$. Write $\\Gamma_{in}$.",
                         "answer": "S_11 + \\frac{S_12 S_21 \\Gamma_L}{1 - S_22 \\Gamma_L}",
-                        "placeholder": "S_11 + \\frac{S_12 S_21 \\Gamma_L}{1 - S_22 \\Gamma_L}",
                         "hint": "$b_1 = S_{11}a_1 + S_{12}\\Gamma_L b_2$, and you already have $b_2$ in terms of $a_1$.",
                         "deconstruct": [
                             "Substituting gives $b_1 = S_{11}a_1 + S_{12}\\Gamma_L S_{21}a_1/(1 - S_{22}\\Gamma_L)$.",
@@ -421,7 +413,6 @@ Find $\Gamma_{in} = b_1/a_1$.
                     {
                         "prompt": "Put a short circuit on port 2, so $\\Gamma_L = -1$. Write $\\Gamma_{in}$ for that case.",
                         "answer": "S_11 - \\frac{S_12 S_21}{1 + S_22}",
-                        "placeholder": "S_11 - \\frac{S_12 S_21}{1 + S_22}",
                         "hint": "Substitute $-1$ everywhere $\\Gamma_L$ appears, and watch the sign in the denominator.",
                         "deconstruct": [
                             "The numerator picks up the factor $-1$.",
@@ -431,7 +422,6 @@ Find $\Gamma_{in} = b_1/a_1$.
                     {
                         "prompt": "Now suppose the two-port is lossless and reciprocal, and write $\\rho$ for $|S_{11}|$. Unitarity says the two columns have unit length. Write $|S_{21}|^2$ in terms of $\\rho$.",
                         "answer": "1 - \\rho^2",
-                        "placeholder": "1 - \\rho^2",
                         "hint": "Whatever fraction of the incident power does not come back must leave by the other port.",
                         "deconstruct": [
                             "The first column of $S^\\dagger S = I$ gives $|S_{11}|^2 + |S_{21}|^2 = 1$.",
@@ -701,7 +691,6 @@ the normalised resistance has become 1.
                     {
                         "prompt": "You want that quarter-wave section to make a real load $Z_L$ look like $Z_0$. Set $Z_{in} = Z_0$ and write the section impedance $Z_1$.",
                         "answer": "\\sqrt{Z_0 Z_L}",
-                        "placeholder": "\\sqrt{Z_0 Z_L}",
                         "hint": "One line of algebra from the previous answer; the square root is the point of the whole device.",
                         "deconstruct": [
                             "$Z_1^2/Z_L = Z_0$, so $Z_1^2 = Z_0 Z_L$.",
@@ -711,7 +700,6 @@ the normalised resistance has become 1.
                     {
                         "prompt": "A 200 Ω antenna is to be fed from a 50 Ω line. Write the characteristic impedance of the quarter-wave section, in ohms.",
                         "answer": "100",
-                        "placeholder": "100",
                         "hint": "Put the numbers into the previous answer.",
                         "deconstruct": [
                             "$\\sqrt{50 \\times 200} = \\sqrt{10000}$.",
@@ -731,7 +719,6 @@ the normalised resistance has become 1.
                     {
                         "prompt": "A slotted line gives you $S$, not $\\rho$. Substitute $\\rho = (S-1)/(S+1)$ into the last answer and simplify. Write $x$ in terms of $S$.",
                         "answer": "\\frac{S - 1}{\\sqrt{S}}",
-                        "placeholder": "\\frac{S - 1}{\\sqrt{S}}",
                         "hint": "$1 - \\rho^2$ collapses to $4S/(S+1)^2$, which you derived in module 1.",
                         "deconstruct": [
                             "$\\sqrt{1 - \\rho^2} = 2\\sqrt{S}/(S+1)$.",
@@ -1017,7 +1004,6 @@ parallel combination looks the same at one frequency.
                     {
                         "prompt": "An L-section matching $R_0$ to a larger $R_L$ works by making $R_0$ look like $R_L$ through exactly that transformation, so $R_L = R_0(1 + Q^2)$. Write $Q$ in terms of $R_L$ and $R_0$.",
                         "answer": "\\sqrt{\\frac{R_L}{R_0} - 1}",
-                        "placeholder": "\\sqrt{\\frac{R_L}{R_0} - 1}",
                         "hint": "Divide both sides by $R_0$ first, then subtract 1.",
                         "deconstruct": [
                             "$R_L/R_0 = 1 + Q^2$.",
@@ -1027,7 +1013,6 @@ parallel combination looks the same at one frequency.
                     {
                         "prompt": "A transistor with a 50 Ω generator needs to see an 800 Ω load resistance. Write the node $Q$ of the L-section that does it.",
                         "answer": "\\sqrt{15}",
-                        "placeholder": "\\sqrt{15}",
                         "hint": "Put the two numbers into the previous answer; $800/50$ is a whole number.",
                         "deconstruct": [
                             "$R_L/R_0 = 16$.",
@@ -1037,7 +1022,6 @@ parallel combination looks the same at one frequency.
                     {
                         "prompt": "A singly-loaded resonance has fractional bandwidth $1/Q$. Write the fractional bandwidth of the L-section in terms of $R_L$ and $R_0$.",
                         "answer": "\\frac{1}{\\sqrt{\\frac{R_L}{R_0} - 1}}",
-                        "placeholder": "\\frac{1}{\\sqrt{\\frac{R_L}{R_0} - 1}}",
                         "hint": "Just the reciprocal of the answer two steps ago.",
                         "deconstruct": [
                             "Bandwidth is $1/Q$ and $Q = \\sqrt{R_L/R_0 - 1}$.",
