@@ -1720,6 +1720,10 @@ Sandbox.define({
 });
 
 const CACHE_MEMO = {};
+/* A fixed working set, so growing the cache genuinely starts to hold it and the
+   miss rate falls. Scaling the set with the cache kept the ratio constant, the curve
+   dead flat, and every caption about capacity misses "starting to fit" false. */
+const WORKING_SET = 32 * 1024;
 /* a cache you can starve: capacity against associativity, on a real trace */
 Sandbox.define({
   id: 'cache',
@@ -1740,7 +1744,7 @@ Sandbox.define({
     function run(setCount, assoc, stride) {
       const tags = [];
       for (let i = 0; i < setCount; i++) tags.push([]);
-      const span = setCount * assoc * LINE * 4;
+      const span = WORKING_SET;
       let hits = 0, total = 0;
       for (let pass = 0; pass < 3; pass++) {
         for (let addr = 0; addr < span; addr += stride) {
@@ -1796,17 +1800,25 @@ Sandbox.define({
   explain: function (v) {
     const LINE = 64;
     const ways = Math.max(1, Math.round(v.ways));
-    const perSet = v.stride * 1 / LINE;
-    const conflict = v.stride >= LINE && (v.stride / LINE) >= 1 &&
-      Math.floor(v.kb * 1024 / LINE / ways) > 0 &&
-      ((v.stride / LINE) % Math.max(1, Math.floor(v.kb * 1024 / LINE / ways)) === 0);
-    if (conflict && ways < 16) {
-      return 'This stride maps every access onto the <b>same set</b>. A direct-mapped cache then ' +
-        'holds one line no matter how large it is \u2014 which is why the curve is flat, and why ' +
-        'associativity, not capacity, is the fix.';
+    const sets = Math.max(1, Math.floor(v.kb * 1024 / LINE / ways));
+    const touched = Math.ceil(WORKING_SET / Math.max(v.stride, 1));
+    const distinctLines = Math.min(touched, Math.ceil(WORKING_SET / LINE));
+    const fits = distinctLines * LINE <= v.kb * 1024;
+    /* a stride that is a multiple of the way size hits one set over and over */
+    const setStride = Math.round(v.stride / LINE) || 0;
+    const conflict = setStride > 0 && sets > 1 && setStride % sets === 0;
+
+    if (conflict) {
+      return 'This stride lands every access on the <b>same set</b>, so only ' + ways +
+        ' line' + (ways === 1 ? '' : 's') + ' of the cache is reachable no matter how big it gets. ' +
+        'That is why the curve is flat here, and why associativity rather than capacity is the fix.';
     }
-    return 'Capacity misses fall as the working set starts to fit. Associativity only helps where ' +
-      'the curve is flat: a flat region means lines are evicting each other by address, not by ' +
-      'volume, and a wider set is the only thing that changes it.';
+    if (fits) {
+      return 'The ' + Math.round(distinctLines * LINE / 1024) + ' KB the walk touches now fits, so ' +
+        'what is left is the compulsory miss on first touch \u2014 the floor no cache can go below.';
+    }
+    return 'The walk touches about <b>' + Math.round(distinctLines * LINE / 1024) + ' KB</b> and the ' +
+      'cache holds ' + v.kb + ' KB, so lines are evicted before they are reused. This part of the ' +
+      'curve is capacity, and only a bigger cache moves it.';
   },
 });

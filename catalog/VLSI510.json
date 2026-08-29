@@ -560,7 +560,7 @@
     "notice": [
      "Take mispredicts from 0 to 1 to 2. Each one pushes every row below it two cycles to the right — that is the front end being emptied and refilled, and the flush is drawn as the same kind of gap a data stall makes.",
      "Now go from 2 to 4. Nothing happens. In a nine-instruction window this model only offers two branch slots, i3 and i6, so the third and fourth mispredictions have nowhere to land and the caption stays at CPI 1.89.",
-     "Set dependent pairs to 6 while leaving forwarding on: still CPI 1.89. Of the eight cycles that separates 17 from the nine instructions, four are the pipeline fill and four are the two flushes — everything above the hazard-free 1.44 is control. Those four cycles are the entire budget a branch predictor has to work with."
+     "Set dependent pairs to 6 while leaving forwarding on: still CPI 1.89. Seventeen cycles retire nine instructions, and the eight cycles of difference split evenly — four are the pipeline fill, four are the two flushes. Everything above the hazard-free 1.44 is control, and those four cycles are the entire budget a branch predictor has to work with."
     ]
    },
    "quiz": null,

@@ -76,6 +76,10 @@ const PART_KINDS = {
   V: { name: 'Voltage source', unit: 'V', def: 5, pins: 2, sym: 'V' },
   I: { name: 'Current source', unit: 'A', def: 0.001, pins: 2, sym: 'I' },
   GND: { name: 'Ground', unit: '', def: 0, pins: 1, sym: '⏚' },
+  /* Node numbering falls out of however the schematic was drawn, so a check has no
+     way to name "the output" on its own. The learner marks it. Placing a probe is
+     also the habit you want: measure where you meant to, not where it was easy. */
+  OUT: { name: 'Probe', unit: '', def: 0, pins: 1, sym: '◦' },
 };
 
 /* engineering notation both ways, because 1e-6 is not how anyone says a microfarad */
@@ -108,7 +112,7 @@ const Netlist = (function () {
   /* Pins in grid coordinates. A part sits at (x, y) and is either horizontal or
      vertical; two-pin parts span two cells so a wire can meet them squarely. */
   function pinsOf(p) {
-    if (p.kind === 'GND') return [[p.x, p.y]];
+    if (p.kind === 'GND' || p.kind === 'OUT') return [[p.x, p.y]];
     return p.rot ? [[p.x, p.y - 1], [p.x, p.y + 1]] : [[p.x - 1, p.y], [p.x + 1, p.y]];
   }
 
@@ -170,14 +174,18 @@ const Netlist = (function () {
       if (nodeOf[r] === undefined) nodeOf[r] = (r === gndRoot) ? 0 : next++;
     });
 
+    const probes = model.parts
+      .filter(function (p) { return p.kind === 'OUT'; })
+      .map(function (p) { return nodeOf[find(key(pinsOf(p)[0]))]; });
+
     const parts = model.parts
-      .filter(function (p) { return p.kind !== 'GND'; })
+      .filter(function (p) { return p.kind !== 'GND' && p.kind !== 'OUT'; })
       .map(function (p) {
         const pins = plusFirst(p).map(function (pt) { return nodeOf[find(key(pt))]; });
         return { id: p.id, kind: p.kind, value: p.value, n1: pins[0], n2: pins[1], ac: p.ac };
       });
 
-    return { parts: parts, nodeCount: next, hasGround: gndRoot !== null,
+    return { parts: parts, probes: probes, nodeCount: next, hasGround: gndRoot !== null,
              nodeAt: function (pt) { const k = key(pt); return parent[k] === undefined ? null : nodeOf[find(k)]; } };
   }
 
@@ -407,7 +415,7 @@ function createCircuit(root, opts) {
       '<div class="ckt-bar">' +
         '<div class="ckt-tools">' +
           [['select', 'Select'], ['wire', 'Wire'], ['R', 'R'], ['C', 'C'], ['L', 'L'],
-           ['V', 'V'], ['I', 'I'], ['GND', 'GND']].map(function (t) {
+           ['V', 'V'], ['I', 'I'], ['GND', 'GND'], ['OUT', 'Probe']].map(function (t) {
             return '<button class="ckt-t" data-tool="' + t[0] + '" title="' + t[1] + '">' + t[1] + '</button>';
           }).join('') +
         '</div>' +
@@ -469,6 +477,19 @@ function createCircuit(root, opts) {
     ctx.fillStyle = colour;
     ctx.lineWidth = 1.8;
     ctx.lineCap = 'round';
+
+    if (p.kind === 'OUT') {
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y - 5); ctx.lineTo(x, y - 13);
+      ctx.stroke();
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('out', x, y - 18);
+      return;
+    }
 
     if (p.kind === 'GND') {
       ctx.beginPath();
@@ -620,7 +641,7 @@ function createCircuit(root, opts) {
   /* ---- panels ---- */
   function paintPart() {
     const p = model.parts.find(function (q) { return q.id === sel; });
-    if (!p || p.kind === 'GND') {
+    if (!p || p.kind === 'GND' || p.kind === 'OUT') {
       partPanel.innerHTML = '<h4>Component</h4><p class="ckt-hint">' +
         (tool === 'wire' ? 'Click a pin, then click where the wire should end.'
           : tool === 'select' ? 'Click a component to select it.'
@@ -800,7 +821,7 @@ function createCircuit(root, opts) {
 
   function doRotate() {
     const p = model.parts.find(function (q) { return q.id === sel; });
-    if (!p || p.kind === 'GND') return;
+    if (!p || p.kind === 'GND' || p.kind === 'OUT') return;
     p.rot = p.rot ? 0 : 1;
     changed();
     paintPart();
@@ -877,3 +898,107 @@ const CIRCUIT_EXAMPLE = {
     { a: [9, 7], b: [9, 9] },
   ],
 };
+
+/* ---------------------------------------------------------------- grading
+ *
+ * A circuit exercise is checked the way a code lab is: the learner's work is run,
+ * and each check either raises or does not. The check writes ordinary JavaScript
+ * against a small API, so "the corner is at 1 kHz" is expressed as the measurement
+ * it actually is rather than as a shape the schematic has to match. Two learners
+ * who build different but equally correct filters both pass.
+ */
+function circuitContext(model) {
+  const net = Netlist.build(model);
+  const cache = {};
+
+  function need(what) {
+    if (!net.hasGround) throw new Error('Add a ground before ' + what + ' can mean anything.');
+  }
+  function out() {
+    if (!net.probes.length) throw new Error('Place a probe on the node you are treating as the output.');
+    if (net.probes.length > 1) throw new Error('There is more than one probe; the checks read a single output.');
+    return net.probes[0];
+  }
+
+  return {
+    net: net,
+    /* how many of a kind the learner used */
+    count: function (kind) { return net.parts.filter(function (p) { return p.kind === kind; }).length; },
+    values: function (kind) { return net.parts.filter(function (p) { return p.kind === kind; }).map(function (p) { return p.value; }); },
+    outNode: out,
+    nodeCount: function () { return net.nodeCount; },
+
+    /* DC operating point; throws with the solver's own message on a bad circuit */
+    dc: function () {
+      need('a DC answer');
+      if (!cache.dc) {
+        const r = MNA.dc(net);
+        if (r.error) throw new Error(r.error);
+        cache.dc = r;
+      }
+      return cache.dc;
+    },
+    vout: function () { return this.dc().v[out()]; },
+
+    /* magnitude and phase of the probed node at one frequency */
+    gain: function (f) {
+      need('a frequency response');
+      const v = MNA.acAt(net, 2 * Math.PI * f);
+      if (!v) throw new Error('The circuit is under-determined at ' + fmtEng(f, 'Hz') + '.');
+      return Lin.cabs(v[out()]);
+    },
+    phase: function (f) {
+      need('a frequency response');
+      const v = MNA.acAt(net, 2 * Math.PI * f);
+      if (!v) throw new Error('The circuit is under-determined at ' + fmtEng(f, 'Hz') + '.');
+      return Math.atan2(v[out()][1], v[out()][0]) * 180 / Math.PI;
+    },
+    /* the -3 dB point, found by bisection on the measured response */
+    corner: function (lo, hi) {
+      need('a corner frequency');
+      const self = this;
+      const ref = self.gain(lo);
+      const target = ref / Math.SQRT2;
+      let a = lo, b = hi;
+      for (let i = 0; i < 60; i++) {
+        const mid = Math.sqrt(a * b);
+        if (self.gain(mid) > target) a = mid; else b = mid;
+      }
+      return Math.sqrt(a * b);
+    },
+    /* the probed node over time */
+    step: function (tstop) {
+      need('a transient');
+      const r = MNA.tran(net, tstop, tstop / 600);
+      if (r.error) throw new Error(r.error);
+      const n = out();
+      return { t: r.t, v: r.v.map(function (row) { return row[n]; }) };
+    },
+
+    assert: function (cond, msg) { if (!cond) throw new Error(msg || 'Assertion failed'); },
+    close: function (got, want, tolFrac, msg) {
+      const tol = Math.abs(want * (tolFrac === undefined ? 0.05 : tolFrac));
+      if (!(Math.abs(got - want) <= tol)) {
+        throw new Error((msg ? msg + ' — ' : '') + 'measured ' + Number(got).toPrecision(4) +
+          ', expected ' + Number(want).toPrecision(4));
+      }
+    },
+    fmt: fmtEng,
+  };
+}
+
+/* Run every check of a circuit exercise against one schematic. */
+function runCircuitChecks(model, checks) {
+  return (checks || []).map(function (c) {
+    let ctx;
+    try { ctx = circuitContext(model); }
+    catch (e) { return { name: c.name, pass: false, message: String(e && e.message || e) }; }
+    try {
+      const fn = new Function('c', '"use strict";\n' + c.code);
+      fn(ctx);
+      return { name: c.name, pass: true };
+    } catch (e) {
+      return { name: c.name, pass: false, message: String((e && e.message) || e) };
+    }
+  });
+}

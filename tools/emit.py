@@ -92,6 +92,42 @@ def norm_lab(lab, ctx):
     return out
 
 
+def norm_build(b, ctx):
+    """A circuit the learner draws, graded by measuring it.
+
+    Checks are JavaScript against the circuit API, so they express what the circuit
+    must *do*. A check that compares the drawing to a reference would fail every
+    correct alternative, which is the opposite of the point."""
+    if not b:
+        return None
+    for key in ("title", "brief"):
+        if not b.get(key):
+            raise ValueError(f"{ctx}/build: missing {key}")
+    checks = b.get("checks") or []
+    if len(checks) < 3:
+        raise ValueError(f"{ctx}/build: {len(checks)} checks (need at least 3)")
+    # A reference schematic is required for the same reason a lab needs a reference
+    # solution: without one there is no way to prove the checks can be passed at all.
+    sol = b.get("solution")
+    if not sol or not sol.get("parts"):
+        raise ValueError(f"{ctx}/build: no `solution` schematic — the gate cannot "
+                         "prove the checks are satisfiable without one")
+    out = []
+    for i, c in enumerate(checks, 1):
+        if not c.get("name") or not c.get("code"):
+            raise ValueError(f"{ctx}/build/check{i}: needs a name and code")
+        out.append({"name": c["name"], "code": clean_md(c["code"])})
+    return {
+        "title": b["title"],
+        "minutes": int(b.get("minutes", 20)),
+        "brief": clean_md(b["brief"]),
+        "start": b.get("start") or {"parts": [], "wires": []},
+        "solution": sol,
+        "checks": out,
+        "hints": [clean_md(h) for h in b.get("hints", [])],
+    }
+
+
 def norm_quiz(q, ctx):
     """Short questions with an explanation on every option.
 
@@ -217,6 +253,7 @@ def normalise(course):
             "concepts": [clean_md(c) for c in m["concepts"]],
             "sandbox": norm_sandbox(m.get("sandbox"), ctx),
             "quiz": norm_quiz(m.get("quiz"), ctx),
+            "build": norm_build(m.get("build"), ctx),
             "derive": norm_derive(m.get("derive"), ctx),
             "lab": norm_lab(m.get("lab"), ctx),
         })

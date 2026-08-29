@@ -1,7 +1,7 @@
 /* ============ Codewright app: state, routing, views ============ */
 
 /* ---------- app state ---------- */
-const XP = { read: 10, sandbox: 15, quiz: 25, derive: 35, code: 40, project: 120 };
+const XP = { read: 10, sandbox: 15, quiz: 25, derive: 35, build: 35, code: 40, project: 120 };
 const LESSON_INDEX = {};
 const TRACK_LESSONS = {};
 const TRACK_OF = {};
@@ -106,6 +106,23 @@ function capstoneMd(c) {
         LESSON_INDEX[qzl.id] = { lesson: qzl, track: c, module: modRef, mi: mi };
         flat.push(qzl);
         m.quizLessonId = qzl.id;
+      }
+
+      if (m.build) {
+        const bl = {
+          id: c.id + '-' + mnum + '-BD',
+          type: 'build',
+          title: m.build.title,
+          min: m.build.minutes || 20,
+          mdText: m.build.brief,
+          start: m.build.start || { parts: [], wires: [] },
+          checks: m.build.checks || [],
+          hints: m.build.hints || [],
+          trackId: c.id, courseId: c.id, num: mnum + '\u00b7c',
+        };
+        LESSON_INDEX[bl.id] = { lesson: bl, track: c, module: modRef, mi: mi };
+        flat.push(bl);
+        m.buildLessonId = bl.id;
       }
 
       if (m.derive) {
@@ -218,7 +235,7 @@ function degreeTotals(programId) {
            pct: units ? Math.round(done / units * 100) : 0 };
 }
 
-let P = { completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null, activity: {}, name: '', railHidden: false };
+let P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null, activity: {}, name: '', railHidden: false };
 let route = { view: 'home' };
 const openTracks = {};
 /* keyed "&lt;programId&gt;:&lt;band&gt;" — two programmes both have a band 1, and a bare
@@ -358,7 +375,7 @@ function firstIncomplete(tid) {
   return null;
 }
 function typeChip(type) {
-  const label = { read: 'Read', sandbox: 'Sandbox', quiz: 'Quiz', derive: 'Derive', code: 'Code', project: 'Project' }[type] || type;
+  const label = { read: 'Read', sandbox: 'Sandbox', quiz: 'Quiz', derive: 'Derive', build: 'Build', code: 'Code', project: 'Project' }[type] || type;
   return '<span class="chip ' + type + '">' + label + '</span>';
 }
 
@@ -683,6 +700,7 @@ function go(r) {
     else if (l.type === 'quiz') renderQuiz(main, l);
     else if (l.type === 'sandbox') renderSandbox(main, l);
     else if (l.type === 'derive') renderDerive(main, l);
+    else if (l.type === 'build') renderBuild(main, l);
     else renderCode(main, l);
   }
 
@@ -939,7 +957,7 @@ function renderHome(main) {
 }
 
 function typeChipText(type) {
-  return { read: 'Reading', sandbox: 'Sandbox', quiz: 'Quiz', derive: 'Derivation', code: 'Lab', project: 'Capstone' }[type] || type;
+  return { read: 'Reading', sandbox: 'Sandbox', quiz: 'Quiz', derive: 'Derivation', build: 'Circuit', code: 'Lab', project: 'Capstone' }[type] || type;
 }
 
 /* ---------- progress ---------- */
@@ -1067,7 +1085,7 @@ function adopt(progress) {
   if (!progress || typeof progress !== 'object') return;
   adopting = true;
   try {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null,
                         activity: {}, name: '', railHidden: false }, progress);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
     recomputeXp();
@@ -1167,7 +1185,7 @@ function importProgress(file) {
       toast('That does not look like a Codex Learn progress file');
       return;
     }
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null,
                         activity: {}, name: '', railHidden: false }, inc);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
     applyTheme();
@@ -1181,7 +1199,7 @@ function importProgress(file) {
   fr.readAsText(file);
 }
 function resetProgress() {
-  P = { completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null,
+  P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null,
         activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme };
   updateXp();
   renderRail();
@@ -1927,6 +1945,98 @@ function currentFiles(l) {
   const saved = P.code[l.id] && P.code[l.id].files;
   if (saved) for (const f of base) if (!f.ro && typeof saved[f.name] === 'string') f.content = saved[f.name];
   return base;
+}
+
+/* ---------- lesson: build a circuit ----------
+   The schematic is the answer. Checks measure what the learner built rather than
+   comparing it to a reference drawing, so two different but equally correct filters
+   both pass — which is the whole reason to grade behaviour instead of shape. */
+function renderBuild(main, l) {
+  const saved = (P.build && P.build[l.id]) || null;
+  const start = saved || l.start || { parts: [], wires: [] };
+  let results = null;
+
+  function checksHtml() {
+    if (!results) {
+      return '<div class="checks"><div class="ck-head">' + l.checks.length +
+        ' to pass</div>' + l.checks.map(function (c) {
+          return '<div class="check"><span class="gmark"></span><span class="name">' +
+            esc(c.name) + '</span></div>';
+        }).join('') + '</div>';
+    }
+    const passed = results.filter(function (r) { return r.pass; }).length;
+    return '<div class="checks"><div class="ck-head">' + passed + ' / ' + results.length +
+      ' passing</div>' + results.map(function (r) {
+        return '<div class="check ' + (r.pass ? 'pass' : 'fail') + '">' +
+          '<span class="gmark ' + (r.pass ? 'done' : 'fail') + '"></span>' +
+          '<span class="name">' + esc(r.name) + '</span>' +
+          (r.pass ? '' : '<span class="msg">' + esc(r.message || '') + '</span>') +
+        '</div>';
+      }).join('') + '</div>';
+  }
+
+  function paint() {
+    main.innerHTML = '<div class="page reading">' +
+      lessonHeader(l) +
+      '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
+      '<div id="build-mount"></div>' +
+      '<div class="build-acts">' +
+        '<button class="btn success" id="build-run">Check the circuit</button>' +
+        '<button class="btn dark" id="build-reset">Start over</button>' +
+      '</div>' +
+      '<div id="build-checks">' + checksHtml() + '</div>' +
+      (l.hints && l.hints.length
+        ? '<div class="helpers"><button class="btn dark" id="hint-btn">Show a hint</button>' +
+          '<div id="hint-body" hidden>' + renderMd(l.hints.map(function (h, i) {
+            return (i + 1) + '. ' + h;
+          }).join('\n')) + '</div></div>'
+        : '') +
+      footNav(l, P.completed[l.id] ? '<span class="done-note">\u2713 Built</span>' : '') +
+    '</div>';
+
+    wireCrumb(main, l);
+    wireFootNav(main, l);
+
+    const handle = createCircuit($('#build-mount', main), {
+      model: model,
+      onChange: function (m2) {
+        model = m2;
+        P.build = P.build || {};
+        P.build[l.id] = m2;
+        saveSoon();
+      },
+    });
+    teardown = function () { handle.dispose(); };
+
+    const hb = $('#hint-btn', main);
+    if (hb) hb.addEventListener('click', function () {
+      const body = $('#hint-body', main);
+      body.hidden = !body.hidden;
+      hb.textContent = body.hidden ? 'Show a hint' : 'Hide the hint';
+    });
+
+    $('#build-reset', main).addEventListener('click', function () {
+      model = JSON.parse(JSON.stringify(l.start || { parts: [], wires: [] }));
+      P.build = P.build || {};
+      P.build[l.id] = model;
+      results = null;
+      saveSoon();
+      paint();
+    });
+
+    $('#build-run', main).addEventListener('click', function () {
+      results = runCircuitChecks(model, l.checks || []);
+      $('#build-checks', main).innerHTML = checksHtml();
+      const passed = results.filter(function (r) { return r.pass; }).length;
+      if (passed === results.length && results.length) {
+        if (completeLesson(l.id)) toast('Circuit built \u00b7 +' + XP.build + ' XP', true);
+        renderRail();
+      }
+    });
+  }
+
+  let model = JSON.parse(JSON.stringify(start));
+  paint();
 }
 
 /* ---------- lesson: sandbox ----------
@@ -2889,7 +2999,7 @@ async function boot() {
   BUNDLE = parseBundle(bundleEl ? bundleEl.textContent : '');
   const saved = await Store.load();
   if (saved && typeof saved === 'object') {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, xp: 0, last: null, playground: null,
                        activity: {}, name: '', railHidden: false }, saved);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
   }
