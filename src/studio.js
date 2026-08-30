@@ -685,11 +685,13 @@ const Sandbox = (function () {
   function palette() {
     const cs = getComputedStyle(document.documentElement);
     const v = function (n, fallback) { return (cs.getPropertyValue(n) || '').trim() || fallback; };
+    /* These colours land on --editor, which is dark in both themes, so they come from
+       the on-editor tokens rather than the page's ink. */
     return {
-      ink: v('--ink', '#EDEFF3'),
-      dim: v('--ink-4', '#565C68'),
-      faint: v('--ink-5', '#3A3F49'),
-      line: v('--line-2', 'rgba(255,255,255,.1)'),
+      ink: v('--on-editor', '#EDEFF3'),
+      dim: v('--on-editor-3', '#565C68'),
+      faint: v('--on-editor-4', '#3A3F49'),
+      line: v('--on-editor-line', 'rgba(255,255,255,.1)'),
       accent: v('--lime', '#C7F751'),
       blue: v('--blue', '#6E9BFF'),
       purple: v('--purple', '#A78BFA'),

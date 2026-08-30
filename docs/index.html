@@ -21,6 +21,16 @@
   --nav:rgba(13,15,18,0.72);
   --head:rgba(10,11,14,0.60);
   --editor:#0A0B0E;
+  /* Ink for anything drawn on the editor surface. That surface is deliberately dark
+     in BOTH themes (see the light block below), so its ink cannot come from --ink,
+     which flips to near-black. Every canvas in the app — schematics, sandboxes, the
+     tune plot — was drawing black on black the moment the light theme was selected.
+     Defined only here, so both themes get the same values. */
+  --on-editor:#EDEFF3;
+  --on-editor-2:#9BA3B0;
+  --on-editor-3:#565C68;
+  --on-editor-4:#3A3F49;
+  --on-editor-line:rgba(255,255,255,.10);
   --sunk:rgba(8,9,11,0.60);
 
   --ink:#EDEFF3;
@@ -734,6 +744,12 @@ math[display=block]{display:block;margin:14px 0;overflow-x:auto;overflow-y:hidde
   grid-template-columns:236px minmax(0,1fr) 380px;
   grid-template-rows:minmax(0,1fr) auto;
   grid-template-areas:"majors main detail" "foot foot foot";
+  /* Any area a media query adds beyond the two rows declared above lands in an
+     implicit track, and an implicit track defaults to `auto` — which sizes to its
+     content and starves the single minmax(0,1fr) row. That row is .pl-main, the
+     year tabs and the subject grid: the whole point of the screen. It collapsed to
+     0px below 820px. Same trap as .frame further down; make the default harmless. */
+  grid-auto-rows:minmax(0,auto);
 }
 .pl-majors{grid-area:majors;border-right:1px solid var(--line);padding:22px 16px;overflow-y:auto;min-height:0}
 .pl-main{grid-area:main;padding:26px 30px 30px;overflow-y:auto;min-height:0}
@@ -865,13 +881,22 @@ math[display=block]{display:block;margin:14px 0;overflow-x:auto;overflow-y:hidde
 .pf-go:hover{border-color:var(--line-3);color:var(--ink)}
 .pl-empty{color:var(--ink-4);font-size:13px}
 
+/* Once the columns stack there is no longer one pane per column to scroll, so the
+   whole planner scrolls as a page instead. Three independent scrollers stacked on a
+   narrow screen is the wrong model even when the tracks are sized correctly. */
 @media (max-width:1240px){
   .planner{grid-template-columns:200px minmax(0,1fr);
-    grid-template-areas:"majors main" "detail detail" "foot foot"}
+    grid-template-rows:auto auto auto;
+    grid-template-areas:"majors main" "detail detail" "foot foot";
+    height:auto}
+  .main.bleed{overflow:auto}
+  .pl-majors,.pl-main,.pl-detail{overflow:visible;min-height:auto}
   .pl-detail{border-left:0;border-top:1px solid var(--line)}
+  .pl-foot{position:sticky;bottom:0;z-index:3}
 }
 @media (max-width:820px){
   .planner{grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto auto auto auto;
     grid-template-areas:"main" "majors" "detail" "foot"}
   .pl-majors{border-right:0;border-top:1px solid var(--line)}
   .pl-foot{flex-wrap:wrap;gap:12px}
@@ -9940,11 +9965,13 @@ const Sandbox = (function () {
   function palette() {
     const cs = getComputedStyle(document.documentElement);
     const v = function (n, fallback) { return (cs.getPropertyValue(n) || '').trim() || fallback; };
+    /* These colours land on --editor, which is dark in both themes, so they come from
+       the on-editor tokens rather than the page's ink. */
     return {
-      ink: v('--ink', '#EDEFF3'),
-      dim: v('--ink-4', '#565C68'),
-      faint: v('--ink-5', '#3A3F49'),
-      line: v('--line-2', 'rgba(255,255,255,.1)'),
+      ink: v('--on-editor', '#EDEFF3'),
+      dim: v('--on-editor-3', '#565C68'),
+      faint: v('--on-editor-4', '#3A3F49'),
+      line: v('--on-editor-line', 'rgba(255,255,255,.1)'),
       accent: v('--lime', '#C7F751'),
       blue: v('--blue', '#6E9BFF'),
       purple: v('--purple', '#A78BFA'),
@@ -11953,6 +11980,26 @@ function createCircuit(root, opts) {
     const pal = P();
     ctx.clearRect(0, 0, w, h);
 
+    /* A diagram is a question's illustration, so cropping it is not a cosmetic
+       failure — the probe the question asks about was falling off the right-hand edge
+       at ordinary laptop widths. The editor can scroll and pan; a diagram cannot, so
+       it scales itself to fit and centres what is left. */
+    if (ro_ && model.parts.length) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const see = function (px, py) {
+        if (px < x0) x0 = px; if (px > x1) x1 = px;
+        if (py < y0) y0 = py; if (py > y1) y1 = py;
+      };
+      model.parts.forEach(function (p2) { Netlist.pinsOf(p2).forEach(function (pt) { see(pt[0], pt[1]); }); see(p2.x, p2.y); });
+      model.wires.forEach(function (wr) { see(wr.a[0], wr.a[1]); see(wr.b[0], wr.b[1]); });
+      const pad = 1.2;
+      const needW = (x1 - x0 + pad * 2) * GRID, needH = (y1 - y0 + pad * 2) * GRID;
+      const s2 = Math.min(w / needW, h / needH, 1.6);
+      ctx.setTransform(dpr * s2, 0, 0, dpr * s2,
+        dpr * ((w - needW * s2) / 2 - (x0 - pad - originX) * GRID * s2 - GRID * s2),
+        dpr * ((h - needH * s2) / 2 - (y0 - pad - originY) * GRID * s2 - GRID * s2));
+    }
+
     /* grid dots */
     ctx.fillStyle = pal.faint;
     for (let X = GRID; X < w; X += GRID) {
@@ -12151,6 +12198,29 @@ function createCircuit(root, opts) {
     paint();
   }
 
+  /* A diagram is a picture. Everything from here down is editing, analysis and
+     chrome — pointer handlers that place parts, a document-level keydown listener,
+     and lookups for a toolbar this DOM does not have. Returning above all of it is
+     what actually makes read-only read-only: the previous version returned below the
+     handlers, so clicking a question's schematic inserted a resistor into it. */
+  if (ro_) {
+    let dro = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      dro = new ResizeObserver(function () { paint(); });
+      dro.observe(cv.parentElement);
+    }
+    paint();
+    return {
+      getModel: function () { return JSON.parse(JSON.stringify(model)); },
+      solve: function () { return null; },
+      dispose: function () {
+        disposed = true;
+        if (dro) dro.disconnect();
+        root.innerHTML = '';
+      },
+    };
+  }
+
   /* ---- interaction ---- */
   cv.addEventListener('pointermove', function (e) {
     const r = cv.getBoundingClientRect();
@@ -12222,24 +12292,6 @@ function createCircuit(root, opts) {
   /* A diagram has no tools, no analysis panel and nothing to click, so there is
      nothing below this line to wire up. Returning early is what makes the read-only
      DOM safe to shrink: every lookup after this point assumes the full chrome. */
-  if (ro_) {
-    let dro = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      dro = new ResizeObserver(function () { paint(); });
-      dro.observe(cv.parentElement);
-    }
-    paint();
-    return {
-      getModel: function () { return JSON.parse(JSON.stringify(model)); },
-      solve: function () { return null; },
-      dispose: function () {
-        disposed = true;
-        if (dro) dro.disconnect();
-        root.innerHTML = '';
-      },
-    };
-  }
-
   root.querySelectorAll('[data-tool]').forEach(function (b) {
     b.addEventListener('click', function () {
       tool = b.dataset.tool;
@@ -12975,8 +13027,11 @@ function effectiveTheme() {
 }
 function applyTheme() {
   const t = effectiveTheme();
-  if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-  else document.documentElement.removeAttribute('data-theme');
+  /* :root carries the DARK palette and [data-theme=light] overrides it, so removing
+     the attribute does not select light — it selects the default, which is dark.
+     Light mode was unreachable: the button toggled, the glyph changed, the colours
+     did not. Name the theme in both directions. */
+  document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
   const b = $('#theme-btn');
   if (b) {
     b.textContent = t === 'dark' ? '☀' : '☾';
@@ -13099,7 +13154,11 @@ function railCrowdedOut() {
 function syncRailToggle() {
   const b = $('#rail-btn');
   if (!b) return;
-  const off = route.view === 'play' || railCrowdedOut();
+  /* The planner carries its own majors column, so the rail is hidden there by
+     renderRoute. The toggle has to agree, or it sits lit and labelled "Hide the
+     curriculum panel" over a rail that is already gone — and clicking it silently
+     persists railHidden onto every other screen. */
+  const off = route.view === 'play' || route.view === 'degree' || railCrowdedOut();
   b.hidden = off;
   const shown = !P.railHidden;
   b.classList.toggle('on', shown);
@@ -13108,7 +13167,8 @@ function syncRailToggle() {
 }
 function toggleRailPanel() {
   P.railHidden = !P.railHidden;
-  $('#body').classList.toggle('no-rail', P.railHidden || route.view === 'play');
+  $('#body').classList.toggle('no-rail',
+    P.railHidden || route.view === 'play' || route.view === 'degree');
   syncRailToggle();
   saveSoon();
 }
@@ -14237,7 +14297,11 @@ function plannerFor(programId) {
    but a learner wants a route through it, so this walks the graph and returns one
    ordered path: the things to do, in the order to do them. */
 function prereqChain(c, limit) {
+  /* The target is marked seen before the walk starts. Without it a cycle — or a
+     course that is transitively its own prerequisite through a bad spine — emits the
+     target twice, and the panel shows two "Current target" cards. */
   const seen = {};
+  seen[c.id] = true;
   const out = [];
   (function walk(course, depth) {
     if (!course || depth > 6) return;
@@ -14322,7 +14386,8 @@ function renderDegree(main, programId) {
   /* ---- left: which degree ---- */
   const majors = PROGRAMS.map(function (pr) {
     const t = programMissing(pr.id) ? null : degreeTotals(pr.id);
-    return '<button class="mj' + (pr.id === prog.id ? ' on' : '') + '" data-major="' + esc(pr.id) + '">' +
+    return '<button class="mj' + (pr.id === prog.id ? ' on' : '') + '" data-major="' + esc(pr.id) +
+      '" aria-pressed="' + (pr.id === prog.id ? 'true' : 'false') + '">' +
       '<span class="mj-i">' + esc(pr.icon || (pr.bands && pr.bands[0] ? pr.bands[0].icon : '◆')) + '</span>' +
       '<span class="mj-n">' + esc(pr.short || pr.name) + '</span>' +
       '<span class="mj-c">' + (t ? t.credits : '\u2014') + ' cr</span>' +
@@ -14331,7 +14396,9 @@ function renderDegree(main, programId) {
 
   /* ---- middle: the year, and its subjects ---- */
   const years = bands.map(function (b) {
-    return '<button class="yr' + (b.n === st.band ? ' on' : '') + '" data-band="' + b.n + '">' + b.n + '</button>';
+    return '<button class="yr' + (b.n === st.band ? ' on' : '') + '" data-band="' + b.n +
+      '" aria-pressed="' + (b.n === st.band ? 'true' : 'false') +
+      '" aria-label="' + esc(bandLabel(prog, b.n)) + '">' + b.n + '</button>';
   }).join('');
 
   const cards = list.map(function (c) {
@@ -14340,7 +14407,8 @@ function renderDegree(main, programId) {
     const state = done === 0 ? 'Not started' : (done === units ? 'Complete' : 'In progress');
     const cls = done === 0 ? '' : (done === units ? 'done' : 'live');
     const pre = prereqState(c);
-    return '<button class="subj' + (c.id === st.sel ? ' on' : '') + '" data-subj="' + esc(c.id) + '">' +
+    return '<button class="subj' + (c.id === st.sel ? ' on' : '') + '" data-subj="' + esc(c.id) +
+      '" aria-pressed="' + (c.id === st.sel ? 'true' : 'false') + '">' +
       '<div class="sj-top">' +
         '<span class="sj-icon">' + esc(c.icon || '◆') + '</span>' +
         '<div class="sj-id"><b>' + esc(c.title.split(/\s+\u2014\s+/)[0]) + '</b><span>' + esc(c.id) + '</span></div>' +
@@ -14361,7 +14429,10 @@ function renderDegree(main, programId) {
   if (sel) {
     const units = courseUnits(sel);
     const labs = sel.modules.filter(function (m) { return m.lab; }).length;
-    const chain = prereqChain(sel, 3);
+    /* Two prerequisites plus the target: four cards overflow the panel and it is
+       the target that scrolls out of sight, which is the one card the rest of the
+       panel is about. The chain already spends its slots on unfinished work. */
+    const chain = prereqChain(sel, 2);
     const firstOpen = chain.find(function (p) { return p !== sel && !courseComplete(p); });
     const links = chain.map(function (p, i) {
       const isTarget = p === sel;
@@ -14403,6 +14474,14 @@ function renderDegree(main, programId) {
 
   const bandMeta = bands.find(function (b) { return b.n === st.band; }) || {};
 
+  /* Every interaction here re-renders the whole pane, so the column the learner is
+     reading has to be put back where it was — otherwise choosing a subject halfway
+     down a year scrolls the grid to the top and loses the card that was just clicked. */
+  const keepScroll = (function () {
+    const el = $('.pl-main', main);
+    return el ? el.scrollTop : 0;
+  })();
+
   main.innerHTML = '<div class="planner">' +
     '<aside class="pl-majors">' +
       '<div class="pl-lbl">Select major</div>' +
@@ -14423,8 +14502,11 @@ function renderDegree(main, programId) {
       '<h2 class="pl-h2">' + esc(bandLabel(prog, st.band)) + ' subjects' +
         (bandMeta.title ? ' <span>\u2014 ' + esc(bandMeta.title) + '</span>' : '') + '</h2>' +
       '<div class="subj-grid">' + (cards || '<p class="pl-empty">Nothing authored in this year yet.</p>') + '</div>' +
-      '<button class="pl-more" data-full="1">View every subject in this ' +
-        esc((prog.bandNoun || 'Year').toLowerCase()) + ' <span>\u203a</span></button>' +
+      /* A "view every subject in this year" link used to sit here. Every subject in
+         the year is already on screen above it, and it navigated to the programme
+         picker, which lists no subjects at all \u2014 a promise of more that led somewhere
+         with less. */
+      '' +
     '</div>' +
 
     '<aside class="pl-detail">' + detail + '</aside>' +
@@ -14438,6 +14520,9 @@ function renderDegree(main, programId) {
       '<button class="pf-go" data-go="progress">View full progress <span>\u203a</span></button>' +
     '</div>' +
   '</div>';
+
+  const pane = $('.pl-main', main);
+  if (pane && keepScroll) pane.scrollTop = keepScroll;
 
   $all('[data-major]', main).forEach(function (b) {
     b.addEventListener('click', function () { go({ view: 'degree', program: b.dataset.major }); });
@@ -14462,8 +14547,6 @@ function renderDegree(main, programId) {
   if (prevBtn) prevBtn.addEventListener('click', function () {
     go({ view: 'course', id: prevBtn.dataset.preview });
   });
-  const more = $('[data-full]', main);
-  if (more) more.addEventListener('click', function () { go({ view: 'programs' }); });
   $all('[data-go]', main).forEach(function (b) {
     b.addEventListener('click', function () { go({ view: b.dataset.go }); });
   });
@@ -14883,11 +14966,22 @@ function renderNumeric(main, l) {
   }
 
   function check() {
-    const raw = String(value).trim().replace(/,/g, '');
+    /* "3,44" is a decimal in most of the world and a thousands separator in the
+       rest, and guessing wrong is worse than asking: stripping it silently turned a
+       correct 3,44 into 344 and then explained, confidently, that it was out by a
+       factor of a hundred. */
+    const raw = String(value).trim();
+    if (/,/.test(raw)) {
+      verdict = { ok: false, head: 'Use a full stop for the decimal point.',
+                  body: 'A comma means different things in different places, so this box ' +
+                        'will not guess. Write ' + String(l.answer) + '-style: digits, a full stop, digits.' };
+      paint();
+      return;
+    }
     const x = Number(raw);
     if (!raw || !isFinite(x)) {
       verdict = { ok: false, head: 'That is not a number.',
-                  body: 'Type a plain decimal \u2014 no units, no commas.' };
+                  body: 'Type a plain decimal \u2014 no units, no thousands separators.' };
       paint();
       return;
     }
@@ -14912,9 +15006,10 @@ function renderNumeric(main, l) {
     else if (near(1000000) || near(0.000001)) { head = 'Out by a million.'; body = 'Two prefixes have gone the same way. Write every quantity in base units once, then convert at the end.'; }
     else if (Math.abs(r + 1) < 0.04) { head = 'The sign is inverted.'; body = 'The magnitude is right. Check which node you measured against, or which way the current was defined.'; }
     else if (near(2) || near(0.5)) { head = 'Out by a factor of two.'; body = 'A halving or a doubling has gone the wrong way \u2014 a peak against an amplitude, or one arm of a pair counted once instead of twice.'; }
-    else if (Math.abs(x - Math.sqrt(Math.abs(l.answer))) < 1e-9) { head = 'A square root too many.'; }
     verdict = { ok: false, head: head, body: body };
     P.numeric = P.numeric || {};
+    /* Keep `ok` if it was ever earned. Overwriting it with a later wrong attempt made
+       the unit reopen pre-filled with a wrong answer under a "Solved" badge. */
     P.numeric[l.id] = Object.assign({}, P.numeric[l.id], { v: raw });
     saveSoon();
     paint();
@@ -14932,13 +15027,22 @@ function renderMatch(main, l) {
   const saved = (P.match && P.match[l.id]) || {};
   const placed = {};
   (l.items || []).forEach(function (_, i) {
-    placed[i] = saved[i] === undefined ? null : saved[i];
+    /* A saved index can outlive the labels it referred to if the unit is re-authored;
+       an out-of-range one used to render the string "undefined" and still count as
+       placed. Treat anything that does not name a current label as empty. */
+    const v = saved[i];
+    placed[i] = (typeof v === 'number' && v >= 0 && v < (l.labels || []).length) ? v : null;
   });
   let armed = null;
   let checked = false;
 
   function used(li) {
     return Object.keys(placed).some(function (k) { return placed[k] === li; });
+  }
+  function filled_() {
+    const o = {};
+    Object.keys(placed).forEach(function (k) { if (placed[k] !== null) o[k] = placed[k]; });
+    return o;
   }
 
   function paint() {
@@ -14951,11 +15055,13 @@ function renderMatch(main, l) {
       lessonHeader(l) +
       '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
       '<h3 class="q-prompt">' + mdInline(l.prompt || '') + '</h3>' +
-      '<p class="q-note">Pick a label, then tap the symbol it belongs to. Tap a placed label to take it back.</p>' +
+      '<p class="q-note">Tap a placed label to take it back. Every label is used exactly once.</p>' +
       '<div class="mt-labels">' +
         (l.labels || []).map(function (lb, li) {
-          return '<button class="mt-lb' + (armed === li ? ' armed' : '') + (used(li) ? ' spent' : '') +
-            '" data-lb="' + li + '"' + (used(li) ? ' disabled' : '') + '>' + esc(lb) + '</button>';
+          return '<button type="button" class="mt-lb' + (armed === li ? ' armed' : '') +
+            (used(li) ? ' spent' : '') + '" data-lb="' + li + '"' +
+            ' aria-pressed="' + (armed === li ? 'true' : 'false') + '"' +
+            (used(li) ? ' disabled' : '') + '>' + esc(lb) + '</button>';
         }).join('') +
       '</div>' +
       '<div class="mt-grid">' +
@@ -14963,10 +15069,12 @@ function renderMatch(main, l) {
           const v = placed[i];
           const state = !checked ? (v === null ? '' : ' filled')
             : (v === it.a ? ' right' : ' wrong');
-          return '<div class="mt-card' + state + '" data-item="' + i + '">' +
+          return '<button type="button" class="mt-card' + state + '" data-item="' + i + '"' +
+            ' aria-label="Symbol ' + (i + 1) + ' of ' + items.length +
+            (v === null ? ', empty' : ', labelled ' + esc(l.labels[v])) + '">' +
             '<canvas class="mt-cv" data-sym="' + esc(it.sym) + '"></canvas>' +
             '<div class="mt-slot">' + (v === null ? '\u2014' : esc(l.labels[v])) + '</div>' +
-          '</div>';
+          '</button>';
         }).join('') +
       '</div>' +
       '<div class="q-acts">' +
@@ -14994,14 +15102,19 @@ function renderMatch(main, l) {
     wireCrumb(main, l);
     wireFootNav(main, l);
 
-    $all('.mt-cv', main).forEach(function (cv) {
-      const paintSym = function () {
-        const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#EDEFF3';
-        Symbols.paint(cv, cv.dataset.sym, ink);
-      };
-      paintSym();
-      requestAnimationFrame(paintSym);      /* once more after layout settles */
-    });
+    const cvs = $all('.mt-cv', main);
+    const paintAll = function () {
+      const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#EDEFF3';
+      cvs.forEach(function (cv) { Symbols.paint(cv, cv.dataset.sym, ink); });
+    };
+    paintAll();
+    requestAnimationFrame(paintAll);        /* once more after layout settles */
+    /* The grid is auto-fit, so the cards change width with the window and the canvas
+       backing store has to be resized with them — otherwise the symbols stay at the
+       first width and blur or clip. */
+    const mro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(paintAll) : null;
+    if (mro && cvs[0]) mro.observe(cvs[0]);
+    teardown = function () { if (mro) mro.disconnect(); };
 
     $all('[data-lb]', main).forEach(function (b) {
       b.addEventListener('click', function () {
@@ -15017,7 +15130,10 @@ function renderMatch(main, l) {
         else if (armed !== null) { placed[i] = armed; armed = null; }
         else return;
         P.match = P.match || {};
-        P.match[l.id] = Object.assign({}, placed);
+        /* Only the slots that actually hold a label are stored. Writing an explicit
+           null for every empty slot makes the two-device merge — which takes the
+           union of the two objects — overwrite a real placement with a null. */
+        P.match[l.id] = filled_();
         checked = false;
         saveSoon();
         paint();
@@ -15065,17 +15181,20 @@ function renderTune(main, l) {
 
   function readouts() { return spec.compute(v, consts); }
 
+  function holdsC(c, x) {
+    if (c.max !== undefined && c.min !== undefined) return x >= c.min && x <= c.max;
+    if (c.max !== undefined) return x <= c.max;
+    if (c.min !== undefined) return x >= c.min;
+    if (c.eq !== undefined) return Math.abs(x - c.eq) <= (c.tol === undefined ? 0.01 : c.tol);
+    return false;
+  }
+
   function tests() {
     const out = readouts();
     return (l.constraints || []).map(function (c) {
       const r = out[c.k];
       const x = r ? r.value : NaN;
-      let ok = false;
-      if (c.max !== undefined && c.min !== undefined) ok = x >= c.min && x <= c.max;
-      else if (c.max !== undefined) ok = x <= c.max;
-      else if (c.min !== undefined) ok = x >= c.min;
-      else if (c.eq !== undefined) ok = Math.abs(x - c.eq) <= (c.tol === undefined ? 0.01 : c.tol);
-      return { c: c, ok: ok, got: x, r: r };
+      return { c: c, ok: r ? holdsC(c, x) : false, got: x, r: r };
     });
   }
 
@@ -15117,8 +15236,17 @@ function renderTune(main, l) {
       box.innerHTML = Object.keys(out).map(function (k) {
         const r = out[k];
         const t = ts.find(function (x) { return x.c.k === k; });
+        /* A readout is graded on its exact value and displayed rounded, so the two
+           can disagree: 1.0004 mA shows as 1.000 and fails a 1.00 cap, which reads as
+           the app being broken. Add digits only when that actually happens — when the
+           number as displayed would satisfy the constraint the raw value fails. */
+        let dp = r.dp;
+        if (t && !t.ok) {
+          const shown = Number((+r.value).toFixed(r.dp));
+          if (holdsC(t.c, shown)) dp = r.dp + 3;
+        }
         return '<div class="tn-r' + (t ? (t.ok ? ' ok' : ' no') : '') + '">' +
-          '<span>' + esc(r.label) + '</span><b>' + (+r.value).toFixed(r.dp) +
+          '<span>' + esc(r.label) + '</span><b>' + (+r.value).toFixed(dp) +
           (r.unit ? ' ' + r.unit : '') + '</b></div>';
       }).join('');
     }
@@ -15194,9 +15322,15 @@ function renderTune(main, l) {
       const ts = tests();
       const pass = ts.length && ts.every(function (t) { return t.ok; });
       if (pass) {
-        if (completeLesson(l.id)) toast('Constraints met \u00b7 +' + XP.tune + ' XP', true);
+        const first = completeLesson(l.id);
         renderRail();
-        toast('All constraints hold at once.', true);
+        /* One toast, not two: the second used to replace the first immediately, so
+           the XP award was never actually seen. And repaint, or the footer keeps
+           saying the unit is unfinished after it has just been finished. */
+        toast(first ? 'All constraints hold \u00b7 +' + XP.tune + ' XP'
+                    : 'All constraints hold at once.', true);
+        paint();
+        return;
       } else {
         const bad = ts.filter(function (t) { return !t.ok; });
         toast(bad.length + ' constraint' + (bad.length > 1 ? 's' : '') + ' still unmet: ' +
@@ -15215,6 +15349,10 @@ function renderTune(main, l) {
     });
 
     refresh();
+    /* paint() is re-entrant — Reset and Check both call it — so the previous
+       observer has to go before a new one is made, or every press leaves one behind
+       redrawing a canvas that is no longer on the page. */
+    if (teardown) { try { teardown(); } catch (e) {} }
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(drawPlot) : null;
     if (ro && plotCv) ro.observe(plotCv);
     teardown = function () { if (ro) ro.disconnect(); };

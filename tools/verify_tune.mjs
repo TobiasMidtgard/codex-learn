@@ -44,13 +44,24 @@ function allHold(spec, consts, cons, v) {
   return cons.every((c) => out[c.k] && holds(c, out[c.k].value));
 }
 
-/* Sweep the reachable grid. Capped so a three-slider model stays tractable: the point
-   is to find whether a solution exists, and a coarse pass over a fine grid answers
-   that for every target anyone would set. */
+/* Sweep the reachable grid.
+ *
+ * The first version strided the axes to stay inside a budget, and that is exactly
+ * wrong for this question: a target with a narrow solution band lives in the notches
+ * a stride skips, so the gate reported UNREACHABLE for targets a learner can hit —
+ * the one verdict that must never be wrong, because it condemns working content.
+ *
+ * So: sweep EVERY notch for one and two sliders, which is the whole catalogue today
+ * (470 and 470x470 = 221k positions, well under a second). Only a three-slider model
+ * needs thinning, and there the stride is reported rather than hidden, so a FAIL from
+ * a thinned sweep can be read as "not found" instead of "does not exist". */
 function sweep(spec, consts, cons, budget) {
+  let thinned = false;
   const axes = spec.params.map((p) => {
     const n = Math.floor((p.max - p.min) / p.step) + 1;
-    const stride = Math.max(1, Math.ceil(n / Math.round(Math.pow(budget, 1 / spec.params.length))));
+    const per = Math.round(Math.pow(budget, 1 / spec.params.length));
+    const stride = spec.params.length <= 2 ? 1 : Math.max(1, Math.ceil(n / per));
+    if (stride > 1) thinned = true;
     const vals = [];
     for (let i = 0; i < n; i += stride) vals.push(+(p.min + i * p.step).toFixed(6));
     if (vals[vals.length - 1] !== p.max) vals.push(p.max);
@@ -68,7 +79,7 @@ function sweep(spec, consts, cons, budget) {
     for (const x of axes[i].vals) { v[axes[i].k] = x; walk(i + 1, v); if (found) return; }
   };
   walk(0, {});
-  return { found, tried };
+  return { found, tried, thinned };
 }
 
 const args = process.argv.slice(2);
@@ -109,13 +120,16 @@ for (const file of files) {
     });
     const startMet = allHold(spec, consts, cons, start);
 
-    const { found: soln, tried } = sweep(spec, consts, cons, 200000);
+    const { found: soln, tried, thinned } = sweep(spec, consts, cons, 1000000);
 
     if (!soln) {
       bad = true;
       const out = spec.compute(start, consts);
-      lines.push(`            ! ${where} is UNREACHABLE — swept ${tried} slider positions and ` +
-        'none satisfies every constraint at once');
+      lines.push(`            ! ${where} is ${thinned ? 'probably unreachable' : 'UNREACHABLE'} — ` +
+        `swept ${tried} slider position(s)` +
+        (thinned ? ' on a THINNED grid, so a very narrow solution could have been missed'
+                 : ' (every reachable one)') +
+        ' and none satisfies every constraint at once');
       cons.forEach((c) => {
         const r = out[c.k];
         lines.push(`                ${c.label}  (at the opening position: ` +

@@ -741,6 +741,26 @@ function createCircuit(root, opts) {
     const pal = P();
     ctx.clearRect(0, 0, w, h);
 
+    /* A diagram is a question's illustration, so cropping it is not a cosmetic
+       failure — the probe the question asks about was falling off the right-hand edge
+       at ordinary laptop widths. The editor can scroll and pan; a diagram cannot, so
+       it scales itself to fit and centres what is left. */
+    if (ro_ && model.parts.length) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const see = function (px, py) {
+        if (px < x0) x0 = px; if (px > x1) x1 = px;
+        if (py < y0) y0 = py; if (py > y1) y1 = py;
+      };
+      model.parts.forEach(function (p2) { Netlist.pinsOf(p2).forEach(function (pt) { see(pt[0], pt[1]); }); see(p2.x, p2.y); });
+      model.wires.forEach(function (wr) { see(wr.a[0], wr.a[1]); see(wr.b[0], wr.b[1]); });
+      const pad = 1.2;
+      const needW = (x1 - x0 + pad * 2) * GRID, needH = (y1 - y0 + pad * 2) * GRID;
+      const s2 = Math.min(w / needW, h / needH, 1.6);
+      ctx.setTransform(dpr * s2, 0, 0, dpr * s2,
+        dpr * ((w - needW * s2) / 2 - (x0 - pad - originX) * GRID * s2 - GRID * s2),
+        dpr * ((h - needH * s2) / 2 - (y0 - pad - originY) * GRID * s2 - GRID * s2));
+    }
+
     /* grid dots */
     ctx.fillStyle = pal.faint;
     for (let X = GRID; X < w; X += GRID) {
@@ -939,6 +959,29 @@ function createCircuit(root, opts) {
     paint();
   }
 
+  /* A diagram is a picture. Everything from here down is editing, analysis and
+     chrome — pointer handlers that place parts, a document-level keydown listener,
+     and lookups for a toolbar this DOM does not have. Returning above all of it is
+     what actually makes read-only read-only: the previous version returned below the
+     handlers, so clicking a question's schematic inserted a resistor into it. */
+  if (ro_) {
+    let dro = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      dro = new ResizeObserver(function () { paint(); });
+      dro.observe(cv.parentElement);
+    }
+    paint();
+    return {
+      getModel: function () { return JSON.parse(JSON.stringify(model)); },
+      solve: function () { return null; },
+      dispose: function () {
+        disposed = true;
+        if (dro) dro.disconnect();
+        root.innerHTML = '';
+      },
+    };
+  }
+
   /* ---- interaction ---- */
   cv.addEventListener('pointermove', function (e) {
     const r = cv.getBoundingClientRect();
@@ -1010,24 +1053,6 @@ function createCircuit(root, opts) {
   /* A diagram has no tools, no analysis panel and nothing to click, so there is
      nothing below this line to wire up. Returning early is what makes the read-only
      DOM safe to shrink: every lookup after this point assumes the full chrome. */
-  if (ro_) {
-    let dro = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      dro = new ResizeObserver(function () { paint(); });
-      dro.observe(cv.parentElement);
-    }
-    paint();
-    return {
-      getModel: function () { return JSON.parse(JSON.stringify(model)); },
-      solve: function () { return null; },
-      dispose: function () {
-        disposed = true;
-        if (dro) dro.disconnect();
-        root.innerHTML = '';
-      },
-    };
-  }
-
   root.querySelectorAll('[data-tool]').forEach(function (b) {
     b.addEventListener('click', function () {
       tool = b.dataset.tool;

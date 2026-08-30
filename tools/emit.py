@@ -19,6 +19,7 @@ import argparse
 import glob
 import importlib.util
 import json
+import math
 import re
 import os
 import sys
@@ -105,15 +106,32 @@ def norm_numeric(q, ctx):
     for key in ("title", "prompt"):
         if not q.get(key):
             raise ValueError(f"{ctx}/numeric: missing {key}")
-    if not isinstance(q.get("answer"), (int, float)):
-        raise ValueError(f"{ctx}/numeric: `answer` must be a number")
-    if not isinstance(q.get("tol"), (int, float)) or q["tol"] < 0:
-        raise ValueError(f"{ctx}/numeric: give an explicit non-negative `tol`")
+    # `isinstance(True, int)` is True in Python, and `nan < 0` is False, so the
+    # obvious spellings of these two checks both let nonsense through: a bool answer
+    # and a NaN tolerance would each ship a question nobody can pass.
+    def _num(x):
+        return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+    if not _num(q.get("answer")):
+        raise ValueError(f"{ctx}/numeric: `answer` must be a finite number")
+    if not _num(q.get("tol")) or q["tol"] < 0:
+        raise ValueError(f"{ctx}/numeric: give an explicit finite, non-negative `tol`")
     if not q.get("why"):
         raise ValueError(f"{ctx}/numeric: no `why` \u2014 a correct answer still has to explain itself")
     dia = q.get("diagram")
-    if dia is not None and not (isinstance(dia, dict) and dia.get("parts")):
-        raise ValueError(f"{ctx}/numeric: `diagram` must be a schematic with parts, or be left out")
+    if dia is not None:
+        if not (isinstance(dia, dict) and dia.get("parts")):
+            raise ValueError(f"{ctx}/numeric: `diagram` must be a schematic with parts, or be left out")
+        # The painter looks the kind up in PART_KINDS and dereferences the result, so
+        # a typo does not draw a wrong symbol — it throws mid-paint and the question
+        # renders as a blank panel with an error in the console.
+        for i, p in enumerate(dia["parts"], 1):
+            if p.get("kind") not in DIAGRAM_KINDS:
+                raise ValueError(f"{ctx}/numeric/diagram part {i}: unknown kind "
+                                 f"{p.get('kind')!r} (have: {', '.join(sorted(DIAGRAM_KINDS))})")
+            for axis in ("x", "y"):
+                if not isinstance(p.get(axis), int):
+                    raise ValueError(f"{ctx}/numeric/diagram part {i}: {axis} must be an integer grid step")
     if dia is None and not q.get("figure"):
         raise ValueError(f"{ctx}/numeric: give a `diagram` or a `figure` \u2014 a bare number "
                          "with no picture is a quiz question, not this")
@@ -143,6 +161,11 @@ def norm_numeric(q, ctx):
 # the symbols src/circuit.js knows how to draw; build.mjs re-checks against the source
 MATCH_SYMBOLS = {"R", "C", "L", "D", "LED", "GND", "V", "BATT", "I", "NPN", "PNP", "SW", "OPAMP"}
 
+# what the schematic painter in src/circuit.js can put on a canvas. Narrower than the
+# symbol list above on purpose: these are the kinds the SOLVER also understands, and a
+# diagram is drawn by the solver's painter.
+DIAGRAM_KINDS = {"R", "C", "L", "V", "I", "GND", "OUT"}
+
 
 def norm_match(q, ctx):
     """Name the symbol. Recognition is its own skill and usually left to osmosis."""
@@ -153,6 +176,12 @@ def norm_match(q, ctx):
             raise ValueError(f"{ctx}/match: missing {key}")
     labels = q.get("labels") or []
     items = q.get("items") or []
+    if len(set(labels)) != len(labels):
+        dupe = [x for x in set(labels) if labels.count(x) > 1]
+        raise ValueError(f"{ctx}/match: two labels read the same ({dupe!r}). The drill "
+                         "accepts one specific index, so the learner can pick the "
+                         "identical-looking wrong one and be marked wrong with no way "
+                         "to tell why")
     if not 3 <= len(items) <= 8:
         raise ValueError(f"{ctx}/match: {len(items)} items (need 3-8)")
     if len(labels) < len(items):

@@ -564,8 +564,11 @@ function effectiveTheme() {
 }
 function applyTheme() {
   const t = effectiveTheme();
-  if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-  else document.documentElement.removeAttribute('data-theme');
+  /* :root carries the DARK palette and [data-theme=light] overrides it, so removing
+     the attribute does not select light — it selects the default, which is dark.
+     Light mode was unreachable: the button toggled, the glyph changed, the colours
+     did not. Name the theme in both directions. */
+  document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
   const b = $('#theme-btn');
   if (b) {
     b.textContent = t === 'dark' ? '☀' : '☾';
@@ -688,7 +691,11 @@ function railCrowdedOut() {
 function syncRailToggle() {
   const b = $('#rail-btn');
   if (!b) return;
-  const off = route.view === 'play' || railCrowdedOut();
+  /* The planner carries its own majors column, so the rail is hidden there by
+     renderRoute. The toggle has to agree, or it sits lit and labelled "Hide the
+     curriculum panel" over a rail that is already gone — and clicking it silently
+     persists railHidden onto every other screen. */
+  const off = route.view === 'play' || route.view === 'degree' || railCrowdedOut();
   b.hidden = off;
   const shown = !P.railHidden;
   b.classList.toggle('on', shown);
@@ -697,7 +704,8 @@ function syncRailToggle() {
 }
 function toggleRailPanel() {
   P.railHidden = !P.railHidden;
-  $('#body').classList.toggle('no-rail', P.railHidden || route.view === 'play');
+  $('#body').classList.toggle('no-rail',
+    P.railHidden || route.view === 'play' || route.view === 'degree');
   syncRailToggle();
   saveSoon();
 }
@@ -1826,7 +1834,11 @@ function plannerFor(programId) {
    but a learner wants a route through it, so this walks the graph and returns one
    ordered path: the things to do, in the order to do them. */
 function prereqChain(c, limit) {
+  /* The target is marked seen before the walk starts. Without it a cycle — or a
+     course that is transitively its own prerequisite through a bad spine — emits the
+     target twice, and the panel shows two "Current target" cards. */
   const seen = {};
+  seen[c.id] = true;
   const out = [];
   (function walk(course, depth) {
     if (!course || depth > 6) return;
@@ -1911,7 +1923,8 @@ function renderDegree(main, programId) {
   /* ---- left: which degree ---- */
   const majors = PROGRAMS.map(function (pr) {
     const t = programMissing(pr.id) ? null : degreeTotals(pr.id);
-    return '<button class="mj' + (pr.id === prog.id ? ' on' : '') + '" data-major="' + esc(pr.id) + '">' +
+    return '<button class="mj' + (pr.id === prog.id ? ' on' : '') + '" data-major="' + esc(pr.id) +
+      '" aria-pressed="' + (pr.id === prog.id ? 'true' : 'false') + '">' +
       '<span class="mj-i">' + esc(pr.icon || (pr.bands && pr.bands[0] ? pr.bands[0].icon : '◆')) + '</span>' +
       '<span class="mj-n">' + esc(pr.short || pr.name) + '</span>' +
       '<span class="mj-c">' + (t ? t.credits : '\u2014') + ' cr</span>' +
@@ -1920,7 +1933,9 @@ function renderDegree(main, programId) {
 
   /* ---- middle: the year, and its subjects ---- */
   const years = bands.map(function (b) {
-    return '<button class="yr' + (b.n === st.band ? ' on' : '') + '" data-band="' + b.n + '">' + b.n + '</button>';
+    return '<button class="yr' + (b.n === st.band ? ' on' : '') + '" data-band="' + b.n +
+      '" aria-pressed="' + (b.n === st.band ? 'true' : 'false') +
+      '" aria-label="' + esc(bandLabel(prog, b.n)) + '">' + b.n + '</button>';
   }).join('');
 
   const cards = list.map(function (c) {
@@ -1929,7 +1944,8 @@ function renderDegree(main, programId) {
     const state = done === 0 ? 'Not started' : (done === units ? 'Complete' : 'In progress');
     const cls = done === 0 ? '' : (done === units ? 'done' : 'live');
     const pre = prereqState(c);
-    return '<button class="subj' + (c.id === st.sel ? ' on' : '') + '" data-subj="' + esc(c.id) + '">' +
+    return '<button class="subj' + (c.id === st.sel ? ' on' : '') + '" data-subj="' + esc(c.id) +
+      '" aria-pressed="' + (c.id === st.sel ? 'true' : 'false') + '">' +
       '<div class="sj-top">' +
         '<span class="sj-icon">' + esc(c.icon || '◆') + '</span>' +
         '<div class="sj-id"><b>' + esc(c.title.split(/\s+\u2014\s+/)[0]) + '</b><span>' + esc(c.id) + '</span></div>' +
@@ -1950,7 +1966,10 @@ function renderDegree(main, programId) {
   if (sel) {
     const units = courseUnits(sel);
     const labs = sel.modules.filter(function (m) { return m.lab; }).length;
-    const chain = prereqChain(sel, 3);
+    /* Two prerequisites plus the target: four cards overflow the panel and it is
+       the target that scrolls out of sight, which is the one card the rest of the
+       panel is about. The chain already spends its slots on unfinished work. */
+    const chain = prereqChain(sel, 2);
     const firstOpen = chain.find(function (p) { return p !== sel && !courseComplete(p); });
     const links = chain.map(function (p, i) {
       const isTarget = p === sel;
@@ -1992,6 +2011,14 @@ function renderDegree(main, programId) {
 
   const bandMeta = bands.find(function (b) { return b.n === st.band; }) || {};
 
+  /* Every interaction here re-renders the whole pane, so the column the learner is
+     reading has to be put back where it was — otherwise choosing a subject halfway
+     down a year scrolls the grid to the top and loses the card that was just clicked. */
+  const keepScroll = (function () {
+    const el = $('.pl-main', main);
+    return el ? el.scrollTop : 0;
+  })();
+
   main.innerHTML = '<div class="planner">' +
     '<aside class="pl-majors">' +
       '<div class="pl-lbl">Select major</div>' +
@@ -2012,8 +2039,11 @@ function renderDegree(main, programId) {
       '<h2 class="pl-h2">' + esc(bandLabel(prog, st.band)) + ' subjects' +
         (bandMeta.title ? ' <span>\u2014 ' + esc(bandMeta.title) + '</span>' : '') + '</h2>' +
       '<div class="subj-grid">' + (cards || '<p class="pl-empty">Nothing authored in this year yet.</p>') + '</div>' +
-      '<button class="pl-more" data-full="1">View every subject in this ' +
-        esc((prog.bandNoun || 'Year').toLowerCase()) + ' <span>\u203a</span></button>' +
+      /* A "view every subject in this year" link used to sit here. Every subject in
+         the year is already on screen above it, and it navigated to the programme
+         picker, which lists no subjects at all \u2014 a promise of more that led somewhere
+         with less. */
+      '' +
     '</div>' +
 
     '<aside class="pl-detail">' + detail + '</aside>' +
@@ -2027,6 +2057,9 @@ function renderDegree(main, programId) {
       '<button class="pf-go" data-go="progress">View full progress <span>\u203a</span></button>' +
     '</div>' +
   '</div>';
+
+  const pane = $('.pl-main', main);
+  if (pane && keepScroll) pane.scrollTop = keepScroll;
 
   $all('[data-major]', main).forEach(function (b) {
     b.addEventListener('click', function () { go({ view: 'degree', program: b.dataset.major }); });
@@ -2051,8 +2084,6 @@ function renderDegree(main, programId) {
   if (prevBtn) prevBtn.addEventListener('click', function () {
     go({ view: 'course', id: prevBtn.dataset.preview });
   });
-  const more = $('[data-full]', main);
-  if (more) more.addEventListener('click', function () { go({ view: 'programs' }); });
   $all('[data-go]', main).forEach(function (b) {
     b.addEventListener('click', function () { go({ view: b.dataset.go }); });
   });
@@ -2472,11 +2503,22 @@ function renderNumeric(main, l) {
   }
 
   function check() {
-    const raw = String(value).trim().replace(/,/g, '');
+    /* "3,44" is a decimal in most of the world and a thousands separator in the
+       rest, and guessing wrong is worse than asking: stripping it silently turned a
+       correct 3,44 into 344 and then explained, confidently, that it was out by a
+       factor of a hundred. */
+    const raw = String(value).trim();
+    if (/,/.test(raw)) {
+      verdict = { ok: false, head: 'Use a full stop for the decimal point.',
+                  body: 'A comma means different things in different places, so this box ' +
+                        'will not guess. Write ' + String(l.answer) + '-style: digits, a full stop, digits.' };
+      paint();
+      return;
+    }
     const x = Number(raw);
     if (!raw || !isFinite(x)) {
       verdict = { ok: false, head: 'That is not a number.',
-                  body: 'Type a plain decimal \u2014 no units, no commas.' };
+                  body: 'Type a plain decimal \u2014 no units, no thousands separators.' };
       paint();
       return;
     }
@@ -2501,9 +2543,10 @@ function renderNumeric(main, l) {
     else if (near(1000000) || near(0.000001)) { head = 'Out by a million.'; body = 'Two prefixes have gone the same way. Write every quantity in base units once, then convert at the end.'; }
     else if (Math.abs(r + 1) < 0.04) { head = 'The sign is inverted.'; body = 'The magnitude is right. Check which node you measured against, or which way the current was defined.'; }
     else if (near(2) || near(0.5)) { head = 'Out by a factor of two.'; body = 'A halving or a doubling has gone the wrong way \u2014 a peak against an amplitude, or one arm of a pair counted once instead of twice.'; }
-    else if (Math.abs(x - Math.sqrt(Math.abs(l.answer))) < 1e-9) { head = 'A square root too many.'; }
     verdict = { ok: false, head: head, body: body };
     P.numeric = P.numeric || {};
+    /* Keep `ok` if it was ever earned. Overwriting it with a later wrong attempt made
+       the unit reopen pre-filled with a wrong answer under a "Solved" badge. */
     P.numeric[l.id] = Object.assign({}, P.numeric[l.id], { v: raw });
     saveSoon();
     paint();
@@ -2521,13 +2564,22 @@ function renderMatch(main, l) {
   const saved = (P.match && P.match[l.id]) || {};
   const placed = {};
   (l.items || []).forEach(function (_, i) {
-    placed[i] = saved[i] === undefined ? null : saved[i];
+    /* A saved index can outlive the labels it referred to if the unit is re-authored;
+       an out-of-range one used to render the string "undefined" and still count as
+       placed. Treat anything that does not name a current label as empty. */
+    const v = saved[i];
+    placed[i] = (typeof v === 'number' && v >= 0 && v < (l.labels || []).length) ? v : null;
   });
   let armed = null;
   let checked = false;
 
   function used(li) {
     return Object.keys(placed).some(function (k) { return placed[k] === li; });
+  }
+  function filled_() {
+    const o = {};
+    Object.keys(placed).forEach(function (k) { if (placed[k] !== null) o[k] = placed[k]; });
+    return o;
   }
 
   function paint() {
@@ -2540,11 +2592,13 @@ function renderMatch(main, l) {
       lessonHeader(l) +
       '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
       '<h3 class="q-prompt">' + mdInline(l.prompt || '') + '</h3>' +
-      '<p class="q-note">Pick a label, then tap the symbol it belongs to. Tap a placed label to take it back.</p>' +
+      '<p class="q-note">Tap a placed label to take it back. Every label is used exactly once.</p>' +
       '<div class="mt-labels">' +
         (l.labels || []).map(function (lb, li) {
-          return '<button class="mt-lb' + (armed === li ? ' armed' : '') + (used(li) ? ' spent' : '') +
-            '" data-lb="' + li + '"' + (used(li) ? ' disabled' : '') + '>' + esc(lb) + '</button>';
+          return '<button type="button" class="mt-lb' + (armed === li ? ' armed' : '') +
+            (used(li) ? ' spent' : '') + '" data-lb="' + li + '"' +
+            ' aria-pressed="' + (armed === li ? 'true' : 'false') + '"' +
+            (used(li) ? ' disabled' : '') + '>' + esc(lb) + '</button>';
         }).join('') +
       '</div>' +
       '<div class="mt-grid">' +
@@ -2552,10 +2606,12 @@ function renderMatch(main, l) {
           const v = placed[i];
           const state = !checked ? (v === null ? '' : ' filled')
             : (v === it.a ? ' right' : ' wrong');
-          return '<div class="mt-card' + state + '" data-item="' + i + '">' +
+          return '<button type="button" class="mt-card' + state + '" data-item="' + i + '"' +
+            ' aria-label="Symbol ' + (i + 1) + ' of ' + items.length +
+            (v === null ? ', empty' : ', labelled ' + esc(l.labels[v])) + '">' +
             '<canvas class="mt-cv" data-sym="' + esc(it.sym) + '"></canvas>' +
             '<div class="mt-slot">' + (v === null ? '\u2014' : esc(l.labels[v])) + '</div>' +
-          '</div>';
+          '</button>';
         }).join('') +
       '</div>' +
       '<div class="q-acts">' +
@@ -2583,14 +2639,19 @@ function renderMatch(main, l) {
     wireCrumb(main, l);
     wireFootNav(main, l);
 
-    $all('.mt-cv', main).forEach(function (cv) {
-      const paintSym = function () {
-        const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#EDEFF3';
-        Symbols.paint(cv, cv.dataset.sym, ink);
-      };
-      paintSym();
-      requestAnimationFrame(paintSym);      /* once more after layout settles */
-    });
+    const cvs = $all('.mt-cv', main);
+    const paintAll = function () {
+      const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#EDEFF3';
+      cvs.forEach(function (cv) { Symbols.paint(cv, cv.dataset.sym, ink); });
+    };
+    paintAll();
+    requestAnimationFrame(paintAll);        /* once more after layout settles */
+    /* The grid is auto-fit, so the cards change width with the window and the canvas
+       backing store has to be resized with them — otherwise the symbols stay at the
+       first width and blur or clip. */
+    const mro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(paintAll) : null;
+    if (mro && cvs[0]) mro.observe(cvs[0]);
+    teardown = function () { if (mro) mro.disconnect(); };
 
     $all('[data-lb]', main).forEach(function (b) {
       b.addEventListener('click', function () {
@@ -2606,7 +2667,10 @@ function renderMatch(main, l) {
         else if (armed !== null) { placed[i] = armed; armed = null; }
         else return;
         P.match = P.match || {};
-        P.match[l.id] = Object.assign({}, placed);
+        /* Only the slots that actually hold a label are stored. Writing an explicit
+           null for every empty slot makes the two-device merge — which takes the
+           union of the two objects — overwrite a real placement with a null. */
+        P.match[l.id] = filled_();
         checked = false;
         saveSoon();
         paint();
@@ -2654,17 +2718,20 @@ function renderTune(main, l) {
 
   function readouts() { return spec.compute(v, consts); }
 
+  function holdsC(c, x) {
+    if (c.max !== undefined && c.min !== undefined) return x >= c.min && x <= c.max;
+    if (c.max !== undefined) return x <= c.max;
+    if (c.min !== undefined) return x >= c.min;
+    if (c.eq !== undefined) return Math.abs(x - c.eq) <= (c.tol === undefined ? 0.01 : c.tol);
+    return false;
+  }
+
   function tests() {
     const out = readouts();
     return (l.constraints || []).map(function (c) {
       const r = out[c.k];
       const x = r ? r.value : NaN;
-      let ok = false;
-      if (c.max !== undefined && c.min !== undefined) ok = x >= c.min && x <= c.max;
-      else if (c.max !== undefined) ok = x <= c.max;
-      else if (c.min !== undefined) ok = x >= c.min;
-      else if (c.eq !== undefined) ok = Math.abs(x - c.eq) <= (c.tol === undefined ? 0.01 : c.tol);
-      return { c: c, ok: ok, got: x, r: r };
+      return { c: c, ok: r ? holdsC(c, x) : false, got: x, r: r };
     });
   }
 
@@ -2706,8 +2773,17 @@ function renderTune(main, l) {
       box.innerHTML = Object.keys(out).map(function (k) {
         const r = out[k];
         const t = ts.find(function (x) { return x.c.k === k; });
+        /* A readout is graded on its exact value and displayed rounded, so the two
+           can disagree: 1.0004 mA shows as 1.000 and fails a 1.00 cap, which reads as
+           the app being broken. Add digits only when that actually happens — when the
+           number as displayed would satisfy the constraint the raw value fails. */
+        let dp = r.dp;
+        if (t && !t.ok) {
+          const shown = Number((+r.value).toFixed(r.dp));
+          if (holdsC(t.c, shown)) dp = r.dp + 3;
+        }
         return '<div class="tn-r' + (t ? (t.ok ? ' ok' : ' no') : '') + '">' +
-          '<span>' + esc(r.label) + '</span><b>' + (+r.value).toFixed(r.dp) +
+          '<span>' + esc(r.label) + '</span><b>' + (+r.value).toFixed(dp) +
           (r.unit ? ' ' + r.unit : '') + '</b></div>';
       }).join('');
     }
@@ -2783,9 +2859,15 @@ function renderTune(main, l) {
       const ts = tests();
       const pass = ts.length && ts.every(function (t) { return t.ok; });
       if (pass) {
-        if (completeLesson(l.id)) toast('Constraints met \u00b7 +' + XP.tune + ' XP', true);
+        const first = completeLesson(l.id);
         renderRail();
-        toast('All constraints hold at once.', true);
+        /* One toast, not two: the second used to replace the first immediately, so
+           the XP award was never actually seen. And repaint, or the footer keeps
+           saying the unit is unfinished after it has just been finished. */
+        toast(first ? 'All constraints hold \u00b7 +' + XP.tune + ' XP'
+                    : 'All constraints hold at once.', true);
+        paint();
+        return;
       } else {
         const bad = ts.filter(function (t) { return !t.ok; });
         toast(bad.length + ' constraint' + (bad.length > 1 ? 's' : '') + ' still unmet: ' +
@@ -2804,6 +2886,10 @@ function renderTune(main, l) {
     });
 
     refresh();
+    /* paint() is re-entrant — Reset and Check both call it — so the previous
+       observer has to go before a new one is made, or every press leaves one behind
+       redrawing a canvas that is no longer on the page. */
+    if (teardown) { try { teardown(); } catch (e) {} }
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(drawPlot) : null;
     if (ro && plotCv) ro.observe(plotCv);
     teardown = function () { if (ro) ro.disconnect(); };

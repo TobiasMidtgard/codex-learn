@@ -194,9 +194,12 @@ for (const c of allCourses) {
 notes.push(`visualisers: ${VIS.size} registered, every sandbox reference checked`);
 
 /* The same argument as the sandbox check above, for the two other places a unit names
-   something the code has to supply. emit.py keeps its own copies of these lists so an
-   author gets the error at authoring time; this is the check that the copies still
-   agree with the source, which is the part emit.py cannot do. */
+   something the code has to supply.
+
+   emit.py keeps its own copies of these lists so an author gets the error while
+   authoring rather than at build time. Copies go stale, so the copies themselves are
+   checked here against the source they were copied from — which is the part emit.py
+   cannot do, because it is the thing being checked. */
 const TUNE_IDS = new Set([...studioJs.matchAll(/Tune\.define\(\{\s*\n?\s*id:\s*'([^']+)'/g)].map((m) => m[1]));
 const SYM_IDS = new Set([...circuitJs.matchAll(/define\('([^']+)',\s*'/g)].map((m) => m[1]));
 for (const c of allCourses) {
@@ -213,7 +216,55 @@ for (const c of allCourses) {
     }
   }
 }
-notes.push(`tune models: ${TUNE_IDS.size} registered · symbols: ${SYM_IDS.size} drawable`);
+/* Read emit.py's copies back and compare. Without this the guard above only caught
+   a unit naming something nothing defines — it never noticed emit.py and the source
+   disagreeing, which is the failure that actually happens: a model gains a readout,
+   or a symbol is added, and the authoring-time list silently rots. */
+{
+  const emitPy = read(join(ROOT, 'tools', 'emit.py'));
+  const setFrom = (re) => {
+    const m = emitPy.match(re);
+    return new Set(m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : []);
+  };
+  const diff = (a, b) => [...a].filter((x) => !b.has(x));
+
+  const emitSyms = setFrom(/MATCH_SYMBOLS = \{([^}]*)\}/);
+  const emitModels = new Set([...emitPy.matchAll(/^\s{4}"([a-z0-9-]+)":\s*\{/gm)].map((m) => m[1]));
+
+  for (const [what, mine, theirs] of [
+    ['symbol', SYM_IDS, emitSyms],
+    ['tune model', TUNE_IDS, emitModels],
+  ]) {
+    for (const x of diff(mine, theirs)) {
+      problems.push(`${what} "${x}" is defined in src/ but missing from emit.py's list — ` +
+        'an author cannot use it and will be told it does not exist');
+    }
+    for (const x of diff(theirs, mine)) {
+      problems.push(`${what} "${x}" is listed in emit.py but no longer defined in src/ — ` +
+        'emit.py would accept a unit the build then cannot render');
+    }
+  }
+
+  /* And the per-model readout keys, which is how a constraint becomes untargetable */
+  for (const id of TUNE_IDS) {
+    const body = studioJs.slice(studioJs.indexOf(`id: '${id}'`));
+    const compute = body.slice(body.indexOf('compute:'), body.indexOf('plot:'));
+    const real = new Set([...compute.matchAll(/^\s{6}([a-z0-9_]+):\s*\{\s*label:/gm)].map((m) => m[1]));
+    const listed = setFrom(new RegExp('"' + id + '":\\s*\\{([^}]*)\\}'));
+    if (!real.size || !listed.size) continue;
+    for (const k of diff(real, listed)) {
+      problems.push(`the ${id} model reports "${k}", which emit.py does not list — ` +
+        'no unit can constrain it');
+    }
+    for (const k of diff(listed, real)) {
+      problems.push(`emit.py lists "${k}" for the ${id} model, which it no longer reports — ` +
+        'a constraint on it would be accepted and then never satisfiable');
+    }
+  }
+}
+
+notes.push(`tune models: ${TUNE_IDS.size} registered · symbols: ${SYM_IDS.size} drawable · ` +
+  "emit.py's copies agree");
 
 
 const degree = { programs, courses: allCourses };
