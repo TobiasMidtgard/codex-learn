@@ -621,6 +621,34 @@ function applyTheme() {
   }
 }
 
+/* Stamped by build.mjs with the hash of the shell it produced.
+
+   GitHub Pages serves index.html with Cache-Control: max-age=600 and cannot be told
+   otherwise, and this app is that one file. So for ten minutes after a deploy a
+   browser can keep serving the previous build, which reads exactly like a fix that
+   did not ship. The app therefore asks, once, whether it is current. */
+const BUILD_ID = '__BUILD_ID__';
+
+function checkForNewBuild() {
+  /* Unstamped (running from source) or opened from disk: there is nothing to ask. */
+  if (BUILD_ID.slice(0, 2) === '__') return;
+  if (!/^https?:$/.test(location.protocol)) return;
+  fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (v) {
+      if (!v || !v.build || v.build === BUILD_ID) return;
+      /* One attempt per build, so a stale CDN edge cannot put us in a reload loop. */
+      let tried = null;
+      try { tried = sessionStorage.getItem('cw-reload'); } catch (e) { return; }
+      if (tried === v.build) return;
+      try { sessionStorage.setItem('cw-reload', v.build); } catch (e) { return; }
+      /* A plain reload re-reads the same cached entry. A different query string is a
+         different cache key, which is what actually fetches the new shell. */
+      location.replace(location.pathname + '?b=' + v.build);
+    })
+    .catch(function () { /* offline, or no version.json: keep running what we have */ });
+}
+
 /* ---------- shell ---------- */
 const NAV = [
   { id: 'degree', label: 'Study plan', view: 'degree',
@@ -674,10 +702,14 @@ function renderShell() {
         '<span class="save-state" id="save-state"></span>' +
       '</header>' +
       '<div class="degrade" id="degrade" role="status" hidden></div>' +
+      /* The runner's two bars. They live in the shell rather than inside <main>
+         because every renderer owns main.innerHTML outright and would wipe them. */
+      '<div class="runbar" id="runbar" hidden></div>' +
       '<div class="body" id="body">' +
         '<aside class="rail" id="rail" aria-label="Curriculum"></aside>' +
         '<main class="main" id="main"></main>' +
       '</div>' +
+      '<div class="runfoot" id="runfoot" hidden></div>' +
     '</div>' +
     '<div class="scrim" id="scrim"></div>';
 
@@ -964,7 +996,8 @@ function go(r) {
     (route.view === 'lesson' && /code|project/.test(LESSON_INDEX[route.id].lesson.type));
   /* The planner carries its own majors column, which is what the curriculum rail
      would otherwise be doing — two lists of the same thing side by side. */
-  const hideRail = route.view === 'play' || route.view === 'degree' || !!P.railHidden;
+  const hideRail = route.view === 'play' || route.view === 'degree' ||
+    !!focusLesson(route) || !!P.railHidden;
   $('#body').classList.toggle('no-rail', hideRail);
   $('#body').classList.toggle('split', isSplit);
   syncRailToggle();
@@ -994,8 +1027,84 @@ function go(r) {
     else renderCode(main, l);
   }
 
+  paintRunner(focusLesson(route));
+
   const host = scrollHost();
   if (host) host.scrollTop = SCROLL_MEM[routeKey(route)] || 0;
+}
+
+/* Which unit kinds become the screen.
+   `read` is an article and `code`/`project` are an IDE beside a task pane; both
+   want their chrome. Everything else is a question, and a question the learner has
+   to hunt for halfway down a scrolling page is the thing that kept reading as
+   "there are only programming tasks here". */
+const FOCUS_TYPES = { quiz: 1, blanks: 1, match: 1, numeric: 1, tune: 1, derive: 1, build: 1, sandbox: 1 };
+function focusLesson(r) {
+  if (!r || r.view !== 'lesson') return null;
+  const info = LESSON_INDEX[r.id];
+  if (!info || !FOCUS_TYPES[info.lesson.type]) return null;
+  return info;
+}
+
+/* The units of the module the learner is inside, in order. That is the run: a
+   handful of questions on one idea, not the whole course. */
+function moduleRun(info) {
+  const flat = TRACK_LESSONS[info.lesson.trackId] || [];
+  return flat.filter(function (x) {
+    const xi = LESSON_INDEX[x.id];
+    return xi && xi.track === info.track && xi.mi === info.mi;
+  });
+}
+
+function paintRunner(info) {
+  const bar = $('#runbar'), foot = $('#runfoot'), main = $('#main');
+  if (!info) {
+    $('#app').classList.remove('focus');
+    bar.hidden = true; foot.hidden = true; bar.innerHTML = ''; foot.innerHTML = '';
+    return;
+  }
+  $('#app').classList.add('focus');
+
+  const run = moduleRun(info);
+  const at = run.indexOf(info.lesson);
+  bar.hidden = false;
+  bar.innerHTML =
+    '<button class="rb-x" id="rb-x" aria-label="Leave this run" title="Leave this run">\u2715</button>' +
+    '<div class="rb-segs">' + run.map(function (u, i) {
+      return '<i class="' + (P.completed[u.id] ? 'on' : (i === at ? 'now' : '')) + '"' +
+        ' title="' + esc(u.title) + '"></i>';
+    }).join('') + '</div>' +
+    '<span class="rb-who">' + esc(info.track.id) + ' \u00b7 ' + esc(info.module.title) + '</span>' +
+    '<span class="rb-at">' + (at + 1) + '/' + run.length + '</span>';
+
+  $('#rb-x').addEventListener('click', function () {
+    go(info.track.kind === 'course'
+      ? { view: 'course', id: info.track.id }
+      : { view: 'track', track: info.track.id });
+  });
+
+  /* Pull the answer controls out of the article and into a bar that is always on
+     screen. Moving the nodes keeps their listeners, which were wired by the
+     renderer moments ago; rebuilding buttons here would silently break every
+     Check in the app. */
+  foot.hidden = false;
+  foot.innerHTML = '';
+  const artfoot = $('.article-foot', main);
+  const done = artfoot ? artfoot.querySelector('.done-note') : null;
+  if (done) foot.appendChild(done);
+  const sp = document.createElement('span');
+  sp.className = 'spacer';
+  foot.appendChild(sp);
+  /* Each renderer names its own action row. Numeric, match and tune share .q-acts;
+     fill-in, build and derive do not. Missing one leaves its Check stranded halfway
+     down the page, which is the exact problem focus mode exists to fix. */
+  const acts = $('.q-acts', main) || $('.blk-acts', main) ||
+    $('.build-acts', main) || $('.dv-acts', main);
+  if (acts) { acts.classList.add('moved'); foot.appendChild(acts); }
+  const nx = artfoot ? artfoot.querySelector('#nav-next') : null;
+  if (nx) { nx.classList.add('run-next'); foot.appendChild(nx); }
+  if (artfoot) artfoot.remove();
+  if (!foot.children.length || (foot.children.length === 1 && foot.firstChild === sp)) foot.hidden = true;
 }
 
 function navSectionFor(r) {
@@ -4098,6 +4207,7 @@ async function boot() {
     else openTracks[info.track.id] = true;
   }
   go(frontRoute());
+  setTimeout(checkForNewBuild, 2000);
 }
 /* boot() used to be unrejectable by construction — its only awaits were Store.load,
    which swallows everything, and a Sync call already inside a try. Fetching the

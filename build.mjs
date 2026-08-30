@@ -402,6 +402,11 @@ if (/const DEGREE_CHUNKS = \[\s*\{/.test(inlineHtml)) {
 }
 
 const kbOf = (t) => Buffer.byteLength(t, 'utf8') / 1024;
+/* The stamp is the hash of the shell as assembled, so it changes exactly when the
+   shipped bytes change. Computed before substitution, or it would chase itself. */
+const BUILD_ID = createHash('sha256').update(shellHtml).digest('hex').slice(0, 12);
+const stamp = (h) => h.replace('__BUILD_ID__', BUILD_ID);
+
 const inlineKb = kbOf(inlineHtml);
 const shellKb = kbOf(shellHtml);
 const chunkKb = chunks.map((c) => kbOf(c.json));
@@ -515,9 +520,11 @@ function writeShape(dir, { inline }) {
   mkdirSync(dir, { recursive: true });
   const chunkDir = join(dir, 'programs');
   mkdirSync(chunkDir, { recursive: true });
-  writeFileSync(join(dir, 'index.html'), shellHtml, 'utf8');
+  writeFileSync(join(dir, 'index.html'), stamp(shellHtml), 'utf8');
+  /* What a running tab fetches to find out whether it is the current build. */
+  writeFileSync(join(dir, 'version.json'), JSON.stringify({ build: BUILD_ID }) + '\n', 'utf8');
   for (const c of chunks) writeFileSync(join(chunkDir, c.name), c.json, 'utf8');
-  if (inline) writeFileSync(join(dir, 'codewright.html'), inlineHtml, 'utf8');
+  if (inline) writeFileSync(join(dir, 'codewright.html'), stamp(inlineHtml), 'utf8');
   return pruneChunks(chunkDir, chunks.map((c) => c.name));
 }
 
@@ -533,5 +540,5 @@ for (const d of [...new Set([...droppedBuild, ...droppedDocs])]) console.log(`  
    habitual `git add docs/index.html` would publish a shell whose payloads 404. Print
    the command that stages all of it. */
 console.log('\ndocs/ is what GitHub Pages serves. To publish:');
-console.log('  git add docs/index.html docs/programs docs/.nojekyll');
+console.log('  git add docs/index.html docs/version.json docs/programs docs/.nojekyll');
 

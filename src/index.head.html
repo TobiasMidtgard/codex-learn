@@ -202,7 +202,7 @@ input{font-family:inherit}
 }
 
 /* header */
-.frame{display:grid;grid-template-columns:minmax(0,1fr);/* topbar, then the degraded-state banner (auto: zero when it is display:none),   then the body. Adding a child without adding a row put the banner in the   body’s 1fr track and pushed the body into an implicit one. */grid-template-rows:var(--topbar-h) auto minmax(0,1fr);min-width:0;min-height:0;position:relative;z-index:2}
+.frame{display:grid;grid-template-columns:minmax(0,1fr);/* topbar, then the degraded-state banner (auto: zero when it is display:none),   then the body. Adding a child without adding a row put the banner in the   body’s 1fr track and pushed the body into an implicit one. */grid-template-rows:var(--topbar-h) auto auto minmax(0,1fr) auto;min-width:0;min-height:0;position:relative;z-index:2}
 .topbar{
   height:var(--topbar-h);display:flex;align-items:center;gap:16px;padding:0 22px;
   border-bottom:1px solid var(--line);background:var(--head);
@@ -928,7 +928,68 @@ math[display=block]{display:block;margin:14px 0;overflow-x:auto;overflow-y:hidde
    was left empty. */
 .frame>.topbar{grid-row:1}
 .frame>.degrade{grid-row:2}
-.frame>.body{grid-row:3}
+.frame>.runbar{grid-row:3}
+.frame>.body{grid-row:4}
+.frame>.runfoot{grid-row:5}
+
+/* ---------- focus mode: the question is the screen ----------
+   A question used to render as a small block partway down a scrolling article,
+   with the icon rail, the top bar and the curriculum rail all still competing for
+   attention. Here the chrome steps back, the prompt and the figure take the room,
+   and Check sits in a bar that is always on screen. */
+.runbar{display:flex;align-items:center;gap:16px;padding:0 16px;height:52px;
+  border-bottom:1px solid var(--line);background:var(--surface-solid)}
+.runbar[hidden]{display:none}
+.rb-x{width:32px;height:32px;border-radius:9px;flex:none;display:grid;place-items:center;
+  border:1px solid var(--line-2);color:var(--ink-3);font-size:13px}
+.rb-x:hover{color:var(--ink);border-color:var(--ink-4)}
+.rb-segs{flex:1;display:flex;gap:3px;max-width:560px}
+.rb-segs i{height:4px;flex:1;border-radius:2px;background:var(--ink-5)}
+.rb-segs i.on{background:var(--lime)}
+.rb-segs i.now{background:var(--lime);opacity:.42}
+.rb-who{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rb-at{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:none}
+
+.runfoot{display:flex;align-items:center;gap:12px;padding:14px 22px;
+  border-top:1px solid var(--line);background:var(--surface-solid)}
+.runfoot[hidden]{display:none}
+.runfoot .spacer{flex:1}
+.runfoot .q-acts,.runfoot .blk-acts,.runfoot .build-acts,.runfoot .dv-acts{
+  margin:0;display:flex;gap:10px;align-items:center}
+.runfoot .btn{min-width:132px;justify-content:center}
+.runfoot .done-note{font-family:var(--mono);font-size:11.5px;color:var(--lime)}
+
+/* Hiding the icon rail takes it out of grid flow, so .frame auto-places into the
+   72px track it used to occupy and the whole app renders 72px wide. Collapse the
+   track as well as the element. */
+.app.focus{grid-template-columns:minmax(0,1fr)}
+.app.focus>.iconrail{display:none}
+.app.focus .topbar{display:none}
+.app.focus .frame{grid-template-rows:0 auto auto minmax(0,1fr) auto}
+.app.focus .rail,.app.focus .scrim{display:none}
+.app.focus .body{grid-template-columns:minmax(0,1fr)}
+.app.focus .main{padding:0}
+.app.focus .page,.app.focus .lesson-read{max-width:860px;margin:0 auto;padding:30px 26px 34px}
+.app.focus .crumb{display:none}
+.app.focus .lesson-title{margin-top:0}
+/* Where the unit carries its own prompt, the lesson title is the same sentence
+   printed a second time. Let the prompt be the headline and drop the echo; units
+   with no prompt (quiz, derive, build) keep their title as the only heading. */
+.app.focus .page:has(.q-prompt) .lesson-title{display:none}
+.app.focus .page:has(.q-prompt) .lesson-meta{margin-bottom:2px}
+.app.focus .lesson-title h1{font-size:29px;letter-spacing:-.03em}
+/* the read-in text is background, not the question - available, not in the way */
+.app.focus .article{font-size:14px;color:var(--ink-3);border-left:2px solid var(--line);
+  padding-left:16px;margin:14px 0 6px}
+.app.focus .q-prompt{font-size:25px;font-weight:600;letter-spacing:-.025em;line-height:1.25;
+  margin:22px 0 4px}
+.app.focus .q-note{font-size:14px;color:var(--ink-3)}
+/* the figure is the thing being reasoned about, so give it the room */
+.app.focus .numq{grid-template-columns:minmax(0,1fr);gap:18px}
+.app.focus .numq-fig{min-height:300px}
+.app.focus .numq-side{max-width:none}
+.app.focus .nq-in input{font-size:20px}
 .degrade{display:flex;align-items:center;gap:12px;padding:10px 18px;
   border-bottom:1px solid color-mix(in srgb,var(--amber) 40%,transparent);
   background:color-mix(in srgb,var(--amber) 12%,transparent);font-size:13px;color:var(--ink-2)}
