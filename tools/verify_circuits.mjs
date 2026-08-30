@@ -24,9 +24,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const mod = { exports: {} };
 new Function('module',
   readFileSync(join(ROOT, 'src', 'circuit.js'), 'utf8') +
-  '\nmodule.exports = { runCircuitChecks, Netlist, MNA };'
+  '\nmodule.exports = { runCircuitChecks, Netlist, MNA, fmtEng, parseEng };'
 )(mod);
-const { runCircuitChecks } = mod.exports;
+const { runCircuitChecks, fmtEng, parseEng } = mod.exports;
 
 const args = process.argv.slice(2);
 const files = args.length ? args.map((a) => join(ROOT, a))
@@ -37,6 +37,7 @@ const files = args.length ? args.map((a) => join(ROOT, a))
 let problems = 0;
 let exercises = 0;
 let totalChecks = 0;
+const partValues = [];
 
 for (const file of files) {
   const course = JSON.parse(readFileSync(file, 'utf8'));
@@ -53,6 +54,13 @@ for (const file of files) {
   for (const [where, b] of found) {
     exercises++;
     totalChecks += b.checks.length;
+    for (const model of [b.start, b.solution]) {
+      for (const part of (model && model.parts) || []) {
+        if (part.value !== undefined && part.kind !== 'GND' && part.kind !== 'OUT') {
+          partValues.push([part.value, `${course.id}/${where}`]);
+        }
+      }
+    }
 
     const sol = runCircuitChecks(b.solution, b.checks);
     const solPassed = sol.filter((r) => r.pass).length;
@@ -79,6 +87,40 @@ for (const file of files) {
   console.log(`[${bad ? 'FAIL' : 'ok  '}] ${course.id.padEnd(8)} ${found.length} circuit exercise(s)`);
   lines.forEach((l) => console.log(l));
   if (bad) problems++;
+}
+
+/* ---------------------------------------------------------------- part labels
+ *
+ * Every check above asks what the SOLVER computed. None of them asked what the
+ * EDITOR displays, and for a long time it displayed 100 pF as "1 pF": the trailing
+ * zeros of an integer were being stripped along with the trailing zeros of a decimal.
+ * A learner comparing the canvas against the brief would have concluded the brief was
+ * wrong. Formatting a value and reading it back has to return the value. */
+{
+  const table = [
+    100e-12, 200, 1e-10, 0.1, 100e-9, 10, 1000, 150, 2.5e-6,
+    42.2e-9, 1e-6, 4545, 0.01, 20, 1.5e9, 470, 3300, 25,
+  ].map((v) => [v, 'the fixed table']);
+
+  const bad = [];
+  for (const [v, where] of table.concat(partValues)) {
+    const text = fmtEng(v, '');
+    const back = parseEng(text, NaN);
+    /* the label rounds for display, so allow the rounding and nothing beyond it */
+    if (!(Math.abs(back - v) <= Math.abs(v) * 0.006)) {
+      bad.push(`${where}: ${v} is labelled "${text.trim()}", which reads back as ${back}`);
+    }
+  }
+
+  if (bad.length) {
+    console.log('\nPART LABELS THAT DO NOT SAY WHAT THE VALUE IS');
+    for (const b of bad.slice(0, 12)) console.log('  !', b);
+    if (bad.length > 12) console.log(`  ... and ${bad.length - 12} more`);
+    problems++;
+  } else {
+    console.log(`[ok  ] labels   ${table.length + partValues.length} part values ` +
+      'format and read back unchanged');
+  }
 }
 
 if (!exercises) {
