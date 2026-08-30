@@ -15,9 +15,22 @@
  *   src/app.js            state, routing, every view
  *   catalog/_spine.json   the degree programme table
  *   catalog/<ID>.json     one emitted course per file
+ *
+ * Outputs, two shapes from one pass over the catalog
+ *   build/codewright.html            everything inlined; the file you can double-click
+ *   build/index.html                 the shell, plus
+ *   build/programs/<id>.<hash>.json  one fetched payload per programme
+ *   docs/*                           a copy of the split shape; Pages serves this
+ *
+ * The split exists because the degree payload is 88% of the bytes. Inlined, none of
+ * the page runs until all of it has parsed; split, the shell is an eighth of the size
+ * and the payloads arrive as JSON, which parses far faster than the same bytes as a
+ * JavaScript object literal.
  */
 
-import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, rmSync,
+         statSync, unlinkSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -26,11 +39,9 @@ const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, 'src');
 const CATALOG = join(ROOT, 'catalog');
 const OUT_DIR = join(ROOT, 'build');
-const OUT = join(OUT_DIR, 'codewright.html');
 /* GitHub Pages serves ./docs straight from the default branch, so the published
    copy is written by the same build rather than kept in step by hand. */
 const DOCS_DIR = join(ROOT, 'docs');
-const DOCS_OUT = join(DOCS_DIR, 'index.html');
 
 const checkOnly = process.argv.includes('--check');
 const problems = [];
@@ -46,10 +57,22 @@ if (!bundleParts.length) problems.push('no src/bundle.N.txt files found');
 const bundleText = bundleParts.map((f) => read(join(SRC, f))).join('\n\n');
 
 /* A raw </script would close the host <script type="text/plain"> tag early.
-   The bundle deliberately writes them as <\/script ; parseBundle unescapes. */
+   The bundle deliberately writes them as <\/script ; parseBundle unescapes.
+   `<!--` and `<script` matter here for the same reason they matter in the app script
+   below: they flip the HTML tokenizer into an escaped state in which `</script>` stops
+   closing the tag, and the rest of the document is swallowed with nothing on screen. */
 if (/<\/script/i.test(bundleText)) {
   problems.push('bundle contains a raw </script — it must be written as <\\/script');
 }
+if (bundleText.includes('<' + '!--')) {
+  problems.push('bundle contains a literal <!-- — it puts the HTML tokenizer into ' +
+    'script-data-escaped state, and a following <script then reaches double-escaped, ' +
+    'where </script> no longer closes the tag and the rest of the page is swallowed. ' +
+    'The bundle already writes them as <\\!-- ; write this one the same way');
+}
+/* A bare `<script` is deliberately NOT flagged. It is only dangerous after a literal
+   `<!--`, which the check above makes unreachable — and the foundation bundle teaches
+   HTML, so it contains seven of them, every one paired with an escaped <\/script>. */
 const bundleKeys = [...bundleText.matchAll(/^@@[ \t]+(\S+)[ \t]*$/gm)].map((m) => m[1]);
 notes.push(`bundle: ${bundleParts.length} parts, ${bundleKeys.length} keys`);
 
@@ -65,6 +88,9 @@ const spineFiles = readdirSync(CATALOG)
 
 const programs = [];
 const allCourses = [];
+/* the same courses, grouped for the split shape — filled in the one pass below, so
+   the cross-spine duplicate guard below still sees every id exactly once */
+const byProgram = {};
 const seenId = new Map();          /* id -> programme, for the collision guard */
 
 for (const file of spineFiles) {
@@ -123,6 +149,7 @@ for (const file of spineFiles) {
     const labs = course.modules.filter((m) => m.lab).length;
     if (!labs) problems.push(`${id}: no labs`);
     allCourses.push(course);
+    (byProgram[prog.id] = byProgram[prog.id] || []).push(course);
     bundled++;
   }
 
@@ -138,9 +165,9 @@ for (const file of spineFiles) {
    and a wrong parameter key is silently ignored, so the learner sees a sandbox that
    opens somewhere other than the brief describes. Both are only visible here, where
    the catalog and the visualiser registry are in the same place. */
-const studioSrc = read(join(SRC, 'studio.js'));
+const studioJs = read(join(SRC, 'studio.js'));
 const VIS = new Map();
-for (const block of studioSrc.split('Sandbox.define({').slice(1)) {
+for (const block of studioJs.split('Sandbox.define({').slice(1)) {
   const id = (block.match(/id:\s*'([^']+)'/) || [])[1];
   if (!id) continue;
   const params = block.slice(0, block.indexOf('draw:'));
@@ -168,100 +195,190 @@ notes.push(`visualisers: ${VIS.size} registered, every sandbox reference checked
 const degree = { programs, courses: allCourses };
 if (!programs.length) notes.push('catalog: no _spine*.json — building without any programme');
 
-/* `</script>` inside any JSON string would terminate the host <script>.
-   Escaping every `<` as < keeps the JSON valid JS and inert to the parser. */
-const degreeJson = JSON.stringify(degree).replace(/</g, '\\u003c');
-
 /* ---------------------------------------------------------------- scripts */
 const langJs = read(join(SRC, 'lang.js'));
 const tracksJs = read(join(SRC, 'tracks.js'));
 const engineJs = read(join(SRC, 'engine.js'));
-const studioJs = read(join(SRC, 'studio.js'));
 const circuitJs = read(join(SRC, 'circuit.js'));
 const appJs = read(join(SRC, 'app.js'));
+const head = read(join(SRC, 'index.head.html'));
 
-const appScript = [
-  langJs,
-  tracksJs,
-  '\n/* ============ degree catalog (generated by build.mjs) ============ */\n',
-  'const DEGREE_DATA = ' + degreeJson + ';\n',
-  engineJs,
-  studioJs,
-  circuitJs,
-  appJs,
-].join('\n');
+/* A literal `</script>` inside any JSON string would terminate the host <script>, and
+   the catalog really contains them — WEB301 and ELEC420 teach HTML. Escaping every
+   `<` as \u003c keeps the JSON valid JavaScript and inert to the HTML tokenizer.
+   This is needed only for the literal that is INLINED into the page. A chunk is
+   fetched and handed to JSON.parse, which is not an HTML context, so it ships raw:
+   the escape would cost 26 KB across the catalog and nothing at all after gzip.
+   Building one escaped string and using it for both shapes is the trap — it either
+   bloats every chunk or, done the other way round, truncates the two web courses. */
+const inlineLiteral = (v) => JSON.stringify(v).replace(/</g, '\u005cu003c');
 
-/* The host page carries this script inline, so the HTML tokenizer sees it before
-   the JS parser does. A literal `<!--` switches it into "script data escaped" state
-   and a following literal `<script` into "double escaped", where `</script>` stops
-   closing the tag — the script then swallows the rest of the document and nothing
-   runs. Both parse fine as JavaScript, so `node --check` cannot see it. Spell the
-   sequences out (`\x3c`, `'<\/scr' + 'ipt>'`) as the rest of the file does. */
-for (const [seq, why] of [
-  ['<' + '!--', 'starts an HTML comment inside the script — write it as <!\\x2d-'],
-  ['<' + 'script', 'flips the tokenizer to double-escaped — write the tag name bare'],
-  ['</' + 'script', 'closes the host tag early — write it as <\\/scr\' + \'ipt>'],
-]) {
-  if (appScript.includes(seq)) {
-    const at = appScript.indexOf(seq);
-    const line = appScript.slice(0, at).split('\n').length;
-    problems.push(`assembled script contains a literal "${seq}" (line ~${line}) — it ${why}`);
+/* Assemble one shape. Called twice, sequentially: the two scripts are not in a subset
+   relation (the shell carries a chunk list the inlined build does not), so the
+   tokenizer guard and the syntax check have to run against each of them. */
+function assemble(label, degreeLiteral, chunkLiteral) {
+  const appScript = [
+    langJs,
+    tracksJs,
+    '\n/* ============ degree catalog (generated by build.mjs) ============ */\n',
+    'const DEGREE_DATA = ' + degreeLiteral + ';\n',
+    /* Always emitted, even empty: app.js guards it with typeof, but an undeclared
+       identifier is a ReferenceError that `node --check` cannot see, and it would
+       blank the page before anything painted. */
+    'const DEGREE_CHUNKS = ' + chunkLiteral + ';\n',
+    engineJs,
+    studioJs,
+    circuitJs,
+    appJs,
+  ].join('\n');
+
+  /* The host page carries this script inline, so the HTML tokenizer sees it before
+     the JS parser does. A literal `<!--` switches it into "script data escaped" state
+     and a following literal `<script` into "double escaped", where `</script>` stops
+     closing the tag — the script then swallows the rest of the document and nothing
+     runs. Both parse fine as JavaScript, so `node --check` cannot see it. Spell the
+     sequences out (`\x3c`, `'<\/scr' + 'ipt>'`) as the rest of the file does. */
+  for (const [seq, why] of [
+    ['<' + '!--', 'starts an HTML comment inside the script — write it as <!\\x2d-'],
+    ['<' + 'script', 'flips the tokenizer to double-escaped — write the tag name bare'],
+    ['</' + 'script', 'closes the host tag early — write it as <\\/scr\' + \'ipt>'],
+  ]) {
+    if (appScript.includes(seq)) {
+      const at = appScript.indexOf(seq);
+      const line = appScript.slice(0, at).split('\n').length;
+      problems.push(`the ${label} script contains a literal "${seq}" (line ~${line}) — it ${why}`);
+    }
   }
-}
 
-/* Syntax-check the assembled script before shipping it. */
-if (!checkOnly || true) {
-  const tmp = join(OUT_DIR, '.syntax-check.js');
+  /* Syntax-check before shipping. The temp is named per shape so two assemblies
+     cannot clobber each other's file. */
+  const tmp = join(OUT_DIR, '.syntax-check.' + label.replace(/\W+/g, '-') + '.js');
   mkdirSync(OUT_DIR, { recursive: true });
   writeFileSync(tmp, appScript, 'utf8');
   try {
     execFileSync(process.execPath, ['--check', tmp], { stdio: 'pipe' });
-    notes.push('syntax: assembled script parses cleanly');
+    notes.push(`syntax: the ${label} script parses cleanly`);
   } catch (e) {
-    problems.push('JavaScript syntax error in the assembled script:\n' +
+    problems.push(`JavaScript syntax error in the ${label} script:\n` +
       String(e.stderr || e.stdout || e.message).split('\n').slice(0, 12).join('\n'));
   } finally {
     try { rmSync(tmp, { force: true }); } catch {}
   }
+
+  return [
+    head,
+    '',
+    '<script type="text/plain" id="bundle">',
+    bundleText,
+    '</' + 'script>',
+    '',
+    '<script>',
+    appScript,
+    '</' + 'script>',
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n');
 }
 
 /* ---------------------------------------------------------------- emit */
-const head = read(join(SRC, 'index.head.html'));
-const html = [
-  head,
-  '',
-  '<script type="text/plain" id="bundle">',
-  bundleText,
-  '</' + 'script>',
-  '',
-  '<script>',
-  appScript,
-  '</' + 'script>',
-  '</body>',
-  '</html>',
-  '',
-].join('\n');
+/* Shape one: everything inlined, and therefore no chunk list at all — a build that
+   lists nothing is a build that fetches nothing, which is what keeps file:// working
+   rather than a promise made in a comment. */
+const inlineHtml = assemble('inlined', inlineLiteral(degree), '[]');
+
+/* Shape two: the shell, plus one payload per programme.
+
+   The filename carries a hash of the payload, for a reason worth stating: the shell
+   holds the code that interprets the chunk, so a stale chunk against a fresh shell is
+   not merely old data — ids stop matching LESSON_INDEX and there is nothing to retry,
+   because the fetch succeeded. Naming the file after its contents makes a stale chunk
+   unaddressable instead. GitHub Pages sets its own cache headers and cannot be told
+   otherwise, and both dev servers send no-store, so this failure is not reproducible
+   locally — which is exactly why it is designed out rather than tested for. */
+const chunks = [];
+for (const prog of programs) {
+  const courses = byProgram[prog.id] || [];
+  if (!courses.length) continue;
+  const json = JSON.stringify(courses);
+  const hash = createHash('sha256').update(json).digest('hex').slice(0, 8);
+  chunks.push({ id: prog.id, name: `${prog.id}.${hash}.json`, json: json,
+                url: `programs/${prog.id}.${hash}.json`, courses: courses.length });
+}
+
+/* Pages publishes this repo as a PROJECT page, at /codex-learn/ — there is no CNAME.
+   A leading slash would resolve to the user root and 404 in production while passing
+   every local check, because locally the server root IS the site root. */
+for (const ch of chunks) {
+  if (/^\//.test(ch.url) || /^[a-z][a-z0-9+.-]*:/i.test(ch.url)) {
+    problems.push(`chunk url "${ch.url}" is not document-relative — Pages serves this ` +
+      'site from a subpath, where a leading slash points off the site root');
+  }
+}
+
+const shellHtml = assemble('split shell',
+  inlineLiteral({ programs, courses: [] }),
+  JSON.stringify(chunks.map((c) => ({ id: c.id, url: c.url }))));
+
+/* The inlined shape must list nothing. Asserted rather than assumed: both shapes come
+   out of one run, and it is the empty list that keeps the double-clickable file from
+   attempting a fetch it cannot make. */
+if (/const DEGREE_CHUNKS = \[\s*\{/.test(inlineHtml)) {
+  problems.push('the inlined build lists chunks — it must fetch nothing');
+}
+
+const kbOf = (t) => Buffer.byteLength(t, 'utf8') / 1024;
+const inlineKb = kbOf(inlineHtml);
+const shellKb = kbOf(shellHtml);
+const chunkKb = chunks.map((c) => kbOf(c.json));
+const chunksTotalKb = chunkKb.reduce((a, b) => a + b, 0);
+
+notes.push(`inlined artifact: ${Math.round(inlineKb)} KB`);
+notes.push(`split shell: ${Math.round(shellKb)} KB, plus ${chunks.length} payload(s) ` +
+  `totalling ${Math.round(chunksTotalKb)} KB`);
+chunks.forEach((c, i) => notes.push(`  ${c.name} — ${c.courses} courses, ${Math.round(chunkKb[i])} KB`));
 
 console.log('--- build report ---');
 for (const n of notes) console.log('  ·', n);
 if (problems.length) {
   console.log('\nPROBLEMS:');
   for (const p of problems) console.log('  !', p);
-}
-
-if (problems.length) {
   console.log('\nbuild aborted');
   process.exit(1);
 }
 
-/* The inlined artifact is the one you can open from disk; past this it stops being
-   a reasonable thing to double-click, and the programme payloads should be split. */
-const SIZE_BUDGET_KB = 6144;
-const sizeKb = Buffer.byteLength(html, 'utf8') / 1024;
-if (sizeKb > SIZE_BUDGET_KB) {
-  problems.push(`built file is ${Math.round(sizeKb)} KB, over the ${SIZE_BUDGET_KB} KB budget — ` +
-    'split the programme payloads instead of growing the single file');
+/* Four budgets, because the two shapes fail in different ways.
+
+   The inlined artifact is bounded by what is reasonable to double-click; nothing
+   waits on it over a network any more, so it has room. The shell is what gates the
+   first paint and is the one to keep small. A single chunk matters more than the sum,
+   because it is one fetch behind one timeout: split a programme before letting one
+   payload grow past this. */
+const INLINE_BUDGET_KB = 8192;
+const SHELL_BUDGET_KB = 1024;
+const CHUNK_BUDGET_KB = 3072;
+const CHUNKS_TOTAL_KB = 6144;
+
+if (inlineKb > INLINE_BUDGET_KB) {
+  problems.push(`the inlined artifact is ${Math.round(inlineKb)} KB, over the ` +
+    `${INLINE_BUDGET_KB} KB budget — it exists only to be opened from disk, so drop a ` +
+    'programme from IT rather than from the published build');
 }
+if (shellKb > SHELL_BUDGET_KB) {
+  problems.push(`the split shell is ${Math.round(shellKb)} KB, over the ${SHELL_BUDGET_KB} KB ` +
+    'budget — something other than the catalog has grown into the first paint');
+}
+chunks.forEach((c, i) => {
+  if (chunkKb[i] > CHUNK_BUDGET_KB) {
+    problems.push(`${c.name} is ${Math.round(chunkKb[i])} KB, over the ${CHUNK_BUDGET_KB} KB ` +
+      'per-payload budget — chunk that programme by band');
+  }
+});
+if (chunksTotalKb > CHUNKS_TOTAL_KB) {
+  problems.push(`the payloads total ${Math.round(chunksTotalKb)} KB, over the ` +
+    `${CHUNKS_TOTAL_KB} KB budget`);
+}
+
 if (problems.length) {
   console.log('\nPROBLEMS:');
   for (const pr of problems) console.log('  !', pr);
@@ -274,11 +391,73 @@ if (checkOnly) {
   process.exit(0);
 }
 
-mkdirSync(OUT_DIR, { recursive: true });
-writeFileSync(OUT, html, 'utf8');
-mkdirSync(DOCS_DIR, { recursive: true });
-writeFileSync(DOCS_OUT, html, 'utf8');
+/* Delete payloads from older builds, but keep the immediately previous generation:
+   a reader still holding the last deploy's shell is asking for its hashed filenames,
+   and removing them the moment a new build lands would 404 a page that was working a
+   minute ago. docs/ is tracked, so an orphan would otherwise be committed and served
+   for ever. */
+/* Which payloads may be deleted is a question about BUILD HISTORY, and the file
+   system does not know the answer: a fresh clone stamps every file with the checkout
+   time, so ordering by mtime picks an arbitrary survivor and can delete the very file
+   the deployed shell is asking for. So the history is recorded explicitly, in a small
+   file that is committed alongside the payloads.
+
+   Three generations are kept rather than one. The generations here are BUILDS, and
+   several builds happen between deploys while iterating; keeping only one would let
+   two local rebuilds delete what the live site is still serving. */
+const PREV_FILE = '_generations.json';
+const KEEP_GENERATIONS = 3;
+
+function pruneChunks(dir, currentNames) {
+  const prevPath = join(dir, PREV_FILE);
+  let history = [];
+  if (existsSync(prevPath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(prevPath, 'utf8'));
+      if (Array.isArray(parsed)) history = parsed.filter((g) => Array.isArray(g));
+    } catch { /* unreadable history: keep everything this round and rewrite it */ }
+  }
+  /* newest first, and never record the same generation twice in a row */
+  const current = [...currentNames].sort();
+  const same = history[0] && history[0].length === current.length &&
+    history[0].every((n, i) => n === current[i]);
+  if (!same) history.unshift(current);
+  history = history.slice(0, KEEP_GENERATIONS);
+
+  const keep = new Set(history.flat());
+  const removed = [];
+  if (existsSync(dir)) {
+    for (const f of readdirSync(dir)) {
+      if (f === PREV_FILE || !/\.json$/.test(f) || keep.has(f)) continue;
+      unlinkSync(join(dir, f));
+      removed.push(f);
+    }
+  }
+  writeFileSync(prevPath, JSON.stringify(history, null, 1), 'utf8');
+  return removed;
+}
+
+function writeShape(dir, { inline }) {
+  mkdirSync(dir, { recursive: true });
+  const chunkDir = join(dir, 'programs');
+  mkdirSync(chunkDir, { recursive: true });
+  writeFileSync(join(dir, 'index.html'), shellHtml, 'utf8');
+  for (const c of chunks) writeFileSync(join(chunkDir, c.name), c.json, 'utf8');
+  if (inline) writeFileSync(join(dir, 'codewright.html'), inlineHtml, 'utf8');
+  return pruneChunks(chunkDir, chunks.map((c) => c.name));
+}
+
+const droppedBuild = writeShape(OUT_DIR, { inline: true });
+const droppedDocs = writeShape(DOCS_DIR, { inline: false });
 writeFileSync(join(DOCS_DIR, '.nojekyll'), '', 'utf8');
-const kb = (Buffer.byteLength(html, 'utf8') / 1024).toFixed(0);
-console.log(`\nwrote ${OUT}  (${kb} KB)`);
-console.log(`wrote ${DOCS_OUT}  (this is what GitHub Pages serves)`);
+
+console.log(`\nwrote ${join(OUT_DIR, 'codewright.html')}  (${Math.round(inlineKb)} KB, inlined — open this one from disk)`);
+console.log(`wrote ${join(OUT_DIR, 'index.html')}  (${Math.round(shellKb)} KB shell + ${chunks.length} payloads — what a browser gets)`);
+for (const d of [...new Set([...droppedBuild, ...droppedDocs])]) console.log(`  removed stale ${d}`);
+
+/* docs/ is tracked and the payload filenames change whenever a course does, so a
+   habitual `git add docs/index.html` would publish a shell whose payloads 404. Print
+   the command that stages all of it. */
+console.log('\ndocs/ is what GitHub Pages serves. To publish:');
+console.log('  git add docs/index.html docs/programs docs/.nojekyll');
+

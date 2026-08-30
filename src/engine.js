@@ -1245,7 +1245,12 @@ const PyRunner = (function () {
         if (initNoise.length) {
           try { console.warn('[codewright] python runtime init failed — last messages:\n' + initNoise.slice(-8).join('\n')); } catch (e) {}
         }
-        throw new Error('The Python runtime could not be started here. Embedded previews sometimes block the ~10 MB download it needs from cdnjs.cloudflare.com — download codewright.html and open it directly in your browser, then press Run again. Web and JavaScript lessons work everywhere either way.');
+        /* This used to say "download codewright.html and open it directly". That file
+           is a local build artifact and has never been published, so the instruction
+           was not actionable for anyone reading it on the site — and since the catalog
+           was split out it would also be the wrong advice, because the published page
+           fetches its courses and a file:// copy cannot. Name the actual cause. */
+        throw new Error('The Python runtime could not be started here. Embedded previews sometimes block the ~10 MB download it needs from cdnjs.cloudflare.com — open this page in a normal browser tab rather than inside an embedded preview, then press Run again. Web and JavaScript lessons work everywhere either way.');
       })();
       loadingPromise.catch(function () { loadingPromise = null; });
     }

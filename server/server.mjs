@@ -14,7 +14,7 @@
 
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { join, extname, dirname, normalize } from 'node:path';
+import { join, extname, dirname, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -194,9 +194,14 @@ async function api(req, res, path) {
 
 /* ------------------------------------------------------------------- static */
 async function serveStatic(req, res, path) {
-  if (path === '/' || path === '') path = '/codewright.html';
+  /* '/' is the SPLIT build, the same shape GitHub Pages publishes, so a local preview
+     actually exercises the payload fetches. The inlined single file stays reachable at
+     /codewright.html for the open-it-from-disk check. */
+  if (path === '/' || path === '') path = '/index.html';
   const file = normalize(join(BUILD, path));
-  if (!file.startsWith(BUILD)) { res.writeHead(403).end('forbidden'); return; }
+  /* startsWith alone lets a sibling directory whose name merely begins with the
+     root's name through; compare on a separator boundary. Pre-existing. */
+  if (file !== BUILD && !file.startsWith(BUILD + sep)) { res.writeHead(403).end('forbidden'); return; }
   try {
     await stat(file);
     const body = await readFile(file);
@@ -211,7 +216,13 @@ async function serveStatic(req, res, path) {
 }
 
 createServer(async (req, res) => {
-  const path = decodeURIComponent((req.url || '/').split('?')[0]);
+  /* decodeURIComponent throws on a malformed escape such as `/%`, and this is
+     outside the try below, in an async handler — so one bad request became an
+     unhandled rejection and took the whole process down. Pre-existing; it
+     matters more now that the app itself requests generated paths. */
+  let path;
+  try { path = decodeURIComponent((req.url || '/').split('?')[0]); }
+  catch { path = (req.url || '/').split('?')[0]; }
   cors(req, res);
   try {
     if (path.startsWith('/api/')) await api(req, res, path);

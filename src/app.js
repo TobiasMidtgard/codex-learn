@@ -25,6 +25,16 @@ const teardownFns = [];
 
 /* ---------- degree catalog ---------- */
 const DEGREE = (typeof DEGREE_DATA !== 'undefined' && DEGREE_DATA) ? DEGREE_DATA : { programs: [], courses: [] };
+/* The published build ships the courses as one fetched payload per programme, because
+   inlined they are seven eighths of the page and nothing renders until all of it has
+   parsed. The double-clickable build inlines them and lists nothing here.
+
+   Guarded with typeof for the same reason DEGREE is: an undeclared identifier is a
+   ReferenceError thrown before the first paint, and `node --check` in build.mjs is a
+   syntax check that cannot see it. */
+const DEGREE_CHUNK_LIST = (typeof DEGREE_CHUNKS !== 'undefined' && DEGREE_CHUNKS) ? DEGREE_CHUNKS : [];
+const MISSING_PROGRAMS = [];
+function programMissing(id) { return MISSING_PROGRAMS.indexOf(id) >= 0; }
 /* A course is placed by (program, band). `band` is the neutral name for what the CS
    degree calls a year and the EE master's calls a track, so nothing has to pretend a
    track is a year. */
@@ -61,8 +71,8 @@ function capstoneMd(c) {
   return md;
 }
 
-(function buildDegreeIndex() {
-  for (const c of DEGREE.courses) {
+function buildDegreeIndex(courses) {
+  for (const c of courses) {
     COURSE_OF[c.id] = c;
     /* a course behaves like a mini-track so lesson chrome, nav and XP all work */
     c.kind = 'course';
@@ -213,7 +223,89 @@ function capstoneMd(c) {
       (COURSE_DEPENDENTS[p] = COURSE_DEPENDENTS[p] || []).push(c.id);
     }
   }
-})();
+}
+/* the inlined build arrives with them already here; the split build adds to this */
+buildDegreeIndex(DEGREE.courses);
+
+/* ---------- fetching the degree payloads ----------
+   One request per programme, in parallel, each with its own timeout and one retry. */
+async function fetchChunk(url, ms) {
+  if (typeof fetch === 'undefined') throw new Error('no fetch in this context');
+  const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = setTimeout(function () { if (ctl) ctl.abort(); }, ms);
+  try {
+    const res = await fetch(url, ctl ? { signal: ctl.signal } : undefined);
+    /* A 404 RESOLVES. Without this line the failure surfaces later as a JSON syntax
+       error, from a different place, and routes around the retry entirely. */
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
+    const data = await res.json();
+    /* Validate the whole payload HERE, where a throw is already routed to the retry
+       and then to the banner. Anything that reaches buildDegreeIndex and throws
+       part way through leaves half a programme indexed, and there is no clean way
+       back from that — so nothing malformed is allowed to get that far. A captive
+       portal returning a JSON error body, or a half-written file, both land here. */
+    if (!Array.isArray(data)) throw new Error('payload is not a list of courses');
+    for (const c of data) {
+      if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !Array.isArray(c.modules)) {
+        throw new Error('payload contains a malformed course');
+      }
+    }
+    return data;
+  } finally { clearTimeout(timer); }
+}
+
+function programLoaded(id) {
+  return DEGREE.courses.some(function (c) { return c.program === id; });
+}
+function markMissing(id) { if (!programMissing(id)) MISSING_PROGRAMS.push(id); }
+function markArrived(id) {
+  const at = MISSING_PROGRAMS.indexOf(id);
+  if (at >= 0) MISSING_PROGRAMS.splice(at, 1);
+}
+
+/* 30 s per attempt, twice. A payload is a couple of megabytes and the budget is for
+   the whole body, so a short fuse does not fail fast on a slow link — it fails
+   permanently, because the retry has exactly the same budget and loses the same race. */
+const CHUNK_TIMEOUT_MS = 30000;
+
+async function loadDegreeChunks() {
+  /* Only ever fetch what is not already here. Re-fetching a programme that loaded
+     fine means a retry for a DIFFERENT programme can un-load it: the second fetch
+     fails, the id goes back on the missing list, and a working degree screen is
+     replaced by an error page for courses that are sitting in the rail. */
+  const todo = DEGREE_CHUNK_LIST.filter(function (ch) { return !programLoaded(ch.id); });
+  if (!todo.length) return;
+  const got = await Promise.all(todo.map(async function (ch) {
+    /* the retry is sequential inside one promise, so a payload can never land twice */
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { return await fetchChunk(ch.url, CHUNK_TIMEOUT_MS); } catch (e) { if (attempt) return null; }
+    }
+    return null;
+  }));
+  /* Apply in declaration order rather than arrival order, so two machines on the same
+     build index identically. MISSING_PROGRAMS is never cleared wholesale: it is the
+     flag recomputeXp reads to decide whether it may write a lower XP figure, and a
+     window where it is empty while the courses are still absent is a window where a
+     deflated total gets persisted and synced. */
+  todo.forEach(function (ch, i) {
+    const courses = got[i];
+    if (!courses) { markMissing(ch.id); return; }
+    try {
+      const fresh = courses.filter(function (c) { return !COURSE_OF[c.id]; });
+      if (!fresh.length) throw new Error('payload added no courses');
+      /* Index BEFORE exposing. Every renderer enumerates DEGREE.courses, and it is
+         buildDegreeIndex that stamps c.kind, the synthesised lesson ids and
+         TRACK_LESSONS — a course visible for even one frame before that is a page
+         that breaks without throwing anything to catch. */
+      buildDegreeIndex(fresh);
+      for (const c of fresh) DEGREE.courses.push(c);
+    } catch (e) {
+      markMissing(ch.id);
+      return;
+    }
+    markArrived(ch.id);
+  });
+}
 
 function coursesInBand(programId, n) {
   return DEGREE.courses.filter(function (c) { return c.program === programId && c.band === n; });
@@ -232,7 +324,10 @@ function courseComplete(c) {
 function prereqState(c) {
   const list = (c.prereqs || []).map(function (id) {
     const pc = COURSE_OF[id];
-    return { id: id, title: pc ? pc.title : id, met: pc ? courseComplete(pc) : true, known: !!pc };
+    /* An unloaded prereq is not a met prereq. Defaulting to met would print the
+       green "you have completed everything this course builds on" for a course whose
+       prerequisite the app never saw. */
+    return { id: id, title: pc ? pc.title : id, met: pc ? courseComplete(pc) : false, known: !!pc };
   });
   return { list: list, allMet: list.every(function (p) { return p.met; }) };
 }
@@ -466,6 +561,7 @@ function renderShell() {
         '<button class="tbtn" id="theme-btn" aria-label="Switch theme">☾</button>' +
         '<span class="save-state" id="save-state"></span>' +
       '</header>' +
+      '<div class="degrade" id="degrade" role="status" hidden></div>' +
       '<div class="body" id="body">' +
         '<aside class="rail" id="rail" aria-label="Curriculum"></aside>' +
         '<main class="main" id="main"></main>' +
@@ -549,6 +645,43 @@ function toggleRail(force) {
 }
 
 /* ---------- rail ---------- */
+/* A payload that did not arrive is the one failure the learner has to be told about,
+   because every screen would otherwise just show smaller numbers and look fine. It
+   lives in the shell rather than in a toast so it survives navigation, and it stays
+   until a retry succeeds. */
+function renderDegradeBanner() {
+  const el = $('#degrade');
+  if (!el) return;
+  if (!MISSING_PROGRAMS.length) { el.hidden = true; el.innerHTML = ''; return; }
+  const names = MISSING_PROGRAMS.map(function (id) {
+    const pr = PROGRAM_OF[id];
+    return esc((pr && (pr.short || pr.name)) || id);
+  }).join(' and ');
+  const fromFile = typeof location !== 'undefined' && location.protocol === 'file:';
+  el.hidden = false;
+  el.innerHTML =
+    '<span class="dg-i">!</span>' +
+    '<span class="dg-t"><b>' + names + '</b> could not be loaded, so its courses, units and ' +
+      'credits are missing from every total on screen. Your progress is untouched.' +
+      (fromFile
+        ? ' This copy was opened straight from a file, and a browser will not fetch the ' +
+          'course payloads from there. Serve this folder over http instead, or build ' +
+          'the single-file copy with `node build.mjs` and open build/codewright.html, ' +
+          'which has the whole catalog inside it.'
+        : '') +
+    '</span>' +
+    (fromFile ? '' : '<button class="btn dark sm" id="dg-retry">Try again</button>');
+  const btn = $('#dg-retry', el);
+  if (btn) btn.addEventListener('click', async function () {
+    btn.disabled = true;
+    btn.textContent = 'Loading\u2026';
+    await loadDegreeChunks();
+    renderDegradeBanner();
+    renderRail();
+    go(route);
+  });
+}
+
 function renderRail() {
   const rail = $('#rail');
   let h = '<div class="rail-sec">Foundation tracks</div>';
@@ -580,7 +713,15 @@ function renderRail() {
   }
 
   for (const pr of PROGRAMS) {
-    if (!coursesInProgram(pr.id).length) continue;
+    if (!coursesInProgram(pr.id).length) {
+      /* A programme whose payload failed keeps its heading and says so. Dropping the
+         section entirely reads as "not written yet", which is the opposite of true. */
+      if (programMissing(pr.id)) {
+        h += '<div class="rail-sec">' + esc(pr.short || pr.name) + '</div>' +
+          '<div class="rail-miss">could not be loaded</div>';
+      }
+      continue;
+    }
     h += '<div class="rail-sec">' + esc(pr.short || pr.name) + '</div>';
     for (const y of pr.bands) {
       const list = coursesInBand(pr.id, y.n);
@@ -740,9 +881,10 @@ function screenMeta(r) {
   }
   if (r.view === 'degree') {
     const dpr = PROGRAM_OF[r.program] || PROGRAMS[0];
-    const dn = dpr ? coursesInProgram(dpr.id).length : 0;
+    const dn = dpr && programMissing(dpr.id) ? null : (dpr ? coursesInProgram(dpr.id).length : 0);
     return { title: dpr ? (dpr.short || dpr.name) : 'Programme',
-             crumb: dpr ? ((dpr.bands || []).length + ' ' + (dpr.bandNoun || 'Year').toLowerCase() + 's · ' + dn + ' courses') : '' };
+             crumb: dpr ? ((dpr.bands || []).length + ' ' + (dpr.bandNoun || 'Year').toLowerCase() + 's · ' +
+               (dn === null ? 'not loaded' : dn + ' courses')) : '' };
   }
   if (r.view === 'progress') return { title: 'Progress', crumb: 'Level ' + level() + ' · ' + P.xp.toLocaleString('en-GB') + ' XP' };
   if (r.view === 'play') return { title: 'Playground', crumb: 'Scratchpad · nothing is checked' };
@@ -780,7 +922,14 @@ function runSearch(q) {
       hits.unshift({ course: c.id, title: c.id + ' · ' + c.title });
     }
   }
-  if (!hits.length) { toast('Nothing matches “' + q + '”'); return; }
+  if (!hits.length) {
+    /* "Nothing matches" about a course the learner worked through last week is not a
+       claim the search is in any position to make while part of the catalog is absent. */
+    toast(MISSING_PROGRAMS.length
+      ? 'No match in what has loaded — part of the catalog is missing'
+      : 'Nothing matches “' + q + '”');
+    return;
+  }
   const top = hits[0];
   toast(hits.length + ' match' + (hits.length > 1 ? 'es' : '') + ' — opening ' + top.title);
   if (top.course) go({ view: 'course', id: top.course });
@@ -847,6 +996,10 @@ function statCard(label, value, unit, delta, spark) {
 /* ---------- home / dashboard ---------- */
 function renderHome(main) {
   const last = P.last && LESSON_INDEX[P.last] ? LESSON_INDEX[P.last] : null;
+  /* P.last can point into a programme whose payload did not arrive. Falling through
+     to Python 1.1 would offer "Resume" on a lesson the learner finished months ago,
+     and clicking it would overwrite the real bookmark. */
+  const lastLost = !last && P.last && MISSING_PROGRAMS.length;
   const target = last ? last.lesson : TRACK_LESSONS.python[0];
   const tinfo = LESSON_INDEX[target.id];
   const dt = degreeTotals();
@@ -906,7 +1059,7 @@ function renderHome(main) {
       '</div>' +
       '<div class="acts">' +
         '<button class="btn" id="open-degree">Degree catalog</button>' +
-        '<button class="btn primary" id="resume-btn">' + (started ? 'Resume' : 'Start learning') +
+        '<button class="btn primary" id="resume-btn">' + (lastLost ? 'Open something else' : started ? 'Resume' : 'Start learning') +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h13m-5-6 6 6-6 6"/></svg></button>' +
       '</div>' +
     '</div>' +
@@ -914,7 +1067,8 @@ function renderHome(main) {
     '<div class="resume" id="resume-card">' +
       '<div class="rl">' +
         '<div class="tagrow">' +
-          '<span class="flag">' + (P.completed[target.id] ? 'Revisit' : (started ? 'In progress' : 'Start here')) + '</span>' +
+          '<span class="flag">' + (lastLost ? 'Not loaded'
+            : P.completed[target.id] ? 'Revisit' : (started ? 'In progress' : 'Start here')) + '</span>' +
           '<span class="where">' + esc(tinfo.track.kind === 'course' ? tinfo.track.id : tinfo.track.name) +
             ' · ' + esc(tinfo.module.title) + '</span>' +
         '</div>' +
@@ -1068,10 +1222,12 @@ function renderProgress(main) {
         '<div class="section-h"><h2>Milestones</h2><span>earned by doing</span></div>' +
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">' +
           badgeSet().map(function (b) {
-            return '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 10px;border-radius:14px;' +
+            return '<div class="badge' + (b.unknown ? ' unknown' : '') + '"' +
+              (b.unknown ? ' title="Cannot be checked while part of the catalog is missing"' : '') +
+              ' style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 10px;border-radius:14px;' +
               'border:1px solid ' + (b.on ? 'var(--lime-30)' : 'var(--line)') + ';background:' + (b.on ? 'var(--lime-08)' : 'var(--surface-2)') +
               (b.on ? ';animation:popIn .4s var(--pop) both' : '') + '">' +
-              '<span style="font-size:20px;' + (b.on ? '' : 'filter:grayscale(1);opacity:.4') + '">' + b.glyph + '</span>' +
+              '<span style="font-size:20px;' + (b.on ? '' : 'filter:grayscale(1);opacity:.4') + '">' + (b.unknown ? '?' : b.glyph) + '</span>' +
               '<span style="font-size:11.5px;font-weight:600;text-align:center;line-height:1.3;color:' +
               (b.on ? 'var(--lime)' : 'var(--ink-4)') + '">' + esc(b.name) + '</span></div>';
           }).join('') +
@@ -1097,6 +1253,12 @@ function recomputeXp() {
     const info = LESSON_INDEX[id];
     xp += info ? (XP[info.lesson.type] || 10) : 10;
   }
+  /* A programme whose payload did not arrive is a different case from an unknown
+     unit: those lessons exist and their real value is known, so recomputing here
+     would flatten every one of them to the 10-point fallback and then persist and
+     sync the deflated figure. Hold the stored number instead — it is the correct one,
+     and the next load with the whole catalog recomputes it exactly. */
+  if (MISSING_PROGRAMS.length && xp < (P.xp || 0)) return;
   P.xp = xp;
 }
 
@@ -1424,6 +1586,11 @@ function badgeSet() {
   const done = Object.keys(P.completed).filter(function (id) { return LESSON_INDEX[id]; }).length;
   const caps = DEGREE.courses.filter(function (c) { return c.capstoneLessonId && P.completed[c.capstoneLessonId]; }).length;
   const full = DEGREE.courses.filter(courseComplete).length;
+  /* With a programme absent these three are undercounts, so a lit badge is still
+     earned but an unlit one is merely unknown. Showing it as unearned would take a
+     milestone the learner has already passed and visibly remove it. */
+  const partial = MISSING_PROGRAMS.length > 0;
+  const mark = function (b) { return partial && !b.on ? Object.assign(b, { unknown: true }) : b; };
   return [
     { glyph: '◆', name: 'First unit', on: done >= 1 },
     { glyph: '✦', name: 'Ten units', on: done >= 10 },
@@ -1431,7 +1598,10 @@ function badgeSet() {
     { glyph: '★', name: 'First capstone', on: caps >= 1 },
     { glyph: '⚑', name: 'Course complete', on: full >= 1 },
     { glyph: '🔥', name: 'Seven-day streak', on: streakDays() >= 7 },
-  ];
+  ].map(function (b) {
+    /* the streak is computed from P.activity alone, so the catalog cannot affect it */
+    return b.name === 'Seven-day streak' ? b : mark(b);
+  });
 }
 
 /* ---------- track ---------- */
@@ -1498,23 +1668,29 @@ function renderPrograms(main) {
     const spread = LEVEL_ORDER.filter(function (lv) { return levels[lv]; })
       .map(function (lv) { return '<span class="chip level ' + lv + '">' + levels[lv] + ' ' + lv + '</span>'; })
       .join('');
+    /* "soon" means not written yet. A programme whose payload failed to arrive is
+       written, paid for and sitting on the server, so saying "soon" about it — next to
+       0 Courses and 0 Units — is the most misleading thing on any screen. */
+    const lost = programMissing(pr.id);
     const bandList = (pr.bands || []).map(function (b) {
       const n = coursesInBand(pr.id, b.n).length;
       return '<li><span class="pb-icon" style="--tt:' + b.tint + '">' + b.icon + '</span>' +
         '<span class="pb-t">' + esc(b.title) + '</span>' +
-        '<span class="pb-n">' + (n ? n + ' course' + (n === 1 ? '' : 's') : 'soon') + '</span></li>';
+        '<span class="pb-n">' + (n ? n + ' course' + (n === 1 ? '' : 's') : (lost ? '—' : 'soon')) + '</span></li>';
     }).join('');
-    return '<button class="prog-card' + (authored ? '' : ' empty') + '" data-program="' + esc(pr.id) + '">' +
+    const stat = function (v, label) {
+      return '<div class="stat"><b>' + (lost ? '\u2014' : v) + '</b><span>' + label + '</span></div>';
+    };
+    return '<button class="prog-card' + (lost ? ' lost' : authored ? '' : ' empty') + '" data-program="' + esc(pr.id) + '">' +
       '<div class="pc-head">' +
         '<div><h2>' + emphasise(pr) + '</h2><p>' + esc(pr.subtitle) + '</p></div>' +
         ringHtml(t.pct) +
       '</div>' +
       '<div class="pc-stats">' +
-        '<div class="stat"><b>' + authored + '</b><span>Courses</span></div>' +
-        '<div class="stat"><b>' + t.units + '</b><span>Units</span></div>' +
-        '<div class="stat"><b>' + t.labs + '</b><span>Labs</span></div>' +
+        stat(authored, 'Courses') + stat(t.units, 'Units') + stat(t.labs, 'Labs') +
         '<div class="stat"><b>' + planned + '</b><span>' + esc((pr.bandNoun || 'Year') + 's') + '</span></div>' +
       '</div>' +
+      (lost ? '<div class="pc-lost">Could not be loaded \u2014 use <b>Try again</b> at the top of the window</div>' : '') +
       (spread ? '<div class="pc-levels">' + spread + '</div>' : '') +
       '<ul class="pc-bands">' + bandList + '</ul>' +
     '</button>';
@@ -1566,7 +1742,20 @@ function courseCardHtml(c) {
 
 function renderDegree(main, programId) {
   if (!DEGREE.courses.length) {
-    main.innerHTML = '<div class="page"><h1>No catalog loaded</h1><p>The degree catalog was not bundled into this build.</p></div>';
+    /* Two different failures used to share one message. They need different answers:
+       one is a build that shipped without a catalog, the other is a catalog that did
+       not arrive over the network. */
+    main.innerHTML = DEGREE_CHUNK_LIST.length
+      ? '<div class="page"><h1>The catalog did not load</h1><p>This build fetches the ' +
+        'course catalog, and none of it arrived. Check the connection and try again \u2014 ' +
+        'the foundation tracks in the panel on the left do not need it.</p></div>'
+      : '<div class="page"><h1>No catalog loaded</h1><p>The degree catalog was not bundled into this build.</p></div>';
+    return;
+  }
+  if (programMissing(programId)) {
+    main.innerHTML = '<div class="page"><h1>' + esc((PROGRAM_OF[programId] || {}).name || programId) +
+      '</h1><p>This programme\u2019s courses could not be loaded. Everything else is ' +
+      'unaffected; use <b>Try again</b> in the bar at the top.</p></div>';
     return;
   }
   const prog = PROGRAM_OF[programId] || PROGRAMS[0];
@@ -3186,6 +3375,37 @@ async function boot() {
   }
   renderShell();
   applyTheme();
+
+  /* The catalog has to be indexed before anything below this line runs, and the
+     ordering is load-bearing rather than tidy:
+
+       - Sync.push -> adopt -> recomputeXp values every completed unit by its type,
+         which it can only do once LESSON_INDEX knows the types;
+       - the P.last restore reads info.track.program to open the right band;
+       - renderHome picks the Resume target, and with no courses indexed it silently
+         falls back to Python 1.1 under a "Welcome back" heading.
+
+     None of those throw when the catalog is absent. They just quietly say something
+     untrue, which is the worst of the available failures. */
+  renderDegradeBanner();
+  if (DEGREE_CHUNK_LIST.length && !DEGREE.courses.length) {
+    /* Something on screen while the payloads are in flight. renderShell has already
+       painted the chrome and the foundation rail; this fills the one panel that has
+       nothing to show yet. */
+    const m = $('#main');
+    if (m) {
+      m.innerHTML = '<div class="boot-wait"><div>Loading the course catalog\u2026</div>' +
+        '<div class="bw-bar"><i></i></div></div>';
+    }
+    const omni = $('#omni');
+    if (omni) { omni.disabled = true; omni.placeholder = 'Loading\u2026'; }
+  }
+  await loadDegreeChunks();
+  const omni = $('#omni');
+  if (omni) { omni.disabled = false; omni.placeholder = 'Search lessons'; }
+  renderDegradeBanner();
+  renderRail();
+
   /* pull whatever the account already has before the first screen paints, so a
      second machine opens where the first one left off rather than at zero */
   if (Sync.signedIn()) {
@@ -3208,9 +3428,27 @@ async function boot() {
   }
   go({ view: 'home' });
 }
+/* boot() used to be unrejectable by construction — its only awaits were Store.load,
+   which swallows everything, and a Sync call already inside a try. Fetching the
+   catalog breaks that, and an unhandled rejection here is a permanently blank page
+   with nothing on screen to explain it. */
+function bootFailed(e) {
+  try { console.error('[codewright] boot failed', e); } catch (_) {}
+  const app = document.getElementById('app');
+  if (!app) return;
+  app.innerHTML = '<div style="max-width:34rem;margin:18vh auto;padding:0 24px;' +
+    'font:15px/1.6 system-ui,sans-serif;color:#c9d1d9">' +
+    '<h1 style="font-size:20px;margin:0 0 10px">Codex Learn could not start</h1>' +
+    '<p style="margin:0 0 14px;color:#8b949e">' +
+    String((e && e.message) || e).replace(/[<>&]/g, '') + '</p>' +
+    '<button onclick="location.reload()" style="padding:8px 16px;border-radius:8px;' +
+    'border:1px solid #30363d;background:#161b22;color:inherit;cursor:pointer">Reload</button>' +
+    '</div>';
+}
 if (typeof window !== 'undefined' && typeof document !== 'undefined' && !(typeof globalThis !== 'undefined' && globalThis.__CW_NO_BOOT)) {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  const start = function () { Promise.resolve().then(boot).catch(bootFailed); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 }
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { parseBundle: parseBundle, renderMd: renderMd, Highlight: Highlight, dedent: dedent, mdInline: mdInline, TRACKS: TRACKS, LESSON_INDEX: LESSON_INDEX, DEGREE: DEGREE };

@@ -49,8 +49,22 @@ Then open <http://localhost:4173>. That serves the app **and** the account API.
 > machines. Signing in needs `server/server.mjs` running somewhere both machines can
 > reach — point the Profile screen at its address to use it.
 
-Rebuilding writes both `build/codewright.html` and `docs/index.html`; the second is
-what Pages publishes, so a push updates the live site.
+Rebuilding writes the app in two shapes. `build/codewright.html` has everything
+inlined — one file, no requests, the one to open from disk. `build/index.html` plus
+`build/programs/*.json` is the same app with the degree catalog split into one fetched
+payload per programme, which is what a browser gets: the catalog is seven eighths of
+the bytes, and inlined it means nothing on the page runs until all of it has parsed.
+
+`docs/` holds a copy of the split shape and is what Pages publishes. The payload
+filenames carry a hash of their contents, so they change whenever a course does —
+publish with
+
+```bash
+git add docs/index.html docs/programs docs/.nojekyll
+```
+
+which `node build.mjs` prints at the end of every run, because staging only
+`docs/index.html` would put up a shell whose payloads 404.
 
 `build/codewright.html` is fully self-contained — you can also just open that file
 directly in a browser, or host it anywhere as a static asset. The only network
@@ -86,7 +100,8 @@ tools/
   test_api.mjs       end-to-end exercise of the account API
   serve.mjs          static server, no accounts
 build.mjs            assembles everything into build/ and docs/
-docs/index.html      the published build (GitHub Pages serves this)
+docs/index.html      the published shell (GitHub Pages serves this)
+docs/programs/       one course payload per programme, fetched by the shell
 data/                accounts and progress (created at runtime, gitignored)
 ```
 
