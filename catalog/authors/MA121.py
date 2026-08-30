@@ -47,6 +47,1095 @@ COURSE = {
                 "Transposition reverses products: (AB)^T = B^T A^T",
                 "Floating-point equality needs a tolerance, so `equals` takes one and `==` picks a default",
             ],
+            "read": [
+                {
+                    "title": "Why the multiplication rule is not the obvious one",
+                    "minutes": 14,
+                    "body": r'''
+Two tables of numbers of the same size. Adding them is not a question: line them up
+and add the entries. Scaling one of them by $3$ is not a question either. Multiplying
+them, though, has an obvious answer that almost nobody uses.
+
+The obvious answer is to multiply entrywise, the way you added: put $a_{ij}b_{ij}$ in
+position $(i,j)$. It is well defined, it is commutative, it is fast, and it has an
+identity — the matrix of all ones. It is a perfectly good operation and it has a name,
+the Hadamard product. What it does not do is the one thing matrices exist to do.
+
+The rule everyone actually means is stranger. To multiply an $m\times k$ matrix by a
+$k\times n$ matrix you take a *row* of the first, a *column* of the second, multiply
+them term by term and add the results — and you do that $mn$ times. The shapes have to
+agree in a specific direction. The result is not commutative. Nothing about it looks
+like arithmetic. Where does it come from, and why is it worth the trouble?
+
+## What a matrix is for
+
+A matrix is not fundamentally a table. It is a **linear map** written down.
+
+A map $T$ from $\mathbf{R}^{k}$ to $\mathbf{R}^{m}$ is linear when it respects the two
+operations a vector space has:
+
+$$T(u + v) = T(u) + T(v) \qquad T(cv) = c\,T(v)$$
+
+That is a strong condition. It rules out $T(x) = x + 1$, it rules out squaring, and it
+rules out almost everything else you could write down. What survives is rotations,
+reflections, projections, shears, scalings, and sums of those — which is to say most
+of the geometry and all of the systems of linear equations you will meet.
+
+Here is the consequence that makes matrices possible. Write a vector in
+$\mathbf{R}^{2}$ in terms of the standard basis, $v = x e_1 + y e_2$. Then linearity
+gives you
+
+$$T(v) = T(x e_1 + y e_2) = x\,T(e_1) + y\,T(e_2)$$
+
+and the whole map has collapsed into two vectors. Once you know where $T$ sends $e_1$
+and where it sends $e_2$, you know where it sends everything, forever. Those two
+images, written as columns side by side, *are* the matrix of $T$:
+
+$$A = \begin{bmatrix} T(e_1) & T(e_2) \end{bmatrix}$$
+
+So a matrix is a list of images of basis vectors, and $Av$ means "combine the columns
+of $A$ with the weights in $v$". Nothing has been invented yet — this is just the
+definition of linear, written out.
+
+## Composition forces the rule
+
+Now take two maps. $B$ acts on $\mathbf{R}^{2}$, then $A$ acts on the result. The
+composite is a map too, and it is linear (check: it respects sums and scalings because
+both halves do). So it has a matrix. Call that matrix $AB$. We are not free to choose
+what $AB$ means; the composite already exists, and $AB$ is whatever matrix it has.
+
+Feed it $v = (x, y)$ and follow the arithmetic. First $B$:
+
+$$Bv = \begin{bmatrix} b_{11}x + b_{12}y \\ b_{21}x + b_{22}y \end{bmatrix}$$
+
+Now apply $A$ to that. The first component of $A$ applied to a vector $(p, q)$ is
+$a_{11}p + a_{12}q$, so
+
+$$(A(Bv))_1 = a_{11}(b_{11}x + b_{12}y) + a_{12}(b_{21}x + b_{22}y)$$
+
+Expand and collect the $x$ and the $y$:
+
+$$(A(Bv))_1 = (a_{11}b_{11} + a_{12}b_{21})\,x + (a_{11}b_{12} + a_{12}b_{22})\,y$$
+
+The composite is linear, so its first component must be some number times $x$ plus some
+number times $y$ — and there they are. The coefficient of $x$ is the $(1,1)$ entry of
+the composite's matrix, and it is $a_{11}b_{11} + a_{12}b_{21}$: row $1$ of $A$ against
+column $1$ of $B$. Do the same for the second component and the pattern repeats. In
+general
+
+$$(AB)_{ij} = \sum_{k} a_{ik} b_{kj}$$
+
+The rule was not chosen. It is what falls out of "do $B$, then do $A$", and every
+strange feature of it is inherited. The index $k$ runs over the *columns* of $A$ and
+the *rows* of $B$, so those two counts must match — that is the shape rule
+$(m\times k)(k\times n) \to (m\times n)$, and it is not a convention but a statement
+that the output of $B$ has to be something $A$ can eat.
+
+## Worked: a $2\times 3$ against a $3\times 2$
+
+$$A = \begin{bmatrix} 1 & 2 & -1 \\ 0 & 3 & 4 \end{bmatrix} \qquad B = \begin{bmatrix} 2 & 0 \\ 1 & -3 \\ 5 & 1 \end{bmatrix}$$
+
+$A$ is $2\times3$ and $B$ is $3\times2$, the inner $3$s agree, so $AB$ is $2\times2$.
+Four entries, each a sum of three products.
+
+$$(AB)_{11} = 1\cdot 2 + 2\cdot 1 + (-1)\cdot 5 = 2 + 2 - 5 = -1$$
+$$(AB)_{12} = 1\cdot 0 + 2\cdot(-3) + (-1)\cdot 1 = 0 - 6 - 1 = -7$$
+$$(AB)_{21} = 0\cdot 2 + 3\cdot 1 + 4\cdot 5 = 0 + 3 + 20 = 23$$
+$$(AB)_{22} = 0\cdot 0 + 3\cdot(-3) + 4\cdot 1 = 0 - 9 + 4 = -5$$
+$$AB = \begin{bmatrix} -1 & -7 \\ 23 & -5 \end{bmatrix}$$
+
+Now turn the pair round. $B$ is $3\times2$, $A$ is $2\times3$, the inner $2$s agree, so
+$BA$ exists as well — and it is $3\times3$:
+
+$$(BA)_{11} = 2\cdot1 + 0\cdot0 = 2 \qquad (BA)_{12} = 2\cdot2 + 0\cdot3 = 4 \qquad (BA)_{13} = 2\cdot(-1) + 0\cdot4 = -2$$
+$$(BA)_{21} = 1\cdot1 + (-3)\cdot0 = 1 \qquad (BA)_{22} = 1\cdot2 + (-3)\cdot3 = -7 \qquad (BA)_{23} = 1\cdot(-1) + (-3)\cdot4 = -13$$
+$$(BA)_{31} = 5\cdot1 + 1\cdot0 = 5 \qquad (BA)_{32} = 5\cdot2 + 1\cdot3 = 13 \qquad (BA)_{33} = 5\cdot(-1) + 1\cdot4 = -1$$
+$$BA = \begin{bmatrix} 2 & 4 & -2 \\ 1 & -7 & -13 \\ 5 & 13 & -1 \end{bmatrix}$$
+
+$AB$ and $BA$ are not merely different numbers here. They are different *sizes*. Any
+instinct that $AB$ and $BA$ ought to be comparable has to die at this example.
+
+## Worked: the case people get wrong
+
+Take two maps of the plane whose geometry you can see.
+
+$$P = \begin{bmatrix} 1 & 0 \\ 0 & 0 \end{bmatrix} \qquad R = \begin{bmatrix} 0 & -1 \\ 1 & 0 \end{bmatrix}$$
+
+$P$ flattens everything onto the horizontal axis: $P(x,y) = (x, 0)$. $R$ turns the
+plane a quarter turn anticlockwise: $R(x,y) = (-y, x)$. Both are square, both are
+$2\times2$, so both orders are defined and both give $2\times2$ answers. Compute them.
+
+$$(RP)_{11} = 0\cdot1 + (-1)\cdot0 = 0 \qquad (RP)_{12} = 0\cdot0 + (-1)\cdot0 = 0$$
+$$(RP)_{21} = 1\cdot1 + 0\cdot0 = 1 \qquad (RP)_{22} = 1\cdot0 + 0\cdot0 = 0$$
+$$RP = \begin{bmatrix} 0 & 0 \\ 1 & 0 \end{bmatrix} \qquad PR = \begin{bmatrix} 0 & -1 \\ 0 & 0 \end{bmatrix}$$
+
+where the second one comes out of $(PR)_{11} = 1\cdot0 + 0\cdot1 = 0$,
+$(PR)_{12} = 1\cdot(-1) + 0\cdot0 = -1$, and a row of zeros underneath.
+
+Read them as maps and the difference is not subtle. $RP$ sends $(x,y)$ to $(0, x)$:
+flatten onto the horizontal axis first, then rotate that axis onto the vertical one, so
+everything ends up on the vertical axis. $PR$ sends $(x,y)$ to $(-y, 0)$: rotate first,
+then flatten, so everything ends up on the horizontal axis. The two composites have
+*perpendicular images*. Squashing a photograph and then turning it is not the same as
+turning it and then squashing it, and no amount of algebra was ever going to make it so.
+
+Two conventions are worth fixing here, because they cause more confusion than the rule
+itself. In $AB$ the matrix on the **right acts first**, because that is the one standing
+next to the vector in $A(Bv)$. And the letters are usually written in the order of the
+maps, not the order of the operations — so "project then rotate" is the product $RP$,
+read right to left.
+
+## The mistake, and why it is tempting
+
+The mistake is to assume $AB = BA$ and then reorder a product to make something cancel.
+It is tempting for a good reason: every product you had multiplied before this course
+commuted. Integers commute, reals commute, complex numbers commute, polynomials commute.
+The notation $AB$ is the same juxtaposition used for all of them, so the hand writes
+$ABA^{-1}B^{-1} = I$ before the head has objected.
+
+The cure is to remember what the letters stand for. $A$ and $B$ are *actions*, and the
+order in which you do two things is part of what you did. There is nothing to prove here
+and nothing to feel bad about; there is only a habit to break.
+
+A second mistake, rarer but more damaging, is to expect the number system's other
+comforts to survive. They do not. If $AB = 0$ with numbers, one of them is zero. With
+matrices, take $N = \begin{bmatrix} 0 & 1 \\ 0 & 0 \end{bmatrix}$; then $N^2$ has
+$(1,1)$ entry $0\cdot0 + 1\cdot0 = 0$ and $(1,2)$ entry $0\cdot1 + 1\cdot0 = 0$, and the
+bottom row was zero to start with, so $N^2 = 0$ although $N \neq 0$. A non-zero matrix
+can square to nothing, and that single example destroys the "divide both sides by $A$"
+move for good.
+
+## Where the rule stops
+
+It stops at the shapes, and it stops hard. $AB$ requires the columns of $A$ to number
+the same as the rows of $B$; there is no partial credit, no broadcasting, no padding.
+That is why the lab raises `ValueError` rather than guessing.
+
+It stops at commutativity, always — except in the special cases where it happens to
+hold: any matrix commutes with $I$, with itself, with its own powers, and with any
+scalar multiple of $I$. Those exceptions are exactly the ones you will use, which is
+part of why the general failure is so easy to forget.
+
+And it stops being *the* product only in the sense that other products exist. The
+Hadamard product from the opening paragraph is genuinely useful — it is how you mask an
+image or apply a per-pixel gain — but it does not compose maps, so it has no place in a
+course whose subject is what linear maps do. When this course writes $AB$, it always
+means the composition.
+''',
+                },
+                {
+                    "title": "Which rearrangements are legal",
+                    "minutes": 13,
+                    "body": r'''
+You have just been told that $AB$ and $BA$ are different matrices. That is one
+rearrangement forbidden. Which ones are still allowed? Can you move brackets? Can you
+expand $(A+B)^2$? Can you transpose a product a factor at a time? Every one of those
+moves is something you have done a thousand times with numbers, and each has to be
+re-examined now that the multiplication has changed.
+
+The answers are not a list to memorise. Two of the three are true, one is false, and in
+each case the reason is visible in the definition.
+
+## Brackets move freely, and the proof is one sentence
+
+$$(AB)C = A(BC)$$
+
+Both sides are the matrix of the same map: do $C$, then $B$, then $A$. Composition of
+functions is associative because "apply $f$ to the result of applying $g$ to the result
+of applying $h$" does not contain a bracket in the first place — the brackets are an
+artefact of writing it down in a line. Since a matrix is only a linear map in
+coordinates, and the product is only composition in coordinates, the matrices must
+agree.
+
+If you would rather see it in the entries, the argument is an exchange of summation
+order:
+
+$$((AB)C)_{ij} = \sum_{l} (AB)_{il} c_{lj} = \sum_{l} \left( \sum_{k} a_{ik} b_{kl} \right) c_{lj} = \sum_{k}\sum_{l} a_{ik} b_{kl} c_{lj}$$
+$$(A(BC))_{ij} = \sum_{k} a_{ik} (BC)_{kj} = \sum_{k} a_{ik} \left( \sum_{l} b_{kl} c_{lj} \right) = \sum_{k}\sum_{l} a_{ik} b_{kl} c_{lj}$$
+
+Same double sum, same terms, written in a different order. The exchange is free because
+the sums are finite; nothing is being assumed about convergence. The hypothesis that
+does matter is on the *shapes*: $A$ must be $m\times k$, $B$ must be $k\times l$ and $C$
+must be $l\times n$, or one of those products does not exist and the identity has
+nothing to say.
+
+### Worked: a bracket move, checked
+
+$$A = \begin{bmatrix} 1 & 2 \\ 0 & 1 \end{bmatrix} \quad B = \begin{bmatrix} 3 & 0 \\ -1 & 2 \end{bmatrix} \quad C = \begin{bmatrix} 1 & 1 \\ 2 & 0 \end{bmatrix}$$
+
+Left first:
+
+$$AB = \begin{bmatrix} 1\cdot3 + 2\cdot(-1) & 1\cdot0 + 2\cdot2 \\ 0\cdot3 + 1\cdot(-1) & 0\cdot0 + 1\cdot2 \end{bmatrix} = \begin{bmatrix} 1 & 4 \\ -1 & 2 \end{bmatrix}$$
+$$(AB)C = \begin{bmatrix} 1\cdot1 + 4\cdot2 & 1\cdot1 + 4\cdot0 \\ -1\cdot1 + 2\cdot2 & -1\cdot1 + 2\cdot0 \end{bmatrix} = \begin{bmatrix} 9 & 1 \\ 3 & -1 \end{bmatrix}$$
+
+Right first:
+
+$$BC = \begin{bmatrix} 3\cdot1 + 0\cdot2 & 3\cdot1 + 0\cdot0 \\ -1\cdot1 + 2\cdot2 & -1\cdot1 + 2\cdot0 \end{bmatrix} = \begin{bmatrix} 3 & 3 \\ 3 & -1 \end{bmatrix}$$
+$$A(BC) = \begin{bmatrix} 1\cdot3 + 2\cdot3 & 1\cdot3 + 2\cdot(-1) \\ 0\cdot3 + 1\cdot3 & 0\cdot3 + 1\cdot(-1) \end{bmatrix} = \begin{bmatrix} 9 & 1 \\ 3 & -1 \end{bmatrix}$$
+
+Identical, as promised. The intermediate matrices $AB$ and $BC$ were completely
+different; only the ends had to agree.
+
+## Associativity is worth money
+
+Mathematically the bracketing is a free choice. Computationally it is not, and the gap
+is enormous. Multiplying an $m\times k$ by a $k\times n$ costs $mnk$ scalar
+multiplications — one per term of each of the $mn$ sums, each sum having $k$ terms.
+
+Take $A$ of shape $3\times50$, $B$ of shape $50\times2$, $C$ of shape $2\times40$.
+
+$$(AB)C: \quad 3\cdot50\cdot2 = 300 \;\text{ then }\; 3\cdot2\cdot40 = 240 \quad\Rightarrow\quad 540$$
+$$A(BC): \quad 50\cdot2\cdot40 = 4000 \;\text{ then }\; 3\cdot50\cdot40 = 6000 \quad\Rightarrow\quad 10000$$
+
+Eighteen times the work for a bit-for-bit identical answer, because the second route
+inflates a $50\times2$ and a $2\times40$ into a $50\times40$ before ever touching the
+small matrix $A$. The general problem of choosing the cheapest bracketing over a long
+chain is a classic dynamic-programming exercise; the point here is only that
+associativity is what makes the question askable at all.
+
+## The square of a sum is not what you remember
+
+$(A+B)^2$ means $(A+B)(A+B)$. The distributive law does hold — it comes straight from
+the definition, since every entry of the product is linear in each factor separately —
+so expand honestly:
+
+$$(A+B)(A+B) = A^2 + AB + BA + B^2$$
+
+and stop. Collecting $AB + BA$ into $2AB$ is the step that requires commutativity, and
+it is not available.
+
+### Worked: the same expansion, twice, with numbers
+
+$$A = \begin{bmatrix} 1 & 1 \\ 0 & 1 \end{bmatrix} \qquad B = \begin{bmatrix} 1 & 0 \\ 1 & 1 \end{bmatrix} \qquad A + B = \begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}$$
+$$(A+B)^2 = \begin{bmatrix} 2\cdot2 + 1\cdot1 & 2\cdot1 + 1\cdot2 \\ 1\cdot2 + 2\cdot1 & 1\cdot1 + 2\cdot2 \end{bmatrix} = \begin{bmatrix} 5 & 4 \\ 4 & 5 \end{bmatrix}$$
+
+Now the pieces:
+
+$$A^2 = \begin{bmatrix} 1 & 2 \\ 0 & 1 \end{bmatrix} \quad B^2 = \begin{bmatrix} 1 & 0 \\ 2 & 1 \end{bmatrix} \quad AB = \begin{bmatrix} 2 & 1 \\ 1 & 1 \end{bmatrix} \quad BA = \begin{bmatrix} 1 & 1 \\ 1 & 2 \end{bmatrix}$$
+
+Adding the four:
+
+$$A^2 + AB + BA + B^2 = \begin{bmatrix} 1+2+1+1 & 2+1+1+0 \\ 0+1+1+2 & 1+1+2+1 \end{bmatrix} = \begin{bmatrix} 5 & 4 \\ 4 & 5 \end{bmatrix}$$
+
+which matches. The remembered formula does not:
+
+$$A^2 + 2AB + B^2 = \begin{bmatrix} 1+4+1 & 2+2+0 \\ 0+2+2 & 1+2+1 \end{bmatrix} = \begin{bmatrix} 6 & 4 \\ 4 & 4 \end{bmatrix}$$
+
+Two of the four entries are wrong. Notice *why* — $AB \neq BA$ here by exactly the
+amount that the two answers differ, $AB - BA = \begin{bmatrix} 1 & 0 \\ 0 & -1 \end{bmatrix}$,
+and adding that to the wrong answer recovers the right one. The discrepancy is the
+commutator, and it is the thing you were silently assuming to be zero.
+
+## Transposition reverses the order
+
+$$(AB)^{\mathsf{T}} = B^{\mathsf{T}} A^{\mathsf{T}}$$
+
+Take it in indices. By definition of the transpose, the $(i,j)$ entry of
+$(AB)^{\mathsf{T}}$ is the $(j,i)$ entry of $AB$:
+
+$$((AB)^{\mathsf{T}})_{ij} = (AB)_{ji} = \sum_{k} a_{jk} b_{ki}$$
+
+Rewrite each factor with its own transpose: $a_{jk} = (A^{\mathsf{T}})_{kj}$ and
+$b_{ki} = (B^{\mathsf{T}})_{ik}$. Substituting, and then reordering the two numbers
+inside the sum — they are scalars, and scalars commute —
+
+$$\sum_{k} (A^{\mathsf{T}})_{kj} (B^{\mathsf{T}})_{ik} = \sum_{k} (B^{\mathsf{T}})_{ik} (A^{\mathsf{T}})_{kj} = (B^{\mathsf{T}} A^{\mathsf{T}})_{ij}$$
+
+The reversal is forced by the index $k$: it has to stay glued between the two factors,
+and after the transpose it has moved from the second slot of $A$ and the first slot of
+$B$ to the first slot of $A^{\mathsf{T}}$ and the second slot of $B^{\mathsf{T}}$. The
+only way to put it back in the middle is to swap the factors.
+
+The shapes say the same thing without any algebra. If $A$ is $m\times k$ and $B$ is
+$k\times n$, then $(AB)^{\mathsf{T}}$ is $n\times m$. And $B^{\mathsf{T}}A^{\mathsf{T}}$
+is $(n\times k)(k\times m)$, which is $n\times m$ — it fits. Whereas
+$A^{\mathsf{T}}B^{\mathsf{T}}$ is $(k\times m)(n\times k)$, which does not even exist
+unless $m = n$, and is the wrong shape when it does. The wrong rule is usually not
+merely false; it is not type-correct.
+
+## The other move that is gone: cancelling
+
+With numbers, $ab = ac$ and $a \neq 0$ give $b = c$. With matrices it fails, and the
+counterexample is small:
+
+$$A = \begin{bmatrix} 1 & 0 \\ 0 & 0 \end{bmatrix} \quad B = \begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix} \quad C = \begin{bmatrix} 1 & 2 \\ 5 & 6 \end{bmatrix}$$
+$$AB = \begin{bmatrix} 1 & 2 \\ 0 & 0 \end{bmatrix} = AC \qquad \text{yet} \qquad B \neq C$$
+
+$A$ is not the zero matrix, and the products are equal anyway, because $A$ throws away
+the second row of whatever it multiplies and the two matrices differ only there.
+Cancellation needs $A$ to be *invertible*, not merely non-zero — a distinction that has
+no counterpart in the real numbers, where the only non-invertible number is zero. Module
+2 gives you the test for it.
+
+## Where these stop
+
+Associativity never fails for real or complex matrices of compatible shape; that one is
+safe. Distribution never fails. Transposition reversal never fails.
+
+Every other reflex you have from school arithmetic is suspect until checked, and the
+three that bite hardest are commuting factors, collecting $AB + BA$ into $2AB$, and
+cancelling a common left factor. Two of them appear in the same line whenever anyone
+expands a binomial in a hurry.
+
+There is one more caveat, and it belongs to the machine rather than to the mathematics.
+$(AB)C$ and $A(BC)$ are equal as matrices of real numbers and are *not* generally equal
+as arrays of floating-point numbers, because the two routes round in different places.
+The next reading is about what to do with that.
+''',
+                },
+                {
+                    "title": "When two computed matrices count as equal",
+                    "minutes": 12,
+                    "body": r'''
+The lab asks you to write `a.equals(b, tol=1e-9)` rather than `a == b`, and to make
+`==` call it with a default. That looks like a fussy detail of the interface. It is not:
+it is the first place in this course where the mathematics and the machine disagree, and
+the disagreement never goes away afterwards.
+
+The question is simple to state. You compute $AB$ two different ways and want to know
+whether you got the same matrix. Why can you not just compare the entries?
+
+## What a `float` actually holds
+
+A Python `float` is an IEEE 754 double: a sign, an 11-bit exponent, and a 53-bit
+significand. Fifty-three bits is about sixteen decimal digits, and the crucial word is
+*about* — the spacing between representable numbers is proportional to their size, not
+fixed. Near $1$ the gap to the next double is $2^{-52} \approx 2.22\times10^{-16}$; near
+$10^{6}$ it is about $1.16\times10^{-10}$; near $10^{16}$ it is $2$.
+
+Half that relative gap is the unit roundoff,
+$u = 2^{-53} \approx 1.11\times 10^{-16}$, and it is the whole budget you have. Every
+elementary operation obeys
+
+$$\mathrm{fl}(a \circ b) = (a \circ b)(1 + \delta), \qquad |\delta| \le u$$
+
+so each individual multiplication and each individual addition is as good as it could
+possibly be. The trouble is never one operation. It is what happens when you chain
+thousands of them, which is precisely what a matrix product does.
+
+The famous symptom is that $0.1 + 0.2$ does not equal $0.3$. Neither $0.1$ nor $0.2$ nor
+$0.3$ is representable in binary at all — each is stored as the nearest double — and the
+rounded sum of the first two lands one step away from the rounded value of the third.
+The difference is $5.55\times10^{-17}$, which is not a bug and cannot be fixed by
+choosing better code. Writing `x == y` on floats is asking whether two computations
+rounded identically, which is a much stronger question than whether they agree.
+
+## Where the error lives in a matrix product
+
+Each entry of $AB$ is a dot product of length $k$:
+
+$$(AB)_{ij} = \sum_{n=1}^{k} a_{in}b_{nj}$$
+
+That is $k$ multiplications and $k-1$ additions, each rounding. Accumulating the
+standard bound over them gives, to first order,
+
+$$| \mathrm{fl}((AB)_{ij}) - (AB)_{ij} | \;\le\; k\,u \sum_{n=1}^{k} |a_{in}| \, |b_{nj}|$$
+
+Read the right-hand side carefully, because it explains everything that follows. The
+error is bounded by a term proportional to the sum of the **magnitudes** of the
+products — not to the magnitude of the answer. When the terms all have the same sign the
+two are comparable and the relative error stays near $ku$. When the terms cancel, the
+answer is small while the sum of magnitudes is not, and the relative error can be
+arbitrarily bad.
+
+### Worked: three numbers, two orders, two answers
+
+Add $10^{16}$, $-10^{16}$ and $1$. Exactly, the answer is $1$ whatever order you choose.
+In doubles, the spacing near $10^{16}$ is $2$, so $10^{16} + 1$ has to round, and it
+rounds down to $10^{16}$:
+
+$$(10^{16} + 1) - 10^{16} \;\to\; 10^{16} - 10^{16} = 0$$
+$$(10^{16} - 10^{16}) + 1 \;\to\; 0 + 1 = 1$$
+
+Two orders, two answers, and one of them has lost the entire quantity of interest. This
+is not a contrived example dressed up: it is exactly the inner loop of a matrix
+multiply, where the order of accumulation is chosen by whoever wrote the loop. It is
+also the reason $(AB)C$ and $A(BC)$ — which the previous reading proved equal — come
+back as different arrays from a computer.
+
+### Worked: the tolerance that is too tight
+
+Let $A$ and $B$ be $3\times3$ with entries of size around $10^{6}$. Each entry of the
+product is a sum of three terms of size around $10^{12}$, so the bound above is roughly
+
+$$3 \times 1.11\times10^{-16} \times 3\times10^{12} \;\approx\; 1.0\times10^{-3}$$
+
+An absolute tolerance of $10^{-9}$ will therefore reject a product that is as accurate
+as double precision permits. Nothing is wrong with the code; the tolerance is asking for
+thirteen more digits than the format has. Compare relatively instead — the relative
+error is about $3.3\times10^{-16}$, comfortably at the noise floor — and the same
+computation passes.
+
+### Worked: the tolerance that is too loose
+
+Now the other end. Let the entries be around $10^{-6}$, so the entries of the product are
+around $10^{-12}$. An absolute tolerance of $10^{-9}$ now declares *every* such matrix
+equal to every other, and equal to the zero matrix as well. A test that always passes is
+worse than no test, because it is reported as a pass.
+
+The standard fix is a mixed criterion, absolute for quantities near zero and relative
+elsewhere:
+
+$$|x - y| \le \varepsilon_{\text{abs}} + \varepsilon_{\text{rel}}\,|y|$$
+
+with $\varepsilon_{\text{rel}}$ a modest multiple of $ku$ and $\varepsilon_{\text{abs}}$
+set by the scale below which you genuinely do not care. The lab keeps a single absolute
+tolerance because everything it tests is of order one, where the two criteria coincide.
+Say that to yourself as you write it, so that the day the entries are not of order one
+you remember which assumption you made.
+
+## Two consequences for the interface
+
+The first is that shape has to be checked before any entry is. Two matrices of different
+shapes are not nearly equal or approximately equal; the question does not arise, and the
+answer is `False` rather than an exception, because "are these the same?" is a
+perfectly reasonable thing to ask about two objects that turn out not to be. The same
+goes for comparing a `Matrix` against a string: the honest answer is `False`, not a
+`TypeError` thrown at whoever asked.
+
+The second is that this equality is not an equivalence relation. Reflexive, yes;
+symmetric, yes; transitive, **no**. With a tolerance of $1$, the numbers $0$ and $1$ are
+equal, $1$ and $2$ are equal, and $0$ and $2$ are not. Nothing can be done about that,
+and it has a practical edge: an object whose equality is approximate cannot sensibly be
+a dictionary key or a set member, because hashing needs exact equality to work. That is
+why the lab defines `__eq__` and stops there, and why defining `__hash__` alongside it
+would be a mistake rather than an omission.
+
+## The mistake, and why it is tempting
+
+The mistake is `if a == b` on computed floats, and it is tempting because it is *true*
+often enough to look right. Small integer matrices multiply exactly — every product and
+every partial sum is an integer well under $2^{53}$, so nothing rounds, and the test
+passes. You write the check, the tests are green, and the assumption ships. It fails the
+first time a division or an irrational number enters, which in this course is the
+Gram-Schmidt module, several weeks after the decision was made.
+
+The second mistake is subtler: choosing a tolerance by tuning it until the test passes.
+That converts the check into a record of what your code currently does. A tolerance
+should come from the arithmetic — how many terms, at what scale, with how much
+cancellation — and be written down with its reason.
+
+## Where a tolerance stops helping
+
+It stops at conditioning. Some problems amplify small perturbations of the input into
+large changes in the output, and no tolerance on the comparison at the end tells you
+that has happened. Two matrices can agree to fifteen digits and behave completely
+differently:
+
+$$\begin{bmatrix} 1 & 0 \\ 0 & 10^{-15} \end{bmatrix} \quad\text{and}\quad \begin{bmatrix} 1 & 0 \\ 0 & 0 \end{bmatrix}$$
+
+are equal under any tolerance looser than $10^{-15}$, yet one is invertible and one is
+not, and their inverses are as far apart as two matrices can get. Entrywise closeness is
+not closeness of the maps. The right measurement is the condition number, and the last
+module of this course is where it arrives, alongside a least-squares engine that reports
+it rather than hiding it.
+
+Until then, one habit is enough: never compare computed floats with `==`, and always be
+able to say where your tolerance came from.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": "The product rule, forced by composition",
+                    "minutes": 14,
+                    "vars": ["a_11", "a_12", "a_21", "a_22",
+                             "b_11", "b_12", "b_21", "b_22", "x", "y"],
+                    "brief": r'''
+$A$ and $B$ are both $2\times2$. Write their entries $a_{ij}$ and $b_{ij}$, first index
+the row and second the column, and let $v = (x, y)$.
+
+Nothing below assumes any rule for multiplying two matrices — that is the thing being
+derived. One fact is assumed, and it is the definition of how a matrix acts on a
+vector: the first component of $A$ applied to $(p, q)$ is $a_{11}p + a_{12}q$, and the
+second is $a_{21}p + a_{22}q$.
+
+Push $v$ through $B$, then through $A$, and read the rule off the coefficients.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Apply $B$ to $v = (x, y)$. What is the **first** component of $Bv$?",
+                            "answer": "b_{11} x + b_{12} y",
+                            "hint": "Row $1$ of $B$ against the two entries of $v$: the left entry of that row multiplies $x$, the right entry multiplies $y$.",
+                        },
+                        {
+                            "prompt": "And the **second** component of $Bv$?",
+                            "answer": "b_{21} x + b_{22} y",
+                            "hint": "The same again with row $2$. Remember the convention: the first index of an entry is the row it lives in, so both entries of row $2$ start with a $2$.",
+                        },
+                        {
+                            "prompt": "Now push that vector through $A$. Write the **first** component of $A(Bv)$ in terms of the $a$'s, the $b$'s, $x$ and $y$. You may leave the brackets unexpanded.",
+                            "answer": "a_{11}(b_{11} x + b_{12} y) + a_{12}(b_{21} x + b_{22} y)",
+                            "hint": "You are applying $A$ to the vector $(p, q)$ whose components you wrote in the last two steps. Substitute them into $a_{11}p + a_{12}q$.",
+                            "deconstruct": [
+                                "The vector coming out of $B$ is $p = b_{11}x + b_{12}y$ and $q = b_{21}x + b_{22}y$.",
+                                "The first component of $A$ acting on $(p, q)$ is $a_{11}p + a_{12}q$ \u2014 that is the definition, nothing more.",
+                                "Substitute the two expressions for $p$ and $q$ and stop. No multiplication rule for matrices has been used anywhere.",
+                            ],
+                        },
+                        {
+                            "prompt": "Expand that and collect the terms. What multiplies $x$?",
+                            "answer": "a_{11} b_{11} + a_{12} b_{21}",
+                            "hint": "Two of the four expanded terms carry an $x$: one from each bracket.",
+                            "deconstruct": [
+                                "Expanding gives $a_{11}b_{11}x + a_{11}b_{12}y + a_{12}b_{21}x + a_{12}b_{22}y$.",
+                                "The first and third terms carry $x$; factor it out.",
+                                "What is left in front of $x$ is row $1$ of $A$ against column $1$ of $B$ \u2014 which is exactly what the multiplication rule will claim for $(AB)_{11}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "From the same expression: what multiplies $y$?",
+                            "answer": "a_{11} b_{12} + a_{12} b_{22}",
+                            "hint": "The other two terms. This one should come out as row $1$ of $A$ against column $2$ of $B$.",
+                        },
+                        {
+                            "prompt": "Repeat the whole thing for the **second** component of $A(Bv)$, which is $a_{21}p + a_{22}q$. What multiplies $x$ there?",
+                            "answer": "a_{21} b_{11} + a_{22} b_{21}",
+                            "hint": "Same substitution, same collection, but starting from row $2$ of $A$. The column of $B$ is fixed by which variable you are collecting \u2014 $x$ picks out column $1$.",
+                        },
+                    ],
+                    "closing": r'''
+The composite map is linear, so its first component has to be *some* number times $x$
+plus *some* number times $y$. Those numbers are forced, and you have just computed them.
+Assembling all four:
+
+$$AB = \begin{bmatrix} a_{11}b_{11} + a_{12}b_{21} & a_{11}b_{12} + a_{12}b_{22} \\ a_{21}b_{11} + a_{22}b_{21} & a_{21}b_{12} + a_{22}b_{22} \end{bmatrix}$$
+
+Every entry is a row of $A$ against a column of $B$, and in general
+
+$$(AB)_{ij} = \sum_{k} a_{ik} b_{kj}$$
+
+Two things fall out for free. The index $k$ ran over the columns of $A$ and the rows of
+$B$ at the same time, so those counts must agree — that is the shape rule
+$(m\times k)(k\times n) \to (m\times n)$, and it is a fact about composition rather than
+a convention. And the rule is not symmetric in $A$ and $B$: $A$ contributes rows, $B$
+contributes columns, and swapping them asks a different question. That asymmetry is the
+whole of why $AB \neq BA$.
+''',
+                },
+                {
+                    "title": "Associativity, one bracket at a time",
+                    "minutes": 13,
+                    "vars": ["u_1", "u_2", "v_1", "v_2", "a_11", "a_12", "a_21", "a_22"],
+                    "brief": r'''
+Let $u$ be a $1\times2$ row, $A$ a $2\times2$ matrix and $v$ a $2\times1$ column:
+
+$$u = \begin{bmatrix} u_1 & u_2 \end{bmatrix} \qquad A = \begin{bmatrix} a_{11} & a_{12} \\ a_{21} & a_{22} \end{bmatrix} \qquad v = \begin{bmatrix} v_1 \\ v_2 \end{bmatrix}$$
+
+The chain $uAv$ has shapes $(1\times2)(2\times2)(2\times1)$, so it comes out $1\times1$ —
+a single number. There are two ways to bracket it, and the claim is that they agree.
+
+Compute both, all the way to the bottom, and compare what you get.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Take the left bracketing first. $uA$ is a $1\\times2$ row. What is its **first** entry?",
+                            "answer": "u_1 a_{11} + u_2 a_{21}",
+                            "hint": "A row times a matrix: the row runs along, the column of $A$ runs down. For entry $1$ you need column $1$ of $A$, which is $a_{11}$ above $a_{21}$.",
+                        },
+                        {
+                            "prompt": "And the **second** entry of $uA$?",
+                            "answer": "u_1 a_{12} + u_2 a_{22}",
+                            "hint": "Column $2$ of $A$ this time: $a_{12}$ above $a_{22}$.",
+                        },
+                        {
+                            "prompt": "Multiply that row by $v$. Write $(uA)v$ in full, in terms of $u_1, u_2, v_1, v_2$ and the entries of $A$.",
+                            "answer": "(u_1 a_{11} + u_2 a_{21}) v_1 + (u_1 a_{12} + u_2 a_{22}) v_2",
+                            "hint": "A $1\\times2$ row against a $2\\times1$ column is one dot product: first entry times $v_1$, plus second entry times $v_2$.",
+                            "deconstruct": [
+                                "The row you have is $(u_1a_{11} + u_2a_{21},\\; u_1a_{12} + u_2a_{22})$.",
+                                "Dotting it with $(v_1, v_2)$ multiplies the first entry by $v_1$ and the second by $v_2$, then adds.",
+                                "Expanded, that is four terms: $u_1a_{11}v_1 + u_2a_{21}v_1 + u_1a_{12}v_2 + u_2a_{22}v_2$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Now start again from the right. $Av$ is a $2\\times1$ column. What is its **first** entry?",
+                            "answer": "a_{11} v_1 + a_{12} v_2",
+                            "hint": "Row $1$ of $A$ against the column $v$. This is a row of $A$, not a column \u2014 the indices come out the other way up from step 1.",
+                        },
+                        {
+                            "prompt": "And the **second** entry of $Av$?",
+                            "answer": "a_{21} v_1 + a_{22} v_2",
+                            "hint": "Row $2$ of $A$ against $v$.",
+                        },
+                        {
+                            "prompt": "Finish the right bracketing: write $u(Av)$ in full.",
+                            "answer": "u_1(a_{11} v_1 + a_{12} v_2) + u_2(a_{21} v_1 + a_{22} v_2)",
+                            "hint": "The row $u$ against the column you just built: $u_1$ times its first entry plus $u_2$ times its second.",
+                        },
+                    ],
+                    "closing": r'''
+Expand the two final expressions and put them side by side:
+
+$$(uA)v = u_1a_{11}v_1 + u_2a_{21}v_1 + u_1a_{12}v_2 + u_2a_{22}v_2$$
+$$u(Av) = u_1a_{11}v_1 + u_1a_{12}v_2 + u_2a_{21}v_1 + u_2a_{22}v_2$$
+
+The same four terms, $u_i a_{ij} v_j$ for each of the four choices of $(i,j)$, listed in
+a different order. That is the whole content of associativity: both bracketings are
+instructions for summing over every path from $v$ through $A$ to $u$, and they differ
+only in the order the paths are visited. In general
+
+$$((AB)C)_{ij} = \sum_{k}\sum_{l} a_{ik}b_{kl}c_{lj} = (A(BC))_{ij}$$
+
+and the exchange of the two sums is legal because they are finite.
+
+Notice what associativity does **not** give you. The number $uAv$ is unchanged by moving
+the bracket, but nothing here says $uAv = vAu$ — that is not even a legal product, since
+$v$ is a column. Reordering the factors and re-bracketing them are different moves, and
+only one of them is safe.
+
+This particular chain, with $u$ the transpose of $v$, is the quadratic form
+$v^{\mathsf{T}}Av$. It is worth recognising now: it is what the least-squares module at
+the end of the course minimises.
+''',
+                },
+                {
+                    "title": "Exactly which matrices a shear will commute with",
+                    "minutes": 14,
+                    "vars": ["a", "b", "c", "d"],
+                    "brief": r'''
+$$N = \begin{bmatrix} 0 & 1 \\ 0 & 0 \end{bmatrix} \qquad B = \begin{bmatrix} a & b \\ c & d \end{bmatrix}$$
+
+$N$ is the map that sends $(x, y)$ to $(y, 0)$, and $B$ is completely arbitrary. Both
+$NB$ and $BN$ exist and both are $2\times2$, so for once the two orders are directly
+comparable.
+
+The previous readings said they usually differ. This derivation says exactly how much,
+and therefore exactly which $B$ escape. Work out both products, subtract, and read the
+condition off the difference.
+''',
+                    "steps": [
+                        {
+                            "prompt": "What is $(NB)_{11}$ — row $1$ of $N$ against column $1$ of $B$?",
+                            "answer": "c",
+                            "hint": "Row $1$ of $N$ is $(0, 1)$ and column $1$ of $B$ is $a$ above $c$. The zero kills one of the two terms.",
+                        },
+                        {
+                            "prompt": "What is $(NB)_{12}$?",
+                            "answer": "d",
+                            "hint": "Same row of $N$, column $2$ of $B$. Multiplying by $N$ on the left has lifted the bottom row of $B$ into the top row.",
+                        },
+                        {
+                            "prompt": "Now the other order. What is $(BN)_{12}$ — row $1$ of $B$ against column $2$ of $N$?",
+                            "answer": "a",
+                            "hint": "Row $1$ of $B$ is $(a, b)$ and column $2$ of $N$ is $1$ above $0$. Multiplying by $N$ on the right pushes the left column of $B$ into the right column.",
+                        },
+                        {
+                            "prompt": "What is $(BN)_{22}$?",
+                            "answer": "c",
+                            "hint": "Row $2$ of $B$ is $(c, d)$, against the same column $2$ of $N$.",
+                        },
+                        {
+                            "prompt": "Subtract. What is the $(1,2)$ entry of the commutator $NB - BN$?",
+                            "answer": "d - a",
+                            "hint": "You have both pieces already: $(NB)_{12}$ from step 2 and $(BN)_{12}$ from step 3.",
+                        },
+                        {
+                            "prompt": "Row $2$ of $N$ is all zeros, so the whole bottom row of $NB$ is zero. Given that, what is the $(2,2)$ entry of $NB - BN$?",
+                            "answer": "-c",
+                            "hint": "$(NB)_{22} = 0$, and you computed $(BN)_{22}$ in step 4. Subtract in that order.",
+                            "deconstruct": [
+                                "$(NB)_{22} = 0\\cdot b + 0\\cdot d = 0$, because row $2$ of $N$ is $(0, 0)$.",
+                                "$(BN)_{22} = c\\cdot 1 + d\\cdot 0 = c$, from step 4.",
+                                "The commutator entry is $(NB)_{22} - (BN)_{22} = 0 - c$.",
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+The two remaining entries go the same way: $(NB)_{11} - (BN)_{11} = c - 0 = c$, and the
+$(2,1)$ entry is $0 - 0 = 0$. So
+
+$$NB - BN = \begin{bmatrix} c & d - a \\ 0 & -c \end{bmatrix}$$
+
+Set that to the zero matrix and the condition is not a vague "usually not". It is
+precise: $c = 0$ and $d = a$. In other words $B$ must look like
+
+$$B = \begin{bmatrix} a & b \\ 0 & a \end{bmatrix} = a I + b N$$
+
+$N$ commutes with exactly the matrices built out of $I$ and $N$ — its own polynomials —
+and with nothing else. Out of the four free parameters in $B$, two are spent buying
+commutativity.
+
+That is the shape of the general answer, and it is worth carrying forward. Commuting is
+not a mild condition that most pairs happen to satisfy; it is a codimension-two
+restriction even in the smallest interesting case, and the matrices that satisfy it are
+the ones that are, in a sense the eigenvalue modules will make exact, *built from the
+same material*.
+
+One more thing to keep. $N \neq 0$, but $N^2 = 0$: applying "take the $y$ component and
+put it in the $x$ slot" twice leaves nothing. A non-zero matrix that squares to zero is
+the counterexample that kills cancellation, and it is this one.
+''',
+                },
+            ],
+            "numeric": [
+                {
+                    "title": "One entry of a product",
+                    "minutes": 5,
+                    "brief": r'''
+The first rung. One entry, one dot product, three terms — nothing to rearrange and
+nothing to derive.
+
+The only thing this question can catch you on is which row and which column, so read
+the subscript before you start multiplying.
+''',
+                    "prompt": "What is the $(2,1)$ entry of $AB$?",
+                    "note": "That is row $2$, column $1$. Give a plain number.",
+                    "figure": r'''
+$$A = \begin{bmatrix} 2 & -1 & 4 \\ 0 & 3 & 5 \end{bmatrix} \qquad B = \begin{bmatrix} 1 & 2 \\ -2 & 0 \\ 3 & 1 \end{bmatrix}$$
+$A$ is $2\times3$, $B$ is $3\times2$, and the inner dimensions agree, so $AB$ is $2\times2$.
+''',
+                    "given": [
+                        {"label": "Shape of $A$", "value": "$2\\times3$"},
+                        {"label": "Shape of $B$", "value": "$3\\times2$"},
+                        {"label": "Entry wanted", "value": "row $2$, column $1$"},
+                    ],
+                    "aside": "Row $2$ of $A$ reads across the bottom. Column $1$ of $B$ reads down the left.",
+                    "answer": 9.0,
+                    "tol": 0.001,
+                    "unit": "",
+                    "hint": "Row $2$ of $A$ is $(0, 3, 5)$ and column $1$ of $B$ is $(1, -2, 3)$. Multiply them term by term and add.",
+                    "wrong": "If you got $16$, you used row $1$ of $A$ instead of row $2$ \u2014 that is the $(1,1)$ entry. If you got $5$, you took column $2$ of $B$ instead of column $1$.",
+                    "why": r'''
+$(AB)_{21} = 0\cdot 1 + 3\cdot(-2) + 5\cdot 3 = 0 - 6 + 15 = 9$.
+The whole product is $AB = \begin{bmatrix} 16 & 8 \\ 9 & 5 \end{bmatrix}$, and you needed one quarter of that work.
+Notice that the $3$ shared by the two shapes is the *number of terms in the sum*: it is why the dot product had three products in it and why it appears nowhere in the answer's shape.
+''',
+                },
+                {
+                    "title": "The trace of a product, without forming the product",
+                    "minutes": 7,
+                    "brief": r'''
+The trace of a square matrix is the sum of its diagonal entries,
+$\operatorname{tr}(M) = \sum_i m_{ii}$.
+
+Applying the rule rather than just evaluating it: the trace only asks for the diagonal,
+so of the four dot products in a $2\times2$ product you need exactly two. Doing the
+other two is not wrong, it is just work you were not asked for.
+''',
+                    "prompt": "What is $\\operatorname{tr}(AB)$?",
+                    "note": "A plain number. Watch the signs.",
+                    "figure": r'''
+$$A = \begin{bmatrix} 2 & 0 & -1 \\ 1 & 3 & 4 \end{bmatrix} \qquad B = \begin{bmatrix} 1 & 2 \\ 0 & -3 \\ 5 & 1 \end{bmatrix}$$
+$AB$ is $2\times2$, so it has a diagonal and therefore a trace.
+''',
+                    "given": [
+                        {"label": "Shape of $AB$", "value": "$2\\times2$"},
+                        {"label": "Wanted", "value": "$(AB)_{11} + (AB)_{22}$"},
+                    ],
+                    "aside": "Two dot products, not four. Row $1$ against column $1$, and row $2$ against column $2$.",
+                    "answer": -6.0,
+                    "tol": 0.001,
+                    "unit": "",
+                    "hint": "$(AB)_{11}$ is row $1$ of $A$, which is $(2, 0, -1)$, against column $1$ of $B$, which is $(1, 0, 5)$. Then do the same with the second row and the second column.",
+                    "wrong": "If you got $6$, a sign slipped: the term $(-1)\\cdot 5$ in the first diagonal entry is negative, and so is $3\\cdot(-3)$ in the second. If you got $-3$, you stopped after one of the two entries.",
+                    "why": r'''
+$(AB)_{11} = 2\cdot 1 + 0\cdot 0 + (-1)\cdot 5 = 2 + 0 - 5 = -3$ and $(AB)_{22} = 1\cdot 2 + 3\cdot(-3) + 4\cdot 1 = 2 - 9 + 4 = -3$, so the trace is $-6$.
+Now do something that looks impossible. $BA$ is $3\times3$, a completely different matrix of a completely different size, and its diagonal is $(BA)_{11} = 1\cdot2 + 2\cdot1 = 4$, $(BA)_{22} = 0\cdot0 + (-3)\cdot3 = -9$ and $(BA)_{33} = 5\cdot(-1) + 1\cdot4 = -1$.
+Those add to $-6$ as well. That is not a coincidence: $\operatorname{tr}(AB) = \sum_i \sum_k a_{ik}b_{ki} = \operatorname{tr}(BA)$, because the double sum is symmetric under swapping the two letters even though the products are not.
+It is the one number about $AB$ that survives reversing the order, and it is the reason the trace turns up wherever a quantity has to be independent of the basis you chose.
+''',
+                },
+                {
+                    "title": "The only companion a shear will accept",
+                    "minutes": 9,
+                    "brief": r'''
+Now the value has to be derived before it can be computed.
+
+You are given a shear $A$ and half of a second matrix $B$. The bottom row of $B$ is
+unknown. Fill it in so that the two matrices commute, then compute with the result.
+
+The derivation on the commutator of a shear is the tool; this is where it earns its
+keep.
+''',
+                    "prompt": "Choose $c$ and $d$ so that $AB = BA$, then report the $(1,2)$ entry of $AB$.",
+                    "note": "One number: the top-right entry of the product, once $B$ has been completed.",
+                    "figure": r'''
+$$A = \begin{bmatrix} 1 & 2 \\ 0 & 1 \end{bmatrix} \qquad B = \begin{bmatrix} 4 & 7 \\ c & d \end{bmatrix}$$
+$A$ is a shear: it sends $(x, y)$ to $(x + 2y,\; y)$. The entries $c$ and $d$ are yours to choose, and exactly one choice makes the two matrices commute.
+''',
+                    "given": [
+                        {"label": "Top row of $B$", "value": "$4$ and $7$, fixed"},
+                        {"label": "Bottom row of $B$", "value": "$c$ and $d$, to be found"},
+                        {"label": "Condition", "value": "$AB = BA$"},
+                    ],
+                    "aside": "Write $A = I + 2N$ with $N$ the shear from the derivation. $I$ commutes with everything, so only the $N$ part can cause trouble.",
+                    "answer": 15.0,
+                    "tol": 0.001,
+                    "unit": "",
+                    "hint": "$AB - BA = 2(NB - BN)$, and the derivation gives that commutator as $\\begin{bmatrix} c & d - 4 \\\\ 0 & -c \\end{bmatrix}$. Setting it to zero pins both unknowns.",
+                    "wrong": "If you got $21$, you set $c = 0$ but left $d$ at $7$; check $AB$ against $BA$ for that $B$ and they differ. If you got $7$, that is the $(1,2)$ entry of $B$ rather than of $AB$.",
+                    "why": r'''
+Write $A = I + 2N$. Then $AB - BA = 2(NB - BN)$, which the derivation evaluated as $\begin{bmatrix} c & d - a \\ 0 & -c \end{bmatrix}$ with $a = 4$ here.
+That vanishes only when $c = 0$ and $d = 4$, so $B = \begin{bmatrix} 4 & 7 \\ 0 & 4 \end{bmatrix}$, which is $4I + 7N$ \u2014 built from the same two pieces as $A$.
+Then $(AB)_{12} = 1\cdot 7 + 2\cdot 4 = 15$, and the whole product is $\begin{bmatrix} 4 & 15 \\ 0 & 4 \end{bmatrix}$.
+Check the other order: $(BA)_{12} = 4\cdot 2 + 7\cdot 1 = 15$ as well, and the rest of $BA$ matches too. Two matrices that commute, arrived at by construction rather than by luck.
+''',
+                },
+                {
+                    "title": "Where to put the brackets",
+                    "minutes": 8,
+                    "brief": r'''
+Associativity says the two bracketings of $ABC$ give the same matrix. It says nothing
+whatever about what they cost.
+
+Multiplying an $m\times k$ by a $k\times n$ takes $mnk$ scalar multiplications: there
+are $mn$ entries to fill and each is a sum of $k$ products. Cost both routes through
+the chain below and report the cheaper total.
+''',
+                    "prompt": "How many scalar multiplications does the cheaper bracketing take in total?",
+                    "note": "Count both products along the route and add them. A whole number.",
+                    "figure": r'''
+$$A:\; 3\times 50 \qquad B:\; 50\times 2 \qquad C:\; 2\times 40$$
+The chain $ABC$ is legal: $50$ meets $50$, and $2$ meets $2$. The answer is a $3\times40$ matrix either way. The two routes are $(AB)C$ and $A(BC)$.
+''',
+                    "given": [
+                        {"label": "Cost of $(m\\times k)(k\\times n)$", "value": "$mnk$ multiplications"},
+                        {"label": "Route 1", "value": "$(AB)C$"},
+                        {"label": "Route 2", "value": "$A(BC)$"},
+                    ],
+                    "aside": "The intermediate matrix is what differs: one route builds a $3\\times2$, the other builds a $50\\times40$.",
+                    "answer": 540.0,
+                    "tol": 0.5,
+                    "unit": "multiplications",
+                    "hint": "Cost of a single product is (rows of the left factor) $\\times$ (columns of the right factor) $\\times$ (the inner dimension they share). Do that twice for each route.",
+                    "wrong": "If you got $10000$ you costed $A(BC)$, which is the expensive route. If you got $300$ or $240$ you costed only one of the two products on the cheap route and forgot to add the other.",
+                    "why": r'''
+Route 1: $AB$ costs $3\cdot50\cdot2 = 300$ and leaves a $3\times2$; then $(AB)C$ costs $3\cdot2\cdot40 = 240$. Total $540$.
+Route 2: $BC$ costs $50\cdot2\cdot40 = 4000$ and leaves a $50\times40$; then $A(BC)$ costs $3\cdot50\cdot40 = 6000$. Total $10000$.
+Eighteen and a half times the work for a bit-for-bit identical answer. The expensive route inflates a thin $50\times2$ and a thin $2\times40$ into a fat $50\times40$ before the small matrix $A$ is ever touched, and every one of those $2000$ entries then has to be multiplied through.
+The general problem \u2014 bracket a chain of $n$ matrices as cheaply as possible \u2014 is the textbook dynamic-programming exercise. The point here is only that associativity is what makes the question askable: if the two routes gave different answers there would be nothing to choose between.
+''',
+                },
+            ],
+            "blanks": {
+                "title": "A product and its transpose, line by line",
+                "minutes": 9,
+                "caption": "a 2x3 against a 3x2, then turned on its side",
+                "lang": "text",
+                "brief": r'''
+Every entry below is one dot product: a row of $A$ read across, a column of $B$ read
+down, multiplied term by term and added. Four entries, three terms each.
+
+Then the product gets transposed, and the last line asks you to name the same matrix a
+second way — which is where the reversal rule
+$(AB)^{\mathsf{T}} = B^{\mathsf{T}}A^{\mathsf{T}}$ has to be got right rather than
+guessed.
+''',
+                "listing": """A is 2x3 and B is 3x2
+
+         [  2  -1   0 ]              [  1   4 ]
+    A =  [  3   5  -2 ]         B =  [ -2   0 ]
+                                     [  6   1 ]
+
+  the inner dimensions are 3 and 3, they agree, so AB has shape ___
+
+  row 1 of A, column 1 of B:
+       (AB) row 1 col 1  =  2*1  +  (-1)*(-2)  +  0*6
+                         =  ___
+
+  row 1 of A, column 2 of B:
+       (AB) row 1 col 2  =  2*4  +  (-1)*0     +  0*1
+                         =  8
+
+  row 2 of A, column 1 of B:
+       (AB) row 2 col 1  =  3*1  +  5*(-2)     +  (-2)*6
+                         =  ___
+
+  row 2 of A, column 2 of B:
+       (AB) row 2 col 2  =  3*4  +  5*0        +  (-2)*1
+                         =  10
+
+                               [   4    8 ]
+                        AB  =  [ -19   10 ]
+
+  transpose it: row i becomes column i
+
+                               [   4   ___ ]
+                     (AB)^T =  [   8    10 ]
+
+  and the same matrix, named without ever forming AB first:
+
+                     (AB)^T =  ___
+""",
+                "blanks": [
+                    {
+                        "prompt": "The inner dimensions cancel and the outer ones survive. What shape is AB?",
+                        "hole": "?",
+                        "opts": ["2x2", "3x3", "2x3", "3x2"],
+                        "a": 0,
+                        "why": "$(2\\times3)(3\\times2) \\to 2\\times2$. The shared $3$ is the number of terms in each "
+                               "dot product, so it controls how much work an entry takes and then disappears from "
+                               "the shape entirely. The shape $3\\times3$ is what $BA$ comes out as \u2014 a real "
+                               "matrix, and a different one.",
+                    },
+                    {
+                        "prompt": "2*1 + (-1)*(-2) + 0*6. What is the total?",
+                        "hole": "?",
+                        "opts": ["0", "4", "2", "-2"],
+                        "a": 1,
+                        "why": "$2 + 2 + 0 = 4$. The middle term is a product of two negatives and so is $+2$; "
+                               "reading it as $-2$ gives $0$, which is the single most common slip in a hand-computed "
+                               "product. The final term vanishes because the entry of $A$ is zero, not because the "
+                               "entry of $B$ is small.",
+                    },
+                    {
+                        "prompt": "3*1 + 5*(-2) + (-2)*6. What is the total?",
+                        "hole": "?",
+                        "opts": ["25", "-1", "-19", "19"],
+                        "a": 2,
+                        "why": "$3 - 10 - 12 = -19$. Adding the magnitudes instead of the signed values gives $25$; "
+                               "dropping the last term gives $-7$. It is worth writing the three products out before "
+                               "adding anything, precisely because two of them are negative.",
+                    },
+                    {
+                        "prompt": "Transposing swaps rows and columns. What sits in row 1, column 2 of (AB)^T?",
+                        "hole": "?",
+                        "opts": ["8", "10", "-19", "4"],
+                        "a": 2,
+                        "why": "Row $1$, column $2$ of $(AB)^{\\mathsf{T}}$ is row $2$, column $1$ of $AB$, which is "
+                               "$-19$. Transposing is a relabelling and moves no arithmetic: every number in $AB$ "
+                               "appears once in $(AB)^{\\mathsf{T}}$, in the mirrored position. The value $8$ is the "
+                               "one that was already there before the swap.",
+                    },
+                    {
+                        "prompt": "The reversal rule. Which product equals (AB)^T?",
+                        "hole": "?",
+                        "opts": ["B^T A^T", "A^T B^T", "A B", "B A"],
+                        "a": 0,
+                        "why": "$(AB)^{\\mathsf{T}} = B^{\\mathsf{T}}A^{\\mathsf{T}}$. The shapes settle it on their "
+                               "own: $B^{\\mathsf{T}}$ is $2\\times3$ and $A^{\\mathsf{T}}$ is $3\\times2$, so the "
+                               "product is $2\\times2$ and fits. Keeping the original order gives "
+                               "$A^{\\mathsf{T}}B^{\\mathsf{T}}$, which is $(3\\times2)(2\\times3)$ \u2014 defined, but "
+                               "$3\\times3$, so it is not even the right size to be the answer.",
+                    },
+                ],
+            },
+            "quiz": {
+                "title": "Shapes, order and the rules that survive",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "$A$ is $4\\times3$ and $B$ is $3\\times5$. What shape is $AB$?",
+                        "opts": [
+                            "$3\\times3$",
+                            "$4\\times5$",
+                            "$5\\times4$",
+                            "$AB$ is not defined",
+                        ],
+                        "a": 1,
+                        "why": r'''
+The inner dimensions — the $3$ columns of $A$ and the $3$ rows of $B$ — have to agree,
+and they do. That shared $3$ is the length of every dot product and then vanishes; the
+outer numbers survive, giving $4\times5$. A result of $5\times4$ would be
+$(AB)^{\mathsf{T}}$, which is a different matrix.
+''',
+                    },
+                    {
+                        "q": "$A$ is $2\\times3$ and $B$ is $3\\times2$. Which statement is true?",
+                        "opts": [
+                            "$AB$ is defined but $BA$ is not",
+                            "$AB$ is $2\\times2$ and $BA$ is $3\\times3$",
+                            "$AB$ and $BA$ are both $2\\times2$, and they are equal",
+                            "Neither product is defined",
+                        ],
+                        "a": 1,
+                        "why": r'''
+Both products exist here, because the inner dimensions agree in both directions:
+$(2\times3)(3\times2)$ gives $2\times2$, and $(3\times2)(2\times3)$ gives $3\times3$.
+They cannot possibly be equal — they are not even the same size. This is the cleanest
+demonstration that $AB$ and $BA$ are separate questions rather than two spellings of one.
+''',
+                    },
+                    {
+                        "q": "What is the $(i,j)$ entry of $AB$?",
+                        "opts": [
+                            "the product $a_{ij} b_{ij}$",
+                            "column $i$ of $A$ against row $j$ of $B$",
+                            "row $i$ of $A$ against column $j$ of $B$",
+                            "row $j$ of $A$ against column $i$ of $B$",
+                        ],
+                        "a": 2,
+                        "why": r'''
+$(AB)_{ij} = \sum_k a_{ik}b_{kj}$: the first index stays with the row of the left
+factor, the second with the column of the right factor, and $k$ runs along both at once.
+Multiplying entrywise is a real operation — the Hadamard product — but it does not
+compose linear maps, which is the only reason matrices are multiplied at all. Swapping
+$i$ and $j$ computes an entry of $(AB)^{\mathsf{T}}$ instead.
+''',
+                    },
+                    {
+                        "q": "Which of these holds for **every** pair or triple of matrices whose shapes allow the products?",
+                        "opts": [
+                            "$AB = BA$",
+                            "$(A+B)^2 = A^2 + 2AB + B^2$",
+                            "$(AB)^{\\mathsf{T}} = A^{\\mathsf{T}} B^{\\mathsf{T}}$",
+                            "$(AB)C = A(BC)$",
+                        ],
+                        "a": 3,
+                        "why": r'''
+Associativity is the one that never fails: both sides are the matrix of "do $C$, then
+$B$, then $A$", and composing three functions has no bracket in it to move. Commuting
+the factors fails in general; collecting $AB + BA$ into $2AB$ fails for exactly the same
+reason, so the binomial expansion is $A^2 + AB + BA + B^2$; and transposing a product
+reverses it, $(AB)^{\mathsf{T}} = B^{\mathsf{T}}A^{\mathsf{T}}$, which the shapes insist
+on even before the algebra does.
+''',
+                    },
+                    {
+                        "q": "Two $2\\times2$ matrices, neither of them the zero matrix, multiply to give the zero matrix. Possible?",
+                        "opts": [
+                            r"Yes — $\begin{bmatrix} 0 & 1 \\ 0 & 0 \end{bmatrix}$ multiplied by itself is the zero matrix",
+                            "No — if $AB = 0$ then $A = 0$ or $B = 0$, just as with numbers",
+                            "Only if one of the two is the identity",
+                            "Only if both of them are diagonal",
+                        ],
+                        "a": 0,
+                        "why": r'''
+Call it $N$. Then $(N^2)_{11} = 0\cdot0 + 1\cdot0 = 0$ and $(N^2)_{12} = 0\cdot1 + 1\cdot0 = 0$,
+and the bottom row of $N$ was zero already, so $N^2 = 0$ while $N \neq 0$. Read as a map,
+$N$ takes the $y$ component and puts it in the $x$ slot; do that twice and nothing is
+left. Matrices have zero divisors and the real numbers do not, which is precisely why
+you cannot divide both sides of a matrix equation by a common factor.
+''',
+                    },
+                    {
+                        "q": "$AB = AC$, and $A$ is not the zero matrix. Must $B = C$?",
+                        "opts": [
+                            "Yes — cancel $A$ from both sides",
+                            "Only when $B$ and $C$ are square",
+                            "No — cancelling needs $A$ to be invertible, not merely non-zero",
+                            "No — cancelling needs $A$ to be symmetric",
+                        ],
+                        "a": 2,
+                        "why": r'''
+Take $A = \begin{bmatrix} 1 & 0 \\ 0 & 0 \end{bmatrix}$, which keeps the first row of
+whatever it multiplies and throws the second away. Any two matrices that share a first
+row therefore give the same product, so $AB = AC$ with $B \neq C$ is easy to arrange.
+Being non-zero is not enough: you need to be able to undo $A$. In the real numbers the
+only non-invertible number is zero, which is why the habit transfers so badly. Module 2
+supplies the test.
+''',
+                    },
+                    {
+                        "q": "Why does `equals` take a tolerance instead of comparing entries with `==`?",
+                        "opts": [
+                            "because comparing floats exactly is slower than comparing them approximately",
+                            "because each entry of a product is a chain of roundings, so two correct routes rarely land on the same value",
+                            "because Python cannot compare two floats with `==`",
+                            "because matrices of different shapes have to come out equal",
+                        ],
+                        "a": 1,
+                        "why": r'''
+Every entry of $AB$ is $k$ multiplications and $k-1$ additions, each rounded to the
+nearest double, so two honest routes to the same matrix generally differ in the last
+few bits — and $(AB)C$ against $A(BC)$ is exactly such a pair. Exact comparison is not
+slow; it is asking a stricter question than the one you meant. Different shapes compare
+*unequal*, and always should.
+''',
+                    },
+                ],
+            },
             "lab": {
                 "title": "A Matrix type over lists of lists",
                 "runtime": "python",
@@ -935,6 +2024,276 @@ except ValueError:
         },
         # ------------------------------------------------------------ M4
         {
+            "title": "Vector spaces, span and the complete solution of Ax = b",
+            "summary": "What elimination was really telling you: which right-hand sides are reachable, and how many solutions each one has.",
+            "concepts": [
+                "A subspace is closed under addition and scaling, so every subspace contains the zero vector",
+                "The column space is the set of reachable right-hand sides: Ax = b is solvable exactly when b is a combination of the columns of A",
+                "The null space collects every x with Ax = 0; it is a subspace of the input space, and it is trivial exactly when the columns are independent",
+                "Reduced row echelon form sorts the columns into pivot columns and free columns, and each free column contributes one special solution",
+                "The complete solution is one particular solution plus the entire null space, so a linear system has none, exactly one, or infinitely many solutions — never exactly two",
+            ],
+            "quiz": {
+                "title": "Reachable right-hand sides, and how many solutions",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "`Ax = b` has no solution at all. What does that say about `b`?",
+                        "opts": [
+                            "`b` lies outside the column space of `A`",
+                            "`b` is the zero vector",
+                            "`A` has a non-trivial null space",
+                            "`A` is not square",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`Ax` is a combination of the columns of `A` with the entries of `x` as weights, so
+the reachable right-hand sides are exactly the column space and nothing else.
+A right-hand side outside it cannot be hit, however clever the solver.
+The zero right-hand side is always solvable by `x = 0`. A non-trivial null space
+changes *how many* solutions a reachable `b` has, not whether it is reachable at
+all. Squareness is neither necessary nor sufficient: plenty of square systems are
+unsolvable, and plenty of rectangular ones are fine.
+""",
+                    },
+                    {
+                        "q": "You find two different solutions `x1` and `x2` of the same system `Ax = b`. How many solutions does it have?",
+                        "opts": [
+                            "Exactly two",
+                            "Infinitely many, because `x1 + t(x1 - x2)` solves it for every real `t`",
+                            "Three, once you count `x1 - x2` as well",
+                            "It depends on whether `A` is square",
+                        ],
+                        "a": 1,
+                        "why": r"""
+`A(x1 - x2) = b - b = 0`, so the difference sits in the null space — and a null
+space is a subspace, so every scalar multiple of that difference is in it too.
+Adding those multiples to `x1` gives a whole line of solutions. This is why the
+count is only ever zero, one, or infinite: two distinct solutions immediately
+manufacture infinitely many. Note that `x1 - x2` is itself a solution only when
+`b = 0`, and squareness has nothing to do with it.
+""",
+                    },
+                    {
+                        "q": "Which of these sets is a subspace of R^3?",
+                        "opts": [
+                            "The non-negative octant, `x >= 0` and `y >= 0` and `z >= 0`",
+                            "The offset plane `x + y + z = 1`",
+                            "The plane `x + y + z = 0`",
+                            "The set where `xyz = 0`",
+                        ],
+                        "a": 2,
+                        "why": r"""
+A subspace must be closed under addition and under scaling by any real number,
+which forces it to contain the origin. The plane through the origin passes every
+test: add two vectors whose coordinates sum to zero and the sum still does.
+The offset plane misses the origin, so scaling by 0 escapes it. The octant is
+closed under addition but not under multiplication by -1. The set where some
+coordinate vanishes is the union of the three coordinate planes: it holds
+`(1, 1, 0)` and `(0, 0, 1)` but not their sum `(1, 1, 1)`.
+""",
+                    },
+                    {
+                        "q": "A 3-by-5 matrix `A` has 2 pivots, and `Ax = b` is known to be consistent. What does the solution set look like?",
+                        "opts": [
+                            "A single vector",
+                            "One particular solution plus any combination of 2 special solutions",
+                            "One particular solution plus any combination of 3 special solutions",
+                            "Empty, because there are more columns than rows",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Five columns and two pivots leave three free columns, and each free column gives
+one special solution; together they are a basis of a three-dimensional null space.
+The complete solution is a particular solution plus that null space, so it is a
+three-parameter family — in R^5, a translated 3-dimensional flat. The count of
+special solutions is the number of *free* columns, not of pivots. It cannot be a
+single vector unless there are no free columns at all, and it cannot be empty
+because consistency was given.
+""",
+                    },
+                ],
+            },
+        },
+        # ------------------------------------------------------------ M5
+        {
+            "title": "Independence, basis, dimension and the four subspaces",
+            "summary": "Counting the degrees of freedom hidden in a matrix, and the four subspaces that account for every one of them.",
+            "concepts": [
+                "Vectors are independent when the only combination giving zero is the trivial one — that is, when the matrix holding them has a trivial null space",
+                "A basis is independent and spanning; every basis of a space has the same size, and that size is the dimension",
+                "Rank counts the pivots, and it is simultaneously the dimension of the column space and of the row space",
+                "Rank plus nullity equals the number of columns: every column is either a pivot or a free variable, and there is no third option",
+                "The four subspaces pair off at right angles: row space against null space inside R^n, column space against left null space inside R^m",
+            ],
+            "quiz": {
+                "title": "Counting dimensions",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "`A` is 4-by-7 with rank 3. What is the dimension of its null space?",
+                        "opts": ["3", "7", "4", "0"],
+                        "a": 2,
+                        "why": r"""
+Rank plus nullity equals the number of *columns*, which is 7 here, so the nullity
+is `7 - 3 = 4`. Each of the four free columns supplies one special solution, and
+those four vectors are a basis of the null space. The value 3 is the rank itself —
+the dimension of the column space, living over in R^4. A nullity of 0 would mean
+seven independent columns in a 4-dimensional space, which is impossible.
+""",
+                    },
+                    {
+                        "q": "What is always true of the row space and the column space of the same matrix?",
+                        "opts": [
+                            "They have equal dimension, even though they usually sit in different spaces",
+                            "They contain the same vectors whenever `A` is square",
+                            "The row space has dimension equal to the number of rows",
+                            "The column space is always the larger of the two",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Row rank equals column rank — one of the genuinely surprising facts in the
+subject. Elimination leaves the row space untouched and exposes the pivots, and
+the same pivot count measures both spaces. They are equal in *dimension*, not as
+sets: for a 4-by-7 matrix one lives in R^7 and the other in R^4, so neither
+contains the other. And the row space fills up the row count only when the rows
+happen to be independent, which rank-deficient matrices are precisely the
+counterexample to.
+""",
+                    },
+                    {
+                        "q": "You are handed five vectors in R^4. What can be said with no further information?",
+                        "opts": [
+                            "They span R^4",
+                            "They are dependent",
+                            "They are independent as long as none of them is zero",
+                            "They form a basis of R^4",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Stack them as the columns of a 4-by-5 matrix: it has at most 4 pivots, so at least
+one column is free, so a non-trivial combination gives zero. Any `n + 1` vectors
+in R^n are dependent, whatever they are. They may or may not span R^4 — five
+copies of the same vector span a line — so they certainly need not be a basis, and
+being non-zero rules nothing out, since two copies of one non-zero vector are
+already dependent.
+""",
+                    },
+                    {
+                        "q": "Why is the null space of `A` orthogonal to the row space of `A`?",
+                        "opts": [
+                            "Because `A^T A` is symmetric",
+                            "Because elimination preserves angles",
+                            "Because both have dimension n/2",
+                            "Because `Ax = 0` says exactly that `x` is perpendicular to every row of `A`",
+                        ],
+                        "a": 3,
+                        "why": r"""
+Entry `i` of `Ax` is the dot product of row `i` with `x`. Setting the whole
+product to zero says `x` meets every row at a right angle, and therefore every
+combination of the rows — which is the row space. That is the entire argument.
+Their dimensions add to `n` by rank plus nullity, but they are almost never equal.
+Elimination does *not* preserve angles (it is not an orthogonal operation), and
+the symmetry of `A^T A` is a different fact about a different matrix.
+""",
+                    },
+                ],
+            },
+        },
+        # ------------------------------------------------------------ M6
+        {
+            "title": "Linear transformations and change of basis",
+            "summary": "The same map written in two languages, and the matrix that translates between them.",
+            "concepts": [
+                "A map is linear when it respects addition and scaling; its matrix is what it does to the basis vectors, recorded as columns",
+                "Rotation, reflection, scaling, shear and projection are all read straight off their action on a basis",
+                "Translation is not linear because it moves the origin, which is why graphics carries an extra coordinate and works with 4-by-4 matrices",
+                "Changing basis conjugates the matrix: B = S^-1 A S, and similar matrices are one map seen from two seats",
+                "|det A| is the factor by which areas and volumes are scaled, and the sign of det A records whether orientation survived",
+            ],
+            "quiz": {
+                "title": "Same map, different coordinates",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "What sits in the columns of the matrix of a linear map `T`?",
+                        "opts": [
+                            "The eigenvectors of `T`",
+                            "The images of the basis vectors, `T(e1)`, `T(e2)`, ..., written in the output basis",
+                            "The input basis vectors, unchanged",
+                            "The rows of the inverse map",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Linearity gives `T(x) = x1 T(e1) + x2 T(e2) + ...`, so knowing where the basis
+vectors land determines the map everywhere; stacking those images as columns
+*is* the matrix. This is the fastest way to write down a rotation or a reflection:
+draw where `e1` and `e2` go and read off two columns. Eigenvectors need not even
+exist over the reals, and the identity is the only map whose columns are the
+input basis unchanged.
+""",
+                    },
+                    {
+                        "q": "Which map of the plane is **not** linear?",
+                        "opts": [
+                            "`(x, y) -> (2x, 3y)`",
+                            "`(x, y) -> (y, x)`",
+                            "`(x, y) -> (x + 1, y)`",
+                            "`(x, y) -> (0, 0)`",
+                        ],
+                        "a": 2,
+                        "why": r"""
+A linear map must send the origin to the origin, and a translation by one unit
+does not: it fails both `T(0) = 0` and `T(2x) = 2T(x)`. Scaling the axes
+separately, swapping the coordinates (a reflection in the diagonal) and collapsing
+everything to zero are all linear. Translation being non-linear is exactly why a
+graphics pipeline stores a point as `(x, y, z, 1)` and uses one size-larger
+matrix: in that extra coordinate, a translation becomes a shear, and can finally
+be composed with the rest by multiplication.
+""",
+                    },
+                    {
+                        "q": "`A` and `B = S^-1 A S` are similar. What do they have in common?",
+                        "opts": [
+                            "Determinant, trace, rank and characteristic polynomial",
+                            "Their entries, up to a permutation",
+                            "Their eigenvectors, written with the same numbers",
+                            "Nothing in general, since `S` may be any invertible matrix",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Similar matrices are the same linear map described in two bases, so everything
+intrinsic to the map survives: `det(S^-1 A S) = det A` because determinants
+multiply, the trace survives because it is invariant under cyclic reordering, and
+the characteristic polynomial — hence the eigenvalues — is unchanged. What does
+*not* survive is coordinates: an eigenvector `v` of `A` appears as `S^-1 v` for
+`B`. The entries themselves can look completely different, which is the point of
+choosing a better basis in the first place.
+""",
+                    },
+                    {
+                        "q": "A 2-by-2 matrix `M` has `det M = -3`. What does `M` do to the unit square?",
+                        "opts": [
+                            "Shrinks its area to one third",
+                            "Maps it to a parallelogram of area 3, with orientation reversed",
+                            "Maps it to a parallelogram of area 3, preserving orientation",
+                            "Collapses it onto a line segment",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The absolute value of the determinant is the area scale factor, so the unit square
+becomes a parallelogram of area 3 — it grows, not shrinks. The minus sign is the
+orientation flip: a reflection is folded into the map, so a counter-clockwise
+circuit of the square comes out clockwise. Collapse onto a segment is what a
+determinant of exactly zero means, and that is the same condition as singularity —
+the map has thrown away a dimension and cannot be undone.
+""",
+                    },
+                ],
+            },
+        },
+        # ------------------------------------------------------------ M7
+        {
             "title": "Orthogonality and eigenstructure",
             "summary": "Orthonormal bases, the QR factorisation, and iterating towards an eigenvector.",
             "concepts": [
@@ -1254,6 +2613,345 @@ try:
 except ValueError:
     pass
 '''},
+                ],
+            },
+        },
+        # ------------------------------------------------------------ M8
+        {
+            "title": "Projection, least squares and the normal equations",
+            "summary": "When Ax = b has no solution, the honest answer is the closest one — and closest means orthogonal.",
+            "concepts": [
+                "The projection of b onto a subspace is the point of that subspace nearest b, and the error b - p is orthogonal to everything in it",
+                "P = A(A^T A)^-1 A^T projects onto the column space; P^2 = P and P^T = P, and its only eigenvalues are 0 and 1",
+                "The normal equations A^T A x = A^T b say precisely that the residual is orthogonal to every column of A",
+                "With orthonormal columns the normal equations collapse to x = Q^T b, which is what makes QR worth computing",
+                "Forming A^T A squares the condition number, so the numerically sound route to a fit runs through QR, not through the normal equations",
+            ],
+            "quiz": {
+                "title": "Closest, not exact",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "`Ax = b` is inconsistent. What does the least-squares solution `xhat` achieve?",
+                        "opts": [
+                            "It makes `A xhat` the orthogonal projection of `b` onto the column space of `A`",
+                            "It makes `A xhat` equal to `b` after all",
+                            "It finds the vector of the null space closest to `b`",
+                            "It makes the residual as large as possible, so the failure is visible",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Least squares minimises the length of `b - Ax`. Every candidate `Ax` lies in the
+column space, so the best possible one is the point of that space nearest `b` —
+its orthogonal projection — and the leftover residual is perpendicular to the
+column space. Hitting `b` exactly is impossible by assumption, which is what
+inconsistent means. The null space is a subspace of the *inputs* and lives in a
+different space from `b` entirely.
+""",
+                    },
+                    {
+                        "q": "Why must the residual be orthogonal to every column of `A` at the minimum?",
+                        "opts": [
+                            "Because `A` has full rank",
+                            "Because the residual is always zero at a minimum",
+                            "Because `A^T (b - Ax) = 0` is the normal equation written out: one dot product per column",
+                            "Because orthogonal vectors have the smallest norm",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Multiply the normal equations `A^T A x = A^T b` out and they read
+`A^T (b - Ax) = 0` — row `i` of that is the dot product of column `i` of `A` with
+the residual. Geometrically it is obvious: if the residual still had a component
+along some column, you could move a little way along that column and get strictly
+closer, so you were not at the minimum. A residual of zero would mean the system
+was consistent, and full rank guarantees a *unique* minimiser without being the
+reason orthogonality holds.
+""",
+                    },
+                    {
+                        "q": "A tall matrix `Q` has orthonormal columns. What is the least-squares solution of `Q x = b`?",
+                        "opts": ["`x = b`", "`x = Q b`", "`x = Q^T b`", "Undefined, because `Q` is not square"],
+                        "a": 2,
+                        "why": r"""
+Orthonormal columns mean `Q^T Q = I`, so the normal equations `Q^T Q x = Q^T b`
+collapse straight to `x = Q^T b` — no system left to solve, just one matrix-vector
+product, and no inverse anywhere. `Q b` does not even have a defined shape when
+`Q` is tall, and `x = b` mixes up the coefficient vector with the data. Least
+squares is perfectly well defined for a tall matrix; that is the case it exists
+for.
+""",
+                    },
+                    {
+                        "q": "Why fit through a QR factorisation rather than by forming `A^T A` and solving?",
+                        "opts": [
+                            "Because `A^T A` is not symmetric",
+                            "Because the normal equations have no solution when `A` is tall",
+                            "Because QR needs fewer arithmetic operations",
+                            "Because the condition number of `A^T A` is the square of the condition number of `A`, so roughly twice as many digits are lost",
+                        ],
+                        "a": 3,
+                        "why": r"""
+Squaring the matrix squares its conditioning: a design matrix with condition
+number `1e8` gives a Gram matrix at `1e16`, and in double precision there is
+nothing left. QR multiplies by an orthogonal matrix instead, which cannot amplify
+error at all, so the fit inherits the conditioning of `A` rather than of `A^T A`.
+Speed is not the argument — QR costs roughly twice the flops. And `A^T A` is
+symmetric, in fact positive definite whenever the columns are independent, which
+is exactly when the normal equations do have their unique solution.
+""",
+                    },
+                ],
+            },
+        },
+        # ------------------------------------------------------------ M9
+        {
+            "title": "Eigenvalues, the characteristic polynomial and diagonalisation",
+            "summary": "The algebra behind the iteration: which directions a matrix merely stretches, and what knowing them buys you.",
+            "concepts": [
+                "Av = lambda v with v non-zero: an eigenvector is a direction the map stretches without turning",
+                "det(A - lambda I) = 0 is the characteristic equation; the trace is the sum of the eigenvalues and the determinant is their product",
+                "Eigenvectors belonging to distinct eigenvalues are independent, so n of them give A = S Lambda S^-1",
+                "Diagonalisation makes powers cheap — A^k = S Lambda^k S^-1 — so long-run behaviour is decided by the largest |lambda|, which is why power iteration converges to it",
+                "A defective matrix has too few independent eigenvectors to diagonalise, and a real matrix may have no real eigenvector at all: a rotation turns everything",
+            ],
+            "quiz": {
+                "title": "Eigenvalues on paper",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "What are the eigenvalues of `[[2, 1], [1, 2]]`?",
+                        "opts": ["2 and 2", "3 and 1", "2 and 1", "4 and 0"],
+                        "a": 1,
+                        "why": r"""
+`det(A - lambda I) = (2 - lambda)^2 - 1 = lambda^2 - 4 lambda + 3`, which factors
+as `(lambda - 3)(lambda - 1)`. Both checks agree: the eigenvalues sum to the trace
+4 and multiply to the determinant 3. The eigenvectors are `(1, 1)` for 3 and
+`(1, -1)` for 1 — the symmetric matrix hands you an orthogonal pair, as it always
+does. Reading the diagonal and calling it 2 and 2 ignores the off-diagonal
+coupling entirely, and 4 and 0 is the pair for `[[2, 2], [2, 2]]`.
+""",
+                    },
+                    {
+                        "q": "A 2-by-2 matrix has trace 7 and determinant 12. What are its eigenvalues?",
+                        "opts": ["7 and 12", "1 and 6", "3 and 4", "-3 and -4"],
+                        "a": 2,
+                        "why": r"""
+For 2-by-2 the characteristic polynomial is `lambda^2 - (trace) lambda + det`,
+here `lambda^2 - 7 lambda + 12 = (lambda - 3)(lambda - 4)`. The two conditions —
+sum 7, product 12 — pin the pair down without ever writing the matrix. The pair
+1 and 6 sums correctly but multiplies to 6, and a negative pair would give a
+negative trace. This shortcut is the fastest sanity check there is on a computed
+eigenpair.
+""",
+                    },
+                    {
+                        "q": "Which of these matrices cannot be diagonalised?",
+                        "opts": ["`[[1, 1], [0, 1]]`", "`[[2, 0], [0, 3]]`", "`[[0, 1], [1, 0]]`", "`[[2, 1], [1, 2]]`"],
+                        "a": 0,
+                        "why": r"""
+The shear has the repeated eigenvalue 1, but solving `(A - I)v = 0` gives only
+multiples of `(1, 0)`: a one-dimensional eigenspace where two dimensions are
+needed. That is a defective matrix, and no `S` exists. Note that a repeated
+eigenvalue is not by itself the problem — the identity repeats its eigenvalue and
+is already diagonal. The other two are symmetric, and a symmetric matrix is always
+diagonalisable, by an orthogonal `S` at that.
+""",
+                    },
+                    {
+                        "q": "What are the real eigenvectors of the quarter-turn `[[0, -1], [1, 0]]`?",
+                        "opts": [
+                            "`(1, 0)` and `(0, 1)`, with eigenvalues 0 and 1",
+                            "Every vector, since a rotation preserves length",
+                            "There are none; the eigenvalues are `i` and `-i`",
+                            "`(1, 1)`, with eigenvalue 1",
+                        ],
+                        "a": 2,
+                        "why": r"""
+An eigenvector is a direction the map does not turn, and a quarter-turn turns
+every direction, so there is nothing for it to be. The algebra agrees:
+`det(A - lambda I) = lambda^2 + 1`, whose roots are `i` and `-i`, with complex
+eigenvectors `(1, -i)` and `(1, i)`. Preserving length is a statement about the
+norm, not about direction. This is the standard demonstration that a perfectly
+ordinary real matrix can force you into complex arithmetic — the arithmetic that
+rotations, oscillations and quantum states all live in.
+""",
+                    },
+                ],
+            },
+        },
+        # ------------------------------------------------------------ M10
+        {
+            "title": "Symmetric matrices, the spectral theorem and quadratic forms",
+            "summary": "The best-behaved matrices there are: real eigenvalues, orthogonal eigenvectors, and a definiteness test you can actually run.",
+            "concepts": [
+                "The spectral theorem: a real symmetric matrix has real eigenvalues and an orthonormal eigenbasis, so A = Q Lambda Q^T",
+                "The complex analogue swaps transpose for conjugate transpose — Hermitian matrices have real eigenvalues, unitary matrices preserve length",
+                "A quadratic form x^T A x is a landscape whose curvature along each eigenvector is that eigenvalue",
+                "Positive definite means x^T A x > 0 for every non-zero x, equivalently every eigenvalue positive, equivalently every pivot positive",
+                "A^T A is symmetric and positive semidefinite for any A, and positive definite exactly when the columns of A are independent",
+            ],
+            "quiz": {
+                "title": "Symmetry, definiteness and curvature",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "What does symmetry of a real matrix `A` guarantee?",
+                        "opts": [
+                            "Distinct eigenvalues",
+                            "Positive eigenvalues",
+                            "That `A` is invertible",
+                            "Real eigenvalues and an orthonormal basis of eigenvectors",
+                        ],
+                        "a": 3,
+                        "why": r"""
+That is the spectral theorem: `A = Q Lambda Q^T` with `Q` orthogonal and `Lambda`
+real. It holds even when eigenvalues repeat — a repeat simply means an eigenspace
+of dimension greater than one, inside which any orthonormal basis will serve, so
+distinctness is not promised and is not needed. Symmetry says nothing about sign:
+`[[1, 2], [2, 1]]` is symmetric with eigenvalues 3 and -1, and the zero matrix is
+symmetric and not invertible.
+""",
+                    },
+                    {
+                        "q": "For a symmetric `A`, which condition is **not** equivalent to positive definiteness?",
+                        "opts": [
+                            "Every entry of `A` is positive",
+                            "Every eigenvalue of `A` is positive",
+                            "Every pivot of elimination on `A` is positive",
+                            "`x^T A x > 0` for every non-zero `x`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Entries are not the test, in either direction. `[[1, 2], [2, 1]]` has every entry
+positive yet eigenvalues 3 and -1, so the form goes negative along `(1, -1)`; and
+`[[2, -1], [-1, 2]]` has a negative entry and is positive definite. The other
+three really are the same statement in three languages — the energy definition,
+the eigenvalue test, and the pivot test that falls out of elimination for free,
+which is why Cholesky doubles as a definiteness check.
+""",
+                    },
+                    {
+                        "q": "What is true of `A^T A` for an arbitrary m-by-n matrix `A`?",
+                        "opts": [
+                            "It equals `A A^T`",
+                            "It is always invertible",
+                            "It is symmetric and positive semidefinite, and positive definite exactly when the columns of `A` are independent",
+                            "It is symmetric only when `A` is square",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Symmetry is immediate: transposing `A^T A` gives `A^T A` back, whatever the shape.
+And `x^T A^T A x = (Ax) . (Ax) = ||Ax||^2`, which is never negative and is zero
+exactly when `x` is in the null space of `A` — so the form is strictly positive
+precisely when that null space is trivial, meaning independent columns. That is
+also the exact condition for the normal equations to be solvable. `A A^T` is a
+different, m-by-m matrix with the same non-zero eigenvalues but a different size.
+""",
+                    },
+                    {
+                        "q": "Over the complex numbers, which pair of matrix classes plays the roles that symmetric and orthogonal play over the reals?",
+                        "opts": [
+                            "Hermitian and unitary",
+                            "Upper triangular and diagonal",
+                            "Symmetric and orthogonal, unchanged",
+                            "Positive definite and singular",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The complex inner product conjugates one side so that `v . v` comes out real and
+non-negative, and every definition follows that conjugation: Hermitian means `A`
+equals its conjugate transpose, unitary means `U* U = I`. Hermitian matrices have
+real eigenvalues and an orthonormal eigenbasis, exactly as symmetric ones do, and
+unitary matrices preserve length, exactly as orthogonal ones do. Plain symmetry
+without conjugation loses the guarantee of real eigenvalues, which is why quantum
+mechanics states its observables as Hermitian and its gates as unitary.
+""",
+                    },
+                ],
+            },
+        },
+        # ------------------------------------------------------------ M11
+        {
+            "title": "Singular values: the SVD, the pseudoinverse and conditioning",
+            "summary": "Every matrix, however awkward, is a rotation then a stretch then a rotation — and that is where conditioning is written down.",
+            "concepts": [
+                "A = U Sigma V^T exists for every matrix of every shape and rank, with sigma_1 >= sigma_2 >= ... >= 0",
+                "The right singular vectors are the eigenvectors of A^T A and the singular values are the square roots of its eigenvalues",
+                "The count of non-zero singular values is the rank, and it is the numerically honest rank: a tiny sigma is a column that nearly does not count",
+                "The condition number sigma_max / sigma_min bounds how far a relative error in b is amplified in x, and squaring A into A^T A squares it",
+                "The pseudoinverse A+ = V Sigma+ U^T inverts what can be inverted and ignores the rest, and truncating after k terms is the best rank-k approximation there is",
+            ],
+            "quiz": {
+                "title": "Reading a matrix by its singular values",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Which matrices have a singular value decomposition?",
+                        "opts": [
+                            "Only square ones",
+                            "Only symmetric ones",
+                            "Only matrices of full rank",
+                            "Every real matrix, of any shape and any rank",
+                        ],
+                        "a": 3,
+                        "why": r"""
+The SVD asks for nothing: no squareness, no independence, no symmetry. That is
+precisely its advantage over diagonalisation, which needs a square matrix with a
+full set of independent eigenvectors and fails on the defective ones. A rank-2
+matrix of shape 7-by-3 has an SVD with `sigma_3 = 0`, and the zeros are
+informative rather than an obstacle — they are how the decomposition reports the
+rank.
+""",
+                    },
+                    {
+                        "q": "Where do the singular values of `A` come from?",
+                        "opts": [
+                            "The square roots of the eigenvalues of `A^T A`, which are never negative",
+                            "The eigenvalues of `A` itself, sorted by size",
+                            "The diagonal entries of `A`",
+                            "The pivots produced by elimination",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`A^T A` is symmetric positive semidefinite, so its eigenvalues are real and at
+least zero, and their square roots are the singular values. For a symmetric
+positive definite matrix these coincide with the eigenvalues of `A`, but in
+general they are unrelated: `[[0, 5], [0, 0]]` has both eigenvalues zero and
+singular values 5 and 0. This is also the reason the capstone gets a condition
+number out of power iteration on `A^T A` alone — no full SVD required.
+""",
+                    },
+                    {
+                        "q": "The condition number of `A` is about `1e6` and the entries of `b` are known to 10 significant digits. How many digits of `x` can you trust?",
+                        "opts": ["About 10 — conditioning affects speed, not accuracy", "About 4", "About 16", "None"],
+                        "a": 1,
+                        "why": r"""
+A relative perturbation in the data is amplified by up to the condition number, so
+roughly `log10(1e6) = 6` digits are lost and about 4 survive. Conditioning is a
+property of the problem, not of the algorithm: a perfect solver cannot recover
+digits the problem has destroyed. It is also why forming the normal equations
+hurts here — `A^T A` would carry a condition number near `1e12`, leaving nothing
+of a 10-digit input, while QR on `A` keeps those four digits.
+""",
+                    },
+                    {
+                        "q": "You keep only the `k` largest singular values and discard the rest. What have you built?",
+                        "opts": [
+                            "A random rank-k matrix",
+                            "The inverse of `A` restricted to k dimensions",
+                            "Nothing useful unless `A` is symmetric",
+                            "The best rank-k approximation of `A` in the Frobenius and spectral norms",
+                        ],
+                        "a": 3,
+                        "why": r"""
+This is the Eckart-Young theorem: no rank-k matrix comes closer to `A`, and the
+error left behind is measured exactly by the singular values you threw away. It is
+the mathematics under image compression, latent semantic indexing and principal
+component analysis, all of which are the same truncation applied to different
+data. Symmetry is not required — the SVD never requires it — and truncation
+approximates `A`, it does not invert it.
+""",
+                    },
                 ],
             },
         },
