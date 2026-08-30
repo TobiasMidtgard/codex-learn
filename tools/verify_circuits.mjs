@@ -28,6 +28,9 @@ new Function('module',
 )(mod);
 const { runCircuitChecks, fmtEng, parseEng } = mod.exports;
 
+/* A unit key holds nothing, one authored object, or a list of them. */
+const asList = (x) => (!x ? [] : (Array.isArray(x) ? x : [x]));
+
 const args = process.argv.slice(2);
 const files = args.length ? args.map((a) => join(ROOT, a))
   : readdirSync(join(ROOT, 'catalog'))
@@ -44,7 +47,9 @@ for (const file of files) {
   const found = [];
 
   for (const [mi, m] of (course.modules || []).entries()) {
-    if (m.build) found.push([`M${mi + 1}`, m.build]);
+    asList(m.build).forEach((b, bi) => {
+      found.push([`M${mi + 1}${bi ? '.' + (bi + 1) : ''}`, b]);
+    });
   }
   if (!found.length) continue;
 

@@ -31,6 +31,10 @@
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, rmSync,
          statSync, unlinkSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+
+/* A unit key holds nothing, one authored object, or a list of them. */
+const asList = (x) => (!x ? [] : (Array.isArray(x) ? x : [x]));
+
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -143,10 +147,10 @@ for (const file of spineFiles) {
        twice: it is readable from the console, and 36 schematics are real bytes in a
        file already close to its size budget. */
     for (const m of course.modules) {
-      if (m.build) delete m.build.solution;
+      for (const b of asList(m.build)) delete b.solution;
     }
 
-    const labs = course.modules.filter((m) => m.lab).length;
+    const labs = course.modules.reduce((n, m) => n + asList(m.lab).length, 0);
     if (!labs) problems.push(`${id}: no labs`);
     allCourses.push(course);
     (byProgram[prog.id] = byProgram[prog.id] || []).push(course);
@@ -176,18 +180,19 @@ for (const block of studioJs.split('Sandbox.define({').slice(1)) {
 }
 for (const c of allCourses) {
   for (const [mi, m] of c.modules.entries()) {
-    if (!m.sandbox) continue;
-    const id = m.sandbox.visualiser;
+    for (const sb of asList(m.sandbox)) {
+    const id = sb.visualiser;
     if (!VIS.has(id)) {
       problems.push(`${c.id}/M${mi + 1}: sandbox names "${id}", which is not a registered ` +
         `visualiser (have: ${[...VIS.keys()].join(', ')})`);
       continue;
     }
-    for (const k of Object.keys(m.sandbox.initial || {})) {
+    for (const k of Object.keys(sb.initial || {})) {
       if (!VIS.get(id).has(k)) {
         problems.push(`${c.id}/M${mi + 1}: sandbox sets "${k}", which is not a parameter of ` +
           `"${id}" (it takes: ${[...VIS.get(id)].join(', ')})`);
       }
+    }
     }
   }
 }
@@ -204,11 +209,13 @@ const TUNE_IDS = new Set([...studioJs.matchAll(/Tune\.define\(\{\s*\n?\s*id:\s*'
 const SYM_IDS = new Set([...circuitJs.matchAll(/define\('([^']+)',\s*'/g)].map((m) => m[1]));
 for (const c of allCourses) {
   for (const [mi, m] of c.modules.entries()) {
-    if (m.tune && !TUNE_IDS.has(m.tune.model)) {
-      problems.push(`${c.id}/M${mi + 1}: tune names the "${m.tune.model}" model, which is not ` +
-        `defined in studio.js (have: ${[...TUNE_IDS].join(', ')})`);
+    for (const t of asList(m.tune)) {
+      if (!TUNE_IDS.has(t.model)) {
+        problems.push(`${c.id}/M${mi + 1}: tune names the "${t.model}" model, which is not ` +
+          `defined in studio.js (have: ${[...TUNE_IDS].join(', ')})`);
+      }
     }
-    for (const it of (m.match ? m.match.items : [])) {
+    for (const it of asList(m.match).flatMap((q) => q.items || [])) {
       if (!SYM_IDS.has(it.sym)) {
         problems.push(`${c.id}/M${mi + 1}: the symbol drill asks for "${it.sym}", which circuit.js ` +
           `cannot draw (have: ${[...SYM_IDS].join(', ')})`);
@@ -370,14 +377,32 @@ const inlineHtml = assemble('inlined', inlineLiteral(degree), '[]');
    unaddressable instead. GitHub Pages sets its own cache headers and cannot be told
    otherwise, and both dev servers send no-store, so this failure is not reproducible
    locally — which is exactly why it is designed out rather than tested for. */
+/* One payload per programme, which is how this started, put a whole degree behind a
+   single fetch. That was tolerable at four modules a course and stops being so the
+   moment a course carries a real syllabus: the per-payload budget is 3 MB and
+   ee-msc was at 2.5 MB before any of the depth work landed.
+
+   So a payload is a BAND of a programme — one year. That is also the unit the planner
+   navigates in, which is what makes it the right seam rather than merely a smaller
+   one. */
 const chunks = [];
 for (const prog of programs) {
   const courses = byProgram[prog.id] || [];
   if (!courses.length) continue;
-  const json = JSON.stringify(courses);
-  const hash = createHash('sha256').update(json).digest('hex').slice(0, 8);
-  chunks.push({ id: prog.id, name: `${prog.id}.${hash}.json`, json: json,
-                url: `programs/${prog.id}.${hash}.json`, courses: courses.length });
+  const bands = new Map();
+  for (const c of courses) {
+    const band = c.band === undefined ? 0 : c.band;
+    if (!bands.has(band)) bands.set(band, []);
+    bands.get(band).push(c);
+  }
+  for (const band of [...bands.keys()].sort((x, y) => x - y)) {
+    const list = bands.get(band);
+    const json = JSON.stringify(list);
+    const hash = createHash('sha256').update(json).digest('hex').slice(0, 8);
+    const name = `${prog.id}.b${band}.${hash}.json`;
+    chunks.push({ id: prog.id, band: band, name: name, json: json,
+                  url: `programs/${name}`, courses: list.length });
+  }
 }
 
 /* Pages publishes this repo as a PROJECT page, at /codex-learn/ — there is no CNAME.
@@ -392,7 +417,7 @@ for (const ch of chunks) {
 
 const shellHtml = assemble('split shell',
   inlineLiteral({ programs, courses: [] }),
-  JSON.stringify(chunks.map((c) => ({ id: c.id, url: c.url }))));
+  JSON.stringify(chunks.map((c) => ({ id: c.id, band: c.band, url: c.url }))));
 
 /* The inlined shape must list nothing. Asserted rather than assumed: both shapes come
    out of one run, and it is the empty list that keeps the double-clickable file from
@@ -436,7 +461,11 @@ if (problems.length) {
 const INLINE_BUDGET_KB = 8192;
 const SHELL_BUDGET_KB = 1024;
 const CHUNK_BUDGET_KB = 3072;
-const CHUNKS_TOTAL_KB = 6144;
+/* The total is now the catalog's footprint on disk across every band, not the size
+   of any one fetch — that is what CHUNK_BUDGET_KB bounds, and chunking by band is
+   what keeps it honest. Raised because a catalog with real syllabi is simply larger;
+   the number that governs what a browser waits for is the per-payload one. */
+const CHUNKS_TOTAL_KB = 24576;
 
 if (inlineKb > INLINE_BUDGET_KB) {
   problems.push(`the inlined artifact is ${Math.round(inlineKb)} KB, over the ` +

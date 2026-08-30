@@ -105,6 +105,9 @@ function capstoneMd(c) {
   return md;
 }
 
+/* A unit key holds either nothing, one authored object, or a list of them. */
+function asList(x) { return !x ? [] : (Array.isArray(x) ? x : [x]); }
+
 function buildDegreeIndex(courses) {
   for (const c of courses) {
     COURSE_OF[c.id] = c;
@@ -118,177 +121,95 @@ function buildDegreeIndex(courses) {
       const mnum = 'M' + (mi + 1);
       const modRef = { title: m.title };
 
-      /* The pedagogical loop is three units per module: look at it, derive it,
-         build it. Each is a lesson in its own right so progress, XP and the rail
-         all work unchanged. */
-      if (m.sandbox) {
-        const sbl = {
-          id: c.id + '-' + mnum + '-SB',
-          type: 'sandbox',
-          title: m.sandbox.title,
-          min: m.sandbox.minutes || 8,
-          mdText: m.sandbox.brief,
-          sandbox: m.sandbox.visualiser,
-          initial: m.sandbox.initial || {},
-          notice: m.sandbox.notice || [],
-          trackId: c.id, courseId: c.id, num: mnum + '\u00b7a',
-        };
-        LESSON_INDEX[sbl.id] = { lesson: sbl, track: c, module: modRef, mi: mi };
-        flat.push(sbl);
-        m.sandboxLessonId = sbl.id;
-      }
+      /* One row per unit kind: where it sits in the sequence, the id suffix it
+         carries, and how an authored object becomes the fields a renderer reads.
 
-      if (m.quiz) {
-        const qzl = {
-          id: c.id + '-' + mnum + '-QZ',
-          type: 'quiz',
-          title: m.quiz.title,
-          min: m.quiz.minutes || 6,
-          questions: m.quiz.questions || [],
-          trackId: c.id, courseId: c.id, num: mnum + '\u00b7q',
-        };
-        LESSON_INDEX[qzl.id] = { lesson: qzl, track: c, module: modRef, mi: mi };
-        flat.push(qzl);
-        m.quizLessonId = qzl.id;
-      }
+         This was nine near-identical blocks, one per kind, each handling exactly one
+         unit. That shape capped a module at nine units and had no reading kind at
+         all, so a subject went from a list of concept bullets straight to being
+         examined on it. Both are why a module could not be learned from.
 
-      if (m.blanks) {
-        const bkl = {
-          id: c.id + '-' + mnum + '-FB',
-          type: 'blanks',
-          title: m.blanks.title,
-          min: m.blanks.minutes || 8,
-          mdText: m.blanks.brief,
-          caption: m.blanks.caption,
-          lang: m.blanks.lang || 'text',
-          listing: m.blanks.listing,
-          blanks: m.blanks.blanks || [],
-          trackId: c.id, courseId: c.id, num: mnum + '\u00b7f',
-        };
-        LESSON_INDEX[bkl.id] = { lesson: bkl, track: c, module: modRef, mi: mi };
-        flat.push(bkl);
-        m.blanksLessonId = bkl.id;
-      }
+         Each key now holds a LIST. The FIRST entry keeps the original unsuffixed id
+         (`-QZ`, and the bare `-M3` for a lab), so nothing anyone has already
+         completed is orphaned; later entries are numbered from 2.
 
-      if (m.numeric) {
-        const nl = {
-          id: c.id + '-' + mnum + '-NV',
-          type: 'numeric',
-          title: m.numeric.title,
-          min: m.numeric.minutes || 7,
-          mdText: m.numeric.brief,
-          prompt: m.numeric.prompt,
-          note: m.numeric.note,
-          diagram: m.numeric.diagram,
-          figure: m.numeric.figure,
-          given: m.numeric.given || [],
-          answer: m.numeric.answer,
-          tol: m.numeric.tol,
-          unit: m.numeric.unit,
-          aside: m.numeric.aside,
-          hint: m.numeric.hint,
-          wrong: m.numeric.wrong,
-          why: m.numeric.why,
-          trackId: c.id, courseId: c.id, num: mnum + '·v',
-        };
-        LESSON_INDEX[nl.id] = { lesson: nl, track: c, module: modRef, mi: mi };
-        flat.push(nl);
-        m.numericLessonId = nl.id;
-      }
+         The order is the order a learner meets them: explain it, see it, establish
+         why, recall the form, work it from easy to hard, apply it, check it stuck,
+         then build the thing. */
+      const UNIT_SPEC = [
+        { key: 'read', sfx: 'RD', type: 'read', tag: 'r', min: 10,
+          map: function (u) { return { mdText: u.body }; } },
+        { key: 'sandbox', sfx: 'SB', type: 'sandbox', tag: 'a', min: 8,
+          map: function (u) { return { mdText: u.brief, sandbox: u.visualiser,
+            initial: u.initial || {}, notice: u.notice || [] }; } },
+        { key: 'derive', sfx: 'DV', type: 'derive', tag: 'b', min: 12,
+          map: function (u) { return { mdText: u.brief, vars: u.vars || [],
+            steps: u.steps || [], closing: u.closing }; } },
+        { key: 'blanks', sfx: 'FB', type: 'blanks', tag: 'f', min: 8,
+          map: function (u) { return { mdText: u.brief, caption: u.caption,
+            lang: u.lang || 'text', listing: u.listing, blanks: u.blanks || [] }; } },
+        { key: 'numeric', sfx: 'NV', type: 'numeric', tag: 'v', min: 7,
+          map: function (u) { return { mdText: u.brief, prompt: u.prompt, note: u.note,
+            diagram: u.diagram, figure: u.figure, given: u.given || [], answer: u.answer,
+            tol: u.tol, unit: u.unit, aside: u.aside, hint: u.hint, wrong: u.wrong,
+            why: u.why }; } },
+        { key: 'match', sfx: 'SY', type: 'match', tag: 's', min: 6,
+          map: function (u) { return { mdText: u.brief, prompt: u.prompt,
+            labels: u.labels || [], items: u.items || [] }; } },
+        { key: 'tune', sfx: 'TN', type: 'tune', tag: 't', min: 9,
+          map: function (u) { return { mdText: u.brief, prompt: u.prompt, note: u.note,
+            model: u.model, initial: u.initial || {}, constants: u.constants || {},
+            plotKey: u.plotKey, constraints: u.constraints || [] }; } },
+        { key: 'build', sfx: 'BD', type: 'build', tag: 'c', min: 20,
+          map: function (u) { return { mdText: u.brief,
+            start: u.start || { parts: [], wires: [] }, checks: u.checks || [],
+            hints: u.hints || [] }; } },
+        { key: 'quiz', sfx: 'QZ', type: 'quiz', tag: 'q', min: 6,
+          map: function (u) { return { questions: u.questions || [] }; } },
+      ];
 
-      if (m.match) {
-        const ml = {
-          id: c.id + '-' + mnum + '-SY',
-          type: 'match',
-          title: m.match.title,
-          min: m.match.minutes || 6,
-          mdText: m.match.brief,
-          prompt: m.match.prompt,
-          labels: m.match.labels || [],
-          items: m.match.items || [],
-          trackId: c.id, courseId: c.id, num: mnum + '·s',
-        };
-        LESSON_INDEX[ml.id] = { lesson: ml, track: c, module: modRef, mi: mi };
-        flat.push(ml);
-        m.matchLessonId = ml.id;
-      }
+      UNIT_SPEC.forEach(function (spec) {
+        asList(m[spec.key]).forEach(function (u, ui) {
+          if (!u) return;
+          const lesson = Object.assign({
+            id: c.id + '-' + mnum + '-' + spec.sfx + (ui ? (ui + 1) : ''),
+            type: spec.type,
+            title: u.title,
+            min: u.minutes || spec.min,
+            trackId: c.id,
+            courseId: c.id,
+            num: mnum + '\u00b7' + spec.tag + (ui ? (ui + 1) : ''),
+          }, spec.map(u));
+          /* the first of a kind keeps the name the rest of the app already uses */
+          if (!ui) m[spec.key + 'LessonId'] = lesson.id;
+          LESSON_INDEX[lesson.id] = { lesson: lesson, track: c, module: modRef, mi: mi };
+          flat.push(lesson);
+        });
+      });
 
-      if (m.tune) {
-        const tl = {
-          id: c.id + '-' + mnum + '-TN',
-          type: 'tune',
-          title: m.tune.title,
-          min: m.tune.minutes || 9,
-          mdText: m.tune.brief,
-          prompt: m.tune.prompt,
-          note: m.tune.note,
-          model: m.tune.model,
-          initial: m.tune.initial || {},
-          constants: m.tune.constants || {},
-          plotKey: m.tune.plotKey,
-          constraints: m.tune.constraints || [],
-          trackId: c.id, courseId: c.id, num: mnum + '·t',
+      asList(m.lab).forEach(function (lab, li) {
+        if (!lab) return;
+        const lesson = {
+          /* the first lab keeps the bare `<COURSE>-M<n>` id it has always had */
+          id: c.id + '-' + mnum + (li ? '-LB' + (li + 1) : ''),
+          type: 'code',
+          title: lab.title,
+          min: lab.minutes || 30,
+          lang: lab.runtime === 'web' ? 'web' : (lab.runtime === 'js' ? 'js' : 'python'),
+          mdText: lab.brief,
+          files: lab.files,
+          main: lab.main,
+          solution: lab.solution,
+          hints: lab.hints || [],
+          tests: lab.tests || [],
+          trackId: c.id,
+          courseId: c.id,
+          num: mnum + (li ? '\u00b7L' + (li + 1) : ''),
         };
-        LESSON_INDEX[tl.id] = { lesson: tl, track: c, module: modRef, mi: mi };
-        flat.push(tl);
-        m.tuneLessonId = tl.id;
-      }
-
-      if (m.build) {
-        const bl = {
-          id: c.id + '-' + mnum + '-BD',
-          type: 'build',
-          title: m.build.title,
-          min: m.build.minutes || 20,
-          mdText: m.build.brief,
-          start: m.build.start || { parts: [], wires: [] },
-          checks: m.build.checks || [],
-          hints: m.build.hints || [],
-          trackId: c.id, courseId: c.id, num: mnum + '\u00b7c',
-        };
-        LESSON_INDEX[bl.id] = { lesson: bl, track: c, module: modRef, mi: mi };
-        flat.push(bl);
-        m.buildLessonId = bl.id;
-      }
-
-      if (m.derive) {
-        const dvl = {
-          id: c.id + '-' + mnum + '-DV',
-          type: 'derive',
-          title: m.derive.title,
-          min: m.derive.minutes || 12,
-          mdText: m.derive.brief,
-          vars: m.derive.vars || [],
-          steps: m.derive.steps || [],
-          closing: m.derive.closing,
-          trackId: c.id, courseId: c.id, num: mnum + '\u00b7b',
-        };
-        LESSON_INDEX[dvl.id] = { lesson: dvl, track: c, module: modRef, mi: mi };
-        flat.push(dvl);
-        m.deriveLessonId = dvl.id;
-      }
-
-      if (!m.lab) return;
-      const lab = m.lab;
-      const lesson = {
-        id: c.id + '-M' + (mi + 1),
-        type: 'code',
-        title: lab.title,
-        min: lab.minutes || 30,
-        lang: lab.runtime === 'web' ? 'web' : (lab.runtime === 'js' ? 'js' : 'python'),
-        mdText: lab.brief,
-        files: lab.files,
-        main: lab.main,
-        solution: lab.solution,
-        hints: lab.hints || [],
-        tests: lab.tests || [],
-        trackId: c.id,
-        courseId: c.id,
-        num: 'M' + (mi + 1),
-      };
-      m.lessonId = lesson.id;
-      LESSON_INDEX[lesson.id] = { lesson: lesson, track: c, module: { title: m.title }, mi: mi };
-      flat.push(lesson);
+        if (!li) m.lessonId = lesson.id;
+        LESSON_INDEX[lesson.id] = { lesson: lesson, track: c, module: modRef, mi: mi };
+        flat.push(lesson);
+      });
     });
 
     if (c.capstone && c.capstone.tests && c.capstone.tests.length) {
@@ -353,11 +274,17 @@ async function fetchChunk(url, ms) {
   } finally { clearTimeout(timer); }
 }
 
-function programLoaded(id) {
-  /* The foundation tracks are inlined and already sit in cs-degree, so a bare
+function chunkLoaded(ch) {
+  /* The foundation tracks are inlined and already sit in cs-degree band 0, so a bare
      "does this programme have any courses" test would report it loaded and skip its
-     fetch entirely. Only a fetched course counts as the payload arriving. */
-  return DEGREE.courses.some(function (c) { return c.program === id && c.kind !== 'track'; });
+     fetch entirely. Only a fetched course counts as the payload arriving.
+
+     Matched on band as well as programme now that a payload is one year: without the
+     band test the first year to arrive would mark every other year of that degree as
+     already here, and the rest would never be fetched. */
+  return DEGREE.courses.some(function (c) {
+    return c.program === ch.id && c.band === ch.band && c.kind !== 'track';
+  });
 }
 function markMissing(id) { if (!programMissing(id)) MISSING_PROGRAMS.push(id); }
 function markArrived(id) {
@@ -375,7 +302,7 @@ async function loadDegreeChunks() {
      fine means a retry for a DIFFERENT programme can un-load it: the second fetch
      fails, the id goes back on the missing list, and a working degree screen is
      replaced by an error page for courses that are sitting in the rail. */
-  const todo = DEGREE_CHUNK_LIST.filter(function (ch) { return !programLoaded(ch.id); });
+  const todo = DEGREE_CHUNK_LIST.filter(function (ch) { return !chunkLoaded(ch); });
   if (!todo.length) return;
   const got = await Promise.all(todo.map(async function (ch) {
     /* the retry is sequential inside one promise, so a payload can never land twice */
@@ -418,6 +345,26 @@ function coursesInProgram(programId) {
 function courseUnits(c) { return TRACK_LESSONS[c.id] || []; }
 /* A course keeps its labs in modules[].lab; a foundation track keeps them as units of
    type 'code'. Both mean "the parts a machine checks", so ask the units, not the shape. */
+/* Two different quantities were being printed as one.
+
+   `c.hours` is the academic workload of the subject: a 10-credit course is about 120
+   hours of a student's time once lectures, reading and private study are counted.
+   That is a true statement about the SUBJECT. What this platform holds is the guided
+   part of it, and for four modules that is a couple of hours. Printing the academic
+   figure under the label "estimated total study time" claimed the whole 120 hours was
+   in the app, which is how the gap got noticed.
+
+   So guidedTime is what is actually here, and it is what the app leads with. The
+   academic figure stays, named as what it is. */
+function guidedMinutes(c) {
+  return courseUnits(c).reduce(function (n, l) { return n + (l.min || 8); }, 0);
+}
+function guidedTime(c) {
+  const m = guidedMinutes(c);
+  if (!m) return '—';
+  return m < 90 ? m + ' min' : (Math.round(m / 30) / 2) + ' h';
+}
+
 function courseLabs(c) {
   if (c && c.kind === 'track') {
     return courseUnits(c).filter(function (l) { return l.type === 'code' || l.type === 'project'; }).length;
@@ -1840,7 +1787,7 @@ function courseCardHtml(c) {
       '<span class="spacer"></span>' +
       (!pre.allMet && d === 0
         ? '<span class="lock-note">needs ' + pre.list.filter(function (p) { return !p.met; }).map(function (p) { return p.id; }).join(', ') + '</span>'
-        : '<span>' + (c.credits || 0) + ' cr · ' + (c.hours || 0) + ' h</span>') +
+        : '<span>' + (c.credits || 0) + ' cr, ' + guidedTime(c) + ' here</span>') +
     '</div>' +
   '</button>';
 }
@@ -1969,7 +1916,8 @@ function renderDegree(main, programId) {
         '<div class="sj-id"><b>' + esc(c.title.split(/\s+\u2014\s+/)[0]) + '</b><span>' + esc(c.id) + '</span></div>' +
       '</div>' +
       '<div class="sj-meta">' +
-        '<span title="Estimated total study time">\u25f7 \u2248 ' + (c.hours || 0) + ' h</span>' +
+        '<span title="Guided work in this course. The subject itself is '
+          + (c.hours || 0) + ' h of study.">◷ ' + guidedTime(c) + '</span>' +
         '<span class="dot">\u00b7</span>' +
         '<span>' + (c.kind === 'track'
           ? units + ' unit' + (units === 1 ? '' : 's')
@@ -2015,7 +1963,8 @@ function renderDegree(main, programId) {
       '<div class="pd-chips">' +
         '<span>\u25a4 ' + units.length + ' units</span>' +
         '<span>\u2697 ' + labs + ' labs</span>' +
-        '<span>\u25f7 \u2248 ' + (sel.hours || 0) + ' h</span>' +
+        '<span title="Guided work here. The subject is ' + (sel.hours || 0)
+          + ' h of study in total.">◷ ' + guidedTime(sel) + '</span>' +
       '</div>' +
       '<p class="pd-sum">' + esc(sel.summary || '') + '</p>' +
       '<h3 class="pd-h">Recommended prerequisites</h3>' +
@@ -2256,7 +2205,10 @@ function renderCourse(main, c) {
             }).join('')
           : '<span class="chip">None</span>') + '</dd>' +
         '<dt>Stack</dt><dd>' + (c.stack || []).map(function (s) { return '<span class="chip stack">' + esc(s) + '</span>'; }).join('') + '</dd>' +
-        '<dt>Credits</dt><dd class="plain">' + (c.credits || 0) + ' · ' + (c.hours || 0) + ' h</dd>' +
+        '<dt>Credits</dt><dd class="plain">' + (c.credits || 0) + '</dd>' +
+        '<dt>In this course</dt><dd class="plain">' + guidedTime(c) + ' of guided work</dd>' +
+        '<dt>Subject workload</dt><dd class="plain">' + (c.hours || 0) +
+          ' h <span style="color:var(--ink-4)">including your own study</span></dd>' +
         '<dt>Progress</dt><dd class="plain">' + d + ' / ' + units.length + ' units</dd>' +
         (c.assessment ? '<dt>Assessed</dt><dd class="plain" style="font-family:var(--font-body);font-size:13px">' + esc(c.assessment) + '</dd>' : '') +
       '</dl></div>' +
@@ -2367,7 +2319,7 @@ function wireFootNav(root, l) {
 function renderRead(main, l) {
   const done = P.completed[l.id];
   main.innerHTML = '<div class="lesson-read">' + lessonHeader(l) +
-    '<div class="article">' + renderMd(BUNDLE[l.md] || '*missing content*') + '</div>' +
+    '<div class="article">' + renderMd(lessonMd(l) || '*missing content*') + '</div>' +
     footNav(l, done ? '<span class="done-note">✓ Read</span>' : '<button class="btn success" id="mark-read">✓ Mark as read</button>') +
   '</div>';
   wireCrumb(main, l);

@@ -51,6 +51,13 @@ process.stdout.write(JSON.stringify(out));
 """
 
 
+def as_list(x):
+    """A unit key holds nothing, one authored object, or a list of them."""
+    if not x:
+        return []
+    return x if isinstance(x, list) else [x]
+
+
 def translate(jobs):
     """Run every answer through the real translator in src/studio.js."""
     with tempfile.TemporaryDirectory() as d:
@@ -107,20 +114,18 @@ def main(argv):
         with open(path, encoding="utf-8") as f:
             course = json.load(f)
         for mi, mod in enumerate(course.get("modules", []), 1):
-            dv = mod.get("derive")
-            if not dv:
-                continue
-            names = list(dv.get("vars") or [])
-            for si, st in enumerate(dv.get("steps", []), 1):
-                jobs.append({"answer": st["answer"], "vars": names})
-                where.append((course["id"], mi, si, st["answer"], names, dv["title"]))
-                # A placeholder showing the answer turns the exercise into a
-                # transcription task. The app refuses to render one, but a course
-                # should not ship it either.
-                ph = "".join((st.get("placeholder") or "").split())
-                an = "".join((st.get("answer") or "").split())
-                if ph and ph == an:
-                    leaks.append(f"{course['id']}/M{mi} step {si}: the placeholder is the answer")
+            for dv in as_list(mod.get("derive")):
+                names = list(dv.get("vars") or [])
+                for si, st in enumerate(dv.get("steps", []), 1):
+                    jobs.append({"answer": st["answer"], "vars": names})
+                    where.append((course["id"], mi, si, st["answer"], names, dv["title"]))
+                    # A placeholder showing the answer turns the exercise into a
+                    # transcription task. The app refuses to render one, but a course
+                    # should not ship it either.
+                    ph = "".join((st.get("placeholder") or "").split())
+                    an = "".join((st.get("answer") or "").split())
+                    if ph and ph == an:
+                        leaks.append(f"{course['id']}/M{mi} step {si}: the placeholder is the answer")
 
     if not jobs:
         print("no derivations found")

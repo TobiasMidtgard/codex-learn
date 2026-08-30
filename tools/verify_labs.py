@@ -209,11 +209,19 @@ def banned_used(files):
     return sorted(hits)
 
 
+def as_list(x):
+    """A unit key holds nothing, one authored object, or a list of them."""
+    if not x:
+        return []
+    return x if isinstance(x, list) else [x]
+
+
 def iter_labs(course):
     for mi, module in enumerate(course.get("modules", [])):
-        lab = module.get("lab")
-        if lab:
-            yield f"M{mi + 1}", module.get("title", ""), lab
+        labs = as_list(module.get("lab"))
+        for li, lab in enumerate(labs, 1):
+            tag = f"M{mi + 1}" if len(labs) == 1 else f"M{mi + 1}.{li}"
+            yield tag, module.get("title", ""), lab
     cap = course.get("capstone")
     if cap and cap.get("tests"):
         yield "CAP", "Capstone", cap

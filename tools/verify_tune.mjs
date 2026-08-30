@@ -82,6 +82,9 @@ function sweep(spec, consts, cons, budget) {
   return { found, tried, thinned };
 }
 
+/* A unit key holds nothing, one authored object, or a list of them. */
+const asList = (x) => (!x ? [] : (Array.isArray(x) ? x : [x]));
+
 const args = process.argv.slice(2);
 const files = args.length ? args.map((a) => join(ROOT, a))
   : readdirSync(join(ROOT, 'catalog'))
@@ -95,7 +98,9 @@ for (const file of files) {
   const course = JSON.parse(readFileSync(file, 'utf8'));
   const found = [];
   for (const [mi, m] of (course.modules || []).entries()) {
-    if (m.tune) found.push([`M${mi + 1}`, m.tune]);
+    asList(m.tune).forEach((t, ti) => {
+      found.push([`M${mi + 1}${ti ? '.' + (ti + 1) : ''}`, t]);
+    });
   }
   if (!found.length) continue;
 

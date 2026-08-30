@@ -359,6 +359,51 @@ def norm_build(b, ctx):
     }
 
 
+def norm_read(rd, ctx):
+    """The explanation.
+
+    A module went from a list of concept bullets straight to being examined on them,
+    which tests whether you already knew the material rather than teaching it. There
+    was no unit kind that could hold prose, so there was nowhere for the subject to
+    be explained. This is it.
+
+    The word floor is deliberate: a two-line "reading" unit is a stub that makes a
+    module look complete while teaching nothing, and that is harder to notice later
+    than an obviously missing one."""
+    if not rd:
+        return None
+    for key in ("title", "body"):
+        if not rd.get(key):
+            raise ValueError(f"{ctx}/read: missing {key}")
+    body = clean_md(rd["body"])
+    words = len(body.split())
+    if words < 150:
+        raise ValueError(f"{ctx}/read: {words} words — too short to explain anything "
+                         "(need at least 150; write the explanation, not a summary)")
+    return {
+        "title": rd["title"],
+        "minutes": int(rd.get("minutes", max(3, round(words / 170)))),
+        "body": body,
+    }
+
+
+def norm_many(fn, value, ctx, kind):
+    """A unit key holds nothing, one authored object, or a list of them.
+
+    A single stays a single in the emitted JSON, so a course nobody has touched still
+    round-trips byte for byte and `emit.py --all` stays a drift detector."""
+    if not value:
+        return None
+    if not isinstance(value, list):
+        return fn(value, ctx)
+    out = []
+    for n, item in enumerate(value, 1):
+        r = fn(item, f"{ctx}/{kind}{n}")
+        if r:
+            out.append(r)
+    return out or None
+
+
 def norm_quiz(q, ctx):
     """Short questions with an explanation on every option.
 
@@ -516,18 +561,23 @@ def normalise(course):
             "title": m["title"],
             "summary": clean_md(m.get("summary", "")),
             "concepts": [clean_md(c) for c in m["concepts"]],
-            "sandbox": norm_sandbox(m.get("sandbox"), ctx),
-            "quiz": norm_quiz(m.get("quiz"), ctx),
-            "blanks": norm_blanks(m.get("blanks"), ctx),
-            "numeric": norm_numeric(m.get("numeric"), ctx),
-            "match": norm_match(m.get("match"), ctx),
-            "tune": norm_tune(m.get("tune"), ctx),
-            "build": norm_build(m.get("build"), ctx),
-            "derive": norm_derive(m.get("derive"), ctx),
-            "lab": norm_lab(m.get("lab"), ctx),
+            "read": norm_many(norm_read, m.get("read"), ctx, "read"),
+            "sandbox": norm_many(norm_sandbox, m.get("sandbox"), ctx, "sandbox"),
+            "quiz": norm_many(norm_quiz, m.get("quiz"), ctx, "quiz"),
+            "blanks": norm_many(norm_blanks, m.get("blanks"), ctx, "blanks"),
+            "numeric": norm_many(norm_numeric, m.get("numeric"), ctx, "numeric"),
+            "match": norm_many(norm_match, m.get("match"), ctx, "match"),
+            "tune": norm_many(norm_tune, m.get("tune"), ctx, "tune"),
+            "build": norm_many(norm_build, m.get("build"), ctx, "build"),
+            "derive": norm_many(norm_derive, m.get("derive"), ctx, "derive"),
+            "lab": norm_many(norm_lab, m.get("lab"), ctx, "lab"),
         })
-    if not 3 <= len(mods) <= 5:
-        raise ValueError(f"{cid}: {len(mods)} modules (need 3-5)")
+    # The ceiling was 5, which is about a fifth of what a 10-credit subject actually
+    # covers and was the reason a course claiming 120 hours held four short modules.
+    # It still has a ceiling, because the job of this check is to catch an author file
+    # that has gone wrong, not to ration the syllabus.
+    if not 3 <= len(mods) <= 14:
+        raise ValueError(f"{cid}: {len(mods)} modules (need 3-14)")
 
     cap = course["capstone"]
     capstone = {
