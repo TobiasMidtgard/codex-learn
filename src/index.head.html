@@ -269,6 +269,11 @@ input{font-family:inherit}
 .rail-track .t-name{font-weight:600;font-size:13.5px;letter-spacing:-.01em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rail-track .t-pct{font-family:var(--mono);font-size:10.5px;color:var(--ink-4)}
 .rail-module{padding:4px 0 6px}
+/* a track nested inside a band: its lessons indent one step further than a course */
+.rail-sub>button .cid{font-size:9px}
+.rail-module.sub{padding:2px 0 4px}
+.rail-module.sub h4{margin-left:56px}
+.rail-module.sub .rail-lesson{padding-left:12px}
 .rail-module h4{margin:8px 18px 5px 44px;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);font-weight:500}
 .rail-lesson,.rail-course{
   display:grid;align-items:center;width:100%;text-align:left;font-size:13px;color:var(--ink-3);
@@ -639,6 +644,20 @@ math[display=block]{display:block;margin:14px 0;overflow-x:auto;overflow-y:hidde
 .blk-row b{font-family:var(--mono);font-size:13px;color:var(--ink)}
 .blk-yours{font-family:var(--mono);font-size:11.5px;color:var(--ans-no)}
 .blk-row p{margin:5px 0 0;font-size:13px;line-height:1.6;color:var(--ink-3);text-wrap:pretty}
+
+/* ---------- a module's units ---------- */
+.unit-list{display:flex;flex-direction:column;gap:7px}
+.unit-list .lab-row{display:grid;grid-template-columns:18px auto minmax(0,1fr) auto;
+  align-items:center;gap:11px;text-align:left}
+.mcount{flex:none;font-family:var(--mono);font-size:11px;color:var(--ink-5);
+  margin-left:auto;padding-right:12px}
+
+/* ---------- a module's units ---------- */
+.unit-list{display:flex;flex-direction:column;gap:7px}
+.unit-list .lab-row{display:grid;grid-template-columns:18px auto minmax(0,1fr) auto;
+  align-items:center;gap:11px;text-align:left}
+.mcount{flex:none;font-family:var(--mono);font-size:11px;color:var(--ink-5);
+  margin-left:auto;padding-right:12px}
 
 /* ---------- interactive questions: solve, match, tune ----------
    One prompt, one thing to manipulate, one verdict. The shared pieces live here so a

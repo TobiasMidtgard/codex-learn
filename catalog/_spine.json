@@ -2,8 +2,15 @@
   "program": {
     "id": "cs-degree",
     "name": "Computer Science — 5 Year Program",
-    "subtitle": "Integrated BSc + MSc track, 32 courses, every module ending in code that runs.",
+    "subtitle": "Integrated BSc + MSc track: a foundation year, then 32 courses, every module ending in code that runs.",
     "years": [
+      {
+        "n": 0,
+        "title": "Foundations",
+        "theme": "The hands-on tracks the degree assumes you have done: write and run code, put a page on the web, serve it from a backend, reason about data structures, and learn the tools every later year uses.",
+        "icon": "◌",
+        "tint": "#E9F7D6"
+      },
       {
         "n": 1,
         "title": "Foundations & Mathematics",
