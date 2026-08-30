@@ -511,6 +511,29 @@ c.close(Math.abs(d), 90, 0.03,
                 "The **time constant** $\\tau = RC$ is the same fact in the time domain: $f_c = 1/(2\\pi\\tau)$. Charge the capacitor through the resistor and it reaches 63% of its final voltage after one $\\tau$.",
                 "Only the product $RC$ sets the corner. 1 kΩ with 1 µF and 1 MΩ with 1 nF are the same filter — but not the same circuit, because the impedance level decides how heavily it loads whatever drives it.",
             ],
+            "tune": {
+                "title": "Keep the signal, lose the interference",
+                "minutes": 9,
+                "brief": r"""
+A corner frequency is never chosen for its own sake. It is chosen because something
+below it has to survive and something above it has to go, and the single number you
+control has to satisfy both at once.
+
+Here a 100 Hz measurement has to come through almost untouched, while 10 kHz of
+switching noise riding on the same wire has to be knocked down by twenty decibels.
+Move the corner too low and you flatten the signal; too high and the noise walks
+straight through. There is a window, and finding it *is* the design.
+""",
+                "prompt": "Pass 100 Hz nearly untouched, and put 10 kHz at least 20 dB down.",
+                "note": "One corner frequency, two requirements pulling opposite ways.",
+                "model": "rc-lowpass",
+                "initial": {"r": 1000, "c": 100},
+                "constants": {"fsig": 100, "fnoise": 10000},
+                "constraints": [
+                    {"k": "keep", "label": "\u2265 0.95 of the signal kept at 100 Hz", "min": 0.95},
+                    {"k": "reject", "label": "\u2264 \u221220 dB at 10 kHz", "max": -20.0},
+                ],
+            },
             "sandbox": {
                 "title": "Reading a corner off a response curve",
                 "visualiser": "bode",

@@ -127,6 +127,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -268,6 +271,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "A capacitor that blocks DC and passes AC",
     "minutes": 22,
@@ -596,6 +602,37 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": {
+    "title": "Keep the signal, lose the interference",
+    "minutes": 9,
+    "brief": "A corner frequency is never chosen for its own sake. It is chosen because something\nbelow it has to survive and something above it has to go, and the single number you\ncontrol has to satisfy both at once.\n\nHere a 100 Hz measurement has to come through almost untouched, while 10 kHz of\nswitching noise riding on the same wire has to be knocked down by twenty decibels.\nMove the corner too low and you flatten the signal; too high and the noise walks\nstraight through. There is a window, and finding it *is* the design.",
+    "prompt": "Pass 100 Hz nearly untouched, and put 10 kHz at least 20 dB down.",
+    "note": "One corner frequency, two requirements pulling opposite ways.",
+    "model": "rc-lowpass",
+    "initial": {
+     "r": 1000,
+     "c": 100
+    },
+    "constants": {
+     "fsig": 100,
+     "fnoise": 10000
+    },
+    "plotKey": "",
+    "constraints": [
+     {
+      "k": "keep",
+      "label": "≥ 0.95 of the signal kept at 100 Hz",
+      "min": 0.95
+     },
+     {
+      "k": "reject",
+      "label": "≤ −20 dB at 10 kHz",
+      "max": -20.0
+     }
+    ]
+   },
    "build": {
     "title": "A low-pass filter with a 1 kHz corner",
     "minutes": 25,
@@ -940,6 +977,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "An RL circuit with a 100 µs time constant",
     "minutes": 25,

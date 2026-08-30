@@ -115,6 +115,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Where $g_m$ comes from, and its three faces",
@@ -326,6 +329,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "A four-resistor bias for 1 mA",
     "minutes": 28,
@@ -726,6 +732,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -877,6 +886,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "The output pole, drawn and measured",
     "minutes": 30,

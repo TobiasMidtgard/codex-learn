@@ -98,6 +98,10 @@ export function mergeProgress(stored, incoming) {
     build: newestWhole(a.build, b.build),
     /* a filled blank stays filled; the union keeps whichever side answered one */
     blanks: mergeSlots(a.blanks, b.blanks),
+    /* a placed symbol and a tuned slider behave the same way */
+    match: mergeSlots(a.match, b.match),
+    numeric: newestWhole(a.numeric, b.numeric),
+    tune: newestWhole(a.tune, b.tune),
     activity: maxNumbers(a.activity, b.activity),
     code: newestPerKey(a.code, b.code),
     xp: Math.max(Number(a.xp) || 0, Number(b.xp) || 0),

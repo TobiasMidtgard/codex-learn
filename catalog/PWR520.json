@@ -118,6 +118,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Why the alpha axis is the a axis, and what a rotation preserves",
@@ -346,6 +349,9 @@
      }
     ]
    },
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "From the voltage equation to the state matrix and the torque",
@@ -494,6 +500,9 @@
    },
    "quiz": null,
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "The winding is the filter",
     "minutes": 22,
@@ -921,6 +930,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "The inscribed circle, the 15 per cent, and where field weakening starts",

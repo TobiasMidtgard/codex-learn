@@ -111,6 +111,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Where a component lands after decimation by M",
@@ -346,6 +349,9 @@
      }
     ]
    },
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "The gain and the images of an upsampler",
@@ -556,6 +562,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Splitting a filter into M branches",
@@ -778,6 +787,9 @@
      }
     ]
    },
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Specifying the one filter that does both jobs",

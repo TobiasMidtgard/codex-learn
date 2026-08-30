@@ -128,6 +128,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -289,6 +292,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "A filter that lags by 45 degrees",
     "minutes": 22,
@@ -639,6 +645,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "Integration you can watch",
     "minutes": 20,
@@ -940,6 +949,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "A circuit with a time constant of one millisecond",
     "minutes": 22,

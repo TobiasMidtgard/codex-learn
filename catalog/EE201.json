@@ -119,6 +119,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "The built-in potential, from mass action and Boltzmann",
@@ -341,6 +344,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "A diode a linear solver can swallow",
     "minutes": 28,
@@ -736,6 +742,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -882,6 +891,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "A 5.1 V rail that holds under load",
     "minutes": 30,

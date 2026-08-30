@@ -43,6 +43,9 @@
    "sandbox": null,
    "quiz": null,
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -116,6 +119,9 @@
    "sandbox": null,
    "quiz": null,
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -193,6 +199,9 @@
    "sandbox": null,
    "quiz": null,
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": null,
    "lab": {
@@ -266,6 +275,9 @@
    "sandbox": null,
    "quiz": null,
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": null,
    "lab": {

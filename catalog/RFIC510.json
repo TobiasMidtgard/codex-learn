@@ -114,6 +114,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Transconductance and output resistance from the square law",
@@ -360,6 +363,9 @@
      }
     ]
    },
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Miller multiplication and the input pole",
@@ -526,6 +532,9 @@
    },
    "quiz": null,
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "The small-signal model is a circuit — so build it",
     "minutes": 24,
@@ -958,6 +967,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Input capacitance and output resistance of a cascode",

@@ -116,6 +116,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Conversion gain of a switching mixer",
@@ -279,6 +282,9 @@
    },
    "quiz": null,
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "The loop filter, driven by the charge pump itself",
     "minutes": 26,
@@ -727,6 +733,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Noise transfer functions and the optimum bandwidth",
@@ -965,6 +974,9 @@
      }
     ]
    },
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Resolution, and the shape of the quantisation noise",

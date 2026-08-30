@@ -1,7 +1,7 @@
 /* ============ Codewright app: state, routing, views ============ */
 
 /* ---------- app state ---------- */
-const XP = { read: 10, sandbox: 15, blanks: 20, quiz: 25, derive: 35, build: 35, code: 40, project: 120 };
+const XP = { read: 10, sandbox: 15, blanks: 20, match: 20, numeric: 25, quiz: 25, tune: 30, derive: 35, build: 35, code: 40, project: 120 };
 const LESSON_INDEX = {};
 const TRACK_LESSONS = {};
 const TRACK_OF = {};
@@ -134,6 +134,70 @@ function buildDegreeIndex(courses) {
         LESSON_INDEX[bkl.id] = { lesson: bkl, track: c, module: modRef, mi: mi };
         flat.push(bkl);
         m.blanksLessonId = bkl.id;
+      }
+
+      if (m.numeric) {
+        const nl = {
+          id: c.id + '-' + mnum + '-NV',
+          type: 'numeric',
+          title: m.numeric.title,
+          min: m.numeric.minutes || 7,
+          mdText: m.numeric.brief,
+          prompt: m.numeric.prompt,
+          note: m.numeric.note,
+          diagram: m.numeric.diagram,
+          figure: m.numeric.figure,
+          given: m.numeric.given || [],
+          answer: m.numeric.answer,
+          tol: m.numeric.tol,
+          unit: m.numeric.unit,
+          aside: m.numeric.aside,
+          hint: m.numeric.hint,
+          wrong: m.numeric.wrong,
+          why: m.numeric.why,
+          trackId: c.id, courseId: c.id, num: mnum + '·v',
+        };
+        LESSON_INDEX[nl.id] = { lesson: nl, track: c, module: modRef, mi: mi };
+        flat.push(nl);
+        m.numericLessonId = nl.id;
+      }
+
+      if (m.match) {
+        const ml = {
+          id: c.id + '-' + mnum + '-SY',
+          type: 'match',
+          title: m.match.title,
+          min: m.match.minutes || 6,
+          mdText: m.match.brief,
+          prompt: m.match.prompt,
+          labels: m.match.labels || [],
+          items: m.match.items || [],
+          trackId: c.id, courseId: c.id, num: mnum + '·s',
+        };
+        LESSON_INDEX[ml.id] = { lesson: ml, track: c, module: modRef, mi: mi };
+        flat.push(ml);
+        m.matchLessonId = ml.id;
+      }
+
+      if (m.tune) {
+        const tl = {
+          id: c.id + '-' + mnum + '-TN',
+          type: 'tune',
+          title: m.tune.title,
+          min: m.tune.minutes || 9,
+          mdText: m.tune.brief,
+          prompt: m.tune.prompt,
+          note: m.tune.note,
+          model: m.tune.model,
+          initial: m.tune.initial || {},
+          constants: m.tune.constants || {},
+          plotKey: m.tune.plotKey,
+          constraints: m.tune.constraints || [],
+          trackId: c.id, courseId: c.id, num: mnum + '·t',
+        };
+        LESSON_INDEX[tl.id] = { lesson: tl, track: c, module: modRef, mi: mi };
+        flat.push(tl);
+        m.tuneLessonId = tl.id;
       }
 
       if (m.build) {
@@ -348,7 +412,7 @@ function degreeTotals(programId) {
            pct: units ? Math.round(done / units * 100) : 0 };
 }
 
-let P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null, activity: {}, name: '', railHidden: false };
+let P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null, activity: {}, name: '', railHidden: false };
 let route = { view: 'home' };
 const openTracks = {};
 /* keyed "&lt;programId&gt;:&lt;band&gt;" — two programmes both have a band 1, and a bare
@@ -488,7 +552,7 @@ function firstIncomplete(tid) {
   return null;
 }
 function typeChip(type) {
-  const label = { read: 'Read', sandbox: 'Sandbox', blanks: 'Fill in', quiz: 'Quiz', derive: 'Derive', build: 'Build', code: 'Code', project: 'Project' }[type] || type;
+  const label = { read: 'Read', sandbox: 'Sandbox', blanks: 'Fill in', match: 'Match', numeric: 'Solve', quiz: 'Quiz', tune: 'Tune', derive: 'Derive', build: 'Build', code: 'Code', project: 'Project' }[type] || type;
   return '<span class="chip ' + type + '">' + label + '</span>';
 }
 
@@ -837,13 +901,16 @@ function go(r) {
      Everything else is the reader's own choice, kept in P.railHidden. */
   const isSplit = route.view === 'play' ||
     (route.view === 'lesson' && /code|project/.test(LESSON_INDEX[route.id].lesson.type));
-  const hideRail = route.view === 'play' || !!P.railHidden;
+  /* The planner carries its own majors column, which is what the curriculum rail
+     would otherwise be doing — two lists of the same thing side by side. */
+  const hideRail = route.view === 'play' || route.view === 'degree' || !!P.railHidden;
   $('#body').classList.toggle('no-rail', hideRail);
   $('#body').classList.toggle('split', isSplit);
   syncRailToggle();
 
   const main = $('#main');
   main.classList.toggle('split', isSplit);
+  main.classList.toggle('bleed', route.view === 'degree');
   main.scrollTop = 0;
   if (route.view === 'home') renderHome(main);
   else if (route.view === 'track') renderTrack(main, TRACK_OF[route.track]);
@@ -861,6 +928,9 @@ function go(r) {
     else if (l.type === 'derive') renderDerive(main, l);
     else if (l.type === 'build') renderBuild(main, l);
     else if (l.type === 'blanks') renderBlanks(main, l);
+    else if (l.type === 'numeric') renderNumeric(main, l);
+    else if (l.type === 'match') renderMatch(main, l);
+    else if (l.type === 'tune') renderTune(main, l);
     else renderCode(main, l);
   }
 
@@ -1130,7 +1200,7 @@ function renderHome(main) {
 }
 
 function typeChipText(type) {
-  return { read: 'Reading', sandbox: 'Sandbox', blanks: 'Fill in', quiz: 'Quiz', derive: 'Derivation', build: 'Circuit', code: 'Lab', project: 'Capstone' }[type] || type;
+  return { read: 'Reading', sandbox: 'Sandbox', blanks: 'Fill in', match: 'Symbol drill', numeric: 'Find the value', quiz: 'Quiz', tune: 'Hit the target', derive: 'Derivation', build: 'Circuit', code: 'Lab', project: 'Capstone' }[type] || type;
 }
 
 /* ---------- progress ---------- */
@@ -1266,7 +1336,7 @@ function adopt(progress) {
   if (!progress || typeof progress !== 'object') return;
   adopting = true;
   try {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
                         activity: {}, name: '', railHidden: false }, progress);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
     recomputeXp();
@@ -1366,7 +1436,7 @@ function importProgress(file) {
       toast('That does not look like a Codex Learn progress file');
       return;
     }
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
                         activity: {}, name: '', railHidden: false }, inc);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
     applyTheme();
@@ -1380,7 +1450,7 @@ function importProgress(file) {
   fr.readAsText(file);
 }
 function resetProgress() {
-  P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null,
+  P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
         activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme };
   updateXp();
   renderRail();
@@ -1740,6 +1810,64 @@ function courseCardHtml(c) {
   '</button>';
 }
 
+/* ---------- degree: the planner ----------
+   A catalogue answers "what exists". A planner answers "what do I do next", which is
+   the question anyone actually arrives with. Three columns: which degree, which year
+   and subject, and what that subject needs first — with the prerequisite chain laid
+   out as a path rather than left implicit in a list. */
+
+const plannerState = {};
+function plannerFor(programId) {
+  if (!plannerState[programId]) plannerState[programId] = { band: null, sel: null };
+  return plannerState[programId];
+}
+
+/* The chain of subjects behind one course, deepest first. Prerequisites are a graph,
+   but a learner wants a route through it, so this walks the graph and returns one
+   ordered path: the things to do, in the order to do them. */
+function prereqChain(c, limit) {
+  const seen = {};
+  const out = [];
+  (function walk(course, depth) {
+    if (!course || depth > 6) return;
+    for (const id of (course.prereqs || [])) {
+      const pc = COURSE_OF[id];
+      if (!pc || seen[id]) continue;
+      seen[id] = true;
+      walk(pc, depth + 1);
+      out.push(pc);
+    }
+  })(c, 0);
+  /* an incomplete prerequisite is worth more of the four slots than a finished one */
+  const undone = out.filter(function (p) { return !courseComplete(p); });
+  const done = out.filter(courseComplete);
+  const keep = (limit || 3);
+  const shown = undone.length >= keep
+    ? undone.slice(0, keep)
+    : done.slice(-(keep - undone.length)).concat(undone);
+  return shown.concat([c]);
+}
+
+function foundationProgress() {
+  let total = 0, done = 0;
+  for (const t of TRACKS) {
+    for (const m of t.modules) {
+      total++;
+      if (m.lessons.every(function (l) { return P.completed[l.id]; })) done++;
+    }
+  }
+  return { done: done, total: total };
+}
+
+/* a run of segments rather than one bar: at a glance you count, not estimate */
+function segBar(done, total, max) {
+  const n = Math.min(total, max || 14);
+  const lit = total ? Math.round(done / total * n) : 0;
+  let h = '<span class="segs">';
+  for (let i = 0; i < n; i++) h += '<i' + (i < lit ? ' class="on"' : '') + '></i>';
+  return h + '</span>';
+}
+
 function renderDegree(main, programId) {
   if (!DEGREE.courses.length) {
     /* Two different failures used to share one message. They need different answers:
@@ -1760,87 +1888,173 @@ function renderDegree(main, programId) {
   }
   const prog = PROGRAM_OF[programId] || PROGRAMS[0];
   if (!prog) { main.innerHTML = '<div class="page"><h1>No programme</h1></div>'; return; }
-  const dt = degreeTotals(prog.id);
-  const filt = degFilterFor(prog.id);
 
-  function bands() {
-    let out = '';
-    const q = filt.q.trim().toLowerCase();
-    let shown = 0;
-    for (const y of prog.bands) {
-      let list = coursesInBand(prog.id, y.n);
-      if (q) {
-        list = list.filter(function (c) {
-          return (c.id + ' ' + c.title + ' ' + c.summary + ' ' + (c.stack || []).join(' ')).toLowerCase().indexOf(q) !== -1;
-        });
-      }
-      if (filt.level !== 'all') list = list.filter(function (c) { return c.level === filt.level; });
-      if (!list.length) continue;
-      shown += list.length;
-      const all = coursesInBand(prog.id, y.n);
-      const doneC = all.filter(courseComplete).length;
-      const pct = all.length ? Math.round(doneC / all.length * 100) : 0;
-      out += '<section class="year-band">' +
-        '<div class="year-head">' +
-          '<span class="year-badge" style="--tt:' + y.tint + '">' + y.n + '</span>' +
-          '<div><h2>' + esc(bandLabel(prog, y.n)) + ' — ' + esc(y.title) + '</h2><p>' + esc(y.theme) + '</p></div>' +
-          '<div class="yr-prog"><b>' + doneC + '/' + all.length + '</b>courses<div class="bar"><i style="width:' + pct + '%"></i></div></div>' +
-        '</div>' +
-        '<div class="course-grid">' + list.map(courseCardHtml).join('') + '</div>' +
-      '</section>';
-    }
-    return { html: out || '<p style="color:var(--ink-3)">No course matches that filter.</p>', shown: shown };
+  const st = plannerFor(prog.id);
+  const bands = prog.bands || [];
+  if (st.band === null || !bands.some(function (b) { return b.n === st.band; })) {
+    /* open on the year the learner is actually in: the first with unfinished work */
+    const live = bands.find(function (b) {
+      return coursesInBand(prog.id, b.n).some(function (c) { return !courseComplete(c); });
+    });
+    st.band = live ? live.n : (bands[0] ? bands[0].n : 1);
+  }
+  const list = coursesInBand(prog.id, st.band);
+  if (!st.sel || !COURSE_OF[st.sel] || COURSE_OF[st.sel].band !== st.band ||
+      COURSE_OF[st.sel].program !== prog.id) {
+    const next = list.find(function (c) { return !courseComplete(c); });
+    st.sel = (next || list[0] || {}).id || null;
+  }
+  const sel = st.sel ? COURSE_OF[st.sel] : null;
+  const dt = degreeTotals(prog.id);
+  const fp = foundationProgress();
+
+  /* ---- left: which degree ---- */
+  const majors = PROGRAMS.map(function (pr) {
+    const t = programMissing(pr.id) ? null : degreeTotals(pr.id);
+    return '<button class="mj' + (pr.id === prog.id ? ' on' : '') + '" data-major="' + esc(pr.id) + '">' +
+      '<span class="mj-i">' + esc(pr.icon || (pr.bands && pr.bands[0] ? pr.bands[0].icon : '◆')) + '</span>' +
+      '<span class="mj-n">' + esc(pr.short || pr.name) + '</span>' +
+      '<span class="mj-c">' + (t ? t.credits : '\u2014') + ' cr</span>' +
+    '</button>';
+  }).join('');
+
+  /* ---- middle: the year, and its subjects ---- */
+  const years = bands.map(function (b) {
+    return '<button class="yr' + (b.n === st.band ? ' on' : '') + '" data-band="' + b.n + '">' + b.n + '</button>';
+  }).join('');
+
+  const cards = list.map(function (c) {
+    const units = courseUnits(c).length;
+    const done = courseDone(c);
+    const state = done === 0 ? 'Not started' : (done === units ? 'Complete' : 'In progress');
+    const cls = done === 0 ? '' : (done === units ? 'done' : 'live');
+    const pre = prereqState(c);
+    return '<button class="subj' + (c.id === st.sel ? ' on' : '') + '" data-subj="' + esc(c.id) + '">' +
+      '<div class="sj-top">' +
+        '<span class="sj-icon">' + esc(c.icon || '◆') + '</span>' +
+        '<div class="sj-id"><b>' + esc(c.title.split(/\s+\u2014\s+/)[0]) + '</b><span>' + esc(c.id) + '</span></div>' +
+      '</div>' +
+      '<div class="sj-meta">' +
+        '<span title="Estimated total study time">\u25f7 \u2248 ' + (c.hours || 0) + ' h</span>' +
+        '<span class="dot">\u00b7</span>' +
+        '<span>' + (c.credits || 0) + ' credits</span>' +
+      '</div>' +
+      segBar(done, units, 12) +
+      '<div class="sj-state ' + cls + '"><i></i>' + state +
+        (!pre.allMet && done === 0 ? ' \u00b7 prerequisites open' : '') + '</div>' +
+    '</button>';
+  }).join('');
+
+  /* ---- right: what this subject needs first ---- */
+  let detail = '<div class="pl-empty">No subject selected.</div>';
+  if (sel) {
+    const units = courseUnits(sel);
+    const labs = sel.modules.filter(function (m) { return m.lab; }).length;
+    const chain = prereqChain(sel, 3);
+    const firstOpen = chain.find(function (p) { return p !== sel && !courseComplete(p); });
+    const links = chain.map(function (p, i) {
+      const isTarget = p === sel;
+      const complete = courseComplete(p);
+      const nextUp = p === firstOpen;
+      const state = isTarget ? 'Current target' : complete ? 'Complete' : nextUp ? 'Recommended next' : 'Not started';
+      const kls = isTarget ? 'target' : complete ? 'ok' : nextUp ? 'next' : '';
+      const badge = isTarget ? '' : complete
+        ? '<span class="pq-b ok">\u2713</span>'
+        : nextUp ? '<span class="pq-b next">!</span>' : '';
+      return (i ? '<span class="pq-arrow">\u2192</span>' : '') +
+        '<button class="pq ' + kls + '" data-subj="' + esc(p.id) + '">' + badge +
+          '<span class="pq-g">' + esc(p.icon || '◆') + '</span>' +
+          '<span class="pq-n">' + esc(p.title.split(/\s+\u2014\s+/)[0]) + '</span>' +
+          '<span class="pq-c">' + esc(p.id) + '</span>' +
+          '<span class="pq-s">' + state + '</span>' +
+        '</button>';
+    }).join('');
+    const goal = firstOpen || sel;
+    detail =
+      '<div class="pd-eyebrow">' + esc(sel.id) + ' \u00b7 ' + esc(sel.title.toUpperCase()) + '</div>' +
+      '<h2 class="pd-title">' + esc(sel.title.split(/\s+\u2014\s+/)[0]) + '</h2>' +
+      '<div class="pd-chips">' +
+        '<span>\u25a4 ' + units.length + ' units</span>' +
+        '<span>\u2697 ' + labs + ' labs</span>' +
+        '<span>\u25f7 \u2248 ' + (sel.hours || 0) + ' h</span>' +
+      '</div>' +
+      '<p class="pd-sum">' + esc(sel.summary || '') + '</p>' +
+      '<h3 class="pd-h">Recommended prerequisites</h3>' +
+      '<div class="pq-row">' + links + '</div>' +
+      '<p class="pd-note">\u24d8 Recommended, not required \u2014 nothing is locked, and every ' +
+        'unit is checked the same way whichever order you take them in.</p>' +
+      '<div class="pd-acts">' +
+        '<button class="btn success" data-open="' + esc(goal.id) + '">\u25b6 ' +
+          (goal === sel ? 'Open this subject' : 'Start ' + esc(goal.id)) + '</button>' +
+        '<button class="btn dark" data-preview="' + esc(sel.id) + '">Preview subject</button>' +
+      '</div>';
   }
 
-  const b = bands();
-  main.innerHTML = '<div class="page wide">' +
-    '<div class="crumb"><button data-go="home">Home</button><span>›</span>' +
-      '<button data-go="programs">Programmes</button><span>›</span><span>' + esc(prog.short || prog.name) + '</span></div>' +
-    '<div class="deg-hero">' +
-      '<div>' +
-        '<h1>' + emphasise(prog) + '</h1>' +
-        '<p>' + esc(prog.subtitle) + '</p>' +
-        '<div class="deg-stats">' +
-          '<div class="stat"><b>' + dt.courses + '</b><span>Courses</span></div>' +
-          '<div class="stat"><b>' + dt.labs + '</b><span>Labs</span></div>' +
-          '<div class="stat"><b>' + dt.units + '</b><span>Units</span></div>' +
-          '<div class="stat"><b>' + dt.credits + '</b><span>Credits</span></div>' +
-        '</div>' +
+  const bandMeta = bands.find(function (b) { return b.n === st.band; }) || {};
+
+  main.innerHTML = '<div class="planner">' +
+    '<aside class="pl-majors">' +
+      '<div class="pl-lbl">Select major</div>' +
+      '<div class="mj-list">' + majors + '</div>' +
+      '<div class="pl-lbl mt">Foundation modules</div>' +
+      '<div class="fnd">' +
+        '<div class="fnd-h"><span>Progress</span><b>' + fp.done + ' of ' + fp.total + '</b></div>' +
+        segBar(fp.done, fp.total, 14) +
       '</div>' +
-      '<div class="deg-progress">' +
-        '<div class="ring" style="--pct:' + dt.pct + '"><div><b>' + dt.pct + '%</b><span>complete</span></div></div>' +
-        '<div class="pl"><h3>' + dt.done + ' of ' + dt.units + ' units</h3>' +
-        '<p>' + dt.earned + ' of ' + dt.credits + ' credits earned. A course counts as complete when every lab and its capstone pass.</p></div>' +
-      '</div>' +
+      '<button class="fnd-go" data-go="home">View foundation modules <span>\u203a</span></button>' +
+    '</aside>' +
+
+    '<div class="pl-main">' +
+      '<div class="pl-eyebrow">' + esc((prog.short || prog.name).toUpperCase()) + ' \u00b7 study plan</div>' +
+      '<h1 class="pl-h1">Build your path, in the right order.</h1>' +
+      '<p class="pl-sub">Choose a year and a subject to see what to learn first.</p>' +
+      '<div class="yr-row"><span class="yr-lbl">' + esc((prog.bandNoun || 'Year').toUpperCase()) + '</span>' + years + '</div>' +
+      '<h2 class="pl-h2">' + esc(bandLabel(prog, st.band)) + ' subjects' +
+        (bandMeta.title ? ' <span>\u2014 ' + esc(bandMeta.title) + '</span>' : '') + '</h2>' +
+      '<div class="subj-grid">' + (cards || '<p class="pl-empty">Nothing authored in this year yet.</p>') + '</div>' +
+      '<button class="pl-more" data-full="1">View every subject in this ' +
+        esc((prog.bandNoun || 'Year').toLowerCase()) + ' <span>\u203a</span></button>' +
     '</div>' +
-    '<div class="filters">' +
-      '<input type="search" id="deg-q" placeholder="Search courses, topics, languages…" value="' + esc(filt.q) + '">' +
-      '<div class="seg" id="deg-lv">' +
-        ['all'].concat(LEVEL_ORDER).map(function (lv) {
-          return '<button data-lv="' + lv + '"' + (filt.level === lv ? ' class="active"' : '') + '>' +
-            (lv === 'all' ? 'All levels' : lv) + '</button>';
-        }).join('') +
-      '</div>' +
-      '<span class="count">' + b.shown + ' shown</span>' +
+
+    '<aside class="pl-detail">' + detail + '</aside>' +
+
+    '<div class="pl-foot">' +
+      '<div class="pf-lbl">Degree progress</div>' +
+      '<div class="pf-pct">' + dt.pct + '%</div>' +
+      '<div class="pf-cr"><b>' + dt.earned + '</b> of ' + dt.credits + ' credits' +
+        '<span class="pf-ok">\u2713 ' + dt.done + ' of ' + dt.units + ' units done</span></div>' +
+      segBar(dt.done, dt.units, 22) +
+      '<button class="pf-go" data-go="progress">View full progress <span>\u203a</span></button>' +
     '</div>' +
-    b.html +
   '</div>';
 
-  $('[data-go="home"]', main).addEventListener('click', function () { go({ view: 'home' }); });
-  $('[data-go="programs"]', main).addEventListener('click', function () { go({ view: 'programs' }); });
-  $all('.course-card', main).forEach(function (c) {
-    c.addEventListener('click', function () { go({ view: 'course', id: c.dataset.course }); });
+  $all('[data-major]', main).forEach(function (b) {
+    b.addEventListener('click', function () { go({ view: 'degree', program: b.dataset.major }); });
   });
-  const q = $('#deg-q', main);
-  q.addEventListener('input', debounce(function () {
-    filt.q = q.value;
-    const pos = q.selectionStart;
-    renderDegree(main, prog.id);
-    const nq = $('#deg-q', main);
-    if (nq) { nq.focus(); try { nq.setSelectionRange(pos, pos); } catch (e) {} }
-  }, 180));
-  $all('#deg-lv button', main).forEach(function (bn) {
-    bn.addEventListener('click', function () { filt.level = bn.dataset.lv; renderDegree(main, prog.id); });
+  $all('[data-band]', main).forEach(function (b) {
+    b.addEventListener('click', function () {
+      st.band = Number(b.dataset.band); st.sel = null; renderDegree(main, prog.id);
+    });
+  });
+  $all('[data-subj]', main).forEach(function (b) {
+    b.addEventListener('click', function () {
+      const c = COURSE_OF[b.dataset.subj];
+      if (c && c.band === st.band && c.program === prog.id) { st.sel = c.id; renderDegree(main, prog.id); }
+      else if (c) go({ view: 'course', id: c.id });
+    });
+  });
+  const openBtn = $('[data-open]', main);
+  if (openBtn) openBtn.addEventListener('click', function () {
+    go({ view: 'course', id: openBtn.dataset.open });
+  });
+  const prevBtn = $('[data-preview]', main);
+  if (prevBtn) prevBtn.addEventListener('click', function () {
+    go({ view: 'course', id: prevBtn.dataset.preview });
+  });
+  const more = $('[data-full]', main);
+  if (more) more.addEventListener('click', function () { go({ view: 'programs' }); });
+  $all('[data-go]', main).forEach(function (b) {
+    b.addEventListener('click', function () { go({ view: b.dataset.go }); });
   });
 }
 
@@ -2174,6 +2388,428 @@ function currentFiles(l) {
   const saved = P.code[l.id] && P.code[l.id].files;
   if (saved) for (const f of base) if (!f.ro && typeof saved[f.name] === 'string') f.content = saved[f.name];
   return base;
+}
+
+/* ---------- lesson: find the value ----------
+   The plainest question in engineering and the one most worth asking: here is a
+   circuit, here are the numbers on it, what does the meter read. The diagram is drawn
+   by the same painter the schematic editor uses, so it cannot drift from what the
+   solver would show for the same model, and the givens are a table rather than prose
+   because that is how a datasheet hands them to you. */
+function renderNumeric(main, l) {
+  const saved = (P.numeric && P.numeric[l.id]) || {};
+  let value = saved.v === undefined ? '' : String(saved.v);
+  let verdict = null;
+
+  function close(x) {
+    const tol = l.tol === undefined ? Math.abs(l.answer) * 0.01 : l.tol;
+    return Math.abs(x - l.answer) <= Math.abs(tol) + 1e-12;
+  }
+
+  function paint() {
+    const done = !!P.completed[l.id];
+    main.innerHTML = '<div class="page reading">' +
+      lessonHeader(l) +
+      '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
+      '<h3 class="q-prompt">' + mdInline(l.prompt || '') + '</h3>' +
+      (l.note ? '<p class="q-note">' + mdInline(l.note) + '</p>' : '') +
+      '<div class="numq">' +
+        '<div class="numq-fig">' + (l.diagram ? '<div id="numq-dia"></div>'
+          : '<div class="numq-nofig">' + mdInline(l.figure || '') + '</div>') + '</div>' +
+        '<div class="numq-side">' +
+          '<div class="nq-lbl">Your answer</div>' +
+          '<div class="nq-in"><input type="text" inputmode="decimal" id="nq-v" value="' + esc(value) +
+            '" placeholder="0.00" autocomplete="off" spellcheck="false">' +
+            '<span class="nq-u">' + esc(l.unit || '') + '</span></div>' +
+          (l.given && l.given.length
+            ? '<div class="nq-lbl mt">Given</div><table class="nq-given">' +
+              l.given.map(function (g) {
+                return '<tr><td>' + mdInline(g.label) + '</td><td>' + mdInline(g.value) + '</td></tr>';
+              }).join('') + '</table>'
+            : '') +
+          (l.aside ? '<p class="nq-aside">' + mdInline(l.aside) + '</p>' : '') +
+        '</div>' +
+      '</div>' +
+      (verdict
+        ? '<div class="q-verdict ' + (verdict.ok ? 'ok' : 'no') + '">' +
+            '<span class="gmark ' + (verdict.ok ? 'done' : 'fail') + '"></span>' +
+            '<div><b>' + (verdict.ok ? 'That is it.' : verdict.head) + '</b>' +
+            '<p>' + mdInline(verdict.ok ? (l.why || '') : verdict.body) + '</p></div>' +
+          '</div>'
+        : '') +
+      '<div class="q-acts">' +
+        '<button class="btn success" id="nq-check">Check</button>' +
+        (l.hint ? '<button class="btn dark" id="nq-hint">Hint</button>' : '') +
+      '</div>' +
+      (saved.hint ? '<div class="q-hint">' + mdInline(l.hint) + '</div>' : '') +
+      footNav(l, done ? '<span class="done-note">\u2713 Solved</span>' : '') +
+    '</div>';
+
+    wireCrumb(main, l);
+    wireFootNav(main, l);
+
+    if (l.diagram) {
+      const host = $('#numq-dia', main);
+      if (host && typeof createCircuit === 'function') {
+        const h = createCircuit(host, { model: l.diagram, readOnly: true });
+        teardown = function () { h.dispose(); };
+      }
+    }
+
+    const inp = $('#nq-v', main);
+    inp.addEventListener('input', function () { value = inp.value; });
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') check(); });
+
+    $('#nq-check', main).addEventListener('click', check);
+    const hb = $('#nq-hint', main);
+    if (hb) hb.addEventListener('click', function () {
+      P.numeric = P.numeric || {};
+      P.numeric[l.id] = Object.assign({}, P.numeric[l.id], { hint: true });
+      saved.hint = true;
+      saveSoon();
+      paint();
+    });
+  }
+
+  function check() {
+    const raw = String(value).trim().replace(/,/g, '');
+    const x = Number(raw);
+    if (!raw || !isFinite(x)) {
+      verdict = { ok: false, head: 'That is not a number.',
+                  body: 'Type a plain decimal \u2014 no units, no commas.' };
+      paint();
+      return;
+    }
+    if (close(x)) {
+      verdict = { ok: true };
+      P.numeric = P.numeric || {};
+      P.numeric[l.id] = Object.assign({}, P.numeric[l.id], { v: raw, ok: true });
+      saveSoon();
+      if (completeLesson(l.id)) toast('Correct \u00b7 +' + XP.numeric + ' XP', true);
+      renderRail();
+      paint();
+      return;
+    }
+    /* A wrong number is more informative than a wrong word: the RATIO to the right
+       answer usually names the mistake outright. */
+    const r = l.answer === 0 ? Infinity : x / l.answer;
+    let head = 'Not quite.';
+    let body = l.wrong || 'Check the arithmetic and try again.';
+    const near = function (v, t) { return Math.abs(r - v) <= (t || 0.04) * v; };
+    if (near(1000) || near(0.001)) { head = 'Right number, wrong scale.'; body = 'That is out by a factor of a thousand \u2014 a prefix went astray. Milli, micro and kilo are the usual suspects.'; }
+    else if (near(2 * Math.PI) || near(1 / (2 * Math.PI))) { head = 'A factor of 2π is missing.'; body = 'Angular frequency ω is 2πf. Whichever of the two the formula wants, it wants only that one.'; }
+    else if (near(1000000) || near(0.000001)) { head = 'Out by a million.'; body = 'Two prefixes have gone the same way. Write every quantity in base units once, then convert at the end.'; }
+    else if (Math.abs(r + 1) < 0.04) { head = 'The sign is inverted.'; body = 'The magnitude is right. Check which node you measured against, or which way the current was defined.'; }
+    else if (near(2) || near(0.5)) { head = 'Out by a factor of two.'; body = 'A halving or a doubling has gone the wrong way \u2014 a peak against an amplitude, or one arm of a pair counted once instead of twice.'; }
+    else if (Math.abs(x - Math.sqrt(Math.abs(l.answer))) < 1e-9) { head = 'A square root too many.'; }
+    verdict = { ok: false, head: head, body: body };
+    P.numeric = P.numeric || {};
+    P.numeric[l.id] = Object.assign({}, P.numeric[l.id], { v: raw });
+    saveSoon();
+    paint();
+  }
+
+  paint();
+}
+
+/* ---------- lesson: symbol drill ----------
+   Recognition is a separate skill from calculation and it is usually left to
+   osmosis. Pick a label, tap the symbol it belongs to; tap a placed label to take it
+   back. Everything is drawn from the same symbol table, so a drill can never show a
+   symbol the rest of the app draws differently. */
+function renderMatch(main, l) {
+  const saved = (P.match && P.match[l.id]) || {};
+  const placed = {};
+  (l.items || []).forEach(function (_, i) {
+    placed[i] = saved[i] === undefined ? null : saved[i];
+  });
+  let armed = null;
+  let checked = false;
+
+  function used(li) {
+    return Object.keys(placed).some(function (k) { return placed[k] === li; });
+  }
+
+  function paint() {
+    const done = !!P.completed[l.id];
+    const items = l.items || [];
+    const filled = items.filter(function (_, i) { return placed[i] !== null; }).length;
+    const right = items.filter(function (it, i) { return placed[i] === it.a; }).length;
+
+    main.innerHTML = '<div class="page reading">' +
+      lessonHeader(l) +
+      '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
+      '<h3 class="q-prompt">' + mdInline(l.prompt || '') + '</h3>' +
+      '<p class="q-note">Pick a label, then tap the symbol it belongs to. Tap a placed label to take it back.</p>' +
+      '<div class="mt-labels">' +
+        (l.labels || []).map(function (lb, li) {
+          return '<button class="mt-lb' + (armed === li ? ' armed' : '') + (used(li) ? ' spent' : '') +
+            '" data-lb="' + li + '"' + (used(li) ? ' disabled' : '') + '>' + esc(lb) + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="mt-grid">' +
+        items.map(function (it, i) {
+          const v = placed[i];
+          const state = !checked ? (v === null ? '' : ' filled')
+            : (v === it.a ? ' right' : ' wrong');
+          return '<div class="mt-card' + state + '" data-item="' + i + '">' +
+            '<canvas class="mt-cv" data-sym="' + esc(it.sym) + '"></canvas>' +
+            '<div class="mt-slot">' + (v === null ? '\u2014' : esc(l.labels[v])) + '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+      '<div class="q-acts">' +
+        '<button class="btn success" id="mt-check"' + (filled === items.length ? '' : ' disabled') + '>' +
+          (checked ? 'Check again' : 'Check') + '</button>' +
+        (checked ? '<button class="btn dark" id="mt-reset">Clear</button>' : '') +
+        '<span class="q-count">' + (checked ? right + ' / ' + items.length + ' right'
+          : filled + ' / ' + items.length + ' placed') + '</span>' +
+      '</div>' +
+      (checked
+        ? '<div class="mt-fb">' + items.map(function (it, i) {
+            const ok = placed[i] === it.a;
+            return '<div class="blk-row ' + (ok ? 'right' : 'wrong') + '">' +
+              '<span class="gmark ' + (ok ? 'done' : 'fail') + '"></span>' +
+              '<div><b>' + esc(l.labels[it.a]) + '</b>' +
+              (ok ? '' : ' <span class="blk-yours">you put ' +
+                (placed[i] === null ? 'nothing' : esc(l.labels[placed[i]])) + '</span>') +
+              '<p>' + mdInline(it.why || '') + '</p></div>' +
+            '</div>';
+          }).join('') + '</div>'
+        : '') +
+      footNav(l, done ? '<span class="done-note">\u2713 Named</span>' : '') +
+    '</div>';
+
+    wireCrumb(main, l);
+    wireFootNav(main, l);
+
+    $all('.mt-cv', main).forEach(function (cv) {
+      const paintSym = function () {
+        const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#EDEFF3';
+        Symbols.paint(cv, cv.dataset.sym, ink);
+      };
+      paintSym();
+      requestAnimationFrame(paintSym);      /* once more after layout settles */
+    });
+
+    $all('[data-lb]', main).forEach(function (b) {
+      b.addEventListener('click', function () {
+        const li = +b.dataset.lb;
+        armed = armed === li ? null : li;
+        paint();
+      });
+    });
+    $all('[data-item]', main).forEach(function (card) {
+      card.addEventListener('click', function () {
+        const i = +card.dataset.item;
+        if (placed[i] !== null) { placed[i] = null; }
+        else if (armed !== null) { placed[i] = armed; armed = null; }
+        else return;
+        P.match = P.match || {};
+        P.match[l.id] = Object.assign({}, placed);
+        checked = false;
+        saveSoon();
+        paint();
+      });
+    });
+    const ck = $('#mt-check', main);
+    if (ck) ck.addEventListener('click', function () {
+      checked = true;
+      const got = items.filter(function (it, i) { return placed[i] === it.a; }).length;
+      paint();
+      if (got === items.length) {
+        if (completeLesson(l.id)) toast('Every symbol named \u00b7 +' + XP.match + ' XP', true);
+        renderRail();
+      }
+    });
+    const rs = $('#mt-reset', main);
+    if (rs) rs.addEventListener('click', function () {
+      items.forEach(function (_, i) { placed[i] = null; });
+      P.match = P.match || {};
+      P.match[l.id] = {};
+      checked = false; armed = null;
+      saveSoon();
+      paint();
+    });
+  }
+
+  paint();
+}
+
+/* ---------- lesson: hit the target ----------
+   A sandbox with a goal. The sliders are the same, the plot is the same, and the
+   difference is that the exercise states constraints which all have to hold at once —
+   which is what turns "see what this does" into a design problem, because in every
+   real one the constraints pull against each other. */
+function renderTune(main, l) {
+  const spec = Tune.get(l.model);
+  const saved = (P.tune && P.tune[l.id]) || {};
+  const v = {};
+  (spec ? spec.params : []).forEach(function (p) {
+    const start = (l.initial && l.initial[p.k] !== undefined) ? l.initial[p.k] : p.def;
+    v[p.k] = saved.v && saved.v[p.k] !== undefined ? saved.v[p.k] : start;
+  });
+  const consts = Object.assign({}, spec && spec.constants, l.constants || {});
+  let plotCv = null;
+
+  function readouts() { return spec.compute(v, consts); }
+
+  function tests() {
+    const out = readouts();
+    return (l.constraints || []).map(function (c) {
+      const r = out[c.k];
+      const x = r ? r.value : NaN;
+      let ok = false;
+      if (c.max !== undefined && c.min !== undefined) ok = x >= c.min && x <= c.max;
+      else if (c.max !== undefined) ok = x <= c.max;
+      else if (c.min !== undefined) ok = x >= c.min;
+      else if (c.eq !== undefined) ok = Math.abs(x - c.eq) <= (c.tol === undefined ? 0.01 : c.tol);
+      return { c: c, ok: ok, got: x, r: r };
+    });
+  }
+
+  function drawPlot() {
+    if (!plotCv || !spec.plot) return;
+    const pl = spec.plot(v, consts);
+    const dpr = window.devicePixelRatio || 1;
+    const w = plotCv.clientWidth || 600, h = plotCv.clientHeight || 300;
+    plotCv.width = Math.round(w * dpr); plotCv.height = Math.round(h * dpr);
+    const ctx = plotCv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const f = Sandbox.frame(ctx, w, h, {
+      xRange: pl.xRange, yRange: pl.yRange, logX: !!pl.logX,
+      xTicks: 6, yTicks: 5, margin: { l: 52, r: 16, t: 16, b: 30 },
+    });
+    /* the target band, drawn first so the curve sits on top of it */
+    (l.constraints || []).forEach(function (c) {
+      if (c.k !== (l.plotKey || 'vout') || c.eq === undefined) return;
+      ctx.save();
+      ctx.strokeStyle = f.P.amber;
+      ctx.setLineDash([7, 6]);
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(f.x0, f.fy(c.eq)); ctx.lineTo(f.x1, f.fy(c.eq));
+      ctx.stroke();
+      ctx.restore();
+    });
+    f.line(pl.points, f.P.accent, 2.2);
+    if (pl.at) f.dot(pl.at[0], pl.at[1], f.P.accent, 5);
+    const cap = $('#tn-cap', main);
+    if (cap) cap.textContent = pl.caption || '';
+  }
+
+  function refresh() {
+    const out = readouts();
+    const ts = tests();
+    const box = $('#tn-read', main);
+    if (box) {
+      box.innerHTML = Object.keys(out).map(function (k) {
+        const r = out[k];
+        const t = ts.find(function (x) { return x.c.k === k; });
+        return '<div class="tn-r' + (t ? (t.ok ? ' ok' : ' no') : '') + '">' +
+          '<span>' + esc(r.label) + '</span><b>' + (+r.value).toFixed(r.dp) +
+          (r.unit ? ' ' + r.unit : '') + '</b></div>';
+      }).join('');
+    }
+    const st = $('#tn-state', main);
+    if (st) {
+      const pass = ts.length && ts.every(function (t) { return t.ok; });
+      st.className = 'tn-goal' + (pass ? ' met' : '');
+      st.innerHTML = (l.constraints || []).map(function (c, i) {
+        const t = ts[i];
+        return '<span class="tn-c' + (t && t.ok ? ' ok' : '') + '">' +
+          (t && t.ok ? '\u2713 ' : '\u00b7 ') + esc(c.label) + '</span>';
+      }).join('');
+    }
+    drawPlot();
+    const ck = $('#tn-check', main);
+    if (ck) ck.disabled = false;
+  }
+
+  function paint() {
+    const done = !!P.completed[l.id];
+    if (!spec) {
+      main.innerHTML = '<div class="page reading">' + lessonHeader(l) +
+        '<div class="pcard warn"><div class="pcard-h"><span class="dot"></span><b>Model missing</b></div>' +
+        '<p>This unit asks for the <code>' + esc(l.model || '?') + '</code> model, which is not in this build.</p></div>' +
+        footNav(l, '') + '</div>';
+      wireCrumb(main, l); wireFootNav(main, l);
+      return;
+    }
+    main.innerHTML = '<div class="page reading">' +
+      lessonHeader(l) +
+      '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
+      '<h3 class="q-prompt">' + mdInline(l.prompt || '') + '</h3>' +
+      (l.note ? '<p class="q-note">' + mdInline(l.note) + '</p>' : '') +
+      '<div class="tune">' +
+        '<div class="tn-plot"><div class="tn-cap" id="tn-cap"></div><canvas id="tn-cv"></canvas></div>' +
+        '<div class="tn-side">' +
+          spec.params.map(function (p) {
+            return '<div class="tn-p">' +
+              '<div class="tn-ph"><span>' + esc(p.label) + '</span><b data-out="' + p.k + '">' +
+                v[p.k] + (p.unit ? ' ' + p.unit : '') + '</b></div>' +
+              '<input type="range" data-k="' + p.k + '" min="' + p.min + '" max="' + p.max +
+                '" step="' + p.step + '" value="' + v[p.k] + '">' +
+            '</div>';
+          }).join('') +
+          '<div class="tn-reads" id="tn-read"></div>' +
+          '<div class="tn-goal" id="tn-state"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="q-acts">' +
+        '<button class="btn success" id="tn-check">Check</button>' +
+        '<button class="btn dark" id="tn-reset">Reset</button>' +
+      '</div>' +
+      footNav(l, done ? '<span class="done-note">\u2713 Met</span>' : '') +
+    '</div>';
+
+    wireCrumb(main, l);
+    wireFootNav(main, l);
+    plotCv = $('#tn-cv', main);
+
+    $all('input[type=range]', main).forEach(function (sl) {
+      sl.addEventListener('input', function () {
+        v[sl.dataset.k] = Number(sl.value);
+        const p = spec.params.find(function (x) { return x.k === sl.dataset.k; });
+        const lab = $('[data-out="' + sl.dataset.k + '"]', main);
+        if (lab) lab.textContent = sl.value + (p && p.unit ? ' ' + p.unit : '');
+        P.tune = P.tune || {};
+        P.tune[l.id] = { v: Object.assign({}, v) };
+        saveSoon();
+        refresh();
+      });
+    });
+    $('#tn-check', main).addEventListener('click', function () {
+      const ts = tests();
+      const pass = ts.length && ts.every(function (t) { return t.ok; });
+      if (pass) {
+        if (completeLesson(l.id)) toast('Constraints met \u00b7 +' + XP.tune + ' XP', true);
+        renderRail();
+        toast('All constraints hold at once.', true);
+      } else {
+        const bad = ts.filter(function (t) { return !t.ok; });
+        toast(bad.length + ' constraint' + (bad.length > 1 ? 's' : '') + ' still unmet: ' +
+          bad.map(function (t) { return t.c.label; }).join('; '));
+      }
+      refresh();
+    });
+    $('#tn-reset', main).addEventListener('click', function () {
+      spec.params.forEach(function (p) {
+        v[p.k] = (l.initial && l.initial[p.k] !== undefined) ? l.initial[p.k] : p.def;
+      });
+      P.tune = P.tune || {};
+      P.tune[l.id] = { v: Object.assign({}, v) };
+      saveSoon();
+      paint();
+    });
+
+    refresh();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(drawPlot) : null;
+    if (ro && plotCv) ro.observe(plotCv);
+    teardown = function () { if (ro) ro.disconnect(); };
+  }
+
+  paint();
 }
 
 /* ---------- lesson: fill the blanks ----------
@@ -3369,7 +4005,7 @@ async function boot() {
   BUNDLE = parseBundle(bundleEl ? bundleEl.textContent : '');
   const saved = await Store.load();
   if (saved && typeof saved === 'object') {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, xp: 0, last: null, playground: null,
+    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
                        activity: {}, name: '', railHidden: false }, saved);
     if (!P.activity || typeof P.activity !== 'object') P.activity = {};
   }

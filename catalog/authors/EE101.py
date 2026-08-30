@@ -181,6 +181,37 @@ means the real current runs the other way — which is information, not an error
                     },
                 ],
             },
+            "match": {
+                "title": "Name every symbol on the bench",
+                "minutes": 6,
+                "brief": r"""
+Before any of the arithmetic is worth doing, a schematic has to be readable at a
+glance. These five turn up on almost every board ever made, and three of them are
+distinguished from their neighbours by a single stroke — an arrow, a curve, a
+second bar. Learning that stroke now saves reading a diagram backwards later.
+""",
+                "prompt": "Pick a label, then tap the symbol it belongs to.",
+                "labels": ["Resistor", "Capacitor", "LED", "Ground", "NPN transistor"],
+                "items": [
+                    {"sym": "R", "a": 0, "why": "A resistor: the zig-zag is the international "
+                     "symbol most of the world learned; the plain rectangle is the IEC form and "
+                     "means exactly the same thing. Nothing about it is polarised, which is why "
+                     "it can go either way round."},
+                    {"sym": "C", "a": 1, "why": "A capacitor: two plates that never touch, which "
+                     "is the whole device. Two straight bars means non-polarised; one bar curved "
+                     "would mean electrolytic, and that one has a right way round."},
+                    {"sym": "LED", "a": 2, "why": "An LED. It is a diode \u2014 same triangle "
+                     "into a bar, same one-way behaviour \u2014 with two arrows leaving it. "
+                     "Arrows pointing *away* mean it emits; pointing *in* would make it a "
+                     "photodiode, which is the same silicon used backwards."},
+                    {"sym": "GND", "a": 3, "why": "Ground: the node every voltage in the circuit "
+                     "is quoted against. It is a choice, not a place \u2014 you nominate it, and "
+                     "every reading on the schematic then means \u2018relative to here\u2019."},
+                    {"sym": "NPN", "a": 4, "why": "An NPN transistor. The arrow is on the emitter "
+                     "and points outward, which is the entire difference from a PNP. Read the "
+                     "arrow as the direction conventional current leaves the device."},
+                ],
+            },
             "lab": {
                 "title": "Counting charge and energy",
                 "runtime": "python",
@@ -886,6 +917,29 @@ assert abs(j - 0.15) < 1e-12, f"0.65 in, 0.5 out, so 0.15 A left, got {j}"
                 "Stiffness costs heat. Every milliamp of divider current is a milliamp the supply pays for, whether a load uses it or not.",
                 "Conservation of energy gives a free check on any solution: the power the supply delivers must equal the sum of the powers dissipated in every resistor.",
             ],
+            "tune": {
+                "title": "Deliver 3.30 V, and pay under a milliamp for it",
+                "minutes": 9,
+                "brief": r"""
+Reading a divider is arithmetic. *Designing* one is the first time two requirements
+pull against each other: the ratio fixes what fraction of the rail you get, and
+nothing about the ratio fixes the current — that is set by how large the two
+resistors are together. Halve both and the output voltage does not move a millivolt
+while the current doubles.
+
+Two knobs, two constraints, and they are not independent.
+""",
+                "prompt": "Deliver 3.30 V from a 5 V rail \u2014 and draw under 1 mA doing it.",
+                "note": "The dashed line is your target. Both constraints must hold at once.",
+                "model": "divider",
+                "initial": {"r1": 2200, "r2": 2200},
+                "constants": {"vin": 5},
+                "plotKey": "vout",
+                "constraints": [
+                    {"k": "vout", "label": "Vout = 3.30 V \u00b1 0.03", "eq": 3.30, "tol": 0.03},
+                    {"k": "i", "label": "I \u2264 1.00 mA", "max": 1.0},
+                ],
+            },
             "sandbox": {
                 "title": "A ratio, read as a gain",
                 "visualiser": "bode",
@@ -1099,6 +1153,56 @@ c.assert(i >= 90e-6 * 0.99,
                     "Pick $X$ first from the current budget: the supply current is $9/(R_{top}+X) = 9/(3X)$, so $X = 10$ kΩ gives 300 µA, comfortably inside both limits.",
                     "Then solve $1/X = 1/R_{low} + 1/100\\text{k}$ for $R_{low}$. With $X = 10$ kΩ it comes to about 11.1 kΩ, and $R_{top}$ is 20 kΩ.",
                 ],
+            },
+            "numeric": {
+                "title": "What voltage appears at Vout?",
+                "minutes": 7,
+                "brief": r"""
+The divider is the first circuit worth calling a circuit, and the first place a
+formula can be reached for instead of understood. The number below falls out of one
+idea: with nothing drawing current from the output node, the *same* current flows
+through both resistors, so they share the supply in proportion to their resistance.
+""",
+                "prompt": "What voltage appears at Vout?",
+                "note": "No load on the output node. Two decimal places is plenty.",
+                "diagram": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 3, "y": 7, "rot": 1, "value": 5},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                        {"id": "r1", "kind": "R", "x": 11, "y": 4, "rot": 1, "value": 1000},
+                        {"id": "r2", "kind": "R", "x": 11, "y": 10, "rot": 1, "value": 2200},
+                        {"id": "g1", "kind": "GND", "x": 11, "y": 13},
+                        {"id": "out", "kind": "OUT", "x": 15, "y": 7},
+                    ],
+                    "wires": [
+                        {"a": [3, 8], "b": [3, 10]},
+                        {"a": [3, 6], "b": [3, 3]},
+                        {"a": [3, 3], "b": [11, 3]},
+                        {"a": [11, 5], "b": [11, 9]},
+                        {"a": [11, 7], "b": [15, 7]},
+                        {"a": [11, 11], "b": [11, 13]},
+                    ],
+                },
+                "given": [
+                    {"label": "Supply", "value": "5.00 V"},
+                    {"label": "R1 (top)", "value": "1.00 k\u03a9"},
+                    {"label": "R2 (bottom)", "value": "2.20 k\u03a9"},
+                    {"label": "Load", "value": "none"},
+                ],
+                "aside": "Nothing draws current from Vout, so the same current flows through both "
+                         "resistors \u2014 which is the only reason the ratio rule is allowed.",
+                "answer": 3.4375,
+                "tol": 0.02,
+                "unit": "V",
+                "hint": "The current through the pair is $5/(R_1+R_2)$. Vout is that current "
+                        "through $R_2$ alone \u2014 which rearranges to $5 \\cdot R_2/(R_1+R_2)$.",
+                "wrong": "Check which resistor ends up on top of the fraction: Vout is measured "
+                         "across the BOTTOM resistor, so it is $R_2$ over the sum, not $R_1$.",
+                "why": "$5 \\times 2200/3200 = 3.4375$ V. Notice it is nearer the supply than to "
+                       "ground, because the larger resistor is the one you are measuring across "
+                       "\u2014 more of the total voltage is dropped where there is more "
+                       "resistance to drop it. Swapping the two resistors would give 1.5625 V, "
+                       "and the two answers sum to the supply, as they must.",
             },
             "lab": {
                 "title": "Designing the divider you just drew",

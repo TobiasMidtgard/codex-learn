@@ -116,6 +116,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "From the load impedance to the standing wave",
@@ -378,6 +381,9 @@
      }
     ]
    },
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "What a mismatched load does to the input",
@@ -600,6 +606,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "The transformer and the stub",
@@ -756,6 +765,9 @@
    },
    "quiz": null,
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "An L-match, and the bandwidth it costs",
     "minutes": 26,

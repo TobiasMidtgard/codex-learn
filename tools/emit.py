@@ -93,6 +93,155 @@ def norm_lab(lab, ctx):
     return out
 
 
+def norm_numeric(q, ctx):
+    """One number, with a tolerance and a diagram.
+
+    The tolerance is required rather than defaulted, because "how close is close
+    enough" is a judgement about the physics that only the author can make: three
+    significant figures on a reactance and two on a resistor colour code are both
+    right, and a shared default would be wrong for one of them."""
+    if not q:
+        return None
+    for key in ("title", "prompt"):
+        if not q.get(key):
+            raise ValueError(f"{ctx}/numeric: missing {key}")
+    if not isinstance(q.get("answer"), (int, float)):
+        raise ValueError(f"{ctx}/numeric: `answer` must be a number")
+    if not isinstance(q.get("tol"), (int, float)) or q["tol"] < 0:
+        raise ValueError(f"{ctx}/numeric: give an explicit non-negative `tol`")
+    if not q.get("why"):
+        raise ValueError(f"{ctx}/numeric: no `why` \u2014 a correct answer still has to explain itself")
+    dia = q.get("diagram")
+    if dia is not None and not (isinstance(dia, dict) and dia.get("parts")):
+        raise ValueError(f"{ctx}/numeric: `diagram` must be a schematic with parts, or be left out")
+    if dia is None and not q.get("figure"):
+        raise ValueError(f"{ctx}/numeric: give a `diagram` or a `figure` \u2014 a bare number "
+                         "with no picture is a quiz question, not this")
+    given = q.get("given") or []
+    for i, g in enumerate(given, 1):
+        if not g.get("label") or g.get("value") in (None, ""):
+            raise ValueError(f"{ctx}/numeric/given{i}: needs a label and a value")
+    return {
+        "title": q["title"],
+        "minutes": int(q.get("minutes", 7)),
+        "brief": clean_md(q.get("brief", "")),
+        "prompt": clean_md(q["prompt"]),
+        "note": clean_md(q.get("note", "")),
+        "diagram": dia,
+        "figure": clean_md(q.get("figure", "")),
+        "given": [{"label": clean_md(g["label"]), "value": clean_md(str(g["value"]))} for g in given],
+        "answer": float(q["answer"]),
+        "tol": float(q["tol"]),
+        "unit": q.get("unit", ""),
+        "aside": clean_md(q.get("aside", "")),
+        "hint": clean_md(q.get("hint", "")),
+        "wrong": clean_md(q.get("wrong", "")),
+        "why": clean_md(q["why"]),
+    }
+
+
+# the symbols src/circuit.js knows how to draw; build.mjs re-checks against the source
+MATCH_SYMBOLS = {"R", "C", "L", "D", "LED", "GND", "V", "BATT", "I", "NPN", "PNP", "SW", "OPAMP"}
+
+
+def norm_match(q, ctx):
+    """Name the symbol. Recognition is its own skill and usually left to osmosis."""
+    if not q:
+        return None
+    for key in ("title", "prompt"):
+        if not q.get(key):
+            raise ValueError(f"{ctx}/match: missing {key}")
+    labels = q.get("labels") or []
+    items = q.get("items") or []
+    if not 3 <= len(items) <= 8:
+        raise ValueError(f"{ctx}/match: {len(items)} items (need 3-8)")
+    if len(labels) < len(items):
+        raise ValueError(f"{ctx}/match: {len(labels)} labels for {len(items)} items \u2014 "
+                         "there must be at least one label per item")
+    seen = set()
+    out = []
+    for i, it in enumerate(items, 1):
+        where = f"{ctx}/match/{i}"
+        sym = it.get("sym")
+        if sym not in MATCH_SYMBOLS:
+            raise ValueError(f"{where}: unknown symbol {sym!r} "
+                             f"(have: {', '.join(sorted(MATCH_SYMBOLS))})")
+        if sym in seen:
+            raise ValueError(f"{where}: {sym!r} appears twice \u2014 two identical symbols "
+                             "cannot be told apart, so one of them is unanswerable")
+        seen.add(sym)
+        a = it.get("a")
+        if not isinstance(a, int) or not 0 <= a < len(labels):
+            raise ValueError(f"{where}: `a` must index one of the labels")
+        if not it.get("why"):
+            raise ValueError(f"{where}: no `why`")
+        out.append({"sym": sym, "a": a, "why": clean_md(it["why"])})
+    if len({it["a"] for it in out}) != len(out):
+        raise ValueError(f"{ctx}/match: two items share an answer label")
+    return {
+        "title": q["title"],
+        "minutes": int(q.get("minutes", 6)),
+        "brief": clean_md(q.get("brief", "")),
+        "prompt": clean_md(q["prompt"]),
+        "labels": [clean_md(x) for x in labels],
+        "items": out,
+    }
+
+
+# the tunable models defined in src/studio.js, and the quantities each reports
+TUNE_MODELS = {
+    "divider": {"vout", "i", "ratio"},
+    "rc-lowpass": {"fc", "keep", "reject", "tau"},
+    "rlc": {"wn", "fn", "zeta", "peak"},
+}
+
+
+def norm_tune(q, ctx):
+    """Move the sliders until every constraint holds at once.
+
+    Constraints name a quantity the model reports, so a typo is caught here rather
+    than becoming a target that can never be hit."""
+    if not q:
+        return None
+    for key in ("title", "prompt", "model"):
+        if not q.get(key):
+            raise ValueError(f"{ctx}/tune: missing {key}")
+    model = q["model"]
+    if model not in TUNE_MODELS:
+        raise ValueError(f"{ctx}/tune: unknown model {model!r} "
+                         f"(have: {', '.join(sorted(TUNE_MODELS))})")
+    keys = TUNE_MODELS[model]
+    cons = q.get("constraints") or []
+    if not cons:
+        raise ValueError(f"{ctx}/tune: no constraints \u2014 that is a sandbox, not a target")
+    out = []
+    for i, c in enumerate(cons, 1):
+        where = f"{ctx}/tune/constraint{i}"
+        if c.get("k") not in keys:
+            raise ValueError(f"{where}: {c.get('k')!r} is not reported by the {model!r} model "
+                             f"(it reports: {', '.join(sorted(keys))})")
+        if not c.get("label"):
+            raise ValueError(f"{where}: needs a `label` the learner can read")
+        bounds = [k for k in ("min", "max", "eq") if c.get(k) is not None]
+        if not bounds:
+            raise ValueError(f"{where}: give at least one of min, max or eq")
+        if "eq" in bounds and c.get("tol") is None:
+            raise ValueError(f"{where}: an `eq` constraint needs a `tol`")
+        out.append({k: c[k] for k in ("k", "label", "min", "max", "eq", "tol") if c.get(k) is not None})
+    return {
+        "title": q["title"],
+        "minutes": int(q.get("minutes", 9)),
+        "brief": clean_md(q.get("brief", "")),
+        "prompt": clean_md(q["prompt"]),
+        "note": clean_md(q.get("note", "")),
+        "model": model,
+        "initial": q.get("initial", {}),
+        "constants": q.get("constants", {}),
+        "plotKey": q.get("plotKey", ""),
+        "constraints": out,
+    }
+
+
 def norm_blanks(b, ctx):
     """A listing with holes in it, from the Voltaic design.
 
@@ -341,6 +490,9 @@ def normalise(course):
             "sandbox": norm_sandbox(m.get("sandbox"), ctx),
             "quiz": norm_quiz(m.get("quiz"), ctx),
             "blanks": norm_blanks(m.get("blanks"), ctx),
+            "numeric": norm_numeric(m.get("numeric"), ctx),
+            "match": norm_match(m.get("match"), ctx),
+            "tune": norm_tune(m.get("tune"), ctx),
             "build": norm_build(m.get("build"), ctx),
             "derive": norm_derive(m.get("derive"), ctx),
             "lab": norm_lab(m.get("lab"), ctx),

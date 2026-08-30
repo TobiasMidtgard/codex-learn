@@ -166,6 +166,7 @@ for (const file of spineFiles) {
    opens somewhere other than the brief describes. Both are only visible here, where
    the catalog and the visualiser registry are in the same place. */
 const studioJs = read(join(SRC, 'studio.js'));
+const circuitJs = read(join(SRC, 'circuit.js'));
 const VIS = new Map();
 for (const block of studioJs.split('Sandbox.define({').slice(1)) {
   const id = (block.match(/id:\s*'([^']+)'/) || [])[1];
@@ -192,6 +193,29 @@ for (const c of allCourses) {
 }
 notes.push(`visualisers: ${VIS.size} registered, every sandbox reference checked`);
 
+/* The same argument as the sandbox check above, for the two other places a unit names
+   something the code has to supply. emit.py keeps its own copies of these lists so an
+   author gets the error at authoring time; this is the check that the copies still
+   agree with the source, which is the part emit.py cannot do. */
+const TUNE_IDS = new Set([...studioJs.matchAll(/Tune\.define\(\{\s*\n?\s*id:\s*'([^']+)'/g)].map((m) => m[1]));
+const SYM_IDS = new Set([...circuitJs.matchAll(/define\('([^']+)',\s*'/g)].map((m) => m[1]));
+for (const c of allCourses) {
+  for (const [mi, m] of c.modules.entries()) {
+    if (m.tune && !TUNE_IDS.has(m.tune.model)) {
+      problems.push(`${c.id}/M${mi + 1}: tune names the "${m.tune.model}" model, which is not ` +
+        `defined in studio.js (have: ${[...TUNE_IDS].join(', ')})`);
+    }
+    for (const it of (m.match ? m.match.items : [])) {
+      if (!SYM_IDS.has(it.sym)) {
+        problems.push(`${c.id}/M${mi + 1}: the symbol drill asks for "${it.sym}", which circuit.js ` +
+          `cannot draw (have: ${[...SYM_IDS].join(', ')})`);
+      }
+    }
+  }
+}
+notes.push(`tune models: ${TUNE_IDS.size} registered · symbols: ${SYM_IDS.size} drawable`);
+
+
 const degree = { programs, courses: allCourses };
 if (!programs.length) notes.push('catalog: no _spine*.json — building without any programme');
 
@@ -199,7 +223,6 @@ if (!programs.length) notes.push('catalog: no _spine*.json — building without 
 const langJs = read(join(SRC, 'lang.js'));
 const tracksJs = read(join(SRC, 'tracks.js'));
 const engineJs = read(join(SRC, 'engine.js'));
-const circuitJs = read(join(SRC, 'circuit.js'));
 const appJs = read(join(SRC, 'app.js'));
 const head = read(join(SRC, 'index.head.html'));
 

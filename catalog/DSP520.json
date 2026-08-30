@@ -114,6 +114,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "The Wiener solution, one tap at a time",
@@ -345,6 +348,9 @@
      }
     ]
    },
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Why the step size is bounded by the largest eigenvalue",
@@ -573,6 +579,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "From the true gradient to LMS, and the price of the substitution",
@@ -821,6 +830,9 @@
      }
     ]
    },
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Memory, forgetting and the fixed price of speed",

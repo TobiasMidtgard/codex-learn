@@ -52,6 +52,9 @@
    },
    "quiz": null,
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": {
     "title": "A line, made of eight components",
     "minutes": 26,
@@ -856,6 +859,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "The reflection coefficient and the quarter-wave transformer",
@@ -1116,6 +1122,9 @@
      }
     ]
    },
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Where the cutoff frequency comes from",
@@ -1331,6 +1340,9 @@
     ]
    },
    "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
    "build": null,
    "derive": {
     "title": "Two velocities from one dispersion relation",

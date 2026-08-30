@@ -903,6 +903,138 @@ const Sandbox = (function () {
  */
 
 /* poles ↔ step response: the single most useful picture in control */
+/* ---------------------------------------------------------------- tune
+ *
+ * A sandbox is for looking. This is for hitting a target: the learner moves the same
+ * kind of sliders, but the model reports named quantities and the exercise states
+ * constraints those quantities must satisfy — all of them, at once.
+ *
+ * The constraints live in the catalog and the physics lives here, which is the same
+ * split the circuit builds use: content says what must be true, code says what is.
+ */
+const Tune = (function () {
+  const REG = {};
+  function define(spec) { REG[spec.id] = spec; return spec; }
+  function get(id) { return REG[id] || null; }
+  function ids() { return Object.keys(REG); }
+  return { define: define, get: get, ids: ids };
+})();
+
+/* Two resistors from a rail. The whole of a divider design is in the tension between
+   the ratio you want and the current you are willing to spend getting it. */
+Tune.define({
+  id: 'divider',
+  title: 'Resistive divider',
+  params: [
+    { k: 'r1', label: 'R1 (top)', min: 100, max: 47000, step: 100, def: 2200, unit: 'Ω' },
+    { k: 'r2', label: 'R2 (bottom)', min: 100, max: 47000, step: 100, def: 2200, unit: 'Ω' },
+  ],
+  constants: { vin: 5 },
+  compute: function (v, k) {
+    const vin = (k && k.vin) || 5;
+    const vout = vin * v.r2 / (v.r1 + v.r2);
+    const i = vin / (v.r1 + v.r2);
+    return {
+      vout: { label: 'Vout', value: vout, unit: 'V', dp: 3 },
+      i: { label: 'I total', value: i * 1000, unit: 'mA', dp: 3 },
+      ratio: { label: 'Divider ratio', value: v.r2 / (v.r1 + v.r2), unit: '', dp: 3 },
+    };
+  },
+  /* Vout against R2, with R1 held where the learner has it */
+  plot: function (v, k) {
+    const vin = (k && k.vin) || 5;
+    const pts = [];
+    for (let r2 = 100; r2 <= 47000; r2 *= 1.03) pts.push([r2, vin * r2 / (v.r1 + r2)]);
+    return { x: 'R2', y: 'Vout', logX: true, yRange: [0, vin],
+             xRange: [100, 47000], points: pts, at: [v.r2, vin * v.r2 / (v.r1 + v.r2)],
+             caption: 'Vout vs R2 · R1 = ' + fmtOhm(v.r1) };
+  },
+});
+
+/* A first-order low-pass: the corner and the attenuation you get at a stated
+   frequency are one choice, not two. */
+Tune.define({
+  id: 'rc-lowpass',
+  title: 'RC low-pass',
+  params: [
+    { k: 'r', label: 'R', min: 100, max: 100000, step: 100, def: 1000, unit: 'Ω' },
+    { k: 'c', label: 'C', min: 1, max: 1000, step: 1, def: 100, unit: 'nF' },
+  ],
+  /* `fsig` is the signal you must not spoil and `fnoise` the interferer you must
+     remove. Reporting the response at BOTH is what makes this a design rather than a
+     reading: one constraint pushes the corner up, the other pushes it down, and the
+     answer is the window where they overlap. */
+  constants: { fsig: 100, fnoise: 10000 },
+  compute: function (v, k) {
+    const c = v.c * 1e-9;
+    const fc = 1 / (2 * Math.PI * v.r * c);
+    const at = function (f) { return 1 / Math.sqrt(1 + Math.pow(f / fc, 2)); };
+    const fsig = (k && k.fsig) || 100, fnoise = (k && k.fnoise) || 10000;
+    return {
+      fc: { label: 'Corner f', value: fc, unit: 'Hz', dp: 1 },
+      keep: { label: 'kept at ' + fmtHz(fsig), value: at(fsig), unit: '', dp: 4 },
+      reject: { label: 'rejected at ' + fmtHz(fnoise), value: 20 * Math.log10(at(fnoise)), unit: 'dB', dp: 2 },
+      tau: { label: 'Time constant', value: v.r * c * 1000, unit: 'ms', dp: 3 },
+    };
+  },
+  plot: function (v) {
+    const c = v.c * 1e-9;
+    const fc = 1 / (2 * Math.PI * v.r * c);
+    const pts = [];
+    for (let f = 10; f <= 1e6; f *= 1.06) pts.push([f, 1 / Math.sqrt(1 + Math.pow(f / fc, 2))]);
+    return { x: 'f', y: '|H|', logX: true, yRange: [0, 1.05], xRange: [10, 1e6],
+             points: pts, at: [fc, 1 / Math.SQRT2],
+             caption: '|H| vs frequency · corner at ' + fmtHz(fc) };
+  },
+});
+
+/* A series RLC, chosen so that damping and bandwidth pull against each other the way
+   they do in every second-order design. */
+Tune.define({
+  id: 'rlc',
+  title: 'Series RLC',
+  params: [
+    { k: 'r', label: 'R', min: 1, max: 400, step: 1, def: 100, unit: 'Ω' },
+    { k: 'l', label: 'L', min: 1, max: 200, step: 1, def: 100, unit: 'mH' },
+    { k: 'c', label: 'C', min: 0.1, max: 20, step: 0.1, def: 2.5, unit: 'µF' },
+  ],
+  compute: function (v) {
+    const L = v.l * 1e-3, C = v.c * 1e-6;
+    const wn = 1 / Math.sqrt(L * C);
+    const zeta = (v.r / 2) * Math.sqrt(C / L);
+    const peak = zeta < 0.7071 ? 1 / (2 * zeta * Math.sqrt(1 - zeta * zeta)) : 1;
+    return {
+      wn: { label: 'ω\u2099', value: wn, unit: 'rad/s', dp: 1 },
+      fn: { label: 'f\u2099', value: wn / (2 * Math.PI), unit: 'Hz', dp: 2 },
+      zeta: { label: 'damping ζ', value: zeta, unit: '', dp: 3 },
+      peak: { label: 'peak gain', value: peak, unit: '', dp: 3 },
+    };
+  },
+  plot: function (v) {
+    const L = v.l * 1e-3, C = v.c * 1e-6;
+    const wn = 1 / Math.sqrt(L * C);
+    const zeta = (v.r / 2) * Math.sqrt(C / L);
+    const pts = [];
+    for (let f = wn / (2 * Math.PI) / 60; f <= wn / (2 * Math.PI) * 60; f *= 1.05) {
+      const x = 2 * Math.PI * f / wn;
+      pts.push([f, 1 / Math.sqrt(Math.pow(1 - x * x, 2) + Math.pow(2 * zeta * x, 2))]);
+    }
+    return { x: 'f', y: '|H|', logX: true, yRange: [0, Math.max(2, Math.min(6, 1 / (2 * zeta) + 0.5))],
+             xRange: [wn / (2 * Math.PI) / 60, wn / (2 * Math.PI) * 60], points: pts,
+             at: [wn / (2 * Math.PI), zeta > 0 ? 1 / (2 * zeta) : 1],
+             caption: '|H| vs frequency · ζ = ' + zeta.toFixed(3) };
+  },
+});
+
+function fmtOhm(v) {
+  return v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + ' kΩ' : Math.round(v) + ' Ω';
+}
+function fmtHz(v) {
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + ' MHz';
+  if (v >= 1e3) return (v / 1e3).toFixed(2) + ' kHz';
+  return v.toFixed(1) + ' Hz';
+}
+
 Sandbox.define({
   id: 'pole-step',
   title: 'Poles and the step response',

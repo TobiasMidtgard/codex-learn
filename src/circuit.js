@@ -391,6 +391,164 @@ const MNA = (function () {
   return { dc: dc, ac: ac, tran: tran, acAt: acAt };
 })();
 
+/* ---------------------------------------------------------------- symbols
+ *
+ * The schematic editor draws parts small, rotated, and only for the kinds the solver
+ * understands. A drill needs the opposite: one symbol, large, centred, and a
+ * vocabulary wider than the solver's — a learner has to recognise a transistor long
+ * before anything here can simulate one.
+ *
+ * So this is a separate table on purpose. Adding a symbol here teaches it; it does
+ * not claim the solver can do anything with it.
+ */
+const Symbols = (function () {
+  const DEF = {};
+  function define(id, name, draw) { DEF[id] = { id: id, name: name, draw: draw }; }
+  function get(id) { return DEF[id] || null; }
+  function ids() { return Object.keys(DEF); }
+
+  /* Every draw() works in a box from (-60,-40) to (60,40); the caller scales. */
+  define('R', 'Resistor', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-30, 0);
+    const n = 6, w = 60 / n;
+    for (let i = 0; i < n; i++) c.lineTo(-30 + (i + 0.5) * w, i % 2 ? 17 : -17);
+    c.lineTo(30, 0); c.lineTo(60, 0);
+  });
+
+  define('C', 'Capacitor', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-9, 0);
+    c.moveTo(9, 0); c.lineTo(60, 0);
+    c.moveTo(-9, -26); c.lineTo(-9, 26);
+    c.moveTo(9, -26); c.lineTo(9, 26);
+  });
+
+  define('L', 'Inductor', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-32, 0);
+    for (let i = 0; i < 4; i++) c.arc(-32 + 8 + i * 16, 0, 8, Math.PI, 0, false);
+    c.lineTo(60, 0);
+  });
+
+  define('D', 'Diode', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-16, 0);
+    c.moveTo(-16, -20); c.lineTo(-16, 20); c.lineTo(18, 0); c.closePath();
+    c.moveTo(18, -20); c.lineTo(18, 20);
+    c.moveTo(18, 0); c.lineTo(60, 0);
+  });
+
+  define('LED', 'LED', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-16, 0);
+    c.moveTo(-16, -20); c.lineTo(-16, 20); c.lineTo(18, 0); c.closePath();
+    c.moveTo(18, -20); c.lineTo(18, 20);
+    c.moveTo(18, 0); c.lineTo(60, 0);
+    /* the two arrows that separate an LED from an ordinary diode */
+    for (const dx of [0, 15]) {
+      c.moveTo(2 + dx, -26); c.lineTo(16 + dx, -40);
+      c.moveTo(16 + dx, -40); c.lineTo(9 + dx, -38);
+      c.moveTo(16 + dx, -40); c.lineTo(14 + dx, -33);
+    }
+  });
+
+  define('GND', 'Ground', function (c) {
+    c.moveTo(0, -30); c.lineTo(0, 0);
+    c.moveTo(-34, 0); c.lineTo(34, 0);
+    c.moveTo(-21, 13); c.lineTo(21, 13);
+    c.moveTo(-9, 26); c.lineTo(9, 26);
+  });
+
+  define('V', 'Voltage source', function (c) {
+    c.arc(0, 0, 30, 0, Math.PI * 2);
+    c.moveTo(-60, 0); c.lineTo(-30, 0);
+    c.moveTo(30, 0); c.lineTo(60, 0);
+    c.moveTo(-15, -9); c.lineTo(-3, -9);
+    c.moveTo(-9, -15); c.lineTo(-9, -3);
+    c.moveTo(3, -9); c.lineTo(15, -9);
+  });
+
+  define('BATT', 'Battery', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-18, 0);
+    c.moveTo(-18, -26); c.lineTo(-18, 26);
+    c.moveTo(-6, -13); c.lineTo(-6, 13);
+    c.moveTo(6, -26); c.lineTo(6, 26);
+    c.moveTo(18, -13); c.lineTo(18, 13);
+    c.moveTo(18, 0); c.lineTo(60, 0);
+  });
+
+  define('I', 'Current source', function (c) {
+    c.arc(0, 0, 30, 0, Math.PI * 2);
+    c.moveTo(-60, 0); c.lineTo(-30, 0);
+    c.moveTo(30, 0); c.lineTo(60, 0);
+    c.moveTo(0, 16); c.lineTo(0, -16);
+    c.moveTo(-7, -8); c.lineTo(0, -17); c.lineTo(7, -8);
+  });
+
+  define('NPN', 'NPN transistor', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-14, 0);          /* base lead */
+    c.moveTo(-14, -28); c.lineTo(-14, 28);       /* base bar */
+    c.moveTo(-14, -14); c.lineTo(22, -34);       /* collector */
+    c.lineTo(22, -60);
+    c.moveTo(-14, 14); c.lineTo(22, 34);         /* emitter */
+    c.lineTo(22, 60);
+    /* the emitter arrow, pointing out — this is what makes it NPN */
+    c.moveTo(9, 20); c.lineTo(22, 34); c.lineTo(7, 31);
+  });
+
+  define('PNP', 'PNP transistor', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-14, 0);
+    c.moveTo(-14, -28); c.lineTo(-14, 28);
+    c.moveTo(-14, -14); c.lineTo(22, -34);
+    c.lineTo(22, -60);
+    c.moveTo(-14, 14); c.lineTo(22, 34);
+    c.lineTo(22, 60);
+    /* the arrow points IN at the base, which is the whole difference */
+    c.moveTo(-1, 8); c.lineTo(-14, 14); c.lineTo(-3, 22);
+  });
+
+  define('SW', 'Switch', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-24, 0);
+    c.moveTo(-24, 0); c.lineTo(20, -24);
+    c.moveTo(24, 0); c.lineTo(60, 0);
+    c.arc(-24, 0, 4, 0, Math.PI * 2);
+    c.moveTo(28, 0); c.arc(24, 0, 4, 0, Math.PI * 2);
+  });
+
+  define('OPAMP', 'Op-amp', function (c) {
+    c.moveTo(-26, -38); c.lineTo(-26, 38); c.lineTo(34, 0); c.closePath();
+    c.moveTo(-60, -19); c.lineTo(-26, -19);
+    c.moveTo(-60, 19); c.lineTo(-26, 19);
+    c.moveTo(34, 0); c.lineTo(60, 0);
+    c.moveTo(-21, -24); c.lineTo(-9, -24);      /* + */
+    c.moveTo(-15, -30); c.lineTo(-15, -18);
+    c.moveTo(-21, 24); c.lineTo(-9, 24);        /* - */
+  });
+
+  /* Paint one symbol into a canvas, sized to it and centred. */
+  function paint(canvas, id, colour) {
+    const spec = DEF[id];
+    if (!canvas || !spec) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 200, h = canvas.clientHeight || 130;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const scale = Math.min(w / 150, h / 110);
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.scale(scale, scale);
+    ctx.strokeStyle = colour || '#EDEFF3';
+    ctx.lineWidth = 3.4 / scale * Math.max(scale, 0.6);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    spec.draw(ctx);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  return { define: define, get: get, ids: ids, paint: paint, all: DEF };
+})();
+
 /* ---------------------------------------------------------------- editor
  *
  * A schematic canvas: pick a part, click to place it, drag to wire. Everything is
@@ -416,6 +574,13 @@ function createCircuit(root, opts) {
   let result = null;
   let disposed = false;
 
+  /* A question that shows a circuit wants the drawing and nothing else — no tools,
+     no analysis panel, nothing to click. Same painter, so a diagram can never drift
+     from what the editor would show for the same model. */
+  if (opts.readOnly) {
+    root.innerHTML = '<div class="ckt ckt-ro"><div class="ckt-main">' +
+      '<div class="ckt-canvas"><canvas></canvas></div></div></div>';
+  } else {
   root.innerHTML =
     '<div class="ckt">' +
       '<div class="ckt-bar">' +
@@ -449,11 +614,13 @@ function createCircuit(root, opts) {
       '</div>' +
       '<div class="ckt-plot" data-plot hidden><canvas></canvas></div>' +
     '</div>';
+  }
 
   const cv = root.querySelector('.ckt-canvas canvas');
   const ctx = cv.getContext('2d');
   const plotWrap = root.querySelector('[data-plot]');
-  const plotCv = plotWrap.querySelector('canvas');
+  const ro_ = !!opts.readOnly;
+  const plotCv = plotWrap ? plotWrap.querySelector('canvas') : null;
   const outEl = root.querySelector('[data-out]');
   const partPanel = root.querySelector('[data-panel="part"]');
   const optsEl = root.querySelector('[data-opts]');
@@ -838,6 +1005,27 @@ function createCircuit(root, opts) {
     sel = null;
     changed();
     paintPart();
+  }
+
+  /* A diagram has no tools, no analysis panel and nothing to click, so there is
+     nothing below this line to wire up. Returning early is what makes the read-only
+     DOM safe to shrink: every lookup after this point assumes the full chrome. */
+  if (ro_) {
+    let dro = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      dro = new ResizeObserver(function () { paint(); });
+      dro.observe(cv.parentElement);
+    }
+    paint();
+    return {
+      getModel: function () { return JSON.parse(JSON.stringify(model)); },
+      solve: function () { return null; },
+      dispose: function () {
+        disposed = true;
+        if (dro) dro.disconnect();
+        root.innerHTML = '';
+      },
+    };
   }
 
   root.querySelectorAll('[data-tool]').forEach(function (b) {
