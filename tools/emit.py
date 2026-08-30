@@ -135,6 +135,17 @@ def norm_numeric(q, ctx):
     if dia is None and not q.get("figure"):
         raise ValueError(f"{ctx}/numeric: give a `diagram` or a `figure` \u2014 a bare number "
                          "with no picture is a quiz question, not this")
+    # A drawn circuit can be solved, so its answer should not rest on arithmetic
+    # nobody re-did. `check` is a line of JavaScript run against the app own solver
+    # by tools/verify_numeric.mjs; it returns the quantity the prompt asks for, and
+    # the gate compares it to `answer` within `tol`.
+    chk = q.get("check")
+    if dia is not None and not chk:
+        raise ValueError(f"{ctx}/numeric: a unit that draws a schematic needs a `check`: "
+                         "one line of JS against the solver returning the quantity asked "
+                         "for, e.g. \"return c.vout();\". Without it the answer is unverified.")
+    if chk is not None and not isinstance(chk, str):
+        raise ValueError(f"{ctx}/numeric: `check` must be a string of JavaScript")
     given = q.get("given") or []
     for i, g in enumerate(given, 1):
         if not g.get("label") or g.get("value") in (None, ""):
@@ -155,6 +166,7 @@ def norm_numeric(q, ctx):
         "hint": clean_md(q.get("hint", "")),
         "wrong": clean_md(q.get("wrong", "")),
         "why": clean_md(q["why"]),
+        "check": chk or "",
     }
 
 

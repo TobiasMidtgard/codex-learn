@@ -91,6 +91,33 @@ const spineFiles = readdirSync(CATALOG)
   .sort((a, b) => (a === '_spine.json' ? -1 : b === '_spine.json' ? 1 : a.localeCompare(b)));
 
 const programs = [];
+/* A course is authored in catalog/authors/<ID>.py and EMITTED to catalog/<ID>.json,
+   and it is the emitted file that ships. So a fix made at source and never re-emitted
+   is a fix that does not reach anybody — the defect stays in the artifact, invisible,
+   because the source reads correctly. That happened: three defects were corrected in
+   EE131.py, never re-emitted, and were still being served weeks later; an auditor
+   reading the built catalog reported them as live, which is how it surfaced at all.
+
+   Mtimes are a coarse test and will occasionally cry wolf after a checkout. That is
+   the right way round for this: the cost of a false alarm is one `emit.py` run, and
+   the cost of a miss is shipping content that was already known to be wrong. */
+const staleAuthored = [];
+for (const f of readdirSync(join(CATALOG, 'authors'))) {
+  if (!f.endsWith('.py') || f.startsWith('_')) continue;
+  const id = f.slice(0, -3);
+  const src = join(CATALOG, 'authors', f);
+  const out = join(CATALOG, `${id}.json`);
+  if (!existsSync(out)) { staleAuthored.push(`${id} has never been emitted`); continue; }
+  if (statSync(src).mtimeMs > statSync(out).mtimeMs + 1000) {
+    staleAuthored.push(`${id}.py is newer than ${id}.json`);
+  }
+}
+if (staleAuthored.length) {
+  problems.push(`${staleAuthored.length} course(s) edited at source but not re-emitted, so the ` +
+    `build would ship the older text: ${staleAuthored.join(', ')}. Run ` +
+    `\`python -X utf8 tools/emit.py --all\`.`);
+}
+
 const allCourses = [];
 /* the same courses, grouped for the split shape — filled in the one pass below, so
    the cross-spine duplicate guard below still sees every id exactly once */
@@ -458,7 +485,12 @@ if (problems.length) {
    first paint and is the one to keep small. A single chunk matters more than the sum,
    because it is one fetch behind one timeout: split a programme before letting one
    payload grow past this. */
-const INLINE_BUDGET_KB = 8192;
+/* The inlined artifact holds the whole catalog in one file, so it grows with the
+   syllabus by design: 8 MB was already 95% spent before a single course reached full
+   density. Like the module ceiling, this number is here to catch a build that has gone
+   wrong, not to ration content. If it is ever genuinely too large to open from disk,
+   the answer is to stop shipping the inlined shape, not to write less. */
+const INLINE_BUDGET_KB = 32768;
 const SHELL_BUDGET_KB = 1024;
 const CHUNK_BUDGET_KB = 3072;
 /* The total is now the catalog's footprint on disk across every band, not the size

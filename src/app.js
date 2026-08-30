@@ -369,7 +369,10 @@ function courseLabs(c) {
   if (c && c.kind === 'track') {
     return courseUnits(c).filter(function (l) { return l.type === 'code' || l.type === 'project'; }).length;
   }
-  return (c && c.modules ? c.modules : []).filter(function (m) { return m.lab; }).length;
+  /* one module can carry more than one lab now, so count labs and not modules */
+  return (c && c.modules ? c.modules : []).reduce(function (n, m) {
+    return n + asList(m.lab).length;
+  }, 0);
 }
 function courseDone(c) {
   return courseUnits(c).reduce(function (n, l) { return n + (P.completed[l.id] ? 1 : 0); }, 0);

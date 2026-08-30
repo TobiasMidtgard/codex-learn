@@ -7,6 +7,9 @@ import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/* A unit key holds nothing, one authored object, or a list of them. */
+const asList = (x) => (!x ? [] : (Array.isArray(x) ? x : [x]));
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CATALOG = join(ROOT, 'catalog');
 const OUT_DIR = join(ROOT, 'build');
@@ -96,8 +99,8 @@ const known = new Set(courses.map((c) => c.id));
 const totals = {
   courses: courses.length,
   modules: courses.reduce((s, c) => s + c.modules.length, 0),
-  labs: courses.reduce((s, c) => s + c.modules.filter((m) => m.lab).length, 0),
-  checks: courses.reduce((s, c) => s + c.modules.reduce((n, m) => n + (m.lab ? m.lab.tests.length : 0), 0)
+  labs: courses.reduce((s, c) => s + c.modules.reduce((n, m) => n + asList(m.lab).length, 0), 0),
+  checks: courses.reduce((s, c) => s + c.modules.reduce((n, m) => n + asList(m.lab).reduce((k, l) => k + l.tests.length, 0), 0)
     + (c.capstone.tests || []).length, 0),
   credits: courses.reduce((s, c) => s + (c.credits || 0), 0),
   hours: courses.reduce((s, c) => s + (c.hours || 0), 0),
@@ -123,16 +126,16 @@ function courseSection(c) {
           <h5>Key theoretical concepts</h5>
           <ul>${m.concepts.map((x) => `<li>${inline(x)}</li>`).join('')}</ul>
         </div>
-        ${m.lab ? `
+        ${asList(m.lab).map((lab) => `
         <div class="lab">
-          <h5>Interactive coding lab<span class="labmeta">${m.lab.minutes} min · ${m.lab.tests.length} automated checks · ${esc(m.lab.runtime)}</span></h5>
-          <p class="labtitle">${esc(m.lab.title)}</p>
-          <div class="brief">${md(m.lab.brief)}</div>
+          <h5>Interactive coding lab<span class="labmeta">${lab.minutes} min · ${lab.tests.length} automated checks · ${esc(lab.runtime)}</span></h5>
+          <p class="labtitle">${esc(lab.title)}</p>
+          <div class="brief">${md(lab.brief)}</div>
           <details class="checks">
-            <summary>Automated test requirements <span class="cnt">${m.lab.tests.length}</span></summary>
-            <ol>${m.lab.tests.map((t) => `<li>${esc(t.name)}</li>`).join('')}</ol>
+            <summary>Automated test requirements <span class="cnt">${lab.tests.length}</span></summary>
+            <ol>${lab.tests.map((t) => `<li>${esc(t.name)}</li>`).join('')}</ol>
           </details>
-        </div>` : ''}
+        </div>`).join('')}
       </div>
     </section>`).join('');
 
@@ -201,7 +204,7 @@ const years = spine.program.years.map((y) => {
       <div class="ystats">
         <span>${list.length} courses</span>
         <span>${list.reduce((s, c) => s + c.credits, 0)} credits</span>
-        <span>${list.reduce((s, c) => s + c.modules.filter((m) => m.lab).length, 0)} labs</span>
+        <span>${list.reduce((s, c) => s + c.modules.reduce((n, m) => n + asList(m.lab).length, 0), 0)} labs</span>
       </div>
     </header>
     ${list.map(courseSection).join('')}
