@@ -2606,7 +2606,15 @@ function renderMatch(main, l) {
       lessonHeader(l) +
       '<div class="article">' + renderMd(lessonMd(l)) + '</div>' +
       '<h3 class="q-prompt">' + mdInline(l.prompt || '') + '</h3>' +
-      '<p class="q-note">Tap a placed label to take it back. Every label is used exactly once.</p>' +
+      /* A drill may deliberately offer more labels than there are symbols, so that
+         picking the right one is a decision and not an elimination. Saying every
+         label is used tells that learner the opposite of the truth, and the brief
+         right above it says so explicitly. */
+      '<p class="q-note">Tap a placed label to take it back. ' +
+        ((l.labels || []).length === (l.items || []).length
+          ? 'Every label is used exactly once.'
+          : 'There are more labels than symbols — some describe a part that is not '
+            + 'drawn here.') + '</p>' +
       '<div class="mt-labels">' +
         (l.labels || []).map(function (lb, li) {
           return '<button type="button" class="mt-lb' + (armed === li ? ' armed' : '') +
