@@ -143,6 +143,80 @@ breaks both, and the error becomes a periodic distortion you can hear rather tha
 noise floor you can ignore. That is the failure mode dither exists to fix.
 ''',
             },
+            "quiz": {
+                "title": "An integer with a promise about the point",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "What is the step size of a Q(m.f) number?",
+                        "opts": ["$2^{-f}$", "$2^{-m}$", "$2^{f}$", "$1/(m+f)$"],
+                        "a": 0,
+                        "why": r"""
+The fractional bits set the resolution and the integer bits set the range — two
+independent choices out of a fixed total, which is the entire design decision in fixed
+point. Q1.14 resolves $6.1\times10^{-5}$ and saturates just past 2; Q7.8 resolves
+$3.9\times10^{-3}$ and reaches 128. Same 16 bits, four hundred times the difference in
+resolution.
+""",
+                    },
+                    {
+                        "q": "You multiply a Q(m.f) number by another Q(m.f) number. What does the product need?",
+                        "opts": [
+                            "Q(2m+1 . 2f) — a full-width accumulator",
+                            "Q(m.f) — the same format",
+                            "Q(m . 2f)",
+                            "Q(2m . f)",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The fractional bits add and the integer bits add, plus one for the sign interaction. Two
+Q1.14 values need Q3.28, which is why a 16×16 multiplier feeds a 32-bit (or 40-bit)
+accumulator. Truncating back to Q(m.f) after *every* multiply, rather than accumulating
+full width and rounding once at the end, is the most common way to lose 20 dB of SNR in
+an FIR filter without noticing.
+""",
+                    },
+                    {
+                        "q": "Why is the range of a two's complement fixed-point number asymmetric?",
+                        "opts": [
+                            "There is one more negative code than positive",
+                            "The sign bit is not counted",
+                            "Rounding always goes down",
+                            "It is not — the asymmetry is a myth",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Q1.14 runs from $-2$ to $+2 - 2^{-14}$: the most negative value has no positive
+counterpart. Which means negating the most negative number overflows — a real and
+frequently shipped bug, since `-x` looks incapable of failing. Saturating negation, or
+simply never using the extreme code, is the standard defence.
+""",
+                    },
+                    {
+                        "q": "For a quantiser of step $q$, what is the noise power?",
+                        "opts": ["$q^2/12$", "$q^2/4$", "$q/2$", "$q^2$"],
+                        "a": 0,
+                        "why": r"""
+The variance of a uniform distribution over one step. It rests on assumptions worth
+stating — that the error is uniform, white, and uncorrelated with the signal — and they
+fail exactly when the signal is small or periodic, which is when the error becomes an
+audible tone rather than a hiss. That failure is what dither is for, and it is the same
+mechanism behind the limit cycles in module 4.
+""",
+                    },
+                    {
+                        "q": "What does one extra bit of word length buy?",
+                        "opts": ["About 6 dB of signal-to-noise ratio", "About 3 dB", "About 10 dB", "A factor of two in bandwidth"],
+                        "a": 0,
+                        "why": r"""
+$20\log_{10}2 = 6.02$ dB, because the step halves and the noise *power* falls by four.
+It is the most useful conversion factor in the subject: 16 bits is about 98 dB of
+dynamic range, 24 bits about 146 dB, and any claim of a 20-bit converter with a 130 dB
+floor can be sanity-checked in one line.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "A Q-format quantiser and its noise floor",
                 "runtime": "python",
@@ -412,6 +486,111 @@ pairwise separations — several of which are small — in the denominators.
 
 The lab measures exactly that, and the ratio is not subtle.
 ''',
+            },
+            "blanks": {
+                "title": "Where a quantised coefficient puts the poles",
+                "minutes": 9,
+                "caption": "coeffs.py — the grid, and why direct form sits badly on it",
+                "lang": "python",
+                "brief": r"""
+Storing a coefficient to finite precision moves the poles. How far it moves them is not a
+property of the filter — it is a property of the *structure* you chose to realise it in,
+and that is the whole content of this module.
+""",
+                "listing": """# A coefficient stored in Q(m.f) can only land on a grid of spacing ___ .
+
+# For a direct-form denominator  1 - a1*z**-1 - a2*z**-2 , the reachable
+# POLE positions that grid produces are ___ .
+
+# The sensitivity of a pole to a coefficient goes as the reciprocal of
+# ___ ,
+
+# so poles that are clustered together are ___ .
+
+# The standard structural fix is ___ .
+""",
+                "blanks": [
+                    {
+                        "prompt": "The coefficient grid.",
+                        "hole": "?",
+                        "opts": ["2 ** -f", "2 ** -m", "2 ** f", "1 / f"],
+                        "a": 0,
+                        "why": "Uniform, in the *coefficient* domain, at the resolution of the format. Everything interesting follows from the fact that a uniform grid in coefficients is not a uniform grid in poles.",
+                        "whys": [
+                            "Uniform, in the *coefficient* domain, at the resolution of the format. Everything interesting follows from the fact that a uniform grid in coefficients is not a uniform grid in poles.",
+                            "The integer bits set the range, not the step.",
+                            "That is a large number; the step is a small one.",
+                            "Not a power of two, so it does not describe a binary format at all.",
+                        ],
+                    },
+                    {
+                        "prompt": "What does that uniform grid look like in the z-plane?",
+                        "hole": "?",
+                        "opts": [
+                            "not uniform -- the reachable poles thin out near z = +/-1",
+                            "a uniform grid, at the same spacing",
+                            "points on the unit circle only",
+                            "only real values",
+                        ],
+                        "a": 0,
+                        "why": "The map from $(a_1, a_2)$ to pole positions is non-linear, and it stretches badly near $z = \\pm1$. Which is precisely where the poles of a narrowband low-pass sit — so the filters that most need accuracy are the ones the direct form serves worst, and a high-order narrowband design can go unstable purely from rounding.",
+                        "whys": [
+                            "The map from $(a_1, a_2)$ to pole positions is non-linear, and it stretches badly near $z = \\pm1$. Which is precisely where the poles of a narrowband low-pass sit — so the filters that most need accuracy are the ones the direct form serves worst, and a high-order narrowband design can go unstable purely from rounding.",
+                            "If it were uniform there would be no structure problem to solve — and the coupled-form realisation, which achieves very nearly a uniform pole grid, would offer no advantage.",
+                            "Poles are not confined to the unit circle; a stable filter's poles are strictly inside it.",
+                            "Complex conjugate pairs are exactly what a second-order section is usually for.",
+                        ],
+                    },
+                    {
+                        "prompt": "Sensitivity goes as the reciprocal of what?",
+                        "hole": "?",
+                        "opts": [
+                            "the distance from that pole to the other poles",
+                            "the filter order",
+                            "the sample rate",
+                            "the coefficient's own value",
+                        ],
+                        "a": 0,
+                        "why": "The classical result: $\\partial p_i/\\partial a_k$ carries $\\prod_{j \\neq i}(p_i - p_j)$ in its denominator. Poles far apart are individually robust; poles crowded together are not, and the crowding is what a high-order direct-form design creates.",
+                        "whys": [
+                            "The classical result: $\\partial p_i/\\partial a_k$ carries $\\prod_{j \\neq i}(p_i - p_j)$ in its denominator. Poles far apart are individually robust; poles crowded together are not, and the crowding is what a high-order direct-form design creates.",
+                            "Order matters only through its effect on how crowded the poles become — it is the mechanism, not the measure.",
+                            "The sample rate does not appear in the sensitivity, though raising it does push poles toward $z = 1$ and make crowding worse.",
+                            "The coefficient's magnitude is not what governs it.",
+                        ],
+                    },
+                    {
+                        "prompt": "So clustered poles are what?",
+                        "hole": "?",
+                        "opts": ["the most sensitive", "the least sensitive", "unaffected", "always stable"],
+                        "a": 0,
+                        "why": "Most sensitive, by a wide margin. A tenth-order elliptic filter realised as one direct-form section can be unusable at 16 bits and perfectly fine at 24 — and the same filter as five second-order sections is fine at 16.",
+                        "whys": [
+                            "Most sensitive, by a wide margin. A tenth-order elliptic filter realised as one direct-form section can be unusable at 16 bits and perfectly fine at 24 — and the same filter as five second-order sections is fine at 16.",
+                            "Backwards: the small differences in the denominator make the derivative large, not small.",
+                            "Sensitivity is exactly what changes.",
+                            "Rounding can and does push a marginally stable pole outside the unit circle.",
+                        ],
+                    },
+                    {
+                        "prompt": "And the fix?",
+                        "hole": "?",
+                        "opts": [
+                            "cascade second-order sections",
+                            "raise the sample rate",
+                            "use more taps",
+                            "use saturating arithmetic",
+                        ],
+                        "a": 0,
+                        "why": "Break the filter into biquads, each holding one conjugate pair. Each section's poles are then far from *its own* other poles, so the sensitivity denominators stay large, and a coefficient error perturbs one pair rather than the whole polynomial. It is why essentially every shipped IIR filter is a cascade of second-order sections.",
+                        "whys": [
+                            "Break the filter into biquads, each holding one conjugate pair. Each section's poles are then far from *its own* other poles, so the sensitivity denominators stay large, and a coefficient error perturbs one pair rather than the whole polynomial. It is why essentially every shipped IIR filter is a cascade of second-order sections.",
+                            "Raising the sample rate crowds the poles toward $z = 1$ and makes the problem worse, not better.",
+                            "More taps is an FIR remedy; this is a pole problem, and FIR filters have none.",
+                            "Saturation deals with overflow, which is module 3 and a different failure entirely.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Cascade against expanded direct form",
@@ -691,6 +870,95 @@ round once at the end. That single change removes the factor of three above and,
 recursive filter, removes the rounding that would otherwise be fed back through the
 poles — which is the subject of the next module.
 ''',
+            },
+            "quiz": {
+                "title": "What happens at the top of the range",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A two's complement accumulator at full scale is incremented once more. What does it become?",
+                        "opts": [
+                            "The most negative value",
+                            "Full scale again",
+                            "Zero",
+                            "An exception is raised",
+                        ],
+                        "a": 0,
+                        "why": r"""
+It wraps: the largest positive code rolls straight to the largest negative one. In audio
+that is a full-scale sign inversion in a single sample — a loud click, not a gentle
+distortion — and it is why an overflow that happens once every few seconds is far more
+objectionable than continuous mild clipping. Nothing is raised; the hardware simply
+carries on.
+""",
+                    },
+                    {
+                        "q": "What does saturating arithmetic bound the error by?",
+                        "opts": [
+                            "The amount by which the result exceeded the range",
+                            "Half a quantisation step",
+                            "The full range",
+                            "Nothing — saturation is exact",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Clamping gives an error equal to the overshoot, so a small overflow causes a small error
+— which is the behaviour intuition expects and wrapping violently fails to provide. It
+turns a catastrophic failure into a graceful one, and it is why DSP instruction sets have
+saturating add as a primitive rather than leaving it to software.
+""",
+                    },
+                    {
+                        "q": "Wrapping has one genuine advantage over saturation. What is it?",
+                        "opts": [
+                            "A sum of wrapping intermediates is correct as long as the final total is in range",
+                            "It is faster",
+                            "It produces less quantisation noise",
+                            "It cannot cause limit cycles",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Modular arithmetic is associative, so intermediate overflows cancel: an accumulator that
+wraps three times and comes back is exactly right, while a saturating one has clamped and
+lost the information permanently. That is why FIR accumulators are often left to wrap
+while the *output* stage saturates — the intermediate sum is allowed to roam, and only
+the final value has to be representable.
+""",
+                    },
+                    {
+                        "q": "You scale a signal down before an accumulator. What have you traded?",
+                        "opts": [
+                            "Resolution, for headroom",
+                            "Bandwidth, for headroom",
+                            "Speed, for accuracy",
+                            "Nothing — scaling is free",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Shifting right buys room at the top and throws away bits at the bottom, so the signal
+sits further above the noise floor of the range and closer to the noise floor of the
+quantiser. Every fixed-point design is this one negotiation, repeated at each stage, and
+it is why scaling analysis is done with a norm bound rather than by trying a few inputs.
+""",
+                    },
+                    {
+                        "q": "For an audio output stage, which failure is worse?",
+                        "opts": [
+                            "Wrapping, because a sign inversion is a click",
+                            "Saturating, because it distorts",
+                            "They sound identical",
+                            "Neither is audible below full scale",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Saturation is soft clipping — harmonic distortion, unpleasant but continuous with what
+came before. Wrapping is a discontinuity of the full range, which is broadband and
+sounds like a fault rather than like overload. Where the *arithmetic* wants wrapping,
+as in the intermediate sums above, and the *output* wants saturation, is a distinction
+worth designing around explicitly.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Wraparound, saturation and the L1 bound",
@@ -975,6 +1243,94 @@ Nothing in the derivation depended on the value being large or small, which is t
 point: the deadband is a property of the pole and the word length, not of the signal
 that happened to excite it.
 ''',
+            },
+            "blanks": {
+                "title": "The filter that will not go quiet",
+                "minutes": 8,
+                "caption": "deadband.py — an oscillation with no input at all",
+                "lang": "python",
+                "brief": r"""
+Take the input away from a stable recursive filter and it should decay to silence.
+Quantised, it frequently does not — it settles into a small, permanent oscillation that
+no amount of waiting removes. Fill in why.
+""",
+                "listing": """# First-order section:   y[n] = Q( a * y[n-1] )     with |a| < 1
+
+# In a RECURSIVE structure the rounding error is ___ ,
+# so unlike an FIR filter it does not simply add a noise floor.
+
+# A limit cycle survives when the shrink per step is smaller than
+# ___ ,
+# because the rounding then puts the value straight back where it was.
+
+# The amplitude is bounded by the deadband
+#     q / (2 * (1 - ___ ))
+# which grows without bound as the pole approaches ___ .
+""",
+                "blanks": [
+                    {
+                        "prompt": "What makes a recursive filter different from an FIR one here?",
+                        "hole": "?",
+                        "opts": [
+                            "the rounding error is fed back through the poles",
+                            "the rounding error is filtered out",
+                            "there is no rounding error",
+                            "the error is independent of the coefficients",
+                        ],
+                        "a": 0,
+                        "why": "The error made at step $n$ becomes part of the state and is amplified by the same feedback that shapes the signal. In an FIR filter each rounding error appears once and leaves; here it circulates, and near an under-damped pole it circulates with almost no attenuation.",
+                        "whys": [
+                            "The error made at step $n$ becomes part of the state and is amplified by the same feedback that shapes the signal. In an FIR filter each rounding error appears once and leaves; here it circulates, and near an under-damped pole it circulates with almost no attenuation.",
+                            "The opposite: the feedback path is what sustains it. If it were filtered out there would be no limit cycle.",
+                            "Rounding is unavoidable at every multiply — that is what fixed point means.",
+                            "It depends on them strongly, which is exactly what the deadband formula quantifies.",
+                        ],
+                    },
+                    {
+                        "prompt": "When does the value fail to shrink?",
+                        "hole": "?",
+                        "opts": [
+                            "the quantisation step",
+                            "the coefficient a",
+                            "the sample rate",
+                            "the filter order",
+                        ],
+                        "a": 0,
+                        "why": "If $|ay| $ differs from $|y|$ by less than half a step, rounding returns the same number and the state is stuck — a fixed point of the *quantised* recursion that is not a fixed point of the ideal one. The filter has, in effect, found a place to stand.",
+                        "whys": [
+                            "If $|ay| $ differs from $|y|$ by less than half a step, rounding returns the same number and the state is stuck — a fixed point of the *quantised* recursion that is not a fixed point of the ideal one. The filter has, in effect, found a place to stand.",
+                            "$a$ governs how fast it shrinks; the step is the threshold that shrink has to beat.",
+                            "The sample rate does not enter the recursion.",
+                            "This is a first-order section; the order is not the mechanism.",
+                        ],
+                    },
+                    {
+                        "prompt": "Complete the deadband bound.",
+                        "hole": "?",
+                        "opts": ["abs(a)", "a", "1 - a", "q"],
+                        "a": 0,
+                        "why": "$q/(2(1-|a|))$. The magnitude, because the bound is the same for a pole at $+0.99$ and one at $-0.99$ — the second oscillates every sample instead of drifting, but it is just as stuck.",
+                        "whys": [
+                            "$q/(2(1-|a|))$. The magnitude, because the bound is the same for a pole at $+0.99$ and one at $-0.99$ — the second oscillates every sample instead of drifting, but it is just as stuck.",
+                            "Without the magnitude a negative pole gives $1 - a > 1$ and a bound *smaller* than the quantisation step, which cannot be right.",
+                            "This inverts the dependence: the deadband would shrink as the pole approached the unit circle.",
+                            "The step is already the numerator; using it twice has the wrong dimensions.",
+                        ],
+                    },
+                    {
+                        "prompt": "Where does the deadband blow up?",
+                        "hole": "?",
+                        "opts": ["the unit circle", "the origin", "z = 0", "the imaginary axis"],
+                        "a": 0,
+                        "why": "As $|a| \\to 1$ the denominator goes to zero and the bound diverges — which is the practical warning: a very narrowband filter, which is exactly a filter with poles near the unit circle, can hold a limit cycle far larger than one quantisation step. A DC-blocker at $a = 0.9999$ in 16-bit arithmetic has a deadband of thousands of codes.",
+                        "whys": [
+                            "As $|a| \\to 1$ the denominator goes to zero and the bound diverges — which is the practical warning: a very narrowband filter, which is exactly a filter with poles near the unit circle, can hold a limit cycle far larger than one quantisation step. A DC-blocker at $a = 0.9999$ in 16-bit arithmetic has a deadband of thousands of codes.",
+                            "Near the origin the pole is heavily damped and the deadband is at its smallest — about half a step.",
+                            "$z = 0$ is a point in the same well-behaved region, not where the bound diverges.",
+                            "The relevant boundary in the z-plane is the unit circle; the imaginary axis is the s-plane's.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Find the limit cycle, then remove it",

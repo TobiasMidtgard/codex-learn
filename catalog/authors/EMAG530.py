@@ -143,6 +143,85 @@ indices, so a fibre facet loses the same 3.5 per cent whether the light is going
 or coming out.
 ''',
             },
+            "quiz": {
+                "title": "Guiding is one inequality on an angle",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "What is the numerical aperture of a step-index fibre?",
+                        "opts": ["$\\sqrt{n_1^2 - n_2^2}$", "$n_1 - n_2$", "$n_1/n_2$", "$\\sqrt{n_1n_2}$"],
+                        "a": 0,
+                        "why": r"""
+It comes out of applying Snell's law twice — once entering the end face, once at the
+core–cladding boundary — and it is the sine of the largest angle that will still be
+guided. A typical multimode fibre has $n_1 = 1.48$, $n_2 = 1.46$, so
+$\text{NA} = \sqrt{0.0588} = 0.24$: an acceptance half-angle of 14°. The difference
+$n_1 - n_2$ is small and appears in $\Delta$, but it is not the NA.
+""",
+                    },
+                    {
+                        "q": "The critical angle at the core–cladding boundary is:",
+                        "opts": [
+                            "$\\arcsin(n_2/n_1)$, measured from the normal",
+                            "$\\arcsin(n_1/n_2)$",
+                            "$\\arctan(n_2/n_1)$",
+                            "$\\arccos(n_2/n_1)$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Snell with the refracted ray grazing along the boundary. With $n_2/n_1$ close to 1 the
+critical angle is close to 90° — for the fibre above, 80.6°, so only rays within about
+9° of the axis are guided. Writing $n_1/n_2$ gives an arcsine of a number greater than 1,
+which is the arithmetic telling you that light cannot be totally reflected going from
+low index to high.
+""",
+                    },
+                    {
+                        "q": "In terms of the relative index difference $\\Delta$, the NA is approximately:",
+                        "opts": ["$n_1\\sqrt{2\\Delta}$", "$n_1\\Delta$", "$\\sqrt{\\Delta}$", "$2n_1\\Delta$"],
+                        "a": 0,
+                        "why": r"""
+Factor $n_1^2 - n_2^2 = (n_1+n_2)(n_1-n_2) \approx 2n_1 \cdot n_1\Delta$ for small
+$\Delta$. It is the form worth carrying because $\Delta$ is what data sheets quote and
+what fabrication controls — and the square root is why halving $\Delta$ only reduces the
+NA by 30%.
+""",
+                    },
+                    {
+                        "q": "A larger NA gives you what, and costs you what?",
+                        "opts": [
+                            "Easier coupling, at the price of more modal dispersion",
+                            "Easier coupling with no penalty",
+                            "Lower loss, at the price of a smaller core",
+                            "Higher bandwidth, at the price of coupling",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A wider acceptance cone catches more light from a cheap LED — and admits rays at steeper
+angles, whose zig-zag path is longer, which spreads the pulse. The two are the same
+inequality read in opposite directions, and the trade defines the market: high-NA
+multimode for short cheap links, low-NA single-mode for long fast ones.
+""",
+                    },
+                    {
+                        "q": "Light arrives outside the acceptance cone. What happens to it?",
+                        "opts": [
+                            "It refracts into the cladding and is lost within a short distance",
+                            "It is reflected back out of the fibre end",
+                            "It propagates with higher loss",
+                            "It couples into a higher-order mode",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Beyond the critical angle the reflection is no longer total, so a fraction escapes at
+every bounce and the ray is gone within centimetres. This is why a fibre's measured loss
+depends on how far from the launch you start measuring — the cladding modes have to
+strip out first, which is what a mode stripper is for and why standard loss measurements
+specify a launch condition.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "The acceptance cone and the end face",
                 "runtime": "python",
@@ -400,6 +479,87 @@ $x$ in units of $a$ — which is why every textbook plots $b$ against $V$ and ne
 against wavelength. The eigenvalue equation itself, $u\tan(u - m\pi/2) = w$, has no
 closed form, so the next step is numerical.
 ''',
+            },
+            "blanks": {
+                "title": "Only some angles survive the round trip",
+                "minutes": 9,
+                "caption": "the symmetric slab, from transverse resonance to a mode count",
+                "lang": "text",
+                "brief": r"""
+A mode is an angle that reproduces itself after one transverse round trip. Writing that
+sentence as an equation gives the eigenvalue condition, and it is a root-finding problem
+rather than a formula — which is what the lab solves. Fill in the chain.
+""",
+                "listing": """Transverse resonance: two crossings of the core, plus the phase
+shift of each total internal reflection, must come back in phase:
+
+        2*kappa*d - 2*phi = ___
+
+with     kappa = k0 * sqrt(n1^2 - ne^2)      inside the core
+         gamma = k0 * sqrt( ___ )            decaying in the cladding
+
+Normalise with u = kappa*d/2 and w = gamma*d/2. Then
+
+        u^2 + w^2 = ___
+
+which is a circle -- and the eigenvalue condition u*tan(u - m*pi/2) = w
+is a curve. The modes are the intersections, so the number of guided
+modes is ___ .
+""",
+                "blanks": [
+                    {
+                        "prompt": "Back in phase after a round trip means what?",
+                        "hole": "?",
+                        "opts": ["2*m*pi", "m*pi", "pi/2", "0"],
+                        "a": 0,
+                        "why": "A whole number of full cycles — that is what 'reproduces itself' means, and the integer $m$ is the mode index. It is the same argument as a standing wave on a string, with the reflection phase $\\phi$ making it more interesting than an integer number of half wavelengths.",
+                        "whys": [
+                            "A whole number of full cycles — that is what 'reproduces itself' means, and the integer $m$ is the mode index. It is the same argument as a standing wave on a string, with the reflection phase $\\phi$ making it more interesting than an integer number of half wavelengths.",
+                            "Half-cycles would mean the wave comes back inverted and cancels itself, which is the condition for a mode NOT to exist.",
+                            "A fixed quarter cycle carries no mode index and cannot generate a family of solutions.",
+                            "Zero is the $m = 0$ case only, and would give exactly one mode ever.",
+                        ],
+                    },
+                    {
+                        "prompt": "In the cladding the field decays. What is under the root?",
+                        "hole": "?",
+                        "opts": ["ne**2 - n2**2", "n2**2 - ne**2", "n1**2 - n2**2", "n1**2 - ne**2"],
+                        "a": 0,
+                        "why": "A guided mode has $n_2 < n_e < n_1$, so this is positive and $\\gamma$ is real — a genuinely decaying evanescent tail, not a propagating wave. That inequality *is* the definition of guidance, and the effective index is the single number that says how tightly a mode is held.",
+                        "whys": [
+                            "A guided mode has $n_2 < n_e < n_1$, so this is positive and $\\gamma$ is real — a genuinely decaying evanescent tail, not a propagating wave. That inequality *is* the definition of guidance, and the effective index is the single number that says how tightly a mode is held.",
+                            "Negative for any guided mode, which would make $\\gamma$ imaginary and describe radiation leaking away rather than a bound mode.",
+                            "That combination is the numerical aperture and does not involve the mode at all — it cannot describe how a *particular* mode decays.",
+                            "This is $\\kappa$'s argument, for the oscillation inside the core, not the decay outside it.",
+                        ],
+                    },
+                    {
+                        "prompt": "What do u and w satisfy together?",
+                        "hole": "?",
+                        "opts": ["V**2 / 4", "V**2", "V / 2", "1"],
+                        "a": 0,
+                        "why": "Adding the two definitions eliminates $n_e$ and leaves the V number, with the factor of 4 from the $d/2$ in both normalisations. So the whole problem is one circle of fixed radius intersected with a family of tangent branches — and $V$ alone decides how many intersections there are.",
+                        "whys": [
+                            "Adding the two definitions eliminates $n_e$ and leaves the V number, with the factor of 4 from the $d/2$ in both normalisations. So the whole problem is one circle of fixed radius intersected with a family of tangent branches — and $V$ alone decides how many intersections there are.",
+                            "That is the convention with $u = \\kappa d$ rather than $\\kappa d/2$; mixing the two makes the mode count wrong by a factor of two.",
+                            "The circle's equation is in the squares, not the first power.",
+                            "A unit circle would make the answer independent of the guide, which is exactly what $V$ exists to capture.",
+                        ],
+                    },
+                    {
+                        "prompt": "How many intersections does a circle of radius V/2 have?",
+                        "hole": "?",
+                        "opts": ["floor(2V/pi) + 1", "V", "always one", "unbounded"],
+                        "a": 0,
+                        "why": "The tangent branches sit $\\pi/2$ apart in $u$, so a circle of radius $V/2$ crosses one every $\\pi/2$. Two consequences worth keeping: there is always at least one mode in a symmetric slab, however small $V$ is; and single-mode operation needs $V < \\pi/2$, which is what sets the core diameter of single-mode fibre.",
+                        "whys": [
+                            "The tangent branches sit $\\pi/2$ apart in $u$, so a circle of radius $V/2$ crosses one every $\\pi/2$. Two consequences worth keeping: there is always at least one mode in a symmetric slab, however small $V$ is; and single-mode operation needs $V < \\pi/2$, which is what sets the core diameter of single-mode fibre.",
+                            "$V$ is not an integer and is not a count.",
+                            "A large slab supports many modes; that is what multimode fibre is.",
+                            "The circle has finite radius, so the number of crossings is finite.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Solve the slab eigenvalue equation",
@@ -700,6 +860,84 @@ smaller. In quadrature the chromatic term is invisible. Kill the modal term by g
 single-mode and the roles reverse completely, which is the subject of the capstone.
 ''',
             },
+            "quiz": {
+                "title": "Different paths, different colours, different arrival times",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "In a step-index multimode guide, how much longer is the extreme ray's path than the axial one?",
+                        "opts": [
+                            "A factor of $n_1/n_2$",
+                            "A factor of $n_1/n_0$",
+                            "A factor of $\\sqrt{n_1/n_2}$",
+                            "It depends on the launch power",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The steepest guided ray travels at the critical angle, and the geometry gives a path
+$n_1/n_2$ times the length. For $n_1 = 1.48$, $n_2 = 1.46$ that is 1.4% — which sounds
+negligible and over a kilometre is about 68 ns of spread, enough to close the eye at
+10 Mbit/s. Small fractional differences over long distances are what dispersion is.
+""",
+                    },
+                    {
+                        "q": "Why does single-mode fibre have no modal dispersion?",
+                        "opts": [
+                            "There is only one path, so there is nothing to spread against",
+                            "Its index difference is zero",
+                            "Its modes travel at the same speed",
+                            "Its cladding absorbs the higher modes",
+                        ],
+                        "a": 0,
+                        "why": r"""
+One mode, one group velocity, no spread from this mechanism at all — which is why
+single-mode fibre outperforms multimode by orders of magnitude in bandwidth-distance
+product. It is not free: the core is around 9 µm instead of 50, so alignment tolerances
+become severe and connectors get expensive. Chromatic dispersion remains, and becomes the
+limit instead.
+""",
+                    },
+                    {
+                        "q": "Chromatic dispersion is quoted as a coefficient $D$. What does it multiply?",
+                        "opts": [
+                            "Length and source linewidth: $\\Delta\\tau = D\\,L\\,\\Delta\\lambda$",
+                            "Length alone",
+                            "Linewidth alone",
+                            "Bit rate and length",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Both, linearly. That gives two independent levers: shorten the link, or narrow the
+source. A DFB laser at 0.1 nm instead of an LED at 40 nm is a factor of 400 in pulse
+spread for no change to the fibre at all, which is why source linewidth is specified as
+carefully as fibre grade.
+""",
+                    },
+                    {
+                        "q": "What are the units of $D$?",
+                        "opts": ["ps/(nm·km)", "ps/km", "ns/nm", "dB/km"],
+                        "a": 0,
+                        "why": r"""
+Picoseconds of spread, per nanometre of source width, per kilometre of fibre — the units
+are the formula. Standard single-mode fibre is about 17 ps/(nm·km) at 1550 nm, and near
+zero at 1310 nm, which is why 1310 was the first long-haul window even though 1550 has
+lower loss. dB/km is attenuation, a different budget entirely.
+""",
+                    },
+                    {
+                        "q": "You halve the source linewidth. What happens to the chromatic spread?",
+                        "opts": ["It halves", "It quarters", "It is unchanged", "It falls by $\\sqrt{2}$"],
+                        "a": 0,
+                        "why": r"""
+Linear in $\Delta\lambda$, so halving halves it — and since the total spread combines
+with the modal term in quadrature, the *system* improvement is smaller than that whenever
+another term is comparable. Knowing which term dominates before optimising is the whole
+point of writing the budget down, and it is the same discipline as the loss budget in the
+next module.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Pulse spreading and the bit rate it allows",
                 "runtime": "python",
@@ -952,6 +1190,95 @@ calculation gives 0.029 dB — a factor of ten, for a substance whose only job i
 have roughly the right index. That is the whole argument for index matching, and it
 is the same argument as moving the load to the centre of the Smith chart.
 ''',
+            },
+            "blanks": {
+                "title": "Every decibel between the laser and the detector",
+                "minutes": 8,
+                "caption": "budget.py — a chain of multiplications, added up",
+                "lang": "python",
+                "brief": r"""
+A link works or it does not, and the answer is a subtraction. Fill in the terms, and the
+reason the whole calculation is done in decibels rather than in milliwatts.
+""",
+                "listing": """# Decibels are used here because they turn ___ .
+
+# 0 dBm is defined as ___ .
+
+P_rx_dBm = P_tx_dBm - alpha*L - splices - connectors - ___
+
+# and the link closes if
+
+#     P_rx_dBm >= ___
+""",
+                "blanks": [
+                    {
+                        "prompt": "Why decibels at all?",
+                        "hole": "?",
+                        "opts": [
+                            "a chain of multiplications into a sum",
+                            "a small number into a large one",
+                            "power into voltage",
+                            "an absolute measure into a relative one",
+                        ],
+                        "a": 0,
+                        "why": "Each element multiplies the power by its own factor, and logarithms turn products into sums — so a budget becomes a column of numbers you can add in your head and, more importantly, one where you can see at a glance which term dominates. That visibility is the real reason, more than the arithmetic convenience.",
+                        "whys": [
+                            "Each element multiplies the power by its own factor, and logarithms turn products into sums — so a budget becomes a column of numbers you can add in your head and, more importantly, one where you can see at a glance which term dominates. That visibility is the real reason, more than the arithmetic convenience.",
+                            "Compressing the range is a side effect, and a useful one, but not what makes the budget work.",
+                            "Decibels relate powers to powers; the voltage form differs only by a factor of two in the definition.",
+                            "dBm is absolute and plain dB is relative — the notation carries both, which is the opposite of a conversion.",
+                        ],
+                    },
+                    {
+                        "prompt": "The absolute reference.",
+                        "hole": "?",
+                        "opts": ["1 mW", "1 W", "1 uW", "0 W"],
+                        "a": 0,
+                        "why": "The m in dBm. So $-30$ dBm is 1 µW and $+10$ dBm is 10 mW, and a receiver sensitivity of $-28$ dBm is a genuine power you could measure with a meter. Mixing dBm and dB in the same column — one absolute, one a ratio — is the classic budget error.",
+                        "whys": [
+                            "The m in dBm. So $-30$ dBm is 1 µW and $+10$ dBm is 10 mW, and a receiver sensitivity of $-28$ dBm is a genuine power you could measure with a meter. Mixing dBm and dB in the same column — one absolute, one a ratio — is the classic budget error.",
+                            "1 W is the reference for dBW, used in radio transmitters; it is 30 dB away from dBm and confusing the two is a factor of a thousand.",
+                            "Not a standard reference; dBµ exists but means something else again.",
+                            "Zero power is minus infinity on a logarithmic scale and cannot be a reference.",
+                        ],
+                    },
+                    {
+                        "prompt": "One more term before the comparison.",
+                        "hole": "?",
+                        "opts": [
+                            "a system margin for ageing and repairs",
+                            "the receiver sensitivity",
+                            "the transmitter power again",
+                            "the dispersion penalty in ps",
+                        ],
+                        "a": 0,
+                        "why": "A few decibels held back deliberately, because connectors get dirty, splices get added when a cable is cut and repaired, and the laser dims over years. A budget that closes with 0 dB of margin closes only on the day it was installed.",
+                        "whys": [
+                            "A few decibels held back deliberately, because connectors get dirty, splices get added when a cable is cut and repaired, and the laser dims over years. A budget that closes with 0 dB of margin closes only on the day it was installed.",
+                            "Sensitivity is what the result is compared *against*, on the next line — subtracting it here would count it twice.",
+                            "The transmit power is already the first term.",
+                            "Dispersion is measured in picoseconds and cannot be subtracted from a power. It enters as a separate penalty in dB, once converted.",
+                        ],
+                    },
+                    {
+                        "prompt": "What does the received power have to beat?",
+                        "hole": "?",
+                        "opts": [
+                            "the receiver sensitivity",
+                            "the transmitter power",
+                            "zero dBm",
+                            "the fibre attenuation",
+                        ],
+                        "a": 0,
+                        "why": "The least power the receiver can turn into bits at the required error rate — which is a specification of the receiver, quoted in dBm, and depends on the bit rate. Note there is usually an upper limit too: too much power saturates the receiver, so a short link sometimes needs an attenuator, which surprises people the first time.",
+                        "whys": [
+                            "The least power the receiver can turn into bits at the required error rate — which is a specification of the receiver, quoted in dBm, and depends on the bit rate. Note there is usually an upper limit too: too much power saturates the receiver, so a short link sometimes needs an attenuator, which surprises people the first time.",
+                            "The received power is always below the transmitted power; comparing them says only that the fibre is lossy.",
+                            "0 dBm is 1 mW, far above any receiver's threshold — this test would fail every real link.",
+                            "The attenuation is one of the terms already subtracted, not the threshold.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "Build a link budget and invert it",

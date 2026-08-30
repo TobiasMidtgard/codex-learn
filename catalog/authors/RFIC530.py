@@ -151,6 +151,91 @@ harmonic of the square wave downconverts too, with gain $2/(k\pi)$ — the lab m
 that directly.
 ''',
             },
+            "quiz": {
+                "title": "A mixer multiplies by a square wave",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A hard-driven LO switching pair multiplies the signal by what?",
+                        "opts": [
+                            "A square wave alternating between $+1$ and $-1$",
+                            "A sinusoid at the LO frequency",
+                            "The LO voltage itself",
+                            "A constant",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Once the LO is large enough to fully commutate the pair, the switching is
+all-or-nothing and the signal current is simply steered one way then the other. That is
+multiplication by $\pm1$ — and it explains the most useful practical property of the
+topology, which is the next question.
+""",
+                    },
+                    {
+                        "q": "What is the fundamental amplitude of a unit square wave?",
+                        "opts": ["$4/\\pi$", "$1$", "$\\pi/4$", "$2/\\pi$"],
+                        "a": 0,
+                        "why": r"""
+$4/\pi = 1.273$ — the fundamental of a $\pm1$ square wave is *larger* than the square
+wave's own amplitude, which is worth pausing on and is exactly what the Fourier series
+says. It also means only $(4/\pi)^2/(\pi^2/8)$ of the energy is at the fundamental and the
+rest sits at odd harmonics, each of which is another band the mixer will happily downconvert.
+""",
+                    },
+                    {
+                        "q": "What is the single-sideband conversion gain of a single-balanced cell, relative to the transconductance stage's gain?",
+                        "opts": [
+                            "$2/\\pi$",
+                            "$4/\\pi$",
+                            "$1/2$",
+                            "$\\pi/2$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$4/\pi$ from the square wave's fundamental, times $1/2$ because multiplying two sinusoids
+splits the energy into a sum and a difference and you keep one — giving $2/\pi = 0.64$,
+or $-3.9$ dB. That loss is intrinsic to the multiplication and not a defect of the
+implementation, which is why a mixer's gain is quoted separately from the stage's and why
+the LNA in front of it matters so much.
+""",
+                    },
+                    {
+                        "q": "Once the LO is large enough to fully switch the pair, what does increasing it further do to the conversion gain?",
+                        "opts": [
+                            "Nothing",
+                            "Increases it proportionally",
+                            "Decreases it",
+                            "Increases it as the square root",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The multiplication is by $\pm1$ regardless of how hard you drive it, so the gain
+saturates — which is a considerable practical virtue, since LO amplitude then does not
+have to be controlled precisely. What more LO *does* buy is faster switching edges, which
+shortens the interval when both devices conduct and reduces noise; and what it costs is
+power and LO leakage. Below full commutation the gain does depend on amplitude, and the
+mixer is noisier there.
+""",
+                    },
+                    {
+                        "q": "What does the double-balanced (full Gilbert) cell add over the single-balanced one?",
+                        "opts": [
+                            "Rejection of both LO and RF feedthrough at the output",
+                            "Higher conversion gain",
+                            "Lower noise figure",
+                            "Wider bandwidth",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Both the LO and the RF appear as common-mode at the differential output and cancel,
+leaving the wanted product. It matters enormously in a direct-conversion receiver, where
+LO leakage back out of the antenna is a regulatory problem and self-mixing produces a DC
+offset that can swamp the signal. The gain is the same, the noise is generally slightly
+worse, and it costs another pair of devices and more headroom.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Measure the conversion gain of a switching mixer",
                 "runtime": "python",
@@ -451,6 +536,157 @@ have changed $\omega_n$ and $\zeta$ as well, which is why a synthesiser is only 
 designed at the worst-case divide ratio.
 ''',
             },
+            "build": {
+                "title": "The loop filter, driven by the charge pump itself",
+                "minutes": 26,
+                "brief": r"""
+A charge pump is a current source. A loop filter is an impedance. The control voltage is
+the product of the two — so the loop filter's job can be measured directly, by pushing a
+known current into it and looking at the voltage that results.
+
+## What is on the canvas
+
+A **1 mA current source**, which is $I_{cp}$, and a probe on the control-voltage node.
+Ground and nothing else.
+
+## What to build
+
+The standard second-order loop filter:
+
+- $C_2 = 100$ nF in series with $R_2 = 1\ \text{k}\Omega$, that series pair from the
+  control node to ground,
+- $C_1 = 10$ nF directly from the control node to ground.
+
+## Read the impedance, and you have read the loop
+
+Because the excitation is 1 mA, the voltage the probe reports is numerically the
+impedance in kilohms — and that impedance has three regions, which are the three things
+the filter is for.
+
+- **Below the zero** at $1/(2\pi R_2C_2) = 1.6$ kHz, the pair of capacitors integrates
+  and $|Z|$ falls at 20 dB per decade. This is the second integrator in the loop, and it
+  is what makes the PLL type II with zero steady-state phase error.
+- **Between the zero and the pole**, $|Z|$ flattens out at $R_2$. **This flat region is
+  the entire reason the loop is stable.** Two integrators alone give $-180°$ of phase and
+  no margin whatsoever; $R_2$ contributes a zero whose phase lead pulls the loop back
+  from the brink. Set the loop bandwidth in this region and the PLL is damped; set it
+  below the zero and it rings or oscillates.
+- **Above the pole** at $1/(2\pi R_2(C_1\|C_2)) = 17.5$ kHz, $C_1$ takes over and the
+  impedance falls again. That is not incidental either: without $C_1$ the charge pump's
+  current pulses would drop across $R_2$ as a square wave of ripple, straight onto the
+  VCO control line and out as reference spurs.
+
+The checks measure all three regions and the phase in the middle one.
+
+## No DC operating point, and that is correct
+
+There is no resistive path from the control node to ground, so the circuit has no DC
+solution and the checks are all AC. That is a property of the real filter, not a
+limitation of the model: the loop's DC control voltage is set by where the VCO has to
+sit, and the filter contributes only the integration.
+""",
+                "start": {
+                    "parts": [
+                        {"id": "icp", "kind": "I", "x": 3, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 4},
+                        {"id": "g1", "kind": "GND", "x": 7, "y": 11},
+                        {"id": "g2", "kind": "GND", "x": 11, "y": 14},
+                        {"id": "out", "kind": "OUT", "x": 5, "y": 7},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 7], "b": [7, 7]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "icp", "kind": "I", "x": 3, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 4},
+                        {"id": "c1", "kind": "C", "x": 7, "y": 9, "rot": 1, "value": 10e-9},
+                        {"id": "g1", "kind": "GND", "x": 7, "y": 11},
+                        {"id": "r2", "kind": "R", "x": 11, "y": 9, "rot": 1, "value": 1000},
+                        {"id": "c2", "kind": "C", "x": 11, "y": 12, "rot": 1, "value": 100e-9},
+                        {"id": "g2", "kind": "GND", "x": 11, "y": 14},
+                        {"id": "out", "kind": "OUT", "x": 5, "y": 7},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 7], "b": [7, 7]},
+                        {"a": [7, 7], "b": [7, 8]},
+                        {"a": [7, 10], "b": [7, 11]},
+                        {"a": [7, 7], "b": [11, 7]},
+                        {"a": [11, 7], "b": [11, 8]},
+                        {"a": [11, 10], "b": [11, 11]},
+                        {"a": [11, 13], "b": [11, 14]},
+                    ],
+                },
+                "checks": [
+                    {
+                        "name": "one resistor, two capacitors, and no DC path to ground",
+                        "code": r"""
+c.assert(c.count('R') === 1, 'One resistor, R2; there are ' + c.count('R') + '.');
+c.assert(c.count('C') === 2, 'Two capacitors, C1 and C2; there are ' + c.count('C') + '.');
+let hasDc = true;
+try { c.vout(); } catch (e) { hasDc = false; }
+c.assert(!hasDc,
+  'The control node reached a DC solution, which means there is a resistive path from ' +
+  'it to ground. R2 must be in series with C2, not straight to ground — otherwise the ' +
+  'charge pump would be fighting a load resistor and the loop could not integrate.');
+""",
+                    },
+                    {
+                        "name": "below the zero it integrates: 14.5 kohm at 100 Hz",
+                        "code": r"""
+c.close(c.gain(100), 14.47, 0.06,
+  'the impedance at 100 Hz, in volts per milliamp (so, kilohms). Down here both ' +
+  'capacitors are in parallel and R2 is negligible, giving 1/(2*pi*f*(C1+C2)) with ' +
+  'C1 + C2 = 110 nF');
+c.close(c.gain(10) / c.gain(100), 10.0, 0.04,
+  'the fall from 10 Hz to 100 Hz, both far below the 1.6 kHz zero, where the pair of ' +
+  'capacitors is integrating on its own. Measured closer to the zero this ratio is ' +
+  'already softening: 100 Hz against 1 kHz gives only 8.5');
+""",
+                    },
+                    {
+                        "name": "the flat region between zero and pole is R2, and it is the phase margin",
+                        "code": r"""
+c.close(c.gain(5e3), 0.917, 0.06,
+  'the impedance at 5 kHz, between the 1.6 kHz zero and the 17.5 kHz pole. R2 is ' +
+  '1 kohm and the shelf only reaches 0.92 of it, because the zero and the pole sit ' +
+  'barely a decade apart and neither has finished before the other begins. This ' +
+  'shelf is where a loop bandwidth is placed');
+const ph = c.phase(5e3);
+c.assert(ph > -45,
+  'The phase at 5 kHz is ' + ph.toFixed(0) + ' degrees. In the flat region it should ' +
+  'have recovered well away from the -90 degrees of pure integration — that recovery ' +
+  'IS the phase margin R2 contributes, and without it two integrators in the loop ' +
+  'leave none at all.');
+c.assert(c.phase(100) < -75,
+  'At 100 Hz the filter should be integrating, which means close to -90 degrees. It ' +
+  'reads ' + c.phase(100).toFixed(0) + ', so the low-frequency behaviour is not a ' +
+  'pure integration and the loop would not be type II.');
+""",
+                    },
+                    {
+                        "name": "above the pole C1 takes over, and kills the ripple",
+                        "code": r"""
+c.assert(c.gain(200e3) < 0.2 * c.gain(5e3),
+  'Above the C1 pole the impedance must fall away again — that is what stops the ' +
+  'charge pump current pulses appearing across R2 as reference spurs on the VCO ' +
+  'control line. It reads ' + c.gain(200e3).toFixed(3) + ' kohm at 200 kHz against ' +
+  c.gain(5e3).toFixed(3) + ' on the shelf, which is not enough attenuation.');
+c.close(c.gain(200e3) / c.gain(2e6), 10.0, 0.10,
+  'the fall over a decade well above the pole. C1 alone is a single pole, so a ' +
+  'factor of 10 per decade');
+""",
+                    },
+                ],
+                "hints": [
+                    "$C_1$ goes straight from the control node to ground. $R_2$ and $C_2$ go from the same node to ground *through each other*, in series.",
+                    "The order of $R_2$ and $C_2$ within the series branch makes no electrical difference; put $R_2$ at the top so the drawing matches the way the filter is usually printed.",
+                    "If the first check complains about a DC solution, $R_2$ has a path to ground that does not pass through $C_2$.",
+                ],
+            },
             "lab": {
                 "title": "Loop parameters, overshoot and lock time",
                 "runtime": "python",
@@ -735,6 +971,89 @@ The model has one honest omission. Nothing here accounts for noise the divider i
 adds, and in a fractional-N synthesiser that term is large enough to move the optimum
 down by a decade. That is the next module.
 ''',
+            },
+            "quiz": {
+                "title": "A low-pass one way, a high-pass the other",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "How does reference noise reach the output?",
+                        "opts": [
+                            "Multiplied by $N$, through a low-pass",
+                            "Multiplied by $N$, through a high-pass",
+                            "Unchanged, through a low-pass",
+                            "Divided by $N$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The loop forces the divided output to track the reference, so any reference phase noise is
+multiplied by the divide ratio on the way back up — $20\log_{10}N$ decibels of it, which
+for $N = 1000$ is 60 dB. Inside the loop bandwidth the loop follows it faithfully, so it
+passes; outside, the loop cannot respond and it is filtered. That multiplication is the
+strongest argument for keeping $N$ small, and the reason fractional-N exists.
+""",
+                    },
+                    {
+                        "q": "And VCO noise?",
+                        "opts": [
+                            "Through a high-pass — the loop corrects it inside the bandwidth",
+                            "Through a low-pass",
+                            "Unfiltered",
+                            "Multiplied by $N$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The VCO's own noise is an error the loop can see and correct, so within the loop bandwidth
+it is suppressed by the loop gain and outside it the VCO runs free. The two paths are
+therefore complementary, which is the next question and the whole basis of choosing a
+bandwidth.
+""",
+                    },
+                    {
+                        "q": "The reference path's transfer function $L(s)$ and the VCO path's sum to what?",
+                        "opts": ["1, at every frequency", "0", "$N$", "The loop gain"],
+                        "a": 0,
+                        "why": r"""
+$L(s) + (1 - L(s)) = 1$ identically — there is no bandwidth at which both noise sources
+are suppressed, because suppressing one necessarily passes the other. That is not a
+limitation of any particular design; it is structural, and it is why a synthesiser's
+phase-noise plot has a characteristic shoulder right at the loop bandwidth.
+""",
+                    },
+                    {
+                        "q": "You widen the loop bandwidth. What happens?",
+                        "opts": [
+                            "Less VCO noise, more reference and divider noise",
+                            "Less of both",
+                            "More of both",
+                            "More VCO noise, less reference noise",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The loop corrects the VCO over a wider range and simultaneously tracks the reference over
+that same wider range. Wider also means faster settling, which matters for a frequency-
+hopping radio, so the choice is rarely made on noise alone.
+""",
+                    },
+                    {
+                        "q": "Where is the optimum loop bandwidth, for phase noise alone?",
+                        "opts": [
+                            "Where the two contributions cross",
+                            "As wide as stability allows",
+                            "As narrow as possible",
+                            "At the reference frequency",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Below the crossing the VCO dominates and widening helps; above it the multiplied reference
+dominates and widening hurts. Putting the bandwidth at the crossover minimises the
+integrated noise, and it is the one place the two curves can be traded evenly. Stability
+puts a hard ceiling on top of that — roughly a tenth of the reference frequency — and
+sometimes the ceiling arrives first, in which case the answer is a quieter VCO rather than
+a wider loop.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Shape the noise and find the best bandwidth",
@@ -1036,6 +1355,89 @@ same part with a narrow one.
 The lab builds the first-order case exactly, and measures the bounded phase error
 that makes the shaping true.
 ''',
+            },
+            "blanks": {
+                "title": "Dividing by a number that is not an integer",
+                "minutes": 8,
+                "caption": "fracn.py — an accumulator, and the error it creates",
+                "lang": "python",
+                "brief": r"""
+The divider can only ever divide by a whole number. Alternate between two of them in the
+right proportion and the *average* is fractional — which solves the resolution problem
+and creates a spur problem. Fill in both halves.
+""",
+                "listing": """# An m-bit accumulator fed a constant K on every reference cycle
+# overflows at an average rate of ___ ,
+# and each overflow bumps the divider from N to N+1.
+
+# Average divide ratio    N + K/2**m
+# Channel resolution      f_ref / ___
+
+# But the INSTANTANEOUS ratio is still an integer, so the phase error
+# builds and resets: it is a ___ ,
+# and its harmonics are the fractional spurs.
+
+# Replacing the plain accumulator with a delta-sigma modulator ___ .
+""",
+                "blanks": [
+                    {
+                        "prompt": "How often does an m-bit accumulator fed K overflow?",
+                        "hole": "?",
+                        "opts": ["K / 2**m", "2**m / K", "K * 2**m", "1 / K"],
+                        "a": 0,
+                        "why": "It advances by $K$ each cycle and wraps at $2^m$, so it overflows $K$ times every $2^m$ cycles. That fraction is the whole mechanism — the accumulator is a rate multiplier and nothing more.",
+                        "whys": [
+                            "It advances by $K$ each cycle and wraps at $2^m$, so it overflows $K$ times every $2^m$ cycles. That fraction is the whole mechanism — the accumulator is a rate multiplier and nothing more.",
+                            "Inverted: this is the number of cycles *between* overflows, not the rate.",
+                            "A product would exceed one for any sensible $K$, meaning more than one overflow per cycle.",
+                            "The accumulator size has to appear; without it the answer does not depend on the resolution at all.",
+                        ],
+                    },
+                    {
+                        "prompt": "So how fine can the channels be?",
+                        "hole": "?",
+                        "opts": ["2 ** m", "K", "m", "2 ** K"],
+                        "a": 0,
+                        "why": "$f_{ref}/2^m$, and here is the point of the whole technique: resolution has been decoupled from the reference frequency. An integer-N synthesiser needing 100 kHz channels must run a 100 kHz reference and multiply its noise by a huge $N$; fractional-N gets the same channels from a 10 MHz reference, with a hundredfold smaller $N$ and 40 dB less multiplied reference noise.",
+                        "whys": [
+                            "$f_{ref}/2^m$, and here is the point of the whole technique: resolution has been decoupled from the reference frequency. An integer-N synthesiser needing 100 kHz channels must run a 100 kHz reference and multiply its noise by a huge $N$; fractional-N gets the same channels from a 10 MHz reference, with a hundredfold smaller $N$ and 40 dB less multiplied reference noise.",
+                            "$K$ selects which channel, not how finely they are spaced.",
+                            "The bit count, not the modulus — off by a factor of $2^m/m$.",
+                            "Not the accumulator's modulus.",
+                        ],
+                    },
+                    {
+                        "prompt": "The phase error builds up and snaps back. What shape is that?",
+                        "hole": "?",
+                        "opts": ["a sawtooth", "a sinusoid", "white noise", "a square wave"],
+                        "a": 0,
+                        "why": "The instantaneous divide ratio is wrong in the same direction until the accumulator overflows, so the phase error ramps and then resets — a sawtooth at the overflow rate. Its harmonics are the fractional spurs, and they are deterministic, which is what makes them so much more objectionable than an equivalent amount of noise.",
+                        "whys": [
+                            "The instantaneous divide ratio is wrong in the same direction until the accumulator overflows, so the phase error ramps and then resets — a sawtooth at the overflow rate. Its harmonics are the fractional spurs, and they are deterministic, which is what makes them so much more objectionable than an equivalent amount of noise.",
+                            "A sinusoid would produce a single clean tone; the sawtooth's harmonic series is what makes the spur pattern so hard to plan around.",
+                            "It would be far less troublesome if it were noise — that is precisely what delta-sigma turns it into.",
+                            "The error accumulates gradually rather than jumping between two levels.",
+                        ],
+                    },
+                    {
+                        "prompt": "And what does a delta-sigma modulator do about it?",
+                        "hole": "?",
+                        "opts": [
+                            "shapes the error to high frequency, where the loop filters it",
+                            "removes the error entirely",
+                            "reduces the average error to zero",
+                            "makes the divide ratio non-integer",
+                        ],
+                        "a": 0,
+                        "why": "It randomises the sequence of integer divides so the error stops being periodic, and shapes its spectrum so most of the power lands well above the loop bandwidth, where the loop filter removes it. The total error is not reduced — it is moved somewhere harmless. That is the same bargain as in an audio converter, which is why the same modulator appears in both.",
+                        "whys": [
+                            "It randomises the sequence of integer divides so the error stops being periodic, and shapes its spectrum so most of the power lands well above the loop bandwidth, where the loop filter removes it. The total error is not reduced — it is moved somewhere harmless. That is the same bargain as in an audio converter, which is why the same modulator appears in both.",
+                            "The instantaneous error is still there and is in fact larger, since the modulator uses a range of divide values rather than two.",
+                            "The plain accumulator already has zero average error — that was never the problem. The problem is its spectrum.",
+                            "The divider still divides by integers. Nothing changes that; only the sequence of them changes.",
+                        ],
+                    },
+                ],
             },
             "lab": {
                 "title": "A fractional-N accumulator and its spurs",

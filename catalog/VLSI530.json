@@ -56,7 +56,67 @@
      "Now switch forwarding on with dependent pairs still at 3. Every bubble vanishes at once and the reading returns to 13 cycles — the schedule becomes identical to the one you started with."
     ]
    },
-   "quiz": null,
+   "quiz": {
+    "title": "One edge, one update, everywhere at once",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "In the synchronous model, where does state live?",
+      "opts": [
+       "Only in registers",
+       "In registers and in the combinational logic between them",
+       "Wherever a signal is assigned",
+       "In whatever the simulator remembers between events"
+      ],
+      "a": 0,
+      "why": "Everything between two registers is a pure function of the current register contents —\nit has no memory, and whatever transient it goes through during the cycle is irrelevant\nprovided it has settled by the next edge. That single restriction is what makes digital\ndesign tractable: an unbounded analogue problem becomes a finite state machine plus a\ntiming constraint."
+     },
+     {
+      "q": "At the clock edge, every next-state function is evaluated from what?",
+      "opts": [
+       "The current values, all simultaneously",
+       "The values as updated in program order",
+       "The values from the previous edge but one",
+       "Whichever values have settled first"
+      ],
+      "a": 0,
+      "why": "All at once, from the pre-edge values. Two registers that swap contents do so correctly\nand simultaneously, which has no equivalent in sequential code — and it is exactly what\nnon-blocking assignment expresses in Verilog. Using blocking assignment in a clocked\nblock makes the result depend on the order the lines happen to be written, which is\nwhere a design and its synthesis diverge silently."
+     },
+     {
+      "q": "What must the clock period exceed?",
+      "opts": [
+       "The slowest register-to-register path, plus setup time and clock skew",
+       "The average combinational delay",
+       "The sum of every path in the design",
+       "The propagation delay of the slowest gate"
+      ],
+      "a": 0,
+      "why": "One path decides the whole clock, and it is the worst one — averages are irrelevant, and\nso is the total, since the paths run in parallel. Note the additions: setup time is the\nregister's own requirement and skew is the clock arriving at the two ends at different\nmoments, and both eat into the period before any logic is done. Which is why timing\nclosure is so often about the last hundred picoseconds."
+     },
+     {
+      "q": "How fine a time axis does a cycle-accurate model need?",
+      "opts": [
+       "None finer than the edge — cycle count is the answer",
+       "Picoseconds, to model the gates",
+       "Nanoseconds, to model the clock",
+       "It depends on the technology"
+      ],
+      "a": 0,
+      "why": "If the timing constraint is met, nothing observable happens between edges, so a model can\nstep edge to edge and still be exact about *what* the machine computes and *how many\ncycles* it takes. That is why a cycle-accurate simulator can run thousands of times\nfaster than a gate-level one and still answer architectural questions correctly — and\nwhy it cannot answer the question of what the clock frequency will be."
+     },
+     {
+      "q": "Which assignment belongs in a clocked block?",
+      "opts": [
+       "Non-blocking, because it models simultaneous update",
+       "Blocking, because it is faster to simulate",
+       "Either, as they are equivalent",
+       "Blocking, because it matches synthesis"
+      ],
+      "a": 0,
+      "why": "Non-blocking schedules the update for the end of the time step, so every right-hand side\nreads pre-edge values — exactly the hardware's behaviour. Blocking assignment in a clocked\nblock simulates as sequential code, and the synthesised circuit does *not*, so the design\npasses its test bench and fails in silicon. It is the most consequential style rule in\nRTL, and it is a rule precisely because both compile."
+     }
+    ]
+   },
    "blanks": null,
    "build": null,
    "derive": {
@@ -220,7 +280,106 @@
     ]
    },
    "quiz": null,
-   "blanks": null,
+   "blanks": {
+    "title": "The three blocks, and where the output comes from",
+    "minutes": 8,
+    "brief": "Every state machine worth writing has the same three pieces. The only genuine design\ndecision is where the output is taken from, and it has consequences for timing that show\nup two blocks downstream.",
+    "caption": "fsm.py — the canonical form, and the one real choice in it",
+    "lang": "text",
+    "listing": "The canonical form:\n\n  1.  a ___ , clocked\n\n  2.  a combinational ___ ,\n      which reads the state and the inputs\n\n  3.  a combinational ___\n\nMoore outputs depend on ___ ,\nso they are stable for the whole cycle and glitch-free.\n\nMealy outputs depend additionally on ___ ,\nso they appear a cycle earlier and carry the input's glitches with them.\n",
+    "blanks": [
+     {
+      "prompt": "The only clocked piece.",
+      "hole": "?",
+      "opts": [
+       "state register",
+       "output register",
+       "counter",
+       "memory array"
+      ],
+      "a": 0,
+      "why": "One register holding the current state, and it is the only sequential element in the canonical form. Keeping it in a block of its own — nothing but the reset and `state <= next_state` — is what makes the machine easy to read and impossible to get subtly wrong.",
+      "whys": [
+       "One register holding the current state, and it is the only sequential element in the canonical form. Keeping it in a block of its own — nothing but the reset and `state <= next_state` — is what makes the machine easy to read and impossible to get subtly wrong.",
+       "Registering the output is a legitimate variation, and it is not the state-holding element the machine is built around.",
+       "A counter is one particular state machine, not the general form.",
+       "A memory array is storage the machine may address, not the machine's own state."
+      ]
+     },
+     {
+      "prompt": "What decides where to go next?",
+      "hole": "?",
+      "opts": [
+       "next-state function",
+       "output function",
+       "reset function",
+       "clock divider"
+      ],
+      "a": 0,
+      "why": "Purely combinational, reading the current state and the inputs. It needs a default assignment or a complete case: an incompletely specified next state infers a latch, which is the single most common accidental sequential element in RTL.",
+      "whys": [
+       "Purely combinational, reading the current state and the inputs. It needs a default assignment or a complete case: an incompletely specified next state infers a latch, which is the single most common accidental sequential element in RTL.",
+       "That is the third block, and mixing the two is what makes a state machine hard to follow.",
+       "Reset is a property of the register block, not a separate function.",
+       "Clock division is not part of a state machine's structure."
+      ]
+     },
+     {
+      "prompt": "And the third block.",
+      "hole": "?",
+      "opts": [
+       "output function",
+       "next-state function",
+       "state register",
+       "decoder"
+      ],
+      "a": 0,
+      "why": "Separating it from the next-state logic is what lets you change Moore to Mealy by editing one block. Fusing them is legal and tempting and makes every later change touch both concerns at once.",
+      "whys": [
+       "Separating it from the next-state logic is what lets you change Moore to Mealy by editing one block. Fusing them is legal and tempting and makes every later change touch both concerns at once.",
+       "Already the second block.",
+       "Already the first block, and it is the clocked one.",
+       "A decoder is one possible implementation of the output function, not the role itself."
+      ]
+     },
+     {
+      "prompt": "Moore outputs are a function of what?",
+      "hole": "?",
+      "opts": [
+       "the state alone",
+       "the inputs alone",
+       "the state and the inputs",
+       "the previous output"
+      ],
+      "a": 0,
+      "why": "Which is why they are stable: the state only changes at an edge, so a Moore output is clean for the whole cycle and safe to send anywhere, including off-chip or into another clock domain's synchroniser.",
+      "whys": [
+       "Which is why they are stable: the state only changes at an edge, so a Moore output is clean for the whole cycle and safe to send anywhere, including off-chip or into another clock domain's synchroniser.",
+       "An output depending only on the inputs is not a state machine's output at all.",
+       "That is Mealy, the next blank.",
+       "Feeding the output back to itself is a latch, not a state machine output."
+      ]
+     },
+     {
+      "prompt": "And Mealy adds what?",
+      "hole": "?",
+      "opts": [
+       "the current input",
+       "the next state",
+       "the clock",
+       "the previous state"
+      ],
+      "a": 0,
+      "why": "Which buys a cycle of latency — the output responds in the same cycle the input arrives rather than after the next edge — and costs stability, because any glitch on the input reaches the output directly. It also usually needs fewer states. The right choice depends on what is downstream: a Mealy output into another block's combinational logic is where long paths and awkward timing come from.",
+      "whys": [
+       "Which buys a cycle of latency — the output responds in the same cycle the input arrives rather than after the next edge — and costs stability, because any glitch on the input reaches the output directly. It also usually needs fewer states. The right choice depends on what is downstream: a Mealy output into another block's combinational logic is where long paths and awkward timing come from.",
+       "The next state is an internal signal of the machine; using it as an output source is a third variation (a registered Mealy) rather than the definition.",
+       "The clock gates when the state changes, not what the output is a function of.",
+       "The machine keeps only the current state; the previous one is not available unless you register it deliberately."
+      ]
+     }
+    ]
+   },
    "build": null,
    "derive": {
     "title": "What a multi-cycle controller costs and what it buys",
@@ -378,7 +537,67 @@
      "Sweep dependent pairs from 0 to 6 with forwarding off and watch the reading: exactly two cycles per step, a straight line. Back-pressure that is proportional to the number of stalled beats is the well-behaved case; the interesting bugs are the ones that are not."
     ]
    },
-   "quiz": null,
+   "quiz": {
+    "title": "Two wires and one rule",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "When does a transfer happen on a ready/valid interface?",
+      "opts": [
+       "On a clock edge where both are high",
+       "When valid rises",
+       "When ready rises",
+       "One cycle after both are high"
+      ],
+      "a": 0,
+      "why": "The coincidence at the edge is the transfer — one beat of data moves and both sides know\nit, with no acknowledgement to follow. That is the whole protocol, and its economy is why\nit is everywhere: two wires, one rule, and blocks written years apart connect without\nnegotiation."
+     },
+     {
+      "q": "Once `valid` is asserted, what may the producer do?",
+      "opts": [
+       "Hold it, and the data, until a transfer occurs",
+       "Withdraw it if it changes its mind",
+       "Change the data while waiting",
+       "Withdraw it after one cycle"
+      ],
+      "a": 0,
+      "why": "The stability rule. Without it a consumer could see `valid` and commit to accepting in\nthe same cycle the producer withdraws, and a beat is lost with no way for either side to\ndetect it. This is the rule that makes the interface *composable* — a register slice can\nbe dropped into any link precisely because both sides obey it, and the rule is why such a\nslice needs two storage elements rather than one."
+     },
+     {
+      "q": "Why must `ready` not depend combinationally on `valid`?",
+      "opts": [
+       "Two connected blocks would form a combinational loop",
+       "It would violate setup time",
+       "It would make the interface Mealy",
+       "It would need an extra wire"
+      ],
+      "a": 0,
+      "why": "If A's `valid` feeds B's `ready` and B's `ready` feeds A's `valid`, the loop closes\nthrough no register at all and the design will not converge in simulation and cannot be\ntimed in synthesis. The asymmetry is deliberate: `valid` may depend on `ready`, but not\nthe other way round. Getting this backwards produces a block that works perfectly in\nisolation and hangs the moment two of them are connected."
+     },
+     {
+      "q": "May `ready` be asserted before `valid` arrives?",
+      "opts": [
+       "Yes — a consumer with room may sit ready indefinitely",
+       "No, it must wait for valid",
+       "Only for one cycle",
+       "Only if the producer permits it"
+      ],
+      "a": 0,
+      "why": "Yes, and it is the common case: a consumer with space asserts `ready` and leaves it\nthere, so transfers happen the instant data appears with no handshake latency at all.\nThat asymmetry is precisely what the previous question's rule permits, and it is what\nmakes the protocol full-throughput rather than costing a cycle per beat."
+     },
+     {
+      "q": "What is back-pressure?",
+      "opts": [
+       "The consumer deasserting `ready` to stall the producer",
+       "The producer stalling because it has no data",
+       "A buffer overflowing",
+       "An error signal from the consumer"
+      ],
+      "a": 0,
+      "why": "Flow control travelling backwards, and it propagates: a full consumer stalls its\nproducer, which fills and stalls *its* producer, all the way to the source. That is what\nmakes a pipeline of such blocks safe by construction — no element can ever be overrun,\nso no data is lost and no overflow check is needed anywhere. It is the property that\nmakes the protocol worth its two wires."
+     }
+    ]
+   },
    "blanks": null,
    "build": null,
    "derive": {
@@ -540,7 +759,106 @@
     ]
    },
    "quiz": null,
-   "blanks": null,
+   "blanks": {
+    "title": "A bench that checks itself",
+    "minutes": 8,
+    "brief": "A test that prints waveforms is a test nobody runs twice. A test that compares against a\nmodel written independently is a test that can run ten thousand times unattended. Fill in\nthe four decisions that separate the two.",
+    "caption": "bench.py — where the reference comes from, and what it catches",
+    "lang": "text",
+    "listing": "The reference model is written from ___ ,\n\nnot from the design -- because a model derived from the design\nwill faithfully agree with ___ .\n\nA scoreboard compares the two streams and reports ___ ,\nwhich is the one place worth looking.\n\nDirected stimulus reaches ___ .\n\nRandomised stimulus, given enough runs, reaches ___ .\n",
+    "blanks": [
+     {
+      "prompt": "Where does the reference come from?",
+      "hole": "?",
+      "opts": [
+       "the specification",
+       "the RTL",
+       "the waveform dump",
+       "the previous version"
+      ],
+      "a": 0,
+      "why": "Independently, from what the block is supposed to do. That independence is the entire value: two derivations of the same intent, disagreeing only where one of them is wrong.",
+      "whys": [
+       "Independently, from what the block is supposed to do. That independence is the entire value: two derivations of the same intent, disagreeing only where one of them is wrong.",
+       "A model read off the design has no independence and cannot disagree with it in the places that matter.",
+       "Waveforms are output, not specification, and reading a reference from them enshrines whatever the design did on that run.",
+       "Comparing against the previous version catches regressions and cannot catch a bug both versions share."
+      ]
+     },
+     {
+      "prompt": "What does a design-derived model agree with?",
+      "hole": "?",
+      "opts": [
+       "the design's bugs",
+       "the specification",
+       "nothing",
+       "the timing"
+      ],
+      "a": 0,
+      "why": "Including them, silently. This is why an engineer verifying their own block should write the model first, or from the document, or ideally have someone else write it — and why 'the test passes' from a model written afterwards is much weaker evidence than it feels.",
+      "whys": [
+       "Including them, silently. This is why an engineer verifying their own block should write the model first, or from the document, or ideally have someone else write it — and why 'the test passes' from a model written afterwards is much weaker evidence than it feels.",
+       "Only where the design happens to be right, which is exactly the part that needed no checking.",
+       "It will agree with a great deal — that is the problem.",
+       "Timing is a separate concern from functional equivalence."
+      ]
+     },
+     {
+      "prompt": "What should the scoreboard report?",
+      "hole": "?",
+      "opts": [
+       "the first divergence",
+       "every divergence",
+       "the total number of mismatches",
+       "the final state of both models"
+      ],
+      "a": 0,
+      "why": "The first one, because everything after it is downstream of a machine already in the wrong state — a thousand reported mismatches are usually one bug plus nine hundred and ninety-nine consequences. Stopping there points at the cause instead of burying it.",
+      "whys": [
+       "The first one, because everything after it is downstream of a machine already in the wrong state — a thousand reported mismatches are usually one bug plus nine hundred and ninety-nine consequences. Stopping there points at the cause instead of burying it.",
+       "Reporting all of them buries the useful information in noise generated by the first.",
+       "A count says a bug exists and nothing about where.",
+       "Final states will differ once anything has gone wrong, and comparing only them says nothing about when."
+      ]
+     },
+     {
+      "prompt": "What does directed stimulus find?",
+      "hole": "?",
+      "opts": [
+       "the corners you already thought of",
+       "the corners you did not think of",
+       "timing violations",
+       "synthesis errors"
+      ],
+      "a": 0,
+      "why": "Which is genuinely valuable — it is how you check the cases the specification calls out — and is bounded by your own imagination. Directed tests prove the things you know to ask about.",
+      "whys": [
+       "Which is genuinely valuable — it is how you check the cases the specification calls out — and is bounded by your own imagination. Directed tests prove the things you know to ask about.",
+       "That is what randomisation is for, and the contrast is the point of pairing the two.",
+       "Timing is checked by static analysis, not by stimulus.",
+       "Synthesis errors are caught by the synthesiser."
+      ]
+     },
+     {
+      "prompt": "And randomised stimulus?",
+      "hole": "?",
+      "opts": [
+       "the corners you did not think of",
+       "the same corners, more slowly",
+       "only common cases",
+       "nothing a directed test cannot"
+      ],
+      "a": 0,
+      "why": "Random sequences reach interleavings no one would have written down — the back-to-back stall on the cycle a flush arrives, and so on. It needs coverage measurement to say when enough is enough, and constraints to keep it legal, and with both it finds bugs directed testing structurally cannot.",
+      "whys": [
+       "Random sequences reach interleavings no one would have written down — the back-to-back stall on the cycle a flush arrives, and so on. It needs coverage measurement to say when enough is enough, and constraints to keep it legal, and with both it finds bugs directed testing structurally cannot.",
+       "It reaches a different set, which is why the two are complementary rather than redundant.",
+       "Unconstrained randomisation spends most of its time on unusual cases, not common ones — the opposite complaint is the usual one.",
+       "If that were true nobody would run it; the whole industry does."
+      ]
+     }
+    ]
+   },
    "build": null,
    "derive": {
     "title": "How long a random test takes to find one corner",

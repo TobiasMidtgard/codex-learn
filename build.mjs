@@ -111,6 +111,15 @@ for (const file of spineFiles) {
     course.icon = course.icon || s.icon;
     delete course.year;
 
+    /* A build exercise's reference schematic is the answer key. It exists so
+       verify_circuits.mjs can prove the checks are satisfiable, and that gate reads
+       catalog/*.json directly — so shipping it to the browser buys nothing and costs
+       twice: it is readable from the console, and 36 schematics are real bytes in a
+       file already close to its size budget. */
+    for (const m of course.modules) {
+      if (m.build) delete m.build.solution;
+    }
+
     const labs = course.modules.filter((m) => m.lab).length;
     if (!labs) problems.push(`${id}: no labs`);
     allCourses.push(course);

@@ -54,7 +54,67 @@
      "Keep $a_{21}$ negative and set $a_{22}$ to exactly zero. The eigenvalues land on the imaginary axis and the orbits close. This is the one picture you may not trust: the linearisation is non-hyperbolic, and the discarded terms — a little dry friction, a little air — decide what really happens."
     ]
    },
-   "quiz": null,
+   "quiz": {
+    "title": "When the linearisation is telling the truth",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "What is an equilibrium of $\\dot{x} = f(x)$?",
+      "opts": [
+       "A root of $f(x) = 0$",
+       "A point where $x = 0$",
+       "A closed orbit",
+       "A point where $f$ is not differentiable"
+      ],
+      "a": 0,
+      "why": "Where the vector field vanishes, the state stops moving. The origin is only an\nequilibrium if $f(0) = 0$, which is a modelling choice rather than a fact — most systems\nare written with the coordinates shifted so that the operating point sits at zero, and\nforgetting that shift is how a correct analysis gets applied at the wrong place."
+     },
+     {
+      "q": "The Jacobian $\\partial f/\\partial x$ is evaluated where?",
+      "opts": [
+       "At the equilibrium being examined",
+       "At the origin, always",
+       "Averaged over the state space",
+       "At the initial condition"
+      ],
+      "a": 0,
+      "why": "*At* the equilibrium, and a system with several equilibria has a different Jacobian —\nand possibly a completely different character — at each. A pendulum is a spiral at the\nbottom and a saddle at the top, from one $f$. Evaluating at the origin out of habit\ngives an answer about a point you were not asking about."
+     },
+     {
+      "q": "Hartman–Grobman says the linearisation describes the local behaviour under what condition?",
+      "opts": [
+       "No eigenvalue lies on the imaginary axis",
+       "All eigenvalues are real",
+       "The system is second order",
+       "The non-linearity is small"
+      ],
+      "a": 0,
+      "why": "Hyperbolicity. Away from the imaginary axis the non-linear flow is a continuous\ndeformation of the linear one, so stability, instability and the saddle structure all\ncarry across. It is a strong result and it has one exact gap — the imaginary axis —\nwhich is precisely where the interesting behaviour of this course lives. The size of the\nnon-linearity is irrelevant."
+     },
+     {
+      "q": "The Jacobian has a purely imaginary pair. What may you conclude?",
+      "opts": [
+       "Nothing — the non-linear terms decide, and they can go either way",
+       "The system is stable",
+       "The system is unstable",
+       "There is a limit cycle"
+      ],
+      "a": 0,
+      "why": "This is the one case linearisation cannot answer, and the classic demonstration is\n$\\dot{x} = -y + ax(x^2+y^2)$, $\\dot{y} = x + ay(x^2+y^2)$: identical linearisation for\nevery $a$, and the origin is attracting for $a<0$, repelling for $a>0$ and a centre at\n$a=0$. That is exactly why Lyapunov's direct method exists — it needs no linearisation\nand works here."
+     },
+     {
+      "q": "How many equilibria can a non-linear system have?",
+      "opts": [
+       "Any number, including none and infinitely many",
+       "Exactly one",
+       "At most one per state",
+       "Always an odd number"
+      ],
+      "a": 0,
+      "why": "$\\dot{x} = 1 + x^2$ has none; a pendulum has infinitely many, one per full turn. That is\nthe first genuine departure from linear systems, where $Ax = 0$ has either the origin\nalone or a whole subspace. It also means \"the\" equilibrium is a phrase to be suspicious\nof, and that a global claim needs more than a local argument."
+     }
+    ]
+   },
    "blanks": null,
    "build": null,
    "derive": {
@@ -221,7 +281,106 @@
     ]
    },
    "quiz": null,
-   "blanks": null,
+   "blanks": {
+    "title": "Lyapunov, without solving anything",
+    "minutes": 9,
+    "brief": "The remarkable thing about the direct method is what it does not require: no solution, no\nlinearisation, no eigenvalues. Find one scalar that falls, and stability is proved. Fill\nin the conditions it has to satisfy.",
+    "caption": "the direct method, condition by condition",
+    "lang": "text",
+    "listing": "A candidate V(x), with V(0) = 0.\n\n  V(x) > 0 for every x != 0            --  V must be ___\n\n  Vdot = ___                           --  the rate along the trajectories,\n                                           which is where f enters the argument\n\nIf Vdot is negative DEFINITE, the origin is ___ .\n\nIf Vdot is only negative SEMI-definite, you may conclude ___ ,\n\nand ___ recovers the stronger result\nby examining where the trajectories can remain with Vdot = 0.\n",
+    "blanks": [
+     {
+      "prompt": "What must V itself be?",
+      "hole": "?",
+      "opts": [
+       "positive definite",
+       "negative definite",
+       "bounded",
+       "linear"
+      ],
+      "a": 0,
+      "why": "Positive everywhere except at the origin, where it is zero — an energy-like quantity, so that 'V is decreasing' means 'the state is heading home'. Without positive definiteness a falling V says nothing about where the state is going.",
+      "whys": [
+       "Positive everywhere except at the origin, where it is zero — an energy-like quantity, so that 'V is decreasing' means 'the state is heading home'. Without positive definiteness a falling V says nothing about where the state is going.",
+       "A negative definite $V$ would be unbounded below and a decreasing one would prove nothing at all.",
+       "Boundedness is not enough on its own — a bounded function that never approaches zero cannot certify convergence to the origin.",
+       "Linearity would restrict the method to exactly the systems it was invented to avoid needing."
+      ]
+     },
+     {
+      "prompt": "The derivative is taken along the trajectories.",
+      "hole": "?",
+      "opts": [
+       "grad(V) . f(x)",
+       "grad(V)",
+       "f(x)",
+       "the partial derivative of V with respect to time"
+      ],
+      "a": 0,
+      "why": "The chain rule: $\\dot{V} = \\nabla V \\cdot \\dot{x} = \\nabla V \\cdot f(x)$. This is the step where the dynamics enter — without $f$ you are differentiating a function of position with no knowledge of how position changes, and the whole argument is empty.",
+      "whys": [
+       "The chain rule: $\\dot{V} = \\nabla V \\cdot \\dot{x} = \\nabla V \\cdot f(x)$. This is the step where the dynamics enter — without $f$ you are differentiating a function of position with no knowledge of how position changes, and the whole argument is empty.",
+       "The gradient alone is a vector, not a rate, and it says nothing about which way the state is actually moving.",
+       "The vector field alone is also a vector, and it is not a rate of change of $V$.",
+       "$V$ has no explicit time dependence — all of its variation comes through $x(t)$, which is exactly why the chain rule is needed."
+      ]
+     },
+     {
+      "prompt": "Negative definite Vdot gives what?",
+      "hole": "?",
+      "opts": [
+       "asymptotic stability",
+       "stability, but possibly without convergence",
+       "instability",
+       "a guaranteed limit cycle"
+      ],
+      "a": 0,
+      "why": "$V$ strictly decreases everywhere except the origin, so it is squeezed down to zero and the state with it. Note this is a *local* conclusion unless $V$ is also radially unbounded — a technicality that matters, because a $V$ that flattens out far away leaves room for trajectories to escape.",
+      "whys": [
+       "$V$ strictly decreases everywhere except the origin, so it is squeezed down to zero and the state with it. Note this is a *local* conclusion unless $V$ is also radially unbounded — a technicality that matters, because a $V$ that flattens out far away leaves room for trajectories to escape.",
+       "That is the weaker semi-definite case, which is the next blank. Strict decrease gives the stronger conclusion.",
+       "A decreasing energy is the opposite of instability.",
+       "Limit cycles are excluded by this, not implied — a trajectory on a closed orbit would return $V$ to its starting value."
+      ]
+     },
+     {
+      "prompt": "And if Vdot is only negative semi-definite?",
+      "hole": "?",
+      "opts": [
+       "stability only, with no promise of convergence",
+       "asymptotic stability anyway",
+       "instability",
+       "nothing whatsoever"
+      ],
+      "a": 0,
+      "why": "$V$ never grows, so the state stays near the origin — but it might settle on a level set and circle there forever. An undamped pendulum is exactly this case: energy is conserved, $\\dot{V} = 0$ everywhere, and it is stable without ever converging.",
+      "whys": [
+       "$V$ never grows, so the state stays near the origin — but it might settle on a level set and circle there forever. An undamped pendulum is exactly this case: energy is conserved, $\\dot{V} = 0$ everywhere, and it is stable without ever converging.",
+       "That claim needs strict decrease, or LaSalle's extra argument. Asserting it from a semi-definite $\\dot{V}$ is the most common error in a Lyapunov proof.",
+       "A non-increasing energy cannot certify instability.",
+       "Stability itself is a real and useful conclusion — a bounded response is often all that was needed."
+      ]
+     },
+     {
+      "prompt": "What recovers asymptotic stability from a semi-definite Vdot?",
+      "hole": "?",
+      "opts": [
+       "LaSalle's invariance principle",
+       "Hartman-Grobman",
+       "linearising at the origin",
+       "the reaching condition"
+      ],
+      "a": 0,
+      "why": "LaSalle asks where a trajectory could *stay* while $\\dot{V} = 0$, and if the only such invariant set is the origin, convergence follows. It rescues the very common situation where a natural energy function has damping that vanishes on a surface — which is most mechanical systems, and why the method is worth knowing rather than reaching for a cleverer $V$.",
+      "whys": [
+       "LaSalle asks where a trajectory could *stay* while $\\dot{V} = 0$, and if the only such invariant set is the origin, convergence follows. It rescues the very common situation where a natural energy function has damping that vanishes on a surface — which is most mechanical systems, and why the method is worth knowing rather than reaching for a cleverer $V$.",
+       "Hartman-Grobman is about linearisation and needs hyperbolicity — precisely the assumption Lyapunov's method was chosen to avoid.",
+       "Linearising abandons the whole approach, and in the marginal cases where it is most needed it cannot decide.",
+       "The reaching condition belongs to sliding mode in module 4; it is a design requirement rather than an analysis tool."
+      ]
+     }
+    ]
+   },
    "build": null,
    "derive": {
     "title": "Proving stability without solving",
@@ -373,7 +532,67 @@
      "Try every combination of the four sliders. Nothing produces a single closed curve with trajectories approaching it from inside *and* outside. A linear field cannot do it at any setting, which is precisely why the lab needs a non-linear one."
     ]
    },
-   "quiz": null,
+   "quiz": {
+    "title": "An orbit no linear system can produce",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "What is a nullcline?",
+      "opts": [
+       "A curve where one component of $\\dot{x}$ is zero",
+       "A curve where the whole vector field vanishes",
+       "A trajectory that returns to its start",
+       "The boundary of the region of attraction"
+      ],
+      "a": 0,
+      "why": "One component at a time. Where the $x_1$-nullcline runs, motion is purely vertical;\nwhere the $x_2$-nullcline runs, purely horizontal; and where they *cross*, both are zero\nand you have an equilibrium. Sketching the two curves carves the plane into regions with\na known sign pattern, which is how you get the qualitative picture without solving\nanything."
+     },
+     {
+      "q": "What makes a limit cycle a limit cycle rather than just a closed orbit?",
+      "opts": [
+       "It is isolated — nearby trajectories spiral onto it or away from it",
+       "It is circular",
+       "It is stable",
+       "It encloses an equilibrium"
+      ],
+      "a": 0,
+      "why": "Isolation. A limit cycle has a neighbourhood containing no other closed orbit, so its\nneighbours must approach it or leave it — they cannot simply sit beside it. That is\nprecisely what makes it a robust, physically observable object: an oscillator settles\nonto the same amplitude regardless of how it was started, which is what you want from a\nclock and cannot get from a linear circuit."
+     },
+     {
+      "q": "Can a linear system have a limit cycle?",
+      "opts": [
+       "No — when it has closed orbits at all they form a continuum",
+       "Yes, if the eigenvalues are purely imaginary",
+       "Yes, if it is at least third order",
+       "Only if it is time-varying"
+      ],
+      "a": 0,
+      "why": "A linear centre gives a nested family of closed orbits, one through every point — nothing\nisolated, and the amplitude is whatever the initial condition happened to be. That is why\na purely imaginary pair is such a fragile way to build an oscillator: the amplitude is\nunset, and the tiniest modelling error turns the family into a slow spiral in or out. A\nreal oscillator is non-linear on purpose."
+     },
+     {
+      "q": "You perturb a linear centre slightly. What happens to its closed orbits?",
+      "opts": [
+       "They all become spirals, in or out",
+       "They survive unchanged",
+       "They collapse to a single limit cycle",
+       "They become saddles"
+      ],
+      "a": 0,
+      "why": "The eigenvalues move off the imaginary axis and every orbit becomes a spiral. The whole\nfamily is destroyed at once, which is another way of saying a centre is structurally\nunstable — and the reason Hartman–Grobman has to exclude the imaginary axis. A limit\ncycle, by contrast, survives small perturbation, which is what makes it worth building a\ndesign around."
+     },
+     {
+      "q": "A stable limit cycle in the plane attracts trajectories from where?",
+      "opts": [
+       "Both inside and outside it",
+       "Outside only",
+       "Inside only",
+       "Only from points on the cycle itself"
+      ],
+      "a": 0,
+      "why": "Both sides — which, in the plane, forces something to be inside it: by the\nPoincaré–Bendixson theorem a closed orbit must enclose at least one equilibrium, and for\nthe cycle to be attracting from within, that equilibrium is typically an unstable focus.\nEnergy is being pumped in near the centre and dissipated at large amplitude, and the\ncycle sits where the two balance. That is a Van der Pol oscillator described in one\nsentence."
+     }
+    ]
+   },
    "blanks": null,
    "build": null,
    "derive": {
@@ -520,7 +739,106 @@
     ]
    },
    "quiz": null,
-   "blanks": null,
+   "blanks": {
+    "title": "The surface, the reaching law, and the price of chattering",
+    "minutes": 9,
+    "brief": "Sliding mode is two ideas bolted together: choose a surface on which the error behaves\nthe way you want, then switch hard enough to force the state onto it and keep it there.\nFill in both halves, and the cost the method charges.",
+    "caption": "sliding.py — a controller in four decisions",
+    "lang": "python",
+    "listing": "# The sliding surface, with lambda > 0:\ns = ___\n\n# On s = 0 the error obeys  edot = -lambda*e, a first-order decay of\n# time constant ___ .\n# Note the ORDER has dropped: a second-order plant now behaves first-order.\n\n# The reaching condition, with eta > 0:\ns * sdot <= ___\n\n# With V = s**2/2 this is Vdot <= -eta*sqrt(2V), which drives s to zero\n# in ___ -- not asymptotically.\n\n# Replacing sign(s) with a saturation of width phi buys ___ .\n",
+    "blanks": [
+     {
+      "prompt": "The surface itself.",
+      "hole": "?",
+      "opts": [
+       "edot + lam * e",
+       "e + lam * edot",
+       "lam * e",
+       "edot - lam * e"
+      ],
+      "a": 0,
+      "why": "$s = \\dot{e} + \\lambda e$. Setting it to zero *is* the differential equation $\\dot{e} = -\\lambda e$, so the surface is not an arbitrary choice — it is the error dynamics you want, written as an algebraic constraint. Pick $\\lambda$ and you have picked the closed-loop time constant before designing any control at all.",
+      "whys": [
+       "$s = \\dot{e} + \\lambda e$. Setting it to zero *is* the differential equation $\\dot{e} = -\\lambda e$, so the surface is not an arbitrary choice — it is the error dynamics you want, written as an algebraic constraint. Pick $\\lambda$ and you have picked the closed-loop time constant before designing any control at all.",
+       "Swapping the terms gives $\\dot{e} = -e/\\lambda$ on the surface, which inverts what $\\lambda$ means and makes a large $\\lambda$ slow rather than fast.",
+       "Without $\\dot{e}$ the surface constrains the error but not its rate, and reaching it says nothing about how the error then behaves.",
+       "The minus sign makes the surface dynamics $\\dot{e} = +\\lambda e$ — the error grows exponentially once you are on it, which is exactly backwards."
+      ]
+     },
+     {
+      "prompt": "edot = -lambda*e decays how fast?",
+      "hole": "?",
+      "opts": [
+       "1 / lam",
+       "lam",
+       "2 / lam",
+       "lam ** 2"
+      ],
+      "a": 0,
+      "why": "$1/\\lambda$, the usual first-order time constant. So $\\lambda$ is the one performance knob and it is chosen directly, in seconds — a considerably more comfortable design parameter than a set of pole locations.",
+      "whys": [
+       "$1/\\lambda$, the usual first-order time constant. So $\\lambda$ is the one performance knob and it is chosen directly, in seconds — a considerably more comfortable design parameter than a set of pole locations.",
+       "$\\lambda$ is a rate, in reciprocal seconds; the time constant is its inverse.",
+       "The factor of two belongs to no standard first-order form.",
+       "Squaring gives neither a time nor a rate."
+      ]
+     },
+     {
+      "prompt": "How hard must you push toward the surface?",
+      "hole": "?",
+      "opts": [
+       "-eta * abs(s)",
+       "0",
+       "-eta * s",
+       "eta * abs(s)"
+      ],
+      "a": 0,
+      "why": "$s\\dot{s} \\le -\\eta|s|$. The $|s|$ is what makes reaching happen in *finite* time — the push does not fade away as $s$ shrinks, so the state arrives rather than merely approaching. That is the property the whole method is built on, and it is why the control has to switch discontinuously.",
+      "whys": [
+       "$s\\dot{s} \\le -\\eta|s|$. The $|s|$ is what makes reaching happen in *finite* time — the push does not fade away as $s$ shrinks, so the state arrives rather than merely approaching. That is the property the whole method is built on, and it is why the control has to switch discontinuously.",
+       "Merely non-increasing lets the state hover at a fixed distance from the surface forever.",
+       "$-\\eta s$ is not sign-definite: for negative $s$ it demands $s\\dot{s} \\le$ a positive number, which is no constraint at all in that half.",
+       "The sign is inverted, which requires the state to move *away* from the surface."
+      ]
+     },
+     {
+      "prompt": "So the state reaches the surface how?",
+      "hole": "?",
+      "opts": [
+       "in finite time",
+       "asymptotically, never exactly",
+       "in exactly one time constant",
+       "only if the initial error is small"
+      ],
+      "a": 0,
+      "why": "Finite time, bounded by $|s(0)|/\\eta$ — after which the error obeys $\\dot{e} = -\\lambda e$ exactly, and any matched uncertainty is completely rejected. That combination of finite-time reaching and total insensitivity to matched disturbance is what people mean when they call sliding mode robust.",
+      "whys": [
+       "Finite time, bounded by $|s(0)|/\\eta$ — after which the error obeys $\\dot{e} = -\\lambda e$ exactly, and any matched uncertainty is completely rejected. That combination of finite-time reaching and total insensitivity to matched disturbance is what people mean when they call sliding mode robust.",
+       "That is what a continuous law gives. The discontinuity is precisely what buys arrival in finite time — and precisely what causes the chattering in the next blank.",
+       "The reaching time depends on the initial distance and on $\\eta$; there is no single time constant for it.",
+       "The condition is global for any $s(0)$, provided the control authority is there to satisfy it."
+      ]
+     },
+     {
+      "prompt": "And what does the boundary layer trade?",
+      "hole": "?",
+      "opts": [
+       "chattering, for a bounded steady-state error",
+       "robustness, for speed",
+       "bandwidth, for accuracy",
+       "nothing -- it is a free improvement"
+      ],
+      "a": 0,
+      "why": "Inside the layer the control is continuous, so the infinitely fast switching stops — and so does the exact rejection of disturbance, leaving an error proportional to $\\phi$. Real hardware forces this trade whether or not you design it: no actuator switches infinitely fast, and unmodelled dynamics turn ideal sliding into buzzing anyway. Choosing $\\phi$ deliberately is better than discovering it.",
+      "whys": [
+       "Inside the layer the control is continuous, so the infinitely fast switching stops — and so does the exact rejection of disturbance, leaving an error proportional to $\\phi$. Real hardware forces this trade whether or not you design it: no actuator switches infinitely fast, and unmodelled dynamics turn ideal sliding into buzzing anyway. Choosing $\\phi$ deliberately is better than discovering it.",
+       "Speed on the surface is set by $\\lambda$ and the boundary layer does not change it.",
+       "The trade is about steady-state accuracy against actuator wear, not bandwidth.",
+       "It is emphatically not free: the exactness of the sliding motion is what is being given up."
+      ]
+     }
+    ]
+   },
    "build": null,
    "derive": {
     "title": "The reaching law, the reaching time, and what the layer costs",

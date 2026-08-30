@@ -147,6 +147,84 @@ Steinmetz relation on its own will always tell you to run fast with few volts pe
 turn; the rest of the course is the reason you do not.
 ''',
             },
+            "quiz": {
+                "title": "A power law with two exponents",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "Faraday fixes the flux swing from the applied volt-seconds. At a fixed applied voltage, doubling the switching frequency does what to $B_m$?",
+                        "opts": ["Halves it", "Doubles it", "Leaves it unchanged", "Quadruples it"],
+                        "a": 0,
+                        "why": r"""
+$B_m = V/(K_f fNA_e)$ — the same voltage applied for half as long puts half the flux
+into the core. This is the mechanism behind every "run it faster and it gets smaller"
+argument in power electronics, and it is why frequency and core size trade against each
+other at all.
+""",
+                    },
+                    {
+                        "q": "With $P_v = kf^{\\alpha}B_m^{\\beta}$ and $\\alpha \\approx 1.4$, doubling the frequency at *constant* flux density multiplies the core loss by:",
+                        "opts": ["About 2.6", "Exactly 2", "About 1.4", "About 4"],
+                        "a": 0,
+                        "why": r"""
+$2^{1.4} = 2.64$. Taken alone this looks like an argument against raising the frequency —
+and it is the wrong comparison, because holding $B_m$ constant while raising $f$ means
+you deliberately kept the core the same size. The honest comparison is the next question.
+""",
+                    },
+                    {
+                        "q": "Now double the frequency with the same volt-seconds, so $B_m$ halves too. What happens to the core loss?",
+                        "opts": [
+                            "It falls, to about 0.47 of what it was",
+                            "It rises, by about 2.6",
+                            "It is unchanged",
+                            "It falls to about 0.18",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$2^{1.4} \times 0.5^{2.5} = 2.64 \times 0.177 = 0.47$. The flux exponent is the larger of
+the two and it is working in your favour, so switching faster *reduces* core loss for the
+same core — which is the actual reason converters moved from 20 kHz to hundreds. It is
+also why $\beta$, not $\alpha$, is the number to look up carefully: it is the one doing
+most of the work.
+""",
+                    },
+                    {
+                        "q": "What kind of relation is Steinmetz?",
+                        "opts": [
+                            "An empirical fit, valid only over the range it was fitted on",
+                            "A derivation from Maxwell's equations",
+                            "An exact result for ferrites",
+                            "A worst-case bound",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A curve fit to measured data, with $k$, $\alpha$ and $\beta$ extracted over a stated
+frequency and flux range — and extrapolating outside that range is not conservative, it is
+simply unsupported. It also assumes sinusoidal excitation, which a converter does not
+provide; the iGSE and its relatives exist to correct for exactly that, and the correction
+is not small for a square wave.
+""",
+                    },
+                    {
+                        "q": "You must halve the core loss and can change only one variable. Which gives it to you with the smallest change?",
+                        "opts": [
+                            "$B_m$, because $\\beta$ is the larger exponent",
+                            "$f$, because $\\alpha$ is smaller",
+                            "$k$, by choosing a different material",
+                            "The core volume",
+                        ],
+                        "a": 0,
+                        "why": r"""
+With $\beta = 2.5$, a 24% reduction in $B_m$ halves the loss; with $\alpha = 1.4$ it would
+take a 39% reduction in frequency. The larger exponent is the more powerful lever, which
+is why adding turns — which lowers $B_m$ directly — is the first thing to try when a core
+runs hot. Changing material is often the right answer in practice and is not a change of
+*variable*, and the volume enters as a multiplier rather than through an exponent.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Predict and fit core loss",
                 "runtime": "python",
@@ -411,6 +489,107 @@ that minimises $R_{ac}$ rather than $\frac{R_{ac}}{R_{dc}}$, and the answer is n
 "as thick as it fits".
 ''',
             },
+            "blanks": {
+                "title": "The conductor stops using its own middle",
+                "minutes": 8,
+                "caption": "skin.py — depth, normalised thickness, and the layer count",
+                "lang": "python",
+                "brief": r"""
+Above a few tens of kilohertz a wire's DC resistance stops being the number that matters,
+and its neighbours make things worse than the wire alone would. Fill in the chain from
+material constants to a winding decision.
+""",
+                "listing": """delta = sqrt(rho / (pi * f * mu))
+
+# In copper this is 0.21 mm at ___ ,
+# and it falls as the square root of frequency.
+
+# Dowell's normalised thickness -- the only place frequency enters his curves:
+Delta = ___
+
+# The proximity term scales as ___ in the number of layers,
+# but it vanishes as ___ .
+
+# So for a many-layer winding the standard remedy is ___ .
+""",
+                "blanks": [
+                    {
+                        "prompt": "The anchor value worth memorising.",
+                        "hole": "?",
+                        "opts": ["100 kHz", "1 kHz", "10 MHz", "50 Hz"],
+                        "a": 0,
+                        "why": "0.21 mm at 100 kHz in copper, and the square-root scaling gets you everywhere else: 0.66 mm at 10 kHz, 0.066 mm at 10 MHz. One anchor plus one exponent replaces the formula in practice.",
+                        "whys": [
+                            "0.21 mm at 100 kHz in copper, and the square-root scaling gets you everywhere else: 0.66 mm at 10 kHz, 0.066 mm at 10 MHz. One anchor plus one exponent replaces the formula in practice.",
+                            "At 1 kHz the skin depth is about 2.1 mm, larger than most conductors, which is why mains-frequency magnetics can ignore the effect entirely.",
+                            "At 10 MHz it is around 21 micrometres, thinner than most foils and the reason RF windings look nothing like power ones.",
+                            "At 50 Hz it is nearly 10 mm, which is why it matters only in busbars and very large machines.",
+                        ],
+                    },
+                    {
+                        "prompt": "Dowell normalises the conductor against the skin depth.",
+                        "hole": "?",
+                        "opts": ["h / delta", "delta / h", "h * delta", "h**2 / delta"],
+                        "a": 0,
+                        "why": "Layer thickness over skin depth — a dimensionless number, which is why Dowell's curves are universal and one chart covers every material and frequency. Everything about the winding's AC behaviour is a function of $\\Delta$ and the layer count, and of nothing else.",
+                        "whys": [
+                            "Layer thickness over skin depth — a dimensionless number, which is why Dowell's curves are universal and one chart covers every material and frequency. Everything about the winding's AC behaviour is a function of $\\Delta$ and the layer count, and of nothing else.",
+                            "Inverted, so a thick conductor at high frequency would score *low* and appear harmless — exactly the wrong way round.",
+                            "A product has dimensions of area and is not what the curves are plotted against.",
+                            "Not dimensionless, so it cannot be the universal parameter.",
+                        ],
+                    },
+                    {
+                        "prompt": "How does the proximity term grow with layers?",
+                        "hole": "?",
+                        "opts": ["m ** 2", "m", "sqrt(m)", "it does not"],
+                        "a": 0,
+                        "why": "Quadratically. Each layer sits in the field of every layer before it, so the field builds across the winding and the induced eddy currents build with it — which is why a five-layer winding can dissipate far more than five times a single layer's AC loss. It is the dominant surprise in transformer design.",
+                        "whys": [
+                            "Quadratically. Each layer sits in the field of every layer before it, so the field builds across the winding and the induced eddy currents build with it — which is why a five-layer winding can dissipate far more than five times a single layer's AC loss. It is the dominant surprise in transformer design.",
+                            "Linear growth would be unremarkable — it would just mean more copper. The whole problem is that it is worse than proportional.",
+                            "A square root would mean layers get progressively cheaper, which is the opposite of what is measured.",
+                            "It grows sharply; a single-layer winding and a ten-layer one of the same total copper behave completely differently at high frequency.",
+                        ],
+                    },
+                    {
+                        "prompt": "But the term vanishes in which limit?",
+                        "hole": "?",
+                        "opts": [
+                            "Delta -> 0, thin layers compared with the skin depth",
+                            "Delta -> infinity, thick layers",
+                            "m -> infinity",
+                            "f -> infinity",
+                        ],
+                        "a": 0,
+                        "why": "A layer much thinner than the skin depth cannot support a meaningful circulating current, so the proximity term goes away however many layers there are. This is the entire justification for foil and for litz wire: make each conductor thin enough and the $m^2$ has nothing to act on.",
+                        "whys": [
+                            "A layer much thinner than the skin depth cannot support a meaningful circulating current, so the proximity term goes away however many layers there are. This is the entire justification for foil and for litz wire: make each conductor thin enough and the $m^2$ has nothing to act on.",
+                            "Thick layers are the bad case — that is where the eddy currents have room to circulate.",
+                            "More layers make it worse, not better.",
+                            "Rising frequency shrinks the skin depth and raises $\\Delta$ for a fixed conductor, which makes it worse.",
+                        ],
+                    },
+                    {
+                        "prompt": "So what is done to a many-layer winding?",
+                        "hole": "?",
+                        "opts": [
+                            "interleave primary and secondary to halve the peak field",
+                            "add more turns",
+                            "use a thicker conductor",
+                            "raise the switching frequency",
+                        ],
+                        "a": 0,
+                        "why": "Splitting the primary either side of the secondary makes the field build up and back down twice instead of once, so the peak MMF halves and the loss — which goes as its square — falls by about four. It costs an extra winding operation and a little more interwinding capacitance, and it is the single most effective change available.",
+                        "whys": [
+                            "Splitting the primary either side of the secondary makes the field build up and back down twice instead of once, so the peak MMF halves and the loss — which goes as its square — falls by about four. It costs an extra winding operation and a little more interwinding capacitance, and it is the single most effective change available.",
+                            "More turns means more layers, which is what the $m^2$ punishes.",
+                            "A thicker conductor raises $\\Delta$ and can increase AC resistance even as it lowers the DC value — the classic case where adding copper makes a winding hotter.",
+                            "Higher frequency shrinks the skin depth and makes the problem worse.",
+                        ],
+                    },
+                ],
+            },
             "lab": {
                 "title": "Dowell's factor and the optimum foil",
                 "runtime": "python",
@@ -669,6 +848,84 @@ design is a division rather than a simulation.
 What the formula does *not* contain is loss. $J$ and $B_m$ are stand-ins for a
 thermal limit, and setting them honestly is module 4.
 ''',
+            },
+            "quiz": {
+                "title": "One number that picks the core",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "The area product is $A_p = A_wA_e$. What does it come out proportional to?",
+                        "opts": [
+                            "$VI/(K_ffB_mJK_u)$",
+                            "$VIfB_m$",
+                            "$V/(fB_m)$",
+                            "$I/(JK_u)$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Two constraints multiplied together. The window must hold the copper,
+$K_uA_w = NI/J$; the core must hold the flux, $N = V/(K_ffB_mA_e)$. Multiply them and
+$N$ cancels, leaving one number that depends on the *requirement* and not on the number
+of turns — which is what makes it a selection criterion rather than a design.
+""",
+                    },
+                    {
+                        "q": "What does raising the frequency do to the core you need?",
+                        "opts": [
+                            "Shrinks it, since $A_p$ goes as $1/f$",
+                            "Enlarges it",
+                            "Leaves it unchanged",
+                            "Shrinks it as $1/f^2$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+This is the whole economic argument for high-frequency conversion, in one relation: ten
+times the frequency, a tenth of the area product. It is limited in practice by the two
+previous modules — core loss and winding loss both rise with frequency — so the real
+optimum sits where shrinking the core stops paying for the loss it adds.
+""",
+                    },
+                    {
+                        "q": "What is $K_f$ for a square-wave excitation?",
+                        "opts": ["4", "4.44", "2", "$\\pi$"],
+                        "a": 0,
+                        "why": r"""
+Exactly 4 for a square wave and $4.44 = 2\pi/\sqrt{2}$ for a sinusoid — the difference is
+just the form factor of the waveform whose volt-seconds you are integrating. Only 10%,
+but it is 10% in a core-selection calculation where the next size up is often a factor of
+two, so it is worth getting right rather than approximating.
+""",
+                    },
+                    {
+                        "q": "The window utilisation factor $K_u$ is typically what?",
+                        "opts": ["0.3 to 0.4", "0.9 to 0.95", "0.6 to 0.7", "1.0 by definition"],
+                        "a": 0,
+                        "why": r"""
+Round wires do not tessellate, insulation takes space, bobbins have walls, and safety
+creepage distances eat the ends — so under half the window ends up as conductor, and 0.4
+is optimistic for a multi-winding design. Assuming a value near 1 is the fastest route to
+choosing a core the winding does not physically fit into, which is discovered late and
+expensively.
+""",
+                    },
+                    {
+                        "q": "$A_p$ has units of length to the fourth. What does that imply?",
+                        "opts": [
+                            "Doubling every linear dimension multiplies the power capability by sixteen",
+                            "By eight",
+                            "By four",
+                            "By two",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$A_w$ and $A_e$ are each areas, so the product goes as $L^4$ and a modest increase in size
+buys a great deal of capability. Which cuts both ways: cores come in discrete sizes, and
+being 20% over on $A_p$ frequently means stepping up to a core with twice what you need.
+It is also why cooling gets harder as designs grow, since the loss scales with volume,
+$L^3$, and the surface available to shed it only as $L^2$.
+""",
+                    },
+                ],
             },
             "lab": {
                 "title": "Choose a core and count the cost",
@@ -968,6 +1225,184 @@ run away at $R_{ja} = 125$ K/W — a figure a small ungapped core in still air c
 easily reach. The margin you need is not on the loss; it is on the thermal
 resistance.
 ''',
+            },
+            "build": {
+                "title": "A thermal network really is a circuit",
+                "minutes": 26,
+                "brief": r"""
+$\Delta T = PR_{th}$ is Ohm's law with different labels, and the correspondence is not a
+teaching analogy — it is how thermal simulation is actually done, because once you accept
+it you get a solver, a transient response and a frequency domain for free.
+
+| thermal | electrical |
+|---|---|
+| power dissipated, W | current, A |
+| temperature rise, K | voltage, V |
+| thermal resistance, K/W | resistance, Ω |
+| thermal capacitance, J/K | capacitance, F |
+
+## What is on the canvas
+
+A **25 A current source**, which is 25 W of dissipation, and three capacitors already
+placed — the thermal masses of the die, the case and the heatsink. The probe is on the
+junction node, so the voltage it reads is the junction's rise above ambient, in kelvin.
+Ground is ambient.
+
+## What to add
+
+The three resistances of the junction-to-ambient path, in series from the junction node
+down to ambient:
+
+| | K/W |
+|---|---|
+| $R_{jc}$, junction to case | 0.5 |
+| $R_{cs}$, case to sink, through the thermal interface | 0.2 |
+| $R_{sa}$, sink to ambient | choose it |
+
+Size $R_{sa}$ so that the junction settles **67.5 K** above ambient. With $T_{amb} = 40$ °C
+that puts the junction at 107.5 °C — inside a 125 °C limit, with the margin a real design
+keeps.
+
+## What the checks measure
+
+- The steady-state rise, which is $P$ times the sum of the three.
+- The **shape** of the warm-up, and this is the part worth building it for. The die and
+  the case have time constants of milliseconds; the heatsink's is tens of seconds. So a
+  short burst of dissipation is limited by $R_{jc} + R_{cs}$ alone and the junction
+  barely notices the heatsink is there — while a sustained load is governed almost
+  entirely by $R_{sa}$, which is 74% of the total.
+- Which means the same part survives a pulse it could never survive continuously, and
+  the transient thermal impedance curve on a datasheet exists precisely to quantify that.
+
+## The trap
+
+Only $R_{sa}$ is yours to choose. $R_{jc}$ is fixed by the package and $R_{cs}$ by the
+interface material — and the standard mistake is to buy a heatsink twice as good and
+expect the junction temperature to halve. It does not: 0.7 K/W of the path is untouchable,
+so halving $R_{sa}$ from 2.0 to 1.0 takes the rise from 67.5 K to 42.5 K, not to 34 K.
+""",
+                "start": {
+                    "parts": [
+                        {"id": "p", "kind": "I", "x": 3, "y": 6, "rot": 1, "value": 25},
+                        {"id": "ga", "kind": "GND", "x": 3, "y": 4},
+                        {"id": "cj", "kind": "C", "x": 6, "y": 9, "rot": 1, "value": 0.002},
+                        {"id": "gb", "kind": "GND", "x": 6, "y": 11},
+                        {"id": "cc", "kind": "C", "x": 12, "y": 9, "rot": 1, "value": 0.05},
+                        {"id": "gc", "kind": "GND", "x": 12, "y": 11},
+                        {"id": "cs", "kind": "C", "x": 18, "y": 9, "rot": 1, "value": 20},
+                        {"id": "gd", "kind": "GND", "x": 18, "y": 11},
+                        {"id": "ge", "kind": "GND", "x": 21, "y": 11},
+                        {"id": "out", "kind": "OUT", "x": 4, "y": 7},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 7], "b": [6, 7]},
+                        {"a": [6, 7], "b": [6, 8]},
+                        {"a": [6, 10], "b": [6, 11]},
+                        {"a": [12, 7], "b": [12, 8]},
+                        {"a": [12, 10], "b": [12, 11]},
+                        {"a": [18, 7], "b": [18, 8]},
+                        {"a": [18, 10], "b": [18, 11]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p", "kind": "I", "x": 3, "y": 6, "rot": 1, "value": 25},
+                        {"id": "ga", "kind": "GND", "x": 3, "y": 4},
+                        {"id": "cj", "kind": "C", "x": 6, "y": 9, "rot": 1, "value": 0.002},
+                        {"id": "gb", "kind": "GND", "x": 6, "y": 11},
+                        {"id": "rjc", "kind": "R", "x": 9, "y": 7, "rot": 0, "value": 0.5},
+                        {"id": "cc", "kind": "C", "x": 12, "y": 9, "rot": 1, "value": 0.05},
+                        {"id": "gc", "kind": "GND", "x": 12, "y": 11},
+                        {"id": "rcs", "kind": "R", "x": 15, "y": 7, "rot": 0, "value": 0.2},
+                        {"id": "cs", "kind": "C", "x": 18, "y": 9, "rot": 1, "value": 20},
+                        {"id": "gd", "kind": "GND", "x": 18, "y": 11},
+                        {"id": "rsa", "kind": "R", "x": 21, "y": 9, "rot": 1, "value": 2.0},
+                        {"id": "ge", "kind": "GND", "x": 21, "y": 11},
+                        {"id": "out", "kind": "OUT", "x": 4, "y": 7},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 7], "b": [6, 7]},
+                        {"a": [6, 7], "b": [6, 8]},
+                        {"a": [6, 10], "b": [6, 11]},
+                        {"a": [6, 7], "b": [8, 7]},
+                        {"a": [10, 7], "b": [14, 7]},
+                        {"a": [12, 7], "b": [12, 8]},
+                        {"a": [12, 10], "b": [12, 11]},
+                        {"a": [16, 7], "b": [21, 7]},
+                        {"a": [18, 7], "b": [18, 8]},
+                        {"a": [18, 10], "b": [18, 11]},
+                        {"a": [21, 7], "b": [21, 8]},
+                        {"a": [21, 10], "b": [21, 11]},
+                    ],
+                },
+                "checks": [
+                    {
+                        "name": "three resistances in the path, settling 67.5 K above ambient",
+                        "code": r"""
+c.assert(c.count('R') === 3,
+  'The junction-to-ambient path has three resistances: R_jc, R_cs and R_sa. There are ' +
+  c.count('R') + '.');
+c.close(c.vout(), 67.5, 0.03,
+  'the steady-state junction rise in kelvin. It is 25 W times the sum of the three ' +
+  'resistances, so the sum must be 2.7 K/W and R_sa must be 2.0. Too low a rise means ' +
+  'the heatsink chosen is better (and more expensive) than the specification asked for');
+""",
+                    },
+                    {
+                        "name": "a short burst does not reach the heatsink",
+                        "code": r"""
+const s = c.step(0.05);                 /* 50 ms, far shorter than the sink's constant */
+const at50ms = s.v[s.v.length - 1];
+c.close(at50ms, 17.6, 0.10,
+  'the junction rise after 50 ms. The die and case masses have settled by now but the ' +
+  'heatsink has barely begun to warm, so the rise is set by R_jc + R_cs alone: about ' +
+  '25 W x 0.7 K/W. This is why a part survives a pulse that would destroy it ' +
+  'continuously');
+c.assert(at50ms < 0.4 * c.vout(),
+  'After 50 ms the junction has already reached ' + at50ms.toFixed(1) + ' K of its ' +
+  'final ' + c.vout().toFixed(1) + ' K. That is far too fast — it means the ' +
+  'heatsink thermal mass is not in the path, so the model has no long time constant ' +
+  'and will badly under-predict how hot a sustained load gets.');
+""",
+                    },
+                    {
+                        "name": "the heatsink is the slow term, and the dominant one",
+                        "code": r"""
+const s = c.step(200);                  /* 200 s: several sink time constants */
+const settled = s.v[s.v.length - 1];
+c.close(settled, 67.5, 0.05,
+  'the rise after 200 seconds, which must have converged on the DC answer');
+const half = s.v[Math.floor(s.v.length / 8)];   /* about 25 s in */
+c.assert(half > 0.4 * settled && half < 0.95 * settled,
+  'At around 25 seconds the junction is at ' + half.toFixed(1) + ' K against a final ' +
+  settled.toFixed(1) + ' K. The heatsink time constant is R_sa * C_s = 40 s, so it ' +
+  'should be well on its way and not yet there. A value outside that range means the ' +
+  'sink resistance or its thermal mass is not what the specification asked for.');
+""",
+                    },
+                    {
+                        "name": "0.7 K/W of the path is not yours to improve",
+                        "code": r"""
+/* The DC answer is 25*(Rjc + Rcs + Rsa). The transient at 50 ms isolates the first
+   two, so the difference tells us what the heatsink is contributing. */
+const s = c.step(0.05);
+const fast = s.v[s.v.length - 1];
+const total = c.vout();
+const sinkShare = (total - fast) / total;
+c.close(sinkShare, 0.74, 0.10,
+  'the fraction of the steady-state rise contributed by the heatsink. R_sa is 2.0 of ' +
+  'the 2.7 K/W total, so it is 74% of the problem and the package is the other 26%. ' +
+  'That ratio is what decides whether a better heatsink is worth buying');
+""",
+                    },
+                ],
+                "hints": [
+                    "The three resistances are in series, from the junction node down to ground. Ground is ambient temperature — the reference everything is measured against.",
+                    "$R_{sa} = 67.5/25 - 0.5 - 0.2$. The division comes first.",
+                    "Each capacitor is already connected between its node and ambient; you are wiring the resistors *between* those nodes, so the chain reads junction, case, sink, ambient.",
+                ],
             },
             "lab": {
                 "title": "Junction temperature, steady and transient",
