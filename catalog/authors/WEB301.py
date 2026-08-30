@@ -46,6 +46,277 @@ COURSE = {
                 "`aria-describedby` attaches supplementary text without repeating the label",
                 "Native elements first: a `<button>` is focusable, activatable and announced for free",
             ],
+            "quiz": {
+                "title": "What the markup promises",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A `<label for=\"...\">` binds to a control. What does the value of `for` have to match?",
+                        "opts": [
+                            "The control's `id`",
+                            "The control's `name`",
+                            "The control's `placeholder`",
+                            "The `id` of the form the control sits in",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`for` holds an id and the browser resolves it the way `getElementById` does. `name` is
+what the server sees on submit and is deliberately *not* unique — the two radios in this
+lab share `name="level"` — so binding to it could not identify one control. And a
+placeholder is not a label at all: it vanishes the moment someone types, which is
+exactly when they most want to check what the field was for.
+""",
+                    },
+                    {
+                        "q": "A page has an `h1`, then a section headed `h3` because `h2` looked too big. What did that cost?",
+                        "opts": [
+                            "Nothing — heading levels are a visual choice",
+                            "The outline now implies a level-2 section that does not exist, so anyone navigating by heading hears a gap",
+                            "The page stops validating and the browser skips the section",
+                            "Search engines discard every heading after the skip",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Headings are the page's table of contents, and a screen reader user moves through them
+the way a sighted reader skims — jumping from level to level. A jump from `h1` to `h3`
+says *there is a subsection here, of a section you were never told about*. Nothing
+breaks and nothing fails to render; the information is simply wrong. Size is a separate
+question entirely: `h2 { font-size: 1rem }` costs you nothing and keeps the outline
+honest.
+""",
+                    },
+                    {
+                        "q": "A decorative flourish sits beside a heading and repeats it. What belongs in its `alt`?",
+                        "opts": [
+                            "`alt=\"\"` — an empty string",
+                            "No `alt` attribute at all",
+                            "`alt=\"decorative image\"`",
+                            "`alt=\"flourish.svg\"`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An empty `alt` is a statement, not an omission: *this image carries nothing the text
+does not already say, skip it*. Leaving the attribute off is a different thing — the
+image has no description, and assistive technology commonly falls back to announcing the
+file name, so `flourish.svg` gets read aloud one character at a time. Writing
+`decorative image` is the same problem said politely: it is an interruption that adds
+nothing.
+""",
+                    },
+                    {
+                        "q": "`<div role=\"button\" tabindex=\"0\">Delete</div>` announces as a button and can be tabbed to. What is still missing?",
+                        "opts": [
+                            "Nothing — that is equivalent to a `<button>`",
+                            "An accessible name, which a `<div>` cannot have",
+                            "Keyboard activation: a real button fires a click on Enter and Space, a div does not",
+                            "Focus — `tabindex=\"0\"` does not put an element in the tab order",
+                        ],
+                        "a": 2,
+                        "why": r"""
+`role` buys the announcement and `tabindex="0"` buys the focus stop, and both of those
+are true here. What neither buys is *behaviour*. Press Enter or Space on that div and
+nothing happens until you write a `keydown` handler for both keys — and then you still
+owe it `disabled` semantics, and form submission if it lives in a form. Its text content
+does give it a name, so that part is fine. This is the argument for reaching for
+`<button>` first: everything above arrives already written.
+""",
+                    },
+                    {
+                        "q": "What does `aria-describedby` do that `<label for>` does not?",
+                        "opts": [
+                            "It replaces the label for controls that have no visible text",
+                            "It attaches supplementary text that is announced after the name, without becoming the name",
+                            "It only works on elements with an explicit `role`",
+                            "It hides the referenced text from sighted users",
+                        ],
+                        "a": 1,
+                        "why": r"""
+A control has one name and any amount of description. The name is what gets announced
+when focus lands and what a voice-control user says out loud, so it wants to stay short:
+*Email address*. The hint — "we only use this to confirm the booking" — is a
+description, announced after the name and skippable. Fold it into the label and every
+visit to that field replays the whole sentence. The referenced element stays perfectly
+visible; `aria-describedby` only says how the two are related.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "The booking form, attribute by attribute",
+                "minutes": 9,
+                "caption": "index.html — six holes",
+                "lang": "html",
+                "brief": r'''
+Every hole below is somewhere the page still renders identically and conveys
+something different. Nothing is executed here: you are choosing markup, and the
+question each time is what the browser puts in the accessibility tree as a result.
+''',
+                "listing": r'''<header>
+  <h1>Riverside Bike Workshop</h1>
+  <nav ___="Primary">
+    <ul><li><a href="#booking">Book a service</a></li></ul>
+  </nav>
+</header>
+
+<main>
+  <h2 id="booking">Book a service</h2>
+  <img src="stand.jpg" alt="___">
+
+  <form id="booking-form" action="#" method="post">
+    <label ___="email">Email address</label>
+    <input id="email" name="email" type="___" required ___="email-hint">
+    <span id="email-hint">We only use this to confirm the booking.</span>
+
+    <fieldset>
+      <legend>Service level</legend>
+      <input id="level-basic" name="level" type="radio" value="basic">
+      <label for="level-basic">Basic</label>
+      <input id="level-full" name="level" type="radio" value="full">
+      <label for="level-full">Full strip-down</label>
+    </fieldset>
+
+    <button type="___">Request booking</button>
+  </form>
+</main>
+''',
+                "blanks": [
+                    {
+                        "prompt": "A page may hold several nav landmarks. How does this one say which it is?",
+                        "hole": "attr",
+                        "opts": ["aria-label", "title", "name", "id"],
+                        "a": 0,
+                        "why": "`aria-label` names the landmark, so the landmarks list reads *navigation, Primary* rather than *navigation, navigation*.",
+                        "whys": [
+                            "`aria-label` names the landmark, so the landmarks list reads *navigation, Primary* rather than *navigation, navigation*. With one nav on the page it is a nicety; with a primary nav, a breadcrumb and a footer nav it is the only thing telling them apart.",
+                            "`title` produces a tooltip on hover and is announced inconsistently — it is the attribute that gets recommended and then quietly ignored by half the stack. It is not how a landmark is named.",
+                            "`name` means something on form controls and on `<iframe>`; on a `<nav>` it is an invalid attribute the browser drops. Nothing reads it.",
+                            "`id` is an anchor for links and for `for`/`aria-*` references. It is never announced, so `id=\"Primary\"` names this nav for your CSS and for nobody else.",
+                        ],
+                    },
+                    {
+                        "prompt": "The photo shows a bike in a repair stand. What goes in its alt text?",
+                        "hole": "text",
+                        "opts": ["stand.jpg", "A road bike clamped in a repair stand", "Image of a bike", "bike"],
+                        "a": 1,
+                        "why": "Alt text stands in for the picture: describe what it shows and why it is here, in the voice of the surrounding page.",
+                        "whys": [
+                            "The file name is the one thing assistive technology falls back to when there is no alt at all, so writing it deliberately is the worst of both worlds — it is read out character by character and says nothing.",
+                            "Alt text stands in for the picture: describe what it shows and why it is here, in the voice of the surrounding page. A sentence is fine; this one tells you the workshop has proper stands, which is the reason the photo is on a booking page.",
+                            "\"Image of\" is redundant — the element is already announced as an image — and \"a bike\" is the level of detail you would get from guessing. Everything informative has been left out.",
+                            "One word is not wrong so much as wasted. If the picture is worth its bytes it is worth a clause; if it is not, `alt=\"\"` says so honestly.",
+                        ],
+                    },
+                    {
+                        "prompt": "Which attribute points a label at the control it names?",
+                        "hole": "attr",
+                        "opts": ["id", "for", "name", "aria-labelledby"],
+                        "a": 1,
+                        "why": "`<label for=\"email\">` binds to the control whose `id` is `email`; clicking the label then focuses the field, which is the visible proof the binding took.",
+                        "whys": [
+                            "An `id` on the label identifies the label itself. That is useful when a control points *back* with `aria-labelledby`, but on its own it binds nothing.",
+                            "`<label for=\"email\">` binds to the control whose `id` is `email`; clicking the label then focuses the field, which is the visible proof the binding took.",
+                            "`name` is the key the value is submitted under. Two controls can share it — radios always do — so it could not identify one field to label.",
+                            "`aria-labelledby` runs the other way: it goes on the *control* and names the element that labels it. Putting it on the label points the label at itself.",
+                        ],
+                    },
+                    {
+                        "prompt": "The field takes an email address. Which input type?",
+                        "hole": "type",
+                        "opts": ["text", "string", "email", "mail"],
+                        "a": 2,
+                        "why": "`type=\"email\"` gives constraint validation for free, and on a phone it changes the keyboard that comes up — the `@` and the dot move onto the front row.",
+                        "whys": [
+                            "`type=\"text\"` works, in the sense that the form still submits. It just declines every piece of help the browser was ready to give: no format check, no autofill hint, and a phone keyboard with the `@` two taps away.",
+                            "There is no `string` input type. Unknown types silently fall back to `text`, which is why this class of typo survives review — the field looks fine and quietly does less.",
+                            "`type=\"email\"` gives constraint validation for free, and on a phone it changes the keyboard that comes up — the `@` and the dot move onto the front row. Paired with `required` it is a whole validation rule you did not have to write.",
+                            "`mail` is not a type either, and falls back to `text` in the same silent way. The list is short and worth knowing: `email`, `tel`, `url`, `number`, `search`, `date`.",
+                        ],
+                    },
+                    {
+                        "prompt": "The hint sentence should be announced after the field's name, not as part of it.",
+                        "hole": "attr",
+                        "opts": ["aria-describedby", "aria-labelledby", "aria-label", "title"],
+                        "a": 0,
+                        "why": "`aria-describedby` attaches the span as a *description*: announced after the name, and skippable on the second visit to the field.",
+                        "whys": [
+                            "`aria-describedby` attaches the span as a *description*: announced after the name, and skippable on the second visit to the field. The label stays short, the hint stays visible to everyone, and neither has to be duplicated.",
+                            "`aria-labelledby` would make that sentence the field's *name*, and it overrides the `<label>` outright — so the field would announce as \"We only use this to confirm the booking\" and the word *email* would disappear.",
+                            "`aria-label` takes a string, not an id, so pointing it at `email-hint` names the field the literal text \"email-hint\". It would also override the visible label, which is the bug that produces controls whose spoken name does not match their printed one.",
+                            "`title` is a tooltip. It is announced only sometimes, never on touch, and never on keyboard focus in several browsers — which is why the sentence is in the page as a real element instead.",
+                        ],
+                    },
+                    {
+                        "prompt": "The button ends the form. What type is it?",
+                        "hole": "type",
+                        "opts": ["button", "submit", "reset", "send"],
+                        "a": 1,
+                        "why": "`type=\"submit\"` is what makes the button submit the form, and what Enter in a text field activates — constraint validation runs on the way.",
+                        "whys": [
+                            "`type=\"button\"` is the inert one: it does nothing at all unless JavaScript is listening, and the form is left with no default button, so pressing it validates nothing and fires no `submit` event. Enter is the surprise in the other direction. Only text-entry fields block implicit submission — radios and checkboxes do not — so this form has exactly one, the email input, and a form with no submit button and only one such field still submits when Enter is pressed in it. The form can still be sent; the button has simply stopped being the thing that sends it.",
+                            "`type=\"submit\"` is what makes the button submit the form, and what Enter in a text field activates — constraint validation runs on the way, so the `required` email is checked because a submit was attempted. It is also the default inside a form, but writing it down means the next person does not have to remember that.",
+                            "`type=\"reset\"` wipes every field back to its initial value. It sits one letter away in the autocomplete list and destroys the booking someone has just typed, which is why reset buttons have quietly disappeared from the web.",
+                            "There is no `send` type. `submit` is both the default and the fallback for an unrecognised value, so this one accidentally works — which is the worst kind of typo, because nothing ever tells you and the next reader assumes a distinction was meant.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How many tab stops?",
+                "minutes": 7,
+                "brief": r'''
+Keyboard order is not a feature you add at the end. It falls out of which elements
+you chose, and you can read it off the markup before the page has any CSS at all.
+
+```html
+<a href="#main">Skip to content</a>
+<a>Help</a>
+<button type="button">Menu</button>
+<input id="q" type="search">
+<button type="button" disabled>Clear</button>
+<div role="button" tabindex="0">Filters</div>
+<h2 tabindex="-1">Results</h2>
+<textarea id="notes"></textarea>
+<select id="sort"><option>Newest</option></select>
+```
+
+Nine elements, all visible, none hidden by CSS. Tab forward through them from the
+address bar and count where focus actually lands.
+''',
+                "prompt": "How many of the nine elements does keyboard focus land on?",
+                "note": "A whole number. Count stops, not elements.",
+                "figure": "`<a href=\"#main\">` Skip to content · `<a>` Help · `<button>` Menu · "
+                          "`<input type=\"search\">` Search · `<button disabled>` Clear · "
+                          "`<div role=\"button\" tabindex=\"0\">` Filters · `<h2 tabindex=\"-1\">` Results · "
+                          "`<textarea>` Notes · `<select>` Sort",
+                "given": [
+                    {"label": "Elements in the fragment", "value": "9"},
+                    {"label": "Stylesheet", "value": "none — nothing hidden or reordered"},
+                    {"label": "Direction", "value": "Tab, forwards, from the address bar"},
+                ],
+                "aside": "The hand-made `<div role=\"button\" tabindex=\"0\">` is a tab stop and announces "
+                         "as a button, and still does nothing when you press Enter. Focus is the easy half.",
+                "answer": 6,
+                "tol": 0,
+                "unit": "stops",
+                "hint": "Five things are focusable with no help at all: `<a>` **with an href**, `<button>`, "
+                        "`<input>`, `<select>`, `<textarea>`. Anything carrying `tabindex=\"0\"` joins them. "
+                        "Two things take an element back out again: `disabled`, and `tabindex=\"-1\"`.",
+                "wrong": "Nine counts every element rather than every stop. Seven or eight usually means "
+                         "`disabled` or `tabindex=\"-1\"` slipped through — both elements are still in the "
+                         "DOM and still on screen, they are simply not in the tab order.",
+                "why": r"""
+Six: the `<a href>`, the `<button>`, the `<input>`, the `<div tabindex="0">`, the
+`<textarea>` and the `<select>`. The three skipped are skipped for three different
+reasons, and each is worth knowing on its own. An `<a>` with no `href` is not a link —
+it is text inside an anchor element, and the browser gives it no behaviour and no focus.
+`disabled` removes a control from the tab order along with its events. And
+`tabindex="-1"` is the deliberate one: reachable from script with `.focus()`, so a
+router can move focus to the results heading after a navigation, but never reached by
+tabbing. Notice the shape of the count — five of the six needed nothing written on them,
+and the only hand-made control needed an attribute to buy back part of what `<button>`
+comes with.
+""",
+            },
             "lab": {
                 "title": "A booking form a screen reader can navigate",
                 "runtime": "web",
@@ -347,6 +618,308 @@ assert(_hint.textContent.trim() !== '', 'The element referenced by aria-describe
                 "Custom properties cascade and can be read from JavaScript with `getPropertyValue`",
                 "Horizontal overflow is a layout bug: `scrollWidth` larger than `clientWidth`",
             ],
+            "quiz": {
+                "title": "Boxes, axes and the cascade",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "With `box-sizing: border-box`, what does `width: 200px` on a padded, bordered element describe?",
+                        "opts": [
+                            "The content alone — padding and border are added outside it",
+                            "Content plus padding plus border, together",
+                            "Content plus padding plus border plus margin",
+                            "The width the element would have with no padding or border at all",
+                        ],
+                        "a": 1,
+                        "why": r"""
+`border-box` makes the declared width the width you can measure with a ruler: whatever
+padding and border you add eat into the content instead of pushing the box wider. Under
+the default `content-box`, the same element with `1rem` of padding and a `1px` border
+takes 200 + 32 + 2 = 234px, which is how a three-column grid of "200px" cards ends up
+overflowing a 640px container. Margin is outside the box under either rule — no value of
+`box-sizing` includes it.
+""",
+                    },
+                    {
+                        "q": "A row of navigation links of differing widths needs to sit in a line with an even gap. Which is the smaller tool?",
+                        "opts": [
+                            "CSS grid, because a navbar is a layout",
+                            "Flexbox — one axis, and the items size themselves to their text",
+                            "Floats, which is what they were designed for",
+                            "Absolute positioning, so the links cannot move",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The question to ask is *how many axes am I arranging on*. A nav list is one row: items
+follow each other along the main axis and size themselves to their content, which is
+flexbox's whole model. Grid is the right answer when you are placing things into rows
+*and* columns that line up across both — the gallery below is exactly that. Floats
+predate both and need clearing hacks to contain anything, and absolute positioning takes
+the links out of flow entirely, so the header collapses to nothing behind them.
+""",
+                    },
+                    {
+                        "q": "`@media (max-width: 640px) { .gallery { grid-template-columns: 1fr; } }` is written *above* the plain `.gallery { grid-template-columns: repeat(3, 1fr); }`. What renders on a 400px screen?",
+                        "opts": [
+                            "Three columns — equal specificity, so the later rule wins",
+                            "One column — a media query outranks an unconditional rule",
+                            "One column — the narrower the matching context, the higher the priority",
+                            "Neither rule applies, and the grid falls back to one implicit column",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A media query contributes nothing to specificity. Both rules select `.gallery` — one
+class each, identical weight — so the cascade falls through to document order and the
+last declaration wins, media query or not. The override renders three columns on a
+phone, and the fix is to move it below rather than to reach for `!important`. This is
+also the reason a stylesheet reads in one direction: base rules first, then the
+breakpoints that amend them.
+""",
+                    },
+                    {
+                        "q": "A 480px-wide `<img>` sits in a 300px grid track and pushes the page sideways. Which declaration makes it fit and keeps its shape?",
+                        "opts": [
+                            "`max-width: 100%; height: auto;`",
+                            "`width: 100%; height: 100%;`",
+                            "`overflow: hidden;` on the card around it",
+                            "`max-height: 100%;`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`max-width: 100%` caps the rendered width at the containing block, and `height: auto`
+then lets the intrinsic aspect ratio choose the height, so the picture shrinks rather
+than squashes. Setting both `width` and `height` to 100% stretches the image to whatever
+shape the box happens to be. `overflow: hidden` crops the part that does not fit instead
+of fitting it — the page stops scrolling and you have silently thrown away a third of the
+photo. And `max-height` constrains the axis that is not overflowing.
+""",
+                    },
+                    {
+                        "q": "`--layout` is declared once on `:root`. Why can `.card` read it without it being repeated?",
+                        "opts": [
+                            "Custom properties inherit, so every descendant sees the value unless something nearer overrides it",
+                            "`:root` has higher specificity than any other selector",
+                            "Custom properties are global variables and sit outside the cascade",
+                            "`var()` searches the whole stylesheet for a matching declaration",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A custom property is an ordinary inherited CSS property that happens to hold a token
+instead of a length. `var(--layout)` resolves against the element's own computed value,
+which it inherited from its parent, and so on up to `:root`. That is why re-declaring
+`--layout` on `:root` inside a media query changes it for the entire page at once, and
+why re-declaring it on `.card` would change it only inside cards and their descendants.
+`:root` is just `html` with one extra point of specificity; nothing about it is special
+here beyond being the common ancestor.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "One stylesheet, two widths",
+                "minutes": 9,
+                "caption": "style.css — six holes",
+                "lang": "css",
+                "brief": r'''
+The gallery stylesheet, with the load-bearing declarations removed. Every hole is a
+place where the wrong value still produces a page that looks plausible on the machine
+you wrote it on and falls apart on a phone.
+''',
+                "listing": r''':root {
+  --layout: wide;
+  --gap: 1.25rem;
+}
+
+* { box-sizing: border-box; }
+
+.site-nav {
+  display: ___;
+  justify-content: ___;
+}
+
+.nav-list {
+  display: flex;
+  gap: var(--gap);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gallery {
+  display: ___;
+  grid-template-columns: ___;
+  gap: var(--gap);
+  list-style: none;
+}
+
+.card-img {
+  display: block;
+  max-width: ___;
+  height: auto;
+}
+
+@media (max-width: 640px) {
+  :root { --layout: ___; }
+  .nav-list { flex-direction: column; }
+  .gallery { grid-template-columns: 1fr; }
+}
+''',
+                "blanks": [
+                    {
+                        "prompt": "The navbar holds two children in a line. What kind of container is it?",
+                        "hole": "value",
+                        "opts": ["flex", "block", "inline", "table-row"],
+                        "a": 0,
+                        "why": "`display: flex` makes the two children flex items on one axis, which is the whole of what a navbar needs.",
+                        "whys": [
+                            "`display: flex` makes the two children flex items on one axis, which is the whole of what a navbar needs — and it is what gives `justify-content` anything to do.",
+                            "`block` is what it already is. The brand and the list would stack, and `justify-content` on the line below would be ignored entirely, because block layout has no main axis to distribute along.",
+                            "`inline` makes the header itself inline-level, so it stops being a full-width band and shrinks to its contents. The children are unaffected.",
+                            "`table-row` borrows table layout for something that is not a table: the children have to be table cells, sizing is content-driven and unpredictable, and `gap` behaves differently. It was the 2005 workaround and there is no reason to reach for it now.",
+                        ],
+                    },
+                    {
+                        "prompt": "Brand at one end, links at the other, all the slack in the middle.",
+                        "hole": "value",
+                        "opts": ["center", "space-around", "space-between", "flex-start"],
+                        "a": 2,
+                        "why": "`space-between` puts every pixel of free space into the gaps *between* items and none on the outside, so the two children land on the two edges.",
+                        "whys": [
+                            "`center` collects both children in the middle with the free space split to the outsides — a perfectly good navbar, just not this one.",
+                            "`space-around` gives each item an equal share of space on both sides, so the outer margins come out half the size of the middle one and the brand sits a little way in from the edge rather than on it.",
+                            "`space-between` puts every pixel of free space into the gaps *between* items and none on the outside, so with two children they land on the two edges. Add a third child later and it goes exactly halfway between them.",
+                            "`flex-start` packs both children against the start edge, which is what a plain flex row does anyway. The links end up glued to the brand.",
+                        ],
+                    },
+                    {
+                        "prompt": "The gallery lays cards out in rows and columns that line up in both directions.",
+                        "hole": "value",
+                        "opts": ["table", "grid", "flex", "block"],
+                        "a": 1,
+                        "why": "Two axes at once is grid's reason to exist: you declare the tracks, and items flow into them in order.",
+                        "whys": [
+                            "A `table` display would line the columns up, and would also drag in table sizing rules, demand rows and cells, and refuse to wrap onto a new line — which is precisely what a gallery has to do.",
+                            "Two axes at once is grid's reason to exist: you declare the tracks, and items flow into them in order. Card three and card six sit in the same column with no arithmetic from you.",
+                            "`flex` with `flex-wrap: wrap` gets close, and is what people reach for first. The difference shows on the last row: flex items size themselves, so four cards wrapping into 3 + 1 leave the lone card stretched or stranded, where grid keeps every track the same width.",
+                            "`block` stacks the list items vertically, one per line. That is the correct *narrow* layout, but it is what the breakpoint is for.",
+                        ],
+                    },
+                    {
+                        "prompt": "Three equal columns, whatever is inside them.",
+                        "hole": "tracks",
+                        "opts": ["repeat(3, 1fr)", "repeat(3, auto)", "1fr", "3fr"],
+                        "a": 0,
+                        "why": "`1fr` means *one share of the leftover space*, so three of them split the row into three identical tracks regardless of the content.",
+                        "whys": [
+                            "`1fr` means *one share of the leftover space*, so three of them split the row into three identical tracks regardless of what the cards contain. `repeat(3, ...)` is shorthand for writing it out three times.",
+                            "`repeat(3, auto)` does give three tracks, but `auto` sizes each one to its content — the card with the longest title gets the widest column, and the row looks accidentally ragged.",
+                            "A single `1fr` declares one column. The other cards land in implicitly created rows underneath, which renders as a single stacked column.",
+                            "`3fr` is still one track. The `fr` value is a proportion, not a count: with only one track it takes all the free space, and three shares of everything is everything.",
+                        ],
+                    },
+                    {
+                        "prompt": "The images are 480px wide intrinsically and the tracks are narrower than that.",
+                        "hole": "value",
+                        "opts": ["480px", "none", "100vw", "100%"],
+                        "a": 3,
+                        "why": "`max-width: 100%` caps the image at the width of its containing block — the grid track — so it shrinks with the column instead of bursting out of it.",
+                        "whys": [
+                            "Pinning the image to its intrinsic 480px is the bug, written down. The track is 300px, the image is 480px, and the difference is the sideways scrollbar.",
+                            "`none` is the initial value, which is to say no cap at all. This is what the page does before you touch it.",
+                            "`100vw` is one hundred percent of the *viewport*, not of the track. Inside a padded container it is reliably wider than the space available, which makes it a common and confusing source of overflow in its own right.",
+                            "`max-width: 100%` caps the image at the width of its containing block — the grid track — so it shrinks with the column instead of bursting out of it. Paired with `height: auto` the aspect ratio survives.",
+                        ],
+                    },
+                    {
+                        "prompt": "The token JavaScript reads to find out which layout is showing.",
+                        "hole": "token",
+                        "opts": ["narrow", "wide", "640px", "column"],
+                        "a": 0,
+                        "why": "Inside the breakpoint the token has to change, or reading it back tells you nothing you did not already know.",
+                        "whys": [
+                            "Inside the breakpoint the token has to change, or reading it back tells you nothing you did not already know. `wide` on `:root` and `narrow` here means one declaration is the single answer to *which layout am I in*, and the media query condition lives in exactly one place.",
+                            "Re-declaring the same value is a no-op with a comment's worth of intent. The check reads `--layout` back and compares it against `matchMedia`, so it would report `wide` on a 400px screen.",
+                            "The token is a name for the layout, not a copy of the condition. Putting `640px` in it means every reader has to know which side of the comparison they are on, which is the thing the token existed to hide.",
+                            "`column` describes what the nav list does at this width, not what the page's layout is called. The gallery is not a column of anything — it is a single-column grid — so the name would mislead the moment a second component read it.",
+                        ],
+                    },
+                ],
+            },
+            "derive": {
+                "title": "How many columns does auto-fill place?",
+                "minutes": 12,
+                "vars": ["W", "t", "g", "k", "m"],
+                "brief": r'''
+`grid-template-columns: repeat(auto-fill, minmax(220px, 1fr))` is the responsive
+gallery in one declaration: no breakpoint, no media query, the browser works out the
+column count itself on every resize. What it is working out is one line of algebra.
+
+Let the container's content width be $W$, the gap between neighbouring tracks be $g$,
+the number of tracks be $k$, each of width $t$, and let $m$ be the smallest width a
+track is allowed to have.
+''',
+                "steps": [
+                    {
+                        "prompt": "Write the total width a row of $k$ tracks occupies, in terms of $k$, $t$ and $g$.",
+                        "answer": "k t + (k - 1) g",
+                        "hint": "Fence posts. The tracks stand side by side and a gap sits in each join — but not on the outside edges.",
+                        "deconstruct": [
+                            "The tracks themselves contribute $k$ lots of $t$.",
+                            "A gap sits between neighbours only, so there are $k - 1$ of them.",
+                        ],
+                    },
+                    {
+                        "prompt": "The row fills the container exactly. Solve for the track width $t$.",
+                        "given": "$k t + (k - 1) g = W$",
+                        "answer": "\\frac{W - (k - 1) g}{k}",
+                        "placeholder": "\\frac{?}{k}",
+                        "hint": "Take the gaps out of $W$ first. Whatever is left is shared equally between the $k$ tracks.",
+                        "deconstruct": [
+                            "Move the gaps across: $k t = W - (k - 1) g$.",
+                            "Divide both sides by $k$.",
+                        ],
+                    },
+                    {
+                        "prompt": "`minmax(m, 1fr)` forbids a track narrower than $m$. Find the value of $k$ at which $t$ is exactly $m$ — the point where one more column stops fitting.",
+                        "given": "Put $t = m$ into $k t + (k - 1) g = W$ and solve for $k$.",
+                        "answer": "\\frac{W + g}{m + g}",
+                        "hint": "Expand the bracket, then collect the two terms that carry $k$.",
+                        "deconstruct": [
+                            "$k m + (k - 1) g = W$ expands to $k m + k g - g = W$.",
+                            "Collect: $k(m + g) = W + g$.",
+                            "Divide by $m + g$.",
+                        ],
+                    },
+                    {
+                        "prompt": "A 960px content box, a 16px gap, and `minmax(220px, 1fr)`. How many whole columns does `auto-fill` place?",
+                        "given": "$W = 960$, $g = 16$, $m = 220$. Round down — a partial column is no column.",
+                        "answer": "4",
+                        "hint": "Substitute into the expression you just derived, then take the floor of it.",
+                        "deconstruct": [
+                            "$(960 + 16)/(220 + 16) = 976/236 \\approx 4.14$.",
+                            "Four whole tracks fit; a fifth would force every track below the 220px floor.",
+                        ],
+                    },
+                    {
+                        "prompt": "Those four tracks share the row. How wide is each one, in pixels?",
+                        "given": "$W = 960$, $g = 16$, $k = 4$.",
+                        "answer": "228",
+                        "hint": "Four tracks have three gaps between them. Take those out of $W$ before dividing.",
+                        "deconstruct": [
+                            "Gaps: $3 \\times 16 = 48$px.",
+                            "$(960 - 48)/4 = 912/4$.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+That is the whole of `repeat(auto-fill, minmax(220px, 1fr))`, and the browser redoes it
+on every resize. Notice what the `1fr` half is for: four tracks at the 220px minimum
+plus 48px of gaps comes to 928px, so 32px of the row would be left empty on the right.
+`1fr` hands that slack back out — eight pixels each — and every track lands on 228.
+Swap `auto-fill` for `auto-fit` and the empty tracks collapse instead, which is the same
+arithmetic with the leftovers spent differently.
+''',
+            },
             "lab": {
                 "title": "A gallery that survives a 360px phone",
                 "runtime": "web",
@@ -641,6 +1214,251 @@ if (_doc.clientWidth > 0) {
                 "`textContent` over `innerHTML`: the difference is whether user input can execute",
                 "`localStorage` holds strings only, can be unavailable, and can contain junk",
             ],
+            "quiz": {
+                "title": "One truth, one render, one listener",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "Why rebuild the whole list in `render()` instead of patching the row that changed?",
+                        "opts": [
+                            "Because rebuilding is faster than patching in every browser",
+                            "Because the DOM offers no way to change a single node",
+                            "Because a patch is a second description of the truth, and it drifts the first time a case is forgotten",
+                            "Because `textContent` can only be assigned once per element",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Patching means writing the transition for every change: mark done, un-mark, remove,
+rename, re-tag, and every pair of those happening close together. Each one is a separate
+chance to update the array and forget the DOM, and the symptom is a row that says
+something the state does not. Re-rendering has one path, so there is one place to be
+wrong. It is not automatically faster — for very long lists it is measurably slower, and
+that is when a keyed diff earns its complexity. Start with the version that cannot drift.
+""",
+                    },
+                    {
+                        "q": "A click handler is bound to `#list`. Inside it, what is `event.currentTarget`?",
+                        "opts": [
+                            "The deepest element the click actually landed on",
+                            "`#list` — the element the listener is attached to",
+                            "The `<li>` containing the button that was clicked",
+                            "`document`, since the event has finished bubbling",
+                        ],
+                        "a": 1,
+                        "why": r"""
+`target` is where the event started — usually the `<button>`, sometimes a `<span>`
+inside it — and it does not change as the event bubbles. `currentTarget` is whichever
+element is running a handler right now, so inside a listener bound to `#list` it is
+always `#list`. Delegation is built on having both: bind to the stable element, then ask
+`event.target.closest('button')` which control the person was actually aiming at.
+""",
+                    },
+                    {
+                        "q": "For `<li data-id=\"3\">`, what does `li.dataset.id === 3` evaluate to?",
+                        "opts": [
+                            "`false` — `dataset` gives back the string `\"3\"`",
+                            "`true`",
+                            "`true`, because the browser coerces numeric data attributes",
+                            "A `TypeError`, because `dataset` has no `id` property",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Every attribute in the DOM is a string, `data-*` included, so `li.dataset.id` is `"3"`
+and `"3" === 3` is false. This is the bug that makes a delegated handler look broken:
+the click fires, the row is found, and then `state.items.filter(i => i.id !== id)`
+removes nothing because it is comparing numbers with a string. Convert once, on the way
+in — `Number(row.dataset.id)` — and let everything downstream deal in numbers.
+""",
+                    },
+                    {
+                        "q": "A user titles a book `<img src=x onerror=alert(1)>`. What separates `title.textContent = item.title` from `title.innerHTML = item.title`?",
+                        "opts": [
+                            "Nothing — both escape the string before inserting it",
+                            "`textContent` puts those characters on the page as text; `innerHTML` parses them as markup and the `onerror` fires",
+                            "`innerHTML` is simply the faster of the two",
+                            "`textContent` strips the tags and `innerHTML` keeps them, but neither runs anything",
+                        ],
+                        "a": 1,
+                        "why": r"""
+`textContent` sets a text node: the angle brackets are just characters and the title
+appears on screen exactly as it was typed. `innerHTML` hands the string to the HTML
+parser, which builds an `<img>` with a broken `src`, fires its error handler, and runs
+whatever was in the attribute. It is a common surprise that an injected `<script>` tag
+does *not* execute this way — which is why people conclude `innerHTML` is safe, and why
+the `onerror` trick is the one every payload uses. The rule that survives contact with
+reality is simpler: text goes in with `textContent`.
+""",
+                    },
+                    {
+                        "q": "`localStorage.setItem('k', { a: 1 })`, then `localStorage.getItem('k')`. What comes back?",
+                        "opts": [
+                            "The object `{ a: 1 }`",
+                            "`null`, because objects are rejected",
+                            "A `TypeError`, because the Storage API only accepts strings",
+                            "`\"[object Object]\"` — storage holds strings, and the object was coerced into one",
+                        ],
+                        "a": 3,
+                        "why": r"""
+The Storage API stringifies whatever it is handed, so the object becomes
+`"[object Object]"` and the data is gone — with no exception to tell you. `JSON.stringify`
+going in and `JSON.parse` coming out is the whole contract, and the parse is the half
+that needs a `try`/`catch`: the string sitting in storage was written by an older version
+of your code, or by a different tab, or by nothing at all. Note that quota errors *do*
+throw, so the write is worth wrapping too.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "Delegation and render, line by line",
+                "minutes": 9,
+                "caption": "app.js — five holes",
+                "lang": "js",
+                "brief": r'''
+The two halves that have to agree with each other: the render that builds rows, and the
+one listener that has to keep working on rows built by a render that had not happened
+yet when it was bound. Nothing runs here — you are choosing identifiers.
+''',
+                "listing": r'''/* One listener for the whole list, bound once, before any row exists. */
+listEl.addEventListener('click', function (event) {
+  var button = event.___.closest('button');
+  if (!button) { return; }
+  var row = button.closest('li[data-id]');
+  var id = ___(row.dataset.id);
+  if (button.classList.contains('js-done')) { toggleDone(id); }
+  if (button.classList.contains('js-remove')) { removeItem(id); }
+});
+
+function render() {
+  var items = visibleItems();
+  listEl.textContent = '';
+  items.forEach(function (item) {
+    var li = document.createElement('li');
+    li.className = item.done ? 'item done' : 'item';
+    li.dataset.___ = String(item.id);
+
+    var title = document.createElement('span');
+    title.className = 'item-title';
+    title.___ = item.title;
+
+    li.appendChild(title);
+    listEl.appendChild(li);
+  });
+  emptyEl.hidden = ___;
+}
+''',
+                "blanks": [
+                    {
+                        "prompt": "Which element did the click actually land on?",
+                        "hole": "prop",
+                        "opts": ["currentTarget", "target", "relatedTarget", "detail"],
+                        "a": 1,
+                        "why": "`event.target` is the deepest element under the pointer, so `target.closest('button')` walks back up to the control that was pressed.",
+                        "whys": [
+                            "`currentTarget` is `listEl` itself — the element running the handler. Calling `closest('button')` on a `<ul>` searches the `<ul>` and its ancestors, finds no button, and returns null, so the handler gives up on every click.",
+                            "`event.target` is the deepest element under the pointer, so `target.closest('button')` walks back up to the control that was pressed. It matters that it walks up: click the text inside the button and the target is the text's element, not the button.",
+                            "`relatedTarget` is the *other* element in an enter/leave or focus pair — where the pointer came from, or where focus went. On a click event it is null.",
+                            "`event.detail` on a mouse event is the click count: 1 for a single click, 2 for the second of a double. It is a number, and numbers have no `closest`.",
+                        ],
+                    },
+                    {
+                        "prompt": "The ids in `state.items` are numbers. What has to happen to the attribute?",
+                        "hole": "fn",
+                        "opts": ["String", "Boolean", "Number", "Object"],
+                        "a": 2,
+                        "why": "`dataset` hands back a string, and `\"3\" !== 3`, so every strict comparison downstream would fail silently.",
+                        "whys": [
+                            "`String` is what it already is. Leaving it as text means `item.id !== id` compares a number with a string, is always true, and `removeItem` cheerfully filters nothing out while reporting success.",
+                            "`Boolean('3')` is `true`, and every row would answer to the same id. The list would behave as though there were one item in it.",
+                            "`dataset` hands back a string, and `\"3\" !== 3`, so every strict comparison downstream would fail silently. Convert once here and the rest of the app deals only in numbers.",
+                            "`Object('3')` gives a String wrapper object, which is worse than the string: it is never `===` anything, and it prints as `3` in the console while comparing equal to nothing at all.",
+                        ],
+                    },
+                    {
+                        "prompt": "The handler looks for `li[data-id]`. What must the render write?",
+                        "hole": "key",
+                        "opts": ["id", "itemId", "key", "index"],
+                        "a": 0,
+                        "why": "`dataset.id` is the `data-id` attribute — the dataset key and the attribute suffix are the same name, in camelCase.",
+                        "whys": [
+                            "`dataset.id` is the `data-id` attribute — the dataset key and the attribute suffix are the same name, and the selector in the handler is written against the attribute. The two spellings have to agree or the row is never found.",
+                            "`dataset.itemId` writes `data-item-id`, because dataset camelCase maps onto hyphens in the attribute. The selector `li[data-id]` then matches nothing, and every click falls through the `if (!row)` guard in silence.",
+                            "`dataset.key` writes `data-key`. It is a perfectly good name — as long as the selector is changed to match. Here it is not.",
+                            "`dataset.index` writes `data-index`, and the name is a trap beyond the mismatch: a position in the array is not an identity. Remove one row and every index below it now points at the wrong item.",
+                        ],
+                    },
+                    {
+                        "prompt": "The title came from a text field somebody typed into.",
+                        "hole": "prop",
+                        "opts": ["innerHTML", "textContent", "outerHTML", "nodeValue"],
+                        "a": 1,
+                        "why": "`textContent` writes the characters as text, so a title containing angle brackets appears as typed rather than being parsed as markup.",
+                        "whys": [
+                            "`innerHTML` parses the string as HTML. A title of `<img src=x onerror=...>` becomes a real element and its error handler runs — user input reaching the parser is the whole of this class of bug.",
+                            "`textContent` writes the characters as text, so a title containing angle brackets appears as typed rather than being parsed as markup. It is also the faster of the two, because no parser is involved.",
+                            "`outerHTML` replaces the span *itself* with whatever the string parses to. The element you just created and are about to append is gone before it was used.",
+                            "`nodeValue` is meaningful on text and comment nodes; on an element it reads as null and assigning to it does nothing at all. The row would render with an empty title and no error anywhere.",
+                        ],
+                    },
+                    {
+                        "prompt": "The message reads 'Nothing to show for this filter.' When is it hidden?",
+                        "hole": "expr",
+                        "opts": ["items.length > 0", "items.length === 0", "state.items.length > 0", "false"],
+                        "a": 0,
+                        "why": "`hidden` is true when there *is* something on screen, so the test is on the visible rows this render just produced.",
+                        "whys": [
+                            "`hidden` is true when there *is* something on screen, so the test is on the visible rows this render just produced. Empty list, or a filter that matches nothing: both give zero, both show the message.",
+                            "That is the condition inverted — the message would appear exactly when there are rows to read and vanish when there are none.",
+                            "`state.items` is everything, before the filter. Switch to a tag with no matches and the list renders empty while the message stays hidden, leaving a blank panel that says nothing. The derived view is what the render is showing, so the derived view is what it should ask.",
+                            "`hidden = false` un-hides the paragraph, and nothing ever hides it again — so *Nothing to show for this filter.* sits there on every render, including above a full list of rows. A constant cannot follow a changing list in either direction: `false` shows the message forever, `true` would hide it forever. This is the half that announces itself the first time you load the page with data in it.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "What binding to every button costs",
+                "minutes": 6,
+                "brief": r'''
+The argument for delegation is usually made as a matter of taste. It is cheaper than
+that to make it as a count.
+
+A dashboard shows a fixed table of 250 rows, and every row carries three buttons —
+`Done`, `Edit`, `Remove`. `render()` clears the container and rebuilds all 250 rows
+from state, and it runs eight times over the session: the first paint plus seven
+changes. The direct version calls `addEventListener('click', ...)` on each button as
+it is created. The delegated version calls it once, on the container, before a single
+row exists.
+''',
+                "prompt": "How many `addEventListener` calls does the direct version make in total?",
+                "note": "A whole number of calls, over the whole session.",
+                "figure": "250 rows × 3 buttons per row, rebuilt on every one of 8 renders — against "
+                          "one listener on the container, bound once and never rebound.",
+                "given": [
+                    {"label": "Rows, every render", "value": "250"},
+                    {"label": "Buttons per row", "value": "3"},
+                    {"label": "Renders in the session", "value": "8"},
+                    {"label": "Delegated version", "value": "1 listener, bound once"},
+                ],
+                "aside": "The old nodes are discarded on each render and their listeners go with them — "
+                         "but they were still created, one closure at a time.",
+                "answer": 6000,
+                "tol": 0,
+                "unit": "calls",
+                "hint": "Count the buttons on screen after one render, then ask how many times those "
+                        "buttons are built from scratch.",
+                "wrong": "750 is a single render's worth. The buttons are new elements every time "
+                         "`render()` clears the container, so the listeners have to be attached again.",
+                "why": r"""
+$250 \times 3 = 750$ buttons on screen, rebuilt eight times: $750 \times 8 = 6000$
+calls, against exactly one for the delegated version — bound before the first row
+existed and still bound after the last re-render. The size of the number is not really
+the point. The point is its shape: the direct count grows with the data *and* with the
+number of renders, and the delegated one is constant in both. That same fact is why a
+handler attached to a button stops firing after a re-render, which is the bug that sends
+people looking for delegation in the first place — the element it was attached to no
+longer exists.
+""",
+            },
             "lab": {
                 "title": "A filterable reading list",
                 "runtime": "web",
@@ -1127,6 +1945,253 @@ setFilter('all');
                 "`role=\"alert\"` makes an error region announce itself when it gains content",
                 "Never leave a spinner running: hide it on every exit path, including the failures",
             ],
+            "quiz": {
+                "title": "What settles, when, and what it means",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "`console.log('a')`, then `setTimeout(() => console.log('b'), 0)`, then `Promise.resolve().then(() => console.log('c'))`, then `console.log('d')`. What is printed?",
+                        "opts": [
+                            "a d c b",
+                            "a b c d",
+                            "a d b c",
+                            "a c d b",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Synchronous code runs to completion first, so `a` then `d`. Then the microtask queue
+drains — that is where a resolved promise's callback waits — giving `c`. Timers are a
+separate, later queue, so `b` comes last even at zero milliseconds. `setTimeout(fn, 0)`
+does not mean *now*; it means *after the current task and everything its microtasks
+queue*. This is also why an `await` never lets other synchronous code interleave halfway
+through a statement: the continuation is a microtask, not a thread.
+""",
+                    },
+                    {
+                        "q": "`await fetch(url)` where the server replies 500. What happens?",
+                        "opts": [
+                            "The promise rejects, so the `catch` block runs",
+                            "The promise resolves; the response has `ok === false` and `status === 500`",
+                            "`fetch` retries the request once before rejecting",
+                            "The promise never settles and the await hangs",
+                        ],
+                        "a": 1,
+                        "why": r"""
+`fetch` rejects only when there was no answer at all — DNS failure, a dropped
+connection, a blocked cross-origin request. A 500 is a completed round trip whose answer
+happens to be bad news, so it resolves normally and hands you a response to inspect.
+That split is why real code needs both halves: a `try`/`catch` around the await for the
+no-answer case, and an `if (!response.ok)` after it for the bad-answer case. Leave out
+the second and a 500 renders as an empty list — the server is on fire and the UI says
+"no results".
+""",
+                    },
+                    {
+                        "q": "A search completes and matches nothing. Which of the four states is that?",
+                        "opts": [
+                            "Error — nothing came back",
+                            "Empty — a successful answer that happens to contain no rows",
+                            "Loading, until the user searches again",
+                            "Success; the list simply renders zero rows",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The request worked. The catalogue just has nothing matching, which is information, not a
+fault. Calling it an error tells someone something is broken when nothing is, and
+sending it down the success path renders an empty rectangle that is indistinguishable
+from a spinner that never finished — the reader cannot tell whether to wait, retry, or
+search for something else. Empty is the state that gets forgotten most often, because it
+never shows up in the fixture data you developed against.
+""",
+                    },
+                    {
+                        "q": "Why does `showState('loading')` belong before the `await` rather than after it?",
+                        "opts": [
+                            "An async function runs synchronously up to its first `await`, so anything before it takes effect immediately",
+                            "Because `await` may not be the first statement in a function body",
+                            "It makes no difference — both run before the response arrives",
+                            "Because `showState` is itself asynchronous and needs the head start",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An `async` function is ordinary synchronous code until it reaches its first `await`;
+that is the point where it returns a pending promise to its caller and the rest becomes
+a continuation scheduled for later. So a call before the await has already run and
+painted by the time the request goes out. Move it after and it runs when the response is
+already in hand — the spinner appears for one frame at the exact moment it is no longer
+needed, which reads as a flicker rather than as feedback.
+""",
+                    },
+                    {
+                        "q": "The error paragraph is `<p id=\"error\" role=\"alert\" hidden></p>`. What does `role=\"alert\"` buy?",
+                        "opts": [
+                            "It styles the message as an error",
+                            "Content appearing in it is announced immediately, without focus moving",
+                            "Keyboard focus jumps to the message when it appears",
+                            "It stops the form from submitting while the message is showing",
+                        ],
+                        "a": 1,
+                        "why": r"""
+`role="alert"` marks an assertive live region: change its contents and a screen reader
+interrupts whatever it was saying to read the new text. It deliberately does *not* move
+focus, so the person keeps their place in the form and can carry on typing. This is why
+the element sits in the markup from the start, empty and hidden, and is filled in later
+rather than created on demand — a live region that is created and populated in the same
+tick is announced unreliably across screen readers. Styling is entirely separate; the
+`#error` rule in the stylesheet does that.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "Four outcomes, one function",
+                "minutes": 9,
+                "caption": "app.js — five holes",
+                "lang": "js",
+                "brief": r'''
+`searchBooks` in full, with the five decisions taken out. Each hole is a place where
+the wrong choice still produces a function that works perfectly against a fast, healthy
+server and misleads the user the first time the server is neither.
+''',
+                "listing": r'''async function searchBooks(query) {
+  showState('loading');
+
+  var response;
+  try {
+    response = ___ window.fakeFetch('/api/books?q=' + ___(query));
+  } catch (err) {
+    showState('error', 'Could not reach the catalogue. Check the connection and try again.');
+    return [];
+  }
+
+  if (!response.___) {
+    showState('error', 'The catalogue answered with status ' + response.status + '.');
+    return [];
+  }
+
+  var payload = await response.___();
+  var books = (payload && payload.books) || [];
+
+  if (books.length === 0) {
+    showState('___');
+    return [];
+  }
+
+  showState('success');
+  renderBooks(books);
+  return books;
+}
+''',
+                "blanks": [
+                    {
+                        "prompt": "`fakeFetch` hands back a promise. How does the response get out of it?",
+                        "hole": "kw",
+                        "opts": ["await", "return", "yield", "new"],
+                        "a": 0,
+                        "why": "`await` suspends the function until the promise settles, then either produces the value or rethrows the rejection — which is what puts the `catch` in play.",
+                        "whys": [
+                            "`await` suspends the function until the promise settles, then either produces the value or rethrows the rejection — which is what puts the surrounding `catch` in play at all. Without it the `try` block cannot see the failure, because the rejection happens long after the block has been left.",
+                            "`return` is a statement, not an operator, so it cannot sit on the right-hand side of an assignment: `response = return window.fakeFetch(...)` is a syntax error and the file never parses, so not one of the four states is ever reached. Written on its own line it would at least run — and still be wrong, because an `async` function's own promise simply adopts the one it returns, so awaiting `searchBooks` hands the caller a raw response object where it expected an array of books, and every state below the return is skipped.",
+                            "`yield` belongs to generator functions, declared `function*`. In an `async function` it is a syntax error.",
+                            "`new` would try to construct `window.fakeFetch` as a class. It is a plain function returning a promise, so this produces an object that is not a response and has no `ok`.",
+                        ],
+                    },
+                    {
+                        "prompt": "The query is whatever the user typed — `C++`, `rock & roll`, `50% off`.",
+                        "hole": "fn",
+                        "opts": ["encodeURI", "encodeURIComponent", "escape", "String"],
+                        "a": 1,
+                        "why": "`encodeURIComponent` escapes the characters that are structural in a URL — `&`, `=`, `+`, `#`, `/` — which is exactly right for a value being placed inside one.",
+                        "whys": [
+                            "`encodeURI` is for encoding a whole URL, so it deliberately leaves `&`, `=`, `?` and `/` alone — they are the punctuation it is trying to preserve. Search for `rock & roll` and the server sees a query of `rock ` plus a parameter called ` roll`.",
+                            "`encodeURIComponent` escapes the characters that are structural in a URL — `&`, `=`, `+`, `#`, `/` — which is exactly right for a value being placed inside one. This is the one to reach for whenever you are building a query string by concatenation.",
+                            "`escape` is deprecated and was never URL encoding: it uses a different escape syntax, mangles non-ASCII into `%uXXXX`, and leaves `+` untouched — where `+` in a query string already means a space.",
+                            "`String` changes nothing about the text; the value is already a string. Every unescaped `&` in it still splits the query into parameters that were never intended.",
+                        ],
+                    },
+                    {
+                        "prompt": "The request completed. Did it succeed?",
+                        "hole": "prop",
+                        "opts": ["status", "ok", "error", "body"],
+                        "a": 1,
+                        "why": "`response.ok` is true exactly for statuses 200-299, which is the question being asked.",
+                        "whys": [
+                            "`status` is a number, and every real status is truthy — `!500` and `!200` are both false — so this branch would never run and a 500 would fall through to `json()` and render as an empty result.",
+                            "`response.ok` is true exactly for statuses 200-299, which is the question being asked. The message below still reads `response.status`, because *which* failure it was is what the reader needs.",
+                            "There is no `error` property on a `Response`. It reads as `undefined`, `!undefined` is true, and every response — including the good ones — takes the error path.",
+                            "`body` is a `ReadableStream` and is truthy whether the request went well or badly. Touching it here also risks consuming the stream that `json()` is about to need.",
+                        ],
+                    },
+                    {
+                        "prompt": "The payload is `{ books: [...] }`, sent as JSON.",
+                        "hole": "method",
+                        "opts": ["json", "text", "parse", "body"],
+                        "a": 0,
+                        "why": "`response.json()` reads the body to the end and parses it, returning a promise — which is why it is awaited too.",
+                        "whys": [
+                            "`response.json()` reads the body to the end and parses it, returning a promise for the parsed value — which is why it is awaited as well. Reading the body is a second asynchronous step, separate from receiving the headers.",
+                            "`response.text()` resolves to the raw string. `payload.books` on a string is `undefined`, the fallback gives `[]`, and every successful search renders as the empty state — a failure with no error message anywhere.",
+                            "`parse` is a method of `JSON`, not of `Response`. Calling `response.parse()` throws a TypeError, and because it is outside the `try` the rejection escapes the function entirely.",
+                            "`body` is a property, not a method, so this calls a `ReadableStream` as a function and throws. The stream is the low-level way in, for when you want to read a response progressively rather than all at once.",
+                        ],
+                    },
+                    {
+                        "prompt": "The server answered, correctly, with nothing.",
+                        "hole": "state",
+                        "opts": ["error", "success", "empty", "loading"],
+                        "a": 2,
+                        "why": "Zero results is a successful answer with nothing in it, and it needs its own message — otherwise it is a blank panel the reader cannot interpret.",
+                        "whys": [
+                            "Nothing failed. Reporting an error sends someone off to check their connection over a search that worked perfectly and simply matched no books.",
+                            "The success path calls `renderBooks` on an empty array and leaves an empty `<ul>`, which on screen is indistinguishable from a request that is still running. The reader has no way to tell whether to wait or to try different words.",
+                            "Zero results is a successful answer with nothing in it, and it needs its own message. This is the state that survives development untested, because the fixtures always have data in them.",
+                            "`loading` leaves the spinner up over a request that has already finished, which is the one outcome worse than no feedback: it promises something is still coming when nothing is.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How long does the waterfall take?",
+                "minutes": 7,
+                "brief": r'''
+A dashboard's first paint needs 18 independent `GET` calls to the same origin. They
+are all started at once — no `await` inside a loop, one `Promise.all` — so as far as
+your code is concerned they are simultaneous.
+
+The browser disagrees. It keeps at most 6 connections open to a single origin over
+HTTP/1.1, and the rest wait their turn. Every call takes 120 ms from request to last
+byte, and the server itself adds no queueing delay.
+''',
+                "prompt": "How long after the first request goes out does the last response arrive?",
+                "note": "Milliseconds. Assume each connection starts its next request the instant the previous one finishes.",
+                "figure": "18 requests, 6 connections, 120 ms each — issued together, served six at a time.",
+                "given": [
+                    {"label": "Requests", "value": "18"},
+                    {"label": "Concurrent connections per origin", "value": "6"},
+                    {"label": "Round trip per request", "value": "120 ms"},
+                    {"label": "Server queueing", "value": "none"},
+                ],
+                "aside": "Six per origin is the long-standing HTTP/1.1 browser limit. Over a single "
+                         "HTTP/2 connection the requests are multiplexed instead and the batching "
+                         "disappears — which is what made domain sharding obsolete.",
+                "answer": 360,
+                "tol": 0,
+                "unit": "ms",
+                "hint": "The six connections work through the queue in waves. How many waves, and what "
+                        "does one wave cost?",
+                "wrong": "2160 ms is the sequential figure — an `await` inside a `for` loop, one request "
+                         "at a time. 120 ms is what you would get if the connection limit did not exist.",
+                "why": r"""
+Six at a time through eighteen requests is three waves — $\lceil 18/6 \rceil = 3$ — and
+each wave costs one full round trip, so $3 \times 120 = 360$ ms. Two numbers bracket it
+and both are worth carrying around. With no connection limit it would be 120 ms, the
+cost of a single round trip, because the requests genuinely were issued together. Await
+them one at a time inside a loop instead and it is $18 \times 120 = 2160$ ms — six times
+worse than the real answer, and the version you get by accident, because writing
+`for (const url of urls) { await get(url); }` reads so naturally. `Promise.all` is what
+buys the difference, and the connection limit is what stops it being free.
+""",
+            },
             "lab": {
                 "title": "Book search against a flaky API",
                 "runtime": "web",

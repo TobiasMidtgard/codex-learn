@@ -43,10 +43,203 @@
     "Uncorrelated subqueries, `NOT IN` versus `NOT EXISTS`, and NULL's effect on both",
     "Bound parameters are not a style preference: string-built SQL is an injection hole"
    ],
+   "read": null,
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
-   "numeric": null,
+   "quiz": {
+    "title": "Relations, keys, and what a join keeps",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "A relation is a *set* of tuples. Which consequence follows for SQL?",
+      "opts": [
+       "A query with no `ORDER BY` may return its rows in any order, and a different order on a later run is not a bug",
+       "The engine returns rows in insertion order unless you ask for something else",
+       "Adding an index can change which rows a query returns",
+       "Every row carries a position, counted from 1, that you can select on"
+      ],
+      "a": 0,
+      "why": "Order is not information. SQLite will often hand back rows in rowid order today and in a completely different order tomorrow, once an index makes another access path cheaper — the same rows, differently arranged, and the engine considers itself to have answered correctly both times. That is exactly why `ORDER BY` exists, and why a test that asserts an unordered result is a test that will fail on someone else's machine. Note that an index changes the *order* and the *cost*, never the set of rows; and there is no row number to select on, because a set has no positions to number."
+     },
+     {
+      "q": "`SELECT title FROM book WHERE id NOT IN (SELECT book_id FROM loan)` — and one row of `loan` has a NULL `book_id`. What comes back?",
+      "opts": [
+       "Nothing at all, whatever is in `book`",
+       "Every book that has never been loaned, as intended",
+       "Every book, because a NULL matches nothing",
+       "An error: NULL is not comparable with `IN`"
+      ],
+      "a": 0,
+      "why": "`id NOT IN (1, 4, NULL)` expands to `id <> 1 AND id <> 4 AND id <> NULL`, and that last comparison is UNKNOWN for every possible `id`. A conjunction with an UNKNOWN in it can be FALSE, but it can never be TRUE — and `WHERE` keeps only TRUE. So the result is empty, silently, with no error and nothing in the log. `NOT EXISTS` asks a different question: does a matching row exist? A row whose `book_id` is NULL simply fails to match and is ignored, which is what you meant in the first place. This is the single best reason to reach for `NOT EXISTS` by habit."
+     },
+     {
+      "q": "You want the countries with more than two books, counting only books published after 1960. Where does each condition go?",
+      "opts": [
+       "`year > 1960` in `WHERE`, `COUNT(*) > 2` in `HAVING`",
+       "Both in `WHERE`",
+       "Both in `HAVING`",
+       "`year > 1960` in `HAVING`, `COUNT(*) > 2` in `WHERE`"
+      ],
+      "a": 0,
+      "why": "`WHERE` runs before the grouping and sees one row at a time; `HAVING` runs after it and sees one group at a time. The year is a property of a book, so it belongs in `WHERE` — and filtering there also means the groups are built from fewer rows, which is free speed. The count is a property of a group and does not exist until the grouping has happened, so an aggregate in `WHERE` is rejected outright by every engine. Putting a plain column test in `HAVING` is the mirror-image mistake: with no aggregate wrapped around it there is no single value for the group, and standard SQL refuses it too."
+     },
+     {
+      "q": "`SELECT a.name, COUNT(*) FROM author a LEFT JOIN book b ON b.author_id = a.id GROUP BY a.id` — what does it report for an author with no books?",
+      "opts": [
+       "1",
+       "0",
+       "NULL",
+       "Nothing: that author is left out"
+      ],
+      "a": 0,
+      "why": "The left join manufactures one row for that author with every `book` column set to NULL, and `COUNT(*)` counts *rows*, not values — so an author with nothing scores 1. `COUNT(b.id)` counts the non-NULL values of that column and reports the 0 you wanted. `COUNT(1)` is identical to `COUNT(*)`, because the constant is never NULL either. This is quietly the most common wrong number in a business report: it is off by exactly one, only on the rows nobody checks, and it never raises anything."
+     },
+     {
+      "q": "Why is `conn.execute(\"SELECT * FROM book WHERE title = ?\", (title,))` not merely a tidier spelling of an f-string?",
+      "opts": [
+       "The value never becomes part of the SQL text, so no quote inside it can end the string and start a statement",
+       "The driver escapes the quotes in the value before pasting it into the SQL",
+       "It is faster, because the driver caches the assembled string",
+       "It converts the value to the column's declared type, which an f-string cannot do"
+      ],
+      "a": 0,
+      "why": "The statement is parsed once with a hole in it, and the value is handed to the engine down a separate channel. Nothing in it is ever read as SQL, so `x'; DROP TABLE book; --` is a title that no book has, and that is the whole of it. Escaping the quotes first is what a hand-rolled quoting helper does, and such a helper is only ever a list of the tricks its author happened to remember. Reusing a prepared statement is a real secondary benefit, but speed is not the argument — and no driver quietly coerces your value to the column's type; SQLite in particular stores whatever you give it."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "One report, five decisions",
+    "minutes": 9,
+    "brief": "This query is the shape of half the reports ever written: walk down from a parent\ntable, count something on a grandchild, keep the parents that have nothing.\n\nEvery hole below has a plausible-looking wrong filling that produces *numbers*\nrather than an error. That is what makes reporting SQL dangerous — the query runs,\nthe report ships, and the figures come out plausible and wrong on precisely the rows\nnobody looks at.",
+    "caption": "loans_by_author.sql — five holes, each one a different way to be wrong",
+    "lang": "sql",
+    "listing": "-- Every author from one country, and how many loans their books have\n-- attracted. An author whose books have never left the shelf -- or who\n-- has no books on it at all -- must still appear, with a zero.\n\nSELECT author.name,\n       COUNT(___) AS loans\n  FROM author\n  ___ book ON book.author_id = author.id\n  LEFT JOIN loan ON loan.___ = book.id\n WHERE author.country = ___\n GROUP BY author.id, author.name\n ORDER BY loans ___, author.name;\n",
+    "blanks": [
+     {
+      "prompt": "An author with no loans must come out as 0, not as 1. What is counted?",
+      "hole": "?",
+      "opts": [
+       "1",
+       "loan.id",
+       "*",
+       "book.id"
+      ],
+      "a": 1,
+      "why": "`COUNT` over a column counts its non-NULL values. The outer join pads an author with no loans with a NULL `loan.id`, that NULL is not counted, and the author scores the 0 the brief asked for.",
+      "whys": [
+       "A constant is never NULL, so `COUNT(1)` is exactly `COUNT(*)` in every engine — including this one — and it inflates exactly the same authors by exactly the same amount.",
+       "`COUNT` over a column counts its non-NULL values. The outer join pads an author with no loans with a NULL `loan.id`, that NULL is not counted, and the author scores the 0 the brief asked for.",
+       "`COUNT(*)` counts rows, and the NULL-padded row an outer join invents is still a row. Because this is a two-level chain, an author with nothing borrowed keeps one padded row *per book*: three books and no loans reports 3, not 1. Only an author with a single book — or no books at all — happens to report 1. No error, no warning, just a report inflated by the size of each silent author's shelf.",
+       "This counts the surviving *book* rows, which the second join has already multiplied by the number of loans on each. An author with one much-borrowed book and one untouched one gets a number that is neither their book count nor their loan count."
+      ]
+     },
+     {
+      "prompt": "How do we reach `book` without dropping an author who has none?",
+      "hole": "?",
+      "opts": [
+       "JOIN",
+       "RIGHT JOIN",
+       "CROSS JOIN",
+       "LEFT JOIN"
+      ],
+      "a": 3,
+      "why": "A left join keeps every row of `author` whether or not the `ON` clause finds it a partner, filling the missing side with NULLs. That is the only construct here that can produce a row for an author with an empty shelf.",
+      "whys": [
+       "A plain `JOIN` is an inner join: an author the `ON` clause cannot match simply vanishes from the result. The rows it deletes are precisely the rows the report was written to show.",
+       "A right join preserves `book` instead. Since `book.author_id` is `NOT NULL` and the foreign key is enforced, every book already has an author, so this collapses to the inner join and loses the same authors.",
+       "A cross join asks for every author paired with every book. The `ON` clause is not part of what a cross join means; engines that tolerate one anyway just treat the whole thing as an inner join, so it either multiplies the table or loses the empty authors.",
+       "A left join keeps every row of `author` whether or not the `ON` clause finds it a partner, filling the missing side with NULLs. That is the only construct here that can produce a row for an author with an empty shelf."
+      ]
+     },
+     {
+      "prompt": "Which column of `loan` points at a book?",
+      "hole": "?",
+      "opts": [
+       "book_id",
+       "id",
+       "member_id",
+       "day"
+      ],
+      "a": 0,
+      "why": "`loan.book_id` is the declared foreign key into `book(id)`. It is the only column in `loan` whose values are book identifiers, and the join is only meaningful along a declared reference.",
+      "whys": [
+       "`loan.book_id` is the declared foreign key into `book(id)`. It is the only column in `loan` whose values are book identifiers, and the join is only meaningful along a declared reference.",
+       "`loan.id` is the loan's own surrogate key. Joining it to `book.id` pairs loan 1 with book 1 for no reason at all, and because both are dense integers it produces a full-looking result with entirely fictional numbers in it — the worst failure mode there is.",
+       "`member_id` identifies a borrower, not a book. The numbers still line up against `book.id`, so once again you get rows rather than an error, and the report attributes loans to whichever books happen to share an id with a member.",
+       "`day` is a date string. SQLite compares it against an integer id under the usual affinity rules, finds them never equal, and the outer join pads every author with NULLs — so the whole report comes out as zeros."
+      ]
+     },
+     {
+      "prompt": "The country comes from outside the query. How does it get in?",
+      "hole": "?",
+      "opts": [
+       "'Italy'",
+       "{country}",
+       "?",
+       "%s"
+      ],
+      "a": 2,
+      "why": "`?` is the placeholder Python's `sqlite3` binds. The value travels beside the statement rather than inside it, so it is data to the engine no matter what characters it contains.",
+      "whys": [
+       "Hard-coding the country makes the statement answer exactly one question forever. Every new country means a new string, and the first person in a hurry builds that string by concatenation — which is how the hole gets opened.",
+       "That is a Python format hole, and filling it means the value becomes part of the SQL text. A country named `x' OR '1'='1` then returns the whole table, which is the injection this course keeps coming back to.",
+       "`?` is the placeholder Python's `sqlite3` binds. The value travels beside the statement rather than inside it, so it is data to the engine no matter what characters it contains.",
+       "`%s` is the placeholder that `psycopg2` and the MySQL drivers use. `sqlite3` has never heard of it, and bare `%` is SQLite's modulo operator, so the statement does not even parse: `sqlite3.OperationalError: near \"%\": syntax error`. That is the honest kind of failure. Quoting it as `'%s'` is the dangerous variant — that one parses, compares against the literal two-character string, and returns an empty report for every country."
+      ]
+     },
+     {
+      "prompt": "Busiest author first.",
+      "hole": "?",
+      "opts": [
+       "ASC",
+       "DESCENDING",
+       "-1",
+       "DESC"
+      ],
+      "a": 3,
+      "why": "`DESC` sorts the count downwards, and `author.name` after it settles the ties, so the same data always produces the same report.",
+      "whys": [
+       "`ASC` is the default and sorts upwards, which puts every author nobody has borrowed at the top of a report about who is borrowed most.",
+       "SQL has no such keyword. SQLite stops with `near \"DESCENDING\": syntax error`, which is at least the honest kind of failure — you find out immediately.",
+       "This is not a sort direction at all: the parser reads `loans -1` as the expression `loans - 1` and sorts ascending on it. Every count shifted down by one sorts in exactly the same order as the counts themselves, so you get a silently ascending report.",
+       "`DESC` sorts the count downwards, and `author.name` after it settles the ties, so the same data always produces the same report."
+      ]
+     }
+    ]
+   },
+   "numeric": {
+    "title": "How many rows does the left join produce?",
+    "minutes": 6,
+    "brief": "The library data from the lab: four members, eight loans. Every loan names exactly\none member, and one member has never borrowed anything.\n\n```sql\nSELECT member.name, loan.id\n  FROM member\n  LEFT JOIN loan ON loan.member_id = member.id;\n```\n\nCount the rows this returns. Not the members, not the loans — the rows.",
+    "prompt": "How many rows does that query return?",
+    "note": "Whole rows, including any the join has padded with NULLs.",
+    "diagram": null,
+    "figure": "`member` holds Ada, Grace, Linus and Barbara. The eight rows of `loan` carry `member_id` = 1, 2, 1, 3, 1, 2, 2, 1 — in that order, one row per borrowing.",
+    "given": [
+     {
+      "label": "Rows in `member`",
+      "value": "4"
+     },
+     {
+      "label": "Rows in `loan`",
+      "value": "8"
+     },
+     {
+      "label": "Join predicate",
+      "value": "`loan.member_id = member.id`"
+     },
+     {
+      "label": "Members are ids 1-4",
+      "value": "Ada 1, Grace 2, Linus 3, Barbara 4"
+     }
+    ],
+    "answer": 9.0,
+    "tol": 0.0,
+    "unit": "rows",
+    "aside": "A join is not a lookup. It emits one row per matching pair, and an outer join then adds one more row for each left row that matched nothing.",
+    "hint": "Count the matching pairs first — each loan matches exactly one member — then ask what a LEFT JOIN does for a member that matched none.",
+    "wrong": "Eight is the inner join: the eight loan rows, each paired with its one member. The word LEFT is there to add something to that.",
+    "why": "Each of the eight loans matches exactly one member, so the join emits those eight pairs: four for Ada, three for Grace, one for Linus. Barbara matches nothing, and keeping her is the entire reason the join is a LEFT one — she comes back once, with every `loan` column NULL. Eight plus one is nine.\n\nThat ninth row is worth remembering, because it is the row that makes `COUNT(*)` on this join report 1 for Barbara instead of 0. The NULL-padded row is still a row; only `COUNT(loan.id)` looks at the values and gives her the zero she has earned."
+   },
    "match": null,
    "tune": null,
    "build": null,
@@ -119,10 +312,203 @@
     "3NF weakens BCNF to keep dependency preservation, which BCNF cannot always give you",
     "Projecting a dependency set onto a sub-relation is a closure computation over its subsets"
    ],
+   "read": null,
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
-   "numeric": null,
+   "quiz": {
+    "title": "Dependencies, keys and the BCNF test",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "What does the dependency `A → B` actually assert?",
+      "opts": [
+       "In every legal instance of the relation, two rows agreeing on A agree on B",
+       "In the rows stored right now, no two rows agree on A and disagree on B",
+       "B can be computed from A by some formula",
+       "A is a key of the relation"
+      ],
+      "a": 0,
+      "why": "A functional dependency is a constraint on the *schema* — a promise about every instance the table will ever hold. That is why you cannot read one off the data: a table that happens to satisfy `A → B` today proves nothing about tomorrow, and a table of one row satisfies every dependency you can write. It is also not a computation; it says B is *determined* by A, never how. And it makes A a key only in the special case where A determines every other attribute too."
+     },
+     {
+      "q": "R(A, B, C, D) with `A → B`, `B → C`, `C → D`. What is {B}+?",
+      "opts": [
+       "{B, C, D}",
+       "{B, C}",
+       "{A, B, C, D}",
+       "{B}"
+      ],
+      "a": 0,
+      "why": "Start with B itself, since closure is reflexive. `B → C` adds C; now `C → D` fires and adds D; nothing else has a left side inside {B, C, D}, so the loop stops. Nothing ever reaches A, because A appears on no right-hand side — and an attribute that no dependency can produce has to be supplied, so it sits in every candidate key. Since {B}+ falls short of R, B is not even a superkey here, let alone a key."
+     },
+     {
+      "q": "R(A, B, C) with `A B → C` and `C → B`. Which statement is true?",
+      "opts": [
+       "`C → B` violates BCNF, because {C}+ is {B, C} and that is not the whole of R",
+       "`A B → C` violates BCNF, because C belongs to no candidate key",
+       "R is in BCNF: both dependencies have a candidate key on the left",
+       "R is in BCNF, because both dependencies are non-trivial"
+      ],
+      "a": 0,
+      "why": "BCNF asks exactly one question of every non-trivial dependency: is the left side a superkey? {A, B}+ is all of R, so `A B → C` passes. {C}+ is only {B, C}, so `C → B` is the violation. This is the textbook relation for a reason: C *is* part of the candidate key {A, C}, which is what makes R third normal form and not Boyce-Codd — 3NF forgives a dependency whose right side is prime, and BCNF does not. Being non-trivial is the precondition for asking the question at all, never an answer to it."
+     },
+     {
+      "q": "BCNF is strictly stronger than 3NF. So why does anyone still use 3NF?",
+      "opts": [
+       "A BCNF decomposition sometimes cannot preserve every dependency; a 3NF one always can",
+       "A BCNF decomposition can lose rows when the pieces are joined back",
+       "3NF is cheaper to check, and the check is the expensive part",
+       "BCNF applies only to relations with a single candidate key"
+      ],
+      "a": 0,
+      "why": "Both give you a lossless join — that is guaranteed by splitting on X → Y so that the shared attributes X form a key of one piece, so losing rows is not the trade. What BCNF can cost is dependency preservation. Decompose R(A, B, C) with `A B → C` and `C → B` and A and B end up in different pieces, so `A B → C` can no longer be checked without a join, and the engine cannot enforce it locally any more. 3NF is defined so that a lossless *and* dependency-preserving decomposition always exists; it pays for that by tolerating exactly the dependency BCNF rejects."
+     },
+     {
+      "q": "Decomposing R(A, B, C) on the violation `C → B` gives which two pieces?",
+      "opts": [
+       "{B, C} and {A, C}",
+       "{B, C} and {A, B}",
+       "{A, B} and {A, C}",
+       "{A, B, C} and {B, C}"
+      ],
+      "a": 0,
+      "why": "The rule is: split R into X ∪ Y and (R − Y) ∪ X. Here X is {C} and Y is {B}, so one piece is {B, C} and the other is {A, C}. The shared attribute is C, and C is a key of {B, C} — which is precisely the condition that makes the join of the two pieces lossless. Leaving R itself as one of the pieces would decompose nothing, and a split into {A, B} and {A, C} shares only A, which determines neither piece, so joining those back would invent rows that were never there."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "Closure and the BCNF test, in eleven lines",
+    "minutes": 9,
+    "brief": "Everything in this module reduces to two routines. The first is a fixed-point loop:\nkeep applying dependencies until a whole pass adds nothing. The second is a single\nquestion asked of one dependency at a time.\n\nThey are short enough that the wrong version of either still runs, still returns a\nset, and still looks like an answer.",
+    "caption": "normalise.py — the fixed point, then the one question BCNF asks",
+    "lang": "python",
+    "listing": "def closure(attrs, fds):\n    \"\"\"X+ : everything the dependencies force, starting from attrs.\"\"\"\n    reached = set(attrs)\n    while True:\n        grew = False\n        for lhs, rhs in fds:\n            if ___ and not rhs <= reached:\n                reached ___ rhs\n                grew = True\n        if not ___:\n            break\n    return frozenset(reached)\n\n\ndef violates_bcnf(lhs, rhs, R, fds):\n    \"\"\"Does lhs -> rhs break BCNF on the relation R?\"\"\"\n    if ___:\n        return False          # trivial: the right side adds nothing\n    return not ___ <= closure(lhs, fds)\n",
+    "blanks": [
+     {
+      "prompt": "When may a dependency fire?",
+      "hole": "?",
+      "opts": [
+       "lhs & reached",
+       "rhs <= reached",
+       "lhs <= reached",
+       "reached <= lhs"
+      ],
+      "a": 2,
+      "why": "A dependency fires when its whole left side is already known — that is what `lhs <= reached` says, subset on the correct side. Every attribute of the left side, not merely one of them.",
+      "whys": [
+       "An intersection is truthy as soon as *one* attribute of the left side is known, so `A B → C` would fire on A alone. That is the single most common way to compute a closure that is far too large and to declare non-keys keys.",
+       "Testing the right side inverts the whole loop: combined with the `not rhs <= reached` that follows, the condition can never be true, and the closure returns exactly what it was given.",
+       "A dependency fires when its whole left side is already known — that is what `lhs <= reached` says, subset on the correct side. Every attribute of the left side, not merely one of them.",
+       "The subset is the wrong way round: this fires only while what you know is contained in the left side, which is true at the very start and false ever after. The closure stops one step in and returns nearly its input."
+      ]
+     },
+     {
+      "prompt": "How does the newly implied attribute set get added?",
+      "hole": "?",
+      "opts": [
+       "|=",
+       "&=",
+       "-=",
+       "=="
+      ],
+      "a": 0,
+      "why": "Closure only ever grows, so the right side is unioned in. `reached |= rhs` is `reached = reached | rhs`, and it is what makes the loop monotone and therefore guaranteed to terminate.",
+      "whys": [
+       "Closure only ever grows, so the right side is unioned in. `reached |= rhs` is `reached = reached | rhs`, and it is what makes the loop monotone and therefore guaranteed to terminate.",
+       "Intersection shrinks the set to whatever the two have in common, so the first dependency to fire would throw away almost everything you had already established.",
+       "Difference removes the implied attributes instead of adding them — and since the guard above only fires when they are *not* yet present, this line would usually change nothing at all while `grew` still claims it did. That is an infinite loop.",
+       "`==` is a comparison, not an assignment. The line becomes an expression whose value is discarded, `reached` never changes, and the loop spins forever because `grew` is set on every pass."
+      ]
+     },
+     {
+      "prompt": "What decides that the fixed point has been reached?",
+      "hole": "?",
+      "opts": [
+       "reached",
+       "fds",
+       "rhs",
+       "grew"
+      ],
+      "a": 3,
+      "why": "A full sweep that added nothing means no further sweep can add anything either, because the dependency list has not changed. `grew` is the flag that records whether this sweep did any work.",
+      "whys": [
+       "`reached` is non-empty whenever `attrs` is, so `not reached` is false and the loop never ends. Worse, for an empty starting set it ends immediately and returns the empty closure regardless of the dependencies.",
+       "The dependency list is a loop invariant — it is the same list on every pass — so testing it either never stops or never starts, depending only on whether there were any dependencies at all.",
+       "`rhs` is left over from the `for` loop above and holds whichever right side happened to come last. Stopping on it makes the answer depend on the order the dependencies were written in.",
+       "A full sweep that added nothing means no further sweep can add anything either, because the dependency list has not changed. `grew` is the flag that records whether this sweep did any work."
+      ]
+     },
+     {
+      "prompt": "Which dependencies are exempt from the test?",
+      "hole": "?",
+      "opts": [
+       "lhs == rhs",
+       "rhs <= lhs",
+       "lhs <= rhs",
+       "not rhs"
+      ],
+      "a": 1,
+      "why": "A dependency is trivial when its right side is already inside its left: `A B → A` says nothing and holds in every relation, so it cannot be evidence of a design fault. BCNF only ever constrains the non-trivial ones.",
+      "whys": [
+       "Equality catches only `A → A` and misses `A B → A`, which is trivial too. Every partial overlap is then tested as though it were meaningful, and a relation in BCNF is reported as violating.",
+       "A dependency is trivial when its right side is already inside its left: `A B → A` says nothing and holds in every relation, so it cannot be evidence of a design fault. BCNF only ever constrains the non-trivial ones.",
+       "The subset is inverted. This exempts `C → A B C` — a dependency that genuinely constrains the relation — while still testing `A B → A`, which constrains nothing. The exemptions land on exactly the wrong dependencies.",
+       "An empty right side is not what trivial means, and a parser that rejects empty sides makes this test dead code. Every genuinely trivial dependency then goes on to be reported as a violation."
+      ]
+     },
+     {
+      "prompt": "The left side must be a superkey. Of what?",
+      "hole": "?",
+      "opts": [
+       "lhs",
+       "fds",
+       "R",
+       "rhs"
+      ],
+      "a": 2,
+      "why": "X is a superkey of R exactly when X+ covers all of R, so the test is `R <= closure(lhs, fds)` and the violation is its negation. Note that superkey is relative to the relation you are testing — the same dependency can be fine on one piece and a violation on another.",
+      "whys": [
+       "A set is always inside its own closure, so this is true unconditionally and `violates_bcnf` becomes a function that returns False. A schema in any state at all would be pronounced in BCNF.",
+       "`fds` is a list of pairs, not a set of attributes, and Python refuses the comparison rather than guessing at it: `TypeError: '<=' not supported between instances of 'list' and 'frozenset'`. `violates_bcnf` does not return a wrong answer, it stops dead on its first call.",
+       "X is a superkey of R exactly when X+ covers all of R, so the test is `R <= closure(lhs, fds)` and the violation is its negation. Note that superkey is relative to the relation you are testing — the same dependency can be fine on one piece and a violation on another.",
+       "Checking only that the left side determines its own right side is checking that the dependency holds, which was assumed. It is true for every dependency in the set, so nothing is ever reported as a violation."
+      ]
+     }
+    ]
+   },
+   "numeric": {
+    "title": "How many candidate keys?",
+    "minutes": 8,
+    "brief": "Five attributes, four dependencies. Nothing here needs a decomposition — only\nclosures, computed in the right order.\n\n```text\nR(A, B, C, D, E)\n\n    A  -> B C\n    C D -> E\n    B  -> D\n    E  -> A\n```\n\nA superkey is any set whose closure covers R. A **candidate key** is a superkey\nwith no proper subset that is also one. Count the candidate keys.",
+    "prompt": "How many candidate keys does R have?",
+    "note": "Candidate keys, not superkeys — the minimal ones only.",
+    "diagram": null,
+    "figure": "`R(A, B, C, D, E)` under `A → B C`, `C D → E`, `B → D`, `E → A`. Four dependencies, five attributes, and no attribute that is missing from all of them.",
+    "given": [
+     {
+      "label": "Relation",
+      "value": "`R(A, B, C, D, E)`"
+     },
+     {
+      "label": "Dependencies",
+      "value": "`A → B C`, `C D → E`, `B → D`, `E → A`"
+     },
+     {
+      "label": "Superkey",
+      "value": "X with X+ ⊇ R"
+     },
+     {
+      "label": "Candidate key",
+      "value": "a superkey with no proper subset that is one"
+     }
+    ],
+    "answer": 4.0,
+    "tol": 0.0,
+    "unit": "candidate keys",
+    "aside": "Work upwards by size. Once a set is known to be a key, every larger set containing it is a superkey and can never be minimal, so it need not be tested at all.",
+    "hint": "Close each single attribute first. Then, among the pairs, only those containing none of the single-attribute keys can still be minimal.",
+    "wrong": "Superkeys are plentiful — every set containing a key is one, so there are far more than a handful. Count only the minimal ones, and discard any pair that already has a key inside it.",
+    "why": "Singles first. {A}+ : `A → B C` gives B and C, then `B → D` gives D, then `C D → E` gives E — all of R, so A is a key by itself. {E}+ : `E → A`, and A then drags in the rest, so E is a key too. The others fall short: {B}+ is {B, D}, {C}+ is {C}, {D}+ is {D}.\n\nAny pair containing A or E already has a key inside it, so only pairs drawn from {B, C, D} can still be minimal. {B, C}+ : `B → D` gives D, then `C D → E` gives E, then `E → A` gives A — all of R. {C, D}+ : `C D → E` gives E, `E → A` gives A, `A → B C` gives B — all of R. {B, D}+ is just {B, D}, since nothing there produces C.\n\nSo the candidate keys are {A}, {E}, {B, C} and {C, D} — four of them, and every larger set is a superkey that contains one. Worth noticing: all five attributes appear in some candidate key, so all five are prime. That is exactly the situation in which 3NF stops agreeing with BCNF."
+   },
    "match": null,
    "tune": null,
    "build": null,
@@ -195,14 +581,246 @@
     "An index lookup on an unclustered index costs about one page per matching row",
     "Covering indexes remove the heap fetch entirely, which changes the crossover point"
    ],
+   "read": null,
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
+   "quiz": {
+    "title": "Pages, trees, and the cost of a lookup",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "Why is the page, and not the row, the unit of cost?",
+      "opts": [
+       "Storage delivers a whole block at a time, so reading one row fetches its page whether or not the rest is wanted",
+       "Rows are variable length and pages are not",
+       "The buffer pool has no room to hold individual rows",
+       "SQL provides no way to address a single row"
+      ],
+      "a": 0,
+      "why": "Storage — spinning or solid state — has a minimum transfer unit, and the file system and the buffer pool are both built on top of it. Asking for one 200-byte row moves a 4 or 8 KB page into memory, so that row costs one page read and the other forty rows sitting on the page are free. Every cost model in this module is a consequence of that single fact. Variable-length rows are real but beside the point; the buffer pool is measured in pages *because* the page is the transfer unit, not the other way round; and SQL addresses individual rows perfectly well — it is the hardware underneath that cannot."
+     },
+     {
+      "q": "A B+-tree over 1 000 000 entries with a fan-out of 100. How many levels, counting the leaves?",
+      "opts": [
+       "3",
+       "4",
+       "5",
+       "10 000"
+      ],
+      "a": 0,
+      "why": "1 000 000 entries at 100 per leaf is 10 000 leaf pages; 10 000 entries at the level above pack into 100 nodes; those 100 fit under one root. Leaves, one internal level, root — three. 10 000 is the leaf count, not the height. Height grows like log_f(n), and with a fan-out in the hundreds it barely grows at all: take the table to a hundred million rows and you add a single level. That is the whole reason an index lookup costs a fixed handful of page reads instead of something that scales with the table."
+     },
+     {
+      "q": "The same index over the same query, once clustered and once not. What is different?",
+      "opts": [
+       "The heap fetch: clustered costs about one page per *page* of matching rows, unclustered about one page per matching *row*",
+       "The height of the tree",
+       "The number of entries in the leaves",
+       "Whether the index can serve a range query at all"
+      ],
+      "a": 0,
+      "why": "Clustering is a statement about the heap, not about the tree. If the rows are stored in roughly index order then consecutive matches land on the same page, and the buffer pool serves the second and the fortieth of them for nothing. The tree itself is untouched — same entries, same fan-out, same height — and both forms answer ranges perfectly well. What moves is the crossover: on the lab's thousand-row table it sits at 18 matching rows unclustered and 601 clustered, which is the difference between an index that is almost never worth using and one that almost always is."
+     },
+     {
+      "q": "Why does making an index *covering* change the arithmetic?",
+      "opts": [
+       "Every column the query needs is already in the index, so the heap is never visited and the per-row fetch term vanishes",
+       "It makes the tree shorter",
+       "It stores the table's rows in index order",
+       "It lets the planner skip evaluating the WHERE clause"
+      ],
+      "a": 0,
+      "why": "The expensive term in an unclustered lookup is one heap page per matching row, and it is the only term that grows with the size of the result. If the leaf entry already carries every column the query asks for, that term is zero and the cost falls to the descent plus a few leaf pages. SQLite says so out loud — the plan reads `SEARCH loan USING COVERING INDEX ...`. Note the tree does not get shorter: an extra column makes each entry wider, so the fan-out drops slightly and the index grows. Storing rows in index order is clustering, a different mechanism entirely, and the `WHERE` clause is still very much evaluated — narrowing on it is what the search is."
+     },
+     {
+      "q": "There is an index on `(day, book_id)`. Which query can use it to *narrow* the rows it reads?",
+      "opts": [
+       "`WHERE day = ?`, because `day` is a prefix of the index key",
+       "`WHERE book_id = ?`, because `book_id` is in the index",
+       "Neither: a two-column index serves only a query that names both columns",
+       "Both equally, because the index contains both columns"
+      ],
+      "a": 0,
+      "why": "The index is one sorted sequence, ordered by `day` first and by `book_id` only within a single day. Every entry for one `day` is therefore contiguous, and the engine can descend straight to the start of that run — a search. The entries for one `book_id` are scattered right through the sequence, one per day, so nothing can be skipped; SQLite may still read the whole index because it is narrower than the table, but that is a scan of the index rather than a search. Naming both columns works as well, which is why demanding both is too strong: any *prefix* of the key is enough, and the one-column prefix is by far the commonest case."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "Reading a query plan out loud",
+    "minutes": 9,
+    "brief": "`EXPLAIN QUERY PLAN` is the shortest feedback loop in this whole subject: you change\none thing, you ask again, and the engine tells you in half a line what it intends to\ndo. The vocabulary is tiny — `SCAN`, `SEARCH`, `USING COVERING INDEX`,\n`USE TEMP B-TREE` — and knowing it is most of what separates guessing at performance\nfrom measuring it.\n\nThe session below is real output from SQLite 3.50. Fill in what the engine said, and\nwhat was asked of it.",
+    "caption": "a sqlite3 session against a 200 000-row loan table",
+    "lang": "text",
+    "listing": "sqlite> -- 200 000 loans. The only index so far is the primary key.\nsqlite> EXPLAIN QUERY PLAN\n   ...> SELECT book_id, COUNT(*) FROM loan WHERE day >= ? GROUP BY book_id;\n___ loan\nUSE TEMP B-TREE FOR GROUP BY\n\nsqlite> CREATE INDEX loan_day ON loan (day);\nsqlite> EXPLAIN QUERY PLAN\n   ...> SELECT book_id, COUNT(*) FROM loan WHERE day >= ? GROUP BY book_id;\nSEARCH loan USING INDEX loan_day (___)\nUSE TEMP B-TREE FOR GROUP BY\n\nsqlite> CREATE INDEX loan_day_book ON loan (day, ___);\nsqlite> EXPLAIN QUERY PLAN\n   ...> SELECT book_id, COUNT(*) FROM loan WHERE day >= ? GROUP BY book_id;\nSEARCH loan USING ___ INDEX loan_day_book (day>?)\nUSE TEMP B-TREE FOR GROUP BY\n\nsqlite> EXPLAIN QUERY PLAN SELECT * FROM loan WHERE id = 42;\nSEARCH loan USING ___ (rowid=?)\n",
+    "blanks": [
+     {
+      "prompt": "No index on `day` yet. What is the engine doing?",
+      "hole": "?",
+      "opts": [
+       "SEARCH",
+       "SEEK",
+       "FULL SCAN",
+       "SCAN"
+      ],
+      "a": 3,
+      "why": "SQLite writes `SCAN` when it reads the whole table and `SEARCH` when an index narrows the rows first. With nothing indexed on `day`, all 200 000 rows must be read and tested. Older releases printed `SCAN TABLE loan`; the word that matters has not changed, and it is the word to look for in a slow report.",
+      "whys": [
+       "`SEARCH` is what appears once an index can restrict which rows are visited. No such index exists at this point in the session, so there is nothing to search — that is the whole reason the next two statements are there.",
+       "Not a word SQLite's planner uses. Reading plans is partly vocabulary, and the vocabulary is genuinely small: `SCAN`, `SEARCH`, `USING COVERING INDEX`, `USE TEMP B-TREE`.",
+       "Other engines say `Seq Scan` or `type: ALL`; SQLite prints a bare `SCAN`. The distinction that matters is never the adjective, only whether an index restricted the rows before they were read.",
+       "SQLite writes `SCAN` when it reads the whole table and `SEARCH` when an index narrows the rows first. With nothing indexed on `day`, all 200 000 rows must be read and tested. Older releases printed `SCAN TABLE loan`; the word that matters has not changed, and it is the word to look for in a slow report."
+      ]
+     },
+     {
+      "prompt": "Which constraint is the index being used to satisfy?",
+      "hole": "?",
+      "opts": [
+       "day<?",
+       "day>?",
+       "day=?",
+       "book_id>?"
+      ],
+      "a": 1,
+      "why": "The bracket names the constraint the index resolved. The query says `day >= ?` and SQLite prints the bound as `day>?` — the planner records that this is a range on `day` and does not distinguish the open end from the closed one. What matters is that `day`, and nothing else, narrowed the search.",
+      "whys": [
+       "That is the opposite bound. The query wants days at or after the parameter, and SQLite would print `day<?` only if the comparison ran the other way.",
+       "The bracket names the constraint the index resolved. The query says `day >= ?` and SQLite prints the bound as `day>?` — the planner records that this is a range on `day` and does not distinguish the open end from the closed one. What matters is that `day`, and nothing else, narrowed the search.",
+       "An equality constraint prints as `day=?` and describes a different plan: one contiguous run of identical keys, rather than everything from a point onwards. The query here asks for a range.",
+       "`book_id` is not in `loan_day` and is not in the `WHERE` clause either — it appears only in the `GROUP BY`, which is exactly why the grouping still needs its own temporary B-tree."
+      ]
+     },
+     {
+      "prompt": "Add the column that lets the index answer the whole query by itself.",
+      "hole": "?",
+      "opts": [
+       "id",
+       "COUNT(*)",
+       "book_id",
+       "member_id"
+      ],
+      "a": 2,
+      "why": "The query touches exactly two columns, `day` and `book_id`. Putting both into the index means every value it needs is in the leaves, and the table never has to be opened. The order matters too: `day` first, because that is the column being ranged over.",
+      "whys": [
+       "`id` is the rowid, and SQLite already stores the rowid beside every index entry, so appending it adds nothing the index did not have. `book_id` would still be missing, and the plan would still say `INDEX` rather than `COVERING INDEX`.",
+       "An aggregate is computed from rows; it is not a column and there is nothing to store. What can be indexed is the column being grouped by, which is what makes the aggregate cheap to compute.",
+       "The query touches exactly two columns, `day` and `book_id`. Putting both into the index means every value it needs is in the leaves, and the table never has to be opened. The order matters too: `day` first, because that is the column being ranged over.",
+       "`member_id` is not one of the columns this query mentions, so the engine would still have to visit the table to fetch `book_id` for every matching row — the per-row heap fetch stays, and nothing is covered."
+      ]
+     },
+     {
+      "prompt": "The plan changed one word. Which one?",
+      "hole": "?",
+      "opts": [
+       "COVERING",
+       "CLUSTERED",
+       "PARTIAL",
+       "UNIQUE"
+      ],
+      "a": 0,
+      "why": "SQLite says `COVERING` when every column the query needs lives in the index, so the table is never touched. That deletes the per-row heap fetch from the cost — the one term that grows with the number of matching rows — which is how an extra column in an index turns a losing plan into a winning one without the query changing at all.",
+      "whys": [
+       "SQLite says `COVERING` when every column the query needs lives in the index, so the table is never touched. That deletes the per-row heap fetch from the cost — the one term that grows with the number of matching rows — which is how an extra column in an index turns a losing plan into a winning one without the query changing at all.",
+       "Clustering describes the order the *table* is stored in. SQLite has no clustered secondary indexes to report; the nearest thing it has is the rowid ordering of the table itself. Both tricks remove work, but by different means and with different words.",
+       "A partial index is one created with a `WHERE` clause of its own, so that it holds only some of the rows. This one was created without any such clause — and a partial index would still need the table for the columns it lacks.",
+       "Uniqueness is a constraint, not an access strategy. `loan_day_book` was created without `UNIQUE`, and two loans of the same book on the same day are perfectly legal, so it could not have been."
+      ]
+     },
+     {
+      "prompt": "A lookup by primary key uses neither of the two indexes. What does it use?",
+      "hole": "?",
+      "opts": [
+       "TEMP B-TREE",
+       "INTEGER PRIMARY KEY",
+       "INDEX loan_day",
+       "COVERING INDEX loan_day_book"
+      ],
+      "a": 1,
+      "why": "In SQLite an `INTEGER PRIMARY KEY` *is* the rowid: the table is itself a B-tree keyed on it. A lookup by id is a descent through the table, with no separate index to consult and no second fetch afterwards — the cheapest access path the engine has, and why a surrogate integer key is so hard to beat.",
+      "whys": [
+       "A temporary B-tree is something the engine builds *during* a query in order to sort or group — you can see one doing exactly that above. It is never the structure a search is performed against.",
+       "In SQLite an `INTEGER PRIMARY KEY` *is* the rowid: the table is itself a B-tree keyed on it. A lookup by id is a descent through the table, with no separate index to consult and no second fetch afterwards — the cheapest access path the engine has, and why a surrogate integer key is so hard to beat.",
+       "That index is keyed on `day`, which this query never mentions. An index only helps when the query constrains a prefix of its key, and `id` is not a prefix of `(day)`.",
+       "`SELECT *` asks for every column, and that index holds only `day` and `book_id`, so it cannot cover this query. Even reading it end to end would leave every other column still to fetch."
+      ]
+     }
+    ]
+   },
    "numeric": null,
    "match": null,
    "tune": null,
    "build": null,
-   "derive": null,
+   "derive": {
+    "title": "Where the index stops paying",
+    "minutes": 13,
+    "brief": "The optimiser's entire question, in one inequality.\n\nA heap of $N$ rows at $p$ rows per page. A B+-tree of height $h$ — leaf level\nincluded — holding $f$ entries per leaf page. A query that matches $m$ rows.\n\nDrop the ceilings. They are worth a page or two and they hide the shape; you can put\nthem back once you know what you are looking at. What is left is the crossover: the\nnumber of matching rows at which the sequential scan catches the index up.",
+    "vars": [
+     "N",
+     "p",
+     "h",
+     "f",
+     "m"
+    ],
+    "steps": [
+     {
+      "prompt": "A sequential scan reads the whole heap, whatever the predicate says. Write its cost in pages, in terms of $N$ and $p$.",
+      "given": "",
+      "answer": "\\frac{N}{p}",
+      "placeholder": "",
+      "hint": "$N$ rows packed $p$ to a page. Nothing about the query enters this — a scan that matches nothing costs exactly the same as one that matches everything.",
+      "deconstruct": [
+       "Each page holds $p$ rows.",
+       "So $N$ rows occupy $N/p$ pages, and every one of them is read."
+      ]
+     },
+     {
+      "prompt": "Now the unclustered lookup. It descends $h-1$ internal levels, walks the leaf entries for the $m$ matches at $f$ entries per leaf page, then fetches one heap page per matching row. Write the total.",
+      "given": "Height $h$ counts the leaf level, so there are $h-1$ levels above it.",
+      "answer": "h - 1 + \\frac{m}{f} + m",
+      "placeholder": "",
+      "hint": "Three terms added together: the descent, the leaf pages the matches span, and the heap fetches. Only the last one is per-row.",
+      "deconstruct": [
+       "Descending from the root to the leaf level touches $h-1$ internal nodes.",
+       "The $m$ matching entries are contiguous in the leaves, so they span $m/f$ leaf pages.",
+       "Unclustered means the rows themselves are scattered: one page read each, $m$ in total."
+      ]
+     },
+     {
+      "prompt": "Set the two costs equal and solve for $m$. This is the crossover — the match count at which the scan catches up.",
+      "given": "$\\frac{N}{p} = h - 1 + \\frac{m}{f} + m$",
+      "answer": "\\frac{f \\cdot (\\frac{N}{p} - h + 1)}{f + 1}",
+      "placeholder": "",
+      "hint": "Move the constant terms to the left, then collect the two $m$ terms: $\\frac{m}{f} + m = m\\frac{1+f}{f}$.",
+      "deconstruct": [
+       "$\\frac{N}{p} - h + 1 = \\frac{m}{f} + m$.",
+       "The right side is $m \\cdot \\frac{1 + f}{f}$.",
+       "Divide through: $m = \\frac{f}{f+1}\\left(\\frac{N}{p} - h + 1\\right)$."
+      ]
+     },
+     {
+      "prompt": "Cluster the index. The rows now sit in roughly index order, so the heap fetch becomes $\\frac{m}{p}$ instead of $m$. Write the clustered lookup cost.",
+      "given": "",
+      "answer": "h - 1 + \\frac{m}{f} + \\frac{m}{p}",
+      "placeholder": "",
+      "hint": "Only the last term changes. Matching rows are adjacent in the heap now, so they arrive $p$ at a time like any other page of rows.",
+      "deconstruct": [
+       "The descent and the leaf walk are properties of the tree and do not care how the heap is ordered.",
+       "The heap fetch becomes $m$ rows at $p$ rows per page."
+      ]
+     },
+     {
+      "prompt": "Solve that one for $m$ as well, to get the clustered crossover.",
+      "given": "$\\frac{N}{p} = h - 1 + \\frac{m}{f} + \\frac{m}{p}$",
+      "answer": "\\frac{f \\cdot p \\cdot (\\frac{N}{p} - h + 1)}{p + f}",
+      "placeholder": "",
+      "hint": "Same move as before, but the two $m$ terms now share a denominator of $fp$: $\\frac{m}{f} + \\frac{m}{p} = m\\frac{p+f}{fp}$.",
+      "deconstruct": [
+       "$\\frac{N}{p} - h + 1 = m\\left(\\frac{1}{f} + \\frac{1}{p}\\right)$.",
+       "$\\frac{1}{f} + \\frac{1}{p} = \\frac{p + f}{fp}$.",
+       "So $m = \\frac{fp}{p+f}\\left(\\frac{N}{p} - h + 1\\right)$."
+      ]
+     }
+    ],
+    "closing": "Put the lab's numbers in. $N = 1000$, $p = 50$, $h = 2$, $f = 100$: a scan costs 20\npages and $\\frac{N}{p} - h + 1 = 19$. The unclustered crossover is\n$100 \\times 19 / 101 \\approx 18.8$ rows — under two percent of the table. The\nclustered one is $100 \\times 50 \\times 19 / 150 \\approx 633$, nearly two thirds of it.\nClustering buys roughly a factor of $p$, because the term that grows with the result\nstops being per-row and becomes per-page.\n\nThe lab's exhaustive search reports 18 and 601, not 18.8 and 633. The gap is the\nceilings you dropped: $\\lceil m/f \\rceil$ is a whole page rather than 0.18 of one at\neighteen matches, and the two ceilings together cost the clustered plan up to two\nextra pages — which, on a curve this flat, moves the crossing by about thirty rows.\nThe algebra gives you the shape and the order of magnitude. The exact integer is a\nsearch, and that is the right division of labour."
+   },
    "lab": {
     "title": "Index versus scan: a cost model that decides",
     "runtime": "python",
@@ -271,10 +889,203 @@
     "Two-phase locking: a growing phase then a shrinking phase, which guarantees serialisability",
     "Strict 2PL holds every lock to commit, so cascading aborts cannot happen — at the price of deadlock"
    ],
+   "read": null,
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
-   "numeric": null,
+   "quiz": {
+    "title": "Conflicts, graphs and locks",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "Two operations conflict when they...",
+      "opts": [
+       "belong to different transactions, touch the same item, and at least one of them writes",
+       "belong to different transactions and touch the same item",
+       "sit next to each other in the schedule",
+       "belong to different transactions and at least one of them writes"
+      ],
+      "a": 0,
+      "why": "All three conditions do work. Two reads of the same item commute — swap them and nothing anywhere changes — so a read/read pair carries no ordering information. Two operations of the same transaction are already ordered by that transaction and are not free to be swapped in the first place. And operations on different items commute whatever they do, because neither can see the other's effect. What is left is exactly the pair whose swap can change the outcome, which is why it is the atom the whole theory is built from. Adjacency has nothing to do with it: a conflict holds between operations a thousand steps apart."
+     },
+     {
+      "q": "A schedule's precedence graph contains a cycle. What follows?",
+      "opts": [
+       "No serial schedule is conflict-equivalent to it",
+       "It is certain to deadlock",
+       "It has definitely produced a wrong answer",
+       "It contains at least one write/write pair"
+      ],
+      "a": 0,
+      "why": "A cycle says the transactions must be ordered T1 before T2 before … before T1, and no serial order can satisfy that. It is a statement about equivalence, not about damage: a non-serialisable schedule *may* leave the database somewhere no serial run could reach, but on particular data it can come out fine, which is what makes the bug so hard to find by testing. Deadlock is a different phenomenon entirely — it belongs to locking, and a schedule that never blocks anybody can still be cyclic. And every edge needs only *one* write, so `r1(A) w2(A) r2(B) w1(B)` cycles with no write/write pair in it at all."
+     },
+     {
+      "q": "The graph turns out to be acyclic. What is a topological order of it?",
+      "opts": [
+       "A serial schedule that is conflict-equivalent to the one you ran",
+       "The order the transactions committed in",
+       "The only order in which the schedule could have been run",
+       "The order the locks were granted in"
+      ],
+      "a": 0,
+      "why": "Acyclic means every ordering constraint can be met at once, and any topological order is a serial schedule reaching the same final state as the interleaved one. There is usually more than one; the lab takes the smallest available transaction id at each step purely so that the answer is reproducible. It need not resemble the commit order at all — a transaction can commit last and still have to be ordered first, if everything it read was read before anyone overwrote it."
+     },
+     {
+      "q": "What does the two-phase rule actually forbid?",
+      "opts": [
+       "Acquiring any lock after releasing any lock",
+       "Holding two locks at the same time",
+       "Releasing a lock before the transaction commits",
+       "Upgrading a shared lock to an exclusive one"
+      ],
+      "a": 0,
+      "why": "One growing phase, then one shrinking phase, and the moment between them is the transaction's lock point. That single restriction is what guarantees conflict-serialisability: order the transactions by their lock points and you have the equivalent serial schedule. Holding many locks at once is the normal case and the entire purpose. Releasing early is allowed by plain 2PL — it is *strict* 2PL that holds everything to commit, and it does so to rule out cascading aborts, not to keep the schedule serialisable. Upgrading is permitted too, though it is one of the commonest routes into a deadlock."
+     },
+     {
+      "q": "Strict 2PL holds every exclusive lock until commit. What does that buy, and what does it cost?",
+      "opts": [
+       "It rules out cascading aborts; it makes deadlock likelier, because locks are held longer",
+       "It rules out deadlock, at the cost of throughput",
+       "It rules out non-serialisable schedules, which plain 2PL does not",
+       "It rules out lost updates, which plain 2PL does not"
+      ],
+      "a": 0,
+      "why": "Nobody can read or overwrite an uncommitted value, so no transaction ever has to be rolled back merely because another one was. That is the cascadeless property, and it is also what makes recovery simple: undoing one transaction never drags a second one down with it. The price is that every lock is held to the very end, which widens the window in which two transactions can end up waiting on each other. Plain 2PL already guarantees serialisability and already rules out lost updates; deadlock is prevented by neither, and is dealt with after the fact — by a timeout, or by finding a cycle in the waits-for graph and aborting somebody."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "A deadlock, one step at a time",
+    "minutes": 9,
+    "brief": "This is the schedule the lab calls `DEADLOCK`, and it is worth walking by hand before\nyou make a machine do it. Two transactions each read one item and then reach for the\nother. Neither has done anything wrong. Neither can proceed.\n\nRead the *lock wanted* column as a request and the *verdict* column as the lock\nmanager's reply.",
+    "caption": "the scheduler's own trace of r1(A) r2(B) w1(B) w2(A) c1 c2",
+    "lang": "text",
+    "listing": "Strict 2PL running   r1(A)  r2(B)  w1(B)  w2(A)  c1  c2\n\nS(x) = shared lock on x, X(x) = exclusive lock on x.\nShared locks coexist; an exclusive lock excludes everyone else.\n\n step  operation   lock wanted    verdict\n ----  ----------  -------------  ------------------------------------------\n  1    r1(A)       S(A) for T1    granted -- nobody holds A\n  2    r2(B)       ___ for T2     granted -- nobody holds B\n  3    w1(B)       X(B) for T1    ___\n  4    w2(A)       ___ for T2     refused -- T1 holds S(A) and has not committed\n  5    --          --             ___\n  6    abort T2    --             T2's locks go; T1 ___\n",
+    "blanks": [
+     {
+      "prompt": "T2 is reading B. What does it need?",
+      "hole": "?",
+      "opts": [
+       "S(B)",
+       "X(B)",
+       "S(A)",
+       "X(B) for T1"
+      ],
+      "a": 0,
+      "why": "A read needs a shared lock on the item being read, so `r2(B)` asks for `S(B)`. Nobody holds B, and shared locks coexist anyway, so it is granted immediately.",
+      "whys": [
+       "A read needs a shared lock on the item being read, so `r2(B)` asks for `S(B)`. Nobody holds B, and shared locks coexist anyway, so it is granted immediately.",
+       "An exclusive lock is what a *write* needs. Taking one to read would be correct but needlessly strict — it would block every other reader of B, and the deadlock two steps later would arrive one step sooner.",
+       "Wrong item. T2 is reading B here; A is what it reaches for at step 4, and that is where its trouble starts.",
+       "Wrong transaction as well as wrong mode. It is T2 that is executing this step, and T1 has no interest in B until step 3."
+      ]
+     },
+     {
+      "prompt": "T1 wants to write B, which it has not locked at all.",
+      "hole": "?",
+      "opts": [
+       "granted -- a writer takes priority over a reader",
+       "refused -- T1 already holds S(A)",
+       "refused -- T2 holds S(B)",
+       "granted -- T1 may upgrade its own lock"
+      ],
+      "a": 2,
+      "why": "An exclusive lock excludes everyone else, and T2 is holding `S(B)` from step 2. Under strict 2PL T2 will not let go until it commits, so T1 waits — it is not aborted, it is simply blocked, and the scheduler moves on to somebody else's operation.",
+      "whys": [
+       "No such rule exists in plain two-phase locking. Priority schemes are how some systems *prevent* deadlock — wound-wait and wait-die both work by letting one transaction shove another aside — but they are an addition to 2PL, not part of it.",
+       "Holding `S(A)` is entirely legitimate and is not a reason to refuse anything. The two-phase rule constrains when locks may be acquired relative to releases, never how many may be held at once.",
+       "An exclusive lock excludes everyone else, and T2 is holding `S(B)` from step 2. Under strict 2PL T2 will not let go until it commits, so T1 waits — it is not aborted, it is simply blocked, and the scheduler moves on to somebody else's operation.",
+       "An upgrade is a shared lock of your own becoming exclusive, and it is allowed only when yours is the *only* shared lock on the item. T1 holds no lock on B at all, so there is nothing here to upgrade."
+      ]
+     },
+     {
+      "prompt": "T2 wants to write A. What does it ask for?",
+      "hole": "?",
+      "opts": [
+       "S(A)",
+       "X(B)",
+       "an upgrade of S(A)",
+       "X(A)"
+      ],
+      "a": 3,
+      "why": "A write needs an exclusive lock on the item written, so `w2(A)` asks for `X(A)`. T1 holds `S(A)` and will not release it before committing, so this is refused and T2 blocks too.",
+      "whys": [
+       "A shared lock permits reading only. It would in fact be granted here, since shared locks coexist — and the write would then proceed with no protection at all, which is the precise hole the lock modes exist to close.",
+       "Wrong item: B is the one T2 already holds. It is the reach for A that closes the circle.",
+       "T2 holds no lock on A to upgrade — and even if it did, an upgrade needs to be the only shared lock on the item, which it would not be while T1 holds `S(A)`.",
+       "A write needs an exclusive lock on the item written, so `w2(A)` asks for `X(A)`. T1 holds `S(A)` and will not release it before committing, so this is refused and T2 blocks too."
+      ]
+     },
+     {
+      "prompt": "Both transactions are now waiting. What has the scheduler detected?",
+      "hole": "?",
+      "opts": [
+       "a lock conflict, to be retried from the front of the queue",
+       "a deadlock: every live transaction is blocked, so nothing can release anything",
+       "starvation: T2 will get its lock eventually",
+       "a non-serialisable schedule"
+      ],
+      "a": 1,
+      "why": "A lock is released by a commit, and a commit is reached by executing operations. With every live transaction blocked, no operation can run, so no lock can ever be released. Waiting longer changes nothing, which is exactly the condition worth naming.",
+      "whys": [
+       "Retrying is what the scheduler does after every commit, and it is the right response to an ordinary conflict. Here there is no commit coming, so a retry produces the identical refusals for ever.",
+       "A lock is released by a commit, and a commit is reached by executing operations. With every live transaction blocked, no operation can run, so no lock can ever be released. Waiting longer changes nothing, which is exactly the condition worth naming.",
+       "Starvation is a transaction that *could* proceed but keeps being passed over. Here T2 cannot proceed under any scheduling at all, because the lock it waits for is held by a transaction that is itself waiting on T2.",
+       "The schedule that 2PL has actually produced so far is serialisable — that is what the protocol guarantees, and it never emits a cyclic one. Deadlock is the price paid for that guarantee, not a failure of it."
+      ]
+     },
+     {
+      "prompt": "T2 is aborted and its locks released. What becomes of T1?",
+      "hole": "?",
+      "opts": [
+       "must restart from r1(A) as well",
+       "must release S(A) before it can continue",
+       "is aborted too, since both were blocked",
+       "may now take X(B) and run to commit"
+      ],
+      "a": 3,
+      "why": "Releasing T2's `S(B)` leaves B unheld, so T1's pending `X(B)` is granted the moment the scheduler retries the queue, and T1 goes on to commit. Breaking the cycle takes exactly one victim; the survivors lose nothing.",
+      "whys": [
+       "T1 has done nothing that needs undoing, and nothing it wrote was read by T2 — strict 2PL guarantees that. Restarting it would throw away correct work for no reason, which is what a *cascading* abort does and what strict 2PL exists to prevent.",
+       "Releasing `S(A)` is precisely what T1 must not do: acquiring `X(B)` after a release would break the two-phase rule and forfeit the serialisability guarantee. Locks come off at commit, all together.",
+       "Aborting everybody would resolve the deadlock and also lose every transaction involved. One victim is enough, because removing one edge is enough to break a cycle — the lab picks the highest-numbered blocked transaction only so the choice is deterministic.",
+       "Releasing T2's `S(B)` leaves B unheld, so T1's pending `X(B)` is granted the moment the scheduler retries the queue, and T1 goes on to commit. Breaking the cycle takes exactly one victim; the survivors lose nothing."
+      ]
+     }
+    ]
+   },
+   "numeric": {
+    "title": "How many edges in the precedence graph?",
+    "minutes": 8,
+    "brief": "Two operations **conflict** when they belong to different transactions, touch the\nsame item, and at least one of them writes. Each conflicting pair forces an ordering:\nthe earlier transaction must come before the later one in any equivalent serial\nschedule, and that is drawn as one arrow.\n\n```text\nS:   r1(A)  r2(A)  w3(A)  r2(B)  w1(B)  r3(B)  w2(A)  c1  c2  c3\n```\n\nBuild the precedence graph of S and count its **edges** — the distinct arrows, not\nthe conflicts that justify them.",
+    "prompt": "How many distinct edges does the precedence graph of S contain?",
+    "note": "An edge is an ordered pair of transactions. Two conflicts between the same pair, in the same direction, draw one arrow.",
+    "diagram": null,
+    "figure": "`S = r1(A) r2(A) w3(A) r2(B) w1(B) r3(B) w2(A) c1 c2 c3` — three transactions, two data items, seven operations before the commits.",
+    "given": [
+     {
+      "label": "Transactions",
+      "value": "T1, T2, T3"
+     },
+     {
+      "label": "Items",
+      "value": "A and B"
+     },
+     {
+      "label": "Conflict",
+      "value": "different transactions, same item, at least one write"
+     },
+     {
+      "label": "Count",
+      "value": "edges, not conflicting pairs"
+     }
+    ],
+    "answer": 5.0,
+    "tol": 0.0,
+    "unit": "edges",
+    "aside": "Commits are not operations on data, so they never conflict with anything and never contribute an edge.",
+    "hint": "Take one item at a time. Write out that item's operations in schedule order, then test every earlier/later pair among them.",
+    "wrong": "Count arrows, not conflicts. The same ordered pair of transactions can be forced twice — even on two different items — and it is still one arrow.",
+    "why": "On A, in schedule order: r1, r2, w3, w2. The two reads commute, so they are no constraint. r1 before w3 gives T1 → T3. r1 before w2 gives T1 → T2. r2 before w3 gives T2 → T3. r2 and w2 are the same transaction, so nothing. w3 before w2 gives T3 → T2.\n\nOn B, in schedule order: r2, w1, r3. r2 before w1 gives T2 → T1. r2 and r3 are both reads. w1 before r3 gives T1 → T3.\n\nSix conflicting pairs — but T1 → T3 was forced twice, once on A and once on B, and one arrow is drawn for it. So the edges are T1 → T2, T1 → T3, T2 → T1, T2 → T3 and T3 → T2: five.\n\nNow look at what you have drawn. T1 → T2 and T2 → T1 are both there, so the graph is cyclic and S is not conflict-serialisable. Which also means no two-phase-locking scheduler could ever have produced it — 2PL emits only acyclic schedules, and this is the kind of interleaving it exists to refuse."
+   },
    "match": null,
    "tune": null,
    "build": null,

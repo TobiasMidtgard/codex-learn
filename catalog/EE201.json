@@ -20,14 +20,19 @@
   "Find a diode's operating point by the load-line method and by numerical solution, and replace it with a piecewise-linear model that a linear solver can handle.",
   "Distinguish a diode's static resistance from its dynamic resistance, and say which one governs which measurement.",
   "Design a full-wave rectifier and reservoir capacitor to meet a stated ripple, and account for the diode drops, the peak inverse voltage and the peak repetitive current.",
-  "Design a Zener shunt regulator that holds its output across the full range of line and load, and compute its line regulation from the dynamic resistance."
+  "Design a Zener shunt regulator that holds its output across the full range of line and load, and compute its line regulation from the dynamic resistance.",
+  "Compute a junction's capacitance at any reverse bias from its zero-bias value and its grading exponent, and size a varactor-tuned circuit and its bias network against the tuning range and the loaded Q at the same time.",
+  "Design the diode circuits that shape a waveform rather than rectify it — clippers, clamps, peak detectors and multipliers — including how flat a clipped level really is and how far a clamp droops between clamping instants.",
+  "Predict from the charge-control model how long a conducting diode goes on conducting after it is reversed, and damp the resonance that the resulting snap excites in the surrounding loop.",
+  "Say what a Schottky diode, an LED and a photodiode each change about the pn junction and what each change costs, and size the circuit around each one accordingly."
  ],
- "assessment": "Four quizzes, one guided derivation, two circuits drawn and measured in the schematic editor, four Python labs checked by execution, and a capstone that designs a complete unregulated-plus-regulated supply and then proves it by time-stepped simulation.",
+ "assessment": "Ten quizzes, four guided derivations, seven circuits drawn and measured in the schematic editor and eight Python labs checked by execution — and, because not all of this subject is code, two intuition sandboxes, two fill-the-blanks listings, a schematic-symbol drill and a numeric design problem. The capstone designs a complete unregulated-plus-regulated supply and then proves it by time-stepped simulation.",
  "reading": [
   "*The Art of Electronics*, Horowitz & Hill — chapter 1, sections 1.6 to 1.8, on diodes and power supplies.",
   "*Microelectronic Circuits*, Sedra & Smith — chapter 4, for the diode equation and every model built on it.",
   "*Semiconductor Physics and Devices*, Neamen — chapters 4 to 7, for the physics behind the built-in potential.",
-  "Any manufacturer's 1N4148 and 1N4007 data sheets, side by side. The difference between them is the whole of module 3."
+  "Any manufacturer's 1N4148 and 1N4007 data sheets, side by side. The difference between them is the whole of module 3.",
+  "*Physics of Semiconductor Devices*, Sze & Ng — chapters 2, 3 and 13, for junction capacitance, the metal-semiconductor barrier and photodetectors."
  ],
  "modules": [
   {
@@ -45,6 +50,7 @@
     "The **thermal voltage** $V_T = kT/q$ is 25.85 mV at 300 K. It is not a fitted constant; it is the thermal energy per carrier expressed in volts, and it sets the scale of every exponential in this course.",
     "You cannot measure $V_{bi}$ with a voltmeter. The contact potentials at the two probe junctions cancel it exactly — if they did not, a diode in a drawer would be a battery, and thermodynamics forbids that."
    ],
+   "read": null,
    "sandbox": null,
    "quiz": {
     "title": "Doping, mass action and the junction",
@@ -270,6 +276,7 @@
     "Static resistance answers 'how much current at this voltage'. Dynamic resistance answers 'how much does the voltage move if the current wobbles'. Confusing them is the most expensive mistake in this course.",
     "The **piecewise-linear model** replaces the diode by a fixed voltage $V_{D0}$ in series with $r_d$ — the tangent to the exponential at the chosen operating point. It is exact at that point and useful for a decade either side."
    ],
+   "read": null,
    "sandbox": null,
    "quiz": {
     "title": "The exponential, and the two resistances",
@@ -650,6 +657,7 @@
     "Real diodes do not stop conducting instantly when the current reverses. **Reverse recovery** sweeps the stored minority charge out, and the loop inductance and junction capacitance then ring at tens of megahertz — the source of most of a supply's radiated noise.",
     "A rectifier output is not a supply. It has ripple, it moves with the mains and with the load, and it needs either a filter, a regulator or both. Module 4 supplies the regulator."
    ],
+   "read": null,
    "sandbox": {
     "title": "What happens the instant a diode stops conducting",
     "visualiser": "switching",
@@ -811,6 +819,7 @@
     "A shunt regulator is deliberately wasteful: it draws its full current whether the load needs it or not. That is the price of a circuit with three components and no feedback loop.",
     "Everything in this module rests on the same fact as module 2. The Zener's static resistance at 5.1 V and 20 mA is 255 Ω; its dynamic resistance is 8 Ω. The first number tells you what it costs to run; the second tells you how well it regulates. A resistor has only one number, which is exactly why a resistor cannot do this job."
    ],
+   "read": null,
    "sandbox": {
     "title": "How much filtering the ripple actually needs",
     "visualiser": "bode",
@@ -1180,6 +1189,2554 @@
      }
     ]
    }
+  },
+  {
+   "title": "Drift, diffusion, and where $I_S$ actually comes from",
+   "summary": "The two ways a carrier moves, the one constant that ties them together, and the calculation that turns a doping profile into the saturation current module 2 took on trust.",
+   "concepts": [
+    "**Drift** is motion in a field, and it produces a *velocity* rather than an acceleration: a carrier accelerates, scatters off a lattice vibration or an ionised dopant, and starts again, so on average $v = \\mu E$. The **mobility** $\\mu$ is about 0.135 m$^2$/V·s for electrons in lightly doped silicon and 0.048 for holes, and both fall as the doping rises, because there is more to scatter off.",
+    "That gives the conductivity straight away: $\\sigma = q(n\\mu_n + p\\mu_p)$. In doped material one term is astronomically larger than the other, so n-type silicon at $N_d = 10^{22}$ m$^{-3}$ has $\\sigma = 216$ S/m and a resistivity of 4.62 mΩ·m — 0.46 Ω·cm in the units a wafer is actually sold in.",
+    "**Diffusion** is motion down a concentration gradient with no field at all: $J_p = -qD_p\\,dp/dx$. It is not separate physics from drift, it is the same random walk seen from a different starting condition, which is why the two coefficients cannot be independent. The **Einstein relation** $D = V_T\\mu$ says so: at 300 K the two mobilities above give $D_n = 34.9$ cm$^2$/s and $D_p = 12.4$ cm$^2$/s with no new measurement.",
+    "Forward bias injects minority carriers across the junction. They diffuse away from it and recombine, surviving a lifetime $\\tau$ and therefore travelling a **diffusion length** $L = \\sqrt{D\\tau}$ — 59 µm for electrons and 35 µm for holes at $\\tau = 1$ µs. That length sets the concentration gradient, the gradient sets the current, and evaluating it gives $I_S = qAn_i^2\\left(D_p/(L_pN_d) + D_n/(L_nN_a)\\right)$.",
+    "So $I_S$ is not a fitted constant, it is a consequence of the doping — and it goes the way round that surprises people. Raising $N_d$ from $10^{22}$ to $10^{23}$ m$^{-3}$ divides $I_S$ by 8.7 and therefore *raises* the forward drop at 1 mA by 56 mV, from 0.729 V to 0.785 V. Every diode's 0.7 V is a decision somebody made at a furnace."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "Transport, and the saturation current it produces",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "A bar of n-type silicon is doped with $10^{22}$ m$^{-3}$ donors, and at that level the electron mobility is 0.135 m$^2$/V·s. What is its resistivity?",
+      "opts": [
+       "4.6 Ω·cm",
+       "0.46 Ω·cm",
+       "216 Ω·cm",
+       "0.46 Ω·m"
+      ],
+      "a": 1,
+      "why": "$\\sigma = qN_d\\mu_n = 1.602\\times10^{-19} \\times 10^{22} \\times 0.135 = 216$ S/m, so\n$\\rho = 1/\\sigma = 4.62\\times10^{-3}$ Ω·m. Converting to the centimetre units the\nindustry still uses divides by a hundred, not multiplies: 4.62 mΩ·m is 0.462 Ω·cm.\nQuoting 0.46 Ω·m instead is the standard slip and puts the answer out by a factor of a\nhundred; quoting 216 Ω·cm hands back the conductivity with a resistivity's unit\nattached. Half a Ω·cm is worth remembering as a landmark — it is roughly where a\npower device's drift region sits."
+     },
+     {
+      "q": "The hole mobility in the same silicon is 0.048 m$^2$/V·s. What is the hole diffusion coefficient at 300 K?",
+      "opts": [
+       "$1.24\\times10^{-3}$ m$^2$/s",
+       "$1.86$ m$^2$/s",
+       "$0.048$ m$^2$/s — $D$ and $\\mu$ are the same number in SI units",
+       "it cannot be found without knowing the doping"
+      ],
+      "a": 0,
+      "why": "Einstein: $D = V_T\\mu = 0.025852 \\times 0.048 = 1.24\\times10^{-3}$ m$^2$/s, which is\n12.4 cm$^2$/s in the units the tables use. Dividing instead of multiplying gives\n1.86 and is dimensionally impossible — $D$ is an area per second and $\\mu$ is not.\nThe point of the relation is that drift and diffusion are the *same* scattering seen\ntwice, so a mobility measured with a voltmeter tells you a diffusion coefficient you\nnever measured. Once again the constant of proportionality is $V_T$."
+     },
+     {
+      "q": "Both sides of a junction are doped ten times more heavily. What happens to $I_S$?",
+      "opts": [
+       "multiplied by ten",
+       "unchanged — the two sides scale together, so the ratio is the same",
+       "divided by a hundred",
+       "divided by ten, and the forward drop at a fixed current rises by about 59 mV"
+      ],
+      "a": 3,
+      "why": "Both terms of $I_S = qAn_i^2(D_p/(L_pN_d) + D_n/(L_nN_a))$ carry a doping in the\ndenominator, so both are divided by ten and so is their sum. Then\n$V = V_T\\ln(I/I_S)$ rises by $V_T\\ln 10 = 59.5$ mV at any fixed current. Answering\n\"unchanged, because the ratio is the same\" is module 1's rule misapplied: the built-in\npotential depends on the doping *product*, but $I_S$ depends on how many minority\ncarriers are available to inject, and heavier doping means fewer."
+     },
+     {
+      "q": "Which carriers actually carry the saturation current?",
+      "opts": [
+       "the majority carriers on each side, drifting in the junction field",
+       "minority carriers injected across the junction, diffusing away from it and recombining",
+       "carriers generated at the metal contacts",
+       "the ionised dopants themselves, once the field is strong enough to move them"
+      ],
+      "a": 1,
+      "why": "Minority carriers, which is why $n_i^2$ appears in $I_S$ and the doping appears\nunderneath it. The majority carriers are the ones that were always there; what crosses\nthe junction and then has somewhere to go is the small population on the other side.\nDopant atoms are substituted into the lattice and never move at any field a diode\nsurvives. The whole exponential is a statement about how many minority carriers the\nbarrier lets through, which is exactly the $10^{10}$ m$^{-3}$ that looked negligible\nin module 1."
+     },
+     {
+      "q": "A junction has $N_a = 10^{24}$ m$^{-3}$ on the p-side and $N_d = 10^{22}$ m$^{-3}$ on the n-side. Which injection dominates $I_S$?",
+      "opts": [
+       "hole injection into the lightly doped n-side, by roughly sixty to one",
+       "electron injection into the heavily doped p-side, by roughly sixty to one",
+       "the two contribute equally, because it is one device with one current",
+       "neither — $I_S$ is fixed by the width of the depletion region"
+      ],
+      "a": 0,
+      "why": "Compare the two terms: $D_p/(L_pN_d) = 3.52\\times10^{-21}$ against\n$D_n/(L_nN_a) = 5.91\\times10^{-23}$, a ratio of 59.6. The hundredfold difference in\ndoping does most of it and the different diffusion constants pull back a little.\nThat is why real diodes are made deliberately one-sided: injection into the heavily\ndoped side is suppressed, so almost all the current is one carrier type, which makes\nthe device's speed and its recovery behaviour predictable rather than a mixture."
+     },
+     {
+      "q": "The doping of a silicon bar is raised by a factor of one hundred. Does its conductivity rise by exactly one hundred?",
+      "opts": [
+       "yes, exactly one hundred times",
+       "somewhat less, because the extra ionised dopants scatter carriers and the mobility falls",
+       "somewhat more, because heavier doping also raises the mobility",
+       "not at all — conductivity is a property of silicon and not of its doping"
+      ],
+      "a": 1,
+      "why": "$\\sigma = qn\\mu$ has two factors and only one of them was changed on purpose. Every\nionised donor is a charged obstacle, so raising the doping raises the scattering and\nlowers $\\mu$ — from about 0.135 m$^2$/V·s in lightly doped silicon to well under half\nthat at $10^{24}$ m$^{-3}$. The conductivity still rises steeply, just not\nproportionally, which is why a resistivity table is a table and not a formula. Every\nnumber in this module quotes the mobility at the doping it belongs to for exactly\nthis reason."
+     }
+    ]
+   },
+   "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
+   "build": {
+    "title": "Measuring a wafer's resistivity without measuring its contacts",
+    "minutes": 26,
+    "brief": "The transport arithmetic above turns a doping level into a resistivity, and a\nresistivity into the resistance of a specific piece of silicon. This is that piece of\nsilicon, and the measurement that gets the number right.\n\n## The bar\n\nA bar of n-type silicon, doped $N_d = 10^{22}$ m$^{-3}$, with $\\mu_n = 0.135$\nm$^2$/V·s at that doping. It is **500 µm long** with a **100 µm square** cross\nsection, so $A = 1\\times10^{-8}$ m$^2$.\n\n$$\\sigma = qN_d\\mu_n = 216\\ \\text{S/m}, \\qquad\n\\rho = 4.62\\ \\text{m}\\Omega\\cdot\\text{m}, \\qquad\nR = \\frac{\\rho L}{A} = 231\\ \\Omega$$\n\nIts bottom face is bonded straight onto the grounded package. Current is forced in at\nthe top through a probe needle, and that needle plus the metal-to-silicon contact\nunder it is worth about **22 Ω** — not a defect, just what a pressed contact is.\n\n## What to build\n\nThe canvas gives you a **10 mA** current source and a probe. Add:\n\n- the **22 Ω** contact resistance, in the path the forcing current takes,\n- the **231 Ω** bar, from the probed node down to ground,\n\nand wire the probe so that it sits on the **far side of the contact**, looking at the\nbar alone.\n\n## Why the wiring is the whole exercise\n\nA voltmeter draws no current, so no current flows in the wire that reaches it, so no\nvoltage is dropped along that wire or across whatever it is touching. Put the probe on\nthe far side of the contact and the contact is outside the measurement entirely.\n\nPut it on the near side — the same node the current source feeds — and you measure\n253 Ω instead of 231 Ω, and conclude that the wafer is 9.5% more resistive than it is.\nNothing about the arithmetic warns you: the number is stable, repeatable, and wrong.\nThis is why every resistivity, sheet-resistance and on-resistance measurement worth\npublishing forces current on one pair of contacts and senses voltage on another.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "I",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 0.01
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 4
+      },
+      {
+       "id": "p2",
+       "kind": "GND",
+       "x": 13,
+       "y": 11
+      },
+      {
+       "id": "p3",
+       "kind": "OUT",
+       "x": 11,
+       "y": 7
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        3,
+        4
+       ]
+      },
+      {
+       "a": [
+        11,
+        7
+       ],
+       "b": [
+        13,
+        7
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "I",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 0.01
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 4
+      },
+      {
+       "id": "p4",
+       "kind": "R",
+       "x": 7,
+       "y": 7,
+       "rot": 0,
+       "value": 22
+      },
+      {
+       "id": "p5",
+       "kind": "R",
+       "x": 13,
+       "y": 9,
+       "rot": 1,
+       "value": 231
+      },
+      {
+       "id": "p2",
+       "kind": "GND",
+       "x": 13,
+       "y": 11
+      },
+      {
+       "id": "p3",
+       "kind": "OUT",
+       "x": 11,
+       "y": 7
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        3,
+        4
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        6,
+        7
+       ]
+      },
+      {
+       "a": [
+        8,
+        7
+       ],
+       "b": [
+        13,
+        7
+       ]
+      },
+      {
+       "a": [
+        13,
+        7
+       ],
+       "b": [
+        13,
+        8
+       ]
+      },
+      {
+       "a": [
+        13,
+        10
+       ],
+       "b": [
+        13,
+        11
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "10 mA is forced, and the probed node sits at 2.31 V",
+      "code": "const src = c.net.parts.filter(function (p) { return p.kind === 'I'; });\nc.assert(src.length === 1,\n  'Exactly one current source — the 10 mA forced through the bar. Found ' + src.length + '.');\nc.close(Math.abs(src[0].value), 0.010, 0.02, 'the forcing current');\nc.close(c.vout(), 2.3117, 0.03,\n  'the voltage at the probed node. 216 S/m over a 500 um length and a 1e-8 m^2 section ' +\n  'is 231 ohms, and 10 mA through 231 ohms is 2.31 V');"
+     },
+     {
+      "name": "the contact resistance is in the forcing path, not in the sensed one",
+      "code": "const src = c.net.parts.filter(function (p) { return p.kind === 'I'; })[0];\nconst force = src.n1 === 0 ? src.n2 : src.n1;\nconst out = c.outNode();\nc.assert(force !== out,\n  'The probe is on the same node the current source feeds, so it is reading the ' +\n  'contact resistance as well as the bar. That is a two-wire measurement, and ' +\n  'avoiding it is the whole point here: move the probe to the far side of the contact.');\nconst v = c.dc().v;\nc.close(v[force] - v[out], 0.22, 0.15,\n  'the volts across the contact resistance. 10 mA through 22 ohms is 0.22 V, and it is ' +\n  'sitting between the source and the bar where the voltmeter cannot see it');"
+     },
+     {
+      "name": "the bar is the resistance the doping and the geometry say it is",
+      "code": "const out = c.outNode();\nconst bar = c.net.parts.filter(function (p) {\n  return p.kind === 'R' && ((p.n1 === out && p.n2 === 0) || (p.n2 === out && p.n1 === 0));\n});\nc.assert(bar.length === 1,\n  'Exactly one resistor from the probed node to ground — the bar itself. Found ' +\n  bar.length + '. If the contact resistance is down here instead, it is inside the ' +\n  'measurement again.');\nc.close(bar[0].value, 231, 0.03, 'the bar resistance from rho times L over A');\nc.close(c.vout() / bar[0].value, 0.010, 0.02,\n  'the current actually in the bar. All ten milliamps have to go through it and nowhere else');"
+     },
+     {
+      "name": "and the two-wire answer would have been 9.5% high",
+      "code": "const src = c.net.parts.filter(function (p) { return p.kind === 'I'; })[0];\nconst force = src.n1 === 0 ? src.n2 : src.n1;\nconst v = c.dc().v;\nconst fourWire = c.vout() / 0.010;\nconst twoWire = v[force] / 0.010;\nc.close(fourWire, 231, 0.03, 'the resistance the probe reports where you put it');\nc.close(twoWire, 253, 0.03,\n  'the resistance a probe on the forcing node would have reported. It is not a random ' +\n  'error — it is exactly the contact resistance added on, every time, repeatably');\nc.assert(twoWire / fourWire > 1.05,\n  'The two readings differ by only ' + ((twoWire / fourWire - 1) * 100).toFixed(1) +\n  '%, which means the contact resistance you placed is too small to make the point. ' +\n  'A pressed probe on silicon really is tens of ohms.');"
+     }
+    ],
+    "hints": [
+     "$\\sigma = 1.602\\times10^{-19} \\times 10^{22} \\times 0.135 = 216$ S/m. Then $R = L/(\\sigma A) = 500\\times10^{-6}/(216 \\times 10^{-8}) = 231\\ \\Omega$. Type `231`.",
+     "Place the 22 Ω contact horizontally between the current source's lower pin and the node the probe already sits on, then run the bar vertically from that node down to the ground below it.",
+     "The current source in the canvas is drawn with its top pin grounded so that it pushes current out of its lower pin into your circuit. Leave it where it is; the exercise is what you hang off it.",
+     "If the check about the two-wire answer complains that the two readings are the same, the contact resistance has ended up somewhere that carries no current — most likely in the wire going to the probe, where by definition nothing flows."
+    ]
+   },
+   "derive": {
+    "title": "$I_S$, from the injected minority carriers",
+    "minutes": 14,
+    "brief": "Module 2 wrote $I = I_S(e^{V/V_T} - 1)$ and left $I_S$ as a number off a data sheet.\nIt is not a number off a data sheet; it is four lines of algebra from the two facts\nmodule 1 already established.\n\nWork on the n-side, where holes are the minority carriers. In equilibrium the hole\nconcentration there is $p_{n0} = n_i^2/N_d$. Forward bias raises the concentration at\nthe edge of the depletion region by the Boltzmann factor, to\n$p_n(0) = p_{n0}\\,e^{V/V_T}$ — the same exponential as before, and for the same\nreason.\n\nThose extra holes then have to go somewhere. They diffuse into the neutral n-region\nand recombine, and the distance they cover before they do is the diffusion length\n$L_p$.",
+    "vars": [
+     "n_i",
+     "N_a",
+     "N_d",
+     "V",
+     "V_T",
+     "q",
+     "A",
+     "D_p",
+     "D_n",
+     "L_p",
+     "L_n",
+     "tau_p",
+     "I_S",
+     "p_n0",
+     "J_p"
+    ],
+    "steps": [
+     {
+      "prompt": "Write the **excess** hole concentration at the edge of the n-side — the amount by which $p_n(0)$ exceeds its equilibrium value — in terms of $n_i$, $N_d$, $V$ and $V_T$.",
+      "given": "$p_n(0) = p_{n0}e^{V/V_T}$ with $p_{n0} = n_i^2/N_d$.",
+      "answer": "\\frac{n_i^2}{N_d}(exp(\\frac{V}{V_T}) - 1)",
+      "placeholder": "",
+      "hint": "Excess means $p_n(0) - p_{n0}$. Factor $p_{n0}$ out of the subtraction and the $-1$ appears on its own.",
+      "deconstruct": [
+       "The excess is $p_{n0}e^{V/V_T} - p_{n0}$.",
+       "Take $p_{n0}$ outside the bracket, then substitute $p_{n0} = n_i^2/N_d$.",
+       "That $-1$ is the same $-1$ as in the Shockley equation, and it arrives here rather than being bolted on."
+      ]
+     },
+     {
+      "prompt": "The excess decays over a distance $L_p$, so the concentration gradient at the edge is the excess divided by $L_p$. Multiply by $qD_p$ to get the hole current density $J_p$ there.",
+      "given": "$J_p = qD_p \\times (\\text{excess})/L_p$",
+      "answer": "\\frac{q D_p n_i^2}{L_p N_d}(exp(\\frac{V}{V_T}) - 1)",
+      "placeholder": "",
+      "hint": "Nothing new happens here — take the previous answer, divide it by $L_p$ and multiply it by $qD_p$.",
+      "deconstruct": [
+       "The gradient is the excess concentration over the diffusion length.",
+       "Fick's law turns a gradient into a current density by multiplying by $qD_p$.",
+       "Everything except the exponential bracket is a constant of the device."
+      ]
+     },
+     {
+      "prompt": "The p-side does the same thing with electrons, giving a second term with $D_n$, $L_n$ and $N_a$ in place of $D_p$, $L_p$ and $N_d$. Add the two current densities, multiply by the junction area $A$, and write the whole coefficient in front of $(e^{V/V_T} - 1)$ — that coefficient is $I_S$.",
+      "given": "",
+      "answer": "q A n_i^2 (\\frac{D_p}{L_p N_d} + \\frac{D_n}{L_n N_a})",
+      "placeholder": "",
+      "hint": "Both terms share $qAn_i^2$ and both share the same exponential bracket, so only the two fractions differ.",
+      "deconstruct": [
+       "Write the electron term by swapping every $p$ subscript for an $n$ and $N_d$ for $N_a$.",
+       "Add the two densities; the exponential bracket is common and comes out.",
+       "Multiply by the area to turn a current density into a current."
+      ]
+     },
+     {
+      "prompt": "One loose end: the diffusion length itself. A hole diffuses with coefficient $D_p$ and survives for a lifetime $\\tau_p$. Write $L_p$.",
+      "given": "",
+      "answer": "\\sqrt{D_p \\tau_p}",
+      "placeholder": "",
+      "hint": "A diffusing particle covers a distance that grows as the square root of the time, and $D$ has units of area per second.",
+      "deconstruct": [
+       "$D_p\\tau_p$ has units of m$^2$/s times s, which is an area.",
+       "The square root of that area is the only length the two quantities can make."
+      ]
+     }
+    ],
+    "closing": "Put the numbers in. With $A = 10^{-8}$ m$^2$, $N_a = 10^{24}$ m$^{-3}$,\n$N_d = 10^{22}$ m$^{-3}$, $n_i = 1.0\\times10^{16}$ m$^{-3}$ and $\\tau = 1$ µs on both\nsides:\n\n$$I_S = 5.74\\times10^{-16}\\ \\text{A}$$\n\nwhich is squarely inside the $10^{-15}$ to $10^{-12}$ A that module 2 quoted from a\ndata sheet — except that now it came from a doping profile and a lifetime rather than\nfrom a measurement.\n\nTwo things follow immediately. The first is that $I_S$ falls as the doping rises, so\nthe forward drop *rises*: 0.729 V at 1 mA here, 0.785 V if the n-side is doped ten\ntimes harder. The second is that $n_i^2$ sits in front of everything, and $n_i^2$ is\nthe most temperature-sensitive quantity in the whole subject. That is the next module."
+   },
+   "lab": {
+    "title": "From a doping level to a saturation current",
+    "runtime": "python",
+    "minutes": 30,
+    "brief": "Five functions that walk the whole chain of this module: doping to conductivity,\nconductivity to a resistance you could measure, mobility to a diffusion coefficient,\ndiffusion to a length, and all of it to $I_S$.\n\n- `conductivity(n, p, mu_n, mu_p)` returns $\\sigma = q(n\\mu_n + p\\mu_p)$ in S/m.\n- `bar_resistance(sigma, length, area)` returns $L/(\\sigma A)$ in ohms.\n- `diffusion_coefficient(mu, v_t)` returns $D = V_T\\mu$ in m$^2$/s.\n- `diffusion_length(d, tau)` returns $L = \\sqrt{D\\tau}$ in metres.\n- `saturation_current(area, n_i, n_a, n_d, d_p, l_p, d_n, l_n)` returns\n\n```text\nq * area * n_i**2 * ( d_p / (l_p * n_d)  +  d_n / (l_n * n_a) )\n```\n\nin amps. Note which doping sits under which diffusion term: the holes injected into\nthe n-side are limited by $N_d$, and the electrons injected into the p-side by $N_a$.\nSwapping them is the one mistake here that produces a plausible-looking wrong answer.\n\n`Q_ELECTRON` and `V_T300` are defined for you. Everything is SI throughout.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"Transport numbers: from a doping level to a saturation current.\"\"\"\n\nimport math\n\nQ_ELECTRON = 1.602176634e-19            # C\nV_T300 = 0.025851999786435535           # V, kT/q at 300 K\n\n\ndef conductivity(n, p, mu_n, mu_p):\n    \"\"\"Conductivity in S/m from both carrier populations and both mobilities.\"\"\"\n    # TODO: q times (n*mu_n + p*mu_p).\n    return 0.0\n\n\ndef bar_resistance(sigma, length, area):\n    \"\"\"Resistance in ohms of a uniform bar of conductivity `sigma`.\"\"\"\n    # TODO: length over (sigma * area).\n    return 0.0\n\n\ndef diffusion_coefficient(mu, v_t):\n    \"\"\"Einstein: D = V_T * mu, in m^2/s.\"\"\"\n    # TODO: one multiplication.\n    return 0.0\n\n\ndef diffusion_length(d, tau):\n    \"\"\"How far a minority carrier gets before it recombines, in metres.\"\"\"\n    # TODO: the square root of D times tau.\n    return 0.0\n\n\ndef saturation_current(area, n_i, n_a, n_d, d_p, l_p, d_n, l_n):\n    \"\"\"The diode's I_S, in amps, from the two injected minority populations.\"\"\"\n    # TODO: the expression in the brief. Watch which doping goes with which term.\n    return 0.0\n\n\nif __name__ == \"__main__\":\n    n_i = 1.0e16\n    mu_n, mu_p = 0.135, 0.048\n    sigma = conductivity(1e22, n_i * n_i / 1e22, mu_n, mu_p)\n    print(\"sigma:\", sigma, \"S/m\")\n    print(\"bar, 500 um long, 1e-8 m^2:\", bar_resistance(sigma, 500e-6, 1e-8), \"ohm\")\n    d_n = diffusion_coefficient(mu_n, V_T300)\n    d_p = diffusion_coefficient(mu_p, V_T300)\n    print(\"D_n:\", d_n, \" D_p:\", d_p)\n    l_n = diffusion_length(d_n, 1e-6)\n    l_p = diffusion_length(d_p, 1e-6)\n    print(\"L_n:\", l_n, \" L_p:\", l_p)\n    i_s = saturation_current(1e-8, n_i, 1e24, 1e22, d_p, l_p, d_n, l_n)\n    print(\"I_S:\", i_s, \"A\")\n    if i_s > 0:\n        print(\"V_F at 1 mA:\", V_T300 * math.log(1.0 + 1e-3 / i_s), \"V\")\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"Transport numbers: from a doping level to a saturation current.\"\"\"\n\nimport math\n\nQ_ELECTRON = 1.602176634e-19            # C\nV_T300 = 0.025851999786435535           # V, kT/q at 300 K\n\n\ndef conductivity(n, p, mu_n, mu_p):\n    \"\"\"Conductivity in S/m from both carrier populations and both mobilities.\"\"\"\n    return Q_ELECTRON * (n * mu_n + p * mu_p)\n\n\ndef bar_resistance(sigma, length, area):\n    \"\"\"Resistance in ohms of a uniform bar of conductivity `sigma`.\"\"\"\n    return length / (sigma * area)\n\n\ndef diffusion_coefficient(mu, v_t):\n    \"\"\"Einstein: D = V_T * mu, in m^2/s.\"\"\"\n    return mu * v_t\n\n\ndef diffusion_length(d, tau):\n    \"\"\"How far a minority carrier gets before it recombines, in metres.\"\"\"\n    return math.sqrt(d * tau)\n\n\ndef saturation_current(area, n_i, n_a, n_d, d_p, l_p, d_n, l_n):\n    \"\"\"The diode's I_S, in amps, from the two injected minority populations.\"\"\"\n    return (Q_ELECTRON * area * n_i * n_i\n            * (d_p / (l_p * n_d) + d_n / (l_n * n_a)))\n\n\nif __name__ == \"__main__\":\n    n_i = 1.0e16\n    mu_n, mu_p = 0.135, 0.048\n    sigma = conductivity(1e22, n_i * n_i / 1e22, mu_n, mu_p)\n    print(\"sigma:\", sigma, \"S/m\")\n    print(\"bar, 500 um long, 1e-8 m^2:\", bar_resistance(sigma, 500e-6, 1e-8), \"ohm\")\n    d_n = diffusion_coefficient(mu_n, V_T300)\n    d_p = diffusion_coefficient(mu_p, V_T300)\n    print(\"D_n:\", d_n, \" D_p:\", d_p)\n    l_n = diffusion_length(d_n, 1e-6)\n    l_p = diffusion_length(d_p, 1e-6)\n    print(\"L_n:\", l_n, \" L_p:\", l_p)\n    i_s = saturation_current(1e-8, n_i, 1e24, 1e22, d_p, l_p, d_n, l_n)\n    print(\"I_S:\", i_s, \"A\")\n    if i_s > 0:\n        print(\"V_F at 1 mA:\", V_T300 * math.log(1.0 + 1e-3 / i_s), \"V\")\n"
+     }
+    ],
+    "hints": [
+     "`conductivity` is one line, but the minority term is not decoration: pass it the real $p = n_i^2/N_d$ and watch how little it contributes. That is what *majority* means, quantitatively.",
+     "`bar_resistance` is $L/(\\sigma A)$, not $\\sigma L/A$. A quick check: 216 S/m, 500 µm and $10^{-8}$ m$^2$ must give about 231 Ω, not about 0.0043 Ω.",
+     "`diffusion_coefficient` looks too small to be a function. It is the Einstein relation, and writing it down once is how you stop yourself dividing by $V_T$ later in a hurry.",
+     "`diffusion_length` is `math.sqrt(d * tau)`. With $D_p = 1.24\\times10^{-3}$ m$^2$/s and $\\tau = 1$ µs it comes to $3.5\\times10^{-5}$ m, which is 35 µm — comparable with the thickness of the silicon, which is why the geometry of a real diode matters.",
+     "In `saturation_current`, `n_i * n_i` beats `n_i ** 2` for nothing and both are fine; what matters is the pairing. `d_p` goes with `l_p` and `n_d`; `d_n` goes with `l_n` and `n_a`. The holes are injected into the n-side, so the n-side doping limits them."
+    ],
+    "tests": [
+     {
+      "name": "the conductivity and resistivity of doped silicon",
+      "code": "n_i = 1.0e16\ns = conductivity(1e22, n_i * n_i / 1e22, 0.135, 0.048)\nassert abs(s - 216.2938455900769) < 1e-9, f\"expected 216.294 S/m, got {s}\"\nassert abs(1.0 / s - 0.0046233400551544766) < 1e-12, \\\n    f\"the resistivity should be 4.6233e-3 ohm.m, got {1.0 / s}\"\npure = conductivity(n_i, n_i, 0.135, 0.048)\nassert abs(pure - 0.000293198324022) < 1e-15, \\\n    f\"undoped silicon has both carriers at n_i and comes to 2.932e-4 S/m, got {pure}\"\nassert s / pure > 700000.0, \\\n    \"one dopant atom in five million should raise the conductivity by nearly a million times\""
+     },
+     {
+      "name": "the bar, and how it scales with its own geometry",
+      "code": "s = 216.2938455900769\nr = bar_resistance(s, 500e-6, 1e-8)\nassert abs(r - 231.16700275772382) < 1e-9, f\"expected 231.167 ohm, got {r}\"\nassert abs(bar_resistance(s, 1000e-6, 1e-8) - 2.0 * r) < 1e-9, \\\n    \"twice as long is twice the resistance\"\nassert abs(bar_resistance(s, 500e-6, 2e-8) - 0.5 * r) < 1e-9, \\\n    \"twice the cross section is half the resistance\""
+     },
+     {
+      "name": "Einstein, and the two diffusion coefficients it gives",
+      "code": "d_n = diffusion_coefficient(0.135, V_T300)\nd_p = diffusion_coefficient(0.048, V_T300)\nassert abs(d_n - 0.0034900199711687973) < 1e-15, f\"expected 3.49002e-3 m^2/s, got {d_n}\"\nassert abs(d_p - 0.0012408959897489058) < 1e-15, f\"expected 1.24090e-3 m^2/s, got {d_p}\"\nassert abs(d_n / 0.135 - d_p / 0.048) < 1e-15, \\\n    \"D/mu must be the same number for both carriers, because that number is V_T\""
+     },
+     {
+      "name": "the diffusion lengths are tens of micrometres",
+      "code": "l_n = diffusion_length(0.0034900199711687973, 1e-6)\nl_p = diffusion_length(0.0012408959897489058, 1e-6)\nassert abs(l_n - 5.9076390979551186e-05) < 1e-15, f\"expected 5.9076e-05 m, got {l_n}\"\nassert abs(l_p - 3.5226353625501824e-05) < 1e-15, f\"expected 3.5226e-05 m, got {l_p}\"\nlong_life = diffusion_length(0.0012408959897489058, 4e-6)\nassert abs(long_life - 2.0 * l_p) < 1e-15, \\\n    \"four times the lifetime is twice the length, because the walk is a square root\""
+     },
+     {
+      "name": "the saturation current of the module 1 junction",
+      "code": "d_n, d_p = 0.0034900199711687973, 0.0012408959897489058\nl_n, l_p = 5.9076390979551186e-05, 3.5226353625501824e-05\ni_s = saturation_current(1e-8, 1.0e16, 1e24, 1e22, d_p, l_p, d_n, l_n)\nassert abs(i_s - 5.738534881228506e-16) < 1e-24, f\"expected 5.7385e-16 A, got {i_s}\"\nimport math\nv = V_T300 * math.log(1.0 + 1e-3 / i_s)\nassert abs(v - 0.7286748656801748) < 1e-9, \\\n    f\"that I_S puts the forward drop at 1 mA at 0.72867 V, got {v}\""
+     },
+     {
+      "name": "heavier doping means a smaller I_S and a larger forward drop",
+      "code": "import math\nd_n, d_p = 0.0034900199711687973, 0.0012408959897489058\nl_n, l_p = 5.9076390979551186e-05, 3.5226353625501824e-05\nbase = saturation_current(1e-8, 1.0e16, 1e24, 1e22, d_p, l_p, d_n, l_n)\nheavy = saturation_current(1e-8, 1.0e16, 1e24, 1e23, d_p, l_p, d_n, l_n)\nassert abs(heavy - 6.590392200464875e-17) < 1e-25, f\"expected 6.5904e-17 A, got {heavy}\"\nassert abs(base / heavy - 8.707425456141623) < 1e-9, \\\n    f\"ten times the n-side doping divides I_S by 8.71, not by 10, because the p-side term does not move; got {base / heavy}\"\nstep = V_T300 * math.log(1.0 + 1e-3 / heavy) - V_T300 * math.log(1.0 + 1e-3 / base)\nassert abs(step - 0.05594828168665744) < 1e-9, \\\n    f\"the forward drop should rise by 55.9 mV, got {step * 1000} mV\""
+     },
+     {
+      "name": "the lightly doped side dominates the injection",
+      "code": "d_n, d_p = 0.0034900199711687973, 0.0012408959897489058\nl_n, l_p = 5.9076390979551186e-05, 3.5226353625501824e-05\nhole_only = saturation_current(1e-8, 1.0e16, 1e24, 1e22, d_p, l_p, 0.0, l_n)\nboth = saturation_current(1e-8, 1.0e16, 1e24, 1e22, d_p, l_p, d_n, l_n)\nassert hole_only / both > 0.98, \\\n    \"with the p-side doped a hundred times harder, hole injection into the n-side is over 98% of I_S\"\nsym = saturation_current(1e-8, 1.0e16, 1e23, 1e23, d_p, l_p, d_n, l_n)\nassert abs(sym - 1.5108965392828552e-16) < 1e-25, f\"expected 1.5109e-16 A, got {sym}\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Temperature: two coefficients pulling opposite ways",
+   "summary": "Everything in the diode equation moves with temperature, and the two things that move fastest send the forward voltage down while they send the reverse current up.",
+   "concepts": [
+    "$n_i^2 \\propto T^3e^{-E_g/kT}$, and $I_S \\propto n_i^2$, so the ideal saturation current climbs ferociously: a factor of **4.46 for every 10 K** near 300 K. That is not the number most data sheets quote, and both numbers are right — see below.",
+    "The familiar rule that **leakage doubles every 10 °C** is about a different current. Measured reverse current in a real silicon diode is dominated by carriers *generated inside the depletion region*, and that goes as $n_i$ rather than $n_i^2$ — the square root of the diffusion scaling, and $\\sqrt{4.46} = 2.11$. One mechanism, two exponents, two rules of thumb that only look contradictory.",
+    "At constant **current** the forward voltage falls, because $V = V_T\\ln(I/I_S)$ and $I_S$ climbs faster than $V_T$ does. The ideal model above gives $-1.56$ mV/K at 1 mA; real diodes measure about $-2$ mV/K, the difference being the band gap's own shrinkage with temperature which the model holds fixed. The coefficient is more negative at *lower* current — $-1.76$ mV/K at 100 µA against $-1.36$ mV/K at 10 mA — which is why a diode thermometer is biased at a low, and above all a *constant*, current.",
+    "Dissipation raises the junction above ambient by $T_J = T_A + \\theta_{JA}P$. A bridge delivering 1.0 A DC puts 0.5 A average through each diode, and at 0.85 V that is 0.425 W each; on a 100 K/W package in a 45 °C cabinet the junction sits at 87.5 °C. Nothing on the outside of the part is anywhere near that.",
+    "Drive a diode from a **voltage** instead and the loop closes: more temperature gives more current, more current gives more power, more power gives more temperature. For the device in module 5 on 100 K/W the loop converges at 0.84 V and runs away at 0.85 V. The same feedback is why paralleled diodes need ballast resistors: at a shared voltage, the one that is 5 °C hotter takes 47% more of the current, and pulls further ahead."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "What the temperature does, and to which quantity",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "A silicon diode drops 0.65 V at 1 mA at 25 °C. At the same 1 mA, roughly what does it drop at 85 °C?",
+      "opts": [
+       "0.77 V",
+       "0.65 V",
+       "0.53 V",
+       "0.41 V"
+      ],
+      "a": 2,
+      "why": "About $-2$ mV per degree over 60 degrees is $-120$ mV, so 0.65 V becomes 0.53 V. The\nsign catches people out because everything else about a hot semiconductor gets bigger:\nthe leakage rises, the intrinsic carrier concentration rises, $V_T$ itself rises. The\nforward drop is the one that falls, and it falls because $I_S$ in the denominator of\n$\\ln(I/I_S)$ is growing much faster than the $V_T$ in front of the logarithm."
+     },
+     {
+      "q": "A data sheet says the reverse leakage doubles every 10 °C. Module 5's model says the saturation current rises by a factor of 4.5 every 10 K. Which is right?",
+      "opts": [
+       "only one can be — the doubling is a rule of thumb and the factor of 4.5 is the truth",
+       "both, because they describe different currents: measured leakage is dominated by generation inside the depletion region, which follows $n_i$, while the ideal saturation current follows $n_i^2$",
+       "both, because one is quoted per 10 °C and the other per 10 K",
+       "neither — reverse current does not depend on temperature"
+      ],
+      "a": 1,
+      "why": "Two mechanisms with two different powers of $n_i$. The diffusion current that the\nShockley equation describes carries $n_i^2$; the generation current from carriers\ncreated inside the depletion region carries $n_i$, so its temperature factor is the\nsquare root of the other one — and $\\sqrt{4.46} = 2.11$, which is where the doubling\nrule comes from. In a real silicon diode at room temperature the generation term is\nthe larger of the two, so a data sheet quotes what it measures. Choosing the answer\nabout °C and K is a trap: a ten-degree *interval* is the same size in both scales."
+     },
+     {
+      "q": "A diode dissipates 0.6 W in a package with $\\theta_{JA} = 100$ K/W, in a 40 °C cabinet. Where is the junction?",
+      "opts": [
+       "60 °C",
+       "160 °C",
+       "100 °C",
+       "640 °C"
+      ],
+      "a": 2,
+      "why": "$T_J = T_A + \\theta_{JA}P = 40 + 100 \\times 0.6 = 100$ °C. The rise is 60 degrees and\nthe ambient is 40, and forgetting to add the ambient — answering 60 °C — is the error\nthat puts a part inside its rating on paper and outside it on the bench. Note how\nlittle power it takes: 0.6 W in a small package is most of the way to a 125 °C limit\nbefore the cabinet has warmed up at all, which is why derating curves start sloping\ndownwards well below the maximum ambient."
+     },
+     {
+      "q": "Two identical diodes are wired in parallel to share a load. One sits 5 °C hotter than the other. At the voltage they necessarily share, how much current does the hotter one take?",
+      "opts": [
+       "the same, since they are identical parts",
+       "about 2% more",
+       "about 10% more",
+       "about 47% more"
+      ],
+      "a": 3,
+      "why": "Five degrees moves the forward characteristic by about 10 mV, and at a shared voltage\nthat is a current ratio of $e^{0.010/0.025852} = 1.47$. The hotter diode takes half as\nmuch again, dissipates half as much again, and gets hotter still. Parallel diodes are\nnot a way to share current, they are a way to concentrate it — which is why every\npractical arrangement puts a small ballast resistor in series with each one, chosen so\nthat its drop is large compared with 10 mV."
+     },
+     {
+      "q": "Why is a diode never driven straight from a voltage source?",
+      "opts": [
+       "because the current is exponential in the voltage and rises with temperature at a fixed voltage, so dissipation and temperature drive each other with nothing to stop them",
+       "because a voltage source cannot supply enough current",
+       "because the diode would be reverse biased",
+       "because the forward voltage is not defined below 0.7 V"
+      ],
+      "a": 0,
+      "why": "At a fixed current the feedback is negative: heating lowers the drop, which lowers the\npower. At a fixed *voltage* it is positive: heating raises $I_S$, which raises the\ncurrent, which raises the power, which raises the temperature. Whether it settles or\nnot is a question of loop gain, and for the device modelled in this course on a\n100 K/W package the answer changes between 0.84 V and 0.85 V. A series resistor — or\nany current-limiting element at all — turns the sign of the feedback round, which is\nwhy every diode in this course has had one."
+     },
+     {
+      "q": "The $-2$ mV/K figure is always quoted at a stated current. Measured at 10 µA rather than 10 mA, the coefficient is:",
+      "opts": [
+       "less negative, about $-1.0$ mV/K",
+       "unchanged — it is a property of silicon",
+       "more negative, about $-2.0$ mV/K",
+       "positive, because low currents reverse the effect"
+      ],
+      "a": 2,
+      "why": "More negative. The coefficient is set by how far the forward voltage sits *below* the\nband gap, and at a smaller current it sits further below, so there is more distance to\nfall. The model in this module gives $-1.36$ mV/K at 10 mA, $-1.56$ at 1 mA and\n$-1.76$ at 100 µA, and the trend continues. It is not a defect: a band-gap reference\nexploits exactly this by summing a $V_{BE}$ that falls with temperature and a\ndifference of two $V_{BE}$s that rises, and the currents at which each is taken are\npart of the design."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "The self-heating loop, line by line",
+    "minutes": 9,
+    "brief": "Thermal runaway is not a special mode a device enters; it is an ordinary fixed-point\niteration that sometimes fails to converge. Each pass takes a temperature, works out\nwhat the diode does at that temperature, and works out what that does to the\ntemperature. Fill the four holes and the loop is the whole story.\n\nNothing is executed here — you are choosing expressions, not writing code.",
+    "caption": "runaway.py — one iteration, four holes",
+    "lang": "python",
+    "listing": "# Junction temperature when a diode's own dissipation warms it.\n#   I_S0   saturation current at 300 K        V      the applied forward voltage\n#   E_g    band gap in joules                 theta  junction-to-ambient K/W\n#   k, q   Boltzmann's constant and the electronic charge\n\nT = T_amb\nrepeat until T stops moving:\n    V_T = ___                          # the thermal voltage AT THIS temperature\n    I_S = I_S0 * (T / 300.0)**3 * exp(___)\n    I   = I_S * (exp(V / V_T) - 1.0)\n    P   = ___\n    T   = T_amb + ___\n",
+    "blanks": [
+     {
+      "prompt": "The thermal voltage is not a constant here.",
+      "hole": "?",
+      "opts": [
+       "k * 300.0 / q",
+       "k * T / q",
+       "q * T / k",
+       "k * T_amb / q"
+      ],
+      "a": 1,
+      "why": "`k * T / q`, evaluated at the current guess. Freezing it at 300 K or at ambient removes one of the two things temperature does to the diode, and the loop then converges when it should not.",
+      "whys": [
+       "Freezing $V_T$ at its 300 K value removes one of the two temperature effects. The remaining one, $I_S$, still drives the loop, so the code appears to work — it just gives the wrong threshold.",
+       "`k * T / q`, evaluated at the current guess. Both $V_T$ and $I_S$ have to be re-evaluated every pass, because both of them are what the temperature is changing.",
+       "Inverted. $kT$ is an energy and dividing it by a charge gives a voltage; dividing a charge by an energy gives something with no meaning here, and a number around $10^{22}$.",
+       "Ambient never changes during the iteration, so this is the same mistake as pinning it at 300 K with an extra step of indirection."
+      ]
+     },
+     {
+      "prompt": "How the saturation current scales from its 300 K value up to T.",
+      "hole": "?",
+      "opts": [
+       "(E_g / k) * (1.0 / T - 1.0 / 300.0)",
+       "-E_g / (k * T)",
+       "(E_g / k) * (1.0 / 300.0 - 1.0 / T)",
+       "(E_g / k) * (T - 300.0)"
+      ],
+      "a": 2,
+      "why": "The ratio of two Boltzmann factors is $e^{-E_g/kT}/e^{-E_g/k\\cdot300}$, which is $\\exp[(E_g/k)(1/300 - 1/T)]$. For $T$ above 300 that bracket is positive, so $I_S$ grows — as it must.",
+      "whys": [
+       "The sign is inverted, so the model has the saturation current *falling* as the device heats. Every conclusion in this module then comes out backwards, including the sign of the forward temperature coefficient.",
+       "That is the absolute Boltzmann factor, not the ratio of two of them. Used here it multiplies $I_{S0}$ by about $e^{-43}$ and the current vanishes; the reference value already contains that factor at 300 K.",
+       "The ratio of two Boltzmann factors is $\\exp[(E_g/k)(1/300 - 1/T)]$, positive above 300 K, so $I_S$ grows with temperature. This is where the factor of 4.5 per 10 K comes from.",
+       "Linear in $T$ rather than in $1/T$. It gives roughly the right answer within a degree or two of 300 K and diverges wildly outside that, which is the worst kind of wrong."
+      ]
+     },
+     {
+      "prompt": "The power the junction has to get rid of.",
+      "hole": "?",
+      "opts": [
+       "I * I * theta",
+       "V * I",
+       "V * V / I",
+       "I / V"
+      ],
+      "a": 1,
+      "why": "Volts times amps. The diode is not a resistor, so $I^2R$ and $V^2/R$ have no meaning for it — there is no single $R$ to put in them. The product of the terminal voltage and the terminal current always works.",
+      "whys": [
+       "$I^2$ times a thermal resistance mixes two unrelated quantities and does not even have units of watts.",
+       "Volts times amps, which is the definition and needs no model of the device. The $I^2R$ and $V^2/R$ forms are shortcuts that assume the two are proportional, and here they are exponentially related instead.",
+       "$V^2/R$ requires an $R$, and a diode's static and dynamic resistances are different numbers, neither of which belongs here. Module 2 is about exactly this confusion.",
+       "Not a power at all — amps over volts is a conductance. It happens to produce a small number, which is why a loop written this way looks stable and proves nothing."
+      ]
+     },
+     {
+      "prompt": "And what that dissipation does to the junction temperature.",
+      "hole": "?",
+      "opts": [
+       "theta * P",
+       "P / theta",
+       "theta / P",
+       "theta * P / T_amb"
+      ],
+      "a": 0,
+      "why": "$\\theta$ is a rise per watt, so the rise is $\\theta P$ and the junction sits at $T_{amb} + \\theta P$. It is Ohm's law with kelvin for volts and watts for amps, which is why the same solver draws both.",
+      "whys": [
+       "$\\theta$ is kelvin per watt, so watts times $\\theta$ is kelvin. A 100 K/W package dissipating 0.425 W runs 42.5 K above whatever is around it.",
+       "Dividing by the thermal resistance makes a *better* heatsink give a *hotter* junction, which is the opposite of the whole reason to fit one.",
+       "Upside down twice over: the units come out as K/W², and doubling the dissipation would cool the part.",
+       "Ambient temperature does not scale the rise. A part dissipating 0.425 W on 100 K/W runs 42.5 K hot in a cold room and 42.5 K hot in a warm one; what changes is where that rise starts from."
+      ]
+     }
+    ]
+   },
+   "numeric": null,
+   "match": null,
+   "tune": null,
+   "build": {
+    "title": "A hundred nanoamps that ruins a reference",
+    "minutes": 26,
+    "brief": "Reverse leakage is a few nanoamps at room temperature and nobody thinks about it. At\n85 °C it is a hundred times that, and it is still only a hundred nanoamps — which\nsounds harmless right up to the moment it meets a high-impedance node.\n\n## The circuit\n\nA 10 V rail has to produce a **5.00 V reference** through a two-resistor divider. A\nprotection diode hangs off that reference node; it is reverse biased and does nothing\nexcept leak, and at the top of the temperature range it leaks **100 nA** out of the\nnode. That leakage is already on the canvas as a current source, drawn pulling current\nout of the node, because that is what it does.\n\n## The specification\n\n- the reference must land between **4.95 V and 5.05 V** with the leak flowing\n- the divider must draw no more than **25 µA** from the 10 V rail\n- the two resistors must be **equal to within 2%**\n\n## Why the last one is not pedantry\n\nThe obvious cheat is to skew the ratio upwards until the leak drags the node back to\nexactly 5.000 V. It works, at one temperature. Leakage falls by a factor of about two\nfor every 10 °C the part cools, so a divider trimmed at 85 °C is trimmed for a leak\nthat has all but vanished by 25 °C, and the reference is then high by the whole amount\nyou compensated. The fix is not to cancel the error but to make it small, and the only\nlever for that is impedance.\n\n## The arithmetic\n\nSuperposition. The divider on its own gives $10R_2/(R_1+R_2)$. The leak on its own,\nlooking into a dead network, sees $R_1 \\parallel R_2$ and pulls the node down by\n$I_{leak}(R_1\\parallel R_2)$. With equal resistors of value $R$ that is\n$5.00 - 10^{-7}R/2$ volts, and the rail current is about $10/2R$. One constraint\npushes $R$ down, the other pushes it up, and the window between them is wide — which\nis the useful thing to know about it.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 10
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p5",
+       "kind": "I",
+       "x": 17,
+       "y": 9,
+       "rot": 1,
+       "value": 1e-07
+      },
+      {
+       "id": "p6",
+       "kind": "GND",
+       "x": 17,
+       "y": 11
+      },
+      {
+       "id": "p7",
+       "kind": "OUT",
+       "x": 11,
+       "y": 8
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        11,
+        8
+       ],
+       "b": [
+        17,
+        8
+       ]
+      },
+      {
+       "a": [
+        17,
+        10
+       ],
+       "b": [
+        17,
+        11
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 10
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 500000
+      },
+      {
+       "id": "p3",
+       "kind": "R",
+       "x": 13,
+       "y": 9,
+       "rot": 1,
+       "value": 500000
+      },
+      {
+       "id": "p4",
+       "kind": "GND",
+       "x": 13,
+       "y": 11
+      },
+      {
+       "id": "p5",
+       "kind": "I",
+       "x": 17,
+       "y": 9,
+       "rot": 1,
+       "value": 1e-07
+      },
+      {
+       "id": "p6",
+       "kind": "GND",
+       "x": 17,
+       "y": 11
+      },
+      {
+       "id": "p7",
+       "kind": "OUT",
+       "x": 11,
+       "y": 8
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        9,
+        8
+       ]
+      },
+      {
+       "a": [
+        9,
+        8
+       ],
+       "b": [
+        17,
+        8
+       ]
+      },
+      {
+       "a": [
+        13,
+        10
+       ],
+       "b": [
+        13,
+        11
+       ]
+      },
+      {
+       "a": [
+        17,
+        10
+       ],
+       "b": [
+        17,
+        11
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "one rail, two resistors, and the leak still connected",
+      "code": "const leak = c.net.parts.filter(function (p) { return p.kind === 'I'; });\nc.assert(leak.length === 1,\n  'Exactly one current source: the junction leakage. Found ' + leak.length +\n  '. Deleting it makes the circuit pass and the reference fail on the bench.');\nc.close(Math.abs(leak[0].value), 100e-9, 0.02, 'the leakage current');\nconst sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 10) < 0.5; });\nc.assert(sup.length === 1, 'Exactly one 10 V rail; found ' + sup.length + '.');\nc.assert(c.count('R') === 2,\n  'Two resistors and only two — this is a divider with a leak hanging off it, not a ' +\n  'network. Found ' + c.count('R') + '.');"
+     },
+     {
+      "name": "the reference lands between 4.95 V and 5.05 V with the leak flowing",
+      "code": "const v = c.vout();\nc.assert(v >= 4.95 * 0.9995 && v <= 5.05 * 1.0005,\n  'The reference is at ' + c.fmt(v, 'V') + ', outside the 4.95 V to 5.05 V window. ' +\n  'The leak pulls the node down by 100 nA times the parallel combination of the two ' +\n  'resistors, so bringing that combination down is the only thing that helps.');"
+     },
+     {
+      "name": "and it does it on no more than 25 microamps",
+      "code": "const sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 10) < 0.5; })[0];\nconst i = Math.abs(c.dc().currents[sup.id]);\nc.assert(i > 1e-6,\n  'The 10 V rail is delivering ' + c.fmt(i, 'A') + '. Until both resistors are in ' +\n  'place there is no divider to measure.');\nc.assert(i <= 25e-6 * 1.01,\n  'The divider is drawing ' + c.fmt(i, 'A') + ', over the 25 uA budget. Every ohm you ' +\n  'remove to fight the leak is current you spend permanently, and this is a reference ' +\n  'that has to sit there being right for years.');"
+     },
+     {
+      "name": "the ratio is still one to one, so the leak was made small rather than cancelled",
+      "code": "const rs = c.values('R');\nc.assert(rs.length === 2, 'Two resistors expected; found ' + rs.length + '.');\nconst hi = Math.max(rs[0], rs[1]), lo = Math.min(rs[0], rs[1]);\nc.assert(hi / lo <= 1.02,\n  'The two resistors are ' + c.fmt(lo, 'ohm') + ' and ' + c.fmt(hi, 'ohm') + ', a ratio ' +\n  'of ' + (hi / lo).toFixed(3) + '. Skewing the ratio to cancel the leak lands the node ' +\n  'on 5.000 V at one temperature and leaves it high everywhere colder, because the leak ' +\n  'halves for every 10 degrees. Make the error small instead of cancelling it.');"
+     }
+    ],
+    "hints": [
+     "Start from the two constraints. Equal resistors of value $R$ give $5.00 - 10^{-7}R/2$ volts, so 50 mV of droop is reached at $R = 1\\ \\mathrm{M}\\Omega$; and the rail current is about $10/2R$, so 25 µA is reached at $R = 200\\ \\mathrm{k}\\Omega$. Anything between works.",
+     "500 kΩ each is the comfortable middle: the node lands at 4.975 V and the rail supplies 10.05 µA. Type `500k` for each.",
+     "Lay it out exactly like the Zener regulator of module 4: the upper resistor from the rail down to the probed node, the lower one from that node down to its own ground.",
+     "If the reference comes out at 5.000 V exactly, check the ratio. Landing on the nominal value is a warning sign here, not a success — the leak is real and it has to show up somewhere."
+    ]
+   },
+   "derive": null,
+   "lab": {
+    "title": "The two coefficients, and the loop that runs away",
+    "runtime": "python",
+    "minutes": 32,
+    "brief": "Four functions. The first three are the temperature model; the fourth closes the loop\nand finds out whether it settles.\n\n- `saturation_current(i_s_ref, t_ref, t)` scales $I_S$ from its value at `t_ref` to\n  its value at `t`:\n\n```text\ni_s_ref * (t / t_ref)**3 * exp( (E_GAP * Q / K) * (1/t_ref - 1/t) )\n```\n\n  where `E_GAP` is in electronvolts, so multiplying by `Q` turns it into joules.\n\n- `forward_voltage(i, i_s, t)` returns $V_T(T)\\ln(1 + I/I_S)$ — and $V_T$ has to be\n  computed at `t`, not at 300 K.\n- `temperature_coefficient(i, i_s_ref, t_ref, t)` returns $dV_F/dT$ in volts per\n  kelvin, by central difference with a step of **exactly 0.5 K**: evaluate\n  `forward_voltage` at `t + 0.5` and at `t - 0.5`, each with its own scaled `i_s`, and\n  divide the difference by 1.0.\n- `settle(v_bias, i_s_ref, t_amb, theta, iters=200)` iterates the self-heating loop\n  from the blanks exercise, starting at `t = t_amb`, doing `iters` passes:\n\n```text\ni_s = saturation_current(i_s_ref, 300.0, t)\ni   = i_s * expm1(v_bias / thermal_voltage(t))\nt   = t_amb + theta * v_bias * i\nif t is not finite or t > 1000.0:  return float(\"inf\")\n```\n\n  Return the temperature it converged to, or `float(\"inf\")` if it did not. Use\n  `math.expm1`, which is $e^x - 1$ computed accurately; at these arguments it makes no\n  visible difference, but it is the right function for the job.\n\nEverything is in kelvin. `K_BOLTZMANN`, `Q_ELECTRON` and `E_GAP` are given.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"What temperature does to a diode, and the loop that closes on itself.\"\"\"\n\nimport math\n\nK_BOLTZMANN = 1.380649e-23\nQ_ELECTRON = 1.602176634e-19\nE_GAP = 1.12                             # eV, silicon at room temperature\n\n\ndef thermal_voltage(t):\n    \"\"\"kT/q at t kelvin, in volts.\"\"\"\n    return K_BOLTZMANN * t / Q_ELECTRON\n\n\ndef saturation_current(i_s_ref, t_ref, t):\n    \"\"\"I_S at t kelvin, given its value at t_ref.\"\"\"\n    # TODO: the cube of the temperature ratio times the Boltzmann ratio.\n    return 0.0\n\n\ndef forward_voltage(i, i_s, t):\n    \"\"\"Forward drop at current i, with saturation current i_s, at t kelvin.\"\"\"\n    # TODO: V_T at THIS temperature, times log(1 + i/i_s).\n    return 0.0\n\n\ndef temperature_coefficient(i, i_s_ref, t_ref, t):\n    \"\"\"dV_F/dT in volts per kelvin at a fixed current, by central difference.\"\"\"\n    # TODO: half a kelvin either side, each with its own scaled i_s.\n    return 0.0\n\n\ndef settle(v_bias, i_s_ref, t_amb, theta, iters=200):\n    \"\"\"Junction temperature under self-heating, or inf if it runs away.\"\"\"\n    t = t_amb\n    # TODO: the loop from the brief.\n    return t\n\n\nif __name__ == \"__main__\":\n    i_s = 5.738534881228506e-16\n    print(\"I_S ratio over 10 K at 300 K:\", saturation_current(1.0, 300.0, 310.0))\n    for t in (273.15, 300.0, 358.15):\n        scaled = saturation_current(i_s, 300.0, t)\n        print(\"  T =\", t, \" I_S =\", scaled,\n              \" V_F at 1 mA =\", forward_voltage(1e-3, scaled, t))\n    for cur in (1e-4, 1e-3, 1e-2):\n        print(\"  dV_F/dT at\", cur, \"A:\", temperature_coefficient(cur, i_s, 300.0, 300.0))\n    for v in (0.70, 0.84, 0.85):\n        print(\"  bias\", v, \"V settles at\", settle(v, i_s, 300.0, 100.0))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"What temperature does to a diode, and the loop that closes on itself.\"\"\"\n\nimport math\n\nK_BOLTZMANN = 1.380649e-23\nQ_ELECTRON = 1.602176634e-19\nE_GAP = 1.12                             # eV, silicon at room temperature\n\n\ndef thermal_voltage(t):\n    \"\"\"kT/q at t kelvin, in volts.\"\"\"\n    return K_BOLTZMANN * t / Q_ELECTRON\n\n\ndef saturation_current(i_s_ref, t_ref, t):\n    \"\"\"I_S at t kelvin, given its value at t_ref.\"\"\"\n    return (i_s_ref * (t / t_ref) ** 3\n            * math.exp((E_GAP * Q_ELECTRON / K_BOLTZMANN) * (1.0 / t_ref - 1.0 / t)))\n\n\ndef forward_voltage(i, i_s, t):\n    \"\"\"Forward drop at current i, with saturation current i_s, at t kelvin.\"\"\"\n    return thermal_voltage(t) * math.log(1.0 + i / i_s)\n\n\ndef temperature_coefficient(i, i_s_ref, t_ref, t):\n    \"\"\"dV_F/dT in volts per kelvin at a fixed current, by central difference.\"\"\"\n    h = 0.5\n    hi = forward_voltage(i, saturation_current(i_s_ref, t_ref, t + h), t + h)\n    lo = forward_voltage(i, saturation_current(i_s_ref, t_ref, t - h), t - h)\n    return (hi - lo) / (2.0 * h)\n\n\ndef settle(v_bias, i_s_ref, t_amb, theta, iters=200):\n    \"\"\"Junction temperature under self-heating, or inf if it runs away.\"\"\"\n    t = t_amb\n    for _ in range(iters):\n        i_s = saturation_current(i_s_ref, 300.0, t)\n        i = i_s * math.expm1(v_bias / thermal_voltage(t))\n        t = t_amb + theta * v_bias * i\n        if not math.isfinite(t) or t > 1000.0:\n            return float(\"inf\")\n    return t\n\n\nif __name__ == \"__main__\":\n    i_s = 5.738534881228506e-16\n    print(\"I_S ratio over 10 K at 300 K:\", saturation_current(1.0, 300.0, 310.0))\n    for t in (273.15, 300.0, 358.15):\n        scaled = saturation_current(i_s, 300.0, t)\n        print(\"  T =\", t, \" I_S =\", scaled,\n              \" V_F at 1 mA =\", forward_voltage(1e-3, scaled, t))\n    for cur in (1e-4, 1e-3, 1e-2):\n        print(\"  dV_F/dT at\", cur, \"A:\", temperature_coefficient(cur, i_s, 300.0, 300.0))\n    for v in (0.70, 0.84, 0.85):\n        print(\"  bias\", v, \"V settles at\", settle(v, i_s, 300.0, 100.0))\n"
+     }
+    ],
+    "hints": [
+     "In `saturation_current`, `E_GAP * Q_ELECTRON / K_BOLTZMANN` is a temperature, and it is close to 13000 K. If you get a number near $1.4\\times10^{-42}$ the charge and the constant have swapped places.",
+     "The bracket is `1/t_ref - 1/t`, in that order. Get it the other way round and the model has diodes leaking *less* when they are hot, which is wrong in a way that every later test will notice.",
+     "`forward_voltage` must call `thermal_voltage(t)`. Using the 300 K value there is the single most common mistake in this lab and it changes the temperature coefficient by about a third.",
+     "For `temperature_coefficient` the step is exactly 0.5 K either side, so the divisor is 1.0. Both evaluations need their *own* `saturation_current` call — the whole coefficient comes from $I_S$ moving.",
+     "In `settle`, test for runaway inside the loop and return `float('inf')` immediately. Left to run, the exponential overflows and Python raises rather than returning anything."
+    ],
+    "tests": [
+     {
+      "name": "the saturation current climbs by four and a half per ten kelvin",
+      "code": "r = saturation_current(1.0, 300.0, 310.0)\nassert abs(r - 4.4633644098905) < 1e-9, f\"expected a ratio of 4.46336, got {r}\"\nassert abs(saturation_current(1.0, 300.0, 300.0) - 1.0) < 1e-12, \\\n    \"scaling from 300 K to 300 K must change nothing\"\nhot = saturation_current(5.738534881228506e-16, 300.0, 398.15)\nassert abs(hot / 5.831791835649743e-11 - 1.0) < 1e-9, f\"expected 5.8318e-11 A at 125 C, got {hot}\"\nassert saturation_current(1.0, 300.0, 350.0) / 1.0 > 100.0, \\\n    \"fifty kelvin should be worth more than two orders of magnitude\""
+     },
+     {
+      "name": "the forward voltage falls as the junction warms",
+      "code": "i_s = 5.738534881228506e-16\ncold = forward_voltage(1e-3, saturation_current(i_s, 300.0, 273.15), 273.15)\nroom = forward_voltage(1e-3, saturation_current(i_s, 300.0, 300.0), 300.0)\nhot = forward_voltage(1e-3, saturation_current(i_s, 300.0, 358.15), 358.15)\nassert abs(cold - 0.7703194004172075) < 1e-9, f\"expected 0.770319 V at 0 C, got {cold}\"\nassert abs(room - 0.7286748656801748) < 1e-9, f\"expected 0.728675 V at 300 K, got {room}\"\nassert abs(hot - 0.6364190823514099) < 1e-9, f\"expected 0.636419 V at 85 C, got {hot}\"\nassert cold > room > hot, \"the drop must fall monotonically as the junction heats\""
+     },
+     {
+      "name": "the coefficient, and how it moves with bias current",
+      "code": "i_s = 5.738534881228506e-16\na = temperature_coefficient(1e-4, i_s, 300.0, 300.0)\nb = temperature_coefficient(1e-3, i_s, 300.0, 300.0)\nd = temperature_coefficient(1e-2, i_s, 300.0, 300.0)\nassert abs(a - -0.0017613584236627622) < 1e-9, f\"expected -1.7614 mV/K at 100 uA, got {a * 1000} mV/K\"\nassert abs(b - -0.0015629369925760361) < 1e-9, f\"expected -1.5629 mV/K at 1 mA, got {b * 1000} mV/K\"\nassert abs(d - -0.0013645155614703253) < 1e-9, f\"expected -1.3645 mV/K at 10 mA, got {d * 1000} mV/K\"\nassert a < b < d < 0.0, \"all three are negative, and the smaller the current the steeper the fall\""
+     },
+     {
+      "name": "at a low bias the loop settles almost where it started",
+      "code": "i_s = 5.738534881228506e-16\nt = settle(0.70, i_s, 300.0, 100.0)\nassert abs(t - 300.02312201486114) < 1e-6, f\"expected 300.0231 K, got {t}\"\nt2 = settle(0.80, i_s, 300.0, 100.0)\nassert abs(t2 - 301.3530011521132) < 1e-6, f\"expected 301.3530 K, got {t2}\"\nassert t2 > t, \"more bias means more dissipation and a warmer junction\""
+     },
+     {
+      "name": "and between 0.84 V and 0.85 V it stops settling at all",
+      "code": "import math\ni_s = 5.738534881228506e-16\nok = settle(0.84, i_s, 300.0, 100.0)\nassert abs(ok - 309.5651800808127) < 1e-6, f\"expected 309.5652 K at 0.84 V, got {ok}\"\ngone = settle(0.85, i_s, 300.0, 100.0)\nassert math.isinf(gone), f\"0.85 V on a 100 K/W package must run away; got {gone}\"\nassert math.isinf(settle(0.90, i_s, 300.0, 100.0)), \"and so must anything above it\""
+     },
+     {
+      "name": "a better heatsink moves the threshold, it does not remove it",
+      "code": "import math\ni_s = 5.738534881228506e-16\nassert not math.isinf(settle(0.85, i_s, 300.0, 10.0)), \\\n    \"ten times the heatsinking should bring 0.85 V back inside the convergent region\"\ncool = settle(0.85, i_s, 300.0, 10.0)\nassert abs(cool - 300.9691695373529) < 1e-6, f\"expected 300.9692 K on 10 K/W, got {cool}\"\nassert math.isinf(settle(0.95, i_s, 300.0, 10.0)), \\\n    \"and the threshold has only moved: enough bias still runs away on any finite heatsink\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Reverse bias: the junction as a capacitor",
+   "summary": "The region module 1 stripped of carriers is an insulator between two conductors, and its width is under your control. That is a capacitor with a voltage knob on it.",
+   "concepts": [
+    "Reverse bias widens the depletion region, and a depletion region is a slab with nothing mobile in it lying between two conducting regions. That is a capacitor, $C_j = \\epsilon A/W$, and it is not a parasitic bolted onto the model — it is the same electrostatics that produced the built-in potential.",
+    "Module 1 had $W \\propto \\sqrt{V_{bi}+V_R}$, so $C_j = C_{j0}/(1+V_R/V_{bi})^m$ with $m = 1/2$ for an abrupt junction. For module 5's device — $10^{23}$ m$^{-3}$ either side, $A = 10^{-8}$ m$^2$ — that is $C_{j0} = 7.06$ pF at zero bias and 2.67 pF at 5 V.",
+    "The exponent $m$ is a statement about the doping *profile*, not about the material: 1/2 for an abrupt step, 1/3 for a linearly graded junction, and up to 1 or 2 for a **hyperabrupt** profile grown deliberately to get more capacitance change per volt. A varactor is a diode whose doping profile was chosen for its $m$.",
+    "The exponent matters because the tuning is weak. Taking an abrupt junction from 1 V to 12 V of reverse bias changes $C_j$ by 2.65, and since $f = 1/2\\pi\\sqrt{LC}$ the frequency only moves by $\\sqrt{2.65} = 1.63$. Eleven volts buys two thirds of an octave. A hyperabrupt part with $m = 2$ does the same swing in about 1.1 V, and covers the whole FM broadcast band on a 1 µH coil — 88 to 108 MHz — with 0.28 V of tuning where the abrupt junction needs 4.9 V.",
+    "The same capacitance means a reverse-biased diode is not an open circuit. 2.67 pF is 596 $\\Omega$ of reactance at 100 MHz, which is a perfectly ordinary impedance — so a diode that is off at DC is merely a small capacitor at RF, and every fast circuit has to be drawn with that capacitor in it.",
+    "Whatever biases the varactor appears in parallel with the tuned circuit and damps it, so the tuning voltage is fed through a resistance large enough to be invisible to the signal. The same resistance and the same $C_j$ then set how fast the tuning can move, and those two requirements pull in opposite directions."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "Capacitance you can steer",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "An abrupt junction has $C_{j0} = 7.06$ pF and $V_{bi} = 0.833$ V. What is its capacitance at 5.0 V of reverse bias?",
+      "opts": [
+       "7.06 pF",
+       "2.67 pF",
+       "1.01 pF",
+       "42.4 pF"
+      ],
+      "a": 1,
+      "why": "$C_j = C_{j0}/\\sqrt{1+V_R/V_{bi}} = 7.06/\\sqrt{1+6.00} = 7.06/2.646 = 2.67$ pF. The\nanswer 1.01 pF is the same calculation with the square root left out — dividing by\n7.00 rather than by 2.646 — and that root is not decoration: it comes from the width\ngoing as $\\sqrt{V}$, which is where module 1's depletion-width formula put it. Answering\n42.4 pF multiplies where the physics divides; more reverse bias means a wider gap\nbetween the plates and therefore *less* capacitance."
+     },
+     {
+      "q": "The same junction is taken from 4 V to 8 V of reverse bias. What happens to $C_j$?",
+      "opts": [
+       "it halves",
+       "it falls to about 74% of its value",
+       "it falls to a quarter",
+       "it is unchanged — the capacitance is fixed once the junction is made"
+      ],
+      "a": 1,
+      "why": "$C_j(4) = 2.931$ pF and $C_j(8) = 2.168$ pF, a ratio of 0.740. Doubling the *applied*\nbias did not double the total junction voltage — that went from 4.83 V to 8.83 V,\na factor of 1.83 — and then the square root cut it to 1.35. Expecting a halving\ntreats the relation as $1/V$ when it is $1/\\sqrt{V}$, and forgets that the built-in\npotential is in the sum whether you applied it or not. This diminishing return is the\ncentral nuisance of varactor tuning: the first volt is worth far more than the eighth."
+     },
+     {
+      "q": "You want to tune an oscillator over a 2:1 frequency range with an abrupt-junction varactor, starting from 1 V of reverse bias. Roughly how much bias do you need at the top?",
+      "opts": [
+       "2 V",
+       "4 V",
+       "about 28 V",
+       "it cannot be done at any voltage"
+      ],
+      "a": 2,
+      "why": "2:1 in frequency is 4:1 in capacitance, and for $m = 1/2$ that is 16:1 in total\njunction voltage. Starting from $0.833 + 1 = 1.833$ V you need $16 \\times 1.833 =\n29.3$ V across the junction, so about 28.5 V of applied reverse bias. Answering 4 V\napplies the capacitance ratio directly to the voltage and skips both the square and the\nsquare root. This is exactly why wideband VCOs use hyperabrupt varactors, or several\nvaractors switched in banks, rather than one abrupt junction and a large supply."
+     },
+     {
+      "q": "A diode with 2.67 pF of junction capacitance is reverse biased and carrying no current. What does it look like to a 100 MHz signal?",
+      "opts": [
+       "an open circuit — it is reverse biased",
+       "about 596 $\\Omega$ of reactance",
+       "about 6 $\\Omega$ of reactance",
+       "a short circuit, because capacitors pass AC"
+      ],
+      "a": 1,
+      "why": "$1/2\\pi fC = 1/(2\\pi \\times 10^8 \\times 2.67\\times10^{-12}) = 596\\ \\Omega$, which is an\nutterly ordinary impedance — the same order as the circuits it sits in. Treating a\nreverse-biased diode as an open circuit is safe at DC and at audio and is wrong by the\ntime you reach VHF, which is why RF switches specify an off-state capacitance and why\nthis same capacitance sets a photodiode's speed in module 10. Neither extreme answer\nsurvives arithmetic: a capacitor is neither an open nor a short, it is a number of ohms\nthat depends on the frequency you asked about."
+     },
+     {
+      "q": "Why is a varactor's tuning voltage fed in through a resistor of tens of kilohms rather than straight from a low-impedance supply?",
+      "opts": [
+       "to limit the current through the varactor",
+       "to drop the supply voltage down to the tuning range",
+       "because whatever is connected to the tuned circuit loads it, and a low-impedance source would damp the resonance away",
+       "to protect the varactor against reverse breakdown"
+      ],
+      "a": 2,
+      "why": "Anything joined to a tuned circuit appears across it. A tuning supply with an output\nimpedance of a fraction of an ohm would sit in parallel with the tank and take its\nloaded $Q$ to nearly nothing; the series resistor is what keeps the supply out of the\nsignal path. Current limiting is not the reason — a reverse-biased varactor draws\nnanoamps whatever you do — and the resistor drops no steady voltage for the same\nreason, so the tuning voltage arrives at the varactor unchanged. What the resistor does\ncost is speed: with $C_j$ it makes a time constant, and that sets how fast you can\nretune."
+     },
+     {
+      "q": "A varactor data sheet gives $C_{j0}$, $V_{bi}$ and $m$. Which physical property of the device is $m$ describing?",
+      "opts": [
+       "how the doping varies with distance through the junction",
+       "the junction area",
+       "the minority carrier lifetime",
+       "the reverse breakdown voltage"
+      ],
+      "a": 0,
+      "why": "The doping profile. An abrupt step from p to n gives $m = 1/2$; a doping that ramps\nlinearly through the junction gives 1/3; a profile with the doping deliberately made\n*heaviest* right at the junction and falling away from it — hyperabrupt — gives\n$m$ near 1 or 2, and much more capacitance change per volt. Area sets $C_{j0}$ and\nnothing else, since it scales the capacitance at every bias equally. The lifetime\nbelongs to module 9 and the breakdown to module 4; neither appears anywhere in\n$C_j(V_R)$."
+     }
+    ]
+   },
+   "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
+   "build": {
+    "title": "A tank tuned by a voltage",
+    "minutes": 28,
+    "brief": "A varactor and an inductor make a tuned circuit whose frequency is set by a DC voltage\nand nothing else — no moving parts, no gang capacitor. This is that circuit, at one\npoint in its tuning range, with the two things that have to be true at once.\n\n## The device\n\nThe abrupt junction of module 5, used backwards: $C_{j0} = 7.06$ pF, $V_{bi} = 0.833$ V,\n$m = 1/2$. It is biased at **5.00 V reverse**, so\n\n$$C_j = \\frac{7.06\\ \\text{pF}}{\\sqrt{1 + 5.00/0.833}} = 2.67\\ \\text{pF}$$\n\nand the tank inductor is **1.0 µH**. Together those resonate at 97.4 MHz, in the middle\nof the FM broadcast band — which is what this stage is for.\n\n## The canvas\n\nThe signal from the antenna is modelled as a **1 mA current source** driving the tank\nnode, and the probe is on that node. The inductor is already there. A current source is\nan open circuit to the signal, so it does not load the tank; the *only* loss in this\nidealised version is whatever you add.\n\nAdd:\n\n- the varactor, as its junction capacitance at the stated bias, from the tank node to\n  ground,\n- the bias resistor, from the tank node to ground. In the real circuit it goes to the\n  tuning supply, which is a short circuit as far as the signal is concerned, so it is\n  drawn to ground here.\n\n## What has to be true\n\n- the tank must resonate at **97.4 MHz**, within about one and a half per cent\n- the **loaded $Q$ must be at least 80**, or the stage passes half the band at once\n- the tuning must **settle within a microsecond**, which means the bias network's time\n  constant $Z_{pk}C_j$ must be **200 ns or less**\n\n## Where the tension is\n\nThe bias resistor is the only free choice, and it is the whole of the loaded $Q$:\n$Q = R_b\\sqrt{C_j/L}$, so a bigger resistor is a sharper tank. It is also the whole of\nthe tuning time constant, $\\tau = R_bC_j$, so a bigger resistor is a slower tuner. Work\nout both from the numbers above before you type anything: one of them puts a floor\nunder $R_b$ and the other puts a ceiling on it, and the gap between them is not\nenormous.\n\nThe other trap is the capacitance. Use $C_{j0}$ instead of $C_j$ at the working bias\nand the tank lands at 59.9 MHz, which is not in the FM band or anywhere near it.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "I",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 0.001
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 4
+      },
+      {
+       "id": "p2",
+       "kind": "L",
+       "x": 9,
+       "y": 9,
+       "rot": 1,
+       "value": 1e-06
+      },
+      {
+       "id": "p3",
+       "kind": "GND",
+       "x": 9,
+       "y": 11
+      },
+      {
+       "id": "p8",
+       "kind": "OUT",
+       "x": 11,
+       "y": 7
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        3,
+        4
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        11,
+        7
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        9,
+        8
+       ]
+      },
+      {
+       "a": [
+        9,
+        10
+       ],
+       "b": [
+        9,
+        11
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "I",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 0.001
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 4
+      },
+      {
+       "id": "p2",
+       "kind": "L",
+       "x": 9,
+       "y": 9,
+       "rot": 1,
+       "value": 1e-06
+      },
+      {
+       "id": "p3",
+       "kind": "GND",
+       "x": 9,
+       "y": 11
+      },
+      {
+       "id": "p4",
+       "kind": "C",
+       "x": 13,
+       "y": 9,
+       "rot": 1,
+       "value": 2.67e-12
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 13,
+       "y": 11
+      },
+      {
+       "id": "p6",
+       "kind": "R",
+       "x": 17,
+       "y": 9,
+       "rot": 1,
+       "value": 62000
+      },
+      {
+       "id": "p7",
+       "kind": "GND",
+       "x": 17,
+       "y": 11
+      },
+      {
+       "id": "p8",
+       "kind": "OUT",
+       "x": 11,
+       "y": 7
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        3,
+        4
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        17,
+        7
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        9,
+        8
+       ]
+      },
+      {
+       "a": [
+        13,
+        7
+       ],
+       "b": [
+        13,
+        8
+       ]
+      },
+      {
+       "a": [
+        17,
+        7
+       ],
+       "b": [
+        17,
+        8
+       ]
+      },
+      {
+       "a": [
+        9,
+        10
+       ],
+       "b": [
+        9,
+        11
+       ]
+      },
+      {
+       "a": [
+        13,
+        10
+       ],
+       "b": [
+        13,
+        11
+       ]
+      },
+      {
+       "a": [
+        17,
+        10
+       ],
+       "b": [
+        17,
+        11
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "one inductor, one capacitor and one resistor across the tank node",
+      "code": "const ls = c.values('L');\nc.assert(ls.length === 1,\n  'The tank needs exactly one inductor, and the 1 uH one is already on the canvas. Found ' +\n  ls.length + '.');\nc.close(ls[0], 1.0e-6, 0.02,\n  'the tank inductance. It is given, not chosen; the varactor is what does the tuning');\nc.assert(c.count('C') === 1,\n  'Exactly one capacitor: the varactor\\'s junction capacitance at its working bias. ' +\n  'Found ' + c.count('C') + '.');\nc.assert(c.count('R') === 1,\n  'Exactly one resistor: the bias feed. Found ' + c.count('R') + '. Any extra resistance ' +\n  'across this node is extra loss, and the Q check below will find it.');"
+     },
+     {
+      "name": "it resonates at 97.4 MHz",
+      "code": "let fb = 0, gb = -1;\nfor (let i = 0; i <= 600; i++) {\n  const f = 1e7 * Math.pow(100, i / 600);\n  const g = c.gain(f);\n  if (g > gb) { gb = g; fb = f; }\n}\nlet lo = fb / 1.05, hi = fb * 1.05;\nfor (let k = 0; k < 80; k++) {\n  const a = lo + (hi - lo) / 3, b = hi - (hi - lo) / 3;\n  if (c.gain(a) < c.gain(b)) lo = a; else hi = b;\n}\nconst f0 = 0.5 * (lo + hi);\nc.close(f0, 97.4e6, 0.015,\n  'the frequency the tank peaks at. With 1 uH it wants 2.67 pF; if you are near 60 MHz ' +\n  'the zero-bias capacitance went in instead of the value at 5 V of reverse bias');"
+     },
+     {
+      "name": "the loaded Q is at least 80",
+      "code": "const L = c.values('L')[0];\nlet fb = 0, gb = -1;\nfor (let i = 0; i <= 600; i++) {\n  const f = 1e7 * Math.pow(100, i / 600);\n  const g = c.gain(f);\n  if (g > gb) { gb = g; fb = f; }\n}\nlet lo = fb / 1.05, hi = fb * 1.05;\nfor (let k = 0; k < 80; k++) {\n  const a = lo + (hi - lo) / 3, b = hi - (hi - lo) / 3;\n  if (c.gain(a) < c.gain(b)) lo = a; else hi = b;\n}\nconst f0 = 0.5 * (lo + hi);\nconst zpk = c.gain(f0) / 1.0e-3;\nconst q = zpk / (2 * Math.PI * f0 * L);\nc.assert(q >= 80 * 0.99,\n  'The loaded Q is ' + q.toFixed(1) + ', below the 80 asked for. Q = R_b*sqrt(C_j/L) here, ' +\n  'so the bias resistor is the only thing setting it — make it larger.');"
+     },
+     {
+      "name": "and the tuning settles in under a microsecond",
+      "code": "let fb = 0, gb = -1;\nfor (let i = 0; i <= 600; i++) {\n  const f = 1e7 * Math.pow(100, i / 600);\n  const g = c.gain(f);\n  if (g > gb) { gb = g; fb = f; }\n}\nlet lo = fb / 1.05, hi = fb * 1.05;\nfor (let k = 0; k < 80; k++) {\n  const a = lo + (hi - lo) / 3, b = hi - (hi - lo) / 3;\n  if (c.gain(a) < c.gain(b)) lo = a; else hi = b;\n}\nconst f0 = 0.5 * (lo + hi);\nconst zpk = c.gain(f0) / 1.0e-3;\nconst cj = c.values('C')[0];\nconst tau = zpk * cj;\nc.assert(tau <= 200e-9 * 1.01,\n  'The bias network\\'s time constant is ' + c.fmt(tau, 's') + ', over the 200 ns allowed. ' +\n  'Five of those is how long the tuning takes to arrive after the voltage changes, and ' +\n  'a receiver that takes longer than a microsecond to settle is a receiver you can hear ' +\n  'settling. The only lever is the bias resistor, and it is the same lever as the Q.');"
+     }
+    ],
+    "hints": [
+     "The capacitance first: $7.06/\\sqrt{1+5.00/0.833} = 7.06/2.646 = 2.67$ pF. Type `2.67p`.",
+     "Then the two bounds on the bias resistor. $Q = R_b\\sqrt{C_j/L} = R_b \\times 1.633\\times10^{-3}$, so $Q \\ge 80$ needs $R_b \\ge 49.0$ k$\\Omega$; and $\\tau = R_bC_j \\le 200$ ns needs $R_b \\le 74.9$ k$\\Omega$.",
+     "That leaves 56 k, 62 k and 68 k as the standard values inside the window. 62 k sits comfortably in the middle: $Q = 101$ and $\\tau = 165$ ns.",
+     "Both the capacitor and the resistor run from the tank node down to their own ground. The inductor is already wired that way — copy it.",
+     "If the resonance check reads about 60 MHz, the capacitance is $C_{j0}$ rather than $C_j$ at 5 V. If it reads over 1 GHz, there is no capacitor on the node at all and the scan is just running off the top of the sweep."
+    ]
+   },
+   "derive": {
+    "title": "The capacitance of a junction you are pulling apart",
+    "minutes": 13,
+    "brief": "Two facts, both already established, and the varactor equation falls out in four steps.\n\nThe first is electrostatic: a region of width $W$ and area $A$ with no mobile charge\ninside it, lying between two conducting regions, holds a capacitance. The second is\nmodule 1's: the depletion width of an abrupt junction goes as the square root of the\ntotal voltage the junction is supporting, which under $V_R$ volts of reverse bias is\n$V_{bi} + V_R$.\n\nWrite $W_0$ for the depletion width with nothing applied, and $C_{j0}$ for the\ncapacitance there. $\\epsilon$ is the permittivity of silicon.",
+    "vars": [
+     "C_j",
+     "C_j0",
+     "epsilon",
+     "A",
+     "W",
+     "W_0",
+     "V_bi",
+     "V_R",
+     "V_1",
+     "V_2",
+     "q",
+     "N_a",
+     "N_d"
+    ],
+    "steps": [
+     {
+      "prompt": "Treat the depletion region as a parallel-plate capacitor of area $A$, thickness $W$, filled with silicon of permittivity $\\epsilon$. Write its capacitance.",
+      "given": "",
+      "answer": "\\frac{\\epsilon A}{W}",
+      "placeholder": "",
+      "hint": "The standard parallel-plate result. Nothing about a junction changes it; only the plate separation is unusual, in that you can move it.",
+      "deconstruct": [
+       "A parallel-plate capacitor has $C = \\epsilon A/d$ for a plate separation $d$.",
+       "Here the separation is the depletion width $W$, and the two quasi-neutral regions either side are the plates."
+      ]
+     },
+     {
+      "prompt": "Module 1 gave $W \\propto \\sqrt{V_{bi}+V_R}$, and with nothing applied the width is $W_0$. Write $W$ under $V_R$ volts of reverse bias, in terms of $W_0$, $V_{bi}$ and $V_R$.",
+      "given": "$W \\propto \\sqrt{V_{bi}+V_R}$, and $W = W_0$ when $V_R = 0$.",
+      "answer": "W_0\\sqrt{\\frac{V_bi + V_R}{V_bi}}",
+      "placeholder": "",
+      "hint": "Take the ratio of the width at $V_R$ to the width at zero, so the constant of proportionality cancels.",
+      "deconstruct": [
+       "$W(V_R)/W_0 = \\sqrt{V_{bi}+V_R}\\,/\\,\\sqrt{V_{bi}}$, because everything else in the constant is the same junction.",
+       "One square root over another is the square root of the ratio."
+      ]
+     },
+     {
+      "prompt": "Put that width into step 1, and use $C_{j0} = \\epsilon A/W_0$ to remove $\\epsilon$, $A$ and $W_0$ together. Write $C_j$ in terms of $C_{j0}$, $V_{bi}$ and $V_R$.",
+      "given": "",
+      "answer": "\\frac{C_j0}{\\sqrt{1 + \\frac{V_R}{V_bi}}}",
+      "placeholder": "",
+      "hint": "Dividing by $W_0\\sqrt{\\cdots}$ is dividing by $W_0$ and then by the root, and the first of those two divisions is exactly $C_{j0}$.",
+      "deconstruct": [
+       "$C_j = \\epsilon A / \\left(W_0\\sqrt{(V_{bi}+V_R)/V_{bi}}\\right)$.",
+       "Group the $\\epsilon A/W_0$ and call it $C_{j0}$.",
+       "$(V_{bi}+V_R)/V_{bi}$ is the same thing as $1 + V_R/V_{bi}$."
+      ]
+     },
+     {
+      "prompt": "A tuning range is a ratio, not a value. Write $C_j(V_1)/C_j(V_2)$ for two reverse biases $V_1$ and $V_2$ — the factor by which the capacitance falls as you go from $V_1$ up to $V_2$.",
+      "given": "",
+      "answer": "\\sqrt{\\frac{V_bi + V_2}{V_bi + V_1}}",
+      "placeholder": "",
+      "hint": "Divide step 3 by itself at the two voltages; $C_{j0}$ cancels and the two roots combine into one.",
+      "deconstruct": [
+       "The ratio is $\\sqrt{1+V_2/V_{bi}}\\,/\\,\\sqrt{1+V_1/V_{bi}}$, since dividing by a fraction inverts it.",
+       "Multiply top and bottom inside the roots by $V_{bi}$."
+      ]
+     }
+    ],
+    "closing": "So $C_j = C_{j0}(1+V_R/V_{bi})^{-1/2}$, and the general form a data sheet quotes is\n$C_j = C_{j0}(1+V_R/V_{bi})^{-m}$ with $m$ carrying the doping profile.\n\nThe ratio in step 4 is the honest way to read a varactor. Between 1 V and 12 V it is\n$\\sqrt{12.833/1.833} = 2.65$ in capacitance, and a resonant frequency goes as\n$1/\\sqrt{C}$, so the *frequency* only moves by $\\sqrt{2.65} = 1.63$. Eleven volts of\ntuning range bought two thirds of an octave, and there is no arrangement of an abrupt\njunction that does better — the exponent is fixed by the doping profile, which was\ndecided in a furnace long before you chose your supply rail.\n\nTwo other consequences are worth carrying forward. Because $C_j$ falls as the bias\nrises, a reverse-biased photodiode is faster than an unbiased one, which is module 10.\nAnd because $C_j$ is still there when the diode has stopped conducting, it is half of\nthe resonant circuit that rings after a diode turns off, which is module 9."
+   },
+   "lab": {
+    "title": "The tuning curve, and reading it backwards",
+    "runtime": "python",
+    "minutes": 28,
+    "brief": "A varactor data sheet gives you $C_{j0}$, $V_{bi}$ and $m$. Everything a tuner designer\nwants — what frequency a given voltage produces, and what voltage a wanted frequency\nneeds — is four short functions away.\n\n- `junction_capacitance(c_j0, v_bi, v_r, m)` returns $C_{j0}/(1+V_R/V_{bi})^m$ in\n  farads.\n- `resonant_frequency(l, c)` returns $1/2\\pi\\sqrt{LC}$ in hertz.\n- `tank_frequency(l, c_j0, v_bi, v_r, m)` returns the resonant frequency of `l` with\n  that varactor at that reverse bias. It should call the two functions above rather\n  than repeat them.\n- `bias_for_frequency(l, c_j0, v_bi, m, f_target, v_lo, v_hi)` returns the reverse bias\n  that puts the tank on `f_target`, found by **bisection** between `v_lo` and `v_hi`.\n\nThere is no closed form for the last one worth writing — you could invert it by hand,\nbut the moment $m$ stops being exactly 1/2 you would have to do it again, and bisection\ndoes not care what $m$ is. The frequency rises monotonically with the bias, so:\n\n```text\nlo, hi = v_lo, v_hi\nrepeat 200 times:\n    mid = (lo + hi) / 2\n    if tank_frequency(at mid) < f_target:  lo = mid\n    else:                                  hi = mid\nreturn (lo + hi) / 2\n```\n\nEverything is in SI units: farads, henries, hertz and volts.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"A varactor-tuned tank, forwards and backwards.\"\"\"\n\nimport math\n\n\ndef junction_capacitance(c_j0, v_bi, v_r, m):\n    \"\"\"Junction capacitance in farads at `v_r` volts of reverse bias.\"\"\"\n    # TODO: c_j0 divided by (1 + v_r / v_bi) raised to the power m.\n    return 0.0\n\n\ndef resonant_frequency(l, c):\n    \"\"\"Resonant frequency in hertz of `l` henries with `c` farads.\"\"\"\n    # TODO: one over two pi root LC.\n    return 0.0\n\n\ndef tank_frequency(l, c_j0, v_bi, v_r, m):\n    \"\"\"Where the tank sits with the varactor at `v_r` volts of reverse bias.\"\"\"\n    # TODO: call the two functions above, in the obvious order.\n    return 0.0\n\n\ndef bias_for_frequency(l, c_j0, v_bi, m, f_target, v_lo, v_hi):\n    \"\"\"Reverse bias that puts the tank on f_target, by bisection.\"\"\"\n    lo, hi = v_lo, v_hi\n    # TODO: 200 halvings, then return the midpoint.\n    return 0.0\n\n\nif __name__ == \"__main__\":\n    c_j0, v_bi, m, l = 7.06e-12, 0.833, 0.5, 1.0e-6\n    print(\"C at 0 V:\", junction_capacitance(c_j0, v_bi, 0.0, m), \"F\")\n    print(\"C at 5 V:\", junction_capacitance(c_j0, v_bi, 5.0, m), \"F\")\n    print(\"tank at 5 V:\", tank_frequency(l, c_j0, v_bi, 5.0, m), \"Hz\")\n    lo = bias_for_frequency(l, c_j0, v_bi, m, 88.0e6, 0.0, 30.0)\n    hi = bias_for_frequency(l, c_j0, v_bi, m, 108.0e6, 0.0, 30.0)\n    print(\"88 MHz needs\", lo, \"V and 108 MHz needs\", hi, \"V\")\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"A varactor-tuned tank, forwards and backwards.\"\"\"\n\nimport math\n\n\ndef junction_capacitance(c_j0, v_bi, v_r, m):\n    \"\"\"Junction capacitance in farads at `v_r` volts of reverse bias.\"\"\"\n    return c_j0 / (1.0 + v_r / v_bi) ** m\n\n\ndef resonant_frequency(l, c):\n    \"\"\"Resonant frequency in hertz of `l` henries with `c` farads.\"\"\"\n    return 1.0 / (2.0 * math.pi * math.sqrt(l * c))\n\n\ndef tank_frequency(l, c_j0, v_bi, v_r, m):\n    \"\"\"Where the tank sits with the varactor at `v_r` volts of reverse bias.\"\"\"\n    return resonant_frequency(l, junction_capacitance(c_j0, v_bi, v_r, m))\n\n\ndef bias_for_frequency(l, c_j0, v_bi, m, f_target, v_lo, v_hi):\n    \"\"\"Reverse bias that puts the tank on f_target, by bisection.\"\"\"\n    lo, hi = v_lo, v_hi\n    for _ in range(200):\n        mid = 0.5 * (lo + hi)\n        if tank_frequency(l, c_j0, v_bi, mid, m) < f_target:\n            lo = mid\n        else:\n            hi = mid\n    return 0.5 * (lo + hi)\n\n\nif __name__ == \"__main__\":\n    c_j0, v_bi, m, l = 7.06e-12, 0.833, 0.5, 1.0e-6\n    print(\"C at 0 V:\", junction_capacitance(c_j0, v_bi, 0.0, m), \"F\")\n    print(\"C at 5 V:\", junction_capacitance(c_j0, v_bi, 5.0, m), \"F\")\n    print(\"tank at 5 V:\", tank_frequency(l, c_j0, v_bi, 5.0, m), \"Hz\")\n    lo = bias_for_frequency(l, c_j0, v_bi, m, 88.0e6, 0.0, 30.0)\n    hi = bias_for_frequency(l, c_j0, v_bi, m, 108.0e6, 0.0, 30.0)\n    print(\"88 MHz needs\", lo, \"V and 108 MHz needs\", hi, \"V\")\n"
+     }
+    ],
+    "hints": [
+     "`junction_capacitance` is `c_j0 / (1.0 + v_r / v_bi) ** m`. Keep the whole bracket under the power; `1.0 + (v_r / v_bi) ** m` is a different and much flatter function.",
+     "At `v_r = 0` the divisor is $1^m = 1$ for every $m$, so the function must hand back `c_j0` exactly. That is the cheapest test you can run on it.",
+     "`resonant_frequency` is `1.0 / (2.0 * math.pi * math.sqrt(l * c))`. Put `l * c` inside the root, not `math.sqrt(l) * c`.",
+     "`tank_frequency` should be one line that calls the other two. Repeating the algebra means fixing it twice when `m` turns out not to be 1/2.",
+     "In `bias_for_frequency` the comparison runs the opposite way to a diode load line: *more* reverse bias means *less* capacitance and therefore a *higher* frequency. If the answer comes back as `v_lo` or `v_hi`, swap the two branches."
+    ],
+    "tests": [
+     {
+      "name": "the capacitance at zero bias, and at five volts",
+      "code": "c0 = junction_capacitance(7.06e-12, 0.833, 0.0, 0.5)\nassert abs(c0 - 7.06e-12) < 1e-24, f\"at zero bias it must be c_j0 exactly, got {c0}\"\nc5 = junction_capacitance(7.06e-12, 0.833, 5.0, 0.5)\nassert abs(c5 - 2.6679716690809683e-12) < 1e-21, f\"expected 2.66797 pF at 5 V, got {c5}\"\nc12 = junction_capacitance(7.06e-12, 0.833, 12.0, 0.5)\nassert abs(c12 - 1.7987180989963752e-12) < 1e-21, f\"expected 1.79872 pF at 12 V, got {c12}\""
+     },
+     {
+      "name": "the exponent is not hard-wired to a half",
+      "code": "graded = junction_capacitance(7.06e-12, 0.833, 5.0, 1.0 / 3.0)\nassert abs(graded - 3.690249324221493e-12) < 1e-21, \\\n    f\"a linearly graded junction at 5 V gives 3.69025 pF, got {graded}\"\nhyper = junction_capacitance(7.06e-12, 0.833, 5.0, 2.0)\nassert abs(hyper - 1.4398284511215044e-13) < 1e-22, \\\n    f\"a hyperabrupt m = 2 at 5 V gives 0.14398 pF, got {hyper}\"\nassert hyper < graded, \"a larger m must always mean a steeper fall with bias\""
+     },
+     {
+      "name": "the resonance formula, on numbers you can check by hand",
+      "code": "f = resonant_frequency(1.0e-6, 100e-12)\nassert abs(f - 15915494.309189534) < 1e-3, f\"1 uH and 100 pF resonate at 15.9155 MHz, got {f}\"\nassert abs(resonant_frequency(4.0e-6, 100e-12) - f / 2.0) < 1e-3, \\\n    \"four times the inductance must halve the frequency\"\ng = resonant_frequency(1.0e-6, 2.67e-12)\nassert abs(g - 97401243.3888913) < 1e-3, f\"expected 97.4012 MHz, got {g}\""
+     },
+     {
+      "name": "the tuning curve of the tank you drew",
+      "code": "l, c_j0, v_bi, m = 1.0e-6, 7.06e-12, 0.833, 0.5\nat5 = tank_frequency(l, c_j0, v_bi, 5.0, m)\nassert abs(at5 - 97438261.10179539) < 1e-3, f\"expected 97.4383 MHz at 5 V, got {at5}\"\nat1 = tank_frequency(l, c_j0, v_bi, 1.0, m)\nat12 = tank_frequency(l, c_j0, v_bi, 12.0, m)\nassert abs(at1 - 72953670.44535531) < 1e-3, f\"expected 72.9537 MHz at 1 V, got {at1}\"\nassert abs(at12 - 118669354.30791171) < 1e-3, f\"expected 118.6694 MHz at 12 V, got {at12}\"\nassert abs(at12 / at1 - 1.6266399426304252) < 1e-9, \\\n    \"eleven volts of tuning is worth only 1.6266 in frequency, and that is the point\""
+     },
+     {
+      "name": "bisection lands on the frequency it was asked for",
+      "code": "l, c_j0, v_bi, m = 1.0e-6, 7.06e-12, 0.833, 0.5\nlo = bias_for_frequency(l, c_j0, v_bi, m, 88.0e6, 0.0, 30.0)\nhi = bias_for_frequency(l, c_j0, v_bi, m, 108.0e6, 0.0, 30.0)\nassert abs(lo - 3.0476508088795233) < 1e-9, f\"88 MHz should need 3.04765 V, got {lo}\"\nassert abs(hi - 7.970774274817906) < 1e-9, f\"108 MHz should need 7.97077 V, got {hi}\"\nassert abs(tank_frequency(l, c_j0, v_bi, lo, m) - 88.0e6) < 1.0, \\\n    \"the bias it returned must put the tank back on 88 MHz\"\nassert abs(tank_frequency(l, c_j0, v_bi, hi, m) - 108.0e6) < 1.0, \\\n    \"and on 108 MHz\""
+     },
+     {
+      "name": "a hyperabrupt varactor covers the same band in under a volt",
+      "code": "l, c_j0, v_bi = 1.0e-6, 7.06e-12, 0.833\nabrupt = (bias_for_frequency(l, c_j0, v_bi, 0.5, 108.0e6, 0.0, 30.0)\n          - bias_for_frequency(l, c_j0, v_bi, 0.5, 88.0e6, 0.0, 30.0))\nhyper = (bias_for_frequency(l, c_j0, v_bi, 2.0, 108.0e6, 0.0, 30.0)\n         - bias_for_frequency(l, c_j0, v_bi, 2.0, 88.0e6, 0.0, 30.0))\nassert abs(abrupt - 4.9231234659383825) < 1e-9, \\\n    f\"the abrupt junction needs 4.92312 V to cover 88 to 108 MHz, got {abrupt}\"\nassert abs(hyper - 0.2781360072872795) < 1e-9, \\\n    f\"the m = 2 part needs 0.278136 V for the same band, got {hyper}\"\nassert hyper < abrupt / 10.0, \\\n    \"and that is why hyperabrupt profiles exist, awkward doping and all\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Clippers, clamps and multipliers: the diode as a decision",
+   "summary": "A family of circuits that use none of the diode's curve and all of its asymmetry — cutting a waveform's top off, moving its DC level, and getting more volts out than went in.",
+   "concepts": [
+    "Everything so far leaned on the diode's *curve*: the exponential, the slope, the tangent. These circuits use only its *decision* — conducting or not — and the constant-drop model, 0.7 V when on and an open circuit when off, is enough to design every one of them.",
+    "A **shunt clipper** is a series resistor with a diode across the output. While the diode is off no current flows in the resistor, so the output follows the input exactly; once it conducts, the output is pinned near $V_F$ and the residual slope is $r_d/(R+r_d)$ — about 1% for a 1 k$\\Omega$ resistor and a 10 $\\Omega$ diode. Clipping is not flat, and how flat it is is a ratio of two resistances.",
+    "Put a battery in series with that diode and the clipping level moves to $V_{bias}+V_F$; two such branches facing opposite ways make a two-sided clipper. It is the cheapest waveform limiter there is, it is what protects an input pin from an overvoltage, and it is most of what an overdriven guitar pedal does to a sine wave.",
+    "A **clamper** swaps the roles: the capacitor goes in series and the diode across the output. It has memory. Over the first cycles the capacitor charges to whatever DC level puts the clamped extreme at $\\pm V_F$, and after that the whole waveform is shifted by that amount. A clipper changes the shape and leaves the DC alone; a clamper changes the DC and leaves the shape alone.",
+    "That memory has to survive between clamping instants, so the load's discharge must be slow compared with one period: $R_LC \\gg T$. If it is not, the waveform sags between clamps and the restoration is incomplete — the same $I/(fC)$ droop as module 3's reservoir, in a circuit that looks nothing like a rectifier.",
+    "A **peak detector** is a diode and a capacitor feeding a load: it charges to $V_{peak}-V_F$ and then droops at $I_{load}/(fC)$. Feed a peak detector from a clamper and its input already swings to $2V_{peak}-V_F$, so the output is $2V_{peak}-2V_F$ — a **voltage doubler**, built from two diodes and two capacitors and no transformer. Stack $N$ of them and you have a Cockcroft–Walton ladder at roughly $2NV_{peak}$.",
+    "Notice the reversal from module 3. In a mains rectifier the 1.4 V of bridge drops is 4% of a 34 V peak and hardly worth the arithmetic. In a doubler run from a 5 V logic swing it is 1.4 V out of 10, and in a five-stage ladder it is paid five times over. That is why multipliers are built from Schottky diodes, which module 10 explains."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "Shaping a waveform with a decision",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "A shunt clipper — 1 k$\\Omega$ in series, then a diode to a 2.0 V battery — clips at 2.7 V. The diode's dynamic resistance is 10 $\\Omega$. By how much does the clipped level rise as the input goes from 3 V to 10 V?",
+      "opts": [
+       "not at all — that is what clipping means",
+       "about 69 mV",
+       "about 700 mV",
+       "7 V, since the output follows the input"
+      ],
+      "a": 1,
+      "why": "Once the diode conducts, the input drives $R$ into the diode's model and the output\nrises by the divider ratio $r_d/(R+r_d) = 10/1010 = 0.0099$ of whatever the input does.\nSeven volts of input becomes $7 \\times 0.0099 = 69$ mV of output. A clipped level is\nflat to about a per cent, not flat absolutely, and that residual slope is the reason a\nclipper's flat top still carries a trace of the signal. Answering 700 mV uses\n$r_d/R$ with the decimal point one place out; answering 7 V forgets that the diode is\nconducting at all."
+     },
+     {
+      "q": "What is the difference between a clipper and a clamper?",
+      "opts": [
+       "a clipper removes part of the waveform and leaves its DC level alone; a clamper shifts the whole waveform and leaves its shape alone",
+       "they are two names for the same circuit",
+       "a clipper needs a capacitor and a clamper does not",
+       "a clamper works on sine waves and a clipper on square waves"
+      ],
+      "a": 0,
+      "why": "A clipper is memoryless: give it a voltage and it gives you a voltage, with the top or\nthe bottom cut off, and the average of what comes out is whatever the cutting left\nbehind. A clamper is the opposite in every respect: nothing is removed, the peak-to-peak\nswing is unchanged, and what moves is where the whole waveform sits. The component that\nmakes the difference is the capacitor, and it belongs to the *clamper* — there is no\ncapacitor anywhere in a clipper, only resistors, diodes and whatever sets the bias\nlevel. Both work on any waveform; neither cares what shape it is."
+     },
+     {
+      "q": "A 5.0 V peak sine drives a clamper whose diode holds the output's negative extreme at $-V_F$, with $V_F = 0.7$ V. Where do the two extremes of the output sit?",
+      "opts": [
+       "$-5.0$ V and $+5.0$ V",
+       "$-0.7$ V and $+4.3$ V",
+       "$-0.7$ V and $+9.3$ V",
+       "0 V and $+10.0$ V"
+      ],
+      "a": 2,
+      "why": "The capacitor charges until the trough sits at $-0.7$ V. Nothing has been removed, so\nthe peak-to-peak swing is still 10 V, and the positive extreme therefore lands at\n$-0.7 + 10 = +9.3$ V — which is $2V_{peak}-V_F$, and is exactly why the next stage of a\nvoltage doubler sees nearly twice the input. Answering $-0.7$ V and $+4.3$ V keeps the\ntrough right but shrinks the waveform, which a clamper never does; answering $\\pm 5.0$ V\nis the input, unshifted."
+     },
+     {
+      "q": "Why must a clamper's $R_LC$ be long compared with the period of the signal?",
+      "opts": [
+       "to keep the diode from overheating",
+       "because between clamping instants the capacitor is the only thing holding the shift, and it is discharging into the load the whole time",
+       "to filter out the harmonics the clamping generates",
+       "because a short time constant would clip the waveform instead of shifting it"
+      ],
+      "a": 1,
+      "why": "The diode conducts for a small part of each cycle — just enough to top the capacitor up\nat the clamped extreme. For the rest of the cycle the capacitor holds the DC shift on\nits own while the load draws current out of it, and the shift decays at exactly module\n3's rate, $I_{load}/(fC)$ per cycle. Make $R_LC$ comparable with the period and the\nwaveform visibly sags between clamps: the DC restoration is then partial and depends on\nthe signal, which is the failure mode that ruins a video clamp. The diode's dissipation\nis negligible here and no harmonics are generated by a circuit that only shifts."
+     },
+     {
+      "q": "A voltage doubler is driven from a 5.0 V peak source and uses two silicon diodes at 0.7 V each. What does it deliver at light load?",
+      "opts": [
+       "10.0 V",
+       "9.3 V",
+       "8.6 V",
+       "4.3 V"
+      ],
+      "a": 2,
+      "why": "$2V_{peak}-2V_F = 10 - 1.4 = 8.6$ V. Each stage costs one drop: the clamper's diode\ntakes 0.7 V off the shift, and the peak detector's takes another 0.7 V off what it\ncaptures. Answering 9.3 V pays for only one of them; answering 10.0 V is the ideal\ndoubler with no diodes in it at all. The gap between 10.0 and 8.6 is 14% of the output,\nwhich is what makes this a circuit where the choice of diode matters more than the\nchoice of capacitor."
+     },
+     {
+      "q": "Why do the forward drops matter far more in a voltage multiplier than in a mains rectifier?",
+      "opts": [
+       "because multipliers run at higher frequencies, where the drop is larger",
+       "because a multiplier's diodes carry much more current",
+       "because the drop is a fixed number of volts, so it is a large fraction of a small input swing — and an N-stage ladder pays it N times",
+       "because multipliers use the diodes in reverse breakdown"
+      ],
+      "a": 2,
+      "why": "A forward drop is roughly 0.7 V whatever the circuit around it, so what changes is what\nit is 0.7 V *of*. Against a 34 V mains peak two drops are 4% and nobody notices; against\na 5 V logic swing two drops are 14%, and a five-stage ladder from the same source loses\n7 V of the 50 it was aiming at. The drop does not grow with frequency and it barely\ngrows with current — a decade of current is only 60 mV, which is module 2's whole point.\nThe fix is a diode with a smaller drop, and that is what a Schottky is."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "A two-sided clipper, and the shift a clamper settles at",
+    "minutes": 9,
+    "brief": "Both of these are one line of algebra each, but the algebra is the design. The clipper's\nholes are about what happens on each side of its two thresholds; the clamper's is the\nsteady-state offset, which is where every doubler's output voltage comes from.\n\nNothing is executed here — you are choosing expressions, not writing code.",
+    "caption": "shapers.py — two functions, four holes",
+    "lang": "python",
+    "listing": "# Two waveform shapers, in their steady state.\n#   V_F            the diode's forward drop while it is conducting\n#   R, r_d         the series resistor and the diode's dynamic resistance\n#   V_TOP, V_BOT   the two bias batteries, both quoted as positive numbers\n\ndef clip(v_in):\n    # the top diode conducts\n    if v_in > V_TOP + V_F:\n        return (V_TOP + V_F) + (v_in - (V_TOP + V_F)) * ___\n    # the bottom diode conducts\n    if v_in < ___:\n        return -(V_BOT + V_F) + (v_in + (V_BOT + V_F)) * (r_d / (R + r_d))\n    # neither conducts, so nothing flows in R\n    return ___\n\n\ndef clamp_offset(v_peak):\n    # A clamper: C in series with the signal, diode from the output to ground\n    # with its cathode at the output, so the trough is held at -V_F.\n    # In the steady state, v_out = v_in + (this).\n    return ___\n",
+    "blanks": [
+     {
+      "prompt": "How much of the input's movement still reaches the output once the top diode is conducting.",
+      "hole": "?",
+      "opts": [
+       "R / (R + r_d)",
+       "r_d / (R + r_d)",
+       "1.0",
+       "0.0"
+      ],
+      "a": 1,
+      "why": "`r_d / (R + r_d)`. With the diode on, the input drives R into the diode's model and the output is taken across the diode, so the ratio is the diode's share of the series pair — small, which is what makes the clipping nearly flat.",
+      "whys": [
+       "That is the resistor's share of the pair, which is what appears across *R*, not across the diode. It is close to 1, so this version barely clips at all.",
+       "`r_d / (R + r_d)`. The output sits across the diode branch, so it gets the diode's share of the divider: 10/1010 for a 1 k resistor and a 10 ohm diode, or about 1%.",
+       "A slope of 1 means the output follows the input exactly, which is the *unclipped* case. Using it here makes the whole piecewise function the identity and the circuit does nothing.",
+       "A slope of zero is the ideal clipper, perfectly flat. It is a fair first approximation and it is what the constant-drop model gives, but it hides the one per cent that this line exists to expose."
+      ]
+     },
+     {
+      "prompt": "The input below which the bottom diode takes over.",
+      "hole": "?",
+      "opts": [
+       "-V_BOT",
+       "V_BOT + V_F",
+       "-(V_BOT + V_F)",
+       "-(V_BOT - V_F)"
+      ],
+      "a": 2,
+      "why": "`-(V_BOT + V_F)`. The lower branch is the mirror image of the upper one: its battery holds the level at $-V_{BOT}$ and its diode adds another $V_F$ of drop in the direction it conducts, so the threshold sits below both.",
+      "whys": [
+       "The battery alone. It leaves out the diode's own drop, so the model starts clipping $V_F$ too early on the negative side and the two thresholds are no longer symmetric.",
+       "Positive, so this condition is met by every input the *upper* branch was supposed to handle. Both branches would then fire on the same signal and the function returns whichever it tested first.",
+       "`-(V_BOT + V_F)`. The threshold is the battery plus the drop, and the whole thing is negative because this branch handles the bottom of the waveform.",
+       "Subtracting the drop rather than adding it. This is the sign error that makes a clipper look right on a slow sine and wrong on anything with a sharp edge, because the two sides clip at levels that differ by $2V_F$."
+      ]
+     },
+     {
+      "prompt": "What comes out when neither diode is conducting.",
+      "hole": "?",
+      "opts": [
+       "0.0",
+       "V_TOP + V_F",
+       "v_in * (r_d / (R + r_d))",
+       "v_in"
+      ],
+      "a": 3,
+      "why": "`v_in`. With both diodes off nothing is drawing current, so no current flows in R, so R drops no voltage and the output is the input. That is why the series resistor costs nothing in the pass region.",
+      "whys": [
+       "Zero output between the thresholds would be a circuit that passes only the parts of the signal it was built to remove, which is exactly backwards.",
+       "That is the upper clipping level, held all the time. It would flatten the waveform completely rather than only its extremes.",
+       "The divider ratio applies only while the diode is conducting and providing the bottom of that divider. With both diodes off there is nothing for R to divide against.",
+       "`v_in`. An open circuit at the output means no current in R, so no drop across it. The resistor is invisible until a diode turns on and gives it something to work against."
+      ]
+     },
+     {
+      "prompt": "The DC offset a clamper settles at, once the capacitor has charged.",
+      "hole": "?",
+      "opts": [
+       "v_peak + V_F",
+       "v_peak - V_F",
+       "2 * v_peak - V_F",
+       "-v_peak + V_F"
+      ],
+      "a": 1,
+      "why": "`v_peak - V_F`. At the input's negative peak the diode holds the output at $-V_F$, so the capacitor has to be carrying $v_{peak} - V_F$ volts, and it then adds that to every other point of the waveform.",
+      "whys": [
+       "Adding the drop instead of losing it. This puts the trough at $+V_F$ rather than $-V_F$, which is the wrong side of ground and, worse, a level the diode could not have set — it clamps by conducting, and conducting means it drops volts.",
+       "`v_peak - V_F`. Set $v_{out} = -V_F$ at the moment $v_{in} = -v_{peak}$ and the offset falls straight out. It is what makes the positive extreme $2v_{peak}-V_F$, which is the whole input to a doubler's second stage.",
+       "That is the *peak* of the clamped output, not the offset that produced it. Using it here shifts the waveform twice as far and the trough ends up near $+v_{peak}$.",
+       "The right size and the wrong sign, which clamps the waveform downwards instead. It is what you get from the same circuit with the diode turned round, and it is a perfectly good negative clamper — just not this one."
+      ]
+     }
+    ]
+   },
+   "numeric": null,
+   "match": {
+    "title": "The four parts of a waveform shaper",
+    "minutes": 6,
+    "brief": "Clippers, clamps, peak detectors and multipliers are all built from the same four\nsymbols in different arrangements, and the arrangement is the entire design. Before you\ncan read one of these circuits off a page you have to be able to say, immediately, which\nelement is doing which job.\n\nMatch each role to the symbol that plays it.",
+    "prompt": "Pick a role, then tap the symbol that performs it in these circuits.",
+    "labels": [
+     "Makes the decision",
+     "Holds the DC shift",
+     "Sets the clipping level",
+     "Lets the shift decay",
+     "What every level is measured from"
+    ],
+    "items": [
+     {
+      "sym": "D",
+      "a": 0,
+      "why": "The diode. Triangle into a bar, and the bar is the cathode — the end current comes out of. Conventional current goes in at the flat back of the triangle and out past the bar, in the direction the triangle points; what it will not do is go in at the cathode. Every circuit in this module is the same handful of passives plus this one asymmetry, and removing it leaves a divider that does nothing interesting to any waveform."
+     },
+     {
+      "sym": "C",
+      "a": 1,
+      "why": "The capacitor: two plates that never touch. In a clamper it sits in series with the signal and its charge *is* the DC shift; in a peak detector it sits across the output and its charge is the remembered peak. Same part, same physics, different place in the circuit."
+     },
+     {
+      "sym": "BATT",
+      "a": 2,
+      "why": "A battery — the long bar is the positive terminal. In series with the clipping diode it moves the threshold from $V_F$ to $V_{bias}+V_F$. In a real design it is almost never a cell; it is a divider off the supply, or a second diode, but the symbol tells you what it is doing."
+     },
+     {
+      "sym": "R",
+      "a": 3,
+      "why": "The resistor, drawn as a zig-zag or as a plain rectangle. Here it is the load, and it is what makes the difference between a clamper that holds its shift and one that sags: the product of this and the capacitance has to be long compared with a period."
+     },
+     {
+      "sym": "GND",
+      "a": 4,
+      "why": "Ground. Worth including because in these circuits it is doing real work rather than being bookkeeping: a clamper's diode returns to it, and the clamping level is measured from it. Move the ground and you have a different circuit."
+     }
+    ]
+   },
+   "tune": null,
+   "build": null,
+   "derive": null,
+   "lab": {
+    "title": "Clipping, clamping and the droop between clamps",
+    "runtime": "python",
+    "minutes": 32,
+    "brief": "One memoryless function and two that have to be stepped through time, because the whole\npoint of a clamper is what it remembers.\n\n- `clip(v_in, v_top, v_bot, v_f, r, r_d)` returns the two-sided clipper's output —\n  exactly the piecewise function from the drill above.\n- `simulate_clamper(v_peak, f_hz, c, r_load, v_f, cycles, per_cycle)` steps a clamper\n  driven by a sine and returns the output at every sample, as a list.\n- `simulate_peak_detector(v_peak, f_hz, c, r_load, v_f, cycles, per_cycle)` does the\n  same for a peak detector.\n- `cycle_stats(samples, per_cycle)` returns the tuple `(mean, peak_to_peak)` of the\n  **last `per_cycle` samples** — one whole cycle, after any start-up transient.\n\n## The two models\n\nBoth use `dt = 1 / (f_hz * per_cycle)` and run for `cycles * per_cycle` samples, with\n`v_in = v_peak * sin(2*pi*f_hz*k*dt)` at sample `k`.\n\nThe clamper holds a capacitor voltage `v_c`, the difference between its input side and\nits output side:\n\n```text\nv_out = v_in - v_c\nif v_out < -v_f:                 # the diode conducts and pins the output\n    v_out = -v_f\n    v_c = v_in + v_f\nelse:                            # it is off, and the load discharges C\n    v_c += v_out / (r_load * c) * dt\nrecord v_out\n```\n\nThe peak detector holds the output voltage itself:\n\n```text\nif v_in - v_f > v:               # the diode conducts and tops the capacitor up\n    v = v_in - v_f\nelse:                            # it is off, and the load discharges C\n    v -= v / (r_load * c) * dt\nrecord v\n```\n\nBoth discharge lines are $C\\,dV = -I\\,dt$ with the load current taken at the start of\nthe step, which is the same forward Euler as module 3. Use plain loops: each sample\ndepends on the one before it.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"Clipper, clamper and peak detector — one static, two with memory.\"\"\"\n\nimport math\n\n\ndef clip(v_in, v_top, v_bot, v_f, r, r_d):\n    \"\"\"Two-sided clipper output for one input voltage.\"\"\"\n    # TODO: the piecewise function, with slope r_d / (r + r_d) in the clipped regions.\n    return 0.0\n\n\ndef simulate_clamper(v_peak, f_hz, c, r_load, v_f, cycles, per_cycle):\n    \"\"\"Step a clamper driven by a sine; return every output sample.\"\"\"\n    dt = 1.0 / (f_hz * per_cycle)\n    v_c = 0.0\n    out = []\n    # TODO: the update from the brief, appending v_out every step.\n    return out\n\n\ndef simulate_peak_detector(v_peak, f_hz, c, r_load, v_f, cycles, per_cycle):\n    \"\"\"Step a peak detector driven by a sine; return every output sample.\"\"\"\n    dt = 1.0 / (f_hz * per_cycle)\n    v = 0.0\n    out = []\n    # TODO: the update from the brief, appending v every step.\n    return out\n\n\ndef cycle_stats(samples, per_cycle):\n    \"\"\"(mean, peak-to-peak) of the last per_cycle samples.\"\"\"\n    # TODO: slice the tail once, then average it and take max minus min.\n    return (0.0, 0.0)\n\n\nif __name__ == \"__main__\":\n    print(\"clip(10 V):\", clip(10.0, 2.0, 3.0, 0.7, 1000.0, 10.0))\n    print(\"clip(1 V):\", clip(1.0, 2.0, 3.0, 0.7, 1000.0, 10.0))\n    print(\"clip(-10 V):\", clip(-10.0, 2.0, 3.0, 0.7, 1000.0, 10.0))\n    s = simulate_clamper(5.0, 1000.0, 1e-6, 100e3, 0.7, 40, 2000)\n    if s:\n        print(\"clamper:\", cycle_stats(s, 2000), \"min\", min(s[-2000:]), \"max\", max(s[-2000:]))\n    p = simulate_peak_detector(5.0, 1000.0, 1e-6, 100e3, 0.7, 40, 2000)\n    if p:\n        print(\"peak detector:\", cycle_stats(p, 2000))\n        print(\"doubler would give:\", 2 * 5.0 - 2 * 0.7, \"V\")\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"Clipper, clamper and peak detector — one static, two with memory.\"\"\"\n\nimport math\n\n\ndef clip(v_in, v_top, v_bot, v_f, r, r_d):\n    \"\"\"Two-sided clipper output for one input voltage.\"\"\"\n    slope = r_d / (r + r_d)\n    if v_in > v_top + v_f:\n        return (v_top + v_f) + (v_in - (v_top + v_f)) * slope\n    if v_in < -(v_bot + v_f):\n        return -(v_bot + v_f) + (v_in + (v_bot + v_f)) * slope\n    return v_in\n\n\ndef simulate_clamper(v_peak, f_hz, c, r_load, v_f, cycles, per_cycle):\n    \"\"\"Step a clamper driven by a sine; return every output sample.\"\"\"\n    dt = 1.0 / (f_hz * per_cycle)\n    v_c = 0.0\n    out = []\n    for k in range(cycles * per_cycle):\n        v_in = v_peak * math.sin(2.0 * math.pi * f_hz * k * dt)\n        v_out = v_in - v_c\n        if v_out < -v_f:\n            v_out = -v_f\n            v_c = v_in + v_f\n        else:\n            v_c += v_out / (r_load * c) * dt\n        out.append(v_out)\n    return out\n\n\ndef simulate_peak_detector(v_peak, f_hz, c, r_load, v_f, cycles, per_cycle):\n    \"\"\"Step a peak detector driven by a sine; return every output sample.\"\"\"\n    dt = 1.0 / (f_hz * per_cycle)\n    v = 0.0\n    out = []\n    for k in range(cycles * per_cycle):\n        v_in = v_peak * math.sin(2.0 * math.pi * f_hz * k * dt)\n        if v_in - v_f > v:\n            v = v_in - v_f\n        else:\n            v -= v / (r_load * c) * dt\n        out.append(v)\n    return out\n\n\ndef cycle_stats(samples, per_cycle):\n    \"\"\"(mean, peak-to-peak) of the last per_cycle samples.\"\"\"\n    tail = samples[-per_cycle:]\n    return (sum(tail) / len(tail), max(tail) - min(tail))\n\n\nif __name__ == \"__main__\":\n    print(\"clip(10 V):\", clip(10.0, 2.0, 3.0, 0.7, 1000.0, 10.0))\n    print(\"clip(1 V):\", clip(1.0, 2.0, 3.0, 0.7, 1000.0, 10.0))\n    print(\"clip(-10 V):\", clip(-10.0, 2.0, 3.0, 0.7, 1000.0, 10.0))\n    s = simulate_clamper(5.0, 1000.0, 1e-6, 100e3, 0.7, 40, 2000)\n    if s:\n        print(\"clamper:\", cycle_stats(s, 2000), \"min\", min(s[-2000:]), \"max\", max(s[-2000:]))\n    p = simulate_peak_detector(5.0, 1000.0, 1e-6, 100e3, 0.7, 40, 2000)\n    if p:\n        print(\"peak detector:\", cycle_stats(p, 2000))\n        print(\"doubler would give:\", 2 * 5.0 - 2 * 0.7, \"V\")\n"
+     }
+    ],
+    "hints": [
+     "In `clip`, work out `slope = r_d / (r + r_d)` once at the top and use it in both clipped branches. The two branches are mirror images, so if one of them is right the other is the same line with the signs flipped.",
+     "Test `clip` at an input just inside each threshold before you go further: at 2.7 V it must return 2.7 exactly, and at $-3.7$ V it must return $-3.7$ exactly. Getting a jump at the threshold means the offsets in the clipped branch do not match the condition above it.",
+     "In both simulations, append at the **end** of the step, after the update. Appending first shifts every sample by one and quietly changes both statistics.",
+     "The clamper's `v_c` is the capacitor's voltage, not the output. When the diode conducts you set both — the output to $-v_f$ and `v_c` to whatever makes that true, which is `v_in + v_f`.",
+     "`cycle_stats` must slice the tail once and work from the slice. Running the statistics over the whole list includes the start-up, where a clamper is still charging and a peak detector is still climbing from zero.",
+     "If the clamper's mean comes out near zero, the capacitor is never being charged: check the sign in `if v_out < -v_f`. A clamper that never clamps is a series capacitor, and a series capacitor passes the waveform with its DC removed."
+    ],
+    "tests": [
+     {
+      "name": "the clipper passes what it should and cuts what it should",
+      "code": "assert abs(clip(1.0, 2.0, 3.0, 0.7, 1000.0, 10.0) - 1.0) < 1e-12, \"1 V is between the thresholds\"\nassert abs(clip(2.7, 2.0, 3.0, 0.7, 1000.0, 10.0) - 2.7) < 1e-12, \"2.7 V is exactly at the top threshold\"\nassert abs(clip(-3.7, 2.0, 3.0, 0.7, 1000.0, 10.0) + 3.7) < 1e-12, \"-3.7 V is exactly at the bottom one\"\nhi = clip(10.0, 2.0, 3.0, 0.7, 1000.0, 10.0)\nassert abs(hi - 2.7722772277227725) < 1e-12, f\"expected 2.7722772 V at 10 V in, got {hi}\"\nlo = clip(-10.0, 2.0, 3.0, 0.7, 1000.0, 10.0)\nassert abs(lo + 3.7623762376237626) < 1e-12, f\"expected -3.7623762 V at -10 V in, got {lo}\""
+     },
+     {
+      "name": "the clipped region has the slope the divider says it has",
+      "code": "a = clip(3.0, 2.0, 3.0, 0.7, 1000.0, 10.0)\nb = clip(10.0, 2.0, 3.0, 0.7, 1000.0, 10.0)\nassert abs((b - a) - 7.0 * 10.0 / 1010.0) < 1e-12, \\\n    f\"seven volts in should move the clipped level by 69.3 mV, got {b - a}\"\nflat = clip(10.0, 2.0, 3.0, 0.7, 1000.0, 0.0)\nassert abs(flat - 2.7) < 1e-12, f\"with r_d = 0 the clipping is perfectly flat, got {flat}\""
+     },
+     {
+      "name": "the clamper shifts the waveform without changing its size",
+      "code": "s = simulate_clamper(5.0, 1000.0, 1e-6, 100e3, 0.7, 40, 2000)\nassert len(s) == 80000, f\"cycles * per_cycle samples expected, got {len(s)}\"\nmean, ptp = cycle_stats(s, 2000)\nassert abs(mean - 4.2791636188624445) < 1e-9, f\"expected a mean of 4.2791636 V, got {mean}\"\nassert abs(ptp - 9.978571513858414) < 1e-9, f\"expected 9.9785715 V peak to peak, got {ptp}\"\ntail = s[-2000:]\nassert abs(min(tail) + 0.7) < 1e-12, f\"the trough must sit exactly at -v_f, got {min(tail)}\"\nassert abs(max(tail) - 9.278571513858415) < 1e-9, f\"expected a peak of 9.2785715 V, got {max(tail)}\""
+     },
+     {
+      "name": "and the shift is v_peak - v_f, less whatever the load has drooped",
+      "code": "big = cycle_stats(simulate_clamper(5.0, 1000.0, 10e-6, 100e3, 0.7, 40, 2000), 2000)\nassert abs(big[0] - 4.297870414768958) < 1e-9, \\\n    f\"ten times the capacitance should give a mean of 4.2978704 V, got {big[0]}\"\nassert abs(big[0] - 4.3) < abs(4.2791636188624445 - 4.3), \\\n    \"more capacitance must land closer to the ideal v_peak - v_f = 4.3 V\"\nheavy = cycle_stats(simulate_clamper(5.0, 1000.0, 1e-6, 10e3, 0.7, 40, 2000), 2000)\nassert abs(heavy[0] - 4.108721214822937) < 1e-9, \\\n    f\"a ten times heavier load should give 4.1087212 V, got {heavy[0]}\"\nassert heavy[1] < 9.978571513858414, \\\n    \"and a heavier load also shrinks the swing, because the sag is not uniform\""
+     },
+     {
+      "name": "the peak detector holds the peak, and droops at I/(fC)",
+      "code": "p = simulate_peak_detector(5.0, 1000.0, 1e-6, 100e3, 0.7, 40, 2000)\nmean, ptp = cycle_stats(p, 2000)\nassert abs(mean - 4.279156445729092) < 1e-9, f\"expected a mean of 4.2791564 V, got {mean}\"\nassert abs(ptp - 0.04189171021811955) < 1e-9, f\"expected 41.89 mV of droop, got {ptp}\"\nassert abs(max(p[-2000:]) - 4.3) < 1e-9, f\"the top must be v_peak - v_f = 4.3 V, got {max(p[-2000:])}\"\npredicted = (mean / 100e3) / (1000.0 * 1e-6)\nassert abs(predicted / ptp - 1.0) < 0.05, \\\n    f\"module 3's I/(fC) predicts {predicted} V of droop against the measured {ptp}\""
+     },
+     {
+      "name": "a heavier load droops the detector proportionally more",
+      "code": "light = cycle_stats(simulate_peak_detector(5.0, 1000.0, 1e-6, 100e3, 0.7, 40, 2000), 2000)\nheavy = cycle_stats(simulate_peak_detector(5.0, 1000.0, 1e-6, 10e3, 0.7, 40, 2000), 2000)\nassert abs(heavy[0] - 4.109126803218794) < 1e-9, f\"expected a mean of 4.1091268 V, got {heavy[0]}\"\nassert abs(heavy[1] - 0.384317162804217) < 1e-9, f\"expected 384.3 mV of droop, got {heavy[1]}\"\nassert heavy[1] > 8.0 * light[1], \\\n    \"ten times the load current is very nearly ten times the droop, and the shortfall is \" \\\n    \"the mean falling too\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Stored charge, reverse recovery and the snap",
+   "summary": "A conducting diode has charge inside it, and that charge has to come back out before the device can block anything. Everything a diode does wrong at speed follows from how long that takes.",
+   "concepts": [
+    "A conducting pn diode has minority carriers in transit either side of the junction. Module 5 counted them to get $I_S$; what matters here is their total, the **stored charge** $Q = I_F\\tau$. At 100 mA with $\\tau = 1$ µs that is 100 nC — a real quantity of charge sitting inside a part you were treating as a switch.",
+    "That charge must leave before the junction can support any reverse voltage at all. It leaves by recombining, which takes a lifetime, or by being carried out, which takes current. Until it has gone the diode is still a short circuit **in the reverse direction**, and the reverse current is set entirely by the external circuit.",
+    "The **charge-control model** is the whole story: $dQ/dt = i - Q/\\tau$. Solving it for a diode carrying $I_F$ that is suddenly reversed with $I_R$ gives the storage time $t_s = \\tau\\ln(1+I_F/I_R)$. Reversing harder always clears the charge faster, but what a decade of reverse current buys depends on where you start: from $I_R = I_F$ a factor of ten buys about seven times the speed, because the $1$ in the bracket is still the larger term; below that, with $I_R \\ll I_F$, a decade only subtracts $\\tau\\ln 10$ and the returns really do diminish.",
+    "$t_{rr}$ is that storage time plus the transition in which the depletion region re-forms, and $Q_{rr}$ is the charge the external circuit had to supply during it. A **snappy** diode ends the transition abruptly, and the loop inductance turns that $di/dt$ into a voltage spike and a ring at $1/2\\pi\\sqrt{L_{loop}C_j}$; a **soft** one tapers off and does not.",
+    "Fast diodes are made by deliberately spoiling the silicon — gold or platinum doping, or electron irradiation — to add recombination centres and cut $\\tau$. The price is a higher forward drop and a higher leakage, both from the same defects. A 1N4007 recovers in a few microseconds and a 1N4148 in 4 ns; they are not the same part with different labels.",
+    "A Schottky has no minority carriers to store, so it has no recovery at all, only its junction capacitance. That is module 10, and it is the reason the fastest rectifier in a low-voltage supply is usually not a pn junction.",
+    "When a snap cannot be avoided, the response is an RC snubber across the diode: $R_s \\approx \\sqrt{L_{loop}/C_j}$, with $C_s$ three to ten times $C_j$. It costs $C_sV^2f$ of dissipation every cycle, which is why the first fix is always a shorter loop and the snubber is what you add when the layout has run out of improvements."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "How long a diode stays on after you turn it off",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "A diode carrying 200 mA with $\\tau = 1$ µs is suddenly reversed by a circuit that pulls 200 mA out of it. Roughly how long before it can block any voltage?",
+      "opts": [
+       "instantly",
+       "about 693 ns",
+       "about 1 µs",
+       "about 2 µs"
+      ],
+      "a": 1,
+      "why": "$t_s = \\tau\\ln(1+I_F/I_R) = 1\\ \\mu\\text{s} \\times \\ln 2 = 693$ ns. For the whole of that\ntime the diode is conducting *backwards* with 200 mA through it and essentially no\nvoltage across it, because the stored charge is still there and a junction full of\nminority carriers cannot support a field. Expecting it to block instantly is the\nassumption every ideal-diode analysis makes, and it is the assumption that fails first\nwhen a circuit is asked to run faster."
+     },
+     {
+      "q": "The same diode, same 200 mA forward, but now reversed with 2 A instead of 200 mA. How much faster does the charge clear?",
+      "opts": [
+       "ten times faster, since the current is ten times larger",
+       "about seven times faster",
+       "no faster — the lifetime sets it",
+       "a hundred times faster"
+      ],
+      "a": 1,
+      "why": "$\\tau\\ln(1+0.2/2) = \\tau\\ln(1.1) = 95$ ns against 693 ns, a factor of 7.3 for a factor of\n10 in current. The logarithm is why it is 7.3 and not 10: at these currents $I_F/I_R$ is\n0.1, so the $1$ inside the bracket is still the dominant term and taking the log of the\nsum costs you part of the decade. That is not a permanent tax — push on to 20 A and\n$t_s$ goes from 95 ns to 9.95 ns, very nearly the full factor of ten, because once\n$I_F/I_R$ is small $\\ln(1+x)\\to x$ and $t_s \\to \\tau I_F/I_R$, inversely proportional to\nthe reverse current. The flattening is at the *other* end: reverse gently, with\n$I_R \\ll I_F$, and a decade of current only takes $\\tau\\ln 10$ off.\nAnswering \"no faster\" goes too\nfar the other way — the lifetime sets the *scale*, but how hard you pull genuinely\nmatters, and it is the only lever the circuit designer has once the part is chosen.\nPulling harder also costs you: the snap at the end is sharper."
+     },
+     {
+      "q": "A rectifier works perfectly in a 50 Hz supply. Why does the same part fail in a 100 kHz converter?",
+      "opts": [
+       "its forward drop rises with frequency",
+       "its junction capacitance shorts it out at 100 kHz",
+       "a 2 µs recovery is a ten-thousandth of a 50 Hz cycle and a fifth of a 100 kHz one, so it now conducts backwards for a large part of every cycle",
+       "the package cannot dissipate the extra heat"
+      ],
+      "a": 2,
+      "why": "Nothing about the diode changed; what changed is what its recovery time is a fraction\n*of*. A 100 kHz period is 10 µs, so 2 µs of reverse conduction is 20% of every cycle\nwith the full supply voltage eventually appearing across a device that is passing\ncurrent the wrong way. The heat is a symptom rather than the cause — it is that\noverlap that produces it, and no package fixes it. The forward drop does not depend on\nfrequency at all, and 150 pF at 100 kHz is 10.6 k$\\Omega$, which shorts nothing that a\nrectifier drives."
+     },
+     {
+      "q": "What actually makes a fast recovery diode fast?",
+      "opts": [
+       "recombination centres added on purpose — gold, platinum or electron irradiation — which cut the minority carrier lifetime",
+       "a thinner depletion region, so the carriers cross it faster",
+       "heavier doping on both sides",
+       "a smaller package with less lead inductance"
+      ],
+      "a": 0,
+      "why": "Silicon is deliberately made worse. Every added recombination centre gives a stored\nminority carrier somewhere to disappear, which is exactly what cutting $\\tau$ means, and\nthe same centres raise both the forward drop and the leakage — a fast diode is a\ncompromised diode, sold as such. The transit across the depletion region takes\npicoseconds and was never the limit; the wait is for the charge stored in the *neutral*\nregions either side. Package inductance matters for the ring afterwards, not for how\nlong the recovery lasts."
+     },
+     {
+      "q": "A diode snaps off in a loop with 30 nH of inductance, and its junction capacitance is 150 pF. What frequency does the resulting ring sit at?",
+      "opts": [
+       "75 kHz",
+       "7.5 MHz",
+       "75 MHz",
+       "750 MHz"
+      ],
+      "a": 2,
+      "why": "$1/2\\pi\\sqrt{LC} = 1/(2\\pi\\sqrt{30\\times10^{-9} \\times 150\\times10^{-12}}) = 75$ MHz.\nTwo components nobody chose — a few centimetres of loop and the junction capacitance\nmodule 7 derived — set a resonance in the VHF band, and the snap excites it hard. This\nis where most of a supply's radiated emissions come from, and it is why the loop area\naround a rectifier is a design parameter rather than a layout convenience. Getting\n75 kHz means 150 pF was read as 150 µF: a factor of $10^6$ in $LC$ is a factor of\n$10^3$ in frequency."
+     },
+     {
+      "q": "Your snubber uses 470 pF and works. You fit 10 nF instead, on the grounds that more must be better. The node swings 60 V at 100 kHz. What have you bought?",
+      "opts": [
+       "a little more damping, and 3.6 W of dissipation instead of 0.17 W",
+       "nothing at all — the snubber capacitor does not affect anything",
+       "twice the ring frequency",
+       "half the recovery time"
+      ],
+      "a": 0,
+      "why": "The snubber capacitor is charged and discharged through its resistor once per cycle, so\nit dissipates $C_sV^2f$: $470\\ \\text{pF} \\times 60^2 \\times 10^5 = 0.17$ W, against\n$10\\ \\text{nF} \\times 60^2 \\times 10^5 = 3.6$ W. Twenty-one times the heat for a\nmarginal improvement in a peak that was already under control. The recovery time is a\nproperty of the diode and is untouched by anything you hang across it, and the ring —\nwhat is left of it — moves *down* in frequency with more capacitance, not up. Snubbing\nis bought with watts, which is why the first fix is always a shorter loop."
+     }
+    ]
+   },
+   "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
+   "build": {
+    "title": "Damping what the snap leaves behind",
+    "minutes": 28,
+    "brief": "The recovery ends with the current going abruptly to zero. What happens next has nothing\nto do with the diode's physics and everything to do with what it is wired into: the loop\ninductance and the junction capacitance are a resonant circuit, and the snap kicks it.\n\n## The circuit\n\nThis is that loop, drawn small-signal so the solver can sweep it. A source drives\n**30 nH** of loop inductance and **0.5 $\\Omega$** of loop resistance into the diode's\noff-state junction capacitance of **150 pF**, and the probe is on the diode's node.\nThose three numbers give\n\n$$f_{ring} = \\frac{1}{2\\pi\\sqrt{L C_j}} = 75\\ \\text{MHz},\n\\qquad Q = \\frac{1}{R}\\sqrt{\\frac{L}{C_j}} = 28$$\n\nso the node rings at 75 MHz, and 28 is its $Q$ — the resonant gain the sweep below\nmeasures. A snap is a step rather than a sine, so what you would see on a probe is an\novershoot to nearly twice the off-state voltage followed by a ring that takes of order\n$Q$ cycles to die away: on a 60 V node, about 120 V of overshoot and a third of a\nmicrosecond of 75 MHz radiating out of every centimetre of the loop. Damping is\nmeasured as $Q$ because $Q$ is what says how long it lasts.\n\n## What to add\n\nAn **RC snubber** — a resistor in series with a capacitor — from the diode's node to\nground. Both values are yours to choose.\n\n## What has to be true\n\n- the peak of the response, anywhere between 1 MHz and 1 GHz, must be **no more than\n  2.0 times** the drive\n- the snubber capacitor must be **three to ten times** the 150 pF junction capacitance\n- the snubber resistor must be within about a factor of two of the loop's\n  characteristic impedance $\\sqrt{L/C_j}$ — that is, between **7 $\\Omega$ and 25 $\\Omega$**\n\n## Why those bounds are the design and not a formality\n\nThe characteristic impedance $\\sqrt{L/C_j} = \\sqrt{30\\ \\text{nH}/150\\ \\text{pF}} =\n14.1\\ \\Omega$ is the impedance the ring circulates energy at. A resistor much smaller\nthan that is nearly a short and lets the loop ring against the snubber capacitor\ninstead; much larger and it is nearly an open and the loop rings as if it were not\nthere. Damping is best when the resistance matches the impedance it is damping.\n\nThe capacitor has to be large enough to hold the ring's energy without its own voltage\nmoving much — under about three times $C_j$ and it simply joins the resonance rather\nthan damping it — and small enough that you can afford $C_sV^2f$ every cycle. At 60 V\nand 100 kHz that is 0.17 W for 470 pF and 3.6 W for 10 nF.\n\nYou cannot pass this by deleting the junction capacitance, and check one says so. The\nring is not a modelling artefact; it is what the part does.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 8,
+       "rot": 1,
+       "value": 1
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 10
+      },
+      {
+       "id": "p2",
+       "kind": "L",
+       "x": 7,
+       "y": 7,
+       "rot": 0,
+       "value": 3e-08
+      },
+      {
+       "id": "p3",
+       "kind": "R",
+       "x": 11,
+       "y": 7,
+       "rot": 0,
+       "value": 0.5
+      },
+      {
+       "id": "p4",
+       "kind": "C",
+       "x": 15,
+       "y": 9,
+       "rot": 1,
+       "value": 1.5e-10
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 15,
+       "y": 11
+      },
+      {
+       "id": "p9",
+       "kind": "OUT",
+       "x": 13,
+       "y": 7
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        9
+       ],
+       "b": [
+        3,
+        10
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        6,
+        7
+       ]
+      },
+      {
+       "a": [
+        8,
+        7
+       ],
+       "b": [
+        10,
+        7
+       ]
+      },
+      {
+       "a": [
+        12,
+        7
+       ],
+       "b": [
+        15,
+        7
+       ]
+      },
+      {
+       "a": [
+        15,
+        7
+       ],
+       "b": [
+        15,
+        8
+       ]
+      },
+      {
+       "a": [
+        15,
+        10
+       ],
+       "b": [
+        15,
+        11
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 8,
+       "rot": 1,
+       "value": 1
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 10
+      },
+      {
+       "id": "p2",
+       "kind": "L",
+       "x": 7,
+       "y": 7,
+       "rot": 0,
+       "value": 3e-08
+      },
+      {
+       "id": "p3",
+       "kind": "R",
+       "x": 11,
+       "y": 7,
+       "rot": 0,
+       "value": 0.5
+      },
+      {
+       "id": "p4",
+       "kind": "C",
+       "x": 15,
+       "y": 9,
+       "rot": 1,
+       "value": 1.5e-10
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 15,
+       "y": 11
+      },
+      {
+       "id": "p6",
+       "kind": "R",
+       "x": 19,
+       "y": 9,
+       "rot": 1,
+       "value": 15
+      },
+      {
+       "id": "p7",
+       "kind": "C",
+       "x": 19,
+       "y": 12,
+       "rot": 1,
+       "value": 4.7e-10
+      },
+      {
+       "id": "p8",
+       "kind": "GND",
+       "x": 19,
+       "y": 14
+      },
+      {
+       "id": "p9",
+       "kind": "OUT",
+       "x": 13,
+       "y": 7
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        9
+       ],
+       "b": [
+        3,
+        10
+       ]
+      },
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        6,
+        7
+       ]
+      },
+      {
+       "a": [
+        8,
+        7
+       ],
+       "b": [
+        10,
+        7
+       ]
+      },
+      {
+       "a": [
+        12,
+        7
+       ],
+       "b": [
+        15,
+        7
+       ]
+      },
+      {
+       "a": [
+        15,
+        7
+       ],
+       "b": [
+        15,
+        8
+       ]
+      },
+      {
+       "a": [
+        15,
+        10
+       ],
+       "b": [
+        15,
+        11
+       ]
+      },
+      {
+       "a": [
+        15,
+        7
+       ],
+       "b": [
+        19,
+        7
+       ]
+      },
+      {
+       "a": [
+        19,
+        7
+       ],
+       "b": [
+        19,
+        8
+       ]
+      },
+      {
+       "a": [
+        19,
+        10
+       ],
+       "b": [
+        19,
+        11
+       ]
+      },
+      {
+       "a": [
+        19,
+        13
+       ],
+       "b": [
+        19,
+        14
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "the ringing loop is still intact, and a snubber has been added to it",
+      "code": "const ls = c.values('L');\nc.assert(ls.length === 1 && Math.abs(ls[0] - 30e-9) <= 30e-9 * 0.03,\n  'The 30 nH of loop inductance must still be there and must not be edited. It is not a ' +\n  'component anyone fitted, it is the wiring, and shrinking it on the schematic is a way ' +\n  'of pretending the layout is better than it is.');\nconst cs = c.values('C');\nc.assert(cs.length === 2,\n  'Two capacitors expected — the diode\\'s 150 pF junction capacitance and the snubber\\'s ' +\n  '— and there are ' + cs.length + '. The junction capacitance is what the ring resonates ' +\n  'against; deleting it removes the problem from the model and not from the board.');\nconst dev = cs.filter(function (v) { return Math.abs(v - 150e-12) <= 150e-12 * 0.03; });\nc.assert(dev.length === 1,\n  'One of the two capacitors has to be the 150 pF junction capacitance, untouched. ' +\n  'Found ' + dev.length + ' at that value.');\nconst rs = c.values('R');\nc.assert(rs.length === 2,\n  'Two resistors expected — the 0.5 ohm of loop resistance and the snubber\\'s — and ' +\n  'there are ' + rs.length + '.');\nc.assert(rs.filter(function (v) { return Math.abs(v - 0.5) <= 0.05; }).length === 1,\n  'The 0.5 ohm loop resistance must still be there. Raising it damps the ring on the ' +\n  'schematic, but on the board it is the diode\\'s own bulk resistance plus the winding ' +\n  'and the copper, and you do not get to choose it.');"
+     },
+     {
+      "name": "nothing anywhere in the sweep rings above twice the drive",
+      "code": "let peak = 0, at = 0;\nfor (let i = 0; i <= 800; i++) {\n  const f = 1e6 * Math.pow(1000, i / 800);\n  const g = c.gain(f);\n  if (g > peak) { peak = g; at = f; }\n}\nc.assert(peak <= 2.0 * 1.01,\n  'The response peaks at ' + peak.toFixed(2) + ' times the drive, at ' +\n  c.fmt(at, 'Hz') + '. Undamped this loop peaks at 28; the specification is 2.0. If you ' +\n  'are near 8, the snubber is a capacitor with no resistance in series and it has simply ' +\n  'moved the resonance down.');"
+     },
+     {
+      "name": "the snubber capacitor is three to ten times the junction capacitance",
+      "code": "const cs = c.values('C');\nconst snub = cs.filter(function (v) { return Math.abs(v - 150e-12) > 150e-12 * 0.03; });\nc.assert(snub.length === 1,\n  'Exactly one capacitor that is not the 150 pF junction capacitance; found ' + snub.length +\n  '. A snubber capacitor equal to C_j joins the resonance instead of damping it.');\nconst ratio = snub[0] / 150e-12;\nc.assert(ratio >= 3.0 * 0.99,\n  'The snubber capacitor is ' + ratio.toFixed(2) + ' times the junction capacitance. Below ' +\n  'about three times, its own voltage moves as much as the node it is supposed to be ' +\n  'holding still, and it becomes part of the tuned circuit rather than a damper on it.');\nc.assert(ratio <= 10.0 * 1.01,\n  'The snubber capacitor is ' + ratio.toFixed(2) + ' times the junction capacitance. Every ' +\n  'cycle it is charged and discharged through the snubber resistor, at a cost of C*V^2*f — ' +\n  '0.17 W at 470 pF and 0.54 W at ten times C_j, on a 60 V node at 100 kHz, and rising in ' +\n  'proportion from there.');"
+     },
+     {
+      "name": "the snubber resistor is near the loop's characteristic impedance",
+      "code": "const rs = c.values('R');\nconst snub = rs.filter(function (v) { return Math.abs(v - 0.5) > 0.05; });\nc.assert(snub.length === 1,\n  'Exactly one resistor that is not the 0.5 ohm loop resistance; found ' + snub.length + '.');\nconst z0 = Math.sqrt(30e-9 / 150e-12);\nc.assert(snub[0] >= 7.0 * 0.99 && snub[0] <= 25.0 * 1.01,\n  'The snubber resistor is ' + c.fmt(snub[0], 'ohm') + '. The loop circulates its energy ' +\n  'at sqrt(L/C_j) = ' + z0.toFixed(1) + ' ohms, and damping works best when the resistance ' +\n  'is near that: much smaller is nearly a short and much larger is nearly an open, and ' +\n  'both let the loop ring.');"
+     }
+    ],
+    "hints": [
+     "Work out $\\sqrt{L/C_j}$ first: $\\sqrt{30\\times10^{-9}/150\\times10^{-12}} = \\sqrt{200} = 14.1\\ \\Omega$. The nearest standard values inside the window are 15 $\\Omega$ and 22 $\\Omega$, and both work.",
+     "Then the capacitor: three to ten times 150 pF is 450 pF to 1.5 nF. 470 pF is the obvious standard value; 1 nF also passes and damps a little harder.",
+     "Build the snubber as a chain from the diode's node: down through the resistor, down through the capacitor, then to ground. Neither part is polarised, so the order does not matter electrically — but keep it visually next to the node it is protecting, because on a real board the snubber's own loop has to be short too.",
+     "Type the values plainly: `15` for the resistor and `470p` for the capacitor. The editor understands `n` and `p` as well as bare numbers.",
+     "If the peak check reports something near 8 rather than near 1.5, there is a capacitor across the node with no resistor in series with it. That is not a snubber, it is more junction capacitance, and it moves the ring down to about 23 MHz rather than damping it."
+    ]
+   },
+   "derive": {
+    "title": "How long the charge takes to come out",
+    "minutes": 13,
+    "brief": "The **charge-control model** treats the stored minority charge $Q$ as the state of the\ndevice and nothing else. Charge arrives as terminal current and disappears by\nrecombination, and recombination removes a fixed *fraction* of what is there per unit\ntime — which is what a lifetime $\\tau$ means. So\n\n$$\\frac{dQ}{dt} = i(t) - \\frac{Q}{\\tau}$$\n\nand that single line, integrated once, is the whole of reverse recovery.\n\nThe experiment: the diode has been carrying a steady forward current $I_F$ for a long\ntime. At $t = 0$ the external circuit reverses and holds a steady reverse current $I_R$\nthrough it, which in the sign convention of the equation above means $i = -I_R$.",
+    "vars": [
+     "Q",
+     "Q_0",
+     "I_F",
+     "I_R",
+     "tau",
+     "t",
+     "t_s"
+    ],
+    "steps": [
+     {
+      "prompt": "Start before $t = 0$. The diode has been carrying $I_F$ for a long time, so nothing is changing. Write the stored charge $Q_0$ at that point.",
+      "given": "$dQ/dt = i - Q/\\tau$, with $dQ/dt = 0$ and $i = I_F$.",
+      "answer": "I_F \\tau",
+      "placeholder": "",
+      "hint": "Set the derivative to zero and solve the line that is left for $Q$.",
+      "deconstruct": [
+       "In steady state $0 = I_F - Q_0/\\tau$.",
+       "Multiply through by $\\tau$.",
+       "So 100 mA held in a diode with a microsecond of lifetime is 100 nC of stored charge."
+      ]
+     },
+     {
+      "prompt": "At $t = 0$ the current is forced to $-I_R$ and held there. Write $dQ/dt$ from that instant onwards, in terms of $I_R$, $Q$ and $\\tau$.",
+      "given": "",
+      "answer": "-I_R - \\frac{Q}{\\tau}",
+      "placeholder": "",
+      "hint": "Put $i = -I_R$ into the model. Nothing else changes.",
+      "deconstruct": [
+       "The charge is now leaving by two routes at once.",
+       "One is the terminal current, $-I_R$; the other is recombination, $-Q/\\tau$.",
+       "Both terms are negative, which is why the charge falls faster than either mechanism alone would take it."
+      ]
+     },
+     {
+      "prompt": "That is a first-order linear equation with a constant forcing term, so its solution is a decaying exponential about a steady value. Solve it with the initial condition from step 1, and write $Q(t)$ in terms of $I_F$, $I_R$, $\\tau$ and $t$.",
+      "given": "The general solution of $dQ/dt = -I_R - Q/\\tau$ is $Q = Ae^{-t/\\tau} - I_R\\tau$.",
+      "answer": "\\tau(I_F + I_R)exp(-\\frac{t}{\\tau}) - I_R \\tau",
+      "placeholder": "A exp(-t/tau) - ...",
+      "hint": "Put $t = 0$ into the general solution, set it equal to $Q_0$ from step 1, and solve for $A$.",
+      "deconstruct": [
+       "At $t = 0$ the general solution gives $Q(0) = A - I_R\\tau$.",
+       "Step 1 said $Q(0) = I_F\\tau$, so $A = I_F\\tau + I_R\\tau$.",
+       "Substitute $A$ back in."
+      ]
+     },
+     {
+      "prompt": "The diode can begin to block only once the stored charge has gone. Set $Q = 0$ and solve for the time, $t_s$.",
+      "given": "",
+      "answer": "\\tau ln(1 + \\frac{I_F}{I_R})",
+      "placeholder": "",
+      "hint": "Move the constant term across, divide out the $\\tau$, and take logarithms of both sides.",
+      "deconstruct": [
+       "$\\tau(I_F+I_R)e^{-t_s/\\tau} = I_R\\tau$, and the $\\tau$ on each side cancels.",
+       "$e^{-t_s/\\tau} = I_R/(I_F+I_R)$, so $e^{+t_s/\\tau} = (I_F+I_R)/I_R$.",
+       "Take the natural logarithm, and note that $(I_F+I_R)/I_R$ is $1 + I_F/I_R$."
+      ]
+     }
+    ],
+    "closing": "$$t_s = \\tau\\ln\\!\\left(1 + \\frac{I_F}{I_R}\\right)$$\n\nThree things are worth taking from it.\n\nThe lifetime is the scale, and it is a property of the silicon. Nothing you do in the\ncircuit changes it; the only way to a shorter $t_s$ at a given ratio of currents is a\ndifferent part, made from silicon that has been deliberately spoiled.\n\nThe ratio is a logarithm, and where you sit on it decides what pulling harder is worth.\nReversing a 200 mA forward current with 200 mA gives $\\tau\\ln 2 = 0.69\\tau$; with 2 A it\ngives $\\tau\\ln 1.1 = 0.095\\tau$ — ten times the current for seven times the speed,\nbecause the $1$ in the bracket is still doing most of the work. Beyond that the\nlogarithm stops charging you: $\\ln(1+x)\\to x$ for small $x$, so at 20 A $t_s$ is\n$0.00995\\tau$ and every further decade of $I_R$ buys nearly the full decade of speed.\nIt is at the gentle end, $I_R \\ll I_F$, that the returns genuinely diminish, a decade of\ncurrent subtracting only $\\tau\\ln 10$. And the harder you pull, the more abruptly the\ncurrent has to come back to zero at the end,\nwhich is the snap that makes the ring.\n\nAnd $t_s$ is not the whole of $t_{rr}$. After the charge is gone the depletion region has\nto re-form and the junction capacitance has to charge to the reverse voltage; that is the\ntransition time, it is where the $dV/dt$ lives, and the ratio of the two is what a data\nsheet calls the softness factor."
+   },
+   "lab": null
+  },
+  {
+   "title": "Schottky, LED and photodiode: junctions that are not silicon pn",
+   "summary": "Three devices that keep the rectifying junction and change something else — the material on one side, the band gap, or the direction light goes — and what each change costs.",
+   "concepts": [
+    "A **Schottky** diode is a metal on lightly doped silicon. There is still a barrier and still rectification, but the current is carried across it by *majority* carriers, thermionically. Nothing is stored, so there is nothing to recover: module 9's whole problem does not arise, and only the junction capacitance is left.",
+    "Its saturation current is four to six orders of magnitude larger than a pn junction's, so the same current arrives at 0.3 to 0.45 V instead of 0.7 V. Those two facts are one fact: $\\Delta V_F = V_T\\ln(I_{S2}/I_{S1})$, so saving 0.35 V of forward drop means $I_S$ larger by $e^{0.35/0.02585} = 7.6\\times10^5$ — and the reverse leakage is larger by the same factor. A Schottky is not a better diode; it is the same trade made differently, and its breakdown is lower too, typically 20 to 100 V.",
+    "An **LED** is a junction in a direct-gap compound — AlGaInP, InGaN — where a recombining electron gives its energy to a photon rather than to the lattice. The photon's energy is the band gap, so $E_g[\\text{eV}] = 1240/\\lambda[\\text{nm}]$, and the forward voltage follows the *colour* rather than the semiconductor's reputation: about 1.9 V for red at 630 nm, and 2.67 V at the very least for blue at 465 nm.",
+    "That is a hard floor, not a preference. No arrangement of resistors will light a blue LED from a single 1.5 V cell, which is why a blue torch has a boost converter in it and a red one does not.",
+    "LEDs are current-driven for module 2's reason and paralleled at your peril for module 6's. Two nominally identical parts modelled as 1.85 V and 1.95 V in series with 12 $\\Omega$, sharing one resistor at 20 mA, split it 14.1 mA and 5.8 mA — a 100 mV spread in $V_F$ becoming a 2.4:1 spread in brightness and in ageing. Give each its own ballast.",
+    "A **photodiode** is the same junction run backwards with light making the carriers. The photocurrent is proportional to optical power and almost independent of the reverse voltage, so the small-signal model is a current source in parallel with $C_j$ — which makes module 7's capacitance the thing that sets its speed. Its **responsivity** is $R = \\eta q\\lambda/hc$, or $\\eta\\lambda[\\mu\\text{m}]/1.24$ A/W, about 0.6 A/W for silicon at 900 nm.",
+    "Reverse bias it — photoconductive mode — and $C_j$ shrinks, the response is fast and linear, and you pay in dark current. Leave it at zero volts — photovoltaic mode — and the dark current vanishes while $C_j$ is at its largest and the device is slow. Push the same curve into the fourth quadrant, delivering power rather than absorbing it, and it is a solar cell."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "The same junction, changed on purpose",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "A Schottky drops 0.35 V where a silicon pn junction drops 0.70 V at the same current, both with $n = 1$ at 300 K. What does that say about their saturation currents?",
+      "opts": [
+       "the Schottky's is about 760 000 times larger",
+       "the Schottky's is twice as large",
+       "the Schottky's is half as large",
+       "they are the same — the difference is in the series resistance"
+      ],
+      "a": 0,
+      "why": "$V = V_T\\ln(I/I_S)$, so at the same $I$ a difference of 0.35 V is a ratio of\n$e^{0.35/0.025852} = e^{13.54} = 7.6\\times10^5$ in $I_S$. Answering \"twice as large\"\napplies the ratio of the voltages to $I_S$, which is the same error as expecting a diode\nat twice the voltage to pass twice the current. And it is not series resistance: at\nthese currents a couple of tens of milliohms would account for microvolts, not for\n350 mV."
+     },
+     {
+      "q": "What does that enormous $I_S$ do to the Schottky's reverse leakage?",
+      "opts": [
+       "nothing — leakage and forward drop are unrelated",
+       "it raises it by the same factor, which is why Schottkys leak microamps where silicon leaks nanoamps",
+       "it lowers it, because the barrier is thinner",
+       "it raises it, but only above 100 °C"
+      ],
+      "a": 1,
+      "why": "The reverse current of an ideal junction *is* $I_S$, so the same number that sets the\nforward drop sets the leakage, and the two cannot be chosen independently. Microamps\ninstead of nanoamps sounds harmless until it meets a high-impedance node — which is\nmodule 6's build, exactly — or until it is multiplied by a rail voltage in a battery\ncircuit and works out as a permanent drain. It is worse hot, but it is already there\ncold: this is the trade a Schottky makes, not a defect it develops."
+     },
+     {
+      "q": "An InGaN LED emits at 465 nm. What is the least forward voltage that could light it at all?",
+      "opts": [
+       "0.7 V, like any diode",
+       "1.5 V",
+       "2.67 V",
+       "3.6 V"
+      ],
+      "a": 2,
+      "why": "$E_g = 1240/465 = 2.67$ eV, and an electron cannot emit a 2.67 eV photon on its way\nacross a junction that has dropped less than 2.67 V across it. So no series resistor,\nhowever small, will light this LED from a single alkaline cell — the physics is in the\nway, not the circuit. Measured parts sit higher still, around 3.0 V at 20 mA, once the\nseries resistance and the extra bias needed for useful current are included. The 0.7 V\nanswer is silicon's number, and silicon has an indirect gap of 1.12 eV and does not\nemit light at all."
+     },
+     {
+      "q": "Two nominally identical LEDs, modelled as 1.85 V and 1.95 V in series with 12 $\\Omega$ each, are wired in parallel behind one resistor that delivers 20 mA in total. How does the current split?",
+      "opts": [
+       "10 mA each, since they are the same part",
+       "about 14 mA and 6 mA, with the larger share going to the lower $V_F$",
+       "about 14 mA and 6 mA, with the larger share going to the higher $V_F$",
+       "about 18 mA and 2 mA"
+      ],
+      "a": 1,
+      "why": "Both sit at the same node voltage, 2.02 V, so the currents are $(2.02-1.85)/12 = 14.1$ mA\nand $(2.02-1.95)/12 = 5.8$ mA. The one that needs *less* voltage takes more current —\nwhich is the same asymmetry as module 6's hot diode, arriving here through manufacturing\nspread rather than through temperature, and then made worse by it, because the one\ncarrying 14 mA is also the one getting hot. A 100 mV data-sheet spread is entirely\nordinary, and it is why LEDs are ballasted individually."
+     },
+     {
+      "q": "A silicon photodiode has a responsivity of 0.50 A/W at 850 nm. What quantum efficiency is that?",
+      "opts": [
+       "50%",
+       "73%",
+       "100%",
+       "42%"
+      ],
+      "a": 1,
+      "why": "Responsivity is $\\eta q\\lambda/hc$, which in convenient units is\n$\\eta\\lambda[\\mu\\text{m}]/1.24$ A/W. Inverting, $\\eta = 0.50 \\times 1.24/0.85 = 0.73$.\nAnswering 50% reads the responsivity as a percentage, which it is not — it is amps per\nwatt, and its value depends on the wavelength as well as on how good the device is.\nNotice that the responsivity of a *perfect* detector rises with wavelength, because each\nphoton carries less energy and so a watt of light is more photons per second; that is\nwhy silicon's responsivity climbs to 900 nm before the band gap cuts it off."
+     },
+     {
+      "q": "Why is a photodiode usually run with a reverse bias across it rather than at zero volts?",
+      "opts": [
+       "so that it conducts",
+       "to increase the responsivity",
+       "because the wider depletion region means less $C_j$, and $C_j$ is what limits the speed",
+       "to keep the dark current down"
+      ],
+      "a": 2,
+      "why": "Module 7's result, put to work: reverse bias widens the depletion region, $C_j =\n\\epsilon A/W$ falls, and the bandwidth into any load resistance rises in proportion. The\nbias also keeps the response linear over a wide range of light levels. What it does not\ndo is help with the dark current — it makes that *worse*, and choosing zero bias is\nexactly how a low-light instrument buys a lower noise floor by accepting a slower\ndetector. Responsivity is set by the quantum efficiency and the wavelength, and hardly\nmoves with bias at all."
+     }
+    ]
+   },
+   "blanks": null,
+   "numeric": {
+    "title": "How fast a photodiode can be, and what that costs in signal",
+    "minutes": 8,
+    "brief": "A photodiode with nothing but a resistor after it is the simplest optical receiver there\nis, and the only design decision in it is the value of that resistor. The photocurrent\nthrough it is your signal, so a large resistor is a large signal. The junction\ncapacitance is across it, so a large resistor is also a low bandwidth. Both of those are\none line of arithmetic; the interesting part is that they point in opposite directions.",
+    "prompt": "What is the largest load resistor that still meets the bandwidth requirement?",
+    "note": "Give the answer in kilohms, to two decimal places.",
+    "diagram": null,
+    "figure": "A silicon photodiode is reverse biased, where its junction capacitance is 50 pF. Its responsivity at 850 nm is 0.55 A/W, and 4.0 µW of light falls on it. Its photocurrent flows into a load resistor to ground, and the voltage across that resistor is the output. The receiver must have a bandwidth of at least 250 kHz.",
+    "given": [
+     {
+      "label": "Junction capacitance",
+      "value": "50 pF"
+     },
+     {
+      "label": "Responsivity at 850 nm",
+      "value": "0.55 A/W"
+     },
+     {
+      "label": "Optical power",
+      "value": "4.0 µW"
+     },
+     {
+      "label": "Bandwidth required",
+      "value": "250 kHz"
+     }
+    ],
+    "answer": 12.73,
+    "tol": 0.15,
+    "unit": "kΩ",
+    "aside": "The photodiode is a current source in parallel with its junction capacitance, so what the load resistor sees is a first-order low-pass: $R$ and $C_j$, and nothing else in the circuit.",
+    "hint": "The corner is at $f = 1/2\\pi RC_j$. Set that equal to 250 kHz and solve for $R$; the responsivity and the optical power do not enter this part at all.",
+    "wrong": "If you got 80 k$\\Omega$, the $2\\pi$ went missing: $1/(RC)$ is a rate in radians per second, not a frequency in hertz. If you got 12.73 $\\Omega$, the picofarads went in as nanofarads.",
+    "why": "$R = 1/(2\\pi f C_j) = 1/(2\\pi \\times 250\\times10^3 \\times 50\\times10^{-12}) = 12.73$ k$\\Omega$. Now look at what that buys: the photocurrent is $0.55 \\times 4.0\\ \\mu\\text{W} = 2.2\\ \\mu$A, so the signal across 12.73 k$\\Omega$ is 28 mV — small enough that the next stage's noise and offset are real considerations. Doubling the resistor would double the signal to 56 mV and halve the bandwidth to 125 kHz, and there is no value that gives you both. The way out is not a better resistor but a different circuit: a transimpedance amplifier holds the diode at a virtual earth so that $C_j$ never has to be charged by the signal, and the trade between gain and bandwidth stops being a straight exchange. That is the first thing EE202 builds with a transistor.",
+    "check": ""
+   },
+   "match": null,
+   "tune": null,
+   "build": {
+    "title": "Two LEDs that are meant to look the same",
+    "minutes": 26,
+    "brief": "An indicator with two LEDs side by side, driven from a 5 V rail, and they have to be the\nsame brightness. That is the whole specification, and it is enough to rule out the\ncircuit almost everyone draws first.\n\n## The parts\n\nTwo nominally identical red LEDs from the same reel, modelled the way module 2 modelled\na diode — a fixed offset in series with a resistance, the tangent to the real curve near\nthe working current:\n\n- **LED A**: 1.85 V in series with 12 $\\Omega$\n- **LED B**: 1.95 V in series with 12 $\\Omega$\n\nThe 100 mV between them is not a fault. It is the ordinary bin-to-bin spread a data\nsheet allows, and any two parts you pull off a reel will differ by something like it.\n\nBoth models are already on the canvas, each running down to its own ground, and both are\nunconnected at the top. The 5 V rail is there and unconnected too.\n\n## The specification\n\n- each LED must carry between **8 mA and 12 mA**\n- the two currents must be within **10%** of each other, or the difference in brightness\n  shows\n- the rail must supply no more than **22 mA** in total\n\n## The circuit almost everyone draws\n\nOne resistor from the rail, feeding both LEDs in parallel. Size it for 20 mA total and\n150 $\\Omega$ is the answer, and it delivers exactly 19.87 mA — bang on budget. Both LEDs\nthen sit at the same node, 2.02 V, so LED A carries $(2.02-1.85)/12 = 14.1$ mA and LED B\ncarries $(2.02-1.95)/12 = 5.8$ mA. Same total current, same power out of the rail,\ntwo-and-a-half times the brightness on one side.\n\nNothing in that circuit is broken. The two LEDs share a node, so they must share a\nvoltage, and at a shared voltage the one that needs less takes more. The only fix is to\nstop them sharing.\n\n## What to build\n\nGive each LED its own ballast resistor from the 5 V rail. Choose the value from the\nspecification above, and note as you do it that the ballast is not overhead — it is the\ncomponent that makes the mismatch stop mattering, because the current is now set mostly\nby a resistor you chose rather than by a 100 mV difference you did not.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 5
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "a1",
+       "kind": "R",
+       "x": 11,
+       "y": 9,
+       "rot": 1,
+       "value": 12
+      },
+      {
+       "id": "a2",
+       "kind": "V",
+       "x": 11,
+       "y": 12,
+       "rot": 1,
+       "value": 1.85
+      },
+      {
+       "id": "a3",
+       "kind": "GND",
+       "x": 11,
+       "y": 14
+      },
+      {
+       "id": "b1",
+       "kind": "R",
+       "x": 17,
+       "y": 9,
+       "rot": 1,
+       "value": 12
+      },
+      {
+       "id": "b2",
+       "kind": "V",
+       "x": 17,
+       "y": 12,
+       "rot": 1,
+       "value": 1.95
+      },
+      {
+       "id": "b3",
+       "kind": "GND",
+       "x": 17,
+       "y": 14
+      },
+      {
+       "id": "pr",
+       "kind": "OUT",
+       "x": 9,
+       "y": 8
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        9,
+        8
+       ],
+       "b": [
+        11,
+        8
+       ]
+      },
+      {
+       "a": [
+        11,
+        10
+       ],
+       "b": [
+        11,
+        11
+       ]
+      },
+      {
+       "a": [
+        11,
+        13
+       ],
+       "b": [
+        11,
+        14
+       ]
+      },
+      {
+       "a": [
+        17,
+        10
+       ],
+       "b": [
+        17,
+        11
+       ]
+      },
+      {
+       "a": [
+        17,
+        13
+       ],
+       "b": [
+        17,
+        14
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 5
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "r1",
+       "kind": "R",
+       "x": 11,
+       "y": 5,
+       "rot": 1,
+       "value": 300
+      },
+      {
+       "id": "r2",
+       "kind": "R",
+       "x": 17,
+       "y": 5,
+       "rot": 1,
+       "value": 300
+      },
+      {
+       "id": "a1",
+       "kind": "R",
+       "x": 11,
+       "y": 9,
+       "rot": 1,
+       "value": 12
+      },
+      {
+       "id": "a2",
+       "kind": "V",
+       "x": 11,
+       "y": 12,
+       "rot": 1,
+       "value": 1.85
+      },
+      {
+       "id": "a3",
+       "kind": "GND",
+       "x": 11,
+       "y": 14
+      },
+      {
+       "id": "b1",
+       "kind": "R",
+       "x": 17,
+       "y": 9,
+       "rot": 1,
+       "value": 12
+      },
+      {
+       "id": "b2",
+       "kind": "V",
+       "x": 17,
+       "y": 12,
+       "rot": 1,
+       "value": 1.95
+      },
+      {
+       "id": "b3",
+       "kind": "GND",
+       "x": 17,
+       "y": 14
+      },
+      {
+       "id": "pr",
+       "kind": "OUT",
+       "x": 9,
+       "y": 8
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        5
+       ],
+       "b": [
+        9,
+        4
+       ]
+      },
+      {
+       "a": [
+        9,
+        4
+       ],
+       "b": [
+        11,
+        4
+       ]
+      },
+      {
+       "a": [
+        11,
+        4
+       ],
+       "b": [
+        17,
+        4
+       ]
+      },
+      {
+       "a": [
+        11,
+        6
+       ],
+       "b": [
+        11,
+        8
+       ]
+      },
+      {
+       "a": [
+        9,
+        8
+       ],
+       "b": [
+        11,
+        8
+       ]
+      },
+      {
+       "a": [
+        17,
+        6
+       ],
+       "b": [
+        17,
+        8
+       ]
+      },
+      {
+       "a": [
+        11,
+        10
+       ],
+       "b": [
+        11,
+        11
+       ]
+      },
+      {
+       "a": [
+        11,
+        13
+       ],
+       "b": [
+        11,
+        14
+       ]
+      },
+      {
+       "a": [
+        17,
+        10
+       ],
+       "b": [
+        17,
+        11
+       ]
+      },
+      {
+       "a": [
+        17,
+        13
+       ],
+       "b": [
+        17,
+        14
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "both LED models are present and unedited",
+      "code": "const a = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.85) < 0.02; });\nconst b = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.95) < 0.02; });\nc.assert(a.length === 1 && b.length === 1,\n  'One 1.85 V offset and one 1.95 V offset, which are the two LEDs. Found ' + a.length +\n  ' and ' + b.length + '. Editing them until they match is solving the exercise by ' +\n  'assuming the parts are identical, which is the assumption that fails on a reel.');\nconst twelves = c.values('R').filter(function (v) { return Math.abs(v - 12) <= 0.6; });\nc.assert(twelves.length === 2,\n  'Each LED model needs its own 12 ohm slope resistance; found ' + twelves.length +\n  ' resistors near 12 ohms.');\nconst sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 5) < 0.2; });\nc.assert(sup.length === 1, 'Exactly one 5 V rail; found ' + sup.length + '.');"
+     },
+     {
+      "name": "each LED carries between 8 mA and 12 mA",
+      "code": "const d = c.dc();\nconst a = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.85) < 0.02; })[0];\nconst b = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.95) < 0.02; })[0];\nconst ia = Math.abs(d.currents[a.id]), ib = Math.abs(d.currents[b.id]);\nc.assert(ia >= 0.008 * 0.99 && ia <= 0.012 * 1.01,\n  'LED A is carrying ' + c.fmt(ia, 'A') + ', outside the 8 mA to 12 mA window.');\nc.assert(ib >= 0.008 * 0.99 && ib <= 0.012 * 1.01,\n  'LED B is carrying ' + c.fmt(ib, 'A') + ', outside the 8 mA to 12 mA window.');"
+     },
+     {
+      "name": "and the two are within ten per cent of each other",
+      "code": "const d = c.dc();\nconst a = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.85) < 0.02; })[0];\nconst b = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.95) < 0.02; })[0];\nconst ia = Math.abs(d.currents[a.id]), ib = Math.abs(d.currents[b.id]);\nconst hi = Math.max(ia, ib), lo = Math.min(ia, ib);\nc.assert(lo > 1e-9, 'One of the LEDs is carrying nothing at all.');\nc.assert(hi / lo <= 1.10 * 1.001,\n  'The two LEDs are carrying ' + c.fmt(lo, 'A') + ' and ' + c.fmt(hi, 'A') + ', a ratio of ' +\n  (hi / lo).toFixed(2) + '. A single shared resistor gives 2.44 here, because both LEDs ' +\n  'then sit at one node voltage and the one with the lower offset takes the difference. ' +\n  'Each LED needs its own path back to the rail.');"
+     },
+     {
+      "name": "the rail supplies no more than 22 mA",
+      "code": "const sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 5) < 0.2; })[0];\nconst i = Math.abs(c.dc().currents[sup.id]);\nc.assert(i > 1e-4,\n  'The 5 V rail is delivering ' + c.fmt(i, 'A') + '. Nothing is connected to it yet, so ' +\n  'neither LED is lit and there is nothing to measure.');\nc.assert(i <= 0.022 * 1.01,\n  'The rail is being asked for ' + c.fmt(i, 'A') + ', over the 22 mA budget. Two LEDs at ' +\n  '10 mA each is 20 mA and the budget allows a little over that, so if you are well above ' +\n  'it the ballast resistors are too small.');"
+     }
+    ],
+    "hints": [
+     "Size each ballast for about 10 mA through its own LED. For LED A: $(5 - 1.85)/(R + 12) = 0.010$ gives $R = 303\\ \\Omega$, so 300 $\\Omega$ is the standard value to reach for.",
+     "The same 300 $\\Omega$ works for both: LED A then takes 10.10 mA and LED B takes 9.78 mA, a ratio of 1.03 and a total of 19.87 mA. Trimming the two ballasts to different values to equalise them exactly is possible and pointless — the next pair off the reel will be mismatched differently.",
+     "330 $\\Omega$ also passes, at 9.21 mA and 8.92 mA. 390 $\\Omega$ does not: it drops LED B to 7.59 mA, under the 8 mA floor. 220 $\\Omega$ does not either: it asks the rail for 26.7 mA.",
+     "Lay it out as two independent columns: rail, ballast, LED model, ground, twice over. The only thing the two branches may share is the rail and the ground.",
+     "Notice what the shared-resistor version and the correct one have in common: both draw 19.87 mA from the rail and both dissipate the same total power. The mismatch costs nothing in current and everything in what the current is doing, which is why measuring the supply rail would never have found it."
+    ]
+   },
+   "derive": null,
+   "lab": null
   }
  ],
  "capstone": {

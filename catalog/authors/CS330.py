@@ -48,6 +48,237 @@ COURSE = {
                 "Whitespace and comments are skipped, but they still advance the position counters",
                 "A synthetic EOF token lets every later pass peek without a bounds check",
             ],
+            "quiz": {
+                "title": "What the lexer owes every pass after it",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "`OPERATORS` is scanned in order and the list is longest first. What does the lexer make of the four characters `a<=b`?",
+                        "opts": [
+                            "Three tokens: `a`, `<=`, `b`",
+                            "Four tokens: `a`, `<`, `=`, `b`",
+                            "Three tokens: `a`, `<`, `=b`",
+                            "One token, because there is no whitespace to split it on",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Maximal munch: at each position the scanner takes the longest lexeme that fits, which
+is why `OPERATORS` is written longest first and why the loop stops at the first match.
+Sort that list shortest first and the scanner takes `<`, leaves `=`, and hands the
+parser an assignment where a comparison was written — a bug that never mentions the
+lexer in its symptoms. Whitespace is a separator, not a requirement: `a<=b` and
+`a <= b` produce identical tokens, which is exactly why the position has to be
+recorded rather than reconstructed later.
+""",
+                    },
+                    {
+                        "q": "The source contains the word `letter`. Why does the lexer not return the keyword `let` followed by an identifier `ter`?",
+                        "opts": [
+                            "It scans the whole identifier first, and only then asks whether that word is in `KEYWORDS`",
+                            "`let` only counts as a keyword when a space follows it",
+                            "`KEYWORDS` is checked first, and the check happens to fail here",
+                            "It does split it, and the parser glues the pieces back together",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Keywords are identifiers that lose a lookup. The scanner consumes letters, digits and
+underscores until they run out — that gives `letter` — and the word is only then
+tested against `KEYWORDS`. Trying keywords first means matching `let` inside `letter`,
+`if` inside `ifx`, and `return` inside `returned`, and patching that with a
+"followed by a space" rule breaks `let(x)` and every other legal spacing. Doing the
+lookup after the scan needs no rule at all, because the longest identifier was already
+taken.
+""",
+                    },
+                    {
+                        "q": "A token carries `line` and `col`. Which position do they hold?",
+                        "opts": [
+                            "That of the token's first character",
+                            "That of the character just past its last",
+                            "That of the first non-space character on its line",
+                            "A byte offset into the source, converted to a line and column when something is reported",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The first character, because that is where a caret has to point. An error that says
+*column 11* for a token starting at column 9 sends the reader two characters past the
+thing being complained about, and on a long line that is the difference between an
+obvious mistake and a mystery. Storing an offset and converting on demand is a
+perfectly real design — production compilers keep spans plus a table of line starts,
+which is cheaper per token and gives you end positions for free — but this lexer keeps
+the pair directly, and `start_col` is recorded before the cursor moves precisely so
+that it survives the scan of the lexeme.
+""",
+                    },
+                    {
+                        "q": "Which of these is a *lexical* error — one this pass should raise rather than pass on?",
+                        "opts": [
+                            "`\"oops` — a string literal with no closing quote",
+                            "`let x = ;` — a declaration with nothing on the right",
+                            "`if x { print y;` — a block that is never closed",
+                            "`f(1, 2)` where `f` was declared to take three arguments",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The dividing line is what you need in order to notice. An unterminated string is
+noticed while forming a single lexeme: the scanner runs off the end of the line with
+no closing quote and has nothing to hand back. The missing right-hand side and the
+unclosed block are both perfectly good token sequences — they only look wrong against
+the grammar, so they belong to the parser. The argument count is not even a grammar
+question; it needs a symbol table that knows how `f` was declared, which is module 3's
+work. Push errors down as far as they will go: the lower the pass, the more precise
+the position it can name.
+""",
+                    },
+                    {
+                        "q": "Why does `tokenize` append a synthetic `EOF` token instead of just returning?",
+                        "opts": [
+                            "So that every later pass can look at the next token without first checking that one exists",
+                            "So that the number of tokens matches the number of lines",
+                            "Because the parser needs somewhere to store its final error message",
+                            "Because the source file might not end with a newline",
+                        ],
+                        "a": 0,
+                        "why": r"""
+It is a sentinel. `peek` is `self.tokens[self.pos]` with no bounds check, and it stays
+that simple because the list can never run out: past the end there is always `EOF`,
+and `advance` refuses to move beyond it. One token constructed once replaces an
+`if self.pos < len(self.tokens)` in every function that looks ahead, and — worth more
+— it removes the class of bug where one of those functions forgets. The `EOF` token
+carries a position too, which is what lets "unexpected end of input" name a line and
+column instead of shrugging.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "The scanner loop, hole by hole",
+                "minutes": 8,
+                "caption": "main.py — one turn of the scanner's while loop",
+                "lang": "python",
+                "brief": r"""
+Three cursors move through the source together and every branch has to keep them in
+step: `i` indexes the string, `line` and `col` say where `i` is in human coordinates.
+Almost every position bug in a lexer is one of these four holes filled in with
+something that is *nearly* right.
+
+Nothing runs here — you are choosing what the line has to say.
+""",
+                "listing": """ch = src[i]
+
+if ch == "\\n":
+    i += 1
+    line += 1
+    col = ___
+    continue
+
+start_col = ___          # where this lexeme begins, before anything moves
+
+if ch.isalpha() or ch == "_":
+    j = i
+    while j < n and (src[j].isalnum() or src[j] == "_"):
+        j += 1
+    word = src[i:j]
+    kind = ___ if word in KEYWORDS else "IDENT"
+    tokens.append(Token(kind, word, line, start_col))
+    col += ___
+    i = j
+    continue
+""",
+                "blanks": [
+                    {
+                        "prompt": "A newline has just been consumed. What column is the next character in?",
+                        "hole": "?",
+                        "opts": ["col + 1", "start_col", "1", "0"],
+                        "a": 2,
+                        "why": "Columns are one-based here, so the first character of a line sits at column 1 — the same number the editor shows in its status bar, which is the whole point of reporting one.",
+                        "whys": [
+                            "That carries the old line's column across the newline, so positions on the second line come out shifted by the length of the first — and the further down the file, the worse it gets.",
+                            "`start_col` belongs to the lexeme that was scanned before the newline. It has nothing to say about where the new line starts.",
+                            "Columns are one-based here, so the first character of a line sits at column 1 — the same number the editor shows in its status bar, which is the whole point of reporting one.",
+                            "Zero-based columns are a defensible convention, but this hole is the wrong place to adopt one: `col` is initialised to `1` at the top of `tokenize`, so line 1 stays one-based and only line 2 onwards slides down by one. Half a convention is worse than either — the check \"Line and column survive a newline\" wants `print` at 2:1 and gets 2:0.",
+                        ],
+                    },
+                    {
+                        "prompt": "The lexeme's own column, saved before any cursor moves.",
+                        "hole": "?",
+                        "opts": ["col", "i", "1", "col + 1"],
+                        "a": 0,
+                        "why": "`col` is the live column cursor, and right now it still points at the first character of this lexeme. Saving it here is what lets the scan run ahead and still report where the token began.",
+                        "whys": [
+                            "`col` is the live column cursor, and right now it still points at the first character of this lexeme. Saving it here is what lets the scan run ahead and still report where the token began.",
+                            "`i` is an index into the whole source string. On line 4 it is already in the hundreds, so every token would be reported in a column that does not exist.",
+                            "A constant puts every token at the start of its line, which is worse than reporting nothing: the caret lands somewhere plausible and confidently wrong.",
+                            "One past the first character. Every position would be off by one in the direction that hides the offending character rather than pointing at it.",
+                        ],
+                    },
+                    {
+                        "prompt": "The word has been scanned. What kind is it when the lookup succeeds?",
+                        "hole": "?",
+                        "opts": ['"IDENT"', '"OP"', '"NUM"', '"KW"'],
+                        "a": 3,
+                        "why": "The word competed as an identifier, won the scan, and then lost the lookup: it is in `KEYWORDS`, so it is a keyword. Scanning first and classifying second is exactly what keeps `letter` an identifier.",
+                        "whys": [
+                            "That is the kind for a word the lookup did *not* find, and it is already on the other side of the conditional. Using it in both branches makes the lookup pointless and leaves the parser waiting for a `let` it will never see.",
+                            "`OP` is what the operator scan produces further down the loop. A word made of letters never reaches it.",
+                            "`NUM` belongs to the digit branch further down the loop, which a lexeme starting with a letter never reaches — and a digit run glued to letters, `12ab`, is a malformed number rather than either kind.",
+                            "The word competed as an identifier, won the scan, and then lost the lookup: it is in `KEYWORDS`, so it is a keyword. Scanning first and classifying second is exactly what keeps `letter` an identifier.",
+                        ],
+                    },
+                    {
+                        "prompt": "How far does the column cursor move now that the whole word is consumed?",
+                        "hole": "?",
+                        "opts": ["len(word) + 1", "j - i", "1", "j"],
+                        "a": 1,
+                        "why": "`j - i` is the number of characters the scan actually crossed. `i` becomes `j` on the next line, so this is the one increment that keeps the two cursors describing the same place.",
+                        "whys": [
+                            "One too many: it counts a character the scan never crossed, so each identifier on a line pushes everything after it one column right.",
+                            "`j - i` is the number of characters the scan actually crossed. `i` becomes `j` on the next line, so this is the one increment that keeps the two cursors describing the same place.",
+                            "One character, whatever the length of the word. `i` still jumps to `j`, so the two cursors part company at the first identifier and every position after it on that line is wrong.",
+                            "`j` is an absolute index into the source, not a distance. Adding it to a column adds everything before the token as well.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "Count the tokens",
+                "minutes": 6,
+                "brief": r"""
+A lexeme is not a word, and a token is not a character. The line below has whitespace
+in places that do not separate anything, punctuation inside a string literal that is
+not punctuation as far as the lexer is concerned, and a comment that produces no
+tokens at all while still moving the position counters.
+""",
+                "prompt": "How many tokens does `tokenize` return for this line, counting the `EOF` token at the end?",
+                "note": "A whole number. The line is complete as shown; there is nothing after it.",
+                "figure": "`let s = \"a + b\"; print !ok && s;   # let s = 1;`",
+                "given": [
+                    {"label": "Whitespace", "value": "separates tokens, then is dropped"},
+                    {"label": "Comments", "value": "`#` to the end of the line"},
+                    {"label": "Operators", "value": "longest match wins"},
+                    {"label": "Count", "value": "includes the `EOF` token"},
+                ],
+                "aside": "Nothing here is parsed. `ok` is never declared and `!ok && s` would not type-check, "
+                         "which the lexer neither knows nor cares about.",
+                "answer": 12,
+                "tol": 0,
+                "unit": "tokens",
+                "hint": "Walk the line and count lexemes. Everything between the quotes is a single `STR` "
+                        "token however much punctuation is in it, `&&` is one token rather than two, and "
+                        "the comment yields nothing at all.",
+                "wrong": "The two things most often missed are the `EOF` token at the end and the inside of "
+                         "the string literal — the `+` between the quotes is text, not an operator.",
+                "why": r"""
+`let`, `s`, `=`, `"a + b"`, `;`, `print`, `!`, `ok`, `&&`, `s`, `;` is eleven, and the
+synthetic `EOF` makes twelve. Three details do the work: the string is one `STR` token
+whose value is the five characters `a + b`, so the `+` inside it is never an operator;
+`&&` is one token because `OPERATORS` is scanned longest first; and everything from
+`#` onwards is dropped, comment text that looks like code included. Note that the
+comment still advances `col`, which is why the `EOF` token lands at column 48 rather
+than at the semicolon — dropping a lexeme is not the same as pretending it was not
+there.
+""",
+            },
             "lab": {
                 "title": "A lexer with positions and honest errors",
                 "runtime": "python",
@@ -375,6 +606,251 @@ assert 2.5 in [t.value for t in _toks if t.kind == "NUM"], "2.5 should survive a
                 "One token of lookahead distinguishes assignment from an expression statement",
                 "A parse error names the token it found and the position it found it at",
             ],
+            "quiz": {
+                "title": "Precedence, associativity and the tree that results",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "`(1 + 2) * 3` and `1 + 2 * 3` parse to different trees, yet neither tree contains anything representing a parenthesis. Where did the brackets go?",
+                        "opts": [
+                            "They were spent during the parse: they decided which tree got built, and nothing afterwards needs them",
+                            "A later pass walks the tree and deletes them",
+                            "They are kept, as a `(\"group\", expr)` node wrapping the inner expression",
+                            "They survive as an extra field on the `bin` node",
+                        ],
+                        "a": 0,
+                        "why": r"""
+This is the whole difference between concrete and abstract syntax. A bracket is an
+instruction to the parser about grouping; once the grouping is in the shape of the
+tree, the instruction has been carried out and re-recording it would be recording the
+same fact twice. `parse_primary` shows this directly — the `(` branch parses the inner
+expression and returns it *unwrapped*, with no node of its own. The consequence to
+keep in mind is that a pretty-printer walking this tree has to re-insert brackets from
+precedence, because the original ones are genuinely gone; that is a known cost of
+abstract syntax, and tools that must preserve the source text exactly keep a concrete
+tree alongside for it.
+""",
+                    },
+                    {
+                        "q": "In the Pratt loop, a left-associative operator recurses with `prec + 1` and a right-associative one with `prec`. What does the difference do?",
+                        "opts": [
+                            "Recursing at the same level lets the right operand absorb another operator of equal precedence, so equals nest to the right",
+                            "It changes which operators are legal on the right, not how they group",
+                            "`prec + 1` is a small optimisation; both spellings build the same tree",
+                            "It decides the order the operands are evaluated in at run time",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Look at what each choice forbids. With `prec + 1`, the recursive call refuses any
+operator at the same level, so the right operand of `1 - 2` stops at `2`, the loop
+comes back round, and `- 3` attaches to the tree already built: `(1 - 2) - 3`. With
+`prec`, the recursive call happily takes another `^`, so `3 ^ 2` is swallowed whole
+and becomes the right child: `2 ^ (3 ^ 2)`. One integer, one bit of behaviour, no
+separate function per level — which is what a Pratt parser buys over a stack of
+`parse_term` / `parse_factor` functions. Evaluation order is a separate question the
+tree does not answer.
+""",
+                    },
+                    {
+                        "q": "Prefix `-` parses its operand with `self.parse_expr(UNARY_BIND)` and `UNARY_BIND` is 7, the level of `^`. What is `-2 ^ 2`?",
+                        "opts": [
+                            "`(\"unary\", \"-\", (\"bin\", \"^\", 2, 2))` — the negation of four",
+                            "`(\"bin\", \"^\", (\"unary\", \"-\", 2), 2)` — minus two, squared",
+                            "A parse error: a prefix operator cannot be followed by an infix one",
+                            "It depends on `RIGHT_ASSOCIATIVE`, which contains `^`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`parse_expr(7)` will accept any operator whose precedence is at least 7, and `^` is
+exactly 7 — so the recursive call takes `2 ^ 2` and hands the whole thing back as the
+operand of the minus. The result is $-(2^2) = -4$, which agrees with mathematical
+notation and with Python. The same number, 7, is what stops `-a * b` from behaving the
+same way: `*` is 6, below the bind, so the negation closes over `a` alone and the
+multiplication is built around it. Binding a prefix operator tighter than everything
+would give $(-2)^2 = 4$; the choice is real, and worth making deliberately rather than
+by accident.
+""",
+                    },
+                    {
+                        "q": "The parser is at the start of a statement and the next token is an `IDENT`. What does it need in order to tell an assignment from an expression statement?",
+                        "opts": [
+                            "The token after the identifier — `=` means assignment, anything else does not",
+                            "The whole rest of the line, scanned ahead to the semicolon",
+                            "A way to unwind and re-parse when the first guess turns out wrong",
+                            "The symbol table, to find out whether the name is a variable",
+                        ],
+                        "a": 0,
+                        "why": r"""
+One token past the one you are looking at, which is why `self.tokens[self.pos + 1]` is
+safe — the `EOF` sentinel guarantees there is something there to read. That single
+peek is enough because the two forms differ at their second token and nowhere earlier,
+which is a property of the grammar rather than luck; a grammar without it needs
+backtracking or a longer lookahead, and both are avoidable design choices. The symbol
+table cannot help even in principle: it does not exist yet, and `x = 1;` is a syntactic
+question that stays the same whether or not `x` was ever declared.
+""",
+                    },
+                    {
+                        "q": "In recursive descent, what corresponds to the derivation — the record of which grammar rules were applied?",
+                        "opts": [
+                            "The call stack: each active call is a non-terminal currently being expanded",
+                            "The token list, which the parser rewrites in place as it goes",
+                            "An explicit stack of rule names the parser maintains alongside its position",
+                            "The tree, which is why the derivation cannot be recovered until parsing finishes",
+                        ],
+                        "a": 0,
+                        "why": r"""
+That is the trick the technique is named for. `parse_stmt` calling `parse_expr` calling
+`parse_unary` calling `parse_primary` *is* the leftmost derivation, held in the
+machine's own stack instead of a data structure you wrote. It also explains the two
+characteristic failure modes: a deeply nested expression can overflow the Python stack,
+and a left-recursive rule such as `expr -> expr '+' term` calls itself with no token
+consumed and never returns. The Pratt loop sidesteps the second one by making the
+left-recursive case a `while` loop rather than a call — the tree still leans left, but
+the recursion does not.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "The Pratt loop, four decisions",
+                "minutes": 9,
+                "caption": "main.py — Parser.parse_expr",
+                "lang": "python",
+                "brief": r"""
+Every precedence and associativity rule in the language is decided by the four holes
+below. There is no table of grammar rules to consult and no function per level: the
+binding powers are data, and this loop is the only place that reads them.
+
+Nothing runs here — you are choosing what each line has to say.
+""",
+                "listing": """def parse_expr(self, min_prec=1):
+    left = self.parse_unary()
+    while True:
+        tok = self.peek()
+        if tok.kind != "OP" or tok.value not in PRECEDENCE:
+            break
+        prec = PRECEDENCE[tok.value]
+        if prec < ___:
+            break
+        op = self.advance().value
+        next_min = ___ if op in RIGHT_ASSOCIATIVE else ___
+        right = self.parse_expr(next_min)
+        left = ___
+    return left
+""",
+                "blanks": [
+                    {
+                        "prompt": "When should this loop stop and hand what it has back to its caller?",
+                        "hole": "?",
+                        "opts": ["UNARY_BIND", "min_prec", "prec", "1"],
+                        "a": 1,
+                        "why": "`min_prec` is the caller's demand: *do not take anything looser than this*. An operator below it belongs to the caller, so the loop returns and lets the outer call build that node instead.",
+                        "whys": [
+                            "`UNARY_BIND` is the level a prefix operator hands down to its own operand. Using it as the loop's floor would reject `+` and `*` everywhere, leaving arithmetic unparseable.",
+                            "`min_prec` is the caller's demand: *do not take anything looser than this*. An operator below it belongs to the caller, so the loop returns and lets the outer call build that node instead.",
+                            "Comparing `prec` against itself is never true, so the loop never stops early and every operator is swallowed by the innermost call. `1 + 2 * 3` and `1 * 2 + 3` come out with the same shape, which is to say precedence stops existing.",
+                            "A constant floor accepts every operator in the table at every depth, which is the same failure: the recursion has no way to decline an operator on the caller's behalf.",
+                        ],
+                    },
+                    {
+                        "prompt": "The operator just consumed is right-associative, like `^`. What floor does its right operand get?",
+                        "hole": "?",
+                        "opts": ["prec + 1", "prec - 1", "min_prec", "prec"],
+                        "a": 3,
+                        "why": "The same level it is at. The recursive call will therefore accept another `^`, swallow it, and return the nested tree — so `2 ^ 3 ^ 2` groups as `2 ^ (3 ^ 2)`, which is what the exponent notation means.",
+                        "whys": [
+                            "That is the left-associative floor, and it makes `^` group like subtraction: `(2 ^ 3) ^ 2`, which is $2^6$ rather than $2^9$. Both are legal trees; only one of them is what was written.",
+                            "Dropping below the operator's own level lets the right operand take *looser* operators too, so `2 ^ 3 * 4` would grab the multiplication and become `2 ^ (3 * 4)`.",
+                            "Passing the caller's floor straight through ignores the operator that was just consumed, so the nesting depends on where the expression started rather than on what it contains.",
+                            "The same level it is at. The recursive call will therefore accept another `^`, swallow it, and return the nested tree — so `2 ^ 3 ^ 2` groups as `2 ^ (3 ^ 2)`, which is what the exponent notation means.",
+                        ],
+                    },
+                    {
+                        "prompt": "And for everything else — `+`, `-`, `*` and the comparisons?",
+                        "hole": "?",
+                        "opts": ["prec + 1", "prec", "min_prec + 1", "1"],
+                        "a": 0,
+                        "why": "One level up, so the recursive call refuses an operator of equal precedence and leaves it for this loop's next turn. That is what makes `1 - 2 - 3` come back as `(1 - 2) - 3`.",
+                        "whys": [
+                            "One level up, so the recursive call refuses an operator of equal precedence and leaves it for this loop's next turn. That is what makes `1 - 2 - 3` come back as `(1 - 2) - 3`.",
+                            "That is the right-associative floor. Applied to subtraction it builds `1 - (2 - 3)`, which is 2 where the answer should be $-4$ — the kind of bug that survives every test written with `+` and `*`.",
+                            "Built from the caller's floor rather than this operator's, so two `*` at the same level group differently depending on what enclosed them.",
+                            "A floor of 1 accepts everything, so the right operand keeps eating the rest of the expression and the whole thing leans right.",
+                        ],
+                    },
+                    {
+                        "prompt": "The right operand is parsed. What replaces `left` before the loop turns again?",
+                        "hole": "?",
+                        "opts": [
+                            "(\"bin\", op, left, self.parse_unary())",
+                            "right",
+                            "(\"bin\", op, left, right)",
+                            "(\"bin\", op, right, left)",
+                        ],
+                        "a": 2,
+                        "why": "The node just built becomes the left operand of whatever comes next, and that reassignment is the entire mechanism of left associativity — the tree grows downwards on its left side, one turn of the loop per operator.",
+                        "whys": [
+                            "The operand was already parsed into `right`; parsing another one here consumes a token that belongs to the next operator and drops the value that was just built.",
+                            "Throwing the operator and the left operand away keeps only the last operand, so `1 + 2 + 3` parses to `3`.",
+                            "The node just built becomes the left operand of whatever comes next, and that reassignment is the entire mechanism of left associativity — the tree grows downwards on its left side, one turn of the loop per operator.",
+                            "Swapping the children silently reverses every non-commutative operator: `5 - 3` evaluates to 2 with the operands the right way round and to $-2$ this way, and `+` and `*` keep working, so half the tests still pass.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How many trees is that expression, without a precedence table?",
+                "minutes": 8,
+                "brief": r"""
+A grammar written as `expr -> expr OP expr` is ambiguous: it says which strings are
+expressions but not which tree each one denotes. The precedence and associativity
+table is what removes the ambiguity, and it is worth knowing how much ambiguity it is
+removing.
+
+Count the trees for one chain of the same operator, where precedence has nothing to
+say and only the grouping is in question:
+
+```text
+a - b - c - d - e
+```
+
+Each tree is a different program: `(a - b) - c` and `a - (b - c)` disagree for almost
+every input, so this is not a question about notation.
+""",
+                "prompt": "Ignoring precedence and associativity entirely, how many distinct binary trees could `a - b - c - d - e` denote?",
+                "note": "The operands stay in the order written — only the grouping varies. A whole number.",
+                "figure": "`a - b - c - d - e` — five operands, four subtractions, no rule yet about how they group",
+                "given": [
+                    {"label": "Operands", "value": "5, in a fixed order"},
+                    {"label": "Operators", "value": "4, all the same"},
+                    {"label": "Counted", "value": "distinct binary trees"},
+                ],
+                "aside": "Split at whichever operator ends up at the root: with $i$ operands to its left "
+                         "and $5 - i$ to its right, the two sides are independent, so the counts multiply.",
+                "answer": 14,
+                "tol": 0,
+                "unit": "trees",
+                "hint": "Let $T(k)$ be the answer for $k$ operands. $T(1) = 1$, and "
+                        "$T(k) = \\sum_{i=1}^{k-1} T(i)\\,T(k-i)$. That gives $T(2) = 1$, $T(3) = 2$, "
+                        "$T(4) = 5$ — keep going one more step.",
+                "wrong": "Counting arrangements of the operands, or subsets of the operators, both give "
+                         "numbers that grow far too fast. Only the bracketing varies here: the operands "
+                         "stay where they are and every tree has exactly four internal nodes.",
+                "why": r"""
+$T(5) = T(1)T(4) + T(2)T(3) + T(3)T(2) + T(4)T(1) = 5 + 2 + 2 + 5 = 14$. The sequence
+$1, 1, 2, 5, 14, 42, 132$ is the Catalan numbers, and they count binary trees for the
+same reason they count bracketings — the recurrence above *is* the recursive structure
+of a tree, written down.
+
+Fourteen candidates, and the parser returns exactly one of them without ever
+enumerating the rest: the loop's `prec + 1` picks the leftmost grouping,
+`(((a - b) - c) - d) - e`, in a single pass. That is the real content of an
+associativity rule, and it is also why an ambiguous grammar handed to a parser
+generator produces a *conflict* rather than a list — the tool is telling you it has
+fourteen answers and no basis for choosing.
+""",
+            },
             "lab": {
                 "title": "A Pratt parser for the whole grammar",
                 "runtime": "python",
@@ -953,6 +1429,265 @@ except ParseError:
                 "An error message is only useful with a position, so every node carries one",
                 "Fail fast on the first error: cascading errors from a poisoned type are noise",
             ],
+            "quiz": {
+                "title": "Scopes, hoisting and the first error",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "Shadowing is legal, redeclaration is not. Which property of the symbol table draws that line?",
+                        "opts": [
+                            "`declare` inspects only the innermost dictionary, while `lookup` walks all of them from the inside out",
+                            "`declare` walks outwards too, and compares how deep the existing binding is",
+                            "The parser rejects a repeated `let` before the table ever sees it",
+                            "`pop` deletes any binding that shadowed an outer one",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Two methods, two different reaches, and that is the entire rule. `declare` asks *is
+this name already bound here*, where "here" is `self.scopes[-1]` and nothing else — so
+an inner block may bind `x` even though an outer one has, and the second `let x` in
+the same block is caught. `lookup` asks *what does this name mean now*, which is a
+question about every enclosing scope, answered innermost first. Make `declare` walk
+outwards and shadowing becomes an error; make `lookup` stop at the innermost scope and
+every reference to an outer variable breaks. And the parser genuinely cannot help: it
+sees two well-formed `let` statements and has no idea they collide.
+""",
+                    },
+                    {
+                        "q": "Why are all the top-level `fn` signatures declared in one loop, before any function body is checked?",
+                        "opts": [
+                            "So a body can call a function defined further down the file — mutual recursion needs both names bound before either body is looked at",
+                            "So the bodies can be checked in any order, which lets the pass be parallelised",
+                            "Because the return type of a function cannot be known until its body has been checked",
+                            "Because parameters must be declared in the global scope first",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Check the bodies in one pass and `is_even` calling `is_odd` fails whenever `is_odd`
+happens to appear later in the file — and since `is_odd` calls back, no ordering saves
+both. Hoisting the signatures first means every call, wherever it appears, finds a
+`("fn", params, ret)` binding to check itself against. Note what makes this cheap: the
+signature is written down by the programmer, so it can be recorded without looking at
+the body at all. A language that *infers* return types has to do real work here —
+Hindley-Milner solves a whole binding group at once for exactly this reason — which is
+one concrete thing an explicit type annotation buys the compiler.
+""",
+                    },
+                    {
+                        "q": "`type_of` is described as compositional. What does that actually mean here?",
+                        "opts": [
+                            "The type of a node is a function of the types of its children, so one bottom-up walk types the tree",
+                            "Every expression has exactly one type, and no expression has two",
+                            "The types compose into a single type for the whole program",
+                            "Any two expressions of the same type may be swapped without changing the program",
+                        ],
+                        "a": 0,
+                        "why": r"""
+It means the recursion terminates in the obvious way and never has to guess: to type
+`a + b` you type `a`, type `b`, and consult one rule. No node needs to know what
+encloses it, so there is no fixed-point iteration and no ordering constraint beyond
+children-before-parent. That is also why the checker fits in one dispatch on `node[0]`.
+Languages where this fails are the interesting ones — a lambda with no annotation
+needs its argument type from the *context*, which is why bidirectional type checking
+exists, and why the rule "type is a function of the children" is worth naming as an
+assumption rather than assuming it silently.
+""",
+                    },
+                    {
+                        "q": "Which of these programs does `declare` reject?",
+                        "opts": [
+                            "`let x = 1; let x = 2;` at the top level",
+                            "`let x = 1; if c { let x = \"a\"; }`",
+                            "`let x = 1; while c { let y = x; }`",
+                            "`fn f(a) { return a; } let a = 1;`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Only the first is two bindings of one name in a single scope; the rest are all
+different scopes. The `if` body binds `x` in its own dictionary, which shadows the
+outer `x` until the block is popped — legal, if not always wise. The `while` body binds
+a fresh `y` and reads `x` from outside, which is what `lookup` walking outwards is for.
+The parameter `a` lives in the function's scope, so a global `a` afterwards collides
+with nothing. The check is mechanical: name the enclosing block of each binding, and
+if two bindings name the same block with the same identifier, that is the error.
+""",
+                    },
+                    {
+                        "q": "The checker raises on the first error rather than collecting them. What is the argument for that here?",
+                        "opts": [
+                            "After a failed judgement the node has no type, so anything reported downstream is guesswork about an unknown",
+                            "Programs rarely contain more than one error",
+                            "Exceptions are faster than accumulating a list",
+                            "The position information is lost once the walk has moved past the node",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`type_of` has to return a type for its caller to use. When the rule fails there is no
+honest type to return, and inventing one makes every enclosing expression suspect: one
+misspelled name becomes fifteen errors, fourteen of which name lines that are fine.
+That is a real cost, and the reason people put up with a compiler that stops early.
+Compilers that do report many errors buy it deliberately — they add an `error` type
+that is compatible with everything and silently absorbs further complaints, plus
+parser recovery at statement boundaries. Both are worth building; neither is free, and
+"report the first one accurately" is the honest version of not building them.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "The two halves of a symbol table",
+                "minutes": 8,
+                "caption": "main.py — SymbolTable, and one typing rule",
+                "lang": "python",
+                "brief": r"""
+`declare` and `lookup` differ in two characters, and those two characters are the
+scoping rules of the language. The typing rule underneath is here for contrast: it
+also compares two things, but it returns something that has nothing to do with what it
+compared.
+
+Nothing runs here — you are choosing what each line has to say.
+""",
+                "listing": """def declare(self, name, type_, pos=(1, 1)):
+    scope = self.scopes[___]
+    if name in scope:
+        raise SemanticError(f"{name!r} is already declared in this scope",
+                            pos[0], pos[1])
+    scope[name] = type_
+    return type_
+
+def lookup(self, name):
+    for scope in ___(self.scopes):
+        if name in scope:
+            return scope[name]
+    return ___
+
+
+# ... and in type_of, the rule for == and !=
+if op in EQUALITY:
+    if lt != rt:
+        raise SemanticError(f"cannot compare {lt} with {rt}", pos[0], pos[1])
+    return ___
+""",
+                "blanks": [
+                    {
+                        "prompt": "Which scope does a declaration land in — and which scope may object to it?",
+                        "hole": "?",
+                        "opts": ["0", ":", "1", "-1"],
+                        "a": 3,
+                        "why": "The innermost scope, the last one pushed. Declaring there and objecting only from there is what makes an inner `let x` shadow an outer one instead of colliding with it.",
+                        "whys": [
+                            "Index 0 is the global scope. Every local would be declared globally, so two functions could not each have a parameter called `n`, and popping a block would leave its bindings behind.",
+                            "A slice gives a list of dictionaries; `name in scope` would then test the list for a dictionary, which is never true, so no redeclaration is ever caught.",
+                            "A fixed index into a stack that grows and shrinks. It names the second scope when there are three and does not exist at the top level, where the table is one deep.",
+                            "The innermost scope, the last one pushed. Declaring there and objecting only from there is what makes an inner `let x` shadow an outer one instead of colliding with it.",
+                        ],
+                    },
+                    {
+                        "prompt": "In what order does a lookup visit the scopes?",
+                        "hole": "?",
+                        "opts": ["list", "reversed", "sorted", "enumerate"],
+                        "a": 1,
+                        "why": "Innermost first. The first dictionary containing the name wins, which means the nearest enclosing binding is the one a reference means — that is shadowing, implemented.",
+                        "whys": [
+                            "Outermost first: the global binding is found before the local one, so a parameter never shadows anything and a function reading `n` gets whichever `n` happened to be declared first.",
+                            "Innermost first. The first dictionary containing the name wins, which means the nearest enclosing binding is the one a reference means — that is shadowing, implemented.",
+                            "Python cannot order dictionaries at all, so this raises `TypeError` on the second scope — and even if it could, scope order is a fact about nesting rather than about the contents.",
+                            "That yields `(index, scope)` pairs, so `name in scope` asks whether the name equals 0 or 1. It never matches and every lookup fails.",
+                        ],
+                    },
+                    {
+                        "prompt": "No scope had the name. What comes back?",
+                        "hole": "?",
+                        "opts": ["{}", "name", "None", "\"num\""],
+                        "a": 2,
+                        "why": "`None` is the sentinel every caller tests for before deciding whose error it is — an undefined variable, an undefined function, or an assignment to something never declared.",
+                        "whys": [
+                            "An empty dictionary is truthy-adjacent trouble: it is not `None`, so the caller's check passes, and a type that is a dictionary flows into the comparisons downstream.",
+                            "Handing back the name says nothing about whether it was found, and the caller would compare a variable name against `\"num\"` and report a type error for a name that does not exist.",
+                            "`None` is the sentinel every caller tests for before deciding whose error it is — an undefined variable, an undefined function, or an assignment to something never declared.",
+                            "Returning a type makes every misspelled name a well-typed number. The program then fails at run time, in a place with no connection to the typo.",
+                        ],
+                    },
+                    {
+                        "prompt": "The two operands agree in type. What type does `==` produce?",
+                        "hole": "?",
+                        "opts": ["\"bool\"", "lt", "\"num\"", "rt"],
+                        "a": 0,
+                        "why": "A comparison answers a yes-or-no question, so its result is `bool` whatever went into it. The operand types were checked to be equal and are then done with — this is where a rule stops being about its inputs.",
+                        "whys": [
+                            "A comparison answers a yes-or-no question, so its result is `bool` whatever went into it. The operand types were checked to be equal and are then done with — this is where a rule stops being about its inputs.",
+                            "Passing the operand type through says `\"a\" == \"b\"` is a string, so `if s == t` would then be rejected for having a non-`bool` condition — and `1 == 2` would quietly be usable as a number.",
+                            "That is right by accident when both operands are numbers and wrong for every other comparison, which makes it the version that survives a shallow test suite.",
+                            "Same mistake as passing the left type through, and identical in effect since the rule has already established that the two agree.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "What a name costs to look up",
+                "minutes": 8,
+                "brief": r"""
+`lookup` walks the scope stack from the innermost dictionary outwards and stops at the
+first one that has the name. So a reference is not free, and what it costs depends on
+how far the name is from where it is used — the deeper the block, the more dictionaries
+a reference to a global has to miss on the way out.
+
+```text
+let x = 1;                 # scope 1
+while x < 9 {              # body opens scope 2
+    let y = x + 1;
+    if y > 3 {             # body opens scope 3
+        let z = x + y;
+        print z;
+    }
+}
+```
+
+Count a **probe** as one dictionary examined. A name found in the innermost scope
+costs 1 probe; one found two scopes out costs 3, because two dictionaries were checked
+and missed before the third answered.
+""",
+                "prompt": "How many probes does the checker make in total while checking this program?",
+                "note": "Count only reads of a variable. A block's condition is checked *before* its body's scope is pushed, and `let` declares rather than looks up.",
+                "figure": "`x` is bound at depth 1, `y` at depth 2, `z` at depth 3 — and every read starts at the innermost scope and walks out",
+                "given": [
+                    {"label": "Probe", "value": "one dictionary examined"},
+                    {"label": "Counted", "value": "variable reads only"},
+                    {"label": "`while` / `if` condition", "value": "checked in the enclosing scope"},
+                    {"label": "Scopes at the top level", "value": "1"},
+                ],
+                "aside": "There are six reads in the program. Work out the depth each one happens at, "
+                         "and how far out its name is bound.",
+                "answer": 10,
+                "tol": 0,
+                "unit": "probes",
+                "hint": "The reads are `x` in the `while` condition, `x` in `let y`, `y` in the `if` "
+                        "condition, then `x` and `y` in `let z`, and `z` in the `print`. Each costs "
+                        "the depth of the scope where it is bound, counted from the innermost open "
+                        "scope inwards.",
+                "wrong": "Two things to check. The `while` condition is checked before the loop body "
+                         "opens its scope, so the `x` in it costs 1, not 2. And a name found in the "
+                         "innermost scope costs a probe as well — the search still had to look.",
+                "why": r"""
+Six reads, at these depths:
+
+| read | scopes open | bound in | probes |
+| --- | --- | --- | --- |
+| `x` in `x < 9` | 1 | 1 | 1 |
+| `x` in `let y = x + 1` | 2 | 1 | 2 |
+| `y` in `y > 3` | 2 | 2 | 1 |
+| `x` in `let z = x + y` | 3 | 1 | 3 |
+| `y` in `let z = x + y` | 3 | 2 | 2 |
+| `z` in `print z` | 3 | 3 | 1 |
+
+which is 10. The shape is what matters: the innermost block reads `x` at a cost of 3
+and would read it at a cost of 12 from twelve blocks in. Real compilers do not pay
+this — they run resolution once and rewrite each reference as a `(depth, slot)` pair,
+or as a flat slot index, which is exactly what module 4's compiler does when it turns
+every name into an integer at compile time. The scope stack is the specification of
+what a name means; the slot number is the implementation.
+""",
+            },
             "lab": {
                 "title": "A scoped symbol table and a type checker",
                 "runtime": "python",
@@ -1448,6 +2183,289 @@ except SemanticError as _e:
                 "Short-circuit `&&` and `||` are control flow, not operators — they compile to jumps",
                 "An interpreter loop needs a step budget: a compiler must not be able to hang the machine forever",
             ],
+            "quiz": {
+                "title": "Instructions, jumps and frames",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "Why does compiling an expression to this machine need no register allocation?",
+                        "opts": [
+                            "The postorder traversal is already a correct instruction sequence: every operator finds its operands on top of the stack, whatever produced them",
+                            "The VM has an unlimited supply of registers, so allocation always succeeds",
+                            "The compiler gives every subexpression a slot in the frame, which is allocation done cheaply",
+                            "Because operands are pushed in reverse order, which removes the need to name them",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The stack is the answer to *where does this intermediate value live*, and it answers
+the same way for every subexpression, so there is nothing to decide. Emit the left
+subtree, emit the right subtree, emit the operator: the operator's operands are the
+top two entries by construction. On a register machine that question has a different
+answer each time and a finite supply of answers, which is where allocation, spilling
+and Sethi-Ullman numbering come from. The price paid here is that values are addressed
+by position rather than by name, so the same value cannot be reused without being
+recomputed or stored — which is one reason real bytecode VMs still lower to registers
+before they emit machine code.
+""",
+                    },
+                    {
+                        "q": "The compiler emits `(\"JZ\", 0)` and overwrites the 0 later. Why not emit the real address straight away?",
+                        "opts": [
+                            "The target is the address just past the then-branch, and that is not known until the then-branch has been emitted",
+                            "Because instruction addresses shift as later code is added",
+                            "Because `JZ` cannot take an argument until the condition has been compiled",
+                            "To keep every instruction the same size in the list",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A forward jump names a place the compiler has not reached yet. `emit` returns the
+address of the instruction it just appended precisely so that address can be kept and
+the slot rewritten once `len(self.code)` finally *is* the target — that is
+backpatching, and it is why the code list is mutable. Nothing shifts: this compiler
+appends and never inserts, so an address, once assigned, is stable. A backward jump
+needs none of this, which is why the `while` loop records `start = len(self.code)`
+before the test and jumps straight to it.
+""",
+                    },
+                    {
+                        "q": "`&&` compiles to `JZ` and `JMP` rather than to a `BIN`. What would a `BIN` change?",
+                        "opts": [
+                            "Both operands would always be evaluated, so a guard such as `n != 0 && 10 / n > 1` would divide by zero when `n` is 0",
+                            "Nothing, for `&&` — only `||` genuinely needs the jumps",
+                            "The result would be a number rather than a `bool`",
+                            "The operands would be evaluated in the wrong order",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`BIN` is a strict operator: its operands are on the stack before it runs, so both were
+evaluated, so the guard has already failed to guard. Short-circuiting is not an
+optimisation — it is part of what `&&` *means* in this language, and it is control
+flow, so it compiles to control flow. `||` is the mirror image and needs the jumps for
+the same reason. Look at the emitted shape and the asymmetry is visible: the false
+branch pushes the constant `False` and never touches the right operand at all.
+""",
+                    },
+                    {
+                        "q": "An instruction reads `(\"LOAD\", 2)`. What is the 2, and when was it decided?",
+                        "opts": [
+                            "A slot in the current frame's locals, fixed at compile time by `declare`",
+                            "An offset from the top of the stack, computed as the VM runs",
+                            "An index into the global variable table, filled in when the program starts",
+                            "The address of the instruction that stored the value",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`declare` hands out slot numbers as names are first mentioned, and `ENTER` pads the
+frame to hold them, so by run time a variable is an integer index into a list — one
+array read, no name lookup, no scope walk. That is what module 3's scope stack is
+*for*: it settles what each name means so this pass can throw the names away. Note the
+consequence in this design: each function gets its own flat slot space and there are
+no globals, so `LOAD 2` in one function and `LOAD 2` in another are unrelated, and the
+frame pushed by `CALL` is what keeps them apart.
+""",
+                    },
+                    {
+                        "q": "`VM.run` counts steps and raises once the budget is exhausted. What is that for?",
+                        "opts": [
+                            "A compiled program can loop forever, and a runtime hosted inside a page must not be able to hang it",
+                            "It detects infinite loops, which is what makes the compiler safe",
+                            "It measures how fast the generated code is, for the optimiser to compare against",
+                            "It bounds the recursion depth, which Python would otherwise exceed",
+                        ],
+                        "a": 0,
+                        "why": r"""
+It is a budget, not an analysis. `while true { }` is a perfectly legal program and no
+compiler can decide in general whether an arbitrary one terminates, so the runtime
+takes the other route: bound the work, then fail with a message that says so. The
+distinction matters because a step limit will also stop a program that was merely slow,
+and cannot tell you which case it just hit. The recursion depth is a separate concern
+and is bounded separately — frames live in a Python list here, not on the Python call
+stack, so a deep call chain in the compiled language costs memory rather than a
+`RecursionError`.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "Read the bytecode back",
+                "minutes": 9,
+                "caption": "the code for: let i = 1; while i <= 3 { i = i + 1; } print i;",
+                "lang": "text",
+                "brief": r"""
+Three statements, fifteen instructions, and every piece of structure in the source has
+become an address. The loop is a backward jump, the exit is a forward jump that was
+patched once the body had been emitted, and the variable `i` has stopped being a name.
+
+Fill the four holes. Addresses are absolute, and the instruction at address 14 is the
+last one in the program.
+""",
+                "listing": """addr  instruction        source
+  0   ENTER  1           # one local slot, for i
+  1   PUSH   1
+  2   STORE  0           # let i = 1;
+  3   LOAD   0           # while i <= 3 {   <- the test starts here
+  4   PUSH   3
+  5   BIN    "<="
+  6   JZ     ___         #   ... and this is where the loop leaves
+  7   LOAD   0
+  8   PUSH   1
+  9   BIN    "+"
+ 10   STORE  ___         #   i = i + 1;
+ 11   JMP    ___         # }
+ 12   LOAD   0
+ 13   ___    None        # print i;
+ 14   HALT   None
+""",
+                "blanks": [
+                    {
+                        "prompt": "The test was false. Where does `JZ` send the machine?",
+                        "hole": "?",
+                        "opts": ["12", "11", "13", "3"],
+                        "a": 0,
+                        "why": "Past the whole loop — the body ends with the backward jump at 11, so the first instruction that is not part of the loop is 12. That address was unknown when the `JZ` was emitted, which is why it was patched afterwards.",
+                        "whys": [
+                            "Past the whole loop — the body ends with the backward jump at 11, so the first instruction that is not part of the loop is 12. That address was unknown when the `JZ` was emitted, which is why it was patched afterwards.",
+                            "Landing on the backward jump runs it, which sends the machine straight back to the test it just failed. The loop becomes infinite and the step budget is what finally stops it.",
+                            "One too far: the `LOAD 0` that fetches `i` for the `print` is skipped, so `PRINT` pops whatever happens to be on the stack — and on an empty stack that is a crash rather than a wrong number.",
+                            "That is the top of the test, which is where the loop goes when it continues. Sending the *false* case there means the loop never ends.",
+                        ],
+                    },
+                    {
+                        "prompt": "The new value of `i` is on the stack. Where does it go?",
+                        "hole": "?",
+                        "opts": ["i", "3", "0", "1"],
+                        "a": 2,
+                        "why": "Slot 0 — the same slot the `LOAD` at address 7 read from, because `i` is the only local and `declare` gave it the first slot. `ENTER 1` is what reserved it.",
+                        "whys": [
+                            "The name is gone by this point in the pipeline. Slots are integers precisely so the VM never has to look a name up.",
+                            "3 is the constant the loop compares against, and it appears here only because it is nearby. Slot numbers and literal values have nothing to do with each other.",
+                            "Slot 0 — the same slot the `LOAD` at address 7 read from, because `i` is the only local and `declare` gave it the first slot. `ENTER 1` is what reserved it.",
+                            "There is no slot 1: `ENTER 1` padded the frame to exactly one slot, so this is an index error at run time rather than a wrong answer.",
+                        ],
+                    },
+                    {
+                        "prompt": "The body is finished. Where does the loop go next?",
+                        "hole": "?",
+                        "opts": ["7", "3", "0", "6"],
+                        "a": 1,
+                        "why": "Back to the top of the *test*, at 3. A loop re-checks its condition on every turn, and the address was recorded before the condition was compiled — a backward jump needs no patching because its target is already behind it.",
+                        "whys": [
+                            "Skipping the test and re-entering the body is a loop with no exit: `i` climbs past 3 and nothing ever looks.",
+                            "Back to the top of the *test*, at 3. A loop re-checks its condition on every turn, and the address was recorded before the condition was compiled — a backward jump needs no patching because its target is already behind it.",
+                            "Address 0 re-runs `ENTER` and then `PUSH 1; STORE 0`, which resets `i` to 1 on every turn. The condition is then always true and the loop never ends.",
+                            "Jumping to the `JZ` itself skips the three instructions at 3, 4 and 5 that compute the condition, so it pops whatever is on the stack instead — and there is nothing on it, since the body left nothing behind.",
+                        ],
+                    },
+                    {
+                        "prompt": "The value of `i` has just been loaded. What consumes it?",
+                        "hole": "?",
+                        "opts": ["POP", "STORE", "RET", "PRINT"],
+                        "a": 3,
+                        "why": "`PRINT` pops one value and records `format_value` of it, which is how `print i;` gets its output. Every statement leaves the stack as it found it, and this is the instruction that balances the `LOAD` before it.",
+                        "whys": [
+                            "`POP` also removes the value and leaves the stack balanced — which is exactly what makes it dangerous here. The program runs to completion and prints nothing, and that is what an expression statement compiles to.",
+                            "`STORE` needs a slot to write into and would consume the value without producing output, turning a print into an assignment to whatever slot came to hand.",
+                            "`RET` belongs to a function body: it drops a frame and hands a value back to a caller. At the top level there is no caller, and the VM says so.",
+                            "`PRINT` pops one value and records `format_value` of it, which is how `print i;` gets its output. Every statement leaves the stack as it found it, and this is the instruction that balances the `LOAD` before it.",
+                        ],
+                    },
+                ],
+            },
+            "derive": {
+                "title": "What an expression costs on a stack machine",
+                "minutes": 13,
+                "vars": ["n", "k", "D", "L"],
+                "brief": r"""
+Take an expression that is one perfectly balanced binary tree — every internal node an
+operator with two children, every leaf a literal or a variable, and both subtrees of
+every node the same height. For $k = 2$ that is `(a + b) * (c + d)`.
+
+Compiled by module 4's back end, each leaf becomes one instruction (`PUSH` or `LOAD`)
+and each internal node becomes one `BIN`. Two questions follow: how long is the code,
+and how deep does the stack get while running it?
+""",
+                "steps": [
+                    {
+                        "prompt": "The tree has $n$ leaves and every internal node has exactly two children. How many internal nodes are there? Write it in terms of $n$.",
+                        "answer": "n - 1",
+                        "hint": "Think of it as merging. You start with $n$ separate leaves and finish with one tree; count the merges.",
+                        "deconstruct": [
+                            "Start with the $n$ leaves as $n$ separate pieces.",
+                            "Every internal node joins two pieces into one, so each one reduces the count of pieces by exactly one.",
+                            "Going from $n$ pieces to $1$ therefore takes $n - 1$ of them.",
+                        ],
+                    },
+                    {
+                        "prompt": "Each leaf emits one instruction and each internal node emits one `BIN`. Write the total instruction count $L$ for the expression, in terms of $n$.",
+                        "given": "There are $n$ leaves and the internal-node count you just found.",
+                        "answer": "2n - 1",
+                        "hint": "Add the two counts. Nothing else is emitted — there are no jumps in a plain expression.",
+                        "deconstruct": [
+                            "$n$ leaves give $n$ push-like instructions.",
+                            "$n - 1$ internal nodes give $n - 1$ `BIN` instructions.",
+                            "$n + (n - 1) = 2n - 1$, which is also just the number of nodes in the tree.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now use the balance. The tree has height $k$, where $k = 0$ is a single leaf. Write the number of leaves $n$ in terms of $k$.",
+                        "answer": "2^{k}",
+                        "placeholder": "a power of 2",
+                        "hint": "Each level down doubles the number of nodes, and the leaves are the bottom level.",
+                        "deconstruct": [
+                            "Height 0 is one leaf; height 1 is two; height 2 is four.",
+                            "Each extra level replaces every leaf with two, doubling the count.",
+                            "After $k$ doublings from a single node: $2^k$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Substitute, and write the instruction count $L$ in terms of the height $k$.",
+                        "answer": "2^{k+1} - 1",
+                        "hint": "Put $n = 2^k$ into the count you derived, and fold the factor of 2 into the exponent.",
+                        "deconstruct": [
+                            "$L = 2n - 1$ and $n = 2^k$.",
+                            "$2 \\cdot 2^k = 2^{k+1}$.",
+                            "So $L = 2^{k+1} - 1$ — one instruction per node, and that is the number of nodes in a full binary tree of height $k$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now the peak stack depth. Both subtrees of the root are balanced of height $k-1$, and each peaks at $D$ on its own. The right subtree runs with the left subtree's single result already sitting on the stack. Write the root's peak depth in terms of $D$.",
+                        "given": "Evaluating a subtree peaks at $D$ and finishes having left exactly one value behind.",
+                        "answer": "D + 1",
+                        "hint": "The left side reaches $D$ and leaves one value. The right side then reaches its own $D$ on top of that one value.",
+                        "deconstruct": [
+                            "The left subtree runs first: peak $D$, then one value remains.",
+                            "The right subtree runs on top of that leftover, so its peak of $D$ becomes $D + 1$ overall.",
+                            "The `BIN` then pops two and pushes one, which is below the peak already reached — so the peak is $D + 1$.",
+                        ],
+                    },
+                    {
+                        "prompt": "A single leaf peaks at a depth of 1. Solve that recurrence: write the peak depth of the balanced tree of height $k$, in terms of $k$.",
+                        "answer": "k + 1",
+                        "hint": "Every level of the tree adds exactly one, and the base case at $k = 0$ is 1.",
+                        "deconstruct": [
+                            "Depth at $k = 0$ is 1.",
+                            "Each step up the tree adds 1, by the relation you just wrote.",
+                            "After $k$ steps: $k + 1$.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+So the balanced tree over $n = 2^k$ leaves compiles to $2n - 1$ instructions and peaks
+at $k + 1 = \log_2 n + 1$ stack entries.
+
+Now compare the chain the parser actually builds from `1 + 2 + 3 + ... + n`. Left
+associativity leans it all the way over, so the right operand of every operator is a
+single leaf: the code is *the same length*, $2n - 1$, and the machine does the same
+work — but the peak depth is 2 no matter how long the expression is, because each
+`BIN` fires as soon as its two operands exist. Shape does not change the instruction
+count; it changes only how much has to be held at once.
+
+Both numbers are worth having. The depth is what a VM needs in order to size a stack
+in advance instead of growing one, and on a register machine the same quantity is the
+number of registers the expression needs before anything spills to memory — which is
+Sethi-Ullman numbering, computed from exactly this recurrence.
+""",
+            },
             "lab": {
                 "title": "Compile to bytecode and run it",
                 "runtime": "python",
@@ -2028,6 +3046,291 @@ except VMError as _e:
                 "Transformations feed each other, so the pass is iterated to a fixed point",
                 "A corpus with expected outputs is the cheapest available proof of semantics preservation",
             ],
+            "quiz": {
+                "title": "What an optimiser is allowed to do",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "An optimisation must preserve the program's behaviour. Which behaviour, exactly?",
+                        "opts": [
+                            "What can be observed from outside: the output it prints, and the errors it raises",
+                            "The tree, up to a renaming of the nodes",
+                            "The number of instructions executed, which must not increase",
+                            "Every intermediate value the program computes along the way",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Observable behaviour is the contract, and everything not observable is the budget you
+get to spend. The tree obviously changes — that is the point. Intermediate values are
+free to disappear; `2 + 3` never being computed at run time is the whole of constant
+folding. Instruction counts usually fall but are not the promise: inlining and loop
+unrolling both make the code longer on purpose. Being precise about *observable* is
+what makes the hard cases decidable rather than a matter of taste — it is why dropping
+a call is forbidden even when its result is unused, and why the reference interpreter
+in `main.py`, which reports only the printed lines, is the right yardstick to test
+against.
+""",
+                    },
+                    {
+                        "q": "`fold` leaves `1 / 0` in the tree instead of evaluating it. Why is that the right refusal?",
+                        "opts": [
+                            "The expression may sit in a branch that never runs, and folding it would either reject a working program or invent a value it never had",
+                            "Division is not associative, so the compiler cannot reason about it",
+                            "Because the result is a float rather than an int",
+                            "Because the VM would raise a different exception from the one Python raises",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Folding means *evaluate now what would be evaluated later*. This is precisely the case
+where "later" might be never — put it inside `if false { ... }` and the program is
+supposed to run fine. So the compiler has two bad options if it insists on folding: it
+can raise, turning a program that works into a program that does not compile, or it
+can substitute some number, in which case the division by zero silently stops
+happening. So it does neither, leaves the node alone, and lets the machine raise if
+and when control actually reaches it. This is why `const_apply` catches the
+arithmetic exceptions and returns `None`: refusing to fold is always sound, and that
+asymmetry is the safety net an optimiser is built on.
+""",
+                    },
+                    {
+                        "q": "`x * 0 -> 0` is guarded with `is_pure(x)`. What does the guard prevent?",
+                        "opts": [
+                            "Deleting an operand that does something observable, such as `f() * 0` where `f` prints",
+                            "Folding a multiplication whose operands are not both numbers",
+                            "Rewriting an expression whose value is used later in the program",
+                            "Applying the rule twice to the same node",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The rule is true about *values* — anything times zero is zero — and an optimiser deals
+in programs, where an operand is not only a value but a thing that happens. Dropping
+`f()` throws away whatever `f` printed, and the arithmetic identity has nothing to say
+about that. Note which rules need the guard and which do not: `x * 1 -> x` keeps its
+operand, so it is safe unconditionally, and `false && x -> false` needs no guard
+either, because `&&` short-circuits — the right operand was never going to run, so
+discarding it discards nothing. It is `x * 0`, `x - x`, `x ^ 0` and `x && false` that
+throw away an operand the program would have evaluated, and those must ask first. In
+this language `is_pure` only has
+to look for a call, because nothing else can have an effect — a language with
+assignment inside expressions, or exceptions, needs a much more careful test.
+""",
+                    },
+                    {
+                        "q": "Why must folding run before dead-code elimination rather than after?",
+                        "opts": [
+                            "Dead-code elimination looks for a literal condition, and `2 > 3` only becomes `false` once it has been folded",
+                            "Because folding is cheaper, and cheap passes should run first",
+                            "Because eliminating first would remove the constants folding needs",
+                            "Because folding cannot be applied to code inside an `if`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`eliminate_dead` tests `cond[0] == "bool"` — it acts only on a condition that is
+already a literal, and does no evaluation of its own. So `if 2 > 3` is invisible to it
+until folding has turned the comparison into `false`; run in the other order, the
+branch stays. This is the general shape of a pass pipeline: transformations create
+each other's opportunities, and the order is a real design decision rather than a
+matter of taste. It is also why `optimise` runs the whole thing to a fixed point
+instead of once — a fold can enable a simplification, and a simplification can produce
+a constant that folds.
+""",
+                    },
+                    {
+                        "q": "`optimise_expr` repeats `simplify(fold(node))` until nothing changes. Which of these actually needs the second pass?",
+                        "opts": [
+                            "`x ^ 0 + y ^ 0`",
+                            "`2 * 3 + 4`",
+                            "`x + 0`",
+                            "`(x - x) + 3`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Follow the order inside one pass: `fold` runs first, then `simplify`. For
+`x ^ 0 + y ^ 0` the fold finds nothing constant, then simplify turns each side into
+`1` — and the addition of those two ones is a folding opportunity that arrived after
+folding had already run. The next pass turns it into `2`. The others all finish in one
+pass, because `simplify` works bottom up: it rewrites `x - x` to `0` before it looks
+at the `+` above it, so `(x - x) + 3` collapses to `3` on the way back up the tree. A
+fixed-point loop is the cheap way to be right about all of these without reasoning
+about which pass enables which.
+""",
+                    },
+                    {
+                        "q": "Every corpus program prints the same lines before and after optimising. What has that established?",
+                        "opts": [
+                            "That the transformations preserved behaviour on those five programs, which is evidence rather than proof",
+                            "That the transformations are semantics-preserving for every program",
+                            "That the optimiser is a fixed point, since nothing changed",
+                            "That the optimised programs are faster",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Testing shows the presence of correctness on the inputs tested and nothing beyond
+them — a corpus of five programs cannot reach the case where `x * 0` drops a call,
+unless someone put that case in the corpus. Which is exactly how to use it: a corpus
+is a place to record every dangerous case you thought of, and it earns its keep the
+day a rule is added and an old program's output changes. Proof is available for
+transformations this small — you argue that folding agrees with the evaluator on
+literal operands, and that each identity holds for pure operands — and a serious
+compiler does both, because the proof covers all programs and the corpus covers the
+gap between the proof and the code you actually wrote.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "The three guards that keep the pass honest",
+                "minutes": 9,
+                "caption": "main.py — the refusal in fold, the purity test in simplify, the cut in eliminate_dead",
+                "lang": "python",
+                "brief": r"""
+An optimiser is mostly rules that are obviously true, plus a small number of places
+where it has to decline. Those places are what separates a pass you can trust from one
+that is right about most programs. Three of them are below, one hole each, plus the
+identity that keeps its operand.
+
+Nothing runs here — you are choosing what each line has to say.
+""",
+                "listing": """# in const_apply: evaluate what the machine would evaluate anyway, and nothing else
+try:
+    value = APPLY[op](lv, rv)
+except (ZeroDivisionError, KeyError, OverflowError):
+    return ___                         # 1 / 0 has to survive to run time
+return ("bool", value) if op in COMPARISONS else ("num", value)
+
+
+# in simplify: the multiplicative identities
+elif op == "*":
+    if is_num(right, 1):
+        return ___                     # x * 1
+    if is_num(right, 0) and ___(left):
+        return ("num", 0, pos)         # x * 0
+
+
+# in eliminate_dead: walking a statement list
+elif kind == "return":
+    kept.append(node)
+    ___                                # nothing later in this block can run
+""",
+                "blanks": [
+                    {
+                        "prompt": "The arithmetic refused to happen. What does `const_apply` hand back?",
+                        "hole": "?",
+                        "opts": ["(\"bool\", False)", "left", "None", "(\"num\", 0)"],
+                        "a": 2,
+                        "why": "`None` is the agreed signal for *this will not fold*, and the caller responds by leaving the node exactly as it was. Refusing to fold is always sound, which is what makes it the safe answer whenever anything is unclear.",
+                        "whys": [
+                            "Same fault in a different type: a value is manufactured for an expression that has none, and the type is wrong as well, so the rest of the tree is now folding against a boolean.",
+                            "The caller expects a `(kind, value)` pair and appends the position to it, so handing back a node produces a malformed tree — and it silently rewrites `1 / 0` to its left operand along the way.",
+                            "`None` is the agreed signal for *this will not fold*, and the caller responds by leaving the node exactly as it was. Refusing to fold is always sound, which is what makes it the safe answer whenever anything is unclear.",
+                            "That invents a value for `1 / 0`. The division by zero then never happens at run time, and a program that should have stopped carries on with a number nobody computed.",
+                        ],
+                    },
+                    {
+                        "prompt": "The right operand is the literal 1. What does the multiplication become?",
+                        "hole": "?",
+                        "opts": ["right", "(\"num\", 1, pos)", "(\"bin\", op, left, right, pos)", "left"],
+                        "a": 3,
+                        "why": "The left operand, unchanged and undisturbed. This identity keeps both operands' effects — it simply stops multiplying by one — so it needs no purity guard at all.",
+                        "whys": [
+                            "`right` is the literal 1 that was just matched, so this rewrites `x * 1` to `1` — arithmetic nonsense that happens to be right when `x` is also 1.",
+                            "Same value, thrown away differently: every multiplication by one collapses to the constant 1 rather than to the operand it should keep.",
+                            "Rebuilding the node unchanged means the identity never fires. Nothing breaks; the pass just does not do its job, and the multiply survives to run time.",
+                            "The left operand, unchanged and undisturbed. This identity keeps both operands' effects — it simply stops multiplying by one — so it needs no purity guard at all.",
+                        ],
+                    },
+                    {
+                        "prompt": "The right operand is the literal 0, so the left one is about to be discarded. What has to hold first?",
+                        "hole": "?",
+                        "opts": ["fold", "is_pure", "is_num", "bool"],
+                        "a": 1,
+                        "why": "The operand may only be dropped if evaluating it could not have been observed. `is_pure` says no call is hiding in there, and without that check `f() * 0` loses whatever `f` printed.",
+                        "whys": [
+                            "Folding returns a node, which is always truthy, so the guard passes for every operand — and it quietly does a fold in the middle of a condition, which is not what a guard is for.",
+                            "The operand may only be dropped if evaluating it could not have been observed. `is_pure` says no call is hiding in there, and without that check `f() * 0` loses whatever `f` printed.",
+                            "`is_num` takes a node and the value to compare against, so this does not even have the right shape — and asking whether the operand is a literal number is a much stronger demand than the rule needs.",
+                            "A node is a non-empty tuple, so this is true of every expression there is. The guard reads as if it were checking something while permitting exactly everything.",
+                        ],
+                    },
+                    {
+                        "prompt": "A `return` has just been kept. What happens to the rest of the block?",
+                        "hole": "?",
+                        "opts": ["break", "continue", "pass", "return []"],
+                        "a": 0,
+                        "why": "`break` leaves the loop, so every statement after the `return` is simply never appended — which is the definition of unreachable code, expressed as three characters of control flow.",
+                        "whys": [
+                            "`break` leaves the loop, so every statement after the `return` is simply never appended — which is the definition of unreachable code, expressed as three characters of control flow.",
+                            "`continue` goes on to the next statement and keeps it, so the unreachable code survives. The pass is then correct but pointless on exactly the case this branch exists for.",
+                            "`pass` does nothing at all, which is the same outcome: the loop carries on and appends everything after the `return`.",
+                            "That throws away the statements already kept, including the `return` itself, so a function body optimises down to nothing and stops returning anything.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How much is left after the pass?",
+                "minutes": 8,
+                "brief": r"""
+`count_nodes` counts tree nodes: one for each statement, plus one for every expression
+node inside it. Positions are not nodes. Run the whole optimiser over this program —
+fold, then the identities, then dead-code elimination, to a fixed point — and count
+what survives.
+
+```text
+let n = 6 * 7;
+print n + 0;
+if 2 < 3 { print "yes"; } else { print "no"; }
+99;
+print n ^ 0;
+```
+
+The program starts at 22 nodes. Every one of the five statements is touched by
+something.
+""",
+                "prompt": "How many nodes does `count_nodes` report for the optimised program?",
+                "note": "One node per statement and one per expression node. `Print(Var(\"n\"))` is 2 nodes.",
+                "figure": "22 nodes go in, and all five statements are touched — by folding, by an identity, or by dead-code elimination",
+                "given": [
+                    {"label": "Before", "value": "22 nodes"},
+                    {"label": "A statement", "value": "1 node, plus its expression"},
+                    {"label": "`n`", "value": "a variable, and pure"},
+                    {"label": "Passes", "value": "fold, simplify, eliminate_dead, to a fixed point"},
+                ],
+                "aside": "Write the optimised program out as source first. The count is then almost "
+                         "immediate, because nothing complicated survives.",
+                "answer": 8,
+                "tol": 0,
+                "unit": "nodes",
+                "hint": "Take the statements one at a time: `6 * 7` folds; `n + 0` loses its zero; "
+                        "`2 < 3` folds to `true` and the `if` collapses to the branch that runs; a bare "
+                        "literal statement cannot be observed; and `n ^ 0` is 1 because `n` is pure.",
+                "wrong": "Check the `if`: dead-code elimination keeps the statements of the branch that "
+                         "runs, but the `if` node itself, the condition and the whole other branch are "
+                         "gone. And `99;` leaves nothing behind at all.",
+                "why": r"""
+The optimised program is four statements:
+
+```text
+let n = 42;
+print n;
+print "yes";
+print 1;
+```
+
+Each is one statement node holding one expression node, so the total is 8 — down from
+22. Statement by statement: `6 * 7` folds to `42`; `n + 0` simplifies to `n`; `2 < 3`
+folds to `true`, so the `if` is replaced by the contents of its then-branch and the
+`else` disappears; `99;` is an expression statement whose expression is a literal, so
+nothing about it is observable and it goes; and `n ^ 0` becomes `1`, which is legal
+only because `n` is a variable and therefore pure — had it been `f() ^ 0`, the node
+would have had to stay.
+
+Worth noticing what did *not* happen: `print n;` still reads a variable at run time
+even though `n` is provably 42 at this point. Propagating that constant into its uses
+is a separate transformation with a separate obligation — it has to prove that nothing
+reassigns `n` in between — and that is the next pass, not this one.
+""",
+            },
             "lab": {
                 "title": "A fold / simplify / DCE pass with a corpus check",
                 "runtime": "python",
@@ -2060,7 +3363,7 @@ x * 0   0 * x   ->  0        x ^ 0  ->  1        x - x  ->  0
 true && b  ->  b       b || false  ->  b      !!x  ->  x      --x  ->  x
 ```
 
-The rules that *drop* an operand (`x * 0`, `x - x`, `false && x`) are only
+The rules that *drop* an operand (`x * 0`, `x - x`, `x ^ 0`) are only
 sound when that operand is pure, so guard them with `is_pure`.
 
 **`eliminate_dead(stmts)`** — over a statement list:

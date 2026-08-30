@@ -47,6 +47,235 @@ COURSE = {
                 "Vector clocks cost O(processes) per message — the reason Dynamo prunes them",
                 "Total order by (Lamport, process id) is a tie-break, not a causal fact",
             ],
+            "quiz": {
+                "title": "What a clock can and cannot tell you",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "You are handed two Lamport stamps and told $L(a) < L(b)$. What follows?",
+                        "opts": [
+                            "$a$ happened before $b$",
+                            "Nothing on its own — $a$ may have happened before $b$, or the two may be concurrent",
+                            "$a$ and $b$ are concurrent",
+                            "$a$ and $b$ ran on the same process",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Lamport's rule runs one way only: if $a$ could have influenced $b$ then $L(a) < L(b)$.
+Reading it backwards is the mistake, because a smaller stamp is produced both by a
+genuine ancestor and by an event on some other machine nobody ever heard from. That is
+what `lamport_blind_spots` in the lab is for — events 2 and 7 of the reference log are
+concurrent and carry stamps 1 and 3, so a stamp comparison orders them anyway. Nor can
+you read concurrency off the stamps: a causal chain also produces increasing numbers.
+And two events on one process are indeed always ordered, but the stamps alone never say
+they were on one process.
+""",
+                    },
+                    {
+                        "q": "Event $p$ carries the vector $\\{A:2, B:1, C:0\\}$ and event $q$ carries $\\{A:1, B:3, C:0\\}$. How are they related?",
+                        "opts": [
+                            "$p$ happened before $q$",
+                            "$q$ happened before $p$",
+                            "$p$ and $q$ are concurrent",
+                            "$p$ and $q$ are the same event seen twice",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Dominance has to hold in every entry at once. $p$ is ahead on $A$ (2 against 1) and $q$
+is ahead on $B$ (3 against 1), so neither vector dominates and neither event can have
+influenced the other — they are concurrent. This is the whole gain over a Lamport stamp:
+the vector detects the disagreement, and a single integer cannot, because collapsing
+three counters into one number throws away exactly the information you need. Two
+identical vectors would mean the same event; here nothing matches.
+""",
+                    },
+                    {
+                        "q": "Process $B$ holds $\\{A:2, B:6\\}$ and receives a message carrying $\\{A:4, B:1\\}$. What does it hold immediately after the receive?",
+                        "opts": [
+                            "$\\{A:4, B:7\\}$",
+                            "$\\{A:4, B:6\\}$",
+                            "$\\{A:6, B:7\\}$",
+                            "$\\{A:2, B:7\\}$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Merge, then increment. Element-wise maximum first — $A$ becomes $\max(2,4) = 4$ and $B$
+stays at $\max(6,1) = 6$, because the sender's view of $B$ is older than $B$'s own — and
+then the receive is itself an event on $B$, so $B$'s own entry goes to 7. Stopping after
+the merge loses the receive. Adding the entries instead of taking the maximum inflates
+$A$ to 6 and claims knowledge of four events that never happened. Skipping the merge
+leaves $A$ at 2, which is the bug that makes a message appear to arrive before it was
+sent.
+""",
+                    },
+                    {
+                        "q": "Replicas order operations by the pair (Lamport stamp, process id). What has that bought them?",
+                        "opts": [
+                            "A total order every replica agrees on, which says nothing about what caused what",
+                            "A record of which operation caused which",
+                            "The same ordering a vector clock would have produced",
+                            "A guarantee that concurrent operations are never reordered",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The tie-break is genuinely useful: it makes every replica apply the same operations in
+the same sequence with no further communication, which is all a deterministic state
+machine needs. What it is not is a fact about the world. It imposes an order on pairs
+that had none, arbitrarily and by construction, so a consumer reading the sequence as
+"this caused that" is wrong about every concurrent pair in it. A vector clock would have
+left those pairs unordered, which is the honest answer and also a less convenient one.
+""",
+                    },
+                    {
+                        "q": "NTP holds every clock in the fleet within 10 ms of true time. A log line on machine X is stamped 4 ms earlier than one on machine Y. What may you conclude?",
+                        "opts": [
+                            "X's event happened first",
+                            "The two events are concurrent",
+                            "Nothing about their order — the gap is smaller than the error the clocks admit to",
+                            "Y's clock has drifted and needs resynchronising",
+                        ],
+                        "a": 2,
+                        "why": r"""
+NTP gives you a bound, not the truth. With each clock inside 10 ms of real time, stamps
+4 ms apart are consistent with either event having happened first. An ordering claim is
+only safe once the gap exceeds the sum of the two error bounds — which is precisely what
+Spanner's TrueTime does when it waits out its uncertainty interval before committing.
+Concurrency is not available either: that is a statement about causality, and a clock
+reading knows nothing about who sent what to whom. Both clocks here are behaving exactly
+as specified.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "One event, stamped",
+                "minutes": 8,
+                "caption": "the receive path, four holes",
+                "lang": "python",
+                "brief": r"""
+The whole of vector time is four lines: absorb what the sender knew, then count the one
+thing that is genuinely new. Get the order of those two wrong, or forget that a message
+carries a *copy*, and the clock still produces plausible-looking numbers — which is the
+worst failure mode available, because nothing crashes.
+
+Nothing is executed here. You are choosing the operation, not writing the loop.
+""",
+                "listing": """# One event on process P. `clock` is P's own vector; `carried` is the vector
+# that arrived with the message. No physical clock appears anywhere.
+
+if op == "recv":
+    for q, v in carried.items():
+        clock[q] = ___(clock[q], v)     # absorb everything the sender already knew
+
+clock[P] += ___                         # this event is the one new thing to record
+
+if op == "send":
+    in_flight[msg] = ___(clock)         # what the message takes away with it
+
+# and later, comparing the vectors of two events a and b
+before = all(a[q] <= b[q] for q in a) and ___
+""",
+                "blanks": [
+                    {
+                        "prompt": "How does a receiver combine its own knowledge with the sender's?",
+                        "hole": "?",
+                        "opts": ["max", "min", "sum", "abs"],
+                        "a": 0,
+                        "why": "Element-wise maximum. Each entry is a count of events, and the receiver now knows about everything either side knew about, so the larger count is the true one.",
+                        "whys": [
+                            "Element-wise maximum. Each entry is a count of events, and the receiver now knows about everything either side knew about, so the larger count is the true one.",
+                            "Taking the smaller count throws away knowledge on receipt — the receiver would forget events it had already seen, and its vector would go backwards, which is the one thing a clock must never do.",
+                            "Adding double-counts everything both sides already knew. Two processes that have exchanged a few messages would report counters far above the number of events that ever happened.",
+                            "`abs` takes one argument and these counters are never negative, so it is not even applicable — worth noticing because the merge really is this simple, and there is nothing clever hiding in it.",
+                        ],
+                    },
+                    {
+                        "prompt": "By how much does the process advance its own entry for this event?",
+                        "hole": "?",
+                        "opts": ["1", "0", "len(clock)", "v"],
+                        "a": 0,
+                        "why": "By one, because exactly one event just happened here. Local work, a send and a receive all count the same — the receive is not special, it merely does the merge first.",
+                        "whys": [
+                            "By one, because exactly one event just happened here. Local work, a send and a receive all count the same — the receive is not special, it merely does the merge first.",
+                            "Not advancing at all means two distinct events on this process carry the same vector, so they compare as `equal` and the ordering the clock is supposed to induce quietly stops being a total order on one process's own timeline.",
+                            "Jumping by the number of processes makes the counter grow with cluster size rather than with local activity, and comparisons against a process that has been quiet start returning `after` for no reason.",
+                            "`v` is a counter that arrived from somewhere else. Using it here would let a chatty peer decide how fast this process's own time runs.",
+                        ],
+                    },
+                    {
+                        "prompt": "What does the message carry away?",
+                        "hole": "?",
+                        "opts": ["dict", "list", "sorted", "iter"],
+                        "a": 0,
+                        "why": "`dict(clock)` is a copy. Handing over the live vector means the next local event mutates a message already in flight, and the receiver merges a clock from the future — a bug that only shows up when the receive happens to be delivered late.",
+                        "whys": [
+                            "`dict(clock)` is a copy. Handing over the live vector means the next local event mutates a message already in flight, and the receiver merges a clock from the future — a bug that only shows up when the receive happens to be delivered late.",
+                            "`list(clock)` keeps the process names and drops every counter, so the receiver has no numbers to take a maximum against.",
+                            "`sorted(clock)` has the same problem and adds an ordering nobody asked for: the keys come back as a plain list, and the counts are gone.",
+                            "`iter(clock)` hands over a one-shot view of a structure that is about to change underneath it. Reading it after the sender moves on gives either stale keys or a runtime error.",
+                        ],
+                    },
+                    {
+                        "prompt": "What has to hold as well, for `a` to be strictly before `b`?",
+                        "hole": "?",
+                        "opts": [
+                            "any(a[q] < b[q] for q in a)",
+                            "all(a[q] < b[q] for q in a)",
+                            "any(a[q] > b[q] for q in a)",
+                            "len(a) == len(b)",
+                        ],
+                        "a": 0,
+                        "why": "At least one entry must be strictly smaller, or `a` and `b` are the same vector and the events are equal rather than ordered. Dominance is `<=` everywhere plus `<` somewhere.",
+                        "whys": [
+                            "At least one entry must be strictly smaller, or `a` and `b` are the same vector and the events are equal rather than ordered. Dominance is `<=` everywhere plus `<` somewhere.",
+                            "Demanding every entry be strictly smaller is far too strong: a process that has been idle has the same count in both vectors, so an event genuinely in the past of another would be reported as concurrent.",
+                            "Given that every entry already satisfies `<=`, no entry can be strictly greater — so this makes `before` permanently false, and every pair in the log comes back as concurrent.",
+                            "Comparing lengths says the two vectors cover the same processes, which is true of every pair in a fixed cluster. It admits the equal case, so an event would be reported as strictly before itself.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How much clock rides on each message?",
+                "minutes": 7,
+                "brief": r"""
+Vector clocks are the honest answer to ordering, and the bill arrives on every packet.
+A vector is dense: one entry per process in the system, whether or not that process has
+ever done anything, because a missing entry and a zero entry have to be told apart from
+each other and from an entry you simply have not heard about yet.
+
+This is the arithmetic that pushed Dynamo into truncating its clocks.
+""",
+                "prompt": "How many bytes of vector clock does each message carry?",
+                "note": "Count the clock only, not the payload. A whole number of bytes.",
+                "figure": "`[ payload 120 B ][ clock: (node id 16 B + counter 8 B) x one per process ]` — 200 processes, and every message carries the sender's entire vector.",
+                "given": [
+                    {"label": "Processes in the system", "value": "200"},
+                    {"label": "Node id per entry", "value": "16 bytes"},
+                    {"label": "Counter per entry", "value": "8 bytes"},
+                    {"label": "Entries sent per message", "value": "all of them"},
+                    {"label": "Application payload", "value": "120 bytes"},
+                ],
+                "aside": "Dynamo caps the clock at ten entries and drops the oldest, accepting that "
+                         "two versions may then be reported as conflicting when one really did "
+                         "precede the other. Bounded bytes, occasional false conflicts.",
+                "answer": 4800,
+                "tol": 0,
+                "unit": "bytes",
+                "hint": "One entry per process, and each entry is a node id next to a counter. "
+                        "Nothing depends on how busy the processes have been.",
+                "wrong": "The usual slip is to count only the processes that have a non-zero "
+                         "counter. The vector is dense — a process that has never been heard "
+                         "from still occupies an entry, because that is what distinguishes "
+                         "'nothing yet' from 'not in the system'.",
+                "why": "$200 \\times (16 + 8) = 4800$ bytes, against a 120-byte payload: the "
+                       "bookkeeping is forty times the message. This is the cost that makes "
+                       "vector clocks unusable at fleet scale and perfectly reasonable at the "
+                       "scale of one key's replica set, which is why Dynamo keeps a clock per "
+                       "*object* — three or five entries — rather than per cluster. Halving the "
+                       "node id to 8 bytes only takes it to 3200; the term that hurts is the "
+                       "process count, and it is linear.",
+            },
             "lab": {
                 "title": "Lamport and vector clocks over an event log",
                 "runtime": "python",
@@ -345,6 +574,261 @@ for _fn in (lamport_clocks, vector_clocks):
                 "A leader may only commit an entry from its *own* term; earlier entries commit indirectly",
                 "A split vote wastes a term; randomised timeouts, not cleverness, break the tie",
             ],
+            "quiz": {
+                "title": "Terms, votes, and what a leader may commit",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A follower at term 5 receives an `AppendEntries` carrying term 4. What does it do?",
+                        "opts": [
+                            "Adopts term 4 and appends the entries",
+                            "Rejects it with `success=False` and stays at term 5",
+                            "Starts an election at term 6",
+                            "Appends the entries but refuses to advance its commit index",
+                        ],
+                        "a": 1,
+                        "why": r"""
+A message from a smaller term comes from a leader that has already been superseded and
+does not know it yet. Rejecting it is the whole mechanism: the reply carries the
+follower's own term, the stale leader sees a term larger than its own, and rule 1 makes
+it step down. Adopting the smaller term would run history backwards. Appending the
+entries — with or without committing them — would let a deposed leader keep writing to a
+follower that has moved on, which is exactly the divergence the term is there to prevent.
+Nothing here calls for an election: the follower has heard from a leader, just not a
+current one.
+""",
+                    },
+                    {
+                        "q": "Why may a leader not commit an entry from an earlier term merely because a majority now stores it?",
+                        "opts": [
+                            "Because such an entry can still be overwritten by a future leader, even with a majority holding it",
+                            "Because entries from earlier terms are always duplicates of entries it already has",
+                            "Because it cannot tell which term an entry came from",
+                            "Because `match_index` from a follower in an earlier term cannot be trusted",
+                        ],
+                        "a": 0,
+                        "why": r"""
+This is Figure 8 of the Raft paper, and it is the least obvious rule in the protocol. A
+majority holding an old-term entry is not enough, because a server whose log lacks that
+entry can still win a later election — the election restriction compares the last entry,
+not the whole log — and will then force its own log onto everyone. Committing it would
+mean an applied entry disappearing. The fix is the rule in the lab's `advance_commit`:
+only count an entry of your *own* term, and everything before it commits with it through
+log matching. A leader can always read the term off an entry, since it is stored beside
+the command, and `match_index` is reported by the follower's own current term.
+""",
+                    },
+                    {
+                        "q": "Four servers, and the vote splits two-two. What is the state of the cluster at the end of that term?",
+                        "opts": [
+                            "The server with the lowest id takes office",
+                            "Both candidates lead, each with its own half",
+                            "No leader, nothing committed, nothing lost — a later term settles it",
+                            "Deadlocked until an operator intervenes",
+                        ],
+                        "a": 2,
+                        "why": r"""
+A term that elects nobody is simply wasted: no entry can commit without a leader, and no
+entry is damaged either. The retry is not cleverness, it is randomised timeouts — the two
+candidates wake at different moments, one gets its requests out first, and the split does
+not repeat. The lab reproduces this exactly, dropping all but two `RequestVote` messages
+so both candidates stall on two votes out of four, then letting term 2 resolve it.
+Lowest-id tie-breaking would make elections deterministic and is a real design, but it is
+not Raft's, and two leaders in one term is precisely what one-vote-per-server-per-term
+rules out.
+""",
+                    },
+                    {
+                        "q": "A voter refuses any candidate whose log is behind its own. What would break if it did not?",
+                        "opts": [
+                            "Two leaders could hold the same term at once",
+                            "A leader could take office missing committed entries and would then delete them everywhere else",
+                            "The leader's log would grow without bound",
+                            "Followers would never learn the commit index",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Two guarantees are easy to confuse here. One vote per server per term is what stops two
+leaders in a term, and it holds with or without the log comparison. The election
+restriction does something else: it keeps a server that is missing committed entries out
+of office. Without it, such a server could win, and since a leader repairs followers by
+overwriting them, it would erase entries that had already been acknowledged to a client.
+The comparison is `last_log_term` first, then `last_log_index` — the term dominates,
+because a longer log from an older term is the log that is stale.
+""",
+                    },
+                    {
+                        "q": "A leader is cut off into a minority partition holding two of five servers. What can it still do?",
+                        "opts": [
+                            "Nothing — it stops the moment the partition forms",
+                            "Commit entries, since it is still the leader of the highest term it has seen",
+                            "Elect a replacement leader on its own side of the partition",
+                            "Accept client commands and replicate them, but never commit any of them",
+                        ],
+                        "a": 3,
+                        "why": r"""
+The leader has no way to detect the partition, so it keeps behaving normally: it appends
+commands, sends `AppendEntries` to everyone, and gets replies from the one follower it
+can still reach. What it cannot do is count to three. `advance_commit` needs a majority
+including itself, and two is not a majority of five, so `commit_index` stops moving —
+which is what the lab asserts after `isolate(["a", "b"])`. Meanwhile the other three
+elect a leader at a higher term. When the link heals, the old leader sees that term,
+steps down, and its uncommitted entries are overwritten. Availability was traded for
+consistency, and this is the trade being made.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "One election and one entry, delivered by hand",
+                "minutes": 9,
+                "caption": "message trace — three servers, nothing in flight",
+                "lang": "text",
+                "brief": r"""
+Below is what the deterministic network actually carries during the simplest useful
+sequence: an election, a client command, and the two rounds it takes for everyone to
+agree that the command is committed. The interesting holes are the boundary values — the
+conventions for an empty log, and the one-round lag between the leader knowing something
+and the follower being told.
+
+Read it as a transcript, not as code. Every line is a message that moved because
+`deliver()` was called.
+""",
+                "listing": """three servers, all at term 0 with empty logs. nothing moves until a message is
+delivered. the empty heartbeat round that follows the election is left out; it changes
+none of the values below.
+
+n1         start_election()      -> term 1, votes for itself
+n1 -> n2   RequestVote           term=1  last_log_index=-1  last_log_term=___
+n2 -> n1   RequestVoteReply      term=1  granted=True
+n1         2 votes of 3          -> leader of term 1
+
+n1         client_append("set x 1")            -> index 0, entry (1, "set x 1")
+n1 -> n2   AppendEntries         term=1  prev_log_index=___  prev_log_term=0
+                                 entries=[(1, "set x 1")]  leader_commit=-1
+n2 -> n1   AppendEntriesReply    term=1  success=True  match_index=___
+n1         advance_commit()      -> commit_index=___    # n1 and n2 both hold index 0
+n2         commit_index is still ___                    # nothing has told it otherwise
+
+n1 -> n2   AppendEntries         term=1  prev_log_index=0  prev_log_term=1
+                                 entries=[]  leader_commit=0
+n2         commit_index=0
+""",
+                "blanks": [
+                    {
+                        "prompt": "What last-entry term does a candidate with an empty log advertise?",
+                        "hole": "?",
+                        "opts": ["0", "-1", "1", "None"],
+                        "a": 0,
+                        "why": "An empty log has last index -1 and last term 0. The two conventions differ on purpose: the index is a position and there is no position yet, while the term is compared with `>` and `>=`, so it has to be a number below every real term.",
+                        "whys": [
+                            "An empty log has last index -1 and last term 0. The two conventions differ on purpose: the index is a position and there is no position yet, while the term is compared with `>` and `>=`, so it has to be a number below every real term.",
+                            "-1 is the index convention leaking into the term. It would still order correctly against real terms, but it disagrees with every other node's idea of 'no entries yet', and the comparison in the vote handler is between two nodes' answers.",
+                            "Claiming term 1 asserts an entry the candidate does not have, and a voter that genuinely holds a term-1 entry would then find the candidate's log 'as up to date' as its own and vote for it.",
+                            "`None` cannot be compared with an integer at all — the vote handler's `>` would raise before it decided anything.",
+                        ],
+                    },
+                    {
+                        "prompt": "The new leader has one entry at index 0. What does it put in `prev_log_index` for a follower it has not spoken to yet?",
+                        "hole": "?",
+                        "opts": ["0", "-1", "1", "None"],
+                        "a": 1,
+                        "why": "`become_leader` set `next_index` to `last_log_index() + 1`, which was 0 when the log was empty, so `prev` is -1: there is no entry before index 0, and the consistency check is vacuously satisfied.",
+                        "whys": [
+                            "That would claim the follower already holds index 0 and ask it to check the entry being sent against itself. The follower's log is empty, the check fails, and the leader backs off an index for no reason.",
+                            "`become_leader` set `next_index` to `last_log_index() + 1`, which was 0 when the log was empty, so `prev` is -1: there is no entry before index 0, and the consistency check is vacuously satisfied.",
+                            "Index 1 does not exist on either side. The follower would reject, the leader would decrement `next_index` twice, and the round trip is wasted — which is exactly the backtracking that exists for genuinely divergent logs, not for a fresh one.",
+                            "The reply path arithmetic is `prev_log_index + len(entries)`, so a non-numeric sentinel breaks `match_index` before the follower ever answers.",
+                        ],
+                    },
+                    {
+                        "prompt": "The follower appended one entry onto an empty log. What `match_index` does it report?",
+                        "hole": "?",
+                        "opts": ["-1", "0", "1", "2"],
+                        "a": 1,
+                        "why": "`match_index = prev_log_index + len(entries)` = -1 + 1 = 0. It is the index of the highest entry the follower now holds, not a count of entries — which is why an empty log reports -1 rather than 0.",
+                        "whys": [
+                            "-1 is what a rejection reports, meaning 'nothing agreed'. Reporting it after a successful append would leave the leader convinced no follower has the entry, and the commit index would never move.",
+                            "`match_index = prev_log_index + len(entries)` = -1 + 1 = 0. It is the index of the highest entry the follower now holds, not a count of entries — which is why an empty log reports -1 rather than 0.",
+                            "1 is the *number* of entries the follower holds, and the off-by-one between a count and a 0-based index is the classic way to commit an entry nobody has.",
+                            "2 is past the end of the follower's log entirely; the leader would set `next_index` to 3 and start sending from a position that does not exist.",
+                        ],
+                    },
+                    {
+                        "prompt": "The leader holds index 0 and knows n2 does too. How far can it commit?",
+                        "hole": "?",
+                        "opts": ["-1", "0", "1", "2"],
+                        "a": 1,
+                        "why": "Index 0 is an entry of the leader's own term, and two of three servers hold it — the leader counts itself. That is a majority, so `commit_index` becomes 0.",
+                        "whys": [
+                            "Leaving it at -1 is what happens if the leader forgets to count itself: it would then need both followers for a three-node cluster, which is a majority of the followers rather than a majority of the servers.",
+                            "Index 0 is an entry of the leader's own term, and two of three servers hold it — the leader counts itself. That is a majority, so `commit_index` becomes 0.",
+                            "There is no index 1 yet; only one command has been appended.",
+                            "Nor an index 2. `advance_commit` scans down from `last_log_index()`, so it never considers a position past the end of the log.",
+                        ],
+                    },
+                    {
+                        "prompt": "At that same moment, what is n2's commit index?",
+                        "hole": "?",
+                        "opts": ["-1", "0", "1", "None"],
+                        "a": 0,
+                        "why": "Still -1. The follower stored the entry, but `leader_commit` on the message that carried it was -1, because the leader had not yet counted the majority. It learns the entry is committed on the next `AppendEntries`, one full round later.",
+                        "whys": [
+                            "Still -1. The follower stored the entry, but `leader_commit` on the message that carried it was -1, because the leader had not yet counted the majority. It learns the entry is committed on the next `AppendEntries`, one full round later.",
+                            "0 is what the follower will hold after the next round. Assuming it here is the same mistake as assuming a client's write is durable everywhere the instant the leader answers — the commit point is a fact the leader discovers and then has to distribute.",
+                            "1 is beyond anything either log contains.",
+                            "`commit_index` starts at -1 and only ever moves up; it is never absent. The follower having no knowledge of a commit is represented by the number, not by a sentinel.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "When does the leader know it is committed?",
+                "minutes": 8,
+                "brief": r"""
+Commit latency in Raft is not the time to reach every replica; it is the time to reach
+*enough* of them. The leader already holds the entry the instant it is appended, so it
+needs the round trip to the followers that turn its own copy into a majority — and every
+follower slower than those is irrelevant to the answer the client is waiting for.
+
+That is the property worth internalising before tuning anything: a chronically slow
+replica costs the cluster nothing at all while enough faster ones are healthy — and it
+becomes the machine every commit waits on only once so few of those faster ones are left
+that the majority cannot be reached without it.
+""",
+                "prompt": "How long after the command reaches the leader does the leader know the entry is committed?",
+                "note": "Delays are one way; a reply takes the same time back. Processing and disk time are zero.",
+                "figure": "`n1 (leader) —8ms— n2 · —11ms— n3 · —40ms— n4 · —95ms— n5` — five servers, one-way delays from the leader.",
+                "given": [
+                    {"label": "Servers", "value": "5 (one leader, four followers)"},
+                    {"label": "Leader to n2", "value": "8 ms one way"},
+                    {"label": "Leader to n3", "value": "11 ms one way"},
+                    {"label": "Leader to n4", "value": "40 ms one way"},
+                    {"label": "Leader to n5", "value": "95 ms one way"},
+                    {"label": "Processing and disk", "value": "0 ms"},
+                ],
+                "aside": "The same cluster with n4 and n5 removed commits faster, not slower: a "
+                         "majority of three is two, the leader is one of them, so n2's reply at "
+                         "16 ms is on its own enough. What the smaller cluster gives up is margin. "
+                         "Lose n2 and every commit falls onto n3 at 22 ms, and the tail latency of "
+                         "the cluster becomes the tail latency of that one machine.",
+                "answer": 22,
+                "tol": 0.5,
+                "unit": "ms",
+                "hint": "A majority of five is three, and the leader is one of them at zero cost. "
+                        "Which follower's reply is the one that tips the count over?",
+                "wrong": "Two traps sit here. Forgetting that the leader counts itself pushes you "
+                         "to the third-fastest follower, and quoting a one-way delay forgets that "
+                         "the leader learns nothing until the acknowledgement comes back.",
+                "why": "A majority of five is three. The leader has the entry at $t = 0$, so two "
+                       "follower acknowledgements are enough. `AppendEntries` reaches n2 at 8 ms "
+                       "and n3 at 11 ms; their replies land at 16 ms and 22 ms. At 22 ms the "
+                       "leader counts itself, n2 and n3 — a majority — and `advance_commit` moves. "
+                       "n4 and n5 contribute nothing to the answer, and would not even if they "
+                       "were down. The client's own latency is this plus the leader's reply to it; "
+                       "the *follower's* view of the commit arrives a further round later, on the "
+                       "next `AppendEntries`.",
+            },
             "lab": {
                 "title": "Raft election and log replication",
                 "runtime": "python",
@@ -910,6 +1394,259 @@ assert _n.replicate() == [], "a follower has nothing to replicate"
                 "Read repair is opportunistic anti-entropy carried on the read path",
                 "Availability versus staleness is a dial, not a binary — this is PACELC's ELC half",
             ],
+            "quiz": {
+                "title": "Turning the dials",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "With $N = 5$, which setting guarantees a read sees the last completed write while keeping reads as cheap as possible?",
+                        "opts": [
+                            "$R = 5$, $W = 1$",
+                            "$R = 3$, $W = 3$",
+                            "$R = 1$, $W = 5$",
+                            "$R = 2$, $W = 3$",
+                        ],
+                        "a": 2,
+                        "why": r"""
+The guarantee needs $R + W > N$. That rules out $R = 2, W = 3$ immediately, since $5$ is
+not greater than $5$ — the read set and the write set can be disjoint, which is the case
+the lab reproduces on purpose. Of the three that qualify, $R = 1$ is the cheapest read,
+and the bill arrives on the other side: $W = 5$ means every replica must be up for any
+write to succeed. $R = 3, W = 3$ is the balanced choice most stores default to, and
+$R = 5, W = 1$ is the mirror image — writes that survive almost anything, reads that
+need the entire cluster. The condition does not pick a point on the line; it only says
+which points are on it.
+""",
+                    },
+                    {
+                        "q": "$R + W > N$ holds and a write has returned successfully. What is a later read guaranteed to do?",
+                        "opts": [
+                            "Contact at least one replica that acknowledged that write",
+                            "Return that write's value, whatever the merge rule is",
+                            "Contact every replica that acknowledged that write",
+                            "Avoid contacting any replica that is behind",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Intersection is all the arithmetic buys you: the two sets are too large to fit in $N$
+replicas without sharing at least one. Turning that overlap into read-your-writes takes a
+second ingredient — a version on every value and a merge that keeps the highest. Without
+it the coordinator holds one fresh answer and some stale ones and no way to tell them
+apart, which is the whole reason the store carries version numbers rather than bare
+values. The read certainly does not reach every acknowledging replica; it stops the
+moment it has $R$ responses. And it will often include a replica that is behind — read
+repair exists precisely because it does.
+""",
+                    },
+                    {
+                        "q": "Why is $W > N/2$ a separate condition from $R + W > N$?",
+                        "opts": [
+                            "It is a stronger form of the same condition and implies it",
+                            "It forces two concurrent writes to share a replica, so one of them can be seen as older",
+                            "It guarantees the read quorum is also a majority",
+                            "It only matters when read repair is switched off",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The two conditions constrain different pairs of quorums. $R + W > N$ makes a read set
+meet a write set. $W > N/2$ makes two *write* sets meet each other, so at least one
+replica sees both writes and can order them by version — without it, two clients can
+write disjoint quorums, both succeed, and no replica anywhere has grounds to call either
+one older. It is not the stronger condition: $N = 5, W = 3, R = 1$ satisfies $W > N/2$
+and fails $R + W > N$, so a read can still miss. It says nothing about $R$, and read
+repair changes when replicas converge, not whether two writes were ever comparable.
+""",
+                    },
+                    {
+                        "q": "The coordinator merges $R$ answers by keeping the highest version. What does that quietly discard?",
+                        "opts": [
+                            "Nothing — the highest version is by definition the most recent write",
+                            "The version numbers, which is why read repair has to run before the merge",
+                            "A concurrent update that happened to draw a lower version",
+                            "Every response that arrives after the first one",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Versions are a total order; the writes that produced them were not. Two clients that both
+read the old value and both write produce two values that are genuinely concurrent, and
+last-writer-wins picks one and drops the other with no report to anyone. That is a real
+choice, not a bug — it is cheap, it always converges, and for a "current temperature" it
+is exactly right. For a shopping cart it is wrong, which is why Dynamo keeps both values
+as siblings and hands the merge to the application, and why that cart is famous for
+resurrecting a deleted item: union is a safe merge, and it never removes.
+""",
+                    },
+                    {
+                        "q": "A write with $W = 2$ raised a quorum error after one replica had already stored the value. What is now true?",
+                        "opts": [
+                            "The value sits on that one replica, and anti-entropy will spread it",
+                            "The value is discarded, because the write never reached its quorum",
+                            "The value sits on that one replica and is rolled back by the next read",
+                            "The coordinator retries the write at a lower $W$",
+                        ],
+                        "a": 0,
+                        "why": r"""
+There is no rollback anywhere in this design — no undo log, no two-phase commit, nothing
+that could take a value back off a replica that has already stored it. A failed write is
+not an absent write; it is a write with an unknown outcome, and read repair or anti-entropy
+will happily finish the job the coordinator gave up on. The lab asserts exactly this after
+a `QuorumError`, and the client is left in the genuinely awkward position of having been
+told "no" about something that may yet become true. Retrying at a lower $W$ would be a
+policy decision, and a store that made it silently would be lying about its own
+guarantees.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "Sizing the quorums for a keyspace",
+                "minutes": 8,
+                "caption": "carts.yaml — four decisions, no code",
+                "lang": "yaml",
+                "brief": r"""
+Every quorum store puts these dials in a config file and every one of them ships a
+default that is wrong for somebody. Here the requirements are stated, so each dial has
+exactly one defensible value — which is the point of the exercise: the settings are not
+a matter of taste once you have written down what the service must survive.
+""",
+                "listing": """# keyspace: carts
+#
+# Five replicas per key. The service must keep taking writes while a whole rack
+# (two of the five nodes) is down, and a read must never miss a write that was
+# acknowledged to the client.
+
+replicas: 5
+write_quorum: ___                 # W, as large as the rack outage still allows
+read_quorum: ___                  # R, the smallest that pairs with that W
+merge: ___                        # how the coordinator turns R answers into one
+misses_an_acknowledged_write: ___ # the consequence of the three settings above
+""",
+                "blanks": [
+                    {
+                        "prompt": "How large may W be if two of the five nodes are down?",
+                        "hole": "?",
+                        "opts": ["2", "3", "4", "5"],
+                        "a": 1,
+                        "why": "With two nodes down only three can acknowledge, so W = 3 is the largest value a write can still satisfy during the outage. Every larger W turns a rack failure into a total write outage.",
+                        "whys": [
+                            "W = 2 would work, but it gives up durability the outage did not force you to give up — and it drags R up to 4 to keep the pairing, making every read more expensive than it needs to be.",
+                            "With two nodes down only three can acknowledge, so W = 3 is the largest value a write can still satisfy during the outage. Every larger W turns a rack failure into a total write outage.",
+                            "W = 4 needs four live replicas. The moment the rack goes, every write raises a quorum error — the exact failure the requirement was written to avoid.",
+                            "W = 5 demands the whole cluster for every write, so a single node reboot stops writes. This is the setting that makes availability numbers look inexplicable in a post-mortem.",
+                        ],
+                    },
+                    {
+                        "prompt": "Given that W, what is the smallest R that still meets the read requirement?",
+                        "hole": "?",
+                        "opts": ["1", "2", "3", "5"],
+                        "a": 2,
+                        "why": "R + W > N with N = 5 and W = 3 needs R > 2, so R = 3. At R = 3 the read set and any write set share at least one replica, which is exactly the guarantee that was asked for.",
+                        "whys": [
+                            "R = 1 gives R + W = 4, which is not greater than 5. A read aimed at the two replicas that were not in the write set misses the write entirely — the failure the lab reproduces deliberately.",
+                            "R = 2 gives R + W = 5, and 5 is not greater than 5. This is the near miss worth remembering: the condition is strict, and equality is precisely the case where a read set and a write set can be disjoint.",
+                            "R + W > N with N = 5 and W = 3 needs R > 2, so R = 3. At R = 3 the read set and any write set share at least one replica, which is exactly the guarantee that was asked for.",
+                            "R = 5 satisfies the condition with room to spare and makes every read depend on every node, so a single failure stops reads — a much worse position than the writes were put in.",
+                        ],
+                    },
+                    {
+                        "prompt": "The coordinator has three answers in hand. Which one does it return?",
+                        "hole": "?",
+                        "opts": ["highest_version", "first_response", "majority_value", "lowest_version"],
+                        "a": 0,
+                        "why": "The overlap guarantees that one of the answers is at least as new as the last acknowledged write; taking the highest version is what turns that guarantee into the value the client gets back.",
+                        "whys": [
+                            "The overlap guarantees that one of the answers is at least as new as the last acknowledged write; taking the highest version is what turns that guarantee into the value the client gets back.",
+                            "Returning whichever reply arrives first hands the answer to the network. The fastest replica is usually the nearest one, not the best informed, and the intersection argument is wasted.",
+                            "Counting votes among replicas is worse than it looks: after a W = 3 write to five replicas, a read of three can easily see two stale copies and one fresh one, and the majority is wrong.",
+                            "Keeping the lowest version returns the stalest answer available, and read repair would then push that stale value back over the fresh one.",
+                        ],
+                    },
+                    {
+                        "prompt": "With those three settings, how often can a read miss a write the client was told had succeeded?",
+                        "hole": "?",
+                        "opts": ["never", "sometimes", "only while a node is down", "only during a network partition"],
+                        "a": 0,
+                        "why": "Never, and that is arithmetic rather than luck: three read replicas and three write replicas cannot both fit inside five without sharing one, and the merge keeps the newest of what comes back.",
+                        "whys": [
+                            "Never, and that is arithmetic rather than luck: three read replicas and three write replicas cannot both fit inside five without sharing one, and the merge keeps the newest of what comes back.",
+                            "'Sometimes' is the honest answer for R + W <= N, and the reason to state the requirement in the config rather than leave the dials to a default.",
+                            "A node being down changes which replicas answer, not whether the sets overlap. It can stop the read from assembling R responses at all — that raises an error rather than returning a stale value.",
+                            "A partition does not weaken the intersection either. It can leave a coordinator unable to reach R or W replicas, in which case the operation fails loudly; what it cannot do is let a successful read step over a successful write.",
+                        ],
+                    },
+                ],
+            },
+            "derive": {
+                "title": "Where R + W > N comes from",
+                "minutes": 12,
+                "vars": ["N", "R", "W", "k"],
+                "brief": r"""
+A write is acknowledged by a set of $W$ replicas out of $N$. A later read collects
+answers from a set of $R$ replicas out of the same $N$. Write $k$ for the number of
+replicas that are in both sets.
+
+Nothing below is about distributed systems. It is counting, and the famous condition
+falls out of it in two lines.
+""",
+                "steps": [
+                    {
+                        "prompt": "Write the number of distinct replicas touched by the two operations together — the size of the union — in terms of $R$, $W$ and $k$.",
+                        "answer": "R + W - k",
+                        "hint": "Inclusion–exclusion. Adding the two sizes counts each shared replica twice.",
+                        "deconstruct": [
+                            "A replica in exactly one of the two sets is counted once by $R + W$.",
+                            "A replica in both is counted twice, and there are $k$ of those, so subtract $k$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Both sets are drawn from the same cluster, so that union cannot exceed $N$. Rearrange $R + W - k \\le N$ to get the smallest value $k$ can take.",
+                        "answer": "R + W - N",
+                        "hint": "Move $k$ to one side and $N$ to the other; the inequality flips to a lower bound on $k$.",
+                        "deconstruct": [
+                            "$R + W - k \\le N$ gives $R + W - N \\le k$.",
+                            "That is a floor, not an estimate: no choice of the two sets can do worse.",
+                        ],
+                    },
+                    {
+                        "prompt": "The read is forced to touch the write when $k \\ge 1$ for every possible pair of sets. What is the largest $N$ for which that still holds, in terms of $R$ and $W$?",
+                        "answer": "R + W - 1",
+                        "hint": "Set the bound you just derived to at least 1 and solve for $N$.",
+                        "deconstruct": [
+                            "$R + W - N \\ge 1$ rearranges to $N \\le R + W - 1$.",
+                            "Which is the same statement as $R + W > N$, written the other way round.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now two *writes*, each acknowledged by $W$ replicas. By the same counting, what is the smallest number of replicas that must have seen both?",
+                        "answer": "2 W - N",
+                        "hint": "The bound was $R + W - N$ for any two sets of those sizes. Both sets now have size $W$.",
+                        "deconstruct": [
+                            "Nothing in the counting cared that one set was a read and the other a write.",
+                            "Substitute $W$ for $R$ in $R + W - N$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Require that overlap to be at least 1 and solve for $W$: two write quorums always share a replica when $W$ exceeds what?",
+                        "answer": "\\frac{N}{2}",
+                        "hint": "$2W - N \\ge 1$ is $W \\ge (N+1)/2$, and for a whole number of replicas that is the same as $W$ strictly greater than half of $N$.",
+                        "deconstruct": [
+                            "$2W - N \\ge 1$ gives $2W \\ge N + 1$.",
+                            "Divide by two: $W \\ge (N+1)/2$, which for integer $W$ is exactly $W > N/2$.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+Two different conditions have come out of one piece of counting, and they are about
+different things. $R + W > N$ is a read *seeing* a write. $W > N/2$ is two writes seeing
+*each other*. A store can satisfy one and fail the other: $N = 5$, $W = 3$, $R = 1$ has
+write quorums that always overlap and a read that can still miss both of them entirely.
+
+Notice also what the bound $k \ge R + W - N$ does not promise. It says at least one
+replica in the read set holds the write; it says nothing about that replica being the one
+whose answer you keep. The version numbers do that half, and a store with quorums and no
+versions has bought itself nothing.
+""",
+            },
             "lab": {
                 "title": "A tunable quorum store",
                 "runtime": "python",
@@ -1293,6 +2030,258 @@ assert _s.read("k", prefer=["a", "c"]) is not None, "two live replicas are enoug
                 "`hash()` on a str is salted per process; partitioning needs a stable digest such as MD5",
                 "Hot keys are not solved by hashing — they need a separate splitting or caching strategy",
             ],
+            "quiz": {
+                "title": "Where a key lives",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A ring holds four nodes with 128 virtual points each. A fifth node joins. Which keys change owner?",
+                        "opts": [
+                            "About a fifth of them, and every one of them moves onto the new node",
+                            "About a fifth of them, redistributed between all five nodes",
+                            "About four fifths of them, as under modulo hashing",
+                            "None, until a rebalance is triggered explicitly",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A joining node only ever takes keys. Each of its 128 points claims the arc immediately
+behind it from whoever held that arc before, and no point that was already on the ring
+moves, so no two existing nodes ever swap keys with each other. The share taken comes out
+near $1/5$, and every moved key has the same destination. That is the property the
+structure exists for: modulo hashing moves a similar-sounding fraction of keys for a very
+different reason — it renumbers everything — and the lab measures both. And nothing is
+deferred: the new node owns those arcs from the instant its points are inserted, which is
+why the data has to be streamed to it promptly.
+""",
+                    },
+                    {
+                        "q": "Why does the lab insist on MD5 rather than Python's builtin `hash()` for ring positions?",
+                        "opts": [
+                            "`hash()` collides far more often than a digest",
+                            "`hash()` is too slow to call 128 times per node",
+                            "`hash()` on a `str` is salted per process, so two nodes would build different rings",
+                            "`hash()` returns a signed value and `bisect` requires unsigned positions",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Python randomises string hashing per interpreter unless `PYTHONHASHSEED` is fixed. Two
+processes would place the same key at different ring positions and disagree about who
+owns it from the very first request — and the disagreement would survive restarts by
+changing every time, which is about the worst debugging experience available. MD5 is not
+chosen here for cryptographic strength; it is chosen because it is the same number
+everywhere, for ever. It is true that `hash()` can come back negative and would need
+fixing up, but that is a nuisance, not the reason. And `hash()` is the *faster* of the
+two — speed is what you are giving up to get determinism.
+""",
+                    },
+                    {
+                        "q": "What do 128 virtual points per machine actually buy?",
+                        "opts": [
+                            "Fewer keys moving when a node joins or leaves",
+                            "An even share of the ring per machine, because many small arcs vary far less than one large one",
+                            "The ability to keep a key on more than one machine",
+                            "A faster lookup, since the search has more points to bisect against",
+                        ],
+                        "a": 1,
+                        "why": r"""
+With one point per machine the arc lengths are wildly uneven — they are essentially
+exponentially distributed — and the lab measures a max/min load ratio above 2 for four
+nodes. Averaging 128 arcs per machine collapses that variance and brings the ratio under
+1.5. The fraction that moves on a join is about $1/(k+1)$ either way, so that is not the
+gain. Replication is the preference list's job, not the virtual nodes'. And more points
+make the binary search marginally *longer*, not shorter — it is logarithmic, so 128 times
+more points costs about seven extra comparisons, which is the price of the balance.
+""",
+                    },
+                    {
+                        "q": "A preference list walks the ring clockwise from the key. Why must it skip nodes it has already collected?",
+                        "opts": [
+                            "Because consecutive points often belong to the same machine, and three copies on one machine is one copy",
+                            "Because two nodes can collide on the same ring position",
+                            "Because the walk would otherwise never terminate",
+                            "Because the first node is the coordinator and may not also hold a replica",
+                        ],
+                        "a": 0,
+                        "why": r"""
+With 128 points per machine scattered over the ring, the next point clockwise belongs to
+the same machine roughly one time in $k$, and a list built from points rather than
+machines would happily put all three replicas of a key on one box. Then one machine
+failing takes the key with it, and the whole replication scheme is decoration. The walk
+terminates either way, since it is bounded by the number of points. Collisions between
+two nodes' positions are possible but astronomically rare with a 64-bit digest, and would
+not be fixed by skipping repeats. And the coordinator is normally the first node in the
+list — holding a replica is its job, not a conflict of interest.
+""",
+                    },
+                    {
+                        "q": "One key in the store takes 40% of all reads. What do more virtual nodes do for it?",
+                        "opts": [
+                            "Spread it over 128 points and so across many machines",
+                            "Move it to the least loaded machine at the next rebalance",
+                            "Nothing — one key hashes to one position, so it lands on one machine",
+                            "Split its value between the replicas in its preference list",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Hashing balances *keys*, not requests. A key has one hash, so it has one position, so it
+has one owner however many points that owner has placed — and 40% of the traffic lands on
+one machine no matter how the ring is dressed. Virtual nodes fix skew in how many keys a
+machine owns, which is a different problem that happens to look similar in a load graph.
+The fixes for a hot key are elsewhere: split it into sub-keys with a suffix, cache it in
+front of the store, or serve reads from all $N$ replicas in its preference list rather
+than from the first one. Rebalancing on load, meanwhile, would break the one property the
+ring is for — that any client can compute the owner without asking anyone.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "Placing a key on the ring",
+                "minutes": 8,
+                "caption": "ring.py — build, look up, walk",
+                "lang": "python",
+                "brief": r"""
+Three operations, and each holds one decision that is easy to get subtly wrong: what a
+ring point maps back to, which side of a tie the search lands on, and what happens past
+the largest point. The wrap is the only special case in the whole structure — everything
+else is a sorted list and a binary search.
+""",
+                "listing": """# `points` is kept sorted; `owner` maps a ring point back to a machine.
+for node in nodes:
+    for v in range(vnodes):
+        point = ring_hash("%s#%d" % (node, v))
+        bisect.insort(points, point)
+        owner[point] = ___                    # 128 points, one machine
+
+# the owner of a key is the first point strictly clockwise of it
+i = bisect.___(points, ring_hash(key))
+if i == len(points):
+    i = ___                                   # the ring wraps here and nowhere else
+
+# the preference list keeps walking, crediting each machine once
+prefs = []
+for step in range(len(points)):
+    n = owner[points[(i + step) % len(points)]]
+    if n ___ prefs:
+        prefs.append(n)
+""",
+                "blanks": [
+                    {
+                        "prompt": "What does a ring point map back to?",
+                        "hole": "?",
+                        "opts": ["node", "v", "point", "vnodes"],
+                        "a": 0,
+                        "why": "The physical machine. Many points share one node id, and that many-to-one mapping is the entire mechanism of virtual nodes — the ring is full of positions, the cluster is made of machines.",
+                        "whys": [
+                            "The physical machine. Many points share one node id, and that many-to-one mapping is the entire mechanism of virtual nodes — the ring is full of positions, the cluster is made of machines.",
+                            "`v` is the replica index within one machine's points, a number from 0 to 127. Storing it loses which machine placed the point, which is the only thing a lookup needs to know.",
+                            "Mapping a point to itself says nothing. The dictionary exists to answer 'whose is this position?', and a position is not an answer to that.",
+                            "`vnodes` is the same count for every machine, so every lookup would return 128.",
+                        ],
+                    },
+                    {
+                        "prompt": "Which search finds the first point clockwise of the key?",
+                        "hole": "?",
+                        "opts": ["bisect_right", "bisect_left", "insort", "insort_right"],
+                        "a": 0,
+                        "why": "`bisect_right` returns the index of the first point strictly greater than the key's hash, which is the definition the ring uses. It never mutates the list, which matters here: a lookup that changed the ring would change ownership as a side effect of reading.",
+                        "whys": [
+                            "`bisect_right` returns the index of the first point strictly greater than the key's hash, which is the definition the ring uses. It never mutates the list, which matters here: a lookup that changed the ring would change ownership as a side effect of reading.",
+                            "`bisect_left` returns the first point greater *or equal*, so a key that hashes exactly onto a ring point is given to that point rather than to the next one clockwise. The ring still works, but it is not the rule the tests and the preference list are written against.",
+                            "`insort` inserts. Every lookup would push the key's hash into `points` as if it were a machine's position, growing the ring on every read and silently handing arcs to a node id that does not exist.",
+                            "`insort_right` is the same insertion with the tie-breaking side named explicitly — still a mutation, and still catastrophic on a read path.",
+                        ],
+                    },
+                    {
+                        "prompt": "The key hashed past the largest point on the ring. Where does the search go?",
+                        "hole": "?",
+                        "opts": ["0", "-1", "len(points) - 1", "None"],
+                        "a": 0,
+                        "why": "Back to the smallest point. The ring is a circle drawn on a sorted list, and this line is the only place that circularity appears — every other operation is ordinary array arithmetic.",
+                        "whys": [
+                            "Back to the smallest point. The ring is a circle drawn on a sorted list, and this line is the only place that circularity appears — every other operation is ordinary array arithmetic.",
+                            "-1 indexes the last element in Python, which is the point the key just walked past. Keys above the largest position would be given to the machine behind them rather than the one in front, and the arc boundaries stop lining up with what the preference list computes.",
+                            "The same last element, spelled out. It reads more deliberate and is wrong in exactly the same way.",
+                            "`None` cannot index a list. The wrap is not an error case — it is the ordinary fate of every key hashing above the highest ring position, which is a real share of them.",
+                        ],
+                    },
+                    {
+                        "prompt": "What decides whether a machine joins the preference list?",
+                        "hole": "?",
+                        "opts": ["not in", "in", "is not", "!="],
+                        "a": 0,
+                        "why": "A machine is added the first time it is met and skipped afterwards, which is what makes the list N *distinct* nodes rather than N ring points.",
+                        "whys": [
+                            "A machine is added the first time it is met and skipped afterwards, which is what makes the list N *distinct* nodes rather than N ring points.",
+                            "Inverted: nothing is ever appended, because a machine is only added once it is already there. The list stays empty for every key.",
+                            "`n is not prefs` compares a string with a list by identity, so it is true on every iteration and every point clockwise gets appended — repeats included. Three replicas of a key can end up on one machine.",
+                            "`n != prefs` has the same problem in a different disguise: a string never equals a list, so the guard is always true and never guards anything.",
+                        ],
+                    },
+                ],
+            },
+            "derive": {
+                "title": "What a modulo rehash really costs",
+                "minutes": 12,
+                "vars": ["k", "h"],
+                "brief": r"""
+The lab measures it; this is where the number comes from. A key hashes to $h$. Under
+modulo hashing across $k$ machines it lands on machine $h \bmod k$; add one machine and
+it lands on $h \bmod (k+1)$. A key keeps its home exactly when those two agree.
+
+Treat $h$ as uniform over a large range — a digest gives you that — and the fraction is
+pure number theory.
+""",
+                "steps": [
+                    {
+                        "prompt": "$k$ and $k+1$ never share a factor, so by the Chinese remainder theorem the pair $(h \\bmod k,\\ h \\bmod (k+1))$ is determined by $h$ modulo a single number. Write that number.",
+                        "answer": "k(k + 1)",
+                        "hint": "Coprime moduli combine into their product, and every pair of residues occurs exactly once across that range.",
+                        "deconstruct": [
+                            "Any common factor of $k$ and $k+1$ would have to divide their difference, which is 1 — so they are coprime for every $k$.",
+                            "The theorem then says the two residues together carry exactly as much information as $h$ modulo the product.",
+                        ],
+                    },
+                    {
+                        "prompt": "A key stays put exactly when $h \\bmod k$ and $h \\bmod (k+1)$ are the same value; call it $r$. How many values can $r$ take?",
+                        "answer": "k",
+                        "hint": "$r$ has to be a legal residue for both moduli at once, so the smaller range wins.",
+                        "deconstruct": [
+                            "$h \\bmod k$ ranges over $0 \\ldots k-1$; $h \\bmod (k+1)$ ranges over $0 \\ldots k$.",
+                            "They can only agree on a value both can produce, so $r$ lies in $0 \\ldots k-1$ — that is $k$ values.",
+                        ],
+                    },
+                    {
+                        "prompt": "Each of those values of $r$ pins $h$ to one residue modulo $k(k+1)$. Write the fraction of keys that keep their machine.",
+                        "answer": "\\frac{1}{k + 1}",
+                        "hint": "Good residues over total residues, then cancel the common factor.",
+                        "deconstruct": [
+                            "$k$ good values out of the $k(k+1)$ residues that $h$ can take.",
+                            "$k / (k(k+1))$ cancels to $1/(k+1)$.",
+                        ],
+                    },
+                    {
+                        "prompt": "So write the fraction that has to move.",
+                        "answer": "\\frac{k}{k + 1}",
+                        "hint": "Everything that did not stay.",
+                        "deconstruct": [
+                            "The movers are $1 - 1/(k+1)$.",
+                            "Over a common denominator that is $k/(k+1)$.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+Put $k = 3$ in and you get $3/4$: adding a fourth machine under modulo hashing moves
+three quarters of the keys, and the lab measures 0.741 over 5000 MD5-hashed keys, which
+is that fraction with the sampling noise you would expect.
+
+The same lab measures 0.26 for the ring, and $1/(k+1) = 1/4$ turns up there too — but on
+the other side of the ledger. On a ring that fraction is *everything* that moves, and all
+of it moves onto the machine that just joined. Modulo hashing moves that quarter and then
+moves the rest as well, to no purpose whatsoever: it is not placing keys badly, it is
+renumbering every machine each time the count changes.
+""",
+            },
             "lab": {
                 "title": "A consistent-hashing ring",
                 "runtime": "python",

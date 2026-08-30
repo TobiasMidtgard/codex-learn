@@ -48,6 +48,283 @@ COURSE = {
                 "CRC-32 as polynomial division over GF(2), computed with a reflected 256-entry table",
                 "Error *detection* is not correction — a detected frame is simply discarded",
             ],
+            "quiz": {
+                "title": "Delimiters, and what a check can tell you",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "Why does a PPP-style framer escape any payload byte that happens to equal `0x7E`?",
+                        "opts": [
+                            "So that the frame length stays even, which the checksum needs",
+                            "So that a byte of data can never be read as the end of the frame",
+                            "So that a flipped bit cannot turn a data byte into a flag",
+                            "So that the payload compresses better on a slow link",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Framing is a delimiter problem before it is anything else. The receiver has a byte
+stream and no idea where the boundaries are, so one value is reserved to mean *here is
+a boundary* — and the moment a value carries meaning, data holding that value has to be
+disguised. That is all stuffing is.
+
+Evenness belongs to the checksum, which pads for itself and does not care what the
+framer did. Compression is the opposite of what happens: stuffing makes the frame
+longer, never shorter. And stuffing offers no protection at all against a bit flip
+that manufactures a flag out of ordinary data — that corruption sails straight into
+the framer, which cuts the frame short; the CRC on the truncated frame is what catches
+it afterwards.
+""",
+                    },
+                    {
+                        "q": "An $n$-byte payload is stuffed. In the worst case, how many bytes does the escaped body occupy, not counting the two flags?",
+                        "opts": ["$n + 1$", "$n + 2$", "$2n$", "$n$"],
+                        "a": 2,
+                        "why": r"""
+The worst case is a payload made entirely of `0x7E` and `0x7D`. Every single byte then
+needs an escape in front of it, so every one byte in becomes two bytes out: $2n$.
+
+A payload of ordinary text hits none of that — it comes out at exactly $n$, which is
+what makes the doubling so easy to forget. The link still has to be sized for it,
+because the payload is chosen by whoever is sending, and a sender who does not like
+you can choose `7e 7e 7e 7e ...`.
+""",
+                    },
+                    {
+                        "q": "Which corruption slips past the internet checksum but is caught by CRC-32?",
+                        "opts": [
+                            "Two bits flipped inside the same byte",
+                            "One bit flipped somewhere in the payload",
+                            "One byte replaced by a different value",
+                            "Two 16-bit words of the payload exchanged with each other",
+                        ],
+                        "a": 3,
+                        "why": r"""
+The checksum is a sum, and addition does not care what order it adds things in. Move
+two whole 16-bit words past each other and the total is untouched, so the check passes
+on data that is now wrong. CRC-32 is a polynomial remainder, and position is baked into
+every term of it, so the swap changes the answer.
+
+The other three all change some 16-bit word by a non-zero amount smaller than
+$65535$, and the one's-complement sum is arithmetic modulo $65535$ — a change that
+small cannot wrap all the way round to invisible. Both checks catch all of them. It is
+specifically *rearrangement*, not damage, that the checksum is blind to.
+""",
+                    },
+                    {
+                        "q": "A frame arrives and its CRC does not match. What does the link layer do with it?",
+                        "opts": [
+                            "Drops it, and leaves recovery to a layer that has sequence numbers and timers",
+                            "Repairs the damaged bits from the CRC and passes the frame up",
+                            "Passes it up with a flag set, so the application can decide",
+                            "Recomputes the CRC over what arrived and forwards the frame with the new value",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A CRC detects; it does not correct. Thirty-two bits of remainder cannot locate an error
+in a twelve-thousand-bit frame — there are far more possible corruptions than there are
+remainders — so there is nothing to repair from. The frame is dropped and the layer
+above notices the gap, which is what the next module is about.
+
+Passing damaged data up with a warning would push a decision onto code that has no way
+to make it. And recomputing the CRC is the genuinely dangerous option: it makes
+corrupted data look pristine to everyone downstream, which is why a router that
+re-frames a packet must re-derive its check from data it has already verified, never
+from data it has not.
+""",
+                    },
+                    {
+                        "q": "Why does a reflected CRC-32 implementation build a 256-entry table?",
+                        "opts": [
+                            "Because a CRC-32 remainder can only take 256 distinct values",
+                            "One entry per byte value, so the eight shift-and-XOR steps happen once at build time instead of once per byte of every frame",
+                            "Because the polynomial `0xEDB88320` has 256 non-zero terms",
+                            "Because the table has to be indexed by the low byte of the polynomial",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The bitwise loop does eight shift-and-conditional-XOR steps per byte. Those eight steps
+depend only on the low byte of the running remainder XORed with the incoming byte —
+256 possibilities — so they can all be computed once and looked up thereafter. The
+per-byte cost drops to one XOR, one shift and one array read, which is why CRC-32 is
+cheap enough to run on every frame on the wire.
+
+A CRC-32 remainder takes $2^{32}$ values, not 256; the table is indexed by a byte, not
+sized by the remainder space. The polynomial has 33 terms in total, of which fifteen
+are non-zero. And the index is derived from the data and the running remainder — the
+polynomial is a constant and never indexes anything.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "Two checks, side by side",
+                "minutes": 9,
+                "caption": "checks.py — the two integrity checks, four holes",
+                "lang": "python",
+                "brief": r"""
+Both of these functions take bytes in and give a number out, and both are called an
+*error check*. The four holes are where the difference between them lives: whether
+position matters, and what the running value is doing between bytes.
+
+Nothing is executed here — you are choosing expressions, not writing code.
+""",
+                "listing": r'''
+# The two integrity checks, side by side. Same job, very different strength.
+
+def internet_checksum(data):
+    padded = data + (b"\x00" if len(data) % 2 else b"")
+    total = 0
+    for i in range(0, len(padded), 2):
+        total += (padded[i] << ___) | padded[i + 1]   # one big-endian 16-bit word
+        total = (total & 0xFFFF) + (total >> 16)      # fold the carry straight back in
+    return ___ & 0xFFFF
+
+
+CRC_POLY = 0xEDB88320                                 # the reflected CRC-32 polynomial
+
+def table_entry(index):
+    value = index
+    for _ in range(8):
+        value = (value >> 1) ^ (CRC_POLY if ___ else 0)
+    return value
+
+
+CRC_TABLE = [table_entry(i) for i in range(256)]
+
+
+def crc32(data):
+    crc = ___
+    for byte in data:
+        crc = CRC_TABLE[(crc ^ byte) & 0xFF] ^ (crc >> 8)
+    return crc ^ 0xFFFFFFFF
+''',
+                "blanks": [
+                    {
+                        "prompt": "The word is big-endian: the byte at the lower offset is the more significant half.",
+                        "hole": "?",
+                        "opts": ["1", "16", "8", "0"],
+                        "a": 2,
+                        "why": "A shift of 8 puts the earlier byte in the high half of a 16-bit word and leaves room for the next byte to be ORed into the low half. That is what big-endian means, and it is the only step in the whole function that knows which byte came first.",
+                        "whys": [
+                            "A shift of 1 doubles the byte instead of positioning it, and seven of its eight bits then overlap the next byte in the OR rather than sitting above it. The result is still a number, which is what makes this kind of slip survive a casual test.",
+                            "A shift of 16 lands the byte in the carry region, where the very next line folds it straight back into the low half. The two bytes of a word would then contribute equally and become interchangeable — the check would stop noticing a byte swap inside a word.",
+                            "A shift of 8 puts the earlier byte in the high half of a 16-bit word and leaves room for the next byte to be ORed into the low half. That is what big-endian means, and it is the only step in the whole function that knows which byte came first.",
+                            "With no shift the two bytes are simply ORed on top of each other, which is not even a sum: `41 42` and `42 41` both come out as `43`, and so does `43 40`.",
+                        ],
+                    },
+                    {
+                        "prompt": "RFC 1071 calls for the one's complement of the sum.",
+                        "hole": "?",
+                        "opts": ["total >> 16", "total", "-total", "~total"],
+                        "a": 3,
+                        "why": "`~total` inverts every bit, and masking to 16 bits gives the one's complement. Inverting is what makes the defining property work: append the result to the data and the receiver's sum comes out zero, so the receiver never has to compare anything.",
+                        "whys": [
+                            "That is the carry, and the fold on the line above has already driven it to zero — it is provably zero at every exit from that loop. So this returns 0 for every input, carrying no information about the data at all.",
+                            "Returning the sum unchanged still detects the same errors, but it breaks the property every receiver relies on: data plus its own check would sum to twice the value rather than to zero, and every implementation on the internet would disagree with this one.",
+                            "`-total` is the *two's* complement, which lands exactly one away from the one's complement the RFC specifies. Every value this function returns would then be wrong by one — consistently, and only against the rest of the internet, which is the kind of bug that only shows up in interoperation.",
+                            "`~total` inverts every bit, and masking to 16 bits gives the one's complement. Inverting is what makes the defining property work: append the result to the data and the receiver's sum comes out zero, so the receiver never has to compare anything.",
+                        ],
+                    },
+                    {
+                        "prompt": "The reflected algorithm shifts right, so which bit is leaving the register each step?",
+                        "hole": "?",
+                        "opts": ["value & 1", "value & 0x80000000", "index & 1", "value >> 31"],
+                        "a": 0,
+                        "why": "`value >> 1` drops the least significant bit, so the XOR has to be conditioned on that bit — the one about to be lost. Reflected CRCs run bit-reversed throughout, which is why the polynomial is written as `0xEDB88320` rather than `0x04C11DB7`.",
+                        "whys": [
+                            "`value >> 1` drops the least significant bit, so the XOR has to be conditioned on that bit — the one about to be lost. Reflected CRCs run bit-reversed throughout, which is why the polynomial is written as `0xEDB88320` rather than `0x04C11DB7`.",
+                            "Testing the top bit is right for the *non*-reflected form, which shifts left. Paired with a right shift it tests a bit that is not going anywhere, and the table it builds belongs to no CRC at all.",
+                            "`index` is fixed for the whole eight-step loop, so this either XORs on every step or on none of them. Half the table would come out as a bare shift of the index.",
+                            "This is the top bit again, extracted differently, and it has the same problem: the register shifts right, so bit 31 is arriving rather than leaving.",
+                        ],
+                    },
+                    {
+                        "prompt": "CRC-32 does not start from a blank register.",
+                        "hole": "?",
+                        "opts": ["0", "0xFFFFFFFF", "CRC_POLY", "0xCBF43926"],
+                        "a": 1,
+                        "why": "All ones in, all ones out — the initial and final XOR are both `0xFFFFFFFF`. The non-zero start is what makes leading zero bytes visible: from a zero register, a run of `00` bytes changes nothing, so `00 00 hello` and `hello` would share a remainder.",
+                        "whys": [
+                            "Zero is the mathematically natural start and the reason the standard does not use it: leading zero bytes become invisible, and a length field that is quietly padded would pass its own check.",
+                            "All ones in, all ones out — the initial and final XOR are both `0xFFFFFFFF`. The non-zero start is what makes leading zero bytes visible: from a zero register, a run of `00` bytes changes nothing, so `00 00 hello` and `hello` would share a remainder.",
+                            "The polynomial is the divisor, not the dividend. Seeding with it produces a self-consistent check that no other implementation agrees with, which is the worst kind: it works perfectly until it has to talk to something.",
+                            "That is the published check value for the string `123456789` — an output, used to test an implementation, never an input to one.",
+                        ],
+                    },
+                ],
+            },
+            "derive": {
+                "title": "What stuffing costs",
+                "minutes": 12,
+                "vars": ["n", "p", "L"],
+                "brief": r"""
+Escaping is not free, and *how* not-free depends on the payload. Take an $n$-byte
+payload in which each byte independently has probability $p$ of being `FLAG` or `ESC`,
+and work out how many bytes actually go on the wire.
+""",
+                "steps": [
+                    {
+                        "prompt": "How many of the $n$ payload bytes does the stuffer have to escape, on average?",
+                        "answer": "n p",
+                        "hint": "Each byte is its own trial with success probability $p$, and expectations add whether or not the trials are independent.",
+                        "deconstruct": [
+                            "Write an indicator per byte: 1 if it needs escaping, 0 otherwise.",
+                            "Each has expectation $p$, and there are $n$ of them.",
+                        ],
+                    },
+                    {
+                        "prompt": "An escaped byte goes out as two bytes; every other byte goes out as one. Write the length of the escaped body in terms of $n$ and $p$.",
+                        "given": "On average $np$ of the $n$ bytes need escaping.",
+                        "answer": "n(1 + p)",
+                        "placeholder": "n \\cdot (\\ldots)",
+                        "hint": "Every byte costs at least one byte on the wire, and each escaped one adds exactly one more.",
+                        "deconstruct": [
+                            "The body is $(n - np)$ single bytes plus $np$ doubled ones: $(n - np) + 2np$.",
+                            "That collapses to $n + np$.",
+                        ],
+                    },
+                    {
+                        "prompt": "A frame is that body with a `FLAG` byte at each end. Write the whole frame length $L$.",
+                        "answer": "n(1 + p) + 2",
+                        "hint": "The delimiters are a fixed cost — two bytes, however long the payload is.",
+                        "deconstruct": [
+                            "One flag opens the frame, one closes it.",
+                            "Neither is escaped, and neither scales with $n$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Divide by $n$ to get the bytes on the wire per byte of payload.",
+                        "given": "$L = n(1 + p) + 2$.",
+                        "answer": "1 + p + \\frac{2}{n}",
+                        "hint": "Divide each term of $L$ by $n$ separately and simplify the first one.",
+                        "deconstruct": [
+                            "$n(1+p)/n = 1 + p$.",
+                            "The delimiters contribute $2/n$, which shrinks as the payload grows.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now the worst case: a payload made entirely of reserved bytes, so $p = 1$. Write $L$ in terms of $n$.",
+                        "answer": "2n + 2",
+                        "hint": "Substitute $p = 1$ into $L = n(1 + p) + 2$.",
+                        "deconstruct": [
+                            "$1 + p$ becomes 2, so the body is $2n$.",
+                            "The two flags are still there on top.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+Two numbers make this concrete. On payloads that look like random bytes, two of the 256
+values are reserved, so $p = 1/128$ and the body grows by under 1% — invisible. But $p$
+is not a property of the protocol, it is a property of whoever is sending: a payload of
+solid `7e` bytes drives $p$ to 1 and doubles the frame, and a link sized for the average
+case has just been halved by a sender who read the RFC.
+
+The $2/n$ term pulls the other way. It says the delimiters are what hurt *small* frames,
+which is why an acknowledgement carrying no data at all is still not free, and why
+length-prefixed framing — a counted header instead of a reserved byte — trades a fixed
+header for an expansion factor that no payload can inflate.
+""",
+            },
             "lab": {
                 "title": "Framing, checksums and CRC-32",
                 "runtime": "python",
@@ -341,6 +618,267 @@ assert 0.9 < _chk2 < 1.0, \
                 "Out-of-order frames are discarded by a Go-Back-N receiver, so one loss costs a window",
                 "Goodput = useful frames delivered / total transmissions; the bandwidth-delay product sets the window",
             ],
+            "quiz": {
+                "title": "What the sender knows, and when",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "A stop-and-wait receiver gets a frame it has already delivered. Why must it acknowledge it again rather than ignore it?",
+                        "opts": [
+                            "Because the duplicate might carry different data under the same sequence bit",
+                            "So the sender can measure the round-trip time from the repeat",
+                            "The duplicate means its previous acknowledgement never arrived, and silence would leave the sender retransmitting for ever",
+                            "So the receiver's own sequence bit flips on schedule",
+                        ],
+                        "a": 2,
+                        "why": r"""
+There are only two ways a duplicate can turn up: the sender timed out because the frame
+was lost, or it timed out because the *acknowledgement* was lost. In the second case the
+receiver has already delivered the data and the sender is waiting for a reply that it
+will never get unless the receiver sends another one. Staying quiet deadlocks the pair.
+
+Timing is not the point — the sender times out on a clock, not on a pattern of arrivals.
+The data under a repeated sequence bit is by definition the same frame, which is exactly
+why it is safe to discard the payload and reply anyway. And the receiver's bit must *not*
+flip on a duplicate: flipping it is how the same frame gets delivered twice.
+""",
+                    },
+                    {
+                        "q": "The sender's timer fires with no acknowledgement in hand. What does it actually know?",
+                        "opts": [
+                            "That the receiver has run out of buffer space",
+                            "That the frame was lost, since a receiver always acknowledges",
+                            "That the acknowledgement was lost, since the channel drops replies more often",
+                            "Only that nothing came back — a lost frame and a lost acknowledgement look identical from here",
+                        ],
+                        "a": 3,
+                        "why": r"""
+A timeout is the absence of information, and the sender cannot distinguish between the
+several worlds that produce it: the frame died on the way out, the acknowledgement died
+on the way back, or both are still in flight and the timer was simply too short. This is
+why the protocol is built to be correct under *all* of them — retransmit, and let the
+sequence number sort out what the receiver should do with what arrives.
+
+Nothing about a timeout points at a direction, or at a rate, or at the receiver's
+memory. Any design that assumes it does is assuming a fact the sender does not have.
+""",
+                    },
+                    {
+                        "q": "A Go-Back-N receiver is waiting for frame 6, and frames 7 and 8 arrive intact. What happens to them?",
+                        "opts": [
+                            "They are discarded, the receiver re-acknowledges 5, and the sender resends from 6 onwards",
+                            "They are buffered until 6 arrives, then all three are delivered in order",
+                            "They are delivered immediately and the application reorders them",
+                            "They are acknowledged individually so the sender only resends 6",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A Go-Back-N receiver keeps exactly one number — the next sequence it wants — and no
+buffer. Anything that is not that number is thrown away, however intact it was. That is
+the bargain: a trivially simple receiver, paid for by re-sending a whole window every
+time one frame goes missing.
+
+Buffering out-of-order arrivals is selective repeat, and it is a genuinely different
+protocol: it needs per-frame acknowledgements and a receive buffer, and it recovers
+without re-sending what already got through. Delivering out of order breaks the promise
+the layer exists to make. And individual acknowledgements are precisely what Go-Back-N
+does not have — its acknowledgements are cumulative, which is why a single one can
+cover a whole burst.
+""",
+                    },
+                    {
+                        "q": "A 100 Mb/s link has a 40 ms round-trip time and carries 10 000-bit frames. Roughly how many frames must be in flight to keep the sender transmitting continuously?",
+                        "opts": ["About 40", "About 400", "About 4000", "About 4"],
+                        "a": 1,
+                        "why": r"""
+The bandwidth-delay product is $10^8 \times 0.04 = 4 \times 10^6$ bits, which is
+$4 \times 10^6 / 10^4 = 400$ frames sitting on the wire at any instant. A window of
+about 400 (401 if you count the one being transmitted) keeps the sender busy; anything
+smaller leaves it waiting.
+
+The arithmetic is worth doing rather than eyeballing, because the answer scales with
+*both* rate and delay and neither is intuitive. Stop-and-wait on this link would run one
+frame per 40 ms — a quarter of one percent of what the link can carry, on a link that is
+in no way slow.
+""",
+                    },
+                    {
+                        "q": "A transfer of five frames completes after seven data transmissions. What is its goodput?",
+                        "opts": ["$5/12 \\approx 0.42$", "$7/5 = 1.4$", "$5/7 \\approx 0.71$", "$2/7 \\approx 0.29$"],
+                        "a": 2,
+                        "why": r"""
+Goodput is useful frames delivered over total transmissions: $5/7$. It is a fraction of
+work that was not wasted, so it is at most 1, and it reaches 1 only when nothing was
+ever sent twice.
+
+A ratio above 1 has the fraction upside down and would claim the link delivered more
+than it carried. Folding the five acknowledgements into the denominator alongside the
+seven data transmissions measures something else — the cost of the exchange in total
+messages, which is worth knowing but is not this. And $2/7$ is the waste rather than
+the useful work: a real quantity, but the complement of the one being asked for.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "Go-Back-N, one round at a time",
+                "minutes": 9,
+                "caption": "gbn.py — one window burst, four holes",
+                "lang": "python",
+                "brief": r"""
+One pass of the `while` loop is one round: the sender bursts everything in its window,
+the receiver accepts only what comes next in order, and at most one cumulative
+acknowledgement comes back. Every hole takes a plausible neighbouring variable, and none
+of the wrong ones is a syntax error — they all fail further downstream than that, and
+they fail in different ways. Some deliver the wrong bytes. Some deliver the right ones at
+a fraction of the rate. Some leave `base` stuck where it is, and then the `while` loop
+never ends at all. And one hole holds a number that goes out on the wire but that nothing
+in this listing reads back, so only the protocol's meaning can tell you which value is
+right. Work out which kind each one is.
+
+Nothing is executed here — you are choosing names, not writing code.
+""",
+                "listing": r'''
+def go_back_n(frames, link, window):
+    """Sliding-window ARQ. `base` is the sender's oldest unacknowledged frame;
+    `expected` is the receiver's next in-order sequence number."""
+    delivered, base, expected, rounds = [], 0, 0, 0
+    while base < len(frames):
+        rounds += 1
+        for seq in range(base, min(base + ___, len(frames))):
+            if link.send_data(seq) and seq == ___:
+                delivered.append(frames[seq])       # the receiver never buffers
+                expected += 1
+        if expected > base and link.send_ack(___):
+            base = ___
+    return delivered, rounds
+''',
+                "blanks": [
+                    {
+                        "prompt": "How far past the oldest unacknowledged frame may the sender go?",
+                        "hole": "?",
+                        "opts": ["rounds", "1", "len(frames)", "window"],
+                        "a": 3,
+                        "why": "The window is the whole point of the protocol: it is the number of frames the sender is allowed to have outstanding, so the burst runs from `base` to `base + window`. The `min` with `len(frames)` is only there to stop the last burst running off the end.",
+                        "whys": [
+                            "`rounds` grows by one each pass, so the window would start at one frame and creep upward with no relation to what the link can hold. Slow start looks a little like this, but it is driven by acknowledgements, not by a loop counter.",
+                            "A burst of one is stop-and-wait wearing a sliding-window costume. It is correct, it terminates, and it throws away every bit of the throughput the window exists to buy.",
+                            "Sending the whole file every round ignores the window entirely. On a long file that is an enormous burst into a receiver that will discard everything past the first gap.",
+                            "The window is the whole point of the protocol: it is the number of frames the sender is allowed to have outstanding, so the burst runs from `base` to `base + window`. The `min` with `len(frames)` is only there to stop the last burst running off the end.",
+                        ],
+                    },
+                    {
+                        "prompt": "What is the receiver's whole acceptance test?",
+                        "hole": "?",
+                        "opts": ["expected", "base", "base + window", "seq"],
+                        "a": 0,
+                        "why": "`expected` is the only state the receiver has, and comparing against it is the only test it performs. A frame that is not the next one in order is dropped even though it arrived perfectly, which is exactly why one loss costs a whole window.",
+                        "whys": [
+                            "`expected` is the only state the receiver has, and comparing against it is the only test it performs. A frame that is not the next one in order is dropped even though it arrived perfectly, which is exactly why one loss costs a whole window.",
+                            "`base` is the *sender's* variable and the receiver has no access to it. Because `base` only moves after an acceptance, this does deliver frames in order — but one per round, whatever the window is, so every other frame in the burst is transmitted and thrown away. And it duplicates: lose an acknowledgement and `base` stays put, so the next round accepts `frames[base]` a second time.",
+                            "`range` stops one short of its upper bound, so `seq` never reaches `base + window` and this test is never true for any frame. Nothing is ever accepted, `expected` stays at 0, `expected > base` is therefore false, `base` never moves — and the `while` loop resends the same burst for ever into a receiver that will not take any of it.",
+                            "`seq == seq` is always true, so every frame that arrives is delivered, in whatever order it happens to arrive, gaps and all. That is the layer failing to do the one thing it promised.",
+                        ],
+                    },
+                    {
+                        "prompt": "The acknowledgement is cumulative: it names the highest sequence number received in order.",
+                        "hole": "?",
+                        "opts": ["expected", "expected - 1", "base", "seq"],
+                        "a": 1,
+                        "why": "`expected` is the frame the receiver *wants next*, so the highest one it actually holds is `expected - 1` — and a cumulative acknowledgement names what arrived, not what is hoped for. Note that this listing cannot tell the four choices apart: `Link.send_ack` reports only whether the acknowledgement got through, and the line below slides to `expected` whatever number was passed. You are choosing what a real peer would be told, and the other three tell it something untrue.",
+                        "whys": [
+                            "This acknowledges a frame the receiver has not seen. Some real protocols do number their acknowledgements this way — TCP acknowledges the next byte expected — but then the sender's update has to match, and mixing the two conventions is how a frame gets silently skipped.",
+                            "`expected` is the frame the receiver *wants next*, so the highest one it actually holds is `expected - 1` — and a cumulative acknowledgement names what arrived, not what is hoped for. Note that this listing cannot tell the four choices apart: `Link.send_ack` reports only whether the acknowledgement got through, and the line below slides to `expected` whatever number was passed. You are choosing what a real peer would be told, and the other three tell it something untrue.",
+                            "`base` is the oldest frame the sender has not yet had credited, so naming it credits exactly one frame no matter how many arrived — the cumulative acknowledgement's whole value thrown away. A peer that acted on the number would crawl forward a frame per round; this listing does not act on it, so the wrongness is entirely in what the message says.",
+                            "`seq` survives the `for` loop holding the last sequence number the sender *transmitted*, which is not evidence that anything arrived. Naming it claims the whole burst, gap and all — a frame the channel ate in the middle would be acknowledged along with everything after it. Again the claim is false on the wire rather than in this listing, which ignores the number.",
+                        ],
+                    },
+                    {
+                        "prompt": "The acknowledgement arrived. How far does the window slide?",
+                        "hole": "?",
+                        "opts": ["base + window", "base + 1", "expected", "expected - 1"],
+                        "a": 2,
+                        "why": "The acknowledgement covers everything up to `expected - 1`, so the oldest frame still unaccounted for is `expected`. The window slides by however much got through in that round — sometimes the whole burst, sometimes one frame, sometimes nothing.",
+                        "whys": [
+                            "This slides by the full window regardless of what was acknowledged. The receiver still accepts only `expected`, so nothing is ever delivered out of order and the list cannot end up with a hole in it — it comes up short instead. `base` marches on past the frames the receiver discarded, and the transfer either stops early having silently skipped them, or `base` overshoots `expected` for good: `expected > base` is then never true again, no acknowledgement is ever sent, `base` stops moving, and the `while` loop resends the same burst for ever.",
+                            "Sliding by exactly one throws away the cumulative acknowledgement's whole value: a burst of eight that all arrived would take eight rounds to be credited, and the protocol degenerates to stop-and-wait with extra transmissions.",
+                            "The acknowledgement covers everything up to `expected - 1`, so the oldest frame still unaccounted for is `expected`. The window slides by however much got through in that round — sometimes the whole burst, sometimes one frame, sometimes nothing.",
+                            "`expected - 1` is the last frame the receiver *has*, so leaving `base` there re-sends it every round for ever. The transfer never terminates, and there is nothing in this listing to stop it.",
+                        ],
+                    },
+                ],
+            },
+            "derive": {
+                "title": "Utilisation, and the window that fills the pipe",
+                "minutes": 13,
+                "vars": ["L", "R", "T", "W"],
+                "brief": r"""
+A sender with a long file to move, a link that carries $R$ bits per second, and a
+round-trip time of $T$ seconds. Frames are $L$ bits each and nothing is lost. The only
+thing between the sender and the full rate of the link is the protocol.
+""",
+                "steps": [
+                    {
+                        "prompt": "How long does the sender spend pushing one $L$-bit frame onto an $R$ bit/s link?",
+                        "answer": "\\frac{L}{R}",
+                        "hint": "Bits divided by bits per second is seconds.",
+                        "deconstruct": [
+                            "This is transmission time, not propagation.",
+                            "It is set by how fast the interface clocks bits out, not by how far they then travel.",
+                        ],
+                    },
+                    {
+                        "prompt": "Stop-and-wait sends one frame and may then send nothing until its acknowledgement returns. Write the time from the start of one frame to the start of the next.",
+                        "given": "$T$ already covers propagation in both directions and the acknowledgement itself.",
+                        "answer": "\\frac{L}{R} + T",
+                        "hint": "Transmit the frame, then wait one round trip. Those are the only two things in the cycle.",
+                        "deconstruct": [
+                            "The sender is busy for the transmission time.",
+                            "Then it is idle for $T$, and only then may it start again.",
+                        ],
+                    },
+                    {
+                        "prompt": "Utilisation $U$ is the fraction of that cycle the sender is actually transmitting. Clear the inner fraction and write $U$ in terms of $L$, $R$ and $T$.",
+                        "given": "$U = (L/R) / (T + L/R)$.",
+                        "answer": "\\frac{L}{L + R T}",
+                        "placeholder": "\\frac{L}{\\ldots}",
+                        "hint": "Multiply the top and the bottom by $R$.",
+                        "deconstruct": [
+                            "Top: $R \\cdot L/R = L$.",
+                            "Bottom: $R(T + L/R) = RT + L$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now let the sender keep several frames in flight. How many frames $W$ exactly fill one cycle, so that the sender never stops transmitting?",
+                        "given": "The cycle lasts $T + L/R$ seconds and one frame occupies $L/R$ of it.",
+                        "answer": "\\frac{R T}{L} + 1",
+                        "hint": "Divide the cycle length by the time a single frame takes.",
+                        "deconstruct": [
+                            "$W = (T + L/R) / (L/R)$.",
+                            "Divide each term of the top by $L/R$: the $T$ gives $RT/L$ and the $L/R$ gives 1.",
+                        ],
+                    },
+                    {
+                        "prompt": "With a window of $W$ frames, and $W$ no larger than that limit, write the utilisation.",
+                        "answer": "\\frac{W L}{L + R T}",
+                        "hint": "$W$ frames go out per cycle now instead of one, and the cycle length has not changed.",
+                        "deconstruct": [
+                            "The sender is busy for $W \\cdot L/R$ seconds of each cycle.",
+                            "So the utilisation is $W$ times what it was.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+$RT/L$ is the bandwidth-delay product measured in frames — how much data the link is
+holding at any instant, and the entire reason a window exists.
+
+Put a satellite hop in: $T = 500$ ms, $R = 10$ Mb/s, $L = 12\,000$ bits. Then $RT/L$ is
+about 417, and stop-and-wait runs at $12\,000 / (12\,000 + 5 \times 10^6)$, which is
+0.24% of the link. Notice what that expression does when you buy more bandwidth: $R$ is
+in the denominator, so a faster link makes stop-and-wait *worse*. Only $W$ helps, and
+that is a protocol change, not a purchase.
+""",
+            },
             "lab": {
                 "title": "Stop-and-wait and Go-Back-N on a deterministic channel",
                 "runtime": "python",
@@ -639,6 +1177,264 @@ assert goodput(stop_and_wait(_frames, Link(data_drops={0})), _frames) < 1.0, \
                 "Split horizon: never advertise a route back to the neighbour you learned it from",
                 "Link state: flood the topology, then run Dijkstra locally — same answer, different failure modes",
             ],
+            "quiz": {
+                "title": "Two algorithms, one answer, different things known",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "What does a distance vector node actually put in the message it sends its neighbours?",
+                        "opts": [
+                            "Its forwarding table's next hops, without the costs",
+                            "The links it is directly attached to, and their costs",
+                            "The shortest paths it has found, as lists of nodes",
+                            "Its current cost to every destination it knows about",
+                        ],
+                        "a": 3,
+                        "why": r"""
+A distance *vector* is a vector of distances: destination, cost, and nothing else. That
+is the whole protocol — a node adds the cost of the link to each advertised cost and
+keeps the smallest, which is Bellman's equation applied locally and repeatedly.
+
+Flooding your own links instead is link state, and it is what makes Dijkstra possible:
+every node ends up with the graph. Sending whole paths would work and is what BGP does
+for exactly the reason you would guess — a node that can see the path can see itself in
+it, and refuse. And next hops without costs are unusable: the receiver has nothing to
+add its link cost to and no way to compare two offers.
+""",
+                    },
+                    {
+                        "q": "The link A-B fails on the line A-B-C. Why does count-to-infinity happen?",
+                        "opts": [
+                            "B accepts C's advertised route to A without being able to see that the route runs back through B",
+                            "The link costs are large enough that the sum overflows before it converges",
+                            "B and C update at different times, so one of them uses a stale table",
+                            "The graph acquires a negative cycle when the link cost becomes infinite",
+                        ],
+                        "a": 0,
+                        "why": r"""
+C says *I can reach A at cost 2*, and that is true right up until it isn't — C's route
+goes through B, and B has just lost its own. B has no way to know that: a distance
+vector carries a number, not a path, so the loop is invisible from inside it. B adopts
+cost 3, tells C, C adopts 4, and the two of them walk each other up one hop per round.
+
+The costs are small here and nothing overflows. Synchrony is not the cause either — the
+exchange in the lab is perfectly synchronous and still counts to infinity. And there is
+no negative cycle: every cost is positive, which is the case where Bellman-Ford is
+supposed to be at its most comfortable.
+""",
+                    },
+                    {
+                        "q": "Why does RIP treat 16 as infinity?",
+                        "opts": [
+                            "Because no real network has a diameter greater than 16 hops",
+                            "So that counting to infinity terminates quickly — a larger ceiling only means longer before the routers give up",
+                            "Because the hop count field is four bits wide",
+                            "Because Dijkstra needs a finite upper bound to terminate",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Sixteen is a deadline, not a measurement. When a route dies, the counting proceeds one
+round per exchange until it reaches the ceiling, so the ceiling *is* the convergence
+time: raise it to a thousand and the same failure takes a thousand rounds to clear. The
+price is a hard limit on network diameter, which is the trade RIP accepted and the
+reason it does not scale.
+
+Plenty of networks are wider than 16 hops — they simply cannot run RIP. Sixteen needs
+five bits, not four, and the field was never short of room in the first place: RIP gives
+every route entry a four-octet metric, in RFC 1058 and in RFC 2453 after it. And Dijkstra
+never sees an infinity: it is the other algorithm, running on a real graph.
+""",
+                    },
+                    {
+                        "q": "What does split horizon do?",
+                        "opts": [
+                            "A node waits a fixed number of rounds before advertising any route that got worse",
+                            "A node advertises the route back to that neighbour with a cost of infinity",
+                            "A node does not advertise a route back to the neighbour it learned that route from",
+                            "A node advertises only routes whose cost is below half of infinity",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Silence, not a statement. If B's route to A goes through C, B says nothing about A when
+it talks to C — because whatever B knows about A, C told it, and echoing it back is
+where the loop comes from. In the lab that is one `continue` in the middle of the
+update.
+
+Advertising it back at infinity is *poison reverse*, a real and closely related
+technique: it says the same thing out loud instead of by omission, which is faster
+because the neighbour learns immediately rather than waiting to time the route out.
+Waiting before accepting worse news is a hold-down timer, a third mechanism again. None
+of the three is a cure — all of them fail on loops of three or more nodes.
+""",
+                    },
+                    {
+                        "q": "On a static graph, link state and distance vector produce the same distances. What genuinely differs?",
+                        "opts": [
+                            "Link state needs a central controller to compute the routes",
+                            "Link state finds shorter paths, because Dijkstra is optimal and Bellman-Ford is a heuristic",
+                            "Distance vector cannot handle links whose cost differs in each direction",
+                            "What each node knows: link state floods the topology and every node runs Dijkstra on the whole graph, while a distance vector node never sees the graph at all",
+                        ],
+                        "a": 3,
+                        "why": r"""
+Both are shortest-path algorithms and both are exact, so on a fixed graph they agree —
+the lab checks that node by node. What differs is the information each node holds, and
+that is what decides the failure modes: distance vector cannot see a loop it is part of,
+while link state has to get an identical copy of the topology to every node and misroutes
+badly when one of them disagrees.
+
+Bellman-Ford is exact, not approximate; it is slower and it handles negative edges,
+which Dijkstra cannot. Asymmetric costs are fine for both. And link state is
+emphatically not centralised — every router computes for itself, from a database it
+built out of flooded advertisements.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "One node, one destination, one exchange",
+                "minutes": 9,
+                "caption": "dv.py — the Bellman-Ford update, four holes",
+                "lang": "python",
+                "brief": r"""
+This is the inner loop of a distance vector node: for one destination, look at what each
+neighbour is advertising, add the cost of the link to that neighbour, and keep the best.
+The whole protocol is here, split horizon included.
+
+Nothing is executed here — you are choosing names, not writing code.
+""",
+                "listing": r'''
+# `node` is us; `dest` is the destination we are recomputing.
+# tables[v][d] is the (cost, next_hop) pair neighbour v is advertising for d.
+
+best, hop = INFINITY, None
+for neighbour, weight in sorted(graph[node].items()):
+    cost, advertised_hop = tables[neighbour][dest]
+    if split_horizon and advertised_hop == ___:
+        continue                        # a route back through us is not a route
+    total = min(___ + cost, INFINITY)   # our link, then their remaining distance
+    if total < best:
+        best, hop = total, ___
+table[dest] = (best, hop) if best < INFINITY else (INFINITY, ___)
+''',
+                "blanks": [
+                    {
+                        "prompt": "Split horizon skips a neighbour whose route to this destination goes back through whom?",
+                        "hole": "?",
+                        "opts": ["node", "dest", "neighbour", "hop"],
+                        "a": 0,
+                        "why": "The guard is about *us*: if the neighbour reaches the destination by sending traffic to `node`, then their advertised cost is really our own cost with a link added, and believing it is how the count to infinity starts.",
+                        "whys": [
+                            "The guard is about *us*: if the neighbour reaches the destination by sending traffic to `node`, then their advertised cost is really our own cost with a link added, and believing it is how the count to infinity starts.",
+                            "A next hop equal to the destination just means the neighbour is directly attached to it — the single most trustworthy advertisement there is. Skipping it discards the best routes and keeps the worst.",
+                            "`advertised_hop == neighbour` says the neighbour reaches the destination through itself, which is a comparison that never usefully holds. The guard would fire almost never and split horizon would do nothing.",
+                            "`hop` is the best next hop found so far in this loop and has nothing to do with what the neighbour is claiming. It also changes as the loop runs, so the guard would depend on the order neighbours are visited.",
+                        ],
+                    },
+                    {
+                        "prompt": "Bellman-Ford: the cost of getting to the neighbour, plus what the neighbour says the rest costs.",
+                        "hole": "?",
+                        "opts": ["best", "weight", "INFINITY", "1"],
+                        "a": 1,
+                        "why": "`weight` is the cost of our own link to this neighbour — the one piece of the sum we know first-hand. Everything beyond it is hearsay, and adding our link to their claim is the entire recursion.",
+                        "whys": [
+                            "`best` is the answer this loop is computing, and feeding it back into its own recurrence stops the recurrence from ever starting: `best` begins at `INFINITY`, so `min(best + cost, INFINITY)` is `INFINITY` for the first neighbour, `total < best` is false, and `best` is therefore never lowered — for that neighbour or any after it. The node finishes the round declaring every destination but itself unreachable.",
+                            "`weight` is the cost of our own link to this neighbour — the one piece of the sum we know first-hand. Everything beyond it is hearsay, and adding our link to their claim is the entire recursion.",
+                            "Adding the ceiling to everything pins `total` at `INFINITY` for every neighbour, so nothing ever beats the `INFINITY` that `best` started at. The tables do not merely stand still, either: a round rebuilds each table from scratch, so this erases even the direct-neighbour costs the initial tables were seeded with and leaves every node knowing only itself.",
+                            "Counting one per link is the special case where every cost is 1, which is what a pure hop count does. It converges, and it routes traffic down a congested single hop in preference to two fast ones.",
+                        ],
+                    },
+                    {
+                        "prompt": "We have found a better route. Which way do we send the traffic?",
+                        "hole": "?",
+                        "opts": ["advertised_hop", "dest", "neighbour", "node"],
+                        "a": 2,
+                        "why": "A forwarding table holds the *next* hop, not the destination and not the rest of the path. We hand the packet to the neighbour whose advertisement won, and what that neighbour does with it afterwards is its own business.",
+                        "whys": [
+                            "That is the neighbour's next hop, two steps down the path. Forwarding to it would skip the neighbour entirely, and there is generally no link that way.",
+                            "Storing the destination as the next hop is only right when the destination is directly attached. Anywhere else it names a node we cannot hand a packet to, because there is no link to it.",
+                            "A forwarding table holds the *next* hop, not the destination and not the rest of the path. We hand the packet to the neighbour whose advertisement won, and what that neighbour does with it afterwards is its own business.",
+                            "`node` is us, so this points the route back at ourselves and forwards the packet in a tight loop until its time-to-live runs out.",
+                        ],
+                    },
+                    {
+                        "prompt": "No neighbour offered anything under the ceiling. What next hop goes in the table?",
+                        "hole": "?",
+                        "opts": ["INFINITY", "node", "hop", "None"],
+                        "a": 3,
+                        "why": "An unreachable destination has no next hop, and saying so explicitly is what lets the rest of the code — and the tests — tell *no route* apart from a route that merely costs a lot. The lab compares tables for equality to decide convergence, so a stale hop left beside an infinite cost would keep the exchange running.",
+                        "whys": [
+                            "`INFINITY` is a cost, and this slot holds a neighbour's name. A later lookup would try to forward a packet to the node called 16.",
+                            "Pointing an unreachable destination back at ourselves is a route to nowhere that looks like a route. Worse, it is the shape of entry that split horizon reads as *we own this*, so neighbours would be told to stay away from a destination nobody can reach.",
+                            "`hop` is whatever the loop last assigned, which for an unreachable destination is `None` anyway — but only by accident, and only until someone reorders the loop. Saying `None` outright is the difference between correct and correct-for-now.",
+                            "An unreachable destination has no next hop, and saying so explicitly is what lets the rest of the code — and the tests — tell *no route* apart from a route that merely costs a lot. The lab compares tables for equality to decide convergence, so a stale hop left beside an infinite cost would keep the exchange running.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "What does the shortest path cost?",
+                "minutes": 8,
+                "brief": r"""
+This is what a link-state router does the moment the flooding settles: the topology is
+ordinary local data by then, and finding the routes is a plain single-source shortest
+path. Do it by hand once and the tie-breaking, the settled set and the reason greedy
+works stop being incantations.
+""",
+                "prompt": "What is the total cost of the cheapest path from A to F?",
+                "note": "Costs are symmetric and every one is positive. Answer with the total cost, not the number of hops.",
+                "figure": r"""
+```python
+graph = {
+    "A": {"B": 4, "C": 2},
+    "B": {"A": 4, "C": 1, "D": 5},
+    "C": {"A": 2, "B": 1, "D": 8, "E": 10},
+    "D": {"B": 5, "C": 8, "E": 2, "F": 6},
+    "E": {"C": 10, "D": 2, "F": 3},
+    "F": {"D": 6, "E": 3},
+}
+```
+
+```text
+   the same nine links, cheapest first
+
+   B-C   1      A-C   2      D-E   2
+   E-F   3      A-B   4      B-D   5
+   D-F   6      C-D   8      C-E  10
+```
+""",
+                "given": [
+                    {"label": "Source", "value": "A"},
+                    {"label": "Destination", "value": "F"},
+                    {"label": "Links", "value": "9, undirected"},
+                    {"label": "Costs", "value": "all positive"},
+                ],
+                "aside": "Two direct links are traps. A-B at 4 and D-F at 6 each look like the "
+                         "obvious move at the moment you meet them, and neither is on the cheapest "
+                         "path — both lose to a detour by exactly one.",
+                "answer": 13,
+                "tol": 0.5,
+                "unit": "",
+                "hint": "Settle nodes in increasing order of their distance from A, relaxing each "
+                        "settled node's edges once. Keep a running table of the best cost known to "
+                        "every node; a node is only finished when you pop it.",
+                "wrong": "If you got 14, check the two direct links. Reaching B costs 3 through C, "
+                         "not the 4 the A-B edge advertises, and leaving D costs 5 through E, not "
+                         "the 6 the D-F edge advertises.",
+                "why": r"""
+Settle in order: A at 0; C at 2; then B at 3, because 2 + 1 through C beats the direct
+link at 4; then D at 8, via B; then E at 10, via D; then F at 13, via E. The path is
+A-C-B-D-E-F.
+
+Both of the tempting direct edges lose by exactly one. Note that the very first hop of
+the cheapest path to F is A-C, which is also the cheapest single edge out of A — but
+that is a coincidence of this graph, not a rule. What *is* a rule is why the algorithm
+may commit to C: every remaining edge has positive cost, so no route that leaves A by a
+more expensive edge can ever come back and undercut a distance of 2. Put one negative
+edge in and that argument collapses, which is precisely the case Dijkstra is not allowed
+to touch and Bellman-Ford is.
+""",
+            },
             "lab": {
                 "title": "Convergence, and how it fails",
                 "runtime": "python",
@@ -940,6 +1736,266 @@ assert _rounds <= 4, f"split horizon should not slow convergence down, took {_ro
                 "DNS as a delegating hierarchy — root, TLD, then authoritative name server",
                 "Caching with a TTL is what makes recursive resolution affordable; CNAME chains need a loop guard",
             ],
+            "quiz": {
+                "title": "Reading a text protocol exactly",
+                "minutes": 7,
+                "questions": [
+                    {
+                        "q": "Where does the head of an HTTP/1.1 message end?",
+                        "opts": [
+                            "At the first CRLF CRLF — an empty line",
+                            "At the first CRLF",
+                            "`Content-Length` bytes from the start of the message",
+                            "At the first line that does not contain a colon",
+                        ],
+                        "a": 0,
+                        "why": r"""
+An empty line closes the header section, which on the wire is two CRLFs back to back.
+That is the only thing separating the head from the body, and it is why the parser hunts
+for `\r\n\r\n` before it looks at anything else.
+
+A single CRLF ends one line, not the section. `Content-Length` measures the body and
+cannot be read until the headers are parsed, so it cannot possibly delimit them. And a
+line without a colon is not a terminator, it is a malformed header — treating it as the
+end of the head is a request-smuggling bug waiting to be written.
+""",
+                    },
+                    {
+                        "q": "A request carries both `Accept-Encoding: gzip` and `accept-encoding: br`. What is true?",
+                        "opts": [
+                            "They are different fields, because header names are case-sensitive",
+                            "They are the same field, because field names are case-insensitive",
+                            "The second is ignored, because a field may appear only once",
+                            "The lowercase form is invalid and the message must be rejected",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Field names are case-insensitive, which is why the parser lowercases every name as it
+stores it — comparing `headers["accept-encoding"]` should not depend on how the sender
+felt about capitals. HTTP/2 went further and made lowercase the only legal form on the
+wire.
+
+The repeat is legal here too, and the two lines mean exactly what one
+`accept-encoding: gzip, br` would mean — which is why the lab joins repeats with a comma
+rather than letting the last one win. That is not a general licence, though: RFC 7230
+§3.2.2 permits a field to be sent more than once only when its value is defined as a
+comma-separated list, as `Accept-Encoding` is. `Host` is the field to remember on the
+other side of that line — §5.4 requires a server to answer 400 to a request carrying two
+of them. Silently dropping a repeat that *is* legal is how two pieces of software end up
+disagreeing about what a message said, and disagreement between a proxy and an origin
+server is what request smuggling is made of.
+""",
+                    },
+                    {
+                        "q": "What is on the size line of a chunk?",
+                        "opts": [
+                            "The number of chunks still to come",
+                            "The number of data bytes in that chunk, in decimal",
+                            "The number of data bytes in that chunk, in hexadecimal, optionally followed by `;` and parameters",
+                            "The total length of the whole body",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Hexadecimal, with no `0x` prefix, and anything after a semicolon is a chunk extension the
+decoder is free to skip. A body of twelve bytes is announced as `c`. Writing `12` instead
+is the classic way to desynchronise a decoder from its stream, and it is quiet because
+`12` is a perfectly valid size line — it just means eighteen.
+
+The point of the format is that each chunk is self-delimiting *locally*: the sender never
+has to know how many chunks it will send or how long the body will end up. Both of those
+counts would be impossible to write at the moment the first chunk goes out.
+""",
+                    },
+                    {
+                        "q": "Why does chunked transfer encoding exist?",
+                        "opts": [
+                            "HTTP/1.1 requires it for every response body",
+                            "It compresses the body, which `Content-Length` cannot express",
+                            "It lets the receiver reassemble a body that arrived out of order",
+                            "The sender can start transmitting before it knows how long the body will be",
+                        ],
+                        "a": 3,
+                        "why": r"""
+`Content-Length` has to be written before the first byte of the body, so it forces the
+sender to buffer the whole response — impossible for output that is being generated as it
+goes, or streamed from somewhere else. Chunking replaces one length known in advance with
+a series of lengths known just in time, and the terminating zero-length chunk is what says
+*that was all of it*.
+
+Compression is a separate header and a separate mechanism, and the two compose. Ordering
+is TCP's job — HTTP never sees an out-of-order byte. And chunking is optional: a response
+whose length is known simply sends `Content-Length` and is done.
+""",
+                    },
+                    {
+                        "q": "A resolver holds `shop.example.com` with a 30-second TTL; 12 seconds have passed. Another query for the same name arrives. What happens?",
+                        "opts": [
+                            "It is answered from the cache and no server is queried",
+                            "The authoritative server is queried to confirm, but the root and TLD are not",
+                            "The full walk from the root repeats, and the cache only saves the last step",
+                            "The cached entry is returned and its TTL restarts at 30 seconds",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A live cache entry is the answer. Nobody is asked, nothing is confirmed, and the whole
+root-TLD-authoritative walk is skipped — which is the entire reason the root servers can
+serve the internet from a few hundred machines rather than a few hundred thousand.
+
+Refreshing the TTL on every hit would be the serious mistake: a popular name would then
+never expire, and the zone's owner would lose the ability to move it. The TTL is set by
+whoever published the record precisely so they can say how long the world is allowed to
+be wrong about it, and it counts down from when the record was fetched.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "One exchange, byte for byte",
+                "minutes": 9,
+                "caption": "a chunked request and its answer, with every CRLF made visible",
+                "lang": "text",
+                "brief": r"""
+Line endings are shown as `<CRLF>` because they are data here, not layout: the parser
+counts them. Fill the holes so the exchange is one a conforming server would accept and
+a conforming client would understand.
+""",
+                "listing": r'''
+--- request -------------------------------------------------
+POST /orders HTTP/1.1<CRLF>
+Host: shop.example.com<CRLF>
+X-Tag: a<CRLF>
+X-Tag: b<CRLF>
+Transfer-Encoding: ___<CRLF>
+<CRLF>
+___<CRLF>
+chunked body<CRLF>
+0<CRLF>
+<CRLF>
+
+--- response ------------------------------------------------
+HTTP/1.1 200 OK<CRLF>
+Content-Type: application/json<CRLF>
+Content-Length: ___<CRLF>
+<CRLF>
+{"id":7}
+
+--- what the parser hands back ------------------------------
+request["body"]              == b"chunked body"
+request["headers"]["x-tag"]  == "___"
+''',
+                "blanks": [
+                    {
+                        "prompt": "The body's length is not known when the head goes out.",
+                        "hole": "?",
+                        "opts": ["identity", "chunked", "gzip", "none"],
+                        "a": 1,
+                        "why": "`chunked` is the transfer coding that frames a body as a run of self-sized pieces. It is the alternative to `Content-Length`, not an addition to it — a message carrying both is ambiguous and a careful parser rejects it outright.",
+                        "whys": [
+                            "`identity` means no transfer coding at all, which leaves the body unframed: the receiver would read the size line as the first bytes of the payload and keep going until the connection closed.",
+                            "`chunked` is the transfer coding that frames a body as a run of self-sized pieces. It is the alternative to `Content-Length`, not an addition to it — a message carrying both is ambiguous and a careful parser rejects it outright.",
+                            "`gzip` is a coding, but a compressing one, and it changes the bytes without saying where they stop. Compression belongs in `Content-Encoding`; framing is a separate job and still has to be done.",
+                            "There is no such value, and an unrecognised transfer coding is a message the receiver must refuse rather than guess at.",
+                        ],
+                    },
+                    {
+                        "prompt": "`chunked body` is twelve bytes long. How is that announced?",
+                        "hole": "?",
+                        "opts": ["13", "12", "c", "24"],
+                        "a": 2,
+                        "why": "Chunk sizes are hexadecimal, so twelve is written `c`. Nothing on the line says which base it is in, which is what makes the mistake so easy and so quiet: a decoder that reads it as decimal simply cuts the stream in the wrong place.",
+                        "whys": [
+                            "Thirteen is twelve plus one, as though the line ending after the data were a single byte. It is two, which is the whole reason this listing spells every one of them `<CRLF>` — and neither byte counts in any case: the terminator is framing, not payload, and the size line measures the data alone.",
+                            "Twelve in decimal parses as hexadecimal too — as eighteen. The decoder would run six bytes past the end of the chunk, swallow the CRLF and the next size line, and then fail on whatever it found there.",
+                            "Chunk sizes are hexadecimal, so twelve is written `c`. Nothing on the line says which base it is in, which is what makes the mistake so easy and so quiet: a decoder that reads it as decimal simply cuts the stream in the wrong place.",
+                            "Twenty-four is the number of hexadecimal digits it would take to write the payload out, not the number of bytes in it.",
+                        ],
+                    },
+                    {
+                        "prompt": "The response body `{\"id\":7}` is framed by its length.",
+                        "hole": "?",
+                        "opts": ["10", "9", "7", "8"],
+                        "a": 3,
+                        "why": "Eight characters, eight bytes, all of them ASCII. `Content-Length` counts the octets of the body and nothing else — not the head, not the blank line that ends it, and not any line ending the body does not contain.",
+                        "whys": [
+                            "Ten counts a CRLF as well as the body. The blank line before the body belongs to the head, and there is no line ending after it.",
+                            "Nine adds a trailing newline the body does not have. Overstating the length is the worse direction to be wrong in: the receiver waits for a byte that never comes, and the connection hangs until something times out.",
+                            "Seven understates it by one, so the closing brace is left in the stream. On a reused connection that stray byte becomes the first byte of the next response, and everything after it is nonsense.",
+                            "Eight characters, eight bytes, all of them ASCII. `Content-Length` counts the octets of the body and nothing else — not the head, not the blank line that ends it, and not any line ending the body does not contain.",
+                        ],
+                    },
+                    {
+                        "prompt": "The field appears twice. What does the parser store under `x-tag`?",
+                        "hole": "?",
+                        "opts": ["a, b", "b", "a", "ab"],
+                        "a": 0,
+                        "why": "Repeated fields combine into one value, joined by a comma, in the order they arrived — the message means exactly the same thing as a single `X-Tag: a, b`. Order is preserved because for some fields it matters, `Accept-Encoding` among them.",
+                        "whys": [
+                            "Repeated fields combine into one value, joined by a comma, in the order they arrived — the message means exactly the same thing as a single `X-Tag: a, b`. Order is preserved because for some fields it matters, `Accept-Encoding` among them.",
+                            "Letting the last one win throws information away silently. It is what a plain dictionary assignment does, which is why the mistake is so common and why the lab makes you write the join by hand.",
+                            "Keeping the earliest and discarding the rest loses the same information the other way round, and disagrees with every other implementation about what the message said.",
+                            "Concatenating without a separator invents a value that was never sent: a parser splitting on commas downstream would see one token where the sender wrote two.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How long before the first byte?",
+                "minutes": 8,
+                "brief": r"""
+A page feels slow before it has transferred anything, and this is why. Naming happens
+before connecting, connecting happens before requesting, and every one of those is a
+round trip that no amount of bandwidth shortens.
+""",
+                "prompt": "How long after the browser asks for the name does the first byte of the response arrive?",
+                "note": "Ignore transmission time and all processing time — count only the round trips listed.",
+                "figure": r"""
+```text
+ resolver cache: empty                       round trip
+ ─────────────────────────────────────────────────────
+ resolver  ->  root name server                  90 ms
+ resolver  ->  .com name server                  45 ms
+ resolver  ->  authoritative name server         25 ms
+ browser   ->  web server: TCP connection setup  30 ms
+ browser   ->  web server: GET, first byte back  30 ms
+ ─────────────────────────────────────────────────────
+```
+
+The resolver is on the same machine as the browser, so asking it costs nothing.
+No name in this hierarchy is an alias, and every step happens strictly after the one
+above it.
+""",
+                "given": [
+                    {"label": "Root query", "value": "90 ms"},
+                    {"label": ".com query", "value": "45 ms"},
+                    {"label": "Authoritative query", "value": "25 ms"},
+                    {"label": "TCP setup", "value": "30 ms"},
+                    {"label": "Request and response", "value": "30 ms"},
+                ],
+                "aside": "The three naming round trips are 160 of the 220 ms, and every one of them "
+                         "disappears on the next page view. That gap between the first visit and the "
+                         "second is the TTL cache doing its job.",
+                "answer": 220,
+                "tol": 0.5,
+                "unit": "ms",
+                "hint": "Add the three round trips that turn the name into an address, then the two "
+                        "that the connection and the request cost. Nothing here overlaps.",
+                "wrong": "The usual slip is to treat the connection as free because the third segment "
+                         "of the handshake can carry the request. It cannot be free: the first two "
+                         "segments are a full round trip that has to complete before the request may "
+                         "go at all.",
+                "why": r"""
+$90 + 45 + 25 = 160$ ms to turn the name into an address, then 30 ms for the handshake
+and 30 ms for the request and its answer: 220 ms in total, before a single byte of the
+page exists.
+
+The shape of that number is the useful part. Naming is nearly three quarters of it and is
+pure round trips — which is why a resolver that caches aggressively feels like a faster
+internet connection, and why the DNS is one of the few places where a warm cache changes
+the experience more than a faster link does. The other 60 ms is the reason connection
+reuse and TLS session resumption exist: every extra connection to the same server pays
+those two round trips again.
+""",
+            },
             "lab": {
                 "title": "An HTTP/1.1 parser and a recursive resolver",
                 "runtime": "python",

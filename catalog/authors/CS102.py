@@ -46,6 +46,321 @@ COURSE = {
                 "`__repr__` is for the programmer and should round-trip through `eval` where it can",
                 "Immutability by convention (`_name`), by `__slots__`, and by overriding `__setattr__`",
             ],
+            "quiz": {
+                "title": "Value semantics and the data model",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "`Vector2D(3, 4)` is evaluated. What is `__init__`'s part in it?",
+                        "opts": [
+                            "It creates the object and returns it to the caller",
+                            "It is handed an object that already exists, fills in its state, and returns `None`",
+                            "It runs only when the class defines no `__new__`",
+                            "It reserves the memory, and Python fills in the attributes afterwards",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Two things happen and only the second one is `__init__`. `Vector2D.__new__` allocates
+the object; `__init__` is then handed that object as `self` and initialises it. It must
+return `None` — returning anything else is a `TypeError`, which is the language saying
+plainly that this is an initialiser and not a constructor. The distinction is invisible
+until it is not: `__new__` is the hook you need for a class that interns its instances,
+or that subclasses an immutable built-in like `tuple`, because by the time `__init__`
+runs the value is already fixed.
+""",
+                    },
+                    {
+                        "q": "A class defines `__eq__` and leaves `__hash__` alone. What does `hash(obj)` do?",
+                        "opts": [
+                            "Falls back to the identity hash inherited from `object`",
+                            "Returns `0` — legal, but it turns every dict into a linked list",
+                            "Raises `TypeError`: defining `__eq__` sets `__hash__` to `None`",
+                            "Raises `AttributeError`, because the method is missing",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Python puts `__hash__ = None` in the class for you when `__eq__` is defined and
+`__hash__` is not, and instances become unhashable — no sets, no dict keys. That looks
+officious until you see the alternative: the inherited hash is based on identity, so two
+objects your new `__eq__` calls equal would land in different buckets, and a dict would
+cheerfully hold both. Rather than let that rot quietly, the language breaks loudly. Write
+`__hash__` alongside `__eq__` over the same fields, or accept that the type is not
+hashable — which is the right answer for anything mutable.
+""",
+                    },
+                    {
+                        "q": "`Vector2D.__add__` is handed an `int`. What should it return?",
+                        "opts": [
+                            "`NotImplemented`, so Python can ask the other operand and then raise `TypeError` itself",
+                            "`False`, since the addition did not happen",
+                            "`None`, which Python reads as a refusal",
+                            "It should `raise NotImplementedError`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`NotImplemented` is a singleton meaning *I decline — ask someone else*. Python then tries
+`int.__radd__`, and when that declines too it raises `TypeError: unsupported operand
+type(s)`, a message naming both types and far better than anything you would have
+written. The refusals that are not refusals: `False` makes `v + 5` evaluate to `False`,
+`None` makes it `None`, and `NotImplementedError` is a real exception meant for an
+abstract method a subclass forgot — raising it aborts the reflected-operand machinery and
+reports the wrong problem entirely.
+""",
+                    },
+                    {
+                        "q": "A class defines `__repr__` and no `__str__`. What does `print(obj)` show?",
+                        "opts": [
+                            "`<Vector2D object at 0x7f...>`",
+                            "An empty line",
+                            "`TypeError`",
+                            "Whatever `__repr__` returns — `__str__` falls back to it",
+                        ],
+                        "a": 3,
+                        "why": r"""
+`object.__str__` calls `__repr__`, so one good repr covers printing as well. The reverse
+does not hold: define only `__str__` and `repr(v)` stays the angle-bracket default —
+which is what you will see *inside a list*, because a container displays the reprs of its
+elements and never their strs. That asymmetry is the reason for the usual advice: write
+`__repr__` first, and add `__str__` only when a human-facing form genuinely differs from
+the programmer-facing one.
+""",
+                    },
+                    {
+                        "q": "`2 * v`, where `v` is a `Vector2D`. How does Python reach your code?",
+                        "opts": [
+                            "It rewrites the expression as `v * 2` and calls `__mul__`",
+                            "It asks `int.__mul__(2, v)` first, is told `NotImplemented`, then calls `Vector2D.__rmul__(v, 2)`",
+                            "It calls `Vector2D.__mul__(v, 2)` directly, because the operands are different types",
+                            "It raises `TypeError` — the left operand decides, and `int` cannot multiply a vector",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The left operand is asked first. `int` has no idea what a vector is, returns
+`NotImplemented`, and only then does the right operand get its reflected hook. There is
+one documented exception, and it is not this case: when the right operand's type is a
+*proper subclass* of the left's and overrides the reflected method, Python tries the
+subclass's `__rmul__` before the base's `__mul__`, so a subclass can always override an
+operator it inherited. `int` and `Vector2D` are unrelated types, so the ordinary order
+holds here. Nothing is rewritten either: `__rmul__` is a separate method, and it
+receives the vector as `self` and the
+`2` as the argument, so the operands arrive swapped. Delegating it straight to `__mul__`
+is right for a scalar, where the product commutes — for matrix multiplication that same
+delegation would be a bug, and that is the case worth remembering.
+""",
+                    },
+                    {
+                        "q": "`__slots__ = ('x', 'y')` is added to a class. What does it actually do?",
+                        "opts": [
+                            "Makes the instances immutable",
+                            "Makes `x` and `y` read-only",
+                            "Replaces the per-instance `__dict__` with two fixed descriptors, so any other attribute raises `AttributeError`",
+                            "Stops the class being subclassed",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Slots trade flexibility for memory and for catching typos: there is no instance
+dictionary, so `v.z = 1` fails where it would silently have worked. What slots do *not*
+do is stop `v.x = 9` — that is an ordinary write to a slot descriptor, which is exactly
+why the lab has to refuse it in `__setattr__` as well. And a subclass that does not
+declare `__slots__` of its own quietly gets a `__dict__` back, taking the saving with it.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "A value type, hole by hole",
+                "minutes": 9,
+                "caption": "money.py — five decisions that make a value behave like one",
+                "lang": "python",
+                "brief": r'''
+`Money` is the same shape as the `Vector2D` you are about to build: two components, no
+identity of its own, and no way to change it once it exists. Every hole below is a place
+where a value type is usually got wrong.
+
+Nothing runs here — you are choosing symbols, not writing code.
+''',
+                "listing": '''class Money:
+    """A fixed amount in one currency: a value, not a container."""
+
+    __slots__ = ("amount", "currency")
+
+    def __init__(self, amount, currency):
+        # __setattr__ below refuses every write, so reach past it exactly here
+        ___(self, "amount", round(float(amount), 2))
+        object.__setattr__(self, "currency", currency.upper())
+
+    def __setattr__(self, name, value):
+        raise ___("Money is immutable")
+
+    def __repr__(self):
+        return f"Money({self.amount}, {self.currency!r})"
+
+    def __eq__(self, other):
+        if not isinstance(other, Money):
+            return ___
+        return (self.amount, self.currency) == (other.amount, other.currency)
+
+    def __hash__(self):
+        return hash(___)
+
+    def __mul__(self, factor):
+        if isinstance(factor, bool) or not isinstance(factor, (int, float)):
+            return NotImplemented
+        return Money(self.amount * factor, self.currency)
+
+    # scaling commutes, so the reflected hook is the very same function
+    __rmul__ = ___
+''',
+                "blanks": [
+                    {
+                        "prompt": "`__init__` has to write two attributes through a guard that refuses every write.",
+                        "hole": "?",
+                        "opts": [
+                            "setattr",
+                            "object.__setattr__",
+                            "Money.__setattr__",
+                            "self.__setattr__",
+                        ],
+                        "a": 1,
+                        "why": "`object.__setattr__` is the plain machinery your guard is standing in front of. Calling it by name is how you step around your own refusal exactly once, in the one place that is entitled to.",
+                        "whys": [
+                            "`setattr(self, name, value)` is spelled differently but is identical to `self.name = value`: it looks the method up on the type and lands straight back in the guard, so construction fails with the message meant for outsiders.",
+                            "`object.__setattr__` is the plain machinery your guard is standing in front of. Calling it by name is how you step around your own refusal exactly once, in the one place that is entitled to.",
+                            "The arity is right, but this is the guard itself, named explicitly. It raises for `__init__` as readily as for anyone else — the write has to go *above* `Money`, not to it.",
+                            "Two problems at once: it is the same refusing method, and the instance is already bound as `self`, so passing it again hands the call one argument too many.",
+                        ],
+                    },
+                    {
+                        "prompt": "A refused attribute write should look like every other refused attribute write in Python.",
+                        "hole": "?",
+                        "opts": [
+                            "NotImplementedError",
+                            "TypeError",
+                            "ValueError",
+                            "AttributeError",
+                        ],
+                        "a": 3,
+                        "why": "`AttributeError` is what Python itself raises for a write it cannot perform: a slot that does not exist, a property with no setter, an attribute on a `tuple`. Matching it means `except AttributeError` around a write keeps working whether an object defends itself by hand or with `@property`.",
+                        "whys": [
+                            "`NotImplementedError` announces a method a subclass was supposed to override. Nothing here is unfinished — this refusal is the finished behaviour.",
+                            "`TypeError` is about the *kind* of thing that was passed — a string where a number was wanted. The type here is fine; it is the operation that is refused.",
+                            "`ValueError` says the value was the wrong one, which invites the caller to try a different value. No value is acceptable: the attribute cannot be written at all.",
+                            "`AttributeError` is what Python itself raises for a write it cannot perform: a slot that does not exist, a property with no setter, an attribute on a `tuple`. Matching it means `except AttributeError` around a write keeps working whether an object defends itself by hand or with `@property`.",
+                        ],
+                    },
+                    {
+                        "prompt": "`Money(3.5, 'EUR') == 3.5` should be `False`, not an exception.",
+                        "hole": "?",
+                        "opts": [
+                            "NotImplemented",
+                            "False",
+                            "None",
+                            "NotImplementedError",
+                        ],
+                        "a": 0,
+                        "why": "Returning `NotImplemented` lets Python ask the other operand, and when `float.__eq__` declines as well, fall back to comparing identity — which gives `False`, and gives `!=` the opposite for free.",
+                        "whys": [
+                            "Returning `NotImplemented` lets Python ask the other operand, and when `float.__eq__` declines as well, fall back to comparing identity — which gives `False`, and gives `!=` the opposite for free.",
+                            "`False` is the right result reached the wrong way: it takes the decision away from the other operand, so a class that *does* know how to compare itself with money never gets asked, and never can.",
+                            "`None` is falsy, so this even appears to work — until a container relies on `==` and gets a non-boolean back, or someone writes `assert a == b` and reads a confusing failure.",
+                            "That is an exception class, and returning one rather than raising it hands the caller a class object, which is truthy. `Money(1, 'EUR') == 3.5` would come out true.",
+                        ],
+                    },
+                    {
+                        "prompt": "Equal objects must hash equally, or a `dict` will lose them.",
+                        "hole": "?",
+                        "opts": [
+                            "id(self)",
+                            "[self.amount, self.currency]",
+                            "(self.amount, self.currency)",
+                            "self",
+                        ],
+                        "a": 2,
+                        "why": "Hash the same fields `__eq__` compares, packed into a tuple — a tuple of hashables is hashable, so the work is already done for you. Equal amounts in the same currency then land in the same bucket, which is the one condition a `dict` needs in order to find them again.",
+                        "whys": [
+                            "The identity of the object breaks the contract in the quietest possible way: two equal `Money` objects hash differently, so a lookup by an equal key misses the entry, and a `set` keeps both.",
+                            "A list is mutable and therefore unhashable, so `hash()` raises `TypeError` and every dictionary insertion fails. Swapping the brackets for parentheses is the whole fix.",
+                            "Hash the same fields `__eq__` compares, packed into a tuple — a tuple of hashables is hashable, so the work is already done for you. Equal amounts in the same currency then land in the same bucket, which is the one condition a `dict` needs in order to find them again.",
+                            "`hash(self)` calls this very method, so the first hash of the first object recurses until the stack runs out.",
+                        ],
+                    },
+                    {
+                        "prompt": "`3 * m` and `m * 3` are the same money, so the reflected hook can be the same function.",
+                        "hole": "?",
+                        "opts": [
+                            "__mul__()",
+                            "__mul__",
+                            "Money.__mul__",
+                            "self.__mul__",
+                        ],
+                        "a": 1,
+                        "why": "Inside the class body `__mul__` is simply a name bound to the function defined a few lines above, so binding a second name to it is enough. The reflected call arrives with the operands swapped, and for a scalar that makes no difference at all.",
+                        "whys": [
+                            "The parentheses call the function while the class body is still executing, with no arguments at all, so the class never finishes being defined.",
+                            "Inside the class body `__mul__` is simply a name bound to the function defined a few lines above, so binding a second name to it is enough. The reflected call arrives with the operands swapped, and for a scalar that makes no difference at all.",
+                            "The class does not exist yet — its own body is what is running — so the name `Money` is unbound and the module fails to import.",
+                            "`self` is a parameter of the methods, not a name in the class body. At class-definition time there is no instance for it to refer to.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How many cards does the set keep?",
+                "minutes": 7,
+                "brief": r'''
+`Card` was written for a game that cares about rank and not about suit, so two cards
+count as the same card when their ranks match. `__hash__` agrees with `__eq__`, as it
+must — hash the fields you compare, compare the fields you hash.
+
+```python
+class Card:
+    """Two cards count as the same card when their ranks match."""
+
+    def __init__(self, rank, suit):
+        self.rank = rank
+        self.suit = suit
+
+    def __eq__(self, other):
+        if not isinstance(other, Card):
+            return NotImplemented
+        return self.rank == other.rank
+
+    def __hash__(self):
+        return hash(self.rank)
+
+
+hand = [Card("A", "spades"), Card("K", "hearts"), Card("A", "hearts"),
+        Card("Q", "clubs"), Card("K", "spades"), Card("A", "diamonds")]
+
+print(len(set(hand)))
+```
+''',
+                "prompt": "How many members does `set(hand)` have?",
+                "note": "A whole number. Nothing here is random, and nothing depends on the order.",
+                "figure": "Six `Card` objects go into the set: the aces of spades, hearts and diamonds, the kings of hearts and spades, and the queen of clubs. `Card.__eq__` compares `rank` and nothing else, and `Card.__hash__` hashes the same single field.",
+                "given": [
+                    {"label": "Cards in `hand`", "value": "6"},
+                    {"label": "Distinct suits", "value": "4"},
+                    {"label": "`__eq__` compares", "value": "`self.rank == other.rank`"},
+                    {"label": "`__hash__` returns", "value": "`hash(self.rank)`"},
+                ],
+                "aside": "The set never looks at your attributes. It calls `__hash__` to choose a bucket and `__eq__` to settle what shares one.",
+                "answer": 3,
+                "tol": 0,
+                "unit": "members",
+                "hint": "Sort the six cards into piles that `__eq__` cannot tell apart, then count the piles.",
+                "wrong": "Count the piles `__eq__` makes — not the cards, and not the suits. `Card` was written to compare ranks alone, and the set has no other opinion available to it.",
+                "why": r"""
+Three: one ace, one king, one queen. The set asks `__hash__` for a bucket and `__eq__` to
+settle ties, and this `__eq__` looks at `rank` alone — so the three aces collapse into one
+member, the two kings into another, and the queen makes the third. The suit is real data,
+sitting on every one of the six objects, and completely invisible to the container,
+because nothing the container calls ever mentions it. That is the lesson worth carrying
+out of this module: a set, a dict key, `list.remove`, `in` — every one of them is only as
+good as the two methods you wrote. Compare rank *and* suit and the same six cards give
+six members.
+""",
+            },
             "lab": {
                 "title": "An immutable Vector2D",
                 "runtime": "python",
@@ -312,7 +627,7 @@ assert (_v.x, _v.y) == (1.0, 2.0), f"The vector changed anyway: {_v!r}"
             "title": "Inheritance, abstraction and polymorphism",
             "summary": "One interface, several implementations, and code that never asks which.",
             "concepts": [
-                "Inheritance models is-a; a `Square` is a `Rectangle`, a wheel is not a car",
+                "Inheritance models is-a; a `Circle` is a `Shape`, a wheel is not a car",
                 "`super().__init__(...)` cooperates with the MRO instead of naming a parent",
                 "`abc.ABC` + `@abstractmethod`: an incomplete subclass fails at instantiation",
                 "Polymorphic dispatch: the call site names the operation, the object picks the code",
@@ -320,6 +635,324 @@ assert (_v.x, _v.y) == (1.0, 2.0), f"The vector changed anyway: {_v!r}"
                 "Liskov substitution: a subtype must be usable wherever the supertype is",
                 "`isinstance` for type questions, `type(self).__name__` for the dynamic class",
             ],
+            "quiz": {
+                "title": "One interface, several implementations",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A subclass of an abstract `Shape` implements `area()` and forgets `perimeter()`. When does that go wrong?",
+                        "opts": [
+                            "When `perimeter()` is first called",
+                            "At import, when the class statement runs",
+                            "At the first attempt to instantiate it — `TypeError`, naming the method still missing",
+                            "Never: the abstract method's empty body runs and returns `None`",
+                        ],
+                        "a": 2,
+                        "why": r"""
+`ABCMeta` collects the names still marked abstract when the class object is created, and
+instantiation is refused while that set is non-empty — so the failure arrives at `Blob()`
+with the missing names printed in the message. Defining the class has to stay legal,
+because that is exactly how you write an abstract class that extends another abstract
+class. And the abstract body never runs at all, which is why leaving it as nothing but a
+docstring is the honest way to write one.
+""",
+                    },
+                    {
+                        "q": "Which of these should be inheritance rather than composition?",
+                        "opts": [
+                            "A `Playlist` and the `Track`s it holds",
+                            "A `Circle` and the abstract `Shape` it implements",
+                            "An `Account` and its transaction `history`",
+                            "A `Car` and its `Engine`",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Inheritance is a promise about substitutability: anywhere a `Shape` is expected, a
+`Circle` must do — and it can, because `Shape` promises only that you can ask for an
+area and a perimeter, and a circle answers both without ever contradicting the base. The
+other three are ownership — a playlist has tracks, an account has a history, a car has an
+engine — and not one of them can stand in for what it holds. The question that sorts them
+is never *do these share code*, and it is not whether the English sounds like is-a
+either; it is *can I hand this to a function that asked for the base and expect that
+function to keep working*. Hold that test in mind for the `Square` two questions along,
+where the vocabulary says yes and the behaviour says no.
+""",
+                    },
+                    {
+                        "q": "`Square.__init__` could say `Rectangle.__init__(self, side, side)`. Why `super().__init__(side, side)` instead?",
+                        "opts": [
+                            "`super()` is faster, because it caches the parent",
+                            "`super()` skips the parent and calls the grandparent",
+                            "Naming a base class from inside a subclass is a syntax error",
+                            "`super()` follows the MRO of the object being built, so a later subclass inheriting from two places still gets every base initialised exactly once",
+                        ],
+                        "a": 3,
+                        "why": r"""
+With one base and no diamond the two lines call the identical function and the difference
+is invisible. It shows up the day somebody writes `class Tile(Square, Drawable)`.
+`super()` asks what comes *after the current class* in the MRO of `type(self)` — which is
+not always the parent you can see in the file — while a hard-coded name pins the chain,
+and lets a shared base run twice or a sibling not run at all. It also means renaming a
+base is a one-line change rather than a search.
+""",
+                    },
+                    {
+                        "q": "A `Square` inherits from a `Rectangle` whose `width` and `height` can be set independently. What has been broken?",
+                        "opts": [
+                            "Any code holding what it was told is a `Rectangle`, setting the two sides separately, and expecting both to stick",
+                            "Nothing — a square really is a rectangle",
+                            "`area()`, which can no longer be inherited",
+                            "`isinstance(sq, Rectangle)`, which starts returning `False`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The textbook case against reading is-a off the dictionary. Geometry says a square is a
+rectangle; the *type* `Rectangle` promises rather more than geometry does, and one of its
+promises is two dimensions that move independently. A `Square` that stays square has to
+break that promise, and the code that notices is code that never mentioned `Square` at
+all. Liskov's rule is about behaviour, not vocabulary. Two ways out: fix the dimensions
+at construction so the promise is never made, or drop the inheritance and let a `Square`
+hold a `Rectangle`.
+""",
+                    },
+                    {
+                        "q": "`Shape.describe()` calls `self.area()`. Which `area` runs for `Square(2).describe()`, given that `Square` defines none?",
+                        "opts": [
+                            "`Shape.area`, since that is where `describe` was written",
+                            "None — it raises `TypeError`, because `Shape.area` is abstract",
+                            "`Rectangle.area`, found by searching from `Square` up the MRO",
+                            "A copy of `Rectangle.area` that Python puts on `Square` when the class is created",
+                        ],
+                        "a": 2,
+                        "why": r"""
+`self.area` is looked up on the *object*, not in the file where `describe` happens to
+live, so the search starts at `Square`, finds nothing, moves to `Rectangle` and stops
+there — the abstract `Shape.area` is never reached. That late binding is the whole
+mechanism of the template method: the base fixes the shape of the algorithm and each
+subclass supplies the steps. Nothing is copied anywhere; there is one function, found by
+walking a list.
+""",
+                    },
+                    {
+                        "q": "`Shape.__init__` sets `self.name = type(self).__name__`. What is `Square(2).name`?",
+                        "opts": [
+                            "`'Square'`",
+                            "`'Shape'`, because that is the class whose code is running",
+                            "`'Rectangle'`, because `Square` delegates its construction there",
+                            "`'type'`",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`type(self)` is the class of the object in front of you, never the class of the method
+doing the asking — `self.__class__` is the same thing spelled differently. That one line
+is why no subclass needs a `name` of its own, and why a `Square` reports `'Square'` even
+though every line of code involved was written in `Shape`. Hard-code the string in the
+base instead and every subclass claims to be a `Shape`: a `repr` built that way is exactly
+the sort of quiet wrongness that no test thinks to check.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "An abstract base class, hole by hole",
+                "minutes": 9,
+                "caption": "payroll.py — five decisions, and where the abstraction is actually enforced",
+                "lang": "python",
+                "brief": r'''
+The same hierarchy as the lab, in a domain where the money makes the stakes obvious.
+`Employee` is a promise: everyone on the payroll can be asked what they are owed this
+month, and nobody has to ask what *kind* of employee they are holding.
+
+Nothing runs here — you are choosing symbols, not writing code.
+''',
+                "listing": '''from abc import ABC, abstractmethod
+
+
+class Employee(___):
+    """Everyone on the payroll. Nobody is ever *just* an Employee."""
+
+    def __init__(self, name):
+        self.name = name
+        self.role = ___.__name__
+
+    @___
+    def monthly_pay(self):
+        """What this employee is owed for one month."""
+
+    def payslip(self):
+        return f"{self.name} ({self.role}): {___:.2f}"
+
+
+class Salaried(Employee):
+    """Paid a twelfth of the annual figure, whatever the month holds."""
+
+    def __init__(self, name, annual):
+        ___.__init__(name)
+        self.annual = annual
+
+    def monthly_pay(self):
+        return self.annual / 12
+''',
+                "blanks": [
+                    {
+                        "prompt": "What makes the promise enforceable rather than merely documented?",
+                        "hole": "?",
+                        "opts": [
+                            "ABCMeta",
+                            "object",
+                            "ABC",
+                            "abstractmethod",
+                        ],
+                        "a": 2,
+                        "why": "`ABC` is a plain class that carries `ABCMeta` as its metaclass, and inheriting from it is what arms the check refusing to instantiate anything with an abstract method left over. It is the one-line way in; `class Employee(metaclass=ABCMeta)` says the same thing at greater length.",
+                        "whys": [
+                            "`ABCMeta` is the *metaclass* — the class of which `ABC` is an instance. Inheriting from it would make `Employee` a maker of classes rather than a maker of employees, which is not what any of the code below goes on to do with it.",
+                            "Every class inherits from `object` already, so this changes nothing. `@abstractmethod` still marks the method, but with no `ABCMeta` behind the class nothing ever reads the mark: `Employee('Ada')` succeeds, and a subclass that forgot `monthly_pay` fails much later and much less clearly, inside `payslip`.",
+                            "`ABC` is a plain class that carries `ABCMeta` as its metaclass, and inheriting from it is what arms the check refusing to instantiate anything with an abstract method left over. It is the one-line way in; `class Employee(metaclass=ABCMeta)` says the same thing at greater length.",
+                            "`abstractmethod` is a decorator you apply to a method: a function, not a base class. Putting it in the bases fails while the class statement is still being executed.",
+                        ],
+                    },
+                    {
+                        "prompt": "Every payslip names a role, and no subclass writes a line to make that happen.",
+                        "hole": "?",
+                        "opts": [
+                            "type(self)",
+                            "Employee",
+                            "type(Employee)",
+                            "self.role",
+                        ],
+                        "a": 0,
+                        "why": "`type(self)` is the class of the object actually being built, so a `Salaried` records `'Salaried'` even though the line lives in `Employee`. It is the same trick the `Shape` hierarchy uses for its `name`, and it is why the subclasses stay empty of bookkeeping.",
+                        "whys": [
+                            "`type(self)` is the class of the object actually being built, so a `Salaried` records `'Salaried'` even though the line lives in `Employee`. It is the same trick the `Shape` hierarchy uses for its `name`, and it is why the subclasses stay empty of bookkeeping.",
+                            "`Employee.__name__` is the constant string `'Employee'`, evaluated identically for every subclass. Every payslip would claim the same role, and nothing would fail loudly enough for anybody to notice.",
+                            "`type(Employee)` is the metaclass, so this records `'ABCMeta'` — a true fact about the class machinery, and a useless one on a payslip.",
+                            "`self.role` is what this very line is creating: it does not exist yet, and a string would have no `__name__` even if it did.",
+                        ],
+                    },
+                    {
+                        "prompt": "One mark, and a subclass that forgets is stopped at the door.",
+                        "hole": "?",
+                        "opts": [
+                            "staticmethod",
+                            "abstractmethod",
+                            "property",
+                            "classmethod",
+                        ],
+                        "a": 1,
+                        "why": "With the mark in place, a subclass that does not define `monthly_pay` cannot be instantiated at all, and the error names the method — so the mistake surfaces where the object is created rather than in the middle of a payroll run.",
+                        "whys": [
+                            "`@staticmethod` strips `self` from the call, so the body could not reach a single field of the employee — and it would make the method entirely concrete, which is the opposite of the intent.",
+                            "With the mark in place, a subclass that does not define `monthly_pay` cannot be instantiated at all, and the error names the method — so the mistake surfaces where the object is created rather than in the middle of a payroll run.",
+                            "`@property` turns it into an attribute read, so the `.2f` line below would call the *result* rather than the method. Pay as a computed attribute is a defensible design, but it is a different one, and it obliges a subclass to supply nothing.",
+                            "`@classmethod` binds the class instead of the instance — useful for an alternative constructor, and silent about who has implemented what.",
+                        ],
+                    },
+                    {
+                        "prompt": "`payslip` is written once, in the base, and must never learn which subclass it is holding.",
+                        "hole": "?",
+                        "opts": [
+                            "self.monthly_pay",
+                            "Employee.monthly_pay(self)",
+                            "monthly_pay(self)",
+                            "self.monthly_pay()",
+                        ],
+                        "a": 3,
+                        "why": "The call goes through the object, so it finds whichever implementation that object actually has. That is the template method: one line in the base, and the subclasses supply the number.",
+                        "whys": [
+                            "Without the parentheses this formats the bound method object rather than the number it would have returned, and `:.2f` on a method raises `TypeError`.",
+                            "Naming the base explicitly calls the *abstract* body, which is nothing but a docstring and returns `None`; formatting `None` with `:.2f` then raises `TypeError`. Every subclass's work is bypassed.",
+                            "There is no module-level function by that name — it is an attribute of the class — so this raises `NameError`.",
+                            "The call goes through the object, so it finds whichever implementation that object actually has. That is the template method: one line in the base, and the subclasses supply the number.",
+                        ],
+                    },
+                    {
+                        "prompt": "The subclass has its own work to do, and the shared setup still has to happen.",
+                        "hole": "?",
+                        "opts": [
+                            "super()",
+                            "Employee",
+                            "self",
+                            "Employee(self)",
+                        ],
+                        "a": 0,
+                        "why": "`super().__init__(name)` passes the receiver along implicitly and lets the MRO decide what runs next, so the shared setup happens exactly once however the hierarchy is extended later.",
+                        "whys": [
+                            "`super().__init__(name)` passes the receiver along implicitly and lets the MRO decide what runs next, so the shared setup happens exactly once however the hierarchy is extended later.",
+                            "`Employee.__init__(name)` hands the string in as `self` and then has nothing left for the `name` parameter, so it fails on the spot with a `TypeError` about a missing argument.",
+                            "`self.__init__(name)` is `Salaried.__init__` again — the method calling itself with the same argument — and it recurses until the stack runs out.",
+                            "That tries to build an instance of the abstract base, which is precisely what `ABC` refuses; it raises `TypeError` before any initialisation happens.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How many names end up in the trace?",
+                "minutes": 8,
+                "brief": r'''
+The diamond: `Both` inherits from `Left` and `Right`, and each of those inherits from
+`Base`. Every `__init__` records that it ran and then hands over with `super()`, except
+`Base`, which records and stops.
+
+```python
+trace = []
+
+
+class Base:
+    def __init__(self):
+        trace.append("Base")
+
+
+class Left(Base):
+    def __init__(self):
+        trace.append("Left")
+        super().__init__()
+
+
+class Right(Base):
+    def __init__(self):
+        trace.append("Right")
+        super().__init__()
+
+
+class Both(Left, Right):
+    def __init__(self):
+        trace.append("Both")
+        super().__init__()
+
+
+Both()
+print(len(trace))
+```
+''',
+                "prompt": "How many entries does `trace` hold after `Both()` returns?",
+                "note": "A whole number. `Both()` is called once, and `trace` starts empty.",
+                "figure": "`Both` inherits from `Left` and then `Right`; both of those inherit from `Base`, so `Base` sits at the end of two arrows. Every `__init__` appends its own class name and then calls `super().__init__()` — except `Base`, which appends and returns.",
+                "given": [
+                    {"label": "Classes in the diamond", "value": "`Both`, `Left`, `Right`, `Base`"},
+                    {"label": "Bases of `Both`", "value": "`Left`, then `Right`"},
+                    {"label": "Each `__init__`", "value": "appends exactly once"},
+                    {"label": "`Base.__init__`", "value": "appends, and calls no `super()`"},
+                ],
+                "aside": "`super()` is not a synonym for *my parent*. It means *whatever follows me in this object's MRO*.",
+                "answer": 4,
+                "tol": 0,
+                "unit": "entries",
+                "hint": "Write out `Both.__mro__` first. Every `super().__init__()` hands over to the next name on that one list, not to a parent on the diagram.",
+                "wrong": "Five is the answer the diagram suggests, because `Base` sits at the end of two arrows. Follow the MRO instead: it is a single ordered list, and every class appears on it once.",
+                "why": r"""
+Four — `Both`, `Left`, `Right`, `Base`. The MRO of `Both` is `Both, Left, Right, Base,
+object`, and each `super().__init__()` hands over to the next name on that list rather
+than to a parent in the picture. So `Left`'s `super()` goes sideways to `Right`, not up to
+`Base`, and `Base` runs once however many arrows point at it.
+
+Cooperative `super()` is what makes that work, and it only works if everyone plays.
+Change `Left` to call `Base.__init__(self)` directly and the trace comes out at three
+entries with `Right` missing entirely, because `Left` has jumped over its sibling. That
+is the bug the MRO exists to prevent, and it stays invisible until the day somebody
+inherits from two classes at once.
+""",
+            },
             "lab": {
                 "title": "An abstract Shape hierarchy",
                 "runtime": "python",
@@ -673,6 +1306,309 @@ assert largest(_one) is _one[0], "largest of a single-element list is that eleme
                 "Assigning to `self.attr` always creates an instance attribute that shadows the class one",
                 "`@classmethod` receives the class (alternative constructors); `@staticmethod` receives nothing",
             ],
+            "quiz": {
+                "title": "Invariants, properties and where state lives",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The getter for `owner` is written `return self.owner`. What happens on the first read?",
+                        "opts": [
+                            "It returns the stored value — a property knows to skip itself",
+                            "`RecursionError`: the getter reads the property, which calls the getter",
+                            "`AttributeError`, because `owner` is not in the instance dictionary",
+                            "It returns the class attribute of the same name",
+                        ],
+                        "a": 1,
+                        "why": r"""
+There is only one attribute called `owner` and it *is* the property, so reading it from
+inside its own getter starts again at the top. The standard shape is a property named
+`owner` in front of storage named `_owner`, and that leading underscore is doing real
+work: it is what makes the two names different, not merely a note to the reader. The same
+trap catches the setter, where `self.owner = value` inside `@owner.setter` recurses just
+as happily.
+""",
+                    },
+                    {
+                        "q": "`balance` is a `@property` with a getter and no setter. What does `account.balance = 500` do?",
+                        "opts": [
+                            "Creates an instance attribute that shadows the property from then on",
+                            "Calls the getter and throws the result away",
+                            "Raises `AttributeError`",
+                            "Raises `TypeError`",
+                        ],
+                        "a": 2,
+                        "why": r"""
+A property is a *data* descriptor, and data descriptors found on the class win over the
+instance dictionary on writes as well as reads. So the assignment reaches the property,
+finds no setter, and raises — read-only for free, with no code of your own. It is also why
+a property cannot be shadowed the way a plain class attribute can: `self.balance = 0`
+inside `__init__` hits exactly the same wall, which is why the real number has to live
+under `_balance`.
+""",
+                    },
+                    {
+                        "q": "`__init__` says `self.count += 1` instead of `Account.count += 1`. After three accounts, what is `Account.count`?",
+                        "opts": [
+                            "`0` — the class attribute never moved",
+                            "`3`",
+                            "`1`",
+                            "`AttributeError` on the first account",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`self.count += 1` is a read followed by a write, and the two do not go to the same place.
+The read finds nothing on the instance and falls through to the class, getting `0`; the
+write always lands on the instance. So each account ends up with a private `count` of `1`
+shadowing the class attribute, and the shared tally sits at `0` forever. Nothing raises,
+nothing looks wrong from inside the object, and a test that only ever checks
+`account.count` passes.
+""",
+                    },
+                    {
+                        "q": "What does `@classmethod` give a method that `@staticmethod` does not?",
+                        "opts": [
+                            "Access to the instance's private attributes",
+                            "The class it was called through, so an alternative constructor builds the right subclass",
+                            "The right to be called without an instance",
+                            "Automatic validation of its arguments",
+                        ],
+                        "a": 1,
+                        "why": r"""
+`cls` is not pinned to the class where the method was written: called as
+`Savings.from_row(...)`, `cls` is `Savings`, so `return cls(...)` builds a `Savings` with
+no extra code and no `if`. A `@staticmethod` receives nothing at all — it is a plain
+function kept in the class's namespace because that is where it belongs, which is exactly
+what `is_valid_amount` is. Both can be called without an instance, so that is not the
+distinction.
+""",
+                    },
+                    {
+                        "q": "A class body says `history = []`, and `__init__` never mentions it. Two instances each call `self.history.append(...)`. What does the second one see?",
+                        "opts": [
+                            "Only its own entry",
+                            "Nothing — appending to a class attribute is refused",
+                            "Its own entry, plus a copy of the other made at construction",
+                            "Both entries: there is one list, and it lives on the class",
+                        ],
+                        "a": 3,
+                        "why": r"""
+The list is built once, when the class body runs. `self.history` finds no instance
+attribute and falls through to the class, and `append` mutates that one object in place —
+no assignment happens anywhere, so nothing is ever shadowed and every instance goes on
+sharing. Per-instance state has to be *created* per instance, which is the whole job of
+`self.history = []` in `__init__`. Immutable defaults get away with it — `interest_rate =
+0.02` on the class is fine — precisely because `+=` on a number is an assignment, and an
+assignment writes to the instance.
+""",
+                    },
+                    {
+                        "q": "For a plain attribute — no property involved — where does `account.interest_rate` look, and in what order?",
+                        "opts": [
+                            "The class, then the instance",
+                            "The instance only; a class attribute needs `Account.interest_rate`",
+                            "The instance dictionary, then the class, then its bases along the MRO",
+                            "The bases, then the class, then the instance",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Instance first, then the class, then each base in MRO order, and `AttributeError` if
+nobody has it. That single rule explains both the useful behaviour — a shared default any
+one instance may override for itself — and the trap in `self.count += 1`, since only the
+*read* half ever consults the class. The exception worth carrying with it: a data
+descriptor such as a property is found on the class and takes priority over the instance
+dictionary, which is what makes a read-only property genuinely read-only.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "A property that cannot be talked out of it",
+                "minutes": 9,
+                "caption": "thermostat.py — validation, a class-level tally, and an alternative constructor",
+                "lang": "python",
+                "brief": r'''
+A setpoint with a safe range, and one rule: there is no way to get an unsafe value into
+the object. Not through `__init__`, not through an assignment later, not through the
+alternative constructor. Every hole is a place where that guarantee is either kept or
+quietly given away.
+
+Nothing runs here — you are choosing symbols, not writing code.
+''',
+                "listing": '''class Thermostat:
+    """A setpoint that can never leave the safe range, whoever writes to it."""
+
+    unit = "C"
+    made = 0
+
+    def __init__(self, room, setpoint=20.0):
+        self.room = room
+        self.setpoint = setpoint          # goes through the setter below
+        self.log = []
+        ___ += 1
+
+    @property
+    def setpoint(self):
+        return self.___
+
+    @setpoint.___
+    def setpoint(self, value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("setpoint must be a number")
+        if not 5 <= value <= 30:
+            raise ValueError("setpoint must lie between 5 and 30")
+        self._setpoint = float(value)
+
+    @property
+    def fahrenheit(self):
+        return self._setpoint * 9 / 5 + 32
+
+    @___
+    def from_fahrenheit(cls, room, degrees_f):
+        """Build one from a setpoint quoted in Fahrenheit."""
+        return cls(room, (degrees_f - 32) * 5 / 9)
+''',
+                "blanks": [
+                    {
+                        "prompt": "One tally, shared by every thermostat ever made.",
+                        "hole": "?",
+                        "opts": [
+                            "cls.made",
+                            "self.made",
+                            "made",
+                            "Thermostat.made",
+                        ],
+                        "a": 3,
+                        "why": "Naming the class is what makes the write land on the class. It is the only place a shared counter can live if every instance is to see the same number.",
+                        "whys": [
+                            "`cls` exists only inside a `@classmethod`. In an ordinary method the name is simply undefined, and this raises `NameError`.",
+                            "This reads the class value, adds one, and stores the result on the instance — so every thermostat privately believes exactly one has been made, and `Thermostat.made` stays at zero forever.",
+                            "Names from the class body are not in scope inside its methods. The bare name is treated as a local, and reading it before it is assigned raises `UnboundLocalError`.",
+                            "Naming the class is what makes the write land on the class. It is the only place a shared counter can live if every instance is to see the same number.",
+                        ],
+                    },
+                    {
+                        "prompt": "The property is the public name. The value has to live somewhere else.",
+                        "hole": "?",
+                        "opts": [
+                            "setpoint",
+                            "_setpoint",
+                            "__setpoint",
+                        ],
+                        "a": 1,
+                        "why": "One leading underscore is the convention for *this is the storage, do not touch it from outside*, and it is the one attribute the getter and the setter share. The property and its storage must be two different names, or there is nothing to store.",
+                        "whys": [
+                            "That is the getter reading the property it is the getter for: it calls itself until the stack runs out.",
+                            "One leading underscore is the convention for *this is the storage, do not touch it from outside*, and it is the one attribute the getter and the setter share. The property and its storage must be two different names, or there is nothing to store.",
+                            "Nothing ever writes that name — the setter stores `_setpoint` — and two leading underscores also mangle it to `_Thermostat__setpoint`, so the read fails with an `AttributeError` naming an attribute nobody typed.",
+                        ],
+                    },
+                    {
+                        "prompt": "The validation is written once. What connects it to the plain assignment `t.setpoint = 25`?",
+                        "hole": "?",
+                        "opts": [
+                            "deleter",
+                            "getter",
+                            "setter",
+                            "property",
+                        ],
+                        "a": 2,
+                        "why": "`@property` produced an object holding the read path; `.setter` returns a *new* property carrying that same getter plus this function as the write path. Rebinding the name `setpoint` to the result is why the decorated function has to keep the name it already has.",
+                        "whys": [
+                            "`.deleter` supplies the `del t.setpoint` path. Assignment would still be refused, so construction fails at the first write, and the validation never runs.",
+                            "`.getter` replaces the read path with this two-argument function and leaves the property with no way to be written at all, so `self.setpoint = setpoint` in `__init__` raises `AttributeError` on the first thermostat.",
+                            "`@property` produced an object holding the read path; `.setter` returns a *new* property carrying that same getter plus this function as the write path. Rebinding the name `setpoint` to the result is why the decorated function has to keep the name it already has.",
+                            "A property object has `getter`, `setter` and `deleter` and nothing named `property`, so asking for one raises `AttributeError` while the class body is still executing.",
+                        ],
+                    },
+                    {
+                        "prompt": "An alternative constructor: same object, different starting units.",
+                        "hole": "?",
+                        "opts": [
+                            "classmethod",
+                            "staticmethod",
+                            "property",
+                            "abstractmethod",
+                        ],
+                        "a": 0,
+                        "why": "The method needs the class in order to build one, and it needs the class it was *called through*, so a subclass calling `from_fahrenheit` gets a subclass back. That is what makes this an alternative constructor rather than a factory wired to one type — and note it returns through `__init__`, so the setter validates the converted value like any other.",
+                        "whys": [
+                            "The method needs the class in order to build one, and it needs the class it was *called through*, so a subclass calling `from_fahrenheit` gets a subclass back. That is what makes this an alternative constructor rather than a factory wired to one type — and note it returns through `__init__`, so the setter validates the converted value like any other.",
+                            "`@staticmethod` passes nothing automatically, so `cls` would receive the room name and the call arrives one argument short: a `TypeError` about `degrees_f`.",
+                            "A property is evaluated on attribute access, with no arguments at all. `Thermostat.from_fahrenheit` would hand back the property object itself, which is not callable.",
+                            "`@abstractmethod` only marks a method as one a subclass must supply, and outside an `ABC` nothing even reads the mark. It leaves an ordinary method here, with the instance arriving where `cls` was expected.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "Where does the rate come from?",
+                "minutes": 8,
+                "brief": r'''
+`award_bonus` reads `self.bonus_rate`. Between the two accounts being opened and the
+bonus being awarded, that name is written twice — once on an instance and once on the
+class.
+
+```python
+class Loyalty:
+    """A points balance that earns a bonus at the house rate."""
+
+    bonus_rate = 0.02
+
+    def __init__(self, owner, points):
+        self.owner = owner
+        self._points = float(points)
+
+    @property
+    def points(self):
+        return self._points
+
+    def award_bonus(self):
+        """Credit the bonus and return the points added."""
+        bonus = self._points * self.bonus_rate
+        self._points += bonus
+        return bonus
+
+
+ada = Loyalty("Ada", 200)
+bo = Loyalty("Bo", 200)
+
+ada.bonus_rate = 0.05        # written on the instance
+Loyalty.bonus_rate = 0.10    # written on the class
+
+ada.award_bonus()
+bo.award_bonus()
+print(ada.points + bo.points)
+```
+''',
+                "prompt": "What does the last line print?",
+                "note": "Two decimal places is more than enough.",
+                "figure": "Both accounts open with 200 points, and the class default is 0.02. Then `0.05` is written on `ada` herself, `0.10` is written on the class, and each account awards its bonus exactly once.",
+                "given": [
+                    {"label": "Opening points", "value": "200 each"},
+                    {"label": "Class default", "value": "`bonus_rate = 0.02`"},
+                    {"label": "Written on `ada`", "value": "`ada.bonus_rate = 0.05`"},
+                    {"label": "Written on `Loyalty`", "value": "`Loyalty.bonus_rate = 0.10`"},
+                ],
+                "aside": "`award_bonus` reads `self.bonus_rate`, and that lookup starts at the instance every single time.",
+                "answer": 430,
+                "tol": 0.01,
+                "unit": "points",
+                "hint": "Take the two accounts separately. For each one, ask where the lookup of `self.bonus_rate` stops.",
+                "wrong": "The order of the two writes is a red herring. `Loyalty.bonus_rate = 0.10` never reaches into `ada`'s own dictionary, and it would not have mattered if it had come first.",
+                "why": r"""
+430.0. `ada.bonus_rate = 0.05` created an attribute on `ada` herself, and `self.bonus_rate`
+finds it before ever consulting the class, so she earns 10 and finishes on 210. `bo` has
+nothing of his own, so his lookup falls through to the class, finds the 0.10 written there,
+and he earns 20 to finish on 220.
+
+The instance attribute is not a stale copy of the class one. It is a different attribute
+in a different dictionary, and while it exists the class value is invisible to that
+object: `del ada.bonus_rate` removes the shadow and 0.10 becomes visible again, which is
+the proof that nothing was ever overwritten. Had `award_bonus` read `Loyalty.bonus_rate`
+instead of `self.bonus_rate`, both accounts would have earned 20 and the per-instance
+override would be dead code.
+""",
+            },
             "lab": {
                 "title": "A bank account that defends itself",
                 "runtime": "python",
@@ -970,6 +1906,318 @@ Account.set_interest_rate(0.02)
                 "`__contains__` makes `in` explicit — without it Python falls back to iteration",
                 "Returning a new container from a slice or `__add__` keeps the type closed",
             ],
+            "quiz": {
+                "title": "Containers that behave like containers",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A `Playlist` defines `__len__` and no `__bool__`. What is `bool(empty_playlist)`?",
+                        "opts": [
+                            "`True` — an object is truthy unless it says otherwise",
+                            "`False` — with no `__bool__`, truth falls back to `len(obj) != 0`",
+                            "`TypeError`",
+                            "`None`",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Python asks `__bool__` first, then `__len__`, and only then assumes true. So an empty
+container becomes falsy the moment you write `__len__`, and `if playlist:` means what a
+reader expects it to mean. The corner worth knowing about: a class for which zero length
+is a perfectly ordinary state becomes falsy at zero whether you wanted that or not, and
+that is the moment to write `__bool__` explicitly.
+""",
+                    },
+                    {
+                        "q": "`__iter__` is written `return self._tracks`, handing back the underlying list. What happens at `for t in playlist:`?",
+                        "opts": [
+                            "Nothing — a list is perfectly iterable",
+                            "The loop runs once and stops",
+                            "`TypeError: iter() returned non-iterator of type 'list'`",
+                            "The list is consumed, so a second loop over the same playlist sees nothing",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Iterable and iterator are two different jobs. A list is iterable — it has `__iter__` — but
+it is not an iterator, because it has no `__next__`, and `iter()` insists on being handed
+something that has one. `return iter(self._tracks)` produces a fresh `list_iterator` on
+every call, which is also why two nested loops over the same playlist do not tread on each
+other: each `for` asks for its own.
+""",
+                    },
+                    {
+                        "q": "`playlist[0:2]`. What does `__getitem__` actually receive?",
+                        "opts": [
+                            "One argument: `slice(0, 2, None)`",
+                            "Two arguments, `0` and `2`",
+                            "The tuple `(0, 2)`",
+                            "A `range` object",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Subscription always passes exactly one object, so the colon syntax is packaged into a
+`slice` carrying `start`, `stop` and `step` — `step` being `None` when it is not written.
+That is why the method has to branch on `isinstance(key, slice)`, and why passing the key
+straight through to the underlying list works for both cases: a list already knows what to
+do with either. It also means `playlist[0:2]` and `playlist[slice(0, 2)]` are the same
+call.
+""",
+                    },
+                    {
+                        "q": "A class defines `__iter__` and no `__contains__`. What does `x in obj` do?",
+                        "opts": [
+                            "Raises `TypeError`",
+                            "Returns `False` always",
+                            "Compares identity only, as if with `is`",
+                            "Iterates, comparing each item with `==`, until it matches or runs out",
+                        ],
+                        "a": 3,
+                        "why": r"""
+Membership falls back to iteration, so `in` works the moment an object is iterable. What
+you give up is speed and control: the scan is linear, and it compares with `==`, which
+decides for you what counts as a match. Writing `__contains__` is how a playlist comes to
+accept a title string as well as a `Track` — the fallback would compare a string against a
+`Track`, find nothing, and never complain.
+""",
+                    },
+                    {
+                        "q": "Why does `Playlist` hold a list rather than subclass one?",
+                        "opts": [
+                            "Because `list` cannot be subclassed in Python",
+                            "Because inheriting hands out every list method — `pop`, `sort`, `extend`, slice assignment — and not one of them will respect the rules `add` enforces",
+                            "Because a subclass of `list` cannot define `__len__`",
+                            "Because it would make the playlist mutable",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Subclassing is a promise that your object can be used anywhere a list can, which means
+accepting `p.extend([1, 2, 3])` — three integers now living in a playlist, having never
+passed the `isinstance(track, Track)` check in `add`. Composition keeps the surface
+exactly as wide as you meant it: the methods you wrote, and nothing else. The related fact
+worth carrying: the built-in's own methods do not call your overrides, so even the ones you
+try to intercept leak.
+""",
+                    },
+                    {
+                        "q": "`playlist[0:2]` returns a new `Playlist` rather than a plain list. What does that buy?",
+                        "opts": [
+                            "It stops the original being mutated by the slice",
+                            "It is required — `__getitem__` must return the same type it was called on",
+                            "The result supports everything the original did, so slices chain and can be handed to the same code",
+                            "It makes the slice cheaper, because no tracks are copied",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Keeping the type closed under its own operations is what lets `jazz[0:2].by_artist('Miles
+Davis')` read naturally, and what lets a function that takes a playlist be handed a slice
+of one. Returning a bare list would work, but then every caller has to remember which
+operations quietly demote a playlist into something less capable. Note the two things that
+happen either way: slicing never mutates the original, because a new container is built,
+and no `Track` is copied, because both playlists hold references to the very same objects.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "A container, hole by hole",
+                "minutes": 9,
+                "caption": "deck.py — five protocol methods, and the ways each one goes wrong",
+                "lang": "python",
+                "brief": r'''
+A `Deck` *has* a list of cards; it is not one. Everything below is delegation — five
+methods that forward work to the list inside, and in doing so make the deck behave like
+something Python already understands.
+
+Nothing runs here — you are choosing symbols, not writing code.
+''',
+                "listing": '''class Deck:
+    """An ordered hand of cards. It *has* a list; it is not one."""
+
+    def __init__(self, name, cards=None):
+        self.name = name
+        self._cards = list(cards) if cards else []
+
+    def __len__(self):
+        return ___
+
+    def __iter__(self):
+        return ___(self._cards)
+
+    def __getitem__(self, key):
+        if isinstance(key, ___):
+            return Deck(self.name, self._cards[key])
+        return self._cards[key]
+
+    def __contains__(self, item):
+        if isinstance(item, str):
+            return any(card.name == item for card in self._cards)
+        return ___
+
+    def __add__(self, other):
+        if not isinstance(other, Deck):
+            return NotImplemented
+        return ___
+''',
+                "blanks": [
+                    {
+                        "prompt": "The deck's length is the length of what it holds.",
+                        "hole": "?",
+                        "opts": [
+                            "self._cards",
+                            "len(self._cards)",
+                            "len(self)",
+                            "self._cards.count()",
+                        ],
+                        "a": 1,
+                        "why": "Pure delegation, and one line of it buys `len(deck)`, `if deck:` and every loop that wants a count. Ask the list; it already knows.",
+                        "whys": [
+                            "`__len__` must return a non-negative integer. Handing back the list itself raises `TypeError: 'list' object cannot be interpreted as an integer` the first time anybody calls `len`.",
+                            "Pure delegation, and one line of it buys `len(deck)`, `if deck:` and every loop that wants a count. Ask the list; it already knows.",
+                            "`len(self)` calls `__len__` again — the method asking itself how long it is — and recurses until the stack runs out.",
+                            "`list.count` needs the value to count, so with no argument it raises `TypeError`; even with one it would be answering a different question.",
+                        ],
+                    },
+                    {
+                        "prompt": "`__iter__` has to hand back an iterator, not merely something iterable.",
+                        "hole": "?",
+                        "opts": [
+                            "next",
+                            "list",
+                            "iter",
+                            "tuple",
+                        ],
+                        "a": 2,
+                        "why": "`iter` turns the list into a genuine iterator — an object with `__next__` — which is what a `for` statement demands of whatever `__iter__` returns. A fresh one is made on every call, so two loops over the same deck stay independent.",
+                        "whys": [
+                            "`next` expects an iterator and is being handed a list, so it raises `TypeError: 'list' object is not an iterator` — and even if it worked it would produce one card rather than something to iterate over.",
+                            "A copy of the list is still a list: iterable, but not an iterator, so the loop fails with `iter() returned non-iterator of type 'list'` before the first card comes out.",
+                            "`iter` turns the list into a genuine iterator — an object with `__next__` — which is what a `for` statement demands of whatever `__iter__` returns. A fresh one is made on every call, so two loops over the same deck stay independent.",
+                            "A tuple has exactly the problem a list has: it owns an `__iter__` and no `__next__`, so it is iterable and is not an iterator.",
+                        ],
+                    },
+                    {
+                        "prompt": "One subscript syntax, two kinds of key.",
+                        "hole": "?",
+                        "opts": [
+                            "range",
+                            "list",
+                            "int",
+                            "slice",
+                        ],
+                        "a": 3,
+                        "why": "The colon syntax arrives as a single `slice` object, so this is the test that tells `deck[1]` from `deck[1:3]`. Passing the key straight to the underlying list then handles both, because a list understands each of them.",
+                        "whys": [
+                            "A `range` is something you might build *from* a slice, not what arrives at the door — `isinstance(slice(0, 2), range)` is `False`, so the branch never fires.",
+                            "`key` is never a list, so this branch never runs: every slice falls through to the line below and quietly returns a plain list. Nothing raises, and the type has stopped being closed without anybody noticing.",
+                            "This inverts the test. `deck[0]` would take the wrapping branch and try to build a `Deck` out of a single card, while a slice falls through and comes back as a bare list.",
+                            "The colon syntax arrives as a single `slice` object, so this is the test that tells `deck[1]` from `deck[1:3]`. Passing the key straight to the underlying list then handles both, because a list understands each of them.",
+                        ],
+                    },
+                    {
+                        "prompt": "A string was handled above. What should `in` mean for an actual card?",
+                        "hole": "?",
+                        "opts": [
+                            "item in self._cards",
+                            "item in self",
+                            "self._cards.index(item)",
+                            "any(card is item for card in self._cards)",
+                        ],
+                        "a": 0,
+                        "why": "Delegating to the list gives `in` its ordinary meaning: a scan comparing with `==`, so any card equal to the one being asked about counts. The string branch above is the extra this deck adds; this line is the part it should not reinvent.",
+                        "whys": [
+                            "Delegating to the list gives `in` its ordinary meaning: a scan comparing with `==`, so any card equal to the one being asked about counts. The string branch above is the extra this deck adds; this line is the part it should not reinvent.",
+                            "This re-enters `__contains__` with the same argument — the method calling itself — and recurses until the stack runs out.",
+                            "`list.index` returns a position, and the position of the front card is `0`, which is falsy: the first card in the deck would report as absent. A card that really is missing raises `ValueError` rather than answering `False`.",
+                            "Identity, not equality: a card equal to one in the deck but built separately reports `False`. That is precisely the case `__eq__` was written for, and this line declines to use it.",
+                        ],
+                    },
+                    {
+                        "prompt": "`a + b` is an expression. It produces a value; it does not rearrange its operands.",
+                        "hole": "?",
+                        "opts": [
+                            "self._cards.extend(other._cards)",
+                            "self._cards + other._cards",
+                            'Deck(f"{self.name} + {other.name}", list(self) + list(other))',
+                            "Deck(self.name, self._cards)",
+                        ],
+                        "a": 2,
+                        "why": "A new deck, built out of both and leaving each of them exactly as it was. Returning a `Deck` rather than something less capable is what keeps the result usable by everything that accepts one.",
+                        "whys": [
+                            "`extend` mutates the left operand in place and returns `None`, so `a + b` evaluates to `None` and `a` has silently grown. An expression that rewrites its own operands is the one thing `+` must never be.",
+                            "This returns a bare list. The addition works and every card is present, but the result has lost its name and every method the deck defines.",
+                            "A new deck, built out of both and leaving each of them exactly as it was. Returning a `Deck` rather than something less capable is what keeps the result usable by everything that accepts one.",
+                            "The right operand is dropped and the result is a copy of the left one. Nothing raises, but very little hides either: the length is short by however many cards `other` held, so one non-empty operand on the right is enough to catch it, and the name is wrong in every case — the correct result is called `A + B` and this one comes back called `A`, which even two empty decks would expose.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How long does the joined playlist run?",
+                "minutes": 8,
+                "brief": r'''
+Three tracks, a slice and a concatenation. Both `__getitem__` and `__add__` build a new
+playlist rather than changing an existing one; here are the three methods that matter.
+
+```python
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            sliced = Playlist(self.name)
+            for track in self._tracks[key]:
+                sliced.add(track)
+            return sliced
+        return self._tracks[key]
+
+    def __add__(self, other):
+        joined = Playlist(f"{self.name} + {other.name}")
+        for track in list(self) + list(other):
+            joined.add(track)
+        return joined
+
+    def total_seconds(self):
+        return sum(track.seconds for track in self._tracks)
+```
+
+And the script:
+
+```python
+jazz = Playlist("Jazz")
+jazz.add(Track("Blue Train", "John Coltrane", 617))
+jazz.add(Track("So What", "Miles Davis", 545))
+jazz.add(Track("Take Five", "Dave Brubeck", 324))
+
+half = jazz[0:2]
+both = jazz + half
+
+print(both.total_seconds())
+```
+''',
+                "prompt": "What does `both.total_seconds()` return?",
+                "note": "A whole number of seconds.",
+                "figure": "`jazz` holds Blue Train (617 s), So What (545 s) and Take Five (324 s), in that order. `half` is `jazz[0:2]`, a new playlist built by the slice branch of `__getitem__`, and `both` is `jazz + half`.",
+                "given": [
+                    {"label": "Blue Train", "value": "617 s"},
+                    {"label": "So What", "value": "545 s"},
+                    {"label": "Take Five", "value": "324 s"},
+                    {"label": "`half`", "value": "`jazz[0:2]`"},
+                    {"label": "`both`", "value": "`jazz + half`"},
+                ],
+                "aside": "Neither the slice nor the concatenation copies a single `Track`. All three playlists point at the same three objects.",
+                "answer": 2648,
+                "tol": 0,
+                "unit": "s",
+                "hint": "Total `jazz`, total the slice, then add the two. Nothing is de-duplicated along the way.",
+                "wrong": "Two things to check: `0:2` takes indices 0 and 1 and stops before 2, and concatenation keeps duplicates — a track appearing in both operands is counted twice.",
+                "why": r"""
+2648. `jazz` runs 617 + 545 + 324 = 1486. The slice `jazz[0:2]` is a *new* `Playlist`
+holding the first two tracks, 617 + 545 = 1162 — stopping before index 2 is what leaves
+Take Five out of it. Concatenation then builds a third playlist out of both, so `both`
+holds five entries and totals 1486 + 1162 = 2648, with Blue Train and So What counted
+twice because the same objects appear twice in the list.
+
+Note what was *not* copied. `half` and `both` hold references to the very same three
+`Track` objects, so three tracks exist in memory throughout, and `jazz` still runs 1486 —
+neither operation touched it. Returning new containers is what makes that safe to say.
+""",
+            },
             "lab": {
                 "title": "A Playlist that behaves like a sequence",
                 "runtime": "python",

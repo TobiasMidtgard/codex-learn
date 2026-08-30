@@ -21,9 +21,18 @@ against every other:
 
 biased at I_D = 1 mA, which gives V_ov = 1.0 V, g_m = 2 mA/V and r_o = 45 kΩ.
 The schematic solver has no transistors — it is linear only — so the transistor
-appears in the two build exercises the way it appears in an engineer's notebook:
+appears in every build exercise the way it appears in an engineer's notebook:
 as a current source at DC, and as a current source in parallel with r_o for small
 signals. That is not a workaround, it is the model.
+
+Module 9 introduces one bipolar device, and it is kept at the same operating point
+for the same reason:
+
+    I_C = 1 mA    V_T = 25 mV    beta = 100    V_A = 45 V
+
+giving g_m = 40 mA/V, r_pi = 2.5 kΩ, r_o = 45 kΩ and an intrinsic gain of 1800, so
+that every bipolar number in that module can be read against the MOSFET number
+directly above it.
 """
 
 COURSE = {
@@ -42,9 +51,14 @@ COURSE = {
         "amplification, and this course makes every quantity in it concrete: the square "
         "law that sets the drain current, the bias network that holds the device at a "
         "sensible operating point, the small-signal model that linearises it, and the "
-        "single capacitor that decides how much bandwidth the gain costs you. By the end "
-        "you can design a common-source stage from a supply voltage and a gain "
-        "requirement, and say in advance what it will and will not do."
+        "single capacitor that decides how much bandwidth the gain costs you. From there "
+        "it opens out: how much signal the stage will take before it clips or distorts, "
+        "what the coupling and bypass capacitors do at the bottom of the band, the two "
+        "other ways to wire the same device, what a transistor is worth as a load, the "
+        "bipolar version of all of it, the differential pair every op-amp starts with, "
+        "and what it costs to drive a real load at the end of the chain. By the end you "
+        "can design a common-source stage from a supply voltage and a gain requirement, "
+        "and say in advance what it will and will not do."
     ),
     "outcomes": [
         "Place a MOSFET in cut-off, triode or saturation from its terminal voltages, and compute its drain current in each.",
@@ -52,11 +66,20 @@ COURSE = {
         "Design a four-resistor bias network for a stated drain current, source voltage and drain voltage, and check it leaves the device in saturation with headroom.",
         "Draw the small-signal equivalent of a common-source stage and compute its gain, input resistance and output resistance, loaded and unloaded.",
         "Predict the -3 dB bandwidth of a stage from its output resistance and load capacitance, and explain why raising the gain lowers the bandwidth by the same factor.",
+        "Place the quiescent drain voltage for maximum symmetric swing, and decide whether clipping or square-law distortion is the limit a given specification runs into first.",
+        "Size coupling and bypass capacitors from the resistance each one works against, and identify which of the three low-frequency corners actually sets f_L.",
+        "Choose between common-source, common-drain and common-gate from the input and output impedances a situation demands, and compute the gain and the two impedances of each.",
+        "Explain what a current mirror copies and how well, and compute the gain and bandwidth of an actively loaded stage from the two output resistances at its drain.",
+        "Work in bipolar terms — g_m = I_C/V_T, r_pi = beta/g_m, an intrinsic gain of V_A/V_T — and say where a base current forces a bias design to differ from a MOSFET one.",
+        "Analyse a differential pair: the half-circuit gain, the common-mode gain set by the tail resistance, the CMRR they imply, and the input at which the pair fully steers.",
+        "Size a class-A output stage from the current its load demands, and account for its efficiency and for the fact that it runs hottest with no signal at all.",
     ],
     "assessment": (
-        "Four quizzes, one guided derivation, two circuits drawn and measured in the "
-        "schematic editor, three short Python labs checked by execution, and a capstone "
-        "that designs a common-source stage end to end and then analyses what it built."
+        "Eleven quizzes and six guided derivations; six circuits drawn and measured in "
+        "the schematic editor; five short Python labs checked by execution; a symbol "
+        "drill, a fill-the-holes listing, a numeric question and a slider target where "
+        "the material calls for them; and a capstone that designs a common-source stage "
+        "end to end and then analyses what it built."
     ),
     "reading": [
         "*Microelectronic Circuits*, Sedra & Smith — chapters 5 and 7, the reference text for this material.",
@@ -1405,6 +1428,2226 @@ c.assert(slope > 8.5 && slope < 11.5,
                 ],
             },
         },
+        # ---- M5 -----------------------------------------------------------
+        {
+            "title": "Swing, clipping and distortion",
+            "summary": "Two different ceilings sit above the stage you just designed, and the lower one is rarely the one being watched.",
+            "concepts": [
+                "Module 3 computed a gain and said nothing at all about how large a signal that gain applies to. Two independent ceilings sit above it. **Clipping** is geometric: the drain runs out of room. **Distortion** is the curvature of the square law showing through. They have different cures and they produce different-looking waveforms.",
+                "Upward, the drain cannot pass $V_{DD}$ — that is the point where the drain current has fallen to zero and the device is off. The positive margin is $V_{DD} - V_D$.",
+                "Downward, the drain must stay above $V_S + V_{ov}$ or the device slides into triode. The negative margin is $V_D - V_S - V_{ov}$. That is the quick version, using the quiescent overdrive; the honest condition is $v_{DS} \\ge v_{GS} - V_{th}$ at every *instant*, and on the downward half-cycle the gate is being driven up, so the real limit arrives slightly earlier than the estimate says.",
+                "The two margins are equal when $V_D = (V_{DD} + V_S + V_{ov})/2$ — the midpoint of the drain's allowed range. For this stage on 12 V with $V_S = 2$ V and $V_{ov} = 1$ V that is 7.50 V, which needs $R_D = 4.5$ kΩ and gives ±4.5 V of swing.",
+                "Every volt of source lift bought for bias stability costs half a volt of peak swing, because it is taken off one end of a range whose midpoint then moves by half of it. That is the price of the negative feedback module 2 put in.",
+                "Distortion comes from the square itself. Put $v_{gs} = \\hat{V}\\cos\\omega t$ into $I_D = \\tfrac{1}{2}k(V_{ov} + v_{gs})^2$ and the cross term gives a fundamental of $kV_{ov}\\hat{V}$ while the $v_{gs}^2$ term gives a second harmonic of $\\tfrac{1}{4}k\\hat{V}^2$. Their ratio is $\\mathrm{HD}_2 = \\hat{V}/(4V_{ov})$: the input amplitude measured in overdrives, divided by four.",
+                "The same squared term also raises the *average* drain current by $\\tfrac{1}{4}k\\hat{V}^2$. A large signal shifts the operating point it is sitting on — 0.2 V of drive takes this stage from 1.00 mA to 1.02 mA.",
+                "Which ceiling binds here is not close. Clipping allows 4.5 V of peak at the drain. One per cent second-harmonic distortion allows $\\hat{V} = 40$ mV, which at a gain of 9 is 0.36 V at the drain — more than ten times sooner. Raising the supply does nothing about that; raising the overdrive does, and the overdrive is bought with current.",
+                "An unbypassed source resistor cuts distortion by roughly the same $(1 + g_mR_S)$ by which it cuts gain. The 2 kΩ of module 2 takes $\\mathrm{HD}_2$ at 0.1 V of drive from 2.5% to about 0.5%, and the gain from −10 to −2. Linearity, like gain accuracy, is something feedback buys with gain.",
+            ],
+            "quiz": {
+                "title": "How much signal the stage will actually take",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "The stage from module 2 sits with $V_{DD} = 12$ V, $V_D = 7$ V, $V_S = 2$ V and $V_{ov} = 1$ V. What is the largest *symmetric* output swing it can produce?",
+                        "opts": ["5 V peak", "4 V peak", "4.5 V peak", "9 V peak"],
+                        "a": 1,
+                        "why": r'''
+Upward there are $12 - 7 = 5$ V of room; downward there are $7 - 2 - 1 = 4$ V. A
+symmetric sine is limited by the smaller of the two, so 4 V peak. Quoting 5 V uses only
+the margin to the supply and ignores that the device leaves saturation first on the
+other half-cycle; quoting 9 V adds the two margins as though the waveform only ever
+went one way.
+''',
+                    },
+                    {
+                        "q": "Where should the drain of that stage sit for the largest symmetric swing, and what $R_D$ puts it there at 1 mA?",
+                        "opts": [
+                            "7.5 V, from $R_D = 4.5$ kΩ",
+                            "6.0 V, from $R_D = 6$ kΩ",
+                            "9.5 V, from $R_D = 2.5$ kΩ",
+                            "7.0 V, from $R_D = 5$ kΩ",
+                        ],
+                        "a": 0,
+                        "why": r'''
+The drain may live anywhere between $V_S + V_{ov} = 3$ V and $V_{DD} = 12$ V, and the
+midpoint of that range is 7.5 V. At 1 mA the drop across $R_D$ is then 4.5 V, so
+$R_D = 4.5$ kΩ and the swing is ±4.5 V. Leaving the drain at the 7.0 V module 2
+designed costs half a volt on the tighter side, which is the price of having asked for
+a round drain voltage rather than a symmetric one.
+''',
+                    },
+                    {
+                        "q": "The same stage is driven with a gate signal of 100 mV amplitude. What second-harmonic distortion does the square law produce?",
+                        "opts": ["0.25%", "10%", "5%", "2.5%"],
+                        "a": 3,
+                        "why": r'''
+$\mathrm{HD}_2 = \hat{V}/(4V_{ov}) = 0.1/4 = 0.025$, so 2.5%. The useful way to hold
+that formula is that the distortion is a quarter of the drive expressed as a fraction
+of the overdrive — a tenth of an overdrive in gives 2.5% of second harmonic out. 10%
+would be $\hat{V}/V_{ov}$ with the factor of four dropped, and it is worth keeping,
+because it is the difference between a design that meets a specification and one that
+misses it fourfold.
+''',
+                    },
+                    {
+                        "q": "At a fixed *input* amplitude, which change halves the second-harmonic distortion?",
+                        "opts": [
+                            "doubling the overdrive",
+                            "doubling $R_D$",
+                            "halving $R_D$",
+                            "adding a bypass capacitor across $R_S$",
+                        ],
+                        "a": 0,
+                        "why": r'''
+$\mathrm{HD}_2 = \hat{V}/(4V_{ov})$ contains neither $R_D$ nor anything else at the
+drain, because the distortion is created in the gate-to-current relation and $R_D$ only
+turns the resulting current into a voltage — it scales the fundamental and the harmonic
+equally. Doubling the overdrive does halve it, and costs four times the bias current
+since $V_{ov} = \sqrt{2I_D/k}$. Bypassing $R_S$ goes the wrong way entirely: it removes
+the local feedback that was linearising the stage.
+''',
+                    },
+                    {
+                        "q": "This stage has a gain of 9 and 4.5 V of symmetric headroom. A specification asks for 1 V peak at the drain. What actually limits the design?",
+                        "opts": [
+                            "the negative half clips on the triode boundary",
+                            "distortion — the second harmonic is already about 2.8%",
+                            "the positive half clips on the supply rail",
+                            "nothing; 1 V is comfortably inside every limit",
+                        ],
+                        "a": 1,
+                        "why": r'''
+1 V at the drain needs 111 mV at the gate, which is $\mathrm{HD}_2 = 0.111/4 = 2.8\%$.
+The clipping limits are four and a half times further away and never come into it. This
+is the usual state of affairs in a single-ended square-law stage: the rails are
+generous and the curvature is not, so headroom calculations tell you what the amplifier
+cannot do and distortion calculations tell you what it will not do *well*.
+''',
+                    },
+                    {
+                        "q": "Why is $V_D > V_S + V_{ov}$, with the quiescent overdrive, slightly optimistic as a clipping limit?",
+                        "opts": [
+                            "because $r_o$ falls at large signals",
+                            "because the supply sags under load",
+                            "because on the half-cycle that pulls the drain down the gate is being driven up, so the instantaneous overdrive is larger than the quiescent one",
+                            "because the source voltage rises with the signal",
+                        ],
+                        "a": 2,
+                        "why": r'''
+Saturation is $v_{DS} \ge v_{GS} - V_{th}$ instant by instant, not against the resting
+overdrive. The stage inverts, so the moment the drain is at its lowest the gate is at
+its highest and the overdrive it must clear has grown by exactly the input amplitude.
+With $\hat{V} = 0.1$ V that moves the boundary up by 0.1 V — small, but always in the
+direction that makes the estimate flattering rather than safe.
+''',
+                    },
+                ],
+            },
+            "build": {
+                "title": "Bias for the largest symmetric swing",
+                "minutes": 26,
+                "brief": r'''
+Module 2 asked for a drain at 7 V because 7 V is a tidy number. This time the drain
+voltage is not given to you: it is whatever makes the output swing the same distance
+in both directions.
+
+As before, the schematic solver has no transistors, so the device appears as the 1 mA
+current source it is at its operating point, with its **+ pin as the drain**. The probe
+is already on the drain node, because that is the output.
+
+## The specification
+
+- the drain current is **1.00 mA** from a **12 V** supply, both already on the canvas,
+- the source sits at **2.00 V**, the same lift module 2 used for bias stability,
+- the overdrive is **1.00 V**, so the drain may not go below $V_S + V_{ov}$,
+- the quiescent drain voltage is chosen so that the room above it and the room below it
+  are **equal**.
+
+Two resistors is the whole drawing. No gate network is needed here — the gate voltage
+is module 2's problem and this exercise is about where the drain sits.
+
+## Working it out
+
+The drain's allowed range runs from $V_S + V_{ov}$ at the bottom to $V_{DD}$ at the top.
+Put the quiescent point at the middle of that range, then let Ohm's law give you the
+two resistors from the currents and voltages you now know.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "p2", "kind": "I", "x": 13, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "p3", "kind": "GND", "x": 13, "y": 12},
+                        {"id": "p4", "kind": "OUT", "x": 16, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [13, 2]},
+                        {"a": [13, 5], "b": [16, 5]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "p2", "kind": "I", "x": 13, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "p3", "kind": "GND", "x": 13, "y": 12},
+                        {"id": "p4", "kind": "OUT", "x": 16, "y": 5},
+                        {"id": "p5", "kind": "R", "x": 13, "y": 3, "rot": 1, "value": 4500},
+                        {"id": "p6", "kind": "R", "x": 13, "y": 9, "rot": 1, "value": 2000},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [13, 2]},
+                        {"a": [13, 5], "b": [16, 5]},
+                        {"a": [13, 4], "b": [13, 5]},
+                        {"a": [13, 7], "b": [13, 8]},
+                        {"a": [13, 10], "b": [13, 12]},
+                    ],
+                },
+                "checks": [
+                    {"name": "the supply reaches the drain through a resistor", "code": r'''
+c.assert(c.count('V') === 1, 'Exactly one supply — the 12 V rail. Found ' + c.count('V') + '.');
+c.close(c.values('V')[0], 12, 0.001, 'the supply voltage');
+c.assert(c.count('I') === 1,
+  'One current source, standing in for the transistor at its operating point. Found ' +
+  c.count('I') + '.');
+c.close(c.values('I')[0], 1e-3, 0.01, 'the drain current the current source represents');
+/* until a drain resistor joins the rail to the drain the supply delivers nothing, so
+   this measures the drawing rather than restating what came with the canvas */
+const cur = c.dc().currents;
+const isup = Math.abs(cur[Object.keys(cur)[0]]);
+c.assert(isup >= 1e-3 * 0.99,
+  'The 1 mA has to reach the drain from the rail through R_D. The supply is delivering ' +
+  (isup * 1e6).toFixed(1) + ' µA, so the drain branch is not connected to the rail.');
+'''},
+                    {"name": "the source is lifted to 2.00 V", "code": r'''
+const q = c.net.parts.filter(function (p) { return p.kind === 'I'; })[0];
+c.assert(q, 'The current source standing in for the transistor has gone missing.');
+const v = c.dc().v;
+c.assert(v[q.n1] > v[q.n2],
+  'The current source is upside down: its + pin is the drain and has to end up above the ' +
+  'source pin. Measured ' + v[q.n1].toFixed(2) + ' V at the + pin and ' + v[q.n2].toFixed(2) +
+  ' V at the other.');
+c.close(v[q.n2], 2.0, 0.02, 'the source voltage, which is I_D through R_S');
+'''},
+                    {"name": "the drain sits at the middle of its allowed range", "code": r'''
+c.close(c.vout(), 7.5, 0.01,
+  'the probed drain voltage — halfway between V_S + V_ov and the supply');
+'''},
+                    {"name": "the two margins are equal, and each is 4.5 V", "code": r'''
+const q = c.net.parts.filter(function (p) { return p.kind === 'I'; })[0];
+const v = c.dc().v;
+const vdd = c.values('V')[0];
+const up = vdd - v[q.n1];
+const down = v[q.n1] - v[q.n2] - 1.0;
+c.assert(Math.abs(up - down) <= 0.12,
+  'The swing is lopsided: ' + up.toFixed(2) + ' V of room upward and ' + down.toFixed(2) +
+  ' V downward. Equal margins are what maximum symmetric swing means.');
+c.assert(Math.min(up, down) >= 4.4,
+  'Both margins should reach 4.5 V. The smaller one here is ' +
+  Math.min(up, down).toFixed(2) + ' V.');
+'''},
+                ],
+                "hints": [
+                    "The drain may sit anywhere from $V_S + V_{ov} = 3$ V up to the 12 V rail. Symmetric swing means the middle of that: 7.5 V.",
+                    "$R_S = V_S/I_D = 2.0/0.001 = 2$ kΩ, from the current source's lower pin down to a ground symbol.",
+                    "$R_D$ has to drop $12 - 7.5 = 4.5$ V at 1 mA, so it is 4.5 kΩ, from the rail down to the current source's + pin. Type it as `4.5k`.",
+                    "If the drain comes out at 12 V and the checks complain that no current is flowing, the drain resistor is drawn but not actually touching the rail — the wire has to land on the pin, not near it.",
+                ],
+            },
+            "derive": {
+                "title": "Where to put the drain, and what it is worth",
+                "minutes": 11,
+                "vars": ["V_DD", "V_D", "V_S", "V_ov", "I_D", "R_D"],
+                "brief": r'''
+The drain has a ceiling and a floor. The ceiling is the supply, because that is where
+the device has stopped conducting altogether. The floor is the edge of saturation,
+$V_S + V_{ov}$, because below it the square law stops applying and the gain collapses.
+
+Everything in this derivation follows from putting the quiescent drain voltage at the
+right place between those two, and it ends with a formula for $R_D$ you can use without
+thinking about it again.
+''',
+                "steps": [
+                    {
+                        "prompt": "Write the room the drain has above it — the distance from its quiescent value to the ceiling.",
+                        "answer": "V_{DD} - V_D",
+                        "hint": "The ceiling is the supply rail itself. Subtract where the drain rests from where it may go.",
+                        "deconstruct": [
+                            "As the signal drives the drain current down, the drop across $R_D$ shrinks and the drain rises.",
+                            "It stops rising when the current reaches zero and the whole supply appears at the drain.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now the room below. The floor is the edge of saturation, one overdrive above the source. Write the downward margin.",
+                        "answer": "V_D - V_S - V_{ov}",
+                        "hint": "The floor is at $V_S + V_{ov}$; the margin is the quiescent drain voltage minus that.",
+                        "deconstruct": [
+                            "Saturation needs $V_{DS} \\ge V_{ov}$, and $V_{DS} = V_D - V_S$.",
+                            "So the lowest usable drain voltage is $V_S + V_{ov}$.",
+                        ],
+                    },
+                    {
+                        "prompt": "A symmetric sine is limited by the smaller margin, so the best place for the drain makes them equal. Set the two expressions equal and solve for $V_D$.",
+                        "answer": "\\frac{V_{DD} + V_S + V_{ov}}{2}",
+                        "hint": "Collect the two $V_D$ terms on one side; everything else is the sum of the ceiling and the floor.",
+                        "deconstruct": [
+                            "$V_{DD} - V_D = V_D - V_S - V_{ov}$ gives $2V_D = V_{DD} + V_S + V_{ov}$.",
+                            "Which is just the midpoint of the range between the floor and the ceiling.",
+                        ],
+                    },
+                    {
+                        "prompt": "Put that back into either margin. Write the peak swing available.",
+                        "answer": "\\frac{V_{DD} - V_S - V_{ov}}{2}",
+                        "hint": "Substitute into $V_{DD} - V_D$ and put the result over a common denominator.",
+                        "deconstruct": [
+                            "$V_{DD} - \\tfrac{1}{2}(V_{DD} + V_S + V_{ov}) = \\tfrac{1}{2}(V_{DD} - V_S - V_{ov})$.",
+                            "Half the width of the allowed range, which is what a midpoint always gives.",
+                        ],
+                    },
+                    {
+                        "prompt": "The drain resistor drops $V_{DD} - V_D$ at $I_D$. Write $R_D$ in terms of $V_{DD}$, $V_S$, $V_{ov}$ and $I_D$.",
+                        "answer": "\\frac{V_{DD} - V_S - V_{ov}}{2 I_D}",
+                        "hint": "You have just written that drop: it is the peak swing. Divide it by the current.",
+                        "deconstruct": [
+                            "$R_D = (V_{DD} - V_D)/I_D$ and $V_{DD} - V_D$ is the peak swing from the previous step.",
+                            "So the drop across $R_D$ at the best bias point is exactly the swing you get.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+Read the last line back as a design rule: **at maximum symmetric swing, the drain
+resistor drops exactly as many volts as the output is allowed to swing.** For the
+course stage that is 4.5 V of drop for 4.5 V of peak, and it also fixes the gain, since
+$R_D$ and $g_m$ are all a gain needs. Swing, headroom and gain stop being three
+independent choices at that point — which is the honest situation, and worth meeting
+before a specification forces it on you.
+''',
+            },
+            "lab": {
+                "title": "Both ceilings, measured",
+                "runtime": "python",
+                "minutes": 28,
+                "brief": r'''
+Clipping is arithmetic and you have just derived it. Distortion is not something to
+take on trust, so measure it.
+
+- `swing_limits(vdd, i_d, r_d, r_s, v_ov)` returns `(v_d, up, down)`: the quiescent
+  drain voltage and the two margins, in volts.
+- `best_drain_resistor(vdd, i_d, r_s, v_ov)` returns the $R_D$ that makes the margins
+  equal.
+- `harmonics(v_ov, amp, k, n)` samples the drain current
+  $i_D = \tfrac{1}{2}k(V_{ov} + \hat{V}\cos\theta)^2$ over one period at `n` points and
+  returns `(dc, fundamental, second)` in amperes. The mean is the DC term; the
+  amplitude of the $m$-th harmonic is $\tfrac{2}{n}\sum_j i_j\cos(m\theta_j)$.
+- `hd2(v_ov, amp, k)` returns the second-harmonic distortion as a fraction, **measured
+  with `harmonics`** rather than from the formula. The point of the exercise is to
+  watch the measurement land on $\hat{V}/(4V_{ov})$ without having been told to.
+
+Nothing here needs NumPy; a loop over `n` samples is fast enough and shows what the
+sum is doing.
+''',
+                "files": [{"name": "main.py", "content": r'''
+"""How much signal the stage will take, and what it does to it on the way through."""
+
+import math
+
+K = 2e-3      # A/V^2
+V_TH = 1.0    # V
+
+
+def swing_limits(vdd, i_d, r_d, r_s, v_ov):
+    """Return (v_d, up, down) in volts for this bias network."""
+    # TODO: the drain sits at vdd - i_d * r_d and the source at i_d * r_s.
+    # TODO: up is the room to the supply; down is the room to V_S + V_ov.
+    return (0.0, 0.0, 0.0)
+
+
+def best_drain_resistor(vdd, i_d, r_s, v_ov):
+    """The drain resistor that makes the two margins equal."""
+    # TODO: straight from the derivation.
+    return 0.0
+
+
+def harmonics(v_ov, amp, k=K, n=4096):
+    """Return (dc, fundamental, second) amplitudes of the drain current, in amperes."""
+    # TODO: sample i_D = k (v_ov + amp cos(theta))^2 / 2 at n points over one period.
+    # TODO: dc is the mean; harmonic m has amplitude (2/n) * sum(i * cos(m theta)).
+    return (0.0, 0.0, 0.0)
+
+
+def hd2(v_ov, amp, k=K):
+    """Second-harmonic distortion as a fraction of the fundamental, measured."""
+    # TODO: call harmonics() and divide. Do not use the closed form here.
+    return 0.0
+
+
+if __name__ == "__main__":
+    print("margins with R_D = 5 k:", swing_limits(12.0, 1e-3, 5000.0, 2000.0, 1.0))
+    r_d = best_drain_resistor(12.0, 1e-3, 2000.0, 1.0)
+    print("best R_D:", r_d, "ohms")
+    print("margins with it:", swing_limits(12.0, 1e-3, r_d, 2000.0, 1.0))
+    print("harmonics at 0.2 V of drive:", harmonics(1.0, 0.2))
+    print("HD2 measured:", hd2(1.0, 0.2), " formula:", 0.2 / 4.0)
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+"""How much signal the stage will take, and what it does to it on the way through."""
+
+import math
+
+K = 2e-3      # A/V^2
+V_TH = 1.0    # V
+
+
+def swing_limits(vdd, i_d, r_d, r_s, v_ov):
+    """Return (v_d, up, down) in volts for this bias network."""
+    v_s = i_d * r_s
+    v_d = vdd - i_d * r_d
+    return (v_d, vdd - v_d, v_d - v_s - v_ov)
+
+
+def best_drain_resistor(vdd, i_d, r_s, v_ov):
+    """The drain resistor that makes the two margins equal."""
+    return (vdd - i_d * r_s - v_ov) / (2.0 * i_d)
+
+
+def harmonics(v_ov, amp, k=K, n=4096):
+    """Return (dc, fundamental, second) amplitudes of the drain current, in amperes."""
+    total = 0.0
+    first = 0.0
+    second = 0.0
+    for j in range(n):
+        theta = 2.0 * math.pi * j / n
+        i = 0.5 * k * (v_ov + amp * math.cos(theta)) ** 2
+        total += i
+        first += i * math.cos(theta)
+        second += i * math.cos(2.0 * theta)
+    return (total / n, 2.0 * first / n, 2.0 * second / n)
+
+
+def hd2(v_ov, amp, k=K):
+    """Second-harmonic distortion as a fraction of the fundamental, measured."""
+    _, fundamental, second = harmonics(v_ov, amp, k)
+    return second / fundamental
+
+
+if __name__ == "__main__":
+    print("margins with R_D = 5 k:", swing_limits(12.0, 1e-3, 5000.0, 2000.0, 1.0))
+    r_d = best_drain_resistor(12.0, 1e-3, 2000.0, 1.0)
+    print("best R_D:", r_d, "ohms")
+    print("margins with it:", swing_limits(12.0, 1e-3, r_d, 2000.0, 1.0))
+    print("harmonics at 0.2 V of drive:", harmonics(1.0, 0.2))
+    print("HD2 measured:", hd2(1.0, 0.2), " formula:", 0.2 / 4.0)
+'''}],
+                "hints": [
+                    "`swing_limits` is three subtractions. Compute the source voltage first and keep it in a local variable — the downward margin needs it and the upward one does not.",
+                    "`best_drain_resistor` is `(vdd - i_d * r_s - v_ov) / (2 * i_d)`. Check it against the numbers by hand once: 12 V, 1 mA, 2 kΩ and 1 V of overdrive give 4.5 kΩ.",
+                    "In `harmonics`, accumulate three running sums in one loop over `theta = 2 * math.pi * j / n`. The DC term is the plain mean, so it does *not* get the factor of two that the harmonic amplitudes do.",
+                    "If the fundamental comes out at half what you expect, the factor of `2/n` has been applied to the DC term as well; if the second harmonic comes out at zero, `cos(2 * theta)` has probably become `2 * cos(theta)`.",
+                ],
+                "tests": [
+                    {"name": "the margins are what the arithmetic says", "code": r'''
+v_d, up, down = swing_limits(12.0, 1e-3, 5000.0, 2000.0, 1.0)
+assert abs(v_d - 7.0) < 1e-9, f"12 V less 1 mA through 5 k is 7.00 V, got {v_d}"
+assert abs(up - 5.0) < 1e-9, f"the drain can rise 5 V to reach the supply, got {up}"
+assert abs(down - 4.0) < 1e-9, f"7 - 2 - 1 leaves 4 V before triode, got {down}"
+'''},
+                    {"name": "the best drain resistor makes them equal", "code": r'''
+r_d = best_drain_resistor(12.0, 1e-3, 2000.0, 1.0)
+assert abs(r_d - 4500.0) < 1e-6, f"(12 - 2 - 1) over 2 mA is 4.5 k, got {r_d}"
+v_d, up, down = swing_limits(12.0, 1e-3, r_d, 2000.0, 1.0)
+assert abs(v_d - 7.5) < 1e-9, f"expected the drain at 7.50 V, got {v_d}"
+assert abs(up - down) < 1e-9, f"the two margins must match; got {up} and {down}"
+assert abs(up - 4.5) < 1e-9, f"expected 4.5 V of peak swing, got {up}"
+'''},
+                    {"name": "a volt of source lift costs half a volt of swing", "code": r'''
+a = swing_limits(12.0, 1e-3, best_drain_resistor(12.0, 1e-3, 2000.0, 1.0), 2000.0, 1.0)[1]
+b = swing_limits(12.0, 1e-3, best_drain_resistor(12.0, 1e-3, 3000.0, 1.0), 3000.0, 1.0)[1]
+assert abs(a - 4.5) < 1e-9, f"expected 4.5 V of peak with the source at 2 V, got {a}"
+assert abs(b - 4.0) < 1e-9, f"lifting the source to 3 V leaves 4.0 V, got {b}"
+'''},
+                    {"name": "the harmonics land where the square law puts them", "code": r'''
+dc, fundamental, second = harmonics(1.0, 0.2)
+assert abs(dc - 1.02e-3) < 1e-9, \
+    f"the mean current is 1.020 mA, not the 1.000 mA it was biased at; got {dc}"
+assert abs(fundamental - 4e-4) < 1e-9, f"k V_ov amp is 0.400 mA, got {fundamental}"
+assert abs(second - 2e-5) < 1e-9, f"k amp^2 / 4 is 0.020 mA, got {second}"
+'''},
+                    {"name": "the measurement agrees with the formula it is meant to confirm", "code": r'''
+for amp in (0.05, 0.1, 0.2, 0.4):
+    m = hd2(1.0, amp)
+    assert abs(m - amp / 4.0) < 1e-6, \
+        f"at {amp} V of drive the measurement gives {m} and the formula {amp / 4.0}"
+assert abs(hd2(2.0, 0.2) - 0.025) < 1e-6, \
+    f"twice the overdrive is half the distortion, so 2.5%, got {hd2(2.0, 0.2)}"
+'''},
+                    {"name": "distortion binds long before the rails do", "code": r'''
+r_d = best_drain_resistor(12.0, 1e-3, 2000.0, 1.0)
+peak = swing_limits(12.0, 1e-3, r_d, 2000.0, 1.0)[1]
+drive = 0.04                     # the gate amplitude that gives 1% second harmonic
+assert abs(hd2(1.0, drive) - 0.01) < 1e-6, \
+    f"expected 1% at 40 mV of drive, got {hd2(1.0, drive)}"
+assert drive * 9.0 < peak / 10.0, (
+    "at a gain of 9 that is 0.36 V at the drain, against the 4.5 V clipping allows: "
+    "the curvature binds more than ten times sooner than the rails")
+'''},
+                ],
+            },
+        },
+
+        # ---- M6 -----------------------------------------------------------
+        {
+            "title": "Coupling, bypassing and the low-frequency end",
+            "summary": "Module 4 found the top of the band. The capacitors that let a signal in and out find the bottom of it.",
+            "concepts": [
+                "A stage has to be connected to something at each end without either connection disturbing the operating point that module 2 worked so hard to set. A **coupling capacitor** in series does that and nothing else: an open circuit at DC, a short well above its corner.",
+                "Every coupling capacitor sees the resistance on both sides of it in series with itself, and the three make a **high-pass**. At the input that resistance is $R_{sig} + (R_1\\parallel R_2)$; at the output it is $(r_o\\parallel R_D) + R_L$. Each contributes a corner at $1/(2\\pi RC)$.",
+                "For the course stage: $R_1\\parallel R_2 = 167$ kΩ, so 47 nF puts the input corner at 20.3 Hz. At the output, $4.5\\,\\text{k}\\Omega + 45\\,\\text{k}\\Omega = 49.5$ kΩ, so 470 nF puts that corner at 6.8 Hz. Big resistances make coupling capacitors small, which is one more reason the gate drawing no current is worth something.",
+                "The **bypass capacitor** across $R_S$ is a different animal. It is not in series with the signal; it removes the degeneration. Well above its corner it shorts $R_S$ and the gain is $-g_mR_D$; at DC it is not there and the gain is $-g_mR_D/(1+g_mR_S)$. So it produces a **pole and a zero**, not just a pole.",
+                "The zero sits at $1/(2\\pi R_SC_S)$ and the pole at $(1+g_mR_S)/(2\\pi R_SC_S)$. Their ratio is exactly $1+g_mR_S$ — the same factor by which the degeneration cut the gain. The gain climbs between them and is flat outside them, which is what a pole-zero pair separated by a factor of five looks like on a Bode plot.",
+                "That factor is why $C_S$ is the largest capacitor on the board. To put its pole at 20 Hz with $R_S = 2$ kΩ and $g_mR_S = 4$ takes $C_S = 5/(2\\pi\\times 2000\\times 20) \\approx 20$ µF — four hundred times the 47 nF at the input, because it is working against 2 kΩ, divided again by five.",
+                "**Midband** is the window where every coupling and bypass capacitor is already a short and every parasitic capacitance is still an open. Module 3's gain is the midband gain; module 4's corner is the top of the window and these corners are the bottom.",
+                "$f_L$ is set by the **highest** of the three corners, not by their sum: the one still rolling off when the others have finished. The usual design habit is to put one corner where $f_L$ belongs and push the other two a decade below it, so that only one thing is happening at the bottom of the band.",
+                "A high-pass shifts phase the opposite way from a low-pass: the output **leads**, by 45° at the corner and approaching 90° well below it. Where a DC path between stages is acceptable, leaving the capacitors out is better in every respect but one — the two stages' operating points are then locked together, and any DC offset at the input is amplified along with the signal.",
+            ],
+            "quiz": {
+                "title": "Where the band stops at the bottom",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "The stage is fed through a 47 nF coupling capacitor into the 500 kΩ / 250 kΩ bias divider, from a source whose own resistance is negligible. Where is the input corner?",
+                        "opts": ["6.8 Hz", "128 Hz", "20 Hz", "13.5 Hz"],
+                        "a": 2,
+                        "why": r'''
+The capacitor works against $R_1 \parallel R_2 = 167$ kΩ, so
+$f = 1/(2\pi \times 166.7\text{ k}\Omega \times 47\text{ nF}) = 20.3$ Hz. Using 500 kΩ
+alone gives 6.8 Hz and 250 kΩ alone gives 13.5 Hz — both wrong, because to a signal the
+two resistors are in parallel: one goes to ground and the other goes to $V_{DD}$, which
+is the same thing at signal frequencies. 128 Hz is $1/(RC)$ with the $2\pi$ left out.
+''',
+                    },
+                    {
+                        "q": "Why is the source bypass capacitor typically hundreds of times larger than the coupling capacitors in the same circuit?",
+                        "opts": [
+                            "it works against $R_S$, which is small, and its pole is pushed up by a further factor of $1+g_mR_S$",
+                            "it has to store the entire DC bias current",
+                            "electrolytic capacitors are only made in large values",
+                            "it works against $R_1 \\parallel R_2$, which is large",
+                        ],
+                        "a": 0,
+                        "why": r'''
+Two effects multiply. $R_S$ is 2 kΩ against the input network's 167 kΩ, which is
+already a factor of 80; and the bypass pole sits at $(1+g_mR_S)/(R_SC_S)$ rather than
+$1/(R_SC_S)$, so a further factor of 5 of capacitance is needed to drag it back down.
+80 times 5 is the 400 between 47 nF and 20 µF. Nothing about it is to do with storing
+bias current — no DC flows through a capacitor at all.
+''',
+                    },
+                    {
+                        "q": "Ignoring $r_o$, this stage has $g_mR_D = 10$ and $g_mR_S = 4$. What does the magnitude of the gain do as the frequency falls through the bypass capacitor's pole and zero?",
+                        "opts": [
+                            "it stays at 10 and then falls to zero at DC",
+                            "it falls from 10 to 2 and stays there",
+                            "it rises from 2 to 10",
+                            "it falls from 10 to 0.4",
+                        ],
+                        "a": 1,
+                        "why": r'''
+Above the pole the capacitor is a short, $R_S$ is out of the circuit and the gain is
+$g_mR_D = 10$. Below the zero the capacitor has gone and the full degeneration is back:
+$g_mR_D/(1+g_mR_S) = 10/5 = 2$. Between them the response slides by that factor of 5.
+It does not fall to zero at DC — a bypass capacitor is not in series with the signal,
+so it cannot block it; it only stops hiding $R_S$.
+''',
+                    },
+                    {
+                        "q": "At the input coupling corner, what is the phase of the output relative to its midband value?",
+                        "opts": ["−45°", "+90°", "0°", "+45°"],
+                        "a": 3,
+                        "why": r'''
+A single high-pass has a transfer function $j\omega RC/(1+j\omega RC)$, which at
+$\omega RC = 1$ is $j/(1+j)$: magnitude $1/\sqrt{2}$ and phase $+45°$. The output
+*leads*, which is the opposite of what a low-pass does at its corner, and it approaches
+$+90°$ far below. The phase in a real stage is the sum of all of it — this lead at the
+bottom, the inversion in the middle, and module 4's lag at the top.
+''',
+                    },
+                    {
+                        "q": "A stage has an input corner at 20 Hz, an output corner at 6.8 Hz and a bypass corner at 80 Hz. What is $f_L$?",
+                        "opts": [
+                            "about 107 Hz, the sum of the three",
+                            "about 6.8 Hz, the lowest",
+                            "about 80 Hz, the highest",
+                            "about 27 Hz, the geometric mean",
+                        ],
+                        "a": 2,
+                        "why": r'''
+Roughly 80 Hz. Coming down in frequency, the first corner reached is the one that
+starts the roll-off, and by the time the others arrive the response is already falling —
+they steepen it but do not decide where it began. So $f_L$ is set by the highest corner,
+and the practical consequence is that making the *other* two capacitors bigger buys
+nothing at all until the dominant one has been dealt with.
+''',
+                    },
+                    {
+                        "q": "A designer removes every coupling capacitor and connects the stages directly. What is gained and what is lost?",
+                        "opts": [
+                            "the response is flat to DC, but the stages' operating points are now coupled and any input offset is amplified with the signal",
+                            "nothing is gained; the response is unchanged",
+                            "the bandwidth at the top improves as well",
+                            "the gain rises, because the capacitors were attenuating the signal",
+                        ],
+                        "a": 0,
+                        "why": r'''
+Direct coupling removes the entire low-frequency roll-off — the amplifier works down to
+DC, which is exactly what an instrumentation amplifier needs. The cost is that the
+first stage's drain voltage is now the second stage's gate voltage, so the two bias
+designs are one design; and a millivolt of DC offset at the input becomes a
+gain-times-millivolt offset at the output, which is a large fraction of the swing.
+Coupling capacitors are not attenuating anything in midband, and they have nothing to
+do with the top of the band.
+''',
+                    },
+                ],
+            },
+            "build": {
+                "title": "The input coupling network, and where it stops passing",
+                "minutes": 26,
+                "brief": r'''
+This is the small-signal input of the stage from module 2, drawn as a signal sees it.
+
+The gate divider is 500 kΩ from the supply and 250 kΩ to ground — and to a signal
+those are **both** resistors to ground, because the supply rail is signal ground. The
+source is a 1 V test generator, so whatever the probe reads is the transfer directly.
+
+## What to draw
+
+- the 1 V source is already on the canvas,
+- a **coupling capacitor in series** between the source and the gate node — in series,
+  not to ground, or the network becomes a low-pass and blocks the wrong end of the band,
+- the two divider resistors, **both** from the gate node to ground,
+- a probe on the gate node.
+
+## What it must do
+
+- pass the signal essentially untouched at 2 kHz, with a phase shift of a degree or two,
+- pass almost nothing at 1 Hz, with the output leading by more than 60°,
+- have its **−3 dB corner at 20 Hz**: the amplitude there is $1/\sqrt{2}$ of the
+  midband amplitude.
+
+## Working it out
+
+The capacitor sees the two divider resistors in parallel. Put that resistance and the
+20 Hz corner into $f = 1/(2\pi RC)$ and solve for $C$; the arithmetic gives 47.7 nF and
+the nearest standard value, 47 nF, lands at 20.3 Hz. Type it as `47n`.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 5, "rot": 1, "value": 1},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 8},
+                    ],
+                    "wires": [
+                        {"a": [3, 6], "b": [3, 8]},
+                        {"a": [3, 4], "b": [3, 2]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 5, "rot": 1, "value": 1},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 8},
+                        {"id": "p2", "kind": "C", "x": 7, "y": 3, "rot": 1, "value": 4.7e-08},
+                        {"id": "p3", "kind": "R", "x": 11, "y": 8, "rot": 1, "value": 500000},
+                        {"id": "p4", "kind": "GND", "x": 11, "y": 11},
+                        {"id": "p5", "kind": "R", "x": 15, "y": 8, "rot": 1, "value": 250000},
+                        {"id": "p6", "kind": "GND", "x": 15, "y": 11},
+                        {"id": "p7", "kind": "OUT", "x": 13, "y": 6},
+                    ],
+                    "wires": [
+                        {"a": [3, 6], "b": [3, 8]},
+                        {"a": [3, 4], "b": [3, 2]},
+                        {"a": [3, 2], "b": [7, 2]},
+                        {"a": [7, 4], "b": [7, 6]},
+                        {"a": [7, 6], "b": [15, 6]},
+                        {"a": [11, 6], "b": [11, 7]},
+                        {"a": [15, 6], "b": [15, 7]},
+                        {"a": [11, 9], "b": [11, 11]},
+                        {"a": [15, 9], "b": [15, 11]},
+                    ],
+                },
+                "checks": [
+                    {"name": "the source reaches the gate through a capacitor, not into one", "code": r'''
+c.assert(c.count('V') === 1, 'One signal source. Found ' + c.count('V') + '.');
+c.close(c.values('V')[0], 1, 0.001, 'the test signal amplitude');
+c.assert(c.count('C') === 1,
+  'Exactly one capacitor — the coupling capacitor. Found ' + c.count('C') + '.');
+const cap = c.net.parts.filter(function (p) { return p.kind === 'C'; })[0];
+c.assert(cap.n1 !== 0 && cap.n2 !== 0,
+  'A coupling capacitor goes in series with the signal, from the source to the gate node. ' +
+  'This one has an end on ground, which makes it a low-pass and blocks the wrong half ' +
+  'of the spectrum.');
+'''},
+                    {"name": "both halves of the divider hang on the gate node", "code": r'''
+const out = c.outNode();
+const legs = c.net.parts.filter(function (p) {
+  return p.kind === 'R' && ((p.n1 === out && p.n2 === 0) || (p.n2 === out && p.n1 === 0));
+});
+c.assert(legs.length === 2,
+  'The divider is two resistors, and in the small-signal circuit BOTH run from the gate ' +
+  'node to ground, because V_DD is signal ground. Found ' + legs.length +
+  ' resistor(s) between the probed node and ground.');
+const cond = legs.reduce(function (s, p) { return s + 1 / p.value; }, 0);
+c.close(1 / cond, 166666.7, 0.03,
+  'R1 in parallel with R2, which is the resistance the coupling capacitor works against');
+'''},
+                    {"name": "in midband the capacitor is invisible", "code": r'''
+c.close(c.gain(2000), 1.0, 0.02,
+  'the amplitude at the gate at 2 kHz — well above the corner, the network should pass ' +
+  'the whole 1 V');
+c.assert(Math.abs(c.phase(2000)) < 5,
+  'Well above the corner the coupling capacitor should shift the phase by a degree or ' +
+  'two. Measured ' + c.phase(2000).toFixed(1) + '°.');
+'''},
+                    {"name": "it is a high-pass: the bottom of the band is blocked, and the phase leads", "code": r'''
+const mid = c.gain(2000);
+c.assert(c.gain(1) < 0.1 * mid,
+  'At 1 Hz almost nothing should get through — that is what a coupling capacitor is for. ' +
+  'This network is passing ' + (100 * c.gain(1) / mid).toFixed(1) + '% of its midband value.');
+c.assert(c.phase(1) > 60,
+  'A high-pass leads, approaching +90° far below the corner. Measured ' +
+  c.phase(1).toFixed(1) + '°, which is what a low-pass would give — check which way round ' +
+  'the capacitor and the resistors are.');
+'''},
+                    {"name": "the corner is at 20 Hz", "code": r'''
+const ratio = c.gain(20) / c.gain(2000);
+c.close(ratio, 0.7071, 0.03,
+  'the amplitude at 20 Hz as a fraction of midband — at the -3 dB corner it is 1/sqrt(2)');
+'''},
+                ],
+                "hints": [
+                    "The two divider resistors are in parallel as far as the signal is concerned: $500\\,\\text{k} \\parallel 250\\,\\text{k} = 167$ kΩ. Draw each of them from the gate node to its own ground symbol.",
+                    "$C = 1/(2\\pi Rf) = 1/(2\\pi \\times 166667 \\times 20) = 47.7$ nF. Type `47n` — the nearest standard value, and it lands the corner at 20.3 Hz, inside the tolerance.",
+                    "The capacitor goes *between* two nodes that are both live: the source's top terminal and the gate node. If either end of it is on a ground symbol, it is a decoupling capacitor rather than a coupling one, and it will do the opposite of what is wanted.",
+                    "If the phase at 1 Hz comes out near −90° rather than +90°, the capacitor and the resistors have been swapped: the resistors go to ground and the capacitor goes in the signal path.",
+                ],
+            },
+            "derive": {
+                "title": "The pole and the zero a bypass capacitor brings with it",
+                "minutes": 12,
+                "vars": ["g_m", "R_D", "R_S", "C_S", "s", "A_v", "Z_S"],
+                "brief": r'''
+A coupling capacitor gives a pole and nothing else. The bypass capacitor across $R_S$
+gives a pole *and* a zero, and the reason is worth seeing rather than memorising: the
+capacitor does not interrupt the signal path, it changes the amount of degeneration,
+and the gain has a different finite value at each end of the transition.
+
+Start from the degenerated gain with the source impedance left general,
+
+$$A_v = \frac{-g_mR_D}{1 + g_mZ_S}$$
+
+and put the parallel pair into it.
+''',
+                "steps": [
+                    {
+                        "prompt": "Write the impedance of $R_S$ in parallel with $C_S$, as a function of $s$.",
+                        "answer": "\\frac{R_S}{1 + s R_S C_S}",
+                        "hint": "Product over sum, with $1/(sC_S)$ for the capacitor. Multiply numerator and denominator by $sC_S$ to clear the compound fraction.",
+                        "deconstruct": [
+                            "$Z_S = R_S \\cdot \\frac{1}{sC_S} \\big/ \\left(R_S + \\frac{1}{sC_S}\\right)$.",
+                            "Multiplying top and bottom by $sC_S$ leaves $R_S/(1 + sR_SC_S)$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Substitute that into $A_v = -g_mR_D/(1 + g_mZ_S)$ and tidy it into a single ratio of polynomials in $s$.",
+                        "given": "The denominator will need a common factor of $1 + sR_SC_S$ before it can be inverted.",
+                        "answer": "\\frac{-g_m R_D (1 + s R_S C_S)}{1 + g_m R_S + s R_S C_S}",
+                        "hint": "$1 + g_mR_S/(1+sR_SC_S)$ becomes $(1 + sR_SC_S + g_mR_S)/(1+sR_SC_S)$; dividing by that multiplies the top by $1+sR_SC_S$.",
+                        "deconstruct": [
+                            "Put the 1 over the same denominator: $\\frac{1 + sR_SC_S + g_mR_S}{1 + sR_SC_S}$.",
+                            "Dividing by a fraction multiplies by its reciprocal, which lifts $1 + sR_SC_S$ into the numerator.",
+                        ],
+                    },
+                    {
+                        "prompt": "The zero is the frequency at which the numerator vanishes. Write it as a positive frequency in rad/s.",
+                        "answer": "\\frac{1}{R_S C_S}",
+                        "hint": "Set $1 + sR_SC_S = 0$ and quote the magnitude of the root.",
+                        "deconstruct": [
+                            "$s = -1/(R_SC_S)$, so the zero sits at that distance from the origin.",
+                            "It is the plain time constant of $R_S$ and $C_S$, with no $g_m$ in it at all.",
+                        ],
+                    },
+                    {
+                        "prompt": "And the pole, from the denominator.",
+                        "answer": "\\frac{1 + g_m R_S}{R_S C_S}",
+                        "hint": "Set $1 + g_mR_S + sR_SC_S = 0$ and divide through by $R_SC_S$.",
+                        "deconstruct": [
+                            "$s = -(1 + g_mR_S)/(R_SC_S)$.",
+                            "Read it as the same time constant, but working against $R_S \\parallel (1/g_m)$ rather than $R_S$ alone.",
+                        ],
+                    },
+                    {
+                        "prompt": "Write the ratio of the pole frequency to the zero frequency.",
+                        "answer": "1 + g_m R_S",
+                        "hint": "Divide one by the other; $R_SC_S$ cancels.",
+                        "deconstruct": [
+                            "Both frequencies carry the same $1/(R_SC_S)$.",
+                            "What is left is the factor by which degeneration reduced the gain in the first place.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+The gain climbs by $1 + g_mR_S$ between the zero and the pole, and the two are separated
+by exactly that factor — which is why the transition looks the same on every Bode plot
+of a degenerated stage regardless of the numbers. Two consequences worth keeping. The
+capacitor must be sized against the **pole**, not the zero, or the response is still
+climbing at the frequency you meant to be flat at. And with $g_mR_S = 4$ the pole is
+five times the zero, so $C_S$ has to be five times what a naive $1/(2\pi R_SC_S)$
+calculation suggests — which is where most of the 20 µF comes from.
+''',
+            },
+        },
+
+        # ---- M7 -----------------------------------------------------------
+        {
+            "title": "The source follower and the common-gate stage",
+            "summary": "The same device wired two other ways, neither of which is trying to give you voltage gain.",
+            "concepts": [
+                "One device, three ways to wire it. The signal goes in at one terminal, comes out at another, and the third is common to both — which is what the three names mean. Everything else in analogue electronics is these three in combination.",
+                "**Common-drain**, always called the **source follower**: in at the gate, out at the source. The source sits one $V_{GS}$ below the gate and follows it, so $A_v = g_mR_L/(1+g_mR_L)$, which is always less than one and never inverts.",
+                "The point of it is not gain. Looking back into the source terminal, the stage has an output resistance of $1/g_m$ — 500 Ω at 1 mA, against the common-source stage's 4.5 kΩ. What the follower buys is the ability to drive something without the gain collapsing.",
+                "And it is bought with current: $1/g_m = 1/\\sqrt{2kI_D}$, so halving the output resistance costs four times the bias current. A follower that has to look like 50 Ω is an expensive object.",
+                "The follower's bandwidth into a load capacitance is $1/(2\\pi (1/g_m) C_L) = g_m/(2\\pi C_L)$ — which is precisely the **gain-bandwidth product** of a common-source stage built from the same device with the same $C_L$. The follower is module 4's bargain taken to its limit: all of the product spent on speed, none of it on gain. For this device with $C_L = 354$ pF that is 900 kHz at a gain of one, against 100 kHz at a gain of nine.",
+                "**Common-gate**: in at the source, out at the drain, gate held at a fixed voltage. The gain is $+g_m(r_o\\parallel R_D)$ — the same magnitude as common-source, and *not* inverting.",
+                "Its input resistance is about $1/g_m$, and the low value is the reason to use it. When what arrives is a current rather than a voltage — a photodiode, a coaxial line that has to be terminated, the drain of another transistor — you want an input that does not let the node's voltage move. The common-gate stage takes current in at a low impedance and delivers it to a high one, which is what a current buffer is.",
+                "In one line each: common-source gives voltage gain and inverts; common-drain gives current gain, a gain of about one, and a low output resistance; common-gate gives voltage gain without inverting, and a low input resistance. Choosing between them is choosing which impedance you need at which end.",
+            ],
+            "sandbox": {
+                "title": "The same product, spent two different ways",
+                "visualiser": "bode",
+                "minutes": 9,
+                "initial": {"K": 1, "wn": 200, "zeta": 0.71},
+                "brief": r'''
+The top plot is magnitude in decibels against frequency, the bottom is phase, and both
+frequency axes are logarithmic. $K$ is the low-frequency gain and $\omega_n$ is the
+corner; with $\zeta$ left at 0.71 that corner is the −3 dB point to within half a
+percent, which is the reading you want.
+
+The picture opens on a **source follower**: a gain of one, and a corner an order of
+magnitude further out than anything module 4 managed. Nothing here is a second-order
+circuit — a follower and a common-source stage each have one pole, so the slope above
+the corner is half as steep as what this visualiser draws — but the *positions* are
+honest, and it is the positions this module is about.
+
+Work $K$ and $\omega_n$ against each other and watch what refuses to change.
+''',
+                "notice": [
+                    "At the opening values the magnitude curve is flat at 0 dB across most of the plot, and the amber corner marker sits at −3 dB at $\\omega = 200$. A gain of one is 0 dB: the follower hands back exactly what it was given, and the whole of what the device can do has gone into how quickly it hands it back.",
+                    "Now set $K$ to 9 and $\\omega_n$ to 22 — the common-source stage of module 4, near enough. The flat part lifts to 19 dB and the corner slides a decade to the left. Multiply the two settings out in absolute terms rather than decibels: $1 \\times 200$ and $9 \\times 22$ are the same number, and that number is $g_m/(2\\pi C_L)$.",
+                    "Push it to the other extreme: $K = 20$ with $\\omega_n = 10$. The flat part is 26 dB and the corner is at 10 — the product is still 200. There is a straight line's worth of settings here, and a real device lets you slide along it and nowhere else.",
+                    "Put $\\omega_n$ back to 200 and read the lower plot. The phase passes through exactly −90° at the corner whatever $\\zeta$ is, and it has begun to bend long before the magnitude has: at $\\omega = 20$, a decade below the corner, the magnitude is still flat while the phase has already moved several degrees. That gap is why an amplifier inside a feedback loop can be in trouble at frequencies where its gain still looks perfectly healthy.",
+                    "Note what this picture cannot show you: the follower's real gain is $g_mR_L/(1+g_mR_L)$, which is just *under* one, and how far under depends on the load. Set $K$ to 0.7 to see a follower driving 1 kΩ at $g_m = 2$ mA/V — the corner does not move, because the same $1/g_m$ sets both.",
+                ],
+            },
+            "quiz": {
+                "title": "Which terminal is doing what",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "A source follower biased at 1 mA ($g_m = 2$ mA/V) drives a 1 kΩ load. What is its voltage gain?",
+                        "opts": ["2.0", "0.5", "0.667", "1.0"],
+                        "a": 2,
+                        "why": r'''
+$A_v = g_mR_L/(1+g_mR_L) = 2/(1+2) = 0.667$. Read the formula as a divider between the
+follower's own output resistance $1/g_m = 500$ Ω and the 1 kΩ load, because that is
+exactly what it is: 1000/1500. A gain of one is what a follower approaches when the
+load is much larger than $1/g_m$, and it never exceeds one — a value above one would
+mean the source moving further than the gate that is dragging it.
+''',
+                    },
+                    {
+                        "q": "What is the output resistance of that follower, looking back into the source terminal?",
+                        "opts": ["500 Ω", "45 kΩ", "2 kΩ", "4.5 kΩ"],
+                        "a": 0,
+                        "why": r'''
+$1/g_m = 1/0.002 = 500$ Ω. It is not $r_o$: $r_o$ is what you see looking into the
+*drain*, and 45 kΩ is what the common-source stage of module 3 offered its load. The
+whole reason a follower is put on the end of a signal chain is that 500 Ω is nine times
+lower than the 4.5 kΩ a common-source stage would present, and it is the same device at
+the same current.
+''',
+                    },
+                    {
+                        "q": "That follower is asked for a gain of 0.95 into the same 1 kΩ. Roughly what bias current does it need?",
+                        "opts": ["about 4 mA", "about 90 mA", "about 19 mA", "about 2 mA"],
+                        "a": 1,
+                        "why": r'''
+0.95 needs $g_mR_L = 19$, so $g_m = 19$ mA/V, and $I_D = g_m^2/(2k) = (0.019)^2/0.004
+= 90$ mA. Ninety times the bias current for a gain that has gone from 0.667 to 0.95.
+This is the square-root law biting hard: transconductance is bought with current at a
+worsening rate, and a follower asked for a very low output resistance is one of the
+places in analogue design where the bill is enormous.
+''',
+                    },
+                    {
+                        "q": "A common-gate stage takes its input at the source. What is its input resistance, and why is a low value the point?",
+                        "opts": [
+                            "about $1/g_m$, so the node's voltage barely moves and the stage accepts a current cleanly",
+                            "about $r_o$, so it does not load the source",
+                            "infinite, because the gate takes no current",
+                            "about $R_D$, so it matches the drain",
+                        ],
+                        "a": 0,
+                        "why": r'''
+About $1/g_m$ — 500 Ω here. It is low on purpose: a photodiode, a terminated coaxial
+line or the drain of another transistor delivers a *current*, and the way to accept a
+current faithfully is to give it a node whose voltage does not move. The infinite input
+resistance belongs to the common-source and common-drain stages, where the signal
+arrives at the gate.
+''',
+                    },
+                    {
+                        "q": "Which of the three configurations inverts?",
+                        "opts": [
+                            "common-source and common-gate, but not common-drain",
+                            "common-source only",
+                            "all three",
+                            "common-drain only",
+                        ],
+                        "a": 1,
+                        "why": r'''
+Only common-source. In it, more gate voltage means more drain current, more drop across
+$R_D$ and therefore a lower drain — the 180° of module 3. In common-gate, the input at
+the source *reduces* $V_{GS}$ when it goes up, so the drain current falls and the drain
+rises: same magnitude, no inversion. And the follower's output tracks its input by
+definition. Sign is not decoration; it decides whether a feedback loop settles or runs
+away.
+''',
+                    },
+                    {
+                        "q": "The same device and the same 354 pF of load capacitance are used in a common-source stage and in a follower. How do the bandwidths compare?",
+                        "opts": [
+                            "100 kHz and 900 kHz — the follower's bandwidth equals the common-source stage's gain-bandwidth product",
+                            "both 100 kHz, since the capacitance is the same",
+                            "100 kHz and 11 kHz — the follower is slower",
+                            "900 kHz each",
+                        ],
+                        "a": 0,
+                        "why": r'''
+The corner is $1/(2\pi RC_L)$ with $R$ the resistance at the output node. For the
+common-source stage $R = r_o \parallel R_D = 4.5$ kΩ, giving 100 kHz at a gain of nine.
+For the follower $R = 1/g_m = 500$ Ω, giving 900 kHz at a gain of about one. Nine times
+the bandwidth for a ninth of the gain: the same $g_m/(2\pi C_L)$, spent differently.
+Nothing about the follower breaks module 4's rule — it obeys it exactly.
+''',
+                    },
+                ],
+            },
+            "derive": {
+                "title": "The follower, from its own small-signal circuit",
+                "minutes": 12,
+                "vars": ["g_m", "R_L", "v_in", "v_out", "v_gs", "i_d", "A_v", "r_o"],
+                "brief": r'''
+The common-source result was easy because the source was held at signal ground: $v_{gs}$
+was simply the input. Here the source is the output, so $v_{gs}$ depends on the answer,
+and the algebra has to be closed rather than read off.
+
+Take $r_o$ as large enough to ignore — with $R_L$ of a few kilohms against 45 kΩ that
+costs a few percent — and work in the small-signal circuit: a controlled current source
+$g_mv_{gs}$ from drain to source, the drain at signal ground, and $R_L$ from the source
+node to ground.
+''',
+                "steps": [
+                    {
+                        "prompt": "The gate is driven by $v_{in}$ and the source sits at $v_{out}$. Write $v_{gs}$.",
+                        "answer": "v_{in} - v_{out}",
+                        "hint": "It is the definition: the gate voltage minus the source voltage, both measured as small-signal quantities.",
+                        "deconstruct": [
+                            "In the common-source stage the source was at signal ground, so $v_{gs}$ was just $v_{in}$.",
+                            "Here it is not, and that difference is the whole of the feedback in a follower.",
+                        ],
+                    },
+                    {
+                        "prompt": "The device's small-signal drain current is $g_mv_{gs}$. Write $i_d$ in terms of $v_{in}$ and $v_{out}$.",
+                        "answer": "g_m (v_{in} - v_{out})",
+                        "hint": "Substitute the previous line into $i_d = g_mv_{gs}$; keep the bracket.",
+                        "deconstruct": [
+                            "$g_m$ multiplies the whole gate-source voltage, not just the input.",
+                            "Notice the current already depends on the output — that is why this needs solving rather than evaluating.",
+                        ],
+                    },
+                    {
+                        "prompt": "That current flows out of the source terminal into $R_L$. Write $v_{out}$ in terms of $v_{in}$, $v_{out}$, $g_m$ and $R_L$.",
+                        "answer": "g_m (v_{in} - v_{out}) R_L",
+                        "hint": "Ohm's law on $R_L$: the output voltage is the current through it times its resistance.",
+                        "deconstruct": [
+                            "The drain is at signal ground, so all of $i_d$ arrives at the source node.",
+                            "$v_{out} = i_dR_L$, with $i_d$ from the previous step.",
+                        ],
+                    },
+                    {
+                        "prompt": "Solve that for the voltage gain $A_v = v_{out}/v_{in}$.",
+                        "answer": "\\frac{g_m R_L}{1 + g_m R_L}",
+                        "hint": "Expand the bracket, gather the $v_{out}$ terms on the left, then divide.",
+                        "deconstruct": [
+                            "$v_{out}(1 + g_mR_L) = g_mR_Lv_{in}$.",
+                            "Divide both sides by $v_{in}(1+g_mR_L)$.",
+                        ],
+                    },
+                    {
+                        "prompt": "For the output resistance, set $v_{in} = 0$ and drive the source node with a test voltage $v$. The current flowing *into* the node from the test source is $-i_d$. Write $R_{out} = v/(-i_d)$ in terms of $g_m$.",
+                        "answer": "\\frac{1}{g_m}",
+                        "hint": "With the gate grounded, $v_{gs} = -v$, so $i_d = -g_mv$ and the test source is supplying $g_mv$.",
+                        "deconstruct": [
+                            "$v_{gs} = 0 - v = -v$, so $i_d = -g_mv$: the device is pulling current *out* of the test source.",
+                            "$R_{out} = v/(g_mv) = 1/g_m$, and $R_L$ does not appear because it was in parallel with the test source, not part of the device.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+Read the gain as a divider and the follower stops being a special case: it is a voltage
+source of $v_{in}$ behind a resistance of $1/g_m$, and $R_L/(R_L + 1/g_m)$ is what any
+divider does. That Thévenin picture is the one to carry — it makes the loaded gain
+obvious, it makes the bandwidth into a capacitive load obvious, and it is the model the
+output-stage module works with directly. Including $r_o$ changes $R_L$ to
+$R_L \parallel r_o$ and moves nothing else, which is why it is usually left out of the
+first pass.
+''',
+            },
+        },
+
+        # ---- M8 -----------------------------------------------------------
+        {
+            "title": "Current mirrors and the active load",
+            "summary": "A resistor at the drain is asked to be large and to drop nothing. A transistor can do both.",
+            "concepts": [
+                "The drain resistor has two incompatible jobs. The gain wants it large, because $A_v = -g_mR_D$; the headroom wants it small, because everything it drops is swing that no longer exists. At 1 mA a 45 kΩ drain resistor would need 45 V across it, and the supply is 12 V.",
+                "A current source breaks the link. Ideally it has infinite small-signal resistance and needs only about one overdrive of DC across it, so it can be large *and* cheap in volts. That is the entire argument for an **active load**.",
+                "The **current mirror** is how a current source gets built out of transistors. Two matched devices share a gate-source voltage. The reference device has its gate tied to its drain — which forces $V_{DS} = V_{GS}$, and since $V_{GS} > V_{ov}$ always, that device is guaranteed to be in saturation — and it develops whatever $V_{GS}$ the reference current demands. The output device sees the same $V_{GS}$ and carries the same current.",
+                "The ratio is geometry, not resistance: $I_{out}/I_{ref} = (W/L)_2/(W/L)_1$. Currents are multiplied and divided by drawing devices wider or narrower, and geometry ratios on one die match far better than resistor values do.",
+                "Tying gate to drain has a small-signal consequence worth knowing on its own. The diode-connected device is not a current source at all: driving its terminals with $v$ produces $g_mv$ from the controlled source and $v/r_o$ through $r_o$, so it looks like $1/(g_m + 1/r_o) \\approx 1/g_m$ — 500 Ω here, not 45 kΩ. One wire turns the best current source in the circuit into the worst.",
+                "The *output* device keeps its $r_o$, and that is the honest resistance of a real current source: $r_o = V_A/I_D = 45$ kΩ at 1 mA. A current source is only as stiff as the Early voltage of the device making it.",
+                "With an active load the drain sees $r_o$ of the amplifier in parallel with $r_o$ of the load: 22.5 kΩ. The gain is $g_m \\times 22.5\\,\\text{k}\\Omega = 45$ — half the intrinsic gain of 90, five times what the 5 kΩ resistor gave, and it hands back 5 V of headroom while doing it.",
+                "What it does not do is move the gain-bandwidth product. With the same $C_L = 354$ pF the corner falls from 100 kHz to 20 kHz, and $45 \\times 20\\text{ kHz} = 900$ kHz, the same number as module 4. An active load converts *headroom* into gain, not bandwidth into gain.",
+                "Matching decides whether any of this works. A threshold mismatch $\\Delta V_{th}$ between the two mirror devices gives a fractional current error of $2\\Delta V_{th}/V_{ov}$ — 5 mV of mismatch at a 1 V overdrive is 1%. A larger overdrive makes a mirror more accurate and costs voltage, which is the same trade in yet another costume.",
+            ],
+            "quiz": {
+                "title": "Mirrors, and what a transistor load is worth",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "What does tying a MOSFET's gate to its drain do?",
+                        "opts": [
+                            "it turns the device off",
+                            "it makes $V_{DS} = V_{GS}$, so the device is always in saturation, and it behaves as a two-terminal resistor of about $1/g_m$",
+                            "it puts the device in triode, where it behaves as a resistor of $1/(kV_{ov})$",
+                            "it has no small-signal effect; the device is still a current source of $r_o$",
+                        ],
+                        "a": 1,
+                        "why": r'''
+Two things at once. Because $V_{DS} = V_{GS}$ and saturation needs only
+$V_{DS} \ge V_{GS} - V_{th}$, a diode-connected device is in saturation whenever it is
+conducting at all — which is what makes it a reliable reference. And to a small signal
+it is a resistor of $1/(g_m + 1/r_o) \approx 1/g_m$, because the gate now moves with the
+drain: 500 Ω at 1 mA, not the 45 kΩ the same device offers with its gate held still.
+''',
+                    },
+                    {
+                        "q": "A mirror's reference device has $W/L = 10$ and carries 0.2 mA. The output device has $W/L = 40$. What does it carry?",
+                        "opts": ["0.05 mA", "0.2 mA", "0.8 mA", "2.0 mA"],
+                        "a": 2,
+                        "why": r'''
+0.8 mA. Both devices sit at the same $V_{GS}$, so both have the same overdrive, and
+$I_D = \tfrac{1}{2}k'(W/L)V_{ov}^2$ scales straight with $W/L$: four times the width is
+four times the current. This is why a bias distribution network on a chip is a row of
+mirrors with different widths rather than a row of resistors — the ratio depends on
+drawn dimensions, which track each other across temperature and process in a way that
+absolute values never do.
+''',
+                    },
+                    {
+                        "q": "The output device of a mirror runs at 1 mA and has $V_A = 45$ V. What is the small-signal output resistance of that 'current source'?",
+                        "opts": ["45 kΩ", "500 Ω", "infinite", "22.5 kΩ"],
+                        "a": 0,
+                        "why": r'''
+$r_o = V_A/I_D = 45$ kΩ. The infinite answer is the ideal-current-source idealisation,
+and the whole reason channel-length modulation was introduced in module 1 is that this
+is where it shows up as a design limit. 500 Ω is what the *reference* device of the same
+mirror looks like, because its gate is tied to its drain; the two devices are identical
+silicon and differ by one wire.
+''',
+                    },
+                    {
+                        "q": "A common-source stage at 1 mA ($g_m = 2$ mA/V, $r_o = 45$ kΩ) is given an active load whose own $r_o$ is also 45 kΩ. What is the gain?",
+                        "opts": ["−90", "−9", "−180", "−45"],
+                        "a": 3,
+                        "why": r'''
+The drain sees $45\text{k} \parallel 45\text{k} = 22.5$ kΩ, so $A_v = -2\text{ mA/V}
+\times 22.5\text{ k}\Omega = -45$: half the intrinsic gain of 90, because there are now
+two identical resistances at that node instead of one. Answering −90 forgets that the
+load device has an output resistance too; −9 is the 5 kΩ resistor from module 3, which
+is exactly what has just been replaced.
+''',
+                    },
+                    {
+                        "q": "That change took the gain from 9 to 45 with the same device, the same current and the same 354 pF of load capacitance. What happened to the bandwidth?",
+                        "opts": [
+                            "it fell from 100 kHz to 20 kHz, leaving the gain-bandwidth product at 900 kHz",
+                            "it stayed at 100 kHz",
+                            "it rose to 500 kHz",
+                            "it fell to 2 kHz",
+                        ],
+                        "a": 0,
+                        "why": r'''
+The corner is $1/(2\pi R_{out}C_L)$ and $R_{out}$ went from 4.5 kΩ to 22.5 kΩ, a factor
+of five — so 100 kHz becomes 20 kHz and $45 \times 20\text{ kHz}$ is the same 900 kHz
+module 4 measured. The active load did not cheat the product; it bought gain with
+headroom, which is a resource module 4's resistor could not spend. Getting more product
+still needs a bigger $g_m$ or a smaller $C_L$.
+''',
+                    },
+                    {
+                        "q": "The two devices of a mirror differ by 5 mV in threshold voltage, at an overdrive of 1 V. What current error does that give?",
+                        "opts": ["0.5%", "1%", "5 mV", "0.25%"],
+                        "a": 1,
+                        "why": r'''
+The current goes as the square of the overdrive, so a fractional change in overdrive
+appears doubled in the current: $\Delta I/I = 2\Delta V_{th}/V_{ov} = 2 \times
+0.005/1 = 1\%$. Answering 0.5% is the un-doubled version, and forgetting the factor of
+two is exactly the sort of error that makes a mirror look twice as good on paper as it
+is on silicon. Note the cure: a larger overdrive shrinks the fraction, at the price of
+the voltage it takes to sustain it.
+''',
+                    },
+                ],
+            },
+            "build": {
+                "title": "Swap the drain resistor for a current source",
+                "minutes": 24,
+                "brief": r'''
+The canvas opens with the finished circuit from module 4: the transistor's
+$g_mv_{gs} = 20$ µA generator for a 10 mV input, its own $r_o$ of 45 kΩ, the 5 kΩ drain
+resistor, and the 354 pF of load capacitance. It measures a gain of 9 and a corner at
+100 kHz, as it should.
+
+Your job is one component. Replace the 5 kΩ drain resistor with the small-signal
+equivalent of a **current-source load** — which is the output device of a mirror, and
+therefore its own $r_o$, 45 kΩ, from the drain node to ground.
+
+## What the finished circuit must do
+
+- $r_o$ of the amplifying device, 45 kΩ, still there from the probed drain node to
+  ground,
+- nothing small left at that node: no resistance below 20 kΩ anywhere on the drain,
+- a low-frequency gain of **45**, so the probed node reads 450 mV for the 10 mV the
+  current source stands for,
+- a corner at **20 kHz**,
+- and therefore a gain-bandwidth product still equal to **900 kHz**, which the checks
+  measure rather than assume.
+
+## Why it works
+
+Nothing in the drawing changed except one value, and the gain went up fivefold. The
+resistor was giving 5 kΩ and taking 5 V of headroom to do it; the transistor gives 45 kΩ
+and takes about one overdrive. That is the entire argument, and it is worth watching the
+corner move at the same time so that the price is visible next to the prize.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "I", "x": 3, "y": 3, "rot": 1, "value": 2e-05},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "p2", "kind": "OUT", "x": 5, "y": 2},
+                        {"id": "p3", "kind": "R", "x": 7, "y": 3, "rot": 1, "value": 45000},
+                        {"id": "p4", "kind": "GND", "x": 7, "y": 6},
+                        {"id": "p5", "kind": "R", "x": 11, "y": 3, "rot": 1, "value": 5000},
+                        {"id": "p6", "kind": "GND", "x": 11, "y": 6},
+                        {"id": "p7", "kind": "C", "x": 15, "y": 3, "rot": 1, "value": 3.5367765131532294e-10},
+                        {"id": "p8", "kind": "GND", "x": 15, "y": 6},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [15, 2]},
+                        {"a": [7, 4], "b": [7, 6]},
+                        {"a": [11, 4], "b": [11, 6]},
+                        {"a": [15, 4], "b": [15, 6]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "I", "x": 3, "y": 3, "rot": 1, "value": 2e-05},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "p2", "kind": "OUT", "x": 5, "y": 2},
+                        {"id": "p3", "kind": "R", "x": 7, "y": 3, "rot": 1, "value": 45000},
+                        {"id": "p4", "kind": "GND", "x": 7, "y": 6},
+                        {"id": "p5", "kind": "R", "x": 11, "y": 3, "rot": 1, "value": 45000},
+                        {"id": "p6", "kind": "GND", "x": 11, "y": 6},
+                        {"id": "p7", "kind": "C", "x": 15, "y": 3, "rot": 1, "value": 3.5367765131532294e-10},
+                        {"id": "p8", "kind": "GND", "x": 15, "y": 6},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [15, 2]},
+                        {"a": [7, 4], "b": [7, 6]},
+                        {"a": [11, 4], "b": [11, 6]},
+                        {"a": [15, 4], "b": [15, 6]},
+                    ],
+                },
+                "checks": [
+                    {"name": "the amplifying device still has its own output resistance", "code": r'''
+c.assert(c.count('I') === 1,
+  'One current source: the g_m v_gs generator. Found ' + c.count('I') + '.');
+c.close(c.values('I')[0], 20e-6, 0.01,
+  'the small-signal drain current, g_m times the 10 mV test input');
+const out = c.outNode();
+c.assert(c.net.parts.some(function (p) {
+  return p.kind === 'R' && Math.abs(p.value - 45000) <= 900 &&
+    ((p.n1 === out && p.n2 === 0) || (p.n2 === out && p.n1 === 0));
+}), 'r_o = 45 kΩ belongs to the amplifying device and stays where it was, from the ' +
+   'probed drain node to ground. Replacing it rather than the 5 kΩ is the one wrong ' +
+   'component to change.');
+'''},
+                    {"name": "nothing small is left hanging on the drain", "code": r'''
+const out = c.outNode();
+const legs = c.net.parts.filter(function (p) {
+  return p.kind === 'R' && ((p.n1 === out && p.n2 === 0) || (p.n2 === out && p.n1 === 0));
+});
+c.assert(legs.length >= 2,
+  'Two resistances belong at the drain now: r_o of the amplifier and r_o of the load ' +
+  'device. Found ' + legs.length + '.');
+const smallest = Math.min.apply(null, legs.map(function (p) { return p.value; }));
+c.assert(smallest >= 20000,
+  'Something on the drain is only ' + c.fmt(smallest, 'Ω') + '. A current-source load ' +
+  'is a transistor r_o, tens of kilohms; a resistor of a few kilohms is the thing being ' +
+  'replaced, and while it is there it sets the node resistance on its own.');
+'''},
+                    {"name": "the low-frequency gain is 45, and still inverting", "code": r'''
+c.close(c.gain(100), 0.45, 0.02,
+  'the output amplitude well below the corner — 10 mV in at a gain of 45 is 450 mV out');
+c.assert(Math.abs(c.phase(100)) > 170,
+  'A common-source stage inverts whatever is used as its load. Measured ' +
+  c.phase(100).toFixed(1) + '°.');
+'''},
+                    {"name": "the corner has moved to 20 kHz", "code": r'''
+const f = c.corner(10, 1e9);
+c.close(f, 2e4, 0.05,
+  'the -3 dB corner — five times the drain resistance is a fifth of the bandwidth');
+'''},
+                    {"name": "the gain-bandwidth product has not moved at all", "code": r'''
+const a = c.gain(10) / 0.01;
+const f = c.corner(10, 1e9);
+c.close(a * f, 9e5, 0.03,
+  'the gain-bandwidth product, which module 4 measured as 900 kHz on the same device ' +
+  'with the same load capacitance');
+'''},
+                ],
+                "hints": [
+                    "Only one number changes. The 5 kΩ resistor becomes 45 kΩ — the output resistance of the load device, which runs at the same 1 mA and has the same 45 V of Early voltage.",
+                    "A gain of 45 from $g_m = 2$ mA/V needs 22.5 kΩ at the drain, and $45\\,\\text{k} \\parallel 45\\,\\text{k}$ is exactly that.",
+                    "The capacitor does not change: $C_L$ is what the next stage and the wiring present, and it has no idea what kind of load is hanging beside it. Only the resistance it works against changed.",
+                    "If the gain comes out at 90 rather than 45, the 5 kΩ has been deleted instead of replaced and the drain is seeing $r_o$ alone.",
+                ],
+            },
+            "blanks": {
+                "title": "The active-loaded stage, in five numbers",
+                "minutes": 9,
+                "caption": "the same stage as module 3, with a transistor where the resistor was",
+                "lang": "text",
+                "brief": r'''
+Everything about the active load is in the arithmetic of the change: what happens at
+the drain node, what the gain becomes, what the bandwidth becomes, what their product
+does, and what the load costs in volts.
+
+Fill the five holes and read the last two back together. One of them is the reason the
+technique is used at all, and the other is the reason it is not magic.
+''',
+                "listing": """# Module 3's stage, with the 5 kΩ drain resistor replaced by a current-source load.
+#   amplifier:  g_m = 2 mA/V   r_o = 45 kΩ   I_D = 1 mA   C_L = 354 pF
+#   load:       a mirror output device, also at 1 mA, so also r_o = 45 kΩ
+
+R_drain    =  45 kΩ ___ 45 kΩ                =  22.5 kΩ
+A_v        =  -g_m * R_drain                 =  ___
+f_3dB      =  1 / (2 * pi * R_drain * C_L)   =  ___
+|A_v| * f_3dB                                =  ___
+DC volts the load takes to do its job        =  ___
+""",
+                "blanks": [
+                    {
+                        "prompt": "The amplifier's own output resistance and the load's, both at the same node.",
+                        "hole": "?",
+                        "opts": ["in series with", "in parallel with", "minus", "plus"],
+                        "a": 1,
+                        "why": "Both run from the drain node to signal ground — $r_o$ of the amplifier from drain to source, and $r_o$ of the load device from drain to the supply, which is signal ground. Two resistances between the same pair of nodes are in parallel, and $45\\,\\text{k} \\parallel 45\\,\\text{k} = 22.5$ kΩ.",
+                        "whys": [
+                            "Series would need the signal current to flow through one and then the other, which would mean the drain node sitting between them. It does not: both have one end on the drain.",
+                            "Both run from the drain node to signal ground — $r_o$ of the amplifier from drain to source, and $r_o$ of the load device from drain to the supply, which is signal ground. Two resistances between the same pair of nodes are in parallel, and $45\\,\\text{k} \\parallel 45\\,\\text{k} = 22.5$ kΩ.",
+                            "Subtracting resistances has no physical meaning here, and it would give zero for two equal ones — a short circuit at the drain, which would leave no gain at all.",
+                            "Adding would give 90 kΩ and a gain of 180, which is twice the intrinsic gain of the device. Nothing you hang on the drain can beat $g_mr_o$; a result above it is a sign the parallel rule went in upside down.",
+                        ],
+                    },
+                    {
+                        "prompt": "Transconductance times the resistance at the drain, with the sign the stage actually has.",
+                        "hole": "?",
+                        "opts": ["-9", "-45", "-90", "-4.5"],
+                        "a": 1,
+                        "why": "$-2\\,\\text{mA/V} \\times 22.5\\,\\text{k}\\Omega = -45$. Five times module 3's −9, and exactly half the intrinsic gain of 90 — which is what two equal resistances at one node always give.",
+                        "whys": [
+                            "That is module 3's answer, from the 5 kΩ resistor that has just been removed. If the gain has not moved, the new load is not in the circuit yet.",
+                            "$-2\\,\\text{mA/V} \\times 22.5\\,\\text{k}\\Omega = -45$. Five times module 3's −9, and exactly half the intrinsic gain of 90 — which is what two equal resistances at one node always give.",
+                            "−90 is $g_mr_o$, the intrinsic gain, and it needs a load with *infinite* output resistance. A real mirror output device brings its own 45 kΩ, and that halves the answer.",
+                            "−4.5 would need 2.25 kΩ at the drain, which is less than the resistor that was there before. The change made the node resistance larger, not smaller.",
+                        ],
+                    },
+                    {
+                        "prompt": "The corner, from the same drain resistance and the unchanged 354 pF.",
+                        "hole": "?",
+                        "opts": ["100 kHz", "4.5 kHz", "20 kHz", "900 kHz"],
+                        "a": 2,
+                        "why": "$1/(2\\pi \\times 22.5\\,\\text{k}\\Omega \\times 354\\,\\text{pF}) = 20$ kHz. The resistance went up by five, so the corner came down by five, from module 4's 100 kHz.",
+                    },
+                    {
+                        "prompt": "Multiply the last two together.",
+                        "hole": "?",
+                        "opts": ["180 kHz", "20 kHz", "4.5 MHz", "900 kHz"],
+                        "a": 3,
+                        "why": "$45 \\times 20\\,\\text{kHz} = 900$ kHz — the same product module 4 measured with a resistor load, because the product is $g_m/(2\\pi C_L)$ and neither of those changed. The drain resistance cancels out of it, whatever is providing that resistance.",
+                    },
+                    {
+                        "prompt": "The DC price of the load: how much of the supply does a current-source load take across itself, compared with the 5 V the resistor took?",
+                        "hole": "?",
+                        "opts": ["5 V, as the resistor did", "one overdrive, about 1 V", "nothing at all", "the whole 12 V supply"],
+                        "a": 1,
+                        "why": "A transistor stays in saturation as long as it has about $V_{ov}$ across it — roughly a volt here. The resistor needed 5 V to deliver 5 kΩ at 1 mA, and would have needed 45 V to deliver 45 kΩ. That is the whole trade: four volts of headroom handed back and five times the gain, from the same current.",
+                        "whys": [
+                            "That is what the resistor cost, and it is the number being escaped. A resistor's drop and its resistance are the same choice; a transistor's are not.",
+                            "A transistor stays in saturation as long as it has about $V_{ov}$ across it — roughly a volt here. The resistor needed 5 V to deliver 5 kΩ at 1 mA, and would have needed 45 V to deliver 45 kΩ. That is the whole trade: four volts of headroom handed back and five times the gain, from the same current.",
+                            "Nothing at all would mean the load device sitting with zero volts across it, which puts it in triode, where it is a small resistor rather than a current source and the gain collapses.",
+                            "The whole supply would leave zero for the amplifying device, which then has no headroom of its own. The two devices share the rail, and the point of an active load is that it asks for a very small share.",
+                        ],
+                    },
+                ],
+            },
+        },
+
+        # ---- M9 -----------------------------------------------------------
+        {
+            "title": "The bipolar transistor as an amplifier",
+            "summary": "The same job done by an exponential instead of a square law, and a base terminal that will not stop drawing current.",
+            "concepts": [
+                "Two junctions, three terminals: emitter, base, collector. In the **forward-active** region the base-emitter junction is forward biased and the base-collector junction reverse biased, and the collector current is $I_C = I_Se^{V_{BE}/V_T}$ — the diode equation of EE201, now controlling a current that leaves by a third terminal.",
+                "$V_T = kT/q$, the thermal voltage: 25.9 mV at 300 K, and 25 mV in every hand calculation including this course's. A decade of collector current costs $V_T\\ln 10$ of $V_{BE}$ — 58 mV at 25 mV, which is where the familiar '60 mV per decade' comes from. $V_{BE}$ is around 0.7 V and is never the number to design against.",
+                "The base takes current: $I_B = I_C/\\beta$, with $\\beta$ around 100 and specified as a range rather than a value. This is the single largest practical difference from the MOSFET, whose gate takes none, and it is why a bipolar bias divider has to be much stiffer than module 2's.",
+                "$g_m = I_C/V_T$. Notice what is missing: no $k$, no $W/L$, no geometry at all. At 1 mA a bipolar device gives 40 mA/V against this course's MOSFET at 2 mA/V — twenty times, from the same current, because an exponential is a much steeper function than a parabola.",
+                "The input is no longer infinite. $r_\\pi = \\beta/g_m = \\beta V_T/I_C$, which at 1 mA and $\\beta = 100$ is 2.5 kΩ. Put that in parallel with module 2's 167 kΩ divider and the stage's input resistance is 2.46 kΩ: the divider has become irrelevant and the device decides.",
+                "$r_o = V_A/I_C$, exactly as before — 45 kΩ at 1 mA. The Early effect is the bipolar original; channel-length modulation was named after it.",
+                "The intrinsic gain is therefore $g_mr_o = V_A/V_T$ — 1800 here, and **independent of the bias current**, because $g_m$ rises and $r_o$ falls in exact proportion. A MOSFET's intrinsic gain moves with current and is 90 at 1 mA. Twenty times more gain per device is why bipolar transistors are still chosen for the front end of a precision amplifier.",
+                "The common-emitter stage is the common-source stage with the names changed: $A_v = -g_m(r_o\\parallel R_C)$, which with $R_C = 5$ kΩ is $-40\\text{ mA/V}\\times 4.5\\text{ k}\\Omega = -180$. Everything module 3 established about small-signal analysis transfers unaltered; only the two parameter formulas are different.",
+                "$V_{BE}$ falls by about 2 mV for every kelvin of temperature rise, which at first sight wrecks any bias. It does not, for the same reason module 2's emitter resistor existed: the emitter current is set by $(V_B - V_{BE})/R_E$, and with 2 V across $R_E$ a 2 mV drift is one part in a thousand per kelvin. Bias a bipolar stage against $V_{BE}$ and it is hopeless; bias it against a voltage large compared with $V_{BE}$'s drift and it is fine.",
+            ],
+            "quiz": {
+                "title": "An exponential instead of a parabola",
+                "minutes": 10,
+                "questions": [
+                    {
+                        "q": "A bipolar transistor runs at $I_C = 1$ mA. Taking $V_T = 25$ mV, what is $g_m$?",
+                        "opts": ["25 mA/V", "40 mA/V", "2 mA/V", "1 mA/V"],
+                        "a": 1,
+                        "why": r'''
+$g_m = I_C/V_T = 1\text{ mA}/25\text{ mV} = 40$ mA/V. There is no device parameter in
+that expression at all — two bipolar transistors of wildly different sizes at the same
+collector current have the same transconductance, which is not remotely true of
+MOSFETs. 2 mA/V is what this course's MOSFET gives at the same 1 mA, and the factor of
+twenty between them is the reason to reach for a bipolar front end.
+''',
+                    },
+                    {
+                        "q": "That device has $V_A = 45$ V. What is its intrinsic gain $g_mr_o$, and how does it change if the bias current is halved?",
+                        "opts": [
+                            "1800, and it is unchanged",
+                            "1800, and it rises to 2545",
+                            "90, and it is unchanged",
+                            "180, and it halves",
+                        ],
+                        "a": 0,
+                        "why": r'''
+$g_mr_o = (I_C/V_T)(V_A/I_C) = V_A/V_T = 45/0.025 = 1800$, and the current cancels
+completely — halving it doubles $r_o$ and halves $g_m$. That is a real structural
+difference from the MOSFET, where $g_m$ falls only as $\sqrt{I_D}$ so the intrinsic
+gain *rises* at low current, as module 1 worked out. 90 is that MOSFET's figure at
+1 mA.
+''',
+                    },
+                    {
+                        "q": "With $\\beta = 100$ at 1 mA, what is $r_\\pi$?",
+                        "opts": ["100 Ω", "2.5 kΩ", "45 kΩ", "25 Ω"],
+                        "a": 1,
+                        "why": r'''
+$r_\pi = \beta/g_m = 100/0.04 = 2.5$ kΩ. This is the price of the base current: a
+bipolar common-emitter stage has an input resistance of a few kilohms, so hanging it on
+module 2's 167 kΩ divider gives $167\text{k}\parallel 2.5\text{k} = 2.46$ kΩ and the
+divider might as well not be there. A MOSFET stage's input resistance is whatever the
+divider is; a bipolar stage's is whatever the device is.
+''',
+                    },
+                    {
+                        "q": "Module 2's divider is 500 kΩ / 250 kΩ and draws 16 µA. A bipolar device at 1 mA with $\\beta = 100$ is hung on it. What happens?",
+                        "opts": [
+                            "nothing; 10 µA is small compared with the 16 µA the divider carries",
+                            "the base current pulls the gate voltage up",
+                            "the divider is far too soft: 10 µA of base current across its 167 kΩ Thévenin resistance costs about 1.7 V, and the bias is destroyed",
+                            "the divider draws more current from the supply, but its output voltage is unchanged",
+                        ],
+                        "a": 2,
+                        "why": r'''
+$I_B = I_C/\beta = 10$ µA, and the divider looks like a 4 V source behind
+$500\text{k}\parallel 250\text{k} = 167$ kΩ. Ten microamps out of that is 1.7 V of sag —
+most of the 2 V that was meant to sit across the emitter resistor. The working rule is
+that the divider current should be at least ten times the base current, which here means
+100 µA or more and resistors ten times smaller. The MOSFET's megohm divider was a
+luxury paid for by the gate oxide.
+''',
+                    },
+                    {
+                        "q": "A bipolar common-emitter stage runs at 1 mA with $R_C = 5$ kΩ and $V_A = 45$ V. What is its voltage gain?",
+                        "opts": ["−9", "−200", "−180", "−1800"],
+                        "a": 2,
+                        "why": r'''
+$A_v = -g_m(r_o\parallel R_C) = -40\text{ mA/V}\times(45\text{k}\parallel 5\text{k}) =
+-40\text{ mA/V}\times 4.5\text{ k}\Omega = -180$. Answering −200 leaves $r_o$ out, which
+costs 10% here just as it did in module 3; −1800 is the intrinsic gain, which needs an
+ideal current source at the collector rather than a 5 kΩ resistor. Exactly twenty times
+module 3's −9, on the same resistor at the same current, which is the $g_m$ ratio and
+nothing else.
+''',
+                    },
+                    {
+                        "q": "How much does $V_{BE}$ have to change to move the collector current by a factor of ten?",
+                        "opts": ["about 58 mV", "about 0.7 V", "about 700 mV per decade", "about 2 mV"],
+                        "a": 0,
+                        "why": r'''
+$\Delta V_{BE} = V_T\ln 10 = 25\text{ mV}\times 2.303 = 58$ mV — and about 60 mV at the
+25.9 mV that room temperature really gives. That steepness is both the attraction and
+the danger: it is where the large $g_m$ comes from, and it is why nothing may be biased
+by applying a fixed voltage to the base and hoping. 0.7 V is roughly the whole $V_{BE}$,
+not the change in it; 2 mV is the per-kelvin temperature drift.
+''',
+                    },
+                    {
+                        "q": "Why does a 2 mV/K drift in $V_{BE}$ not ruin a well-designed bipolar bias?",
+                        "opts": [
+                            "because the emitter current is set by $(V_B - V_{BE})/R_E$, and with 2 V across $R_E$ a 2 mV shift is a tenth of a per cent",
+                            "because $\\beta$ rises with temperature and cancels it",
+                            "because the drift is too slow to matter",
+                            "because $V_{BE}$ does not appear anywhere in the bias equations",
+                        ],
+                        "a": 0,
+                        "why": r'''
+The emitter resistor turns the bias into a subtraction between a large number and
+$V_{BE}$, so a drift in $V_{BE}$ appears in the answer divided by how large that
+subtraction is. Two volts across $R_E$ against 2 mV/K is 0.1% per kelvin, or 3% over a
+thirty-degree rise, which most designs will accept. Shrink $V_E$ to 200 mV to gain some
+swing and the same drift becomes 1% per kelvin. The argument is exactly module 2's, with
+$V_{BE}$ in the role $V_{th}$ played.
+''',
+                    },
+                ],
+            },
+            "match": {
+                "title": "The four symbols this module needs",
+                "minutes": 6,
+                "brief": r'''
+The MOSFET was introduced as three terminals and an equation, and its symbol never had
+to be read carefully. Bipolar circuits are different: the entire distinction between an
+NPN and a PNP — which way the supply goes, which way the signal swings, which one goes
+at the top of an output stage — is one arrow, and getting it backwards produces a
+circuit that cannot possibly work and often looks fine on the page.
+
+Two of these four are not transistors at all, and both are here because they turn up
+inside every bipolar amplifier: the base-emitter junction that behaves exactly like one
+of them, and the idealisation the collector behaves exactly like.
+''',
+                "prompt": "Pick a label, then tap the symbol it belongs to.",
+                "labels": ["NPN transistor", "PNP transistor", "Diode", "Ideal current source", "Battery"],
+                "items": [
+                    {"sym": "NPN", "a": 0, "why": "An NPN. The arrow is always on the emitter, and here it points *outward* — read it as the direction conventional current leaves the device. Collector current flows in at the top, base current in at the side, and the sum comes out of the emitter."},
+                    {"sym": "PNP", "a": 1, "why": "A PNP: the same drawing with the emitter arrow pointing *inward*. Current now flows into the emitter and out of the collector and base, so it works with its emitter at the more positive end — which is why PNP devices sit at the top of a supply rail and NPN devices at the bottom."},
+                    {"sym": "D", "a": 2, "why": "A diode — triangle into a bar, current one way only. It is here because the base-emitter junction *is* one: $I_C = I_Se^{V_{BE}/V_T}$ is the diode equation, and the 0.7 V and the 60 mV per decade are the diode's numbers, met in EE201."},
+                    {"sym": "I", "a": 3, "why": "An ideal current source: a fixed current whatever the voltage across it. It is the idealisation of a transistor collector in the forward-active region — the thing $r_o = V_A/I_C$ measures the failure of, and the thing an active load is trying to be."},
+                ],
+            },
+            "derive": {
+                "title": "Three bipolar parameters from one exponential",
+                "minutes": 12,
+                "vars": ["I_C", "I_S", "V_BE", "V_T", "g_m", "beta", "r_o", "V_A", "I_B"],
+                "brief": r'''
+Module 1 got $g_m$ by differentiating a square law. Here the same operation is applied
+to an exponential, and because the derivative of an exponential is itself, the answer
+comes out startlingly simple — and free of every device parameter.
+
+Start from the forward-active relation
+
+$$I_C = I_S e^{V_{BE}/V_T}$$
+
+with $I_S$ a device constant and $V_T = kT/q$ the thermal voltage.
+''',
+                "steps": [
+                    {
+                        "prompt": "Differentiate with respect to $V_{BE}$. Write $g_m$ in terms of $I_S$, $V_{BE}$ and $V_T$.",
+                        "answer": "\\frac{I_S}{V_T} e^{V_{BE}/V_T}",
+                        "hint": "The chain rule on $e^{u}$ with $u = V_{BE}/V_T$ brings down $1/V_T$ and leaves the exponential alone.",
+                        "deconstruct": [
+                            "$\\frac{d}{dx}e^{ax} = a e^{ax}$, and here $a = 1/V_T$.",
+                            "$I_S$ is a constant and comes along for the ride.",
+                        ],
+                    },
+                    {
+                        "prompt": "The exponential together with $I_S$ is the collector current itself. Write $g_m$ in terms of $I_C$ and $V_T$.",
+                        "answer": "\\frac{I_C}{V_T}",
+                        "hint": "Substitute $I_S e^{V_{BE}/V_T} = I_C$ into what you just wrote.",
+                        "deconstruct": [
+                            "The derivative of an exponential is proportional to the exponential, which is proportional to $I_C$.",
+                            "Every device constant has vanished; only the current and the temperature are left.",
+                        ],
+                    },
+                    {
+                        "prompt": "The base current is $I_B = I_C/\\beta$, and the input resistance is $r_\\pi = \\partial V_{BE}/\\partial I_B$. Write it in terms of $\\beta$ and $g_m$.",
+                        "answer": "\\frac{\\beta}{g_m}",
+                        "hint": "Differentiate $I_B = I_C/\\beta$ with respect to $V_{BE}$ to get $g_m/\\beta$, then take the reciprocal.",
+                        "deconstruct": [
+                            "$\\partial I_B/\\partial V_{BE} = (1/\\beta)\\,\\partial I_C/\\partial V_{BE} = g_m/\\beta$.",
+                            "Resistance is the reciprocal of that slope.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now substitute $g_m$. Write $r_\\pi$ in terms of $\\beta$, $V_T$ and $I_C$.",
+                        "answer": "\\frac{\\beta V_T}{I_C}",
+                        "hint": "Dividing by $I_C/V_T$ is multiplying by $V_T/I_C$.",
+                        "deconstruct": [
+                            "$r_\\pi = \\beta \\big/ (I_C/V_T)$.",
+                            "So the input resistance falls as the current rises — a stage biased harder is a heavier load on whatever drives it.",
+                        ],
+                    },
+                    {
+                        "prompt": "With $r_o = V_A/I_C$, write the intrinsic gain $g_mr_o$.",
+                        "answer": "\\frac{V_A}{V_T}",
+                        "hint": "Multiply the two expressions and watch $I_C$ cancel.",
+                        "deconstruct": [
+                            "$g_mr_o = (I_C/V_T)(V_A/I_C)$.",
+                            "$I_C$ appears once on top and once underneath, so the product depends only on the device's Early voltage and the temperature.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+Three results and one thing to notice about each. $g_m = I_C/V_T$ has no device
+parameter in it, so bipolar transconductance is bought with current alone and at a
+fixed exchange rate — no square roots, no widths. $r_\pi = \beta V_T/I_C$ is the bill
+for that: the base draws current, and the harder the stage is biased the more heavily it
+loads its source. And $g_mr_o = V_A/V_T$ is fixed by the process and the temperature and
+by nothing the designer does, which makes it the cleanest single figure of merit for a
+transistor technology there is — 1800 here, against 90 for the MOSFET of module 1 at
+1 mA.
+''',
+            },
+        },
+
+        # ---- M10 ----------------------------------------------------------
+        {
+            "title": "The differential pair",
+            "summary": "Two of everything, arranged so that the amplifier can tell a signal from the interference sitting on top of it.",
+            "concepts": [
+                "Two matched devices with their sources tied together and fed by a single **tail current source** $I_{SS}$. The pair amplifies the *difference* between its two inputs and, if it is built well, almost nothing of what they have in common.",
+                "At balance each side carries $I_{SS}/2$. With $I_{SS} = 2$ mA each device sits at the 1 mA operating point this course has used throughout: $V_{ov} = 1$ V, $g_m = 2$ mA/V, $r_o = 45$ kΩ. Everything from module 1 applies to each half unchanged.",
+                "For a purely **differential** input the tail node does not move: whatever current one side gains the other loses, so the total through the tail is constant and the node is a *virtual ground*. Each half is then a common-source stage driven by $v_{id}/2$, which is what the **differential half-circuit** means.",
+                "So the gain taken from one drain is $A_d = -g_mR_D/2$, and taken between the two drains it is $-g_mR_D$. With $R_D = 4$ kΩ those are −4 and −8.",
+                "For a **common-mode** input both gates move together, the tail node follows them, and each half becomes a degenerated common-source stage. The two halves share the tail resistance, so each half sees twice it: $A_{cm} = -R_D/(2R_{SS} + 1/g_m)$.",
+                "**CMRR** is the ratio of the two, and from a single-ended output it works out to $g_mR_{SS} + 1/2$. Note what is not in it: $R_D$ cancels. Common-mode rejection cannot be bought with the load — only with transconductance and with the stiffness of the tail.",
+                "Which is the entire argument for the tail being a current source. A 2 kΩ tail resistor on a 12 V rail already drops 4 V and gives $\\mathrm{CMRR} = 4.5$, or 13 dB, which is worthless. A tail *device* at 2 mA has $r_o = V_A/I = 22.5$ kΩ and gives 45.5, or 33 dB, while dropping only its overdrive. Getting far beyond that means raising the tail's output resistance further, which is what a cascode is for and a later course's business.",
+                "Large signal: solving the two square laws against $i_1 + i_2 = I_{SS}$ gives $i_1 - i_2 = kv_{id}\\sqrt{I_{SS}/k - v_{id}^2/4}$. Its slope at the origin is exactly $g_m$, and it reaches **full steering** — the whole tail current in one device and none in the other — at $v_{id} = \\sqrt{2}V_{ov} = 1.41$ V. Past that the pair has stopped being an amplifier and become a comparator.",
+                "The linear range is a small fraction of that. At $v_{id} = 0.2$ V the exact difference is 0.398 mA against the small-signal 0.400 mA — half a per cent low. Keep the differential input well under one overdrive and the pair behaves; drive it near the steering point and it does not.",
+                "Whatever the two halves fail to match appears as an **input offset voltage**, and nothing downstream can remove it — a later stage amplifies the offset exactly as faithfully as the signal. A threshold mismatch appears directly; a $k$ mismatch appears as $(V_{ov}/2)(\\Delta k/k)$. This is where the matching effort in a chip layout goes, and it is why the pair is the input stage of essentially every operational amplifier ever made.",
+            ],
+            "quiz": {
+                "title": "Difference, common mode and the tail",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "Both gates of a balanced pair are driven with equal and opposite signals. What does the tail node do?",
+                        "opts": [
+                            "it moves with the average of the two inputs",
+                            "it stays put — whatever current one side takes, the other gives back",
+                            "it moves by half the differential input",
+                            "it is undefined without knowing $R_{SS}$",
+                        ],
+                        "a": 1,
+                        "why": r'''
+The two drain currents move in opposite directions by equal amounts, so their sum — the
+current in the tail — does not change, and neither does the voltage on the tail
+resistance. That is what makes it a *virtual* ground: nothing holds it there, the
+symmetry does. It is also what licenses the half-circuit, in which one side is analysed
+alone as an ordinary common-source stage with its source grounded.
+''',
+                    },
+                    {
+                        "q": "A pair runs at $I_{SS} = 2$ mA with $R_D = 4$ kΩ on each side, so each device has $g_m = 2$ mA/V. What is the gain from the differential input to *one* drain?",
+                        "opts": ["−8", "−4", "−2", "−16"],
+                        "a": 1,
+                        "why": r'''
+Each gate moves by half the differential input, so one drain sees $-g_mR_D/2 = -4$.
+Between the two drains the answer is $-g_mR_D = -8$, because the second drain is moving
+the opposite way by the same amount. Both are correct answers to different questions,
+and quoting one where the other is meant is a factor-of-two error that survives all the
+way to a specification.
+''',
+                    },
+                    {
+                        "q": "That pair uses a 2 kΩ tail resistor. Replacing it with a current source whose output resistance is 22.5 kΩ does what to the CMRR?",
+                        "opts": [
+                            "takes it from 4.5 to 45.5, about 13 dB to 33 dB",
+                            "leaves it unchanged, since the DC current is the same",
+                            "takes it from 4.5 to 9.0",
+                            "makes it infinite",
+                        ],
+                        "a": 0,
+                        "why": r'''
+$\mathrm{CMRR} = g_mR_{SS} + 1/2$, so 2 mA/V against 2 kΩ gives 4.5 and against 22.5 kΩ
+gives 45.5 — 13 dB becoming 33 dB. Not infinite: a real current source is a transistor
+with $r_o = V_A/I$, and at 2 mA that is 22.5 kΩ, not infinity. The DC current being
+identical is exactly the point — the tail's *small-signal* resistance is what rejection
+depends on, and a resistor and a current source that pass the same DC differ completely
+there.
+''',
+                    },
+                    {
+                        "q": "A designer doubles $R_D$ on both sides to get more differential gain. What happens to the CMRR?",
+                        "opts": [
+                            "it doubles as well",
+                            "it halves",
+                            "it is unchanged, because $R_D$ cancels out of the ratio",
+                            "it improves by 6 dB",
+                        ],
+                        "a": 2,
+                        "why": r'''
+$R_D$ multiplies the differential gain and the common-mode gain equally, so the ratio
+does not notice it: $\mathrm{CMRR} = g_mR_{SS} + 1/2$ contains no load resistance at
+all. Rejection comes from two places and two only — the transconductance of the devices
+and the stiffness of the tail. This is worth internalising, because "more gain" is the
+first instinct when a common-mode specification is missed, and it is precisely the
+change that cannot help.
+''',
+                    },
+                    {
+                        "q": "With $I_{SS} = 2$ mA, $k = 2$ mA/V² and therefore $V_{ov} = 1$ V per side, at what differential input does one device take the entire tail current?",
+                        "opts": ["1.00 V", "0.50 V", "1.41 V", "2.00 V"],
+                        "a": 2,
+                        "why": r'''
+$v_{id} = \sqrt{2}V_{ov} = 1.41$ V. Beyond it the pair is fully steered and the output
+stops responding to the input at all — a comparator, not an amplifier. Worth holding
+alongside it: the *linear* range is far smaller. At 0.2 V, a seventh of the way, the
+difference current is already half a per cent below what the small-signal model
+predicts, and the departure grows quickly after that.
+''',
+                    },
+                    {
+                        "q": "Two devices in a pair differ slightly, giving the stage a 3 mV input offset. What can a following stage of gain 100 do about it?",
+                        "opts": [
+                            "nothing — it amplifies the offset to 300 mV along with the signal",
+                            "divide it by 100, since offsets refer to the output",
+                            "remove it, if it is AC-coupled to the pair's output",
+                            "cancel it, since a second stage has an offset of its own",
+                        ],
+                        "a": 0,
+                        "why": r'''
+An input-referred offset is indistinguishable from a real input, so every stage after it
+treats it as signal: 3 mV becomes 300 mV. This is why the matching effort in a layout
+goes into the input pair and almost nowhere else, and why input offset voltage is the
+first line of an operational amplifier's data sheet. AC coupling does remove a *static*
+offset from the output, at the price of the whole DC response — and it does nothing for
+the offset's drift with temperature.
+''',
+                    },
+                ],
+            },
+            "build": {
+                "title": "Bias a pair, and check it is balanced",
+                "minutes": 26,
+                "brief": r'''
+Two devices, at their operating points, are two current sources — so the canvas opens
+with a pair of 1 mA sources already sharing a lower node. That shared node is the tail,
+and it is the only thing making this a pair rather than two unrelated stages.
+
+The probe is on the left drain.
+
+## The specification
+
+- a **12 V** supply, already drawn,
+- each side carries **1.00 mA**, so the tail carries 2.00 mA,
+- the tail node sits at **4.00 V**,
+- both drains sit at **8.00 V**, and at the *same* voltage as each other,
+- so each device has 4 V of $V_{DS}$ against its 1 V overdrive.
+
+Three resistors, and two of them are equal.
+
+## Why the tail voltage is specified
+
+A tail resistor is the cheap way to define that node, and this exercise draws it that
+way because the schematic solver needs a resistance there to have a defined voltage at
+all. Work out what CMRR 2 kΩ implies once the drawing passes — $g_mR_{SS} + 1/2$ with
+$g_m = 2$ mA/V — and the reason every real pair uses a current source instead will not
+need arguing.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "p2", "kind": "I", "x": 9, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "p3", "kind": "I", "x": 15, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "p4", "kind": "GND", "x": 12, "y": 12},
+                        {"id": "p5", "kind": "OUT", "x": 6, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [15, 2]},
+                        {"a": [6, 5], "b": [9, 5]},
+                        {"a": [9, 7], "b": [12, 7]},
+                        {"a": [12, 7], "b": [15, 7]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "p2", "kind": "I", "x": 9, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "p3", "kind": "I", "x": 15, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "p4", "kind": "GND", "x": 12, "y": 12},
+                        {"id": "p5", "kind": "OUT", "x": 6, "y": 5},
+                        {"id": "p6", "kind": "R", "x": 9, "y": 3, "rot": 1, "value": 4000},
+                        {"id": "p7", "kind": "R", "x": 15, "y": 3, "rot": 1, "value": 4000},
+                        {"id": "p8", "kind": "R", "x": 12, "y": 8, "rot": 1, "value": 2000},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [15, 2]},
+                        {"a": [6, 5], "b": [9, 5]},
+                        {"a": [9, 7], "b": [12, 7]},
+                        {"a": [12, 7], "b": [15, 7]},
+                        {"a": [9, 4], "b": [9, 5]},
+                        {"a": [15, 4], "b": [15, 5]},
+                        {"a": [12, 9], "b": [12, 12]},
+                    ],
+                },
+                "checks": [
+                    {"name": "two sides, one supply, and a shared tail", "code": r'''
+c.assert(c.count('V') === 1, 'One supply — the 12 V rail. Found ' + c.count('V') + '.');
+c.close(c.values('V')[0], 12, 0.001, 'the supply voltage');
+c.assert(c.count('I') === 2,
+  'Two current sources, one for each device of the pair. Found ' + c.count('I') + '.');
+const qs = c.net.parts.filter(function (p) { return p.kind === 'I'; });
+c.close(qs[0].value, 1e-3, 0.01, 'the current in one side of the pair');
+c.close(qs[1].value, 1e-3, 0.01, 'the current in the other side');
+c.assert(qs[0].n2 === qs[1].n2,
+  'The two sources must share their lower node. That shared node is the tail, and it is ' +
+  'the only thing that makes this a pair rather than two unrelated common-source stages.');
+'''},
+                    {"name": "the tail carries the whole 2 mA and sits at 4.00 V", "code": r'''
+const qs = c.net.parts.filter(function (p) { return p.kind === 'I'; });
+const v = c.dc().v;
+c.close(v[qs[0].n2], 4.0, 0.02,
+  'the tail node voltage — 2 mA through R_SS, so it reads the tail resistor directly');
+'''},
+                    {"name": "the two drains are balanced, and both at 8.00 V", "code": r'''
+const qs = c.net.parts.filter(function (p) { return p.kind === 'I'; });
+const v = c.dc().v;
+const a = v[qs[0].n1], b = v[qs[1].n1];
+c.assert(Math.abs(a - b) < 0.01,
+  'The two drains have to rest at the same voltage: a pair that is unbalanced with no ' +
+  'input has an offset before any signal arrives. Measured ' + a.toFixed(3) + ' V and ' +
+  b.toFixed(3) + ' V, so the two drain resistors are not equal.');
+c.close(c.vout(), 8.0, 0.01, 'the probed drain voltage');
+'''},
+                    {"name": "each device keeps room to work in", "code": r'''
+const qs = c.net.parts.filter(function (p) { return p.kind === 'I'; });
+const v = c.dc().v;
+c.assert(v[qs[0].n1] > v[qs[0].n2],
+  'The current sources are upside down: the + pin is the drain and belongs above the tail.');
+const vds = v[qs[0].n1] - v[qs[0].n2];
+c.assert(vds >= 3.0,
+  'Each device needs V_DS comfortably above its 1 V overdrive — the common-mode input ' +
+  'has to be able to move without pushing a side into triode. Measured ' +
+  vds.toFixed(2) + ' V.');
+'''},
+                ],
+                "hints": [
+                    "The tail carries both currents: 2 mA. For 4.00 V at that node, $R_{SS} = 4.0/0.002 = 2$ kΩ, drawn from the shared node down to the ground symbol.",
+                    "Each drain resistor carries only its own side's 1 mA and has to drop $12 - 8 = 4$ V, so each is 4 kΩ. They must be equal, or the pair is unbalanced at rest.",
+                    "Draw the rail across the top and take both drain resistors from it. The two drains are separate nodes — joining them would short the output the pair exists to produce.",
+                    "If one drain reads 8 V and the other 12 V, the second drain resistor is not touching the rail; if the tail reads 2 V, the tail resistor is carrying one side's current only, which means the two sources are not actually sharing a node.",
+                ],
+            },
+            "numeric": {
+                "title": "What gets through in common mode?",
+                "minutes": 8,
+                "brief": r'''
+The differential gain of this pair is straightforward: each gate moves by half the
+input, so one drain sees $-g_mR_D/2 = -4.0$. The interesting number is the other one —
+what happens when both inputs move *together*, which is what interference, ground shift
+and supply noise all look like.
+
+In common mode the tail node is no longer still. It rises and falls with the inputs, and
+each half of the pair becomes a degenerated common-source stage. The subtlety is how
+much degeneration: the two halves share one tail resistor, so each half, considered
+alone, sees twice its value.
+''',
+                "prompt": "What is the magnitude of the gain from a common-mode input to the probed drain?",
+                "note": "Both gates driven with the same signal. Four significant figures is more than enough.",
+                "diagram": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "q1", "kind": "I", "x": 9, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "q2", "kind": "I", "x": 15, "y": 6, "rot": 1, "value": 0.001},
+                        {"id": "rd1", "kind": "R", "x": 9, "y": 3, "rot": 1, "value": 4000},
+                        {"id": "rd2", "kind": "R", "x": 15, "y": 3, "rot": 1, "value": 4000},
+                        {"id": "rss", "kind": "R", "x": 12, "y": 8, "rot": 1, "value": 2000},
+                        {"id": "g1", "kind": "GND", "x": 12, "y": 12},
+                        {"id": "out", "kind": "OUT", "x": 6, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [15, 2]},
+                        {"a": [6, 5], "b": [9, 5]},
+                        {"a": [9, 7], "b": [12, 7]},
+                        {"a": [12, 7], "b": [15, 7]},
+                        {"a": [9, 4], "b": [9, 5]},
+                        {"a": [15, 4], "b": [15, 5]},
+                        {"a": [12, 9], "b": [12, 12]},
+                    ],
+                },
+                "check": r'''
+/* The drawing is the bias point — each device is standing in as its own DC drain
+   current — so the two resistances the common-mode gain depends on are read back out
+   of the solved operating point rather than copied off the page. R_D is what the
+   probed drain drops from the rail at that side's current; R_SS is where the tail
+   node sits while it carries both of them. */
+const v = c.dc().v;
+const dev = c.net.parts.filter(function (p) { return p.kind === 'I'; });
+const sup = c.net.parts.filter(function (p) { return p.kind === 'V'; })[0];
+c.assert(sup, 'there is no supply rail to measure the drain drop against');
+
+const out = c.outNode();
+const probed = dev.filter(function (p) { return p.n1 === out; })[0];
+c.assert(probed, 'the probe is not on a drain, so there is no half-circuit to take the gain of');
+
+const tail = probed.n2;
+const itail = dev.reduce(function (s, p) { return s + (p.n2 === tail ? p.value : 0); }, 0);
+const rd = (v[sup.n1] - v[out]) / probed.value;
+const rss = v[tail] / itail;
+
+/* g_m is not on the schematic; it is the device — k = 2 mA/V^2 — at whatever drain
+   current the drawing biases it to, so re-biasing the pair re-derives it rather than
+   quietly keeping 2 mA/V. */
+const gm = Math.sqrt(2 * 2e-3 * probed.value);
+
+/* the whole point of the question: each half is degenerated by TWICE the shared tail */
+return rd / (2 * rss + 1 / gm);
+''',
+                "given": [
+                    {"label": "g_m, each device", "value": "2.00 mA/V"},
+                    {"label": "R_D, each side", "value": "4.00 kΩ"},
+                    {"label": "Tail resistance R_SS", "value": "2.00 kΩ"},
+                    {"label": "Differential gain to this drain", "value": "−4.00"},
+                ],
+                "aside": "Each half is degenerated by 2 R_SS, not by R_SS — split the tail resistor "
+                         "into two parallel halves of 2 R_SS each and one goes to each side, which is "
+                         "the standard trick for turning a shared component into a half-circuit.",
+                "answer": 0.8889,
+                "tol": 0.01,
+                "unit": "V/V",
+                "hint": "A degenerated common-source stage has $|A| = R_D/(R_{source} + 1/g_m)$. "
+                        "Here $R_{source}$ is $2R_{SS} = 4$ kΩ and $1/g_m$ is 500 Ω.",
+                "wrong": "Check whether the tail resistance went in once or twice. Each half-circuit "
+                         "sees 2 R_SS; using R_SS alone gives 1.60 and overstates the leakage by "
+                         "nearly a factor of two.",
+                "why": "$|A_{cm}| = R_D/(2R_{SS} + 1/g_m) = 4000/(4000 + 500) = 0.889$. Put that "
+                       "against the differential gain of 4.00 and the CMRR is 4.5, or 13.1 dB — "
+                       "a pair that passes almost a quarter of any interference sitting on both "
+                       "inputs. The general result is $\\mathrm{CMRR} = g_mR_{SS} + 1/2$, so the "
+                       "only cure is a stiffer tail: a current source at 2 mA offers "
+                       "$r_o = 22.5$ kΩ and lifts the figure to 45.5, or 33 dB, without "
+                       "costing a single extra volt of headroom.",
+            },
+            "lab": {
+                "title": "Steering the tail current",
+                "runtime": "python",
+                "minutes": 30,
+                "brief": r'''
+The small-signal picture of a pair is two half-circuits and a ratio. The large-signal
+picture has to be solved, and it is worth solving once so that the linear range stops
+being a rule of thumb.
+
+- `full_steering(i_ss, k)` returns the differential input at which one device takes the
+  whole tail current: $\sqrt{2I_{SS}/k}$.
+- `tail_split(v_id, i_ss, k)` returns `(i1, i2)` in amperes. Inside the steering range
+  the exact solution of the two square laws against $i_1 + i_2 = I_{SS}$ is
+
+  ```text
+  i1 - i2 = k * v_id * sqrt(i_ss / k  -  v_id**2 / 4)
+  ```
+
+  and the sum is $I_{SS}$, which is two equations for the two currents. Outside the
+  range, clamp: all of the current in one side and none in the other.
+- `stage_gains(gm, r_d, r_ss)` returns `(a_d, a_cm, cmrr)` for a single-ended output —
+  the first two signed and negative, the third a positive ratio.
+
+Check yourself before running the tests: the slope of `tail_split` at the origin has to
+come out as $g_m$, and `cmrr` has to equal $g_mR_{SS} + 1/2$ without that formula ever
+being written down.
+''',
+                "files": [{"name": "main.py", "content": r'''
+"""The differential pair: how the tail current divides, and what gets rejected."""
+
+import math
+
+K = 2e-3      # A/V^2, each device
+
+
+def full_steering(i_ss, k=K):
+    """The differential input at which one side takes the entire tail current."""
+    # TODO: sqrt(2 i_ss / k).
+    return 0.0
+
+
+def tail_split(v_id, i_ss=2e-3, k=K):
+    """Return (i1, i2) in amperes for this differential input."""
+    # TODO: clamp outside the steering range, both signs.
+    # TODO: inside it, the difference is k v_id sqrt(i_ss/k - v_id^2/4) and the sum is i_ss.
+    return (0.0, 0.0)
+
+
+def stage_gains(gm, r_d, r_ss):
+    """Return (a_d, a_cm, cmrr) for a single-ended output."""
+    # TODO: a_d = -gm r_d / 2, because each gate moves by half the differential input.
+    # TODO: a_cm = -r_d / (2 r_ss + 1/gm) — each half is degenerated by TWICE the tail.
+    # TODO: cmrr is the magnitude of their ratio.
+    return (0.0, 0.0, 0.0)
+
+
+if __name__ == "__main__":
+    print("full steering at:", full_steering(2e-3), "V")
+    for v in (0.0, 0.1, 0.5, 1.0, 1.5):
+        i1, i2 = tail_split(v)
+        print(f"  v_id = {v:4.1f} V -> {i1 * 1e3:6.3f} mA / {i2 * 1e3:6.3f} mA")
+    print("resistor tail: ", stage_gains(2e-3, 4000.0, 2000.0))
+    print("current-source tail:", stage_gains(2e-3, 4000.0, 22500.0))
+'''}],
+                "main": "main.py",
+                "solution": [{"name": "main.py", "content": r'''
+"""The differential pair: how the tail current divides, and what gets rejected."""
+
+import math
+
+K = 2e-3      # A/V^2, each device
+
+
+def full_steering(i_ss, k=K):
+    """The differential input at which one side takes the entire tail current."""
+    return math.sqrt(2.0 * i_ss / k)
+
+
+def tail_split(v_id, i_ss=2e-3, k=K):
+    """Return (i1, i2) in amperes for this differential input."""
+    edge = full_steering(i_ss, k)
+    if v_id >= edge:
+        return (i_ss, 0.0)
+    if v_id <= -edge:
+        return (0.0, i_ss)
+    diff = k * v_id * math.sqrt(i_ss / k - v_id * v_id / 4.0)
+    return ((i_ss + diff) / 2.0, (i_ss - diff) / 2.0)
+
+
+def stage_gains(gm, r_d, r_ss):
+    """Return (a_d, a_cm, cmrr) for a single-ended output."""
+    a_d = -gm * r_d / 2.0
+    a_cm = -r_d / (2.0 * r_ss + 1.0 / gm)
+    return (a_d, a_cm, abs(a_d / a_cm))
+
+
+if __name__ == "__main__":
+    print("full steering at:", full_steering(2e-3), "V")
+    for v in (0.0, 0.1, 0.5, 1.0, 1.5):
+        i1, i2 = tail_split(v)
+        print(f"  v_id = {v:4.1f} V -> {i1 * 1e3:6.3f} mA / {i2 * 1e3:6.3f} mA")
+    print("resistor tail: ", stage_gains(2e-3, 4000.0, 2000.0))
+    print("current-source tail:", stage_gains(2e-3, 4000.0, 22500.0))
+'''}],
+                "hints": [
+                    "`full_steering` is `math.sqrt(2 * i_ss / k)`. With the course numbers it is $\\sqrt{2}$ volts, because $\\sqrt{I_{SS}/k}$ is the per-side overdrive and that is 1 V here.",
+                    "In `tail_split`, handle both clamps before touching the square root — outside the range the expression under it goes negative and `math.sqrt` raises rather than returning something wrong, which is at least honest.",
+                    "Given the difference and the sum, each current is `(sum ± difference) / 2`. Keep the sign of `v_id` in `diff` rather than taking an absolute value, or the pair will steer the same way for both polarities.",
+                    "In `stage_gains` the common trap is `2 * r_ss`. The tail resistor is shared, so each half-circuit sees twice it; using `r_ss` alone makes the common-mode gain look nearly twice as large as it is.",
+                ],
+                "tests": [
+                    {"name": "the steering point is where the square laws say", "code": r'''
+edge = full_steering(2e-3)
+assert abs(edge - 1.4142135623730951) < 1e-12, \
+    f"sqrt(2 * 2e-3 / 2e-3) is sqrt(2), got {edge}"
+assert abs(full_steering(2e-3, 8e-3) - 0.7071067811865476) < 1e-12, \
+    "a device four times wider halves the steering voltage"
+'''},
+                    {"name": "at balance the current divides evenly, and it always sums to the tail", "code": r'''
+i1, i2 = tail_split(0.0)
+assert abs(i1 - 1e-3) < 1e-15 and abs(i2 - 1e-3) < 1e-15, \
+    f"with no input each side takes half of 2 mA, got {i1} and {i2}"
+for v in (-1.0, -0.3, 0.0, 0.25, 0.9, 1.3):
+    a, b = tail_split(v)
+    assert abs(a + b - 2e-3) < 1e-15, f"at v_id = {v} the two currents sum to {a + b}, not 2 mA"
+    assert a >= 0.0 and b >= 0.0, f"at v_id = {v} a current came out negative: {a}, {b}"
+'''},
+                    {"name": "the slope at the origin is the transconductance", "code": r'''
+a, b = tail_split(0.001)
+slope = (a - b) / 0.001
+assert abs(slope - 2e-3) < 1e-8, \
+    f"the difference current should start off at g_m = 2 mA/V per volt, got {slope}"
+'''},
+                    {"name": "beyond the steering point one side is off", "code": r'''
+assert tail_split(1.5) == (2e-3, 0.0), f"1.5 V is past sqrt(2), got {tail_split(1.5)}"
+assert tail_split(-1.5) == (0.0, 2e-3), f"and the other way round, got {tail_split(-1.5)}"
+near = tail_split(1.41)
+assert near[1] > 0.0, "just inside the steering point the far side still carries something"
+assert near[1] < 2e-6, f"but not much: expected under 2 uA, got {near[1]}"
+'''},
+                    {"name": "the small-signal model is already 0.5% out at a fifth of an overdrive", "code": r'''
+a, b = tail_split(0.2)
+exact = a - b
+linear = 2e-3 * 0.2
+assert abs(exact - 3.9799497484264805e-4) < 1e-12, \
+    f"expected 0.39799 mA of difference current, got {exact}"
+assert exact < linear, "the square-law pair is always a little softer than its tangent"
+assert 0.004 < (linear - exact) / linear < 0.006, \
+    f"expected about half a per cent low, got {(linear - exact) / linear}"
+'''},
+                    {"name": "rejection depends on the tail and not on the load", "code": r'''
+a_d, a_cm, cmrr = stage_gains(2e-3, 4000.0, 2000.0)
+assert abs(a_d + 4.0) < 1e-12, f"-g_m R_D / 2 is -4.00, got {a_d}"
+assert abs(a_cm + 0.8888888888888888) < 1e-12, \
+    f"-4000 / (4000 + 500) is -0.8889, got {a_cm}"
+assert abs(cmrr - 4.5) < 1e-12, f"a 2 k tail gives a CMRR of 4.5, got {cmrr}"
+assert abs(stage_gains(2e-3, 10000.0, 2000.0)[2] - 4.5) < 1e-12, \
+    "R_D cancels out of the CMRR entirely, so changing it must not move the answer"
+assert abs(stage_gains(2e-3, 4000.0, 22500.0)[2] - 45.5) < 1e-12, \
+    "a current-source tail of 22.5 k should give 45.5"
+'''},
+                ],
+            },
+        },
+
+        # ---- M11 ----------------------------------------------------------
+        {
+            "title": "Output stages and the current you have to deliver",
+            "summary": "At the end of the chain the question stops being how much gain and becomes how many milliamps, and how much heat.",
+            "concepts": [
+                "Every stage so far has driven either nothing at all or a resistor chosen because it was convenient. An **output stage** drives whatever the application hands it — a few hundred ohms, a transducer, a length of cable — and at that point the design question is not gain. It is current, and the heat that comes with it.",
+                "The natural output stage is a source follower, because $1/g_m$ is the lowest output resistance a single device offers. Module 7's result is the whole design equation: the loaded gain is the divider $R_L/(R_L + 1/g_m)$, so a required fraction of the signal fixes $1/g_m$, and $1/g_m$ fixes the bias current through $g_m = \\sqrt{2kI_D}$.",
+                "That chain is brutal, because it runs through a square. Keeping 90% of the signal into 1 kΩ needs $1/g_m \\le 111$ Ω, so $g_m \\ge 9$ mA/V, so $I_D \\ge 20$ mA — twenty times everything this course has done so far, for one specification about a load.",
+                "**Class A** means the device conducts for the whole cycle. Bias the follower with a tail current source $I_Q$: the device current is $I_Q + v_{out}/R_L$, which reaches zero on the negative half when $v_{out} = -I_QR_L$. That is a hard ceiling — the peak output into $R_L$ can never exceed $I_QR_L$, however generous the supply is.",
+                "So a class-A stage's bias current is set by the *largest* signal it must ever deliver, and it draws that current continuously whether or not the signal is there.",
+                "Efficiency follows. With $\\pm V_{DD}$ rails the supplies deliver $2V_{DD}I_Q$ at all times; at the very best — full swing, with $I_Q$ sized exactly for it — the load receives $V_{DD}^2/(2R_L)$, and the ratio is **25%**. Three quarters of the power is heat in the devices, at best.",
+                "And the dissipation is **largest with no signal at all**: the supply power is fixed and the load is taking none of it. A class-A output stage runs hottest doing nothing, which is the opposite of every intuition from digital electronics.",
+                "**Class B** push-pull fixes the economics: an n-channel device sources the positive half, a p-channel device sinks the negative half, and the quiescent current is zero. The best efficiency rises to $\\pi/4 = 78.5\\%$ and the idle dissipation falls to nothing. What it introduces is **crossover distortion** — near zero output neither device has enough gate drive to conduct, so the waveform has a flat step through the crossing, and it is worst for small signals, which is exactly where it is most audible.",
+                "**Class AB** is what almost everything actually uses: bias the pair with a small quiescent current so both are conducting near the crossing, then let each take its own half. Nearly all of class B's efficiency and very little of its distortion — at the price of a bias network that has to track the devices' temperature, because a quiescent current that depends exponentially or quadratically on a bias voltage will run away if that voltage does not fall as the devices warm.",
+                "Two sizing rules fall out of the above and are worth carrying. A class-A heatsink is sized from the **idle** condition; a class-AB heatsink is sized from the **loudest** condition. Getting that backwards is a design that passes the bench and fails the customer.",
+            ],
+            "tune": {
+                "title": "Deliver the signal into a real load, and count the cost",
+                "minutes": 10,
+                "brief": r'''
+Module 7 established that a source follower, looked at from its output, is a voltage
+source equal to its input sitting behind a resistance of $1/g_m$. Hang a load on it and
+what the load receives is a plain divider — which is exactly the model on the screen.
+
+Read the two sliders as the two things they are:
+
+- **R1** is the follower's own output resistance, $1/g_m$. It is not a component you
+  buy; it is what the bias current gives you, through $I_Q = 1/(2kR_1^2)$ with
+  $k = 2$ mA/V². R1 = 500 Ω is the 1 mA this course has used all along; R1 = 200 Ω is
+  6.25 mA; R1 = 100 Ω is 25 mA.
+- **R2** is the load.
+
+The input is 1 V, so **Vout reads as the fraction of the signal that survives**, and
+**I total is the signal current the stage has to deliver**. Both matter: a follower can
+only deliver current up to its own bias, so the current reading is also a statement
+about $I_Q$.
+''',
+                "prompt": "Deliver at least 0.900 V of a 1 V signal into the load \u2014 and make it a load that actually draws 0.400 mA or more.",
+                "note": "Either constraint alone is easy. Together they say: keep almost all of the signal, into something low-impedance. Both must hold at once.",
+                "model": "divider",
+                "initial": {"r1": 2200, "r2": 4700},
+                "constants": {"vin": 1},
+                "plotKey": "vout",
+                "constraints": [
+                    {"k": "vout", "label": "Vout \u2265 0.900 V of the 1 V input", "min": 0.90},
+                    {"k": "i", "label": "I \u2265 0.400 mA into the load", "min": 0.40},
+                ],
+            },
+            "quiz": {
+                "title": "Current, efficiency and heat",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "A source follower biased by a 1 mA tail current source drives a 1 kΩ load. What is the largest negative peak it can produce before the device cuts off?",
+                        "opts": ["12 V, set by the supply", "1 V", "0.5 V", "2 V"],
+                        "a": 1,
+                        "why": r'''
+The device current is $I_Q + v_{out}/R_L$, and it reaches zero at
+$v_{out} = -I_QR_L = -1\text{ mA}\times 1\text{ k}\Omega = -1$ V. Below that the tail
+source is asking for more current than the load and the device between them can supply,
+so the device turns off and the waveform stops. Notice the supply never entered the
+calculation: this limit is about current, and a bigger rail does not move it.
+''',
+                    },
+                    {
+                        "q": "A follower must deliver 90% of its input into a 1 kΩ load. Roughly what bias current does that need, with $k = 2$ mA/V²?",
+                        "opts": ["about 1 mA", "about 2 mA", "about 20 mA", "about 111 mA"],
+                        "a": 2,
+                        "why": r'''
+$R_L/(R_L + 1/g_m) = 0.9$ needs $1/g_m = 111$ Ω, so $g_m = 9$ mA/V and
+$I_D = g_m^2/(2k) = (0.009)^2/0.004 = 20$ mA. The square is what makes it expensive:
+asking for nine tenths rather than two thirds of the signal moved the current from about
+1 mA to about 20 mA. 111 is the output resistance in ohms, not a current — a useful
+number, but not this one.
+''',
+                    },
+                    {
+                        "q": "What is the best efficiency a class-A output stage can reach, with a current-source bias and $\\pm V_{DD}$ supplies?",
+                        "opts": ["50%", "25%", "78.5%", "100%"],
+                        "a": 1,
+                        "why": r'''
+25%. The supplies deliver $2V_{DD}I_Q$ constantly; at full swing the load receives
+$V_{DD}^2/(2R_L)$, and with $I_Q$ sized exactly for that swing ($I_Q = V_{DD}/R_L$) the
+ratio is one quarter. 78.5% is $\pi/4$, which belongs to class B. And the 25% is a
+*ceiling* reached only at full swing — at a tenth of full swing the efficiency is a
+hundredth of it, because the load power goes as the square while the supply power does
+not move at all.
+''',
+                    },
+                    {
+                        "q": "When does the device in a class-A output stage dissipate the most power?",
+                        "opts": [
+                            "at full output swing",
+                            "with no signal at all",
+                            "at half of full swing",
+                            "it is constant, whatever the signal",
+                        ],
+                        "a": 1,
+                        "why": r'''
+With no signal. The supply delivers a fixed $2V_{DD}I_Q$ regardless, and whatever the
+load does not take is dissipated in the device — so the device is hottest when the load
+is taking nothing. The heatsink for a class-A stage is therefore sized from the idle
+condition, which is the opposite of the digital instinct that a circuit doing nothing is
+a circuit costing nothing.
+''',
+                    },
+                    {
+                        "q": "Where does crossover distortion in a class-B stage come from?",
+                        "opts": [
+                            "the two devices conducting at the same time near zero output",
+                            "the supply sagging at high output",
+                            "neither device having enough gate drive to conduct while the output passes through zero",
+                            "the load capacitance at the output node",
+                        ],
+                        "a": 2,
+                        "why": r'''
+With zero quiescent current, each device needs its threshold's worth of drive before it
+conducts at all, so there is a band around zero output where neither is on and the
+output does not follow the input. The waveform gets a flat step through the crossing.
+Its severity does not scale with signal size, so it is proportionally *worst* for small
+signals — the reverse of the square-law distortion of module 5, and much more offensive
+to listen to for exactly that reason.
+''',
+                    },
+                    {
+                        "q": "What does class AB change, and what does it cost?",
+                        "opts": [
+                            "a small quiescent current keeps both devices conducting through the crossing; the cost is a bias network that must track the devices' temperature",
+                            "it doubles the supply voltage, at the cost of efficiency",
+                            "it removes the second device, at the cost of swing",
+                            "it adds feedback around the output stage, at the cost of bandwidth",
+                        ],
+                        "a": 0,
+                        "why": r'''
+Class AB idles at a small but non-zero current, so neither device fully turns off near
+the crossing and the flat step disappears; the efficiency is barely worse than class B
+because that current is small compared with the peaks. The catch is thermal: the
+quiescent current depends steeply on the bias voltage, the devices' threshold falls as
+they warm, and unless the bias voltage falls with them the idle current climbs, which
+warms them further. Every class-AB output stage therefore has a bias element bolted to
+the same heatsink as the output devices.
+''',
+                    },
+                ],
+            },
+            "derive": {
+                "title": "Why class A stops at a quarter",
+                "minutes": 11,
+                "vars": ["V_p", "R_L", "V_DD", "I_Q", "P_L", "P_S"],
+                "brief": r'''
+The 25% is quoted everywhere and it is worth four lines of algebra rather than trust,
+because the derivation shows exactly which assumptions it rests on — full swing, and a
+bias current sized for that swing and no larger.
+
+Take a class-A follower between $+V_{DD}$ and $-V_{DD}$, biased by a tail current source
+$I_Q$, driving $R_L$ to ground with a sinusoidal output of peak $V_p$.
+''',
+                "steps": [
+                    {
+                        "prompt": "Write the average power delivered to $R_L$ by a sinusoid of peak $V_p$.",
+                        "answer": "\\frac{V_p^{2}}{2 R_L}",
+                        "hint": "The RMS value of a sinusoid is its peak over $\\sqrt{2}$, and power is RMS squared over resistance.",
+                        "deconstruct": [
+                            "$V_{rms} = V_p/\\sqrt{2}$.",
+                            "$P = V_{rms}^2/R_L$, and squaring the $\\sqrt{2}$ gives the 2 underneath.",
+                        ],
+                    },
+                    {
+                        "prompt": "The tail source draws $I_Q$ from the negative rail at all times, and the same $I_Q$ comes on average out of the positive rail. Write the total average power taken from the two supplies.",
+                        "answer": "2 V_{DD} I_Q",
+                        "hint": "Each rail is at $V_{DD}$ from ground and passes $I_Q$; there are two of them.",
+                        "deconstruct": [
+                            "Each supply contributes $V_{DD}I_Q$.",
+                            "Nothing in that expression depends on the signal — which is the fact the whole result turns on.",
+                        ],
+                    },
+                    {
+                        "prompt": "Divide one by the other. Write the efficiency in terms of $V_p$, $R_L$, $V_{DD}$ and $I_Q$.",
+                        "answer": "\\frac{V_p^{2}}{4 V_{DD} I_Q R_L}",
+                        "hint": "Dividing by $2V_{DD}I_Q$ multiplies the existing 2 in the denominator up to 4.",
+                        "deconstruct": [
+                            "$\\left(\\frac{V_p^2}{2R_L}\\right) \\big/ \\left(2V_{DD}I_Q\\right)$.",
+                            "The two denominators multiply together.",
+                        ],
+                    },
+                    {
+                        "prompt": "The best case is full swing, $V_p = V_{DD}$, with the bias sized exactly to deliver it, $I_Q = V_{DD}/R_L$. Substitute both and write the efficiency.",
+                        "answer": "\\frac{1}{4}",
+                        "hint": "The substitution leaves $V_{DD}^2$ over $4V_{DD}^2$; $R_L$ cancels against the $R_L$ inside $I_Q$.",
+                        "deconstruct": [
+                            "The denominator becomes $4V_{DD}(V_{DD}/R_L)R_L = 4V_{DD}^2$.",
+                            "The numerator is $V_{DD}^2$, so the whole thing is one quarter.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+Two things the derivation makes plain that the bare number hides. First, 25% is a
+*ceiling*, met only at full swing: back the output off to a tenth of the rail and the
+numerator falls by a hundred while the denominator does not move at all, so the
+efficiency is a quarter of one per cent. Real signals spend most of their time far below
+their peaks, which is why a class-A amplifier's average efficiency is dreadful even by
+its own standard. Second, the whole argument rests on the supply current being constant,
+and that is the thing class B changes: let the current follow the signal and the same
+calculation gives $\pi/4$ instead — at the price of the two devices having to hand over
+to each other cleanly, which is the rest of this module's problem.
+''',
+            },
+        },
+
     ],
 
     # ---- capstone ---------------------------------------------------------

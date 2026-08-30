@@ -43,14 +43,252 @@
     "A tail pointer is what makes appending to a singly linked list O(1)",
     "Big-O hides constants: cache locality is why arrays usually still win"
    ],
+   "read": null,
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
+   "quiz": {
+    "title": "Where the cost of a growable array actually goes",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "Starting from capacity 1, a dynamic array doubles whenever the backing store fills. Over $n$ appends, how many slot writes happen in total?",
+      "opts": [
+       "Fewer than $3n$ — the $n$ stores, plus copies that form a geometric series adding to less than $2n$",
+       "About $n\\log_2 n$: there are $\\log_2 n$ resizes and each one copies $n$ slots",
+       "About $n^2/2$, because every resize copies everything already in the store",
+       "Exactly $n$ — a resize hands over the same backing store, so it writes nothing"
+      ],
+      "a": 0,
+      "why": "The copies are 1, 2, 4, 8 and so on, and the series stops at the last doubling\nbefore the $n$th append, so it adds to $2^{\\lceil\\log_2 n\\rceil} - 1$ — one less\nthan the first power of two at or above $n$, and therefore under $2n$. It comes to\nexactly $n - 1$ only when $n$ is itself a power of two: sixteen appends copy 15, but\nseventeen copy 31. Add the $n$ stores and the total is under $3n$, so the amortised\ncost per append is a small constant. There really are about $\\log_2 n$\nresizes, but they are nothing like equal: the last one alone copies more than every\nearlier one put together, so counting resizes and multiplying by $n$ overstates the\nwork badly. Quadratic total work is what growing by a *fixed* number of slots costs,\nnot doubling. And a resize certainly does write — copying every live element into\nthe new store is the only thing it does."
+     },
+     {
+      "q": "Why double the capacity rather than grow by a fixed 100 slots?",
+      "opts": [
+       "Doubling makes the copy costs a geometric series, which totals about $n$; a fixed increment makes them an arithmetic series, which is quadratic",
+       "Doubling holds less memory at every moment than a fixed increment does",
+       "A fixed increment cannot be implemented without knowing the final length in advance",
+       "With doubling the old elements never have to be copied at all"
+      ],
+      "a": 0,
+      "why": "With a fixed increment $c$ there are $n/c$ growths, copying $c$, then $2c$, then\n$3c$ — an arithmetic series summing to roughly $n^2/(2c)$. Growing by 100 turns a\nmillion appends into about five billion slot writes; doubling turns them into about\ntwo million. Doubling is not a memory saving, and claiming otherwise gets it exactly\nbackwards: a doubled store can sit half empty, and that wasted half is the price\npaid for the cheap appends. A fixed increment is perfectly easy to implement — it is\njust slow. And every growth copies the live elements, however the new store is\nobtained."
+     },
+     {
+      "q": "The array halves its capacity when it falls to a quarter full rather than to a half. What does waiting until a quarter buy?",
+      "opts": [
+       "A push and a pop repeated at the boundary would resize on every single operation if the trigger were a half",
+       "Shrinking at a half would drop elements off the end of the store",
+       "A quarter is the largest fraction for which the geometric series still converges",
+       "It makes `pop` cost $O(\\log n)$ instead of $O(n)$"
+      ],
+      "a": 0,
+      "why": "Shrink at exactly half and the array comes out of the shrink completely full, so the\nvery next append doubles it straight back. Alternate a push and a pop on that\nboundary and every single operation copies the whole array — the array is $O(n)$ per\noperation, with no amortisation left. Waiting until a quarter leaves the array half\nfull after the shrink, so a linear number of operations is needed to reach either\ntrigger again and the cost is spread over them. Nothing is ever dropped: the shrink\ncopies the live prefix, which fits in the smaller store by construction. And `pop`\nis $O(1)$ amortised under either rule when it is not being adversarially poked; the\nquarter rule is about closing that adversarial case, not about a logarithm."
+     },
+     {
+      "q": "`push_back` on the singly linked list is $O(1)$. What makes it so?",
+      "opts": [
+       "The list keeps a pointer to its last node, so nothing has to be walked to find the end",
+       "The list caches its length, so the position of the end is known",
+       "Nodes are stored contiguously, so the end is a fixed offset from the start",
+       "The value goes in at the head, and the list is reversed on the next read"
+      ],
+      "a": 0,
+      "why": "The tail pointer is the whole trick: allocate a node, hang it off `self.tail.next`,\nmove `self.tail` on. Without it, the only route to the end of a singly linked list is\na walk from the head, which is $O(n)$ — and the lab's step counter exists to catch\nexactly that, since 1000 `push_back` calls must cost 0 steps. Knowing the length does\nnot help, because a length is a number and not an address; you still cannot reach the\nlast node without following $n$ links. Nodes are emphatically not contiguous — that is\nthe defining difference from the array. And pushing at the head with a lazy reverse\njust moves the linear cost onto whoever reads next."
+     },
+     {
+      "q": "Both containers hold a million integers, and traversing either is $O(n)$. On real hardware the array is several times faster. Why?",
+      "opts": [
+       "Array elements sit next to each other, so one cache line brings in several of them; list nodes are scattered, and each hop is its own trip to memory",
+       "Traversing a linked list is really $O(n\\log n)$ once the pointer chasing is counted",
+       "The linked list recomputes its length on every step",
+       "Big-O is measuring the wrong thing here: array traversal is $O(1)$"
+      ],
+      "a": 0,
+      "why": "Big-O throws away constants, and on modern hardware that constant is dominated by\nmemory locality. Reading one array element pulls in a whole cache line, which is the\nnext several elements for free; the nodes of a linked list were allocated at\ndifferent moments and can sit anywhere, so each `node.next` can be a fresh miss\ncosting a hundred-odd cycles. Both traversals genuinely are $O(n)$ — following a\npointer is one step per node, not a logarithm — and neither implementation\nrecomputes anything per step. This gap is why `list` in Python and `std::vector` in\nC++ are the default containers, and why linked lists survive mostly where $O(1)$\nsplicing of a node you already hold is the point."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "The growth and shrink rules, line by line",
+    "minutes": 9,
+    "brief": "The whole amortised argument lives in four numbers: when to grow, by how much, when\nto shrink, and by how much. Get any of them wrong and the container still *works* —\nevery test about values passes — while the write counter quietly goes quadratic.\n\nNothing runs here. Filled in correctly, sixteen appends from capacity 1 leave\n`resizes` at 4 and `writes` at 31.",
+    "caption": "dynamic_array.py — five holes, and a counter that has to come out at 31",
+    "lang": "python",
+    "listing": "class DynamicArray:\n    \"\"\"capacity is the size of the backing store; _size is how much of it is live.\"\"\"\n\n    def append(self, value):\n        if self._size == ___:\n            self._resize(___)\n        self._store[self._size] = value\n        self.writes += 1\n        self._size += 1\n\n    def pop(self):\n        if self._size == 0:\n            raise IndexError(\"pop from an empty array\")\n        value = self._store[self._size - 1]\n        self._store[self._size - 1] = None\n        self._size -= 1\n        if self.capacity > 1 and self._size * ___ <= self.capacity:\n            self._resize(max(1, self.capacity // ___))\n        return value\n\n    def _resize(self, capacity):\n        store = [None] * capacity\n        for i in range(___):\n            store[i] = self._store[i]\n            self.writes += 1\n        self._store = store\n        self.capacity = capacity\n        self.resizes += 1\n",
+    "blanks": [
+     {
+      "prompt": "When has the backing store run out of room?",
+      "hole": "?",
+      "opts": [
+       "self.writes",
+       "len(self.to_list())",
+       "self.capacity",
+       "self.capacity - 1"
+      ],
+      "a": 2,
+      "why": "`_size` counts live elements and `capacity` counts slots, so the store is full exactly when the two meet — and not a moment before. This is the one comparison the whole doubling schedule hangs off.",
+      "whys": [
+       "`writes` is a diagnostic counter that only ever goes up, and it outruns `_size` as soon as a resize copies anything. Comparing the length against it fires on the first two appends, taking the capacity to 4, and then never again — so the fifth append writes off the end of the store and raises `IndexError`.",
+       "`to_list()` returns the live prefix, so its length *is* `_size`; the test becomes `_size == _size`, always true, and every single append resizes.",
+       "`_size` counts live elements and `capacity` counts slots, so the store is full exactly when the two meet — and not a moment before. This is the one comparison the whole doubling schedule hangs off.",
+       "This grows one append early and leaves the last slot of every store permanently unused. Sixteen appends would then cost 5 resizes rather than 4, and the `capacity == 16` check fails."
+      ]
+     },
+     {
+      "prompt": "The new capacity to grow into.",
+      "hole": "?",
+      "opts": [
+       "self.capacity * 2",
+       "self.capacity + 1",
+       "self.capacity + 100",
+       "self._size"
+      ],
+      "a": 0,
+      "why": "Doubling is what makes the copies a geometric series: 1 + 2 + 4 + … stays below the number of appends that paid for it, so the amortised cost per append is a constant.",
+      "whys": [
+       "Doubling is what makes the copies a geometric series: 1 + 2 + 4 + … stays below the number of appends that paid for it, so the amortised cost per append is a constant.",
+       "One extra slot per growth means every append resizes and copies everything: $n$ appends cost about $n^2/2$ writes. A thousand appends would cost half a million.",
+       "A fixed increment of any size is still arithmetic growth, and still quadratic — 100 only moves the constant. A million appends would cost around five billion writes instead of two million.",
+       "At this point `_size` equals `capacity`, so this resizes the store to exactly the size it already was. The append then writes off the end of it."
+      ]
+     },
+     {
+      "prompt": "The shrink trigger: this multiplier makes the test read *at most a quarter full*.",
+      "hole": "?",
+      "opts": [
+       "2",
+       "8",
+       "0.25",
+       "4"
+      ],
+      "a": 3,
+      "why": "A quarter full means `_size <= capacity / 4`, and multiplying out to `_size * 4 <= capacity` keeps it in integers. After the halving the array sits half full, with room to move in both directions.",
+      "whys": [
+       "This shrinks at half full, which leaves the array completely full straight afterwards. A push and a pop repeated on that boundary then resize on every operation — the thrashing the quarter rule exists to prevent.",
+       "This waits until an eighth. The amortised cost survives, but it lets the store grow to eight times the live size rather than four before releasing anything — twice the capacity held, and seven idle slots per live element instead of three — and the lab's check that an emptied array is back to capacity 1 fails outright: `_size * 8 <= capacity` stops firing at capacity 4 with one element left, so the final pop halves that to 2 and the array is stranded there.",
+       "Multiplying by a float makes the comparison true almost always — a full array of 8 gives `8 * 0.25 = 2.0 <= 8` — so the store halves after nearly every pop and the capacity collapses under the live data.",
+       "A quarter full means `_size <= capacity / 4`, and multiplying out to `_size * 4 <= capacity` keeps it in integers. After the halving the array sits half full, with room to move in both directions."
+      ]
+     },
+     {
+      "prompt": "And the store shrinks by this divisor.",
+      "hole": "?",
+      "opts": [
+       "1",
+       "2",
+       "4"
+      ],
+      "a": 1,
+      "why": "Halving mirrors the doubling, so the two triggers sit a factor of two apart and the array leaves a shrink half full rather than exactly full.",
+      "whys": [
+       "Integer division by 1 returns the same capacity, so the shrink condition stays true and every subsequent pop pays for a full copy that changes nothing.",
+       "Halving mirrors the doubling, so the two triggers sit a factor of two apart and the array leaves a shrink half full rather than exactly full.",
+       "Quartering lands the array exactly full at the moment it shrinks, so the next append doubles it back and the push/pop thrash returns by a different route."
+      ]
+     },
+     {
+      "prompt": "How much of the old store is worth copying across?",
+      "hole": "?",
+      "opts": [
+       "capacity",
+       "len(self._store)",
+       "self._size",
+       "self.capacity"
+      ],
+      "a": 2,
+      "why": "Only the live prefix means anything; everything from `_size` onwards is rubbish left behind by earlier pops. Copying exactly `_size` values is also what makes the write count come out at 31 for sixteen appends.",
+      "whys": [
+       "`capacity` here is the parameter, the *new* size. When growing, that reads past the end of the old store; the values it copies do not exist.",
+       "This is the old capacity spelled a longer way, with the same failure: fine while growing, an `IndexError` the first time the array shrinks.",
+       "Only the live prefix means anything; everything from `_size` onwards is rubbish left behind by earlier pops. Copying exactly `_size` values is also what makes the write count come out at 31 for sixteen appends.",
+       "The old capacity is right when growing, because the store is full at that moment — but on a shrink it is twice the new store's length, and the copy raises `IndexError` on the first slot past the end."
+      ]
+     }
+    ]
+   },
    "numeric": null,
    "match": null,
    "tune": null,
    "build": null,
-   "derive": null,
+   "derive": {
+    "title": "Why doubling makes an append cost a constant",
+    "minutes": 12,
+    "brief": "The array starts with one slot and doubles whenever it fills. Each doubling copies\nevery live element into the new store, which looks expensive — and on the append\nthat triggers it, it is. The claim is that it is cheap *on average*, and that claim\nis a sum rather than an opinion. So count.\n\nA **write** is one value put into a slot of the backing store: the $n$ appends\nthemselves, plus every copy made during a resize.",
+    "vars": [
+     "n",
+     "k",
+     "c",
+     "W"
+    ],
+    "steps": [
+     {
+      "prompt": "The store starts at capacity 1 and doubles on overflow. What is the capacity after $k$ doublings?",
+      "given": "",
+      "answer": "2^{k}",
+      "placeholder": "",
+      "hint": "Each doubling multiplies by 2, and you started at 1.",
+      "deconstruct": [
+       "Capacity 1 becomes 2, then 4, then 8.",
+       "After $k$ of those, it is 2 multiplied by itself $k$ times."
+      ]
+     },
+     {
+      "prompt": "A doubling copies the whole live prefix, which is exactly the old capacity: 1 element on the first doubling, 2 on the second, 4 on the third. Add up the copies made by all $k$ of them.",
+      "given": "$1 + 2 + 4 + \\dots + 2^{k-1}$",
+      "answer": "2^{k} - 1",
+      "placeholder": "",
+      "hint": "A geometric series with ratio 2. In binary it is $k$ ones in a row, which is one less than a 1 followed by $k$ zeros.",
+      "deconstruct": [
+       "Write $S = 1 + 2 + \\dots + 2^{k-1}$ and double it: $2S = 2 + 4 + \\dots + 2^{k}$.",
+       "Subtract: $2S - S$ cancels everything but the ends, leaving $2^{k} - 1$."
+      ]
+     },
+     {
+      "prompt": "Those $k$ doublings take the store to precisely the capacity you found, so $n = 2^{k}$ appends fill it exactly. Rewrite the copy total in terms of $n$.",
+      "given": "",
+      "answer": "n - 1",
+      "placeholder": "",
+      "hint": "You have $2^{k} - 1$, and $n$ is another name for $2^{k}$.",
+      "deconstruct": [
+       "$n = 2^{k}$ by the substitution the prompt just made.",
+       "So $2^{k} - 1$ is $n - 1$: the copies alone cost slightly less than one per append."
+      ]
+     },
+     {
+      "prompt": "Now add the appends themselves, one write each. What is the total write count $W$?",
+      "given": "",
+      "answer": "2n - 1",
+      "placeholder": "",
+      "hint": "Copies plus stores: $(n - 1) + n$.",
+      "deconstruct": [
+       "The copies came to $n - 1$.",
+       "The stores are one per append, so $n$ more."
+      ]
+     },
+     {
+      "prompt": "Divide by $n$ to get the amortised cost of a single append.",
+      "given": "",
+      "answer": "2 - \\frac{1}{n}",
+      "placeholder": "",
+      "hint": "Divide both terms of $2n - 1$ by $n$ separately.",
+      "deconstruct": [
+       "$\\frac{2n}{n} = 2$.",
+       "$\\frac{1}{n}$ is what comes off it, and it shrinks as the array grows."
+      ]
+     },
+     {
+      "prompt": "Now suppose the array grew by a fixed $c$ slots instead, starting at capacity $c$. There are $n/c - 1$ growths, copying $c$, then $2c$, and so on up to $n - c$. What is the total copy count?",
+      "given": "$c + 2c + 3c + \\dots + (n - c)$",
+      "answer": "\\frac{n(n-c)}{2c}",
+      "placeholder": "",
+      "hint": "An arithmetic series is the number of terms times the average of the first and last. There are $n/c - 1$ terms, and the first and last average to $n/2$.",
+      "deconstruct": [
+       "The terms run $c, 2c, \\dots, (n-c)$, so there are $n/c - 1$ of them.",
+       "First plus last over two is $(c + n - c)/2 = n/2$.",
+       "Multiply the count by the average."
+      ]
+     }
+    ],
+    "closing": "$2 - 1/n$ writes per append: under 2, and falling towards it. That is what \"$O(1)$\namortised\" means here — not that no append is ever expensive, because one in every\n$n$ of them copies the entire array, but that the expensive ones are rare in exactly\nthe proportion that pays for them.\n\nSet the two totals side by side for a million appends. Doubling: about two million\nwrites. Growing by $c = 100$: $n(n-c)/(2c)$ is about five *billion*. The difference\nis not a constant factor you can optimise away later; it is the difference between a\ncontainer that scales and one that does not, and it comes down entirely to whether\nthe growth is multiplicative or additive."
+   },
    "lab": {
     "title": "A growable array and a linked list, counted",
     "runtime": "python",
@@ -127,10 +365,201 @@
     "A monotonic deque holds only the candidates that can still become the answer",
     "Each index enters and leaves the deque once, so a sliding-window maximum is O(n), not O(nk)"
    ],
+   "read": null,
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
-   "numeric": null,
+   "quiz": {
+    "title": "Nesting, order, and why the window is linear",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "Why does a monotonic deque bring the sliding-window maximum down to $O(n)$ when the obvious nested loop is $O(nk)$?",
+      "opts": [
+       "Every index is appended once and removed at most once, so the total deque work is bounded by $2n$ however wide the window is",
+       "The deque keeps the window sorted, which costs $O(k\\log k)$ but only has to be done once",
+       "`collections.deque` supports $O(1)$ indexing, so the maximum can be looked up directly",
+       "$k$ is small in practice, so the $k$ factor does not matter"
+      ],
+      "a": 0,
+      "why": "This is the aggregate argument again, in a new costume. A single step can pop many\nindices, so no step is $O(1)$ in the worst case — but an index has to be appended\nbefore it can be popped, and it is appended exactly once, so across the whole run\nthere are at most $n$ appends and $n$ removals. Nothing is ever sorted: the deque is\n*kept* in decreasing order by refusing to admit anything that would break it, which\nis cheaper than sorting and is why $k$ never appears in the cost. A deque does index\nin $O(1)$, but that is not where the saving comes from — the brute-force loop\nindexes in $O(1)$ too and is still $O(nk)$. And an algorithm whose cost depends on\n$k$ is exactly what falls over on the day someone passes $k = 100{,}000$."
+     },
+     {
+      "q": "An index is dropped from the back of the deque when its value is not greater than the incoming value. Why is that safe?",
+      "opts": [
+       "The incoming element is both larger and younger, so it outlives the dropped one — which can therefore never be the maximum of any future window",
+       "Duplicate values cannot appear in a window, so the dropped index was spurious",
+       "The dropped index has already fallen out of the window",
+       "It is not strictly safe; it is an approximation that is correct for almost all inputs"
+      ],
+      "a": 0,
+      "why": "Two conditions have to hold together, and both do: the newcomer is at least as large,\nso it beats the older element on value; and it arrived later, so it stays inside the\nwindow for at least as long. Any future window containing the older index also\ncontains the newer one, and the newer one wins — the older index is dead and can be\ndiscarded without a second thought. Duplicates are perfectly possible and are why the\ncomparison is written with `<=` rather than `<`. Ageing out of the window is a\nseparate check, done at the front, not the back. And there is nothing approximate\nabout it: the lab compares against brute force on sixty random cases."
+     },
+     {
+      "q": "A FIFO queue built from two stacks. What does a single `dequeue` cost?",
+      "opts": [
+       "$O(1)$ amortised: one dequeue can move many elements, but each element is moved between the stacks at most once ever",
+       "$O(1)$ worst case, because a dequeue moves exactly one element",
+       "$O(n)$ always, because the inbox has to be tipped on every dequeue",
+       "$O(\\log n)$, the same as a heap"
+      ],
+      "a": 0,
+      "why": "The tip-over is the expensive event and it is genuinely $O(n)$ when it happens: a\ndequeue that arrives with 1000 elements in the inbox moves all 1000. What rescues the\nbound is that those elements are now in the outbox and never go back — each element\ncrosses from inbox to outbox exactly once in its whole life, so $n$ dequeues cost\n$O(n)$ in total. That is the identical argument to the doubling array, on completely\ndifferent machinery. The tip only happens when the outbox is empty, so most dequeues\ntouch one element; and nothing here is ordered by comparison, so no logarithm can\nappear."
+     },
+     {
+      "q": "Shunting-yard turns `2 ^ 3 ^ 2` into `2 3 2 ^ ^`, but `3 - 4 - 5` into `3 4 - 5 -`. What accounts for the difference?",
+      "opts": [
+       "`^` is right associative, so an incoming `^` leaves an equal-precedence `^` on the stack; `-` is left associative, so an incoming `-` pops one first",
+       "`^` has higher precedence than `-`, so equal-precedence operators never meet on the stack",
+       "Exponentiation is not really a binary operator, so it is handled by a separate rule",
+       "The two expressions differ in the number of operands, not in any property of the operators"
+      ],
+      "a": 0,
+      "why": "The pop condition is the only place associativity shows up: pop while the operator on\ntop binds *strictly tighter*, or binds equally tightly *and the incoming operator is\nleft associative*. Two `^` tokens are equally tight and `^` is right associative, so\nnothing is popped, both sit on the stack, and they come off in reverse — giving\n$2^{(3^2)} = 512$. Two `-` tokens are equally tight and `-` is left associative, so\nthe first is popped before the second is pushed, giving $(3-4)-5$. Precedence is real\nand `^` does outrank `-`, but precedence alone cannot distinguish these two cases,\nbecause in both of them the operators being compared are equal. Both expressions have\nthree operands, and exponentiation is as binary as subtraction."
+     },
+     {
+      "q": "`evaluate_rpn(\"3 4 -\".split())` must give $-1$. Which popped value is the left operand?",
+      "opts": [
+       "The one popped second, since a stack returns operands in the reverse of the order they were pushed",
+       "The one popped first, since it is nearest the operator in the token stream",
+       "Either — the stack holds them in a canonical order regardless",
+       "Neither: subtraction needs a separate operand stack to preserve the order"
+      ],
+      "a": 0,
+      "why": "`3` is pushed, then `4`. The top of the stack is therefore `4`, which is the *right*\noperand, and the value underneath it is `3`, the left. So the pops come out\nright-then-left and the operator has to be applied as `left - right`. Get it the\nwrong way round and `+` and `*` still pass every test while `-`, `/` and `^` are all\nsilently reversed — which is why the lab checks `3 4 -` and `-7 2 /` specifically. A\nstack has exactly one order, last-in-first-out, and no canonicalisation; and one\nstack is all RPN evaluation ever needs, which is most of its appeal."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "The monotonic deque, hole by hole",
+    "minutes": 9,
+    "brief": "The deque holds **indices**, not values, front to back in decreasing order of the\nvalue each index points at. Every line below is doing one of four jobs: evict what\ncan never win again, admit the newcomer, evict what has aged out, and read the\nanswer. Filling it in wrongly mostly does not crash — it quietly returns the wrong\nmaximum for some windows and the right one for others.\n\nNothing runs here. Correctly filled, `sliding_window_max([1, 3, -1, -3, 5, 3, 6, 7], 3)`\nreturns `[3, 3, 5, 5, 6, 7]`.",
+    "caption": "sliding_window.py — five holes between $O(n)$ and wrong answers",
+    "lang": "python",
+    "listing": "from collections import deque\n\n\ndef sliding_window_max(values, k):\n    \"\"\"Maximum of every width-k window, in O(n) total.\"\"\"\n    window = deque()          # indices, front to back in decreasing value order\n    out = []\n    for index, value in enumerate(values):\n        while window and values[___] <= value:\n            window.___()                      # evict from the back\n        window.append(index)\n        if window[0] <= index ___:            # the front has aged out\n            window.popleft()\n        if index >= ___:                      # the first full window exists\n            out.append(values[window[___]])\n    return out\n",
+    "blanks": [
+     {
+      "prompt": "Which index is compared against the newcomer?",
+      "hole": "?",
+      "opts": [
+       "index",
+       "window[-1]",
+       "window[0]",
+       "index - 1"
+      ],
+      "a": 1,
+      "why": "The back of the deque holds the smallest surviving candidate, and it is the one the newcomer can knock out. Working from the back is what keeps the deque decreasing.",
+      "whys": [
+       "This compares the incoming value with itself, which is never strictly greater, so the loop never runs and the deque grows without bound — every index stays in it and the front never changes after the first element.",
+       "The back of the deque holds the smallest surviving candidate, and it is the one the newcomer can knock out. Working from the back is what keeps the deque decreasing.",
+       "The front holds the current maximum. Comparing against it and popping from the back would evict candidates on the strength of an element that is not being evicted, and the deque stops being ordered.",
+       "The previous index may well have been evicted already, so reading `values` at it says nothing about what is still in the deque. It also ignores the whole run of smaller candidates behind it."
+      ]
+     },
+     {
+      "prompt": "…and it comes off which end?",
+      "hole": "?",
+      "opts": [
+       "popleft",
+       "clear",
+       "appendleft",
+       "pop"
+      ],
+      "a": 3,
+      "why": "`pop` takes from the back, which is where the beaten candidate is. Each index is appended once and popped at most once, and that pairing is the whole $O(n)$ argument.",
+      "whys": [
+       "`popleft` throws away the front — the current maximum — while the loop condition keeps looking at the back, so the loop can spin discarding the answer and leave the deque unordered.",
+       "Clearing drops every surviving candidate, including ones still inside the window that are larger than the newcomer. The result is the maximum of a suffix, not of the window.",
+       "This adds instead of removing, so the loop condition never stops being true and the deque grows until memory runs out.",
+       "`pop` takes from the back, which is where the beaten candidate is. Each index is appended once and popped at most once, and that pairing is the whole $O(n)$ argument."
+      ]
+     },
+     {
+      "prompt": "The front index is stale when it is this far behind.",
+      "hole": "?",
+      "opts": [
+       "- k",
+       "- k + 1",
+       "- 1",
+       "+ k"
+      ],
+      "a": 0,
+      "why": "The window ending at `index` covers `index - k + 1` up to `index`, so the oldest index still inside it is `index - k + 1`. Anything at `index - k` or earlier has left, which is exactly the test written here.",
+      "whys": [
+       "The window ending at `index` covers `index - k + 1` up to `index`, so the oldest index still inside it is `index - k + 1`. Anything at `index - k` or earlier has left, which is exactly the test written here.",
+       "This evicts the oldest index that is still legitimately inside the window. The answer is then the maximum of a window of width $k-1$, which is right whenever the true maximum is not the oldest element and wrong when it is.",
+       "This throws away the front on every step where it is not the newest index, so the deque never holds more than one candidate and the result is just `values` shifted along.",
+       "The front index is never ahead of the current one, so `window[0] <= index + k` is true on every single step and the front is thrown away every time — the opposite of aging out. The newcomer appended a line earlier is often the only index there, so the deque is left empty and `values[window[0]]` raises `IndexError` on the first full window."
+      ]
+     },
+     {
+      "prompt": "The first full window is complete when `index` reaches…",
+      "hole": "?",
+      "opts": [
+       "k + 1",
+       "0",
+       "k - 1",
+       "k"
+      ],
+      "a": 2,
+      "why": "Indices are counted from 0, so the window of width $k$ starting at 0 ends at $k-1$. That is the first step at which there is anything to report, and it gives exactly $n - k + 1$ outputs.",
+      "whys": [
+       "Two short at the start, for the same reason, and the lab's length check on 60000 elements fails immediately.",
+       "This reports from the very first element, so the early outputs are maxima of partial windows of width 1, 2, 3 and so on rather than of width $k$.",
+       "Indices are counted from 0, so the window of width $k$ starting at 0 ends at $k-1$. That is the first step at which there is anything to report, and it gives exactly $n - k + 1$ outputs.",
+       "An off-by-one that skips the very first window: the output is one short, and `sliding_window_max([4, 2, 9], 3)` returns `[]` rather than `[9]`."
+      ]
+     },
+     {
+      "prompt": "Where the answer for this window is read from.",
+      "hole": "?",
+      "opts": [
+       "1",
+       "0",
+       "-1"
+      ],
+      "a": 1,
+      "why": "The deque is kept decreasing, so the front is the largest value still in the window — and the eviction step above has already made sure the front is inside it.",
+      "whys": [
+       "The second-largest candidate, when there is one — and an `IndexError` the moment the deque holds a single index, which happens on any strictly increasing stretch of the input, where each newcomer evicts every survivor behind it.",
+       "The deque is kept decreasing, so the front is the largest value still in the window — and the eviction step above has already made sure the front is inside it.",
+       "The back is the *smallest* surviving candidate, usually the newest element. This returns something close to `values` itself and only agrees with the answer when the window happens to end on its maximum."
+      ]
+     }
+    ]
+   },
+   "numeric": {
+    "title": "The bill for a thousand in and a thousand out",
+    "minutes": 7,
+    "brief": "The two-stack queue is the cleanest amortised argument in the course, because you can\ncount it exactly rather than bound it. One dequeue in this run is spectacularly\nexpensive; the total is not.",
+    "prompt": "How many `push` and `pop` calls happen on the two inner stacks in total?",
+    "note": "Count only `push` and `pop`, on either stack. `is_empty` and `__len__` are free.",
+    "diagram": null,
+    "figure": "`enqueue` pushes onto the **inbox**. `dequeue` pops from the **outbox** — and when\nthe outbox is empty it is refilled first, by tipping the inbox across one element at\na time: one `pop` from the inbox and one `push` onto the outbox for each. That single\ntip reverses the order exactly once, which is what turns two LIFOs into a FIFO.",
+    "given": [
+     {
+      "label": "Enqueues",
+      "value": "1000"
+     },
+     {
+      "label": "Dequeues",
+      "value": "1000"
+     },
+     {
+      "label": "Order",
+      "value": "all 1000 enqueues, then all 1000 dequeues"
+     },
+     {
+      "label": "Counted",
+      "value": "`push` and `pop` on the inbox and the outbox"
+     }
+    ],
+    "answer": 4000.0,
+    "tol": 0.5,
+    "unit": "operations",
+    "aside": "One of those dequeues moves a thousand elements by itself. An amortised bound is a claim about the total, never about the worst single call.",
+    "hint": "Follow one value from the instant it is enqueued to the instant it is returned, and count every stack operation it takes part in. Then multiply.",
+    "wrong": "2000 counts one push and one pop per value, as though there were a single stack. Each value passes through two of them.",
+    "why": "Each value is pushed onto the inbox, popped off the inbox during the one tip-over,\npushed onto the outbox, and finally popped off the outbox: four operations, and never\na fifth, because nothing is ever tipped back. $1000 \\times 4 = 4000$.\n\nSpread over the 2000 calls the caller made, that is 2 stack operations per call —\nconstant, which is the entire claim. And it does not depend on the ordering: however\nthe enqueues and dequeues are interleaved, each value still crosses each stack exactly\nonce, so the total is $4n$ for any interleaving at all."
+   },
    "match": null,
    "tune": null,
    "build": null,
@@ -205,16 +634,238 @@
     "Pre-order records the shape; post-order is the order you may safely free nodes in",
     "Deletion splits into three cases: leaf, one child, and two children",
     "The two-child case promotes the in-order successor, the leftmost node of the right subtree",
-    "Random insertion gives height ~1.39 log2 n; sorted insertion gives a linked list"
+    "Random insertion gives height ~3 log2 n and average depth ~1.39 log2 n; sorted insertion gives a linked list"
    ],
+   "read": null,
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
+   "quiz": {
+    "title": "The invariant, and what it costs to break it",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "In-order traversal of a BST comes out sorted. Why?",
+      "opts": [
+       "The invariant puts every key of the left subtree below the node and every key of the right subtree above it, and in-order visits those three groups in exactly that order",
+       "Because `insert` keeps the keys in sorted order as it places them",
+       "Because the tree is balanced, so the levels come out in order",
+       "It does not — the traversal has to be sorted afterwards"
+      ],
+      "a": 0,
+      "why": "Left subtree, node, right subtree — and by the invariant that is exactly *smaller\nkeys, this key, larger keys*, applied recursively all the way down. The sortedness is\nnot something the traversal computes; it is the invariant read out loud. Nothing in\n`insert` maintains a sorted sequence anywhere: it maintains a *local* property at\neach node, and the global ordering is what falls out. Balance has nothing to do with\nit — a degenerate chain of a thousand nodes traverses in sorted order too, just\nslowly. And a tree whose in-order traversal is not sorted is not a BST; the lab's\nrandom-work check is precisely that assertion."
+     },
+     {
+      "q": "Deleting a node with two children promotes its in-order successor. Why is that successor always easy to remove?",
+      "opts": [
+       "It is the leftmost node of the right subtree, so it has no left child — at most one child, never two",
+       "It is always a leaf, so unhooking it is the whole job",
+       "It is always the root of the right subtree",
+       "It is not removed at all; the garbage collector reclaims it"
+      ],
+      "a": 0,
+      "why": "Walk right once, then left until you cannot. Stopping means there is no left child,\nwhich is what makes the follow-up deletion land in the leaf case or the one-child\ncase — never back in the two-child case, so the recursion terminates immediately\nrather than unwinding down the tree. It may well have a right child, so calling it a\nleaf is wrong: delete 50 from the lab's tree and the successor 60 happens to be a\nleaf, but insert 65 first and it is not. It is the root of the right subtree only\nwhen that root has no left child. And something does have to unhook it — the node\nholding the promoted key is still in the tree until the recursive call removes it."
+     },
+     {
+      "q": "The keys 1, 2, 3, …, 1000 are inserted in that order into an unbalanced BST. What is the height, counting edges?",
+      "opts": [
+       "999 — every key is larger than everything already there, so every insert goes right",
+       "9, because a BST of 1000 keys cannot be deeper than that",
+       "10, the number of times 1000 halves",
+       "0, because a sorted insert produces a single chain with no branches"
+      ],
+      "a": 0,
+      "why": "Sorted input is the worst input. Each key walks the entire right spine and hangs off\nthe bottom, so the tree is a linked list wearing tree-shaped types: 1000 nodes,\n999 edges from root to the deepest leaf, and `contains(1000)` costs 1000 comparisons.\nAbout 10 is the height a *balanced* thousand-node tree would have, and the gap\nbetween 10 and 999 is the entire justification for red-black and AVL trees. A chain\ndoes have height — height counts edges on the longest root-to-leaf path, and a chain\nis nothing but one long path."
+     },
+     {
+      "q": "Which traversal is the safe order in which to free every node, in a language where you must free them yourself?",
+      "opts": [
+       "Post-order — both children are released before the node that points at them",
+       "Pre-order, so each node is gone before anything can reach it again",
+       "In-order, because it is the natural order of the keys",
+       "Any of them; freeing is order-independent"
+      ],
+      "a": 0,
+      "why": "Post-order visits a node only after both of its subtrees are finished, so when the\nnode is freed nothing below it is still needed — and crucially, the pointers you need\nto *reach* the children were read before the parent went away. Pre-order frees the\nparent first and then dereferences `node.left` on memory that has just been handed\nback, which is a use-after-free; in-order does the same thing to the right subtree.\nThe order is very much not irrelevant, and this is the one traversal whose reason for\nexisting is not about the keys at all."
+     },
+     {
+      "q": "Search, insert and delete on a BST are all $O(h)$. Why is that a warning rather than a reassurance?",
+      "opts": [
+       "$h$ ranges from about $\\log_2 n$ to $n - 1$, and it is the insertion order — not the keys themselves — that decides which end you get",
+       "$h$ is always close to $n$ in practice, so the bound is meaningless",
+       "$h$ cannot be computed without traversing the whole tree, so the bound cannot be checked",
+       "Because $O(h)$ conceals a hidden factor of $n$ in the comparisons"
+      ],
+      "a": 0,
+      "why": "$O(h)$ is an honest bound that says nothing at all until you know $h$, and $h$ spans\ntwo orders of magnitude for the same thousand keys depending on nothing but the order\nthey arrived in. Feed a tree its keys sorted — which is what happens when you load a\ntable from a database that helpfully returned it ordered — and every operation\ndegrades from ten steps to a thousand with no error and no warning. Random insertion\nkeeps $h$ down to about $3\\log_2 n$ — the *average* node sits at depth\n$1.39\\log_2 n$, but the height is the deepest path, not the typical one — which is\nwhy the lab shuffles before building. Height is cheap to measure and the lab does\nmeasure it. And $O(h)$ hides nothing: it is one key\ncomparison per level, which is exactly what the invariant buys."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "Deletion, all three cases",
+    "minutes": 9,
+    "brief": "Insertion is the easy half. Deletion is where a BST implementation is usually wrong,\nand the trick that removes most of the difficulty is the convention below: `_delete`\nreturns *the new root of the subtree it was given*, and the caller stores that back.\nNo parent pointers, no special case for the root, no case for \"the node I want to\nunhook is a left child\".\n\nNothing runs here. Correctly filled, deleting 50 from the tree built by inserting\n50, 30, 70, 20, 40, 60, 80 leaves a pre-order of `[60, 30, 20, 40, 70, 80]`.",
+    "caption": "bst.py — the recursion that reattaches what it returns",
+    "lang": "python",
+    "listing": "def _delete(self, node, key):\n    \"\"\"Remove key from this subtree and return the subtree's new root.\"\"\"\n    if node is None:\n        return None\n    if key < node.key:\n        node.left = self._delete(___, key)\n    elif key > node.key:\n        node.right = self._delete(node.right, key)\n    else:\n        if node.left is None:          # leaf, or a right child only\n            return ___\n        if node.right is None:         # a left child only\n            return node.left\n        successor = node.___           # the in-order successor lives in here\n        while successor.___ is not None:\n            successor = successor.left\n        node.key = successor.key\n        node.right = self._delete(node.right, ___)\n    return node\n",
+    "blanks": [
+     {
+      "prompt": "The key is smaller than this node, so the search continues where?",
+      "hole": "?",
+      "opts": [
+       "node.right",
+       "node",
+       "self.root",
+       "node.left"
+      ],
+      "a": 3,
+      "why": "Smaller keys live to the left — the same descent as `contains`, with the difference that the result is stored back into `node.left`, which is how a deletion three levels down gets reattached on the way out.",
+      "whys": [
+       "Descending right when the key is smaller searches the half of the tree the invariant guarantees it is not in. The call returns the right subtree unchanged, which is then assigned to `node.left`, and the tree loses everything on the left.",
+       "Passing the same node back is unbounded recursion: the guard `key < node.key` is still true, so it recurses until the stack runs out.",
+       "Restarting from the root each time is unbounded recursion by a longer route, and it also discards the descent already made.",
+       "Smaller keys live to the left — the same descent as `contains`, with the difference that the result is stored back into `node.left`, which is how a deletion three levels down gets reattached on the way out."
+      ]
+     },
+     {
+      "prompt": "There is no left child. What takes this node's place?",
+      "hole": "?",
+      "opts": [
+       "node",
+       "node.right",
+       "node.left",
+       "None"
+      ],
+      "a": 1,
+      "why": "Whatever is on the right is spliced into the gap — and when there is nothing on the right either, that expression is `None`, which is exactly the leaf case. One line covers both.",
+      "whys": [
+       "Returning the node itself deletes nothing — the size counter drops, the key stays reachable, and the map and the tree disagree from then on.",
+       "Whatever is on the right is spliced into the gap — and when there is nothing on the right either, that expression is `None`, which is exactly the leaf case. One line covers both.",
+       "The left child is `None` here by the test immediately above, so this always returns `None` and silently discards the entire right subtree along with the node.",
+       "Returning nothing handles a leaf correctly and throws away a whole right subtree whenever there is one. The lab catches it: after deleting 30 from the sample tree, 40 must survive."
+      ]
+     },
+     {
+      "prompt": "The in-order successor is the smallest key still above this node. Which subtree holds it?",
+      "hole": "?",
+      "opts": [
+       "left",
+       "key",
+       "right"
+      ],
+      "a": 2,
+      "why": "Everything larger than the node sits in its right subtree, so the next key in sorted order is the smallest one in there. Starting anywhere else and there is nothing to be smallest of.",
+      "whys": [
+       "Going left and then further left finds the smallest key in the *left* subtree — the minimum of everything below the node, not its successor. Promoting it puts a small key above a whole subtree of larger ones and breaks the invariant on the spot.",
+       "That is a key, not a node, and the walk below immediately asks it for a `.left` it does not have.",
+       "Everything larger than the node sits in its right subtree, so the next key in sorted order is the smallest one in there. Starting anywhere else and there is nothing to be smallest of."
+      ]
+     },
+     {
+      "prompt": "…and the walk down to it goes which way?",
+      "hole": "?",
+      "opts": [
+       "left",
+       "right",
+       "key"
+      ],
+      "a": 0,
+      "why": "Left as far as it goes. The node where the walk stops has no left child, and that is what guarantees the follow-up deletion cannot land in the two-child case again.",
+      "whys": [
+       "Left as far as it goes. The node where the walk stops has no left child, and that is what guarantees the follow-up deletion cannot land in the two-child case again.",
+       "Walking right finds the *largest* key in the right subtree instead of the smallest. Promoting it puts a key above the rest of that subtree that is larger than all of them, and in-order traversal stops being sorted.",
+       "The loop body assigns `successor = successor.left`, so a key here mixes types and the comparison against `None` never means what it looks like."
+      ]
+     },
+     {
+      "prompt": "The successor's key has been copied up. Now remove the node it came from.",
+      "hole": "?",
+      "opts": [
+       "key",
+       "successor",
+       "node.left.key",
+       "successor.key"
+      ],
+      "a": 3,
+      "why": "The key now appears twice in the tree — once where it was promoted to and once where it came from. This call removes the lower copy, and because that node has at most one child the recursion stops there rather than descending further.",
+      "whys": [
+       "`key` is the key that was just overwritten, and it was smaller than everything in the right subtree — so the search runs off the left edge, removes nothing, and leaves the successor's node in place while the size counter says one fewer. The duplicate is then reachable from two places.",
+       "That is the node object rather than its key, so every comparison in the recursive call raises `TypeError` on the first `<` against an integer.",
+       "The left child of the node being deleted has nothing to do with the right subtree being searched. The call removes some unrelated key if it happens to collide, and nothing at all otherwise.",
+       "The key now appears twice in the tree — once where it was promoted to and once where it came from. This call removes the lower copy, and because that node has at most one child the recursion stops there rather than descending further."
+      ]
+     }
+    ]
+   },
    "numeric": null,
    "match": null,
    "tune": null,
    "build": null,
-   "derive": null,
+   "derive": {
+    "title": "How shallow a tree of n keys is allowed to be",
+    "minutes": 12,
+    "brief": "Every BST operation costs $O(h)$, so the only question worth asking about a tree is\nhow big $h$ can be and how small it can get. The lower end is pure counting: a tree\nof height $h$ has room for only so many nodes, and $n$ keys therefore need a certain\ndepth no matter how cleverly they are arranged.\n\nHeight is counted in **edges**: a single node has height 0.",
+    "vars": [
+     "n",
+     "h",
+     "d"
+    ],
+    "steps": [
+     {
+      "prompt": "In a perfect binary tree, the root sits alone at depth 0 and every node has two children. How many nodes are at depth $d$?",
+      "given": "",
+      "answer": "2^{d}",
+      "placeholder": "",
+      "hint": "Each level has twice as many nodes as the one above it, starting from 1.",
+      "deconstruct": [
+       "Depth 0 holds 1 node, depth 1 holds 2, depth 2 holds 4.",
+       "Each step down doubles the count, $d$ times over."
+      ]
+     },
+     {
+      "prompt": "Add up every level from depth 0 to depth $h$. How many nodes $n$ does a perfect tree of height $h$ hold?",
+      "given": "$1 + 2 + 4 + \\dots + 2^{h}$",
+      "answer": "2^{h+1} - 1",
+      "placeholder": "",
+      "hint": "The same geometric series as the doubling array, run one step further: it goes up to $2^{h}$ rather than stopping at $2^{h-1}$.",
+      "deconstruct": [
+       "There are $h+1$ levels, holding $2^0$ up to $2^{h}$.",
+       "A geometric series with ratio 2 summing to $2^{h}$ comes to one less than the next power: $2^{h+1} - 1$."
+      ]
+     },
+     {
+      "prompt": "Now count only the levels above the deepest one — that is a perfect tree of height $h - 1$. How many nodes sit strictly above depth $h$?",
+      "given": "",
+      "answer": "2^{h} - 1",
+      "placeholder": "",
+      "hint": "Use the formula you just derived with $h - 1$ in place of $h$.",
+      "deconstruct": [
+       "A perfect tree of height $h-1$ holds $2^{(h-1)+1} - 1$ nodes.",
+       "The exponent simplifies to $h$."
+      ]
+     },
+     {
+      "prompt": "A perfect tree with $n$ nodes therefore satisfies $n = 2^{h+1} - 1$. Rearrange it to give $2^{h+1}$ in terms of $n$.",
+      "given": "",
+      "answer": "n + 1",
+      "placeholder": "",
+      "hint": "One term to move across.",
+      "deconstruct": [
+       "Add 1 to both sides of $n = 2^{h+1} - 1$."
+      ]
+     },
+     {
+      "prompt": "Now the other end. Insert $n$ keys in sorted order, so every node gets exactly one child. What is the height?",
+      "given": "",
+      "answer": "n - 1",
+      "placeholder": "",
+      "hint": "The tree is a single path. Count the edges on it, not the nodes.",
+      "deconstruct": [
+       "$n$ nodes in a chain from root to leaf.",
+       "A path through $n$ nodes has $n-1$ edges, and height counts edges."
+      ]
+     }
+    ],
+    "closing": "Take base-2 logarithms of $2^{h+1} = n + 1$ and the best case is\n$h = \\log_2(n+1) - 1$. Against the worst case of $n - 1$, for a million keys: 19\nversus 999,999. Same keys, same code, same invariant — the only difference is the\norder they arrived in.\n\nStep 3 is worth a second look, because it is the reason nobody bothers optimising the\nupper levels of a tree. A perfect tree has $2^{h}$ nodes on its bottom level and\n$2^{h} - 1$ everywhere else combined: more than half of all the nodes are leaves, and\nthe population halves again with every level you climb — $2^{h-1}$ one step above\nthe leaves, $2^{h-2}$ above that, down to a single root. That fact is what makes\nbottom-up heapify linear, and you will meet it again in the heap module."
+   },
    "lab": {
     "title": "A binary search tree that can also delete",
     "runtime": "python",
@@ -283,10 +934,217 @@
     "Open addressing has no chains, so a deletion must leave a tombstone or break probe chains",
     "Tombstones are cleared only by rehashing, so they count towards the resize trigger"
    ],
+   "read": null,
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
-   "numeric": null,
+   "quiz": {
+    "title": "Collisions, tombstones and the load factor",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "A linear-probing map deletes a key by writing `None` into its slot instead of a tombstone. What breaks?",
+      "opts": [
+       "Any key that probed past that slot becomes unreachable, because lookups stop at the first never-used slot",
+       "Nothing breaks; the table merely wastes a slot until the next resize",
+       "The table can no longer resize, because the count of live pairs is wrong",
+       "Inserts begin overwriting live pairs, because the free slot is claimed twice"
+      ],
+      "a": 0,
+      "why": "A lookup walks forward from the home slot and stops at the first `None`, because a\n`None` means *nothing was ever placed here*, and if the key existed the probe would\nhave put it here or earlier. Deleting by writing `None` forges that signal. Three keys\nland on slot 3 and spill into 4 and 5; delete the one in slot 3 and the other two are\nstill sitting there, still findable by eye, and completely unreachable by the\nalgorithm — `get` stops at slot 3 and reports a miss. That is why the lab makes\nexactly that arrangement and then asks for the other two. It is not a wasted slot,\nand it is not a counting problem; it is silent data loss."
+     },
+     {
+      "q": "Why do tombstones count towards the resize trigger rather than being ignored?",
+      "opts": [
+       "Every lookup has to probe through them, so a table thick with tombstones is as slow as a full one even while holding very few keys",
+       "Because they occupy memory the allocator cannot otherwise reclaim",
+       "Because the load factor is defined as capacity divided by size, and tombstones change the capacity",
+       "They should not; only live keys can affect the cost of a lookup"
+      ],
+      "a": 0,
+      "why": "A tombstone is transparent to correctness and completely opaque to cost: `get` may\nnot stop at one, so it has to keep walking. Insert a million keys and delete all but\nten, and without counting tombstones the table looks 0.00001 full while every lookup\nstill walks a million slots. Counting them means the table eventually rehashes, and a\nrehash is the only thing that clears them, since it rebuilds every probe chain from\nscratch. Memory is beside the point — the slot exists either way. And the load factor\nis size over capacity, not the other way round; tombstones move the numerator."
+     },
+     {
+      "q": "A chained table holds $n$ keys in $m$ buckets, with a hash that spreads keys evenly. What is the average cost of an *unsuccessful* lookup?",
+      "opts": [
+       "$1 + n/m$ — one bucket lookup, plus a walk down a chain of average length $n/m$",
+       "$n/m$ — just the chain walk",
+       "$\\log_2(n/m)$, because the chain is kept ordered",
+       "$n/2$, since on average half the table is examined"
+      ],
+      "a": 0,
+      "why": "The $1$ is the hash and the index into the bucket array, which happens whether the\nbucket is empty or not; the $n/m$ is the expected chain length, and a failed lookup\nwalks all of it. That constant matters more than it looks: when the load factor is\n0.75 the walk averages three quarters of a comparison, so the $1$ *is* the cost, and\nthe whole structure is $O(1)$ only because a resize keeps $n/m$ bounded. Chains here\nare unordered lists, so no binary search is possible — and ordering them would not\nhelp at these lengths anyway. And nothing examines half the table: that is what\nhashing exists to avoid."
+     },
+     {
+      "q": "`fnv1a` masks the accumulator back to 32 bits after every multiply. Why does that matter in Python particularly?",
+      "opts": [
+       "Python integers grow without bound, so without the mask the accumulator would keep growing instead of wrapping, and the hash would not match the published values",
+       "Python's multiplication is slower on large integers, so the mask is a speed optimisation",
+       "Without the mask the accumulator could go negative, and a negative index is legal but wrong",
+       "The mask is what makes the hash deterministic across runs"
+      ],
+      "a": 0,
+      "why": "In C the accumulator is a `uint32_t` and the wrap-around is free — it is what the\nhardware does. Python has arbitrary-precision integers, so the same code without the\nmask produces a number thousands of bits long after a few dozen bytes, and every\npublished test vector fails. `& 0xFFFFFFFF` is how you say \"this is a 32-bit\nregister\" in a language that does not have one. Big integers are indeed slower, but\nthat is a consequence rather than the reason. XOR and multiply of non-negative values\nnever go negative. And determinism comes from the algorithm being a pure function of\nthe bytes; Python's own `hash()` is the one that varies between runs, which is\nexactly why the lab does not use it."
+     },
+     {
+      "q": "`hash_index` hashes `repr(key)` rather than `str(key)`. What does that buy?",
+      "opts": [
+       "`repr(1)` is `1` and `repr(\"1\")` is `'1'`, so the integer and the string get different slots; under `str` they are the same text and always collide",
+       "`repr` is faster, because it does not have to format the value for a human reader",
+       "`str` is not defined for tuples, so `repr` is the only option for compound keys",
+       "`repr` returns bytes, which is what FNV-1a needs as input"
+      ],
+      "a": 0,
+      "why": "Neither choice is *incorrect* — the buckets compare keys with `==`, so a collision\nbetween the integer 1 and the string \"1\" is resolved correctly either way. It is a\nquality-of-hash question: `str` maps genuinely different keys onto identical text and\nmanufactures collisions that the table then has to work through, and a mixed-type key\nspace degrades measurably for no reason. `repr` is not faster (it usually does\nslightly more work), `str` is perfectly well defined for tuples, and both return\n`str` objects — which is why `fnv1a` calls `.encode(\"utf-8\")` on the result."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "A session with three keys that all want slot 3",
+    "minutes": 9,
+    "brief": "Three three-letter words that all hash to the same slot of an eight-slot table, so\nthe probe chain is forced and nothing is left to chance. The transcript below is\nreal: fill in what the interpreter printed.\n\n`slots` is the flat list of slots. A slot is `None` when it has never been used,\n`TOMBSTONE` when a key was deleted from it, and a `(key, value)` pair otherwise.",
+    "caption": "a REPL transcript — the outputs are the holes",
+    "lang": "text",
+    "listing": ">>> table = ProbingHashMap(capacity=8)\n>>> [hash_index(key, 8) for key in (\"ada\", \"gnu\", \"ink\")]\n[3, 3, 3]\n>>> for value, key in enumerate((\"ada\", \"gnu\", \"ink\"), 1):\n...     table.put(key, value)\n...\n>>> [i for i, slot in enumerate(table.slots) if slot is not None]\n___\n>>> table.delete(\"ada\")\nTrue\n>>> table.slots[3] is TOMBSTONE\n___\n>>> table.get(\"ink\", \"gone\")\n___\n>>> table.get(\"ada\", \"gone\")\n___\n>>> len(table), table.tombstones\n___\n>>> table.put(\"ada\", 99)\n>>> table.slots[3]\n___\n",
+    "blanks": [
+     {
+      "prompt": "Where did the three pairs end up?",
+      "hole": "?",
+      "opts": [
+       "[3, 4, 5]",
+       "[0, 1, 2]",
+       "[3, 4]",
+       "[3]"
+      ],
+      "a": 0,
+      "why": "`ada` takes its home slot 3; `gnu` finds it occupied and probes one along to 4; `ink` probes past both to 5. Linear probing means the chain occupies a contiguous run starting at the home slot.",
+      "whys": [
+       "`ada` takes its home slot 3; `gnu` finds it occupied and probes one along to 4; `ink` probes past both to 5. Linear probing means the chain occupies a contiguous run starting at the home slot.",
+       "Slots are chosen by the hash, not by insertion order, and all three keys hash to 3. A table that filled from the front would be a list with extra steps.",
+       "Two slots would mean one of the three keys was dropped or replaced. All three keys are distinct, so all three are stored.",
+       "Only one slot would be filled if later keys overwrote earlier ones — which is what a table with no probing at all would do, and it would lose two of the three pairs."
+      ]
+     },
+     {
+      "prompt": "What did the deletion leave behind?",
+      "hole": "?",
+      "opts": [
+       "False",
+       "True"
+      ],
+      "a": 1,
+      "why": "Slot 3 now holds the tombstone sentinel rather than `None`. That distinction is the entire mechanism: `None` means never used, and a lookup is allowed to stop there.",
+      "whys": [
+       "A `False` here would mean the slot held `None` or a live pair. It holds neither: an open-addressed table cannot write `None` on a delete without cutting the probe chain behind it.",
+       "Slot 3 now holds the tombstone sentinel rather than `None`. That distinction is the entire mechanism: `None` means never used, and a lookup is allowed to stop there."
+      ]
+     },
+     {
+      "prompt": "`ink` was reached by probing past `ada`. Is it still reachable?",
+      "hole": "?",
+      "opts": [
+       "None",
+       "'gone'",
+       "3",
+       "1"
+      ],
+      "a": 2,
+      "why": "`ink` was stored with the value 3. The lookup starts at slot 3, meets the tombstone and keeps walking, passes `gnu` in slot 4 and finds `ink` in slot 5 — which is precisely what the tombstone was left there to permit.",
+      "whys": [
+       "`get` returns its default on a miss, and the default supplied here is a string. `None` would come back only from a call that left the default out.",
+       "This is what the same session would print if the delete had written `None` into slot 3: the lookup would stop dead at the first never-used slot and report a miss on a key that is sitting two slots further on.",
+       "`ink` was stored with the value 3. The lookup starts at slot 3, meets the tombstone and keeps walking, passes `gnu` in slot 4 and finds `ink` in slot 5 — which is precisely what the tombstone was left there to permit.",
+       "1 was `ada`'s value, and `ada` is the key that was deleted. The values were assigned in order, so `gnu` is 2 and `ink` is 3."
+      ]
+     },
+     {
+      "prompt": "And the key that was deleted?",
+      "hole": "?",
+      "opts": [
+       "None",
+       "KeyError",
+       "1",
+       "'gone'"
+      ],
+      "a": 3,
+      "why": "The lookup walks the chain, skips the tombstone rather than stopping at it, reaches slot 6 which has never been used, and returns the default. A tombstone keeps other keys reachable without making the deleted one come back.",
+      "whys": [
+       "The default was given as a string, so a miss returns that string. `None` is what a bare `get(key)` would return.",
+       "`get` never raises on a miss; that is what distinguishes it from `__getitem__`, and it is why the default parameter exists.",
+       "The value 1 is still physically in the table's memory only in the sense that nothing overwrote it — the slot holds the sentinel now, and a lookup that returned the old value would make `delete` meaningless.",
+       "The lookup walks the chain, skips the tombstone rather than stopping at it, reaches slot 6 which has never been used, and returns the default. A tombstone keeps other keys reachable without making the deleted one come back."
+      ]
+     },
+     {
+      "prompt": "Live keys, and tombstones.",
+      "hole": "?",
+      "opts": [
+       "(3, 0)",
+       "(2, 1)",
+       "(2, 0)",
+       "(3, 1)"
+      ],
+      "a": 1,
+      "why": "Two live pairs are left and one tombstone stands in for the third. They are counted separately because they mean different things — but the resize trigger adds them together, since a lookup pays for both.",
+      "whys": [
+       "Three live keys would mean the delete had not taken effect. It returned `True`, so a pair was genuinely removed.",
+       "Two live pairs are left and one tombstone stands in for the third. They are counted separately because they mean different things — but the resize trigger adds them together, since a lookup pays for both.",
+       "The length is right and the tombstone count is not: deleting from an open-addressed table always leaves one behind, and only a rehash clears it.",
+       "This has the deleted key both still counted and marked as removed, which no single delete can produce."
+      ]
+     },
+     {
+      "prompt": "Reinserting the deleted key — where does it land?",
+      "hole": "?",
+      "opts": [
+       "('ada', 1)",
+       "('gnu', 2)",
+       "('ada', 99)",
+       "None"
+      ],
+      "a": 2,
+      "why": "`put` remembers the first tombstone it passes and, on reaching a never-used slot without finding the key, drops the pair into that remembered slot rather than the empty one. The chain gets shorter instead of longer, and the tombstone count goes back to 0.",
+      "whys": [
+       "The old value does not come back — the pair was removed, and this is a fresh insertion with a new value.",
+       "`gnu` is in slot 4 and nothing moves it. Slots are never shuffled by an insertion; only a rehash relocates anything.",
+       "`put` remembers the first tombstone it passes and, on reaching a never-used slot without finding the key, drops the pair into that remembered slot rather than the empty one. The chain gets shorter instead of longer, and the tombstone count goes back to 0.",
+       "The slot would still hold the sentinel if `put` had ignored the tombstone and used slot 6 instead. That version is correct but leaks: tombstones then only ever accumulate, and the table rehashes far sooner than it needs to."
+      ]
+     }
+    ]
+   },
+   "numeric": {
+    "title": "What a load factor of 0.75 actually costs",
+    "minutes": 7,
+    "brief": "Chaining degrades gently as a table fills: the average chain is $\\alpha$ long and\nthat is that. Open addressing does not, because occupied slots merge into runs and\nruns merge into longer runs — primary clustering. Knuth's estimates for linear\nprobing put a number on it, and the number is the reason 0.75 is where almost every\nopen-addressed table gives up and grows.",
+    "prompt": "How many slots does an **unsuccessful** lookup probe on average when the table is three-quarters full?",
+    "note": "Use the estimate quoted in the table below. Two decimal places is plenty.",
+    "diagram": null,
+    "figure": "A linear-probing table of `capacity` slots holding `n` live pairs, with load factor\n$\\alpha = n/\\text{capacity}$. A lookup starts at the key's home slot and walks\nforward until it meets a slot that has never been used — so the cost of a miss is the\nlength of whatever run of occupied slots it happens to land in.",
+    "given": [
+     {
+      "label": "Load factor $\\alpha$",
+      "value": "0.75"
+     },
+     {
+      "label": "Unsuccessful search",
+      "value": "$\\frac{1}{2}\\left(1 + \\frac{1}{(1-\\alpha)^2}\\right)$"
+     },
+     {
+      "label": "Successful search",
+      "value": "$\\frac{1}{2}\\left(1 + \\frac{1}{1-\\alpha}\\right)$"
+     },
+     {
+      "label": "Probing",
+      "value": "linear, step 1"
+     }
+    ],
+    "answer": 8.5,
+    "tol": 0.05,
+    "unit": "probes",
+    "aside": "At $\\alpha = 0.875$ the same formula gives 32.5. Halving the free space nearly quadruples the cost of a miss.",
+    "hint": "$1 - \\alpha$ is 0.25, and it is squared before it goes underneath the 1.",
+    "wrong": "2.5 is the figure for a successful search. A miss is far dearer, because a hit can stop as soon as it finds its key while a miss has to walk the run to its end.",
+    "why": "$1 - \\alpha = 0.25$; squared that is $0.0625$; and $1/0.0625 = 16$. So the estimate is\n$\\frac{1}{2}(1 + 16) = 8.5$ probes for a miss, against $\\frac{1}{2}(1 + 4) = 2.5$ for\na hit.\n\nThe square is the part worth remembering. Cost does not rise in proportion to how\nfull the table is; it rises with the *square* of the reciprocal of the free space,\nbecause a slot filling in between two runs does not extend a run by one — it joins\ntwo runs into one long one. That is primary clustering, and it is why a chained table\ncan be run at a load factor above 1 quite happily while an open-addressed one cannot."
+   },
    "match": null,
    "tune": null,
    "build": null,
@@ -359,14 +1217,253 @@
     "Three-way partitioning makes runs of equal keys cheap instead of quadratic",
     "Stability is a property of the algorithm, not the data — heap and quick sorts lose it"
    ],
+   "read": null,
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
+   "quiz": {
+    "title": "Array-shaped trees, and what each sort gives up",
+    "minutes": 7,
+    "questions": [
+     {
+      "q": "In a heap stored in a flat array with the root at index 0, the children of index $i$ are at:",
+      "opts": [
+       "$2i+1$ and $2i+2$",
+       "$2i$ and $2i+1$",
+       "$i/2$ and $i/2 + 1$",
+       "$i+1$ and $i+2$"
+      ],
+      "a": 0,
+      "why": "Check it against index 0: its children must be 1 and 2, which $2i+1$ and $2i+2$ give\nand nothing else does. The parent is the inverse, $(i-1)//2$, and the integer\ndivision is what makes both children map back to the same parent. $2i$ and $2i+1$ is\nthe *one-based* layout, where the root sits at index 1 and index 0 is left empty —\nstill common, and the source of a great many off-by-one bugs when it is mixed with\nthe zero-based form. Halving goes upwards rather than downwards, and consecutive\nindices are siblings and cousins, not children."
+     },
+     {
+      "q": "Bottom-up heapify is $O(n)$, while building the same heap with $n$ separate pushes is $O(n\\log n)$. Where does the difference come from?",
+      "opts": [
+       "Sifting down costs the distance to the leaves, and half the nodes are leaves at distance 0; sifting up costs the distance to the root, which nearly every node pays almost in full",
+       "Bottom-up heapify skips most of the nodes, so it does less work by doing less",
+       "`push` is $O(n)$ in the worst case because the array has to grow",
+       "They are the same cost; the $O(n)$ claim is a loose bound that nobody has tightened"
+      ],
+      "a": 0,
+      "why": "It is a question of where the nodes are. In any binary tree half the nodes are\nleaves, a quarter are one level up, an eighth two levels up: the population is\nconcentrated at the bottom, and sift-down charges each node by its distance from the\nbottom. So the cheap operation is applied to the many nodes and the dear one to the\nfew, and the weighted sum converges to $n$. Sifting up inverts that — it charges by\ndistance from the *root*, so the half of the nodes that are leaves each pay the full\nheight. Heapify does skip the leaves, but only because a leaf is already a heap of\none; it visits every internal node, which is half of them. Amortised growth makes\n`push` $O(\\log n)$, not $O(n)$. And the bound is tight, not loose: the derivation in\nthis module lands on exactly $n$."
+     },
+     {
+      "q": "Merge sort's merge takes from the left half when the two keys compare equal. What does that one line buy?",
+      "opts": [
+       "Stability — records with equal keys come out in the order they went in",
+       "The $O(n\\log n)$ bound, which fails if ties are broken the other way",
+       "A speed-up of roughly a factor of two on input that is already sorted",
+       "Correctness: taking from the right on a tie produces an unsorted result"
+      ],
+      "a": 0,
+      "why": "Both halves are already sorted and the left half holds the elements that came first,\nso on a tie the left one is the earlier record and taking it preserves the original\norder. Take from the right instead and the sort is still perfectly correct — the\noutput is still in non-decreasing order — but equal records come out reversed, which\nis exactly what a stable sort promises not to do. That promise is what lets you sort\nby one field and then by another and keep the first as a tiebreak. The complexity\ndoes not care which side a tie goes to; both branches do one comparison and one\nappend."
+     },
+     {
+      "q": "Why is heap sort not stable?",
+      "opts": [
+       "Building the heap and popping it exchange elements that are far apart, so equal keys are reordered with no record of where they started",
+       "Because a heap cannot contain duplicate keys",
+       "Because it is implemented recursively, and recursion loses the ordering",
+       "It is stable; only quicksort is not"
+      ],
+      "a": 0,
+      "why": "Long-range exchange is exactly what makes heap sort and quicksort cheap, and exactly\nwhat destroys stability — the two properties are the same property seen from\ndifferent sides. `pop` takes the root and moves the *last* element of the array into\nits place, and that element may have started thousands of positions away from an\nequal key it now sits before. Nothing in the array records which of two equal keys\ncame first, so nothing can restore it. Heaps hold duplicates perfectly happily — the\nlab sorts `[5, 5, 5]`. Recursion is irrelevant: merge sort is recursive and stable,\nand the heap here sifts iteratively."
+     },
+     {
+      "q": "Three-way partitioning splits into less-than, equal-to and greater-than. What does carving out the equal region prevent?",
+      "opts": [
+       "A run of identical keys degenerating to quadratic time — the equal block is finished in one pass and never recursed into",
+       "The pivot being chosen badly on input that is already sorted",
+       "The $O(n)$ of extra space that a two-way partition would need",
+       "Stack overflow, by removing one of the two recursive calls"
+      ],
+      "a": 0,
+      "why": "With a two-way partition, a million equal keys put every element on one side of the\npivot, the recursion shortens the range by one each time, and the sort is $O(n^2)$ on\ninput that is arguably already sorted. Three-way partitioning puts them all in the\nmiddle block, and that block is done: the two recursive calls are on what is strictly\nsmaller and strictly larger, so an array of identical keys is finished in a single\npass. Choosing the pivot well is what median-of-three is for, and it is a separate\ndefence. A two-way partition is also in place and needs no extra space. And the\nrecursion-depth problem is handled by recursing into the smaller side and looping on\nthe larger — also separate, and also in the reference solution."
+     },
+     {
+      "q": "Both merge sort and quicksort are $O(n\\log n)$, yet quicksort usually wins on real data. The usual reason is:",
+      "opts": [
+       "Quicksort partitions in place, scanning memory sequentially and allocating nothing; merge sort copies into fresh lists on every level",
+       "Quicksort makes strictly fewer comparisons than merge sort",
+       "Merge sort's real complexity is $O(n^2)$ once the merging is counted",
+       "Quicksort is $O(n)$ on average and only $O(n\\log n)$ in the worst case"
+      ],
+      "a": 0,
+      "why": "The constant hidden by $O(n\\log n)$ is mostly memory traffic, and quicksort's is\nabout as good as it gets: two pointers walking towards each other through one array,\nwith the working set staying in cache as the ranges shrink. Merge sort allocates and\ncopies $n$ elements per level, so it moves several times the data and asks the\nallocator for it. Comparison counts actually favour merge sort slightly, which makes\nit the better choice when comparisons are expensive — sorting long strings, or\nrecords through a costly key function. Merging is linear per level and merge sort is\nfirmly $O(n\\log n)$; quicksort's average is $O(n\\log n)$ and its worst case is\n$O(n^2)$, not the other way round."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "The merge, and the line that makes it stable",
+    "minutes": 9,
+    "brief": "Merge sort is three decisions: where to stop recursing, where to split, and which\nside to take from on a tie. The third is the interesting one, because getting it\nwrong leaves a sort that passes every test about order and fails the only test about\n*which* equal element came out first.\n\nNothing runs here. Correctly filled, sorting\n`[(\"b\", 1), (\"a\", 2), (\"b\", 3), (\"a\", 4)]` by its first element returns\n`[(\"a\", 2), (\"a\", 4), (\"b\", 1), (\"b\", 3)]` — the tags still in the order they arrived.",
+    "caption": "merge_sort.py — five holes, one of which changes nothing except stability",
+    "lang": "python",
+    "listing": "def merge_sort(items, key=None):\n    \"\"\"A stable O(n log n) sort returning a new list.\"\"\"\n    keyof = key if key is not None else (lambda item: item)\n    data = list(items)\n    if len(data) <= ___:\n        return data\n    middle = ___\n    left = merge_sort(data[:middle], key)\n    right = merge_sort(data[middle:], key)\n\n    merged = []\n    i = j = 0\n    while i < len(left) and j < len(right):\n        if keyof(right[j]) ___ keyof(left[i]):\n            merged.append(right[j])\n            j += 1\n        else:\n            merged.append(left[i])\n            i += 1\n    merged.extend(left[___:])\n    merged.extend(right[___:])\n    return merged\n",
+    "blanks": [
+     {
+      "prompt": "The base case: a list this long or shorter is already sorted.",
+      "hole": "?",
+      "opts": [
+       "2",
+       "1",
+       "0"
+      ],
+      "a": 1,
+      "why": "A list of one element, or of none, is sorted by definition and needs no work. It is also the only base case that guarantees both halves are strictly shorter than the whole, which is what makes the recursion terminate.",
+      "whys": [
+       "This returns any two-element list untouched, so `[2, 1]` comes back as `[2, 1]` and the error propagates up through every merge above it.",
+       "A list of one element, or of none, is sorted by definition and needs no work. It is also the only base case that guarantees both halves are strictly shorter than the whole, which is what makes the recursion terminate.",
+       "A single-element list falls through: `middle` becomes 0, the right half is the whole list again, and the function calls itself on identical input until the stack runs out."
+      ]
+     },
+     {
+      "prompt": "Where the split goes, if each half is to be half the size.",
+      "hole": "?",
+      "opts": [
+       "len(data)",
+       "1",
+       "len(data) // 2",
+       "len(data) // 2 + 1"
+      ],
+      "a": 2,
+      "why": "Halving is what gives $\\log_2 n$ levels of recursion, each doing $O(n)$ work. Floor division sends the odd element to the right half, which costs nothing and keeps the arithmetic on integers.",
+      "whys": [
+       "The right half is always empty, so every call recurses on the entire input and the function never terminates.",
+       "This sorts correctly, and it does it in $O(n^2)$: peeling one element off at a time turns merge sort into insertion sort with a much larger constant.",
+       "Halving is what gives $\\log_2 n$ levels of recursion, each doing $O(n)$ work. Floor division sends the odd element to the right half, which costs nothing and keeps the arithmetic on integers.",
+       "On a two-element list this makes `middle` equal to 2, so the right half is empty and the left half is the whole input — the recursion never shrinks and never returns."
+      ]
+     },
+     {
+      "prompt": "The comparison. On a tie, which half should give up its element?",
+      "hole": "?",
+      "opts": [
+       "<=",
+       ">",
+       ">=",
+       "<"
+      ],
+      "a": 3,
+      "why": "The right element is taken only when it is *strictly* smaller, so a tie falls through to the left — and the left half holds whatever came first in the input. That is the entire implementation of stability.",
+      "whys": [
+       "Correct order, lost stability: on every tie the right element goes first, so equal records come out reversed. The lab's tag check catches it and nothing else will.",
+       "This takes from the right whenever the right element is larger, which merges the two halves into descending nonsense — and the leftover `extend` calls then append an ascending tail onto it.",
+       "The same inversion, and ties go the wrong way as well.",
+       "The right element is taken only when it is *strictly* smaller, so a tie falls through to the left — and the left half holds whatever came first in the input. That is the entire implementation of stability."
+      ]
+     },
+     {
+      "prompt": "One half ran out. Append what is left of the left half, starting from…",
+      "hole": "?",
+      "opts": [
+       "i",
+       "0",
+       "j",
+       "i + 1"
+      ],
+      "a": 0,
+      "why": "`i` is how far the left half has been consumed, so `left[i:]` is exactly the part that has not been merged yet — and it is empty, harmlessly, when the left half is the one that ran out.",
+      "whys": [
+       "`i` is how far the left half has been consumed, so `left[i:]` is exactly the part that has not been merged yet — and it is empty, harmlessly, when the left half is the one that ran out.",
+       "Starting from 0 re-appends the entire left half, so every element already merged appears twice and the output is longer than the input.",
+       "`j` indexes the right half. Using it here takes a slice of the left half at an unrelated position — sometimes too much, sometimes too little, and always silently.",
+       "This skips one element: the value at `left[i]` was compared but never appended, and it vanishes from the output."
+      ]
+     },
+     {
+      "prompt": "…and the right half, starting from…",
+      "hole": "?",
+      "opts": [
+       "i",
+       "j + 1",
+       "j",
+       "0"
+      ],
+      "a": 2,
+      "why": "`j` is the matching marker for the right half. Exactly one of these two slices is non-empty, because the loop stopped when one of the halves was exhausted, and both are written out because you do not know which.",
+      "whys": [
+       "`i` belongs to the left half, so this slices the right half at the wrong offset and drops or duplicates elements depending on how the two halves happened to interleave.",
+       "One element short: `right[j]` was examined but never appended.",
+       "`j` is the matching marker for the right half. Exactly one of these two slices is non-empty, because the loop stopped when one of the halves was exhausted, and both are written out because you do not know which.",
+       "The whole right half again, duplicating everything already merged from it."
+      ]
+     }
+    ]
+   },
    "numeric": null,
    "match": null,
    "tune": null,
    "build": null,
-   "derive": null,
+   "derive": {
+    "title": "Why building a heap costs n, not n log n",
+    "minutes": 12,
+    "brief": "Sifting one node down costs its distance from the leaves, and there are $n$ nodes, so\nheapify obviously costs $n\\log n$ — that is the reasoning, and it is wrong. It is\nwrong because it charges every node the height of the whole tree, and almost no node\nis that far from the bottom.\n\nCount by level instead. Take $n$ as a power of two so the tree is full, and let $h$\nbe **height above the leaves**: leaves are at $h = 0$, their parents at $h = 1$.",
+    "vars": [
+     "n",
+     "h",
+     "x",
+     "S",
+     "T"
+    ],
+    "steps": [
+     {
+      "prompt": "Half the nodes are leaves, a quarter are one level above them, an eighth two levels above. How many nodes sit at height $h$?",
+      "given": "",
+      "answer": "\\frac{n}{2^{h+1}}",
+      "placeholder": "",
+      "hint": "At $h = 0$ it should give $n/2$, at $h = 1$ it should give $n/4$.",
+      "deconstruct": [
+       "The leaves are $n/2$ of the nodes, so the formula must give $n/2$ when $h = 0$.",
+       "Each level up halves the population again, which is one more factor of 2 in the denominator."
+      ]
+     },
+     {
+      "prompt": "Sifting a node at height $h$ down costs at most $h$ swaps, because that is how far it can fall. What is the total work contributed by all the nodes at height $h$?",
+      "given": "",
+      "answer": "\\frac{h n}{2^{h+1}}",
+      "placeholder": "",
+      "hint": "Number of nodes at that height, times the cost of each.",
+      "deconstruct": [
+       "There are $n/2^{h+1}$ of them.",
+       "Each costs at most $h$, so multiply."
+      ]
+     },
+     {
+      "prompt": "Add that over every height. Pull the constant $n/2$ out of the sum and call what remains $S = \\sum_{h \\ge 0} h/2^{h}$. Write the total work $T$ in terms of $n$ and $S$.",
+      "given": "$T = \\sum_{h \\ge 0} \\frac{h n}{2^{h+1}}$",
+      "answer": "\\frac{n S}{2}",
+      "placeholder": "",
+      "hint": "$\\frac{hn}{2^{h+1}}$ is $\\frac{n}{2} \\cdot \\frac{h}{2^{h}}$, and only the second factor depends on $h$.",
+      "deconstruct": [
+       "Split the denominator: $2^{h+1} = 2 \\cdot 2^{h}$.",
+       "The $n/2$ is the same in every term, so it comes outside the sum.",
+       "What is left inside is the definition of $S$."
+      ]
+     },
+     {
+      "prompt": "Now evaluate $S$, using the standard result $\\sum_{h \\ge 0} h x^{h} = \\frac{x}{(1-x)^{2}}$ for $|x| < 1$.",
+      "given": "$S = \\sum_{h \\ge 0} h/2^{h}$, so take $x = 1/2$.",
+      "answer": "2",
+      "placeholder": "",
+      "hint": "With $x = 1/2$ the denominator is $(1/2)^2 = 1/4$.",
+      "deconstruct": [
+       "$h/2^{h}$ is $h x^{h}$ with $x = 1/2$.",
+       "So $S = \\frac{1/2}{(1/2)^{2}} = \\frac{1/2}{1/4}$."
+      ]
+     },
+     {
+      "prompt": "Put that value into your expression for $T$.",
+      "given": "",
+      "answer": "n",
+      "placeholder": "",
+      "hint": "Substitute $S = 2$ into $nS/2$.",
+      "deconstruct": [
+       "$T = nS/2$ and $S = 2$.",
+       "The twos cancel."
+      ]
+     }
+    ],
+    "closing": "$T \\le n$: bottom-up heapify does at most one swap per element in the whole array,\nand the $\\log$ never appears. The series is what does it — $S$ converges, so the deep\nnodes contribute a vanishing share of the total no matter how tall the tree gets.\n\nThe contrast with building by $n$ pushes is worth holding on to. Sift-*up* charges\neach node its distance from the root, and the same population argument now works\nagainst you: the $n/2$ leaves each pay the full height, giving $\\Theta(n\\log n)$. Same\ntree, same swaps, same code almost — and a whole factor of $\\log n$ turning on which\ndirection the work flows. It is also why `heap_sort` cannot inherit the $O(n)$: the\nbuild is linear, but the $n$ pops that follow each sift down from the root, and those\nreally do cost $\\log n$ apiece."
+   },
    "lab": {
     "title": "A binary heap and three sorts",
     "runtime": "python",

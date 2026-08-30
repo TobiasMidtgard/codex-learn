@@ -45,6 +45,268 @@ COURSE = {
                 "Starvation under strict priority, and ageing as the usual remedy",
                 "Quantum choice: too large degenerates to FCFS, too small drowns in switch overhead",
             ],
+            "quiz": {
+                "title": "What the scheduler is actually choosing",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A context switch moves the processor from one process to another. What does it cost?",
+                        "opts": [
+                            "Saving and restoring the register set and the page-table base, plus the cache and TLB misses the incoming process then takes",
+                            "Only the handful of instructions that copy the registers into the process control block",
+                            "Nothing measurable, on a processor with hardware task switching",
+                            "Exactly one quantum, because the switch is charged to the outgoing process's slice",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The visible part — spilling registers and reloading a page-table base — is tens to a
+few hundred instructions, and if that were the whole bill a microsecond quantum would
+be fine. The expensive part never appears in the switch routine: the incoming process
+arrives to a cache full of someone else's lines and a TLB that has just been
+invalidated, so its first thousands of instructions run at memory speed instead of
+cache speed. None of that is charged to anybody's slice — it happens *between* slices,
+which is precisely what makes it overhead rather than work.
+""",
+                    },
+                    {
+                        "q": "Non-preemptive shortest-job-first is optimal, in one specific sense. Which?",
+                        "opts": [
+                            "The smallest average waiting time achievable for a set of jobs that are all ready at the same instant",
+                            "The smallest average waiting time whatever the arrival times",
+                            "The smallest waiting time for the longest job in the set",
+                            "The smallest spread of waiting times across the set",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The proof is an exchange argument, and it is short. Take any schedule that runs a
+longer job immediately before a shorter one and swap the pair: the shorter job's
+completion moves earlier by more than the longer one's moves later, so the total
+waiting drops. Repeat until nothing is out of shortest-first order. That argument
+needs every job to be available at the swap, which is why the claim collapses once
+arrivals are staggered — a preemptive scheduler that abandons a long job for a shorter
+one that has just turned up beats non-preemptive SJF there. The longest job is the one
+SJF treats worst, since it is the one left until last, and for the same reason the
+spread of waiting times under SJF is wider than under round robin, not narrower.
+""",
+                    },
+                    {
+                        "q": "A process with a 100 ms burst reaches the head of an FCFS queue ahead of ten processes that each want 1 ms of CPU and then go back to their devices. What happens?",
+                        "opts": [
+                            "All ten wait out the full 100 ms, and their devices sit idle for the whole of it",
+                            "FCFS notices the imbalance and lets the short jobs past",
+                            "The ten are unaffected, because they spend most of their time blocked anyway",
+                            "The long process is preempted as soon as a shorter one becomes ready",
+                        ],
+                        "a": 0,
+                        "why": r"""
+This is the convoy effect, and the damage is not the 100 ms of waiting — it is the
+idle hardware. Those ten processes were the ones keeping the disks and the network
+busy; while they queue, every device they own does nothing, and when they finally get
+their millisecond each they immediately block again, leaving the CPU to the long job
+once more. FCFS has no notion of burst length to notice anything with, and no
+preemption to act on it if it did: the queue is the entire policy.
+""",
+                    },
+                    {
+                        "q": "Round robin is run with a quantum far larger than any process's burst. Which policy does it become?",
+                        "opts": [
+                            "FCFS",
+                            "SJF",
+                            "Strict priority",
+                            "Nothing else — a preemptive policy cannot degenerate into a non-preemptive one",
+                        ],
+                        "a": 0,
+                        "why": r"""
+If the quantum outlasts every burst then no process is ever preempted: each is
+dispatched once, runs to completion, and the order it runs in is the order the ready
+queue holds, which is arrival order. That is FCFS with a timer that never fires. The
+other end of the range fails in the mirror image — a quantum close to the switch cost
+spends a large fraction of the processor on switching and delivers the rest in useless
+slivers. The usable range sits between the two, which is where the rule of thumb that
+80% of bursts should be shorter than the quantum comes from.
+""",
+                    },
+                    {
+                        "q": "A process arrives at tick 3, needs 6 ticks of CPU, and completes at tick 22. What is its waiting time?",
+                        "opts": ["13", "19", "16", "6"],
+                        "a": 0,
+                        "why": r"""
+Turnaround is completion minus arrival: $22 - 3 = 19$ ticks spent in the system. Six
+of those it spent holding the processor, so the other 13 it spent in a queue —
+waiting is turnaround minus burst. Both numbers are *derived*, which is the whole
+reason the lab makes the schedulers return a timeline and nothing else: 19 is the
+turnaround rather than the waiting, and $22 - 6 = 16$ is what you get from measuring
+the turnaround from tick 0 instead of from the moment the process appeared.
+""",
+                    },
+                    {
+                        "q": "Strict priority scheduling can starve a low-priority process indefinitely. What does ageing do about it?",
+                        "opts": [
+                            "It raises a process's priority the longer it has been waiting, so every process eventually reaches the head",
+                            "It kills processes that have waited beyond a threshold, clearing the queue",
+                            "It lowers every process's priority at the same fixed rate, which keeps the queue moving",
+                            "It caps the burst length, so no process can hold the processor long enough to starve another",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Starvation happens because a static priority is a promise that never expires: if
+higher-priority work keeps arriving, the low-priority process is passed over forever.
+Ageing makes the priority a function of waiting time, so a process that has been
+overlooked climbs until it wins on its own merits — the ordering is preserved for
+processes that arrived together and inverted for one that has waited long enough.
+Lowering everybody at the same rate changes no ordering at all and therefore fixes
+nothing. Capping bursts is a different mechanism entirely: it bounds how long one
+dispatch lasts, not how many dispatches you are skipped for.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "One dispatch, and the numbers that fall out of it",
+                "minutes": 9,
+                "caption": "round robin, one turn — then the metrics, read off the finished timeline",
+                "lang": "python",
+                "brief": r"""
+Every scheduler in this module produces the same artefact: a list of
+`(pid, start, end)` segments. Everything else — turnaround, waiting, the averages you
+compare policies with — is arithmetic on that list afterwards. Fill the holes in one
+dispatch and in the two lines that turn a timeline into numbers.
+
+Nothing runs here. You are choosing between spellings, not writing code.
+""",
+                "listing": r'''
+# One dispatch of round robin, then the metrics read back off the timeline.
+
+pid       = queue.___                      # the process at the head goes next
+slice_len = ___(quantum, remaining[pid])   # never run longer than what is left
+timeline.append((pid, clock, clock + slice_len))
+clock += slice_len
+remaining[pid] -= slice_len
+admit(clock)                               # arrivals at this tick queue ahead of it
+if remaining[pid] > 0:
+    queue.append(pid)
+
+# afterwards, per process, from the timeline alone
+completion = max(end for p, start, end in timeline if p == pid)
+turnaround = completion - ___
+waiting    = turnaround - ___
+''',
+                "blanks": [
+                    {
+                        "prompt": "Which end of the ready queue does the next process come from?",
+                        "hole": "?",
+                        "opts": ["pop(0)", "pop()", "append(pid)", "remove(pid)"],
+                        "a": 0,
+                        "why": "The ready queue is FIFO: `pop(0)` takes the process that has waited longest, and the requeue at the bottom of the block puts the preempted one at the back. That pairing is the entire fairness guarantee.",
+                        "whys": [
+                            "The ready queue is FIFO: `pop(0)` takes the process that has waited longest, and the requeue at the bottom of the block puts the preempted one at the back. That pairing is the entire fairness guarantee.",
+                            "`pop()` takes the tail — which, given the `queue.append(pid)` three lines down, is the process that was just preempted. It would immediately redispatch itself and nothing else would ever run. That is a stack, and a stack starves.",
+                            "`append` puts something onto the queue rather than taking something off, and it returns `None`. The next line would then look up `remaining[None]` and raise `KeyError`.",
+                            "`remove(pid)` needs the pid you have not chosen yet, so it cannot be what chooses it — and it returns `None` too.",
+                        ],
+                    },
+                    {
+                        "prompt": "A slice is capped twice over: by the quantum, and by the work the process still owes.",
+                        "hole": "?",
+                        "opts": ["min", "max", "sum", "abs"],
+                        "a": 0,
+                        "why": "`min` takes whichever cap bites first. A process with 2 ticks left and a quantum of 3 runs for 2 and then exits — the quantum is a ceiling on the slice, never a floor.",
+                        "whys": [
+                            "`min` takes whichever cap bites first. A process with 2 ticks left and a quantum of 3 runs for 2 and then exits — the quantum is a ceiling on the slice, never a floor.",
+                            "`max` charges the larger of the two, so it makes the quantum a floor instead of a ceiling. A process with 2 ticks left and a quantum of 3 is billed for 3 and `remaining` ends at -1; one with 5 left is billed for all 5 in a single slice and ends at 0. Either way `remaining[pid] > 0` is false, so nothing is ever requeued: round robin collapses into run-to-completion, and short processes are credited with more processor time than they asked for.",
+                            "`sum` takes an iterable and a starting value, not two numbers, so `sum(3, 2)` raises `TypeError: 'int' object is not iterable` and no slice is computed at all. Read charitably as addition it would be wrong anyway: billing the quantum *and* the outstanding work in one slice claims more processor time than the workload ever asked for.",
+                            "`abs` takes one argument, not two. Both of these numbers are already non-negative in any case, so there would be nothing for it to do.",
+                        ],
+                    },
+                    {
+                        "prompt": "Turnaround is measured from the moment the process appeared, not from the moment the clock started.",
+                        "hole": "?",
+                        "opts": ["arrival", "burst", "0", "clock"],
+                        "a": 0,
+                        "why": "Turnaround is completion minus arrival — the whole span the process spent in the system, running or queued. Subtracting anything else measures from the wrong end.",
+                        "whys": [
+                            "Turnaround is completion minus arrival — the whole span the process spent in the system, running or queued. Subtracting anything else measures from the wrong end.",
+                            "Subtracting the burst here yields the waiting time directly and leaves the next line with nothing left to subtract. They are two different quantities and the code needs both.",
+                            "Measuring from tick 0 bills a process that arrived at tick 3 for three ticks during which it did not exist. It only happens to be right for processes that arrived at 0.",
+                            "`clock` is wherever the simulation has reached, which for a finished process is at or after its completion — so this would come out at zero or negative for every process.",
+                        ],
+                    },
+                    {
+                        "prompt": "Waiting is the part of the turnaround the process did not spend on the processor.",
+                        "hole": "?",
+                        "opts": ["burst", "arrival", "completion", "quantum"],
+                        "a": 0,
+                        "why": "Waiting is turnaround minus burst. The burst is the time the process actually held the CPU; subtract it and what remains is time spent queued or preempted, which is the only part a scheduler can improve.",
+                        "whys": [
+                            "Waiting is turnaround minus burst. The burst is the time the process actually held the CPU; subtract it and what remains is time spent queued or preempted, which is the only part a scheduler can improve.",
+                            "The arrival was already taken out on the line above; taking it out twice subtracts it from a number it is no longer inside.",
+                            "Turnaround minus completion is negative for anything that arrived after tick 0, and it is a duration minus an instant — the two are not even the same kind of quantity.",
+                            "The quantum is a property of the policy, not of the process. Two processes with different bursts under the same quantum would come out with waiting times differing by the wrong amount.",
+                        ],
+                    },
+                ],
+            },
+            "derive": {
+                "title": "What a quantum costs",
+                "minutes": 13,
+                "vars": ["n", "q", "s"],
+                "brief": r"""
+Round robin is not free, and the price is paid in a currency the Gantt chart does not
+show. Take $n$ runnable processes, all CPU-bound, none of them finishing during the
+window we are watching. Each dispatch costs $s$ ticks of context switch and then
+delivers $q$ ticks of useful work.
+
+Two numbers fall out of that, and they pull in opposite directions.
+""",
+                "steps": [
+                    {
+                        "prompt": "One turn of the wheel gives every process exactly one slice. Counting the switch that precedes each slice, how long is a full cycle?",
+                        "answer": "n(q + s)",
+                        "hint": "Work out what one dispatch occupies from end to end, then count how many there are in a cycle.",
+                        "deconstruct": [
+                            "A dispatch is $s$ ticks of switching followed by $q$ ticks of work, so it occupies $q + s$ ticks.",
+                            "A cycle contains one dispatch per process, and there are $n$ processes.",
+                        ],
+                    },
+                    {
+                        "prompt": "Of that cycle, how much was work the processes actually asked for? Write the fraction.",
+                        "answer": "\\frac{q}{q + s}",
+                        "hint": "Useful ticks per cycle over total ticks per cycle. Something cancels.",
+                        "deconstruct": [
+                            "A cycle lasts $n(q+s)$ and contains $nq$ ticks of user work.",
+                            "$nq / (n(q+s))$ cancels to a ratio with no $n$ in it at all — the efficiency does not care how many processes there are.",
+                        ],
+                    },
+                    {
+                        "prompt": "Set the switch cost aside for a moment. A process has just used its whole slice and gone to the back of the queue. How long before it runs again?",
+                        "answer": "(n - 1)q",
+                        "hint": "Count who is ahead of it, and what each of them takes.",
+                        "deconstruct": [
+                            "There are $n - 1$ other processes in front of it in the queue.",
+                            "Each of them uses a full quantum before the queue comes round again.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now put the overhead back. What quantum makes exactly nine ticks in every ten useful? Write $q$ in terms of $s$.",
+                        "answer": "9s",
+                        "hint": "Set the efficiency you derived equal to $9/10$ and clear the denominator.",
+                        "deconstruct": [
+                            "$\\frac{q}{q+s} = \\frac{9}{10}$ multiplies out to $10q = 9q + 9s$.",
+                            "One $q$ cancels from each side, and what is left is $q$ written in units of $s$.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+Those two results are the whole design problem, and they disagree. Efficiency wants a
+large $q$ — at $q = 9s$ you are still spending a tenth of the machine on switching, and
+getting that down to a hundredth costs $q = 99s$. Responsiveness wants a small one,
+because $(n-1)q$ is how long an interactive process waits between slices, and it grows
+with the load. A fixed quantum has to be wrong at one end or the other, which is why
+modern schedulers stopped using one: they pick a target latency for the whole cycle
+and divide it among however many processes are runnable, with a floor so that the
+slice never shrinks to the point where $q$ is comparable to $s$.
+""",
+            },
             "lab": {
                 "title": "Four schedulers over one workload",
                 "runtime": "python",
@@ -338,6 +600,245 @@ assert _a["waiting"] < _f["waiting"], "SJF is optimal for mean waiting time — 
                 "Belady's anomaly — FIFO is not a stack algorithm, so more frames can mean more faults",
                 "Thrashing, the working-set model, and why fault rate not utilisation is the signal to watch",
             ],
+            "quiz": {
+                "title": "Faults, victims, and what a fault costs",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A running instruction touches a page that is not resident. What happens next?",
+                        "opts": [
+                            "The hardware traps to the kernel, the kernel fetches the page into a frame, and the faulting instruction is restarted from the beginning",
+                            "The process is terminated: a reference to a non-resident page is a segmentation fault",
+                            "The kernel supplies zeroes for the missing page so the instruction can finish, and fetches the real contents later",
+                            "The instruction is skipped and execution continues while the page arrives in the background",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A page fault is a trap, not an error — the same mechanism as a system call, raised by
+the MMU instead of by an instruction. The kernel finds a frame, possibly evicting
+something to get one, schedules the disk read, blocks the process, and when the page
+lands it *restarts the faulting instruction*. Restarting rather than resuming is what
+makes the whole scheme invisible to the program, and it is also the constraint that
+shapes instruction sets: an instruction that has already modified memory or a register
+before it faults cannot simply be re-run, which is why architectures with auto-increment
+addressing need extra hardware to undo the increment. A segmentation fault is the
+different case where the address is not in any valid mapping at all.
+""",
+                    },
+                    {
+                        "q": "Why can OPT not be used as a real replacement policy?",
+                        "opts": [
+                            "It needs the rest of the reference string, which only exists after the program has run",
+                            "It needs more bookkeeping per frame than page-table hardware can supply",
+                            "It is only correct for reference strings in which no page repeats",
+                            "It can be implemented, but it faults more often than LRU",
+                        ],
+                        "a": 0,
+                        "why": r"""
+OPT evicts the resident page whose next use is furthest in the future, and the future
+is exactly what a running kernel does not have. Its value is as a yardstick: run it
+offline over a recorded trace and it gives the fewest faults any policy could possibly
+have achieved on that trace, so the gap between LRU and OPT tells you how much is left
+to win. LRU is the practical approximation, and it is the mirror image — the past
+instead of the future — which works because references cluster in time. The bookkeeping
+objection is real for LRU (exact LRU needs a timestamp or a stack update on *every*
+reference, which is why hardware offers a reference bit and software approximates), but
+it is not what rules OPT out.
+""",
+                    },
+                    {
+                        "q": "Giving a policy one more frame makes it fault more often. Which policy can do that?",
+                        "opts": ["FIFO", "LRU", "OPT", "Any of the three, on the right reference string"],
+                        "a": 0,
+                        "why": r"""
+This is Belady's anomaly, and the classic string in the lab shows it: FIFO faults nine
+times with three frames and ten times with four. LRU and OPT cannot do it because they
+are stack algorithms — the pages resident with $m$ frames are always a subset of those
+resident with $m+1$, so a reference that hits with $m$ frames hits with $m+1$ too, and
+the fault curve can only go down. FIFO breaks the subset property because its victim
+choice ignores what is resident and looks only at load order, and load order changes
+when the memory size changes.
+""",
+                    },
+                    {
+                        "q": "What makes a replacement policy a stack algorithm?",
+                        "opts": [
+                            "On any reference string, the pages resident with $m$ frames are always a subset of the pages resident with $m+1$ frames",
+                            "It is implemented with a stack rather than a queue",
+                            "It always evicts the most recently used page",
+                            "Its fault count is the same for every memory size",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The subset property is the definition, and everything else follows from it. If the
+smaller memory's resident set is always contained in the larger one's, then every hit
+in the small memory is a hit in the large one, so faults can never increase with
+frames — the anomaly is ruled out by construction rather than by luck. It also means
+one pass over the reference string can produce the fault count for every memory size at
+once, which is how replacement policies are compared in practice. The name comes from
+the fact that the resident set can be read off the top $m$ entries of a single ordered
+list; it says nothing about the data structure anyone actually implements it with.
+""",
+                    },
+                    {
+                        "q": "A system is thrashing. Which observation actually says so?",
+                        "opts": [
+                            "The page-fault rate is high and climbing while the processes make almost no forward progress",
+                            "CPU utilisation is low, so there is room to admit more processes",
+                            "Every process's resident set is larger than its working set",
+                            "The free-frame list is empty",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Thrashing is the state where processes spend more time faulting than running, and the
+fault rate is the direct measurement of it. Low CPU utilisation is the trap: a scheduler
+that reads it as spare capacity and raises the degree of multiprogramming gives every
+process fewer frames, pushes more of them below their working set, and drives the fault
+rate higher still — utilisation collapses precisely because the processor is idle
+waiting on the disk. A resident set larger than the working set is the healthy case, and
+an empty free list is normal on any system that has been up for a while, since unused
+memory is wasted memory.
+""",
+                    },
+                    {
+                        "q": "With 4 KiB pages, which part of a virtual address does the page table have nothing to do with?",
+                        "opts": [
+                            "The low 12 bits — the offset is copied to the physical address untouched",
+                            "The low 10 bits",
+                            "The high 20 bits",
+                            "None of it: the whole address goes through the table",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A 4 KiB page is $2^{12}$ bytes, so 12 bits are needed to name a byte within one, and
+those 12 bits mean the same thing in both address spaces — byte 2748 of a page is byte
+2748 of the frame that holds it. Only the bits above them, the page number, are looked
+up and replaced by a frame number. That is also why page sizes are powers of two:
+translation is then a shift and a concatenation rather than a division, and can be done
+in hardware in the time it takes to read the table entry.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "One address, translated",
+                "minutes": 8,
+                "caption": "a 32-bit virtual address on a system with 4 KiB pages",
+                "lang": "text",
+                "brief": r"""
+Paging is one shift and one table lookup, and almost every confusion about it comes
+from losing track of which bits are which. Work this single address through and the
+rest of the module is bookkeeping.
+
+Every number here is hexadecimal unless it says otherwise, and each hex digit is four
+bits.
+""",
+                "listing": r'''
+page size        = 4 KiB = 2^12 bytes
+virtual address  = 0x00003ABC
+
+offset           = the low ___ bits of the address    ->  0xABC
+virtual page no  = address >> 12                      ->  page ___
+frame no         = page_table[page no]                ->  0x0025
+physical address = (frame << 12) | offset             ->  0x0025___
+
+one table entry per page, so a 32-bit address space
+with 4 KiB pages needs 2^___ page-table entries
+''',
+                "blanks": [
+                    {
+                        "prompt": "How many bits does it take to name a byte inside one page?",
+                        "hole": "?",
+                        "opts": ["12", "10", "16", "20"],
+                        "a": 0,
+                        "why": "4 KiB is $2^{12}$ bytes, so 12 bits address every byte in a page — and `0xABC` is exactly three hex digits, which is twelve bits. Page size and offset width are the same fact said twice.",
+                        "whys": [
+                            "4 KiB is $2^{12}$ bytes, so 12 bits address every byte in a page — and `0xABC` is exactly three hex digits, which is twelve bits. Page size and offset width are the same fact said twice.",
+                            "10 bits would be a 1 KiB page. It is the right number for a two-level table's index fields on a 32-bit machine, which is probably where the memory of it comes from, but it is not the offset here.",
+                            "16 bits is a 64 KiB page, and it would leave `0xABC` short of the four hex digits it would then need.",
+                            "20 is the width of the page *number* on a 32-bit machine with these pages — the bits above the offset, not the offset itself.",
+                        ],
+                    },
+                    {
+                        "prompt": "Shifting right by 12 throws the offset away. What is left?",
+                        "hole": "?",
+                        "opts": ["3", "4", "0x3ABC", "0xABC"],
+                        "a": 0,
+                        "why": "A shift of 12 bits is a shift of three hex digits, so `0x00003ABC >> 12` drops `ABC` and leaves `0x3`. The reference is to page 3, at byte 2748 within it.",
+                        "whys": [
+                            "A shift of 12 bits is a shift of three hex digits, so `0x00003ABC >> 12` drops `ABC` and leaves `0x3`. The reference is to page 3, at byte 2748 within it.",
+                            "Rounding up. `0x3ABC` is 15036, and $15036 / 4096 = 3.67$ — the page containing it is page 3, not page 4. The fractional part is the offset, and dividing throws it away rather than rounding by it.",
+                            "That is the address with only its leading zeroes removed; nothing has been shifted. Keeping the offset digits in the page number is the single commonest slip here.",
+                            "`0xABC` is the offset — the part that was shifted out, not the part that survived.",
+                        ],
+                    },
+                    {
+                        "prompt": "The table has handed back frame 0x0025. What are the low three digits of the physical address?",
+                        "hole": "?",
+                        "opts": ["ABC", "3ABC", "0025", "0000"],
+                        "a": 0,
+                        "why": "The offset is carried across untouched, so the low three hex digits of the physical address are the low three of the virtual one. Only the page number was replaced.",
+                        "whys": [
+                            "The offset is carried across untouched, so the low three hex digits of the physical address are the low three of the virtual one. Only the page number was replaced.",
+                            "That carries the virtual page digit across as well: the address becomes `0x00253ABC`, whose frame number now reads `0x253` instead of the `0x25` the table handed back. The reference lands 558 frames past the one it belongs in. The page number is precisely the part translation replaces, so it is the part that must not survive.",
+                            "Repeating the frame number in the low digits translates the offset as well, and there is nothing in the table that could tell you what to translate it to.",
+                            "Zeroing the offset points at the first byte of the frame, whatever byte was asked for. Every reference to a page would then return the same byte.",
+                        ],
+                    },
+                    {
+                        "prompt": "One entry per page. How many entries does a 32-bit address space need?",
+                        "hole": "?",
+                        "opts": ["20", "12", "32", "10"],
+                        "a": 0,
+                        "why": "32 bits of address minus 12 bits of offset leaves a 20-bit page number, so the table is indexed 0 to $2^{20}-1$: about a million entries, and at four bytes each that is 4 MiB of page table for every process. That number is the entire argument for multi-level tables.",
+                        "whys": [
+                            "32 bits of address minus 12 bits of offset leaves a 20-bit page number, so the table is indexed 0 to $2^{20}-1$: about a million entries, and at four bytes each that is 4 MiB of page table for every process. That number is the entire argument for multi-level tables.",
+                            "$2^{12}$ is the page size in bytes, not the number of pages. It would be the answer for a 24-bit address space.",
+                            "$2^{32}$ is one entry per *byte* of address space, which is a table four billion entries long describing four billion single-byte pages — the offset bits have not been taken out.",
+                            "$2^{10}$ is the number of entries in one level of a classic two-level 32-bit table, where the 20-bit page number is split 10 and 10. It is a real number in this design, but it is not the total.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "What one fault in a thousand costs",
+                "minutes": 8,
+                "brief": r"""
+A memory reference has two possible fates. Almost always the page is resident and the
+reference costs one memory access. Occasionally it is not, and the cost is a disk read
+— five orders of magnitude worse. The effective access time is the average over both,
+weighted by how often each one happens:
+
+$$\mathrm{EAT} = (1 - p)\,t_{mem} + p\,t_{fault}$$
+
+Work it out for the numbers on the right. The two terms are quoted in different units,
+which is where most of the wrong answers come from.
+""",
+                "prompt": "What is the effective access time?",
+                "note": "Answer in nanoseconds, to one decimal place.",
+                "figure": r"$\mathrm{EAT} = (1-p)\,t_{mem} + p\,t_{fault}$ — one reference, two fates, averaged by how often each one happens.",
+                "given": [
+                    {"label": "Memory access $t_{mem}$", "value": "100 ns"},
+                    {"label": "Fault service $t_{fault}$", "value": "8 ms"},
+                    {"label": "Fault rate $p$", "value": "0.001"},
+                    {"label": "Wanted", "value": "EAT in ns"},
+                ],
+                "aside": "One reference in a thousand faults. That sounds like a rounding error and is not.",
+                "answer": 8099.9,
+                "tol": 0.05,
+                "unit": "ns",
+                "hint": "Convert the service time to nanoseconds before you weight anything: $8\\ \\mathrm{ms} = 8 \\times 10^{6}\\ \\mathrm{ns}$. Then 999 references in a thousand cost 100 ns each and one costs $8 \\times 10^{6}$.",
+                "wrong": "Two slips account for nearly all of these: leaving the service time in milliseconds, so the second term comes out a million times too small, and dropping the $(1-p)$ weight on the first. Check both terms are in nanoseconds before adding them.",
+                "why": r"""
+$0.999 \times 100 + 0.001 \times 8000000 = 99.9 + 8000 = 8099.9$ ns. Memory that looks
+like 100 ns behaves like 8.1 µs — a slowdown of 81 times — and notice how lopsided the
+sum is: the resident term contributes 99.9 ns out of 8099.9, so the answer is almost
+entirely the faults. Turn the arithmetic round and it tells you what fault rate you can
+afford: holding the slowdown under 10% needs $p$ below about $1.25 \times 10^{-6}$, or
+roughly one fault per million references. That gap, between one in a thousand and one
+in a million, is the whole reason the working-set model exists.
+""",
+            },
             "lab": {
                 "title": "Page replacement and Belady's anomaly",
                 "runtime": "python",
@@ -586,6 +1087,263 @@ assert belady_pairs(opt, CLASSIC, 5) == [], "OPT is also a stack algorithm"
                 "Acquiring the mutex before the counting semaphore breaks the third and deadlocks the pair",
                 "Deadlock avoidance: the banker's algorithm grants only requests that leave a safe state",
             ],
+            "quiz": {
+                "title": "Interleavings, semaphores and safety",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "What is a race condition a property of?",
+                        "opts": [
+                            "The set of possible interleavings: at least one of them produces a wrong result",
+                            "A particular run, and it is visible in that run's trace",
+                            "Heavy load, which is when two threads finally collide",
+                            "Multi-core hardware, where two threads genuinely execute at the same instant",
+                        ],
+                        "a": 0,
+                        "why": r"""
+This is why the lab makes you choose the interleaving by hand. A test that passes has
+demonstrated that one schedule out of an enormous set behaves; it says nothing about
+the others, and the others are where the bug lives. Load and core count change the
+*probability* that a bad interleaving is chosen, which is why races surface in
+production and not in testing, but they do not create or remove one — a race on a
+single core with a preemptive kernel is exactly as real, it just needs the timer to
+fire in the wrong microsecond.
+""",
+                    },
+                    {
+                        "q": "In a counting semaphore, which operation can block?",
+                        "opts": [
+                            "`wait` blocks when the counter is zero; `signal` never blocks",
+                            "Both: `signal` blocks once the counter reaches its initial value",
+                            "`signal` blocks while another thread is inside `wait`",
+                            "Neither: a semaphore only counts, and the blocking is the scheduler's business",
+                        ],
+                        "a": 0,
+                        "why": r"""
+`wait` is the only operation that can fail to proceed, and the asymmetry is deliberate.
+A `signal` that could block would be a resource in its own right and would need its own
+semaphore to protect it, and that regress is the reason the primitive is defined this
+way. In the simulator the asymmetry shows up as `try_step` returning `False` for a
+`wait` on zero *without decrementing* — a blocked wait must consume nothing, or the
+counter drifts below the number of resources that actually exist and the invariant the
+whole structure rests on is gone.
+""",
+                    },
+                    {
+                        "q": "A producer takes the mutex and then waits on `empty`. The buffer is full. What follows?",
+                        "opts": [
+                            "The producer sleeps holding the mutex, so no consumer can get in to remove anything, so no slot is ever freed",
+                            "Nothing: the mutex guards the buffer, and a consumer removing an item does not need it",
+                            "The kernel spots the cycle and rolls one of the two back",
+                            "It deadlocks only when the buffer has capacity 1",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The consumer gets past `wait(full)` — there is plenty in the buffer — and then stops
+dead at `wait(mutex)`, which the sleeping producer is holding. The producer is waiting
+for a slot that only the consumer can free, and the consumer is waiting for a lock that
+only the producer can release: hold-and-wait plus circular wait, in five lines. Capacity
+makes no difference beyond delaying it, since the producer only has to run ahead by
+more items than the buffer holds. And nothing rolls it back — a general-purpose kernel
+does not track which lock is protecting what, so the two threads simply stay asleep.
+""",
+                    },
+                    {
+                        "q": "\"Request everything you will need in one go, or nothing at all.\" Which of Coffman's conditions does that remove?",
+                        "opts": ["Hold and wait", "Mutual exclusion", "No preemption", "Circular wait"],
+                        "a": 0,
+                        "why": r"""
+A process that never holds one resource while asking for another cannot be a link in a
+waiting chain, so the chain cannot form. The cost is why nobody does it: you have to
+declare everything up front and hold it for the whole run, so utilisation collapses and
+a process that needs a rarely-contended resource for one second at the end holds it from
+the start. The other three are attacked differently — mutual exclusion mostly cannot be
+attacked at all (a printer is not shareable), no-preemption is attacked by taking
+resources back by force and rolling the victim back, and circular wait is attacked by
+numbering the resource types and requiring requests in increasing order, which is the
+one that is actually cheap enough to use.
+""",
+                    },
+                    {
+                        "q": "The banker's algorithm reports that a state is safe. What has it established?",
+                        "opts": [
+                            "There is at least one order in which all the processes can be run to completion using only the resources on hand",
+                            "No process will have to wait for a resource from here on",
+                            "Every order in which the processes might run completes",
+                            "The system is deadlocked but can still be recovered",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Safety is an existence claim, and the safety check is a constructive proof of it: find
+a process whose remaining need fits the free pool, pretend it runs and returns
+everything, and repeat. Producing one such sequence is enough, because the operating
+system controls the granting order and can therefore *impose* it if it has to.
+Processes still wait; they just never wait forever. The mirror image is worth keeping
+straight too — an unsafe state is not a deadlocked one. It only means the guarantee has
+been lost, and a run through an unsafe state may well complete if the processes turn
+out not to claim their declared maximums.
+""",
+                    },
+                    {
+                        "q": "Mutual exclusion, progress, bounded waiting. Which one fails if a process sitting outside its critical section can stop another from entering?",
+                        "opts": ["Progress", "Mutual exclusion", "Bounded waiting", "None: that is what a lock is for"],
+                        "a": 0,
+                        "why": r"""
+Progress says that the decision about who enters next is taken only among the processes
+that actually want to enter, and that it cannot be postponed indefinitely. A process
+that is not competing must not get a vote — the classic strict-alternation solution
+fails exactly here, because it insists on turns and a process that never wants another
+turn blocks its partner forever. Mutual exclusion is the different requirement that two
+processes are never inside at once, and bounded waiting caps how many times others may
+overtake you once you have declared an interest, which is what keeps a correct lock from
+starving somebody.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "The bounded buffer, semaphore by semaphore",
+                "minutes": 9,
+                "caption": "three semaphores, two programs, and only one order that works",
+                "lang": "python",
+                "brief": r"""
+The bounded-buffer solution is short enough to memorise and easy enough to get subtly
+wrong that it is worth reconstructing rather than recalling. Two of the three
+semaphores count things — free slots and filled slots — and the third is a plain lock.
+Fill the holes and read the two programs back as mirror images of each other.
+""",
+                "listing": r'''
+sem = {"empty": ___, "full": 0, "mutex": 1}
+
+# producer, once per item
+wait(___)               # claim a free slot before touching the lock
+wait("mutex")
+buffer.append(item)
+signal("mutex")
+signal(___)             # a consumer may now take it
+
+# consumer, once per item
+wait("full")
+wait("mutex")
+item = buffer.pop(0)
+signal("mutex")
+signal(___)             # the slot is free again
+''',
+                "blanks": [
+                    {
+                        "prompt": "How many free slots does an empty buffer have?",
+                        "hole": "?",
+                        "opts": ["capacity", "0", "1", "len(buffer)"],
+                        "a": 0,
+                        "why": "`empty` counts free slots, and an empty buffer has every one of them free. That is also the invariant to hold on to: between operations, `empty` plus `full` is the capacity.",
+                        "whys": [
+                            "`empty` counts free slots, and an empty buffer has every one of them free. That is also the invariant to hold on to: between operations, `empty` plus `full` is the capacity.",
+                            "Starting at zero says there is nowhere to put anything. The first producer blocks immediately and nothing ever runs — and since only a consumer raises `empty`, and consumers need something to consume, it never recovers.",
+                            "One free slot regardless of the real capacity. Correct but crippled: the producer can never run more than one item ahead, so a buffer of any size behaves as a buffer of one and the two threads lock-step.",
+                            "That is zero at this point, and worse, it is a snapshot. The semaphore is what tracks the count from here on; seeding it from the buffer length just spells zero the long way round.",
+                        ],
+                    },
+                    {
+                        "prompt": "Which semaphore does the producer wait on first?",
+                        "hole": "?",
+                        "opts": ['"empty"', '"full"', '"mutex"', '"capacity"'],
+                        "a": 0,
+                        "why": "Secure the resource, then take the lock. Waiting for a free slot first means that if the producer does sleep, it sleeps holding nothing, and a consumer can still get in and free one.",
+                        "whys": [
+                            "Secure the resource, then take the lock. Waiting for a free slot first means that if the producer does sleep, it sleeps holding nothing, and a consumer can still get in and free one.",
+                            "`full` counts items waiting to be consumed. A producer waiting on it would block precisely when the buffer is empty, which is the moment it is most needed.",
+                            "This is the deadlock the module is built around. There is nothing wrong with the line itself — it is wrong *here*, before the slot it is about to write into has been secured.",
+                            "There is no semaphore by that name. Capacity is a constant fixed when the buffer is created; `empty` is the running count of how much of it is unused.",
+                        ],
+                    },
+                    {
+                        "prompt": "The item is in and the lock is back. What does the producer announce?",
+                        "hole": "?",
+                        "opts": ['"full"', '"empty"', '"mutex"', '"item"'],
+                        "a": 0,
+                        "why": "`full` counts items available to consume, so producing one raises it and releases a consumer blocked in `wait(\"full\")`. Every `wait(\"empty\")` on this side is paid for by a `signal(\"full\")`.",
+                        "whys": [
+                            "`full` counts items available to consume, so producing one raises it and releases a consumer blocked in `wait(\"full\")`. Every `wait(\"empty\")` on this side is paid for by a `signal(\"full\")`.",
+                            "That claims a slot was freed by the act of filling it. `empty` would return to the capacity while the buffer fills, the producer would sail past the bound, and the simulator would raise the overflow this whole structure exists to prevent.",
+                            "The mutex has already been signalled on the line above. Signalling it twice pushes the counter to 2 and the lock stops excluding anybody — two threads can then be inside the critical section at once.",
+                            "There is no `item` semaphore. The item went into the buffer; what is being announced is that the *count* of available items went up.",
+                        ],
+                    },
+                    {
+                        "prompt": "And what does the consumer announce, having taken an item out?",
+                        "hole": "?",
+                        "opts": ['"empty"', '"full"', '"mutex"', '"done"'],
+                        "a": 0,
+                        "why": "Removing an item frees a slot, so `empty` goes up and a producer blocked on it is released. The two programs are mirror images: each waits on the counter it consumes and signals the counter it produces.",
+                        "whys": [
+                            "Removing an item frees a slot, so `empty` goes up and a producer blocked on it is released. The two programs are mirror images: each waits on the counter it consumes and signals the counter it produces.",
+                            "The consumer already spent one `full` getting in. Signalling it again puts the item back as far as the counter is concerned, and the count of available items climbs forever while the buffer stays empty — until a consumer passes `wait(\"full\")` and finds nothing there.",
+                            "Already released on the line above. A second signal breaks mutual exclusion.",
+                            "Nothing waits on a `done` semaphore in this design, so signalling it releases nobody and the producer stays blocked with the buffer full.",
+                        ],
+                    },
+                ],
+            },
+            "derive": {
+                "title": "How many units make deadlock impossible",
+                "minutes": 13,
+                "vars": ["n", "m", "R"],
+                "brief": r"""
+The banker's algorithm decides one request at a time. This is the other approach: buy
+enough hardware that the question never arises, and prove it by counting.
+
+One resource type, $R$ identical units, $n$ processes. Each process needs at most $m$
+units to finish, and asks for them one at a time, keeping whatever it has already been
+given until it is done.
+""",
+                "steps": [
+                    {
+                        "prompt": "A process that has been given $m$ units has everything it will ever ask for and can run to completion. So what is the most a *blocked* process can be holding?",
+                        "answer": "m - 1",
+                        "hint": "One short of its maximum. If it held the last one it would not be blocked.",
+                        "deconstruct": [
+                            "A process is blocked only while it is still waiting for something it does not have.",
+                            "Needing at least one more out of a maximum of $m$ leaves it holding at most $m - 1$.",
+                        ],
+                    },
+                    {
+                        "prompt": "A deadlock needs every one of the $n$ processes blocked at once. Add up what they are holding — how large can that total be?",
+                        "answer": "n(m - 1)",
+                        "hint": "Every process, each at its own worst case.",
+                        "deconstruct": [
+                            "Each of the $n$ processes is blocked, so each holds at most $m - 1$ units.",
+                            "The worst case is all of them at that bound simultaneously.",
+                        ],
+                    },
+                    {
+                        "prompt": "In a deadlock nothing is left free — a spare unit would satisfy somebody's one-unit request. So all $R$ units are held. Write the smallest $R$ for which no deadlock can exist.",
+                        "answer": "n(m - 1) + 1",
+                        "hint": "A deadlock needs all $R$ units to fit inside the total you just bounded. Make $R$ one too large to fit.",
+                        "deconstruct": [
+                            "A deadlock requires $R \\le n(m-1)$: every unit held, and nobody holding as many as $m$.",
+                            "One unit beyond that and the allocation cannot exist — by the pigeonhole principle somebody must hold $m$ units, and that process can finish and give them all back.",
+                        ],
+                    },
+                    {
+                        "prompt": "Five processes, each needing at most three units. How many units guarantee the system is deadlock-free?",
+                        "answer": "11",
+                        "hint": "Substitute $n = 5$ and $m = 3$ into what you just derived.",
+                        "deconstruct": [
+                            "$n(m-1) = 5 \\times 2 = 10$ units can be shared out as two each, with every process still wanting a third — that is a deadlock.",
+                            "The eleventh unit has nowhere to hide: wherever it goes, somebody now holds three.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+Notice what that bought and what it did not. It is a static guarantee — check it once
+when the machine is configured and no run-time test is ever needed again — but it is
+crude, because it assumes every process might want its full $m$ at the same moment.
+Ten processes that each might want ten units would need 91, and would spend almost all
+of their time using a handful. The banker's algorithm trades the static guarantee for
+utilisation: it will run you on fewer units than $n(m-1)+1$, and pays for it by testing
+every single request against a safe sequence before granting it.
+""",
+            },
             "lab": {
                 "title": "Interleaving simulator and the banker's algorithm",
                 "runtime": "python",
@@ -967,6 +1725,264 @@ except ValueError:
                 "Deletion returns blocks to the free list; only that makes reuse possible",
                 "Failing an allocation atomically: check the space first, so a full disk leaves no half-written file",
             ],
+            "quiz": {
+                "title": "Blocks, inodes, and the space between them",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A 100-byte file on a file system with 4 KiB blocks. What does it occupy, and what is the waste called?",
+                        "opts": [
+                            "One whole block; the 3996 unused bytes are internal fragmentation",
+                            "100 bytes; the allocator hands out exactly what was asked for",
+                            "One whole block; the unused bytes are external fragmentation",
+                            "One whole block, and nothing is wasted, because the block is the unit of allocation",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The block is the unit of allocation, which is exactly why the waste exists: nothing
+smaller can be handed out, so a 100-byte file gets 4096 bytes and the remaining 3996
+belong to it and can be used by nobody. That slack inside an allocated unit is internal
+fragmentation. External fragmentation is the opposite arrangement — free space that
+belongs to nobody but is scattered in pieces too small or too spread out to satisfy a
+request. Averaged over many files it costs half a block each, which is the argument
+against large blocks and the reason a file system full of small files can lose a
+noticeable fraction of the disk.
+""",
+                    },
+                    {
+                        "q": "Contiguous allocation gives the fastest sequential read of the three schemes. What does it cost?",
+                        "opts": [
+                            "External fragmentation, and a file that cannot grow past the hole it was placed in",
+                            "A pointer stored in every block, followed one at a time",
+                            "An index block per file, read before any data can be",
+                            "Nothing — it is strictly better, which is why extent-based file systems use it",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Contiguous allocation is just first-fit or best-fit over the disk, and it inherits
+every problem those have. Files are created and deleted, the free space breaks into
+holes, and eventually there is plenty free but no single run big enough — which is
+external fragmentation, curable only by compaction that has to move real data. Worse,
+the size has to be known when the file is created, because growing means finding a
+larger hole and copying. The per-block pointer is linked allocation's cost and the
+index block is indexed allocation's; modern file systems keep the good part by
+allocating *extents* — runs of contiguous blocks, several per file — which is a
+compromise rather than a free lunch.
+""",
+                    },
+                    {
+                        "q": "Linked allocation stores the next block number inside each block. Which operation does that make expensive?",
+                        "opts": [
+                            "Reading byte 100000 of a file, because every earlier block has to be fetched to find out where the next one is",
+                            "Appending, because every block has to be rewritten",
+                            "Deleting, because the blocks are scattered",
+                            "Growing, because the blocks must stay adjacent",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Random access is what it destroys. The location of block $k$ is only discoverable by
+reading blocks 0 through $k-1$, so a seek into the middle of a large file costs one
+disk read per block skipped — and each of those reads is a genuine I/O, not a
+calculation. Appending is cheap if the inode keeps a tail pointer, deletion is a walk
+of the chain, and growing is trivially easy since the next block can be anywhere at
+all. That is the whole trade: linked allocation solves the growth problem that
+contiguous allocation has and gives up the thing contiguous allocation was best at.
+""",
+                    },
+                    {
+                        "q": "Free-space management: a bitmap of one bit per block, against a linked free list.",
+                        "opts": [
+                            "The bitmap makes finding a run of consecutive free blocks straightforward; the free list makes it hard",
+                            "The free list occupies a fixed amount of space no matter how full the disk is",
+                            "The bitmap has to be scanned linearly to free a block",
+                            "Neither can answer \"is block 4712 free?\" without a scan",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The bitmap's strength is that adjacency in the disk is adjacency in the structure: a
+run of free blocks is a run of zero bits, and it can be found a machine word at a time.
+Freeing block 4712 is clearing bit 4712, and asking whether it is free is reading bit
+4712 — both constant time. Its cost is that it is proportional to the size of the disk
+whether the disk is empty or full, which is the fixed-size structure here, not the free
+list. The free list is the other way round: it shrinks as the disk fills, it hands out
+a block in constant time, and it has no idea whether the block it just handed out is
+next to anything.
+""",
+                    },
+                    {
+                        "q": "The lab's `append` checks the free list can cover the whole write before it writes a single byte. Why that order?",
+                        "opts": [
+                            "So a write that will not fit leaves the file and the free list exactly as they were, rather than half-written with blocks already taken",
+                            "Because the free list cannot be modified while a file is open",
+                            "Because counting the blocks is faster than allocating them",
+                            "It makes no difference: the exception undoes the allocations on its way out",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Raising an exception from the middle of a loop leaves everything the loop already did
+still done — the blocks popped off the free list are gone, the inode lists them, and
+the file contains a prefix of a write that officially failed. Nothing unwinds that for
+you. Computing the requirement first and failing before the first mutation is the
+cheapest form of atomicity there is, and it is the same discipline a real file system
+applies with rather more machinery: reserve the space, then journal the intent, then
+write.
+""",
+                    },
+                    {
+                        "q": "Two files are appended to alternately on a freshly formatted disk. What becomes of their blocks?",
+                        "opts": [
+                            "They interleave, so neither file is contiguous and a sequential read of either seeks back and forth",
+                            "The allocator reserves a contiguous run for each file when it is created",
+                            "The second file's blocks all follow the first file's, because the free list is kept sorted",
+                            "Nothing worth measuring: block numbers do not affect the cost of a read",
+                        ],
+                        "a": 0,
+                        "why": r"""
+The free list is sorted and the allocator takes the lowest number, so alternating
+writers get alternating blocks: one file ends up holding 0 and 2, the other 1 and 3.
+Both files are correct and both are fragmented, and no single decision was wrong — the
+fragmentation is an emergent property of the interleaving, which is why it cannot be
+fixed by being cleverer about any one allocation. On rotating media that turns one
+streaming read into alternating seeks, and it is the reason for delayed allocation and
+for defragmentation. On flash the seek is nearly free, which is why the whole concern
+quietened down rather than disappearing.
+""",
+                    },
+                ],
+            },
+            "blanks": {
+                "title": "append, before it writes anything",
+                "minutes": 9,
+                "caption": "the arithmetic that has to happen before a single byte moves",
+                "lang": "python",
+                "brief": r"""
+`append` does its thinking first and its writing second, and that order is the whole
+reason a full disk leaves no wreckage behind. Fill the holes in the cost calculation,
+in the allocation policy, and in the one line of `delete` that keeps the policy
+meaningful.
+""",
+                "listing": r'''
+# FileSystem.append — settle the whole cost before touching a byte
+
+slack    = len(inode["blocks"]) * self.block_size - inode[___]
+overflow = max(0, len(data) - slack)
+needed   = -(-overflow // ___)          # ceiling division, no import
+if needed > len(self.free):
+    raise OSError("no space left on device")
+
+position = inode["size"]
+for char in data:
+    index = position // self.block_size
+    if index >= len(inode["blocks"]):
+        inode["blocks"].append(self.free.pop(___))
+    self.blocks[inode["blocks"][index]] += char
+    position += 1
+inode["size"] = position
+
+# and in delete, so the next allocation still finds the lowest number first
+___
+''',
+                "blanks": [
+                    {
+                        "prompt": "The file already owns some blocks. How much of them is actually in use?",
+                        "hole": "?",
+                        "opts": ['"size"', '"blocks"', '"name"', '"nblocks"'],
+                        "a": 0,
+                        "why": "The blocks the file holds are worth `len(blocks) * block_size` bytes and `size` of them are occupied, so the difference is the slack in the last block. Both terms have to be in bytes for the subtraction to mean anything.",
+                        "whys": [
+                            "The blocks the file holds are worth `len(blocks) * block_size` bytes and `size` of them are occupied, so the difference is the slack in the last block. Both terms have to be in bytes for the subtraction to mean anything.",
+                            "`inode[\"blocks\"]` is the list of block numbers. Subtracting a list from an integer is a `TypeError`, and even read charitably it sets a block count against a byte count.",
+                            "The name is a string and says nothing about how full the last block is.",
+                            "There is no such key on an inode. `nblocks` is a property of the whole disk, which is a different object with a different lifetime.",
+                        ],
+                    },
+                    {
+                        "prompt": "The overflow is in bytes and the answer wanted is in blocks.",
+                        "hole": "?",
+                        "opts": ["self.block_size", "self.nblocks", "len(data)", "slack"],
+                        "a": 0,
+                        "why": "Dividing bytes by the bytes-per-block gives blocks. `-(-x // b)` is `ceil(x / b)` spelled with floor division: negate, floor toward minus infinity, negate back — 9 bytes over 8-byte blocks comes out as 2 rather than 1.",
+                        "whys": [
+                            "Dividing bytes by the bytes-per-block gives blocks. `-(-x // b)` is `ceil(x / b)` spelled with floor division: negate, floor toward minus infinity, negate back — 9 bytes over 8-byte blocks comes out as 2 rather than 1.",
+                            "That is how many blocks the disk has, not how many bytes one holds. The result would be a number in neither unit, and on a small disk it would demand absurdly many blocks.",
+                            "The write size is already the numerator here, by way of the overflow. Dividing by it yields a fraction near one, never a block count.",
+                            "Slack is routinely zero — a file whose size is an exact multiple of the block size has none at all — so this divides by zero on the commonest case in the tests.",
+                        ],
+                    },
+                    {
+                        "prompt": "The free list is kept sorted. Which end does a new block come from?",
+                        "hole": "?",
+                        "opts": ["0", "-1", "len(self.free)", "index"],
+                        "a": 0,
+                        "why": "`pop(0)` takes the head, which in a sorted list is the lowest-numbered free block. That is the policy the tests pin down: delete a file in the middle of the disk and the next allocation reuses its blocks before touching anything further out.",
+                        "whys": [
+                            "`pop(0)` takes the head, which in a sorted list is the lowest-numbered free block. That is the policy the tests pin down: delete a file in the middle of the disk and the next allocation reuses its blocks before touching anything further out.",
+                            "`pop(-1)` takes the highest-numbered free block, so files march backwards from the end of the disk and a hole freed in the middle is the last thing ever reused.",
+                            "That index is one past the end of the list, so `pop` raises `IndexError` every time — including on the very first allocation.",
+                            "`index` is a position within the *file*, not within the free list. It goes out of range as soon as the file is longer than the free list is, and until then it picks essentially at random.",
+                        ],
+                    },
+                    {
+                        "prompt": "`delete` has a block number in hand and has to put it back.",
+                        "hole": "?",
+                        "opts": [
+                            "bisect.insort(self.free, block)",
+                            "self.free.append(block)",
+                            "self.free.insert(0, block)",
+                            "self.free.remove(block)",
+                        ],
+                        "a": 0,
+                        "why": "`insort` finds the position by binary search and inserts there, so the list is still ascending afterwards — which is the precondition the `pop(0)` policy relies on. Sorted-ness is not decoration here; it is what makes \"lowest first\" true.",
+                        "whys": [
+                            "`insort` finds the position by binary search and inserts there, so the list is still ascending afterwards — which is the precondition the `pop(0)` policy relies on. Sorted-ness is not decoration here; it is what makes \"lowest first\" true.",
+                            "Appending puts the freed block at the end whatever its number. The list stops being sorted, and from then on `pop(0)` returns whatever happens to be first rather than the lowest — the reuse policy quietly becomes something nobody designed.",
+                            "Inserting at the front reuses the freed block next regardless of its number, and leaves the list unsorted for everything after it. It also turns the free list into a stack, which is a defensible policy but not this one.",
+                            "`remove` takes a block *out* of the free list — the exact opposite of freeing it. The block is lost to the file system forever and the disk shrinks with every delete.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": {
+                "title": "How much file one inode can address",
+                "minutes": 8,
+                "brief": r"""
+The lab's inode keeps a flat list of every block the file owns, which is fine in memory
+and impossible on disk: an inode has to be a fixed size, so it can hold only a fixed
+number of pointers. Unix solved it by making most of the pointers indirect. A handful
+point straight at data. One points at a block containing nothing but more pointers.
+One points at a block of pointers to blocks of pointers.
+
+A block holds $B/p$ pointers, where $B$ is the block size and $p$ is the size of a
+pointer. Count the *data* blocks this inode can reach — the pointer blocks themselves
+hold no file content.
+""",
+                "prompt": "How many data blocks in total can this inode address?",
+                "note": "Answer in blocks, not bytes.",
+                "figure": r"`12 direct -> data` · `1 single indirect -> pointers -> data` · `1 double indirect -> pointers -> pointers -> data`",
+                "given": [
+                    {"label": "Block size $B$", "value": "4 KiB"},
+                    {"label": "Pointer size $p$", "value": "4 bytes"},
+                    {"label": "Direct pointers", "value": "12"},
+                    {"label": "Single indirect", "value": "1"},
+                    {"label": "Double indirect", "value": "1"},
+                ],
+                "aside": "Twelve pointers cover the small files; two more cover everything else.",
+                "answer": 1049612,
+                "tol": 0.0,
+                "unit": "blocks",
+                "hint": "Pointers per block first: $4096 / 4$. The single indirect then reaches that many data blocks, and the double indirect reaches that many squared.",
+                "wrong": "Almost every wrong answer here is one of two things: forgetting to square for the double indirect, or counting the pointer blocks as data. Only the 12 direct, the $k$ under the single indirect and the $k^2$ under the double indirect hold file content.",
+                "why": r"""
+$k = 4096/4 = 1024$ pointers per block, so the total is
+$12 + 1024 + 1024^2 = 12 + 1024 + 1048576 = 1049612$ blocks — about 4.0 GiB at 4 KiB
+each. What is worth noticing is how lopsided that is. The double indirect supplies
+99.9% of the reach and costs one pointer in the inode; the twelve direct pointers cover
+only 48 KiB between them. That asymmetry is deliberate and it is a statement about
+files, not about disks: most files are small, and for a small file all twelve pointers
+are in the inode you have already read, so the data is one disk access away with no
+pointer block fetched at all. A byte near the end of a large file costs three.
+""",
+            },
             "lab": {
                 "title": "An inode allocator with a free list",
                 "runtime": "python",

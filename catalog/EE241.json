@@ -21,9 +21,14 @@
   "Size the external components a GPIO pin needs to drive an indicator or read a switch, within the pin's stated current and voltage limits.",
   "Choose between polling and an interrupt for a given deadline, and state the worst-case latency each one delivers.",
   "Configure a timer's prescaler, period and compare value to produce a required PWM frequency and duty cycle, and filter that output into an analogue voltage.",
-  "Convert between volts, ADC codes and fixed-point integers, and predict the quantisation error, the dead band and the overflow points of an integer-only signal chain."
+  "Convert between volts, ADC codes and fixed-point integers, and predict the quantisation error, the dead band and the overflow points of an integer-only signal chain.",
+  "Read a peripheral's register map as a C struct, and predict the address, the access width and the padding of any field in it — along with what integer promotion does to the expression that reads it.",
+  "Work a clock from the crystal through the PLL and the bus prescalers to the peripheral, and say which settings have to be in place before the clock is raised.",
+  "Design the small amount of hardware a pin needs that no software can replace: a transistor switch and its flyback diode, an RC that turns one press into one interrupt, a divider that survives its own capacitance, an I²C pull-up that meets both the rise time and the sink current.",
+  "Bound the worst-case delay before an interrupt handler starts, and write a critical section that does not lengthen that bound for every other interrupt in the system.",
+  "Compute a UART's baud divider and the sampling error it accumulates across a frame, and say which of framing, parity and overrun a given failure would report."
  ],
- "assessment": "Four quizzes, two circuits drawn and measured in the schematic editor, one guided derivation, two Python labs checked by execution, and a capstone that drives a simulated memory-mapped peripheral through a complete integer-only measurement chain.",
+ "assessment": "Ten quizzes, five circuits drawn and measured in the schematic editor, three guided derivations, a symbol drill, a filter tuned against three constraints at once, two listings to complete, two numeric answers, one of them checked against the solver, five Python labs checked by execution, and a capstone that drives a simulated memory-mapped peripheral through a complete integer-only measurement chain.",
  "reading": [
   "*The Definitive Guide to ARM Cortex-M3 and Cortex-M4 Processors*, Joseph Yiu — chapters 4 and 7.",
   "*Making Embedded Systems*, Elecia White — for the working habits rather than the syntax.",
@@ -44,6 +49,7 @@
     "Some status bits are **write-1-to-clear**: writing a 1 clears the flag and writing a 0 leaves it alone. For those registers the read-modify-write idiom is actively wrong — it clears every flag that happened to be set.",
     "Reserved bits are reserved because the vendor may use them later. Read-modify-write preserves them; writing a whole constant word does not."
    ],
+   "read": null,
    "sandbox": null,
    "quiz": {
     "title": "What a write to a register actually does",
@@ -180,6 +186,258 @@
    }
   },
   {
+   "title": "Types, pointers and the map of the address space",
+   "summary": "You have written `*(volatile uint32_t *)0x40020014`. This module is the rest of that line: what the type does, what the number points at, and what the compiler does with both.",
+   "concepts": [
+    "C's built-in integer types have no fixed width — `int` is whatever the machine calls natural, and on a small microcontroller that is 32 bits while on the compiler you tested with it may not be. `<stdint.h>` gives the ones that are fixed: `uint8_t`, `int16_t`, `uint32_t`. A register access must be exactly as wide as the register, so here the type is part of the hardware specification and not a matter of taste.",
+    "Anything narrower than `int` is promoted to `int` before arithmetic, keeping its value. So for two `uint8_t` variables holding 200 and 100, `a + b` is 300 — the truncation to 44 happens on the way back into an 8-bit variable, not during the addition. And when signed meets unsigned of the same rank the signed side converts, which is why `-1 < 1u` is false and why a loop counter that is `unsigned` and counts down past zero never ends.",
+    "A pointer's type says how wide the object it points at is, and pointer arithmetic counts objects rather than bytes: adding 5 to a `uint32_t *` moves the address on by 20. Casting a pointer changes the arithmetic and the access width; it does not change the address, and it does not change what the hardware has at that address.",
+    "A peripheral is a run of consecutive registers, so a `struct` of `volatile uint32_t` members laid over the base address names them: `GPIOA->ODR` compiles to exactly the same load-store as `*(volatile uint32_t *)(0x40020000 + 0x14)`. The members must appear in the manual's order, with an explicit reserved member wherever the manual leaves a gap, or every register after the gap is off by four.",
+    "The address space is a map, not a memory. Flash holds the code and anything `const`; SRAM holds the writable globals — `.data`, whose initial values are copied out of flash before `main` runs, and `.bss`, which the startup code zeroes — and the stack, which grows down from the top of SRAM towards them. Peripheral registers are a third region that is not memory at all. Nothing in C stops you forming a pointer into a region where writes do nothing, or where they fault."
+   ],
+   "read": null,
+   "sandbox": {
+    "title": "What an access pattern costs when the memory is slower than the core",
+    "visualiser": "cache",
+    "minutes": 8,
+    "brief": "The map you have just read says where things are. It says nothing about what reaching\nthem costs, and on any part where the core runs faster than the flash, that cost is\ndecided by the *order* you touch things in rather than by how much you touch.\n\nThis is a memory walk. The horizontal axis is how much cache sits between the core and\nthe memory, the curve is the resulting miss rate, and the **stride** slider is the gap\nin bytes between one access and the next — 4 bytes for stepping along an array of\n`uint32_t`, 64 or more for reading one field out of each element of an array of\nstructs. A line is 64 bytes wide: a miss fetches all 64 whether you wanted one byte of\nit or all of them.\n\nSmall microcontrollers have no cache at all, and the largest of them have a real one;\nin between sit the prefetch buffers and flash accelerators that exist for exactly this\nreason. The architecture courses take the mechanism apart. What it is doing here is\nputting a number on a decision you make in C: how you lay a structure out decides how\nmuch of each fetched line you actually use.",
+    "initial": {
+     "kb": 8,
+     "ways": 1,
+     "stride": 4
+    },
+    "notice": [
+     "It opens at 8 KB, direct-mapped, with a stride of 4 bytes — an ordinary walk along an array of 32-bit words. The marker sits at **6.25%**, which is one miss in sixteen: sixteen 4-byte words fit in a 64-byte line, so the first word of each line pays for the fifteen behind it.",
+     "Leave the stride at 4 and drag the cache size up. Nothing happens until 16 KB, then the miss rate falls steadily to **2.08%** at 32 KB and flattens — 32 KB is what this walk touches, so from there on the second and third passes are all hits and only the first pass still misses. Past 32 KB a bigger cache buys nothing at all, which is the shape of every capacity curve there is.",
+     "Put the size back to 8 KB and step the stride through 8, 16, 32 and 64 bytes. The miss rate reads 12.5%, 25%, 50% and then **100%**: every doubling of the gap halves the number of useful bytes in each line you fetch, until at 64 bytes every single access drags in a whole line to use four bytes of it.",
+     "That last case is the one to remember, because it is a data-structure decision and not a hardware one. An array of 64-byte structs, walked to read one `uint32_t` field out of each element, is exactly the stride-64 case. Splitting that one field into an array of its own turns the same loop back into the stride-4 case at the top of this list.",
+     "With the stride at 64, drag the size up again: 16 KB is still at 100%, and only above that does it come down, reaching **33.3%** at 32 KB. That figure and the 2.08% from two paragraphs ago are the same event counted differently — both walks fetch exactly the same 512 lines once each, and the only difference is whether sixteen accesses are served from each line or one. The memory traffic is identical; the useful work is not.",
+     "Finally, take the associativity slider from direct to 16-way. At 8 KB, at 16 KB and at 32 KB the marker does not move: below the knee every line is evicted before the next pass wants it whatever the placement rule, and at 32 KB the whole walk fits. Between those, from about 17 to 31 KB, the faint comparison curves separate from the one you are on and the marker moves the *wrong* way — at 24 KB with a stride of 4 the miss rate is **4.17%** direct-mapped, 5.21% two-way and 6.25% at four-way and above. Wider sets mean fewer sets, so more of the walk collides, and within a set LRU evicts exactly the line a walk that repeats in address order will ask for first. Associativity is the cure for a *conflict* pattern, and this one is a capacity pattern; here the size and the line width are what you are buying."
+    ]
+   },
+   "quiz": {
+    "title": "Widths, promotions and addresses",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "`uint8_t a = 200, b = 100;` and the program prints the value of `a + b` as a plain integer. What appears?",
+      "opts": [
+       "255",
+       "300",
+       "44",
+       "it is undefined behaviour"
+      ],
+      "a": 1,
+      "why": "300. Both operands are promoted to `int` before the addition — that is the *integer\npromotion* rule, and it is value-preserving — so the sum is computed in 32 bits with\nroom to spare. The value 44 is what you get from `uint8_t c = a + b;`, where the\ntruncation happens on the assignment; the two are different lines with different\nresults, and confusing them is how a checksum that should read 350 ends up reading 94.\nThere is no undefined behaviour here: `int` overflow would be undefined, but 300 is\nnowhere near the limit."
+     },
+     {
+      "q": "`uint32_t *p = (uint32_t *)0x40020000;` and then `p += 5;`. What does `p` hold?",
+      "opts": [
+       "0x40020005",
+       "0x40020014",
+       "0x40020020",
+       "0x40020050"
+      ],
+      "a": 1,
+      "why": "0x40020014. Pointer arithmetic counts *objects*, not bytes, and a `uint32_t` is four\nbytes wide, so five of them is twenty bytes — 0x14. That number should look familiar:\nit is the offset of `ODR` in the GPIO block, which is simply the sixth register along.\nThe value 0x40020005 is the answer for a `uint8_t *`, and the difference between the\ntwo is the entire reason a cast on a pointer is a change of meaning rather than a\nchange of notation."
+     },
+     {
+      "q": "A `uint8_t *` and a `uint32_t *` both hold the address 0x40020014. `*p8 = 0xAA;` puts one byte there. What does `*p32 = 0xAA;` do?",
+      "opts": [
+       "the same thing, since the value fits in one byte",
+       "a single 32-bit write of 0x000000AA, replacing all four bytes",
+       "four separate byte writes of 0xAA",
+       "it is a compile error, because 0xAA is not a 32-bit value"
+      ],
+      "a": 1,
+      "why": "The pointer's type decides the *width of the bus access*, not just the arithmetic. A\n`uint32_t *` produces one 32-bit store, so the three bytes above the one you were\nthinking about are written too — with zeros. For a peripheral this is the difference\nbetween configuring one field and clearing everything else in the register, and it runs\nthe other way as well: many peripherals require a 32-bit access and behave unpredictably,\nor fault, when written a byte at a time. This is why the cast in\n`*(volatile uint32_t *)0x40020014` is load-bearing rather than decorative."
+     },
+     {
+      "q": "On the same 32-bit part: `int i = -1; unsigned int n = 1; if (i < n) { ... }`. Does the body run?",
+      "opts": [
+       "no — `i` is converted to unsigned and becomes 4294967295",
+       "yes — −1 is less than 1",
+       "no — comparing signed with unsigned is a compile error",
+       "it depends on the compiler"
+      ],
+      "a": 0,
+      "why": "It does not run. When signed and unsigned of the same rank meet, the usual arithmetic\nconversions turn the *signed* one unsigned, so −1 becomes 4294967295 and the comparison\nis false. It compiles without complaint unless you have asked for `-Wsign-compare`,\nwhich is one of the strongest arguments for turning warnings on. The same rule is why\n`for (unsigned i = n; i >= 0; i--)` never terminates: the condition cannot be false."
+     },
+     {
+      "q": "A function declares `uint8_t buf[4096];` as a local variable, on a part with 8 KB of SRAM. What is the characteristic symptom?",
+      "opts": [
+       "the compiler reports that there is not enough memory",
+       "the array is placed in flash instead, and writes to it are ignored",
+       "unrelated variables change value, or the chip resets, at a point in the code that has nothing to do with the array",
+       "the array is silently reduced in size"
+      ],
+      "a": 2,
+      "why": "The array is on the stack, and the stack grows down from the top of SRAM towards the\nglobals. Nothing checks that it has room: the writes simply continue past the bottom\ninto whatever `.bss` holds there, so a variable somewhere else in the program changes\nvalue, or a return address is overwritten and the chip ends up executing nonsense. The\ncompiler cannot warn, because it does not know how deep the call chain will be at run\ntime — it is the linker's map file and a stack-painting check at start-up that catch\nthis, not the build."
+     },
+     {
+      "q": "A 2 KB lookup table is declared at file scope as `const uint16_t table[1024]`. Where does it live once the program is running, and what does it cost in SRAM?",
+      "opts": [
+       "in flash, costing nothing in SRAM",
+       "in SRAM, costing 2 KB, with a second copy in flash",
+       "in flash, but copied into SRAM at start-up",
+       "in SRAM only, costing 2 KB"
+      ],
+      "a": 0,
+      "why": "`const` at file scope goes in the read-only section, which the linker places in flash,\nand it is read from there — so it costs 2 KB of flash and nothing at all of SRAM. Drop\nthe `const` and the same array becomes initialised writable data: 2 KB of SRAM held for\nthe whole run, *plus* 2 KB of flash for the initial values, plus the time the startup\ncode spends copying one to the other. On a part with 8 KB of SRAM that one keyword is a\nquarter of your memory."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "The GPIO block, from struct member to address",
+    "minutes": 9,
+    "brief": "Below is how a vendor header describes the GPIO block, and underneath it the same\naddresses worked out by hand. Both are in every embedded project, and they have to come\nout the same: the struct is only a convenience for the arithmetic you are about to do\nin the lower half.\n\nEvery member here is one 32-bit register, listed in the order the reference manual\nprints them. Fill the holes in order.",
+    "caption": "one peripheral, described twice, and the two descriptions must agree",
+    "lang": "c",
+    "listing": "/* The GPIO block, as the vendor's header lays it out. */\n\ntypedef struct {\n    volatile uint32_t MODER;    /* offset 0x00 : pin mode, 2 bits per pin  */\n    volatile uint32_t OTYPER;   /* offset 0x04 : push-pull or open-drain   */\n    volatile uint32_t OSPEEDR;  /* offset ___  : slew rate                 */\n    volatile uint32_t PUPDR;    /* offset 0x0C : pull-up / pull-down       */\n    volatile uint32_t IDR;      /* offset 0x10 : what the pins read as     */\n    volatile uint32_t ODR;      /* offset ___  : what the pins are driven to */\n} GPIO_TypeDef;\n\n#define GPIOA ((GPIO_TypeDef *) 0x40020000u)\n\n--------------------------------------------------------------------------\n\n  six members, four bytes each, nothing narrower than a word anywhere\n\n    sizeof(GPIO_TypeDef)                      =  ___ bytes\n\n  the compiler adds the member's offset to the base and nothing else\n\n    &GPIOA->ODR                               =  ___\n\n  and by hand, with no struct at all: the same block as a plain array of\n  words, ODR being the sixth of them\n\n    ((volatile uint32_t *) 0x40020000u) + 5   =  ___\n\n  now one that is not all words, to see what alignment costs\n\n    struct { uint32_t a; uint8_t b; uint32_t c; }  occupies  ___ bytes\n",
+    "blanks": [
+     {
+      "prompt": "OSPEEDR is the third member. Four bytes each, counting from zero.",
+      "hole": "?",
+      "opts": [
+       "0x08",
+       "0x03",
+       "0x02",
+       "0x0C"
+      ],
+      "a": 0,
+      "why": "Two whole registers sit above it, so its offset is $2 \\times 4 = 8$ bytes, written 0x08. The value 0x03 counts members rather than bytes — which is what pointer arithmetic does for you, and exactly why the two notations are not interchangeable. The value 0x0C is the member after it, PUPDR, and is what you get by counting the register you are naming as well as the ones before it.",
+      "whys": null
+     },
+     {
+      "prompt": "ODR is the sixth member of the struct, and the fifth one along from the base.",
+      "hole": "?",
+      "opts": [
+       "0x14",
+       "0x18",
+       "0x05",
+       "0x10"
+      ],
+      "a": 0,
+      "why": "Five registers above it, so $5 \\times 4 = 20$ bytes, which is 0x14. That is the number in `0x40020014` from the previous module — the address you were given as a constant is a base plus this offset. The value 0x18 is one register too far, and 0x10 is IDR, the register that reads the pins rather than driving them: swapping those two is a bug that looks like the output not working.",
+      "whys": null
+     },
+     {
+      "prompt": "Six members of four bytes each, with no padding needed anywhere.",
+      "hole": "?",
+      "opts": [
+       "24",
+       "6",
+       "20",
+       "28"
+      ],
+      "a": 0,
+      "why": "$6 \\times 4 = 24$ bytes. The value 6 counts members, which is what `sizeof` would give you if it worked in elements — it does not, it works in bytes, and that is why `sizeof(arr)/sizeof(arr[0])` is the idiom for a count. The value 20 stops at the last member's offset instead of its end.",
+      "whys": null
+     },
+     {
+      "prompt": "The base is 0x40020000 and ODR sits at the offset you worked out above.",
+      "hole": "?",
+      "opts": [
+       "0x40020014",
+       "0x40020005",
+       "0x40020020",
+       "0x40020140"
+      ],
+      "a": 0,
+      "why": "$\\text{0x40020000} + \\text{0x14} = \\text{0x40020014}$. The arrow does one addition and no indirection: `GPIOA` is not a variable holding a struct, it is a number the compiler adds an offset to. The value 0x40020005 adds the member index instead of the byte offset, and 0x40020140 is the same digits with the hexadecimal shifted a place — worth a second look whenever an address is 'nearly' right.",
+      "whys": null
+     },
+     {
+      "prompt": "The same block treated as an array of 32-bit words, indexed five along.",
+      "hole": "?",
+      "opts": [
+       "0x40020014",
+       "0x40020005",
+       "0x40020050",
+       "0x4002000A"
+      ],
+      "a": 0,
+      "why": "The same address, 0x40020014, because adding 5 to a `uint32_t *` advances by $5 \\times 4$ bytes. That agreement is the point of this exercise: the struct is doing arithmetic you could do yourself, and when a register comes out at the wrong address it is nearly always because a reserved gap in the manual was left out of the struct, so every member after it has slid four bytes.",
+      "whys": null
+     },
+     {
+      "prompt": "A word, a byte and another word. The 32-bit members must be four-byte aligned.",
+      "hole": "?",
+      "opts": [
+       "12",
+       "9",
+       "16",
+       "10"
+      ],
+      "a": 0,
+      "why": "12. The byte lands at offset 4, then three bytes of padding carry the next `uint32_t` to offset 8, and the structure ends at 12. The value 9 adds the widths and ignores alignment; 16 assumes each member is padded to a word, which is not what the rule says — padding goes wherever it is needed to align the *next* member, and at the end to keep the whole structure's size a multiple of its widest member.",
+      "whys": null
+     }
+    ]
+   },
+   "numeric": null,
+   "match": null,
+   "tune": null,
+   "build": null,
+   "derive": null,
+   "lab": {
+    "title": "C's integer rules, written out",
+    "runtime": "python",
+    "minutes": 26,
+    "brief": "The promotions and conversions are hard to believe until you have watched them happen,\nand in C they happen silently. So write them out: six small functions that model what a\nC compiler does to integers, in Python, where nothing is hidden.\n\n- `store(value, bits, signed)` — the value that actually lands in a `bits`-wide C\n  integer variable. Mask to the width first; then, if the type is signed and the top\n  bit is set, subtract $2^{bits}$ to get the two's-complement reading. So storing 300\n  in a `uint8_t` gives 44, and storing 200 in an `int8_t` gives −56.\n- `add_u8(a, b)` — the value of the C expression `a + b` where both are `uint8_t`. Both\n  operands are promoted to `int` first, so this does **not** wrap: it is the ordinary\n  sum of the two stored values.\n- `assign_u8(a, b)` — the value of `uint8_t c = a + b;`. Same addition, then stored back\n  into eight bits.\n- `shl(value, n)` — `value << n` where `value` has type `int`: shift, then store into a\n  signed 32-bit type.\n- `shl_u(value, n)` — the same shift with `unsigned int`, so the result is stored into\n  an unsigned 32-bit type.\n- `lt_mixed(i, u)` — the value of `i < u` where `i` is an `int` and `u` an\n  `unsigned int`. The usual arithmetic conversions make the signed operand unsigned\n  before the comparison, so convert both with `store(..., 32, False)` and compare those.\n\nTwo of these model something C calls undefined rather than merely surprising. Shifting a\n1 into the sign bit of a signed 32-bit type is undefined behaviour; every compiler you\nwill meet produces the two's-complement answer this model gives, and that is exactly why\nthe fix is to write `1u << 31` and stop relying on it. Signed overflow is the other, and\nit is the one optimisers really do exploit.\n\nNo imports are needed.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"What a C compiler does to integers, made visible.\"\"\"\n\n\ndef store(value, bits, signed):\n    \"\"\"The value that lands in a `bits`-wide C integer variable.\"\"\"\n    # TODO: mask to `bits` bits; if signed and the top bit is set, subtract 2**bits.\n    return 0\n\n\ndef add_u8(a, b):\n    \"\"\"The value of `a + b` for two uint8_t operands: promoted to int, so no wrap.\"\"\"\n    # TODO: store each operand in eight unsigned bits, then add them as integers.\n    return 0\n\n\ndef assign_u8(a, b):\n    \"\"\"The value of `uint8_t c = a + b;` — the same sum, stored back into eight bits.\"\"\"\n    # TODO: reuse add_u8, then store the result.\n    return 0\n\n\ndef shl(value, n):\n    \"\"\"`value << n` where `value` has type int: a signed 32-bit result.\"\"\"\n    # TODO: shift, then store into 32 signed bits.\n    return 0\n\n\ndef shl_u(value, n):\n    \"\"\"`value << n` where `value` has type unsigned int: a 32-bit unsigned result.\"\"\"\n    # TODO: shift, then store into 32 unsigned bits.\n    return 0\n\n\ndef lt_mixed(i, u):\n    \"\"\"`i < u`, where `i` is an int and `u` an unsigned int.\"\"\"\n    # TODO: convert both to unsigned 32-bit first, then compare.\n    return False\n\n\nif __name__ == \"__main__\":\n    print(\"uint8_t 300 ->\", store(300, 8, False))\n    print(\"int8_t  200 ->\", store(200, 8, True))\n    print(\"200 + 100 as an expression:\", add_u8(200, 100))\n    print(\"200 + 100 stored in a uint8_t:\", assign_u8(200, 100))\n    print(\"1 << 31 signed:\", shl(1, 31), \" unsigned:\", shl_u(1, 31))\n    print(\"-1 < 1u is\", lt_mixed(-1, 1))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"What a C compiler does to integers, made visible.\"\"\"\n\n\ndef store(value, bits, signed):\n    \"\"\"The value that lands in a `bits`-wide C integer variable.\"\"\"\n    masked = value & ((1 << bits) - 1)\n    if signed and masked >= (1 << (bits - 1)):\n        masked -= (1 << bits)\n    return masked\n\n\ndef add_u8(a, b):\n    \"\"\"The value of `a + b` for two uint8_t operands: promoted to int, so no wrap.\"\"\"\n    return store(a, 8, False) + store(b, 8, False)\n\n\ndef assign_u8(a, b):\n    \"\"\"The value of `uint8_t c = a + b;` — the same sum, stored back into eight bits.\"\"\"\n    return store(add_u8(a, b), 8, False)\n\n\ndef shl(value, n):\n    \"\"\"`value << n` where `value` has type int: a signed 32-bit result.\"\"\"\n    return store(value << n, 32, True)\n\n\ndef shl_u(value, n):\n    \"\"\"`value << n` where `value` has type unsigned int: a 32-bit unsigned result.\"\"\"\n    return store(value << n, 32, False)\n\n\ndef lt_mixed(i, u):\n    \"\"\"`i < u`, where `i` is an int and `u` an unsigned int.\"\"\"\n    return store(i, 32, False) < store(u, 32, False)\n\n\nif __name__ == \"__main__\":\n    print(\"uint8_t 300 ->\", store(300, 8, False))\n    print(\"int8_t  200 ->\", store(200, 8, True))\n    print(\"200 + 100 as an expression:\", add_u8(200, 100))\n    print(\"200 + 100 stored in a uint8_t:\", assign_u8(200, 100))\n    print(\"1 << 31 signed:\", shl(1, 31), \" unsigned:\", shl_u(1, 31))\n    print(\"-1 < 1u is\", lt_mixed(-1, 1))\n"
+     }
+    ],
+    "hints": [
+     "`store` is two steps: `value & ((1 << bits) - 1)` throws away everything above the width, and then a signed type reinterprets the top bit by subtracting `1 << bits`.",
+     "Check `store` against a case you can do in your head: 0xF0 in an `int8_t` is −16, because 0xF0 is 240 and 240 − 256 = −16.",
+     "`add_u8` must not mask its result. That is the whole point of the promotion rule: the addition happens in `int`, and 200 + 100 is 300 there.",
+     "`shl` and `shl_u` differ only in the last argument to `store`. Compare `shl(1, 31)` with `shl_u(1, 31)`: same bit pattern, two different numbers, and the reason a bit mask for bit 31 is written `1u << 31`.",
+     "In `lt_mixed`, the conversion the standard performs is on the *signed* operand only: `u` already has the common type and is left alone. `store(u, 32, False)` is therefore a no-op for any value a real `unsigned int` could hold, so putting both through it is a harmless convenience that also keeps an out-of-range test argument in range."
+    ],
+    "tests": [
+     {
+      "name": "storing truncates, and a signed type reinterprets",
+      "code": "assert store(300, 8, False) == 44, f\"300 in a uint8_t is 44, got {store(300, 8, False)}\"\nassert store(200, 8, True) == -56, f\"200 in an int8_t is -56, got {store(200, 8, True)}\"\nassert store(0xF0, 8, True) == -16, f\"0xF0 as an int8_t is -16, got {store(0xF0, 8, True)}\"\nassert store(-1, 16, False) == 65535, f\"-1 in a uint16_t is 65535, got {store(-1, 16, False)}\"\nassert store(-1, 32, True) == -1, \"-1 fits in an int32_t unchanged\"\nassert store(42, 8, False) == 42, \"a value that fits is stored unchanged\""
+     },
+     {
+      "name": "the addition happens in int, so it does not wrap",
+      "code": "assert add_u8(200, 100) == 300, f\"promotion means this is 300, got {add_u8(200, 100)}\"\nassert add_u8(255, 255) == 510, f\"got {add_u8(255, 255)}\"\nassert add_u8(0, 0) == 0"
+     },
+     {
+      "name": "the truncation happens on the assignment",
+      "code": "assert assign_u8(200, 100) == 44, f\"300 stored in eight bits is 44, got {assign_u8(200, 100)}\"\nassert assign_u8(255, 1) == 0, f\"255 + 1 wraps to 0, got {assign_u8(255, 1)}\"\nassert assign_u8(100, 100) == 200, \"200 fits, so nothing is lost\""
+     },
+     {
+      "name": "a shift into the sign bit",
+      "code": "assert shl(1, 30) == 1073741824, f\"got {shl(1, 30)}\"\nassert shl(1, 31) == -2147483648, \\\n    f\"in a signed 32-bit type that bit pattern reads as -2147483648, got {shl(1, 31)}\"\nassert shl(0x80, 1) == 256, \\\n    f\"a uint8_t operand is promoted before the shift, so 0x80 << 1 is 256, not 0; got {shl(0x80, 1)}\"\nassert shl(0xFF, 24) == -16777216, f\"got {shl(0xFF, 24)}\""
+     },
+     {
+      "name": "the same shift on an unsigned type",
+      "code": "assert shl_u(1, 31) == 2147483648, f\"got {shl_u(1, 31)}\"\nassert shl_u(0xFF, 24) == 4278190080, f\"got {shl_u(0xFF, 24)}\"\nassert shl_u(0x80000000, 1) == 0, \\\n    f\"the bit shifts off the top of a 32-bit type and is gone, got {shl_u(0x80000000, 1)}\""
+     },
+     {
+      "name": "signed loses to unsigned in a comparison",
+      "code": "assert lt_mixed(1, 2) is True or lt_mixed(1, 2) == True, \"1 < 2 either way\"\nassert not lt_mixed(-1, 1), \\\n    \"-1 converts to 4294967295, so it is not less than 1 - this is the whole trap\"\nassert not lt_mixed(-1, 4294967295), \"-1 converts to exactly that value, so it is not less\"\nassert lt_mixed(0, 1), \"0 < 1 with no conversion trouble\""
+     },
+     {
+      "name": "the checksum that reads low",
+      "code": "total = 0\nfor value in (200, 100, 50):\n    total = store(total + value, 8, False)\nassert total == 94, \\\n    f\"an 8-bit accumulator wraps twice on the way to 350 and ends at 94, got {total}\"\nwide = 0\nfor value in (200, 100, 50):\n    wide = store(wide + value, 32, False)\nassert wide == 350, \"the same loop with a 32-bit accumulator keeps the answer\""
+     }
+    ]
+   }
+  },
+  {
    "title": "A pin is a circuit",
    "summary": "The register decides what the pin is trying to do. Ohm's law decides what actually happens.",
    "concepts": [
@@ -192,6 +450,7 @@
     "An input reads 1 above $V_{IH}$ and 0 below $V_{IL}$, and between them the answer is not defined. A slowly changing signal crossing that band can be read as either, and a divider feeding an input must be designed to land clearly outside it.",
     "Open-drain output can only pull down; the pull-up does the rest. That is what lets several devices share one wire, and it is why $I^2$C looks the way it does."
    ],
+   "read": null,
    "sandbox": null,
    "quiz": {
     "title": "What the pin can and cannot drive",
@@ -480,6 +739,662 @@
    "lab": null
   },
   {
+   "title": "Driving a load the pin cannot",
+   "summary": "Between an 8 mA pin and a relay coil there is a transistor, a resistor and a diode. Each of the three is there for a reason you can put a number on.",
+   "concepts": [
+    "Once the load draws more than the pin's rating, or runs from a different rail, the pin's job stops being to supply the current and becomes to operate a switch. A transistor used as a switch is either off or hard on: the region in between is where an amplifier lives, and where a switch turns supply current into heat.",
+    "A bipolar transistor is driven by current. To hold a collector current $I_C$ in saturation you supply a base current of at least $I_C/h_{FE}$, and because the datasheet's $h_{FE}$ is a *minimum* that falls as the current rises, real designs overdrive it by two to ten times. The base looks like a diode, so the base resistor sees $V_{pin} - V_{BE}$, about $3.3 - 0.8$ V in hard saturation, and the pin's 8 mA ceiling then puts a ceiling on the collector current you can switch this way.",
+    "A MOSFET is driven by voltage, so it takes no steady gate current at all. What it takes instead is charge: the gate is a few nanofarads, and the pin has to move that charge at every edge, which is why a slow driver makes a hot transistor. The other requirement is that the threshold be low enough for 3.3 V to turn the part fully on — a **logic-level** device — because a part specified at 10 V will half-open at 3.3 and dissipate accordingly.",
+    "Low side means the switch sits between the load and ground, and it is the easy case: the emitter or source is at ground, which is where the control voltage is measured from. High side means the switch sits between the supply and the load, and now the device's reference terminal moves with the load — which needs a P-channel part, or a driver that can hold the gate above the supply rail.",
+    "A coil will not let its current stop. Open the switch and the inductance produces whatever voltage it takes to keep the current flowing, which is hundreds of volts across a transistor rated for tens, and the failure is immediate and permanent. A flyback diode across the coil — reverse-biased, so it does nothing at all while the load is on — gives that current a path the instant the switch opens, and clamps the excursion to a diode drop above the supply."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "Base current, saturation and the spike",
+    "minutes": 9,
+    "questions": [
+     {
+      "q": "A relay coil draws 120 mA. The transistor's datasheet guarantees $h_{FE} \\geq 40$ at that collector current, and the usual practice is to overdrive the base by a factor of three. What base current does that ask for?",
+      "opts": [
+       "3 mA",
+       "9 mA",
+       "0.9 mA",
+       "40 mA"
+      ],
+      "a": 1,
+      "why": "$I_B = 3 \\times 120/40 = 9$ mA — which is more than the 8 mA the pin is rated for, and\nthat is the useful part of the answer. The bare $120/40 = 3$ mA is the *edge* of\nsaturation at the guaranteed minimum gain, and designing at that edge means the\ntransistor comes out of saturation whenever the gain is at the low end of its spread or\nthe part is cold. Faced with 9 mA against an 8 mA pin you have three honest moves: a\ntransistor with a higher guaranteed gain, a Darlington or a logic-level MOSFET, or a\nsecond transistor to drive the first."
+     },
+     {
+      "q": "A 3.3 V pin drives that base through a resistor, and the base-emitter junction sits at about 0.8 V in hard saturation. Which resistor gives 5 mA of base current?",
+      "opts": [
+       "660 Ω",
+       "500 Ω",
+       "2.5 kΩ",
+       "160 Ω"
+      ],
+      "a": 1,
+      "why": "$R_B = (3.3 - 0.8)/0.005 = 500$ Ω. The base junction takes its 0.8 V whatever the\ncurrent, so the resistor only ever sees the remaining 2.5 V — exactly the same\nsubtraction as the LED two modules ago, and for the same reason. Using the whole 3.3 V\ngives 660 Ω and about 3.8 mA, a quarter less base current than intended, which is the\ndifference between saturated and warm."
+     },
+     {
+      "q": "The relay works, but after a few hundred operations the transistor fails short. No flyback diode was fitted. What killed it?",
+      "opts": [
+       "the coil current exceeded the transistor's rating",
+       "the base resistor was too small and overheated the junction",
+       "the coil generated a large reverse voltage each time the current was interrupted, and the collector junction broke down",
+       "the relay contacts welded and shorted the supply into the transistor"
+      ],
+      "a": 2,
+      "why": "An inductor opposes a change in its current, and the only way it can do that when the\nswitch opens is to develop whatever voltage the change demands: $v = L\\,di/dt$, and\n$di/dt$ at switch-off is enormous. A 12 V relay easily produces a few hundred volts\nagainst a transistor rated at 40, and the collector junction avalanches. It rarely fails\non the first operation, which is what makes it so dangerous: the part degrades over\nthousands of cycles and the product fails in the field rather than on the bench. The\ndiode across the coil costs a penny and removes the mechanism entirely."
+     },
+     {
+      "q": "Where does the flyback diode go, and which way round?",
+      "opts": [
+       "across the coil, cathode to the positive supply",
+       "across the coil, cathode to the transistor's collector",
+       "in series with the coil, cathode towards the collector",
+       "from the collector to ground, cathode to ground"
+      ],
+      "a": 0,
+      "why": "Across the coil, with the bar — the cathode — at the positive end. In normal operation\nthat puts the supply on the cathode and the collector, which is near ground, on the\nanode: reverse-biased, conducting nothing. When the switch opens, the coil's voltage\nreverses, the anode goes *above* the supply, the diode conducts and the coil's current\ncirculates around the coil-and-diode loop until the resistance of the loop dissipates\nit. Turning it round instead puts a forward diode straight across the supply, which is\na short circuit that works exactly as long as it takes to get warm. Putting it in\nseries with the coil merely blocks the load."
+     },
+     {
+      "q": "A transistor switching 500 mA is given too little base current and settles at $V_{CE} = 1.5$ V instead of the 0.2 V of saturation. How much power does it dissipate?",
+      "opts": [
+       "0.10 W",
+       "0.75 W",
+       "6.0 W",
+       "7.5 mW"
+      ],
+      "a": 1,
+      "why": "$P = V_{CE} I_C = 1.5 \\times 0.5 = 0.75$ W, against $0.2 \\times 0.5 = 0.10$ W when it is\nproperly saturated. A small transistor in a TO-92 package can shed perhaps half a watt\ninto still air before it exceeds its junction temperature, so this one is on its way out\n— and the cause is a resistor value, not a transistor rating. This is the concrete\nreason a switch is driven hard rather than adequately: the dissipation is set by how\nfar into saturation you push it, and base current is much cheaper than heat."
+     },
+     {
+      "q": "Why is a logic-level MOSFET usually the better choice here, and what does the pin still have to do for it?",
+      "opts": [
+       "it needs no steady gate current, but the pin must charge and discharge a few nanofarads of gate capacitance at each edge",
+       "it needs no gate connection at all once it has been switched on",
+       "it needs a smaller base resistor, and the pin must supply the same current more briefly",
+       "it dissipates nothing at any gate voltage, so the drive does not matter"
+      ],
+      "a": 0,
+      "why": "The gate is insulated, so once it is charged the steady current is leakage —\nnanoamps — and the 8 mA problem disappears. What replaces it is charge: a few\nnanofarads that the pin must fill and empty at every transition, and the pin's own\noutput resistance sets how long that takes. During that time the device is partly on and\ndissipating, which is why gate resistors are chosen small for switching and why a\nMOSFET switched slowly by a weak pin runs hotter than one switched quickly. The word\n\"logic-level\" is the other half: an ordinary MOSFET specified at $V_{GS} = 10$ V is only\npart-way on at 3.3 V, and part-way on is the expensive state."
+     }
+    ]
+   },
+   "blanks": null,
+   "numeric": {
+    "title": "What the base resistor asks of the pin",
+    "minutes": 8,
+    "brief": "The schematic editor has no transistor symbol, so the base-emitter junction is drawn the\nway the LED was: as the fixed voltage it holds while it conducts. In hard saturation\nthat is about **0.8 V** — a little above the 0.7 V quoted for a junction on the edge of\nconduction, because the base is being driven well past it.\n\nSo what is on the canvas is the pin, the base resistor, and the junction. The collector\nside of the transistor is not drawn at all, and does not need to be: the base current is\ndecided entirely by this loop.",
+    "prompt": "How much current must the pin supply into the base?",
+    "note": "Give the answer in milliamps, to two decimal places.",
+    "diagram": {
+     "parts": [
+      {
+       "id": "v",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 3.3
+      },
+      {
+       "id": "g0",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "rb",
+       "kind": "R",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 330
+      },
+      {
+       "id": "vbe",
+       "kind": "V",
+       "x": 9,
+       "y": 9,
+       "rot": 1,
+       "value": 0.8
+      },
+      {
+       "id": "g1",
+       "kind": "GND",
+       "x": 9,
+       "y": 11
+      },
+      {
+       "id": "out",
+       "kind": "OUT",
+       "x": 12,
+       "y": 8
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        9,
+        8
+       ]
+      },
+      {
+       "a": [
+        9,
+        8
+       ],
+       "b": [
+        12,
+        8
+       ]
+      },
+      {
+       "a": [
+        9,
+        10
+       ],
+       "b": [
+        9,
+        11
+       ]
+      }
+     ]
+    },
+    "figure": "",
+    "given": [
+     {
+      "label": "Pin output",
+      "value": "3.30 V"
+     },
+     {
+      "label": "Base resistor",
+      "value": "330 Ω"
+     },
+     {
+      "label": "$V_{BE}$ in saturation",
+      "value": "0.80 V"
+     },
+     {
+      "label": "Pin rating",
+      "value": "8 mA"
+     }
+    ],
+    "answer": 7.5758,
+    "tol": 0.05,
+    "unit": "mA",
+    "aside": "One loop, so one current, and the junction takes its 0.8 V before the resistor gets any say in the matter.",
+    "hint": "Kirchhoff round the loop: the pin provides 3.3 V, the junction takes 0.8 V of it, and the resistor has the rest across it. Then Ohm's law.",
+    "wrong": "Check whether you divided the whole 3.3 V by the resistor. The junction holds its own drop, and only what is left appears across the 330 Ω.",
+    "why": "$(3.3 - 0.8)/330 = 7.58$ mA, which is just inside the pin's 8 mA rating and leaves nothing spare. Read it as a design result rather than an arithmetic one: with 7.58 mA of base current, a transistor holding 250 mA of collector current is being run at a forced gain of $250/7.58 = 33$, so any part whose guaranteed $h_{FE}$ at 250 mA is above about 35 will saturate. Drop to a 1 kΩ base resistor and the base current falls to 2.5 mA, the forced gain rises to 100, and the same transistor comes out of saturation and starts dissipating watts.",
+    "check": "\nconst d = c.dc();\nconst r = c.net.parts.filter(function (p) { return p.id === 'rb'; })[0];\nreturn 1000 * Math.abs(d.v[r.n1] - d.v[r.n2]) / r.value;\n"
+   },
+   "match": {
+    "title": "Five symbols from a driver schematic",
+    "minutes": 6,
+    "brief": "A driver stage is a handful of components and the reason for each one is a different\nsentence. These are the symbols you meet around one — the low-side switch itself, the\ncomplementary device you would reach for instead on the high side, and the parts that\nsurround them. Read each label as a *job* rather than a name: in a schematic you have\nnot seen before, the job is what you are trying to work out, and the symbol is the clue.\n\nThere are six labels and five symbols, so one label describes a part that is not drawn\nhere at all.",
+    "prompt": "Pick a label, then tap the symbol that does that job.",
+    "labels": [
+     "The switch: a small current into the base lets a much larger one through the collector, and the arrow leaves on the emitter",
+     "The same device built the other way up, for a switch that has to sit between the supply and the load rather than between the load and ground",
+     "The part that gives the coil's current somewhere to go the instant the switch opens, and that does nothing at all while the load is energised",
+     "The load's own supply, which need not be — and usually is not — the rail the processor runs from",
+     "The mechanical contact whose few milliseconds of bounce are the reason an input needs filtering",
+     "A part that emits light when current passes and blocks it entirely the other way"
+    ],
+    "items": [
+     {
+      "sym": "NPN",
+      "a": 0,
+      "why": "An NPN transistor, the ordinary low-side switch. The arrow is on the emitter and points outward, which is the whole difference from its complement: read the arrow as the direction conventional current leaves. Base current in, collector current through, and the emitter carries the sum of the two back to ground."
+     },
+     {
+      "sym": "PNP",
+      "a": 1,
+      "why": "A PNP transistor. The arrow points *into* the device, and everything about it is upside down: the emitter goes to the positive rail and it turns on when the base is pulled *below* the emitter. That is what makes it the high-side part, and also why a 3.3 V pin cannot drive one whose emitter sits at 12 V without something in between — the pin cannot get the base far enough below 12 V, and it cannot survive being pulled up to it either."
+     },
+     {
+      "sym": "D",
+      "a": 2,
+      "why": "A diode, here the flyback (or freewheel) diode, wired across the coil with its cathode — the bar — to the positive end. In normal operation that is reverse bias and it conducts nothing. When the switch opens, the coil reverses the voltage across itself trying to maintain its current, the diode becomes forward biased, and the current circulates through it and decays instead of arcing across the transistor. Fit it the other way round and it shorts out the supply."
+     },
+     {
+      "sym": "BATT",
+      "a": 3,
+      "why": "A battery, standing here for the load's own supply. The long bar is positive. Drawing it separately from the logic supply is a habit worth keeping even when they come from the same regulator, because it makes you ask the two questions that matter: does the load's return current share a track with the processor's ground, and is there a capacitor near the coil to take the surge when it switches?"
+     },
+     {
+      "sym": "SW",
+      "a": 4,
+      "why": "A mechanical switch. It appears on a driver schematic as the thing that *commands* the load rather than the thing that carries it — and its contacts bounce for a few milliseconds on every operation, which is why the input it drives needs filtering before an interrupt is attached to it."
+     }
+    ]
+   },
+   "tune": null,
+   "build": null,
+   "derive": null,
+   "lab": null
+  },
+  {
+   "title": "Clocks, reset and the first instruction",
+   "summary": "Nothing you have written so far runs at all until the chip has come out of reset with its flash timing right, and none of the peripherals answer until someone has given them a clock.",
+   "concepts": [
+    "Every peripheral sits behind a clock gate, and a gated peripheral is not merely slow — it is absent. Its registers read back as zero and its writes go nowhere. Setting the configuration before setting the enable bit is the first bug almost everybody meets, and the symptom is indistinguishable from a wrong address, which is why it costs an afternoon rather than a minute.",
+    "The oscillator is a specification, not a preference. An internal RC starts in microseconds and holds perhaps 1% over temperature; a crystal holds tens of parts per million but takes milliseconds to start and needs its two load capacitors. What the clock has to agree with decides which: a UART at 115200 tolerates a couple of percent, USB needs 0.25%, and a clock that has to still be right in a month needs a crystal cut for it.",
+    "A PLL is integer arithmetic wrapped around a feedback loop: divide the input by $M$ to make the reference, multiply it by $N$ in the oscillator, divide the result by $P$ on the way out. Each of those has a legal range — the reference must stay inside a window, the oscillator has a minimum and a maximum — and between them they mean some target frequencies are simply not reachable from some crystals.",
+    "The core can outrun the flash. Above some frequency the flash needs wait states, and the *order* of the two changes matters: raise the wait states first, then the clock. Do it the other way round and the very next instruction is fetched too quickly to be read correctly, which is a hang with no error message and nothing on the stack to explain it.",
+    "Reset is not one event. Power-on, brown-out, the external pin, the watchdog and a software request all arrive at the same vector, and a status register records which one it was. Reading that register at start-up, and keeping a count of what it said, is the difference between knowing why a product restarted in the field and guessing."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "Gates, multipliers and the reasons a chip restarts",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "You write 0x00000400 into a GPIO port's MODER, read it straight back, and get zero. The address is right and the chip is not in a fault handler. What is the most likely cause?",
+      "opts": [
+       "the register is write-only",
+       "the port's clock enable bit has not been set, so the peripheral is not there to write to",
+       "the pointer is missing `volatile`, so the read was optimised away",
+       "the value needs to be written twice, because the register is double-buffered"
+      ],
+      "a": 1,
+      "why": "A gated peripheral does not respond to the bus at all: writes are discarded and reads\ncome back as zero. Enabling the clock is a separate write to a completely different\nblock — the clock controller — and it is the line everybody forgets, because nothing\nabout the GPIO chapter of the manual mentions it. A missing `volatile` is a real bug\nwith a different symptom: it makes a *later* read return a stale value the compiler\nkept in a register, not a fresh zero from the bus. And it is worth noticing what this\nfailure mode teaches: reading a register back after writing it, at least during\nbring-up, is how you find out."
+     },
+     {
+      "q": "An 8 MHz crystal feeds a PLL configured with $M = 8$, $N = 336$ and $P = 2$. What is the system clock?",
+      "opts": [
+       "336 MHz",
+       "168 MHz",
+       "21 MHz",
+       "42 MHz"
+      ],
+      "a": 1,
+      "why": "The input divider makes a 1 MHz reference, the loop multiplies it to\n$1 \\times 336 = 336$ MHz, and the output divider halves that to **168 MHz**. Each stage\nis a plain integer ratio, and the intermediate value matters as much as the answer: the\noscillator itself has a legal range — typically 100 to 432 MHz — so a setting that gives\nthe right system clock through an illegal 600 MHz oscillator frequency is not a setting,\nit is a lock-up. The value 336 MHz is the loop frequency rather than the output, and\n21 MHz divides by $M$ twice."
+     },
+     {
+      "q": "A part boots from its 16 MHz internal oscillator and the code switches it to a 168 MHz PLL. The flash needs five wait states above 150 MHz. In which order must the two changes happen?",
+      "opts": [
+       "wait states first, then the clock switch",
+       "clock switch first, then the wait states",
+       "either order, as long as both happen before the first flash access",
+       "they must be written in the same instruction"
+      ],
+      "a": 0,
+      "why": "Wait states first, always. Setting them early costs a few cycles of unnecessary slowness\nat 16 MHz and nothing else; setting them late means the instruction *after* the clock\nswitch is fetched from a flash that can no longer keep up, and what the core executes is\nwhatever the bus happened to return. The failure has no diagnostics: the chip stops, or\nruns nonsense, with a program counter that points somewhere plausible. The general rule\nunderneath it is worth carrying: when two settings must both change, do the one that is\nharmless early first."
+     },
+     {
+      "q": "A design needs USB, whose specification allows the bit clock to be off by 0.25%. Its microcontroller has an internal RC oscillator specified at ±1% over temperature. What follows?",
+      "opts": [
+       "the internal oscillator is fine, since 1% is close to 0.25%",
+       "the internal oscillator can be used if the PLL multiplies it up, because the PLL improves the accuracy",
+       "a crystal is required, because a PLL multiplies the input's error along with its frequency",
+       "the internal oscillator is fine as long as the part is calibrated at room temperature"
+      ],
+      "a": 2,
+      "why": "A PLL multiplies frequency, and the fractional error travels through untouched: 1% in is\n1% out, four times the budget. Calibrating at room temperature deals with the part-to-\npart spread and not with the drift, which is the part of the ±1% that shows up as a\nproduct that works on the bench and fails in a car. Some parts get round this with a\ncrystal-less USB mode that trims the RC against the host's own frame timing — which is\nnot the oscillator being good enough, it is a second control loop being added to make it\ngood enough."
+     },
+     {
+      "q": "A watchdog is reloaded from inside a timer interrupt that runs every millisecond. What does that arrangement actually prove?",
+      "opts": [
+       "that the main program is making progress",
+       "that interrupts are still being serviced, which they are even if the main loop is stuck forever",
+       "nothing at all, because a watchdog cannot be reloaded from an interrupt",
+       "that the timer is configured correctly, which is the point of the watchdog"
+      ],
+      "a": 1,
+      "why": "It proves the timer interrupt still runs, and nothing else. A main loop blocked forever\non a peripheral that will never answer keeps this watchdog fed indefinitely — the exact\nfailure the watchdog was fitted to catch. The reload belongs where the evidence of\nprogress is: at the top of the main loop, or better, after each task has set a flag\nsaying it has run recently and something has checked that all the flags are set. The\nsame argument applies to reloading it inside a delay function, which is the other\ncommon way to build a watchdog that cannot fire."
+     },
+     {
+      "q": "The supply on a battery-powered board sags to 2.1 V for a few milliseconds when a motor starts. The part is specified down to 2.7 V. What does the brown-out reset circuit do for you?",
+      "opts": [
+       "it holds the chip in reset while the supply is below the valid range, so the code never executes out of a flash that cannot be read reliably",
+       "it maintains the supply from an internal capacitor until the dip passes",
+       "it slows the clock down so the chip can keep running at 2.1 V",
+       "it does nothing until the supply reaches zero, then restarts"
+      ],
+      "a": 0,
+      "why": "It converts an undefined situation into a defined one. Below the specified supply the\nflash may return wrong data and the logic may fail in ways nobody characterised, so\nexecuting at all is the danger — a corrupted write to configuration memory is the\nclassic result. The brown-out detector holds reset until the rail is valid again and the\nprogram starts cleanly, and the reset-status register then says so, which is how you\nfind out that the motor and the processor are sharing a supply that cannot support both.\nRiding the dip out is a job for a capacitor and a regulator, not for the processor."
+     }
+    ]
+   },
+   "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": null,
+   "build": {
+    "title": "Holding reset until the board is ready",
+    "minutes": 24,
+    "brief": "This part's reset pin releases the processor when it rises past **0.7 $V_{DD}$**, which\non a 3.3 V board is 2.31 V. The supply itself rises in well under a millisecond, but two\nother things on the board are slower: the 8 MHz crystal takes about 2 ms to start\noscillating, and the sensor on the other end of the I²C bus does not answer for 3 ms\nafter its own supply is valid. So the processor must be held in reset for a while after\npower is applied.\n\nOn the canvas: the 3.3 V rail on the left, a **100 kΩ** resistor from it towards the\nreset pin, and the probe sitting on the reset pin itself. As drawn, the pin follows the\nrail immediately — a resistor with nothing after it carries no current and drops no\nvoltage, so there is no delay at all.\n\n## What the finished network must do\n\n- the reset pin must not reach 2.31 V until at least **3 ms** after power is applied\n- it must get there within **15 ms**, so the product starts promptly\n- it must end up at the full 3.3 V, not at some fraction of it\n- every resistor must be between **1 kΩ and 50 kΩ**: the reset pin's input leakage is\n  specified at up to 1 µA, and across anything larger than 50 kΩ that alone moves the\n  release point by 50 mV or more, drifting with temperature as leakage does\n\n## Working it out\n\nA capacitor charging through a resistor from zero reaches a fraction $f$ of the supply\nat $t = \\tau \\ln(1/(1-f))$, with $\\tau = RC$. For the 0.7 threshold that\nlogarithm is 1.20, so the hold time is about $1.2\\,RC$ — pick the hold you want, divide,\nand you have the product $RC$. Then split that product between a resistor the leakage\nrule allows and a capacitor you can buy.\n\nThe checks simulate the power-up and measure when the pin crosses the threshold, so any\nnetwork that lands inside the window passes. Click a component to change its value;\n`470n`, `4k7` and `10k` are all understood.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 3.3
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 100000
+      },
+      {
+       "id": "p3",
+       "kind": "OUT",
+       "x": 12,
+       "y": 7
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        12,
+        7
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 3.3
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 10000
+      },
+      {
+       "id": "p3",
+       "kind": "OUT",
+       "x": 12,
+       "y": 7
+      },
+      {
+       "id": "p4",
+       "kind": "C",
+       "x": 10,
+       "y": 9,
+       "rot": 1,
+       "value": 4.7e-07
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 10,
+       "y": 11
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        12,
+        7
+       ]
+      },
+      {
+       "a": [
+        10,
+        7
+       ],
+       "b": [
+        10,
+        8
+       ]
+      },
+      {
+       "a": [
+        10,
+        10
+       ],
+       "b": [
+        10,
+        11
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "reset is still held 3 ms after power is applied",
+      "code": "const TH = 0.7 * 3.3;\nconst s = c.step(0.03);\nlet t = null;\nfor (let i = 0; i < s.v.length; i++) {\n  if (s.v[i] >= TH) {\n    t = i === 0 ? 0 : s.t[i - 1] + (TH - s.v[i - 1]) / (s.v[i] - s.v[i - 1]) * (s.t[i] - s.t[i - 1]);\n    break;\n  }\n}\nc.assert(t !== null,\n  'The reset pin never reaches 2.31 V at all within 30 ms. Something is holding it down ' +\n  'permanently — check that nothing shunts the pin to ground through a resistor.');\nc.assert(t >= 0.003,\n  'Reset is released after only ' + c.fmt(t, 's') + ', and the crystal will not have ' +\n  'started. A larger RC product delays it further.');"
+     },
+     {
+      "name": "and released within 15 ms",
+      "code": "const TH = 0.7 * 3.3;\nconst s = c.step(0.03);\nlet t = null;\nfor (let i = 0; i < s.v.length; i++) {\n  if (s.v[i] >= TH) {\n    t = i === 0 ? 0 : s.t[i - 1] + (TH - s.v[i - 1]) / (s.v[i] - s.v[i - 1]) * (s.t[i] - s.t[i - 1]);\n    break;\n  }\n}\nc.assert(t !== null && t <= 0.015,\n  'The processor is still in reset ' + (t === null ? 'after 30 ms' : c.fmt(t, 's') + ' in') +\n  '. That is a visible pause before the product does anything; reduce the RC product.');"
+     },
+     {
+      "name": "the pin settles at the full supply",
+      "code": "c.close(c.vout(), 3.3, 0.01,\n  'the steady voltage on the reset pin. It has to end up at the rail: a network that ' +\n  'divides the supply leaves the pin near its threshold, where noise resets the chip');"
+     },
+     {
+      "name": "the leakage rule is respected",
+      "code": "const rs = c.values('R');\nc.assert(rs.length >= 1, 'The network needs at least one resistor.');\nrs.forEach(function (r) {\n  c.assert(r >= 1000 * 0.99,\n    'A ' + c.fmt(r, 'Ω') + ' resistor draws more from the rail than this needs and makes ' +\n    'the capacitor implausibly large. Keep every resistor at 1 kΩ or above.');\n  c.assert(r <= 50000 * 1.01,\n    'A ' + c.fmt(r, 'Ω') + ' resistor is large enough that the pin\\'s 1 µA of input ' +\n    'leakage shifts the release threshold. Keep every resistor at 50 kΩ or below.');\n});"
+     }
+    ],
+    "hints": [
+     "The missing part is a capacitor from the reset pin down to ground. Until it is there the resistor has nothing to charge and the pin is simply tied to the rail.",
+     "Aim for the middle of the window rather than its edge. A 6 ms hold needs $RC = 6\\,\\text{ms}/1.2 = 5$ ms.",
+     "The 100 kΩ that is already there fails the leakage rule on its own, so it has to change whatever else you do. With 10 kΩ instead, $C = 5\\,\\text{ms}/10\\,\\text{k} = 500$ nF, and the stock value next to it is 470 nF.",
+     "10 kΩ with 470 nF gives $\\tau = 4.7$ ms and a hold of about 5.7 ms — comfortably inside 3 to 15 ms. 47 kΩ with 100 nF gives exactly the same product and passes too.",
+     "If the pin never reaches the threshold at all, look for a second resistor to ground: that makes a divider, and a divider that lands below 2.31 V holds the processor in reset forever."
+    ]
+   },
+   "derive": {
+    "title": "From the crystal to the peripheral, one divider at a time",
+    "minutes": 12,
+    "brief": "Four dividers stand between the crystal and the timer you are trying to configure, and\nthe reason clock arithmetic goes wrong is almost always that one of them was forgotten\nrather than that any of it is hard. So write the chain out once.\n\n$f_x$ is the crystal frequency. $M$ divides it down to the PLL's reference, $N$\nmultiplies that up inside the loop, $P$ divides the loop's output to make the system\nclock, and $Q$ divides the system clock to make the peripheral bus clock.",
+    "vars": [
+     "f_x",
+     "M",
+     "N",
+     "P",
+     "Q"
+    ],
+    "steps": [
+     {
+      "prompt": "The crystal runs at $f_x$, and the PLL's input divider divides it by $M$ to make the reference the loop compares against. Write the reference frequency.",
+      "given": "",
+      "answer": "\\frac{f_x}{M}",
+      "placeholder": "",
+      "hint": "Divide, nothing more. This is the frequency the loop's phase detector sees.",
+      "deconstruct": [
+       "A divider by $M$ produces one output cycle for every $M$ input cycles.",
+       "So the reference is $f_x/M$ — for an 8 MHz crystal and $M = 8$, 1 MHz."
+      ]
+     },
+     {
+      "prompt": "The loop runs its oscillator at $N$ times the reference. Write the oscillator's frequency in terms of $f_x$, $M$ and $N$.",
+      "given": "The reference you have just written is $f_x/M$.",
+      "answer": "\\frac{N f_x}{M}",
+      "placeholder": "",
+      "hint": "Multiply the previous answer by $N$.",
+      "deconstruct": [
+       "The loop holds its output divided by $N$ equal to the reference.",
+       "So the oscillator runs at $N \\cdot f_x/M$ — with $N = 336$ and a 1 MHz reference, 336 MHz. This is the number that has to stay inside the oscillator's legal range."
+      ]
+     },
+     {
+      "prompt": "The output divider $P$ turns that into the system clock. Write the system clock in terms of $f_x$, $M$, $N$ and $P$.",
+      "given": "The oscillator runs at $N f_x / M$.",
+      "answer": "\\frac{N f_x}{M P}",
+      "placeholder": "",
+      "hint": "One more division, by $P$.",
+      "deconstruct": [
+       "Dividing $N f_x / M$ by $P$ gives $N f_x/(M P)$.",
+       "With $f_x = 8$ MHz, $M = 8$, $N = 336$ and $P = 2$ that is 168 MHz."
+      ]
+     },
+     {
+      "prompt": "The peripheral bus runs at the system clock divided by $Q$, and a 16-bit timer on that bus wraps after 65536 ticks. Write the longest interval that timer can measure without wrapping, in terms of $f_x$, $M$, $N$, $P$ and $Q$.",
+      "given": "A counter ticking at $f$ takes $1/f$ per tick.",
+      "answer": "\\frac{65536 M P Q}{N f_x}",
+      "placeholder": "",
+      "hint": "Write the peripheral clock first, then invert it and multiply by 65536. Everything on the bottom of a frequency ends up on the top of a time.",
+      "deconstruct": [
+       "The peripheral clock is $N f_x/(M P Q)$.",
+       "One tick therefore takes $M P Q/(N f_x)$ seconds.",
+       "65536 of them take $65536\\,M P Q/(N f_x)$ — which for the numbers above, with $Q = 4$, is 1.56 ms."
+      ]
+     }
+    ],
+    "closing": "Put the numbers in and the result is worth remembering: an 8 MHz crystal, multiplied to\n168 MHz and divided by 4 for the peripheral bus, gives a 42 MHz timer clock, and a\n16-bit counter on it wraps every **1.56 ms**. That is why the prescaler in the previous\nmodule exists. Anything you want to time in milliseconds has to be prescaled before it\nreaches the counter, and the two `+1`s from that module attach to the same chain: the\nfull expression for a timer period is\n$(\\text{PSC}+1)(\\text{ARR}+1)\\,M P Q/(N f_x)$, and every symbol in it is a register\nfield somebody has to set correctly."
+   },
+   "lab": {
+    "title": "Finding a PLL setting that exists",
+    "runtime": "python",
+    "minutes": 30,
+    "brief": "Configuring a PLL by hand means guessing three integers and checking three ranges, which\nis a job for a search. Write the search.\n\nThe part modelled here is a common one. Its rules:\n\n- the reference $f_x/M$ must be between **1 and 2 MHz**, inclusive\n- the oscillator $f_x N/M$ must be between **100 and 432 MHz**, inclusive\n- $M$ is 2 to 63, $N$ is 50 to 432, and $P$ is one of 2, 4, 6 or 8\n- the system clock $f_x N/(M P)$ must not exceed **168 MHz**\n\nThe functions:\n\n- `vco_input(f_xtal, m)`, `vco_output(f_xtal, m, n)` and `sysclk(f_xtal, m, n, p)` —\n  the three frequencies of the chain, in hertz. Ordinary division is fine; these are\n  not integers.\n- `is_legal(f_xtal, m, n, p)` — `True` when all four rules above hold, including that\n  each of `m`, `n` and `p` is one of the allowed values.\n- `best_pll(f_xtal, target)` — the `(m, n, p)` whose system clock is closest to\n  `target`, searched **`m` ascending, then `n` ascending, then `p` in the order\n  (2, 4, 6, 8)**, keeping a candidate only when it is *strictly* better than the best\n  found so far. That rule matters: several settings usually hit the same frequency\n  exactly, and without a stated tie-break the answer is whichever one your loop happened\n  to reach.\n- `wait_states(f_hz)` — how many flash wait states this part needs at that frequency:\n  0 up to 30 MHz, then one more for each further 30 MHz, to a maximum of 5. So 30 MHz\n  needs none, 30.5 MHz needs one, and anything above 150 MHz needs five.\n\n`best_pll` searches about ninety-five thousand combinations, which is a fraction of a\nsecond. Write it as three plain loops; the point of the exercise is the rules, not the\nsearch.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"Three integers and four rules: configuring a PLL by search.\"\"\"\n\nVCO_IN_MIN = 1_000_000\nVCO_IN_MAX = 2_000_000\nVCO_OUT_MIN = 100_000_000\nVCO_OUT_MAX = 432_000_000\nSYS_MAX = 168_000_000\n\nM_RANGE = range(2, 64)         # 2 .. 63\nN_RANGE = range(50, 433)       # 50 .. 432\nP_CHOICES = (2, 4, 6, 8)\n\n\ndef vco_input(f_xtal, m):\n    \"\"\"The PLL reference frequency, in hertz.\"\"\"\n    # TODO: the crystal divided by m.\n    return 0.0\n\n\ndef vco_output(f_xtal, m, n):\n    \"\"\"The oscillator frequency inside the loop, in hertz.\"\"\"\n    # TODO: the reference multiplied by n.\n    return 0.0\n\n\ndef sysclk(f_xtal, m, n, p):\n    \"\"\"The system clock, in hertz.\"\"\"\n    # TODO: the oscillator divided by p.\n    return 0.0\n\n\ndef is_legal(f_xtal, m, n, p):\n    \"\"\"True when m, n, p are in range and all three frequency limits hold.\"\"\"\n    # TODO: check m, n and p first, then the reference window, the oscillator\n    # window, and the system clock ceiling.\n    return False\n\n\ndef best_pll(f_xtal, target):\n    \"\"\"The (m, n, p) whose system clock is closest to `target`.\"\"\"\n    # TODO: three nested loops in the stated order; skip illegal combinations;\n    # keep a candidate only when its error is strictly smaller than the best so far.\n    return None\n\n\ndef wait_states(f_hz):\n    \"\"\"Flash wait states needed at this system clock: 0 to 5.\"\"\"\n    # TODO: 0 up to 30 MHz, one more per further 30 MHz, capped at 5.\n    return 0\n\n\nif __name__ == \"__main__\":\n    for xtal in (8e6, 12e6, 25e6):\n        m, n, p = best_pll(xtal, 168e6) or (0, 0, 0)\n        f = sysclk(xtal, m, n, p) if m else 0\n        print(\"%2.0f MHz crystal -> M=%d N=%d P=%d giving %.3f MHz, %d wait states\"\n              % (xtal / 1e6, m, n, p, f / 1e6, wait_states(f)))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"Three integers and four rules: configuring a PLL by search.\"\"\"\n\nVCO_IN_MIN = 1_000_000\nVCO_IN_MAX = 2_000_000\nVCO_OUT_MIN = 100_000_000\nVCO_OUT_MAX = 432_000_000\nSYS_MAX = 168_000_000\n\nM_RANGE = range(2, 64)         # 2 .. 63\nN_RANGE = range(50, 433)       # 50 .. 432\nP_CHOICES = (2, 4, 6, 8)\n\n\ndef vco_input(f_xtal, m):\n    \"\"\"The PLL reference frequency, in hertz.\"\"\"\n    return f_xtal / m\n\n\ndef vco_output(f_xtal, m, n):\n    \"\"\"The oscillator frequency inside the loop, in hertz.\"\"\"\n    return f_xtal * n / m\n\n\ndef sysclk(f_xtal, m, n, p):\n    \"\"\"The system clock, in hertz.\"\"\"\n    return f_xtal * n / (m * p)\n\n\ndef is_legal(f_xtal, m, n, p):\n    \"\"\"True when m, n, p are in range and all three frequency limits hold.\"\"\"\n    if m not in M_RANGE or n not in N_RANGE or p not in P_CHOICES:\n        return False\n    if not (VCO_IN_MIN <= vco_input(f_xtal, m) <= VCO_IN_MAX):\n        return False\n    if not (VCO_OUT_MIN <= vco_output(f_xtal, m, n) <= VCO_OUT_MAX):\n        return False\n    return sysclk(f_xtal, m, n, p) <= SYS_MAX\n\n\ndef best_pll(f_xtal, target):\n    \"\"\"The (m, n, p) whose system clock is closest to `target`.\"\"\"\n    best = None\n    best_err = None\n    for m in M_RANGE:\n        for n in N_RANGE:\n            for p in P_CHOICES:\n                if not is_legal(f_xtal, m, n, p):\n                    continue\n                err = abs(sysclk(f_xtal, m, n, p) - target)\n                if best_err is None or err < best_err:\n                    best_err = err\n                    best = (m, n, p)\n    return best\n\n\ndef wait_states(f_hz):\n    \"\"\"Flash wait states needed at this system clock: 0 to 5.\"\"\"\n    for i, top in enumerate((30, 60, 90, 120, 150)):\n        if f_hz <= top * 1_000_000:\n            return i\n    return 5\n\n\nif __name__ == \"__main__\":\n    for xtal in (8e6, 12e6, 25e6):\n        m, n, p = best_pll(xtal, 168e6) or (0, 0, 0)\n        f = sysclk(xtal, m, n, p) if m else 0\n        print(\"%2.0f MHz crystal -> M=%d N=%d P=%d giving %.3f MHz, %d wait states\"\n              % (xtal / 1e6, m, n, p, f / 1e6, wait_states(f)))\n"
+     }
+    ],
+    "hints": [
+     "The three frequency functions are one line each, and each one is the previous one with another factor: `f_xtal / m`, then `* n`, then `/ p`.",
+     "In `is_legal`, check membership before arithmetic — `m not in M_RANGE` — so that a nonsensical `p` is rejected rather than producing a frequency that happens to look reasonable.",
+     "Python's chained comparison reads exactly like the datasheet: `VCO_IN_MIN <= vco_input(f_xtal, m) <= VCO_IN_MAX`.",
+     "In `best_pll`, keep the best error in its own variable and compare with `<`, not `<=`. Using `<=` keeps the *last* equally good candidate rather than the first, and every value in the tests would change.",
+     "`wait_states` is a loop over the boundaries (30, 60, 90, 120, 150) returning the index of the first one the frequency does not exceed, and 5 if it exceeds all of them."
+    ],
+    "tests": [
+     {
+      "name": "the three frequencies of the chain",
+      "code": "assert vco_input(8e6, 4) == 2e6, f\"8 MHz over 4 is 2 MHz, got {vco_input(8e6, 4)}\"\nassert vco_input(8e6, 8) == 1e6, f\"got {vco_input(8e6, 8)}\"\nassert vco_output(8e6, 8, 336) == 336e6, f\"got {vco_output(8e6, 8, 336)}\"\nassert sysclk(8e6, 8, 336, 2) == 168e6, \\\n    f\"the canonical 8 MHz to 168 MHz setting, got {sysclk(8e6, 8, 336, 2)}\"\nassert sysclk(8e6, 8, 336, 4) == 84e6, \"the same loop with a bigger output divider\""
+     },
+     {
+      "name": "the rules reject what the datasheet rejects",
+      "code": "assert is_legal(8e6, 8, 336, 2), \"M=8 N=336 P=2 from an 8 MHz crystal is the stock setting\"\nassert not is_legal(8e6, 2, 336, 2), \\\n    \"M=2 puts the reference at 4 MHz, outside the 1-2 MHz window\"\nassert not is_legal(8e6, 4, 432, 2), \\\n    \"M=4 N=432 runs the oscillator at 864 MHz, twice its limit\"\nassert not is_legal(8e6, 4, 200, 2), \\\n    \"that combination gives a 200 MHz system clock, above the 168 MHz ceiling\"\nassert not is_legal(8e6, 8, 336, 3), \"3 is not one of the allowed output dividers\"\nassert not is_legal(8e6, 1, 336, 2), \"M starts at 2\""
+     },
+     {
+      "name": "an 8 MHz crystal reaches 168 MHz exactly",
+      "code": "got = best_pll(8e6, 168e6)\nassert got == (4, 168, 2), f\"expected (4, 168, 2) under the stated search order, got {got}\"\nassert is_legal(8e6, *got), \"the answer must itself be legal\"\nassert sysclk(8e6, *got) == 168e6, \"and it must be exact, not merely close\""
+     },
+     {
+      "name": "a 25 MHz crystal reaches it too, by a different route",
+      "code": "got = best_pll(25e6, 168e6)\nassert got == (25, 336, 2), f\"expected (25, 336, 2), got {got}\"\nassert sysclk(25e6, *got) == 168e6, \\\n    f\"25 MHz divided by 25 is a 1 MHz reference, multiplied by 336 and halved; got {sysclk(25e6, *got)}\""
+     },
+     {
+      "name": "and lower targets from other crystals",
+      "code": "assert best_pll(16e6, 48e6) == (8, 96, 4), f\"got {best_pll(16e6, 48e6)}\"\nassert sysclk(16e6, 8, 96, 4) == 48e6, \"48 MHz exactly, which is what USB needs\"\nassert best_pll(12e6, 100e6) == (6, 100, 2), f\"got {best_pll(12e6, 100e6)}\"\nassert best_pll(8e6, 84e6) == (4, 84, 2), f\"got {best_pll(8e6, 84e6)}\""
+     },
+     {
+      "name": "wait states, at the boundaries where they change",
+      "code": "assert wait_states(16e6) == 0, \"well under the first boundary\"\nassert wait_states(30e6) == 0, \"30 MHz itself still needs none\"\nassert wait_states(30.5e6) == 1, \"just above it needs one\"\nassert wait_states(84e6) == 2, f\"got {wait_states(84e6)}\"\nassert wait_states(120e6) == 3 and wait_states(150e6) == 4, \"the middle boundaries\"\nassert wait_states(168e6) == 5, \"the top of the range needs five\""
+     }
+    ]
+   }
+  },
+  {
    "title": "Polling, interrupts, timers and PWM",
    "summary": "Two ways to notice that something happened, and one peripheral that makes things happen on time.",
    "concepts": [
@@ -492,6 +1407,7 @@
     "PWM comes from a compare register: the output is high while the counter is below the compare value and low above it, so the duty cycle is $\\text{CCR}/(\\text{ARR}+1)$. The frequency is fixed by the reload, the duty by the compare, and the two are independent.",
     "A PWM output is a square wave, not a voltage. Averaging it with a low-pass filter turns it into one, and the filter's corner frequency has to be far below the PWM frequency for the ripple to disappear — which is the same trade against response time as any other filter."
    ],
+   "read": null,
    "sandbox": {
     "title": "What an interruption costs, drawn as cycles",
     "visualiser": "pipeline",
@@ -786,6 +1702,1020 @@
    "lab": null
   },
   {
+   "title": "The vector table, priority and the critical section",
+   "summary": "What the hardware does between two instructions when an interrupt arrives, what it costs to make a sequence indivisible, and how to bound the delay before a handler starts.",
+   "concepts": [
+    "The vector table is an array of addresses at the very bottom of the address space. The first word is not code: it is the value loaded into the stack pointer at reset. The second is the address of the reset handler, and every entry after that belongs to one exception or one peripheral interrupt. An interrupt 'calling' your function is the hardware fetching a word out of this table and branching to it, which is why a handler with the wrong name silently never runs — the table still holds the default entry.",
+    "Entry and exit are automatic and are not free. The processor stacks the caller-saved registers and the return address on the way in and unstacks them on the way out, a fixed cost of roughly a dozen cycles each way. That is why splitting work across two handlers pays the cost twice, and why a Cortex-M optimises the case of a second interrupt already waiting: it *tail-chains* straight into it without unstacking and restacking.",
+    "Priority is a number, and lower means more urgent. A higher-priority interrupt preempts a running handler; an equal or lower one stays pending and is taken when the current handler returns. Two sources given the same priority can therefore never preempt each other, which is a design tool — it lets them share a buffer with no locking at all.",
+    "Worst-case response time is not the entry latency. It is the entry latency, plus every higher-priority handler that can legitimately be running or arrive first, plus the longest stretch anywhere in the program during which interrupts are disabled. The last term is the one you control and the one that is invisible in the source: a critical section inside a library function lengthens the deadline of an interrupt written by somebody else.",
+    "A critical section is how a read-modify-write is made indivisible against a handler: save the current interrupt-enable state, disable, do the sequence, restore what you saved. Restore rather than blanket-enable — a function that ends with an unconditional enable, called from inside another critical section, silently opens the outer one. And `volatile` is no substitute: it guarantees that accesses happen, not that a pair of them cannot be split."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "Vectors, priorities and indivisible sequences",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "What is stored in the very first word of the vector table, at address 0x00000000?",
+      "opts": [
+       "the address of the reset handler",
+       "the initial value of the stack pointer",
+       "a branch instruction to the startup code",
+       "the address of the first interrupt handler"
+      ],
+      "a": 1,
+      "why": "The initial stack pointer. The processor loads it before executing anything, which is\nwhat lets the very first instruction of the reset handler push a register — there is a\nusable stack before a single line of your code has run. The reset handler's *address* is\nthe second word. Getting these two the wrong way round in a hand-written table produces\na chip that faults immediately on reset with a stack pointer pointing into flash, and it\nis worth knowing because the linker script and the startup file are the two places you\nwill ever have to look at them."
+     },
+     {
+      "q": "A handler at priority 3 is running when an interrupt at priority 1 arrives. What happens?",
+      "opts": [
+       "the priority 1 interrupt preempts it, and the priority 3 handler resumes afterwards",
+       "the priority 1 interrupt waits until the priority 3 handler returns",
+       "the priority 3 handler is abandoned",
+       "the two run alternately, a few instructions at a time"
+      ],
+      "a": 0,
+      "why": "Priority 1 is more urgent than priority 3 — the numbers run the opposite way to the\nintuition, and this is where the confusion is usually planted — so it preempts. The\nlower-priority handler is not abandoned: its state was stacked on entry to the new one\nand it resumes exactly where it stopped. Note what this means for your stack budget,\nwhich is the part that surprises people: with several priority levels in use, the\nworst case has one frame stacked per level, all at once."
+     },
+     {
+      "q": "Two interrupt sources are given the same priority. One is running when the other becomes pending. What follows?",
+      "opts": [
+       "the pending one preempts, because equal priorities alternate",
+       "the pending one is taken when the running handler returns, and the two can share data without locking",
+       "an error is raised, because two sources may not share a priority",
+       "whichever has the lower vector number preempts"
+      ],
+      "a": 1,
+      "why": "Equal priority means no preemption in either direction, so the second handler runs only\nafter the first has returned. That turns into a genuine engineering technique: two\nhandlers at the same priority are mutually exclusive by construction, so a buffer shared\nbetween *them* needs no critical section at all. The main loop is still not covered — it\nruns below every interrupt — so data shared with the loop still does. Choosing\npriorities is therefore partly a locking decision and not only a timing one."
+     },
+     {
+      "q": "A utility function protects a shared counter by disabling interrupts at the top and calling `__enable_irq()` at the bottom. What is wrong with it?",
+      "opts": [
+       "nothing, provided the function is short",
+       "interrupts must be disabled with a compiler barrier as well",
+       "called from inside another critical section, it enables interrupts halfway through the outer one",
+       "`__enable_irq()` is slower than restoring the saved state"
+      ],
+      "a": 2,
+      "why": "It does not restore, it asserts. Called on its own the behaviour is right; called from\ninside a longer critical section it opens a window in the middle of somebody else's\nindivisible sequence, and the resulting corruption is rare, timing-dependent and appears\nin code that looks correct. The fix is to read the current state into a local, disable,\nand write the local back at the end — which is what the `__get_PRIMASK()` and\n`__set_PRIMASK()` pair is for, and why every RTOS wraps critical sections that way. A\ncompiler barrier is a real requirement too, and it comes for free with the intrinsics."
+     },
+     {
+      "q": "A handler must begin within 20 µs of its interrupt. The core runs at 48 MHz, entry costs 12 cycles, and one function in the main loop disables interrupts for 1500 cycles. Is the deadline met?",
+      "opts": [
+       "yes — 12 cycles at 48 MHz is a quarter of a microsecond",
+       "no — the disabled region alone is 31 µs, which is longer than the whole deadline",
+       "yes, provided the interrupt is given the highest priority",
+       "it cannot be decided without knowing how often the interrupt fires"
+      ],
+      "a": 1,
+      "why": "$1500/48\\,\\text{MHz} = 31.25$ µs, and that is time during which the hardware will not\ntake the interrupt at all — no priority level helps, because disabling is not a priority\nmechanism, it is an off switch. The entry cost of 12 cycles is 0.25 µs and rounds to\nnothing beside it. The deadline is missed by the critical section, in a function that\nprobably has nothing to do with the interrupt in question, and the fix is to shorten the\nsection rather than to raise the priority. This is the single most useful reason to know\nwhat your worst-case disabled region is."
+     },
+     {
+      "q": "A 32-bit millisecond counter is incremented in a timer handler and read in the main loop on an 8-bit machine. It is declared `volatile`. Occasionally the loop reads a value that was never in the counter at all. Why?",
+      "opts": [
+       "the counter overflows and wraps",
+       "the read takes four separate byte accesses, and the handler can update the counter between two of them",
+       "`volatile` prevents the compiler from reading the variable at all",
+       "the handler and the loop are using different copies of the variable"
+      ],
+      "a": 1,
+      "why": "A 32-bit value on an 8-bit machine is four loads, and an interrupt between the second and\nthe third gives you two bytes of the old value and two of the new — a number that never\nexisted. `volatile` makes every one of those four accesses happen, which is necessary and\nnowhere near sufficient. The usual fixes are a critical section around the read, or a\nread-twice-and-compare loop that repeats until two consecutive reads agree. The same\ntearing happens on a 32-bit machine for anything wider than a word, and for any pair of\nvariables that have to be consistent with each other."
+     }
+    ]
+   },
+   "blanks": null,
+   "numeric": null,
+   "match": null,
+   "tune": {
+    "title": "One press, one interrupt",
+    "minutes": 10,
+    "brief": "An external interrupt is attached to a pushbutton, and every press produces between ten\nand fifty of them. Nothing is wrong with the code: the contacts of a mechanical switch\nbounce for a few milliseconds as they close, and the edge-triggered input faithfully\nreports every one of those edges.\n\nBefore writing a line of software to work around that, it is worth pricing the hardware\nanswer. A resistor and a capacitor at the pin make a low-pass filter, and the two signals\nyou are trying to separate are far apart: the press itself is an event at a few hertz,\nand the bounce is a burst at around a kilohertz.\n\nTwo sliders, three things that must hold at once. The filter is modelled here as one\nresistor and one capacitor, which is the symmetric idealisation; a real pull-up and\nswitch charge and discharge through different resistances, and the honest versions of\nthis circuit either add a Schmitt-trigger input or do the same filtering in software with\na timer.",
+    "prompt": "Pass the press, remove the bounce, and keep the button feeling immediate.",
+    "note": "The corner has to sit between the two, and the time constant decides how late the interrupt arrives. All three constraints must hold together.",
+    "model": "rc-lowpass",
+    "initial": {
+     "r": 1000,
+     "c": 100
+    },
+    "constants": {
+     "fsig": 10,
+     "fnoise": 1000
+    },
+    "plotKey": "",
+    "constraints": [
+     {
+      "k": "keep",
+      "label": "at least 0.95 of a 10 Hz press survives",
+      "min": 0.95
+     },
+     {
+      "k": "reject",
+      "label": "1 kHz bounce down by 26 dB or more",
+      "max": -26.0
+     },
+     {
+      "k": "tau",
+      "label": "time constant ≤ 5 ms, so the press still feels instant",
+      "max": 5.0
+     }
+    ]
+   },
+   "build": null,
+   "derive": {
+    "title": "What the handlers leave for the main loop",
+    "minutes": 12,
+    "brief": "Interrupts do not run alongside the main loop; they run *instead of* it. So a loop whose\nwork you have measured on a quiet system takes longer on a busy one, by an amount that\ndepends only on the handlers' share of the processor. Four steps put that on a page.\n\nEverything here is in cycles. A handler of cost $C_h$ cycles runs once every $T_h$\ncycles; a second one costs $C_l$ every $T_l$; $u$ is the share the handlers take between\nthem; the loop has $W$ cycles of work to do and a deadline of $D$ cycles to do it in.",
+    "vars": [
+     "C_h",
+     "T_h",
+     "C_l",
+     "T_l",
+     "u",
+     "W",
+     "D"
+    ],
+    "steps": [
+     {
+      "prompt": "One handler costs $C_h$ cycles and runs once every $T_h$ cycles. Write the fraction of the processor's cycles it takes.",
+      "given": "",
+      "answer": "\\frac{C_h}{T_h}",
+      "placeholder": "",
+      "hint": "Cycles spent, over cycles available, across one period of the interrupt.",
+      "deconstruct": [
+       "In any window of $T_h$ cycles, exactly $C_h$ of them belong to the handler.",
+       "So the share is $C_h/T_h$ — for a 200-cycle handler every 10000 cycles, 2%."
+      ]
+     },
+     {
+      "prompt": "A second source costs $C_l$ cycles every $T_l$ cycles. Write the fraction of the processor that is left for the main loop.",
+      "given": "Shares of the processor add, as long as the total stays below 1.",
+      "answer": "1 - \\frac{C_h}{T_h} - \\frac{C_l}{T_l}",
+      "placeholder": "",
+      "hint": "Start from the whole processor and take both shares away.",
+      "deconstruct": [
+       "The two handlers take $C_h/T_h$ and $C_l/T_l$ of the cycles.",
+       "Everything else is the loop's, so the loop gets $1 - C_h/T_h - C_l/T_l$.",
+       "Note what happens as that approaches zero: the loop does not slow down gracefully, it stops."
+      ]
+     },
+     {
+      "prompt": "Write the wall-clock time, in cycles, that the loop takes to finish $W$ cycles of work when the handlers take a share $u$ between them.",
+      "given": "The loop advances by only $(1-u)$ cycles of its own work per cycle of wall-clock time.",
+      "answer": "\\frac{W}{1 - u}",
+      "placeholder": "",
+      "hint": "If you get a fraction of the machine, you need proportionally more wall-clock time. Divide.",
+      "deconstruct": [
+       "In $t$ cycles of wall-clock time the loop gets $(1-u)t$ cycles of work done.",
+       "Setting $(1-u)t = W$ and solving gives $t = W/(1-u)$.",
+       "At $u = 0.5$ the loop takes twice as long; at $u = 0.9$, ten times."
+      ]
+     },
+     {
+      "prompt": "The loop must complete within a deadline of $D$ cycles of wall-clock time. Write the largest amount of work $W$ that fits.",
+      "given": "You have just shown that $W$ cycles of work take $W/(1-u)$ of wall-clock time.",
+      "answer": "D(1 - u)",
+      "placeholder": "",
+      "hint": "Set the time you just wrote equal to $D$ and solve for $W$.",
+      "deconstruct": [
+       "The requirement is $W/(1-u) \\leq D$.",
+       "Multiplying both sides by $(1-u)$ gives $W \\leq D(1-u)$."
+      ]
+     }
+    ],
+    "closing": "The last line is the one to keep. A budget of $D$ cycles is worth only $D(1-u)$ of your\nown code, and $u$ is set by decisions taken elsewhere — an ADC interrupt at 10 kHz whose\nhandler takes 300 cycles on a 48 MHz part occupies 6.25 µs of every 100 µs, which is\n6.25% of the machine gone before your loop starts.\n\nTwo warnings about using it. It is an *average*, so it tells you whether the work fits\nover a long window and says nothing about the worst case at any instant — that needs the\nresponse-time argument from the concepts above, with the disabled regions in it. And it\nassumes the handlers always fit: as $u$ passes 1 the formula returns a negative number,\nwhich is the arithmetic's way of reporting that the interrupts alone now need more than\nthe whole processor, and that no main loop exists at all."
+   },
+   "lab": null
+  },
+  {
+   "title": "Asynchronous serial: the frame, the baud rate and the error budget",
+   "summary": "Two wires, no clock, and a receiver that has to work out where every bit is from a single falling edge.",
+   "concepts": [
+    "Asynchronous means the clock is not on the wire. The line idles high, a start bit takes it low, and the receiver — running at its own nominally identical rate, usually oversampling sixteen times — uses that one edge to place its sampling points in the middle of each bit that follows. Everything the standard specifies is there to make that placement survive.",
+    "A frame is start, then the data **least significant bit first**, then an optional parity bit, then one or two stop bits. `8N1` puts ten bits on the wire for eight bits of payload, so the byte rate is the baud rate divided by ten and not by eight — 11520 bytes per second at 115200 baud, before any protocol of your own takes its share.",
+    "The baud rate comes from an integer divider off the peripheral clock, so what you get is $f_{clk}/\\text{DIV}$ rather than what you asked for. The error that matters is the accumulated one: the sampling point drifts by the fractional error on every bit, and the middle of the stop bit is 9.5 bit times from the start edge, so an error of $e$ has become $9.5e$ of a bit by the time the frame ends. Half a bit is where the sample lands in the wrong bit, and both ends contribute, which is where the familiar 2% budget comes from.",
+    "The three errors a UART reports mean three different things. **Framing**: the stop bit was not high, which nearly always means the two ends disagree about the baud rate. **Parity**: an odd number of bits changed, and an even number is invisible. **Overrun**: the data register was not read before the next byte arrived, and a byte that was received correctly has been lost — a software failure, not a wiring one.",
+    "A logic-level UART is not RS-232. RS-232 idles at about −12 V and inverts the data, so connecting one directly to a 3.3 V pin destroys the pin. Between two boards sharing a supply, two wires and a common ground are enough; across a room, or between separately powered boxes, the ground is no longer common and the link needs a transceiver, or an isolator."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "What is on the wire, and how far it can drift",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "The byte 0x41 is sent as 8N1. Reading the line from the first bit to the last, what appears?",
+      "opts": [
+       "0 0 1 0 0 0 0 0 1 1",
+       "0 1 0 0 0 0 0 1 0 1",
+       "1 1 0 0 0 0 0 1 0 0",
+       "0 1 0 0 0 0 0 1 1"
+      ],
+      "a": 1,
+      "why": "0x41 is `0100 0001`, and the data goes out least significant bit first, so the eight data\nbits are 1, 0, 0, 0, 0, 0, 1, 0 — wrapped in a low start bit at the front and a high stop\nbit at the end. Sending it most significant bit first gives a completely different\nwaveform and is what a bit-banged implementation produces when the shift goes the wrong\nway; the received byte is then the bit-reversal of the one sent, which is 0x82 here, and\nlooks like a baud rate problem until you write the bits out."
+     },
+     {
+      "q": "A link runs at 115200 baud, 8N1, with no gaps between frames. What is the highest sustained data rate?",
+      "opts": [
+       "14400 bytes/s",
+       "11520 bytes/s",
+       "115200 bytes/s",
+       "10472 bytes/s"
+      ],
+      "a": 1,
+      "why": "Ten bits carry eight, so $115200/10 = 11520$ bytes per second. Dividing by eight gives\n14400 and quietly ignores the start and stop bits, which is how a data-rate budget ends\nup 25% optimistic — the overhead is not small and it does not go away. Adding a parity\nbit makes it eleven bits per byte and 10472 bytes per second, which is the figure for\n8E1 rather than 8N1."
+     },
+     {
+      "q": "A receiver's clock is 3% fast and the transmitter's is 2% slow. Which part of an 8N1 frame goes wrong first?",
+      "opts": [
+       "the start bit, because it is sampled first",
+       "the stop bit, because the sampling error accumulates from the start edge",
+       "the least significant data bit, because it is closest to the start edge",
+       "no part of it — 5% is within the tolerance of any UART"
+      ],
+      "a": 1,
+      "why": "Every sampling point is measured from the one start edge, so the error grows through the\nframe and the last bit is the worst placed. The middle of the stop bit is 9.5 bit times\nout, and $9.5 \\times 5 = 47.5$% of a bit — just inside the half-bit at which the\nsample crosses into the neighbouring bit. So this link works, marginally, and fails as\nsoon as anything else moves: temperature, a different part with the same nominal clock,\nor one more stop bit's worth of frame. The failure appears as framing errors, which is\nthe receiver saying \"the stop bit was not where I looked\"."
+     },
+     {
+      "q": "A peripheral reports a framing error on nearly every byte, and the received values are wrong but repeatable. What is the first thing to check?",
+      "opts": [
+       "the parity setting on both ends",
+       "the baud rate — including what the peripheral clock actually is, rather than what the configuration assumes",
+       "the flow control wiring",
+       "the length of the cable"
+      ],
+      "a": 1,
+      "why": "A framing error is the stop bit not being high where the receiver looked, and the usual\ncause is a disagreement about bit timing. The trap in the wording is *what the peripheral\nclock actually is*: the divider is computed from a constant in the code, and if the PLL\ndid not lock, or the peripheral bus prescaler is not what the header assumes, that\nconstant is wrong and every derived baud rate is wrong with it. Repeatable wrong values\nare the signature — random corruption points at noise or a floating line instead. Parity\nis not it: a parity error is reported separately, and would not shift the framing."
+     },
+     {
+      "q": "An interrupt-driven receiver reports an overrun. What has happened?",
+      "opts": [
+       "a byte arrived before the previous one had been read out of the data register, and is lost",
+       "the transmit buffer in software has filled up",
+       "more than 256 bytes were received in one burst",
+       "the sender ignored the flow-control line"
+      ],
+      "a": 0,
+      "why": "The peripheral holds one received byte, occasionally two, and if nothing reads it before\nthe next frame completes, the new one has nowhere to go. Every byte arrived perfectly;\none of them was thrown away inside your own chip, because a handler was too slow, or was\nblocked by a higher-priority one, or interrupts were disabled somewhere for longer than\na byte time — 87 µs at 115200 baud. Ignoring flow control can *cause* an overrun, but the\nerror itself is about your latency and not about the wire, which is why the fix is a\nshorter path from interrupt to buffer rather than a better cable."
+     },
+     {
+      "q": "A 3.3 V microcontroller UART is wired directly to a PC's nine-pin RS-232 port. What happens?",
+      "opts": [
+       "it works, since both are serial at the same baud rate",
+       "it works but only in one direction",
+       "the RS-232 line idles near −12 V and swings to +12 V, which is outside the pin's ratings in both directions",
+       "nothing at all happens, because the signals are inverted"
+      ],
+      "a": 2,
+      "why": "RS-232 is a different electrical standard that happens to carry the same frame. It idles\nat a negative voltage, inverts the sense of the bits, and swings ±5 to ±12 V — so the pin\nsees voltages beyond its supply in one direction and below ground in the other, and the\nprotection diodes conduct until something fails. The inversion is real too, and on its\nown would leave you with a permanent framing error. A transceiver chip does both jobs:\nit shifts the levels and inverts the sense."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "The baud divider, and where the error goes",
+    "minutes": 9,
+    "brief": "The configuration line for a UART is one division and one rounding, and everything that\ngoes wrong with a serial link that is wired correctly is in the rounding. Below is that\ncalculation on three parts: one with a clock chosen for serial work, one with an\nordinary crystal, and one running from an internal oscillator.\n\nFill the holes in order. Each is one step from the line above it.",
+    "caption": "the same sum on three different peripheral clocks",
+    "lang": "text",
+    "listing": "peripheral clock 48.000 MHz, wanted 115200 baud, integer divider only\n---------------------------------------------------------------------\n\n  the divider the wanted rate would need, if it could be fractional\n\n    48000000 / 115200                    =  416.667\n    DIV      =  round(416.667)           =  ___\n\n  and what the hardware then actually produces\n\n    baud     =  48000000 / DIV           =  ___ baud\n\n  as a fraction of what both ends agreed on\n\n    error    =  (baud - 115200) / 115200 =  ___ %\n\n  the same sum on a part whose peripheral clock is an ordinary 8 MHz\n\n    8000000 / 115200 = 69.44,  DIV = 69,  baud = 115942,  error = +0.64 %\n\n  and on one running from a 1 MHz internal oscillator\n\n    1000000 / 115200 = 8.68,   DIV = ___,  baud = 111111,  error = -3.55 %\n\n  a receiver samples in the middle of each bit, and the middle of the stop\n  bit of an 8N1 frame is 9.5 bit times after the start edge, so by then the\n  1 MHz part's sampling point has drifted by\n\n    9.5 * 3.55 %                         =  ___ % of a bit\n",
+    "blanks": [
+     {
+      "prompt": "416.667 rounded to the nearest whole divider.",
+      "hole": "?",
+      "opts": [
+       "417",
+       "416",
+       "4167",
+       "115200"
+      ],
+      "a": 0,
+      "why": "417, because 416.667 is nearer to 417 than to 416. Rounding rather than truncating matters: 416 would give 115385 baud, an error of +0.16% instead of −0.08%, so simply casting the division to an integer doubles the error for free. Real peripherals do better still by keeping a few fractional bits of the divider, which is what the 'fraction' field in a modern UART's baud register is for.",
+      "whys": null
+     },
+     {
+      "prompt": "48000000 divided by the whole divider you just chose.",
+      "hole": "?",
+      "opts": [
+       "115108",
+       "115200",
+       "115385",
+       "114833"
+      ],
+      "a": 0,
+      "why": "$48000000/417 = 115107.9$, which rounds to 115108 baud. The value 115200 is what was asked for and is exactly what the hardware cannot produce from this clock — that gap is the whole subject here. The value 115385 comes from truncating the divider to 416 instead of rounding, and 114833 from rounding it the wrong way to 418.",
+      "whys": null
+     },
+     {
+      "prompt": "How far 115108 is from 115200, as a percentage of 115200.",
+      "hole": "?",
+      "opts": [
+       "-0.08",
+       "+0.08",
+       "-0.80",
+       "-8.0"
+      ],
+      "a": 0,
+      "why": "$(115108 - 115200)/115200 = -0.0008$, which is −0.08%. The sign is worth carrying: a divider rounded *up* makes the rate *lower*, because the divider is underneath. As an error budget this is nothing at all — 9.5 bit times of it is 0.8% of a bit, so the sampling point is still essentially in the middle of the stop bit.",
+      "whys": null
+     },
+     {
+      "prompt": "8.68 rounded to the nearest whole divider.",
+      "hole": "?",
+      "opts": [
+       "9",
+       "8",
+       "10",
+       "87"
+      ],
+      "a": 0,
+      "why": "9, giving $1000000/9 = 111111$ baud. This is where a slow peripheral clock bites: the divider is a small integer, so the steps between the rates you can reach are enormous — 8 would give 125000 baud, +8.5%, and there is nothing available in between. The general rule falls out of it: the higher the peripheral clock, the finer the grid of reachable baud rates.",
+      "whys": null
+     },
+     {
+      "prompt": "3.55% of drift per bit, accumulated over 9.5 bit times.",
+      "hole": "?",
+      "opts": [
+       "33.7",
+       "3.55",
+       "35.5",
+       "50"
+      ],
+      "a": 0,
+      "why": "$9.5 \\times 3.55 = 33.7$% of a bit. That is a third of the way from the middle of the stop bit towards its edge, and it works — just — provided the other end is perfect. It is not: give the transmitter its own 1% and the total is over 43%, and the link starts reporting framing errors that no amount of staring at the wiring will explain. The value 3.55 is the per-bit error, which is harmless on its own; the accumulation is the whole point.",
+      "whys": null
+     }
+    ]
+   },
+   "numeric": null,
+   "match": null,
+   "tune": null,
+   "build": {
+    "title": "A 5 V talker and a 3.3 V listener",
+    "minutes": 26,
+    "brief": "A sensor board's transmit pin swings to **5 V**, and it has to be read by a 3.3 V input\nrunning at **115200 baud**. The pin is drawn here as the 5 V source on the left. A\n1 nF capacitor is already on the canvas between the input node and ground: that is the\ncable and the pin's own capacitance, it is not yours to choose, and it is the reason\nthis is a design problem rather than a division.\n\nA 10 kΩ resistor is placed between the source and the input, which on its own does\nnothing useful — with nowhere else to go, the input just follows the transmitter to 5 V.\n\n## What the finished circuit must do\n\n- the steady high level at the input is between **2.4 V and 3.2 V**: clear of the 2.0 V\n  the input needs to read a 1, and clear of the 3.3 V supply above which the pin's\n  protection diodes start conducting\n- the input reaches 2.0 V within **1.7 µs** of the transmitter going high — one bit at\n  115200 baud is 8.68 µs, the receiver takes its sample in the middle of it at 4.34 µs,\n  and a fifth of a bit is the settling budget this design is held to so that the level\n  is long since steady when that sample is taken\n- the transmitter is asked for no more than **5 mA**\n- every resistor is between **220 Ω and 100 kΩ**\n\n## Working it out\n\nTwo resistors set the level, and the *pair* sets the speed: what charges the capacitor is\nthe two of them in parallel, because as far as a rising edge is concerned the supply and\nground are both fixed voltages. So the ratio decides the level and the parallel\ncombination decides the time constant, and making the ratio right with two large\nresistors gives the right voltage far too slowly.\n\nAn RC network reaching a final value $V_f$ crosses a threshold $V_t$ at\n$t = \\tau \\ln(V_f/(V_f - V_t))$, with $\\tau$ the parallel resistance times 1 nF.\n\nThe checks measure the circuit, so any pair that meets all four requirements passes.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 5.0
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 8,
+       "y": 5,
+       "rot": 0,
+       "value": 10000
+      },
+      {
+       "id": "p3",
+       "kind": "OUT",
+       "x": 13,
+       "y": 5
+      },
+      {
+       "id": "p4",
+       "kind": "C",
+       "x": 11,
+       "y": 7,
+       "rot": 1,
+       "value": 1e-09
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 11,
+       "y": 9
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        7,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        5
+       ],
+       "b": [
+        13,
+        5
+       ]
+      },
+      {
+       "a": [
+        11,
+        5
+       ],
+       "b": [
+        11,
+        6
+       ]
+      },
+      {
+       "a": [
+        11,
+        8
+       ],
+       "b": [
+        11,
+        9
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 5.0
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 8,
+       "y": 5,
+       "rot": 0,
+       "value": 1000
+      },
+      {
+       "id": "p3",
+       "kind": "OUT",
+       "x": 13,
+       "y": 5
+      },
+      {
+       "id": "p4",
+       "kind": "C",
+       "x": 11,
+       "y": 7,
+       "rot": 1,
+       "value": 1e-09
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 11,
+       "y": 9
+      },
+      {
+       "id": "p6",
+       "kind": "R",
+       "x": 9,
+       "y": 7,
+       "rot": 1,
+       "value": 1500
+      },
+      {
+       "id": "p7",
+       "kind": "GND",
+       "x": 9,
+       "y": 9
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        7,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        5
+       ],
+       "b": [
+        13,
+        5
+       ]
+      },
+      {
+       "a": [
+        11,
+        5
+       ],
+       "b": [
+        11,
+        6
+       ]
+      },
+      {
+       "a": [
+        11,
+        8
+       ],
+       "b": [
+        11,
+        9
+       ]
+      },
+      {
+       "a": [
+        9,
+        5
+       ],
+       "b": [
+        9,
+        6
+       ]
+      },
+      {
+       "a": [
+        9,
+        8
+       ],
+       "b": [
+        9,
+        9
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "the steady high level is inside the input's window",
+      "code": "const v = c.vout();\nc.assert(v >= 2.4,\n  'The input sits at ' + c.fmt(v, 'V') + ', which leaves almost no margin above the ' +\n  '2.0 V the pin needs to read a 1. Take less of the 5 V away.');\nc.assert(v <= 3.2,\n  'The input sits at ' + c.fmt(v, 'V') + ', at or above the 3.3 V supply, so current ' +\n  'flows into the pin\\'s protection diode. Divide the 5 V down further.');"
+     },
+     {
+      "name": "the edge arrives inside a fifth of a bit",
+      "code": "const s = c.step(1.7e-5);\nlet t = null;\nfor (let i = 0; i < s.v.length; i++) {\n  if (s.v[i] >= 2.0) {\n    t = i === 0 ? 0 : s.t[i - 1] + (2.0 - s.v[i - 1]) / (s.v[i] - s.v[i - 1]) * (s.t[i] - s.t[i - 1]);\n    break;\n  }\n}\nc.assert(t !== null,\n  'The input never reaches 2.0 V at all, so the receiver sees a permanent zero.');\nc.assert(t <= 1.7e-6,\n  'The input takes ' + c.fmt(t, 's') + ' to pass 2.0 V, against a settling budget of ' +\n  '1.7 µs — a fifth of the 8.68 µs bit. Lower resistances charge the 1 nF faster.');"
+     },
+     {
+      "name": "the transmitter is not overloaded",
+      "code": "const src = c.net.parts.filter(function (p) { return p.kind === 'V'; });\nc.assert(src.length === 1, 'One source, the 5 V transmitter. Found ' + src.length + '.');\nconst i = Math.abs(c.dc().currents[src[0].id]);\nc.assert(i <= 5e-3 * 1.01,\n  'The network draws ' + c.fmt(i, 'A') + ' from the transmitter, over the 5 mA budget. ' +\n  'Larger resistances draw less.');"
+     },
+     {
+      "name": "the cable is still on the input, and the resistors are buyable",
+      "code": "const cs = c.values('C');\nc.assert(cs.length === 1 && Math.abs(cs[0] - 1e-9) <= 1e-11,\n  'The 1 nF is the cable and the pin. Deleting or changing it does not make the real ' +\n  'circuit faster, it only stops the checks measuring what the real one does.');\nconst rs = c.values('R');\nc.assert(rs.length >= 1, 'The level has to come from somewhere.');\nrs.forEach(function (r) {\n  c.assert(r >= 220 * 0.99, 'A ' + c.fmt(r, 'Ω') + ' resistor is below the 220 Ω floor.');\n  c.assert(r <= 100000 * 1.01, 'A ' + c.fmt(r, 'Ω') + ' resistor is above the 100 kΩ ceiling.');\n});"
+     }
+    ],
+    "hints": [
+     "The missing part is a second resistor, from the input node down to ground. Without it there is no divider and no current, so the node simply sits at 5 V.",
+     "Take the level first: $5 \\times R_2/(R_1 + R_2)$ has to land between 2.4 and 3.2 V, so the ratio $R_2/(R_1+R_2)$ is between 0.48 and 0.64. A ratio of 0.6 gives exactly 3.0 V.",
+     "Now the speed. The capacitor charges through $R_1$ and $R_2$ in parallel, so with 1 nF the parallel resistance must be about 1.5 kΩ or less to cross 2.0 V inside 1.7 µs.",
+     "1 kΩ over 1.5 kΩ gives 3.0 V, a parallel resistance of 600 Ω, and an edge that passes 2.0 V in 0.67 µs — with 2 mA drawn from the transmitter.",
+     "2.2 kΩ over 3.3 kΩ keeps the same ratio and still passes, at 1.47 µs. 4.7 kΩ over 6.8 kΩ has the level right and takes 3.2 µs, which is where a divider that looks perfectly sensible on paper starts corrupting bytes."
+    ]
+   },
+   "derive": null,
+   "lab": {
+    "title": "A frame on the wire, and a divider that misses",
+    "runtime": "python",
+    "minutes": 28,
+    "brief": "Five functions covering both halves of this module: what the bits are, and what the\ntiming does to them.\n\n- `parity_bit(byte, kind)` — the bit that makes the count of 1s in the data *plus the\n  parity bit itself* even (`kind == \"even\"`) or odd (`kind == \"odd\"`). Return `None`\n  for any other `kind`.\n- `frame(byte, parity=None, stops=1)` — the line levels of one complete frame, as a\n  list of 0s and 1s: a start bit (0), then the eight data bits **least significant\n  first**, then the parity bit if one was asked for, then `stops` stop bits (1).\n- `decode(bits, parity=None, stops=1)` — the byte a receiver recovers, or `None` if the\n  frame is malformed. Reject a list of the wrong length, a start bit that is not 0, any\n  stop bit that is not 1, and a parity bit that does not match. Otherwise reassemble the\n  byte, remembering which end the bits came out of.\n- `divisor(f_clk, baud)` — the integer divider, rounded to nearest, never less than 1.\n- `error_pct(f_clk, baud)` — how far the resulting rate is from the wanted one, as a\n  signed percentage: $100\\,(f_{clk}/\\text{DIV} - \\text{baud})/\\text{baud}$.\n\n`bin(x).count(\"1\")` counts the set bits in one step, and is worth knowing.\n\nThe pair to look at when it works is `frame` and `decode`. Feeding one into the other\nmust return the byte you started with for all 256 values, which is the property a test\nbelow checks — and it is the only kind of test worth writing for a codec.",
+    "files": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"A UART frame, and the divider that decides where its bits land.\"\"\"\n\n\ndef parity_bit(byte, kind):\n    \"\"\"The bit that makes the total count of 1s even or odd.\"\"\"\n    # TODO: count the 1s in the byte; for \"even\" return that count mod 2,\n    # for \"odd\" return the complement of it, otherwise None.\n    return None\n\n\ndef frame(byte, parity=None, stops=1):\n    \"\"\"The line levels of one frame: start, data LSB first, parity, stop(s).\"\"\"\n    # TODO: build the list. The start bit is 0 and the stop bits are 1.\n    return []\n\n\ndef decode(bits, parity=None, stops=1):\n    \"\"\"The byte a receiver recovers, or None if the frame is malformed.\"\"\"\n    # TODO: check the length, the start bit and every stop bit, reassemble the\n    # data bits, then check the parity bit if there is one.\n    return None\n\n\ndef divisor(f_clk, baud):\n    \"\"\"The integer baud divider, rounded to nearest, at least 1.\"\"\"\n    # TODO: f_clk / baud, rounded, floored at 1.\n    return 0\n\n\ndef error_pct(f_clk, baud):\n    \"\"\"How far the achievable rate is from the wanted one, as a signed percentage.\"\"\"\n    # TODO: work out the achievable rate from the divisor, then compare.\n    return 0.0\n\n\nif __name__ == \"__main__\":\n    print(\"0x41 on the wire:\", frame(0x41))\n    print(\"and back again:  \", decode(frame(0x41)))\n    for f in (48e6, 8e6, 1e6):\n        print(\"%5.1f MHz clock: DIV = %d, error %+.2f %%\"\n              % (f / 1e6, divisor(f, 115200), error_pct(f, 115200)))\n"
+     }
+    ],
+    "main": "main.py",
+    "solution": [
+     {
+      "name": "main.py",
+      "content": "\"\"\"A UART frame, and the divider that decides where its bits land.\"\"\"\n\n\ndef parity_bit(byte, kind):\n    \"\"\"The bit that makes the total count of 1s even or odd.\"\"\"\n    ones = bin(byte & 0xFF).count(\"1\")\n    if kind == \"even\":\n        return ones % 2\n    if kind == \"odd\":\n        return 1 - ones % 2\n    return None\n\n\ndef frame(byte, parity=None, stops=1):\n    \"\"\"The line levels of one frame: start, data LSB first, parity, stop(s).\"\"\"\n    bits = [0]\n    for i in range(8):\n        bits.append((byte >> i) & 1)\n    if parity is not None:\n        bits.append(parity_bit(byte, parity))\n    bits.extend([1] * stops)\n    return bits\n\n\ndef decode(bits, parity=None, stops=1):\n    \"\"\"The byte a receiver recovers, or None if the frame is malformed.\"\"\"\n    want = 1 + 8 + (0 if parity is None else 1) + stops\n    if len(bits) != want:\n        return None\n    if bits[0] != 0:\n        return None\n    if any(b != 1 for b in bits[-stops:]):\n        return None\n    byte = 0\n    for i in range(8):\n        byte |= bits[1 + i] << i\n    if parity is not None and bits[9] != parity_bit(byte, parity):\n        return None\n    return byte\n\n\ndef divisor(f_clk, baud):\n    \"\"\"The integer baud divider, rounded to nearest, at least 1.\"\"\"\n    d = int(f_clk / baud + 0.5)\n    return d if d >= 1 else 1\n\n\ndef error_pct(f_clk, baud):\n    \"\"\"How far the achievable rate is from the wanted one, as a signed percentage.\"\"\"\n    actual = f_clk / divisor(f_clk, baud)\n    return (actual - baud) / baud * 100.0\n\n\nif __name__ == \"__main__\":\n    print(\"0x41 on the wire:\", frame(0x41))\n    print(\"and back again:  \", decode(frame(0x41)))\n    for f in (48e6, 8e6, 1e6):\n        print(\"%5.1f MHz clock: DIV = %d, error %+.2f %%\"\n              % (f / 1e6, divisor(f, 115200), error_pct(f, 115200)))\n"
+     }
+    ],
+    "hints": [
+     "For even parity the bit is simply the count of 1s in the data, modulo 2: send that, and the total number of 1s including it is even. Odd parity is its complement.",
+     "`frame` is a list built in order. The data loop is `for i in range(8): bits.append((byte >> i) & 1)`, and starting at `i = 0` is what puts the least significant bit on the wire first.",
+     "In `decode`, work out the expected length before anything else — `1 + 8 + (0 if parity is None else 1) + stops` — and reject a list that does not match it. A codec that indexes into a short list raises where it should have returned None.",
+     "Reassembling is the mirror of building: `byte |= bits[1 + i] << i`. Shifting by `7 - i` instead gives the bit-reversed value, which passes the single-byte case in your head and fails the round trip over all 256.",
+     "`divisor` must round rather than truncate: `int(f_clk / baud + 0.5)`. Python's built-in `round` uses banker's rounding and would send an exact .5 to the nearest even integer, which is not what a datasheet means by 'rounded'."
+    ],
+    "tests": [
+     {
+      "name": "parity, both senses",
+      "code": "assert parity_bit(0x41, \"even\") == 0, \\\n    f\"0x41 has two 1 bits, so even parity needs a 0; got {parity_bit(0x41, 'even')}\"\nassert parity_bit(0x41, \"odd\") == 1, f\"got {parity_bit(0x41, 'odd')}\"\nassert parity_bit(0x01, \"even\") == 1, \"one 1 bit, so even parity needs another\"\nassert parity_bit(0xFF, \"even\") == 0, \"eight 1 bits is already even\"\nassert parity_bit(0x00, \"odd\") == 1, \"no 1 bits at all, so odd parity needs one\"\nassert parity_bit(0x41, \"none\") is None, \"an unknown kind gives None\""
+     },
+     {
+      "name": "a frame, least significant bit first",
+      "code": "got = frame(0x41)\nassert got == [0, 1, 0, 0, 0, 0, 0, 1, 0, 1], \\\n    f\"start, then 0x41 backwards, then stop; got {got}\"\nassert len(frame(0x00)) == 10, \"8N1 is always ten bits\"\nassert frame(0x00) == [0, 0, 0, 0, 0, 0, 0, 0, 0, 1], \"only the stop bit is high\"\nassert frame(0xFF) == [0, 1, 1, 1, 1, 1, 1, 1, 1, 1], \"only the start bit is low\""
+     },
+     {
+      "name": "parity and a second stop bit lengthen it",
+      "code": "got = frame(0x41, \"even\", 2)\nassert got == [0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1], f\"got {got}\"\nassert len(frame(0x41, \"odd\", 1)) == 11, \"8O1 is eleven bits\""
+     },
+     {
+      "name": "decoding rejects what a receiver rejects",
+      "code": "assert decode(frame(0x41)) == 0x41, f\"got {decode(frame(0x41))}\"\nassert decode([1, 1, 0, 0, 0, 0, 0, 1, 0, 1]) is None, \\\n    \"the start bit is not 0, so this is not a frame\"\nassert decode([0, 1, 0, 0, 0, 0, 0, 1, 0, 0]) is None, \\\n    \"the stop bit is not 1 - this is exactly what a framing error is\"\nassert decode([0, 1, 0, 0, 0, 1]) is None, \"too few bits\"\nassert decode(frame(0x41, \"even\"), \"even\") == 0x41, \"a good parity bit passes\"\nbad = frame(0x41, \"even\")\nbad[1] ^= 1\nassert decode(bad, \"even\") is None, \"one flipped data bit must fail the parity check\""
+     },
+     {
+      "name": "the round trip holds for every byte",
+      "code": "for b in range(256):\n    assert decode(frame(b)) == b, f\"8N1 round trip failed at {hex(b)}\"\n    assert decode(frame(b, \"even\"), \"even\") == b, f\"8E1 round trip failed at {hex(b)}\"\n    assert decode(frame(b, \"odd\", 2), \"odd\", 2) == b, f\"8O2 round trip failed at {hex(b)}\""
+     },
+     {
+      "name": "the divider rounds, and never reaches zero",
+      "code": "assert divisor(48e6, 115200) == 417, f\"48 MHz over 115200 is 416.67; got {divisor(48e6, 115200)}\"\nassert divisor(8e6, 115200) == 69, f\"got {divisor(8e6, 115200)}\"\nassert divisor(1e6, 115200) == 9, f\"8.68 rounds up to 9; got {divisor(1e6, 115200)}\"\nassert divisor(16e6, 9600) == 1667, f\"got {divisor(16e6, 9600)}\"\nassert divisor(1e6, 4000000) == 1, \"a divider can never be zero, however hopeless the request\""
+     },
+     {
+      "name": "and the error that leaves behind",
+      "code": "e = error_pct(48e6, 115200)\nassert abs(e - (-0.0799)) < 0.001, f\"48 MHz gives -0.08 %; got {e}\"\ne = error_pct(8e6, 115200)\nassert abs(e - 0.6441) < 0.001, f\"8 MHz gives +0.64 %; got {e}\"\ne = error_pct(1e6, 115200)\nassert abs(e - (-3.5494)) < 0.001, f\"1 MHz gives -3.55 %; got {e}\"\nassert abs(error_pct(72e6, 115200)) < 1e-9, \\\n    \"72 MHz divides by exactly 625, so this one has no error at all\"\nassert abs(error_pct(48e6, 9600)) < 1e-9, \"and 9600 from 48 MHz is exact too\""
+     }
+    ]
+   }
+  },
+  {
+   "title": "Sharing wires: SPI and I²C",
+   "summary": "Two ways to put the clock on the wire instead of guessing it, and the reason one of them comes with resistors.",
+   "concepts": [
+    "Synchronous means the clock travels with the data, so there is no rate to agree on beforehand and no error to accumulate: the receiver samples on an edge the transmitter provided. What replaces the baud rate as the thing both ends must agree about is *which* edge, and that is all CPOL and CPHA are — the clock's idle level, and whether data is sampled on the first or the second edge of each bit.",
+    "SPI is four wires — clock, one data line each way, and a select line per device — and it is full duplex: every clock edge shifts one bit out and one bit in at the same time. Reading a byte therefore means writing one, usually a dummy, and that is not a quirk of the driver but the shape of the hardware, which is a pair of shift registers joined into a ring.",
+    "SPI has no addressing and no acknowledgement. The select line picks the device, so nothing needs a name, and nothing on the bus can tell the master it is not there: a disconnected peripheral returns whatever the idle line reads as, usually 0x00 or 0xFF, quietly and forever. What it buys for that is speed — tens of megahertz — and what it costs is a pin per device.",
+    "I²C is two wires for any number of devices, so it must supply the two things SPI leaves out: an address, sent as the first seven bits of the first byte, and an acknowledgement, which is a ninth clock in which the addressed device pulls the data line down. Nine bits per byte is an 11% tax on everything you send, and it buys the ability to know that something answered.",
+    "Both I²C lines are open-drain: a device can pull down or let go, never drive up. That is what makes it safe for several devices to share one wire, and it means the rising edge is not driven at all — a pull-up resistor and the bus capacitance charge it. Choosing that resistor is the whole of I²C's electrical design: small enough to charge the capacitance inside the rise-time budget, large enough that whichever device is pulling down stays inside its sink-current limit."
+   ],
+   "read": null,
+   "sandbox": null,
+   "quiz": {
+    "title": "Edges, addresses and the ninth bit",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "An SPI driver needs to read one byte from a sensor. What must it do?",
+      "opts": [
+       "wait for the sensor to clock the byte out on its own",
+       "clock out a byte of its own, because the same clock edges shift data in both directions",
+       "assert the select line and read the data register without generating a clock",
+       "send a read command and then release the clock line"
+      ],
+      "a": 1,
+      "why": "The master generates every clock edge, and each edge shifts a bit out of the master and a\nbit in from the peripheral at the same time — the two devices are a single ring of shift\nregisters. So a read is a write whose transmitted byte nobody cares about, and this is\nwhy SPI drivers are written as one `transfer(byte)` call rather than as separate read and\nwrite functions. Nothing arrives without the master asking for it, which is also why SPI\nperipherals that need to report something urgently come with a separate interrupt pin."
+     },
+     {
+      "q": "A peripheral expects data to be sampled on the falling edge of the clock, and the master is configured to sample on the rising edge. What is seen?",
+      "opts": [
+       "nothing at all — the peripheral will not respond",
+       "the right bytes, delayed by one clock",
+       "values that are consistently wrong, often the correct byte shifted by one bit",
+       "an acknowledgement error reported by the peripheral"
+      ],
+      "a": 2,
+      "why": "Both devices happily clock away; they simply disagree about when the data line is valid,\nso the master samples half a bit early or late and captures the neighbouring bit. The\nresult is repeatable nonsense — often the expected byte shifted by one position, which is\nthe clue worth recognising. There is no error to report, because SPI has no mechanism for\nreporting one: nothing checks anything. Mode mismatches are found by reading a register\nwhose value you already know, which is why so many SPI devices have a \"who am I\" register\nwith a fixed value in it."
+     },
+     {
+      "q": "An I²C bus runs at 400 kHz. Ignoring the start and stop conditions, what is the highest byte rate?",
+      "opts": [
+       "50000 bytes/s",
+       "44444 bytes/s",
+       "40000 bytes/s",
+       "400000 bytes/s"
+      ],
+      "a": 1,
+      "why": "Every byte takes nine clocks — eight of data and one for the acknowledgement — so it is\n$400000/9 = 44444$ bytes per second. Dividing by eight gives 50000 and forgets the\nacknowledgement, which is the same class of mistake as forgetting a UART's start and stop\nbits, and it is worth being consistent about: a bus's bit rate is never its data rate.\nThe real figure is lower again, because every transaction also spends time on its start,\nits address byte and its stop."
+     },
+     {
+      "q": "Why must an I²C device's data pin be open-drain rather than push-pull?",
+      "opts": [
+       "so that several devices can be connected without two of them ever driving the line in opposite directions",
+       "because open-drain outputs switch faster",
+       "so that the bus can run at a different voltage from the devices",
+       "because the protocol requires the master to control the line at all times"
+      ],
+      "a": 0,
+      "why": "The point is that a device can only pull the line down or let go of it. Two devices doing\nthat at once is harmless, so a device can start talking while another is talking without\na short circuit — and the acknowledgement, in which the *addressed* device pulls down a\nline the master has released, works for the same reason. Push-pull outputs disagreeing\nwould put the supply and ground in series through two transistors. Open-drain is\ndemonstrably not faster: the rising edge is left to a resistor, and that is precisely\nwhat limits how fast the bus can go. The level-shifting point is a real bonus of\nopen-drain, but it is not why the protocol requires it."
+     },
+     {
+      "q": "A 400 kHz bus with 200 pF of total capacitance is fitted with 10 kΩ pull-ups. What goes wrong?",
+      "opts": [
+       "the devices cannot pull the line low enough",
+       "the line needs about 2.4 µs to climb from low to a valid high, and it is released for only about half of each 2.5 µs clock period, so it never gets there",
+       "the pull-ups draw too much current from the supply",
+       "nothing — 10 kΩ is the standard value"
+      ],
+      "a": 1,
+      "why": "$\\tau = 10\\,\\text{k} \\times 200\\,\\text{pF} = 2$ µs, and reaching 70% of the supply takes\n$1.2\\tau = 2.4$ µs, against a clock period of 2.5 µs of which the line is only released\nfor about half. The line is still climbing when the next edge arrives, so it never gets\nclearly high and the bus reads as though everything were zero — or works at 100 kHz and\nfails when someone raises the speed, which is the version that reaches production. The\nsink-current problem is the *opposite* failure, from a pull-up that is too small."
+     },
+     {
+      "q": "An SPI sensor is fitted the wrong way round and its select pin is never asserted. What does the driver see?",
+      "opts": [
+       "a bus error from the peripheral",
+       "a timeout, because no clock is returned",
+       "consistent 0x00 or 0xFF bytes, with nothing at all reporting a problem",
+       "the previous device's data"
+      ],
+      "a": 2,
+      "why": "Nothing is listening, so nothing drives the input line, and what the master shifts in is\nwhatever the line idles at — all ones if a pull-up holds it, all zeros if a pull-down\ndoes. The transfer completes normally and the status register is clean, because there is\nno acknowledgement in the protocol to be missing. This is the practical cost of SPI's\nsimplicity and the reason every driver should start by reading an identity register:\n0x00 and 0xFF are the two values that mean \"no answer\", and a real device almost never\nreports either."
+     }
+    ]
+   },
+   "blanks": null,
+   "numeric": {
+    "title": "How much of the second the bus is busy",
+    "minutes": 8,
+    "brief": "Reading one register out of an I²C sensor is not one byte on the wire, it is four: the\naddress with a write bit, the register number, the address again with a read bit after a\nrepeated start, and finally the data. Each of those four is nine clock periods — eight\nbits and the acknowledgement.\n\nCount the clock periods only. The start, repeated start and stop conditions each take\nroughly half a clock period more, which adds about 5% to the answer and is not what this\nquestion is about.",
+    "prompt": "The sensor is read 200 times a second on a 100 kHz bus. What percentage of wall-clock time is the bus busy?",
+    "note": "Give the answer as a percentage, to one decimal place.",
+    "diagram": null,
+    "figure": "**One register read, in order along the wire.** A start condition; the sensor's address\nwith a write bit, and its acknowledgement; the register number, and its acknowledgement;\na repeated start; the address again with a read bit, and its acknowledgement; the data\nbyte, which the master does *not* acknowledge, to say it wants no more; a stop condition.\n\nThat is **four bytes**, and every one of them occupies **nine clock periods** — eight\nbits and the acknowledgement that follows them.",
+    "given": [
+     {
+      "label": "Bus clock",
+      "value": "100 kHz"
+     },
+     {
+      "label": "Clock periods per transaction",
+      "value": "4 × 9 = 36"
+     },
+     {
+      "label": "Transactions per second",
+      "value": "200"
+     }
+    ],
+    "answer": 7.2,
+    "tol": 0.15,
+    "unit": "%",
+    "aside": "One clock period at 100 kHz is 10 µs, and everything else is multiplication.",
+    "hint": "Work out how long one transaction takes, multiply by how many happen in a second, and compare that with the second.",
+    "wrong": "Check whether you used eight clocks per byte instead of nine. The acknowledgement is a full clock period and it is on every byte.",
+    "why": "36 clock periods at 10 µs each is 360 µs per read, and 200 of those is 72 ms out of every second — **7.2%**. Using eight clocks per byte gives 6.4% and quietly loses the acknowledgement. The figure matters because it is a budget on a shared resource: a second sensor on the same bus at the same rate takes another 7.2%, and a device that stretches the clock while it thinks — which I²C explicitly permits — takes as much again on top. Move the same traffic to 400 kHz and it becomes 1.8%, which is the honest reason to raise the bus speed, rather than any single transaction feeling slow.",
+    "check": ""
+   },
+   "match": null,
+   "tune": null,
+   "build": {
+    "title": "Sizing an I²C pull-up",
+    "minutes": 24,
+    "brief": "This is one line of an I²C bus — SDA, though SCL is the same problem — at the instant a\ndevice lets go of it. Nothing drives the line high: the **200 pF** of bus capacitance\nalready on the canvas has to be charged through the pull-up, and until it is, the line\nis not a valid high.\n\nA 47 kΩ resistor is fitted, which is what \"it just needs a pull-up\" gets you.\n\n## What the finished bus must do\n\n- when the line is released, the edge must climb from **0.3 $V_{DD}$ = 0.99 V to\n  0.7 $V_{DD}$ = 2.31 V in no more than 1 µs**, which is the rise-time budget for\n  100 kHz standard-mode I²C — the specification measures $t_r$ between those two\n  levels, not up from zero\n- it must settle at the full 3.3 V, so the inputs on the bus read an unambiguous 1\n- every pull-up must be **1 kΩ or more**: a device pulling the line down holds it at\n  0.4 V and must sink no more than 3 mA, and $(3.3 - 0.4)/1\\,\\text{k} = 2.9$ mA is\n  already at that limit\n\n## Working it out\n\nCharging through a resistor to a supply $V_{DD}$, the line reaches $0.3\\,V_{DD}$ after\n$\\tau \\ln(1/0.7)$ and $0.7\\,V_{DD}$ after $\\tau \\ln(1/0.3)$, so the edge the\nspecification measures takes the difference between them: $\\tau \\ln(7/3) = 0.847\\,\\tau$,\nwith $\\tau = R_p C_{bus}$. Put the budget in, get the largest $\\tau$ you can afford, and\ndivide by 200 pF.\n\nThen notice what the two constraints leave you: they are a floor and a ceiling on the\nsame resistor, and the whole of I²C bus design is keeping that window open. It is why\nthe specification puts a hard limit of 400 pF on bus capacitance, and why adding a sixth\ndevice, or a longer cable, can stop a bus that has worked for years.\n\nThe checks measure the line, so anything inside the window passes.",
+    "start": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 3.3
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 47000
+      },
+      {
+       "id": "p3",
+       "kind": "OUT",
+       "x": 13,
+       "y": 7
+      },
+      {
+       "id": "p4",
+       "kind": "C",
+       "x": 11,
+       "y": 9,
+       "rot": 1,
+       "value": 2e-10
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 11,
+       "y": 11
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        13,
+        7
+       ]
+      },
+      {
+       "a": [
+        11,
+        7
+       ],
+       "b": [
+        11,
+        8
+       ]
+      },
+      {
+       "a": [
+        11,
+        10
+       ],
+       "b": [
+        11,
+        11
+       ]
+      }
+     ]
+    },
+    "solution": {
+     "parts": [
+      {
+       "id": "p0",
+       "kind": "V",
+       "x": 3,
+       "y": 6,
+       "rot": 1,
+       "value": 3.3
+      },
+      {
+       "id": "p1",
+       "kind": "GND",
+       "x": 3,
+       "y": 9
+      },
+      {
+       "id": "p2",
+       "kind": "R",
+       "x": 9,
+       "y": 6,
+       "rot": 1,
+       "value": 2200
+      },
+      {
+       "id": "p3",
+       "kind": "OUT",
+       "x": 13,
+       "y": 7
+      },
+      {
+       "id": "p4",
+       "kind": "C",
+       "x": 11,
+       "y": 9,
+       "rot": 1,
+       "value": 2e-10
+      },
+      {
+       "id": "p5",
+       "kind": "GND",
+       "x": 11,
+       "y": 11
+      }
+     ],
+     "wires": [
+      {
+       "a": [
+        3,
+        7
+       ],
+       "b": [
+        3,
+        9
+       ]
+      },
+      {
+       "a": [
+        3,
+        5
+       ],
+       "b": [
+        9,
+        5
+       ]
+      },
+      {
+       "a": [
+        9,
+        7
+       ],
+       "b": [
+        13,
+        7
+       ]
+      },
+      {
+       "a": [
+        11,
+        7
+       ],
+       "b": [
+        11,
+        8
+       ]
+      },
+      {
+       "a": [
+        11,
+        10
+       ],
+       "b": [
+        11,
+        11
+       ]
+      }
+     ]
+    },
+    "checks": [
+     {
+      "name": "the released edge crosses 0.3 to 0.7 V_DD inside a microsecond",
+      "code": "const s = c.step(2e-5);\nfunction cross(th) {\n  for (let i = 0; i < s.v.length; i++) {\n    if (s.v[i] >= th) {\n      return i === 0 ? 0 : s.t[i - 1] + (th - s.v[i - 1]) / (s.v[i] - s.v[i - 1]) * (s.t[i] - s.t[i - 1]);\n    }\n  }\n  return null;\n}\nconst tLo = cross(0.3 * 3.3);\nconst tHi = cross(0.7 * 3.3);\nc.assert(tHi !== null,\n  'The line never reaches 2.31 V within 20 µs. Check that the pull-up really runs from ' +\n  'the 3.3 V rail to the probed node.');\nc.assert(tHi - tLo <= 1e-6,\n  'The edge takes ' + c.fmt(tHi - tLo, 's') + ' to get from 0.99 V to 2.31 V, against ' +\n  'the 1 µs standard mode allows between 0.3 and 0.7 V_DD. A smaller pull-up charges ' +\n  'the 200 pF faster.');"
+     },
+     {
+      "name": "and settles at the full supply",
+      "code": "c.close(c.vout(), 3.3, 0.01,\n  'the idle level of the line. It must reach the rail: anything that divides the supply ' +\n  'leaves the inputs on the bus reading a level that is neither a 1 nor a 0');"
+     },
+     {
+      "name": "no device is asked to sink more than 3 mA",
+      "code": "const rs = c.values('R');\nc.assert(rs.length >= 1, 'The line needs a pull-up.');\nrs.forEach(function (r) {\n  const sink = (3.3 - 0.4) / r;\n  c.assert(r >= 1000 * 0.99,\n    'A ' + c.fmt(r, 'Ω') + ' pull-up asks the device holding the line low for ' +\n    c.fmt(sink, 'A') + ', past the 3 mA it is specified for. Keep it at 1 kΩ or above.');\n});"
+     },
+     {
+      "name": "the bus capacitance is still there",
+      "code": "const cs = c.values('C');\nc.assert(cs.length === 1 && Math.abs(cs[0] - 200e-12) <= 2e-12,\n  'The 200 pF is the devices, the tracks and the cable. Removing it does not make the ' +\n  'real bus faster; it only stops these checks measuring the real bus.');"
+     }
+    ],
+    "hints": [
+     "Start from the budget: $1\\,\\mu\\text{s} = 0.847\\,\\tau$ gives $\\tau = 1.18\\,\\mu$s, and $1.18\\,\\mu\\text{s}/200\\,\\text{pF} = 5.9$ kΩ — but that lands the edge exactly *on* the 1 µs limit rather than inside it, so the pull-up has to come below it.",
+     "The floor is 1 kΩ from the sink-current rule, so the window runs from 1 kΩ up to just under 5.9 kΩ, and 5.6 kΩ is the largest stock value inside it. 2.2 kΩ sits comfortably in the middle and is a stock value.",
+     "4.7 kΩ is the value most people reach for, and at 200 pF it does meet the budget: $4.7\\,\\text{k} \\times 200\\,\\text{pF} \\times \\ln(7/3) = 796$ ns. What it has no margin for is a bus that grows. The ceiling falls as $1/C_{bus}$, so at the specification's own 400 pF limit the largest pull-up is 2.95 kΩ and the same 4.7 kΩ is 59% over.",
+     "Check the current the other way round before you commit: at 2.2 kΩ, a device holding the line at 0.4 V sinks $(3.3-0.4)/2200 = 1.3$ mA, comfortably inside its 3 mA.",
+     "If the line never reaches the threshold at all, look for a second resistor to ground. A divider on an I²C line leaves it sitting between the two logic thresholds, which is the one place a digital input must never be left."
+    ]
+   },
+   "derive": null,
+   "lab": null
+  },
+  {
    "title": "The converter, quantisation and fixed point",
    "summary": "A voltage becomes an integer, and from there on all the arithmetic is integer arithmetic.",
    "concepts": [
@@ -799,6 +2729,7 @@
     "In Q$f$ format a real number $x$ is held as the integer $X = \\text{round}(x \\cdot 2^{f})$. Adding two Q$f$ numbers is an ordinary integer add; multiplying them gives a Q$2f$ result, which must be shifted right by $f$ to come back.",
     "Two things then have to be watched. The intermediate product needs twice the width of the operands, so a Q15 multiply must be done in 32 bits. And the shift throws away the bits below the point, which gives a fixed-point filter a **dead band**: it stops moving while it is still short of its target."
    ],
+   "read": null,
    "sandbox": {
     "title": "Sampling, and the frequency that comes back as something else",
     "visualiser": "spectrum",
