@@ -389,9 +389,12 @@ def norm_read(rd, ctx):
             raise ValueError(f"{ctx}/read: missing {key}")
     body = clean_md(rd["body"])
     words = len(body.split())
-    if words < 150:
-        raise ValueError(f"{ctx}/read: {words} words — too short to explain anything "
-                         "(need at least 150; write the explanation, not a summary)")
+    if words < 400:
+        raise ValueError(
+            f"{ctx}/read: {words} words. A reading unit is where the subject gets "
+            "explained, and that takes room: work an example all the way through, say "
+            "where the idea stops holding, and name the mistake people actually make. "
+            "Under 400 words none of that fits, and a summary is not an explanation.")
     return {
         "title": rd["title"],
         "minutes": int(rd.get("minutes", max(3, round(words / 170)))),
