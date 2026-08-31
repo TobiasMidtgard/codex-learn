@@ -1023,7 +1023,12 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .rail-miss{padding:6px 14px 12px;font-size:12px;color:var(--ink-5);font-style:italic}
 
 /* ---------- circuit editor ---------- */
-.ckt{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+/* In a lesson the editor sits in the flow at its natural height; in the Playground
+   it is the whole screen. `min-height:340px` was doing both jobs badly — it is a
+   floor, and nothing was giving it a ceiling to grow into. */
+.ckt{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);
+  overflow:hidden;display:flex;flex-direction:column;min-height:0}
+#ckt-mount>.ckt{flex:1;min-height:0;border-radius:0;border-left:0;border-right:0}
 .ckt-bar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);
   background:var(--sunk);flex-wrap:wrap}
 .ckt-bar .spacer{flex:1}
@@ -1033,8 +1038,12 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   transition:background .14s,color .14s,border-color .14s}
 .ckt-t:hover{color:var(--ink);border-color:var(--line-3)}
 .ckt-t.on{background:var(--lime);border-color:var(--lime);color:var(--on-lime)}
-.ckt-main{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:340px}
-.ckt-canvas{position:relative;background:var(--editor);min-height:340px;cursor:crosshair}
+.ckt-main{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:340px;
+  flex:1;min-width:0}
+#ckt-mount .ckt-main{min-height:0}
+.ckt-canvas{position:relative;background:var(--editor);min-height:340px;cursor:crosshair;
+  overflow:hidden}
+#ckt-mount .ckt-canvas{min-height:0}
 .ckt-canvas canvas{display:block}
 .ckt-side{border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
 .ckt-panel{padding:12px 14px;border-bottom:1px solid var(--line)}

@@ -567,7 +567,14 @@ function createCircuit(root, opts) {
   }, 0);
 
   let tool = 'R';
-  let sel = null;              /* selected part id */
+  /* The viewport. `s` is the zoom, `px`/`py` are the world-pixel coordinates of the
+     top-left corner of what you can see. Every screen<->grid conversion goes through
+     it, so there is one place that knows where things are. */
+  let view = { s: 1, px: 0, py: 0 };
+  let selIds = new Set();      /* selected part ids */
+  let drag = null;             /* a move in progress */
+  let marquee = null;          /* a rubber-band selection in progress */
+  let panFrom = null;          /* a pan in progress */
   let wireFrom = null;         /* grid point a wire is being drawn from */
   let hover = null;
   let analysis = { mode: 'dc', node: 1, f1: 10, f2: 1e6, tstop: 5e-3 };
@@ -591,7 +598,10 @@ function createCircuit(root, opts) {
           }).join('') +
         '</div>' +
         '<span class="spacer"></span>' +
-        '<button class="ckt-t" data-act="rotate" title="Rotate the selected part (R)">Rotate</button>' +
+        '<button class="ckt-t" data-act="zoomout" title="Zoom out (-)">−</button>' +
+        '<button class="ckt-t" data-act="zoomin" title="Zoom in (+)">+</button>' +
+        '<button class="ckt-t" data-act="fit" title="Fit the drawing to the window (0)">Fit</button>' +
+        '<button class="ckt-t" data-act="rotate" title="Rotate the selection (R)">Rotate</button>' +
         '<button class="ckt-t" data-act="delete" title="Delete the selection (Del)">Delete</button>' +
         '<button class="ckt-t" data-act="clear">Clear</button>' +
       '</div>' +
@@ -627,13 +637,70 @@ function createCircuit(root, opts) {
 
   function P() { return typeof Sandbox !== 'undefined' ? Sandbox.palette() : { ink: '#eee', dim: '#888', faint: '#555', line: '#333', accent: '#C7F751', blue: '#6E9BFF', amber: '#FFC66D', purple: '#A78BFA' }; }
 
-  /* ---- geometry ---- */
-  let originX = 2, originY = 2;
+  /* ---- geometry ----
+     gx/gy map a grid cell to WORLD pixels and know nothing about zoom or scroll; the
+     canvas transform applies the viewport. Keeping the two apart is what lets every
+     drawing routine below stay exactly as it was when zoom arrived. */
+  const originX = 2, originY = 2;
   function gx(x) { return (x - originX) * GRID + GRID; }
   function gy(y) { return (y - originY) * GRID + GRID; }
-  function toGrid(px, py) {
-    return [Math.round((px - GRID) / GRID) + originX, Math.round((py - GRID) / GRID) + originY];
+  /* screen pixels -> world pixels -> the nearest grid cell */
+  function toWorld(sx, sy) { return [sx / view.s + view.px, sy / view.s + view.py]; }
+  function toGrid(sx, sy) {
+    const w = toWorld(sx, sy);
+    return [Math.round((w[0] - GRID) / GRID) + originX, Math.round((w[1] - GRID) / GRID) + originY];
   }
+  function evPt(e) {
+    const r = cv.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  }
+
+  /* Everything the drawing occupies, in grid cells. Used by zoom-to-fit and by the
+     read-only painter, which have always needed the same answer. */
+  function contentBounds() {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const see = function (px, py) {
+      if (px < x0) x0 = px; if (px > x1) x1 = px;
+      if (py < y0) y0 = py; if (py > y1) y1 = py;
+    };
+    model.parts.forEach(function (p) { Netlist.pinsOf(p).forEach(function (pt) { see(pt[0], pt[1]); }); see(p.x, p.y); });
+    model.wires.forEach(function (wr) { see(wr.a[0], wr.a[1]); see(wr.b[0], wr.b[1]); });
+    if (!isFinite(x0)) return null;
+    return { x0: x0, y0: y0, x1: x1, y1: y1 };
+  }
+
+  function zoomTo(scale, anchorSx, anchorSy) {
+    const ns = Math.max(0.3, Math.min(4, scale));
+    if (anchorSx === undefined) { view.s = ns; paint(); return; }
+    /* keep the point under the cursor still: it is the difference between zooming
+       and being thrown across the drawing */
+    const before = toWorld(anchorSx, anchorSy);
+    view.s = ns;
+    const after = toWorld(anchorSx, anchorSy);
+    view.px += before[0] - after[0];
+    view.py += before[1] - after[1];
+    paint();
+  }
+
+  function zoomFit() {
+    const b = contentBounds();
+    const box = cv.parentElement.getBoundingClientRect();
+    const w = Math.max(320, box.width), h = Math.max(260, box.height);
+    if (!b) { view = { s: 1, px: 0, py: 0 }; paint(); return; }
+    const pad = 1.5;
+    const needW = (b.x1 - b.x0 + pad * 2) * GRID, needH = (b.y1 - b.y0 + pad * 2) * GRID;
+    view.s = Math.max(0.3, Math.min(4, Math.min(w / needW, h / needH)));
+    view.px = gx(b.x0 - pad) - (w / view.s - needW) / 2;
+    view.py = gy(b.y0 - pad) - (h / view.s - needH) / 2;
+    paint();
+  }
+
+  function selOne() {
+    if (selIds.size !== 1) return null;
+    const id = selIds.values().next().value;
+    return model.parts.find(function (p) { return p.id === id; }) || null;
+  }
+  function selParts() { return model.parts.filter(function (p) { return selIds.has(p.id); }); }
 
   function partAt(pt) {
     return model.parts.find(function (p) {
@@ -761,11 +828,25 @@ function createCircuit(root, opts) {
         dpr * ((h - needH * s2) / 2 - (y0 - pad - originY) * GRID * s2 - GRID * s2));
     }
 
-    /* grid dots */
+    /* The editor's viewport. The read-only branch above has already set its own
+       fit-to-box transform and must not be overwritten. */
+    if (!ro_) {
+      ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s,
+        -view.px * view.s * dpr, -view.py * view.s * dpr);
+    }
+
+    /* Grid dots, drawn across whatever part of the world is currently visible rather
+       than across the canvas: at any zoom other than 1 those are different regions,
+       and drawing the canvas one leaves the dots pinned to the screen while the
+       circuit slides underneath. */
+    const vx0 = ro_ ? 0 : view.px, vy0 = ro_ ? 0 : view.py;
+    const vx1 = vx0 + (ro_ ? w : w / view.s), vy1 = vy0 + (ro_ ? h : h / view.s);
     ctx.fillStyle = pal.faint;
-    for (let X = GRID; X < w; X += GRID) {
-      for (let Y = GRID; Y < h; Y += GRID) {
-        ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.5;
+    for (let X = Math.floor(vx0 / GRID) * GRID; X < vx1 + GRID; X += GRID) {
+      if (X < GRID) continue;
+      for (let Y = Math.floor(vy0 / GRID) * GRID; Y < vy1 + GRID; Y += GRID) {
+        if (Y < GRID) continue;
         ctx.fillRect(X - 0.5, Y - 0.5, 1, 1);
       }
     }
@@ -797,8 +878,10 @@ function createCircuit(root, opts) {
 
     /* parts */
     model.parts.forEach(function (p) {
-      drawPart(p, p.id === sel ? pal.accent : pal.ink);
+      drawPart(p, selIds.has(p.id) ? pal.accent : pal.ink);
     });
+
+    paintMarquee();
 
     /* the wire being drawn */
     if (wireFrom && hover) {
@@ -832,8 +915,26 @@ function createCircuit(root, opts) {
   }
 
   /* ---- panels ---- */
+  function paintMarquee() {
+    if (!marquee) return;
+    const a = marquee.a, b = marquee.b;
+    const x = Math.min(a[0], b[0]), y = Math.min(a[1], b[1]);
+    ctx.save();
+    ctx.strokeStyle = P().accent;
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1 / view.s;
+    ctx.strokeRect(x, y, Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));
+    ctx.restore();
+  }
+
   function paintPart() {
-    const p = model.parts.find(function (q) { return q.id === sel; });
+    const p = selOne();
+    if (selIds.size > 1) {
+      partPanel.innerHTML = '<h4>' + selIds.size + ' parts selected</h4>' +
+        '<p class="ckt-hint">Drag to move them together. R rotates, Delete removes. ' +
+        'Click an empty cell to deselect.</p>';
+      return;
+    }
     if (!p || p.kind === 'GND' || p.kind === 'OUT') {
       partPanel.innerHTML = '<h4>Component</h4><p class="ckt-hint">' +
         (tool === 'wire' ? 'Click a pin, then click where the wire should end.'
@@ -983,16 +1084,71 @@ function createCircuit(root, opts) {
   }
 
   /* ---- interaction ---- */
+  /* How far the pointer has moved, in screen pixels, since it went down. A click and
+     a drag start identically, so nothing commits to being a drag until it has moved
+     far enough that the learner clearly meant it. */
+  const DRAG_SLOP = 4;
+  let down = null;
+
   cv.addEventListener('pointermove', function (e) {
-    const r = cv.getBoundingClientRect();
-    hover = toGrid(e.clientX - r.left, e.clientY - r.top);
+    const sp = evPt(e);
+    hover = toGrid(sp[0], sp[1]);
+
+    if (panFrom) {
+      view.px = panFrom.px + (panFrom.sx - sp[0]) / view.s;
+      view.py = panFrom.py + (panFrom.sy - sp[1]) / view.s;
+      paint();
+      return;
+    }
+
+    if (down && !drag && !marquee && down.mode === 'maybe-move' &&
+        Math.hypot(sp[0] - down.sx, sp[1] - down.sy) > DRAG_SLOP) {
+      drag = { from: down.grid, moved: false };
+    }
+    if (down && !drag && !marquee && down.mode === 'maybe-marquee' &&
+        Math.hypot(sp[0] - down.sx, sp[1] - down.sy) > DRAG_SLOP) {
+      marquee = { a: toWorld(down.sx, down.sy), b: toWorld(sp[0], sp[1]) };
+    }
+
+    if (drag) {
+      const dx = hover[0] - drag.from[0], dy = hover[1] - drag.from[1];
+      if (dx || dy) {
+        selParts().forEach(function (p) { p.x += dx; p.y += dy; });
+        drag.from = hover;
+        drag.moved = true;
+        paint();
+      }
+      return;
+    }
+
+    if (marquee) { marquee.b = toWorld(sp[0], sp[1]); paint(); return; }
     if (wireFrom) paint();
   });
+
   cv.addEventListener('pointerleave', function () { hover = null; if (wireFrom) paint(); });
 
+  /* Wheel zooms about the cursor. Ctrl+wheel is the browser's own page zoom on some
+     setups, so it is left alone. */
+  cv.addEventListener('wheel', function (e) {
+    if (e.ctrlKey) return;
+    e.preventDefault();
+    const sp = evPt(e);
+    zoomTo(view.s * (e.deltaY < 0 ? 1.12 : 1 / 1.12), sp[0], sp[1]);
+  }, { passive: false });
+
   cv.addEventListener('pointerdown', function (e) {
-    const r = cv.getBoundingClientRect();
-    const pt = toGrid(e.clientX - r.left, e.clientY - r.top);
+    const sp = evPt(e);
+    const pt = toGrid(sp[0], sp[1]);
+
+    /* Middle button, or space held: pan. Both are what a drawing tool does, and the
+       second is the one people already have in their fingers. */
+    if (e.button === 1 || spaceDown) {
+      panFrom = { sx: sp[0], sy: sp[1], px: view.px, py: view.py };
+      cv.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+    if (e.button !== 0) return;
 
     if (tool === 'wire') {
       if (!wireFrom) { wireFrom = pt; paint(); return; }
@@ -1010,42 +1166,110 @@ function createCircuit(root, opts) {
 
     if (tool === 'select') {
       const hit = partAt(pt);
-      sel = hit ? hit.id : null;
+      cv.setPointerCapture(e.pointerId);
+      if (hit) {
+        if (e.shiftKey) {
+          if (selIds.has(hit.id)) selIds.delete(hit.id); else selIds.add(hit.id);
+        } else if (!selIds.has(hit.id)) {
+          selIds.clear();
+          selIds.add(hit.id);
+        }
+        /* Dragging a part that is already part of a multiple selection moves the
+           whole selection; that is why the clear above is conditional. */
+        down = { sx: sp[0], sy: sp[1], grid: pt, mode: 'maybe-move' };
+      } else {
+        if (!e.shiftKey) selIds.clear();
+        down = { sx: sp[0], sy: sp[1], grid: pt, mode: 'maybe-marquee' };
+      }
       paintPart();
       paint();
       return;
     }
 
     /* placing: refuse to stack two parts on one cell */
-    if (partAt(pt)) { sel = partAt(pt).id; paintPart(); paint(); return; }
+    const existing = partAt(pt);
+    if (existing) { selIds.clear(); selIds.add(existing.id); paintPart(); paint(); return; }
     const kind = tool;
     const p = { id: 'p' + (seq++), kind: kind, x: pt[0], y: pt[1], rot: 0,
                 value: PART_KINDS[kind].def };
     model.parts.push(p);
-    sel = p.id;
+    selIds.clear();
+    selIds.add(p.id);
     changed();
     paintPart();
   });
+
+  function endPointer(e) {
+    if (panFrom) { panFrom = null; return; }
+    if (marquee) {
+      const x0 = Math.min(marquee.a[0], marquee.b[0]), x1 = Math.max(marquee.a[0], marquee.b[0]);
+      const y0 = Math.min(marquee.a[1], marquee.b[1]), y1 = Math.max(marquee.a[1], marquee.b[1]);
+      model.parts.forEach(function (p) {
+        const wx = gx(p.x), wy = gy(p.y);
+        if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) selIds.add(p.id);
+      });
+      marquee = null;
+      paintPart();
+      paint();
+    }
+    if (drag) {
+      /* one undo entry per gesture, not one per grid cell crossed */
+      if (drag.moved) changed();
+      drag = null;
+    }
+    down = null;
+  }
+  cv.addEventListener('pointerup', endPointer);
+  cv.addEventListener('pointercancel', endPointer);
+
+  /* Space is held to pan, the way it is in every drawing tool. Tracked on the
+     document because the canvas does not take keyboard focus. */
+  let spaceDown = false;
+  function onSpaceDown(e) {
+    if (e.code !== 'Space' || spaceDown) return;
+    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+    spaceDown = true;
+    cv.style.cursor = 'grab';
+    e.preventDefault();
+  }
+  function onSpaceUp(e) {
+    if (e.code !== 'Space') return;
+    spaceDown = false;
+    cv.style.cursor = '';
+  }
+  document.addEventListener('keydown', onSpaceDown);
+  document.addEventListener('keyup', onSpaceUp);
 
   function onKey(e) {
     if (e.target && /input|textarea/i.test(e.target.tagName)) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { doDelete(); e.preventDefault(); }
     else if (e.key === 'r' || e.key === 'R') { doRotate(); }
-    else if (e.key === 'Escape') { wireFrom = null; paint(); }
+    else if (e.key === 'Escape') { wireFrom = null; marquee = null; selIds.clear(); paintPart(); paint(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+      selIds.clear();
+      model.parts.forEach(function (p) { selIds.add(p.id); });
+      paintPart(); paint(); e.preventDefault();
+    }
+    else if (e.key === '+' || e.key === '=') { zoomTo(view.s * 1.2); }
+    else if (e.key === '-' || e.key === '_') { zoomTo(view.s / 1.2); }
+    else if (e.key === '0') { zoomFit(); }
   }
   document.addEventListener('keydown', onKey);
 
   function doRotate() {
-    const p = model.parts.find(function (q) { return q.id === sel; });
-    if (!p || p.kind === 'GND' || p.kind === 'OUT') return;
-    p.rot = p.rot ? 0 : 1;
+    const ps = selParts().filter(function (p) { return p.kind !== 'GND' && p.kind !== 'OUT'; });
+    if (!ps.length) return;
+    ps.forEach(function (p) { p.rot = p.rot ? 0 : 1; });
     changed();
     paintPart();
   }
   function doDelete() {
-    if (!sel) return;
-    model.parts = model.parts.filter(function (p) { return p.id !== sel; });
-    sel = null;
+    if (!selIds.size) return;
+    /* A wire with nothing left at either end is a wire the learner cannot see the
+       purpose of, but it may still be carrying a connection between two other
+       things, so deleting parts leaves wires alone. */
+    model.parts = model.parts.filter(function (p) { return !selIds.has(p.id); });
+    selIds.clear();
     changed();
     paintPart();
   }
@@ -1062,10 +1286,15 @@ function createCircuit(root, opts) {
       paint();
     });
   });
+  root.querySelector('[data-act="zoomin"]').addEventListener('click', function () { zoomTo(view.s * 1.2); });
+  root.querySelector('[data-act="zoomout"]').addEventListener('click', function () { zoomTo(view.s / 1.2); });
+  root.querySelector('[data-act="fit"]').addEventListener('click', zoomFit);
   root.querySelector('[data-act="rotate"]').addEventListener('click', doRotate);
   root.querySelector('[data-act="delete"]').addEventListener('click', doDelete);
   root.querySelector('[data-act="clear"]').addEventListener('click', function () {
-    model.parts = []; model.wires = []; sel = null; changed(); paintPart();
+    model.parts = []; model.wires = []; selIds.clear();
+    view = { s: 1, px: 0, py: 0 };
+    changed(); paintPart();
   });
   root.querySelectorAll('[data-an]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -1093,6 +1322,11 @@ function createCircuit(root, opts) {
     dispose: function () {
       disposed = true;
       document.removeEventListener('keydown', onKey);
+      /* space-to-pan is tracked on the document because the canvas takes no keyboard
+         focus, so it has to be released here or every editor ever opened keeps
+         listening for the rest of the session */
+      document.removeEventListener('keydown', onSpaceDown);
+      document.removeEventListener('keyup', onSpaceUp);
       if (ro) ro.disconnect();
       root.innerHTML = '';
     },
