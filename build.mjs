@@ -412,23 +412,24 @@ const inlineHtml = assemble('inlined', inlineLiteral(degree), '[]');
    So a payload is a BAND of a programme — one year. That is also the unit the planner
    navigates in, which is what makes it the right seam rather than merely a smaller
    one. */
+/* A payload is ONE COURSE.
+
+   It was one per programme, then one per band. Both stopped fitting as the courses
+   gained real syllabi: ee-msc year 1 reached 3.2 MB with its six courses only half
+   written, against a 3 MB per-payload budget, and it would have kept growing.
+
+   A course is the right unit and not merely a smaller one: it is what a learner
+   opens, it is the granularity the rail and the planner already navigate, and its
+   size is bounded by how much one subject can hold rather than by how many subjects
+   happen to share a year. */
 const chunks = [];
 for (const prog of programs) {
-  const courses = byProgram[prog.id] || [];
-  if (!courses.length) continue;
-  const bands = new Map();
-  for (const c of courses) {
-    const band = c.band === undefined ? 0 : c.band;
-    if (!bands.has(band)) bands.set(band, []);
-    bands.get(band).push(c);
-  }
-  for (const band of [...bands.keys()].sort((x, y) => x - y)) {
-    const list = bands.get(band);
-    const json = JSON.stringify(list);
+  for (const c of (byProgram[prog.id] || [])) {
+    const json = JSON.stringify([c]);
     const hash = createHash('sha256').update(json).digest('hex').slice(0, 8);
-    const name = `${prog.id}.b${band}.${hash}.json`;
-    chunks.push({ id: prog.id, band: band, name: name, json: json,
-                  url: `programs/${name}`, courses: list.length });
+    const name = `${prog.id}.${c.id}.${hash}.json`;
+    chunks.push({ id: prog.id, band: c.band === undefined ? 0 : c.band, course: c.id,
+                  name: name, json: json, url: `programs/${name}`, courses: 1 });
   }
 }
 
@@ -444,7 +445,7 @@ for (const ch of chunks) {
 
 const shellHtml = assemble('split shell',
   inlineLiteral({ programs, courses: [] }),
-  JSON.stringify(chunks.map((c) => ({ id: c.id, band: c.band, url: c.url }))));
+  JSON.stringify(chunks.map((c) => ({ id: c.id, band: c.band, course: c.course, url: c.url }))));
 
 /* The inlined shape must list nothing. Asserted rather than assumed: both shapes come
    out of one run, and it is the empty list that keeps the double-clickable file from
@@ -467,7 +468,9 @@ const chunksTotalKb = chunkKb.reduce((a, b) => a + b, 0);
 notes.push(`inlined artifact: ${Math.round(inlineKb)} KB`);
 notes.push(`split shell: ${Math.round(shellKb)} KB, plus ${chunks.length} payload(s) ` +
   `totalling ${Math.round(chunksTotalKb)} KB`);
-chunks.forEach((c, i) => notes.push(`  ${c.name} — ${c.courses} courses, ${Math.round(chunkKb[i])} KB`));
+const bigThree = chunks.map((c, i) => [c.name, chunkKb[i]]).sort((a, b) => b[1] - a[1]).slice(0, 3);
+notes.push(`${chunks.length} payloads, largest: ` +
+  bigThree.map(([n, k]) => `${n.replace(/\.[0-9a-f]{8}\.json$/, '')} ${Math.round(k)} KB`).join(', '));
 
 console.log('--- build report ---');
 for (const n of notes) console.log('  ·', n);

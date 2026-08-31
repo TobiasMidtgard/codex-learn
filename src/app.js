@@ -282,8 +282,11 @@ function chunkLoaded(ch) {
      Matched on band as well as programme now that a payload is one year: without the
      band test the first year to arrive would mark every other year of that degree as
      already here, and the rest would never be fetched. */
+  /* Matched on the course now that a payload is one course. Matching on programme,
+     or on programme and band, would let the first arrival mark its neighbours as
+     already here and they would never be fetched. */
   return DEGREE.courses.some(function (c) {
-    return c.program === ch.id && c.band === ch.band && c.kind !== 'track';
+    return c.id === ch.course && c.kind !== 'track';
   });
 }
 function markMissing(id) { if (!programMissing(id)) MISSING_PROGRAMS.push(id); }
