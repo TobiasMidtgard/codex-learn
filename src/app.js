@@ -651,6 +651,7 @@ function renderShell() {
           '<span class="fl">🔥</span><b id="streak-val">0</b><span>day streak</span>' +
         '</div>' +
         '<div class="metric xp" title="Experience earned"><b id="xp-val">0</b><span>XP</span></div>' +
+        '<button class="tbtn" id="desk-btn" aria-label="Notepad and calculator" title="Notepad and calculator (Alt+K)">▤</button>' +
         '<button class="tbtn" id="theme-btn" aria-label="Switch theme">☾</button>' +
         '<span class="save-state" id="save-state"></span>' +
       '</header>' +
@@ -686,6 +687,20 @@ function renderShell() {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault(); omni.focus(); omni.select();
     }
+  });
+  /* Alt+K, not the more obvious Ctrl+K, which the lesson search above already owns.
+     Guarded on typeof: a build without src/desk.js is a build without the modal
+     rather than a page that throws on the first keystroke. */
+  document.addEventListener('keydown', function (e) {
+    if (!e.altKey || (e.key !== 'k' && e.key !== 'K')) return;
+    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+    if (typeof Desk === 'undefined') return;
+    Desk.toggle();
+    e.preventDefault();
+  });
+  const deskBtn = $('#desk-btn');
+  if (deskBtn) deskBtn.addEventListener('click', function () {
+    if (typeof Desk !== 'undefined') Desk.toggle();
   });
   $('#theme-btn').addEventListener('click', function () {
     P.theme = effectiveTheme() === 'dark' ? 'light' : 'dark';
@@ -978,6 +993,14 @@ function go(r) {
     else if (l.type === 'match') renderMatch(main, l);
     else if (l.type === 'tune') renderTune(main, l);
     else renderCode(main, l);
+  }
+
+  /* The desk keeps a note per lesson as well as a scratch pad, so it has to be told
+     where the learner is. Without this the lesson id stays null and every note lands
+     on the scratch pad - half the feature, silently. */
+  if (typeof Desk !== 'undefined') {
+    const li = route.view === 'lesson' && LESSON_INDEX[route.id];
+    Desk.context(li ? { lessonId: route.id, title: li.lesson.title } : { lessonId: null, title: '' });
   }
 
   paintRunner(focusLesson(route));
@@ -3887,8 +3910,12 @@ function renderCircuitPlayground(main, st) {
           esc(screenMeta(route.from).title) + '</button>' : '') +
       '</div>' +
       '<div id="ckt-mount"></div>' +
-      '<p class="ckt-note">Linear components only: resistors, capacitors, inductors and ideal sources. ' +
-      'There is no Newton loop, so no diodes or transistors \u2014 the solver would have to lie about them.</p>' +
+      '<p class="ckt-note">Resistors, capacitors, inductors and sources, plus switches, ' +
+      'a potentiometer, light and temperature sensors, and lamp, meter and bar readouts. ' +
+      'The sensors are simulated: the sliders beside the canvas set what they are sensing. ' +
+      'Each resolves to a resistance before the solve, so the solver stays linear — there ' +
+      'is still no Newton loop, so no diodes or transistors, because a linear one would ' +
+      'have to lie about them.</p>' +
     '</div>';
 
   $all('#seg button', main).forEach(function (b) {

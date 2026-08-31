@@ -309,6 +309,10 @@ const langJs = read(join(SRC, 'lang.js'));
 const tracksJs = read(join(SRC, 'tracks.js'));
 const engineJs = read(join(SRC, 'engine.js'));
 const appJs = read(join(SRC, 'app.js'));
+/* The desk (notepad + calculator) is optional: the app guards every call to it with a
+   typeof check, so a build without the file is a build without the modal rather than a
+   broken page. Read defensively so that stays true. */
+const deskJs = existsSync(join(SRC, 'desk.js')) ? read(join(SRC, 'desk.js')) : '';
 const head = read(join(SRC, 'index.head.html'));
 
 /* A literal `</script>` inside any JSON string would terminate the host <script>, and
@@ -337,6 +341,7 @@ function assemble(label, degreeLiteral, chunkLiteral) {
     engineJs,
     studioJs,
     circuitJs,
+    deskJs,
     appJs,
   ].join('\n');
 
