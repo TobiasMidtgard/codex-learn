@@ -171,7 +171,8 @@ def norm_numeric(q, ctx):
 
 
 # the symbols src/circuit.js knows how to draw; build.mjs re-checks against the source
-MATCH_SYMBOLS = {"R", "C", "L", "D", "LED", "GND", "V", "BATT", "I", "NPN", "PNP", "SW", "OPAMP"}
+MATCH_SYMBOLS = {"R", "C", "L", "D", "LED", "GND", "V", "BATT", "I", "NPN", "PNP",
+                 "SW", "OPAMP", "NMOS", "PMOS"}
 
 # what the schematic painter in src/circuit.js can put on a canvas. Narrower than the
 # symbol list above on purpose: these are the kinds the SOLVER also understands, and a
