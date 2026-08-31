@@ -43,6 +43,7 @@
     "Pure-literal elimination is sound because a pure literal can always be set true",
     "Validating an optimised solver against exhaustive enumeration on random instances"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -119,6 +120,7 @@
     "A loop is opaque: the annotated invariant is the precondition, and it owes two verification conditions",
     "Discharging obligations: a decision procedure, or — here — bounded enumeration that returns a concrete counterexample"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -195,6 +197,7 @@
     "A counterexample to G p is a finite prefix; a counterexample to F p is a path with no witness inside the bound",
     "State explosion: the reachable set of a protocol grows as the product of its components"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -271,6 +274,7 @@
     "Seeding the generator makes a random failure reproducible, which is what makes it a bug report",
     "Testing refutes; it never verifies. Its coverage is the distribution the generator happens to have"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

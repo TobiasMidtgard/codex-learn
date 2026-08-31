@@ -34,6 +34,7 @@
     "The realisation is not unique — any invertible `T` gives `Ā = TAT⁻¹` with identical input–output behaviour.",
     "Why `D` is almost always zero in a physical plant, and what it means when it is not."
    ],
+   "read": null,
    "sandbox": {
     "title": "What the A matrix does to the state",
     "visualiser": "phase-portrait",
@@ -241,6 +242,7 @@
     "Eigenvectors are the directions in which the system behaves like a scalar.",
     "A similarity transform moves the eigenvectors but never the eigenvalues."
    ],
+   "read": null,
    "sandbox": {
     "title": "Damping, poles and the response they produce",
     "visualiser": "pole-step",
@@ -565,6 +567,7 @@
     "Fast poles cost actuator effort, roughly as the square of their distance from the origin.",
     "An uncontrollable mode cannot be moved by any $K$ — and if it is unstable, the plant cannot be stabilised."
    ],
+   "read": null,
    "sandbox": {
     "title": "Buying speed with control effort",
     "visualiser": "pole-place",
@@ -767,6 +770,7 @@
     "Duality: placing observer poles is placing controller poles for $(A^\\top, C^\\top)$.",
     "The separation principle: design $K$ and $L$ independently, and the combined poles are the union."
    ],
+   "read": null,
    "sandbox": {
     "title": "Believing the model or believing the sensor",
     "visualiser": "kalman",

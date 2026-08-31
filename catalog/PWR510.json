@@ -35,6 +35,7 @@
     "The tank has two numbers: $\\omega_r = 1/\\sqrt{L_rC_r}$ and $Z_0 = \\sqrt{L_r/C_r}$. Load enters only through $Q = Z_0/R_{ac}$.",
     "First-harmonic approximation is at its worst far from resonance and at *light* load, because light load is small $Q$: at $Q = 0.85$ the third harmonic is $13$ per cent of the fundamental in the tank current, at $Q = 0.1$ it is $32$ per cent, and by $Q \\to 0$ the current has stopped being a sinusoid and is following the square wave."
    ],
+   "read": null,
    "sandbox": {
     "title": "Reading a tank off a Bode plot",
     "visualiser": "bode",
@@ -426,6 +427,7 @@
     "Below resonance the curve peaks; the peak is the boost budget, and it shrinks as $Q$ rises, so the low-line and full-load corner is the one that sizes the tank.",
     "Above resonance the gain is monotonically decreasing in $x$, which is what makes frequency control well behaved there."
    ],
+   "read": null,
    "sandbox": {
     "title": "How load reshapes a resonant curve",
     "visualiser": "bode",
@@ -654,6 +656,7 @@
     "The tank must also be operating on the inductive side, above the gain peak, so the current lags the bridge voltage and flows in the right direction during the dead time.",
     "Dead time longer than the swing needs is wasted conduction time, and eventually lets the midpoint drift back down."
    ],
+   "read": null,
    "sandbox": {
     "title": "What a transition actually looks like",
     "visualiser": "switching",
@@ -894,6 +897,7 @@
     "Core loss follows Steinmetz, $P = kf_s^{\\alpha}B^{\\beta}$, and at a fixed applied volt-second the flux swing goes as $1/f_s$, so the net dependence is $f_s^{\\alpha-\\beta}$ — usually a negative exponent.",
     "Efficiency is worst at light load, because the circulating current, the core loss and the gate loss are all essentially constant while the output power is not."
    ],
+   "read": null,
    "sandbox": {
     "title": "The loss the transition either does or does not cost",
     "visualiser": "switching",

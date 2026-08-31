@@ -42,6 +42,7 @@
     "Finite sampling error falls as 1/sqrt(shots), which is why quantum experiments are repeated",
     "The Bloch sphere: theta = 2*acos(|a0|) and phi = arg(a1) - arg(a0) for one qubit"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -117,6 +118,7 @@
     "CNOT is a permutation of basis states; combined with single-qubit rotations it is universal",
     "Circuit depth versus gate count, and why the simulator's cost is 2^n regardless"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -192,6 +194,7 @@
     "For |Phi+> the correlation is E(a, b) = cos(a - b), independent of the individual angles",
     "CHSH: any local hidden-variable model obeys |S| <= 2, while quantum mechanics reaches 2*sqrt(2)"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -272,6 +275,7 @@
     "Grover as a rotation in the two-dimensional span of the marked and unmarked states",
     "Amplitude after k iterations is sin((2k+1)*theta) with sin(theta) = sqrt(M/N): overshooting makes it worse"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -352,6 +356,7 @@
     "The transform of a comb of period r is a comb of period N/r, so peaks sit near multiples of N/r",
     "Continued fractions turn a measured k/N into the denominator r, which is the classical half of Shor's algorithm"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

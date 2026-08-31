@@ -43,6 +43,7 @@
     "det J = l1 l2 sin(theta2): the arm is singular fully stretched and fully folded",
     "Manipulability |det J| as a scalar score for how well-conditioned a pose is"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -119,6 +120,7 @@
     "Particle filters represent an arbitrary posterior by weighted samples",
     "Systematic resampling and the effective sample size 1/sum(w^2) fight particle depletion"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -195,6 +197,7 @@
     "RRT trades optimality for probabilistic completeness in continuous space",
     "Goal biasing and step size govern how fast an RRT finds anything at all"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -271,6 +274,7 @@
     "Conditional integration (anti-windup): only commit the integral when the output is unsaturated",
     "Step-response metrics: rise time, overshoot, settling time, steady-state error"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

@@ -37,6 +37,7 @@
     "The optimal law is a constant state feedback $u = -Kx$, with $K = R^{-1}B^\\top P$, and $P$ the solution of a matrix quadratic.",
     "The value function is $J^\\star(x_0) = x_0^\\top P x_0$ — $P$ is not a step towards the answer, it *is* the answer."
    ],
+   "read": null,
    "sandbox": {
     "title": "What the weights are actually buying",
     "visualiser": "pole-place",
@@ -244,6 +245,7 @@
     "The stabilising solution is the symmetric positive-semidefinite one; the quadratic has others, and they are useless.",
     "Existence needs $(A, B)$ stabilisable and $(A, Q^{1/2})$ detectable — a mode that is neither reachable nor penalised is invisible to the cost."
    ],
+   "read": null,
    "sandbox": {
     "title": "Where the Riccati solution puts the poles",
     "visualiser": "pole-place",
@@ -474,6 +476,7 @@
     "Duality: $(A, B, Q, R) \\to (A^\\top, C^\\top, W, V)$ turns the regulator Riccati equation into the estimator's.",
     "The covariance recursion runs without ever seeing a measurement — the gain schedule is known before the sensor is switched on."
    ],
+   "read": null,
    "sandbox": {
     "title": "The gain the variances imply",
     "visualiser": "kalman",
@@ -683,6 +686,7 @@
     "The noise sets the size of the residual motion, not the location of any pole.",
     "What separation does *not* give you: LQG has no guaranteed gain margin, unlike full-state LQR."
    ],
+   "read": null,
    "sandbox": {
     "title": "The estimator half of the loop",
     "visualiser": "kalman",

@@ -40,6 +40,7 @@
     "Prime implicants and the Quine-McCluskey merging procedure",
     "Two expressions are equal only if they agree on all 2^n rows — check, do not assume"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -116,6 +117,7 @@
     "The full adder chains two half adders and ORs the carries",
     "Ripple-carry delay grows linearly with word width — the motivation for carry-lookahead"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -196,6 +198,7 @@
     "Moore machines output from the state; Mealy machines output from state and input",
     "Overlapping pattern detection: the next state is the longest suffix that is still a prefix"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -272,6 +275,7 @@
     "Overflow for addition: both operands share a sign and the result does not",
     "Logical shifts and their carry-out; why arithmetic right shift differs"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

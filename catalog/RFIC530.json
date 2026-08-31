@@ -38,6 +38,7 @@
     "Two RF frequencies land on the same IF: the wanted signal and its image, reflected about the LO. Nothing after the mixer can separate them.",
     "Single-balanced versus double-balanced: the Gilbert cell cancels both LO and RF feedthrough at the output, leaving only the products."
    ],
+   "read": null,
    "sandbox": {
     "title": "Conversion gain and the IF load",
     "visualiser": "bode",
@@ -265,6 +266,7 @@
     "$\\omega_n = \\sqrt{I_{cp}K_{vco}/2\\pi N C}$ and $\\zeta = (R/2)\\omega_n C$ — every design decision reduces to those two numbers.",
     "Overshoot in the phase step response is frequency overshoot in the hop: a synthesiser that rings is a synthesiser that fails its settling mask."
    ],
+   "read": null,
    "sandbox": {
     "title": "Damping, ringing and lock time",
     "visualiser": "pole-step",
@@ -655,6 +657,7 @@
     "Integrated phase noise becomes RMS jitter: $\\sigma_t = \\sqrt{2\\int S_\\phi\\,df} / 2\\pi f_c$.",
     "A low $\\zeta$ puts a peak in $|L(j\\omega)|$ near the bandwidth, and that peak appears directly in the output spectrum as a noise bump."
    ],
+   "read": null,
    "sandbox": {
     "title": "The loop as a filter for noise",
     "visualiser": "bode",
@@ -876,6 +879,7 @@
     "A first-order accumulator produces tones, not noise. The period is $2^m/\\gcd(K, 2^m)$, and a short period is a large fractional spur close to the carrier.",
     "Higher-order MASH modulators trade tones for more shaped noise, which the loop must then filter — the reason a fractional-N loop is narrower than an integer-N one."
    ],
+   "read": null,
    "sandbox": {
     "title": "Settling after a channel hop",
     "visualiser": "pole-step",

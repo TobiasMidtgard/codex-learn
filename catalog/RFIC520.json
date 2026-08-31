@@ -37,6 +37,7 @@
     "Available noise power is $k_BTB$ — independent of $R$, which is why noise figure can be a property of a two-port alone.",
     "A resistive network's noise is the noise of its equivalent resistance seen at the terminals of interest."
    ],
+   "read": null,
    "sandbox": {
     "title": "The flat floor a resistor sets",
     "visualiser": "noise-corner",
@@ -245,6 +246,7 @@
     "Integrating $1/f$ gives a logarithm: the mean square between two frequencies depends only on their *ratio*.",
     "Chopping and correlated double sampling exist because the logarithm is so unforgiving — you move the signal above the corner instead of fighting the noise."
    ],
+   "read": null,
    "sandbox": {
     "title": "Where the two mechanisms cross",
     "visualiser": "noise-corner",
@@ -482,6 +484,7 @@
     "Equivalent noise temperature $T_e = T_0(F-1)$ — the same statement, in the units satellite and radio-astronomy work uses.",
     "Ordering matters: a low-noise, high-gain stage first can rescue a cascade that is otherwise dominated by a lossy mixer."
    ],
+   "read": null,
    "sandbox": {
     "title": "The gain that decides whether the next stage matters",
     "visualiser": "bode",
@@ -700,6 +703,7 @@
     "The sampled noise on a capacitor is $\\sqrt{k_BT/C}$ — the resistance cancels, which is why kT/C is a capacitor specification and not a resistor one.",
     "Halving the r.m.s. noise costs four times the capacitance, and driving four times the capacitance at the same speed costs about four times the current."
    ],
+   "read": null,
    "sandbox": {
     "title": "How much noise a filter shape lets through",
     "visualiser": "bode",

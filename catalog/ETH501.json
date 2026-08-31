@@ -42,6 +42,7 @@
     "Chouldechova's identity: fixing TPR and FPR fixes PPV as a function of the base rate alone",
     "Reporting a gap without a threshold and a justification for that threshold is not an audit"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -118,6 +119,7 @@
     "The Laplace mechanism adds noise of scale Δf/ε, where Δf is the query's sensitivity",
     "Sequential composition: epsilons add, so a budget must be accounted for across queries"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -194,6 +196,7 @@
     "Every request and every refusal is logged, because the controller carries the burden of proof",
     "Deleting on request and retaining under obligation are decided per record, not per subject"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -270,6 +273,7 @@
     "Append-only logging is what turns 'we assessed the risk' into evidence",
     "Binding the card's hash into the log ties a released model to the claims made about it"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

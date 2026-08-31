@@ -37,6 +37,7 @@
     "True LRU is a per-set ordering, not a per-block counter: a hit has to move its block to the recent end of that ordering. A policy that leaves the order alone on a hit is FIFO, and it will evict a block the program is still using.",
     "Widening the set costs `W` tag comparators and a `W`-to-1 multiplexer in the hit path, which is why real L1 caches stop at four or eight ways."
    ],
+   "read": null,
    "sandbox": {
     "title": "What capacity and associativity do not buy you",
     "visualiser": "cache",
@@ -248,6 +249,7 @@
     "The method: run the real cache, a fully associative cache of equal capacity, and an infinite cache over the same trace, and label each miss by which of them also missed.",
     "The taxonomy classifies a measurement, not a cause — the same program under a different block size produces a different split."
    ],
+   "read": null,
    "sandbox": {
     "title": "A curve with no conflict misses in it",
     "visualiser": "cache",
@@ -488,6 +490,7 @@
     "Write-back with write-allocate moves a whole block on a miss and another on a dirty eviction; write-through with no-write-allocate sends one word per write, and still fetches a whole block whenever a *read* misses.",
     "Which wins is arithmetic, not doctrine: it turns on how many times a block is written before it leaves."
    ],
+   "read": null,
    "sandbox": {
     "title": "Turning a miss rate into cycles",
     "visualiser": "cache",
@@ -711,6 +714,7 @@
     "A snooping cache holding Modified data must supply it and downgrade itself, so a remote read turns into a flush plus a state change.",
     "False sharing: two cores writing different words of one block invalidate each other every time, and the protocol cannot tell the difference."
    ],
+   "read": null,
    "sandbox": {
     "title": "The floor a single cache cannot get below",
     "visualiser": "cache",

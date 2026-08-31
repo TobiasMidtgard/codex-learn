@@ -73,6 +73,25 @@ const Lin = (function () {
   return { solve: solve, zeros: zeros, cadd: cadd, csub: csub, cmul: cmul, cdiv: cdiv, cabs: cabs };
 })();
 
+/* What a microcontroller is holding when one is placed. Something that does
+   something, rather than an empty editor: the first thing anyone wants to see is a
+   pin they can watch move, and a blink is the shortest sketch that has one. */
+const MCU_SKETCH = [
+  '// pinMode says which way a pin faces. digitalWrite then drives it',
+  '// to Vcc or to 0 V through the pin resistance — see the panel.',
+  'void setup() {',
+  '  pinMode(3, OUTPUT);',
+  '}',
+  '',
+  'void loop() {',
+  '  digitalWrite(3, HIGH);',
+  '  delay(200);',
+  '  digitalWrite(3, LOW);',
+  '  delay(200);',
+  '}',
+  '',
+].join('\n');
+
 /* ---------------------------------------------------------------- parts */
 const PART_KINDS = {
   R: { name: 'Resistor', unit: 'Ω', def: 1000, pins: 2, sym: 'R' },
@@ -137,6 +156,32 @@ const PART_KINDS = {
   LAMP: { name: 'Lamp', unit: 'Ω', def: 220, pins: 2, sym: 'LAMP', state: { pnom: 0.25 } },
   METER: { name: 'Ammeter', unit: 'Ω', def: 0.1, pins: 2, sym: 'METER' },
   BAR: { name: 'Bar display', unit: 'V', def: 5, pins: 1, sym: 'BAR' },
+
+  /* ---- a piece of circuit, folded up ----
+   * The one kind that is not a component. A block holds a schematic of its own and
+   * shows a rectangle instead, and how many pins it has is a property of what was
+   * folded into it rather than of the kind — so `pins` is 0 here and pinsOf asks the
+   * block itself. It is not on the toolbar because there is nothing to place: a block
+   * comes into existence by grouping a selection, and dies by ungrouping. */
+  IC: { name: 'Block', unit: '', def: 0, pins: 0, sym: 'IC' },
+
+  /* ---- a piece of connection, with nothing on it ----
+   * The other kind that is not a component, and the only one that carries no current
+   * at all. A board has no pins and stamps nothing; what it has is HOLES, and holes
+   * that are already joined to one another before anything is put in them. `value` is
+   * the number of columns, because a board's one dimension is how long it is. */
+  BB: { name: 'Breadboard', unit: '', def: 30, pins: 0, sym: 'BB' },
+
+  /* ---- a part that is a program ----
+   * The third kind that is not a component, and the only one whose behaviour is not
+   * in this file at all: what its pins do is decided by a sketch the learner writes,
+   * run by the interpreter in src/mcu.js. `pins` is 0 for the same reason a block's
+   * is — the count comes from MCU_PINS below rather than from the registry — and
+   * `value` is 0 because there is no one number to type. What it carries instead is
+   * `code`, and that is why `state` here holds a string where every other kind holds
+   * a number. */
+  MCU: { name: 'Microcontroller', unit: '', def: 0, pins: 0, sym: 'MCU',
+         state: { code: MCU_SKETCH } },
 };
 
 /* The simulated world the sensors sense. Not part of the schematic — a circuit is
@@ -177,6 +222,100 @@ const Sensors = {
     return Math.min(Math.max(Math.max(r25, 1) * Math.exp(B * (1 / T - 1 / 298.15)), 0.01), 1e12);
   },
 };
+
+/* ---------------------------------------------------------------- the pin model
+ *
+ * What a microcontroller IS, to a solver that only knows about conductances and
+ * currents. Everything the sketch does reaches the matrix through these numbers and
+ * nothing else, so they are the whole of the electrical claim this part makes, and
+ * every one of them is quoted in the panel.
+ *
+ * The shape is always the same: a Thevenin source — a voltage behind a resistance —
+ * stamped as its Norton equivalent between the pin and the part's OWN ground pin, and
+ * never between the pin and node 0. That distinction costs one extra argument and is
+ * the difference between a model that is right and a model that happens to be right
+ * whenever the learner remembers to wire the ground pin to the same ground everything
+ * else uses. An output at LOW is not a wire to ground; it is 25 Ω to the ground pin,
+ * and if that pin is somewhere else then so is the output.
+ *
+ * A pin does not switch. digitalWrite lands a number in `drive`, and the next matrix
+ * built reads it: there is no event, no edge and no instant in between two time steps.
+ * What that costs is written where it is felt — see MCU_PWM below.
+ */
+const MCU_VCC = 5;                 /* the regulated supply the pins swing between */
+const MCU_ROUT = 25;               /* a driver's on-resistance, which is what an AVR's is */
+const MCU_RPULL = 40e3;            /* the internal pull-up; the datasheet says 20-50 kΩ */
+const MCU_RSUP = 0.5;              /* what the Vcc pin can be loaded through */
+/* An input draws nothing, and "nothing" has to be a resistance rather than an absence
+   for exactly the reason an open switch does — see SW_OFF, which is the same number
+   for the same reason: a pin wired to nothing else must still have a defined voltage,
+   or the solver calls a perfectly ordinary circuit under-determined. */
+const MCU_RIN = 1e8;
+/* Thresholds. Not one threshold at half the supply: a real input is a Schmitt trigger,
+   and the gap between the two is what stops a slowly-charging RC node from being read
+   as a hundred alternating ones and zeros as it drifts across the middle. Between them
+   a pin reads whatever it read last, which is what hysteresis means. 0.6 and 0.4 of
+   Vcc are the AVR's own figures. */
+const MCU_VIH = 0.6 * MCU_VCC, MCU_VIL = 0.4 * MCU_VCC;
+const MCU_ADC_BITS = 10, MCU_ADC_MAX = 1023;
+
+/* The pins, in the order they are drawn and the order pinsOf hands them over: down the
+   left edge, then down the right. `n` is the number a sketch calls them by — 0 to 5,
+   and 14 to 17 for the analogue four, which is where A0 lives on the board this is
+   shaped after. Power is not numbered because no sketch can address it. */
+/* The body is two rows taller than the pins need. Rows 0 and MCU_H carry no pin, and
+   that empty band at each end is not padding for the look of it: a pin's name is
+   written INWARD from its cell, and a pin on the very top row writes its name across
+   the outline. It also leaves the two bands the title and the supply are written in,
+   clear of every label rather than squeezed between two of them. */
+const MCU_W = 4, MCU_H = 7;        /* the body, in cells beyond the origin */
+const MCU_PINS = [
+  { n: 0, name: '0', side: 0, row: 1, adc: false },
+  { n: 1, name: '1', side: 0, row: 2, adc: false },
+  { n: 2, name: '2', side: 0, row: 3, adc: false },
+  { n: 3, name: '3', side: 0, row: 4, adc: false },
+  { n: 4, name: '4', side: 0, row: 5, adc: false },
+  { n: 5, name: '5', side: 0, row: 6, adc: false },
+  { n: 14, name: 'A0', side: 1, row: 1, adc: true },
+  { n: 15, name: 'A1', side: 1, row: 2, adc: true },
+  { n: 16, name: 'A2', side: 1, row: 3, adc: true },
+  { n: 17, name: 'A3', side: 1, row: 4, adc: true },
+  { n: null, name: 'Vcc', side: 1, row: 5, power: 'vcc' },
+  { n: null, name: 'GND', side: 1, row: 6, power: 'gnd' },
+];
+
+/* The state one part's pins are in. Reset is every pin an input: that is what a
+   real one does on power-up, and it is also the only honest thing to stamp in an
+   analysis that has no time in it — see the operating-point note in the panel. */
+function mcuReset(id) {
+  return { id: id, vcc: MCU_VCC,
+           pins: MCU_PINS.map(function (d) {
+             return { n: d.n, name: d.name, power: d.power || null, adc: !!d.adc,
+                      node: 0, mode: 'in', drive: 0, last: 0 };
+           }) };
+}
+
+/* The Norton a pin presents: a conductance to the ground pin, and a current into the
+   pin node. One function, asked by the DC stamp, the AC stamp and every time step, so
+   the three cannot come to disagree about what an output is. */
+function mcuNorton(pin) {
+  if (pin.power === 'gnd') return null;                    /* the reference itself */
+  if (pin.power === 'vcc') return { g: 1 / MCU_RSUP, i: MCU_VCC / MCU_RSUP };
+  if (pin.mode === 'out') return { g: 1 / MCU_ROUT, i: pin.drive * MCU_VCC / MCU_ROUT };
+  if (pin.mode === 'pullup') {
+    return { g: 1 / MCU_RIN + 1 / MCU_RPULL, i: MCU_VCC / MCU_RPULL };
+  }
+  return { g: 1 / MCU_RIN, i: 0 };
+}
+
+/* Volts on a pin to the bit a sketch reads, with the hysteresis above: `last` is
+   carried on the pin so a voltage in the gap gives back what the pin gave last time
+   rather than a coin toss. */
+function mcuLevel(pin, volts) {
+  if (volts >= MCU_VIH) pin.last = 1;
+  else if (volts <= MCU_VIL) pin.last = 0;
+  return pin.last;
+}
 
 /* The one resistance a dynamic part is worth, right now. Returns null for anything
    the solver already understands on its own. */
@@ -552,6 +691,75 @@ function pinWords(p) {
           ['right', 'left', 'below'], ['bottom', 'top', 'to the left']][turnsOf(p)];
 }
 
+/* ---------------------------------------------------------------- breadboard
+ *
+ * Everywhere else on this canvas, two things are connected because a wire was drawn
+ * between them. A breadboard is the one place where they are connected because of
+ * where they were PUT. That is the whole part and the whole difficulty: the drawing
+ * shows holes and no wires, and the netlist has to agree with the reader that a strip
+ * of five holes is already one node.
+ *
+ * The rows, top to bottom, in the layout of the board a learner has actually held:
+ *
+ *     row 0            + rail, running the whole length
+ *     row 1            − rail, running the whole length
+ *     rows 2..6        terminal strips, five holes, ONE PER COLUMN
+ *     row 7            the channel — no holes at all
+ *     rows 8..12       terminal strips again, and separately
+ *     row 13           − rail
+ *     row 14           + rail
+ *
+ * So the rails run ALONG the board and the terminal strips run ACROSS it, which is
+ * the crossing that makes the thing useful: a supply reaches every column, and each
+ * column is still its own node. The channel is what separates the two halves of a
+ * column, and it is one cell wide for a reason that is not cosmetic. A two-pin part
+ * in this editor spans exactly two cells (see pinsOf), so a channel one cell wide is
+ * the only width at which an ordinary resistor can bridge it and land one pin in each
+ * half — which is how a DIP sits, and the gesture the board exists to teach. A real
+ * channel is 0.3 in and would be two cells here; a board nothing in the toolbox could
+ * straddle would be a picture of a breadboard rather than one.
+ */
+const BB_RAIL = 2;                                   /* rail lines along each edge */
+const BB_STRIP = 5;                                  /* holes in one terminal strip */
+const BB_CHAN = BB_RAIL + BB_STRIP;                  /* the row the channel is on */
+const BB_H = BB_RAIL * 2 + BB_STRIP * 2 + 1;         /* rows of holes plus the channel */
+const BB_COLS = 30;                                  /* the half-size board, 30 columns */
+
+/* Clamped, and defaulted the way `param` defaults a device parameter: a board authored
+   in a catalog file may state only that it is a board. Four columns is the shortest
+   thing still worth calling one. */
+function bbCols(p) {
+  const n = Math.round(Number(p.value));
+  return Math.min(Math.max(isFinite(n) && n > 0 ? n : BB_COLS, 4), 200);
+}
+
+/* Which strip a grid cell is a hole of, or null if the cell is not a hole of this
+   board — off it, or in the channel. The id is a STRING and it only has to be unique
+   within one board, since that is the only place it is ever compared. Rails are named
+   by their row, so every column of a rail row answers the same id and the rail is one
+   node down the length of the board; terminal holes are named by their column and by
+   which side of the channel they are on, so the two halves of a column are two nodes
+   that happen to be drawn in line with each other. */
+function bbStripAt(p, cx, cy) {
+  const c = cx - p.x, r = cy - p.y;
+  if (c < 0 || c >= bbCols(p) || r < 0 || r >= BB_H) return null;
+  if (r === BB_CHAN) return null;
+  if (r < BB_RAIL || r >= BB_H - BB_RAIL) return 'rail' + r;
+  return (r < BB_CHAN ? 'u' : 'l') + c;
+}
+
+/* The cells a part covers beyond the one it stands on, or null if it stands on one
+   cell like every symbol does. A block and a board are bodies with an area, and the
+   netlist's flattener, the editor's hit test, the marquee, zoom-to-fit and the
+   read-only painter all have to agree about how big they are — so they ask here
+   rather than each carrying its own idea of which kinds are big. */
+function bodyOf(p) {
+  if (p.kind === 'IC') return [Math.max(1, p.w || 0), Math.max(1, p.h || 0)];
+  if (p.kind === 'BB') return [bbCols(p) - 1, BB_H - 1];
+  if (p.kind === 'MCU') return [MCU_W, MCU_H];
+  return null;
+}
+
 /* ---------------------------------------------------------------- netlist */
 const Netlist = (function () {
 
@@ -570,6 +778,37 @@ const Netlist = (function () {
      where they always did, so nothing already drawn has moved. */
   function pinsOf(p) {
     const k = PART_KINDS[p.kind];
+    /* A block's pins are wherever its boundary was, and it was grouped ON that
+       boundary — so a port's offset is the offset the crossing cell already had from
+       the block's origin, and the pin lands back on the exact cell the wire outside
+       still ends at. Grouping therefore changes no connection, and neither does
+       dragging a block: the pins travel with it the way any part's do. A port can hold
+       more than one cell, because a net that crossed in two places is one net. */
+    if (p.kind === 'IC') {
+      const out = [];
+      (p.ports || []).forEach(function (port) {
+        (port.cells || []).forEach(function (c) { out.push([p.x + c[0], p.y + c[1]]); });
+      });
+      return out;
+    }
+    /* A board has no pins. It has holes, and whatever is in a hole is somebody else's
+       pin — which is why nothing here, and nothing in the pass that walks pins into
+       the union-find, can create a node for a board. Sixty empty strips that each
+       became a node would be sixty floating nodes, and the solver would rightly call
+       a circuit with a board sitting beside it under-determined. The strips are joined
+       further down instead, out of cells that already exist. */
+    if (p.kind === 'BB') return [];
+    /* A microcontroller's pins are a fixed header rather than a count in the registry,
+       and they are NOT turned by rot: a body wide enough to write twelve names inside
+       has no reading of "rotated" that is not just a different drawing, and a block and
+       a board already answer the same way. What that costs is that the pin order on the
+       canvas is the pin order in MCU_PINS, always — which is also what makes a schematic
+       drawn last week still name the same pins today. */
+    if (p.kind === 'MCU') {
+      return MCU_PINS.map(function (d) {
+        return [p.x + (d.side ? MCU_W : 0), p.y + d.row];
+      });
+    }
     const n = k ? k.pins : 2;
     if (n === 1) return [[p.x, p.y]];
     const r = turnsOf(p);
@@ -595,12 +834,18 @@ const Netlist = (function () {
     return (turnsOf(p) % 2) ? pins : [pins[1], pins[0]];
   }
 
-  function key(pt) { return pt[0] + ',' + pt[1]; }
+  /* A grid point, named. The name carries WHICH drawing the point is in as well as
+     where it is — see the flattener below — and an empty prefix is the top level, so
+     a schematic with no blocks in it is keyed exactly as it always was. */
+  function key(pt, at) { return (at || '') + pt[0] + ',' + pt[1]; }
 
   /* Union-find over every point touched by a wire or a pin: two points in the same
-     set are electrically the same node. */
-  function build(model, env) {
-    const world = Object.assign({}, ENV_DEFAULT, env || {});
+     set are electrically the same node. Handed out rather than kept private because
+     the editor's grouping code has to ask the same question of the same drawing —
+     which net is this pin on — and a second implementation of "connected" would sooner
+     or later answer differently from this one. When it did, a block would grow a pin
+     where no current flows and lose one where it does. */
+  function joiner() {
     const parent = {};
     function find(a) {
       if (parent[a] === undefined) { parent[a] = a; return a; }
@@ -611,6 +856,102 @@ const Netlist = (function () {
       const ra = find(a), rb = find(b);
       if (ra !== rb) parent[ra] = rb;
     }
+    /* a wire is a straight run; every grid point along it joins the same node */
+    function run(w, at) {
+      const dx = Math.sign(w.b[0] - w.a[0]), dy = Math.sign(w.b[1] - w.a[1]);
+      const n = Math.max(Math.abs(w.b[0] - w.a[0]), Math.abs(w.b[1] - w.a[1]));
+      let cur = [w.a[0], w.a[1]];
+      find(key(cur, at));
+      for (let i = 0; i < n; i++) {
+        const nxt = [cur[0] + dx, cur[1] + dy];
+        union(key(cur, at), key(nxt, at));
+        cur = nxt;
+      }
+    }
+    return { parent: parent, find: find, union: union, run: run };
+  }
+
+  /* ---- what a board joins ----
+   *
+   * One board, one drawing, applied to a joiner that has already had every pin and
+   * every wire put through it. It walks the holes and unions the ones on a strip that
+   * are ALREADY on the map — a cell nothing reaches is skipped rather than created,
+   * so an empty board is electrically nothing, exactly as an empty board on a desk is.
+   * That single `undefined` test is the difference between a board you can leave lying
+   * under a half-built circuit and a board that makes the solver refuse to answer.
+   *
+   * It is handed the joiner rather than owning one because the grouping code has to
+   * ask the same question of the same drawing — which net is this cell on — and the
+   * comment on joiner() explains what a second answer to that would cost.
+   *
+   * Note what is NOT special-cased: a wire lying across the board. Its run puts every
+   * cell it passes through on the map, so it joins the strips it crosses, exactly as a
+   * wire drawn across another wire already joins it. That is the editor's one rule for
+   * what touching means, and a board is not a reason to have two of them.
+   */
+  function bindBoard(p, uf, at) {
+    const cols = bbCols(p);
+    const first = {};
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < BB_H; r++) {
+        const s = bbStripAt(p, p.x + c, p.y + r);
+        if (s === null) continue;
+        const k = key([p.x + c, p.y + r], at);
+        if (uf.parent[k] === undefined) continue;
+        if (first[s] === undefined) first[s] = k; else uf.union(first[s], k);
+      }
+    }
+  }
+
+  /* ---- subcircuits ----
+   *
+   * A block is one part on the canvas and a whole schematic underneath it. The solver
+   * is never told: the folding is undone HERE, before a single node is numbered, so
+   * the editor, the graders and the read-only painter are all handed an ordinary flat
+   * netlist and none of them has to know that blocks exist. A subcircuit only the
+   * editor understood would be a circuit that grades differently from how it draws.
+   *
+   * Nodes cannot collide, because a grid point is addressed by a STRING and a block's
+   * insides are addressed under a prefix made of the block ids standing above them.
+   * "3,4" is the top level, "p7|3,4" is that cell inside block p7, and "p7|p2|3,4" is
+   * inside a block inside it. A cell is named by where it is AND by which drawing it
+   * is in, which is what makes two blocks holding the same schematic two circuits
+   * rather than one. Nothing is renamed to avoid a clash; the names never meet.
+   *
+   * The interface is joined the same way, and a port's offset is what does it: read
+   * against the block's position it names a cell in the PARENT drawing, and read
+   * against the block's origin it names a cell INSIDE. Union those two keys and the
+   * pin is wired to whatever the parent has on it — no lookup, no matching by name,
+   * and nothing that can go stale when either side is edited.
+   */
+  const MAX_DEPTH = 8;
+
+  function flatten(m, out, at, depth) {
+    (m.parts || []).forEach(function (p) {
+      out.parts.push({ p: p, at: at });
+      if (p.kind !== 'IC') return;
+      const inside = at + p.id + '|';
+      (p.ports || []).forEach(function (port) {
+        (port.cells || []).forEach(function (c) {
+          out.joins.push([key([p.x + c[0], p.y + c[1]], at), key(c, inside)]);
+        });
+      });
+      /* A depth limit, because a hand-written model can nest as deep as it likes and a
+         blown stack is not a diagnosis. It is recorded rather than swallowed: a block
+         whose contents were quietly dropped is a circuit missing parts that nothing on
+         the screen says are missing. */
+      if (depth + 1 > MAX_DEPTH) { out.tooDeep = MAX_DEPTH; return; }
+      flatten(p.inner || { parts: [], wires: [] }, out, inside, depth + 1);
+    });
+    (m.wires || []).forEach(function (w) { out.wires.push({ w: w, at: at }); });
+  }
+
+  function build(model, env) {
+    const world = Object.assign({}, ENV_DEFAULT, env || {});
+    const flat = { parts: [], wires: [], joins: [], tooDeep: 0 };
+    flatten(model || { parts: [], wires: [] }, flat, '', 0);
+    const uf = joiner();
+    const parent = uf.parent, find = uf.find, union = uf.union;
 
     /* A bar display is deliberately left out of this pass. Every other pin creates a
        node whether or not anything else reaches it, which is right for a part that
@@ -618,28 +959,27 @@ const Netlist = (function () {
        with nothing stamped on it, and the solver would call the whole circuit
        under-determined. A readout must never be able to break the answer it exists to
        show, so a bar takes the node it lands on and creates none. */
-    model.parts.forEach(function (p) {
-      if (p.kind === 'BAR') return;
-      pinsOf(p).forEach(function (pt) { find(key(pt)); });
+    flat.parts.forEach(function (e) {
+      if (e.p.kind === 'BAR') return;
+      pinsOf(e.p).forEach(function (pt) { find(key(pt, e.at)); });
     });
-    model.wires.forEach(function (w) {
-      /* a wire is a straight run; every grid point along it joins the same node */
-      const dx = Math.sign(w.b[0] - w.a[0]), dy = Math.sign(w.b[1] - w.a[1]);
-      const n = Math.max(Math.abs(w.b[0] - w.a[0]), Math.abs(w.b[1] - w.a[1]));
-      let cur = [w.a[0], w.a[1]];
-      find(key(cur));
-      for (let i = 0; i < n; i++) {
-        const nxt = [cur[0] + dx, cur[1] + dy];
-        union(key(cur), key(nxt));
-        cur = nxt;
-      }
+    flat.wires.forEach(function (e) { uf.run(e.w, e.at); });
+    /* and last, every block's pins tied to the cells the parent drawing has them on */
+    flat.joins.forEach(function (j) { find(j[0]); find(j[1]); union(j[0], j[1]); });
+    /* Boards last, because a board joins cells rather than making them: everything
+       that can put a cell on the map — a pin, a wire, a block's interface — has to
+       have run first, or a hole would be judged empty because its occupant had not
+       been looked at yet. */
+    flat.parts.forEach(function (e) {
+      if (e.p.kind === 'BB') bindBoard(e.p, uf, e.at);
     });
 
-    /* ground first, so it becomes node 0 and drops out of the unknowns */
-    const gnd = model.parts.filter(function (p) { return p.kind === 'GND'; });
+    /* ground first, so it becomes node 0 and drops out of the unknowns. A ground
+       anywhere grounds everything, insides included: it is one circuit. */
     let gndRoot = null;
-    gnd.forEach(function (p) {
-      const r = find(key(pinsOf(p)[0]));
+    flat.parts.forEach(function (e) {
+      if (e.p.kind !== 'GND') return;
+      const r = find(key(pinsOf(e.p)[0], e.at));
       if (gndRoot === null) gndRoot = r; else union(r, gndRoot);
     });
     if (gndRoot !== null) gndRoot = find(gndRoot);
@@ -651,9 +991,9 @@ const Netlist = (function () {
       if (nodeOf[r] === undefined) nodeOf[r] = (r === gndRoot) ? 0 : next++;
     });
 
-    const probes = model.parts
-      .filter(function (p) { return p.kind === 'OUT'; })
-      .map(function (p) { return nodeOf[find(key(pinsOf(p)[0]))]; });
+    const probes = flat.parts
+      .filter(function (e) { return e.p.kind === 'OUT'; })
+      .map(function (e) { return nodeOf[find(key(pinsOf(e.p)[0], e.at))]; });
 
     /* Everything the learner placed, in the order they placed it, with GND and OUT
        left out exactly as before — this is what `count` and `values` answer from, so
@@ -669,26 +1009,72 @@ const Netlist = (function () {
        ohms of the ones that do both, so the editor can label them without re-deriving
        any of this. */
     const readouts = [];
+    /* The pin states of every microcontroller in the circuit, by id. Held on the net
+       rather than on the part because it is not something the schematic saves: a
+       drawing does not remember which pins were high the last time it was run, any
+       more than it remembers where the light slider was. The interpreter mutates these
+       records between time steps and the stamps read them; a circuit solved with no
+       interpreter attached simply solves them at reset, which is the honest picture of
+       a board with power and no program. */
+    const mcus = {};
 
-    model.parts.forEach(function (p) {
+    flat.parts.forEach(function (e) {
+      const p = e.p;
+      /* Ids are prefixed exactly as cells are, so two blocks holding the same
+         schematic do not share a Newton state or overwrite one another in the table of
+         branch currents. At the top level the prefix is empty and an id is what it has
+         always been. */
+      const pid = e.at + p.id;
       if (p.kind === 'GND' || p.kind === 'OUT') return;
+      if (p.kind === 'IC') {
+        /* The block stamps nothing: what it holds is already in this same list, spliced
+           in above. It is still counted as placed, so a check can ask how many blocks
+           were built — and so counting resistors goes on counting the ones inside one,
+           which is the honest answer to "how many resistors are in this circuit". */
+        placed.push({ id: pid, kind: 'IC', value: 0 });
+        return;
+      }
+      if (p.kind === 'BB') {
+        /* The board is not in the circuit; the circuit is in the board. It stamps
+           nothing, it owns no node, and every connection it makes is between cells
+           that were already there — so it leaves this loop before anything asks it
+           for pins it does not have. Counted as placed all the same, so a check can
+           ask whether the learner built on one. */
+        placed.push({ id: pid, kind: 'BB', value: bbCols(p) });
+        return;
+      }
+      if (p.kind === 'MCU') {
+        const rec = mcuReset(pid);
+        const pins = pinsOf(p).map(function (pt) { return nodeOf[find(key(pt, e.at))]; });
+        rec.pins.forEach(function (pin, i) { pin.node = pins[i]; });
+        rec.gnd = pins[MCU_PINS.length - 1];
+        rec.code = typeof p.code === 'string' ? p.code : MCU_SKETCH;
+        mcus[pid] = rec;
+        placed.push({ id: pid, kind: 'MCU', value: 0 });
+        readouts.push({ id: pid, kind: 'MCU', mcu: rec });
+        /* One entry, not twelve: the stamp walks the record's own pins, so the pin
+           order in the matrix and the pin order on the drawing are the same list read
+           twice rather than two lists kept in step. */
+        parts.push({ id: pid, kind: 'MCU', mcu: rec });
+        return;
+      }
       if (p.kind === 'BAR') {
         /* look the node up without creating one — see the pass above */
-        const kk = key(pinsOf(p)[0]);
-        placed.push({ id: p.id, kind: p.kind, value: p.value });
-        readouts.push({ id: p.id, kind: 'BAR', full: p.value,
+        const kk = key(pinsOf(p)[0], e.at);
+        placed.push({ id: pid, kind: p.kind, value: p.value });
+        readouts.push({ id: pid, kind: 'BAR', full: p.value,
                         node: parent[kk] === undefined ? null : nodeOf[find(kk)] });
         return;
       }
-      const pins = plusFirst(p).map(function (pt) { return nodeOf[find(key(pt))]; });
-      placed.push({ id: p.id, kind: p.kind, value: p.value });
+      const pins = plusFirst(p).map(function (pt) { return nodeOf[find(key(pt, e.at))]; });
+      placed.push({ id: pid, kind: p.kind, value: p.value });
 
       if (p.kind === 'POT') {
         const rr = potSplit(p);
         /* two resistances sharing the wiper node: pin A to wiper, wiper to pin B */
-        parts.push({ id: p.id + '#a', kind: 'R', value: rr[0], n1: pins[0], n2: pins[2], of: p.id });
-        parts.push({ id: p.id + '#b', kind: 'R', value: rr[1], n1: pins[2], n2: pins[1], of: p.id });
-        readouts.push({ id: p.id, kind: 'POT', nodes: pins, ohms: rr[0] + rr[1], split: rr });
+        parts.push({ id: pid + '#a', kind: 'R', value: rr[0], n1: pins[0], n2: pins[2], of: pid });
+        parts.push({ id: pid + '#b', kind: 'R', value: rr[1], n1: pins[2], n2: pins[1], of: pid });
+        readouts.push({ id: pid, kind: 'POT', nodes: pins, ohms: rr[0] + rr[1], split: rr });
         return;
       }
       /* A device the solver has to iterate on goes through unresolved: there is no one
@@ -699,26 +1085,55 @@ const Netlist = (function () {
          Which terminal is which is drawn on the symbol and named in the panel. */
       if (Devices.is(p.kind)) {
         const dev = Devices.build(p);
+        dev.id = pid;
         dev.nodes = pins.slice(0, PART_KINDS[p.kind].pins);
         parts.push(dev);
-        readouts.push({ id: p.id, kind: p.kind, nodes: dev.nodes });
+        readouts.push({ id: pid, kind: p.kind, nodes: dev.nodes });
         return;
       }
       const ohms = ohmsOf(p, world);
       if (ohms !== null) {
-        parts.push({ id: p.id, kind: 'R', value: ohms, n1: pins[0], n2: pins[1], of: p.id, was: p.kind });
-        readouts.push({ id: p.id, kind: p.kind, nodes: pins, ohms: ohms });
+        parts.push({ id: pid, kind: 'R', value: ohms, n1: pins[0], n2: pins[1], of: pid, was: p.kind });
+        readouts.push({ id: pid, kind: p.kind, nodes: pins, ohms: ohms });
         return;
       }
-      parts.push({ id: p.id, kind: p.kind, value: p.value, n1: pins[0], n2: pins[1], ac: p.ac });
+      parts.push({ id: pid, kind: p.kind, value: p.value, n1: pins[0], n2: pins[1], ac: p.ac });
+    });
+
+    /* ---- a microcontroller nobody gave a ground to ----
+     * Every one of its pins is stamped against its OWN ground pin, so an ungrounded
+     * part is an island: a group of nodes with a defined set of voltage DIFFERENCES
+     * and no defined voltage. That is a singular matrix and a true one — the circuit
+     * really has no unique answer — but "the circuit is under-determined" sends a
+     * learner looking for a floating node when what they have is a chip they forgot to
+     * ground, which is a different search. The condition is exact rather than a guess:
+     * the ground pin is not the circuit's ground, and nothing else in the netlist is on
+     * that node either. */
+    const grounded = {};
+    parts.forEach(function (q) {
+      if (q.kind === 'MCU') return;
+      [q.n1, q.n2].concat(q.nodes || []).forEach(function (nd) {
+        if (nd !== undefined) grounded[nd] = 1;
+      });
+    });
+    const floatingMcus = Object.keys(mcus).filter(function (id) {
+      return mcus[id].gnd !== 0 && !grounded[mcus[id].gnd];
     });
 
     return { parts: parts, probes: probes, nodeCount: next, hasGround: gndRoot !== null,
-             placed: placed, readouts: readouts, env: world,
-             nodeAt: function (pt) { const k = key(pt); return parent[k] === undefined ? null : nodeOf[find(k)]; } };
+             placed: placed, readouts: readouts, env: world, tooDeep: flat.tooDeep,
+             mcus: mcus, floatingMcus: floatingMcus,
+             /* `at` names the drawing the point is in, so the editor can ask what node a
+                cell is on while looking INSIDE a block. Left off, it means the top
+                level, which is every caller that has never heard of one. */
+             nodeAt: function (pt, at) {
+               const k = key(pt, at);
+               return parent[k] === undefined ? null : nodeOf[find(k)];
+             } };
   }
 
-  return { build: build, pinsOf: pinsOf, plusFirst: plusFirst };
+  return { build: build, pinsOf: pinsOf, plusFirst: plusFirst,
+           joiner: joiner, bindBoard: bindBoard, key: key, MAX_DEPTH: MAX_DEPTH };
 })();
 
 /* ---------------------------------------------------------------- MNA */
@@ -753,8 +1168,40 @@ const MNA = (function () {
     if (j > 0) b[j - 1] = Lin.cadd(b[j - 1], cur);
   }
 
+  /* Every pin of one microcontroller, at whatever the sketch has left them at. Each is
+     a Thevenin source between the pin and the part's ground pin, stamped as its Norton
+     — see mcuNorton, which is where the numbers are and where the reasoning for them
+     is. Linear in the matrix and re-read on every stamp, which is what lets an output
+     change between two time steps without the solver knowing anything has happened.
+     Nothing here iterates: a pin driven high is a number the sketch chose, exactly as
+     a thrown switch is, and neither is a non-linearity. */
+  function stampMcu(A, b, rec) {
+    rec.pins.forEach(function (pin) {
+      const nrt = mcuNorton(pin);
+      if (!nrt) return;
+      stampG(A, pin.node, rec.gnd, [nrt.g, 0]);
+      if (nrt.i) stampCurrent(b, rec.gnd, pin.node, [nrt.i, 0]);
+    });
+  }
+
   function problems(net) {
+    /* Asked before anything else: past the nesting limit the netlist is missing parts,
+       and every answer below it would be an answer to a different circuit. Refusing is
+       the only honest thing left. */
+    if (net.tooDeep) {
+      return 'Blocks are nested more than ' + net.tooDeep + ' deep, and everything below ' +
+        'that is not in the netlist — so there is no answer to give you that would be ' +
+        'about the circuit you drew. Ungroup a level and solve again.';
+    }
     if (!net.hasGround) return 'No ground. Every circuit needs one, or the node voltages have nothing to be measured against.';
+    if (net.floatingMcus && net.floatingMcus.length) {
+      const who = net.floatingMcus.map(function (id) { return id.replace('p', 'part '); });
+      return 'The GND pin of ' + who.join(' and ') + ' is not connected to anything. ' +
+        'Every pin of a microcontroller is driven and read against its own GND pin, so ' +
+        'without that connection the whole part floats: its pin voltages have differences ' +
+        'but no values, which is a circuit with no unique answer. Wire GND to the same ' +
+        'ground the rest of the circuit uses.';
+    }
     if (!net.parts.length) return 'Nothing to solve yet — place some components and wire them up.';
     return null;
   }
@@ -942,6 +1389,7 @@ const MNA = (function () {
     net.parts.forEach(function (p) {
       if (p.kind === 'R') stampG(A, p.n1, p.n2, [1 / Math.max(p.value, 1e-12), 0]);
       else if (p.kind === 'I') stampCurrent(b, p.n1, p.n2, [p.value, 0]);
+      else if (p.kind === 'MCU') stampMcu(A, b, p.mcu);
       else if (p.kind === 'C') { /* open circuit at DC */ }
       else if (p.kind === 'V' || p.kind === 'L') {
         const k = f.idxOf(p);
@@ -1006,6 +1454,12 @@ const MNA = (function () {
       else if (p.kind === 'C') stampG(A, p.n1, p.n2, [0, w * p.value]);
       else if (p.kind === 'L') stampG(A, p.n1, p.n2, Lin.cdiv([1, 0], [0, w * Math.max(p.value, 1e-15)]));
       else if (p.kind === 'I') stampCurrent(b, p.n1, p.n2, [p.value, 0]);
+      /* A sweep asks what a small change does, and a pin does not respond to one: it
+         is a source and a resistance, both fixed for as long as the sketch leaves them
+         alone. So the pins contribute their conductances and their sources here exactly
+         as at DC, and the answer is the response of the circuit AROUND a part that is
+         holding still — which is the only frequency response a program has. */
+      else if (p.kind === 'MCU') stampMcu(A, b, p.mcu);
       else if (p.kind === 'V') {
         const k = f.idxOf(p);
         if (p.n1 > 0) { A[p.n1 - 1][k] = Lin.cadd(A[p.n1 - 1][k], [1, 0]); A[k][p.n1 - 1] = Lin.cadd(A[k][p.n1 - 1], [1, 0]); }
@@ -1024,7 +1478,12 @@ const MNA = (function () {
   function ac(net, f1, f2, points) {
     const bad = problems(net);
     if (bad) return { error: bad };
-    if (!net.parts.some(function (p) { return p.kind === 'V' || p.kind === 'I'; })) {
+    /* A microcontroller counts as a source, because its Vcc pin and any driven output
+       are exactly that. Leaving it out would refuse a sweep of the RC hanging off a
+       PWM pin, which is the one frequency response anybody asks a board for. */
+    if (!net.parts.some(function (p) {
+      return p.kind === 'V' || p.kind === 'I' || p.kind === 'MCU';
+    })) {
       return { error: 'No source to sweep. Add a voltage or current source.' };
     }
     /* A non-linear circuit has no frequency response until it has a bias to have one
@@ -1047,11 +1506,29 @@ const MNA = (function () {
     return { sweep: out };
   }
 
-  /* ---- transient, backward Euler ----
-     Backward Euler rather than trapezoidal: it is unconditionally stable and never
-     rings on a step, so a learner watching an RC charge sees the physics rather than
-     an artefact of the integrator. */
-  function tran(net, tStop, h) {
+  /* ---- transient, backward Euler, and the one analysis a program can take part in ----
+   *
+   * Backward Euler rather than trapezoidal: it is unconditionally stable and never
+   * rings on a step, so a learner watching an RC charge sees the physics rather than
+   * an artefact of the integrator.
+   *
+   * `hooks` is how something outside the solver rides along with the time steps. It is
+   * optional and every existing caller omits it, so a transient with no hooks is the
+   * transient this file has always run.
+   *
+   *   hooks.begin(h)          the step length that was actually settled on
+   *   hooks.after(t, volts)   every solved point, in order, including the first
+   *
+   * `after` is where a microcontroller reads its input pins and runs the next slice of
+   * its sketch, and where whatever it writes to its output pins lands in the records
+   * the next step's stamp reads. So a pin written at time t appears in the circuit at
+   * t + h and not before. That is a real latency and not a rounding: it is the price of
+   * co-simulating two things that each need the other's answer, and the alternative —
+   * iterating the program and the matrix together to a joint fixed point — has no
+   * meaning for a program, which is not a curve and has no tangent. One step of
+   * latency, stated, beats a fixed point that does not exist.
+   */
+  function tran(net, tStop, h, hooks) {
     const bad = problems(net);
     if (bad) return { error: bad };
     const f = frame(net, 'tran');
@@ -1081,6 +1558,11 @@ const MNA = (function () {
             stampG(A, p.n1, p.n2, [g, 0]);
             stampCurrent(b, p.n1, p.n2, [-g * prevV[p.id], 0]);
           } else if (p.kind === 'I') stampCurrent(b, p.n1, p.n2, [p.value, 0]);
+          /* Read fresh on every stamp, and therefore fresh on every Newton pass and
+             every step: whatever the sketch left in `drive` between the last step and
+             this one is what the matrix is built from. This one line is the entire
+             mechanism by which a program reaches the circuit. */
+          else if (p.kind === 'MCU') stampMcu(A, b, p.mcu);
           else if (p.kind === 'V' || p.kind === 'L') {
             const k = f.idxOf(p);
             if (p.n1 > 0) { A[p.n1 - 1][k] = Lin.cadd(A[p.n1 - 1][k], [1, 0]); A[k][p.n1 - 1] = Lin.cadd(A[k][p.n1 - 1], [1, 0]); }
@@ -1105,7 +1587,14 @@ const MNA = (function () {
     const v0 = [];
     for (let i = 0; i < net.nodeCount; i++) v0.push(0);
     let guess = null;
-    if (devs.length) {
+    /* A microcontroller makes the first instant unwritable for the same reason a diode
+       does: the node its Vcc pin holds up is not a source's own node, and the node an
+       output drives is behind 25 Ω. So a circuit with one is solved for its first
+       sample rather than assumed, by the same short-step trick below. Every transient
+       without one takes the path it always took. */
+    const solveFirst = devs.length ||
+      net.parts.some(function (p) { return p.kind === 'MCU'; });
+    if (solveFirst) {
       /* A non-linear circuit's first sample cannot be written down the way a linear
          one's can, because the node a source drives is not the node the source is at
          once there is a diode in between. So it is solved — by the same backward-Euler
@@ -1126,6 +1615,10 @@ const MNA = (function () {
     }
     times.push(0);
     volts.push(v0);
+    if (hooks && hooks.begin) hooks.begin(h);
+    /* The sketch sees the instant the power arrives before it sees anything else,
+       which is where setup() belongs. */
+    if (hooks && hooks.after) hooks.after(0, v0);
 
     const step = stampStep(h);
     for (let s = 1; s <= steps; s++) {
@@ -1144,13 +1637,125 @@ const MNA = (function () {
         if (p.kind === 'C') prevV[p.id] = v[p.n1] - v[p.n2];
         if (p.kind === 'L') prevI[p.id] = x[f.idxOf(p)][0];
       });
+      /* After the history, so anything a hook does to a pin belongs to the NEXT step
+         and cannot retroactively change the step just solved. */
+      if (hooks && hooks.after) hooks.after(s * h, v);
+      /* A sketch that has faulted has nothing further to say, and the circuit after it
+         is a circuit frozen at whatever its pins were left at — true, and not what the
+         learner is looking at the plot to find out. Stopping here and returning the run
+         so far lets the panel show the fault beside the part of the trace that led to
+         it. */
+      if (hooks && hooks.stop && hooks.stop()) break;
     }
     /* h may have been coarsened above, so report the one actually used */
     return { t: times, v: volts, h: h };
   }
 
-  return { dc: dc, ac: ac, tran: tran, acAt: acAt };
+  return { dc: dc, ac: ac, tran: tran, acAt: acAt, stampMcu: stampMcu };
 })();
+
+/* ---------------------------------------------------------------- program and circuit
+ *
+ * The join. Above this line nothing knows what a sketch is: the solver has a record of
+ * pin states and stamps it. Below this line nothing knows what a matrix is: the
+ * interpreter has twelve pins and asks them questions. This is the twenty lines in
+ * between, and keeping it this thin is what stops either half from growing an opinion
+ * about the other.
+ *
+ * The interpreter is in src/mcu.js and is NOT part of this file. It is reached through
+ * a typeof guard, the way the app reaches its notepad — a build without that file is a
+ * build where a microcontroller is a part you can draw and cannot run, and the panel
+ * says exactly that rather than throwing. Every other analysis in this file goes on
+ * working either way, which is the property that guard is protecting.
+ */
+function mcuAvailable() { return typeof MCU !== 'undefined' && !!MCU; }
+
+/* One part's pins, dressed as the board an interpreter expects. The voltages come from
+   `ref`, which the transient refills at every solved point — read through the object
+   rather than captured, because the array is a new one each step. */
+function mcuBoard(rec, ref) {
+  const byN = {};
+  rec.pins.forEach(function (p) { if (p.n !== null) byN[p.n] = p; });
+  const adcs = rec.pins.filter(function (p) { return p.adc; })
+    .map(function (p) { return p.name; }).join(', ');
+  const all = rec.pins.filter(function (p) { return p.n !== null; })
+    .map(function (p) { return p.name; }).join(', ');
+  /* Always against the part's OWN ground pin, never against node 0 — the same rule the
+     stamps follow, and it has to be the same rule or the sketch would read a pin
+     against one reference while the solver drove it against another. */
+  function volts(p) {
+    const v = ref.v;
+    if (!v) return 0;
+    return (v[p.node] || 0) - (v[rec.gnd] || 0);
+  }
+  return {
+    pinName: function (n) { return byN[n] ? byN[n].name : null; },
+    pinList: function () { return all; },
+    adcList: function () { return adcs; },
+    mode: function (n) { return byN[n].mode; },
+    setMode: function (n, m) {
+      byN[n].mode = m;
+      /* Leaving OUTPUT drops whatever was being driven. A pin that kept its old drive
+         while claiming to be an input would go on holding a node up through 25 Ω with
+         nothing on screen saying so. */
+      if (m !== 'out') byN[n].drive = 0;
+    },
+    drive: function (n, d) { byN[n].drive = Math.min(Math.max(d, 0), 1); },
+    readDigital: function (n) { return mcuLevel(byN[n], volts(byN[n])); },
+    readAnalog: function (n) {
+      const p = byN[n];
+      if (!p.adc) return null;
+      /* Vcc is the reference, which is why the count is a fraction of the supply and
+         not a voltage: 512 means half of whatever Vcc is, and a sketch that wants volts
+         has to multiply by it. That is the ratiometric reading a real ADC gives, and
+         the source of the classic surprise when the supply sags. */
+      const frac = volts(p) / MCU_VCC;
+      return Math.min(Math.max(Math.round(frac * MCU_ADC_MAX), 0), MCU_ADC_MAX);
+    },
+  };
+}
+
+/* Everything needed to co-simulate one netlist's microcontrollers: a compiled machine
+   per part, and the hooks MNA.tran calls. Returns null when there is nothing to run, so
+   every circuit without one takes the path it always took. */
+function mcuRig(net) {
+  const ids = Object.keys((net && net.mcus) || {});
+  if (!ids.length) return null;
+  if (!mcuAvailable()) return { ids: ids, missing: true, rigs: [] };
+
+  const ref = { v: null };
+  let ops = 1;
+  const rigs = ids.map(function (id) {
+    const rec = net.mcus[id];
+    const c = MCU.compile(rec.code);
+    if (c.error) return { id: id, rec: rec, error: c.error };
+    return { id: id, rec: rec, machine: MCU.machine(c.program, mcuBoard(rec, ref)) };
+  });
+  const live = rigs.filter(function (r) { return r.machine; });
+
+  return {
+    ids: ids, rigs: rigs, missing: false,
+    /* True the moment any sketch faults, which is what stops the transient: see the
+       note at the `hooks.stop` call. A sketch that failed to compile does not stop
+       anything — there was never a run to stop, and the other parts are still running. */
+    faulted: function () {
+      return live.some(function (r) { return !!r.machine.state().fault; });
+    },
+    hooks: {
+      begin: function (h) { ops = MCU.opsFor(h); },
+      after: function (t, v) {
+        ref.v = v;
+        live.forEach(function (r) { r.machine.advance(t, ops); });
+      },
+      stop: function () {
+        return live.some(function (r) { return !!r.machine.state().fault; });
+      },
+    },
+    /* How many instructions a step is worth, for the panel to quote. Zero until begin
+       has been called, because before a run there is no step length to answer about. */
+    ops: function () { return ops; },
+  };
+}
 
 /* ---------------------------------------------------------------- symbols
  *
@@ -1345,10 +1950,28 @@ function createCircuit(root, opts) {
   const model = opts.model && opts.model.parts
     ? JSON.parse(JSON.stringify(opts.model))
     : { parts: [], wires: [] };
-  let seq = model.parts.reduce(function (n, p) {
-    const m = /^p(\d+)$/.exec(p.id);
-    return m ? Math.max(n, +m[1] + 1) : n;
-  }, 0);
+  /* One counter for the whole tree, not one per drawing. Ids inside a block are
+     prefixed before they reach the solver and need only be unique among their own
+     siblings, but ungrouping tips a block's contents out among the parent's — and two
+     parts called p3 in one drawing is a selection that cannot be told apart. Handing
+     out a number nothing anywhere is using costs nothing and removes the question. */
+  let seq = 0;
+  (function scan(m) {
+    (m.parts || []).forEach(function (p) {
+      const mm = /^p(\d+)$/.exec(p.id);
+      if (mm) seq = Math.max(seq, +mm[1] + 1);
+      if (p.inner) scan(p.inner);
+    });
+  })(model);
+
+  /* Which drawing the canvas is showing. `model` stays the whole circuit — it is what
+     is saved, what is graded and what is solved, whatever is on screen — and `cur` is
+     the one whose parts the pointer edits, which is `model` until a block is opened.
+     `path` is the blocks between the two: the breadcrumb draws it, and the netlist is
+     addressed through it. Inner drawings are nested inside the root by reference, so
+     editing `cur` edits the circuit and there is nothing to write back. */
+  let path = [];
+  let cur = model;
 
   let tool = 'R';
   /* The viewport. `s` is the zoom, `px`/`py` are the world-pixel coordinates of the
@@ -1361,8 +1984,14 @@ function createCircuit(root, opts) {
   let panFrom = null;          /* a pan in progress */
   let wireFrom = null;         /* grid point a wire is being drawn from */
   let hover = null;
+  let hoverSp = null;          /* the pointer in screen pixels, for the hover card */
   let analysis = { mode: 'dc', node: 1, f1: 10, f2: 1e6, tstop: 5e-3 };
   let result = null;
+  /* The machines the last transient ran, kept only so the panel can show what they
+     printed and where they stopped. Cleared by changed() with everything else: a
+     console belonging to a circuit that has since been edited is a console about a
+     circuit that no longer exists. */
+  let mcuRun = null;
   let disposed = false;
 
   /* A question that shows a circuit wants the drawing and nothing else — no tools,
@@ -1377,6 +2006,10 @@ function createCircuit(root, opts) {
       '<div class="ckt-bar">' +
         '<div class="ckt-tools">' +
           [['select', 'Select', 'Select and move parts'], ['wire', 'Wire', 'Draw a wire'],
+           /* Next to the wire, because the two of them are the only ways anything on
+              this canvas gets connected — and the board is the one you place first. */
+           ['BB', 'Board', 'Breadboard — a strip of five holes is already one node, ' +
+            'with no wire drawn'],
            ['R', 'R', 'Resistor'], ['C', 'C', 'Capacitor'], ['L', 'L', 'Inductor'],
            ['V', 'V', 'Voltage source'], ['I', 'I', 'Current source'],
            ['GND', 'GND', 'Ground'], ['OUT', 'Probe', 'Mark the output node'],
@@ -1393,7 +2026,12 @@ function createCircuit(root, opts) {
            ['PNP', 'PNP', 'PNP bipolar — Ebers-Moll'],
            ['NMOS', 'NMOS', 'N-channel MOSFET — level 1 square law'],
            ['PMOS', 'PMOS', 'P-channel MOSFET — level 1 square law'],
-           ['OPAMP', 'Op-amp', 'Op-amp — finite gain, output limited to its rails']].map(function (t) {
+           ['OPAMP', 'Op-amp', 'Op-amp — finite gain, output limited to its rails'],
+           /* Last on the bar because it is the only part whose behaviour is written
+              rather than typed, and because everything to its left is what a sketch
+              would be wired to. */
+           ['MCU', 'MCU', 'Microcontroller — twelve pins and a sketch you write; ' +
+            'run it with a transient']].map(function (t) {
             return '<button class="ckt-t" data-tool="' + t[0] + '" title="' + t[2] + '">' + t[1] + '</button>';
           }).join('') +
         '</div>' +
@@ -1401,10 +2039,17 @@ function createCircuit(root, opts) {
         '<button class="ckt-t" data-act="zoomout" title="Zoom out (-)">−</button>' +
         '<button class="ckt-t" data-act="zoomin" title="Zoom in (+)">+</button>' +
         '<button class="ckt-t" data-act="fit" title="Fit the drawing to the window (0)">Fit</button>' +
+        '<button class="ckt-t" data-act="group" title="Fold the selection into one block (G)">Group</button>' +
+        '<button class="ckt-t" data-act="ungroup" title="Open a block back out onto the canvas (U)">Ungroup</button>' +
         '<button class="ckt-t" data-act="rotate" title="Rotate the selection (R)">Rotate</button>' +
         '<button class="ckt-t" data-act="delete" title="Delete the selection (Del)">Delete</button>' +
         '<button class="ckt-t" data-act="clear">Clear</button>' +
       '</div>' +
+      /* Where you are, and the way back. A block that opens onto a canvas identical to
+         the one you came from is a place you can get lost in, so the trail is always on
+         screen while there is one — and is not a strip of empty chrome when there is
+         not. */
+      '<div class="ckt-bar" data-crumbs style="display:none"></div>' +
       '<div class="ckt-main">' +
         '<div class="ckt-canvas"><canvas></canvas></div>' +
         '<div class="ckt-side">' +
@@ -1436,6 +2081,7 @@ function createCircuit(root, opts) {
   const partPanel = root.querySelector('[data-panel="part"]');
   const envPanel = root.querySelector('[data-panel="env"]');
   const optsEl = root.querySelector('[data-opts]');
+  const crumbEl = root.querySelector('[data-crumbs]');
 
   /* The simulated world, held beside the model rather than in it: a schematic is the
      same schematic in the dark and in the light, and a saved circuit should not
@@ -1458,7 +2104,30 @@ function createCircuit(root, opts) {
     return copy;
   }
 
-  function P() { return typeof Sandbox !== 'undefined' ? Sandbox.palette() : { ink: '#eee', dim: '#888', faint: '#555', line: '#333', accent: '#C7F751', blue: '#6E9BFF', amber: '#FFC66D', purple: '#A78BFA' }; }
+  function P() { return typeof Sandbox !== 'undefined' ? Sandbox.palette() : { ink: '#eee', dim: '#888', faint: '#555', line: '#333', accent: '#C7F751', blue: '#6E9BFF', amber: '#FFC66D', purple: '#A78BFA', surface: '#0A0B0E' }; }
+
+  /* The key prefix for the drawing on screen — see the flattener. Empty at the top
+     level, so every question the canvas asks of a netlist it did not open a block in
+     is the question it always asked. */
+  function prefix() {
+    return path.map(function (id) { return id + '|'; }).join('');
+  }
+
+  /* The blocks named by `path`, top down, and the drawing at the end of them. Walked
+     from the root each time rather than remembered, so an ungroup or a delete that
+     removes a block the trail runs through leaves the canvas somewhere that exists. */
+  function reseat() {
+    const kept = [];
+    let m = model;
+    for (let i = 0; i < path.length; i++) {
+      const b = (m.parts || []).filter(function (q) { return q.id === path[i]; })[0];
+      if (!b || b.kind !== 'IC') break;
+      kept.push(b.id);
+      m = b.inner || (b.inner = { parts: [], wires: [] });
+    }
+    path = kept;
+    cur = m;
+  }
 
   /* ---- geometry ----
      gx/gy map a grid cell to WORLD pixels and know nothing about zoom or scroll; the
@@ -1486,8 +2155,15 @@ function createCircuit(root, opts) {
       if (px < x0) x0 = px; if (px > x1) x1 = px;
       if (py < y0) y0 = py; if (py > y1) y1 = py;
     };
-    model.parts.forEach(function (p) { Netlist.pinsOf(p).forEach(function (pt) { see(pt[0], pt[1]); }); see(p.x, p.y); });
-    model.wires.forEach(function (wr) { see(wr.a[0], wr.a[1]); see(wr.b[0], wr.b[1]); });
+    cur.parts.forEach(function (p) {
+      Netlist.pinsOf(p).forEach(function (pt) { see(pt[0], pt[1]); });
+      see(p.x, p.y);
+      /* a body is an area as well as a set of pins — a block whose pins all sit up one
+         end, or a board, which has no pins at all — and either would otherwise be
+         fitted with half of itself off the screen */
+      if (bodyOf(p)) see(p.x + bodyW(p), p.y + bodyH(p));
+    });
+    cur.wires.forEach(function (wr) { see(wr.a[0], wr.a[1]); see(wr.b[0], wr.b[1]); });
     if (!isFinite(x0)) return null;
     return { x0: x0, y0: y0, x1: x1, y1: y1 };
   }
@@ -1521,15 +2197,70 @@ function createCircuit(root, opts) {
   function selOne() {
     if (selIds.size !== 1) return null;
     const id = selIds.values().next().value;
-    return model.parts.find(function (p) { return p.id === id; }) || null;
+    return cur.parts.find(function (p) { return p.id === id; }) || null;
   }
-  function selParts() { return model.parts.filter(function (p) { return selIds.has(p.id); }); }
+  function selParts() { return cur.parts.filter(function (p) { return selIds.has(p.id); }); }
 
-  function partAt(pt) {
-    return model.parts.find(function (p) {
-      if (p.kind === 'GND') return p.x === pt[0] && p.y === pt[1];
-      return p.x === pt[0] && p.y === pt[1];
+  /* What a drag actually moves: the selection, and — if a board is in it — everything
+     standing entirely on that board.
+     A board that slid out from under its own circuit would leave every pin hanging in
+     air. A board that took its parts but left its wires would be worse: the parts would
+     arrive where the wires no longer reach, and the circuit would have changed without
+     one thing on the screen looking wrong. So the test is the WHOLE object and not part
+     of it — a part travels when every pin of it is on the board, a wire when both its
+     ends are. Anything with one end off the board is a lead going somewhere else, and it
+     stretches instead, which is what a lead does when you pick a board up. */
+  function moveBy(dx, dy) {
+    const parts = new Set(selParts());
+    const wires = new Set();
+    /* the boards read off a snapshot, since the loop below adds to `parts` */
+    selParts().filter(function (q) { return q.kind === 'BB'; }).forEach(function (b) {
+      const w = bodyW(b), h = bodyH(b);
+      const on = function (pt) {
+        return pt[0] >= b.x && pt[0] <= b.x + w && pt[1] >= b.y && pt[1] <= b.y + h;
+      };
+      cur.parts.forEach(function (q) {
+        if (parts.has(q)) return;
+        const pins = Netlist.pinsOf(q);
+        if (pins.length && pins.every(on)) parts.add(q);
+      });
+      cur.wires.forEach(function (wr) { if (on(wr.a) && on(wr.b)) wires.add(wr); });
     });
+    parts.forEach(function (q) { q.x += dx; q.y += dy; });
+    wires.forEach(function (wr) {
+      wr.a = [wr.a[0] + dx, wr.a[1] + dy];
+      wr.b = [wr.b[0] + dx, wr.b[1] + dy];
+    });
+  }
+
+  /* A body's footprint, in cells. A block's is the ground it was standing on when it
+     was folded up, kept rather than recomputed so that editing its insides does not
+     make the body on the parent canvas breathe in and out; a board's falls out of how
+     many columns it has. See bodyOf: a side of zero is opened out to one, since a
+     rectangle with no height is a line. */
+  function bodyW(p) { const b = bodyOf(p); return b ? b[0] : 0; }
+  function bodyH(p) { const b = bodyOf(p); return b ? b[1] : 0; }
+
+  /* A symbol sits on its own cell and is picked up there. */
+  function cellPartAt(pt) {
+    return cur.parts.find(function (p) {
+      return !bodyOf(p) && p.x === pt[0] && p.y === pt[1];
+    });
+  }
+  /* A body is picked up anywhere on it, the way a thing that size has to be. */
+  function bodyAt(pt) {
+    return cur.parts.find(function (p) {
+      const b = bodyOf(p);
+      return !!b && pt[0] >= p.x && pt[0] <= p.x + b[0] &&
+                    pt[1] >= p.y && pt[1] <= p.y + b[1];
+    });
+  }
+  /* Symbols first, bodies second, and the order is the point: a resistor plugged into
+     a board is standing ON the board, and a click that reached the board instead would
+     make everything built on one unselectable. A block never overlapped anything
+     before, so nothing already drawn is picked up differently. */
+  function partAt(pt) {
+    return cellPartAt(pt) || bodyAt(pt);
   }
 
   /* ---- reading the answer back off the schematic ----
@@ -1539,9 +2270,13 @@ function createCircuit(root, opts) {
    * first point of a frequency sweep would be showing a number that means nothing —
    * so until there is a DC answer on the canvas, the displays sit blank rather than
    * inventing a reading. */
+  /* The solve is always of the WHOLE circuit — a subcircuit's answer depends on what
+     is outside it, so solving one on its own would be solving a circuit that does not
+     exist — and the prefix is what turns a cell on the canvas in front of you into the
+     node it became once everything was flattened. */
   function dcAt(pt) {
     if (!result || result.kind !== 'dc' || !result.net) return null;
-    const n = result.net.nodeAt(pt);
+    const n = result.net.nodeAt(pt, prefix());
     if (n === null || n === undefined || result.v[n] === undefined) return null;
     return result.v[n];
   }
@@ -1573,6 +2308,15 @@ function createCircuit(root, opts) {
     }
     const d = Devices.build(p);
     return { v: vs, i: d.iv(d, vs, { raw: true }).i };
+  }
+
+  /* The pin states a microcontroller was left in by the last solve, or null before
+     there has been one. Taken off the netlist that solve built rather than kept beside
+     it, so what the drawing shows and what the matrix was stamped from are the same
+     object and cannot describe two different runs. */
+  function mcuRecOf(p) {
+    if (!result || !result.net || !result.net.mcus) return null;
+    return result.net.mcus[prefix() + p.id] || null;
   }
 
   /* The halo a part that emits gets: a filled disc and eight rays, both scaled by the
@@ -1635,6 +2379,102 @@ function createCircuit(root, opts) {
   }
 
   /* ---- drawing ---- */
+
+  /* A breadboard, drawn as what it is: holes. There is not one line on it standing for
+     a connection, because on the real thing there is not one either — the connections
+     are underneath, and reading them off the layout is the entire skill the board
+     teaches. Drawing them would hand the learner the answer and, worse, would put a
+     mark on the canvas that means something different from every other mark on it. So
+     the drawing's job is only to make the layout unmistakable: five holes to a strip,
+     a channel splitting every column in two, and the rails running the length with a
+     sign at each end.
+     Every hole comes from bbStripAt, the same function the netlist joins strips with,
+     so the board cannot come to show a hole that is not there or hide one that is. */
+  function drawBoard(p, colour, pal) {
+    const C = bbCols(p);
+    const edge = colour || pal.line;
+    /* The lip of board outside the outer holes. Wide enough that the rail stripe below
+       reads as printed ON the board rather than as the edge of it — at a narrower lip
+       the two lines sit a few pixels apart and the eye takes the pair for one border. */
+    const M = 0.8;
+    const x0 = gx(p.x - M), x1 = gx(p.x + C - 1 + M);
+    const y0 = gy(p.y - M), y1 = gy(p.y + BB_H - 1 + M);
+    const r = 5;
+
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
+    /* corners rounded by hand; roundRect is not old enough to rely on */
+    ctx.moveTo(x0 + r, y0);
+    ctx.lineTo(x1 - r, y0); ctx.quadraticCurveTo(x1, y0, x1, y0 + r);
+    ctx.lineTo(x1, y1 - r); ctx.quadraticCurveTo(x1, y1, x1 - r, y1);
+    ctx.lineTo(x0 + r, y1); ctx.quadraticCurveTo(x0, y1, x0, y1 - r);
+    ctx.lineTo(x0, y0 + r); ctx.quadraticCurveTo(x0, y0, x0 + r, y0);
+    ctx.closePath();
+    ctx.fillStyle = pal.surface || '#0A0B0E';
+    ctx.fill();
+    ctx.strokeStyle = edge;
+    ctx.stroke();
+
+    /* The channel, sunk rather than merely left blank. It is the one feature of the
+       board that is a fact about the netlist — it is why the two halves of a column
+       are two nodes — and an empty row would read as holes somebody forgot to draw. */
+    const cy0 = gy(p.y + BB_CHAN - 0.5), cy1 = gy(p.y + BB_CHAN + 0.5);
+    ctx.fillStyle = pal.faint;
+    ctx.globalAlpha = 0.3;
+    ctx.fillRect(x0 + 1.5, cy0, x1 - x0 - 3, cy1 - cy0);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = pal.faint;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0 + 1.5, cy0); ctx.lineTo(x1 - 1.5, cy0);
+    ctx.moveTo(x0 + 1.5, cy1); ctx.lineTo(x1 - 1.5, cy1);
+    ctx.stroke();
+
+    /* The rail stripes, with the sign written at both ends of each. A rail is the one
+       strip whose extent you cannot see from the holes — five in a row look the same
+       whether they stop at the fifth or run to the end of the board — so the stripe is
+       doing real work and not decoration. */
+    ctx.lineWidth = 1.5;
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.textBaseline = 'middle';
+    [[0, -1, '+', pal.amber], [BB_RAIL - 1, 1, '−', pal.blue],
+     [BB_H - BB_RAIL, -1, '−', pal.blue], [BB_H - 1, 1, '+', pal.amber]]
+      .forEach(function (rail) {
+        const ry = gy(p.y + rail[0]) + rail[1] * GRID * 0.42;
+        ctx.strokeStyle = rail[3];
+        ctx.beginPath();
+        ctx.moveTo(gx(p.x), ry); ctx.lineTo(gx(p.x + C - 1), ry);
+        ctx.stroke();
+        ctx.fillStyle = rail[3];
+        ctx.textAlign = 'right';
+        ctx.fillText(rail[2], x0 - 4, ry);
+        ctx.textAlign = 'left';
+        ctx.fillText(rail[2], x1 + 4, ry);
+      });
+
+    /* The holes. Small and square, and deliberately not the round junction dot this
+       canvas draws where three things meet: a hole is somewhere a lead may go, and
+       nothing is joined there until one does. */
+    ctx.fillStyle = pal.dim;
+    ctx.globalAlpha = 0.7;
+    for (let c = 0; c < C; c++) {
+      for (let rw = 0; rw < BB_H; rw++) {
+        if (bbStripAt(p, p.x + c, p.y + rw) === null) continue;
+        ctx.fillRect(gx(p.x + c) - 1.6, gy(p.y + rw) - 1.6, 3.2, 3.2);
+      }
+    }
+
+    /* Column numbers every five, printed in the channel: the way a board does it, and
+       the one row with no holes for them to sit on top of. */
+    ctx.font = '8.5px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    for (let c = 4; c < C; c += 5) ctx.fillText(String(c + 1), gx(p.x + c), gy(p.y + BB_CHAN));
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   function drawPart(p, colour, pal) {
     const x = gx(p.x), y = gy(p.y);
     const k = PART_KINDS[p.kind];
@@ -1699,6 +2539,124 @@ function createCircuit(root, opts) {
       ctx.fillText(v === null ? 'BAR' + p.id.replace('p', '') : fmtEng(v, 'V'), x, by - 8);
       ctx.fillStyle = pal.dim;
       ctx.fillText('0–' + fmtEng(full, 'V'), x, y + 11);
+      return;
+    }
+
+    /* ---- a microcontroller ----
+       A body like a block's, and for the same reason: twelve pins with names on them
+       do not fit on a symbol. What it has that a block does not is a STATE worth
+       drawing — after a run, each pin is showing which way it is facing and what it
+       last drove or read, because "the sketch says HIGH" and "the pin is at 5 V" are
+       two different claims and this is where a learner finds out they have come apart. */
+    if (p.kind === 'MCU') {
+      const rec = mcuRecOf(p);
+      const bx = gx(p.x + MCU_W), by = gy(p.y + MCU_H), r = 4;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(bx - r, y); ctx.quadraticCurveTo(bx, y, bx, y + r);
+      ctx.lineTo(bx, by - r); ctx.quadraticCurveTo(bx, by, bx - r, by);
+      ctx.lineTo(x + r, by); ctx.quadraticCurveTo(x, by, x, by - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.fillStyle = pal.surface || '#0A0B0E';
+      ctx.fill();
+      ctx.strokeStyle = colour;
+      ctx.stroke();
+
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.textBaseline = 'middle';
+      MCU_PINS.forEach(function (d, i) {
+        const pin = rec ? rec.pins[i] : null;
+        const px = gx(p.x + (d.side ? MCU_W : 0)), py = gy(p.y + d.row);
+        /* A driven pin is filled, everything else is hollow: the difference between a
+           pin pushing current and a pin merely listening is the single most useful
+           thing this drawing can carry, and it reads at any zoom. */
+        const driving = pin && (pin.power || pin.mode === 'out' || pin.mode === 'pullup');
+        ctx.fillStyle = pin && pin.mode === 'out' && pin.drive > 0.5 ? pal.accent : colour;
+        if (driving) ctx.fillRect(px - 3, py - 3, 6, 6);
+        else { ctx.strokeStyle = colour; ctx.strokeRect(px - 2.5, py - 2.5, 5, 5); }
+
+        ctx.fillStyle = d.power ? pal.dim : colour;
+        ctx.textAlign = d.side ? 'right' : 'left';
+        ctx.fillText(d.name, px + (d.side ? -7 : 7), py);
+        /* and, when there is an answer on the canvas, what the pin is actually doing */
+        if (!pin || d.power) return;
+        const tag = pin.mode === 'out'
+          ? (pin.drive === 0 || pin.drive === 1 ? (pin.drive ? 'H' : 'L')
+             : Math.round(pin.drive * 100) + '%')
+          : pin.mode === 'pullup' ? 'pu' : '';
+        if (!tag) return;
+        ctx.fillStyle = pal.dim;
+        ctx.fillText(tag, px + (d.side ? -30 : 30), py);
+      });
+
+      /* In the two empty bands rather than across the middle: the middle of this body is
+         a pin row whichever way you count, and a name written along one is a name
+         written through a label. */
+      ctx.fillStyle = colour;
+      ctx.textAlign = 'center';
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText('MCU' + p.id.replace('p', ''), (x + bx) / 2, gy(p.y) + GRID / 2);
+      ctx.font = '8.5px ui-monospace, monospace';
+      ctx.fillStyle = pal.dim;
+      ctx.fillText(fmtEng(MCU_VCC, 'V'), (x + bx) / 2, gy(p.y + MCU_H) - GRID / 2);
+      return;
+    }
+
+    /* ---- a block ----
+       A body, not a symbol: a rectangle standing on the ground the parts it swallowed
+       were standing on, with a filled pin on every cell its boundary was crossed at.
+       Those cells are not chosen for the look of the thing — they are exactly where the
+       wires outside already ended (see pinsOf), and that is the whole reason folding a
+       selection up leaves every answer where it was. The body is filled rather than
+       outlined so a wire passing behind one reads as passing behind it. */
+    if (p.kind === 'IC') {
+      const bx = gx(p.x + bodyW(p)), by = gy(p.y + bodyH(p)), r = 4;
+      ctx.beginPath();
+      /* corners rounded by hand; roundRect is not old enough to rely on */
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(bx - r, y); ctx.quadraticCurveTo(bx, y, bx, y + r);
+      ctx.lineTo(bx, by - r); ctx.quadraticCurveTo(bx, by, bx - r, by);
+      ctx.lineTo(x + r, by); ctx.quadraticCurveTo(x, by, x, by - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+      ctx.fillStyle = pal.surface || '#0A0B0E';
+      ctx.fill();
+      ctx.strokeStyle = colour;
+      ctx.stroke();
+
+      ctx.fillStyle = colour;
+      ctx.font = '9.5px ui-monospace, monospace';
+      ctx.textBaseline = 'middle';
+      (p.ports || []).forEach(function (port) {
+        (port.cells || []).forEach(function (c) {
+          const px = gx(p.x + c[0]), py = gy(p.y + c[1]);
+          ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
+          /* the name is written on the inward side, where no wire can arrive */
+          if (c[0] === 0) { ctx.textAlign = 'left'; ctx.fillText(port.name, px + 7, py); }
+          else if (c[0] === bodyW(p)) { ctx.textAlign = 'right'; ctx.fillText(port.name, px - 7, py); }
+          else { ctx.textAlign = 'center'; ctx.fillText(port.name, px, py + (c[1] === 0 ? 9 : -9)); }
+        });
+      });
+
+      /* The title, clipped to the body. A name that runs on over the wires beside the
+         block is worse than one that is cut off, because a cut-off name is visibly
+         cut off and a name lying across a wire is just unreadable. */
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x + 2, y + 2, bx - x - 4, by - y - 4);
+      ctx.clip();
+      const held = ((p.inner && p.inner.parts) || []).length;
+      const mx = (x + bx) / 2, my = (y + by) / 2;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 11px ui-monospace, monospace';
+      ctx.fillText(p.title || 'Block', mx, held ? my - 6 : my);
+      if (held) {
+        ctx.font = '9.5px ui-monospace, monospace';
+        ctx.fillStyle = pal.dim;
+        ctx.fillText(held + (held === 1 ? ' part' : ' parts'), mx, my + 7);
+      }
+      ctx.restore();
       return;
     }
 
@@ -1932,14 +2890,18 @@ function createCircuit(root, opts) {
        failure — the probe the question asks about was falling off the right-hand edge
        at ordinary laptop widths. The editor can scroll and pan; a diagram cannot, so
        it scales itself to fit and centres what is left. */
-    if (ro_ && model.parts.length) {
+    if (ro_ && cur.parts.length) {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       const see = function (px, py) {
         if (px < x0) x0 = px; if (px > x1) x1 = px;
         if (py < y0) y0 = py; if (py > y1) y1 = py;
       };
-      model.parts.forEach(function (p2) { Netlist.pinsOf(p2).forEach(function (pt) { see(pt[0], pt[1]); }); see(p2.x, p2.y); });
-      model.wires.forEach(function (wr) { see(wr.a[0], wr.a[1]); see(wr.b[0], wr.b[1]); });
+      cur.parts.forEach(function (p2) {
+        Netlist.pinsOf(p2).forEach(function (pt) { see(pt[0], pt[1]); });
+        see(p2.x, p2.y);
+        if (bodyOf(p2)) see(p2.x + bodyW(p2), p2.y + bodyH(p2));
+      });
+      cur.wires.forEach(function (wr) { see(wr.a[0], wr.a[1]); see(wr.b[0], wr.b[1]); });
       const pad = 1.2;
       const needW = (x1 - x0 + pad * 2) * GRID, needH = (y1 - y0 + pad * 2) * GRID;
       const s2 = Math.min(w / needW, h / needH, 1.6);
@@ -1972,10 +2934,20 @@ function createCircuit(root, opts) {
     }
     ctx.globalAlpha = 1;
 
+    /* Boards go down before the wires and before the parts, because that is the order
+       they go down on a desk: the board is the ground everything else is built on. A
+       jumper drawn across one has to be visible ON it, and a resistor plugged into it
+       has to be visible IN it — both of which a body painted in part order would
+       cover, since the parts pass runs after the wires and in whatever order the
+       learner happened to place things. */
+    cur.parts.forEach(function (p) {
+      if (p.kind === 'BB') drawBoard(p, selIds.has(p.id) ? pal.accent : null, pal);
+    });
+
     /* wires */
     ctx.strokeStyle = pal.dim;
     ctx.lineWidth = 2;
-    model.wires.forEach(function (wr) {
+    cur.wires.forEach(function (wr) {
       ctx.beginPath();
       ctx.moveTo(gx(wr.a[0]), gy(wr.a[1]));
       ctx.lineTo(gx(wr.b[0]), gy(wr.b[1]));
@@ -1985,8 +2957,8 @@ function createCircuit(root, opts) {
     /* junction dots where three or more things meet */
     const count = {};
     function bump(pt) { const k = pt[0] + ',' + pt[1]; count[k] = (count[k] || 0) + 1; }
-    model.wires.forEach(function (wr) { bump(wr.a); bump(wr.b); });
-    model.parts.forEach(function (p) { Netlist.pinsOf(p).forEach(bump); });
+    cur.wires.forEach(function (wr) { bump(wr.a); bump(wr.b); });
+    cur.parts.forEach(function (p) { Netlist.pinsOf(p).forEach(bump); });
     ctx.fillStyle = pal.dim;
     Object.keys(count).forEach(function (k) {
       if (count[k] < 3) return;
@@ -1997,7 +2969,8 @@ function createCircuit(root, opts) {
     });
 
     /* parts */
-    model.parts.forEach(function (p) {
+    cur.parts.forEach(function (p) {
+      if (p.kind === 'BB') return;              /* already down, under the wires */
       drawPart(p, selIds.has(p.id) ? pal.accent : pal.ink, pal);
     });
 
@@ -2021,10 +2994,11 @@ function createCircuit(root, opts) {
     if (result && result.kind === 'dc' && result.net) {
       ctx.font = '10.5px ui-monospace, monospace';
       ctx.textAlign = 'left';
+      const at = prefix();
       const seen = {};
-      model.parts.forEach(function (p) {
+      cur.parts.forEach(function (p) {
         Netlist.pinsOf(p).forEach(function (pt) {
-          const n = result.net.nodeAt(pt);
+          const n = result.net.nodeAt(pt, at);
           if (n === null || n === 0 || seen[n]) return;
           seen[n] = 1;
           ctx.fillStyle = pal.accent;
@@ -2032,6 +3006,88 @@ function createCircuit(root, opts) {
         });
       });
     }
+
+    /* The hover card goes on last and outside the viewport transform, so it is the
+       same size at every zoom and nothing is drawn over it. */
+    paintTip(pal, w, h);
+  }
+
+  /* What a block says about itself when you point at it. Drawn here rather than left
+     to the browser's own tooltip because the title attribute waits the best part of a
+     second, shows one run of text in a font nobody chose, and would be the only place
+     in this editor where something the learner wrote is displayed by the platform
+     rather than by the drawing. */
+  function paintTip(pal, w, h) {
+    const b = hoverSp && tipBlock();
+    if (!b) return;
+    const title = String(b.title || 'Block');
+    const desc = String(b.desc || '').trim();
+    /* Saved and restored around the lot, transform included, because everything below
+       is set for a card and nothing below is set for a schematic — and the parts of
+       the NEXT frame are drawn before anything here is set again. A font left behind
+       here comes back as a part label in the wrong place. */
+    ctx.save();
+    /* back to screen pixels, whatever the viewport was doing */
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const PAD = 8, MAXW = 230;
+    ctx.font = 'bold 11.5px ui-monospace, monospace';
+    let width = Math.min(Math.max(ctx.measureText(title).width, 90), MAXW);
+    ctx.font = '11px ui-monospace, monospace';
+    const lines = desc
+      ? wrapText(desc, MAXW)
+      : ['Double-click to open it. Describe it in the panel.'];
+    lines.forEach(function (l) { width = Math.max(width, Math.min(ctx.measureText(l).width, MAXW)); });
+    const bh = PAD * 2 + 15 + lines.length * 14;
+    const bw = width + PAD * 2;
+    /* kept on the canvas: a card that runs off the edge is a card half of which was
+       written for nobody */
+    const tx = Math.min(hoverSp[0] + 14, Math.max(4, w - bw - 4));
+    const ty = Math.min(hoverSp[1] + 16, Math.max(4, h - bh - 4));
+
+    ctx.globalAlpha = 0.97;
+    ctx.fillStyle = pal.surface || '#0A0B0E';
+    ctx.fillRect(tx, ty, bw, bh);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = pal.accent;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(tx + 0.5, ty + 0.5, bw - 1, bh - 1);
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = pal.accent;
+    ctx.font = 'bold 11.5px ui-monospace, monospace';
+    ctx.fillText(title, tx + PAD, ty + PAD + 11);
+    ctx.fillStyle = desc ? pal.ink : pal.dim;
+    ctx.font = '11px ui-monospace, monospace';
+    lines.forEach(function (l, i) { ctx.fillText(l, tx + PAD, ty + PAD + 26 + i * 14); });
+    ctx.restore();
+  }
+
+  /* Greedy wrap against the font already selected on the context. Long enough for a
+     paragraph and no longer: a description that fills the canvas is a panel, and the
+     panel is where the whole of it lives. */
+  function wrapText(text, maxw) {
+    const words = text.split(/\s+/);
+    const out = [];
+    let line = '';
+    for (let i = 0; i < words.length && out.length < 8; i++) {
+      const test = line ? line + ' ' + words[i] : words[i];
+      if (ctx.measureText(test).width > maxw && line) { out.push(line); line = words[i]; }
+      else line = test;
+    }
+    if (line && out.length < 8) out.push(line);
+    else if (line) out[out.length - 1] += ' …';
+    return out;
+  }
+
+  /* The block under the pointer, if the pointer is over one and doing nothing else. A
+     card that follows you through a drag is a card in the way. */
+  function tipBlock() {
+    if (drag || marquee || panFrom || wireFrom || !hover) return null;
+    const hit = partAt(hover);
+    return hit && hit.kind === 'IC' ? hit : null;
   }
 
   /* ---- panels ---- */
@@ -2052,9 +3108,13 @@ function createCircuit(root, opts) {
     if (selIds.size > 1) {
       partPanel.innerHTML = '<h4>' + selIds.size + ' parts selected</h4>' +
         '<p class="ckt-hint">Drag to move them together. R rotates, Delete removes. ' +
+        'G folds them into one block, whose pins are worked out from which nets cross ' +
+        'the edge of the selection; U opens any block among them back out. ' +
         'Click an empty cell to deselect.</p>';
       return;
     }
+    if (p && p.kind === 'IC') { paintBlock(p); return; }
+    if (p && p.kind === 'MCU') { paintMcu(p); return; }
     if (!p || p.kind === 'GND' || p.kind === 'OUT') {
       partPanel.innerHTML = '<h4>Component</h4><p class="ckt-hint">' +
         (tool === 'wire' ? 'Click a pin, then click where the wire should end.'
@@ -2082,7 +3142,7 @@ function createCircuit(root, opts) {
           '<span data-wiperval style="color:var(--lime)">' +
           (p.wiper === undefined ? 0.5 : p.wiper).toFixed(2) + '</span></div>'
         : '') +
-      '<p class="ckt-hint" data-note>' + modelNote(p) + '</p>';
+      '<p class="ckt-hint" data-note>' + modelNote(p) + '</p>' + boardShortNote(p);
 
     const inp = partPanel.querySelector('[data-val]');
     if (inp) inp.addEventListener('change', function () {
@@ -2114,9 +3174,184 @@ function createCircuit(root, opts) {
     });
   }
 
+  /* Both ends of a part in the SAME strip is the mistake every first breadboard
+     produces, and it is the one mistake this canvas cannot draw: the short is under the
+     board, and there is no wire on the screen for the eye to catch. So the panel says
+     it in words, which is the only place left to say it. */
+  function boardShortNote(p) {
+    const pins = Netlist.pinsOf(p);
+    if (pins.length < 2) return '';
+    let where = null;
+    cur.parts.forEach(function (b) {
+      if (b.kind !== 'BB' || where) return;
+      const seen = {};
+      pins.forEach(function (pt) {
+        const s = bbStripAt(b, pt[0], pt[1]);
+        if (s === null) return;
+        if (seen[s]) where = s; else seen[s] = 1;
+      });
+    });
+    if (!where) return '';
+    return '<p class="ckt-hint" style="color:var(--amber,#FFC66D)">Both ends of this are ' +
+      'in one strip of the board, which has therefore shorted it out — a strip is five ' +
+      'holes and all five are the same node. ' +
+      (where.indexOf('rail') === 0
+        ? 'That strip is a power rail, and a rail runs the whole length of the board, so ' +
+          'moving along it will not help: bring one end off the rail.'
+        : 'Move one end to the next column along, or over the channel into the other half.') +
+      '</p>';
+  }
+
+  /* A block has no value to type, so its panel is the one place the two things only a
+     person can supply are written: what this piece of circuit is called and what it is
+     for. The title is defaulted rather than left empty — "Block 3" is at least true,
+     and an unnamed rectangle on a schematic is worse than a dully named one. The
+     description is where the reason lives, and it is the reason a block is worth
+     having at all: the rectangle hides the parts, and only the words say why hiding
+     them was the right idea. */
+  function paintBlock(p) {
+    const pins = (p.ports || []).length;
+    const held = ((p.inner && p.inner.parts) || []).length;
+    partPanel.innerHTML = '<h4>Block ' + esc2(p.id.replace('p', '')) + '</h4>' +
+      '<label class="ckt-f"><span>Title</span>' +
+      '<input data-title value="' + esc2(p.title || '') + '"></label>' +
+      '<div class="ckt-f" style="grid-template-columns:1fr;align-items:stretch">' +
+      '<span>Description</span>' +
+      '<textarea data-desc rows="4" style="width:100%;padding:6px 8px;border-radius:var(--r);' +
+      'border:1px solid var(--line-2);background:var(--surface-2,transparent);color:inherit;' +
+      'font:inherit;font-size:12px;line-height:1.5;resize:vertical">' +
+      esc2(p.desc || '') + '</textarea></div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:8px">' +
+      '<button class="ckt-t" data-open style="flex:1">Open</button>' +
+      '<button class="ckt-t" data-ungroup style="flex:1">Ungroup</button></div>' +
+      '<p class="ckt-hint">' + held + (held === 1 ? ' part' : ' parts') + ' inside, behind ' +
+      pins + (pins === 1 ? ' pin' : ' pins') + '. The pins are not a list anyone typed: ' +
+      'they are the nets that had a connection inside the selection and a connection ' +
+      'outside it when it was folded up, and they sit on the very cells those crossings ' +
+      'were on — so grouping and ungrouping leave the circuit solving exactly as it did. ' +
+      'Nothing about a block reaches the solver; it is flattened back out before a single ' +
+      'node is numbered.</p>' +
+      (pins
+        ? '<p class="ckt-hint" style="margin-top:8px">Pins, in the order they are drawn:</p>' +
+          (p.ports || []).map(function (port, i) {
+            return '<label class="ckt-f"><span>Pin ' + (i + 1) + '</span>' +
+              '<input data-port="' + i + '" value="' + esc2(port.name) + '"></label>';
+          }).join('')
+        : '<p class="ckt-hint" style="margin-top:8px">No pins at all — nothing outside this ' +
+          'block is wired to anything inside it, so it is a circuit of its own sitting on ' +
+          'the same canvas. That is legal, and it is usually a wire you meant to draw.</p>');
+
+    const t = partPanel.querySelector('[data-title]');
+    t.addEventListener('input', function () {
+      p.title = t.value;
+      paintCrumbs();
+      paint();
+    });
+    /* A rename changes no connection and no value, so the answer on the canvas is
+       still the answer: retouch saves it and re-solves in place rather than throwing
+       the solution away the way an edit to the drawing does. */
+    t.addEventListener('change', function () { retouch(); });
+    const d = partPanel.querySelector('[data-desc]');
+    d.addEventListener('change', function () { p.desc = d.value; retouch(); });
+    d.addEventListener('input', function () { p.desc = d.value; });
+    partPanel.querySelectorAll('[data-port]').forEach(function (el) {
+      el.addEventListener('input', function () {
+        p.ports[+el.dataset.port].name = el.value;
+        paint();
+      });
+      el.addEventListener('change', function () { retouch(); });
+    });
+    partPanel.querySelector('[data-open]').addEventListener('click', function () { openBlock(p); });
+    partPanel.querySelector('[data-ungroup]').addEventListener('click', doUngroup);
+  }
+
+  /* ---- the sketch, its console, and its faults ----
+   *
+   * The one panel in this file whose subject is not a number. A learner debugging here
+   * is holding two things that could be wrong — the sketch and the circuit — and every
+   * decision below is about telling those two apart. The sketch is checked as it is
+   * typed, so a syntax error is reported before any run and can never be mistaken for a
+   * circuit that would not solve. A fault at run time names its line. And the console is
+   * kept separate from the solver's own output pane, because "my program printed this"
+   * and "the solver could not converge" are not the same kind of sentence.
+   */
+  function mcuRigFor(p) {
+    if (!mcuRun) return null;
+    const id = prefix() + p.id;
+    return mcuRun.rigs.filter(function (r) { return r.id === id; })[0] || null;
+  }
+
+  function faultLine(f) {
+    return '<div class="ckt-err">' + (f.line ? 'Line ' + f.line + ': ' : '') +
+      esc2(f.message) + '</div>';
+  }
+
+  function paintMcu(p) {
+    const code = typeof p.code === 'string' ? p.code : MCU_SKETCH;
+    const gone = !mcuAvailable();
+    const built = gone ? null : MCU.compile(code);
+    const rig = mcuRigFor(p);
+    const st = rig && rig.machine ? rig.machine.state() : null;
+
+    partPanel.innerHTML = '<h4>Microcontroller ' + esc2(p.id.replace('p', '')) + '</h4>' +
+      (gone
+        ? '<div class="ckt-err">The interpreter (src/mcu.js) is not in this build, so ' +
+          'this part can be drawn and wired but not run. Its pins stamp at reset — every ' +
+          'one an input — which is what a board with power and no program does.</div>'
+        : '') +
+      '<div class="ckt-f" style="grid-template-columns:1fr;align-items:stretch">' +
+      '<span>Sketch</span>' +
+      '<textarea data-code rows="14" spellcheck="false" style="width:100%;padding:6px 8px;' +
+      'border-radius:var(--r);border:1px solid var(--line-2);background:var(--surface-2,transparent);' +
+      'color:inherit;font-family:var(--mono,ui-monospace,monospace);font-size:11px;line-height:1.5;' +
+      'resize:vertical;white-space:pre;overflow-wrap:normal;overflow-x:auto">' +
+      esc2(code) + '</textarea></div>' +
+      '<div data-built>' + (built && built.error ? faultLine(built.error) : '') + '</div>' +
+      (st && st.fault ? faultLine(st.fault) : '') +
+      (st && !st.fault
+        ? '<p class="ckt-hint">' +
+          (st.done ? 'Finished: there is no loop(), so the sketch ran once and stopped. '
+            : st.inSetup ? 'Still inside setup() when the run ended. '
+            : st.loops + (st.loops === 1 ? ' iteration' : ' iterations') + ' of loop(). ') +
+          st.ops.toLocaleString() + ' instructions, ' + mcuRun.ops() +
+          ' per time step.' + (st.dropped ? ' ' + st.dropped + ' console lines dropped.' : '') +
+          '</p>'
+        : '') +
+      (rig && rig.error ? faultLine(rig.error) : '') +
+      mcuConsole(rig) +
+      '<p class="ckt-hint" data-note>' + modelNote(p) + '</p>';
+
+    const ta = partPanel.querySelector('[data-code]');
+    /* Checked on every keystroke and saved on commit. Two different events on purpose:
+       a compile is cheap and its answer is what the learner is looking at while typing,
+       whereas rewriting the model on every character would put an undo entry between
+       every two letters. */
+    ta.addEventListener('input', function () {
+      const now = mcuAvailable() ? MCU.compile(ta.value) : null;
+      const box = partPanel.querySelector('[data-built]');
+      if (box) box.innerHTML = now && now.error ? faultLine(now.error) : '';
+      p.code = ta.value;
+    });
+    ta.addEventListener('change', function () { p.code = ta.value; changed(); });
+  }
+
+  function mcuConsole(rig) {
+    if (!rig || !rig.machine) return '';
+    const lines = rig.machine.console();
+    if (!lines.length) {
+      return '<p class="ckt-hint">The sketch printed nothing. print("..."), println(x) ' +
+        'and Serial.println(x) all write here.</p>';
+    }
+    return '<h4 style="margin-top:10px">Console</h4><pre style="max-height:150px;overflow:auto;' +
+      'margin:0 0 8px;padding:6px 8px;border-radius:var(--r);border:1px solid var(--line-2);' +
+      'font-family:var(--mono,ui-monospace,monospace);font-size:11px;line-height:1.5;' +
+      'white-space:pre-wrap">' + esc2(lines.join('\n')) + '</pre>';
+  }
+
   /* What the value box means for a kind whose value is not simply "the value". */
   const VALUE_LABEL = {
     LDR: 'R at 10 lx (Ω)', NTC: 'R at 25 °C (Ω)', POT: 'Total (Ω)',
+    BB: 'Columns',
     LAMP: 'Resistance (Ω)', METER: 'Burden (Ω)', BAR: 'Full scale (V)',
     D: 'Is (A)', LED: 'Is (A)', NPN: 'Is (A)', PNP: 'Is (A)',
     NMOS: 'k (A/V²)', PMOS: 'k (A/V²)', OPAMP: 'Open-loop gain',
@@ -2141,6 +3376,62 @@ function createCircuit(root, opts) {
      these states the equation, its parameters, and what it does NOT model. */
   function modelNote(p) {
     const n = p.id.replace('p', '');
+    if (p.kind === 'MCU') {
+      /* Longer than any other note here, and deliberately: a microcontroller makes more
+         claims than any other part on this canvas, and every one of them is a place a
+         learner could be misled. Each paragraph states a number and then states what the
+         number does NOT cover. */
+      return 'Vcc is ' + fmtEng(MCU_VCC, 'V') + ' and every pin is referenced to this ' +
+        'part\'s own GND pin, never to the circuit\'s ground — so an output at LOW is ' +
+        fmtEng(MCU_ROUT, 'Ω') + ' to that pin and not a wire to ground. Wire GND, or the ' +
+        'whole part floats and the solver says so.<br><br>' +
+
+        'An OUTPUT is a source at ' + fmtEng(MCU_VCC, 'V') + ' or 0 V behind ' +
+        fmtEng(MCU_ROUT, 'Ω') + ', which is what limits the current it can pass: an LED ' +
+        'straight to ground draws about ' + fmtEng(MCU_VCC / MCU_ROUT, 'A') + ' at most, ' +
+        'and that is the reason for the resistor, not a rule of thumb.<br><br>' +
+
+        'An INPUT is ' + fmtEng(MCU_RIN, 'Ω') + ' to GND and reads through a Schmitt ' +
+        'trigger: above ' + fmtEng(MCU_VIH, 'V') + ' it reads 1, below ' +
+        fmtEng(MCU_VIL, 'V') + ' it reads 0, and between the two it reads whatever it read ' +
+        'last. INPUT_PULLUP adds ' + fmtEng(MCU_RPULL, 'Ω') + ' up to Vcc, which is what ' +
+        'makes a button to ground work with no other components.<br><br>' +
+
+        'analogRead gives ' + MCU_ADC_BITS + ' bits, 0 to ' + MCU_ADC_MAX + ', against Vcc ' +
+        'as the reference — so one count is ' + fmtEng(MCU_VCC / (MCU_ADC_MAX + 1), 'V') +
+        ' and the reading is a FRACTION of the supply rather than a voltage. There is no ' +
+        'sampling time, no input capacitance and no conversion delay: the count is taken ' +
+        'from the solved node voltage at that instant.<br><br>' +
+
+        'analogWrite stamps the MEAN of the pulse train, duty/255 of Vcc, and not a ' +
+        'switching waveform. A filter or an LED responds to that mean and the answer here ' +
+        'is right; anything that responds within one PWM period — a scope on the pin, a ' +
+        'motor commutating, a second logic input reading it — is not modelled at all, and ' +
+        'this would show it a steady voltage that never exists.<br><br>' +
+
+        'The Vcc pin supplies ' + fmtEng(MCU_VCC, 'V') + ' through ' +
+        fmtEng(MCU_RSUP, 'Ω') + '. There is no current limit and no brown-out: load it ' +
+        'hard enough and it will sag, which is honest, but nothing will reset.<br><br>' +
+
+        'On the drawing, a filled pin is one pushing current — an output, a pull-up, or ' +
+        'a power pin — and a hollow one is only listening. H, L and a percentage are ' +
+        'where the sketch LEFT that pin when the run ended, not where it sat throughout: ' +
+        'a blinking pin shows whichever half of the blink the last time step landed in. ' +
+        'The plot is where the history is.<br><br>' +
+
+        'The sketch runs only during a TRANSIENT. In the operating point and the ' +
+        'frequency sweep every pin is stamped at reset — an input, high impedance — ' +
+        'because a program is a thing that happens over time and neither of those ' +
+        'analyses has any.' +
+        (mcuAvailable()
+          ? '<br><br>It runs at ' + MCU.OPS_PER_SECOND.toLocaleString() + ' operations per ' +
+            'second of simulated time, suspended between steps so an endless loop() costs ' +
+            'nothing. An operation is one statement or one operator, which no real ' +
+            'processor charges alike; the rate is stated rather than realistic. delay() ' +
+            'and millis() run on the simulation clock, so their resolution is the time ' +
+            'step. A pin written during one step reaches the matrix at the next.'
+          : '');
+    }
     if (p.kind === 'SW') {
       return 'A state, not a value. Closed stamps ' + fmtEng(SW_ON, 'Ω') + '; open stamps ' +
         fmtEng(SW_OFF, 'Ω') + ' rather than deleting the branch, so whatever hangs off the far ' +
@@ -2191,6 +3482,19 @@ function createCircuit(root, opts) {
         'gets a caret rather than a full bar that quietly lies, and a negative voltage reads ' +
         'in amber with the bar empty' + (v === null ? '. Solve to give it something to show.' :
         ', and it is showing ' + fmtEng(v, 'V') + ' now.');
+    }
+    if (p.kind === 'BB') {
+      return 'Not a component: it is connection without wire, and the one part on this ' +
+        'canvas that carries no current at all. A terminal strip is five holes in a ' +
+        'column and all five are one node before anything is put in them. The channel ' +
+        'down the middle is what makes the upper half of a column and the lower half two ' +
+        'nodes instead of one — which is the gap a DIP is built to straddle, and why ' +
+        'a part bridging it lands one end in each. The four stripes are rails, and each ' +
+        'one runs the whole length. A pin joins a strip by sitting on its hole, which is ' +
+        'the same test that decides whether a pin meets a wire, so there is no second ' +
+        'rule here to learn. Nothing is stamped: a strip nothing reaches is not a node, ' +
+        'so a board may lie under a half-built circuit without the solver ever calling ' +
+        'it under-determined. This one is ' + bbCols(p) + ' columns wide.';
     }
     /* ---- the non-linear parts ----
        Every one of these states its equation, its parameters, and what it leaves out.
@@ -2305,7 +3609,266 @@ function createCircuit(root, opts) {
   function refreshNote() {
     const sel = selOne();
     const note = partPanel && partPanel.querySelector('[data-note]');
-    if (sel && note) note.textContent = modelNote(sel);
+    /* Markup, because paintPart has always written a note through innerHTML and these
+       two have to render the same string the same way. They did not: a note long enough
+       to need a paragraph break showed the break as literal text every time a solve
+       refreshed it, and looked right again the next time the panel was rebuilt. */
+    if (sel && note) note.innerHTML = modelNote(sel);
+  }
+
+  /* ---- folding a selection into a block ----
+   *
+   * The interface of a block is not something the learner declares; it is something
+   * the drawing has already decided. A net with a connection inside the selection and
+   * a connection outside it HAS to become a pin, or grouping would quietly cut it —
+   * and a net wholly inside is nobody else's business and must not become one. So the
+   * two counts below are the whole rule, and they are counted with the netlist's own
+   * union-find rather than a second one written to look at the same thing.
+   *
+   * Where the block is then put matters as much as which pins it has. It is laid down
+   * on the footprint the selection had, and each pin keeps the exact cell its crossing
+   * was on, so every wire left outside still ends where it ended. Group and the
+   * netlist is the netlist you had; ungroup and it is that same netlist again. A block
+   * that had to be re-wired to work would be a block nobody could trust with a circuit
+   * that was already right.
+   *
+   * Wires are sorted by the net they are on, not by where they lie: a wire on a wholly
+   * internal net goes inside, and everything else stays. A wire that runs between two
+   * selected parts and ALSO reaches something outside is on a crossing net and stays
+   * put, which is why a port holds a list of cells and not one — both of the inside
+   * ends it left behind have to arrive back at the same pin.
+   */
+  /* The block the canvas is standing inside, if it is standing inside one. */
+  function hostBlock() {
+    let m = model, b = null;
+    for (let i = 0; i < path.length; i++) {
+      b = (m.parts || []).filter(function (q) { return q.id === path[i]; })[0];
+      if (!b) return null;
+      m = b.inner || {};
+    }
+    return b;
+  }
+
+  function doGroup() {
+    const sel = selParts();
+    if (!sel.length) return;
+
+    const uf = Netlist.joiner();
+    cur.parts.forEach(function (p) {
+      Netlist.pinsOf(p).forEach(function (pt) { uf.find(Netlist.key(pt, '')); });
+    });
+    cur.wires.forEach(function (w) { uf.run(w, ''); });
+    /* and the boards, by the netlist's own function rather than a second reading of
+       what a strip joins — without this, folding up a selection built on a board
+       would count the two ends of a strip as two nets and grow the block a pin for
+       each, which is a block that solves differently from the drawing it came from */
+    cur.parts.forEach(function (p) {
+      if (p.kind === 'BB') Netlist.bindBoard(p, uf, '');
+    });
+
+    /* one tally per net: how many pins reach it from each side of the line */
+    const tally = {};
+    function at(pt) {
+      const r = uf.find(Netlist.key(pt, ''));
+      return tally[r] || (tally[r] = { in: 0, out: 0, cells: [], seen: {}, gnd: false });
+    }
+    cur.parts.forEach(function (p) {
+      const mine = selIds.has(p.id);
+      Netlist.pinsOf(p).forEach(function (pt) {
+        const t = at(pt);
+        if (p.kind === 'GND') t.gnd = true;
+        if (!mine) { t.out++; return; }
+        t.in++;
+        const kk = pt[0] + ',' + pt[1];
+        if (!t.seen[kk]) { t.seen[kk] = 1; t.cells.push(pt); }
+      });
+    });
+    /* The drawing on screen may itself be the inside of a block, and that block's own
+       pins are connections to the world as surely as any part is — they are simply not
+       drawn as parts, because what they reach is one level up. Counting them as
+       outside is what stops a selection that swallows a pin cell from quietly cutting
+       the block off from its own parent: without this, folding up the only resistor in
+       a block would produce something with no pins at all, still drawn, still saved,
+       and connected to nothing. */
+    const host = hostBlock();
+    if (host) {
+      (host.ports || []).forEach(function (port) {
+        (port.cells || []).forEach(function (c) { at(c).out++; });
+      });
+    }
+    function netOf(pt) { return tally[uf.find(Netlist.key(pt, ''))]; }
+    function crosses(t) { return !!t && t.in > 0 && t.out > 0; }
+    function swallowed(t) { return !!t && t.in > 0 && t.out === 0; }
+
+    /* The origin is the top-left of the ground the selection stood on, and everything
+       that goes inside is measured from it — so the block's own position is the only
+       thing that has to move when it is dragged, and a port's offset reads correctly
+       against both drawings at once. */
+    let ox = Infinity, oy = Infinity, x1 = -Infinity, y1 = -Infinity;
+    sel.forEach(function (p) {
+      const see = function (a, b) {
+        if (a < ox) ox = a; if (a > x1) x1 = a;
+        if (b < oy) oy = b; if (b > y1) y1 = b;
+      };
+      Netlist.pinsOf(p).forEach(function (pt) { see(pt[0], pt[1]); });
+      see(p.x, p.y);
+      if (bodyOf(p)) see(p.x + bodyW(p), p.y + bodyH(p));
+    });
+    if (!isFinite(ox)) return;
+
+    /* Ports in reading order — down the drawing and across it — so the numbering on
+       the block is the order a person would have counted them in. */
+    const ports = [];
+    Object.keys(tally).forEach(function (r) {
+      const t = tally[r];
+      if (!crosses(t)) return;
+      t.cells.sort(function (a, b) { return (a[1] - b[1]) || (a[0] - b[0]); });
+      ports.push(t);
+    });
+    ports.sort(function (a, b) {
+      return (a.cells[0][1] - b.cells[0][1]) || (a.cells[0][0] - b.cells[0][0]);
+    });
+
+    const blk = {
+      id: 'p' + (seq++), kind: 'IC', x: ox, y: oy, rot: 0, value: 0,
+      title: 'Block ' + (countBlocks(model) + 1), desc: '',
+      w: Math.max(1, x1 - ox), h: Math.max(1, y1 - oy),
+      /* A pin carried out to ground is named for what it is rather than numbered: it
+         is the one net whose job a reader already knows. */
+      ports: ports.map(function (t, i) {
+        return { name: t.gnd ? 'GND' : String(i + 1),
+                 cells: t.cells.map(function (c) { return [c[0] - ox, c[1] - oy]; }) };
+      }),
+      inner: {
+        parts: sel.map(function (p) {
+          const q = JSON.parse(JSON.stringify(p));
+          q.x -= ox; q.y -= oy;
+          return q;
+        }),
+        wires: cur.wires.filter(function (w) { return swallowed(netOf(w.a)); })
+          .map(function (w) {
+            return { a: [w.a[0] - ox, w.a[1] - oy], b: [w.b[0] - ox, w.b[1] - oy] };
+          }),
+      },
+    };
+
+    cur.wires = cur.wires.filter(function (w) { return !swallowed(netOf(w.a)); });
+    cur.parts = cur.parts.filter(function (p) { return !selIds.has(p.id); });
+    cur.parts.push(blk);
+    selIds.clear();
+    selIds.add(blk.id);
+    changed();
+    paintPart();
+  }
+
+  /* Ungroup, because a learner who folds up the wrong seven parts has to be able to
+     say so, and because a block you cannot take apart is a black box in the sense
+     nobody wants one. It is the exact inverse: the contents go back to the cells they
+     came from, and the pins were on those cells all along, so the drawing that comes
+     out is the drawing that went in. */
+  function doUngroup() {
+    /* Every block in the selection, not only a lone one. What comes out of an ungroup
+       is a selection of several parts, so insisting on a selection of exactly one
+       would mean a block nested inside what you just unfolded could not be unfolded in
+       turn without clicking away first — and "select everything, ungroup" is the
+       obvious way to flatten a level. Blocks the selection does not name are untouched
+       whatever else is in it. */
+    const blocks = selParts().filter(function (p) { return p.kind === 'IC'; });
+    if (!blocks.length) return;
+    const gone = {};
+    blocks.forEach(function (b) { gone[b.id] = 1; });
+    const taken = {};
+    cur.parts.forEach(function (p) { if (!gone[p.id]) taken[p.id] = 1; });
+
+    const back = [];
+    blocks.forEach(function (b) {
+      (((b.inner || {}).parts) || []).forEach(function (p) {
+        const q = JSON.parse(JSON.stringify(p));
+        q.x += b.x; q.y += b.y;
+        /* An id that already means something else out here is renumbered rather than
+           allowed to collide: two parts with one name is a selection that cannot be
+           told apart and a delete that takes both. */
+        if (taken[q.id]) q.id = 'p' + (seq++);
+        taken[q.id] = 1;
+        back.push(q);
+      });
+      cur.wires = cur.wires.concat((((b.inner || {}).wires) || []).map(function (w) {
+        return { a: [w.a[0] + b.x, w.a[1] + b.y], b: [w.b[0] + b.x, w.b[1] + b.y] };
+      }));
+    });
+    cur.parts = cur.parts.filter(function (p) { return !gone[p.id]; }).concat(back);
+    selIds.clear();
+    back.forEach(function (p) { selIds.add(p.id); });
+    changed();
+    paintPart();
+  }
+
+  function countBlocks(m) {
+    let n = 0;
+    (m.parts || []).forEach(function (p) {
+      if (p.kind !== 'IC') return;
+      n += 1 + countBlocks(p.inner || {});
+    });
+    return n;
+  }
+
+  /* ---- going in and coming back out ----
+   * Opening a block does not open a second editor; it points this one at the drawing
+   * inside. Every tool, the solver and the analysis panel go on working, and the solve
+   * is still of the whole circuit — because what a subcircuit does depends entirely on
+   * what is wired to it, and a block solved on its own would be answering about a
+   * circuit that does not exist. */
+  function openBlock(b) {
+    if (!b || b.kind !== 'IC') return;
+    path.push(b.id);
+    reseat();
+    afterMove();
+  }
+  function closeTo(depth) {
+    path = path.slice(0, Math.max(0, depth));
+    reseat();
+    afterMove();
+  }
+  function afterMove() {
+    selIds.clear();
+    wireFrom = null; marquee = null; drag = null;
+    paintCrumbs();
+    paintPart();
+    /* Fit rather than keep the viewport: the inside of a block is drawn around its own
+       origin and can be nowhere near where the parent canvas was looking, and arriving
+       at an empty stretch of grid reads as a block that lost its contents. */
+    zoomFit();
+  }
+
+  /* The trail, and the way back along it. Present only when there is somewhere to go
+     back to — a breadcrumb reading "Circuit" and nothing else is a strip of chrome
+     saying you are where you already knew you were. */
+  function paintCrumbs() {
+    if (!crumbEl) return;
+    if (!path.length) { crumbEl.style.display = 'none'; crumbEl.innerHTML = ''; return; }
+    crumbEl.style.display = '';
+    const names = ['Circuit'];
+    let m = model;
+    path.forEach(function (id) {
+      const b = (m.parts || []).filter(function (q) { return q.id === id; })[0] || {};
+      names.push(b.title || 'Block');
+      m = b.inner || {};
+    });
+    crumbEl.innerHTML = '<button class="ckt-t" data-up="' + (path.length - 1) +
+      '" title="Back out one level (Escape)">↑ Out</button>' +
+      '<span class="spacer" style="flex:none;width:4px"></span>' +
+      names.map(function (n, i) {
+        return (i ? '<span style="color:var(--ink-5);font-size:11px">›</span>' : '') +
+          (i === names.length - 1
+            ? '<span style="font-family:var(--mono);font-size:11px;color:var(--lime)">' + esc2(n) + '</span>'
+            : '<button class="ckt-t" data-crumb="' + i + '">' + esc2(n) + '</button>');
+      }).join('');
+    crumbEl.querySelectorAll('[data-crumb]').forEach(function (b) {
+      b.addEventListener('click', function () { closeTo(+b.dataset.crumb); });
+    });
+    crumbEl.querySelectorAll('[data-up]').forEach(function (b) {
+      b.addEventListener('click', function () { closeTo(+b.dataset.up); });
+    });
   }
 
   /* A change that alters numbers but not topology: a switch thrown, a wiper moved, a
@@ -2376,14 +3939,20 @@ function createCircuit(root, opts) {
   function envShow(q) {
     return q.log ? fmtEng(env[q.key], q.unit) : env[q.key].toFixed(1) + ' ' + q.unit;
   }
-  /* which quantities anything on the canvas actually senses, in a fixed order */
-  function envInUse() {
-    return ENV_Q.filter(function (q) {
-      return model.parts.some(function (p) {
-        const k = PART_KINDS[p.kind];
-        return k && k.senses === q.key;
-      });
+  /* Which quantities anything in the circuit actually senses, in a fixed order.
+     Asked of the whole circuit rather than of the drawing on screen, because a
+     thermistor folded into a block is still a thermistor in the circuit being solved,
+     and a slider that vanished when you grouped it would be a control disappearing
+     from a model that still depends on it. */
+  function senses(m, q) {
+    return (m.parts || []).some(function (p) {
+      const k = PART_KINDS[p.kind];
+      if (k && k.senses === q.key) return true;
+      return p.kind === 'IC' && senses(p.inner || {}, q);
     });
+  }
+  function envInUse() {
+    return ENV_Q.filter(function (q) { return senses(model, q); });
   }
 
   let envSig = null;
@@ -2457,16 +4026,29 @@ function createCircuit(root, opts) {
     /* the environment is resolved into resistances here, once, before any stamping */
     const net = Netlist.build(model, env);
     let r;
+    mcuRun = null;
     if (analysis.mode === 'dc') r = MNA.dc(net);
     else if (analysis.mode === 'ac') r = MNA.ac(net, analysis.f1, analysis.f2, 220);
-    else r = MNA.tran(net, analysis.tstop, analysis.tstop / 900);
+    else {
+      /* The one analysis a sketch takes part in. The rig is built before the run and
+         kept after it, so what the panel reports and what drove the pins are the same
+         machines rather than a second run of the same source. */
+      mcuRun = mcuRig(net);
+      r = MNA.tran(net, analysis.tstop, analysis.tstop / 900,
+        mcuRun && !mcuRun.missing ? mcuRun.hooks : null);
+    }
 
     if (r.error) {
       result = null;
+      /* A run that never happened has no console and no line count, and reporting one
+         at zero would read as a sketch that did nothing rather than a circuit that
+         would not solve. */
+      mcuRun = null;
       plotWrap.hidden = true;
       outEl.innerHTML = '<div class="ckt-err">' + esc2(r.error) + '</div>';
       paint();
       refreshNote();
+      paintPart();
       return;
     }
     result = Object.assign({ kind: analysis.mode, net: net }, r);
@@ -2484,7 +4066,7 @@ function createCircuit(root, opts) {
       for (let n = 1; n < net.nodeCount; n++) {
         picks.push('<button data-node="' + n + '"' + (n === analysis.node ? ' class="active"' : '') + '>node ' + n + '</button>');
       }
-      outEl.innerHTML = '<div class="seg ckt-nodes">' + picks.join('') + '</div>';
+      outEl.innerHTML = '<div class="seg ckt-nodes">' + picks.join('') + '</div>' + mcuStatus();
       outEl.querySelectorAll('[data-node]').forEach(function (b) {
         b.addEventListener('click', function () { analysis.node = +b.dataset.node; solveRepaint(); });
       });
@@ -2493,6 +4075,40 @@ function createCircuit(root, opts) {
     paint();
     /* the numbers the note quotes are the ones that just changed */
     refreshNote();
+    /* The console and the run report live in the component panel, and nothing else
+       rewrites it after a solve. Only when a sketch actually ran, so selecting a
+       resistor and pressing Solve does not rebuild a panel that has not changed. */
+    if (mcuRun) paintPart();
+  }
+
+  /* A line under the plot saying whether the program got anywhere, because a trace
+     that is flat when it should be blinking has two possible causes and the learner
+     should not have to click the part to find out which. */
+  function mcuStatus() {
+    if (!mcuRun) return '';
+    if (mcuRun.missing) {
+      return '<p class="ckt-hint">The interpreter (src/mcu.js) is not in this build, so ' +
+        'the pins stayed at reset for the whole run.</p>';
+    }
+    return mcuRun.rigs.map(function (r) {
+      /* the id as the canvas writes it, which for a part inside a block is the part's
+         own number and not the trail of blocks above it */
+      const who = 'MCU ' + r.id.split('|').pop().replace('p', '');
+      if (r.error) {
+        return '<div class="ckt-err">' + esc2(who) + ' did not compile — line ' +
+          r.error.line + ': ' + esc2(r.error.message) + '</div>';
+      }
+      const st = r.machine.state();
+      if (st.fault) {
+        return '<div class="ckt-err">' + esc2(who) + ' stopped at line ' + st.fault.line +
+          ': ' + esc2(st.fault.message) + ' The trace ends where it stopped.</div>';
+      }
+      return '<p class="ckt-hint">' + esc2(who) + ': ' +
+        (st.inSetup ? 'still in setup() when the run ended'
+          : st.done ? 'ran to the end; there is no loop()'
+          : st.loops + (st.loops === 1 ? ' iteration' : ' iterations') + ' of loop()') +
+        ', ' + st.ops.toLocaleString() + ' instructions.</p>';
+    }).join('');
   }
   function solveRepaint() { paintPlot(); outEl.querySelectorAll('[data-node]').forEach(function (b) { b.classList.toggle('active', +b.dataset.node === analysis.node); }); }
 
@@ -2538,7 +4154,14 @@ function createCircuit(root, opts) {
 
   function changed() {
     result = null;
+    mcuRun = null;
     plotWrap.hidden = true;
+    /* An edit can remove the block the canvas is standing inside — nothing in the UI
+       offers that today, but a model handed in from outside can, and a canvas pointed
+       at a drawing that is no longer in the circuit would edit parts nobody can save.
+       Walking the trail from the root again is cheap and cannot be wrong. */
+    reseat();
+    paintCrumbs();
     if (opts.onChange) opts.onChange(snapshot());
     /* a sensor may have arrived or left, and with it the slider that drives it */
     paintEnv();
@@ -2577,7 +4200,9 @@ function createCircuit(root, opts) {
 
   cv.addEventListener('pointermove', function (e) {
     const sp = evPt(e);
+    const wasTip = tipBlock();
     hover = toGrid(sp[0], sp[1]);
+    hoverSp = sp;
 
     if (panFrom) {
       view.px = panFrom.px + (panFrom.sx - sp[0]) / view.s;
@@ -2598,7 +4223,7 @@ function createCircuit(root, opts) {
     if (drag) {
       const dx = hover[0] - drag.from[0], dy = hover[1] - drag.from[1];
       if (dx || dy) {
-        selParts().forEach(function (p) { p.x += dx; p.y += dy; });
+        moveBy(dx, dy);
         drag.from = hover;
         drag.moved = true;
         paint();
@@ -2607,10 +4232,21 @@ function createCircuit(root, opts) {
     }
 
     if (marquee) { marquee.b = toWorld(sp[0], sp[1]); paint(); return; }
+    /* The hover card is drawn by paint(), so it only appears if something asks for a
+       repaint — and pointer movement over a block otherwise asks for nothing. Repaint
+       when the card would change and not on every pixel of travel: the card follows
+       the pointer, so a moving pointer over one block is a repaint per event, which is
+       what the whole canvas costs. */
+    const isTip = tipBlock();
+    if (isTip || wasTip) { paint(); return; }
     if (wireFrom) paint();
   });
 
-  cv.addEventListener('pointerleave', function () { hover = null; if (wireFrom) paint(); });
+  cv.addEventListener('pointerleave', function () {
+    const had = tipBlock();
+    hover = null; hoverSp = null;
+    if (wireFrom || had) paint();
+  });
 
   /* Wheel zooms about the cursor. Ctrl+wheel is the browser's own page zoom on some
      setups, so it is left alone. */
@@ -2641,7 +4277,7 @@ function createCircuit(root, opts) {
       const end = Math.abs(pt[0] - wireFrom[0]) > Math.abs(pt[1] - wireFrom[1])
         ? [pt[0], wireFrom[1]] : [wireFrom[0], pt[1]];
       if (end[0] !== wireFrom[0] || end[1] !== wireFrom[1]) {
-        model.wires.push({ a: wireFrom, b: end });
+        cur.wires.push({ a: wireFrom, b: end });
         changed();
       }
       wireFrom = null;
@@ -2673,8 +4309,12 @@ function createCircuit(root, opts) {
       return;
     }
 
-    /* placing: refuse to stack two parts on one cell */
-    const existing = partAt(pt);
+    /* Placing: refuse to stack two parts on one cell. A body is not a part on that
+       cell, it is the ground under it — the whole point of a board is that you put
+       things on it — so only a symbol blocks. Two bodies on one cell is still
+       refused, since a board laid across a block, or across another board, is a
+       drawing nobody can read and a hole nobody can say the owner of. */
+    const existing = cellPartAt(pt) || (bodyOf({ kind: tool }) ? bodyAt(pt) : undefined);
     if (existing) { selIds.clear(); selIds.add(existing.id); paintPart(); paint(); return; }
     const kind = tool;
     const p = { id: 'p' + (seq++), kind: kind, x: pt[0], y: pt[1], rot: 0,
@@ -2683,7 +4323,7 @@ function createCircuit(root, opts) {
        part is never placed half-defined and then behaves oddly */
     const st = PART_KINDS[kind].state;
     if (st) Object.keys(st).forEach(function (key2) { p[key2] = st[key2]; });
-    model.parts.push(p);
+    cur.parts.push(p);
     selIds.clear();
     selIds.add(p.id);
     changed();
@@ -2695,9 +4335,13 @@ function createCircuit(root, opts) {
     if (marquee) {
       const x0 = Math.min(marquee.a[0], marquee.b[0]), x1 = Math.max(marquee.a[0], marquee.b[0]);
       const y0 = Math.min(marquee.a[1], marquee.b[1]), y1 = Math.max(marquee.a[1], marquee.b[1]);
-      model.parts.forEach(function (p) {
+      cur.parts.forEach(function (p) {
+        /* a body is caught by its area rather than by its origin corner, so a rubber
+           band drawn round what you can see picks up what you can see */
         const wx = gx(p.x), wy = gy(p.y);
-        if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) selIds.add(p.id);
+        const wx2 = bodyOf(p) ? gx(p.x + bodyW(p)) : wx;
+        const wy2 = bodyOf(p) ? gy(p.y + bodyH(p)) : wy;
+        if (wx >= x0 && wx2 <= x1 && wy >= y0 && wy2 <= y1) selIds.add(p.id);
       });
       marquee = null;
       paintPart();
@@ -2712,7 +4356,7 @@ function createCircuit(root, opts) {
        browser taking the pointer away is not the learner using the switch. */
     if (!drag && down && down.mode === 'maybe-move' && down.hit &&
         !down.shift && !(e && e.type === 'pointercancel')) {
-      const hp = model.parts.filter(function (p) { return p.id === down.hit; })[0];
+      const hp = cur.parts.filter(function (p) { return p.id === down.hit; })[0];
       if (hp && hp.kind === 'SW') toggleSwitch(hp);
     }
     if (drag) {
@@ -2724,6 +4368,16 @@ function createCircuit(root, opts) {
   }
   cv.addEventListener('pointerup', endPointer);
   cv.addEventListener('pointercancel', endPointer);
+
+  /* Double-click opens a block. It is the gesture people already use on a folder, and
+     it costs nothing anywhere else: every other part on this canvas ignores a second
+     click, and a switch has already been thrown by the first one and is thrown back by
+     the second, which is what a switch clicked twice should do. */
+  cv.addEventListener('dblclick', function (e) {
+    const sp = evPt(e);
+    const hit = partAt(toGrid(sp[0], sp[1]));
+    if (hit && hit.kind === 'IC') { e.preventDefault(); openBlock(hit); }
+  });
 
   /* Space is held to pan, the way it is in every drawing tool. Tracked on the
      document because the canvas does not take keyboard focus. */
@@ -2747,10 +4401,19 @@ function createCircuit(root, opts) {
     if (e.target && /input|textarea/i.test(e.target.tagName)) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { doDelete(); e.preventDefault(); }
     else if (e.key === 'r' || e.key === 'R') { doRotate(); }
-    else if (e.key === 'Escape') { wireFrom = null; marquee = null; selIds.clear(); paintPart(); paint(); }
+    else if (e.key === 'g' || e.key === 'G') { doGroup(); }
+    else if (e.key === 'u' || e.key === 'U') { doUngroup(); }
+    else if (e.key === 'Escape') {
+      /* Escape drops whatever is in hand first, and only then backs out of a block:
+         inside one, the gesture that cancels a half-drawn wire must not also throw
+         away where you are. */
+      if (wireFrom || marquee || selIds.size) {
+        wireFrom = null; marquee = null; selIds.clear(); paintPart(); paint();
+      } else if (path.length) closeTo(path.length - 1);
+    }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
       selIds.clear();
-      model.parts.forEach(function (p) { selIds.add(p.id); });
+      cur.parts.forEach(function (p) { selIds.add(p.id); });
       paintPart(); paint(); e.preventDefault();
     }
     else if (e.key === '+' || e.key === '=') { zoomTo(view.s * 1.2); }
@@ -2778,7 +4441,7 @@ function createCircuit(root, opts) {
     /* A wire with nothing left at either end is a wire the learner cannot see the
        purpose of, but it may still be carrying a connection between two other
        things, so deleting parts leaves wires alone. */
-    model.parts = model.parts.filter(function (p) { return !selIds.has(p.id); });
+    cur.parts = cur.parts.filter(function (p) { return !selIds.has(p.id); });
     selIds.clear();
     changed();
     paintPart();
@@ -2799,10 +4462,12 @@ function createCircuit(root, opts) {
   root.querySelector('[data-act="zoomin"]').addEventListener('click', function () { zoomTo(view.s * 1.2); });
   root.querySelector('[data-act="zoomout"]').addEventListener('click', function () { zoomTo(view.s / 1.2); });
   root.querySelector('[data-act="fit"]').addEventListener('click', zoomFit);
+  root.querySelector('[data-act="group"]').addEventListener('click', doGroup);
+  root.querySelector('[data-act="ungroup"]').addEventListener('click', doUngroup);
   root.querySelector('[data-act="rotate"]').addEventListener('click', doRotate);
   root.querySelector('[data-act="delete"]').addEventListener('click', doDelete);
   root.querySelector('[data-act="clear"]').addEventListener('click', function () {
-    model.parts = []; model.wires = []; selIds.clear();
+    cur.parts = []; cur.wires = []; selIds.clear();
     view = { s: 1, px: 0, py: 0 };
     changed(); paintPart();
   });
@@ -2822,6 +4487,7 @@ function createCircuit(root, opts) {
   }
 
   root.querySelector('[data-tool="R"]').classList.add('on');
+  paintCrumbs();
   paintPart();
   paintEnv();
   paintOpts();
@@ -2881,7 +4547,22 @@ function circuitContext(model, env) {
   const cache = {};
 
   function need(what) {
+    if (net.tooDeep) {
+      throw new Error('Blocks are nested more than ' + net.tooDeep + ' deep, so part of ' +
+        'the circuit is not in the netlist and ' + what + ' would be about a different one.');
+    }
     if (!net.hasGround) throw new Error('Add a ground before ' + what + ' can mean anything.');
+  }
+
+  /* Every part in the circuit, blocks opened out, each with the prefixed id the netlist
+     knows it by. A check that names a part by id goes on naming the same part after the
+     learner folds it into a block — and finds one that has only ever lived inside one. */
+  function allParts(m, at, out) {
+    (((m && m.parts) || [])).forEach(function (p) {
+      out.push({ p: p, id: at + p.id });
+      if (p.kind === 'IC') allParts(p.inner, at + p.id + '|', out);
+    });
+    return out;
   }
   function out() {
     if (!net.probes.length) throw new Error('Place a probe on the node you are treating as the output.');
@@ -2897,9 +4578,12 @@ function circuitContext(model, env) {
        are the same list. */
     count: function (kind) { return net.placed.filter(function (p) { return p.kind === kind; }).length; },
     values: function (kind) { return net.placed.filter(function (p) { return p.kind === kind; }).map(function (p) { return p.value; }); },
-    /* what a dynamic part actually resolved to in this environment */
+    /* What a dynamic part actually resolved to in this environment. A bare id still
+       finds a part that has since been folded into a block, since the netlist knows it
+       by a longer name now and the check that asks for it does not. */
     ohms: function (id) {
-      const r = net.readouts.filter(function (x) { return x.id === id; })[0];
+      const r = net.readouts.filter(function (x) { return x.id === id; })[0] ||
+        net.readouts.filter(function (x) { return x.id.split('|').pop() === id; })[0];
       return r ? r.ohms : null;
     },
     env: net.env,
@@ -2914,12 +4598,15 @@ function circuitContext(model, env) {
        two node voltages and a subtraction, which is the sort of arithmetic a check
        should be verifying rather than doing. */
     device: function (id) {
-      const p = ((model && model.parts) || []).filter(function (q) { return q.id === id; })[0];
+      const hit = allParts(model, '', []).filter(function (q) {
+        return q.id === id || q.p.id === id;
+      })[0];
+      const p = hit && hit.p;
       if (!p || !Devices.is(p.kind)) {
         throw new Error('There is no non-linear device called ' + id + ' in this circuit.');
       }
       const r = this.dc();
-      const seen = net.readouts.filter(function (x) { return x.id === id; })[0];
+      const seen = net.readouts.filter(function (x) { return x.id === hit.id; })[0];
       const vs = seen.nodes.map(function (n) { return r.v[n]; });
       const d = Devices.build(p);
       return { kind: p.kind, v: vs, i: d.iv(d, vs, { raw: true }).i };
@@ -2970,6 +4657,51 @@ function circuitContext(model, env) {
       if (r.error) throw new Error(r.error);
       const n = out();
       return { t: r.t, v: r.v.map(function (row) { return row[n]; }) };
+    },
+
+    /* ---- a sketch, run against the circuit it is wired into ----
+     *
+     * The transient and the program, co-simulated exactly as the editor's Solve button
+     * does it, so a check that says "the LED is lit two hundred milliseconds after
+     * power-up" is reading the same run the learner is watching.
+     *
+     * `node` is a series per node and `out` the probed one; `console` is what the sketch
+     * printed, so a check can require an answer the sketch worked out as well as a
+     * voltage it produced. A sketch that faults does NOT throw: the fault is handed back
+     * as data, because "your program divides by zero on line 9" is a thing a check may
+     * want to assert about and is certainly a thing it should report as itself rather
+     * than as a failed measurement. */
+    sketch: function (tstop) {
+      need('a sketch run');
+      const rig = mcuRig(net);
+      if (!rig) throw new Error('There is no microcontroller in this circuit.');
+      if (rig.missing) {
+        throw new Error('The interpreter is not loaded in this environment, so a sketch ' +
+          'cannot be run. src/mcu.js has to be loaded alongside src/circuit.js.');
+      }
+      const bad = rig.rigs.filter(function (r) { return r.error; })[0];
+      if (bad) {
+        throw new Error('The sketch on ' + bad.id + ' does not compile — line ' +
+          bad.error.line + ': ' + bad.error.message);
+      }
+      const r = MNA.tran(net, tstop, tstop / 600, rig.hooks);
+      if (r.error) throw new Error(r.error);
+      const first = rig.rigs[0];
+      const st = first.machine.state();
+      return {
+        t: r.t,
+        node: function (n) { return r.v.map(function (row) { return row[n]; }); },
+        out: net.probes.length === 1
+          ? r.v.map(function (row) { return row[net.probes[0]]; }) : null,
+        console: first.machine.console(),
+        fault: st.fault,
+        loops: st.loops,
+        /* the pins as the run left them, which is how a check asks what the sketch
+           decided rather than what the circuit did about it */
+        pin: function (name) {
+          return first.rec.pins.filter(function (q) { return q.name === String(name); })[0] || null;
+        },
+      };
     },
 
     assert: function (cond, msg) { if (!cond) throw new Error(msg || 'Assertion failed'); },

@@ -43,6 +43,7 @@
     "A convergence trace is the cheapest diagnostic you will ever write",
     "Divergence, oscillation and crawling are three distinct learning-rate failures"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -119,6 +120,7 @@
     "F1 as the harmonic mean, and what a zero denominator should mean",
     "ROC-AUC as the probability a random positive outscores a random negative"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -195,6 +197,7 @@
     "Bootstrap aggregation averages away variance without touching bias",
     "Random feature subsets at each split decorrelate the trees, which is why forests beat bagging"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -271,6 +274,7 @@
     "Hotelling deflation, A - lambda v v^T, exposes the next component",
     "Explained variance ratio is an eigenvalue divided by the trace"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -347,6 +351,7 @@
     "Model capacity moves bias down and variance up; the sum has an interior minimum",
     "Selecting on the test set is the most common way to fool yourself"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

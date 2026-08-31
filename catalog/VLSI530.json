@@ -39,6 +39,7 @@
     "The setup constraint, written out: `T + t_skew >= t_cq + t_logic + t_setup`. Slack is what is left of the period.",
     "The hold constraint does not contain `T` at all — no amount of slowing the clock down fixes a hold violation."
    ],
+   "read": null,
    "sandbox": {
     "title": "One row per instruction, one column per clock",
     "visualiser": "pipeline",
@@ -265,6 +266,7 @@
     "State encoding is an implementation choice: binary uses `ceil(log2 S)` flops, one-hot uses `S` flops and a much cheaper next-state cloud.",
     "A state your machine cannot reach is either dead logic or a missing reset, and whether an upset that lands the machine in one can get out again depends entirely on the next-state logic you wrote for that encoding."
    ],
+   "read": null,
    "sandbox": {
     "title": "A controller that holds instead of advancing",
     "visualiser": "pipeline",
@@ -526,6 +528,7 @@
     "A one-entry slice whose `ready` is registered can only accept every other cycle. Two entries — a skid buffer — sustain a transfer every cycle.",
     "Throughput is set by whichever side stalls more; the buffer between them only decides whether the two stalls collide."
    ],
+   "read": null,
    "sandbox": {
     "title": "Bubbles are the absence of a path",
     "visualiser": "pipeline",
@@ -750,6 +753,7 @@
     "Seed everything. A failure you cannot reproduce is a rumour.",
     "Coverage is the question 'did the stimulus ever get the design into that state', and it is a different question from 'did it pass'."
    ],
+   "read": null,
    "sandbox": {
     "title": "Where a model stops responding to its inputs",
     "visualiser": "pipeline",

@@ -34,6 +34,7 @@
     "The anti-alias filter must therefore stop everything above $\\pi/M$ *before* the discard, not after.",
     "Filtering costs arithmetic that is then thrown away: the direct form computes `M-1` outputs out of every `M` only to discard them."
    ],
+   "read": null,
    "sandbox": {
     "title": "A tone, a sample rate, and where the tone ends up",
     "visualiser": "spectrum",
@@ -251,6 +252,7 @@
     "Zero insertion divides the mean signal power by `L`, so the filter needs a passband gain of `L` to preserve amplitude.",
     "Between the images, the filter is doing bandlimited interpolation — the zeros are replaced by the sinc-weighted sum of the neighbours."
    ],
+   "read": null,
    "sandbox": {
     "title": "What a higher rate buys",
     "visualiser": "spectrum",
@@ -485,6 +487,7 @@
     "Applying the identities moves every filter to the *slow* side of the rate change, where each tap runs `M` times less often.",
     "The saving is a factor of `M` in multiplications and nothing at all in output — the two structures are exactly equal, sample for sample."
    ],
+   "read": null,
    "sandbox": {
     "title": "What z to the M does to a pole",
     "visualiser": "z-plane",
@@ -689,6 +692,7 @@
     "$L$ and $M$ come from the rates divided by their greatest common divisor: 44.1 kHz to 48 kHz is 160 over 147.",
     "The intermediate rate $L f_s$ is never realised in a polyphase implementation — it exists only in the algebra."
    ],
+   "read": null,
    "sandbox": {
     "title": "Which of the two limits binds",
     "visualiser": "spectrum",

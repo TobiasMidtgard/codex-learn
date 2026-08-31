@@ -37,6 +37,7 @@
     "*Hyperbolic* is the entire condition. One eigenvalue on the axis and the linearisation decides nothing; the terms you discarded now settle the question.",
     "The conclusion is local, and nothing inside the linearisation tells you how far it reaches."
    ],
+   "read": null,
    "sandbox": {
     "title": "One pendulum, two equilibria, two different matrices",
     "visualiser": "phase-portrait",
@@ -266,6 +267,7 @@
     "For a linear system $V = x^\\top P x$ works exactly when $A^\\top P + PA = -Q$ has a positive definite solution $P$, for some — equivalently every — positive definite $Q$.",
     "Failing to find a $V$ proves nothing whatsoever. The condition is sufficient, never necessary, and a badly chosen $V$ fails on stable systems."
    ],
+   "read": null,
    "sandbox": {
     "title": "Does every trajectory cross the circles inwards",
     "visualiser": "phase-portrait",
@@ -521,6 +523,7 @@
     "Bendixson: if $\\nabla\\!\\cdot f$ has one strict sign throughout a simply connected region, no closed orbit lies wholly inside it.",
     "Poincaré–Bendixson: a trajectory that stays inside a bounded planar region containing no equilibrium must approach a closed orbit. This is a two-dimensional theorem and has no analogue in three."
    ],
+   "read": null,
    "sandbox": {
     "title": "Hunting for a closed orbit in a linear field",
     "visualiser": "phase-portrait",
@@ -731,6 +734,7 @@
     "The gain must beat the *bound*, not the nominal value. Under-gain and the surface is never reached, and no amount of patience fixes it.",
     "Chatter: infinite switching frequency is an artefact of an idealised model, and a real actuator pays for it in heat and wear. The boundary layer replaces $\\mathrm{sgn}$ with a saturation and buys smoothness with a band of error."
    ],
+   "read": null,
    "sandbox": {
     "title": "Reaching, sliding, and the price of not chattering",
     "visualiser": "sliding-mode",

@@ -41,6 +41,7 @@
     "HTML entity encoding neutralises `& < > \" '` before the parser sees them",
     "Allow-lists constrain identifiers (table and column names) that cannot be parameterised"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -117,6 +118,7 @@
     "Detection (canary, ASLR, NX) versus prevention (bounds-checked copies)",
     "Truncating (`strncpy`) silently loses data; refusing (`BufferError`) does not"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -193,6 +195,7 @@
     "HOTP (RFC 4226): HMAC-SHA1, dynamic truncation, modulo 10^digits",
     "TOTP (RFC 6238) is HOTP over `time // step`, verified across a drift window"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -273,6 +276,7 @@
     "Every detector is a classifier: true/false positives and negatives",
     "Precision and recall trade against each other as thresholds move"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

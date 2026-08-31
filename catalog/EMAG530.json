@@ -38,6 +38,7 @@
     "Fresnel reflection at normal incidence — 3.5 per cent per bare silica–air face, which is a real term in a real budget.",
     "Why total internal reflection is lossless in magnitude but not in phase, and why that phase is the whole story in module 2."
    ],
+   "read": null,
    "sandbox": {
     "title": "An index step is a mismatched load",
     "visualiser": "smith",
@@ -244,6 +245,7 @@
     "The normalised guide index $b = (w/V)^2$, and recovering $n_e$ from it.",
     "Why the circular step-index fibre has the same structure with cutoff at $V = 2.405$, the first zero of $J_0$."
    ],
+   "read": null,
    "sandbox": {
     "title": "A mode is a round trip that closes",
     "visualiser": "smith",
@@ -488,6 +490,7 @@
     "Independent broadening mechanisms add in quadrature, so the largest one dominates fast.",
     "The rule of thumb $B_{max} = 1/(2\\Delta\\tau)$, and the bandwidth–length product that follows from it."
    ],
+   "read": null,
    "sandbox": {
     "title": "A link is a low-pass filter",
     "visualiser": "bode",
@@ -717,6 +720,7 @@
     "Rearranging the budget for reach rather than margin, which is the form a designer actually needs.",
     "Loss-limited versus dispersion-limited: the reach is the smaller of the two, and knowing which one binds tells you what to fix."
    ],
+   "read": null,
    "sandbox": {
     "title": "Margin as the gap above the sensitivity line",
     "visualiser": "bode",

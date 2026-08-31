@@ -34,6 +34,7 @@
     "B and J immediates encode a multiple of two and omit bit 0; the bit you would expect at position 0 is not stored at all.",
     "A field the format does not define is not zero — it is whatever the immediate happened to put there, which is why a decoder must report absence rather than a number."
    ],
+   "read": null,
    "sandbox": {
     "title": "The machine the encoding feeds",
     "visualiser": "pipeline",
@@ -256,6 +257,7 @@
     "The register file writes in the first half of WB and reads in the second half of ID, so a consumer's ID may sit in the *same* cycle as the producer's WB — this is worth two bubbles, and it is the difference between two and three in every textbook table.",
     "Which registers an instruction actually reads is a property of its *format*, not its mnemonic: a store reads two and writes none, a branch reads two and writes none, `lui` reads none."
    ],
+   "read": null,
    "sandbox": {
     "title": "What a bubble costs",
     "visualiser": "pipeline",
@@ -522,6 +524,7 @@
     "Use stages differ by operand: both ALU operands are needed at the start of EX, but the *data* operand of a store is not needed until MEM.",
     "The load-use hazard is the residue forwarding cannot remove, and it is why compilers schedule an independent instruction into the slot after a load."
    ],
+   "read": null,
    "sandbox": {
     "title": "Forwarding, in one switch",
     "visualiser": "pipeline",
@@ -763,6 +766,7 @@
     "A single counter per branch cannot represent a pattern. Alternating taken and not-taken is predicted wrong 100% of the time, worse than a coin toss.",
     "gshare indexes the counter table with the branch address XORed with a global history register, so the same branch gets different counters in different contexts."
    ],
+   "read": null,
    "sandbox": {
     "title": "What a wrong guess costs",
     "visualiser": "pipeline",

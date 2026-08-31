@@ -34,6 +34,7 @@
     "Characteristic impedance $Z_0 = \\sqrt{L/C}$ is a ratio carried by a travelling wave, not a resistance you can measure with an ohmmeter.",
     "A ladder of discrete LC sections is a low-pass filter with a real cutoff; a line is the limit as the sections become infinitesimal and that cutoff goes to infinity."
    ],
+   "read": null,
    "sandbox": {
     "title": "One LC section, and why a line is not one",
     "visualiser": "bode",
@@ -781,6 +782,7 @@
     "Input impedance rotates with distance: $Z_{in} = Z_0(Z_L + jZ_0\\tan\\beta d)/(Z_0 + jZ_L\\tan\\beta d)$, with period $\\lambda/2$.",
     "A quarter-wave section of impedance $\\sqrt{Z_0 Z_L}$ matches a real load, and only at the one frequency where it is a quarter wave."
    ],
+   "read": null,
    "sandbox": {
     "title": "A load, and where a length of line puts it",
     "visualiser": "smith",
@@ -1005,6 +1007,7 @@
     "Below cutoff $\\beta$ is imaginary: the mode does not travel, it decays, and no length of guide makes it propagate.",
     "With $a$ the broad wall, TE$_{10}$ has the lowest cutoff of all, and the usable band runs from it to the next mode up — for a guide with $a > 2b$ that is TE$_{20}$, at exactly twice the frequency."
    ],
+   "read": null,
    "sandbox": {
     "title": "A reactive load is a mirror, and so is a guide below cutoff",
     "visualiser": "smith",
@@ -1262,6 +1265,7 @@
     "$v_p v_g = c^2$ exactly, for every hollow guide and every mode.",
     "Different frequencies in one pulse arrive at different times, so a wide-band pulse spreads — and the spreading grows with length and with proximity to cutoff."
    ],
+   "read": null,
    "sandbox": {
     "title": "Phase slope is group delay",
     "visualiser": "bode",

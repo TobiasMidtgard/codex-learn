@@ -38,6 +38,7 @@
     "Rounding error is bounded by $q/2$ and behaves, for a busy signal, like white noise of power $q^2/12$.",
     "Truncation is not rounding: it has a DC bias of $-q/2$ for two's complement, which a recursive filter will integrate."
    ],
+   "read": null,
    "sandbox": {
     "title": "The other axis of discretisation",
     "visualiser": "spectrum",
@@ -241,6 +242,7 @@
     "A cascade of second-order sections quantises each pole pair against its own two coefficients, so no pole is sensitive to any other section.",
     "Expanding a cascade into one high-order direct form is algebraically identical and numerically indefensible above about fourth order."
    ],
+   "read": null,
    "sandbox": {
     "title": "Pole radius, decay, and how little it takes to move it",
     "visualiser": "z-plane",
@@ -485,6 +487,7 @@
     "The $L_1$ bound $\\sum |h[k]|$ is the smallest input scaling that makes overflow impossible for any bounded input.",
     "Scaling to the $L_1$ bound is pessimistic for real signals and costs dynamic range directly — guard bits in the accumulator buy the same safety without it."
    ],
+   "read": null,
    "sandbox": {
     "title": "Where the energy goes when something folds",
     "visualiser": "spectrum",
@@ -690,6 +693,7 @@
     "A negative pole gives an alternating cycle at half the sample rate; a positive pole gives a stuck DC offset. Both are audible in the wrong product.",
     "Magnitude truncation always moves towards zero, so it cannot sustain a granular cycle — at the price of a signal-dependent bias."
    ],
+   "read": null,
    "sandbox": {
     "title": "A decay that has to stop somewhere",
     "visualiser": "z-plane",

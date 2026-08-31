@@ -42,6 +42,7 @@
     "Key recovery beats brute force: 26 tests per column instead of 26^k over the whole key",
     "The lesson generalises: a cipher must be judged by the structure it leaves behind, not by its key space"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -118,6 +119,7 @@
     "A derived key longer than the hash needs several blocks, each with its own counter",
     "Comparing digests with `==` leaks how many bytes matched; the fix is an XOR accumulator"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -194,6 +196,7 @@
     "PKCS#7 padding is unambiguous because a full block of padding is added when the input already fits",
     "A CTR nonce must never repeat under one key: two messages with the same keystream XOR to each other"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -270,6 +273,7 @@
     "Signing is decryption applied to a hash: it is the hash, not the message, that is exponentiated",
     "Textbook RSA is deterministic and therefore not semantically secure — padding is not optional in practice"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -346,6 +350,7 @@
     "Unauthenticated key agreement authenticates nobody — the middle can answer both sides at once",
     "Comparing key fingerprints out of band is the cheapest detection; signed exchanges are the real fix"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

@@ -39,6 +39,7 @@
     "The Park transform is a rotation by the electrical angle $\\theta_e$. It is orthogonal, so it changes neither the length of the current vector nor the instantaneous power.",
     "In the rotating frame a steady sinusoid becomes a constant — which is the whole reason a PI regulator with finite gain can drive its error to zero."
    ],
+   "read": null,
    "sandbox": {
     "title": "What the Park transform is rotating",
     "visualiser": "phase-portrait",
@@ -248,6 +249,7 @@
     "Torque $T_e = \\frac{3}{2} P_p \\left( \\lambda_m i_q + (L_d - L_q) i_d i_q \\right)$: a magnet term plus a reluctance term that is zero on a surface machine.",
     "As a state-space plant the machine is $\\dot{x} = Ax + Bv + d$ with $A$ carrying $-R/L$ on the diagonal, the speed-dependent coupling off it, and $d$ the magnet back-EMF."
    ],
+   "read": null,
    "sandbox": {
     "title": "The machine with the controller switched off",
     "visualiser": "phase-portrait",
@@ -483,6 +485,7 @@
     "The inverter is a saturating actuator. Without anti-windup the integrator keeps charging while the output is clipped and repays it as overshoot.",
     "Cascade separation: the current loop must be roughly a decade faster than the speed loop above it, and the modulator's switching frequency a decade above that again."
    ],
+   "read": null,
    "sandbox": {
     "title": "What a decade of bandwidth costs",
     "visualiser": "pole-place",
@@ -851,6 +854,7 @@
     "Splitting $t_0$ evenly between the two zero states is what shifts the common mode. The shift it produces is the min–max wave, $-\\tfrac{1}{2}(\\max + \\min)$ of the three references: a triangle at three times the fundamental whose peak is one quarter of the reference amplitude. It reaches the same $2/\\sqrt{3}$ linear range as a sinusoidal third harmonic injected at one sixth, but it is not that waveform.",
     "Above base speed the back-EMF alone fills the voltage budget. Negative $i_d$ opposes the magnet flux and buys headroom back, bounded by the current circle $i_d^2 + i_q^2 \\le I_{max}^2$."
    ],
+   "read": null,
    "sandbox": {
     "title": "What the decoupling feedforward fails to cancel",
     "visualiser": "phase-portrait",

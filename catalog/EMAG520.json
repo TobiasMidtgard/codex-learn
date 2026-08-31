@@ -37,6 +37,7 @@
     "Return loss in dB is the same statement again, in the units a spectrum analyser prints.",
     "A lossless line multiplies $\\Gamma$ by $e^{-2j\\beta l}$: the phase changes, the magnitude never does."
    ],
+   "read": null,
    "sandbox": {
     "title": "Where a load sits, and where a line takes it",
     "visualiser": "smith",
@@ -264,6 +265,7 @@
     "Losslessness makes $S$ unitary, so $S^\\dagger S = I$ — a constraint that rules out most matrices someone hands you.",
     "$\\Gamma_{in} = S_{11} + S_{12}S_{21}\\Gamma_L/(1 - S_{22}\\Gamma_L)$: what a mismatched load does to the input."
    ],
+   "read": null,
    "sandbox": {
     "title": "S11 of a one-port, read three ways",
     "visualiser": "smith",
@@ -527,6 +529,7 @@
     "A shorted stub of length $l$ presents a pure reactance, and its length is the design variable.",
     "The double-stub tuner, and the forbidden region it pays for having its spacing fixed."
    ],
+   "read": null,
    "sandbox": {
     "title": "Rotating onto the unity-resistance circle",
     "visualiser": "smith",
@@ -747,6 +750,7 @@
     "Multi-section transformers: binomial for a maximally flat response, Chebyshev for equal ripple across a wider band.",
     "The Bode–Fano limit: the integral of $\\ln(1/|\\Gamma|)$ over all frequency is bounded by the load's own $RC$, so bandwidth is a budget and not an engineering choice."
    ],
+   "read": null,
    "sandbox": {
     "title": "Sweeping length is sweeping frequency",
     "visualiser": "smith",

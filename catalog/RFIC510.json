@@ -36,6 +36,7 @@
     "`g_m/I_D` is the currency of analogue design: it is fixed by $V_{ov}$ alone, and it trades directly against speed.",
     "The model is only valid for signals small enough that the second-order term is negligible — a few tens of millivolts on a 200 mV overdrive."
    ],
+   "read": null,
    "sandbox": {
     "title": "Gain, corner frequency, and the fact that they are not yet linked",
     "visualiser": "bode",
@@ -264,6 +265,7 @@
     "The same bridging capacitor feeds signal forward and creates a right-half-plane zero at $g_m/C_{gd}$ — far away in a good device, but it is the reason the phase keeps falling.",
     "Miller is an approximation: it assumes the output follows the input with a constant gain, which stops being true near and above the corner."
    ],
+   "read": null,
    "sandbox": {
     "title": "What raising the gain does to the corner",
     "visualiser": "bode",
@@ -515,6 +517,7 @@
     "Layout changes $f_{max}$ and not $f_T$. Splitting a wide device into fingers contacted at both ends cuts $R_g$ and buys speed for free.",
     "A stage built from a 5 GHz device does not have 5 GHz of bandwidth. $f_T$ assumes a shorted output and no source resistance; both assumptions are violated in every real circuit."
    ],
+   "read": null,
    "sandbox": {
     "title": "How far away the second pole has to be",
     "visualiser": "pole-step",
@@ -889,6 +892,7 @@
     "The price: one $V_{DSsat}$ of headroom, a new pole at the intermediate node near $g_{m2}/\\left(2\\pi C_x\\right)$, and a second device's noise and area.",
     "A cascode does not raise $f_T$. It removes a circuit-level penalty; the device is exactly as fast as it was."
    ],
+   "read": null,
    "sandbox": {
     "title": "The corner after the Miller penalty is removed",
     "visualiser": "bode",

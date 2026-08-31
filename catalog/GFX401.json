@@ -44,6 +44,7 @@
     "Perspective maps the near plane to -1 and the far plane to +1, non-linearly in between",
     "Depth precision is worst far from the eye, which is why the near plane must not be tiny"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -120,6 +121,7 @@
     "A fill rule makes shared edges watertight: a boundary sample belongs to exactly one triangle",
     "The z-buffer resolves visibility per sample, so triangles may be submitted in any order"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -196,6 +198,7 @@
     "Shading is linear-light arithmetic; a display expects roughly sRGB, so encode last",
     "Clamp before the gamma encode, never after, or you raise a negative number to a fractional power"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -268,6 +271,7 @@
     "A shadow ray must be occluded *before* the light, not merely occluded somewhere",
     "Recursion depth bounds the reflection series; each bounce contributes geometrically less"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

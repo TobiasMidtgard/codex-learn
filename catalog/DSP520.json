@@ -37,6 +37,7 @@
     "The orthogonality principle: at the optimum the residual is uncorrelated with every input sample the filter can see.",
     "Eigenvalue spread $\\chi = \\lambda_{max}/\\lambda_{min}$ measures how badly conditioned the bowl is, and it is set by the input spectrum, not by the filter."
    ],
+   "read": null,
    "sandbox": {
     "title": "How fast you sample decides how correlated the input looks",
     "visualiser": "spectrum",
@@ -250,6 +251,7 @@
     "The slowest mode belongs to $\\lambda_{min}$, so the time to converge scales with the eigenvalue spread.",
     "Steepest descent is deterministic: it needs $R$ and $p$, which is exactly what a real system does not have."
    ],
+   "read": null,
    "sandbox": {
     "title": "One mode of the descent as a single pole",
     "visualiser": "z-plane",
@@ -502,6 +504,7 @@
     "Gradient noise never vanishes, so LMS hovers above $J_{min}$: misadjustment $\\approx \\mu\\,\\text{trace}(R)/2$.",
     "NLMS divides the step by the instantaneous input energy, making the stable range of $\\mu$ independent of input power — it does not fix the eigenvalue spread."
    ],
+   "read": null,
    "sandbox": {
     "title": "The samples an echo canceller is actually handed",
     "visualiser": "spectrum",
@@ -732,6 +735,7 @@
     "$\\lambda$ sets the memory: about $1/(1-\\lambda)$ samples. Short memory tracks a changing system and raises misadjustment.",
     "The covariance recursion loses symmetry to rounding and will diverge; symmetrising $P$ each step costs nothing and fixes it."
    ],
+   "read": null,
    "sandbox": {
     "title": "The forgetting factor is a pole",
     "visualiser": "z-plane",

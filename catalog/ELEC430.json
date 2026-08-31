@@ -43,6 +43,7 @@
     "Distinguishing insert, update and exact duplicate is what makes replay auditable",
     "At-least-once delivery is the normal case; exactly-once is idempotency plus retries"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -119,6 +120,7 @@
     "Selective scans read only the projected columns; projection pruning is a storage-level win",
     "Encoding choice is per column, not per table, and is a cost decision not a taste one"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -195,6 +197,7 @@
     "Closing a window emits its aggregate and frees its state; reopening is not free",
     "A final flush is what turns an unbounded pipeline into a terminating batch job"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -271,6 +274,7 @@
     "Already-sorted inputs make sort-merge free of its sorts and keep the output ordered",
     "Two join algorithms must agree as multisets even when their row order differs"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

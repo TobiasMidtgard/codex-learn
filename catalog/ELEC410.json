@@ -41,6 +41,7 @@
     "Admissible: h(n) never exceeds the true cost to a goal. Consistent: h(n) <= c(n, n') + h(n')",
     "Manhattan distance on the 8-puzzle is admissible because each tile needs at least that many moves and each move shifts one tile by one"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -117,6 +118,7 @@
     "Pruning changes the node count, never the root value: it is an exact optimisation",
     "With perfect move ordering the effective branching factor falls from b to about sqrt(b)"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -193,6 +195,7 @@
     "The policy improvement theorem: acting greedily with respect to U^pi is never worse than pi",
     "The Bellman residual max_s |U(s) - backup(U)(s)| is a certificate you can check after the fact"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -269,6 +272,7 @@
     "Online return during training is not the same measure as the quality of the greedy policy afterwards",
     "Convergence needs every state-action pair visited infinitely often and a decaying step size"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -345,6 +349,7 @@
     "The bonus term is a confidence radius from Hoeffding's inequality, and it shrinks as sqrt(1/n)",
     "UCB1's regret is O(sum over suboptimal arms of ln T / gap) — sublinear, so the average regret goes to zero"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

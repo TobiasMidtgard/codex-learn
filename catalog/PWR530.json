@@ -37,6 +37,7 @@
     "At fixed applied volts and turns, raising $f$ *lowers* core loss: $B_m \\propto \\frac{1}{f}$, so the $B_m^\\beta$ factor falls as $f^{-\\beta}$, and $\\beta > \\alpha$ leaves $P_v \\propto f^{\\alpha-\\beta}$.",
     "Fitting $k$, $\\alpha$ and $\\beta$ is linear least squares once you take logarithms of all three axes."
    ],
+   "read": null,
    "sandbox": {
     "title": "The waveform the core actually sees",
     "visualiser": "switching",
@@ -259,6 +260,7 @@
     "For thick conductors $\\frac{R_{ac}}{R_{dc}} \\to \\Delta \\frac{2m^2+1}{3}$, so $R_{ac}$ itself grows only as $\\sqrt{f}$ — but from a much higher floor.",
     "There is an optimum thickness, not a maximum: past $\\Delta \\approx 1$ the extra copper carries no current and only couples to its neighbours."
    ],
+   "read": null,
    "sandbox": {
     "title": "Reading a power law off log axes",
     "visualiser": "bode",
@@ -524,6 +526,7 @@
     "Catalogues list $A_p$ for exactly this reason: it is the one geometric figure of merit that does not depend on the winding.",
     "$A_p \\propto \\frac{1}{f}$ is the whole argument for high-frequency conversion, and modules 1, 2 and 4 are the reasons it stops working."
    ],
+   "read": null,
    "sandbox": {
     "title": "What buys you the higher frequency",
     "visualiser": "switching",
@@ -747,6 +750,7 @@
     "A Foster ladder of positive $R$ and $C$ has only real poles. A fit that produces an overshoot has been fitted to measurement noise.",
     "A power ferrite's loss curve has a minimum near 100 °C; run it above that and core loss rises with temperature, so $P$ and $T_j$ form a loop. Past a critical $R_{ja}$ the steady solution disappears entirely."
    ],
+   "read": null,
    "sandbox": {
     "title": "A heatsink as a low-pass filter",
     "visualiser": "bode",

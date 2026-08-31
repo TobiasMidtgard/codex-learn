@@ -46,6 +46,7 @@
     "Adding a required field or narrowing an enum breaks callers; adding an optional field does not",
     "`isinstance(True, int)` is True — booleans need checking before integers"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -122,6 +123,7 @@
     "Python's sqlite3 in autocommit mode (`isolation_level = None`) makes those boundaries explicit",
     "LIMIT/OFFSET pagination needs a deterministic ORDER BY or pages overlap"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -198,6 +200,7 @@
     "An exception hierarchy carrying `status` and `code` maps the domain onto HTTP in one place",
     "Unexpected exceptions become a generic 500: internals never travel to the caller"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -274,6 +277,7 @@
     "A health check reports on dependencies and never raises — a broken check is a result",
     "A performance budget only means something when a test fails on breaching it"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,

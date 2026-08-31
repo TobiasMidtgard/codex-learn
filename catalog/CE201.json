@@ -43,6 +43,7 @@
     "The implicit leading 1, and how exponent 0 switches it off to give subnormals",
     "Round-to-nearest-even, and why 0.1 is not 0.1"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -119,6 +120,7 @@
     "Pseudo-instructions, and the hardwired zero register that makes them cheap",
     "Assembly-time errors are cheaper than run-time ones: range-check every immediate"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -195,6 +197,7 @@
     "Single-cycle timing is set by the slowest instruction, which is why CPI 1 is not fast",
     "Trapping bad opcodes and bad addresses rather than executing nonsense"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
@@ -271,6 +274,7 @@
     "LRU replacement, its cost in hardware, and why real caches approximate it",
     "Average memory access time = hit time + miss rate x miss penalty"
    ],
+   "read": null,
    "sandbox": null,
    "quiz": null,
    "blanks": null,
