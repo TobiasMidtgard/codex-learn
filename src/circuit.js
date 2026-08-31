@@ -9,10 +9,15 @@
  * The solver is the real method, not a lookup table of textbook answers: the same
  * stamps a SPICE engine uses, assembled into a matrix and solved by Gaussian
  * elimination with partial pivoting. Capacitors and inductors get companion models
- * for transient, and complex admittances for AC. What it will not do is non-linear
- * devices — there is no Newton loop, so no diodes or transistors. That limit is
- * stated rather than hidden, because a learner who trusts a wrong answer is worse
- * off than one who knows where the tool stops.
+ * for transient, and complex admittances for AC. Diodes, bipolars, MOSFETs and
+ * op-amps are replaced each pass by the straight line tangent to their curve at the
+ * present guess, and the whole circuit solved again until the node voltages stop
+ * moving — Newton-Raphson, and the reason those parts can be on the canvas at all.
+ *
+ * Where a model stops is stated rather than hidden, in the panel beside the part that
+ * uses it, because a learner who trusts a wrong answer is worse off than one who knows
+ * where the tool ends. An iteration that does not settle says so and returns no
+ * numbers at all, for exactly the same reason.
  */
 
 /* ---------------------------------------------------------------- linear algebra */
@@ -86,9 +91,11 @@ const PART_KINDS = {
    * A switch, a light-dependent resistor and a thermistor are all the same thing to
    * this solver: a resistance whose number comes from somewhere other than the value
    * box. Netlist.build works that number out before stamping, so the matrix never
-   * learns that anything moved — no Newton loop, no iteration, no pretending. What
-   * makes them worth having is that the "somewhere else" is a state you can click or
-   * a slider you can drag, and the circuit answers.
+   * learns that anything moved — one stamp, one solve, no iteration. The devices
+   * further down the file do iterate, and deliberately not these: a thrown switch is
+   * not a non-linearity, it is a number you chose. What makes them worth having is
+   * that the "somewhere else" is a state you can click or a slider you can drag, and
+   * the circuit answers.
    *
    * `state` is the extra data a kind carries beyond `value`, copied onto the part
    * when it is placed. */
@@ -98,6 +105,31 @@ const PART_KINDS = {
   NTC: { name: 'Thermistor', unit: 'Ω', def: 10000, pins: 2, sym: 'NTC', state: { beta: 3950 },
          senses: 'tempC' },
   POT: { name: 'Potentiometer', unit: 'Ω', def: 10000, pins: 3, sym: 'POT', state: { wiper: 0.5 } },
+
+  /* ---- parts whose current is a curve, not a ratio ----
+   *
+   * These are the ones the matrix cannot answer in a single solve, because what they
+   * pass depends on the very voltages being solved for. Each declares its parameters
+   * in `state` the way a sensor does, and each states its model — and what its model
+   * leaves out — in the component panel. The defaults are chosen so the first number a
+   * learner sees is the textbook one: 0.65 V across a silicon diode at a milliamp,
+   * 1.9 V across a red LED at ten, 0.65 V of Vbe for a milliamp of collector current.
+   *
+   * `value` is whichever parameter the panel calls the value: the saturation current
+   * for a junction, the transconductance parameter for a MOSFET, the open-loop gain
+   * for an op-amp. */
+  D: { name: 'Diode', unit: 'A', def: 1e-14, pins: 2, sym: 'D', state: { n: 1 } },
+  LED: { name: 'LED', unit: 'A', def: 1e-18, pins: 2, sym: 'LED', state: { n: 2, inom: 0.02 } },
+  NPN: { name: 'NPN transistor', unit: 'A', def: 1e-14, pins: 3, sym: 'NPN',
+         state: { bf: 100, br: 1 } },
+  PNP: { name: 'PNP transistor', unit: 'A', def: 1e-14, pins: 3, sym: 'PNP',
+         state: { bf: 100, br: 1 } },
+  NMOS: { name: 'N-channel MOSFET', unit: 'A/V²', def: 2e-3, pins: 3, sym: 'NMOS',
+          state: { vth: 1, lambda: 0.02 } },
+  PMOS: { name: 'P-channel MOSFET', unit: 'A/V²', def: 1e-3, pins: 3, sym: 'PMOS',
+          state: { vth: 1, lambda: 0.02 } },
+  OPAMP: { name: 'Op-amp', unit: '', def: 1e5, pins: 3, sym: 'OPAMP',
+           state: { vpos: 15, vneg: -15 } },
 
   /* ---- readouts ----
    * LAMP and METER are resistances too, and say so. BAR touches nothing: it reads a
@@ -167,6 +199,318 @@ function potSplit(p) {
   return [Math.max(total * w, 1e-3), Math.max(total * (1 - w), 1e-3)];
 }
 
+/* A parameter a part may or may not carry. A schematic authored in a catalog file
+   states only the fields its exercise cares about, so anything missing falls back to
+   the default its kind declares rather than to undefined — which would otherwise reach
+   an exponential as NaN and take every node in the circuit with it. The clamp is the
+   same idea as the sensors': a diode with an ideality of zero is not a diode. */
+function param(p, key, lo, hi) {
+  const k = PART_KINDS[p.kind];
+  const d = k && k.state ? k.state[key] : 0;
+  const v = Number(p[key] === undefined ? d : p[key]);
+  return Math.min(Math.max(isFinite(v) ? v : d, lo), hi);
+}
+
+/* ---------------------------------------------------------------- non-linear devices
+ *
+ * Everything above this line resolves to a number before the matrix is built. A diode
+ * cannot: the current through it depends on the voltage across it, and that voltage is
+ * what the matrix is being solved for. The way out is to guess an operating point,
+ * replace each device by the straight line tangent to its curve there, solve that
+ * linear circuit, and take the answer as the next guess. The loop lives in MNA; this
+ * section is the physics it iterates on.
+ *
+ * Every device answers one question: given the voltages on my terminals, what current
+ * flows into each of them, and how does each of those currents move when each terminal
+ * voltage moves? That pair — a vector i[] and a Jacobian j[][] — plus v[], the point it
+ * actually worked them out at, is all MNA needs, and it turns them into a conductance
+ * and a current source without knowing which device they came from.
+ *
+ * v[] is returned rather than assumed because a device may not have used the voltages it
+ * was handed: the limiting below routinely hands back a junction a long way from where
+ * Newton asked for it. A tangent is a line through a POINT, and stamping the slope from
+ * one point with the intercept from another describes no curve at all — the iteration
+ * still lands on a real answer in the end, because at the end nothing is limited and the
+ * two agree, but on the way it wanders, and a circuit that wanders far enough runs out
+ * of passes and reports a failure it does not have. A diode, a bipolar and a MOSFET are therefore the same shape of thing
+ * to the solver, and a fourth kind is one more function rather than one more stamp.
+ *
+ * The sign convention is the one the linear stamps already use: i[k] is positive when
+ * current flows out of node k and into the device. A plain resistor written this way is
+ * i = [g(v0−v1), −g(v0−v1)] with j = [[g,−g],[−g,g]] and v unchanged, which is exactly
+ * what stampG assembles — so the two halves of the solver agree about which way current goes
+ * without either of them having to be told.
+ */
+
+/* Thermal voltage, kT/q. Every exponential below is in units of it, and every panel
+   quotes it, because "0.7 volts" is something you remember and kT/q is something you
+   can derive. 300 K rather than 300.15 or 293: it is the temperature a datasheet draws
+   its curves at, and picking anything else would make the numbers here disagree with
+   the ones a learner looks up. Nothing in this file models any other temperature. */
+const T_NOM = 300;
+const VT = 1.380649e-23 * T_NOM / 1.602176634e-19;      /* 25.85 mV */
+
+/* Past this many thermal voltages the exponential is continued as the straight line it
+   had reached. Nothing should ever get here — pnjlim below is what keeps junction
+   voltages in range — but a guard that returns a large finite number leaves a bad guess
+   recoverable, where exp(2000) returns Infinity, Infinity minus Infinity returns NaN,
+   and one solve later every node in the circuit is NaN. */
+const EXP_CAP = 40;
+
+/* The Shockley current and its slope together, because the solver always wants both. */
+function pnExp(vj, nvt, is) {
+  const top = EXP_CAP * nvt;
+  if (vj <= top) {
+    const ex = Math.exp(vj / nvt);
+    return [is * (ex - 1), is * ex / nvt];
+  }
+  const ex = Math.exp(EXP_CAP);
+  const g = is * ex / nvt;
+  return [is * (ex - 1) + g * (vj - top), g];
+}
+
+/* The voltage past which a junction's conductance is climbing faster than the rest of
+   the circuit can hold it down, and therefore where a step has to start being held. */
+function vcritOf(is, nvt) {
+  return nvt * Math.log(nvt / (Math.SQRT2 * Math.max(is, 1e-30)));
+}
+
+/* Junction limiting, and the reason a diode circuit solves at all from a cold start.
+   The first Newton step is taken on a curve that is essentially flat at 0 V, so it asks
+   for something like the whole supply across the junction; the next pass evaluates
+   exp(5/0.026), which is e^193, gets a conductance of 1e70, and the pass after that is
+   Infinity and then NaN across the whole circuit. The fix is not to refuse the step but
+   to compress it: past vcrit a forward step is replaced by the Vt·ln of itself, which
+   is still a large move in the direction Newton asked for and a small move in current.
+   Steps the other way are left alone — an exponential running backwards underflows to
+   zero, which is harmless and is also the right answer. */
+function pnjlim(vnew, vold, nvt, vcrit) {
+  if (vnew > vcrit && Math.abs(vnew - vold) > 2 * nvt) {
+    if (vold > 0) {
+      const arg = 1 + (vnew - vold) / nvt;
+      return arg > 0 ? vold + nvt * Math.log(arg) : vcrit;
+    }
+    return nvt * Math.log(vnew / nvt);
+  }
+  return vnew;
+}
+
+/* What voltage to evaluate a junction at on this pass: the one the last solve implies,
+   held back by pnjlim so the exponential cannot run away — except on the very first
+   pass, which has no last solve to imply anything. The all-zero guess a cold start
+   begins from puts every junction at 0 V, where the curve is flat, and the limiter then
+   has to climb to the knee one Vt·ln at a time: thirty-odd passes to arrive somewhere
+   the first pass could simply have been put. So a junction with no history is started AT
+   the knee. The second pass then lands within a hundred millivolts of the answer, with
+   Newton correcting downwards from there — the direction nothing limits, so it costs
+   nothing. Being placed rather than solved, that first value counts as a limited step
+   and does not let the iteration call itself converged. */
+function junctionV(st, key, asked, nvt, vcrit) {
+  const had = st[key];
+  const v = had === undefined ? vcrit : pnjlim(asked, had, nvt, vcrit);
+  if (v !== asked) st.lim = true;
+  st[key] = v;
+  return v;
+}
+
+/* A level-1 MOSFET is a polynomial, so unlike a junction it has nothing to overflow.
+   What it has is three regions with a corner between them, and a step that jumps clean
+   across a corner can sit there swapping cutoff for saturation and back for as long as
+   you let it. Capping how far a controlling voltage may move in one pass costs a few
+   passes and stops the swap. Two volts because that is comfortably wider than the gap
+   between the corners of any sane device and narrow enough to land inside a region. */
+const FET_STEP = 2;
+function fetlim(vnew, vold) {
+  if (vnew > vold + FET_STEP) return vold + FET_STEP;
+  if (vnew < vold - FET_STEP) return vold - FET_STEP;
+  return vnew;
+}
+
+/* An op-amp is not ideal here, and the two departures are what make it solvable. Its
+   open-loop gain is finite: an infinite one would put a row of all zeros in the matrix,
+   which is a singular matrix and not an answer. And its output is driven through a real
+   resistance, so the output pin is a Norton source — a conductance and a current — and
+   needs no extra unknown of its own. 75 Ω is what a small op-amp's open-loop output
+   resistance actually is, so the honest model and the convenient one are the same. */
+const OP_ROUT = 75;
+
+const Devices = (function () {
+
+  /* ---- diode, and the LED that is the same equation with different numbers ----
+     Terminals [anode, cathode], which is pin order: the end the triangle points away
+     from, then the bar. */
+  function diode(d, v, st) {
+    const nvt = d.n * VT;
+    const asked = v[0] - v[1];
+    const vd = st.raw ? asked
+      : junctionV(st, 'vd', asked, nvt, vcritOf(d.is, nvt));
+    const r = pnExp(vd, nvt, d.is);
+    return { i: [r[0], -r[0]], j: [[r[1], -r[1]], [-r[1], r[1]]],
+             v: [v[1] + vd, v[1]] };
+  }
+
+  /* ---- bipolar, Ebers-Moll in transport form ----
+     Terminals in pin order, which for every three-pin part is the two along the body
+     and then the control pin: [collector, emitter, base]. Not the C-B-E a datasheet
+     lists, and deliberately not — every device here is indexed the way its pins come
+     off the grid, so nothing between the netlist and the panel has to remember a
+     per-device permutation, which is exactly the sort of thing that is wrong once and
+     then wrong everywhere.
+     Two junctions, two betas, and nothing else: the collector current is the difference
+     between what the two junctions inject, and the base current is each junction's own
+     current divided by its beta.
+
+     `s` is +1 for an NPN and −1 for a PNP, and that is the whole difference between
+     them. Negating the junction voltages AND the terminal currents leaves the Jacobian
+     alone, because the two sign flips cancel in the derivative — so there is one set of
+     partials written out here and not two nearly-identical sets to keep in step. */
+  function bjt(d, v, st) {
+    const s = d.sign, nvt = VT, vcrit = vcritOf(d.is, nvt);
+    const abe = s * (v[2] - v[1]), abc = s * (v[2] - v[0]);
+    const vbe = st.raw ? abe : junctionV(st, 'vbe', abe, nvt, vcrit);
+    const vbc = st.raw ? abc : junctionV(st, 'vbc', abc, nvt, vcrit);
+    const F = pnExp(vbe, nvt, d.is), R = pnExp(vbc, nvt, d.is);
+    const rf = 1 / d.bf, rr = 1 / d.br;
+    const ic = F[0] - R[0] * (1 + rr);
+    const ib = F[0] * rf + R[0] * rr;
+    /* rows and columns both in pin order [collector, emitter, base]; the emitter takes
+       back whatever the other two passed, which is why its row is the negated sum */
+    const gr = R[1] * (1 + rr);
+    const jc = [gr, -F[1], F[1] - gr];
+    const jb = [-R[1] * rr, -F[1] * rf, F[1] * rf + R[1] * rr];
+    const je = [-jc[0] - jb[0], -jc[1] - jb[1], -jc[2] - jb[2]];
+    /* the terminal voltages these were worked out at, which after limiting are not the
+       ones handed in: the emitter is left where it was and the other two put wherever
+       the two junction voltages actually used imply */
+    return { i: [s * ic, -s * (ic + ib), s * ib], j: [jc, je, jb],
+             v: [v[1] + s * (vbe - vbc), v[1], v[1] + s * vbe] };
+  }
+
+  /* the square law itself: drain current, transconductance and output conductance */
+  function square(vgs, vds, d) {
+    const vov = vgs - d.vth;
+    if (vov <= 0) return [0, 0, 0];                                   /* cutoff */
+    const e = 1 + d.lambda * vds;
+    if (vds < vov) {                                                  /* triode */
+      const q = vov * vds - 0.5 * vds * vds;
+      return [d.k * q * e, d.k * vds * e,
+              d.k * (vov - vds) * e + d.k * q * d.lambda];
+    }
+    return [0.5 * d.k * vov * vov * e,                                /* saturation */
+            d.k * vov * e,
+            0.5 * d.k * vov * vov * d.lambda];
+  }
+
+  /* ---- MOSFET, SPICE level 1 ----
+     Terminals in pin order again: [drain, source, gate]. The gate draws nothing at all,
+     which is exactly why gmin exists — a gate wired only to another gate is a node with
+     no conductance on it anywhere, and a matrix row of zeros is not an answer. */
+  function mos(d, v, st) {
+    const s = d.sign;
+    let vgs = s * (v[2] - v[1]);
+    let vds = s * (v[0] - v[1]);
+    if (!st.raw) {
+      const ags = vgs, ads = vds;
+      vgs = fetlim(vgs, st.vgs === undefined ? 0 : st.vgs);
+      vds = fetlim(vds, st.vds === undefined ? 0 : st.vds);
+      if (vgs !== ags || vds !== ads) st.lim = true;
+      st.vgs = vgs; st.vds = vds;
+    }
+    let id, gm, gds;
+    if (vds >= 0) {
+      const m = square(vgs, vds, d);
+      id = m[0]; gm = m[1]; gds = m[2];
+    } else {
+      /* Below its own source the channel simply runs the other way, so the same square
+         law applies with drain and source exchanged. Solving in the swapped frame and
+         mapping the partials back is what lets a MOSFET be a pass gate, where which end
+         is the source is decided by the signal and not by the drawing. */
+      const m = square(vgs - vds, -vds, d);
+      id = -m[0]; gm = -m[1]; gds = m[1] + m[2];
+    }
+    /* the drain row against [Vd, Vs, Vg]; the source row is its negative, and the gate
+       row is empty because the gate passes nothing whatever the rest of it does */
+    const row = [gds, -(gm + gds), gm];
+    return { i: [s * id, -s * id, 0],
+             j: [row, [-row[0], -row[1], -row[2]], [0, 0, 0]],
+             v: [v[1] + s * vds, v[1], v[1] + s * vgs] };
+  }
+
+  /* ---- op-amp ----
+     Terminals [in+, out, in−]: the two along the body and the control pin at right
+     angles to it, which is the geometry a potentiometer already established.
+
+     The output follows the gain until it reaches a rail and then stops, and the stop is
+     a tanh rather than a hard clip on purpose. A hard clip has a slope of exactly zero
+     beyond the corner, and Newton cannot steer on a slope of zero: it would put the
+     output on a rail and have nothing to tell it how to come back. tanh saturates just
+     as firmly, keeps a slope the whole way, and needs no limiting of its own — it is
+     bounded everywhere, so unlike an exponential it cannot be made to overflow. */
+  function opamp(d, v, st) {
+    const mid = (d.vpos + d.vneg) / 2;
+    const sw = Math.max((d.vpos - d.vneg) / 2, 1e-3);
+    const lin = sw / d.gain;                    /* half-width of the linear region */
+    const th = Math.tanh((v[0] - v[2]) / lin);
+    const gout = 1 / OP_ROUT;
+    const a = d.gain * (1 - th * th) * gout;    /* the slope actually in force */
+    /* nothing here is limited, so the point used is the point handed in — and it has to
+       be reported all the same, because unlike every other device the op-amp's rows do
+       not sum to zero (its output current comes from a supply that is not drawn), so its
+       equivalent current genuinely depends on where the terminals are and not only on
+       the differences between them */
+    return { i: [0, gout * (v[1] - (mid + sw * th)), 0],
+             j: [[0, 0, 0], [-a, gout, a], [0, 0, 0]], v: v };
+  }
+
+  function junction(p) {
+    return { is: Math.max(p.value, 1e-30), n: param(p, 'n', 0.5, 4) };
+  }
+  function bipolar(p, s) {
+    return { is: Math.max(p.value, 1e-30), sign: s,
+             bf: param(p, 'bf', 1, 5000), br: param(p, 'br', 0.01, 100) };
+  }
+  function fet(p, s) {
+    return { k: Math.max(p.value, 1e-12), sign: s,
+             vth: param(p, 'vth', 0.05, 20), lambda: param(p, 'lambda', 0, 1) };
+  }
+
+  const KIND = {
+    D: { iv: diode, of: junction },
+    LED: { iv: diode, of: junction },
+    NPN: { iv: bjt, of: function (p) { return bipolar(p, 1); } },
+    PNP: { iv: bjt, of: function (p) { return bipolar(p, -1); } },
+    NMOS: { iv: mos, of: function (p) { return fet(p, 1); } },
+    PMOS: { iv: mos, of: function (p) { return fet(p, -1); } },
+    OPAMP: { iv: opamp, of: function (p) {
+      const hi = param(p, 'vpos', -100, 100), lo = param(p, 'vneg', -100, 100);
+      return { gain: Math.min(Math.max(p.value, 10), 1e9),
+               vpos: Math.max(hi, lo + 1e-3), vneg: Math.min(lo, hi - 1e-3) };
+    } },
+  };
+
+  /* One device, ready to be asked for currents. The parameters are read out of the part
+     ONCE here rather than on every pass, so a Newton loop of a hundred passes across
+     four thousand time steps is not four hundred thousand trips through the clamps. */
+  function build(p) {
+    const k = KIND[p.kind];
+    if (!k) return null;
+    const d = k.of(p);
+    d.iv = k.iv;
+    d.kind = p.kind;
+    d.id = p.id;
+    return d;
+  }
+
+  return {
+    is: function (kind) { return !!KIND[kind]; },
+    build: build,
+    /* the drop a junction settles at for a given current, which is what the panel
+       quotes: the model read backwards, so the number cannot drift from the model */
+    dropAt: function (is, n, amps) { return n * VT * Math.log(amps / is + 1); },
+    VT: VT, T_NOM: T_NOM, OP_ROUT: OP_ROUT,
+  };
+})();
+
 /* engineering notation both ways, because 1e-6 is not how anyone says a microfarad */
 function fmtEng(v, unit) {
   if (v === 0) return '0 ' + unit;
@@ -197,24 +541,42 @@ function parseEng(text, fallback) {
   return isFinite(v) ? v : fallback;
 }
 
+/* Quarter turns clockwise, normalised. Module level rather than tucked inside the
+   netlist because the pins, the polarity, the drawing and the panel all have to agree
+   about which way round a part is, and one function is how they are made to. */
+function turnsOf(p) { return ((((p.rot || 0) | 0) % 4) + 4) % 4; }
+
+/* The two ends of a body and its control pin, in the words the drawing puts them in. */
+function pinWords(p) {
+  return [['left', 'right', 'above'], ['top', 'bottom', 'to the right'],
+          ['right', 'left', 'below'], ['bottom', 'top', 'to the left']][turnsOf(p)];
+}
+
 /* ---------------------------------------------------------------- netlist */
 const Netlist = (function () {
 
   /* Pins in grid coordinates. A part sits at (x, y) and is either horizontal or
      vertical; two-pin parts span two cells so a wire can meet them squarely. */
-  /* Pin count comes from the registry rather than from a list of kind names here, so
-     a new kind gets its geometry by declaring how many pins it has. One pin sits on
-     its cell; two span it; the third — so far only a potentiometer's wiper — leaves
-     the body at right angles to the track, one cell out, which is where the arrow in
-     the symbol points. The first two pins of a three-pin part are exactly where a
-     two-pin part's pins would be, so nothing that already worked has moved. */
+  /* `rot` counts quarter turns clockwise: 0 lying flat, 1 standing up, and 2 and 3 the
+     same two the other way round. Two of them were enough while every part the solver
+     understood was symmetric end to end — a resistor turned round is the same resistor.
+     A diode is not, and neither is a transistor, so a part that cannot be turned to
+     face the other way is a part half the circuits that need it cannot use.
+     Pin count comes from the registry rather than from a list of kind names here, so a
+     new kind gets its geometry by declaring how many pins it has. One pin sits on its
+     cell; two span it along whichever axis rot puts them, FIRST pin trailing; the third
+     — a potentiometer's wiper, a base, a gate — leaves the body at right angles, one
+     cell out, which is where the arrow in the symbol points. rot 0 and 1 land exactly
+     where they always did, so nothing already drawn has moved. */
   function pinsOf(p) {
     const k = PART_KINDS[p.kind];
     const n = k ? k.pins : 2;
     if (n === 1) return [[p.x, p.y]];
-    const span = p.rot ? [[p.x, p.y - 1], [p.x, p.y + 1]] : [[p.x - 1, p.y], [p.x + 1, p.y]];
+    const r = turnsOf(p);
+    const dx = [1, 0, -1, 0][r], dy = [0, 1, 0, -1][r];
+    const span = [[p.x - dx, p.y - dy], [p.x + dx, p.y + dy]];
     if (n < 3) return span;
-    span.push(p.rot ? [p.x + 1, p.y] : [p.x, p.y - 1]);
+    span.push([p.x + dy, p.y - dx]);
     return span;
   }
 
@@ -223,11 +585,14 @@ const Netlist = (function () {
      horizontal source and the TOP pin of a vertical one. Ordering the pins that way
      here means a divider laid out with ground on the left gives a positive output,
      which is what anyone building one expects. R, C and L are symmetric and do not
-     care. The editor draws the + so it is never a guess. */
+     care. The editor draws the + so it is never a guess.
+     Turned through half a circle the + goes with the part, as it would if you lifted a
+     battery out and put it back the other way round — which is why the test is on
+     whether the body is upright and not on whether rot is set. */
   function plusFirst(p) {
     const pins = pinsOf(p);
     if (p.kind !== 'V' && p.kind !== 'I') return pins;
-    return p.rot ? pins : [pins[1], pins[0]];
+    return (turnsOf(p) % 2) ? pins : [pins[1], pins[0]];
   }
 
   function key(pt) { return pt[0] + ',' + pt[1]; }
@@ -326,6 +691,19 @@ const Netlist = (function () {
         readouts.push({ id: p.id, kind: 'POT', nodes: pins, ohms: rr[0] + rr[1], split: rr });
         return;
       }
+      /* A device the solver has to iterate on goes through unresolved: there is no one
+         number to work out in advance, which is the whole difference between it and a
+         thermistor. It carries its own pins rather than n1/n2, because three-terminal
+         parts have three, and it takes them in the order pinsOf gives them — the two
+         along the body then the control pin at right angles, the convention POT set.
+         Which terminal is which is drawn on the symbol and named in the panel. */
+      if (Devices.is(p.kind)) {
+        const dev = Devices.build(p);
+        dev.nodes = pins.slice(0, PART_KINDS[p.kind].pins);
+        parts.push(dev);
+        readouts.push({ id: p.id, kind: p.kind, nodes: dev.nodes });
+        return;
+      }
       const ohms = ohmsOf(p, world);
       if (ohms !== null) {
         parts.push({ id: p.id, kind: 'R', value: ohms, n1: pins[0], n2: pins[1], of: p.id, was: p.kind });
@@ -381,16 +759,186 @@ const MNA = (function () {
     return null;
   }
 
-  /* ---- DC operating point ---- */
-  function dc(net) {
-    const bad = problems(net);
-    if (bad) return { error: bad };
-    const f = frame(net, 'dc');
-    if (f.n === 0) return { error: 'Everything is tied to ground; there is nothing to solve for.' };
-    const A = Lin.zeros(f.n);
-    const b = [];
-    for (let i = 0; i < f.n; i++) b.push([0, 0]);
+  const UNDER_DC = 'The circuit is under-determined — usually a node connected to nothing, or two voltage sources in a loop.';
+  const UNDER_TRAN = 'The circuit is under-determined.';
 
+  /* ---- Newton-Raphson ----
+   *
+   * A linear circuit has one answer and one solve finds it. A circuit with a diode in
+   * it has an answer that depends on itself, so it is found by successive approximation:
+   * linearise every device where the last answer said it was sitting, solve, and repeat
+   * until the answer stops moving. Everything below is the bookkeeping that makes that
+   * loop trustworthy rather than merely convergent-looking.
+   */
+
+  /* A conductance from every node to ground. Iteration passes through states no real
+     circuit is ever in — a MOSFET in cutoff has an infinite resistance from drain to
+     source, and on the pass that finds it, the drain may be attached to nothing else at
+     all — and a matrix row of zeros stops the whole solve on a circuit that has a
+     perfectly good answer two passes later. gmin gives every node a diagonal entry so
+     the pass can complete and the iteration can carry on to the answer.
+     1e-12 S is a terrohm: 5 pA leaks out of a 5 V node through it, which is six orders
+     below the microamps the smallest of these circuits carries and cannot move a
+     printed answer, while being a hundred times the pivot threshold in Lin.solve.
+     It is added ONLY when there is something non-linear to iterate on. A linear circuit
+     that is singular is genuinely under-determined, and propping one up with gmin would
+     turn "this circuit has no unique answer" into a number — which is the one thing this
+     solver has never done. */
+  const GMIN = 1e-12;
+
+  /* When to stop, and when to give up.
+     Two tolerances, because a 5 V rail and a 0.6 V junction cannot share one: a relative
+     part that keeps a check on a supply node meaningful, and an absolute floor, because
+     nothing is ever within a part in a million of nothing and a node sitting at zero
+     would otherwise never be declared settled. Branch currents get their own floor —
+     an amp and a volt are not the same size of number.
+     These are tighter than SPICE's own defaults (1e-3 and 1 µV), which these circuits
+     are small enough to afford, and which means a check comparing an answer to four
+     figures is reading the circuit rather than the tolerance. */
+  const NR_MAX = 100;
+  const RELTOL = 1e-6, VNTOL = 1e-9, ABSTOL = 1e-12;
+
+  function devicesOf(net) {
+    return net.parts.filter(function (p) { return !!p.iv; });
+  }
+  function freshState(devs) {
+    const s = {};
+    devs.forEach(function (d) { s[d.id] = {}; });
+    return s;
+  }
+  function rhs(n) {
+    const b = [];
+    for (let i = 0; i < n; i++) b.push([0, 0]);
+    return b;
+  }
+  function nodeVolts(nodes, x) {
+    return nodes.map(function (n) { return n > 0 && x ? x[n - 1][0] : 0; });
+  }
+
+  /* The conductance half of a device's linearisation: every terminal against every
+     other. This alone is what an AC sweep wants, since a small signal rides on top of
+     the operating point and asks only about the slope there. */
+  function stampTangent(A, nodes, J) {
+    for (let k = 0; k < nodes.length; k++) {
+      if (nodes[k] <= 0) continue;
+      for (let l = 0; l < nodes.length; l++) {
+        if (nodes[l] <= 0 || !J[k][l]) continue;
+        A[nodes[k] - 1][nodes[l] - 1] = Lin.cadd(A[nodes[k] - 1][nodes[l] - 1], [J[k][l], 0]);
+      }
+    }
+  }
+
+  /* The whole companion model, in six lines: the tangent as a conductance, plus a
+     current source carrying everything the real curve does that the tangent does not.
+     Every device in the file reduces to this, which is why none of them needs a stamp
+     of its own. */
+  function stampDevice(A, b, nodes, v, i, J) {
+    stampTangent(A, nodes, J);
+    for (let k = 0; k < nodes.length; k++) {
+      const nk = nodes[k];
+      if (nk <= 0) continue;
+      let ieq = i[k];
+      for (let l = 0; l < nodes.length; l++) ieq -= J[k][l] * v[l];
+      b[nk - 1] = Lin.csub(b[nk - 1], [ieq, 0]);
+    }
+  }
+
+  function settled(x, prev, nodeRows) {
+    for (let i = 0; i < x.length; i++) {
+      const a = x[i][0], p = prev[i][0];
+      const floor = i < nodeRows ? VNTOL : ABSTOL;
+      if (Math.abs(a - p) > RELTOL * Math.max(Math.abs(a), Math.abs(p)) + floor) return false;
+    }
+    return true;
+  }
+  function allFinite(x) {
+    for (let i = 0; i < x.length; i++) if (!isFinite(x[i][0]) || !isFinite(x[i][1])) return false;
+    return true;
+  }
+
+  /* The linearisation left standing at the settled point, kept so an AC sweep can be
+     taken about it. Re-evaluated with the limiters switched off: they exist to hold a
+     guess back, and this is not a guess. */
+  function tangentsAt(devs, x) {
+    return devs.map(function (d) {
+      const vs = nodeVolts(d.nodes, x);
+      return { nodes: d.nodes, j: d.iv(d, vs, { raw: true }).j };
+    });
+  }
+
+  /* Say which node would not settle and by how much. "It did not converge" is true and
+     useless; the node still moving is nearly always the one with the device on it. */
+  function stalled(msg, x, before, nodeRows) {
+    let worst = 0, at = 0;
+    if (x && before) {
+      for (let i = 0; i < nodeRows; i++) {
+        const d = Math.abs(x[i][0] - before[i][0]);
+        if (d > worst) { worst = d; at = i + 1; }
+      }
+    }
+    return 'The iteration did not settle: ' + NR_MAX + ' passes at ' + msg.where +
+      ' and the node voltages were still moving' +
+      (at ? ' (node ' + at + ' by ' + fmtEng(worst, 'V') + ' on the last one)' : '') +
+      '. A non-linear circuit can fail to converge because it genuinely has more than one ' +
+      'operating point — a latch, or positive feedback round an op-amp — or because a ' +
+      'device is being driven far outside what its model was written for. Rather than ' +
+      'hand you the last guess as though it were an answer, this is the answer: it did ' +
+      'not converge.';
+  }
+  function blewUp(msg) {
+    return 'The iteration went to infinity at ' + msg.where + ' and came back as not a ' +
+      'number. Something is driving a device past anything the step limiting can hold — ' +
+      'a diode straight across a voltage source, with no resistance anywhere in the loop, ' +
+      'is the usual one.';
+  }
+
+  /* One solve if there is nothing to iterate on, Newton if there is. `stamp` lays down
+     whatever is linear about this particular analysis — DC, or one backward-Euler step —
+     and knows nothing about devices; `state` carries each device's junction voltages
+     between passes, and between time steps, so the limiting has a previous value to hold
+     against; `guess` is where to start, which for a time step is the step before it. */
+  function iterate(net, f, devs, state, stamp, guess, msg) {
+    const nodeRows = net.nodeCount - 1;
+
+    if (!devs.length) {
+      const A = Lin.zeros(f.n), b = rhs(f.n);
+      stamp(A, b);
+      const x = Lin.solve(A, b);
+      return x ? { x: x } : { error: msg.under };
+    }
+
+    let prev = guess || null, before = null;
+    for (let pass = 1; pass <= NR_MAX; pass++) {
+      const A = Lin.zeros(f.n), b = rhs(f.n);
+      stamp(A, b);
+      for (let i = 0; i < nodeRows; i++) A[i][i] = Lin.cadd(A[i][i], [GMIN, 0]);
+      let held = false;
+      devs.forEach(function (d) {
+        const st = state[d.id];
+        st.lim = false;
+        const vs = nodeVolts(d.nodes, prev);
+        const r = d.iv(d, vs, st);
+        if (st.lim) held = true;
+        stampDevice(A, b, d.nodes, r.v, r.i, r.j);
+      });
+      const x = Lin.solve(A, b);
+      if (!x) return { error: msg.under };
+      if (!allFinite(x)) return { error: blewUp(msg) };
+      /* A pass whose device voltages were held back by a limiter has not converged
+         however small its step looks: the step it took is the one the limiter allowed,
+         not the one Newton asked for, and mistaking the two is how a solver reports a
+         confident wrong answer. */
+      if (prev && !held && settled(x, prev, nodeRows)) {
+        return { x: x, passes: pass, tangents: tangentsAt(devs, x) };
+      }
+      before = prev;
+      prev = x;
+    }
+    return { error: stalled(msg, prev, before, nodeRows) };
+  }
+
+  /* ---- DC operating point ---- */
+  function stampDC(net, f, A, b) {
     net.parts.forEach(function (p) {
       if (p.kind === 'R') stampG(A, p.n1, p.n2, [1 / Math.max(p.value, 1e-12), 0]);
       else if (p.kind === 'I') stampCurrent(b, p.n1, p.n2, [p.value, 0]);
@@ -404,22 +952,54 @@ const MNA = (function () {
         b[k] = [volts, 0];
       }
     });
+  }
 
-    const x = Lin.solve(A, b);
-    if (!x) return { error: 'The circuit is under-determined — usually a node connected to nothing, or two voltage sources in a loop.' };
+  function dc(net) {
+    const bad = problems(net);
+    if (bad) return { error: bad };
+    const f = frame(net, 'dc');
+    if (f.n === 0) return { error: 'Everything is tied to ground; there is nothing to solve for.' };
+    const devs = devicesOf(net);
+    const r = iterate(net, f, devs, freshState(devs),
+      function (A, b) { stampDC(net, f, A, b); }, null,
+      { where: 'the operating point', under: UNDER_DC });
+    if (r.error) return { error: r.error };
     const v = [0];
-    for (let i = 0; i < net.nodeCount - 1; i++) v.push(x[i][0]);
+    for (let i = 0; i < net.nodeCount - 1; i++) v.push(r.x[i][0]);
     const currents = {};
-    f.carriers.forEach(function (p) { currents[p.id] = x[f.idxOf(p)][0]; });
-    return { v: v, currents: currents };
+    f.carriers.forEach(function (p) { currents[p.id] = r.x[f.idxOf(p)][0]; });
+    return { v: v, currents: currents, passes: r.passes || 1, tangents: r.tangents || [] };
+  }
+
+  /* The operating point an AC sweep is taken about. A sweep asks what a SMALL change
+     does, so for a non-linear part the answer is the slope of its curve at the point the
+     circuit is actually sitting at — which means a transistor stage's gain here is the
+     gain its bias gives it, and moving the bias moves the plot, exactly as it does on the
+     bench. Cached on the net because finding a corner frequency asks for sixty
+     frequencies and the bias does not move between any of them. */
+  function bias(net) {
+    if (!net.__bias) net.__bias = dc(net);
+    return net.__bias;
   }
 
   /* ---- AC, one frequency ---- */
   function acAt(net, w) {
+    const devs = devicesOf(net);
+    let tangents = null;
+    if (devs.length) {
+      const op = bias(net);
+      if (op.error) return null;
+      tangents = op.tangents;
+    }
     const f = frame(net, 'ac');
     const A = Lin.zeros(f.n);
     const b = [];
     for (let i = 0; i < f.n; i++) b.push([0, 0]);
+
+    if (tangents) {
+      for (let i = 0; i < net.nodeCount - 1; i++) A[i][i] = Lin.cadd(A[i][i], [GMIN, 0]);
+      tangents.forEach(function (t) { stampTangent(A, t.nodes, t.j); });
+    }
 
     net.parts.forEach(function (p) {
       if (p.kind === 'R') stampG(A, p.n1, p.n2, [1 / Math.max(p.value, 1e-12), 0]);
@@ -446,6 +1026,16 @@ const MNA = (function () {
     if (bad) return { error: bad };
     if (!net.parts.some(function (p) { return p.kind === 'V' || p.kind === 'I'; })) {
       return { error: 'No source to sweep. Add a voltage or current source.' };
+    }
+    /* A non-linear circuit has no frequency response until it has a bias to have one
+       about, so a failure to find that bias is reported as itself rather than as a
+       sweep that mysteriously would not run. */
+    if (devicesOf(net).length) {
+      const op = bias(net);
+      if (op.error) {
+        return { error: 'A sweep is taken about the DC operating point, and this circuit ' +
+          'has not got one. ' + op.error };
+      }
     }
     const out = [];
     for (let i = 0; i < points; i++) {
@@ -476,52 +1066,78 @@ const MNA = (function () {
     const prevI = {};
     net.parts.forEach(function (p) { prevV[p.id] = 0; prevI[p.id] = 0; });
 
+    const devs = devicesOf(net);
+    const state = freshState(devs);
+    const msg = { where: 'a time step', under: UNDER_TRAN };
+
+    /* one backward-Euler step, of whatever length is asked for */
+    function stampStep(hh) {
+      return function (A, b) {
+        net.parts.forEach(function (p) {
+          if (p.kind === 'R') stampG(A, p.n1, p.n2, [1 / Math.max(p.value, 1e-12), 0]);
+          else if (p.kind === 'C') {
+            /* companion: conductance C/h with a current source carrying the history */
+            const g = Math.max(p.value, 1e-18) / hh;
+            stampG(A, p.n1, p.n2, [g, 0]);
+            stampCurrent(b, p.n1, p.n2, [-g * prevV[p.id], 0]);
+          } else if (p.kind === 'I') stampCurrent(b, p.n1, p.n2, [p.value, 0]);
+          else if (p.kind === 'V' || p.kind === 'L') {
+            const k = f.idxOf(p);
+            if (p.n1 > 0) { A[p.n1 - 1][k] = Lin.cadd(A[p.n1 - 1][k], [1, 0]); A[k][p.n1 - 1] = Lin.cadd(A[k][p.n1 - 1], [1, 0]); }
+            if (p.n2 > 0) { A[p.n2 - 1][k] = Lin.csub(A[p.n2 - 1][k], [1, 0]); A[k][p.n2 - 1] = Lin.csub(A[k][p.n2 - 1], [1, 0]); }
+            if (p.kind === 'V') {
+              b[k] = [p.value, 0];
+            } else {
+              /* inductor companion: v = (L/h)(i - i_prev) */
+              const Lh = Math.max(p.value, 1e-15) / hh;
+              A[k][k] = Lin.csub(A[k][k], [Lh, 0]);
+              b[k] = [-Lh * prevI[p.id], 0];
+            }
+          }
+        });
+      };
+    }
+
     const times = [], volts = [];
     /* The initial condition, before any step. Backward Euler solves for the state at
        the *end* of a step, so without this the first sample already shows one step of
        charging and an RC curve appears not to start at zero. */
     const v0 = [];
     for (let i = 0; i < net.nodeCount; i++) v0.push(0);
-    net.parts.forEach(function (p) {
-      if (p.kind === 'V') { if (p.n1 > 0) v0[p.n1] = p.value; }
-    });
+    let guess = null;
+    if (devs.length) {
+      /* A non-linear circuit's first sample cannot be written down the way a linear
+         one's can, because the node a source drives is not the node the source is at
+         once there is a diode in between. So it is solved — by the same backward-Euler
+         stamp taken over a step short enough that no capacitor charges and no inductor
+         builds current, which leaves every reactance at its initial condition and asks
+         only what the resistive part of the circuit does at the instant the supply
+         arrives. The linear path keeps the sample it has always written: a hundred and
+         fifty published transients start at it. */
+      const first = iterate(net, f, devs, state, stampStep(h * 1e-6), null,
+        { where: 'the first instant', under: UNDER_TRAN });
+      if (first.error) return { error: first.error };
+      for (let i = 0; i < net.nodeCount - 1; i++) v0[i + 1] = first.x[i][0];
+      guess = first.x;
+    } else {
+      net.parts.forEach(function (p) {
+        if (p.kind === 'V') { if (p.n1 > 0) v0[p.n1] = p.value; }
+      });
+    }
     times.push(0);
     volts.push(v0);
 
+    const step = stampStep(h);
     for (let s = 1; s <= steps; s++) {
-      const t = s * h;
-      const A = Lin.zeros(f.n);
-      const b = [];
-      for (let i = 0; i < f.n; i++) b.push([0, 0]);
-
-      net.parts.forEach(function (p) {
-        if (p.kind === 'R') stampG(A, p.n1, p.n2, [1 / Math.max(p.value, 1e-12), 0]);
-        else if (p.kind === 'C') {
-          /* companion: conductance C/h with a current source carrying the history */
-          const g = Math.max(p.value, 1e-18) / h;
-          stampG(A, p.n1, p.n2, [g, 0]);
-          stampCurrent(b, p.n1, p.n2, [-g * prevV[p.id], 0]);
-        } else if (p.kind === 'I') stampCurrent(b, p.n1, p.n2, [p.value, 0]);
-        else if (p.kind === 'V' || p.kind === 'L') {
-          const k = f.idxOf(p);
-          if (p.n1 > 0) { A[p.n1 - 1][k] = Lin.cadd(A[p.n1 - 1][k], [1, 0]); A[k][p.n1 - 1] = Lin.cadd(A[k][p.n1 - 1], [1, 0]); }
-          if (p.n2 > 0) { A[p.n2 - 1][k] = Lin.csub(A[p.n2 - 1][k], [1, 0]); A[k][p.n2 - 1] = Lin.csub(A[k][p.n2 - 1], [1, 0]); }
-          if (p.kind === 'V') {
-            b[k] = [p.value, 0];
-          } else {
-            /* inductor companion: v = (L/h)(i - i_prev) */
-            const Lh = Math.max(p.value, 1e-15) / h;
-            A[k][k] = Lin.csub(A[k][k], [Lh, 0]);
-            b[k] = [-Lh * prevI[p.id], 0];
-          }
-        }
-      });
-
-      const x = Lin.solve(A, b);
-      if (!x) return { error: 'The circuit is under-determined.' };
+      /* the step before is where this one starts looking, which is why a transient
+         costs two or three passes a point rather than the dozen a cold start costs */
+      const r = iterate(net, f, devs, state, step, guess, msg);
+      if (r.error) return { error: r.error };
+      const x = r.x;
+      guess = x;
       const v = [0];
       for (let i = 0; i < net.nodeCount - 1; i++) v.push(x[i][0]);
-      times.push(t);
+      times.push(s * h);
       volts.push(v);
 
       net.parts.forEach(function (p) {
@@ -648,6 +1264,29 @@ const Symbols = (function () {
     c.moveTo(-1, 8); c.lineTo(-14, 14); c.lineTo(-3, 22);
   });
 
+  /* The two MOSFETs share every line but the body arrow, and they share the lead
+     geometry of the bipolars above — control lead out to (-60, 0), the other two to
+     (22, ∓60) — because the editor lands all four on their pins with one transform.
+     A symbol drawn to a different geometry would still draw; it would just stop
+     meeting its own wires. */
+  function fet(c, into) {
+    c.moveTo(-60, 0); c.lineTo(-24, 0);          /* gate lead */
+    c.moveTo(-24, -30); c.lineTo(-24, 30);       /* gate plate, off the channel */
+    /* the channel in three pieces: an enhancement device has no channel until the gate
+       makes one, and the two gaps are how the symbol says so */
+    c.moveTo(-12, -30); c.lineTo(-12, -14);
+    c.moveTo(-12, -7); c.lineTo(-12, 7);
+    c.moveTo(-12, 14); c.lineTo(-12, 30);
+    c.moveTo(-12, -22); c.lineTo(22, -22); c.lineTo(22, -60);   /* drain */
+    c.moveTo(-12, 22); c.lineTo(22, 22); c.lineTo(22, 60);      /* source */
+    c.moveTo(-12, 0); c.lineTo(22, 0); c.lineTo(22, 22);        /* body, tied to source */
+    /* the body arrow: in at the channel for N, out of it for P */
+    if (into) { c.moveTo(-1, -6); c.lineTo(-12, 0); c.lineTo(-1, 6); }
+    else { c.moveTo(-11, -6); c.lineTo(0, 0); c.lineTo(-11, 6); }
+  }
+  define('NMOS', 'N-channel MOSFET', function (c) { fet(c, true); });
+  define('PMOS', 'P-channel MOSFET', function (c) { fet(c, false); });
+
   define('SW', 'Switch', function (c) {
     c.moveTo(-60, 0); c.lineTo(-24, 0);
     c.moveTo(-24, 0); c.lineTo(20, -24);
@@ -747,7 +1386,14 @@ function createCircuit(root, opts) {
            ['POT', 'POT', 'Potentiometer — three pins, a wiper along the track'],
            ['LAMP', 'Lamp', 'Indicator lamp — a resistance that lights with the power in it'],
            ['METER', 'Meter', 'Ammeter — reads the current through it'],
-           ['BAR', 'Bar', 'Bar display — reads the node it sits on']].map(function (t) {
+           ['BAR', 'Bar', 'Bar display — reads the node it sits on'],
+           ['D', 'D', 'Diode — Shockley, solved by iteration rather than by a 0.7 V rule'],
+           ['LED', 'LED', 'LED — the same junction, and it lights when it conducts'],
+           ['NPN', 'NPN', 'NPN bipolar — Ebers-Moll'],
+           ['PNP', 'PNP', 'PNP bipolar — Ebers-Moll'],
+           ['NMOS', 'NMOS', 'N-channel MOSFET — level 1 square law'],
+           ['PMOS', 'PMOS', 'P-channel MOSFET — level 1 square law'],
+           ['OPAMP', 'Op-amp', 'Op-amp — finite gain, output limited to its rails']].map(function (t) {
             return '<button class="ckt-t" data-tool="' + t[0] + '" title="' + t[2] + '">' + t[1] + '</button>';
           }).join('') +
         '</div>' +
@@ -910,6 +1556,47 @@ function createCircuit(root, opts) {
     return u === null ? null : u * u / Math.max(p.value, 1e-3);
   }
 
+  /* What a non-linear part is actually doing, taken from the node voltages written on
+     the canvas and put back through the same model the solver iterated on. Read back
+     rather than carried out of the solve, because then the current a learner sees on the
+     part and the voltages they see on its pins are provably the same answer: if the two
+     ever disagreed, the model would be the thing at fault and it would show. The
+     limiters are off, since these are settled voltages and not a guess to be held. */
+  function deviceOp(p) {
+    if (!Devices.is(p.kind)) return null;
+    const pins = Netlist.pinsOf(p);
+    const vs = [];
+    for (let i = 0; i < PART_KINDS[p.kind].pins; i++) {
+      const u = dcAt(pins[i]);
+      if (u === null) return null;
+      vs.push(u);
+    }
+    const d = Devices.build(p);
+    return { v: vs, i: d.iv(d, vs, { raw: true }).i };
+  }
+
+  /* The halo a part that emits gets: a filled disc and eight rays, both scaled by the
+     square root of the brightness because the eye is not linear in power. Shared, so the
+     lamp and the LED cannot come to disagree about what bright looks like. */
+  function drawGlow(pal, br, r) {
+    const g = Math.sqrt(br);
+    ctx.save();
+    ctx.globalAlpha = 0.18 + 0.55 * g;
+    ctx.fillStyle = pal.amber;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.35 + 0.5 * g;
+    ctx.strokeStyle = pal.amber;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4 + Math.PI / 8;
+      ctx.moveTo(Math.cos(a) * (r + 2), Math.sin(a) * (r + 2));
+      ctx.lineTo(Math.cos(a) * (r + 3 + 5 * g), Math.sin(a) * (r + 3 + 5 * g));
+    }
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+  }
+
   /* What a part writes next to itself. A sensor shows the resistance it has resolved
      to in the current environment, not the parameter in its value box: the whole
      point of a sensor is that the number moves, and watching it move as the slider
@@ -929,6 +1616,20 @@ function createCircuit(root, opts) {
     if (p.kind === 'METER') {
       const u = acrossOf(p);
       return 'A' + n + (u === null ? '  in series' : '  ' + fmtEng(u / Math.max(p.value, 1e-6), 'A'));
+    }
+    /* A non-linear part's value is a saturation current or a square-law constant, and
+       writing 10 fA beside a diode tells a learner nothing they can use. What they want
+       from the drawing is where the device has landed, so the label is the operating
+       point when there is one and the part's name when there is not. */
+    if (Devices.is(p.kind)) {
+      const op = deviceOp(p);
+      if (p.kind === 'OPAMP') return 'U' + n + '  A=' + fmtEng(p.value, '');
+      if (op === null) return p.kind + n;
+      if (p.kind === 'D' || p.kind === 'LED') {
+        return p.kind + n + '  ' + fmtEng(op.v[0] - op.v[1], 'V') + ' ' + fmtEng(op.i[0], 'A');
+      }
+      return p.kind + n + '  ' + (p.kind === 'NPN' || p.kind === 'PNP' ? 'Ic ' : 'Id ') +
+        fmtEng(Math.abs(op.i[0]), 'A');
     }
     return p.kind + n + '  ' + fmtEng(p.value, k.unit);
   }
@@ -1003,7 +1704,7 @@ function createCircuit(root, opts) {
 
     ctx.save();
     ctx.translate(x, y);
-    if (p.rot) ctx.rotate(Math.PI / 2);
+    if (p.rot) ctx.rotate(turnsOf(p) * Math.PI / 2);
     const L = GRID;                       /* pin-to-pin half span */
     ctx.beginPath();
     if (p.kind === 'R') {
@@ -1054,29 +1755,69 @@ function createCircuit(root, opts) {
         ctx.moveTo(-3.5, -14); ctx.lineTo(0, -9.5); ctx.lineTo(3.5, -14);
       }
       ctx.stroke();
+    } else if (p.kind === 'D' || p.kind === 'LED') {
+      /* The registry's own path, at the one scale that puts its two leads on the two
+         pins: 60 units of symbol to a grid cell. The drill's symbol and the editor's are
+         therefore one drawing and cannot come to disagree about which way the triangle
+         points — which matters here more than anywhere else in the file, because for a
+         diode the triangle IS the polarity. The anode is the pin the current enters, at
+         local −L: left flat, top rotated, the same reading as plusFirst's. */
+      if (p.kind === 'LED') {
+        const op = deviceOp(p);
+        const br = op === null ? 0
+          : Math.min(Math.max(op.i[0] / Math.max(p.inom === undefined ? 0.02 : p.inom, 1e-9), 0), 1);
+        if (br > 0.002) drawGlow(pal, br, 12);
+      }
+      ctx.save();
+      const sd = L / 60;
+      ctx.scale(sd, sd);
+      ctx.lineWidth = 1.8 / sd;
+      ctx.beginPath();
+      Symbols.get(p.kind).draw(ctx);
+      ctx.stroke();
+      ctx.restore();
+    } else if (p.kind === 'NPN' || p.kind === 'PNP' || p.kind === 'NMOS' || p.kind === 'PMOS') {
+      /* All four transistor symbols in the registry share one lead geometry — the
+         control lead ending at (-60, 0) and the two channel leads at (22, ∓60) — and
+         landing those three points on the three cells a three-pin part has is a single
+         affine map. So these are the registry's paths too, quarter-turned and squeezed:
+         the 120 units between the channel leads become the 2·GRID between the outer
+         pins, and the 82 units from the control lead across to them become the GRID out
+         to the third. A symbol and its own pins can then never drift apart, and the
+         emitter arrow on the canvas is the same arrow as the one in the drill.
+         The map reflects as well as turns, which costs nothing: an arrow along a lead
+         still points along that lead afterwards, and that is the whole of what it says. */
+      ctx.save();
+      const sx = 2 * L / 120, sy = L / 82;
+      ctx.transform(0, sy, sx, 0, 0, -sy * 22);
+      ctx.lineWidth = 1.8 / Math.sqrt(sx * sy);
+      ctx.beginPath();
+      Symbols.get(p.kind).draw(ctx);
+      ctx.stroke();
+      ctx.restore();
+    } else if (p.kind === 'OPAMP') {
+      /* The one symbol that is drawn here rather than traced from the registry. Its
+         three leads leave the body as two-from-the-left and one-from-the-right, and no
+         affine map takes that to the two-in-line-plus-one-at-right-angles a three-pin
+         part has without shearing the triangle into a wedge. A leaning op-amp is worse
+         than a second drawing, so: a second drawing, and the registry keeps the upright
+         one the drill needs.
+         The + and − ride inside the body, so they turn with it and stay attached to the
+         inputs they name — unlike the source's + in the branch below, which sits on a
+         circle that looks the same either way up. */
+      ctx.moveTo(-13, -15); ctx.lineTo(13, 0); ctx.lineTo(-13, 15); ctx.closePath();
+      ctx.moveTo(-L, 0); ctx.lineTo(-13, 0);        /* in+, in line with the body */
+      ctx.moveTo(13, 0); ctx.lineTo(L, 0);          /* out */
+      ctx.moveTo(0, -L); ctx.lineTo(0, -7.5);       /* in−, down the third pin */
+      ctx.moveTo(-11, 6); ctx.lineTo(-5, 6);        /* + beside the in-line input */
+      ctx.moveTo(-8, 3); ctx.lineTo(-8, 9);
+      ctx.moveTo(-8, -7); ctx.lineTo(-2, -7);       /* − beside the third pin */
+      ctx.stroke();
     } else if (p.kind === 'LAMP') {
       const pw = lampPower(p);
       const br = pw === null ? 0 : Math.min(Math.max(pw / Math.max(p.pnom === undefined ? 0.25 : p.pnom, 1e-9), 0), 1);
-      if (br > 0.002) {
-        /* brightness is shown, not stated: the fill and the rays both scale with it,
-           and the square root is there because the eye is not linear in power */
-        const g = Math.sqrt(br);
-        ctx.save();
-        ctx.globalAlpha = 0.18 + 0.55 * g;
-        ctx.fillStyle = pal.amber;
-        ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 0.35 + 0.5 * g;
-        ctx.strokeStyle = pal.amber;
-        ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const a = i * Math.PI / 4 + Math.PI / 8;
-          ctx.moveTo(Math.cos(a) * 13, Math.sin(a) * 13);
-          ctx.lineTo(Math.cos(a) * (14 + 5 * g), Math.sin(a) * (14 + 5 * g));
-        }
-        ctx.stroke();
-        ctx.restore();
-        ctx.beginPath();
-      }
+      /* brightness is shown, not stated — see drawGlow */
+      if (br > 0.002) drawGlow(pal, br, 11);
       ctx.moveTo(-L, 0); ctx.lineTo(-11, 0);
       ctx.moveTo(11, 0); ctx.lineTo(L, 0);
       ctx.stroke();
@@ -1117,8 +1858,11 @@ function createCircuit(root, opts) {
            local +x put it on the bottom pin of a vertical source: the drawn polarity
            was the opposite of the solved one, and a learner reading the sign off the
            symbol got it backwards. The glyphs swap ends with the symbol instead. The
-           solver's convention is untouched; only the label moves. */
-        const s = p.rot ? -1 : 1;
+           solver's convention is untouched; only the label moves. What decides it is
+           whether the body is standing up, not whether it has been turned at all: turned
+           through half a circle the source is the same way up and the + is simply at the
+           other end, which the canvas rotation has already seen to. */
+        const s = (turnsOf(p) % 2) ? -1 : 1;
         ctx.moveTo(3 * s, -4); ctx.lineTo(9 * s, -4);
         ctx.moveTo(6 * s, -7); ctx.lineTo(6 * s, -1);
         ctx.moveTo(-9 * s, -4); ctx.lineTo(-3 * s, -4);
@@ -1152,13 +1896,21 @@ function createCircuit(root, opts) {
     ctx.fillStyle = colour;
     const lab = labelOf(p, k);
     const wide = { LDR: 24, METER: 22, LAMP: 22, SW: 20, NTC: 20 }[p.kind];
-    if (p.kind === 'POT') {
-      if (p.rot) { ctx.textAlign = 'right'; ctx.fillText(lab, x - 22, y); }
-      else ctx.fillText(lab, x, y + 22);
+    /* Any part with a pin at right angles to its body wants its label on the other side,
+       for the reason the potentiometer wanted it there: a wire arrives on that third
+       pin, and a label written across a wire is a label nobody can read. Asking the
+       registry how many pins a kind has rather than listing the kinds means a transistor
+       inherits the placement instead of having to be remembered. */
+    if ((PART_KINDS[p.kind] || {}).pins === 3) {
+      /* opposite the control pin, whichever of the four ways round the part is turned */
+      const r = turnsOf(p);
+      if (r === 1) { ctx.textAlign = 'right'; ctx.fillText(lab, x - 22, y); }
+      else if (r === 3) { ctx.textAlign = 'left'; ctx.fillText(lab, x + 22, y); }
+      else ctx.fillText(lab, x, y + (r === 2 ? -22 : 22));
     } else if (wide) {
-      if (p.rot) { ctx.textAlign = 'left'; ctx.fillText(lab, x + wide, y); }
+      if (turnsOf(p) % 2) { ctx.textAlign = 'left'; ctx.fillText(lab, x + wide, y); }
       else ctx.fillText(lab, x, y - 26);
-    } else if (p.rot) ctx.fillText(lab, x + 34, y);
+    } else if (turnsOf(p) % 2) ctx.fillText(lab, x + 34, y);
     else ctx.fillText(lab, x, y - 17);
   }
 
@@ -1366,6 +2118,8 @@ function createCircuit(root, opts) {
   const VALUE_LABEL = {
     LDR: 'R at 10 lx (Ω)', NTC: 'R at 25 °C (Ω)', POT: 'Total (Ω)',
     LAMP: 'Resistance (Ω)', METER: 'Burden (Ω)', BAR: 'Full scale (V)',
+    D: 'Is (A)', LED: 'Is (A)', NPN: 'Is (A)', PNP: 'Is (A)',
+    NMOS: 'k (A/V²)', PMOS: 'k (A/V²)', OPAMP: 'Open-loop gain',
   };
   /* The extra numbers a kind carries beyond `value`: key, label, and the range it is
      clamped to, because a γ of zero or a negative B is a model that means nothing. */
@@ -1373,6 +2127,13 @@ function createCircuit(root, opts) {
     LDR: [['gamma', 'γ slope', 0.05, 3]],
     NTC: [['beta', 'B (K)', 1, 20000]],
     LAMP: [['pnom', 'Full at (W)', 1e-9, 1e6]],
+    D: [['n', 'Ideality n', 0.5, 4]],
+    LED: [['n', 'Ideality n', 0.5, 4], ['inom', 'Full at (A)', 1e-6, 1]],
+    NPN: [['bf', 'βF forward', 1, 5000], ['br', 'βR reverse', 0.01, 100]],
+    PNP: [['bf', 'βF forward', 1, 5000], ['br', 'βR reverse', 0.01, 100]],
+    NMOS: [['vth', 'Vth (V)', 0.05, 20], ['lambda', 'λ (1/V)', 0, 1]],
+    PMOS: [['vth', 'Vth (V)', 0.05, 20], ['lambda', 'λ (1/V)', 0, 1]],
+    OPAMP: [['vpos', 'V+ rail (V)', -100, 100], ['vneg', 'V− rail (V)', -100, 100]],
   };
 
   /* The model, written where the learner can read it. A sensor whose curve you have
@@ -1404,7 +2165,7 @@ function createCircuit(root, opts) {
       return 'Three pins, stamped as two resistances sharing the wiper node: ' +
         fmtEng(rr[0], 'Ω') + ' from the first pin to the wiper and ' + fmtEng(rr[1], 'Ω') +
         ' from the wiper to the second. The wiper is the third pin, leaving the body at ' +
-        'right angles to the track — ' + (p.rot ? 'to the right' : 'above') + ' it as drawn.';
+        'right angles to the track — ' + pinWords(p)[2] + ' it as drawn.';
     }
     if (p.kind === 'LAMP') {
       const pw = lampPower(p);
@@ -1418,7 +2179,7 @@ function createCircuit(root, opts) {
       const u = acrossOf(p);
       return 'An ammeter goes IN SERIES: break the branch and put it in the gap. It reads the ' +
         'current through itself as V / ' + fmtEng(p.value, 'Ω') + ', positive from the ' +
-        (p.rot ? 'top' : 'left') + ' pin to the ' + (p.rot ? 'bottom' : 'right') +
+        pinWords(p)[0] + ' pin to the ' + pinWords(p)[1] +
         ' — the arrow says which way' + (u === null ? '' : '; now ' + fmtEng(u / Math.max(p.value, 1e-6), 'A')) +
         '. The burden resistance is honest rather than ideal: it is what the measurement costs ' +
         'the circuit, and it keeps the meter a resistor the linear solver already understands.';
@@ -1431,8 +2192,105 @@ function createCircuit(root, opts) {
         'in amber with the bar empty' + (v === null ? '. Solve to give it something to show.' :
         ', and it is showing ' + fmtEng(v, 'V') + ' now.');
     }
+    /* ---- the non-linear parts ----
+       Every one of these states its equation, its parameters, and what it leaves out.
+       The last of those is the part that matters: a learner told that Ebers-Moll has no
+       Early effect has learnt something about bipolars, and one who is not told has
+       quietly learnt that collector current does not depend on Vce, which is false. */
+    if (Devices.is(p.kind)) {
+      /* the three pin positions, in the words the drawing puts them in */
+      const w = pinWords(p), a = w[0], b = w[1], c = w[2];
+      const vt = 'Vt = ' + (Devices.VT * 1000).toFixed(2) + ' mV, which is kT/q at ' +
+        Devices.T_NOM + ' K';
+      const op = deviceOp(p);
+
+      if (p.kind === 'D' || p.kind === 'LED') {
+        const nn = param(p, 'n', 0.5, 4);
+        const at = p.kind === 'LED' ? param(p, 'inom', 1e-6, 1) : 1e-3;
+        return 'Shockley: I = Is·(exp(V / (n·Vt)) − 1), with Is = ' + fmtEng(p.value, 'A') +
+          ', n = ' + nn + ' and ' + vt + '. That puts ' +
+          fmtEng(Devices.dropAt(Math.max(p.value, 1e-30), nn, at), 'V') + ' across it at ' +
+          fmtEng(at, 'A') + '. The anode is the ' + a + ' pin — the end the triangle points ' +
+          'away from. Nothing here is a 0.7 V rule of thumb: the drop you read is the one ' +
+          'the current makes, found by iterating until the two agree' +
+          (op === null ? '' : ', and right now that is ' + fmtEng(op.v[0] - op.v[1], 'V') +
+            ' at ' + fmtEng(op.i[0], 'A')) + '. ' +
+          (p.kind === 'LED'
+            ? 'It lights on the canvas in proportion to the current through it, against ' +
+              fmtEng(at, 'A') + ' for full brightness. Not modelled: the colour, the light ' +
+              'itself (that glow is drawn from current, not from photons), junction ' +
+              'capacitance, and reverse breakdown — which for a real LED is only a few volts, ' +
+              'so this one will happily survive something the part on your desk would not.'
+            : 'Not modelled: junction capacitance, so this diode has no switching speed and ' +
+              'no reverse recovery; the bulk series resistance, so the curve never straightens ' +
+              'out at high current; reverse breakdown, so it is not a Zener however hard you ' +
+              'push it backwards; and any temperature but ' + Devices.T_NOM + ' K.');
+      }
+
+      if (p.kind === 'NPN' || p.kind === 'PNP') {
+        const bf = param(p, 'bf', 1, 5000);
+        return 'Ebers-Moll, transport form: Ic = Is·(exp(Vbe/Vt) − exp(Vbc/Vt)) − ' +
+          '(Is/βR)·(exp(Vbc/Vt) − 1), and a base current that is each junction\'s own ' +
+          'current over its beta. Is = ' + fmtEng(p.value, 'A') + ', βF = ' + bf + ', βR = ' +
+          param(p, 'br', 0.01, 100) + ', ' + vt + '. Vbe comes out at ' +
+          fmtEng(Devices.dropAt(Math.max(p.value, 1e-30), 1, 1e-3), 'V') + ' for a milliamp ' +
+          'of collector current' + (op === null ? '' : '; right now Ic = ' +
+            fmtEng(Math.abs(op.i[0]), 'A') + ' and Vbe = ' + fmtEng(Math.abs(op.v[2] - op.v[1]), 'V')) +
+          '. Collector is the ' + a + ' pin, emitter the ' + b + ', base on the pin ' + c +
+          ' — the third pin, where a potentiometer keeps its wiper. ' +
+          'Ebers-Moll has no Early effect, so collector current does not climb with Vce and ' +
+          'the output resistance is infinite: a common-emitter stage here has a gain set only ' +
+          'by its load. Beta is a constant, so it does not fall off at high current or low, and ' +
+          'there is no base resistance, no junction capacitance and therefore no fT and no ' +
+          'frequency limit of its own. Gummel-Poon is the model that adds those; this is not it, ' +
+          'and says so rather than letting you find out.';
+      }
+
+      if (p.kind === 'NMOS' || p.kind === 'PMOS') {
+        const sign = p.kind === 'NMOS' ? '' : ' — for the P-channel every voltage in it is ' +
+          'measured the other way round, so Vth is typed as a magnitude and the source sits at ' +
+          'the positive end';
+        return 'Level 1, the square law' + sign + ': cut off below Vov = Vgs − Vth, then triode ' +
+          'while Vds < Vov with Id = k·(Vov·Vds − Vds²/2)·(1 + λ·Vds), then saturation with ' +
+          'Id = ½·k·Vov²·(1 + λ·Vds). k = ' + fmtEng(p.value, 'A/V²') + ', Vth = ' +
+          fmtEng(param(p, 'vth', 0.05, 20), 'V') + ', λ = ' + param(p, 'lambda', 0, 1) + ' /V' +
+          (op === null ? '' : '; right now Id = ' + fmtEng(Math.abs(op.i[0]), 'A')) + '. ' +
+          'Drain is the ' + a + ' pin, source the ' + b + ', gate on the pin ' + c + '. The gate draws ' +
+          'no current whatever, which is true of a real one to within picoamps. Drain and source ' +
+          'are interchangeable and the model swaps them when Vds goes the other way, which is ' +
+          'what lets this work as a pass gate. ' +
+          'The body is tied to the source, so there is no body effect and Vth never moves. λ is a ' +
+          'straight line bolted onto the saturation current, not channel-length modulation: it ' +
+          'gives roughly the right output resistance and knows nothing about the actual channel. ' +
+          'Below Vth the current is exactly zero, where a real device is passing nanoamps and a ' +
+          'low-power design lives or dies by them. And there is no gate capacitance, so no ' +
+          'switching time, no charge to drive and no dynamic power.';
+      }
+
+      /* op-amp */
+      const hi = param(p, 'vpos', -100, 100), lo = param(p, 'vneg', -100, 100);
+      return 'A controlled source, not an ideal one: Vout = A·(V+ − V−), limited to the rails, ' +
+        'driven out through ' + fmtEng(Devices.OP_ROUT, 'Ω') + ' of output resistance, with an ' +
+        'input stage that draws nothing at all. A = ' + fmtEng(p.value, '') + ', rails ' +
+        fmtEng(lo, 'V') + ' to ' + fmtEng(hi, 'V') + ', so the linear region is the ' +
+        fmtEng(Math.max(hi - lo, 1e-3) / Math.max(p.value, 10), 'V') + ' either side of zero ' +
+        'where the gain has not yet run into them. The non-inverting input is the ' + a +
+        ' pin, the output the ' + b + ', the inverting input on the pin ' + c + '. ' +
+        'The gain is large and finite because an infinite one is a row of zeros in the matrix, ' +
+        'which is not an answer but a singular matrix; and the limit is a smooth one rather than ' +
+        'a hard clip because a hard clip has a slope of zero past the corner, and an iteration ' +
+        'cannot steer on a slope of zero. ' +
+        'The rails are parameters, not pins: there is nothing here to wire a supply to, and this ' +
+        'op-amp draws no supply current — which makes it the one part on the canvas whose ' +
+        'terminal currents do not add up to zero, because the current it delivers comes from a ' +
+        'supply that is not drawn. Also missing: input offset voltage, bias current, slew rate, ' +
+        'and any roll-off with frequency at all. The open-loop gain here is ' + fmtEng(p.value, '') +
+        ' at one hertz and ' + fmtEng(p.value, '') + ' at one megahertz, which is the one thing a ' +
+        'real op-amp is certainly not — so a bandwidth measured on this circuit is the ' +
+        'bandwidth of the network you built around it, and nothing to do with the part.';
+    }
     if (p.kind === 'V' || p.kind === 'I') {
-      return 'The + terminal is the ' + (p.rot ? 'top' : 'right') + ' pin. ' +
+      return 'The + terminal is the ' + pinWords(p)[turnsOf(p) % 2 ? 0 : 1] + ' pin. ' +
         'A frequency sweep drives it at this same amplitude, so set it to 1 for a plain transfer function.';
     }
     return 'Part ' + n + '. Type a value with the usual prefixes — 4k7 is not understood, 4.7k is.';
@@ -1909,7 +2767,9 @@ function createCircuit(root, opts) {
       return !k || k.pins > 1;
     });
     if (!ps.length) return;
-    ps.forEach(function (p) { p.rot = p.rot ? 0 : 1; });
+    /* four quarter turns, not two: a diode or a transistor has to be able to face
+       the other way, and a resistor turned twice looks exactly as it did */
+    ps.forEach(function (p) { p.rot = (turnsOf(p) + 1) % 4; });
     changed();
     paintPart();
   }
@@ -2045,6 +2905,25 @@ function circuitContext(model, env) {
     env: net.env,
     outNode: out,
     nodeCount: function () { return net.nodeCount; },
+
+    /* A non-linear part at the operating point: the voltage on each terminal and the
+       current into each, in the order the panel names them, which is pin order —
+       [anode, cathode] for a junction, [collector, emitter, base] for a bipolar,
+       [drain, source, gate] for a MOSFET, [in+, out, in−] for an op-amp. A
+       check can then ask what a transistor is biased at rather than inferring it from
+       two node voltages and a subtraction, which is the sort of arithmetic a check
+       should be verifying rather than doing. */
+    device: function (id) {
+      const p = ((model && model.parts) || []).filter(function (q) { return q.id === id; })[0];
+      if (!p || !Devices.is(p.kind)) {
+        throw new Error('There is no non-linear device called ' + id + ' in this circuit.');
+      }
+      const r = this.dc();
+      const seen = net.readouts.filter(function (x) { return x.id === id; })[0];
+      const vs = seen.nodes.map(function (n) { return r.v[n]; });
+      const d = Devices.build(p);
+      return { kind: p.kind, v: vs, i: d.iv(d, vs, { raw: true }).i };
+    },
 
     /* DC operating point; throws with the solver's own message on a bad circuit */
     dc: function () {

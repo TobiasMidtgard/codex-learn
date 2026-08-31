@@ -3910,12 +3910,13 @@ function renderCircuitPlayground(main, st) {
           esc(screenMeta(route.from).title) + '</button>' : '') +
       '</div>' +
       '<div id="ckt-mount"></div>' +
-      '<p class="ckt-note">Resistors, capacitors, inductors and sources, plus switches, ' +
-      'a potentiometer, light and temperature sensors, and lamp, meter and bar readouts. ' +
-      'The sensors are simulated: the sliders beside the canvas set what they are sensing. ' +
-      'Each resolves to a resistance before the solve, so the solver stays linear — there ' +
-      'is still no Newton loop, so no diodes or transistors, because a linear one would ' +
-      'have to lie about them.</p>' +
+      '<p class="ckt-note">Resistors, capacitors, inductors and sources; switches, a ' +
+      'potentiometer, light and temperature sensors; diodes, LEDs, bipolar and MOS ' +
+      'transistors and an op-amp; and lamp, meter and bar readouts. The sensors are ' +
+      'simulated — the sliders beside the canvas set what they are sensing. The ' +
+      'non-linear parts are solved by Newton iteration about their operating point, and ' +
+      'each states in its panel what its model leaves out: no device capacitances ' +
+      'anywhere, so the only poles in a sweep are the ones you drew.</p>' +
     '</div>';
 
   $all('#seg button', main).forEach(function (b) {
