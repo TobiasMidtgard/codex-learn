@@ -144,8 +144,17 @@ Report: units added by kind, word count of each reading unit, the derivations an
 many steps each, the numeric ladder with answers, and the final line of each gate.
 `
 
+/* A resumed run is given the modules still to write, so it neither re-plans a
+   syllabus that exists nor rewrites a module that is already dense. Two runs have been
+   cut off by a usage limit partway through a course; starting over would have agents
+   duplicating units rather than continuing. */
+const RESUME = COURSES.every((c) => c && Array.isArray(c.only));
+
 phase('Syllabus')
-const spines = await parallel(COURSES.map((id) => () =>
+const spines = RESUME
+  ? COURSES.map((c) => ({ course: c.id, modulesBefore: 0, modulesAfter: 0,
+                          only: c.only, newTitles: [], emitClean: true }))
+  : await parallel(COURSES.map((id) => () =>
   agent(SYLLABUS(id), { label: 'syllabus:' + id, phase: 'Syllabus', schema: {
     type: 'object', additionalProperties: false,
     required: ['course', 'modulesBefore', 'modulesAfter', 'newTitles', 'emitClean'],
@@ -164,8 +173,9 @@ log(`syllabus: ${planned.map((p) => `${p.course} ${p.modulesBefore}->${p.modules
 phase('Write')
 const perCourse = await parallel(planned.map((p) => async () => {
   const done = []
-  for (let n = 1; n <= p.modulesAfter; n++) {
-    const r = await agent(BRIEF(p.course, n, p.modulesAfter),
+  const todo = p.only || Array.from({ length: p.modulesAfter }, (_, i) => i + 1)
+  for (const n of todo) {
+    const r = await agent(BRIEF(p.course, n, p.modulesAfter || (p.only ? p.only.length : 0)),
       { label: `${p.course}/M${n}`, phase: 'Write', schema: {
         type: 'object', additionalProperties: false,
         required: ['course', 'module', 'unitsAfter', 'readWords', 'derivations', 'gatesClean', 'notes'],

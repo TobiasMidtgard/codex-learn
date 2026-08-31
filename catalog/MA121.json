@@ -628,15 +628,536 @@
     "The determinant is the product of the pivots, negated once per row interchange",
     "A square system is solvable for every right-hand side exactly when it has full rank"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "What elimination is allowed to do",
+     "minutes": 15,
+     "body": "Three equations in three unknowns:\n\n$$\\begin{matrix} 2x &+& y &-& z &=& 8 \\\\ -3x &-& y &+& 2z &=& -11 \\\\ -2x &+& y &+& 2z &=& -3 \\end{matrix}$$\n\nThe method taught at school is substitution: solve the first equation for $x$, push\nthat expression into the other two, repeat. It works. It also degrades fast — every\nsubstitution copies a whole expression into two places, and by the fourth unknown you\nare managing a page of algebra whose only structure is the order you happened to write\nit in. At $n = 20$ it is unusable, and $n = 20$ is a small system.\n\nWhat is wanted instead is a procedure with no decisions in it beyond bookkeeping: a\nfixed sequence of moves that turns any system into one you can read the answer off.\nThe design problem is entirely in the word *allowed*. Any move at all turns the system\ninto a different system. The question is which moves turn it into a different system\nwith **the same solution set**.\n\n## Three moves, and why they are safe\n\nWrite the system as a list of equations and allow exactly three operations on that\nlist.\n\n1. **Swap** two equations.\n2. **Scale** an equation by a non-zero constant $c$.\n3. **Add** a multiple of one equation to a different equation.\n\nEach has to be justified, and the justification is the same in all three cases: the\noperation is *reversible*, and reversibility is what forces the solution sets to match.\n\nTake the third and hardest one. Equations $E_i$ and $E_j$ are replaced by $E_i$ and\n$E_j + cE_i$. Suppose $v$ solves the old system. Then $E_i(v)$ holds and $E_j(v)$\nholds, so certainly $E_j(v) + cE_i(v)$ holds — that is just adding two true numerical\nstatements. So $v$ solves the new system, and every old solution survives.\n\nThe other direction is the one people skip, and it is the one that actually matters.\nSuppose $v$ solves the *new* system, so $E_i(v)$ holds and $(E_j + cE_i)(v)$ holds.\nSubtract $c$ times the first from the second: $E_j(v)$ holds. So $v$ solves the old\nsystem too. No solutions were created.\n\nBoth inclusions hold, so the sets are equal. Notice exactly what made the argument\nwork in the second direction: the inverse move — subtract $c$ times $E_i$ — is itself\none of the three legal operations. That is the whole content of the theorem. An\nirreversible move can only lose or invent solutions, and that is precisely why\noperation 2 excludes $c = 0$: scaling an equation to $0 = 0$ throws its information\naway and cannot be undone, and the resulting system generally has more solutions than\nthe one you started with.\n\n## Where you are trying to get to\n\nThe target shape is **row echelon form**. Strip the unknowns off and write the system\nas a matrix of coefficients with the right-hand side carried alongside; the operations\nabove become operations on rows. A matrix is in row echelon form when\n\n- every all-zero row sits below every non-zero row, and\n- in each non-zero row the first non-zero entry — its **pivot** — is strictly to the\n  right of the pivot in the row above.\n\nThe staircase that produces is what makes back-substitution possible: the last pivot\nrow involves one unknown beyond the pivot column at most, so you can solve it, and\nthen each row above adds exactly one new unknown.\n\nThe algorithm to get there is short. Look down the current column from the current\npivot row. If every entry is zero, that column carries no pivot — move right without\nmoving down. Otherwise bring a non-zero entry to the pivot row, subtract the right\nmultiple of that row from every row beneath it to clear the column, and move down and\nright.\n\n## Worked: the system above\n\n$$\\begin{bmatrix} 2 & 1 & -1 \\\\ -3 & -1 & 2 \\\\ -2 & 1 & 2 \\end{bmatrix} \\qquad b = \\begin{bmatrix} 8 \\\\ -11 \\\\ -3 \\end{bmatrix}$$\n\nThe first pivot is $2$. The multiplier for row $2$ is $m_{21} = -3/2$, so row $2$\nbecomes row $2$ minus $(-3/2)$ times row $1$ — that is, row $2$ *plus* $1.5$ times\nrow $1$:\n\n$$(-3 + 3,\\; -1 + 1.5,\\; 2 - 1.5 \\;|\\; -11 + 12) = (0,\\; 0.5,\\; 0.5 \\;|\\; 1)$$\n\nFor row $3$, $m_{31} = -2/2 = -1$, so row $3$ plus row $1$:\n\n$$(-2 + 2,\\; 1 + 1,\\; 2 - 1 \\;|\\; -3 + 8) = (0,\\; 2,\\; 1 \\;|\\; 5)$$\n\nThe second pivot is $0.5$, and $m_{32} = 2/0.5 = 4$. Row $3$ minus $4$ times row $2$:\n\n$$(0,\\; 2 - 2,\\; 1 - 2 \\;|\\; 5 - 4) = (0,\\; 0,\\; -1 \\;|\\; 1)$$\n\nEchelon form reached, with pivots $2$, $0.5$ and $-1$. Back-substitute from the\nbottom. The last row says $-z = 1$, so $z = -1$. The second says\n$0.5y + 0.5(-1) = 1$, so $0.5y = 1.5$ and $y = 3$. The first says\n$2x + 3 - (-1) = 8$, so $2x = 4$ and $x = 2$.\n\nCheck it against the original third equation: $-2(2) + 3 + 2(-1) = -4 + 3 - 2 = -3$.\nCorrect. Three pivots in three columns, one solution.\n\n## Worked: the case that is not a unique solution\n\nHere is the situation people mishandle, because the algorithm does not break — it\njust stops producing pivots.\n\n$$\\begin{bmatrix} 1 & 1 & 2 \\\\ 2 & 2 & 5 \\\\ 3 & 3 & 8 \\end{bmatrix} \\qquad b = \\begin{bmatrix} 3 \\\\ 8 \\\\ 13 \\end{bmatrix}$$\n\nPivot $1$. Row $2$ minus $2$ times row $1$ gives $(0, 0, 1 \\;|\\; 2)$. Row $3$ minus\n$3$ times row $1$ gives $(0, 0, 2 \\;|\\; 4)$.\n\nNow look at column $2$ from row $2$ down: both entries are $0$. There is no pivot\nthere and nothing to do about it. Move right without moving down. Column $3$ has $1$\nin row $2$; that is the second pivot. Row $3$ minus $2$ times row $2$ gives\n$(0, 0, 0 \\;|\\; 0)$.\n\n$$\\begin{bmatrix} 1 & 1 & 2 \\\\ 0 & 0 & 1 \\\\ 0 & 0 & 0 \\end{bmatrix} \\qquad b = \\begin{bmatrix} 3 \\\\ 2 \\\\ 0 \\end{bmatrix}$$\n\nTwo pivots, so the rank is $2$. The last row reads $0 = 0$, which is true and carries\nno information. Column $2$ has no pivot, so $y$ is a **free variable**: pick it, and\neverything else follows. Row $2$ gives $z = 2$. Row $1$ gives $x + y + 4 = 3$, so\n$x = -1 - y$. The solution set is a line, written with $y = t$ as the parameter:\n\n$$(x,\\; y,\\; z) = (-1,\\; 0,\\; 2) + t\\,(-1,\\; 1,\\; 0), \\qquad t \\in \\mathbf{R}$$\n\nEvery point on it satisfies all three original equations, and nothing off it does.\n\nNow change one number: make the third right-hand side $14$ instead of $13$. Every\nelimination step is identical, because the coefficient matrix has not moved, but the\nright-hand side now finishes as $(3, 2, 1)$ and the last row reads $0 = 1$. That is\nfalse, so no $v$ satisfies it, and the system has no solutions at all.\n\nThat is the whole trichotomy, and it is decided by two counts. A zero row of\ncoefficients with a **non-zero** right-hand side means no solutions. Otherwise there\nare solutions, and there is exactly one when every column carries a pivot, and\ninfinitely many when some column does not.\n\n## The mistake\n\nThe tempting wrong move is to operate on **columns**. Rows are equations; columns are\nunknowns. Adding twice column $1$ to column $3$ is a perfectly well-defined matrix\noperation, it changes the rank not at all, and it destroys the answer — because the\nnew system's third unknown is no longer the old system's $z$. Column operations are\nlegitimate tools elsewhere; inside a solve they are not.\n\nThe second common slip is subtler. When a row has been cleared to all zeros, people\nread that as \"no solution\" and stop. It is the *augmented* entry that decides:\n$0 = 0$ is a redundant equation and costs you nothing but a pivot, while $0 = 1$ is\na contradiction. The two look identical if you only kept the coefficients.\n\n## Where it stops\n\nEverything above is exact arithmetic. The theorem \"these three operations preserve\nthe solution set\" is true over the rationals, over the reals, over any field — and it\nis only approximately true in floating point, because the multiplier $m_{ij}$ and the\nsubtraction that uses it are both rounded. That is not a small caveat: it is possible\nto run the algorithm above, make no mistakes, and get an answer with no correct digits\nat all. Which of the available rows you promote to the pivot position turns out to\ndecide whether that happens, and that is the next reading.\n\nOne more limit worth naming now. Row echelon form is **not unique** — scale any row\nby $2$ and it is still in echelon form. What *is* unique is the set of pivot columns,\nand therefore the rank. Reduced row echelon form, where every pivot is $1$ and is the\nonly non-zero entry in its column, is unique, which is why theory quotes it and\nsoftware rarely computes it."
+    },
+    {
+     "title": "The pivot you choose decides the answer you get",
+     "minutes": 14,
+     "body": "Here is a system a child could solve:\n\n$$\\begin{matrix} 0.0001x &+& y &=& 1 \\\\ x &+& y &=& 2 \\end{matrix}$$\n\nSubtract: $0.9999x = -1 + 2$, so $x \\approx 1.0001$ and $y \\approx 0.9999$. The\ncoefficient matrix is nowhere near singular — its determinant is $0.0001 - 1 = -0.9999$,\nabout as far from zero as a matrix with entries of size $1$ ever gets. Nothing is\ndelicate here.\n\nRun the elimination of the previous reading on it, in the obvious order, keeping three\nsignificant figures at every step — a stand-in for what a real machine does with $16$.\nThe answer comes back $x = 0$. Not slightly wrong — wrong by the whole of itself, from\nan algorithm that made no mistakes on a problem that was not hard.\n\n## Three significant figures, honestly\n\nThe first pivot is $0.0001$. The multiplier is\n\n$$m = \\frac{1}{0.0001} = 10000$$\n\nRow $2$ becomes row $2$ minus $10000$ times row $1$. The coefficient of $y$:\n\n$$1 - 10000 \\times 1 = -9999 \\;\\rightarrow\\; -1.00 \\times 10^{4}$$\n\nThree significant figures cannot hold $-9999$, so it is stored as $-10000$. The\nright-hand side:\n\n$$2 - 10000 \\times 1 = -9998 \\;\\rightarrow\\; -1.00 \\times 10^{4}$$\n\nAlso $-10000$. Now back-substitute:\n\n$$y = \\frac{-10000}{-10000} = 1.00 \\qquad x = \\frac{1 - 1.00}{0.0001} = \\frac{0}{0.0001} = 0$$\n\nThe computed $y$ is right to three figures. The computed $x$ is $0$ and the true value\nis $1.0001$.\n\n## What actually went wrong\n\nIt is tempting to blame the small pivot for being small, as if dividing by $0.0001$\nwere the sin. It is not. Look at where the information went.\n\nThe two numbers $-9999$ and $-9998$ differ by $1$, and that difference is the entire\ncontent of the original second equation. Everything else in those two numbers came\nfrom row $1$, multiplied up by $10000$. Rounding to three figures kept the $10000$ and\nthrew away the $1$. The second equation was still in the system on paper and no longer\nin the system numerically.\n\nThen the back-substitution amplified what was left. The step $x = (1 - y)/0.0001$\nmultiplies the error in $y$ by $10000$. An error of $10^{-4}$ in $y$ — which is all\nthree-figure rounding permits — becomes an error of $1$ in $x$, and $1$ is the size\nof the answer.\n\nSo the mechanism is: a multiplier much larger than $1$ inflates row $1$ until it\nswamps row $2$, the rounding then discards row $2$'s own data, and the division by\nthe tiny pivot magnifies whatever error survives. Every stage of that chain is driven\nby the same quantity, $|m| = |a_{21}/a_{11}|$.\n\n## Partial pivoting\n\nThe fix follows directly. Before eliminating in a column, look down that column from\nthe pivot row to the bottom, find the entry of largest absolute value, and swap its\nrow into the pivot position. Then every multiplier is\n\n$$|m_{ij}| = \\left|\\frac{a_{ij}}{a_{ii}}\\right| \\leq 1$$\n\nbecause the denominator was chosen to be the largest of them. No row can be inflated\nbefore it is subtracted, and no entry of the working matrix can grow by more than a\nfactor of $2$ in a single elimination step.\n\nThe cost is one scan per column and a row interchange — $O(n^2)$ comparisons against\nthe $O(n^3)$ arithmetic the algorithm was already doing. It is free, and it is why\nevery production solver does it unconditionally.\n\n## Worked: the same system, rows swapped\n\nColumn $1$ holds $0.0001$ and $1$. The larger is $1$, so swap. One interchange, which\nwill matter for the determinant later:\n\n$$\\begin{matrix} x &+& y &=& 2 \\\\ 0.0001x &+& y &=& 1 \\end{matrix}$$\n\nNow $m = 0.0001/1 = 0.0001$. The coefficient of $y$ in the new second row:\n\n$$1 - 0.0001 \\times 1 = 0.9999 \\;\\rightarrow\\; 1.00$$\n\nThe right-hand side:\n\n$$1 - 0.0001 \\times 2 = 0.9998 \\;\\rightarrow\\; 1.00$$\n\nSo $y = 1.00/1.00 = 1.00$, and back-substitution gives $x = 2 - 1.00 = 1.00$.\n\nBoth are correct to three significant figures. The rounding still happened — $0.9999$\nstill got flattened to $1.00$ — but this time it discarded a part of the answer that\nwas below the precision anyone asked for, instead of discarding an entire equation.\nAnd the back-substitution divides by $1$, not by $0.0001$, so nothing is amplified on\nthe way out.\n\n## Worked: where partial pivoting still fails\n\nNow the case people get wrong, which is believing the rule is a guarantee. Multiply\nthe first equation of the original system through by $10^5$. That is a legal\noperation — it changes no solution — and it is what happens when someone measures a\nquantity in microns instead of metres.\n\n$$\\begin{matrix} 10x &+& 100000y &=& 100000 \\\\ x &+& y &=& 2 \\end{matrix}$$\n\nLook down column $1$: the entries are $10$ and $1$. The largest is $10$, already in\nthe pivot row, so partial pivoting declines to swap and reports itself satisfied. The\nmultiplier is $m = 1/10 = 0.1$, comfortably below $1$. Everything looks healthy.\n\nThe coefficient of $y$ in the new second row:\n\n$$1 - 0.1 \\times 100000 = 1 - 10000 = -9999 \\;\\rightarrow\\; -1.00 \\times 10^{4}$$\n\nand the right-hand side:\n\n$$2 - 0.1 \\times 100000 = -9998 \\;\\rightarrow\\; -1.00 \\times 10^{4}$$\n\nIdentical to the disaster above. $y = 1.00$, and $x = (100000 - 100000 \\times 1.00)/10 = 0$\nagain.\n\nThe multiplier being small was never the point; what matters is whether $m$ times\nrow $1$ is large compared with row $2$, and scaling row $1$ up by $10^5$ arranged that\nwhile keeping $|m| < 1$. **Partial pivoting is not invariant under row scaling.** The\nusual repair is *scaled* partial pivoting: divide each candidate entry by the largest\nabsolute entry in its own row before comparing, so the comparison asks which row is\nmost dominated by this column rather than which entry is biggest. On the system above\nthat picks row $2$, and the answer comes out right.\n\n## How you would notice\n\nNone of this is visible from the answer. A solver that returns $x = 0$ returns it with\nthe same composure as a solver that returns $x = 1.0001$, and there is no warning flag\nin the arithmetic. So it is worth knowing the one cheap check that does catch it: put\nthe computed $\\hat{x}$ back into the original system and look at what is left over.\n\n$$r = b - A\\hat{x}$$\n\nFor the unpivoted answer $\\hat{x} = (0,\\; 1)$:\n\n$$A\\hat{x} = (0.0001 \\times 0 + 1,\\; 0 + 1) = (1,\\; 1) \\qquad r = (1,\\; 2) - (1,\\; 1) = (0,\\; 1)$$\n\nThe second component of the residual is $1$, the same size as the right-hand side\nitself. The computed vector does not come close to satisfying the second equation, and\nnothing subtle is needed to see it.\n\nFor the pivoted answer $\\hat{x} = (1,\\; 1)$:\n\n$$A\\hat{x} = (0.0001 + 1,\\; 1 + 1) = (1.0001,\\; 2) \\qquad r = (-0.0001,\\; 0)$$\n\nDown at the level of the rounding, which is as good as three significant figures allow.\n\nComputing a residual costs one matrix-vector product, $O(n^2)$, against the $O(n^3)$\nof the solve — free, in other words, and worth doing every time. But be exact about\nwhat it proves. A small residual says $\\hat{x}$ solves a system *near* the one you\nasked about; it does not say $\\hat{x}$ is near the true $x$. When $A$ is\nill-conditioned those two statements come apart, and you can have a residual at\nmachine precision alongside a solution with no correct digits. Separating them is the\njob of the condition number, at the end of this course.\n\n## The mistake, and the honest limit\n\nThe mistake, stated plainly: pivoting only when the pivot is exactly zero. A great\ndeal of hand-written elimination code contains `if a[i][i] == 0: swap`. That code is\ncorrect in exact arithmetic and nearly worthless in floating point, because the\ndangerous case is not the zero pivot — which announces itself — but the pivot that is\nmerely small relative to what lies beneath it, which does not. The zero-pivot test\ncatches the one case you would have noticed anyway.\n\nAnd the limit. Partial pivoting bounds the *multipliers* by $1$; it does not bound the\n*entries*. Each elimination step can double an entry, so after $n-1$ steps the growth\nfactor can in principle reach $2^{n-1}$, and Wilkinson's matrix — $1$s on the diagonal,\n$-1$s below it, $1$s in the last column — attains exactly that. For $n = 60$ that is a\nfactor of $10^{17}$ and every digit is gone. Such matrices essentially never arise from\nreal problems, and half a century of practice has found the strategy reliable, but\n\"reliable in practice\" is what it is, not a theorem. Complete pivoting, which searches\nthe entire remaining submatrix, has a provable bound; it is rarely used because the\nsearch costs $O(n^3)$ comparisons and buys nothing on the problems anyone actually\nsolves."
+    },
+    {
+     "title": "The determinant is the product of the pivots",
+     "minutes": 15,
+     "body": "You have a square system and you want one number that tells you whether it has a\nunique solution. The definition most people meet first is cofactor expansion: pick a\nrow, multiply each entry by the determinant of the matrix left when its row and column\nare deleted, alternate the signs, add.\n\nThat definition is correct and it is a disaster as a method. Expanding a determinant\nof order $n$ this way costs about $n!$ multiplications. For $n = 20$ that is\n$2.4 \\times 10^{18}$ operations — decades on a fast machine — while the elimination of\nthe previous two readings does the whole solve in about $n^3/3 \\approx 2700$. So the\nquestion is not what the determinant *is*, but whether the work you were already doing\ncomputes it.\n\nIt does, and almost for free: it is the product of the pivots, with a sign.\n\n## What the determinant has to be\n\nRather than start from the $n!$-term formula, start from the three properties that\npin it down. For $n\\times n$ matrices there is exactly one function $\\det$ of the rows\nwith:\n\n1. **Multilinearity.** $\\det$ is linear in each row separately, the others held fixed.\n   In particular, scaling one row by $c$ scales $\\det$ by $c$.\n2. **Alternating.** If two rows are equal, $\\det = 0$.\n3. **Normalisation.** $\\det I = 1$.\n\nEvery fact below comes out of those three, and the uniqueness is what lets us compute\nby any route we like.\n\n## What each row operation does to it\n\n**Swapping two rows negates the determinant.** Let $A$ have rows $r$ and $s$ in\npositions $i$ and $j$. Build a matrix with $r + s$ in *both* positions; by property 2\nits determinant is $0$. Expand by multilinearity in those two slots:\n\n$$0 = \\det(r, r) + \\det(r, s) + \\det(s, r) + \\det(s, s)$$\n\nThe first and last terms are $0$ by property 2 again, so\n$\\det(r, s) = -\\det(s, r)$. That is the swap rule, and it came from nothing but\nlinearity and the vanishing-on-repeats condition.\n\n**Adding a multiple of one row to another leaves the determinant alone.** Replace\nrow $j$ by $r_j + c\\,r_i$. Linearity in slot $j$ splits it:\n\n$$\\det(\\ldots, r_j + c\\,r_i, \\ldots) = \\det(\\ldots, r_j, \\ldots) + c\\det(\\ldots, r_i, \\ldots)$$\n\nThe second determinant has $r_i$ in two different slots, so it is $0$. What is left is\nthe original. This is the operation elimination spends nearly all of its time on, and\nit costs the determinant nothing.\n\n**Scaling a row by $c$ scales the determinant by $c$** — that is property 1 stated\ndirectly.\n\n## Therefore: the product of the pivots\n\nRun elimination on $A$. The only two operations used are row interchanges and\nadding multiples of rows, so if $s$ interchanges were performed and $U$ is the\nresulting echelon form,\n\n$$\\det A = (-1)^{s} \\det U$$\n\n$U$ is upper triangular. Its determinant is the product of its diagonal — expand\nalong the first column, which has one non-zero entry, then repeat — so\n\n$$\\det A = (-1)^{s}\\,u_{11}u_{22}\\cdots u_{nn}$$\n\nThe diagonal entries of $U$ are the pivots. The determinant costs one extra\nmultiplication per column on top of the elimination you were doing anyway: $n$\noperations bolted onto $n^3/3$.\n\nAnd it delivers the theorem you wanted, because the elimination stalls in a column\nexactly when no pivot can be found there, which leaves a zero on the diagonal and\nsends the product to zero. So $\\det A \\neq 0$, full rank $n$, and \"a unique solution\nfor every $b$\" are three statements of one fact.\n\n## Worked: three by three, no interchange\n\n$$A = \\begin{bmatrix} 4 & 3 & 2 \\\\ 1 & 5 & 7 \\\\ 2 & 2 & 9 \\end{bmatrix}$$\n\nColumn $1$ holds $4, 1, 2$; the largest is already on top, so no swap. Multipliers\n$m_{21} = 1/4 = 0.25$ and $m_{31} = 2/4 = 0.5$:\n\n$$r_2 \\rightarrow (0,\\; 5 - 0.25(3),\\; 7 - 0.25(2)) = (0,\\; 4.25,\\; 6.5)$$\n$$r_3 \\rightarrow (0,\\; 2 - 0.5(3),\\; 9 - 0.5(2)) = (0,\\; 0.5,\\; 8)$$\n\nColumn $2$ below the pivot row holds $4.25$ and $0.5$; the larger is in place, so\nagain no swap. $m_{32} = 0.5/4.25 = 2/17$:\n\n$$r_3 \\rightarrow \\left(0,\\; 0,\\; 8 - \\tfrac{2}{17}(6.5)\\right) = \\left(0,\\; 0,\\; 8 - \\tfrac{13}{17}\\right) = \\left(0,\\; 0,\\; \\tfrac{123}{17}\\right)$$\n\nNo interchanges, so the sign is $+1$ and\n\n$$\\det A = 4 \\times 4.25 \\times \\frac{123}{17} = 17 \\times \\frac{123}{17} = 123$$\n\nCross-check by cofactors along the first row:\n$4(45 - 14) - 3(9 - 14) + 2(2 - 10) = 124 + 15 - 16 = 123$. Agreed.\n\n## Worked: the one people get wrong\n\n$$B = \\begin{bmatrix} 0 & 1 & 2 \\\\ 1 & 0 & 3 \\\\ 2 & 3 & 0 \\end{bmatrix}$$\n\nThe $(1,1)$ entry is $0$, so an interchange is forced whatever your pivoting policy.\nThe largest entry of column $1$ is $2$ in row $3$; swap rows $1$ and $3$. **That is\none interchange — write it down now, because this is the step that gets lost.**\n\n$$\\begin{bmatrix} 2 & 3 & 0 \\\\ 1 & 0 & 3 \\\\ 0 & 1 & 2 \\end{bmatrix}$$\n\n$m_{21} = 1/2 = 0.5$, giving row $2$ as $(0,\\; 0 - 1.5,\\; 3 - 0) = (0,\\; -1.5,\\; 3)$.\n$m_{31} = 0/2 = 0$, so row $3$ is untouched: $(0,\\; 1,\\; 2)$.\n\nColumn $2$ below the pivot row holds $-1.5$ and $1$. Compare *absolute values*:\n$|-1.5| > |1|$, so no second interchange. This is the second place people slip — a\nnegative pivot is a perfectly good pivot, and $-1.5$ is bigger than $1$ in the sense\nthat matters. $m_{32} = 1/(-1.5) = -2/3$:\n\n$$r_3 \\rightarrow \\left(0,\\; 0,\\; 2 - \\left(-\\tfrac{2}{3}\\right)(3)\\right) = (0,\\; 0,\\; 2 + 2) = (0,\\; 0,\\; 4)$$\n\nThe pivots are $2$, $-1.5$ and $4$, product $-12$. One interchange, so the sign is\n$(-1)^1 = -1$:\n\n$$\\det B = -1 \\times (-12) = 12$$\n\nCofactors again: $0(0 - 9) - 1(0 - 6) + 2(3 - 0) = 6 + 6 = 12$. Agreed. Drop the\ninterchange and you get $-12$ — the right magnitude with the wrong sign, which is the\nsingle most common defect in hand-written determinant code and the reason the routine\nmust return the swap count rather than discard it.\n\n## The mistake\n\nThe determinant is linear in each row *separately*. It is not linear in the matrix,\nand $\\det(A + B) = \\det A + \\det B$ is false. Take $A = B = I$ in two dimensions:\n$\\det(2I) = 4$ while $\\det I + \\det I = 2$. The temptation is real because property 1\nhas the word \"linear\" in it and the qualifier \"in each row, the others held fixed\" is\neasy to drop. The correct multiplicative statement is\n$\\det(AB) = \\det A \\, \\det B$, which addition never satisfies.\n\nThe companion slip appears when people normalise pivots to $1$ as they go, which is\ntidy and makes back-substitution trivial. Every such normalisation *divides* the\ndeterminant by the pivot, and if you do not multiply it back you will report $\\det = 1$\nfor every non-singular matrix you meet.\n\n## Where it stops\n\nThe determinant answers \"is this matrix singular?\" exactly, and answers \"is this\nmatrix nearly singular?\" not at all. Consider $0.1\\,I$ of order $100$: a perfectly\nbehaved matrix that any solver handles to full precision. Its determinant is\n$10^{-100}$, which underflows to zero in double precision. Meanwhile\n$\\det(2I_{100}) = 2^{100} \\approx 10^{30}$, and that matrix is no better conditioned\nthan the other. The determinant scales like the $n$th power of the entries, so its\nmagnitude says far more about the units you measured in than about the health of the\nsystem.\n\nThe quantity that does answer the real question is the condition number, and reaching\nit needs singular values rather than pivots. That is where this course ends. Until\nthen, treat $\\det A = 0$ as a fact and $\\det A \\approx 0$ as an opinion — the working\ntest for a near-singular matrix is a pivot that has collapsed relative to the entries\naround it, which is exactly what a tolerance on the pivot magnitude is checking for."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
-   "numeric": null,
+   "quiz": {
+    "title": "Operations, pivots and what the determinant is worth",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "Which of these operations on a system of equations can change its solution set?",
+      "opts": [
+       "interchanging two equations",
+       "multiplying an equation through by $-3$",
+       "multiplying an equation through by $0$",
+       "adding $5$ times one equation to a different equation"
+      ],
+      "a": 2,
+      "why": "Multiplying by zero is the one that breaks. It turns the equation into $0 = 0$, which\nis true for every $v$, so information is destroyed and the solution set generally grows.\nThe test that separates it from the others is reversibility: an interchange is undone by\nthe same interchange, a scaling by $-3$ is undone by scaling by $-1/3$, and adding\n$5E_i$ to $E_j$ is undone by subtracting it — but nothing recovers an equation that has\nbeen multiplied by zero. That is exactly why the second row operation carries the\ncondition $c \\neq 0$."
+     },
+     {
+      "q": "A $3\\times5$ coefficient matrix eliminates to echelon form with pivots in columns $1$ and $4$, and the system $Ax = b$ turns out to be consistent. How many free variables does the solution have?",
+      "opts": [
+       "$1$",
+       "$2$",
+       "$3$",
+       "$5$"
+      ],
+      "a": 2,
+      "why": "Every column without a pivot is a free variable. There are $5$ columns and $2$ pivots,\nso columns $2$, $3$ and $5$ are free: three parameters, and the solution set is a\nthree-dimensional affine subspace of $\\mathbf{R}^{5}$. The count is\n(columns) minus (rank), never (rows) minus (rank) — the rows here number $3$, and one of\nthem eliminated to a zero row, which is what let the rank fall to $2$ in the first place."
+     },
+     {
+      "q": "During elimination a row of the coefficient matrix becomes entirely zero while its entry in the augmented column is $-2$. What follows?",
+      "opts": [
+       "the system has no solutions",
+       "the system has infinitely many solutions",
+       "the system has a unique solution, and $-2$ is one of its components",
+       "an arithmetic error has been made, since this cannot happen"
+      ],
+      "a": 0,
+      "why": "That row states $0x_1 + 0x_2 + \\cdots = -2$, which no vector satisfies, so the system is\ninconsistent and the solution set is empty. Everything hinges on the augmented entry: had\nit been $0$ the row would read $0 = 0$, a redundant equation that costs a pivot and\ntypically leaves infinitely many solutions. The situation is entirely normal and signals\nthat $b$ lies outside the column space of $A$ — it happens for most right-hand sides\nwhenever the rank is below the number of rows."
+     },
+     {
+      "q": "Why do production solvers interchange rows even when the current pivot is not zero?",
+      "opts": [
+       "to keep the determinant positive",
+       "because a pivot that is small relative to the entries below it produces large multipliers, and those destroy the rows being updated",
+       "because echelon form requires the diagonal to be decreasing",
+       "to reduce the operation count from $n^3/3$ to $n^2$"
+      ],
+      "a": 1,
+      "why": "The multiplier is $m = a_{ij}/a_{ii}$. Let it exceed $1$ and the pivot row, scaled up, can\nswamp the row being updated, so that rounding discards the updated row's own contribution\n— the classic case computes $1 - 10^{4}$ and $2 - 10^{4}$, stores both as $-10^{4}$, and\nloses the entire second equation. Choosing the largest available entry forces\n$|m| \\leq 1$ and stops that. Interchanges also flip the sign of the determinant, so they\ncertainly do not keep it positive; echelon form makes no demand on the size of the pivots;\nand the cost stays $n^3/3$, since the scan is only $O(n^2)$ comparisons."
+     },
+     {
+      "q": "Elimination on a $4\\times4$ matrix required $3$ row interchanges and produced pivots $2$, $-1$, $5$ and $0.5$. What is the determinant?",
+      "opts": [
+       "$5$",
+       "$-5$",
+       "$6.5$",
+       "$-6.5$"
+      ],
+      "a": 0,
+      "why": "The pivots multiply to $2 \\times (-1) \\times 5 \\times 0.5 = -5$, and three interchanges\ncontribute $(-1)^3 = -1$, so $\\det A = (-1)(-5) = 5$. Two separate minus signs are in\nplay and both are easy to drop: keeping the negative pivot but ignoring the interchanges\ngives $-5$, and adding the pivots instead of multiplying them gives $6.5$. Only the\nparity of the interchange count matters, so a fourth swap would have flipped the answer\nback to $-5$."
+     },
+     {
+      "q": "Which of these identities is true for all square $A$ and $B$ of the same size?",
+      "opts": [
+       "$\\det(A + B) = \\det A + \\det B$",
+       "$\\det(AB) = \\det A \\, \\det B$",
+       "$\\det(cA) = c \\det A$ for every scalar $c$",
+       "$\\det(A^{\\mathsf{T}}) = -\\det A$"
+      ],
+      "a": 1,
+      "why": "The determinant is multiplicative over products, and that is the identity worth\nremembering. It is emphatically not additive: with $A = B = I$ in two dimensions,\n$\\det(A + B) = \\det(2I) = 4$ while $\\det A + \\det B = 2$. The same example kills the\nscaling claim, since $cA$ scales all $n$ rows and multiplies the determinant by $c^{n}$,\nnot by $c$. And transposing changes nothing at all — $\\det(A^{\\mathsf{T}}) = \\det A$ —\nwhich is why row operations and column operations have identical effects on it."
+     },
+     {
+      "q": "A computed determinant comes out as $3 \\times 10^{-14}$. What does that tell you about the matrix?",
+      "opts": [
+       "it is definitely singular, since the value is within rounding error of zero",
+       "it is definitely non-singular, since the value is not exactly zero",
+       "very little on its own — the magnitude depends on the scale of the entries, so a nearly singular matrix has to be identified some other way",
+       "it is well conditioned, because a small determinant means small round-off"
+      ],
+      "a": 2,
+      "why": "The determinant scales like the $n$th power of the entries, so its magnitude reports the\nunits as much as the health of the matrix. The matrix $0.1\\,I$ of order $100$ has\ndeterminant $10^{-100}$ and is as well behaved as anything ever gets, while $2I_{100}$ has\ndeterminant $10^{30}$ and is no better. Calling $3 \\times 10^{-14}$ singular or\nnon-singular are both unfounded for the same reason. The working diagnostic during\nelimination is a pivot that has collapsed relative to the entries around it; the rigorous\none is the condition number, which needs singular values and arrives at the end of this\ncourse."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "One solve, every line of it",
+    "minutes": 10,
+    "brief": "The same routine you are about to write in the lab, run once by hand on paper. Every\nline is either a choice of pivot, a multiplier, an entry after subtraction, or a\nback-substituted unknown.\n\nThe last two holes are the ones the code usually gets wrong: the sign contributed by\nthe interchanges, and remembering to apply it at all.",
+    "caption": "elimination with partial pivoting on a 3x3 system, then the determinant",
+    "lang": "text",
+    "listing": "solve A x = b by elimination with partial pivoting\n\n                 [  1   2  -1  |   2 ]\n       A | b  =  [  4  -1   5  |  17 ]\n                 [  2   3   1  |  11 ]\n\n  column 1: the candidates are 1, 4, 2.  the largest in absolute value\n            is 4, which sits in row ___, so that row is promoted.\n            swaps = 1\n\n                 [  4  -1   5  |  17 ]\n                 [  1   2  -1  |   2 ]\n                 [  2   3   1  |  11 ]\n\n      m21 = 1 / 4 = ___\n      row2 <- row2 - m21 * row1  =  [ 0   2.25  -2.25 | -2.25 ]\n\n      m31 = 2 / 4 = 0.5\n      row3 <- row3 - m31 * row1  =  [ 0   ___    -1.5  |  2.5  ]\n\n  column 2: below the pivot row the candidates are 2.25 and 3.5.\n            the larger is 3.5, so rows 2 and 3 are interchanged.\n            swaps = 2\n\n                 [  4  -1     5     |  17   ]\n                 [  0   3.5  -1.5   |   2.5 ]\n                 [  0   2.25 -2.25  |  -2.25]\n\n      m32 = 2.25 / 3.5 = 9/14\n      row3 <- row3 - m32 * row2  =  [ 0  0  -9/7 | -27/7 ]\n\n  echelon form reached.  pivots: 4, 3.5, -9/7\n\n  back-substitution, from the bottom row up\n\n      -9/7 * x3  =  -27/7                  ->   x3 = ___\n      3.5 * x2 - 1.5 * x3  =  2.5          ->   x2 = 2\n      4 * x1 - 1 * x2 + 5 * x3  =  17      ->   x1 = 1\n\n  determinant = (sign from 2 interchanges) * (product of the pivots)\n\n      sign  =  ___\n      det A =  sign * 4 * 3.5 * (-9/7)  =  ___\n",
+    "blanks": [
+     {
+      "prompt": "Column 1 holds 1, 4 and 2. Which row is promoted to the pivot position?",
+      "hole": "?",
+      "opts": [
+       "row 1",
+       "row 2",
+       "row 3",
+       "no interchange is needed"
+      ],
+      "a": 1,
+      "why": "The entry $4$ sits in row $2$, so row $2$ is swapped into the pivot position. Leaving row $1$ where it is would be legal arithmetic and poor numerics: the multipliers would then be $4$ and $2$ rather than $0.25$ and $0.5$, and every one of them larger than $1$ inflates the pivot row before subtracting it.",
+      "whys": null
+     },
+     {
+      "prompt": "The multiplier m21 is the entry being cleared divided by the pivot: 1 divided by 4.",
+      "hole": "?",
+      "opts": [
+       "0.25",
+       "4",
+       "0.5",
+       "-0.25"
+      ],
+      "a": 0,
+      "why": "$m_{21} = 1/4 = 0.25$. The pivot goes underneath: it is (entry to clear) over (pivot), not the other way up. Inverting it gives $4$, and the sign is positive because both entries are — the minus sign in the update $r_2 - m\\,r_1$ belongs to the operation, not to the multiplier.",
+      "whys": null
+     },
+     {
+      "prompt": "row3 - 0.5 * row1 in column 2: the entries are 3 and -1.",
+      "hole": "?",
+      "opts": [
+       "3.5",
+       "2.5",
+       "1.5",
+       "2.0"
+      ],
+      "a": 0,
+      "why": "$3 - 0.5 \\times (-1) = 3 + 0.5 = 3.5$. The pivot row's entry is negative, so subtracting a multiple of it *increases* the result. Reading the subtraction as $3 - 0.5$ gives $2.5$ and is the commonest arithmetic slip in a hand elimination; it also happens to be the answer that hides the second interchange, since $2.5$ is still larger than $2.25$.",
+      "whys": null
+     },
+     {
+      "prompt": "The bottom row now reads (-9/7) x3 = -27/7.",
+      "hole": "?",
+      "opts": [
+       "3",
+       "-3",
+       "1",
+       "27/7"
+      ],
+      "a": 0,
+      "why": "$x_3 = (-27/7) \\div (-9/7) = 27/9 = 3$. Two negatives divide to a positive, and the sevenths cancel. Answering $-3$ keeps a minus sign that has already been used twice; answering $27/7$ forgets to divide by the pivot at all.",
+      "whys": null
+     },
+     {
+      "prompt": "Two interchanges were performed. What sign does that contribute?",
+      "hole": "?",
+      "opts": [
+       "+1",
+       "-1",
+       "+2",
+       "-2"
+      ],
+      "a": 0,
+      "why": "The sign is $(-1)^{s}$ with $s = 2$, so $(-1)^2 = +1$. Interchanges do not accumulate additively — each one negates the determinant, so an even number of them cancels out entirely. Only the parity of the swap count matters, which is why the routine can return a plain integer rather than the permutation itself.",
+      "whys": null
+     },
+     {
+      "prompt": "sign * 4 * 3.5 * (-9/7). What is the determinant?",
+      "hole": "?",
+      "opts": [
+       "-18",
+       "18",
+       "-14",
+       "14"
+      ],
+      "a": 0,
+      "why": "$4 \\times 3.5 = 14$, and $14 \\times (-9/7) = -18$, with the sign $+1$ leaving it alone. The value $18$ would follow from miscounting the interchanges as odd, and $14$ from stopping after two pivots. Cofactor expansion along the top row of the original matrix agrees: $1(-1 - 15) - 2(4 - 10) + (-1)(12 + 2) = -16 + 12 - 14 = -18$.",
+      "whys": null
+     }
+    ]
+   },
+   "numeric": [
+    {
+     "title": "A determinant by elimination",
+     "minutes": 6,
+     "brief": "The first rung: run the algorithm and multiply the diagonal. No rearranging, no\nchoosing, nothing to set up.\n\nThe only thing that can catch you is the sign. Partial pivoting will ask for two row\ninterchanges here, and each one flips it.",
+     "prompt": "What is $\\det A$?",
+     "note": "A plain number. Track the interchanges as you go.",
+     "diagram": null,
+     "figure": "$$A = \\begin{bmatrix} 2 & 1 & -1 \\\\ 4 & 3 & 1 \\\\ -2 & 5 & 3 \\end{bmatrix}$$\nEliminate with partial pivoting — at each column, promote the row whose entry in that column is largest in absolute value — then multiply the pivots and apply $(-1)^{s}$ for $s$ interchanges.",
+     "given": [
+      {
+       "label": "Rule",
+       "value": "$\\det A = (-1)^{s} u_{11}u_{22}u_{33}$"
+      },
+      {
+       "label": "$s$",
+       "value": "the number of row interchanges"
+      }
+     ],
+     "answer": -32.0,
+     "tol": 0.001,
+     "unit": "",
+     "aside": "Column $1$ holds $2$, $4$ and $-2$. The pivot is not the entry already sitting on the diagonal.",
+     "hint": "Swap row $2$ up first. After clearing column $1$ the remaining entries in column $2$ are $-0.5$ and $6.5$, so a second interchange is needed.",
+     "wrong": "If you got $32$ you lost a sign somewhere — but note that two interchanges cancel, so the sign here is $+1$ and the minus comes from a negative pivot. If you got $-16$ or $-64$ you have a factor-of-two slip in one of the multipliers.",
+     "why": "Column $1$ holds $2, 4, -2$; the largest in absolute value is $4$, so rows $1$ and $2$ swap. That is one interchange.\nWith $4$ as the pivot, $m_{21} = 2/4 = 0.5$ turns row $2$ into $(0,\\; 1 - 1.5,\\; -1 - 0.5) = (0,\\; -0.5,\\; -1.5)$, and $m_{31} = -2/4 = -0.5$ turns row $3$ into $(0,\\; 5 + 1.5,\\; 3 + 0.5) = (0,\\; 6.5,\\; 3.5)$.\nColumn $2$ below the pivot row holds $-0.5$ and $6.5$; the larger is $6.5$, so rows $2$ and $3$ swap. That is a second interchange.\nThen $m_{32} = -0.5/6.5 = -1/13$, and the last pivot is $-1.5 + (1/13)(3.5) = -1.5 + 3.5/13 = -16/13$.\nTwo interchanges give $(-1)^2 = +1$, so $\\det A = 4 \\times 6.5 \\times (-16/13) = 26 \\times (-16/13) = -32$.\nCofactors confirm it: $2(9 - 5) - 1(12 + 2) + (-1)(20 + 6) = 8 - 14 - 26 = -32$.",
+     "check": ""
+    },
+    {
+     "title": "Counting the pivots",
+     "minutes": 7,
+     "brief": "Applying the rule rather than evaluating it. Rank is not read off the shape of the\nmatrix and it is not the number of rows — it is the number of pivots the elimination\nactually produces, which you only know once you have run it.\n\nThe matrix below is $3\\times4$, so the rank is at most $3$. Find out what it really is.",
+     "prompt": "What is $\\operatorname{rank} A$?",
+     "note": "A whole number.",
+     "diagram": null,
+     "figure": "$$A = \\begin{bmatrix} 1 & 2 & -1 & 3 \\\\ 2 & 1 & 3 & 1 \\\\ 4 & 5 & 1 & 7 \\end{bmatrix}$$\nEliminate to row echelon form and count the rows that are not entirely zero.",
+     "given": [
+      {
+       "label": "Shape",
+       "value": "$3\\times4$"
+      },
+      {
+       "label": "Upper bound",
+       "value": "$\\operatorname{rank} A \\leq \\min(3, 4) = 3$"
+      }
+     ],
+     "answer": 2.0,
+     "tol": 0.4,
+     "unit": "",
+     "aside": "Look at the three rows before you start eliminating. One of them is not carrying any information the other two do not already have.",
+     "hint": "Try $2 \\times$ row $1$ plus row $2$ and compare it with row $3$.",
+     "wrong": "If you answered $3$ you counted rows rather than pivots — the third row disappears entirely during elimination. If you answered $4$ you counted columns, and a $3\\times4$ matrix cannot have rank $4$.",
+     "why": "Row $3$ is $2$ times row $1$ plus row $2$: $2(1, 2, -1, 3) + (2, 1, 3, 1) = (4, 5, 1, 7)$. So it is a combination of the other two and contributes no pivot.\nThe elimination confirms it. With partial pivoting, column $1$ promotes row $3$ (entry $4$), giving pivot row $(4, 5, 1, 7)$.\nThen $m = 2/4 = 0.5$ sends $(2, 1, 3, 1)$ to $(0,\\; -1.5,\\; 2.5,\\; -2.5)$, and $m = 1/4 = 0.25$ sends $(1, 2, -1, 3)$ to $(0,\\; 0.75,\\; -1.25,\\; 1.25)$.\nIn column $2$ the pivot is $-1.5$, and $m = 0.75/(-1.5) = -0.5$ sends the last row to $(0,\\; 0,\\; -1.25 + 1.25,\\; 1.25 - 1.25) = (0, 0, 0, 0)$.\nTwo pivots, so $\\operatorname{rank} A = 2$. Because the matrix is $3\\times4$ with rank $2$, the system $Ax = b$ has $4 - 2 = 2$ free variables whenever it is consistent, and it is not consistent for every $b$ — the rank is short of the $3$ rows.",
+     "check": ""
+    },
+    {
+     "title": "What the row operations did to it",
+     "minutes": 8,
+     "brief": "Now the value has to be derived before it can be computed. You are not given the\nmatrix and cannot compute anything directly; you are given one number about it and a\nlist of things done to it.\n\nEach of the three elementary operations has a known effect on the determinant, and\nthe three effects are different. Get those three rules right and the arithmetic is one\nmultiplication.",
+     "prompt": "What is $\\det B$?",
+     "note": "A plain number, sign included.",
+     "diagram": null,
+     "figure": "$A$ is a $3\\times3$ matrix with $\\det A = 7$. Its entries are not given and are not needed. The matrix $B$ is built from $A$ by performing, in this order:\n\n1. interchange rows $1$ and $3$\n2. multiply row $2$ by $5$\n3. add $4$ times row $1$ to row $3$",
+     "given": [
+      {
+       "label": "$\\det A$",
+       "value": "$7$"
+      },
+      {
+       "label": "Operations",
+       "value": "one interchange, one scaling by $5$, one row addition"
+      }
+     ],
+     "answer": -35.0,
+     "tol": 0.001,
+     "unit": "",
+     "aside": "Two of the three operations change the determinant and one does not. Decide which is which before multiplying anything.",
+     "hint": "An interchange multiplies the determinant by $-1$. Scaling a row by $c$ multiplies it by $c$. Adding a multiple of one row to a different row multiplies it by $1$.",
+     "wrong": "If you got $35$ you applied the scaling but not the sign from the interchange. If you got $-140$ you also multiplied by the $4$ from the row addition — that operation leaves the determinant untouched, whatever the multiple.",
+     "why": "Take the operations one at a time and multiply the effects.\nThe interchange of rows $1$ and $3$ negates the determinant: $7 \\rightarrow -7$. This follows from the alternating property — build a matrix with $r + s$ in both slots, expand by linearity, and the two surviving terms give $\\det(r, s) = -\\det(s, r)$.\nMultiplying row $2$ by $5$ scales the determinant by $5$, because $\\det$ is linear in each row separately: $-7 \\rightarrow -35$.\nAdding $4$ times row $1$ to row $3$ changes nothing. Linearity in row $3$ splits it into the original determinant plus $4$ times a determinant with row $1$ appearing in two places, and that second one is zero: $-35 \\rightarrow -35$.\nSo $\\det B = -35$. This is exactly why elimination is a cheap way to a determinant: the operation it performs thousands of times is the free one, and only the interchanges have to be counted.",
+     "check": ""
+    },
+    {
+     "title": "Tuning a matrix until it breaks",
+     "minutes": 9,
+     "brief": "The last rung: the number you need is not in the question, and finding it means\nsetting up an equation of your own.\n\nOne entry of the matrix is unknown. For most values of it the matrix is invertible and\n$Ax = b$ has exactly one solution for every $b$. For exactly one value it does not.\nFind that value.",
+     "prompt": "For which value of $t$ is $A$ singular?",
+     "note": "One number. Singular means $\\det A = 0$, equivalently rank below $3$.",
+     "diagram": null,
+     "figure": "$$A = \\begin{bmatrix} 1 & 2 & 3 \\\\ 4 & 5 & 6 \\\\ 7 & 8 & t \\end{bmatrix}$$\nTreat $t$ as an unknown, compute $\\det A$ as a function of it, and solve.",
+     "given": [
+      {
+       "label": "Unknown",
+       "value": "the $(3,3)$ entry, $t$"
+      },
+      {
+       "label": "Condition",
+       "value": "$\\det A = 0$"
+      }
+     ],
+     "answer": 9.0,
+     "tol": 0.001,
+     "unit": "",
+     "aside": "$\\det A$ is linear in row $3$, so it is a first-degree polynomial in $t$ — there is exactly one root.",
+     "hint": "Expand along the bottom row, or eliminate: after clearing column $1$ with the pivot $1$, row $2$ becomes $(0, -3, -6)$ and row $3$ becomes $(0, -6, t - 21)$.",
+     "wrong": "If you got $6$ you may have set the third pivot's numerator to zero after a sign slip — check that clearing column $2$ subtracts $2$ times row $2$, not $2$ times row $1$. If you got $-9$ the sign of the $-3t$ term went astray.",
+     "why": "Expanding along the bottom row: $\\det A = 7(2 \\cdot 6 - 3 \\cdot 5) - 8(1 \\cdot 6 - 3 \\cdot 4) + t(1 \\cdot 5 - 2 \\cdot 4) = 7(-3) - 8(-6) + t(-3) = -21 + 48 - 3t = 27 - 3t$.\nSo $\\det A = 0$ exactly when $t = 9$.\nElimination says the same thing and shows where it comes from. With pivot $1$, row $2$ becomes $(0,\\; 5 - 8,\\; 6 - 12) = (0, -3, -6)$ and row $3$ becomes $(0,\\; 8 - 14,\\; t - 21) = (0, -6, t - 21)$.\nThen $m_{32} = -6/-3 = 2$, and the third pivot is $(t - 21) - 2(-6) = t - 9$. The determinant is $1 \\times (-3) \\times (t - 9) = 27 - 3t$, matching.\nAt $t = 9$ the matrix is the famous $\\begin{bmatrix} 1 & 2 & 3 \\\\ 4 & 5 & 6 \\\\ 7 & 8 & 9 \\end{bmatrix}$, whose rows are in arithmetic progression: row $1$ plus row $3$ equals twice row $2$, so the third pivot vanishes and the rank drops to $2$.\nNote what the elimination gives you that the expansion does not — the third pivot is $t - 9$, so it tells you not only where the matrix breaks but how close to broken it is at any other $t$.",
+     "check": ""
+    }
+   ],
    "match": null,
    "tune": null,
    "build": null,
-   "derive": null,
+   "derive": [
+    {
+     "title": "Elimination on a general 2x2, and where the determinant comes from",
+     "minutes": 14,
+     "brief": "Run the algorithm once with letters instead of numbers and it stops being an algorithm\nand becomes a formula. The system is\n\n$$\\begin{matrix} a_{11}x_1 &+& a_{12}x_2 &=& b_1 \\\\ a_{21}x_1 &+& a_{22}x_2 &=& b_2 \\end{matrix}$$\n\nwith $a_{11} \\neq 0$, so no interchange is needed. Eliminate $x_1$ from the second\nequation, back-substitute, and watch what shows up underneath both answers.\n\nNothing is assumed here except the three row operations. Write $m$ for the multiplier\nif it helps, but give every answer in terms of the $a$'s and $b$'s.",
+     "vars": [
+      "a_11",
+      "a_12",
+      "a_21",
+      "a_22",
+      "b_1",
+      "b_2",
+      "x_1",
+      "x_2",
+      "m"
+     ],
+     "steps": [
+      {
+       "prompt": "Row $2$ is replaced by row $2$ minus $m$ times row $1$. What must $m$ be, if the $x_1$ term is to vanish?",
+       "given": "",
+       "answer": "\\frac{a_{21}}{a_{11}}",
+       "placeholder": "",
+       "hint": "The $x_1$ coefficient of the new row $2$ is $a_{21} - m\\,a_{11}$. Set that to zero and solve for $m$.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "With that $m$, what is the coefficient of $x_2$ in the new row $2$?",
+       "given": "",
+       "answer": "a_{22} - \\frac{a_{21} a_{12}}{a_{11}}",
+       "placeholder": "",
+       "hint": "It is $a_{22} - m\\,a_{12}$. Substitute the $m$ you just found and leave it as it stands.",
+       "deconstruct": [
+        "The whole of row $2$ becomes $(a_{21} - m\\,a_{11},\\; a_{22} - m\\,a_{12} \\;|\\; b_2 - m\\,b_1)$.",
+        "Only the middle slot is wanted here, so it is $a_{22} - m\\,a_{12}$.",
+        "Now put $m = a_{21}/a_{11}$ into that. Do not clear the fraction yet — the next steps are easier if you leave it."
+       ]
+      },
+      {
+       "prompt": "And the right-hand side of the new row $2$?",
+       "given": "",
+       "answer": "b_2 - \\frac{a_{21} b_1}{a_{11}}",
+       "placeholder": "",
+       "hint": "The right-hand side rides along through the same operation: $b_2 - m\\,b_1$, with the same $m$.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "The new row $2$ now reads (coefficient) $x_2 =$ (right-hand side). Solve it for $x_2$, and clear the fractions so that no $a_{11}$ is left in a denominator inside another fraction.",
+       "given": "",
+       "answer": "\\frac{a_{11} b_2 - a_{21} b_1}{a_{11} a_{22} - a_{12} a_{21}}",
+       "placeholder": "",
+       "hint": "Divide the last two answers. Then multiply the top and the bottom of the result by $a_{11}$.",
+       "deconstruct": [
+        "You have $x_2 = \\left(b_2 - \\frac{a_{21}b_1}{a_{11}}\\right) \\div \\left(a_{22} - \\frac{a_{21}a_{12}}{a_{11}}\\right)$.",
+        "Multiply the numerator and the denominator of that quotient by $a_{11}$. The numerator becomes $a_{11}b_2 - a_{21}b_1$.",
+        "The denominator becomes $a_{11}a_{22} - a_{21}a_{12}$, and every fraction inside a fraction has gone."
+       ]
+      },
+      {
+       "prompt": "Back-substitute into row $1$, which still reads $a_{11}x_1 + a_{12}x_2 = b_1$, and solve for $x_1$. Give it over the same denominator.",
+       "given": "",
+       "answer": "\\frac{a_{22} b_1 - a_{12} b_2}{a_{11} a_{22} - a_{12} a_{21}}",
+       "placeholder": "",
+       "hint": "$x_1 = (b_1 - a_{12}x_2)/a_{11}$. Substitute the $x_2$ you found, put the numerator over one denominator, and an $a_{11}$ will cancel.",
+       "deconstruct": [
+        "$x_1 = \\dfrac{b_1 - a_{12}x_2}{a_{11}}$, and $x_2 = \\dfrac{a_{11}b_2 - a_{21}b_1}{D}$ where $D = a_{11}a_{22} - a_{12}a_{21}$.",
+        "The numerator is $b_1 - \\dfrac{a_{12}(a_{11}b_2 - a_{21}b_1)}{D} = \\dfrac{b_1 D - a_{12}a_{11}b_2 + a_{12}a_{21}b_1}{D}$.",
+        "Expand $b_1 D = a_{11}a_{22}b_1 - a_{12}a_{21}b_1$. The two $a_{12}a_{21}b_1$ terms cancel, leaving $a_{11}(a_{22}b_1 - a_{12}b_2)$ over $D$ — then divide by $a_{11}$."
+       ]
+      },
+      {
+       "prompt": "Both answers carry the same denominator. Write it down: it is the number that decides whether this system has a unique solution at all.",
+       "given": "",
+       "answer": "a_{11} a_{22} - a_{12} a_{21}",
+       "placeholder": "",
+       "hint": "Read it off the bottom of either of the last two answers.",
+       "deconstruct": []
+      }
+     ],
+     "closing": "The elimination produced, with no cleverness anywhere,\n\n$$x_1 = \\frac{a_{22}b_1 - a_{12}b_2}{a_{11}a_{22} - a_{12}a_{21}} \\qquad x_2 = \\frac{a_{11}b_2 - a_{21}b_1}{a_{11}a_{22} - a_{12}a_{21}}$$\n\nand the shared denominator $a_{11}a_{22} - a_{12}a_{21}$ is the determinant of the\ncoefficient matrix. It was not defined into existence; it is what the algorithm leaves\nat the bottom of the fraction, and that is the honest reason a zero determinant means\ntrouble. Nothing is being divided by zero metaphorically — the second pivot really is\nzero and the division really does not happen.\n\nTwo things are worth pinning down before moving on.\n\nFirst, the derivation assumed $a_{11} \\neq 0$. If it is zero the first step is illegal,\nand the fix is an interchange: swap the rows and run the same argument, which negates\nthe determinant on both the top and the bottom of every fraction and so changes no\nanswer. That is why the formula holds for every non-singular matrix even though its\nderivation did not.\n\nSecond, the numerators are determinants too. $a_{22}b_1 - a_{12}b_2$ is the determinant\nof the coefficient matrix with its first column replaced by $b$, and\n$a_{11}b_2 - a_{21}b_1$ is the same with the second column replaced. That pattern is\nCramer's rule, and it generalises to every $n$. It is also, at $n$ determinants of\norder $n$, one of the most expensive ways ever devised to solve a linear system, and\nyou should never compute with it — but seeing it fall out of two lines of elimination\nis worth more than being handed it."
+    },
+    {
+     "title": "How far a small pivot can throw the answer",
+     "minutes": 13,
+     "brief": "$$\\begin{matrix} \\epsilon x &+& y &=& 1 \\\\ x &+& y &=& 2 \\end{matrix}$$\n\nwith $\\epsilon$ small and positive. The determinant is $\\epsilon - 1$, close to $-1$,\nso the system is in no way delicate.\n\nEverything below is **exact**: no rounding, no floating point. The point of doing it\nexactly is to have the true answers in hand, so that when the rounding is put back in\nthe closing there is something to compare against. Take $\\epsilon$ as the pivot in the\nfirst column, which is what an unpivoted elimination does.",
+     "vars": [
+      "epsilon",
+      "x",
+      "y"
+     ],
+     "steps": [
+      {
+       "prompt": "Row $2$ becomes row $2$ minus $m$ times row $1$. What is $m$?",
+       "given": "",
+       "answer": "\\frac{1}{\\epsilon}",
+       "placeholder": "",
+       "hint": "The $x$ coefficients are $1$ on top of $\\epsilon$. The multiplier is the entry being cleared divided by the pivot.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "What is the coefficient of $y$ in the new row $2$?",
+       "given": "",
+       "answer": "1 - \\frac{1}{\\epsilon}",
+       "placeholder": "",
+       "hint": "It is $1 - m \\times 1$, and you have just written $m$.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "And its right-hand side?",
+       "given": "",
+       "answer": "2 - \\frac{1}{\\epsilon}",
+       "placeholder": "",
+       "hint": "$2 - m \\times 1$, the same $m$ again.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Divide to get $y$ exactly, and tidy it so that neither the numerator nor the denominator contains a fraction.",
+       "given": "",
+       "answer": "\\frac{1 - 2\\epsilon}{1 - \\epsilon}",
+       "placeholder": "",
+       "hint": "Multiply the top and the bottom of $(2 - 1/\\epsilon)\\,/\\,(1 - 1/\\epsilon)$ by $\\epsilon$, then tidy the signs.",
+       "deconstruct": [
+        "$y = \\dfrac{2 - 1/\\epsilon}{1 - 1/\\epsilon}$. Multiply top and bottom by $\\epsilon$.",
+        "That gives $y = \\dfrac{2\\epsilon - 1}{\\epsilon - 1}$.",
+        "Multiplying top and bottom by $-1$ leaves $\\dfrac{1 - 2\\epsilon}{1 - \\epsilon}$, which is the same number written without a leading minus."
+       ]
+      },
+      {
+       "prompt": "Back-substitute into row $1$, which still reads $\\epsilon x + y = 1$, and give $x$ exactly.",
+       "given": "",
+       "answer": "\\frac{1}{1 - \\epsilon}",
+       "placeholder": "",
+       "hint": "$x = (1 - y)/\\epsilon$. Put $1 - y$ over the single denominator $1 - \\epsilon$ first; the numerator will turn out to have an $\\epsilon$ in it that cancels the one outside.",
+       "deconstruct": [
+        "$1 - y = 1 - \\dfrac{1 - 2\\epsilon}{1 - \\epsilon} = \\dfrac{(1 - \\epsilon) - (1 - 2\\epsilon)}{1 - \\epsilon}$.",
+        "The numerator simplifies to $\\epsilon$, so $1 - y = \\dfrac{\\epsilon}{1 - \\epsilon}$.",
+        "Dividing by $\\epsilon$ cancels it: $x = \\dfrac{1}{1 - \\epsilon}$, which tends to $1$ as $\\epsilon$ tends to $0$."
+       ]
+      },
+      {
+       "prompt": "Start again with the rows interchanged, so the pivot is $1$ and the multiplier is $\\epsilon$. What is the coefficient of $y$ in the eliminated second row now?",
+       "given": "",
+       "answer": "1 - \\epsilon",
+       "placeholder": "",
+       "hint": "The second row is now $\\epsilon x + y = 1$ and the pivot row is $x + y = 2$. The multiplier is $\\epsilon/1$, so the $y$ coefficient is $1 - \\epsilon \\times 1$.",
+       "deconstruct": []
+      }
+     ],
+     "closing": "The exact answers are\n\n$$x = \\frac{1}{1 - \\epsilon} \\qquad y = \\frac{1 - 2\\epsilon}{1 - \\epsilon}$$\n\nBoth are close to $1$ for small $\\epsilon$, both are perfectly well behaved, and the\nroute taken to reach them made no difference whatsoever — in exact arithmetic.\n\nNow put the rounding back. Take $\\epsilon = 10^{-4}$ and three significant figures.\nUnpivoted, the two numbers you derived in the middle steps are\n$1 - 10^{4} = -9999$ and $2 - 10^{4} = -9998$. Three figures cannot tell those apart:\nboth are stored as $-1.00\\times10^{4}$. Their ratio is $1.00$, so the computed $y$ is\n$1$ — fine — but then $x = (1 - 1)/10^{-4} = 0$, against a true value of $1.0001$. Every\ndigit is wrong.\n\nLook at what the algebra says about why. The difference between those two quantities is\nexactly $1$, and that $1$ is the *entire* contribution of the second equation; the rest\nof both numbers is row $1$ scaled by $m = 1/\\epsilon$. Rounding keeps the large common\npart and deletes the difference. The second equation is still on the page and is no\nlonger in the computation.\n\nWith the interchange, the same two quantities are $1 - \\epsilon = 0.9999$ and\n$1 - 2\\epsilon = 0.9998$, which round to $1.00$ and $1.00$. Rounding has again lost the\ndifference between them, and this time it does not matter, because that difference is\na $10^{-4}$ correction to an answer of size $1$ rather than the answer itself. The\nback-substitution then divides by $1$ instead of by $\\epsilon$, so nothing is amplified\non the way out, and $x = 2 - 1.00 = 1.00$ is right.\n\nThe general statement is the one to carry: what governs the damage is not the size of\nthe pivot but the size of the multiplier $m$. Partial pivoting exists to force\n$|m| \\leq 1$, and it does so by the cheapest possible means — comparing $n$ numbers and\nswapping two rows."
+    },
+    {
+     "title": "The 3x3 determinant, read off the pivots",
+     "minutes": 16,
+     "brief": "$$A = \\begin{bmatrix} a_{11} & a_{12} & a_{13} \\\\ a_{21} & a_{22} & a_{23} \\\\ a_{31} & a_{32} & a_{33} \\end{bmatrix}$$\n\nAssume $a_{11} \\neq 0$ and that no interchange is needed anywhere, so the sign is $+1$\nthroughout. Elimination will be run to completion in letters. The claim to be tested\nis that the product of the three pivots is the determinant — and since the six-term\nformula for a $3\\times3$ determinant is usually handed over with no explanation, this\nis where it comes from.\n\nClear column $1$ first: row $2$ minus $(a_{21}/a_{11})$ times row $1$, and row $3$\nminus $(a_{31}/a_{11})$ times row $1$. The first four steps ask for the four entries\nthat survive in the bottom-right $2\\times2$ block.",
+     "vars": [
+      "a_11",
+      "a_12",
+      "a_13",
+      "a_21",
+      "a_22",
+      "a_23",
+      "a_31",
+      "a_32",
+      "a_33",
+      "m_2",
+      "p_2",
+      "p_3"
+     ],
+     "steps": [
+      {
+       "prompt": "After the first sweep, what is the entry in row $2$, column $2$?",
+       "given": "",
+       "answer": "a_{22} - \\frac{a_{21} a_{12}}{a_{11}}",
+       "placeholder": "",
+       "hint": "Row $2$ loses $(a_{21}/a_{11})$ times row $1$, so the column-$2$ entry loses $(a_{21}/a_{11})\\,a_{12}$.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "And row $2$, column $3$?",
+       "given": "",
+       "answer": "a_{23} - \\frac{a_{21} a_{13}}{a_{11}}",
+       "placeholder": "",
+       "hint": "Same multiplier, next column along: subtract $(a_{21}/a_{11})\\,a_{13}$.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Row $3$, column $2$?",
+       "given": "",
+       "answer": "a_{32} - \\frac{a_{31} a_{12}}{a_{11}}",
+       "placeholder": "",
+       "hint": "Row $3$ uses the multiplier $a_{31}/a_{11}$, so every entry of row $1$ it subtracts is scaled by that instead.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Row $3$, column $3$?",
+       "given": "",
+       "answer": "a_{33} - \\frac{a_{31} a_{13}}{a_{11}}",
+       "placeholder": "",
+       "hint": "The multiplier $a_{31}/a_{11}$ again, against $a_{13}$ this time.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Second sweep. The multiplier $m_2$ is the row-$3$ column-$2$ entry divided by the row-$2$ column-$2$ entry. Write $m_2$ with no fraction inside a fraction — multiply top and bottom by $a_{11}$.",
+       "given": "",
+       "answer": "\\frac{a_{11} a_{32} - a_{31} a_{12}}{a_{11} a_{22} - a_{21} a_{12}}",
+       "placeholder": "",
+       "hint": "Divide the third answer by the first, then multiply the numerator and the denominator of the result by $a_{11}$.",
+       "deconstruct": [
+        "$m_2 = \\left(a_{32} - \\dfrac{a_{31}a_{12}}{a_{11}}\\right) \\div \\left(a_{22} - \\dfrac{a_{21}a_{12}}{a_{11}}\\right)$.",
+        "Multiply the top by $a_{11}$: it becomes $a_{11}a_{32} - a_{31}a_{12}$.",
+        "Multiply the bottom by $a_{11}$ as well: $a_{11}a_{22} - a_{21}a_{12}$. Since both were scaled by the same factor the quotient is unchanged."
+       ]
+      },
+      {
+       "prompt": "The three pivots are $a_{11}$, then $p_2$, then $p_3$, with $p_2$ and $p_3$ as given below. Multiply them together and expand. Six terms, all of degree three.",
+       "given": "$$p_2 = a_{22} - \\frac{a_{21}a_{12}}{a_{11}} \\qquad p_3 = \\left(a_{33} - \\frac{a_{31}a_{13}}{a_{11}}\\right) - m_2\\left(a_{23} - \\frac{a_{21}a_{13}}{a_{11}}\\right)$$",
+       "answer": "a_{11} a_{22} a_{33} + a_{12} a_{23} a_{31} + a_{13} a_{21} a_{32} - a_{13} a_{22} a_{31} - a_{11} a_{23} a_{32} - a_{12} a_{21} a_{33}",
+       "placeholder": "",
+       "hint": "Take the $a_{11}$ into $p_2$ first: $a_{11}p_2 = a_{11}a_{22} - a_{21}a_{12}$. Then multiply that by $p_3$ and watch the $a_{11}$ denominators cancel.",
+       "deconstruct": [
+        "$a_{11}p_2 = a_{11}a_{22} - a_{12}a_{21}$, which is the denominator of $m_2$. So in the product $a_{11}p_2p_3$ the second term of $p_3$ loses its denominator entirely.",
+        "$a_{11}p_2p_3 = (a_{11}a_{22} - a_{12}a_{21})\\left(a_{33} - \\dfrac{a_{31}a_{13}}{a_{11}}\\right) - (a_{11}a_{32} - a_{31}a_{12})\\left(a_{23} - \\dfrac{a_{21}a_{13}}{a_{11}}\\right)$.",
+        "Expand each bracket. The first gives $a_{11}a_{22}a_{33} - a_{13}a_{22}a_{31} - a_{12}a_{21}a_{33} + \\dfrac{a_{12}a_{21}a_{13}a_{31}}{a_{11}}$; the second gives $a_{11}a_{23}a_{32} - a_{13}a_{21}a_{32} - a_{12}a_{23}a_{31} + \\dfrac{a_{12}a_{31}a_{21}a_{13}}{a_{11}}$. Subtract: the two awkward fractions are identical and cancel."
+       ]
+      }
+     ],
+     "closing": "The product of the pivots is\n\n$$a_{11}a_{22}a_{33} + a_{12}a_{23}a_{31} + a_{13}a_{21}a_{32} - a_{13}a_{22}a_{31} - a_{11}a_{23}a_{32} - a_{12}a_{21}a_{33}$$\n\nwhich is the $3\\times3$ determinant, six terms, three with a plus and three with a\nminus. Elimination did not approximate it or find a shortcut to it; the determinant\n*is* what elimination leaves on the diagonal.\n\nNotice the $a_{11}$ bookkeeping. Every intermediate entry carried a division by\n$a_{11}$, and every one of those divisions cancelled by the end — the two fractional\nterms in the last expansion were identical and subtracted away. That cancellation is\nnot luck. Each pivot is a ratio of determinants: $p_2 = \\det A_2 / \\det A_1$ where\n$A_k$ is the top-left $k\\times k$ block, and in general $p_k = \\det A_k / \\det A_{k-1}$,\nso the product telescopes down to $\\det A_n$. The $a_{11}$s had to cancel because they\nare the $\\det A_1$ in the denominator of $p_2$ and the numerator of nothing else.\n\nTwo limits on what has been shown. The derivation assumed $a_{11} \\neq 0$ and, at the\nsecond sweep, that $p_2 \\neq 0$ — leading principal minors that do not vanish. When one\ndoes, an interchange is required, and each interchange multiplies the answer by $-1$;\nthat is the $(-1)^s$ factor in the general statement, and it is why the routine you\nwrite in the lab has to return the swap count alongside the echelon form.\n\nThe other limit is practical. This expansion is fine to look at and wrong to compute\nwith beyond $n = 3$: the number of terms is $n!$, while elimination reaches the same\nnumber in about $n^3/3$ operations. Order $20$ is the difference between microseconds\nand geological time. Derive the formula once, then never use it."
+    }
+   ],
    "lab": {
     "title": "Elimination with partial pivoting",
     "runtime": "python",
@@ -705,15 +1226,548 @@
     "The inverse is n solves against the columns of the identity — never how you should solve Ax = b",
     "A zero pivot in exact arithmetic means singular; in floating point it means a tolerance test"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "The elimination was a factorisation all along",
+     "minutes": 14,
+     "body": "You solved $Ax = b$ this morning. This afternoon the same $A$ comes back with a\ndifferent $b$: a new load on the same structure, the next column of the identity because\nsomebody wants an inverse, one more step of an iteration that changes nothing but the\nright-hand side. Running the elimination again costs exactly what it cost the first\ntime, and that should annoy you, because the elimination barely looked at $b$. It chose\nits pivots by comparing entries of $A$. It computed its multipliers from entries of $A$.\nThe right-hand side was carried along, updated at every step, and never once consulted.\n\nSo the work splits in two. One part depends on $A$ alone and could in principle be done\nonce and kept; the other depends on $b$ and has to be redone. This module is about\nwriting the first part down. It turns out to be a pair of triangular matrices, and the\nsurprise is that you have been computing them all along and throwing them away.\n\n## One row operation, written as a matrix\n\nElimination does one thing over and over: replace row $r$ by row $r$ minus $m$ times row\n$k$, with $r > k$. Write $e_i$ for the $i$th standard basis column. Then\n$e_r e_k^{\\mathsf{T}}$ is the matrix that is zero everywhere except for a single $1$ in\nposition $(r,k)$, and\n\n$$E = I - m\\,e_r e_k^{\\mathsf{T}}$$\n\nis the identity with $-m$ dropped into position $(r,k)$. For $n = 3$, $r = 3$, $k = 1$:\n\n$$E = \\begin{bmatrix} 1 & 0 & 0 \\\\ 0 & 1 & 0 \\\\ -m & 0 & 1 \\end{bmatrix}$$\n\nMultiply $E$ into $A$. Row $i$ of $EA$ is row $i$ of $E$ against the columns of $A$, so\nrows $1$ and $2$ come through untouched and row $3$ becomes $-m$ times row $1$ plus row\n$3$. That is the row operation exactly, and every step of the elimination is a left\nmultiplication by one of these.\n\n## Undoing it costs one sign and nothing else\n\nHere is the fact the whole factorisation rests on. Multiply $E$ by the same matrix with\nthe sign of $m$ flipped:\n\n$$(I - m\\,e_r e_k^{\\mathsf{T}})(I + m\\,e_r e_k^{\\mathsf{T}}) = I - m^{2}\\,e_r\\,(e_k^{\\mathsf{T}} e_r)\\,e_k^{\\mathsf{T}}$$\n\nThe middle factor $e_k^{\\mathsf{T}} e_r$ is a $1\\times1$ matrix — a number — and it is\nthe dot product of two *different* standard basis vectors, so it is $0$. The quadratic\nterm vanishes completely and\n\n$$E^{-1} = I + m\\,e_r e_k^{\\mathsf{T}}$$\n\nThe inverse of an elimination step is the same step with a plus sign. No fractions, no\narithmetic, nothing to compute. That is what makes everything below cheap, and it is\nalso the reason the entries of $L$ turn out to be the multipliers themselves rather than\ntheir negatives — a sign error waiting for anyone who reasons \"$L$ records what was\ndone, and what was done was a subtraction\".\n\n## The product of the inverses does not mix\n\nNow take a whole column at once. Clearing column $k$ means subtracting multiples of the\npivot row from every row beneath it, so\n\n$$L_k = I - \\sum_{r > k} m_{rk}\\,e_r e_k^{\\mathsf{T}}, \\qquad L_k^{-1} = I + \\sum_{r > k} m_{rk}\\,e_r e_k^{\\mathsf{T}}$$\n\n— the same cancellation works term by term, because $e_k^{\\mathsf{T}} e_r = 0$ for every\n$r > k$. Running the elimination to the end is\n\n$$L_{n-1}\\cdots L_2 L_1 A = U$$\n\nwith $U$ upper triangular, and therefore\n\n$$A = L_1^{-1} L_2^{-1} \\cdots L_{n-1}^{-1}\\,U$$\n\nThat product of inverses is the object we are after. Multiply two of them, with $k < j$:\n\n$$\\left(I + \\sum_{r>k} m_{rk} e_r e_k^{\\mathsf{T}}\\right)\\left(I + \\sum_{s>j} m_{sj} e_s e_j^{\\mathsf{T}}\\right) = I + \\sum_{r>k} m_{rk} e_r e_k^{\\mathsf{T}} + \\sum_{s>j} m_{sj} e_s e_j^{\\mathsf{T}} + \\sum_{r,s} m_{rk}m_{sj}\\, e_r\\,(e_k^{\\mathsf{T}} e_s)\\,e_j^{\\mathsf{T}}$$\n\nEvery $s$ in the second sum satisfies $s > j > k$, so $e_k^{\\mathsf{T}} e_s = 0$ every\ntime and the cross term disappears. The product is nothing but the two sums laid on top\nof one another. Repeat across all the factors:\n\n$$L = L_1^{-1} L_2^{-1}\\cdots L_{n-1}^{-1} = I + \\sum_{k}\\sum_{r>k} m_{rk}\\,e_r e_k^{\\mathsf{T}}$$\n\nIn words: **$L$ is the unit lower triangular matrix whose $(r,k)$ entry is the multiplier\nthat cleared position $(r,k)$.** Not a transformed multiplier, not a combination of\nseveral — the number itself, sitting in the position of the entry it killed. Assembling\n$L$ costs zero operations, because the elimination has already computed every entry of\nit and would otherwise throw them away.\n\nThat is the theorem. **If the elimination runs to the end without an interchange, then\n$A = LU$**, with $L$ holding the multipliers and $U$ the echelon form.\n\n## A factorisation you can check by hand\n\nTake\n\n$$A = \\begin{bmatrix} 2 & 1 & 1 \\\\ 4 & -6 & 0 \\\\ -2 & 7 & 2 \\end{bmatrix}$$\n\nand eliminate using the diagonal entries as pivots. Column $1$, pivot $2$:\n\n$$m_{21} = \\frac{4}{2} = 2, \\qquad \\text{row}_2 - 2\\,\\text{row}_1 = (0,\\; -6 - 2,\\; 0 - 2) = (0,\\; -8,\\; -2)$$\n\n$$m_{31} = \\frac{-2}{2} = -1, \\qquad \\text{row}_3 + 1\\,\\text{row}_1 = (0,\\; 7 + 1,\\; 2 + 1) = (0,\\; 8,\\; 3)$$\n\nColumn $2$, pivot $-8$:\n\n$$m_{32} = \\frac{8}{-8} = -1, \\qquad \\text{row}_3 + 1\\,\\text{row}_2 = (0,\\; 0,\\; 3 - 2) = (0,\\; 0,\\; 1)$$\n\nThree multipliers — $2$, $-1$, $-1$ — and an echelon form. Write each multiplier where it\nbelongs:\n\n$$L = \\begin{bmatrix} 1 & 0 & 0 \\\\ 2 & 1 & 0 \\\\ -1 & -1 & 1 \\end{bmatrix} \\qquad U = \\begin{bmatrix} 2 & 1 & 1 \\\\ 0 & -8 & -2 \\\\ 0 & 0 & 1 \\end{bmatrix}$$\n\nCheck it, one row at a time. Row $2$ of $LU$ is\n$2(2,1,1) + 1(0,-8,-2) = (4,\\; 2-8,\\; 2-2) = (4,-6,0)$. Row $3$ is\n$-1(2,1,1) - 1(0,-8,-2) + 1(0,0,1) = (-2,\\; -1+8,\\; -1+2+1) = (-2,7,2)$. Both are rows of\n$A$, and nothing was computed that the elimination had not already computed.\n\n## The case where $A = LU$ does not exist\n\nNow\n\n$$B = \\begin{bmatrix} 1 & 2 & 3 \\\\ 2 & 4 & 1 \\\\ 3 & 5 & 2 \\end{bmatrix}$$\n\nwith $\\det B = 1(8-5) - 2(4-3) + 3(10-12) = 3 - 2 - 6 = -5$, so $B$ is invertible, and\nevery one of its entries is nonzero. Eliminate. Column $1$, pivot $1$: $m_{21} = 2$ sends\nrow $2$ to $(0,\\; 4-4,\\; 1-6) = (0, 0, -5)$, and $m_{31} = 3$ sends row $3$ to\n$(0,\\; 5-6,\\; 2-9) = (0, -1, -7)$.\n\nColumn $2$ now holds a $0$ in the pivot position with a nonzero entry below it. No choice\nof multipliers rescues this, and you can see the impossibility without the algorithm.\nSuppose $B = LU$ with $L$ unit lower triangular. Matching entries in order forces\n$u_{11} = 1$, $u_{12} = 2$, $u_{13} = 3$; then $l_{21}u_{11} = 2$ gives $l_{21} = 2$;\nthen $l_{21}u_{12} + u_{22} = 4$ gives $4 + u_{22} = 4$, so $u_{22} = 0$; then\n$l_{31}u_{11} = 3$ gives $l_{31} = 3$. The $(3,2)$ entry of $LU$ is now\n$l_{31}u_{12} + l_{32}u_{22} = 3 \\cdot 2 + l_{32}\\cdot 0 = 6$, whatever $l_{32}$ is, and\n$B$ has $5$ in that position. There is no factorisation.\n\nThe criterion behind this is worth keeping: **if every leading principal submatrix of\n$A$ is nonsingular then $A = LU$ exists with $L$ unit lower triangular, and is unique;\nand if $A$ itself is nonsingular while some leading principal submatrix is not, then no\nsuch factorisation exists.** (The two-way version needs $A$ nonsingular: the zero matrix\nfactors as $I \\cdot 0$ and has singular blocks everywhere.) Here the\nleading $2\\times2$ block is $\\begin{bmatrix}1&2\\\\2&4\\end{bmatrix}$\nwith determinant $0$ — which is the vanished second pivot, because the product of the\nfirst $k$ pivots is the determinant of the leading $k\\times k$ block. Invertibility of\n$A$ says nothing about those blocks, and neither does having no zero entries.\n\nInterchange rows $2$ and $3$ and the obstruction is gone. The new second row is\n$(0,-1,-7)$, the third is $(0,0,-5)$, and no further elimination is needed:\n\n$$U = \\begin{bmatrix} 1 & 2 & 3 \\\\ 0 & -1 & -7 \\\\ 0 & 0 & -5 \\end{bmatrix}, \\qquad \\det B = (-1)^{1}(1)(-1)(-5) = -5$$\n\nwhich agrees with the cofactor value.\n\n## The mistake: leaving the multipliers behind\n\nHere is the part that is genuinely easy to get wrong, and that the lab's tests will\ncatch. When you interchange rows $2$ and $3$ of the working matrix, you must interchange\nrows $2$ and $3$ of the multipliers already stored as well.\n\nThe stored multipliers are $m_{21} = 2$, belonging to the original row $2$, and\n$m_{31} = 3$, belonging to the original row $3$. The interchange moves the original row\n$3$ into slot $2$ and the original row $2$ into slot $3$, so they travel with their rows:\n\n$$L = \\begin{bmatrix} 1 & 0 & 0 \\\\ 3 & 1 & 0 \\\\ 2 & 0 & 1 \\end{bmatrix}$$\n\nand $PB$ lists the rows of $B$ in the order $1, 3, 2$ — the lab's zero-based `perm` for\nthis is `[0, 2, 1]` — giving $(1,2,3)$, $(3,5,2)$, $(2,4,1)$. Check: row $2$ of $LU$ is\n$3(1,2,3) + (0,-1,-7) = (3,\\; 6-1,\\; 9-7) = (3,5,2)$, and row $3$ is\n$2(1,2,3) + 0(0,-1,-7) + (0,0,-5) = (2,\\; 4,\\; 6-5) = (2,4,1)$. Both correct.\n\nLeave the multipliers where they sat and you get\n\n$$L' = \\begin{bmatrix} 1 & 0 & 0 \\\\ 2 & 1 & 0 \\\\ 3 & 0 & 1 \\end{bmatrix}$$\n\nwhose second row against $U$ gives $2(1,2,3) + (0,-1,-7) = (2, 3, -1)$ — a vector that is\nnot a row of $B$ at all, nor of any permutation of it. The temptation is real: the\nmultipliers sitting below the current column look like scratch work, unfinished, part of\na calculation still in progress. They are not. Each is a completed record of an operation\nperformed on a specific row, and when that row moves, its record moves with it.\n\n## Where this stops\n\nTwo limits, stated plainly.\n\n$A = LU$ is not available for every invertible matrix — $B$ was the counterexample, and\nthe leading-minor criterion says exactly which matrices are excluded. $PA = LU$ *is*\navailable for every square $A$, because at each column you can always promote a nonzero\nentry into the pivot position if one exists, and if none exists the column below the\npivot is already clear and the elimination moves on with a zero pivot and a singular\nmatrix. So the version with a permutation is universal and the version without it is not.\n\nAnd the interchange is not optional when the pivot is merely small rather than exactly\nzero. The previous module showed a $2\\times2$ in which a pivot of $10^{-4}$ destroyed\nevery correct digit; nothing about factoring rather than solving changes that, because\n$L$ and $U$ are built by exactly the same arithmetic on exactly the same numbers. Partial\npivoting is part of the factorisation, not a decoration on it, and the permutation it\nproduces has to be carried along and applied — which is where the next reading starts."
+    },
+    {
+     "title": "Spending the factors: two triangular passes",
+     "minutes": 13,
+     "body": "Once $PA = LU$ is in hand, what do you actually own? Not a solution — there is no $b$\nanywhere in the factorisation. What you own is every question about $A$ that does not\nmention $b$, already answered. It is worth being exact about which questions those are\nand what each one now costs, because the answer is the reason anybody bothers.\n\n## The system splits into two triangular ones\n\nStart from $Ax = b$ and multiply through by $P$. Reordering the equations of a system is\nthe one operation that certainly changes nothing about its solutions, so\n\n$$Ax = b \\Leftrightarrow PAx = Pb \\Leftrightarrow LUx = Pb$$\n\nNow name the middle of that product. Let $y = Ux$. Then $Ly = Pb$, and two triangular\nsystems are solved one after the other.\n\n**Forward, on $L$.** The first row of $L$ is $(1, 0, \\dots, 0)$, so $y_1 = (Pb)_1$ with no\nwork at all. Row $i$ reads $l_{i1}y_1 + \\cdots + l_{i,i-1}y_{i-1} + y_i = (Pb)_i$, and\nevery $y$ on the left except $y_i$ is already known, so\n\n$$y_i = (Pb)_i - \\sum_{j<i} l_{ij}\\,y_j$$\n\nThere is no division anywhere, because the diagonal of $L$ is all ones. And note where\nthe permutation goes: onto $b$, and onto nothing else. $L$ and $U$ are already the\nfactors of the *permuted* matrix; permuting them again would apply the reordering twice.\n\n**Backward, on $U$.** The last row reads $u_{nn}x_n = y_n$, so $x_n = y_n/u_{nn}$, and\nworking upwards\n\n$$x_i = \\frac{1}{u_{ii}}\\left(y_i - \\sum_{j>i} u_{ij}\\,x_j\\right)$$\n\nHere there is a division at every row, by a pivot. That is the only place a pivot can\nhurt you, and it is why the pivots were chosen large in the first place.\n\n## Counting the work\n\nCount a multiply-and-subtract as one operation, and a division as one operation.\n\nForward substitution: row $i$ needs $i-1$ of them, so the pass costs\n$0 + 1 + \\cdots + (n-1) = n(n-1)/2$.\n\nBack substitution: row $i$ needs $n-i$ multiply-subtracts and one division, so the pass\ncosts $n(n-1)/2 + n = n(n+1)/2$.\n\nA solve is therefore\n\n$$\\frac{n(n-1)}{2} + \\frac{n(n+1)}{2} = \\frac{n^{2} - n + n^{2} + n}{2} = n^{2}$$\n\noperations. Exactly $n^{2}$ — not approximately, not to leading order.\n\nThe factorisation is a different order of magnitude. Clearing column $k$ takes $n-k$\ndivisions, one per multiplier, and then updates $n-k$ rows across the $n-k$ columns to\nthe right of the pivot, which is $(n-k)^{2}$ multiply-subtracts. Summing over the\ncolumns,\n\n$$\\sum_{k=1}^{n-1}(n-k)^{2} = \\sum_{j=1}^{n-1} j^{2} = \\frac{(n-1)n(2n-1)}{6} \\approx \\frac{n^{3}}{3}$$\n\nplus $n(n-1)/2 \\approx n^{2}/2$ divisions, a lower order that drops out for large $n$. So\nthe factorisation is $n^{3}/3$, a solve is $n^{2}$, and the ratio between them is $n/3$.\n\nPut a number on that. At $n = 1200$ one factorisation costs what $400$ solves cost. If\nfour hundred right-hand sides arrive, factoring once and solving four hundred times costs\nabout *two* eliminations; re-eliminating from scratch each time costs four hundred. The\nfactor of two hundred is the whole content of this module.\n\n## The determinant, sign and all\n\nThe determinant of a triangular matrix is the product of its diagonal. Expand an upper\ntriangular matrix along its first column: only the $(1,1)$ entry is nonzero there, so a\nsingle term survives, and its minor is again upper triangular with one row and one column\nfewer. Induction finishes it, and the same argument along the first row handles lower\ntriangular.\n\nSo $\\det L = 1$, because $L$ is unit lower triangular, and\n$\\det U = u_{11}u_{22}\\cdots u_{nn}$. Take determinants across $PA = LU$:\n\n$$\\det(P)\\,\\det(A) = \\det(L)\\,\\det(U) = u_{11}u_{22}\\cdots u_{nn}$$\n\nA single interchange negates a determinant, so $s$ of them give $\\det P = (-1)^{s}$. And\n$(-1)^{s}$ is its own reciprocal, so dividing and multiplying are the same move:\n\n$$\\det A = (-1)^{s}\\,u_{11}u_{22}\\cdots u_{nn}$$\n\nThis is how every serious library computes a determinant, and it costs $n^{3}/3$ — against\n$n!$ terms for the cofactor expansion. At $n = 20$ that is about $2700$ operations against\n$2.4\\times10^{18}$.\n\n## One factorisation, two right-hand sides\n\nTake the factors built in the previous reading,\n\n$$L = \\begin{bmatrix} 1 & 0 & 0 \\\\ 2 & 1 & 0 \\\\ -1 & -1 & 1 \\end{bmatrix} \\qquad U = \\begin{bmatrix} 2 & 1 & 1 \\\\ 0 & -8 & -2 \\\\ 0 & 0 & 1 \\end{bmatrix}$$\n\nwith $P = I$, and solve first with $b = (5, -2, 9)$.\n\nForward:\n\n$$y_1 = 5, \\qquad y_2 = -2 - 2(5) = -12, \\qquad y_3 = 9 - (-1)(5) - (-1)(-12) = 9 + 5 - 12 = 2$$\n\nBackward:\n\n$$x_3 = \\frac{2}{1} = 2, \\qquad x_2 = \\frac{-12 - (-2)(2)}{-8} = \\frac{-8}{-8} = 1, \\qquad x_1 = \\frac{5 - 1(1) - 1(2)}{2} = \\frac{2}{2} = 1$$\n\nSo $x = (1, 1, 2)$. Substituting into $A$: $2 + 1 + 2 = 5$, $4 - 6 + 0 = -2$,\n$-2 + 7 + 4 = 9$. Correct.\n\nNow $b = (1, 0, 0)$, with **no new factorisation**.\n\nForward:\n\n$$y_1 = 1, \\qquad y_2 = 0 - 2(1) = -2, \\qquad y_3 = 0 - (-1)(1) - (-1)(-2) = 1 - 2 = -1$$\n\nBackward:\n\n$$x_3 = -1, \\qquad x_2 = \\frac{-2 - (-2)(-1)}{-8} = \\frac{-4}{-8} = 0.5, \\qquad x_1 = \\frac{1 - 1(0.5) - 1(-1)}{2} = \\frac{1.5}{2} = 0.75$$\n\nSo $x = (0.75,\\; 0.5,\\; -1)$, and because $b$ was the first column of $I$, this is the\nfirst column of $A^{-1}$. Cofactors confirm it: $\\det A = 2(-8)(1) = -16$, the cofactors\nalong the first row of $A$ are $-12$, $-8$ and $16$, and\n$(-12, -8, 16)/(-16) = (0.75, 0.5, -1)$.\n\nThe second solve did nine operations. So did the factorisation, roughly — $n = 3$ is far\ntoo small for the asymptotics to bite. At $n = 1000$ the second solve would cost about a\nthree-hundredth of the first, and that is the shape of the thing.\n\n## The mistake: permuting the factors\n\nThe commonest failure in a first implementation of `lu_solve` is not an arithmetic slip.\nIt is applying the permutation in the wrong place — reordering the rows of $L$, or of\n$U$, or reordering $x$ at the end — and it is tempting because $P$ arrived attached to\n$A$, so it feels like part of the matrix rather than part of the right-hand side.\n\nTrace what it costs. Suppose $P$ swaps rows $1$ and $2$, and you solve $Ly = b$ instead of\n$Ly = Pb$. Then row $1$ of the triangular system, which belongs to the equation that was\noriginally row $2$ of $A$, is being fed $b_1$. Every subsequent $y$ inherits the error,\nand the returned $x$ solves a system whose coefficient rows and right-hand-side entries\nhave been paired up wrongly. It will not be close, and — this is the part that costs an\nafternoon — nothing in the arithmetic complains: no division by zero, no exception, just a\nconfident wrong vector. The only way to catch it is to substitute $x$ back into the\noriginal $A$, which is why the lab's tests do exactly that.\n\n## Where this stops\n\nThe count $n^{2}$ per solve assumed that $L$ and $U$ are dense — that you touch every\nentry below and above the diagonal. Most large systems in practice are sparse, and for\nthose the factorisation costs far less than $n^{3}/3$, but only if the elimination order\nis chosen to stop $L$ and $U$ filling in with nonzeros that $A$ never had. Partial\npivoting chooses that order on numerical grounds alone and can be exactly the wrong\nchoice for sparsity, so sparse solvers trade the two off against each other. That is a\ndifferent subject; what carries over unchanged is the split between work that depends on\n$A$ and work that depends on $b$.\n\nThe determinant formula, meanwhile, is exact but almost useless as a test. Multiply a\nhealthy $100\\times100$ matrix by $0.1$ and its determinant is divided by $10^{100}$\nwhile the matrix stays exactly as invertible as it was — same pivots up to the scaling,\nsame solutions up to the scaling, same everything. Scale by $10^{-4}$ instead and the\nproduct of the pivots falls below the smallest positive double and is computed as $0$.\nSo $\\det A = 0$ means singular in exact arithmetic, but a *computed* determinant that is\nsmall, or even zero, means nothing at all. The next reading is about the test that\nreplaces it."
+    },
+    {
+     "title": "The inverse you should not compute, and the pivot you cannot trust",
+     "minutes": 12,
+     "body": "The lab asks you to write `inverse`. This reading tells you never to use it to solve a\nsystem. Both are right, and the reason is arithmetic rather than taste — so it is worth\ndoing the count instead of repeating the slogan.\n\nThere is a second slogan in the neighbourhood that is worse: \"the pivot was not zero, so\nthe matrix is invertible, so the answer is fine\". The first two clauses are about\nmathematics and the third is about floating point, and the step between them is not\nvalid. Both halves of this reading are about the gap.\n\n## The inverse is $n$ solves\n\nThe definition gives the algorithm. $A A^{-1} = I$ says that column $j$ of $A^{-1}$ is\nthe vector $x$ with $Ax = e_j$. So: factor once, then solve $n$ times, once against each\ncolumn of the identity, and stack the answers as columns.\n\nDo it on the lab's example. $A = \\begin{bmatrix}4&7\\\\2&6\\end{bmatrix}$\nneeds no interchange, since $|4| > |2|$. One multiplier, $m_{21} = 2/4 = 0.5$, sends row\n$2$ to $(0,\\; 6 - 0.5\\cdot 7) = (0,\\; 2.5)$, so\n\n$$L = \\begin{bmatrix} 1 & 0 \\\\ 0.5 & 1 \\end{bmatrix}, \\qquad U = \\begin{bmatrix} 4 & 7 \\\\ 0 & 2.5 \\end{bmatrix}, \\qquad \\det A = 4(2.5) = 10$$\n\nSolve against $e_1 = (1,0)$. Forward: $y_1 = 1$, $y_2 = 0 - 0.5(1) = -0.5$. Backward:\n$x_2 = -0.5/2.5 = -0.2$, then $x_1 = (1 - 7(-0.2))/4 = (1 + 1.4)/4 = 0.6$. First column:\n$(0.6, -0.2)$.\n\nSolve against $e_2 = (0,1)$. Forward: $y_1 = 0$, $y_2 = 1 - 0.5(0) = 1$. Backward:\n$x_2 = 1/2.5 = 0.4$, then $x_1 = (0 - 7(0.4))/4 = -2.8/4 = -0.7$. Second column:\n$(-0.7, 0.4)$.\n\n$$A^{-1} = \\begin{bmatrix} 0.6 & -0.7 \\\\ -0.2 & 0.4 \\end{bmatrix}$$\n\nCheck: $4(0.6) + 7(-0.2) = 2.4 - 1.4 = 1$ and $4(-0.7) + 7(0.4) = -2.8 + 2.8 = 0$. Two\nsolves and one factorisation, exactly as promised. Notice that each column came out of\nthe *same* $L$ and $U$ — that is the reuse this module is about, and `inverse` is its\npurest demonstration.\n\n## What it costs, and what it fails to buy\n\nNow the arithmetic that condemns it as a way to solve $Ax = b$. A solve costs $n^{2}$ and\nthe factorisation costs $n^{3}/3$, so\n\n$$\\text{cost of } A^{-1} \\;=\\; \\frac{n^{3}}{3} \\;+\\; n\\cdot n^{2} \\;=\\; \\frac{4n^{3}}{3}$$\n\nThe first term is the one factorisation and the second is the $n$ solves. Four times the\ncost of just factoring. And once you have $A^{-1}$, computing $A^{-1}b$ is\na matrix-vector product: $n^{2}$ operations — precisely the cost of the forward and back\npasses you were trying to avoid. So the inverse charges four times as much up front and\nthen charges the same per right-hand side. There is no regime, no number of right-hand\nsides, in which it wins.\n\nIt is also less accurate, and that argument survives even if the cost did not. Every\nentry of $A^{-1}$ is the output of a full solve and carries its own rounding error;\nmultiplying by it commits a fresh round of error on top of errors the triangular passes\nnever made. The rule is short: compute the inverse when you genuinely need its entries —\na covariance matrix, an explicit formula someone else will read — which is rare. To solve\na system, solve the system.\n\n## The pivot test, and the scale nobody supplied\n\nNow the second half. In exact arithmetic singularity is decidable: if at some column\nevery entry from the pivot row down is zero, there is no pivot, a column of $U$ is short\nand $A$ is singular. In floating point that almost never happens. Rounding leaves\n$3\\times10^{-17}$ where mathematics has $0$, so a test for exact equality would certify\nevery singular matrix as invertible. The code therefore tests\n$|\\text{pivot}| \\le \\tau$ — and everything now depends on $\\tau$.\n\nThe lab's default is $\\tau = 10^{-12}$, an absolute threshold, and an absolute threshold\nis wrong in both directions.\n\n**Wrong in one direction.** Take the same\n$A = \\begin{bmatrix}4&7\\\\2&6\\end{bmatrix}$ and scale it by\n$10^{-13}$. Its pivots become $4\\times10^{-13}$ and $2.5\\times10^{-13}$, both below\n$10^{-12}$, so `lu_decompose` raises `ValueError: matrix is singular`. But the matrix is\nnot singular by any margin: its determinant is $10\\times10^{-26} = 10^{-25}$, its inverse\nis $10^{13}$ times the inverse computed above, every entry of which is comfortably inside\ndouble precision, and the solution of $Ax = b$ is as accurate as before. Nothing has\nhappened except a change of units — grams instead of kilotonnes — and the routine has\ndeclared the problem unsolvable.\n\n**Wrong in the other.** Take\n\n$$C = \\begin{bmatrix} 10^{8} & 2\\times10^{8} \\\\ 2\\times10^{8} & 4\\times10^{8} + 1 \\end{bmatrix}$$\n\nPartial pivoting interchanges the rows, since $|2\\times10^{8}| > |10^{8}|$, so the pivot\nis $2\\times10^{8}$ and $m_{21} = 0.5$. The second row becomes\n$(0,\\; 2\\times10^{8} - 0.5(4\\times10^{8} + 1)) = (0,\\; -0.5)$, so the second pivot is\n$-0.5$. That clears $\\tau = 10^{-12}$ by eleven orders of magnitude and the routine\nreports no difficulty whatsoever. The determinant checks out —\n$(-1)^{1}(2\\times10^{8})(-0.5) = 10^{8}$, which is what cofactors give. Yet the second\npivot is $10^{-9}$ times the size of the entries around it, and\n\n$$C^{-1} = \\begin{bmatrix} 4 + 10^{-8} & -2 \\\\ -2 & 1 \\end{bmatrix}$$\n\nMeasure both by their largest row sum of absolute values: $C$ gives\n$6\\times10^{8}$ and $C^{-1}$ gives $6$, so their product — the condition number in that\nnorm — is about $3.6\\times10^{9}$. With a machine epsilon of $2.2\\times10^{-16}$\nthat is a relative error in $x$ of up to $8\\times10^{-7}$: roughly six correct digits out\nof sixteen, on a problem the pivot test called healthy.\n\nThe repair for the first failure is easy — compare the pivot to the size of the matrix\nrather than to $1$, testing $|\\text{pivot}| \\le \\tau\\,\\max_{ij}|a_{ij}|$, which is\ninvariant under a change of units. The repair for the second is not a threshold at all.\n\n## The mistake, and why it is tempting\n\nThe mistake is reading a passed pivot test as a statement about accuracy. It is a\nstatement about invertibility, and only that.\n\nIt is tempting because in exact arithmetic the two questions really are the same one:\n$\\det A \\neq 0$ if and only if $Ax = b$ has a unique solution, full stop, no gradations.\nFloating point pulls them apart. Invertibility stays a yes-or-no property of the matrix;\naccuracy becomes a continuous property of the matrix *and* the arithmetic, and the second\ncan be arbitrarily bad while the first is comfortably true. $C$ above is invertible and\nalways will be. It is also, at double precision, a matrix that discards ten of your\nsixteen digits.\n\n## Where this stops\n\nEverything said here about $\\tau$ is a stopgap. The honest quantity is the condition\nnumber $\\kappa(A)$ — the size of $A$ times the size of $A^{-1}$, measured in any matching\npair of matrix norms — which bounds how much a relative perturbation of\nthe data, including the rounding committed while reading $A$ into memory, can change\nthe solution, and predicts a loss of about $\\log_{10}\\kappa$ decimal digits. It cannot be\nread off the pivots: matrices exist whose pivots are all of order $1$ and whose condition\nnumber is enormous, and the smallest pivot is a lower bound on trouble rather than a\nmeasure of it. Computing $\\kappa$ honestly needs the singular values, which arrive in the\nlast module of this course.\n\nTwo things carry forward until then. A tolerance test tells you whether the factorisation\ncould be completed, not whether its output is worth anything. And the residual — the\nlargest entry of $Ax - b$ for the $x$ you computed — is cheap, one matrix-vector product\nat $n^{2}$ operations on top of a solve that cost the same, so there is never a good\nreason not to compute it and look."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
-   "blanks": null,
-   "numeric": null,
+   "quiz": {
+    "title": "Factors, permutations and what each one costs",
+    "minutes": 10,
+    "questions": [
+     {
+      "q": "Where do the entries below the diagonal of $L$ come from?",
+      "opts": [
+       "they are the multipliers used in the elimination, each in the position of the entry it cleared",
+       "they are the negatives of those multipliers, because the operation performed was a subtraction",
+       "they are the reciprocals of the pivots",
+       "they are the entries of $A$ below the diagonal, copied across unchanged"
+      ],
+      "a": 0,
+      "why": "Each elimination step is $E = I - m\\,e_r e_k^{\\mathsf{T}}$, and its inverse is $I + m\\,e_r e_k^{\\mathsf{T}}$ — the same matrix with the sign flipped, because $e_k^{\\mathsf{T}}e_r = 0$ kills the quadratic term. $L$ is built from the *inverses*, so it carries $+m$. Reasoning that $L$ records what was done, and what was done was a subtraction, is exactly the trap: $L$ records how to undo what was done. Nothing is computed to build $L$ — the multipliers already exist and would otherwise be discarded."
+     },
+     {
+      "q": "$A$ is a square matrix and $\\det A \\neq 0$. Which factorisation is guaranteed to exist?",
+      "opts": [
+       "$PA = LU$ for some permutation matrix $P$",
+       "$A = LU$ with no permutation, since $A$ is invertible",
+       "$A = LU$, provided no entry of $A$ is zero",
+       "neither, unless $A$ is symmetric"
+      ],
+      "a": 0,
+      "why": "For a nonsingular $A$, the factorisation $A = LU$ exists exactly when every leading principal submatrix of $A$ is nonsingular — and invertibility of $A$ says nothing about those blocks. The matrix $\\begin{bmatrix} 1 & 2 & 3 \\\\ 2 & 4 & 1 \\\\ 3 & 5 & 2 \\end{bmatrix}$ has determinant $-5$ and not a single zero entry, yet its leading $2\\times2$ block is singular, the second pivot vanishes, and no $LU$ factorisation exists. With a permutation it always does: at every column either some nonzero entry can be promoted into the pivot position, or the column below is already clear."
+     },
+     {
+      "q": "$A$ is $600\\times600$ and $200$ right-hand sides arrive one after another. Roughly how much cheaper is factoring once than re-eliminating each time?",
+      "opts": [
+       "about $100$ times cheaper",
+       "about twice as cheap",
+       "about $200$ times cheaper",
+       "not at all — the same arithmetic happens either way"
+      ],
+      "a": 0,
+      "why": "A factorisation is $n^{3}/3 = 7.2\\times10^{7}$ operations and a solve is $n^{2} = 3.6\\times10^{5}$. Two hundred solves therefore cost $7.2\\times10^{7}$ — exactly one factorisation — so the LU route costs two factorisations while re-eliminating costs two hundred. That is a factor of $100$. Answering $200$ assumes the solves are free, which they are not at this $m$: the crossover $m = n/3$ is precisely $200$ here, so the solves cost as much as the factorisation. The saving does approach $n/3 = 200$, but only as $m$ grows well past $200$."
+     },
+     {
+      "q": "In $PA = LU$, where is the permutation applied when solving $Ax = b$?",
+      "opts": [
+       "to the right-hand side, before the forward pass",
+       "to the rows of $L$ and $U$, once they have been computed",
+       "to the solution $x$, after the back pass",
+       "nowhere — $P$ is bookkeeping and can be dropped"
+      ],
+      "a": 0,
+      "why": "$PA = LU$ gives $LUx = Pb$, so the reordering belongs to $b$. $L$ and $U$ are already the factors of the permuted matrix, so permuting them applies the reordering a second time; permuting $x$ reorders the unknowns, which is a different and equally wrong operation. Dropping $P$ pairs each triangular equation with the wrong entry of $b$ — no division by zero, no exception, just a wrong vector, which is why the residual $Ax - b$ has to be computed against the original $A$."
+     },
+     {
+      "q": "A factorisation of a $4\\times4$ matrix made three interchanges and produced pivots $2$, $-1$, $5$ and $3$. What is $\\det A$?",
+      "opts": [
+       "$30$",
+       "$-30$",
+       "$-1$",
+       "$9$"
+      ],
+      "a": 0,
+      "why": "$\\det A = (-1)^{s}\\,u_{11}u_{22}u_{33}u_{44}$. The pivot product is $2 \\times (-1) \\times 5 \\times 3 = -30$, and $(-1)^{3} = -1$, so $\\det A = 30$. Reporting $-30$ is the pivot product of $PA$, which is a genuinely different matrix from $A$ — three row swaps apart. Only the parity of the swap count matters, so two interchanges would have left the answer at $-30$ and four would too."
+     },
+     {
+      "q": "Partway through a factorisation the largest available pivot in a column is $4\\times10^{-17}$, while the entries of $A$ are of order $1$. What is the best reading?",
+      "opts": [
+       "$A$ is numerically singular: whatever its exact rank, nothing computed from this factorisation will carry meaningful digits",
+       "$A$ is exactly singular, so $Ax = b$ has no solution",
+       "the factorisation is sound, because the pivot is not exactly zero",
+       "$A$ is singular only if every entry below the pivot is exactly zero"
+      ],
+      "a": 0,
+      "why": "A quantity of $4\\times10^{-17}$ against entries of order $1$ is what rounding leaves behind when the exact value is $0$, so the computed numbers cannot decide whether the exact matrix is singular. What they can decide is that dividing by that pivot multiplies every earlier rounding error by $10^{17}$, which destroys the answer either way. Note also that a singular system does not automatically have no solution — if $b$ lies in the column space it has infinitely many — so exact singularity would not justify that conclusion either."
+     },
+     {
+      "q": "You need $x = A^{-1}b$ for a single $b$, with $A$ dense and $n$ large. What should you do?",
+      "opts": [
+       "factor once and run the two triangular passes, never forming $A^{-1}$",
+       "form $A^{-1}$ and multiply, since a matrix-vector product is cheaper than a triangular solve",
+       "form $A^{-1}$ by cofactors, which avoids the rounding that elimination introduces",
+       "either — forming $A^{-1}$ reuses the same factorisation, so it costs nothing extra"
+      ],
+      "a": 0,
+      "why": "Forming $A^{-1}$ is $n$ solves at $n^{2}$ each, so $n^{3}$ operations on top of the $n^{3}/3$ for the factorisation: $4n^{3}/3$, four times the cost of just factoring. The reuse is real — each of those solves is cheap — but there are $n$ of them. And $A^{-1}b$ is then $n^{2}$, precisely what the forward and back passes would have cost, so nothing is recovered afterwards. Cofactors are worse still at $n!$ terms, and they do not avoid rounding: every entry is a sum of products of floating-point numbers."
+     }
+    ]
+   },
+   "blanks": {
+    "title": "Two triangular passes, every line of them",
+    "minutes": 10,
+    "brief": "The factorisation below already exists — this is the cheap half, the part you are\nallowed to do again and again for a new right-hand side without touching $A$.\n\nTwo things decide whether it comes out right. The permutation goes on $b$ and on nothing\nelse, and the signs in $L$ are as likely to be negative as positive, so every\nsubtraction has to be read rather than skimmed.",
+    "caption": "forward substitution on L, then back substitution on U, with the permutation applied to b",
+    "lang": "text",
+    "listing": "solve A x = b, given a factorisation that already exists\n\n                 [  2   4  -2 ]                 [  -6 ]\n       A     =   [  4   9  -3 ]        b    =   [ -10 ]\n                 [ -2  -3   7 ]                 [  20 ]\n\n  partial pivoting put the rows of A in the order 2, 3, 1\n  and produced, after two interchanges,\n\n                 [  1     0     0 ]             [  4   9    -3   ]\n       L     =   [ -0.5   1     0 ]     U   =   [  0   1.5   5.5 ]\n                 [  0.5  -1/3   1 ]             [  0   0     4/3 ]\n\n  step 0: apply the permutation, to b and to nothing else.\n          the rows came out in the order 2, 3, 1, so P b lists\n          the entries of b in that same order.\n\n          P b  =  [ ___ ,   20 ,   -6 ]\n\n  step 1: forward substitution on  L y = P b.\n          no divisions anywhere: the diagonal of L is all ones.\n\n          y1  =  -10\n          y2  =  20 - (-0.5)*(-10)                =  ___\n          y3  =  -6 - 0.5*(-10) - (-1/3)*(15)     =  ___\n\n  step 2: back substitution on  U x = y.\n          one division per row, by the pivot on the diagonal.\n\n          x3  =  4 / (4/3)                        =  ___\n          x2  =  (15 - 5.5*3) / 1.5               =  ___\n          x1  =  (-10 - 9*(-1) - (-3)*3) / 4      =  ___\n\n  check:  substitute back into the original A, not into L or U\n\n          row 1:   2*2  +  4*(-1)   +  (-2)*3  =   -6\n          row 2:   4*2  +  9*(-1)   +  (-3)*3  =  -10\n          row 3:  -2*2  + (-3)*(-1) +   7*3    =   20\n",
+    "blanks": [
+     {
+      "prompt": "P lists the entries of b in the order 2, 3, 1. What comes first?",
+      "hole": "?",
+      "opts": [
+       "-10",
+       "-6",
+       "20",
+       "whichever is largest, 20"
+      ],
+      "a": 0,
+      "why": "The ordering is $2, 3, 1$, so the first entry of $Pb$ is $b_2 = -10$. Starting from $b_1 = -6$ is solving $Ly = b$ rather than $Ly = Pb$, which pairs each triangular equation with the wrong right-hand-side entry and returns a confident wrong vector with no error raised. Nothing about $Pb$ depends on the sizes of the entries — the ordering came from the pivoting, which looked at $A$ and never at $b$.",
+      "whys": null
+     },
+     {
+      "prompt": "y2 = 20 - (-0.5)*(-10). What is it?",
+      "hole": "?",
+      "opts": [
+       "15",
+       "25",
+       "5",
+       "20"
+      ],
+      "a": 0,
+      "why": "$(-0.5)(-10) = +5$, so $y_2 = 20 - 5 = 15$. Reading the product as $-5$ and then subtracting gives $25$, and it is the commonest slip in a hand-run forward pass, because two minus signs meet — one belonging to the entry of $L$ and one to the entry of $Pb$ — and the subtraction in the formula is a third. The value $20$ would follow from treating the entry of $L$ as zero.",
+      "whys": null
+     },
+     {
+      "prompt": "y3 = -6 - 0.5*(-10) - (-1/3)*(15). What is it?",
+      "hole": "?",
+      "opts": [
+       "4",
+       "-6",
+       "-16",
+       "-1"
+      ],
+      "a": 0,
+      "why": "$-6 - (-5) - (-5) = -6 + 5 + 5 = 4$. Both products are negative and both are being subtracted, so both raise the running total. Getting $-16$ means both signs were dropped and the products were subtracted as positives; getting $-6$ means the two corrections were taken as cancelling, which they do not — they happen to be equal in size but they have the same sign.",
+      "whys": null
+     },
+     {
+      "prompt": "x3 = 4 divided by the last pivot, 4/3. What is it?",
+      "hole": "?",
+      "opts": [
+       "3",
+       "5.333",
+       "1",
+       "0.75"
+      ],
+      "a": 0,
+      "why": "$4 \\div \\frac{4}{3} = 4 \\times \\frac{3}{4} = 3$. Dividing by a fraction less than $1$ makes the result larger than $4$ only if that fraction is less than $1$ — here $4/3 > 1$, so the result shrinks. Multiplying by $4/3$ instead of dividing gives $5.333$; taking the pivot as $4$ gives $1$.",
+      "whys": null
+     },
+     {
+      "prompt": "x2 = (15 - 5.5*3) / 1.5. What is it?",
+      "hole": "?",
+      "opts": [
+       "-1",
+       "-1.5",
+       "21",
+       "1"
+      ],
+      "a": 0,
+      "why": "$15 - 16.5 = -1.5$, and $-1.5 \\div 1.5 = -1$. Stopping at $-1.5$ forgets the division by the pivot, which is the step that distinguishes back substitution from the forward pass — $U$ has no unit diagonal to make the division unnecessary. Adding rather than subtracting the known term gives $21$.",
+      "whys": null
+     },
+     {
+      "prompt": "x1 = (-10 - 9*(-1) - (-3)*3) / 4. What is it?",
+      "hole": "?",
+      "opts": [
+       "2",
+       "8",
+       "-2.5",
+       "-7"
+      ],
+      "a": 0,
+      "why": "$-10 + 9 + 9 = 8$, and $8 \\div 4 = 2$. The pivot here is $u_{11} = 4$, not the $1$ from the diagonal of $L$; forgetting to divide leaves $8$. Getting $-7$ means both known terms were subtracted as positives. Substituting $x = (2, -1, 3)$ into the original $A$ reproduces $b = (-6, -10, 20)$ exactly, which is the only check worth trusting.",
+      "whys": null
+     }
+    ]
+   },
+   "numeric": [
+    {
+     "title": "A determinant read off the factors",
+     "minutes": 5,
+     "brief": "The first rung, and there is nothing to run: the factorisation has already been done and\nhanded to you. Apply the formula.\n\nTwo of the three matrices below contribute nothing at all to the answer. Work out which\nbefore you multiply anything.",
+     "prompt": "What is $\\det A$?",
+     "note": "A plain number, sign included.",
+     "diagram": null,
+     "figure": "A routine returned this factorisation of a $3\\times3$ matrix $A$, having performed **one** row interchange along the way.\n\n$$L = \\begin{bmatrix} 1 & 0 & 0 \\\\ 0.5 & 1 & 0 \\\\ -0.25 & 2 & 1 \\end{bmatrix} \\qquad U = \\begin{bmatrix} 3 & 2 & -1 \\\\ 0 & -4 & 5 \\\\ 0 & 0 & 2 \\end{bmatrix}$$\n\n$A$ itself is not given, and is not needed.",
+     "given": [
+      {
+       "label": "Rule",
+       "value": "$\\det A = (-1)^{s} u_{11}u_{22}u_{33}$"
+      },
+      {
+       "label": "$s$",
+       "value": "$1$ interchange"
+      }
+     ],
+     "answer": 24.0,
+     "tol": 0.001,
+     "unit": "",
+     "aside": "$L$ is unit lower triangular, so its determinant is fixed at $1$ no matter what its entries are. The off-diagonal entries of $U$ never enter either.",
+     "hint": "Multiply the diagonal of $U$, then apply $(-1)^{s}$ with $s = 1$.",
+     "wrong": "If you got $-24$ you multiplied the diagonal of $U$ correctly and then forgot that a single interchange flips the sign. If you got $48$ or $12$ you have multiplied in an off-diagonal entry of $L$ — no entry of $L$ can affect the answer, however large, because $\\det L = 1$ regardless.",
+     "why": "$\\det L = 1$, because $L$ is triangular with a diagonal of ones and the determinant of a triangular matrix is the product of its diagonal. The entries $0.5$, $-0.25$ and $2$ are irrelevant to the determinant, however large they get.\n$\\det U = 3 \\times (-4) \\times 2 = -24$, by the same rule applied to the other triangle.\n$\\det P = (-1)^{1} = -1$ for one interchange.\nTaking determinants across $PA = LU$ gives $\\det P \\, \\det A = \\det L \\, \\det U$, so $-\\det A = -24$ and $\\det A = 24$.\nIt is worth seeing that the sign is not decoration. The factorisation is of $PA$, not of $A$; $PA$ genuinely has determinant $-24$, and $A$ genuinely has determinant $24$, and the two differ because one row swap was performed.",
+     "check": ""
+    },
+    {
+     "title": "One entry of L, after the rows have moved",
+     "minutes": 8,
+     "brief": "Now run the algorithm yourself. Partial pivoting on this matrix asks for two\ninterchanges, and the second one happens *after* both first-column multipliers have\nalready been computed and stored.\n\nThe question is about where one of those stored multipliers ends up. That is the whole\ndifficulty, and it is the difficulty the lab's tests are built around.",
+     "prompt": "What is $l_{31}$, the entry of $L$ in row $3$, column $1$?",
+     "note": "A plain number. Rows and columns are numbered from $1$.",
+     "diagram": null,
+     "figure": "$$A = \\begin{bmatrix} 1 & 3 & 2 \\\\ 5 & 2 & 7 \\\\ 3 & 8 & 4 \\end{bmatrix}$$\nFactor $A$ as $PA = LU$ with partial pivoting: at each column, promote the row whose entry in that column is largest in absolute value, then eliminate below it. Store each multiplier in the position of the entry it clears.",
+     "given": [
+      {
+       "label": "Convention",
+       "value": "$L$ is unit lower triangular; $L_{rk}$ is the multiplier that cleared position $(r,k)$"
+      },
+      {
+       "label": "Pivot rule",
+       "value": "largest absolute value in the column, at or below the diagonal"
+      }
+     ],
+     "answer": 0.2,
+     "tol": 0.005,
+     "unit": "",
+     "aside": "There are two interchanges. Both first-column multipliers are computed before the second one happens, so both of them are affected by it.",
+     "hint": "Column $1$ promotes row $2$. Column $2$ then compares $2.6$ against $6.8$ and promotes again — and when rows swap, the multipliers already sitting in those rows swap with them.",
+     "wrong": "If you got $0.6$ you computed the multipliers correctly and then left them in place through the second interchange; that is the single commonest bug in an LU implementation. If you got $3$ or $5$ you inverted a multiplier — it is (entry to clear) over (pivot), not the other way up.",
+     "why": "Column $1$ holds $1$, $5$, $3$; the largest in absolute value is $5$ in row $2$, so rows $1$ and $2$ are interchanged. The working matrix is now $(5,2,7)$, $(1,3,2)$, $(3,8,4)$.\n$m_{21} = 1/5 = 0.2$ turns $(1,3,2)$ into $(0,\\; 3 - 0.4,\\; 2 - 1.4) = (0,\\; 2.6,\\; 0.6)$.\n$m_{31} = 3/5 = 0.6$ turns $(3,8,4)$ into $(0,\\; 8 - 1.2,\\; 4 - 4.2) = (0,\\; 6.8,\\; -0.2)$.\nColumn $2$, below the pivot row, holds $2.6$ and $6.8$. The larger is $6.8$, so rows $2$ and $3$ are interchanged — and the multipliers travel with their rows. The multiplier $0.6$ belonged to the row that has moved up into slot $2$, and the multiplier $0.2$ belonged to the row that has moved down into slot $3$. So $l_{21} = 0.6$ and $l_{31} = 0.2$.\nThe rest of the run: $m_{32} = 2.6/6.8 = 13/34$, and the last pivot is $0.6 - (13/34)(-0.2) = 0.6 + 2.6/34 = 23/34$. The factors are\n$$L = \\begin{bmatrix} 1 & 0 & 0 \\\\ 0.6 & 1 & 0 \\\\ 0.2 & 13/34 & 1 \\end{bmatrix} \\qquad U = \\begin{bmatrix} 5 & 2 & 7 \\\\ 0 & 6.8 & -0.2 \\\\ 0 & 0 & 23/34 \\end{bmatrix}$$\nwith the rows of $A$ in the order $2, 3, 1$ and two interchanges. Check the determinant: $(-1)^{2} \\times 5 \\times 6.8 \\times 23/34 = 34 \\times 23/34 = 23$, and cofactors on $A$ give $1(8 - 56) - 3(20 - 21) + 2(40 - 6) = -48 + 3 + 68 = 23$.",
+     "check": ""
+    },
+    {
+     "title": "Solving from the factors, permutation and all",
+     "minutes": 9,
+     "brief": "The factorisation from the previous question, now spent. The right-hand side is the\nfirst column of the identity, so the answer you produce is the first column of\n$A^{-1}$ — which is exactly what `inverse` does, one column at a time.\n\nEverything here is triangular. There is no elimination left to do, only a forward pass\nand a backward pass, and one decision about where the permutation is applied.",
+     "prompt": "What is $x_1$, the first entry of the solution?",
+     "note": "A number to three decimal places or better.",
+     "diagram": null,
+     "figure": "For $A = \\begin{bmatrix} 1 & 3 & 2 \\\\ 5 & 2 & 7 \\\\ 3 & 8 & 4 \\end{bmatrix}$ the factorisation with partial pivoting is\n\n$$L = \\begin{bmatrix} 1 & 0 & 0 \\\\ 0.6 & 1 & 0 \\\\ 0.2 & 13/34 & 1 \\end{bmatrix} \\qquad U = \\begin{bmatrix} 5 & 2 & 7 \\\\ 0 & 6.8 & -0.2 \\\\ 0 & 0 & 23/34 \\end{bmatrix}$$\n\nwith $P$ putting the rows of $A$ in the order $2, 3, 1$. Solve $Ax = b$ for $b = (1, 0, 0)$.",
+     "given": [
+      {
+       "label": "$b$",
+       "value": "$(1,\\; 0,\\; 0)$"
+      },
+      {
+       "label": "Row order under $P$",
+       "value": "$2,\\; 3,\\; 1$"
+      },
+      {
+       "label": "Method",
+       "value": "$Ly = Pb$ forward, then $Ux = y$ backward"
+      }
+     ],
+     "answer": -2.0869565,
+     "tol": 0.002,
+     "unit": "",
+     "aside": "The permutation is applied to $b$ and to nothing else. $L$ and $U$ are already the factors of the reordered matrix.",
+     "hint": "$Pb$ lists the entries of $b$ in the order $2, 3, 1$, which is $(0, 0, 1)$ — so the forward pass starts from zero and stays there until the last row.",
+     "wrong": "If you got $0.174$ you solved $Ly = b$ instead of $Ly = Pb$; the arithmetic is flawless and the answer belongs to a different system. If you got $1.478$ or $0.043$ you have reported $x_3$ or $x_2$ instead of $x_1$.",
+     "why": "The permutation puts the entries of $b$ in the order $2, 3, 1$, so $Pb = (0,\\; 0,\\; 1)$.\nForward substitution on $L$: $y_1 = 0$; $y_2 = 0 - 0.6(0) = 0$; $y_3 = 1 - 0.2(0) - (13/34)(0) = 1$.\nBack substitution on $U$: $x_3 = 1 \\div (23/34) = 34/23 \\approx 1.478$.\nThen $x_2 = \\dfrac{0 - (-0.2)(34/23)}{6.8} = \\dfrac{6.8/23}{6.8} = \\dfrac{1}{23} \\approx 0.043$.\nThen $x_1 = \\dfrac{0 - 2(1/23) - 7(34/23)}{5} = \\dfrac{(-2 - 238)/23}{5} = \\dfrac{-240/23}{5} = -\\dfrac{48}{23} \\approx -2.087$.\nSubstituting back into the original $A$: row $1$ gives $-48/23 + 3/23 + 68/23 = 23/23 = 1$; row $2$ gives $(-240 + 2 + 238)/23 = 0$; row $3$ gives $(-144 + 8 + 136)/23 = 0$. So $Ax = (1,0,0)$, as required.\nBecause $b$ was the first column of $I$, the vector $(-48/23,\\; 1/23,\\; 34/23)$ is the first column of $A^{-1}$. Cofactors along the first row of $A$ are $-48$, $1$ and $34$, and $\\det A = 23$, which is the same thing.",
+     "check": ""
+    },
+    {
+     "title": "The price of an inverse you did not need",
+     "minutes": 10,
+     "brief": "The last rung: the number you need is not in the question. You are given one timing and\nhave to derive the cost ratio before anything can be multiplied.\n\nNothing here requires a matrix. It requires knowing what a factorisation costs, what a\nsolve costs, and how many solves an inverse is.",
+     "prompt": "How long does forming the full inverse take, in total?",
+     "note": "A time in seconds, to two decimal places.",
+     "diagram": null,
+     "figure": "Factorising a dense $1000 \\times 1000$ matrix as $PA = LU$ takes $1.20$ seconds on a particular machine.\n\nOn the same machine, with the same code, the inverse is formed the way the lab forms it: **one** factorisation, followed by **one solve against each column of the identity**. Estimate the total wall-clock time, counting only arithmetic and using the leading-order operation counts.",
+     "given": [
+      {
+       "label": "Factorisation",
+       "value": "$n^{3}/3$ operations, measured at $1.20$ s"
+      },
+      {
+       "label": "One solve",
+       "value": "$n^{2}$ operations"
+      },
+      {
+       "label": "$n$",
+       "value": "$1000$"
+      }
+     ],
+     "answer": 4.8,
+     "tol": 0.05,
+     "unit": "s",
+     "aside": "Work in units of factorisations rather than in seconds. How many factorisations' worth of arithmetic is $n$ solves?",
+     "hint": "One solve is $n^{2}$, so $n$ solves are $n^{3}$ — and the factorisation was $n^{3}/3$.",
+     "wrong": "If you got $1.20$ you treated the solves as free; they are not, they are three times the factorisation. If you got $2.40$ you counted the solves as costing one factorisation rather than three. If you got about $1200$ you charged a full factorisation for each of the $1000$ solves, which is what the naive routine does and what LU exists to avoid.",
+     "why": "One triangular solve costs $n^{2}$ operations: $n(n-1)/2$ in the forward pass and $n(n+1)/2$ in the backward pass.\nThe inverse needs $n$ of them, one per column of the identity, so the solves alone cost $n \\times n^{2} = n^{3}$ operations.\nThe factorisation costs $n^{3}/3$ operations and takes $1.20$ s, so one second buys $n^{3}/3.6$ operations. The solves are $n^{3}$, which is exactly $3$ times $n^{3}/3$, hence $3 \\times 1.20 = 3.60$ s.\nTotal: $1.20 + 3.60 = 4.80$ s. In operation counts that is $n^{3}/3 + n^{3} = 4n^{3}/3$, four times the cost of the factorisation on its own.\nThe moral is in the comparison, not the number. Having spent $4.80$ s on $A^{-1}$, computing $A^{-1}b$ for a right-hand side costs a matrix-vector product, $n^{2}$ operations — precisely the same as the two triangular passes would have cost using $L$ and $U$ directly. The inverse charged four times as much and then charged the same rate afterwards, so there is no number of right-hand sides that makes it pay.",
+     "check": ""
+    }
+   ],
    "match": null,
    "tune": null,
    "build": null,
-   "derive": null,
+   "derive": [
+    {
+     "title": "The multipliers you were about to throw away",
+     "minutes": 15,
+     "brief": "The claim of this module is that $L$ needs no arithmetic: its entries are the\nmultipliers, each one sitting in the position of the entry it cleared. That is easy to\nassert and easy to believe wrongly, so run it symbolically on a $3\\times3$ and watch it\nclose.\n\n$$A = \\begin{bmatrix} a_{11} & a_{12} & a_{13} \\\\ a_{21} & a_{22} & a_{23} \\\\ a_{31} & a_{32} & a_{33} \\end{bmatrix}$$\n\nwith $a_{11} \\neq 0$ and a second pivot that is also nonzero, so no interchange is\nneeded. Clear column $1$, then column $2$, and keep every multiplier.\n\nGive every answer in terms of the entries $a_{ij}$ — not in terms of $m_{21}$, $m_{31}$\nor $u_{22}$, which are names for things you are being asked to write out.",
+     "vars": [
+      "a_11",
+      "a_12",
+      "a_13",
+      "a_21",
+      "a_22",
+      "a_23",
+      "a_31",
+      "a_32",
+      "a_33",
+      "m_21",
+      "m_31",
+      "m_32",
+      "u_22"
+     ],
+     "steps": [
+      {
+       "prompt": "Row $3$ is replaced by row $3$ minus $m_{31}$ times row $1$, and the $(3,1)$ entry must vanish. What is $m_{31}$?",
+       "given": "",
+       "answer": "\\frac{a_{31}}{a_{11}}",
+       "placeholder": "",
+       "hint": "The new $(3,1)$ entry is $a_{31} - m_{31}a_{11}$. Set it to zero.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "With that $m_{31}$, what sits in position $(3,2)$ after the operation? Leave the fraction as it stands.",
+       "given": "",
+       "answer": "a_{32} - \\frac{a_{31} a_{12}}{a_{11}}",
+       "placeholder": "",
+       "hint": "The whole row becomes $(a_{31} - m_{31}a_{11},\\; a_{32} - m_{31}a_{12},\\; a_{33} - m_{31}a_{13})$. Take the middle slot and substitute $m_{31}$.",
+       "deconstruct": [
+        "Every entry of row $3$ is hit by the same operation: $a_{3j} \\mapsto a_{3j} - m_{31}a_{1j}$.",
+        "For $j = 2$ that is $a_{32} - m_{31}a_{12}$.",
+        "Now put $m_{31} = a_{31}/a_{11}$ into it. Do not clear the fraction — the next steps are tidier if you leave it."
+       ]
+      },
+      {
+       "prompt": "Row $2$ was cleared the same way, with $m_{21} = a_{21}/a_{11}$. What sits in position $(2,2)$ afterwards? This entry is the second pivot $u_{22}$.",
+       "given": "",
+       "answer": "a_{22} - \\frac{a_{21} a_{12}}{a_{11}}",
+       "placeholder": "",
+       "hint": "Same operation, one row up: $a_{22} - m_{21}a_{12}$ with $m_{21} = a_{21}/a_{11}$.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "$m_{32}$ is the entry from the $(3,2)$ slot divided by the pivot $u_{22}$. Write it as a single fraction with no fraction inside it.",
+       "given": "",
+       "answer": "\\frac{a_{11} a_{32} - a_{31} a_{12}}{a_{11} a_{22} - a_{21} a_{12}}",
+       "placeholder": "",
+       "hint": "Divide the second answer by the third, then multiply the top and the bottom of the result by $a_{11}$.",
+       "deconstruct": [
+        "$m_{32} = \\left(a_{32} - \\dfrac{a_{31}a_{12}}{a_{11}}\\right) \\div \\left(a_{22} - \\dfrac{a_{21}a_{12}}{a_{11}}\\right)$.",
+        "Multiply the numerator and the denominator of that quotient by $a_{11}$.",
+        "The top becomes $a_{11}a_{32} - a_{31}a_{12}$ and the bottom becomes $a_{11}a_{22} - a_{21}a_{12}$, and no fraction is left inside a fraction."
+       ]
+      },
+      {
+       "prompt": "Now test the claim. $L$ is asserted to be $\\begin{bmatrix} 1 & 0 & 0 \\\\ m_{21} & 1 & 0 \\\\ m_{31} & m_{32} & 1 \\end{bmatrix}$. Multiply row $3$ of $L$ by column $1$ of $U$, which is $(a_{11}, 0, 0)$, and simplify.",
+       "given": "",
+       "answer": "a_{31}",
+       "placeholder": "",
+       "hint": "The product is $m_{31}a_{11} + m_{32}\\cdot 0 + 1 \\cdot 0$, and $m_{31} = a_{31}/a_{11}$.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "The real test. Column $2$ of $U$ is $(a_{12},\\; u_{22},\\; 0)$. Multiply row $3$ of $L$ by it — that is $m_{31}a_{12} + m_{32}u_{22}$ — and simplify completely.",
+       "given": "",
+       "answer": "a_{32}",
+       "placeholder": "",
+       "hint": "Notice that $u_{22} = (a_{11}a_{22} - a_{21}a_{12})/a_{11}$, which is exactly the denominator of $m_{32}$ divided by $a_{11}$. The product $m_{32}u_{22}$ therefore collapses.",
+       "deconstruct": [
+        "Write $u_{22} = a_{22} - \\dfrac{a_{21}a_{12}}{a_{11}} = \\dfrac{a_{11}a_{22} - a_{21}a_{12}}{a_{11}}$.",
+        "Then $m_{32}u_{22} = \\dfrac{a_{11}a_{32} - a_{31}a_{12}}{a_{11}a_{22} - a_{21}a_{12}} \\cdot \\dfrac{a_{11}a_{22} - a_{21}a_{12}}{a_{11}} = \\dfrac{a_{11}a_{32} - a_{31}a_{12}}{a_{11}}$.",
+        "Add $m_{31}a_{12} = \\dfrac{a_{31}a_{12}}{a_{11}}$. The two $a_{31}a_{12}$ terms cancel and $a_{11}a_{32}/a_{11}$ is left."
+       ]
+      }
+     ],
+     "closing": "Every entry of the product came back as the entry of $A$ it started from, and the only\nnumbers used were multipliers the elimination had already computed. Nothing in the check\nneeded the values of the $a_{ij}$, so it holds for every $3\\times3$ whose first two\npivots are nonzero.\n\nThe general statement is the one proved in the first reading. Each elimination step is\n$E = I - m\\,e_r e_k^{\\mathsf{T}}$, its inverse is the same matrix with $+m$, and the\nproduct of all the inverses has no cross terms because $e_k^{\\mathsf{T}} e_s = 0$\nwhenever $s > k$. So\n\n$$A = LU, \\qquad L_{rk} = m_{rk} \\;\\; (r > k), \\qquad L_{rr} = 1$$\n\nThere is a practical consequence worth noticing. $L$ has $n(n-1)/2$ entries below its\ndiagonal and $U$ has $n(n+1)/2$ on and above, which is $n^{2}$ numbers between them —\nexactly as many as $A$ had. Every serious implementation therefore overwrites $A$ in\nplace: $U$ occupies the upper triangle, the multipliers occupy the lower one, and the\nunit diagonal of $L$ is never stored because it is always the same. The factorisation is\nfree in memory as well as in arithmetic.\n\nThe one thing that is *not* free is the bookkeeping when a row is interchanged. The\nmultipliers already stored belong to specific rows, so they travel with those rows —\nwhich is why the lab's `lu_decompose` swaps `l`, `u` and `perm` together on every\ninterchange, and why filling the diagonal of `l` with ones is left until the very end."
+    },
+    {
+     "title": "What one more right-hand side costs",
+     "minutes": 14,
+     "brief": "\"Factor once, solve many times\" is only worth saying if the second thing is much cheaper\nthan the first. Count the operations and find out how much cheaper, and where the\ncrossover sits.\n\nCount a multiply-and-subtract as one operation, and a division as one operation.\nEverything below is a leading-order count in $n$ — the point is which power of $n$ each\nstage costs, not the constant in front of the $n^{2}$ term.\n\nWrite $n$ for the size of the matrix and $m$ for the number of right-hand sides.",
+     "vars": [
+      "n",
+      "m"
+     ],
+     "steps": [
+      {
+       "prompt": "Forward substitution on $Ly = c$: row $i$ needs $i-1$ multiply-subtracts and no division, because $L$ has ones on its diagonal. Add that over $i = 1$ to $n$.",
+       "given": "",
+       "answer": "\\frac{n(n-1)}{2}",
+       "placeholder": "",
+       "hint": "You are adding $0 + 1 + 2 + \\cdots + (n-1)$.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Back substitution on $Ux = y$: row $i$ needs $n-i$ multiply-subtracts and one division. Give the total for the whole pass.",
+       "given": "",
+       "answer": "\\frac{n(n+1)}{2}",
+       "placeholder": "",
+       "hint": "The multiply-subtracts add to the same triangular number as before. Then add one division per row.",
+       "deconstruct": [
+        "$\\sum_{i=1}^{n}(n-i) = (n-1) + (n-2) + \\cdots + 0 = \\dfrac{n(n-1)}{2}$.",
+        "There are $n$ divisions, one per row.",
+        "$\\dfrac{n(n-1)}{2} + n = \\dfrac{n^{2} - n + 2n}{2} = \\dfrac{n(n+1)}{2}$."
+       ]
+      },
+      {
+       "prompt": "Add the two passes. What does one solve cost, once the factors exist?",
+       "given": "",
+       "answer": "n^{2}",
+       "placeholder": "",
+       "hint": "$\\dfrac{n(n-1)}{2} + \\dfrac{n(n+1)}{2}$ — put them over the common denominator and the linear terms cancel.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "The factorisation: clearing column $k$ costs $(n-k)^{2}$ multiply-subtracts, and summing over $k = 1$ to $n-1$ gives $(n-1)n(2n-1)/6$. Keep only the leading term in $n$.",
+       "given": "",
+       "answer": "\\frac{n^{3}}{3}",
+       "placeholder": "",
+       "hint": "Expand $(n-1)n(2n-1)$: the highest power is $2n^{3}$, over $6$.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Now the whole job. What does it cost to factorise once and then solve $m$ right-hand sides, to leading order?",
+       "given": "",
+       "answer": "\\frac{n^{3}}{3} + m n^{2}",
+       "placeholder": "",
+       "hint": "One factorisation, then $m$ copies of the cost you found for a single solve.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "And the alternative: running a fresh elimination from scratch for each of the $m$ right-hand sides. To leading order, what does that cost?",
+       "given": "",
+       "answer": "\\frac{m n^{3}}{3}",
+       "placeholder": "",
+       "hint": "Each of the $m$ runs pays the full factorisation cost again; the $n^{2}$ of carrying the right-hand side along is a lower order and drops out.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Divide the second by the first and let $m$ grow without bound. What does the saving tend to?",
+       "given": "",
+       "answer": "\\frac{n}{3}",
+       "placeholder": "",
+       "hint": "Divide the top and the bottom by $m$. The bottom becomes $n^{3}/(3m) + n^{2}$, whose first term vanishes as $m$ grows.",
+       "deconstruct": [
+        "The ratio is $\\dfrac{m n^{3}/3}{n^{3}/3 + m n^{2}}$.",
+        "Divide the numerator and the denominator by $m$: $\\dfrac{n^{3}/3}{n^{3}/(3m) + n^{2}}$.",
+        "As $m \\to \\infty$ the term $n^{3}/(3m)$ goes to $0$, leaving $\\dfrac{n^{3}/3}{n^{2}} = \\dfrac{n}{3}$."
+       ]
+      }
+     ],
+     "closing": "So the ceiling on the saving is $n/3$, and it is reached once $m$ is large. The\ncrossover is at $m = n/3$: that is the number of right-hand sides whose solves cost the\nsame as one factorisation, so at $m = n/3$ the LU route costs two eliminations and the\nnaive route costs $n/3$ of them.\n\nAt $n = 300$, one factorisation buys $100$ solves. At $n = 3000$, it buys $1000$. The\nsaving grows with the problem, which is the opposite of how most algorithmic tricks\nbehave and the reason this one is not optional at scale.\n\nTwo cautions on the count.\n\nIt is asymptotic. At $n = 3$ the factorisation costs $5$ multiply-subtracts and $3$\ndivisions while a solve costs $9$ operations — the solve is *more* expensive, and every\nstatement above is false. The $n^{3}$ term does not dominate until $n$ is comfortably\ninto the tens.\n\nAnd it counts arithmetic, not time. On real hardware the factorisation moves $n^{2}$\nnumbers through cache while doing $n^{3}/3$ operations on them, so it is compute-bound\nand runs near peak speed; a triangular solve does $n^{2}$ operations on $n^{2}$ numbers\nand is entirely limited by memory bandwidth. The measured ratio is therefore worse than\n$n/3$, often by a factor of several. The conclusion survives anyway, because a factor of\nseveral is not a factor of $n/3$."
+    },
+    {
+     "title": "The determinant, and the sign nobody remembers",
+     "minutes": 11,
+     "brief": "A determinant computed from the definition costs $n!$ terms. Computed from a\nfactorisation it costs one multiplication per row, on top of an elimination you were\ngoing to run anyway. Everything needed is already sitting in $PA = LU$; the only work is\ntaking determinants of both sides and not losing the sign.\n\nTake $A$ to be $3\\times3$, factored as $PA = LU$ with $L$ unit lower triangular, $U$\nupper triangular with diagonal $u_{11}, u_{22}, u_{33}$, and $P$ the product of $s$ row\ninterchanges.",
+     "vars": [
+      "s",
+      "u_11",
+      "u_22",
+      "u_33",
+      "d"
+     ],
+     "steps": [
+      {
+       "prompt": "$L$ is unit lower triangular. Expanding along its first row leaves one surviving term at every stage, and the surviving entries are the diagonal. What is $\\det L$?",
+       "given": "",
+       "answer": "1",
+       "placeholder": "",
+       "hint": "The diagonal of a *unit* lower triangular matrix is all ones, and the determinant of a triangular matrix is the product of its diagonal.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Same argument down the first column of $U$. What is $\\det U$?",
+       "given": "",
+       "answer": "u_{11} u_{22} u_{33}",
+       "placeholder": "",
+       "hint": "Only the $(1,1)$ entry of the first column is nonzero, so one term survives and its minor is again upper triangular. Induct.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "$P$ is the identity with $s$ row interchanges applied, and each interchange negates a determinant. Starting from $\\det I = 1$, what is $\\det P$?",
+       "given": "",
+       "answer": "(-1)^{s}",
+       "placeholder": "",
+       "hint": "Each swap multiplies the running value by $-1$, and there are $s$ of them.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Take determinants of both sides of $PA = LU$ and solve for $\\det A$. Use that $(-1)^{s}$ is its own reciprocal, so dividing by it and multiplying by it are the same move.",
+       "given": "",
+       "answer": "(-1)^{s} u_{11} u_{22} u_{33}",
+       "placeholder": "",
+       "hint": "$\\det P \\cdot \\det A = \\det L \\cdot \\det U$. Substitute the three values you have and divide.",
+       "deconstruct": [
+        "Determinants are multiplicative: $\\det(PA) = \\det P \\, \\det A$ and $\\det(LU) = \\det L \\, \\det U$.",
+        "That gives $(-1)^{s}\\det A = 1 \\cdot u_{11}u_{22}u_{33}$.",
+        "Divide by $(-1)^{s}$. Since $(-1)^{s}(-1)^{s} = 1$, dividing by it is multiplying by it."
+       ]
+      },
+      {
+       "prompt": "A run on a particular $3\\times3$ made two interchanges and left pivots $u_{11} = 5$, $u_{22} = -2$, $u_{33} = 1.5$. What is $\\det A$?",
+       "given": "",
+       "answer": "-15",
+       "placeholder": "",
+       "hint": "$(-1)^{2} = +1$, so the sign leaves the product alone. Then multiply the three pivots.",
+       "deconstruct": []
+      },
+      {
+       "prompt": "Someone factorises the same matrix in a different pivot order and needs three interchanges, so their $U$ is not yours. What must the product of their three pivots be?",
+       "given": "",
+       "answer": "15",
+       "placeholder": "",
+       "hint": "$\\det A$ is a property of $A$ and does not depend on how it was factored. With $s = 3$ the sign is $-1$, so the pivot product must have the opposite sign to the determinant.",
+       "deconstruct": [
+        "Whatever the pivot order, $\\det A = (-1)^{s}\\,u_{11}u_{22}u_{33}$ must give the same number.",
+        "So $-15 = (-1)^{3}\\,u_{11}u_{22}u_{33} = -\\,u_{11}u_{22}u_{33}$.",
+        "Therefore the product of their pivots is $15$."
+       ]
+      }
+     ],
+     "closing": "The last step is the one worth keeping. $U$ is not unique — change the pivoting rule and\nyou get different pivots, a different $L$ and a different permutation — but\n$(-1)^{s}\\prod u_{ii}$ is the same number every time, because it equals something that\ndepends only on $A$. That is a useful check on an implementation: factor a matrix twice\nwith two different pivot rules and compare the determinants, not the factors.\n\nIt also explains why `lu_decompose` returns `sign` at all. The permutation itself is not\nneeded for the determinant; only its parity is, and parity is one float. Two interchanges\ncancel exactly, so the count can be thrown away as soon as it has been reduced to\n$\\pm 1$.\n\nWhere this stops being useful: as a test for singularity, almost immediately. The\ndeterminant scales like the $n$th power of the matrix. Multiply a healthy $100 \\times\n100$ matrix by $0.5$ and its determinant is divided by $2^{100} \\approx 1.3\\times10^{30}$\nwhile the matrix is exactly as invertible as it was. A computed determinant of\n$10^{-300}$ tells you nothing, and one of $0$ may only mean that the product underflowed.\nThe pivots are the thing to look at, and even they only answer the yes-or-no question —\nwhich is the subject of the third reading."
+    }
+   ],
    "lab": {
     "title": "PA = LU, and what the factors buy you",
     "runtime": "python",

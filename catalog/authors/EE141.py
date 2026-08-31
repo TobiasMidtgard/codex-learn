@@ -7184,6 +7184,647 @@ for (var i = 0; i < fs.length; i++) {
                 "That local law gives the circuit law in one line. Over a uniform bar of length $\\ell$ and cross-section $A$: $V = E\\ell$ and $I = JA = \\sigma E A$, so $R = V/I = \\rho\\ell/A$. Material constant times geometry — exactly the shape of $C = \\varepsilon_0 A/d$, with the length and area the other way up.",
                 "Power dissipates where the current is: $p = EJ$ watts per cubic metre, which integrates over a uniform bar to $I^2R$. And $\\rho$ for a metal climbs with temperature — copper by about 0.39% per kelvin — so a track that runs hot runs hotter, and a copper winding doubles as its own thermometer.",
             ],
+            "read": [
+                {
+                    "title": "What a current is, and the three speeds people confuse",
+                    "minutes": 18,
+                    "body": r'''
+Close a switch and a lamp three metres away lights at once. Almost everyone's first
+model of why is a pipe: the battery pushes electrons out of its negative terminal, they
+race down the wire, arrive at the filament, and glow. It is a good enough picture to get
+a lot of circuit work right, and almost every part of it is false. The electrons were
+already in the filament before you closed the switch. The ones that leave the battery
+this afternoon will not reach the lamp before you have gone home. And nothing is used up
+on the way.
+
+Getting this right is not pedantry. It is the difference between a rule you apply and a
+mechanism you can reason with, and everything in the rest of this module — why a thin
+track burns while a thick one does not, why a resistance is a shape, where the heat comes
+out — is a consequence of the mechanism.
+
+## What is actually in the wire
+
+A cubic metre of copper contains about $8.5\times10^{28}$ atoms. That figure is worth
+seeing assembled, because the whole module hangs off how large it is:
+
+```text
+density of copper        8960 kg/m^3
+molar mass               63.55 g/mol = 0.06355 kg/mol
+
+moles per cubic metre    8960 / 0.06355          = 1.410e5 mol/m^3
+atoms per cubic metre    1.410e5 * 6.022e23      = 8.49e28 /m^3
+```
+
+Each copper atom gives up one of its outer electrons to the metal as a whole, so there
+are about $n = 8.5\times10^{28}$ free electrons per cubic metre, and they belong to no
+particular atom any more.
+
+They are not sitting still. At room temperature they move through the fixed lattice of
+positive ions at something like $1.6\times10^{6}$ m/s — a millionth of a second to cross a
+metre — in every direction at once. That is the **thermal speed**, and by itself it
+carries no current at all, because for every electron heading right there is one heading
+left. A wire with no battery across it is full of frantic motion and completely idle.
+
+## Current, and why it is not the useful number
+
+Connect a battery and a small bias appears on top of that chaos: on average, the
+electrons creep one way. Current is the rate at which charge crosses a section of the
+wire,
+
+$$I = \frac{\mathrm{d}Q}{\mathrm{d}t}$$
+
+measured in coulombs per second, which is an amp. That is the definition and it is
+correct, and it is also the wrong thing to think with — because ten amps means nothing
+until you know what it is going through. Ten amps in a car battery cable is idle. Ten
+amps in the 25 µm bond wire inside a chip package vaporises it. The wire does not know
+what the current is; it only knows how hard the charge is being pushed through *its own
+cross-section*.
+
+So the quantity a material actually feels is the **current density**
+
+$$J = \frac{I}{A}$$
+
+in amps per square metre. Same current, three conductors:
+
+```text
+5.0 A through:
+
+  a 10 x 3 mm busbar     A = 3.0e-5 m^2      J = 1.67e5  A/m^2
+  a 1 mm^2 wire          A = 1.0e-6 m^2      J = 5.00e6  A/m^2
+  a 25 um bond wire      A = 4.91e-10 m^2    J = 1.02e10 A/m^2
+```
+
+Five orders of magnitude between the first and the last, for one unchanged number on the
+ammeter. The busbar is asleep, the wire is doing an honest day's work, and the bond wire
+— which is happy at around an amp and no more — has already failed.
+
+## Counting the charge: where $I = nAqv_d$ comes from
+
+Now put a number on the creep. Take a cross-section of the wire and ask how much charge
+crosses it in a time $\Delta t$. If the average forward speed of the carriers is $v_d$,
+then everything that crosses is everything that started within a distance $v_d\Delta t$
+behind the section — a slab of wire of that length. Nothing further back can get there in
+time; everything nearer does.
+
+```text
+                          |
+      <-- v_d * dt -->    |          the slab whose contents cross
+   [ = = = = = = = = = ]  |          the dotted section during dt
+                          |
+   volume of the slab   = A * v_d * dt
+   carriers in it       = n * A * v_d * dt
+   charge in it         = n * A * v_d * dt * q
+```
+
+Divide by $\Delta t$ and the current is
+
+$$I = n A q v_d$$
+
+Nothing in that derivation is subtle; it is a counting argument, and its whole content is
+that four things multiply. The consequence is what matters. Because $n$ is astronomically
+large, $v_d$ has to be tiny.
+
+## Worked: how fast are they going?
+
+Five amps through an ordinary 1 mm² copper wire.
+
+```text
+I = 5.0 A       A = 1.0 mm^2 = 1.0e-6 m^2
+n = 8.5e28 /m^3                q = 1.602e-19 C
+
+n * A     = 8.5e28 * 1.0e-6            = 8.5e22 carriers per metre of wire
+n * A * q = 8.5e22 * 1.602e-19         = 1.362e4 coulombs per metre of wire
+
+v_d = I / (n A q) = 5.0 / 1.362e4      = 3.67e-4 m/s
+                                       = 0.367 mm/s
+```
+
+A third of a millimetre per second. To cross one metre of that cable an electron needs
+$1/(3.67\times10^{-4}) = 2723$ s, which is forty-five minutes.
+
+The middle line is the one to keep. Every metre of that wire holds thirteen thousand
+coulombs of mobile charge. You are asking five of them per second to leave the far end.
+Of course nothing has to hurry.
+
+Run the same sum on the other two conductors, using $v_d = J/(nq)$:
+
+```text
+n q = 8.5e28 * 1.602e-19 = 1.362e10 C/m^3
+
+busbar     v_d = 1.67e5  / 1.362e10 = 1.22e-5 m/s   = 0.012 mm/s
+1 mm^2     v_d = 5.00e6  / 1.362e10 = 3.67e-4 m/s   = 0.367 mm/s
+bond wire  v_d = 1.02e10 / 1.362e10 = 0.75    m/s
+```
+
+Even in the conductor that is about to fail, the electrons are ambling along at less than
+a metre a second.
+
+## The three speeds
+
+This is where the confusion lives, so put them side by side:
+
+```text
+thermal speed of an electron   ~ 1.6e6  m/s     random, carries no current
+drift speed at 5 A in 1 mm^2   ~ 3.7e-4 m/s     the whole of the current
+speed of the signal            ~ 2e8    m/s     what makes the lamp light
+```
+
+Ten orders of magnitude separate the first from the second, and twelve separate the
+second from the third. They are three different things and only the middle one is the
+current.
+
+The third needs its own sentence, because it is what the pipe model was reaching for.
+When you close the switch you do not launch electrons at the lamp. You establish an
+electric field along the wire, and that field propagates outward at close to the speed of
+light — down the cable as a wave guided by the conductors, at typically two-thirds of $c$
+in ordinary cable. Wherever it arrives, the electrons *already there* start drifting.
+Three metres of cable is fifteen nanoseconds. The filament's own electrons begin moving
+fifteen nanoseconds after the switch closes, and they are the ones that heat it.
+
+## The mistake people make
+
+**"Current gets used up in the lamp."** It is a hard belief to shake, because everything
+about the wiring encourages it: the battery is the source, the lamp is where the energy
+appears, and it is natural to think something is delivered and consumed. But charge is
+conserved and the circuit is a loop. Put an ammeter on either side of the lamp and they
+read identically. What is used up is not charge — it is the *energy per unit charge*: a
+coulomb enters the filament at one potential and leaves at a lower one, having handed the
+difference over. The charge itself goes round and round for the life of the circuit.
+
+The tell that someone still holds the pipe model is a sentence like "the current has to
+get through the first lamp before it can reach the second one". A series circuit with two
+lamps lights both of them at the same instant, and neither one is dimmer for being
+second.
+
+## Where this stops
+
+**Alternating current.** At 50 Hz the electrons do not drift anywhere; they oscillate.
+Take the same 5 A rms in 1 mm²: the peak drift speed is $\sqrt2 \times 3.67\times10^{-4}
+= 5.19\times10^{-4}$ m/s, and the amplitude of the oscillation is that divided by
+$\omega = 2\pi\times50 = 314$ rad/s:
+
+```text
+excursion = 5.19e-4 / 314 = 1.65e-6 m   =  1.7 micrometres
+```
+
+The electrons in your mains wiring shuffle back and forth by less than two micrometres
+and never leave the room they are in. Every joule that reaches the kettle got there
+without a single carrier making the journey.
+
+**Uniform $J$.** Writing $J = I/A$ assumes the current is spread evenly over the section.
+At DC in a good conductor it is. As frequency rises it is not: the current crowds into a
+surface layer of thickness $\delta = \sqrt{\rho/(\pi f\mu_0)}$ — 9.2 mm in copper at
+50 Hz, 65 µm at 1 MHz — and the middle of a fat conductor carries almost nothing. From
+there on the honest quantity is $J$ as a function of position, and $I/A$ is an average
+that no part of the material actually experiences.
+
+**One kind of carrier.** Copper has electrons and nothing else. An electrolyte carries
+current with positive and negative ions moving in opposite directions, both contributing
+with the same sign to $I$. A semiconductor has electrons and holes, and $n$ is not a
+property of the material at all — it is set by doping, by temperature, and by whatever
+you have injected, which is why a transistor can exist and a piece of copper cannot be
+made to do anything interesting.
+
+**Fixed $n$.** In a metal $n$ barely moves with temperature: heating copper does not
+create more free electrons, it only makes the lattice harder to get through. In a
+semiconductor $n$ climbs steeply with temperature, and that single difference is why a
+metal's resistance rises when it gets hot and a semiconductor's falls. The next unit
+builds the machinery that makes that statement precise.
+''',
+                },
+                {
+                    "title": "From a field inside the metal to a number in ohms",
+                    "minutes": 20,
+                    "body": r'''
+Module 5 said a conductor has no field inside it. That was carefully hedged: no field
+*in equilibrium*, when nothing is moving any more. A wire carrying a current is the
+opposite case. Something is moving, permanently, and what keeps it moving is a field
+inside the metal — small, but not zero, and it is the whole subject of this unit.
+
+Start with the picture. A free electron in a field $E$ feels a force and accelerates.
+Left alone it would go faster and faster without limit, and a wire connected to a battery
+would draw a current that rose forever. It does not, so something must be taking the
+momentum away as fast as the field supplies it. That something is collisions: with
+thermal vibrations of the lattice, with impurity atoms, with grain boundaries and with
+the surfaces. Each collision scatters the electron into an essentially random direction,
+which destroys the drift it had accumulated and leaves the thermal motion untouched.
+
+So the steady state is a balance, not an equilibrium. The field feeds momentum in; the
+collisions throw it away; the drift settles at whatever speed makes the two rates equal.
+
+## The balance, written down
+
+Let $\tau$ be the mean time between collisions. A carrier of charge magnitude $q$ in a
+field $E$ gains momentum at a rate $qE$ — that is $F = ma$ written as
+$\mathrm{d}p/\mathrm{d}t$. The population as a whole holds an average drift momentum
+$mv_d$, and collisions destroy it at a rate $mv_d/\tau$: in one $\tau$, essentially all of
+it is gone. Steady state means those two rates are equal:
+
+$$qE = \frac{m v_d}{\tau} \qquad\Longrightarrow\qquad v_d = \frac{q\tau}{m}E$$
+
+The drift speed is proportional to the field, with a constant $\mu = q\tau/m$ that has a
+name — the **mobility** — and a unit, m²/(V·s). This is the first genuinely non-obvious
+result in the module: a field does not make charges accelerate, it makes them *travel at
+a steady speed*, exactly as gravity does not make a raindrop accelerate for long.
+
+Now put it into the counting result from the last unit. Current density is
+$J = nqv_d$, so
+
+$$J = nq\cdot\frac{q\tau}{m}E = \frac{nq^{2}\tau}{m}\,E$$
+
+The bracket contains nothing but properties of the material. Call it $\sigma$, the
+**conductivity**:
+
+$$J = \sigma E, \qquad \sigma = \frac{nq^{2}\tau}{m}, \qquad
+\rho \equiv \frac{1}{\sigma} = \frac{m}{nq^{2}\tau}$$
+
+That is Ohm's law — not as a rule about a component, but as a statement about a point
+inside a material: the current density here is proportional to the field here. Nothing
+about wires, terminals or circuits has been mentioned yet.
+
+## Does the model give the right number?
+
+It had better. Copper's resistivity is measured, not derived: $\rho = 1.68\times10^{-8}$
+Ω·m at 20 °C. Turn $\rho = m/(nq^{2}\tau)$ round and ask what $\tau$ that implies.
+
+```text
+m = 9.109e-31 kg      n = 8.5e28 /m^3      q = 1.602e-19 C
+
+n q^2       = 8.5e28 * (1.602e-19)^2  = 8.5e28 * 2.566e-38 = 2.181e-9
+n q^2 rho   = 2.181e-9 * 1.68e-8                           = 3.665e-17
+
+tau = m / (n q^2 rho) = 9.109e-31 / 3.665e-17  = 2.49e-14 s   (25 femtoseconds)
+```
+
+Twenty-five femtoseconds between collisions. Is that plausible? Multiply it by the
+thermal speed to get the distance covered between one collision and the next:
+
+```text
+mean free path = 1.6e6 m/s * 2.49e-14 s = 4.0e-8 m = 40 nm
+
+copper's atoms are 0.26 nm apart, so that is about 150 atomic spacings
+```
+
+An electron in copper flies past a hundred and fifty atoms before anything deflects it.
+That is a real prediction and it is close to the measured value — and it also says
+something that should feel strange: a *perfect* copper lattice would not scatter electrons
+at all. Resistance in a metal is entirely caused by the lattice being imperfect, either
+because it is vibrating (temperature) or because it is dirty (impurities and defects).
+
+The same $\tau$ gives the mobility, $\mu = q\tau/m = 1.602\times10^{-19} \times
+2.49\times10^{-14} / 9.109\times10^{-31} = 4.4\times10^{-3}$ m²/(V·s), or 44 cm²/(V·s) in
+the unit the semiconductor literature uses. That is copper's measured value.
+
+## From a point law to a component
+
+Now build a resistor. Take a uniform bar of the material, length $\ell$, cross-section
+$A$, and put a voltage $V$ across its ends.
+
+```text
+        |<----------------- l ----------------->|
+        +---------------------------------------+
+   V+   |     E, uniform, pointing right ->     |   V-        cross-section A
+        +---------------------------------------+
+
+   the field is uniform, so           V = E * l
+   the current is spread evenly, so   I = J * A = sigma E A
+```
+
+Divide:
+
+$$R = \frac{V}{I} = \frac{E\ell}{\sigma E A} = \frac{\ell}{\sigma A} = \frac{\rho\,\ell}{A}$$
+
+The field cancels, which it must — a resistance cannot depend on how hard you are driving
+it. What is left is a material constant times a shape, and that is the second big result
+of the module: **a resistor is a geometry**.
+
+Look at the shape of the answer next to module 3's:
+
+```text
+capacitance     C = eps   * A / d          farads
+conductance     G = sigma * A / l          siemens
+resistance      R = rho   * l / A          ohms
+```
+
+Conductance and capacitance are the same formula with $\sigma$ in place of $\varepsilon$.
+That is not a coincidence, and it has a startling consequence: for *any* pair of
+electrodes, however shaped, embedded in a uniform medium, the geometry factor is the same
+one in both expressions and cancels in the product:
+
+$$RC = \rho\varepsilon$$
+
+independent of the shape entirely. Module 5 derived exactly that number by a completely
+different route, as the time $\tau = \varepsilon_0\rho$ for stray charge to relax out of a
+conductor's bulk. It is the same statement seen twice.
+
+## Worked: a printed-circuit track
+
+A track on an ordinary board: 120 mm long, 2.0 mm wide, in "one ounce" copper, which is
+35 µm thick.
+
+```text
+A   = 2.0e-3 * 35e-6                     = 7.0e-8 m^2
+R   = 1.68e-8 * 0.120 / 7.0e-8
+    = 2.016e-9 / 7.0e-8                  = 0.0288 ohm      = 28.8 mohm
+
+at 3.0 A:   V = I R = 3.0 * 0.0288       = 0.0864 V        = 86.4 mV
+            P = I^2 R = 9.0 * 0.0288     = 0.259 W
+```
+
+There is a shortcut hiding in there that is worth extracting. Write the area as
+width × thickness and group the terms differently:
+
+$$R = \frac{\rho\ell}{wt} = \underbrace{\frac{\rho}{t}}_{\text{the metal}}
+\times \underbrace{\frac{\ell}{w}}_{\text{the drawing}}$$
+
+The first factor is the **sheet resistance**, in ohms — usually written "ohms per square"
+to signal what it is. The second is a pure number: how many times longer than wide the
+track is, that is, how many squares it is made of.
+
+```text
+sheet resistance   R_sq = 1.68e-8 / 35e-6      = 4.8e-4 ohm  = 0.48 mohm/square
+squares            l / w = 120 / 2.0           = 60
+R = 60 * 0.48 mohm                             = 28.8 mohm     (as before)
+```
+
+Every layout engineer works this way, because it removes the thickness from every
+subsequent sum: on this board, count squares and multiply by 0.48 mΩ. A square is a
+square whatever its size — a 2 mm × 2 mm patch and a 2 cm × 2 cm patch have identical
+resistance, because doubling the length and the width changes $\ell/w$ not at all.
+
+## Worked: the extension lead
+
+Twenty-five metres of 1.0 mm² two-core lead, feeding a 2.3 kW heater at 10 A.
+
+The trap is in the first line. The lead is 25 m long, but the current goes down the live
+conductor and comes back along the neutral, so the copper it traverses is 50 m.
+
+```text
+R = rho * l / A = 1.68e-8 * 50 / 1.0e-6
+                = 8.4e-7 / 1.0e-6                = 0.84 ohm
+
+drop     V = I R  = 10 * 0.84                    = 8.4 V   (3.7% of 230 V)
+the load sees                                    = 221.6 V
+heat in the lead
+         P = I^2 R = 100 * 0.84                  = 84 W
+```
+
+Eighty-four watts, spread along 25 m of cable, is 3.4 W per metre. Run out flat on the
+floor that is warm and harmless. Wound on its drum, the same 84 W is dissipated inside a
+tight coil that cannot get rid of it, and this is precisely why a cable drum carries two
+ratings — one coiled, one extended — with the coiled one a fraction of the other.
+
+## The mistake people make
+
+**Using the length of the cable instead of the length of the copper.** It halves your
+answer, it is entirely invisible in the arithmetic, and everyone does it once. The check
+is to trace the loop with a finger: the charge has to come back.
+
+**Turning mm² into m² by dividing by a thousand.** It is a *square* millimetre, so the
+factor is $10^{6}$, not $10^{3}$. A resistance that comes out a thousand times too small
+has almost always been through this.
+
+**Believing $R = \rho\ell/A$ is the definition of resistance.** It is not; $R = V/I$ is.
+The geometry formula is what you get when the material obeys $J = \sigma E$ *and* the bar
+is uniform *and* the current is spread evenly across it. Take away any of those three and
+the formula goes, while $V/I$ survives.
+
+## Where this stops
+
+**Materials that are not ohmic.** $J = \sigma E$ is an empirical property of metals over
+a wide range, not a law of nature. A diode's current rises exponentially with voltage. A
+tungsten filament's resistance is roughly ten times higher hot than cold, which is why a
+lamp's inrush current is so much larger than its running current and why the "6 Ω lamp"
+in the exercises later in this module is a convenient fiction. An electrolyte, a gas
+discharge and a varistor are all violently non-ohmic. When someone says "Ohm's law",
+they are asserting a fact about a material, and it can be false.
+
+**Uniform current.** Both derivations above assumed the current is evenly spread. At high
+frequency it is not, and $R = \rho\ell/A$ understates the resistance badly: at 1 MHz, with
+a skin depth of 65 µm, only a thin shell of a 1 mm-radius wire is carrying anything and
+the effective area is a fraction of the geometric one. The same failure happens at DC
+wherever the geometry forces the current to bunch — around a hole, into a corner, at the
+edge of a contact.
+
+**Contact resistance.** Nothing in $\rho\ell/A$ describes the join. A soldered joint adds
+a fraction of a milliohm; a screwed terminal, a crimp or a relay contact can add tens of
+milliohms and can drift by an order of magnitude as it oxidises. Measuring that 28.8 mΩ
+track with a normal meter through two 50 mΩ test leads gives a reading dominated by the
+leads, which is why precision resistance measurement uses four wires: two to force the
+current, two to sense the voltage where you actually mean it.
+
+**Small enough to see the mean free path.** The 40 nm computed above is a physical length,
+and once a conductor's cross-section approaches it the bulk formula fails: electrons start
+scattering off the surfaces and the grain boundaries as often as off the lattice, $\tau$
+falls, and the effective resistivity rises. Copper interconnect in a modern chip is tens
+of nanometres wide and is measurably worse than bulk copper for exactly this reason —
+one of the harder problems in scaling integrated circuits, and it is this unit's $\tau$
+that is doing the damage.
+''',
+                },
+                {
+                    "title": "Where the heat goes, and what it does next",
+                    "minutes": 17,
+                    "body": r'''
+An electron in the wire accelerates through the field, picks up kinetic energy, and then
+hits something. The collision scatters it and hands the energy it had gained to the
+lattice, which now vibrates a little harder than it did. Vibration of the lattice is
+temperature. That is the entire mechanism of resistive heating, and it says two things
+before any algebra: the heat appears *where the collisions happen*, which is to say
+throughout the volume of the conductor rather than at its ends, and it is a one-way
+transfer — the energy taken from the field is not recoverable from the warm metal.
+
+## The power, per cubic metre
+
+Take a cubic metre of the material with a field $E$ across it, carrying a current density
+$J$. The force on the carriers in that cubic metre is $nqE$ newtons, and they are moving
+at $v_d$, so the field does work at a rate
+
+$$p = (nqE)\,v_d = E\,(nqv_d) = EJ \quad\text{watts per cubic metre}$$
+
+In the steady state that power is not going into kinetic energy — the drift speed is
+constant — so all of it is going into the lattice. Every watt of it is heat.
+
+Now integrate over a uniform bar of length $\ell$ and cross-section $A$, using the same
+two substitutions as the last unit:
+
+$$P = p\,(A\ell) = EJ A\ell = (E\ell)(JA) = VI$$
+
+and with $V = IR$ the three familiar forms drop out at once:
+
+$$P = VI = I^{2}R = \frac{V^{2}}{R}$$
+
+They are one statement wearing three faces, and which face is useful depends on what is
+being held fixed. In a series path the current is common, so $I^{2}R$ tells you at a
+glance which element is getting hot. Across a parallel bank the voltage is common, so
+$V^{2}/R$ does. Mixing them up — reaching for $V^{2}/R$ on a series element — is the
+commonest source of a wrong answer that looks reasonable.
+
+## Worked: where 259 milliwatts actually is
+
+The track from the last unit: 120 mm × 2.0 mm × 35 µm of copper, 28.8 mΩ, carrying 3.0 A.
+The lumped answer was $I^{2}R = 0.259$ W. Do it the other way, from the inside out.
+
+```text
+J = I / A       = 3.0 / 7.0e-8               = 4.286e7 A/m^2
+E = rho * J     = 1.68e-8 * 4.286e7          = 0.720 V/m
+
+check:  V = E * l = 0.720 * 0.120            = 0.0864 V     (agrees)
+
+p = E * J       = 0.720 * 4.286e7            = 3.09e7 W/m^3
+volume          = 0.120 * 2.0e-3 * 35e-6     = 8.4e-9 m^3
+P = p * volume  = 3.09e7 * 8.4e-9            = 0.259 W      (agrees)
+```
+
+Thirty million watts per cubic metre is thirty watts in every cubic centimetre — a
+soldering iron's worth of heat in a sugar lump. The number is startling and it is the
+point: what keeps that track cool is not that the power density is low, it is that there
+is so little copper there. The whole 120 mm run is 8.4 cubic millimetres of metal, less
+than a drop of water, and all of it is pressed flat against a board that takes the heat
+away.
+
+That also tells you where a conductor fails. $p = EJ = \rho J^{2}$ depends on the square
+of the current density, so a place where the track is half as wide has four times the
+power density in it. A nick in the edge of a track, a void in a solder joint, a crimp that
+has only half its strands in contact — each is a small region running at many times the
+power density of its neighbours, and each is where the smoke comes from.
+
+## The temperature coefficient, and where it comes from
+
+Heat the metal and its resistance rises. The mechanism is already in hand from the last
+unit: temperature is lattice vibration, more vibration means more scattering, more
+scattering means a shorter mean free time $\tau$ — and
+
+$$\rho = \frac{m}{nq^{2}\tau}$$
+
+has $\tau$ in the denominator, so $\rho$ goes up. Note what does *not* change: $n$. Heating
+copper does not liberate more electrons; there is already one per atom and there is no
+more to be had.
+
+Over any range a workshop cares about the dependence is close to linear, and it is
+written
+
+$$R(T) = R_{20}\bigl[1 + \alpha (T - 20\,^\circ\mathrm{C})\bigr]$$
+
+with $\alpha = 0.00393$ per kelvin for copper — 0.393% per degree. Aluminium is 0.00403,
+tungsten about 0.0045. Note where the two ends of that expression are anchored: $R_{20}$
+is the resistance *at 20 °C*, and the bracket must come out at exactly 1 when $T = 20$. If
+your expression does not do that, the sign of the subtraction is the wrong way round.
+
+## Worked: a motor winding as its own thermometer
+
+You cannot get a temperature probe into the middle of a winding, and the middle is the
+part that fails. But the winding is a long piece of copper whose resistance you can
+measure at the terminals, and copper's $\alpha$ is a known number, so the winding will
+tell you its own average temperature.
+
+A field winding measures 12.40 Ω cold, in a workshop at 20 °C. After an hour on load it
+measures 15.05 Ω.
+
+```text
+ratio             15.05 / 12.40                     = 1.2137
+so                1 + alpha * dT                    = 1.2137
+                  alpha * dT                        = 0.2137
+                  dT = 0.2137 / 0.00393             = 54.4 K
+
+temperature       T = 20 + 54.4                     = 74.4 C
+```
+
+Check it forwards: $12.40 \times (1 + 0.00393 \times 54.4) = 12.40 \times 1.2137 =
+15.05$ Ω, which is where it started.
+
+Two cautions about what that number means. It is an *average* over the whole winding, and
+the hot spot buried in the middle of a slot is a good deal hotter than the average —
+insulation classes are written against the hot spot, so a margin has to be allowed. And it
+has to be measured within seconds of switching off, because the winding starts cooling the
+moment the current stops.
+
+The temperature is not merely a diagnostic; it costs you. At 5 A that winding dissipates
+$I^{2}R = 25 \times 12.40 = 310$ W when cold and $25 \times 15.05 = 376$ W when hot.
+Twenty-one per cent more heat than the cold measurement predicted, and the extra 66 W has
+to be got out of the machine as well.
+
+## Does it run away?
+
+The last paragraph describes a loop: heat raises the resistance, the higher resistance
+makes more heat. Whether that loop is stable is a real question and it is worth doing
+properly.
+
+Let the conductor's rise above ambient be $\Delta T$, and let $R_{\text{th}}$ be its
+thermal resistance to the surroundings, in kelvin per watt, so $\Delta T = R_{\text{th}}P$.
+Hold the *current* fixed, and write $P_0 = I^{2}R_{20}$ for the power it would take at the
+cold resistance.
+
+```text
+P    = I^2 R_20 (1 + alpha dT)     = P0 (1 + alpha dT)
+dT   = R_th P                      = P0 R_th (1 + alpha dT)
+
+dT (1 - alpha P0 R_th)             = P0 R_th
+
+                 P0 R_th
+dT  =  ---------------------------
+        1  -  alpha * P0 * R_th
+```
+
+The denominator is the whole story. If $\alpha P_0R_{\text{th}} < 1$ the loop converges
+and the bracket is a modest correction; as it approaches 1 the rise grows without bound.
+
+Put the track in it. Say it sits on a board with a thermal resistance of about 50 K/W to
+the surrounding air, carrying its 3.0 A:
+
+```text
+P0 * R_th          = 0.2592 * 50            = 12.96 K       (the naive rise)
+alpha * P0 * R_th  = 0.00393 * 12.96        = 0.0509
+
+dT = 12.96 / (1 - 0.0509)                   = 13.7 K
+
+so R_hot = 0.0288 * (1 + 0.00393 * 13.7)    = 0.0303 ohm    (5% up)
+   P_hot = 9 * 0.0303                       = 0.273 W
+   and R_th * P_hot = 50 * 0.273            = 13.7 K        (consistent)
+```
+
+A five per cent correction, and stable. Runaway would need $\alpha P_0R_{\text{th}} \ge 1$,
+that is $P_0R_{\text{th}} \ge 1/0.00393 = 254$ K — a naive temperature rise of 254 kelvin
+before the feedback even becomes the problem. For copper at constant current the loop is
+real, worth a few per cent, and never the thing that kills you.
+
+Change either half of that and the conclusion inverts. Hold the *voltage* fixed instead
+and $P = V^{2}/R$: hotter now means less power, so the feedback is negative and a copper
+element driven from a voltage source is self-stabilising — which is part of why a filament
+lamp settles rather than running away. And make $\alpha$ *negative* — carbon, an
+electrolyte, a thermistor, a semiconductor junction — and at constant voltage the loop
+becomes positive: hotter, lower resistance, more current, hotter. That is thermal runaway
+proper, it is fast, and it is the mechanism behind a shorted power transistor and behind
+the ballast resistors you find in series with parallel-connected diodes and cells.
+
+## Where this stops
+
+**The linear law.** $R_{20}(1 + \alpha\Delta T)$ is a two-term expansion, honest for a
+metal over a couple of hundred kelvin and no further. Cool copper towards absolute zero
+and $\rho$ does not go to zero; it flattens out at a residual value set by the impurities
+and defects in that particular piece, because those scatter electrons whether or not the
+lattice is vibrating. Heat it towards melting and the curve bends the other way.
+
+**Lumping.** $I^{2}R$ gives the total watts and says nothing about where they are. A joint
+with 5 mΩ of contact resistance in series with a 28.8 mΩ track is 15% of the total heat
+concentrated in a region a millimetre across — the track itself is only 0.24 mΩ per
+millimetre, so the joint runs at about twenty times its neighbours' power density. Every
+burnt connector in the world is that sum.
+
+**DC.** At high frequency the current is not spread across the section, so the resistance
+that appears in $I^{2}R$ is not the one you measure with a meter. Above the frequency
+where the skin depth is comparable with the conductor's size, the AC resistance can be
+several times the DC value, and a magnetic core or a nearby conductor makes it worse still
+by pushing the current around inside the wire.
+
+**Resistance at all.** Below its critical temperature a superconductor has $\rho$ exactly
+zero — not small, zero — and carries a current with no field inside it and no heat at all.
+That is not the small-$\alpha$ limit of anything in this unit; it is a different state of
+matter, and the whole scattering picture that produced $\rho = m/(nq^{2}\tau)$ has nothing
+to say about it.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Current and resistance, checked",
                 "minutes": 9,
@@ -7278,6 +7919,235 @@ for (var i = 0; i < fs.length; i++) {
                     },
                 ],
             },
+            "blanks": {
+                "title": "Current, resistance and heat, term by term",
+                "minutes": 9,
+                "caption": "the six relations this module runs on, with the load-bearing part removed",
+                "lang": "text",
+                "brief": r'''
+Nothing here is executed. These are the six expressions the rest of the module is built
+on, and every hole sits where a slip changes the answer rather than the spelling — which
+speed carries the current, which quantity the conductivity multiplies, the power on the
+charge, and which way up the geometry goes.
+
+Two of the distractors are dimensionally sensible and still wrong, and one of them is the
+single commonest error in the whole subject, so saying why a choice is right before taking
+it is worth the ten seconds.
+''',
+                "listing": """# A conductor of cross-section A, holding n carriers per cubic metre, each
+# of charge q. Count the charge crossing one section per second:
+
+I = n * A * q * ___
+
+# Ohm's law as a statement about a point inside the material, with sigma the
+# conductivity in siemens per metre:
+
+J = sigma * ___
+
+# Where that conductivity comes from: m is the carrier mass and tau the mean
+# time between collisions.
+
+rho = m / (n * ___ * tau)
+
+# A uniform bar of that material, length l and cross-section A:
+
+R = rho * ___
+
+# The heat produced, per cubic metre of conductor, wherever the current is:
+
+p = E * ___
+
+# And the same metal at some other temperature T, in degrees Celsius:
+
+R_T = R_20 * (1 + alpha * ___)
+""",
+                "blanks": [
+                    {
+                        "prompt": "Which speed multiplies $nAq$ to give the current?",
+                        "hole": "?",
+                        "opts": ["v_drift", "v_thermal", "v_drift**2", "v_drift / A"],
+                        "a": 0,
+                        "why": "The drift speed — the small net bias on the motion, of order $10^{-4}$ m/s in ordinary wiring. Everything crossing the section in one second started within one drift-length of it, so the count is $nAv_d$ carriers and $nAqv_d$ coulombs.",
+                        "whys": [
+                            "The drift speed — the small net bias on the motion, of order $10^{-4}$ m/s in ordinary wiring. Everything crossing the section in one second started within one drift-length of it, so the count is $nAv_d$ carriers and $nAqv_d$ coulombs.",
+                            "The thermal speed is around $10^{6}$ m/s and carries no current whatever: for every electron crossing the section left to right there is one crossing right to left, and the net transfer is zero. Ten orders of magnitude separate it from the right answer.",
+                            "A square would make the current depend on the units the speed was measured in, which no physical relation may do. It also cannot be right dimensionally: $nAq$ times a speed is already amps.",
+                            "Dividing by $A$ cancels the area that is already there, leaving a current that does not care how thick the conductor is. A busbar and a bond wire would then carry the same current at the same drift speed, and the whole point of current density is that they do not.",
+                        ],
+                    },
+                    {
+                        "prompt": "The conductivity multiplies what, to give the current density at a point?",
+                        "hole": "?",
+                        "opts": ["E", "V", "E**2", "E / A"],
+                        "a": 0,
+                        "why": "The field at that point. This is Ohm's law written locally: $J = \\sigma E$ says nothing about wires or terminals, only that the current density here is proportional to the field here. The circuit form $V = IR$ is what you get after integrating it along a bar.",
+                        "whys": [
+                            "The field at that point. This is Ohm's law written locally: $J = \\sigma E$ says nothing about wires or terminals, only that the current density here is proportional to the field here. The circuit form $V = IR$ is what you get after integrating it along a bar.",
+                            "A voltage is a property of two points, not of one, so it cannot appear in a relation between two quantities defined at a single place. The give-away is the units: $\\sigma$ is in siemens per metre, so $\\sigma V$ is amps per metre, not amps per square metre.",
+                            "A square would make the material's response depend on how hard it was being driven, which is exactly what the word *ohmic* denies. A material whose $J$ went as $E^2$ would have no single resistance at all — its $V/I$ would change with every current you put through it.",
+                            "The area has no business here. $J = \\sigma E$ is a statement at a point, and a point has no cross-section; the area enters later, when $J$ is integrated over the section to get a current.",
+                        ],
+                    },
+                    {
+                        "prompt": "In $\\rho = m/(n\\,\\square\\,\\tau)$, what power of the carrier charge sits in the denominator?",
+                        "hole": "?",
+                        "opts": ["q**2", "q", "2*q", "q**3"],
+                        "a": 0,
+                        "why": "The charge enters twice, for two different reasons, and that is why it is squared. Once because the field pushes harder on a bigger charge, giving $v_d = qE\\tau/m$; and once again because each carrier that arrives delivers $q$ coulombs, in $J = nqv_d$. Multiply the two and you have $nq^2\\tau/m$.",
+                        "whys": [
+                            "The charge enters twice, for two different reasons, and that is why it is squared. Once because the field pushes harder on a bigger charge, giving $v_d = qE\\tau/m$; and once again because each carrier that arrives delivers $q$ coulombs, in $J = nqv_d$. Multiply the two and you have $nq^2\\tau/m$.",
+                            "One power counts only the charge delivered per carrier and forgets that the same charge is what the field pushed on in the first place. The symptom is a resistivity too small by a factor of $1.6\\times10^{-19}$: copper would come out at $2.7\\times10^{-27}$ Ω·m, which is not a rounding error.",
+                            "Twice the charge is not the charge squared. It is also dimensionally wrong: $nq\\tau$ has entirely different units from $nq^2\\tau$, and only the second combination makes $m/(nq^2\\tau)$ come out in ohm metres.",
+                            "A cube would mean the charge entered three times, and there are only two places it can: the force on the carrier, and the charge each carrier carries across the section. There is no third.",
+                        ],
+                    },
+                    {
+                        "prompt": "What does the resistivity multiply, to give the resistance of a uniform bar?",
+                        "hole": "?",
+                        "opts": ["l / A", "A / l", "l * A", "l / A**2"],
+                        "a": 0,
+                        "why": "Length over area. Longer is worse because the charge has further to fight through; fatter is better because there are more paths in parallel. Both halves match the direct experiment of stretching a wire, which makes it longer *and* thinner and so raises its resistance twice over.",
+                        "whys": [
+                            "Length over area. Longer is worse because the charge has further to fight through; fatter is better because there are more paths in parallel. Both halves match the direct experiment of stretching a wire, which makes it longer *and* thinner and so raises its resistance twice over.",
+                            "This is the single commonest slip in the module, and the reason it is tempting is that $C = \\varepsilon A/d$ really does have the area on top. The analogy is genuine but it is with *conductance*: $G = \\sigma A/l$ is the exact twin of the capacitance, and resistance is its reciprocal, so the geometry turns over.",
+                            "A product would say that a long fat bar is worse than a long thin one, which is backwards — adding copper alongside can only give the current more room. It also has the wrong units: ohm metres times an area is not ohms.",
+                            "Squaring the area would make the resistance depend on the shape in a way that no experiment shows. Double every dimension of a bar and this would give an eighth of the resistance instead of the correct half.",
+                        ],
+                    },
+                    {
+                        "prompt": "The heat produced per cubic metre is the field times what?",
+                        "hole": "?",
+                        "opts": ["J", "J**2", "I", "sigma"],
+                        "a": 0,
+                        "why": "The current density. The force per unit volume on the carriers is $nqE$ and they move at $v_d$, so the work done per second per cubic metre is $nqEv_d = E(nqv_d) = EJ$. Integrated over a uniform bar it becomes $(E\\ell)(JA) = VI$, so this is where $I^2R$ comes from.",
+                        "whys": [
+                            "The current density. The force per unit volume on the carriers is $nqE$ and they move at $v_d$, so the work done per second per cubic metre is $nqEv_d = E(nqv_d) = EJ$. Integrated over a uniform bar it becomes $(E\\ell)(JA) = VI$, so this is where $I^2R$ comes from.",
+                            "The square is a memory of $I^2R$ leaking into the wrong expression. $I^2R$ already contains both factors — one $I$ is the current and the other is hiding inside $IR$, which is the voltage. Writing $EJ^2$ counts the current twice and the field once.",
+                            "The current is a property of the whole conductor and this is a quantity per cubic metre, so a bare $I$ cannot appear: the same 10 A in a busbar and in a bond wire would give the same heating per cubic metre, and the bond wire is the one that vaporises.",
+                            "$E\\sigma$ has the units of a current density, not of a power density — it is $J$ itself, by Ohm's law. There is one multiplication still to do.",
+                        ],
+                    },
+                    {
+                        "prompt": "$R_{20}$ was measured at 20 °C. What goes inside the bracket, multiplied by $\\alpha$?",
+                        "hole": "?",
+                        "opts": ["(T - 20)", "T", "(20 - T)", "T / 20"],
+                        "a": 0,
+                        "why": "The rise above the temperature the measurement was made at. The test is to set $T = 20$: the bracket must then be exactly 1, because that is the temperature at which $R_{20}$ is by definition the answer.",
+                        "whys": [
+                            "The rise above the temperature the measurement was made at. The test is to set $T = 20$: the bracket must then be exactly 1, because that is the temperature at which $R_{20}$ is by definition the answer.",
+                            "The bare temperature says the correction is zero at 0 °C rather than at 20 °C, so it puts a 7.9% error into every answer — and it would also make the expression depend on whether $T$ was in Celsius or kelvin, which for a winding at room temperature doubles the answer outright.",
+                            "The subtraction the wrong way round makes a hot winding read as though it were cold. It is right in size and wrong in sign, which is worse than being obviously wrong: a 60 °C winding would come back as though it were at $-20$ °C.",
+                            "A ratio of temperatures is meaningless when the scale has an arbitrary zero — the answer would change if the same temperature were quoted in kelvin. It also fails the test at $T = 20$, where it gives $1 + \\alpha$ instead of 1.",
+                        ],
+                    },
+                ],
+            },
+            "derive": {
+                "title": "From one electron's collisions to the number on the resistor",
+                "minutes": 14,
+                "vars": ["q", "E", "m", "n", "tau", "v", "J", "sigma", "rho", "L", "A", "R"],
+                "brief": r'''
+This is the spine of the module in six lines: start with one carrier being pushed about
+inside a metal, and finish with the resistance of a bar you could hold.
+
+The picture: a carrier of charge magnitude $q$ and mass $m$ sits in a field $E$ inside the
+conductor. Between collisions it is in free flight and the field accelerates it. A
+collision scatters it into a random direction, which destroys whatever drift it had built
+up; the mean time between collisions is $\tau$.
+
+Work with magnitudes throughout — the signs are a distraction here — and take the steady
+state, in which the drift speed $v$ has stopped changing.
+''',
+                "steps": [
+                    {
+                        "prompt": "Between collisions the carrier is in free flight. What is its acceleration, in terms of $q$, $E$ and $m$?",
+                        "answer": "\\frac{q E}{m}",
+                        "hint": "The electric force on a charge $q$ in a field $E$ has magnitude $qE$, and Newton's second law does the rest.",
+                        "deconstruct": [
+                            "The force is $F = qE$.",
+                            "Newton's second law gives $a = F/m$.",
+                        ],
+                    },
+                    {
+                        "prompt": "In the steady state the drift is not growing, so the momentum the field feeds in per second, $qE$, exactly balances the momentum the collisions throw away per second, $mv/\\tau$. Solve that balance for the drift speed $v$.",
+                        "answer": "\\frac{q E \\tau}{m}",
+                        "placeholder": "an expression in q, E, tau and m",
+                        "hint": "Set $qE = mv/\\tau$ and rearrange for $v$. Notice the result is the acceleration you just wrote, multiplied by a time.",
+                        "deconstruct": [
+                            "$qE = mv/\\tau$.",
+                            "Multiply both sides by $\\tau$ and divide by $m$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Current density is carriers per cubic metre times charge each times drift speed: $J = nqv$. Substitute what you just found, and write $J$ in terms of $n$, $q$, $E$, $\\tau$ and $m$.",
+                        "answer": "\\frac{n q^{2} E \\tau}{m}",
+                        "hint": "Put the $v$ from the previous step into $J = nqv$. The charge appears twice — once from the push and once from what each carrier delivers.",
+                        "deconstruct": [
+                            "$J = nq \\times (qE\\tau/m)$.",
+                            "The two factors of $q$ multiply into $q^2$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Ohm's law in its local form is $J = \\sigma E$. Read the conductivity $\\sigma$ off what you just wrote.",
+                        "answer": "\\frac{n q^{2} \\tau}{m}",
+                        "hint": "Divide your $J$ by $E$. What is left should contain nothing but properties of the material.",
+                        "deconstruct": [
+                            "Match $J = (\\ldots)E$ against $J = \\sigma E$.",
+                            "The field cancels, leaving the bracket.",
+                        ],
+                    },
+                    {
+                        "prompt": "Resistivity is the reciprocal of conductivity. Write $\\rho$ in terms of $m$, $n$, $q$ and $\\tau$.",
+                        "answer": "\\frac{m}{n q^{2} \\tau}",
+                        "hint": "Turn the previous answer upside down.",
+                        "deconstruct": [
+                            "$\\rho = 1/\\sigma$.",
+                            "Inverting a fraction swaps numerator and denominator.",
+                        ],
+                    },
+                    {
+                        "prompt": "A uniform bar of this material has length $L$ and cross-section $A$, so its resistance is $\\rho L/A$. Write $R$ out in full, in terms of $m$, $n$, $q$, $\\tau$, $L$ and $A$.",
+                        "answer": "\\frac{m L}{n q^{2} \\tau A}",
+                        "placeholder": "the microscopic quantities and the geometry, in one expression",
+                        "hint": "Multiply the previous answer by $L/A$. Nothing cancels; the material and the shape simply sit side by side.",
+                        "deconstruct": [
+                            "$R = \\rho L / A$ with $\\rho = m/(nq^2\\tau)$.",
+                            "The $L$ goes on top and the $A$ goes underneath.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+Read the last line as a sentence. Everything on the right that is not $L$ or $A$ is a
+property of the material, and of those four quantities three barely move: the electron's
+mass is a constant of nature, the charge is a constant of nature, and in a metal the
+carrier density $n$ is fixed by how many atoms there are and how many electrons each one
+lets go. Only $\tau$ varies — and it varies with everything the metal has done to it.
+Heat it and the lattice vibrates more and $\tau$ falls, which is the temperature
+coefficient. Alloy it and the impurities scatter and $\tau$ falls, which is why constantan
+is nearly thirty times worse a conductor than copper and why that is exactly what a wirewound
+resistor wants. Draw it out into a wire narrower than the distance an electron travels
+between collisions and the surfaces start scattering too, and $\tau$ falls again.
+
+Everything a resistor is, other than its shape, lives in one number with the units of
+femtoseconds.
+
+Put copper in and see whether the model earns its keep. Measured resistivity is
+$1.68\times10^{-8}$ Ω·m, $n = 8.5\times10^{28}$ m$^{-3}$, $m = 9.11\times10^{-31}$ kg,
+$q = 1.602\times10^{-19}$ C:
+
+```text
+tau = m / (n q^2 rho)
+    = 9.109e-31 / (8.5e28 * (1.602e-19)^2 * 1.68e-8)
+    = 9.109e-31 / 3.665e-17                          = 2.49e-14 s
+
+mobility  mu = q tau / m = 1.602e-19 * 2.49e-14 / 9.109e-31
+                                                     = 4.4e-3 m^2/(V s)
+```
+
+Copper's measured mobility is 44 cm²/(V·s), which is the same number. A model built out of
+one electron, one field and one collision time gets it right.
+''',
+            },
             "build": {
                 "title": "A sense resistor that does not spoil what it measures",
                 "minutes": 22,
@@ -7364,17 +8234,73 @@ c.close(hi / lo, 1.0, 0.02, "the reading at 100 kHz relative to the reading at D
                     "The 100 kHz check has nothing to do with the value you chose — it passes for any resistor. It fails if you reached for a capacitor or an inductor to satisfy one of the other two.",
                 ],
             },
-            "numeric": {
-                "title": "How fast is an electron actually going?",
-                "minutes": 7,
-                "brief": r'''
+            "numeric": [
+                {
+                    "title": "The resistance of a length of flex",
+                    "minutes": 5,
+                    "brief": r'''
+The mechanical case: one rule, one unknown, everything given. The only thing this can
+catch you on is the cross-section, which is quoted in square millimetres because that is
+how cable is sold — and a square millimetre is not a thousandth of a square metre.
+''',
+                    "prompt": "What is the resistance of the copper in this length of flex?",
+                    "note": "Answer in milliohms, to one decimal place.",
+                    "figure": r'''
+```text
+   a single core of an 8.0 m length of copper flex
+
+      +==========================================================+
+      |          cross-section A = 0.50 mm^2 of copper           |
+      +==========================================================+
+      |<------------------- l = 8.0 m -------------------------->|
+
+   resistivity of copper at 20 C:   rho = 1.68 x 10^-8 ohm m
+
+   one core only — this is not yet the there-and-back resistance of the lead
+```
+''',
+                    "given": [
+                        {"label": "Length", "value": "8.0 m"},
+                        {"label": "Cross-section", "value": "0.50 mm²"},
+                        {"label": "Resistivity of copper", "value": "1.68 × 10⁻⁸ Ω·m"},
+                    ],
+                    "aside": "0.50 mm² is $0.50\\times10^{-6}$ m². The conversion factor between mm² and "
+                             "m² is $10^{6}$, not $10^{3}$, because both of the millimetres have to be "
+                             "converted.",
+                    "answer": 268.8,
+                    "tol": 1.5,
+                    "unit": "mΩ",
+                    "hint": "$R = \\rho\\ell/A$. Work the top line first: $1.68\\times10^{-8} \\times 8.0 = "
+                            "1.344\\times10^{-7}$ Ω·m², and then divide by the area in square metres.",
+                    "wrong": "If you got 0.269, that is the right answer in ohms and the question asked for "
+                             "milliohms. If you came out around $2.7\\times10^{-7}$, the 0.50 went in as "
+                             "though it were already in square metres — the factor of a million between "
+                             "mm² and m² is the whole of this question.",
+                    "why": r'''
+$A = 0.50\ \text{mm}^2 = 0.50\times10^{-6}$ m², and
+
+$$R = \frac{\rho\ell}{A} = \frac{1.68\times10^{-8} \times 8.0}{0.50\times10^{-6}}
+    = \frac{1.344\times10^{-7}}{5.0\times10^{-7}} = 0.2688\ \Omega = 268.8\ \text{m}\Omega$$
+
+Two things follow that are worth carrying forward. This is one conductor; the lead it
+came out of has a return core as well, so as a lead it is 538 mΩ, and forgetting the
+return half is the standard way of getting a cable calculation wrong by exactly two.
+And the pair is not negligible: at 3 A a 538 mΩ lead costs $3 \times 0.538 = 1.61$ V and
+dissipates $9 \times 0.538 = 4.84$ W in the flex itself, which is why 0.5 mm² flex is sold
+for table lamps and not for kettles.
+''',
+                },
+                {
+                    "title": "How fast is an electron actually going?",
+                    "minutes": 7,
+                    "brief": r'''
 Every intuition about current is built on water in pipes, and this is the number that
 breaks it. Copper has roughly one free electron per atom, which is an enormous carrier
 density, and an enormous carrier density means an ordinary current needs almost no
 speed at all.
 ''',
-                "prompt": "What is the drift velocity of the electrons, in millimetres per second?",
-                "figure": r'''
+                    "prompt": "What is the drift velocity of the electrons, in millimetres per second?",
+                    "figure": r'''
 ```text
    a copper conductor of cross-section 1.0 mm², carrying 5.0 A
 
@@ -7385,30 +8311,300 @@ speed at all.
    A = 1.0 mm^2 = 1.0 x 10^-6 m^2        q = 1.602 x 10^-19 C
 ```
 ''',
-                "given": [
-                    {"label": "Current", "value": "5.0 A"},
-                    {"label": "Cross-section", "value": "1.0 mm²"},
-                    {"label": "Carrier density", "value": "8.5 × 10²⁸ m⁻³"},
-                    {"label": "Charge per electron", "value": "1.602 × 10⁻¹⁹ C"},
-                ],
-                "note": "Answer in mm/s, to three figures.",
-                "aside": "Count the charge that crosses one cross-section per second: it is the charge in a "
-                         "slab of wire one drift-length long, which is $n A v_d q$ coulombs.",
-                "answer": 0.367,
-                "tol": 0.01,
-                "unit": "mm/s",
-                "hint": "Rearrange $I = nAqv_d$ for $v_d$. Everything is already in SI units except the answer, "
-                        "which is asked for in mm/s — so multiply the metres per second by 1000 at the end.",
-                "wrong": "Check the powers of ten. $nA$ is $8.5\\times10^{28} \\times 1.0\\times10^{-6} = "
-                         "8.5\\times10^{22}$ carriers per metre of wire, and multiplying that by the electronic "
-                         "charge gives about $1.36\\times10^{4}$ coulombs per metre.",
-                "why": "$v_d = I/(nAq) = 5.0/(8.5\\times10^{28} \\times 1.0\\times10^{-6} \\times "
-                       "1.602\\times10^{-19}) = 3.67\\times10^{-4}$ m/s, which is 0.367 mm/s. An electron that "
-                       "sets off from the battery when you close the switch arrives a metre down the cable "
-                       "about three quarters of an hour later. Nothing about the lamp lighting instantly "
-                       "required it to get there: the field that pushes the electrons already in the filament "
-                       "was established in nanoseconds.",
-            },
+                    "given": [
+                        {"label": "Current", "value": "5.0 A"},
+                        {"label": "Cross-section", "value": "1.0 mm²"},
+                        {"label": "Carrier density", "value": "8.5 × 10²⁸ m⁻³"},
+                        {"label": "Charge per electron", "value": "1.602 × 10⁻¹⁹ C"},
+                    ],
+                    "note": "Answer in mm/s, to three figures.",
+                    "aside": "Count the charge that crosses one cross-section per second: it is the charge in a "
+                             "slab of wire one drift-length long, which is $n A v_d q$ coulombs.",
+                    "answer": 0.367,
+                    "tol": 0.01,
+                    "unit": "mm/s",
+                    "hint": "Rearrange $I = nAqv_d$ for $v_d$. Everything is already in SI units except the answer, "
+                            "which is asked for in mm/s — so multiply the metres per second by 1000 at the end.",
+                    "wrong": "Check the powers of ten. $nA$ is $8.5\\times10^{28} \\times 1.0\\times10^{-6} = "
+                             "8.5\\times10^{22}$ carriers per metre of wire, and multiplying that by the electronic "
+                             "charge gives about $1.36\\times10^{4}$ coulombs per metre.",
+                    "why": "$v_d = I/(nAq) = 5.0/(8.5\\times10^{28} \\times 1.0\\times10^{-6} \\times "
+                           "1.602\\times10^{-19}) = 3.67\\times10^{-4}$ m/s, which is 0.367 mm/s. An electron that "
+                           "sets off from the battery when you close the switch arrives a metre down the cable "
+                           "about three quarters of an hour later. Nothing about the lamp lighting instantly "
+                           "required it to get there: the field that pushes the electrons already in the filament "
+                           "was established in nanoseconds.",
+                },
+                {
+                    "title": "What the cable costs the lamp",
+                    "minutes": 8,
+                    "brief": r'''
+A circuit now, and the first one in which the wiring is a component rather than a line on
+the drawing. A 12 V supply feeds a lamp down 5.0 m of 1.5 mm² twin cable. The current runs
+out along one core and back along the other, so it crosses 10 m of copper, and the two
+cores' resistance has been added together and drawn as the single resistor at the top:
+
+```text
+R_cable = rho * l / A = 1.68e-8 * 10 / 1.5e-6 = 0.112 ohm
+```
+
+The lamp is drawn as a fixed 6.0 Ω, which is what a 24 W, 12 V lamp works out at when it
+is hot. A real filament is nothing like a fixed resistance — cold it is roughly a tenth
+of that — but at the operating point it is close enough, and treating it as fixed is what
+makes the question answerable with what this module contains.
+''',
+                    "prompt": "What current flows round the loop?",
+                    "note": "Answer in amps, to three decimal places.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 7, "rot": 1, "value": 12},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                            {"id": "rc", "kind": "R", "x": 7, "y": 4, "rot": 0, "value": 0.112},
+                            {"id": "rl", "kind": "R", "x": 12, "y": 7, "rot": 1, "value": 6.0},
+                            {"id": "g1", "kind": "GND", "x": 12, "y": 10},
+                        ],
+                        "wires": [
+                            {"a": [3, 6], "b": [3, 4]},
+                            {"a": [3, 4], "b": [6, 4]},
+                            {"a": [8, 4], "b": [12, 4]},
+                            {"a": [12, 4], "b": [12, 6]},
+                            {"a": [12, 8], "b": [12, 10]},
+                            {"a": [3, 8], "b": [3, 10]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Supply", "value": "12.0 V"},
+                        {"label": "Cable (both cores, 10 m of 1.5 mm²)", "value": "0.112 Ω"},
+                        {"label": "Lamp, hot", "value": "6.0 Ω"},
+                    ],
+                    "aside": "It is one series loop, so the two resistances add before anything else happens.",
+                    # The source current is read straight out of the solve, and the resistances
+                    # are the ones drawn — so a re-valued schematic is re-measured rather than
+                    # compared to a memory of this one.
+                    "check": r'''
+return Math.abs(c.dc().currents.v1);
+''',
+                    "answer": 1.963,
+                    "tol": 0.008,
+                    "unit": "A",
+                    "hint": "Add the two resistances, then $I = V/R_{\\text{total}}$. The cable is a little "
+                            "under 2% of the total, so expect an answer a little under 2 A.",
+                    "wrong": "If you got 2.000, the cable was left out and the lamp was assumed to get the "
+                             "whole 12 V. If you got about 107, the 0.112 Ω was used on its own as though "
+                             "the lamp were not in the loop.",
+                    "why": r'''
+The two resistances are in series, so they add:
+
+```text
+R_total = 6.0 + 0.112                     = 6.112 ohm
+I       = 12.0 / 6.112                    = 1.9634 A
+
+drop in the cable   = 1.9634 * 0.112      = 0.2199 V
+the lamp gets       = 12.0 - 0.2199       = 11.78 V
+heat in the cable   = 1.9634^2 * 0.112    = 0.432 W
+```
+
+Under two per cent of the supply lost, which is a well-designed lead. But notice what the
+1.8% costs: a filament lamp's output falls much faster than its voltage — roughly as the
+3.4th power — so 1.8% off the volts is about 6% off the light. The cable is not a
+rounding error to whoever is trying to see by it.
+
+Notice too that the whole calculation used the module's two ideas back to back. $\rho\ell/A$
+turned a length of cable and a cross-section into 0.112 Ω, and then the cable stopped being
+copper and became an ordinary resistor in an ordinary series loop.
+''',
+                },
+                {
+                    "title": "How hot is the winding?",
+                    "minutes": 8,
+                    "brief": r'''
+No probe will reach the middle of a winding, and the middle is the part that fails. But
+the winding is a long piece of copper with two terminals on it, and copper's resistance
+changes by a known 0.393% per kelvin — so the winding will tell you its own average
+temperature if you ask it the right question.
+
+This one runs the law backwards: you are given the two resistances and asked for the
+temperature, so the rearranging happens before any arithmetic.
+''',
+                    "prompt": "What is the average temperature of the winding when hot?",
+                    "note": "Answer in degrees Celsius, to one decimal place.",
+                    "figure": r'''
+```text
+   the same winding, measured twice
+
+   cold, in a 20 C workshop            hot, seconds after an hour on load
+
+        +--[ ohms ]--+                       +--[ ohms ]--+
+        |   12.40    |                       |   15.05    |
+        +------------+                       +------------+
+             |  |                                 |  |
+           ==(WWWW)==                           ==(WWWW)==
+            the winding                          the winding
+
+   copper:   R(T) = R_20 * ( 1 + alpha * (T - 20) )     alpha = 0.00393 /K
+```
+''',
+                    "given": [
+                        {"label": "Resistance cold, at 20 °C", "value": "12.40 Ω"},
+                        {"label": "Resistance hot", "value": "15.05 Ω"},
+                        {"label": "Temperature coefficient of copper", "value": "0.00393 K⁻¹"},
+                        {"label": "Ambient when the cold reading was taken", "value": "20 °C"},
+                    ],
+                    "aside": "Take the ratio of the two resistances first. What that ratio equals is the "
+                             "whole bracket, $1 + \\alpha(T-20)$, so subtracting 1 leaves $\\alpha(T-20)$ "
+                             "on its own.",
+                    "answer": 74.4,
+                    "tol": 0.6,
+                    "unit": "°C",
+                    "hint": "$R_{\\text{hot}}/R_{20} = 1 + \\alpha(T-20)$. Divide, subtract one, divide by "
+                            "$\\alpha$ — and then remember that what you have is the *rise*, not the "
+                            "temperature.",
+                    "wrong": "If you got 54.4, that is the temperature rise in kelvin and the 20 °C the cold "
+                             "measurement was made at has not been added back. If you got about 329, the "
+                             "subtraction of 1 was skipped and the whole ratio 1.2137 was divided by "
+                             "$\\alpha$ instead of just the 0.2137.",
+                    "why": r'''
+```text
+ratio       15.05 / 12.40                         = 1.21371
+so          1 + alpha (T - 20)                    = 1.21371
+            alpha (T - 20)                        = 0.21371
+            T - 20 = 0.21371 / 0.00393            = 54.38 K
+
+            T = 20 + 54.38                        = 74.4 C
+```
+
+Check it forwards: $12.40 \times (1 + 0.00393 \times 54.38) = 12.40 \times 1.2137 =
+15.05$ Ω, which is the reading you started from.
+
+Three things this number is not. It is not the hot-spot temperature: it is an average over
+the whole winding, and the turns buried in the middle of a slot run appreciably hotter, so
+an insulation class quoted against the hot spot needs a margin on top of this. It is not
+still true a minute later, because the winding begins cooling the moment the current
+stops — this measurement has to be taken within seconds. And it is not free: the same
+winding that dissipated $I^2R$ at 12.40 Ω when cold is dissipating it at 15.05 Ω now, so
+at 5 A the copper loss has gone from 310 W to 376 W, and the extra 66 W has to leave the
+machine as well.
+''',
+                },
+                {
+                    "title": "How much of the supply is being cooked in the copper",
+                    "minutes": 12,
+                    "brief": r'''
+The last rung, and the first with more than one unknown in it. A 12 V supply feeds two
+lamps down one pair of cables, with the second lamp tapped further along than the first.
+Each length of cable is drawn as a single resistor at the top of the diagram: as in the
+earlier rung, the feed core and the return core of a segment carry the same current, so
+their two resistances add and can be lumped into one.
+
+```text
+        R_a = 0.10 ohm       R_b = 0.15 ohm
+   +12 ---/\/\/---+---/\/\/---+
+                  |           |
+                 [ ] 4.0      [ ] 6.0        lamps, modelled as fixed resistances
+                  |           |
+   0 V -----------+-----------+
+```
+
+The question is not what either lamp gets. It is how much of what the supply delivers is
+never reaching a lamp at all — the total heat in the two cable resistances. That is not a
+node voltage and it cannot be read off the diagram; you have to solve the circuit first.
+''',
+                    "prompt": "What is the total power dissipated in the two cable resistances?",
+                    "note": "Answer in watts, to two decimal places.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 8, "rot": 1, "value": 12},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 11},
+                            {"id": "ra", "kind": "R", "x": 7, "y": 5, "rot": 0, "value": 0.1},
+                            {"id": "r1", "kind": "R", "x": 11, "y": 8, "rot": 1, "value": 4.0},
+                            {"id": "g1", "kind": "GND", "x": 11, "y": 11},
+                            {"id": "rb", "kind": "R", "x": 15, "y": 5, "rot": 0, "value": 0.15},
+                            {"id": "r2", "kind": "R", "x": 19, "y": 8, "rot": 1, "value": 6.0},
+                            {"id": "g2", "kind": "GND", "x": 19, "y": 11},
+                        ],
+                        "wires": [
+                            {"a": [3, 7], "b": [3, 5]},
+                            {"a": [3, 5], "b": [6, 5]},
+                            {"a": [8, 5], "b": [14, 5]},
+                            {"a": [11, 5], "b": [11, 7]},
+                            {"a": [11, 9], "b": [11, 11]},
+                            {"a": [16, 5], "b": [19, 5]},
+                            {"a": [19, 5], "b": [19, 7]},
+                            {"a": [19, 9], "b": [19, 11]},
+                            {"a": [3, 9], "b": [3, 11]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Supply", "value": "12.0 V"},
+                        {"label": "Cable, supply to the first tap", "value": "0.10 Ω"},
+                        {"label": "Cable, first tap to the second", "value": "0.15 Ω"},
+                        {"label": "Near lamp", "value": "4.0 Ω"},
+                        {"label": "Far lamp", "value": "6.0 Ω"},
+                    ],
+                    "aside": "The two cable resistors do not carry the same current: everything goes through "
+                             "the first one, and only the far lamp's share goes through the second. So the "
+                             "two $I^2R$ terms have to be worked out separately and added.",
+                    # Both cable resistors are found by id, and their drop and value are read
+                    # out of the solve — nothing here restates a number that is also printed
+                    # on the drawing, so a re-valued schematic is re-measured.
+                    "check": r'''
+const d = c.dc();
+let p = 0;
+c.net.parts.forEach(function (r) {
+  if (r.kind !== 'R') return;
+  if (r.id !== 'ra' && r.id !== 'rb') return;
+  const drop = d.v[r.n1] - d.v[r.n2];
+  p += drop * drop / r.value;
+});
+return p;
+''',
+                    "answer": 2.79,
+                    "tol": 0.03,
+                    "unit": "W",
+                    "hint": "Collapse it from the far end: the far lamp and the cable feeding it are in "
+                            "series, that pair is in parallel with the near lamp, and the result is in "
+                            "series with the first length of cable. That gives the supply current; then "
+                            "work back out to find how it splits at the first tap.",
+                    "wrong": "If you got 2.26, only the first length of cable was counted — the second one "
+                             "carries less current but it is not carrying none. If you got 5.65, the "
+                             "supply current was run through both cable lengths; the far branch takes only "
+                             "1.87 A of the 4.76 A, and $I^2R$ punishes that mistake twice over.",
+                    "why": r'''
+Collapse the network from the far end, then work back out.
+
+```text
+far branch      R_b + R_2  = 0.15 + 6.0            = 6.15 ohm
+in parallel with the near lamp
+                (4.0 * 6.15) / (4.0 + 6.15)        = 24.6 / 10.15   = 2.4236 ohm
+plus the first length of cable
+                R_total = 0.10 + 2.4236            = 2.5236 ohm
+
+supply current  I = 12.0 / 2.5236                  = 4.7550 A
+voltage at the first tap
+                V1 = 12.0 - 4.7550 * 0.10          = 11.5245 V
+
+near lamp       I_1 = 11.5245 / 4.0                = 2.8811 A
+far branch      I_b = 11.5245 / 6.15               = 1.8739 A
+                (and 2.8811 + 1.8739 = 4.7550, as it must)
+
+heat in R_a     4.7550^2 * 0.10                    = 2.2610 W
+heat in R_b     1.8739^2 * 0.15                    = 0.5267 W
+                                              total = 2.79 W
+```
+
+Two things worth taking away. The first is the split of the loss: the short 0.10 Ω length
+dissipates more than four times what the longer 0.15 Ω length does, because it carries all 4.755 A
+while the other carries only 1.874 A, and $I^2R$ weights that ratio squared. Cable near the
+supply is always working hardest, which is why a trunk is fat and its spurs are thin.
+
+The second is the size. The supply delivers $12.0 \times 4.7550 = 57.06$ W, of which
+2.79 W — 4.9% — never reaches a lamp. That is the honest efficiency of the wiring, and it
+is also why the far lamp is dimmer than the near one: it sits at
+$11.5245 - 1.8739 \times 0.15 = 11.24$ V against the near lamp's 11.52 V, which is a
+visible difference in a row of lamps that are supposed to match.
+''',
+                },
+            ],
             "lab": {
                 "title": "A resistor, from its dimensions",
                 "runtime": "python",
@@ -7581,6 +8777,698 @@ assert abs(_hot - 0.03615696000000001) < 1e-9, \
                 "A current is moving charge, so a wire of length $L$ in the field feels $F = BIL\\sin\\theta$. A flat coil of $N$ turns and area $A$ feels no net force in a uniform field but does feel a torque $\\tau = NIAB\\sin\\theta$. Write $m = NIA$ for the magnetic moment and it reads $\\tau = mB\\sin\\theta$ — the same expression that turns a compass needle.",
                 "The Hall effect is this force acting on the carriers *inside* a conductor. They pile up on one edge until the transverse electric field they build balances the magnetic push, leaving a steady voltage $V_H = IB/(nqt)$ across the strip. It measures the field, it measures the carrier density, and the sign of it tells you the sign of the carriers — which is how it was discovered that in some materials the moving charge is effectively positive.",
             ],
+            "read": [
+                {
+                    "title": "A force that pushes sideways, and the circle it makes",
+                    "minutes": 19,
+                    "body": r'''
+Hold a straight wire across the gap of a horseshoe magnet, switch a few amps through it,
+and the wire jumps. Not towards either pole — *out* of the gap, along the one direction
+neither the current nor the magnet was pointing in. Reverse the current and it jumps the
+other way. Turn the wire so that it runs from pole to pole instead of across the gap, and
+now it does nothing at all, however many amps you put through it.
+
+Everything in the electric half of this course was a force along the line joining two
+things. Coulomb's force runs along the line from one charge to the other; the field of a
+point charge points straight at the charge that made it; the plates of a capacitor pull
+directly towards each other. The magnetic force is not like that, and no amount of
+fluency with the electric case will make it feel natural. It is worth being explicit
+about how strange it is before writing anything down, because the formula is three
+symbols long and the strangeness is the part that actually has to be learned.
+
+## What the experiment says, before any formula
+
+Fire a charge $q$ through the region where a magnet sits, and change one thing at a time.
+Four facts come out, and they are the whole content of this module.
+
+1. **A charge at rest feels nothing.** Park a proton in the strongest laboratory magnet
+   ever built and it sits there. There is no magnetic analogue of $F = qE$ — nothing that
+   acts on a charge merely for existing.
+2. **Set it moving and a force appears, proportional to the speed.** Double $v$ and the
+   force doubles. This alone should be startling: no force in the electric half of the
+   course cared how fast anything was going.
+3. **The force is zero when the motion is along the field and largest when it is across
+   it**, and in between it follows $\sin\theta$, with $\theta$ the angle between the
+   velocity and the field.
+4. **The direction of the force is at right angles to the velocity *and* at right angles
+   to the field.** It points along neither of the two things that produced it.
+
+There is exactly one way of multiplying two vectors that behaves like all four of those
+at once, and it is the cross product:
+
+$$\mathbf{F} = q\,\mathbf{v}\times\mathbf{B}, \qquad F = qvB\sin\theta$$
+
+Read that as a definition at least as much as a law. Module 1 defined the electric field
+by the force it puts on a *stationary* test charge, $E = F/q$. This defines the magnetic
+field by the force it puts on a *moving* one — there is no other way to get at $B$,
+because a field that does nothing to stationary charge cannot be measured with stationary
+charge. The unit falls straight out: a field of one **tesla** puts one newton on one
+coulomb crossing it at one metre per second. That is an enormous field. The earth's is
+about 50 µT, a fridge magnet a few millitesla, a good laboratory electromagnet 1 T, an
+MRI bore 1.5 to 3 T, and the strongest continuous laboratory magnets around 45 T.
+
+## Getting the direction right
+
+The cross product is defined by the right-hand rule: point the fingers of the right hand
+along $\mathbf{v}$, curl them towards $\mathbf{B}$, and the thumb gives
+$\mathbf{v}\times\mathbf{B}$. Then multiply by $q$ — and if $q$ is negative, which for an
+electron it always is, the force is the other way.
+
+Work one case through in components, because the sign is where this goes wrong:
+
+```text
+   v along +x        v = (v, 0, 0)
+   B out of page     B = (0, 0, B)      taking +z as out of the page
+
+   x^ cross z^ = -y^          (this is the one people get backwards)
+
+   v cross B = (v, 0, 0) cross (0, 0, B) = (0, -vB, 0)
+
+   a POSITIVE charge is pushed along -y   (down the page)
+   an ELECTRON is pushed along +y         (up the page)
+```
+
+Two charges of opposite sign moving the same way are pushed apart. Two charges of opposite
+sign moving *opposite* ways are pushed the same way, because the two reversals cancel.
+Both of those matter later: the first is how the Hall effect tells electrons from holes,
+and the second is why an electron beam and a positron beam can share one ring of bending
+magnets, running round it in opposite senses on the same curve.
+
+## The property that matters most: it does no work
+
+The magnetic force is always perpendicular to the velocity, so the rate at which it does
+work on the charge is
+
+$$P = \mathbf{F}\cdot\mathbf{v} = q(\mathbf{v}\times\mathbf{B})\cdot\mathbf{v} = 0$$
+
+exactly and always, because a cross product is perpendicular to both of the vectors that
+made it. If no work is done then the kinetic energy cannot change, so
+
+$$\frac{\mathrm{d}}{\mathrm{d}t}\left(\tfrac{1}{2}mv^{2}\right) = 0
+\qquad\Longrightarrow\qquad |\mathbf{v}| = \text{constant}$$
+
+A magnetic field is a steering wheel, never an engine. It decides where a charge goes and
+has no say at all in how fast it gets there. Every joule a motor delivers came from the
+supply pushing current round the winding; the field only aimed it.
+
+## The circle
+
+Take the clean case: the velocity starts perpendicular to a uniform field. The force is
+then $qvB$, at right angles to the motion, and it stays at right angles because the speed
+never changes and the geometry never changes. A constant-magnitude force always
+perpendicular to the velocity is precisely the definition of uniform circular motion, so
+that is what happens. Set the magnetic force equal to the centripetal force:
+
+$$qvB = \frac{mv^{2}}{r} \qquad\Longrightarrow\qquad r = \frac{mv}{qB}$$
+
+Faster means a wider circle; a stronger field means a tighter one; a heavier particle is
+harder to bend. All three of those are what you would guess. The next line is not.
+
+$$T = \frac{2\pi r}{v} = \frac{2\pi}{v}\cdot\frac{mv}{qB} = \frac{2\pi m}{qB}
+\qquad\Longrightarrow\qquad f_c = \frac{qB}{2\pi m}$$
+
+The speed cancelled. The time for one lap does not depend on how fast the particle is
+going or how big its circle is — a faster particle has proportionally further to travel
+and travels proportionally faster, and the two effects cancel exactly. That frequency
+$f_c$ is called the **cyclotron frequency**, and it is a property of the particle and the
+machine and of nothing else.
+
+## Worked example 1: an electron in half a tesla
+
+An electron leaves a hot filament and is accelerated to $1.00\times10^{6}$ m/s, then
+crosses a uniform 0.500 T field at right angles.
+
+```text
+q = 1.602e-19 C     m = 9.109e-31 kg     v = 1.00e6 m/s     B = 0.500 T
+
+q B      = 1.602e-19 * 0.500              = 8.011e-20
+m v      = 9.109e-31 * 1.00e6             = 9.109e-25
+
+r = m v / (q B) = 9.109e-25 / 8.011e-20   = 1.137e-5 m   = 11.4 um
+
+2 pi m   = 6.2832 * 9.109e-31             = 5.724e-30
+T = 2 pi m / (q B) = 5.724e-30 / 8.011e-20 = 7.145e-11 s = 71.4 ps
+
+f_c = 1 / T                                = 1.400e10 Hz = 14.0 GHz
+```
+
+Eleven micrometres. An electron that would cross a metre of vacuum in a microsecond is
+bent into a circle you would need a microscope to see, and it goes round it fourteen
+billion times a second. Half a tesla is not a large field by laboratory standards and an
+electron is not hard to stop; this is the first hint of how completely a magnetic field
+dominates the motion of anything light.
+
+Note the force involved: $F = qvB = 1.602\times10^{-19}\times10^{6}\times0.5 =
+8.01\times10^{-14}$ N. That sounds negligible, and dividing by the electron's mass gives
+an acceleration of $8.8\times10^{16}$ m/s². Nothing about "small force" survives contact
+with a small enough mass.
+
+## Worked example 2: a proton, accelerated and then bent
+
+A proton starts at rest, falls through 2.00 kV, and enters a 0.350 T field at right
+angles. This is two steps, and the join between them is the whole of mass spectrometry.
+
+First the accelerating stage, which is electric and does do work. All of the electrical
+energy $qV$ becomes kinetic:
+
+```text
+q V      = 1.602e-19 * 2000                    = 3.204e-16 J
+v        = sqrt(2 q V / m)
+2 q V / m = 6.409e-16 / 1.6726e-27             = 3.832e11 m^2/s^2
+v        = sqrt(3.832e11)                      = 6.190e5 m/s
+```
+
+Then the magnetic stage, which does no work and only bends:
+
+```text
+m v      = 1.6726e-27 * 6.190e5                = 1.0353e-21
+q B      = 1.602e-19 * 0.350                   = 5.608e-20
+
+r = m v / (q B) = 1.0353e-21 / 5.608e-20       = 0.01846 m  = 1.85 cm
+T = 2 pi m / (q B) = 1.0509e-26 / 5.608e-20    = 1.874e-7 s = 187 ns
+f_c = 1 / T                                    = 5.34 MHz
+```
+
+A circle you could draw on a beer mat, traced five million times a second. And notice
+what the two steps together let you do: the accelerating voltage is known, the field is
+known, and the radius is *measured*. Eliminate $v$ between $qV = \tfrac12 mv^2$ and
+$r = mv/(qB)$ and you get $m = qB^{2}r^{2}/(2V)$ — a mass, from a voltage, a field and a
+length. That is a mass spectrometer, and it is how the isotopes were discovered.
+
+## When the velocity is not perpendicular: the helix
+
+Split the velocity into a part along the field and a part across it. The along-field part
+produces no force at all, so it never changes. The across-field part goes in a circle, at
+the same cyclotron frequency as before. Put the two together and the path is a helix: a
+circle of radius $r = mv_{\perp}/(qB)$, drifting steadily along the field lines at
+$v_{\parallel}$, with a pitch of one revolution's worth of drift,
+
+$$p = v_{\parallel} T = \frac{2\pi m v_{\parallel}}{qB}$$
+
+Take the proton from the last example and send it in at 30° to the field instead of 90°:
+
+```text
+v_par  = 6.190e5 * cos 30 = 5.361e5 m/s        v_perp = 6.190e5 * sin 30 = 3.095e5 m/s
+
+r      = m v_perp / (q B) = 9.23 mm            (half the perpendicular case, as sin30 = 1/2)
+pitch  = v_par * T = 5.361e5 * 1.874e-7        = 0.100 m
+```
+
+A corkscrew 18 mm across advancing 100 mm per turn. Charged particles in space do exactly
+this along the earth's field lines, which is why the aurora appears in rings around the
+poles rather than evenly over the sky: the particles are threaded onto field lines and
+delivered where those lines come down.
+
+## The mistake people make
+
+**Drawing the force along the field.** Ask someone new to the subject to sketch the force
+on a charge moving across a magnetic field and a large fraction will draw an arrow
+parallel to $\mathbf{B}$. It is an entirely reasonable thing to do, because it is what an
+electric field does: $\mathbf{F} = q\mathbf{E}$ is parallel to $\mathbf{E}$, always, and
+three modules of that habit are hard to put down. The magnetic force is the one force in
+this course that points somewhere neither of its causes does. If your sketch has the
+force in the same plane as the velocity and the field, it is wrong before any arithmetic
+starts.
+
+**Saying the field accelerates the particle, and meaning it speeds up.** This one is
+harder to shake because it is *half* true. The particle is accelerating — its velocity is
+changing, continuously and fast. What is not changing is the magnitude of that velocity.
+Acceleration and speeding up are different things, and a magnetic field supplies exactly
+one of them. The moment someone says "the field gives the particle energy", ask where the
+energy came from; there is no answer, because it did not.
+
+## Where this stops holding
+
+**Speeds approaching that of light.** Everything above used $p = mv$. The correct momentum
+is $p = \gamma mv$ with $\gamma = 1/\sqrt{1 - v^2/c^2}$, so the honest results are
+$r = \gamma mv/(qB)$ and $T = 2\pi\gamma m/(qB)$. The period is *not* independent of speed
+after all — it stretches as the particle gains energy:
+
+```text
+proton kinetic energy      gamma        period longer by
+     1 MeV                1.00107            0.11 %
+    10 MeV                1.01066            1.07 %
+   100 MeV                1.10658           10.7  %
+```
+
+A cyclotron driven at a fixed frequency loses its particles when they slip out of step,
+which is why a plain cyclotron tops out at around 20 MeV for protons and why machines
+that go further either sweep the drive frequency (a synchrocyclotron) or ramp the field
+and the frequency together and keep the radius fixed (a synchrotron).
+
+**Non-uniform fields.** A circle is only a circle if $B$ is the same everywhere the
+particle goes. Where the field varies, the orbit does not close: the guiding centre drifts
+sideways, and a particle spiralling into a region of stronger field is slowed along the
+field and can be turned round entirely. That is a magnetic mirror, and a pair of them is
+what holds the Van Allen belts around the earth.
+
+**Radiation.** An accelerating charge radiates, so a particle going round in circles is
+losing energy the whole time — which is a magnetic field taking energy away, indirectly,
+having sworn not to. For heavy particles at laboratory energies the loss is negligible.
+For electrons in a large ring it dominates the design of the machine, and the light it
+throws off is deliberately harvested as synchrotron radiation.
+
+**Very small orbits.** At high field and low temperature the classical circle stops being
+a legal answer: the orbits quantise into Landau levels, spaced by $\hbar\omega_c$. That is
+the regime the quantum Hall effect lives in, and the last unit of this module comes back
+to it.
+
+**Fields plus fields.** In general a charge sits in both an electric and a magnetic field
+at once, and the full expression is the **Lorentz force**
+
+$$\mathbf{F} = q\big(\mathbf{E} + \mathbf{v}\times\mathbf{B}\big)$$
+
+Only the first term can change the speed. Crossed $\mathbf{E}$ and $\mathbf{B}$ give a
+velocity selector: a charge passes undeflected only when $qE = qvB$, that is when
+$v = E/B$, and every other speed is bent out of the beam — regardless of the charge or
+the mass, which is what makes it useful in front of a mass spectrometer.
+''',
+                },
+                {
+                    "title": "A wire full of moving charges, and the couple on a loop",
+                    "minutes": 18,
+                    "body": r'''
+The previous unit was about one charge. Nothing in a laboratory contains one charge. What
+you can build is a wire, and a wire carrying a current is an enormous number of charges
+all drifting the same way at once — which is exactly the situation $\mathbf{F} =
+q\mathbf{v}\times\mathbf{B}$ describes, repeated $10^{22}$ times.
+
+## Adding the force up
+
+Take a straight length $L$ of wire, cross-section $A$, holding $n$ carriers per cubic
+metre, each of charge $q$, drifting at $v_d$ through a field $B$ that is perpendicular to
+the wire. Module 6 counted the current in exactly these terms: $I = nAqv_d$.
+
+The number of carriers in that length is the volume times the density, $N = nAL$. Each
+one feels $qv_dB$, and — this is the point — they all feel it in the *same* direction,
+because they are all drifting the same way through the same field. So the forces add
+rather than cancelling:
+
+$$F = (nAL)(qv_dB) = \big(nAqv_d\big)LB = BIL$$
+
+The four factors regrouped into the current, and everything microscopic disappeared. The
+general form keeps the direction and the angle:
+
+$$\mathbf{F} = I\,\mathbf{L}\times\mathbf{B}, \qquad F = BIL\sin\theta$$
+
+with $\mathbf{L}$ pointing along the wire in the direction of conventional current. It is
+worth doing the arithmetic both ways once, to see that the regrouping is not a trick:
+
+```text
+80 mm of 1.0 mm^2 copper, 3.5 A, in a 0.42 T field across it
+
+  the microscopic route
+    v_d = I/(nAq) = 3.5 / (8.5e28 * 1.0e-6 * 1.602e-19) = 2.570e-4 m/s
+    N   = n A L   = 8.5e28 * 1.0e-6 * 0.080              = 6.80e21 carriers
+    f   = q v_d B = 1.602e-19 * 2.570e-4 * 0.42          = 1.729e-23 N each
+    F   = N f     = 6.80e21 * 1.729e-23                  = 0.1176 N
+
+  the useful route
+    F   = B I L   = 0.42 * 3.5 * 0.080                   = 0.1176 N
+```
+
+Is 0.118 N a lot? That length of 1 mm² copper has a mass of 0.72 g and weighs 7.0 mN, so
+the magnetic force is about seventeen times the wire's own weight. A few amps in a modest
+field will throw a wire out of a magnet gap hard enough to hurt, and that is with no iron,
+no multi-turn coil and no gearing.
+
+## Who actually feels the force
+
+There is a puzzle buried in that calculation, and it is worth a paragraph because it
+connects this unit to the last one in the module. The magnetic force acts on the
+*electrons*. The electrons are not attached to the copper. So why does the copper move?
+
+Because the electrons are pushed sideways, and they cannot leave. They pile up against
+one face of the wire until the transverse electric field of that accumulated charge — a
+field of the ordinary electrostatic kind, acting on the fixed positive lattice as well —
+pulls the metal along with them. The whole $BIL$ is transmitted to the wire
+electrostatically, by a charge separation across its width, and the separation is the
+thing measured directly in the Hall effect. The last unit of this module is about that
+separation.
+
+## A loop: no net force, but a couple
+
+Now bend the wire into a flat rectangle of sides $a$ and $b$, carrying current $I$, and
+put it in a *uniform* field. Line the rotation axis up along the two sides of length $a$
+so that those sides always cross the field at right angles.
+
+```text
+   Edge-on view, looking along the rotation axis. The two sides of
+   length a run into and out of the page and show as o and x; the
+   side of length b joins them. B points to the right.
+
+                          F = B I a
+                              ^
+                              |
+                              o
+                             /|
+                    b       / |
+                           /  |
+                          /   |
+                         x----+          B ------------->
+                         |    |
+                         v    |
+                    F = B I a |
+                         |    |
+                         |<-->|   d = b sin(theta)
+
+   theta is the angle between the loop's normal and B; the normal
+   is perpendicular to b, so as the loop turns, the horizontal
+   offset between the two sides is b sin(theta).
+```
+
+The two sides of length $a$ carry current in opposite directions, so they feel forces
+$BIa$ in opposite directions. Those two forces sum to zero — a current loop in a uniform
+field feels **no net force at all**. But they do not act along the same line: the
+perpendicular distance between their lines of action is $b\sin\theta$, where $\theta$ is
+the angle between the loop's normal and the field. Two equal and opposite forces on
+different lines are a couple, and a couple is pure torque:
+
+$$\tau = (BIa)(b\sin\theta) = BI(ab)\sin\theta = BIA\sin\theta$$
+
+(The two sides of length $b$ do feel forces too, but they point along the rotation axis,
+are equal and opposite, and share a line of action — they try to stretch the loop and
+produce no torque.) With $N$ turns wound on top of each other, every turn contributes:
+
+$$\tau = NIAB\sin\theta$$
+
+Define the **magnetic moment** $\mathbf{m} = NI\mathbf{A}$, a vector of magnitude $NIA$
+pointing along the loop's normal in the right-hand sense with respect to the current, and
+the result compresses to
+
+$$\boldsymbol{\tau} = \mathbf{m}\times\mathbf{B}, \qquad U = -\,\mathbf{m}\cdot\mathbf{B}$$
+
+The energy expression says the loop is happiest with its moment along the field, and the
+torque expression says it is pushed towards that position. This is not an analogy with a
+compass needle — it is the same equation. A compass needle *is* a magnetic moment, and
+the atomic currents it is made of obey exactly this.
+
+Watch the angle convention, because it is the standard trap. $\theta$ is measured from the
+**normal** to the loop, not from its plane. So the torque is zero when the field is
+perpendicular to the loop — the position of maximum flux through it — and maximum when the
+field lies *in* the plane of the loop, where the flux through it is zero. Half the world's
+introductory notes quote $\cos\theta$ instead, having measured from the plane, and both
+are right about the physics and only one matches the moment vector.
+
+## Worked example 1: a moving-coil meter movement
+
+The classic analogue meter is a coil on jewelled bearings in the gap of a permanent
+magnet, held back by a hairspring. Take 250 turns of 20 mm × 15 mm, a gap field of
+0.18 T, and 100 µA through it.
+
+```text
+A   = 0.020 * 0.015                         = 3.00e-4 m^2
+tau = N I A B
+    = 250 * 100e-6 * 3.00e-4 * 0.18         = 1.35e-6 N m   = 1.35 uN m
+
+hairspring stiffness k = 1.5e-6 N m / rad
+
+deflection theta = tau / k = 1.35e-6 / 1.5e-6 = 0.90 rad = 51.6 degrees
+```
+
+Fifty degrees of pointer for a tenth of a milliamp. But look at what has been assumed:
+$\sin\theta = 1$ was used at every deflection, and by the formula that can only be true at
+one angle. Real movements make it true everywhere, by shaping the pole pieces into
+concave faces around a soft-iron cylinder inside the coil. The field in that annular gap
+is radial, so the coil's plane always contains the field as it swings. That is the whole
+reason an analogue meter has a linear scale; without the shaped gap the divisions would
+crowd together towards the end of the sweep like a $\arcsin$.
+
+## Worked example 2: the torque and the power of a small motor
+
+Take 120 turns of 25 mm × 30 mm in a 0.25 T field, carrying 1.2 A.
+
+```text
+A       = 0.025 * 0.030                         = 7.50e-4 m^2
+tau_max = N I A B = 120 * 1.2 * 7.50e-4 * 0.25  = 0.0270 N m   = 27.0 mN m
+```
+
+That is the torque at the best angle only. Left alone, the loop would swing to
+$\theta = 0$ and stop; and if something carried it past, the torque would reverse and drag
+it back. A DC motor's commutator exists to reverse the current at exactly that moment, so
+the torque never changes sign. Over a half turn with the current flipped at the ends, the
+useful torque is the average of $\sin\theta$ over $0$ to $\pi$, which is $2/\pi$:
+
+```text
+tau_mean = 0.0270 * 2/pi                        = 0.01719 N m
+
+at 3000 rpm:  omega = 3000 * 2 pi / 60          = 314.2 rad/s
+P = tau_mean * omega = 0.01719 * 314.2          = 5.40 W
+```
+
+Five and a half watts of shaft power, from a coil you could hold between two fingers. Two
+design consequences fall out of that $2/\pi$ and out of the dead point at $\theta = 0$. A
+single-coil motor has a torque that pulses from zero to maximum twice a revolution and
+will not start at all if it stops on the dead point; so real motors carry three or more
+coils at different angles, each commutated in turn, which both fills in the gaps and
+guarantees a start from rest. And the way to raise the torque without raising the current
+is $N$ and $A$ and $B$ — which is why motors are wound with many turns and built around
+iron, the subject of the next module.
+
+## The mistake people make
+
+**"The magnetic field does the work of the motor."** It cannot; the previous unit proved
+it. The energy comes from the supply, pushing current round a winding that is fighting
+back with a voltage of its own. The magnetic field only sets which way the push points.
+The clean way to see it: a motor that is stalled draws current and delivers no mechanical
+power at all, and every watt goes into heating the copper. Nothing about the field
+changed.
+
+**"A current loop is pulled towards a magnet."** In a uniform field there is *no net
+force* — only a couple. A loop free to move but not to turn would sit there. What actually
+pulls a compass needle towards a magnet, or a paperclip towards a fridge magnet, is the
+non-uniformity: the field is stronger at one end of the object than the other, so the two
+opposing forces no longer cancel. Uniform field, pure rotation. Gradient, translation.
+
+## Where this stops holding
+
+**Non-uniform fields.** Once the field varies over the size of the loop, the net force is
+no longer zero and is instead $\mathbf{F} = \nabla(\mathbf{m}\cdot\mathbf{B})$ — a force
+proportional to the *gradient* of the field, not to the field. Every magnet that picks
+something up is working on that term.
+
+**Loops that are not small, flat and rigid.** $\tau = NIAB\sin\theta$ takes a single plane
+and a single angle for the whole loop. A large coil in a fringing field has different
+parts at different angles and needs the integral back. And a flexible loop does not merely
+turn: in its own field the opposite sides of a loop repel, so a slack single turn snaps
+out into a circle when a large current is pulsed through it, which is a force this
+expression does not contain at all.
+
+**Iron in the picture.** Everything here treats $B$ in the gap as given. Once a
+ferromagnetic core is involved, the field is no longer something you impose — it is
+something the material delivers, up to a ceiling, and past that ceiling more current buys
+almost nothing. That ceiling is the subject of module 8, and it is what actually limits
+the torque of a real motor.
+
+**Anything moving.** The moment the loop turns, the flux through it changes and Faraday's
+law from module 4 puts a voltage across it that opposes the supply. Torque and back-EMF
+are two faces of one mechanism, and a motor cannot be understood from this module alone —
+which is the honest reason this unit could compute the torque at a given current but not
+tell you what current a real motor at a real speed would draw.
+''',
+                },
+                {
+                    "title": "The Hall effect: the sideways push, seen from inside the metal",
+                    "minutes": 15,
+                    "body": r'''
+Both previous units were about what a magnetic field does to something free to move. This
+one asks what it does to carriers that are not free to leave — the electrons inside a
+strip of metal — and the answer is a measurable voltage that has no business being there,
+across an axis where nothing is being driven.
+
+## The picture
+
+Run a current along a flat strip, and put a field through the face of the strip,
+perpendicular to it. The carriers are drifting along the strip at $v_d$, and they are
+crossing the field at right angles, so each of them feels $qv_dB$ pushing it towards one
+edge.
+
+```text
+                   B into the page (x x x)
+
+        +--------------------------------------------+   <- edge that charges up
+   I -> |  x   x   x   x   x   x   x   x   x   x   x |      w
+        +--------------------------------------------+   <- edge that depletes
+        |<---------------- length ------------------>|
+
+        carriers drift along the strip; the magnetic force
+        pushes them across it, and they cannot get out
+```
+
+They pile up. And as soon as they do, the excess charge on one edge and the deficit on the
+other set up an ordinary electrostatic field *across* the strip, which pushes back. The
+pile-up continues only until the two balance, which takes about $10^{-19}$ s — the same
+rearrangement time module 5 quoted for any redistribution of charge in a metal. After that
+the carriers go straight down the strip again, and a steady transverse voltage sits there
+for as long as the current and the field do.
+
+## Working out how big it is
+
+At balance, the electric push across the strip cancels the magnetic one:
+
+$$qE_H = qv_dB \qquad\Longrightarrow\qquad E_H = v_dB$$
+
+The charge cancels — which is the first sign that the sign of the carrier is going to
+matter later and its size is not. The field is uniform across the width $w$, so the
+voltage between the edges is
+
+$$V_H = E_H w = v_d B w$$
+
+That is already useful, but $v_d$ is not something you can read off an instrument. Replace
+it using the current, exactly as module 6 did. For a strip of width $w$ and thickness $t$
+the cross-section is $A = wt$, so $I = nqv_d(wt)$ and $v_d = I/(nqwt)$:
+
+$$V_H = \frac{I}{nqwt}\,B\,w = \frac{IB}{nqt}$$
+
+**The width has cancelled.** A wide strip and a narrow one give the same Hall voltage for
+the same current, field and thickness, and that surprises everybody the first time. The
+reason is worth saying out loud: widening the strip gives the carriers more room, so the
+same current drifts more slowly, so the transverse field is weaker — by exactly the factor
+that the extra width would have gained you in voltage. The *thickness* does not cancel,
+because thinning the strip also concentrates the current. So Hall probes are made thin and
+their width is chosen for convenience.
+
+It is customary to pull the material out of that expression as the **Hall coefficient**
+
+$$R_H = \frac{1}{nq}, \qquad V_H = \frac{R_H IB}{t}$$
+
+so that a measurement of $V_H$ is directly a measurement of the carrier density.
+
+## Worked example 1: why you do not make a Hall probe out of copper
+
+Copper foil 0.100 mm thick and 10.0 mm wide, carrying 1.00 A, in a 0.500 T field.
+
+```text
+n = 8.5e28 /m^3     q = 1.602e-19 C     t = 1.00e-4 m
+
+n q     = 8.5e28 * 1.602e-19               = 1.362e10 C/m^3
+n q t   = 1.362e10 * 1.00e-4               = 1.362e6
+
+V_H = I B / (n q t) = (1.00 * 0.500) / 1.362e6 = 3.67e-7 V = 0.367 uV
+```
+
+A third of a microvolt. Half a tesla is a serious magnet and one amp through a foil is a
+serious current, and the signal is smaller than the thermal EMF of a badly soldered joint.
+
+The same numbers from the other end confirm the picture and give the sense of scale:
+
+```text
+J   = I/(w t) = 1.00 / (0.0100 * 1.00e-4)     = 1.00e6 A/m^2
+v_d = J/(n q) = 1.00e6 / 1.362e10             = 7.34e-5 m/s   (73 um/s)
+E_H = v_d B   = 7.34e-5 * 0.500               = 3.67e-5 V/m
+V_H = E_H w   = 3.67e-5 * 0.0100              = 3.67e-7 V     (agrees)
+
+for comparison, the field driving the current ALONG the strip:
+E_l = rho J   = 1.68e-8 * 1.00e6              = 1.68e-2 V/m
+ratio E_H / E_l                                = 0.0022
+```
+
+The transverse field is two parts in a thousand of the longitudinal one, so the total
+electric field inside a copper strip is tilted away from the strip's axis by about a tenth
+of a degree. That tilt — the *Hall angle* — is all the effect there is in a good metal.
+
+## Worked example 2: the same probe in a semiconductor
+
+Now the same geometry and field, in a doped semiconductor with
+$n = 1.0\times10^{22}$ m⁻³, at 1.00 mA.
+
+```text
+n q     = 1.0e22 * 1.602e-19                = 1602 C/m^3
+n q t   = 1602 * 1.00e-4                    = 0.1602
+
+V_H = I B / (n q t) = (1.00e-3 * 0.500) / 0.1602 = 3.12e-3 V = 3.12 mV
+```
+
+Three millivolts, on a *thousandth* of the current. Copper has $8.5\times10^{6}$ times as
+many carriers per cubic metre, so $R_H$ is $8.5\times10^{6}$ times smaller, and everything
+about a practical Hall sensor follows from that one ratio. It is why Hall probes are made
+of indium antimonide or gallium arsenide, why they are diffused a few micrometres thick,
+and why the position sensor in a brushless motor is a semiconductor die and not a strip of
+brass.
+
+## What the sign tells you, and why that was historically enormous
+
+Reverse the sign of the carriers, keeping the current the same, and they must drift the
+opposite way — so the magnetic force $q\mathbf{v}\times\mathbf{B}$ reverses twice and ends
+up unchanged in direction, while the charge arriving at that edge is now of the opposite
+sign. The Hall voltage flips.
+
+That matters more than it first sounds, because nothing else in electricity can tell the
+two cases apart. Positive charge flowing right and negative charge flowing left are the
+same current, dissipate the same heat, make the same magnetic field, and read the same on
+every meter. The Hall voltage is the one ordinary laboratory measurement that
+distinguishes them.
+
+Edwin Hall found the effect in 1879 — eighteen years before the electron was identified.
+When it was later applied to metals and semiconductors it produced a result nobody wanted:
+in some materials the sign comes out *positive*, as though the moving charge were a
+positive particle. It is not; the carriers are still electrons, but an almost-full band
+of them responds to a field exactly as a small number of positive particles would. Those
+are holes, and p-type semiconductors were identified this way.
+
+## Two measurements, two unknowns
+
+Module 6 gave the conductivity as $\sigma = nq\mu$, where $\mu$ is the mobility. A
+resistance measurement gives you $\sigma$, and therefore the *product* $n\mu$ — one
+equation, two unknowns, and no way to tell a material with many slow carriers from one
+with few fast ones. The Hall effect gives $n$ on its own, because $R_H = 1/(nq)$ contains
+no mobility at all. Put the two together and both come out:
+
+$$n = \frac{1}{qR_H}, \qquad \mu = \frac{\sigma}{nq} = \sigma R_H$$
+
+Run it on copper as a check, using the numbers module 6 established:
+
+```text
+sigma = 1/rho = 1/1.68e-8                    = 5.95e7 S/m
+n q                                           = 1.362e10
+mu = sigma/(n q) = 5.95e7 / 1.362e10          = 4.37e-3 m^2/(V s) = 43.7 cm^2/(V s)
+```
+
+which is the 44 cm²/(V·s) that module 6 got from the mean free time, by a completely
+different route. This pair of measurements — resistivity and Hall — is the standard way
+every semiconductor wafer in the world is characterised.
+
+## The mistake people make
+
+**Expecting a wider probe to give more signal.** It does not, and the algebra above says
+why. The instinct comes from thinking of the strip as a battery whose plates are further
+apart; but the field between the edges falls as fast as the separation grows.
+
+**Confusing the Hall voltage with the ordinary drop along the strip.** They are
+perpendicular and they differ by orders of magnitude — a few millivolts across, against
+volts along. The practical consequence is brutal: if the two Hall contacts are not exactly
+opposite each other, a slice of the longitudinal drop leaks into the reading and can
+swamp it entirely. Every real Hall measurement reverses the field and takes half the
+difference, because the misalignment offset does not reverse and the Hall signal does.
+
+**Thinking a better conductor gives a better Hall probe.** $V_H = IB/(nqt)$ contains no
+resistivity. What makes a good Hall probe is *few* carriers, which usually means a fairly
+poor conductor.
+
+## Where this stops holding
+
+**More than one kind of carrier.** $R_H = 1/(nq)$ assumes a single carrier species. In a
+material carrying both electrons and holes the two are deflected to the *same* edge — they
+have opposite charge and drift in opposite directions, and the two reversals cancel — so
+their contributions to the Hall voltage subtract. The coefficient becomes a weighted
+difference that can be small, or zero, or change sign with temperature. Intrinsic
+germanium does all three.
+
+**The simple derivation itself.** Treating every carrier as drifting at one speed $v_d$ is
+the same approximation module 6 made. Doing it properly with a distribution of speeds
+multiplies $R_H$ by a scattering factor between about 0.7 and 2, so a carrier density from
+a Hall measurement is good to tens of percent and not better.
+
+**Low temperature, high field, two dimensions.** Confine the carriers to a plane, cool them
+to a few kelvin and apply several tesla, and the Hall resistance stops varying smoothly.
+It locks onto flat plateaus at $h/(\nu e^{2})$ for integer $\nu$, where $h/e^{2} =
+25812.807$ Ω exactly by definition. The plateaus are reproducible between laboratories to
+parts in a billion, and since 1990 the ohm has been maintained against them. The classical
+picture in this unit gives the straight line those plateaus depart from; what replaces it
+is the Landau quantisation the first unit mentioned.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "A charge in a magnetic field, drawn in velocity space",
                 "visualiser": "phase-portrait",
@@ -7721,6 +9609,576 @@ speed is not changing.
                     },
                 ],
             },
+            "blanks": {
+                "title": "The magnetic force, term by term",
+                "minutes": 9,
+                "caption": "the seven relations this module runs on, with the load-bearing part removed",
+                "lang": "text",
+                "brief": r'''
+Nothing here is executed. These are the seven expressions the rest of the module is built
+on, and every hole sits where a slip changes the answer rather than the spelling — which
+trigonometric factor, which quantity survives into the period, which dimension of the Hall
+strip divides.
+
+Two of the angles are measured from different references and both are called $\theta$,
+which is not a kindness of the notation but is how everyone writes it. Say why a choice
+is right before taking it.
+''',
+                "listing": """# The magnetic force on a charge q moving at speed v through a field B,
+# with theta the angle between the velocity and the field:
+
+F = q * v * B * ___
+
+# The rate at which that force does work on the charge:
+
+P = ___
+
+# The radius of the circle the charge goes in, having entered at right
+# angles to the field:
+
+r = ___ / (q * B)
+
+# The time it takes to go once round that circle:
+
+T = 2 * pi * ___ / (q * B)
+
+# A straight wire carrying I, at right angles to the field:
+
+F = B * I * ___
+
+# A flat coil of N turns and area A -- theta now measured between the
+# coil's own normal and the field:
+
+tau = ___ * B * sin(theta)
+
+# The Hall voltage across a strip carrying I across a field B, with n
+# carriers per cubic metre each of charge q:
+
+V_H = I * B / (n * q * ___)
+""",
+                "blanks": [
+                    {
+                        "prompt": "Which factor of the angle between $\\mathbf{v}$ and $\\mathbf{B}$?",
+                        "hole": "?",
+                        "opts": ["sin(theta)", "cos(theta)", "tan(theta)", "1"],
+                        "a": 0,
+                        "why": "The sine. The force comes from $\\mathbf{v}\\times\\mathbf{B}$, and a cross product measures the part of one vector that is *across* the other. Motion along the field ($\\theta = 0$) produces nothing; motion across it ($\\theta = 90°$) produces the most.",
+                        "whys": [
+                            "The sine. The force comes from $\\mathbf{v}\\times\\mathbf{B}$, and a cross product measures the part of one vector that is *across* the other. Motion along the field ($\\theta = 0$) produces nothing; motion across it ($\\theta = 90°$) produces the most.",
+                            "The cosine is the dot product's factor, and it is exactly backwards here: it would make the force largest for a charge travelling straight along the field and zero for one crossing it. The single easiest experiment in the subject — turn the wire from across the gap to along it and watch the force vanish — rules it out.",
+                            "The tangent is unbounded, so this would predict an infinite force at $\\theta = 90°$ from a finite field and a finite speed. No factor in a physical law that is bounded by geometry can be a tangent.",
+                            "Dropping the angle entirely says the force does not care which way the charge is going, only how fast. That is the one thing the magnetic force is not: a charge fired along the field feels nothing at all.",
+                        ],
+                    },
+                    {
+                        "prompt": "What is the power delivered to the charge by the magnetic force?",
+                        "hole": "?",
+                        "opts": ["0", "q * v * B", "F * v", "q * v**2 * B"],
+                        "a": 0,
+                        "why": "Zero, always and exactly. Power is $\\mathbf{F}\\cdot\\mathbf{v}$, and the magnetic force is a cross product with $\\mathbf{v}$ in it, so it is perpendicular to $\\mathbf{v}$ and the dot product vanishes. That single line is why the speed of a charge in a magnetic field never changes.",
+                        "whys": [
+                            "Zero, always and exactly. Power is $\\mathbf{F}\\cdot\\mathbf{v}$, and the magnetic force is a cross product with $\\mathbf{v}$ in it, so it is perpendicular to $\\mathbf{v}$ and the dot product vanishes. That single line is why the speed of a charge in a magnetic field never changes.",
+                            "That is the force, not the power — the units are newtons. And even reading it as an attempt at a power, a non-zero answer would mean the kinetic energy was changing, which would break the one result this module leans on hardest.",
+                            "$Fv$ is the power only when the force is along the motion. Here it is at right angles to it by construction, so the general form $Fv\\cos\\phi$ has $\\phi = 90°$ and collapses to nothing.",
+                            "This has the units of power and is still wrong, which is what makes it worth rejecting for the right reason rather than by dimensions. A magnetic field cannot supply energy to a charge; every joule a motor delivers came from the source pushing current round the winding.",
+                        ],
+                    },
+                    {
+                        "prompt": "What sits on top in the radius of the circular orbit?",
+                        "hole": "?",
+                        "opts": ["m * v", "m * v**2", "q * v", "m / v"],
+                        "a": 0,
+                        "why": "The momentum. Setting $qvB = mv^2/r$ and solving gives $r = mv^2/(qvB)$, and one power of $v$ cancels, leaving $r = mv/(qB)$. Heavier or faster is a wider circle; more charge or more field is a tighter one.",
+                        "whys": [
+                            "The momentum. Setting $qvB = mv^2/r$ and solving gives $r = mv^2/(qvB)$, and one power of $v$ cancels, leaving $r = mv/(qB)$. Heavier or faster is a wider circle; more charge or more field is a tighter one.",
+                            "This is the centripetal expression with the cancellation not carried out — the $v$ from the magnetic force $qvB$ has not been divided off. The symptom is a radius that goes as the square of the speed, so a beam at twice the speed would come out on four times the radius instead of two.",
+                            "The mass has been lost and the charge counted twice, so a proton and an electron at the same speed would run the same circle. They do not: the electron is 1836 times lighter and its orbit is 1836 times tighter.",
+                            "Dividing by the speed makes a faster particle turn *more* sharply, which inverts the one thing about this result everybody's intuition gets right. A fast particle is harder to bend, not easier.",
+                        ],
+                    },
+                    {
+                        "prompt": "What survives into the period, over $qB$?",
+                        "hole": "?",
+                        "opts": ["m", "m * v", "r", "m * v**2"],
+                        "a": 0,
+                        "why": "The mass alone. $T = 2\\pi r/v$ with $r = mv/(qB)$ gives $2\\pi mv/(qBv)$, and the speed cancels completely. This is the most useful cancellation in the module: the period depends on the particle and the machine and on nothing the particle is doing.",
+                        "whys": [
+                            "The mass alone. $T = 2\\pi r/v$ with $r = mv/(qB)$ gives $2\\pi mv/(qBv)$, and the speed cancels completely. This is the most useful cancellation in the module: the period depends on the particle and the machine and on nothing the particle is doing.",
+                            "This is the radius substituted in with the division by $v$ forgotten. It would make a faster particle take longer per lap, and a cyclotron driven at a fixed frequency would fall out of step on the second turn instead of running for hundreds.",
+                            "Leaving the radius in is true but useless — it is $T = 2\\pi r/(qBr/m)$ dressed up, and it hides the whole point, which is that the answer contains no geometry. Write it this way and you cannot see that every orbit, large or small, takes the same time.",
+                            "Two powers of the speed is worse than one in the same direction: it would make the period grow as the square of the speed. Nothing in $qvB = mv^2/r$ can leave more than one power of $v$ uncancelled.",
+                        ],
+                    },
+                    {
+                        "prompt": "What does $BI$ multiply, to give the force on a straight wire?",
+                        "hole": "?",
+                        "opts": ["L", "L**2", "L / 2", "A"],
+                        "a": 0,
+                        "why": "The length of wire that is actually in the field. Twice the length holds twice as many drifting carriers and so feels twice the force — the sum $F = (nAL)(qv_dB)$ regroups as $(nAqv_d)LB = BIL$, and the cross-section cancels out along with everything else microscopic.",
+                        "whys": [
+                            "The length of wire that is actually in the field. Twice the length holds twice as many drifting carriers and so feels twice the force — the sum $F = (nAL)(qv_dB)$ regroups as $(nAqv_d)LB = BIL$, and the cross-section cancels out along with everything else microscopic.",
+                            "A square would mean two wires each a metre long in the same field felt a quarter of what one two-metre wire feels, which is not how adding forces works. It is also dimensionally impossible: teslas times amps times metres is already newtons.",
+                            "The half belongs to a different sum — the one where the force builds up from zero along the length, as in a moving rod's induced EMF. Here every carrier along the wire feels the same push, so there is nothing to average.",
+                            "The cross-sectional area appears in the derivation and then cancels: it multiplies the number of carriers and divides the drift speed at fixed current, by exactly the same factor. A busbar and a thin wire carrying the same current in the same field feel the same force.",
+                        ],
+                    },
+                    {
+                        "prompt": "What is the coil's magnetic moment — the thing that multiplies $B\\sin\\theta$?",
+                        "hole": "?",
+                        "opts": ["N * I * A", "N * I * A**2", "I * A / N", "N * I / A"],
+                        "a": 0,
+                        "why": "Turns times current times area. Each of the two sides that cross the field feels $BIa$, the two act on lines $b\\sin\\theta$ apart, and the couple is $BI(ab)\\sin\\theta$; wind $N$ turns on top of one another and every one contributes. The group $NIA$ is worth its own name and symbol — it is what a compass needle has too.",
+                        "whys": [
+                            "Turns times current times area. Each of the two sides that cross the field feels $BIa$, the two act on lines $b\\sin\\theta$ apart, and the couple is $BI(ab)\\sin\\theta$; wind $N$ turns on top of one another and every one contributes. The group $NIA$ is worth its own name and symbol — it is what a compass needle has too.",
+                            "The area enters once, as a product of the two sides of the rectangle: one gives the length of wire in the field and the other the moment arm. A square would make the torque depend on the units the area was measured in, which no physical relation may do.",
+                            "Dividing by the turns is backwards. Every turn lies in the same place, carries the same current and feels the same couple, so the torques add; a hundred-turn coil gives a hundred times the torque of one turn at the same current, and that is the entire reason meters and motors are wound rather than made from a single loop.",
+                            "Dividing by the area says a bigger loop is worse, and it fails the simplest test: shrink the loop towards a point and this would predict an unbounded torque from a vanishing coil.",
+                        ],
+                    },
+                    {
+                        "prompt": "Which dimension of the strip divides, in the Hall voltage?",
+                        "hole": "?",
+                        "opts": [
+                            "t, the thickness measured along the field",
+                            "w, the width across which the voltage appears",
+                            "w * t, the cross-section",
+                            "l, the length between the current contacts",
+                        ],
+                        "a": 0,
+                        "why": "The thickness, measured along $B$. Start from $V_H = v_d B w$ and put in $v_d = I/(nq\\,wt)$: the width appears once on top and once underneath and cancels, leaving $V_H = IB/(nqt)$. That is why Hall probes are made thin and why their width is chosen for convenience.",
+                        "whys": [
+                            "The thickness, measured along $B$. Start from $V_H = v_d B w$ and put in $v_d = I/(nq\\,wt)$: the width appears once on top and once underneath and cancels, leaving $V_H = IB/(nqt)$. That is why Hall probes are made thin and why their width is chosen for convenience.",
+                            "This is the tempting one, because the width is the distance the voltage appears across and a bigger separation ought to mean a bigger voltage. It would, at a fixed transverse field — but widening the strip at fixed current slows the carriers by the same factor, so the field falls exactly as fast as the gap grows and the two cancel.",
+                            "Only one of the two dimensions survives. Putting both in double-counts the width, and would predict that a strip ten times wider gives a tenth of the signal rather than the same signal.",
+                            "The length along the strip never enters. It sets the resistance and hence the voltage you must apply to drive the current, but the Hall voltage is transverse and does not care how far the carriers have travelled to get there.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": [
+                {
+                    "title": "The wire that jumps out of the gap",
+                    "minutes": 5,
+                    "brief": r'''
+The mechanical case: one rule, one unknown, everything given, and the field at right
+angles to the wire so the $\sin\theta$ is 1. The one thing it can catch you on is which
+length to use — the wire is 30 cm long but only the part inside the gap is in any field
+at all.
+''',
+                    "prompt": "What force does the magnet put on the wire?",
+                    "note": "Answer in millinewtons, to one decimal place.",
+                    "figure": r'''
+```text
+   a straight wire lying across the gap of a horseshoe magnet
+
+                     |<--- 120 mm of gap --->|
+      ___________________________________________________
+     (  N pole                                            )
+      +---------------------------------------------------+
+                                                              B = 0.28 T,
+   ==============================================              across the gap,
+     4.5 A ->    a 300 mm length of wire                        at right angles
+   ==============================================              to the wire
+      +---------------------------------------------------+
+     (  S pole                                            )
+      ---------------------------------------------------
+
+   outside the gap the field is negligible
+```
+''',
+                    "given": [
+                        {"label": "Gap field", "value": "0.28 T"},
+                        {"label": "Current", "value": "4.5 A"},
+                        {"label": "Length of wire inside the gap", "value": "120 mm"},
+                        {"label": "Total length of wire", "value": "300 mm"},
+                        {"label": "Angle between wire and field", "value": "90°"},
+                    ],
+                    "aside": "$F = BIL\\sin\\theta$, and $\\sin 90° = 1$. $L$ is the length of wire that is "
+                             "*in the field*, not the length of wire you happen to be holding.",
+                    "answer": 151.2,
+                    "tol": 1.5,
+                    "unit": "mN",
+                    "hint": "Multiply the three numbers in SI units — teslas, amps and metres — and the answer "
+                            "comes out in newtons. Then move the decimal point three places for millinewtons.",
+                    "wrong": "If you got 378, the whole 300 mm went in; only the 120 mm between the poles is in "
+                             "any field. If you got 0.151, that is the right answer in newtons and the "
+                             "question asked for millinewtons.",
+                    "why": r'''
+$$F = BIL = 0.28 \times 4.5 \times 0.120 = 0.1512\ \text{N} = 151.2\ \text{mN}$$
+
+Worth a moment on whether that is a large force. If the wire is 1.5 mm² copper, 120 mm of
+it has a mass of $8960 \times 1.5\times10^{-6} \times 0.120 = 1.61$ g and weighs 15.8 mN
+— so the magnetic force is about nine and a half times the weight of the piece of wire it
+is acting on. A few amps in a field you can buy for pocket money will throw a wire out of
+a magnet gap hard enough to be startling, and there is no iron, no multi-turn winding and
+no gearing anywhere in this.
+
+Note also which way it points: neither along the current nor along the field, but out of
+the gap along the third direction. Reverse either the current or the magnet and it goes
+back in; reverse both and it comes out again.
+''',
+                },
+                {
+                    "title": "How often does the proton go round?",
+                    "minutes": 6,
+                    "brief": r'''
+Still one rule, but now it has to be rearranged and the answer wants a different unit
+from the one the constants arrive in. The point of the question is what is *not* in the
+formula: no speed, no radius, no energy. Whatever the proton is doing, it does it at this
+rate.
+''',
+                    "prompt": "At what frequency does a proton circulate in this field?",
+                    "note": "Answer in megahertz, to two decimal places.",
+                    "figure": r'''
+```text
+   a proton, injected across a uniform field of 1.20 T
+
+              B into the page
+       x     x     x     x     x     x     x
+
+       x    .-------------------.    x
+           /                     \
+       x  |            +          |  x        the proton runs round
+          |          proton       |            at a steady speed on
+       x   \                     /   x         a circle of some radius
+            `-------------------'                 -- neither is given,
+       x     x     x     x     x     x     x        and neither is needed
+
+   proton mass  m = 1.6726 x 10^-27 kg
+   proton charge q = 1.602 x 10^-19 C
+```
+''',
+                    "given": [
+                        {"label": "Field", "value": "1.20 T"},
+                        {"label": "Proton mass", "value": "1.6726 × 10⁻²⁷ kg"},
+                        {"label": "Proton charge", "value": "1.602 × 10⁻¹⁹ C"},
+                    ],
+                    "aside": "The period is $T = 2\\pi m/(qB)$ and the frequency is one over it. Neither "
+                             "contains the speed or the radius — that is the whole point of the result.",
+                    "answer": 18.29,
+                    "tol": 0.15,
+                    "unit": "MHz",
+                    "hint": "$f_c = qB/(2\\pi m)$. Work the two halves separately: $qB = 1.602\\times10^{-19} "
+                            "\\times 1.20$, and $2\\pi m = 6.2832 \\times 1.6726\\times10^{-27}$. Then divide, "
+                            "and convert hertz to megahertz.",
+                    "wrong": "About 115 MHz means the $2\\pi$ was dropped — that is the *angular* frequency "
+                             "$\\omega_c = qB/m$ in radians per second, not the number of revolutions per "
+                             "second. Around 33 600 MHz means the electron mass went in instead of the "
+                             "proton's.",
+                    "why": r'''
+$$f_c = \frac{qB}{2\pi m}$$
+
+```text
+q B     = 1.602e-19 * 1.20              = 1.9226e-19
+2 pi m  = 6.2832 * 1.6726e-27           = 1.0509e-26
+
+f_c     = 1.9226e-19 / 1.0509e-26       = 1.8294e7 Hz = 18.29 MHz
+T       = 1 / f_c                       = 54.7 ns
+```
+
+Eighteen megahertz — an ordinary short-wave radio frequency, which is exactly why a
+cyclotron can be driven by an ordinary radio transmitter. The proton is given a small
+kick twice per revolution by a voltage alternating at this frequency, and because the
+period contains no speed, the same 18.29 MHz stays in step while the orbit spirals from a
+few millimetres to half a metre.
+
+Two figures worth carrying: an electron in the same 1.20 T goes round at 33.6 GHz,
+because it is 1836 times lighter, and a deuteron at 9.15 MHz because it is twice as
+heavy for the same charge. A cyclotron built for protons will accelerate deuterons if you
+halve the drive frequency, and nothing else about the machine has to change.
+''',
+                },
+                {
+                    "title": "The current that swings the pointer to full scale",
+                    "minutes": 8,
+                    "brief": r'''
+Two steps now, and they meet in the middle. The coil produces a torque that turns it; the
+hairspring produces a torque that resists, growing in proportion to the angle it has been
+wound through. The pointer stops where they are equal, so full-scale deflection is a
+statement about torque before it is a statement about current.
+
+The pole pieces are shaped around a soft-iron core so that the field in the gap is radial.
+That means the coil's plane always contains the field however far it has swung, so
+$\sin\theta = 1$ at every deflection — which is what makes the scale of an analogue meter
+evenly divided.
+''',
+                    "prompt": "What current drives the movement to full-scale deflection?",
+                    "note": "Answer in microamps, to one decimal place.",
+                    "figure": r'''
+```text
+   a moving-coil meter movement, seen end-on along its pivot
+
+       +---------------------------------------------+
+       |                   N   pole                  |
+       |         +-------------------------+         |
+       |         |    +---------------+    |         |
+       |         |    |  soft   iron  |    |         |
+       |         |    |     core      |    |         |
+       |         |    +---------------+    |         |
+       |         +-------------------------+         |
+       |                   S   pole                  |
+       +---------------------------------------------+
+
+   The coil -- 320 turns on a 22 mm x 16 mm former -- hangs in the
+   annular gap between the pole faces and the core, and turns about
+   the core axis.  The gap field is radial and of magnitude 0.19 T,
+   so the plane of the coil always contains the field and
+   sin(theta) = 1 at every deflection.
+
+   hairspring stiffness    k = 6.8e-7 N m per radian
+   full-scale deflection       90 deg = pi/2 rad
+```
+''',
+                    "given": [
+                        {"label": "Turns", "value": "320"},
+                        {"label": "Coil dimensions", "value": "22 mm × 16 mm"},
+                        {"label": "Gap field", "value": "0.19 T, radial"},
+                        {"label": "Hairspring stiffness", "value": "6.8 × 10⁻⁷ N·m per radian"},
+                        {"label": "Full-scale deflection", "value": "90° = π/2 rad"},
+                    ],
+                    "aside": "The spring's restoring torque is $k\\theta$ with $\\theta$ in radians. Set it "
+                             "equal to $NIAB\\sin\\theta$ — and here the radial field makes $\\sin\\theta = 1$ "
+                             "whatever the deflection.",
+                    "answer": 49.9,
+                    "tol": 0.5,
+                    "unit": "µA",
+                    "hint": "First the torque the spring can hold at full scale: $\\tau = k\\theta$ with "
+                            "$\\theta = \\pi/2 = 1.5708$ rad. Then the current that produces it: "
+                            "$I = \\tau/(NAB)$. Get the area into square metres before dividing.",
+                    "wrong": "About 2860 µA means the 90 went in as degrees; the spring constant is per "
+                             "*radian*, and $\\pi/2$ is 1.5708 of them, not 90. A number around "
+                             "$5\\times10^{-5}$ µA means the coil area stayed in square millimetres — there "
+                             "are $10^{6}$ of those in a square metre.",
+                    "why": r'''
+```text
+A       = 0.022 * 0.016                        = 3.52e-4 m^2
+
+torque the spring holds at full scale:
+tau     = k * theta = 6.8e-7 * 1.5708          = 1.0681e-6 N m
+
+torque the coil makes per amp:
+N A B   = 320 * 3.52e-4 * 0.19                 = 2.1402e-2 N m per A
+
+I       = tau / (N A B) = 1.0681e-6 / 2.1402e-2
+        = 4.991e-5 A                           = 49.9 uA
+```
+
+A fifty-microamp movement — which is the standard sensitivity of a good analogue
+multimeter, and it did not have to be engineered into the answer; it fell out of ordinary
+numbers for a coil, a magnet and a spring.
+
+Two things the design is trading off. The sensitivity is $NAB/k$, so you get it by winding
+more turns, using a bigger coil, using a stronger magnet, or using a weaker spring. The
+first two add mass to something on jewelled bearings and make the movement slow and
+fragile; the last makes it sluggish to return and vulnerable to friction. The magnet is
+the free variable, which is why the whole history of panel meters is a history of better
+permanent magnets.
+
+And the radial gap is not a detail. Take it away and the torque would fall as
+$\cos(\text{deflection})$ from the rest position, so the divisions would crowd together at
+the top of the scale and the last twenty degrees would need a current rising without
+limit. Shaping the iron so that $\theta$ stays at 90° is what buys a linear scale.
+''',
+                },
+                {
+                    "title": "Which isotope came out of the machine",
+                    "minutes": 10,
+                    "brief": r'''
+The first question with an unknown that has to be eliminated rather than looked up. An
+ion is made at rest, accelerated through a known voltage, and then bent by a known field
+onto a radius you can measure off the detector. The speed it reaches is *not* given, and
+it is not the answer either — it is the quantity that has to disappear between the two
+relations before anything useful comes out.
+
+Take the ion to be singly charged, so its charge is one electronic charge.
+''',
+                    "prompt": "What is the mass of the ion?",
+                    "note": "Answer in unified atomic mass units (u), to three significant figures.",
+                    "figure": r'''
+```text
+   a magnetic-sector mass spectrometer
+
+     ion source                              B = 0.450 T, into the page
+     (at rest)                                x    x    x    x
+         |                                 x                     x
+         |     accelerating gap                                    x
+         v     V = 2.50 kV                x        .-----.
+        (+) ------------------> ------->     x   .'       `.     x
+                                              \ /           \
+                                          x    |             |   x
+                                                \           /
+                                            x    `.       .'    x
+                                                   `-----'
+                                            x    x    x    x
+                                          the beam lands here, on a
+                                          circle of radius r = 10.12 cm
+
+   1 u = 1.66054 x 10^-27 kg        e = 1.602 x 10^-19 C
+```
+''',
+                    "given": [
+                        {"label": "Accelerating voltage", "value": "2.50 kV"},
+                        {"label": "Field", "value": "0.450 T"},
+                        {"label": "Measured radius", "value": "10.12 cm"},
+                        {"label": "Ion charge", "value": "+1 e = 1.602 × 10⁻¹⁹ C"},
+                        {"label": "Atomic mass unit", "value": "1 u = 1.66054 × 10⁻²⁷ kg"},
+                    ],
+                    "aside": "Two relations hold at once: $qV = \\tfrac12 mv^2$ from the accelerating gap, and "
+                             "$r = mv/(qB)$ from the bending field. Neither contains the answer on its own. "
+                             "Eliminate $v$ between them.",
+                    "answer": 40.02,
+                    "tol": 0.4,
+                    "unit": "u",
+                    "hint": "From the bend, $v = qBr/m$. Put that into $qV = \\tfrac12 mv^2$: the two factors "
+                            "of $m$ collapse to one, and you are left with $m = qB^2r^2/(2V)$. Then divide by "
+                            "$1.66054\\times10^{-27}$ kg to get the answer in u.",
+                    "wrong": "Around 80 u means the factor of two went missing — the kinetic energy is "
+                             "$\\tfrac12 mv^2$, not $mv^2$. Around $6.6\\times10^{-26}$ is the right answer in "
+                             "kilograms, which still has to be divided by the mass of one atomic mass unit.",
+                    "why": r'''
+The gap does electrical work on the ion; the field does none at all, so the speed it
+arrives with is the speed it keeps.
+
+$$qV = \tfrac12 mv^2, \qquad r = \frac{mv}{qB}
+\;\Longrightarrow\; v = \frac{qBr}{m}$$
+
+Substitute the second into the first:
+
+$$qV = \tfrac12 m\left(\frac{qBr}{m}\right)^{2} = \frac{q^{2}B^{2}r^{2}}{2m}
+\qquad\Longrightarrow\qquad m = \frac{qB^{2}r^{2}}{2V}$$
+
+```text
+B^2       = 0.450^2                          = 0.2025
+r^2       = 0.1012^2                         = 1.02414e-2
+B^2 r^2   = 0.2025 * 1.02414e-2              = 2.07389e-3
+
+q B^2 r^2 = 1.602e-19 * 2.07389e-3           = 3.32274e-22
+m         = 3.32274e-22 / (2 * 2500)         = 6.64548e-26 kg
+
+in u      = 6.64548e-26 / 1.66054e-27        = 40.02 u
+```
+
+Forty. Singly charged, mass 40 — argon-40, which makes up most of the residual air in any
+vacuum system and is the first peak anyone sees on a new machine. (Calcium-40 has the same
+mass to three figures; a mass spectrometer separates masses, not elements.)
+
+Two things worth taking away. The speed never had to be computed, but if you want it,
+$v = qBr/m = 1.10\times10^{5}$ m/s, and the ion completes its half-turn to the detector in
+about 2.9 µs. And the machine's resolution is readable off the same formula: since
+$r \propto \sqrt{m}$, an ion of 39 u would land at 9.99 cm and one of 41 u at 10.24 cm, so
+neighbouring masses here are about 1.3 mm apart at the detector. That gap is why a
+magnetic-sector instrument can be a metre long — resolution is bought with radius.
+''',
+                },
+                {
+                    "title": "Two measurements on one bar of semiconductor",
+                    "minutes": 12,
+                    "brief": r'''
+The real job the Hall effect does. A resistance measurement on its own gives you the
+conductivity, and $\sigma = nq\mu$ is one equation in two unknowns — a material with many
+slow carriers and one with few fast ones can have exactly the same resistivity. The Hall
+voltage gives $n$ by itself, because $R_H = 1/(nq)$ contains no mobility at all. Two
+measurements, two unknowns, and the pair is how every semiconductor wafer in the world is
+characterised.
+
+Both measurements have been made on the same bar and both are below. The mobility is not
+either of them; it has to be assembled.
+''',
+                    "prompt": "What is the mobility of the carriers in this bar?",
+                    "note": "Answer in m²/(V·s), to three significant figures.",
+                    "figure": r'''
+```text
+   one bar of n-type semiconductor, measured two ways
+
+                  B = 0.350 T, through the face
+                       |  |  |  |  |
+                       v  v  v  v  v
+              +--------------------------+  ---.
+   5.00 mA -> |                          |      |  w = 4.00 mm
+              +--------------------------+  ---'
+              |<------- l = 25.0 mm ----->|
+                                                   t = 0.500 mm (into the page,
+                                                                 along B)
+
+   measured across the width :  V_H = 18.0 mV
+   measured end to end       :  R   = 220 ohm
+
+   e = 1.602 x 10^-19 C
+```
+''',
+                    "given": [
+                        {"label": "Current along the bar", "value": "5.00 mA"},
+                        {"label": "Field through the face", "value": "0.350 T"},
+                        {"label": "Hall voltage across the width", "value": "18.0 mV"},
+                        {"label": "End-to-end resistance", "value": "220 Ω"},
+                        {"label": "Bar: length × width × thickness", "value": "25.0 × 4.00 × 0.500 mm"},
+                        {"label": "Carrier charge", "value": "1.602 × 10⁻¹⁹ C"},
+                    ],
+                    "aside": "Three moves. $n$ from the Hall voltage, $V_H = IB/(nqt)$. Then $\\sigma$ from "
+                             "the resistance and the shape, $R = \\ell/(\\sigma A)$ with $A = wt$. Then "
+                             "$\\mu = \\sigma/(nq)$.",
+                    "answer": 0.292,
+                    "tol": 0.006,
+                    "unit": "m²/(V·s)",
+                    "hint": "Take the thickness for the Hall step and the *whole* cross-section $wt$ for the "
+                            "resistance step — they are different areas doing different jobs. Everything in "
+                            "millimetres has to reach metres before it is used.",
+                    "wrong": "If you got about 2920, that is the right answer in cm²/(V·s), the unit the "
+                             "semiconductor literature uses; there are $10^{4}$ of those in one m²/(V·s). If "
+                             "you got about 12.9, you have stopped at the drift speed in metres per second — "
+                             "one more division, by the 44 V/m driving the bar, finishes it. A number near "
+                             "$1.2\\times10^{21}$ is the carrier density, which is only the first of the "
+                             "three steps.",
+                    "why": r'''
+**Step 1 — the carrier density, from the Hall voltage.** Rearranging $V_H = IB/(nqt)$:
+
+```text
+n = I B / (q t V_H)
+  = (5.00e-3 * 0.350) / (1.602e-19 * 5.00e-4 * 1.80e-2)
+  = 1.750e-3 / 1.4420e-24
+  = 1.214e21 per m^3        (about 1.2e15 per cm^3 -- lightly doped)
+```
+
+**Step 2 — the conductivity, from the resistance and the shape.**
+
+```text
+A     = w t = 4.00e-3 * 5.00e-4        = 2.00e-6 m^2
+rho   = R A / l = 220 * 2.00e-6 / 0.0250 = 1.76e-2 ohm m
+sigma = 1 / rho                          = 56.8 S/m
+```
+
+**Step 3 — the mobility.**
+
+```text
+n q   = 1.214e21 * 1.602e-19           = 194.4
+mu    = sigma / (n q) = 56.8 / 194.4   = 0.292 m^2/(V s)
+```
+
+or 2920 cm²/(V·s), which is a germanium-like number and about seventy times copper's
+44 cm²/(V·s) — few carriers, but each of them very mobile. That combination, low $n$ and
+high $\mu$, is what a Hall sensor is made of and what a piece of metal can never be.
+
+**Worth noticing afterwards.** Push the three steps together symbolically and almost
+everything cancels:
+
+$$\mu = \frac{\sigma}{nq}
+= \frac{\ell}{Rwt}\cdot\frac{t V_H}{IB}
+= \frac{\ell V_H}{R\,w\,I\,B}
+= \frac{0.0250 \times 0.0180}{220 \times 0.00400 \times 0.00500 \times 0.350}
+= 0.292$$
+
+The thickness has gone. It is needed to get $n$ and needed again to get $\sigma$, and it
+divides out between them — which is a genuine relief in the laboratory, because the
+thickness of a diffused layer is the hardest of the three dimensions to know. It is also a
+warning: a mobility measured this way is insensitive to the thickness, but the carrier
+density you quote alongside it is not, and is only as good as your figure for $t$.
+
+For the record, the carriers in this bar are drifting at
+$v_d = I/(nqA) = 12.9$ m/s, in a field along the bar of $E = IR/\ell = 1.10/0.0250 = 44$
+V/m — and $12.9/44 = 0.292$, which is the mobility again, by its definition.
+''',
+                },
+            ],
             "derive": {
                 "title": "The radius and the period of a circling charge",
                 "minutes": 11,
@@ -7990,8 +10448,684 @@ assert abs(loop_torque(400, 0.5, 4e-4, 0.3, np.pi / 2) - 2.0 * _t) < 1e-12, \
                 "Two fields, not one. $H = NI/\\ell$ is what the winding *imposes*, in amps per metre, and it depends only on the current and the geometry. $B = \\mu_0\\mu_r H$ is what the material *delivers*. In vacuum $\\mu_r = 1$; in silicon steel it is a few thousand, in a power ferrite one to ten thousand.",
                 "The multiplication has a ceiling. The material's response comes from magnetic domains lining up, and once they all have there is nothing left to recruit: past saturation — around 1.5 to 2 T for iron, 0.3 to 0.4 T for common ferrites — extra current adds field as if the core were not there, and the inductance collapses to its air value.",
                 "Ferromagnets remember. Take the current away and some flux remains; reversing it takes a coercive field to undo. Traced round a full cycle, $B$ against $H$ is a loop rather than a line, and the area inside that loop is energy turned into heat, per cycle and per cubic metre. That is why a transformer hums warm at 50 Hz and why core materials are chosen by frequency.",
-                "Ampère's law round a closed core reads $NI = \\sum H\\ell$, which is Kirchhoff's voltage law wearing a hat: the magnetomotive force $NI$ plays the part of a voltage, the flux $\\Phi$ that of a current, and the reluctance $\\mathcal{R} = \\ell/(\\mu_0\\mu_r A)$ that of a resistance. Reluctances in series add, and $\\Phi = NI/\\mathcal{R}$ is Ohm's law.",
+                "Ampère's law round a closed core reads $NI = \\sum H\\ell$, which is Kirchhoff's voltage law wearing a hat: the magnetomotive force $NI$ plays the part of a voltage, the flux $\\Phi$ that of a current, and the reluctance $R_m = \\ell/(\\mu_0\\mu_r A)$ that of a resistance. Reluctances in series add, and $\\Phi = NI/R_m$ is Ohm's law.",
                 "An air gap has $\\mu_r = 1$, so half a millimetre of it can outweigh ten centimetres of ferrite ten times over. Gapping a core throws away most of the inductance — and buys back a value fixed by a measurable length instead of by a material property that drifts with temperature, drive level and batch, and buys headroom before saturation. Nearly every power inductor is gapped for exactly those reasons.",
+            ],
+            "read": [
+                {
+                    "title": "Two fields, because the winding and the material are not the same thing",
+                    "minutes": 19,
+                    "body": r'''
+Wind two hundred turns of enamelled wire on a plastic ring, measure the inductance, and
+you get about fifty microhenries. Wind the same two hundred turns on a ferrite ring of
+the same size and the meter reads a hundred millihenries. Nothing electrical changed —
+same wire, same turns, same current, same dimensions. A grey ceramic doughnut that does
+nothing you can see, sitting inside the winding, multiplied the part by two thousand.
+
+Module 4 wrote every magnetic formula with $\mu_0$ in it and quietly assumed the coil
+was wound on nothing. That is the assumption this module removes, and removing it costs
+more than replacing one constant with another. The material joins in, it joins in
+enormously, and it stops joining in at a hard ceiling that has to be designed around.
+
+## What is actually in there
+
+Every electron is a small magnet. It has spin, and spin carries a magnetic moment; it
+also orbits, and a circulating charge is a current loop, which is a magnet too. So the
+raw ingredients for magnetism are in every atom of every substance in the room.
+
+In nearly every substance they cancel. Electrons pair off in shells with opposite spins,
+the moments subtract, and what is left over is feeble: put aluminium or water in a field
+and the response is one part in $10^{5}$ or so. Aluminium is very slightly attracted
+(paramagnetic), water very slightly repelled (diamagnetic), and for either of them
+$\mu_r$ differs from 1 in the fifth decimal place. Nothing in this module is about them.
+
+Iron, cobalt and nickel are different, and the difference is not that their atoms have
+larger moments — a manganese atom has a larger one — but that neighbouring atoms *agree*.
+The unpaired 3d electrons in adjacent iron atoms are coupled by an effect called exchange,
+which is quantum mechanical and has no classical picture, and which is far stronger than
+the ordinary magnetic force one atom exerts on the next. Exchange makes it energetically
+favourable for a moment to lie parallel to its neighbours. So in a lump of iron the
+moments are not randomly arranged waiting for a field to tidy them; they are *already*
+lined up, over regions containing $10^{15}$ atoms or so, with no field applied at all.
+
+Those regions are the **domains**, and they are the reason a nail is not a magnet. Each
+domain is fully magnetised, but the domains point every which way, because a lump of iron
+with all its domains parallel would carry an enormous field outside itself and that field
+costs energy. Splitting into domains that close the flux internally is cheaper. The net
+result — the sum over the whole lump — is zero, and the nail sits there looking inert.
+
+## What a field does to them
+
+Apply a field and the domains pointing more or less the right way grow, at the expense
+of the ones pointing the wrong way. They grow because the boundaries between them — the
+domain walls, a hundred atoms or so thick, where the direction rotates from one domain's
+alignment to the next — *move*. A wall sweeping past an atom does not turn that atom by
+brute force against exchange; it hands it over from one alignment to the other, and the
+energy involved is tiny. That is why the response is so large for so little applied
+field. You are not magnetising iron atom by atom. You are moving boundaries.
+
+When the walls have swept as far as they can go, the remaining work is harder: the last
+stage is rotating whole domains away from the crystal directions they prefer, which does
+fight exchange and crystal anisotropy, and it takes far more field per unit of progress.
+And when every moment in the lump points along the applied field, that is the end. There
+is nothing left to recruit. The material is **saturated**.
+
+## Two symbols, and why one will not do
+
+Here is the bookkeeping problem. The winding imposes something on the space inside it.
+The material adds its own contribution on top. If you use one symbol for the field, you
+cannot say which of those two you mean, and every statement becomes ambiguous. So there
+are two.
+
+$H$, the **magnetic field strength**, in amps per metre, is what the *winding* imposes.
+Ampère's law, in the form that counts only the current you actually put through the wire,
+says that going once round a closed path,
+
+$$\oint \mathbf{H}\cdot\mathrm{d}\mathbf{l} = NI$$
+
+For a uniform ring of mean path length $\ell$ wound with $N$ turns, that is just
+
+$$H = \frac{NI}{\ell}$$
+
+Read what is *not* in that expression: the material. $H$ inside the ring is the same
+whether the ring is ferrite, iron, wood or air. It is a statement about the winding and
+the geometry, and nothing else. The quantity $NI$ has its own name, the **magnetomotive
+force** or mmf, measured in ampere-turns, and the next reading unit but one makes it the
+central object.
+
+$B$, the **flux density**, in tesla, is what the material *delivers*. It is the field
+that appears in Faraday's law, in the force $q\mathbf{v}\times\mathbf{B}$, and in the
+flux $\Phi = BA$ — that is, in every equation that says what the field will actually do
+to something. The material's own contribution is written as a magnetisation $M$, in amps
+per metre like $H$, being the moment per unit volume, and
+
+$$B = \mu_0(H + M)$$
+
+For the materials in this module $M$ is proportional to $H$ over a useful range, so write
+$M = \chi_m H$, fold the constant in, and
+
+$$B = \mu_0(1 + \chi_m)H = \mu_0\mu_r H$$
+
+with $\mu_r = 1 + \chi_m$ the **relative permeability**. In vacuum $\mu_r = 1$ exactly. In
+a manganese-zinc power ferrite it is one to three thousand, and in the filter grades of the
+same material several times that; in transformer-grade silicon steel, four to ten thousand;
+in grain-oriented steel driven along its rolling direction, tens of thousands; in mu-metal,
+up to $10^5$, which is why magnetic shields are made of it.
+
+The short version, worth committing to memory in these words: **$H$ is what you asked
+for; $B$ is what you got.**
+
+## Worked: a ring, and a number that cannot be true
+
+Take a ferrite ring — mean magnetic path $\ell = 100$ mm, cross-section $A = 100$ mm²,
+$\mu_r = 2000$, saturating at about $B_{sat} = 0.35$ T. Wind 200 turns and push half an
+amp through it.
+
+```text
+H = N I / l      = 200 * 0.5 / 0.100          = 1000 A/m
+
+mu_0 mu_r        = 1.2566e-6 * 2000           = 2.5133e-3 T m/A
+B = mu_0 mu_r H  = 2.5133e-3 * 1000           = 2.513 T
+```
+
+Two and a half tesla. That is more than the strongest field any iron alloy has ever been
+made to produce, from a ceramic that gives up at about a seventh of it. The arithmetic is
+not wrong; the *model* stopped being true long before this current. So run the question
+backwards and find where it stopped:
+
+```text
+H_sat = B_sat / (mu_0 mu_r)
+      = 0.35 / 2.5133e-3                      = 139.3 A/m
+
+I_sat = H_sat * l / N
+      = 139.3 * 0.100 / 200                   = 0.0696 A   = 70 mA
+```
+
+Seventy milliamps. Everything above that is outside the linear model, and the half-amp in
+the question is seven times past it. This is the single most common way a magnetic design
+goes wrong, and notice that nothing in the calculation warned you — $B = \mu_0\mu_r H$ is
+happy to return any number you like. The material's limit has to be carried separately
+and checked on purpose.
+
+## Worked: what the collapse does to the inductance
+
+For a coil on a closed core the module-4 result picks up one factor:
+
+$$L = \frac{\mu_0\mu_r N^2 A}{\ell}$$
+
+so the same 200 turns on the same ring give
+
+```text
+L = 2.5133e-3 * 200^2 * 1.0e-4 / 0.100
+  = 2.5133e-3 * 40000 * 1.0e-3               = 0.1005 H    = 100.5 mH
+
+with the core removed (mu_r = 1):
+L_air = 100.5 mH / 2000                      = 50.3 uH
+```
+
+Now saturate it. Past saturation, an extra amp recruits nothing, so the extra flux it
+brings is only what it would have brought in empty space: the *incremental* permeability
+falls from $\mu_0\mu_r$ to $\mu_0$, and the inductance falls with it, from 100.5 mH
+towards 50.3 µH. Not a graceful 20% droop — a factor of two thousand.
+
+What that does in a circuit is worth spelling out, because it is why saturation destroys
+hardware rather than merely degrading it. An inductor obeys
+$\mathrm{d}i/\mathrm{d}t = v/L$, so with five volts across this part:
+
+```text
+below saturation:  di/dt = 5 / 0.1005        = 50 A/s
+above saturation:  di/dt = 5 / 50.3e-6       = 1.0e5 A/s
+```
+
+The failure feeds itself. The current climbs, the core saturates, the inductance
+collapses, so the current climbs two thousand times faster, which saturates the core
+harder. In a switching converter the transistor is holding that voltage across the
+inductor for a fixed few microseconds, and it is the transistor that discovers what
+happened. There is no soft failure here, which is why every switching design carries a
+saturation-current rating and treats it as a hard limit rather than a guideline.
+
+## The mistakes people actually make
+
+**Treating $\mu_r$ as a property of the material, like density.** It is tempting because
+data sheets print it as a single number and textbooks tabulate it. It is really the local
+slope of a curve, $\mu_r = (1/\mu_0)\,\mathrm{d}B/\mathrm{d}H$, and that slope depends on
+where you are on the curve — that is, on the current. The number in the table is usually
+the *initial* permeability, measured at a drive small enough that the domain walls barely
+move. It also falls by half or doubles over the temperature range a converter runs at, and
+varies by ±25% between batches of the same part number. Any design whose value depends
+sensitively on $\mu_r$ is a design that works on the bench and fails in the field. The
+third reading unit is largely about how to build one that does not.
+
+**Saying "$H$ is the field in air and $B$ is the field in iron".** Both exist everywhere,
+including in vacuum, where they differ only by the constant $\mu_0$. The real distinction
+is *imposed* versus *delivered*, and it matters at a boundary: cross from ferrite into an
+air gap and $B$ carries straight through unchanged, because the flux has nowhere else to
+go, while $H$ jumps up by a factor of $\mu_r$. Getting that the wrong way round is the
+reliable way to mis-analyse a gapped core.
+
+**Thinking saturation means $B$ stops increasing.** It does not. Above saturation $B$ goes
+on rising, at the rate $\mu_0$ per unit $H$ — the vacuum rate. What stops is the material's
+*contribution*: $M$ has reached its maximum and cannot grow. Since $\mu_0 H$ is a very
+small term at ordinary drive levels, the curve looks flat on a plot scaled to show 1.5 T,
+but "flat" is a matter of scale, not of physics.
+
+## Where this stops holding
+
+**Above the Curie temperature there is no ferromagnetism at all.** Thermal agitation beats
+exchange, the domains dissolve, and iron becomes an ordinary paramagnet with $\mu_r$
+indistinguishable from 1. For iron that happens at 770 °C, for nickel at 358 °C — and, far
+more relevantly, for a manganese-zinc power ferrite at around 200 °C, which is close enough
+to the temperature a hard-worked converter reaches that data sheets plot the approach to it.
+What replaces the model above the Curie point is Curie's law, $\chi_m \propto 1/T$, and a
+component that has stopped working.
+
+**$B = \mu_0\mu_r H$ is a straight line drawn through a curve.** The real relation has a
+knee, and a design that runs anywhere near it needs the measured $B$–$H$ curve rather than
+the constant. What replaces the constant is either the graph on the data sheet or, for
+small signals riding on a large bias, a local slope called the incremental permeability,
+which can be an order of magnitude lower than the initial value.
+
+**$B$ is not even a single-valued function of $H$.** Take the current away and some flux
+stays; the return path is not the outward path. That is hysteresis, it is the subject of
+the next reading unit, and it means that strictly speaking there is no such thing as *the*
+permeability of a ferromagnet — only a curve, a history, and whichever slope of it you are
+currently sitting on.
+''',
+                },
+                {
+                    "title": "What the material remembers, and what remembering costs",
+                    "minutes": 17,
+                    "body": r'''
+A fridge magnet and an iron nail are both made of stuff full of magnetic domains. Hold the
+nail near a magnet and it becomes a magnet: it will pick up a paperclip. Take the magnet
+away and it drops the paperclip within a second. The fridge magnet has had no field applied
+to it for years and is still holding itself against gravity on a steel door.
+
+Same physics, opposite behaviour, and the difference is entirely in how easily the domain
+walls move.
+
+## Why the return path is not the outward path
+
+The previous unit described magnetisation as domain walls sweeping through the material.
+Walls do not sweep through a perfect crystal, because there is no perfect crystal: real
+material is full of grain boundaries, dislocations, voids and inclusions, and a domain
+wall sitting on one of those has a lower energy than a wall in clean material. So walls
+get **pinned**. Raising the field a little bows the wall against its pinning points;
+raising it further tears the wall loose, and it snaps forward to the next set of defects,
+which is a small irreversible jump. Do this with a coil and an amplifier and you can hear
+the jumps as a rustle — the Barkhausen noise, and the direct evidence that magnetisation
+proceeds in discontinuous steps rather than smoothly.
+
+Irreversible is the operative word. Energy went into tearing walls loose, and it came out
+as heat in the lattice. Take the applied field back to zero and the walls do not return to
+where they started, because there is nothing pulling them back to those particular defects.
+Some magnetisation remains.
+
+Plot $B$ against $H$ for a full cycle of the current and you therefore get a **loop**, not
+a line. Two points on it have names:
+
+- the **remanence** $B_r$, the flux density left when $H$ has been returned to zero. That
+  is what the fridge magnet is living on.
+- the **coercivity** $H_c$, the reverse field needed to bring $B$ back to zero. That is
+  what the nail does not have.
+
+For a transformer steel $H_c$ is of the order of 10 to 40 A/m; for a hard ferrite magnet it
+is around $2\times10^5$ A/m, and for neodymium-iron-boron nearer $10^6$. Four to five
+orders of magnitude between two materials made of much the same elements, and the whole
+difference is metallurgy: a soft material is processed to be as clean and as
+strain-free as possible so the walls slide, while a hard material is deliberately made of
+fine single-domain particles with nowhere for a wall to go at all. When you choose between
+"soft" and "hard" magnetic material you are choosing which side of that you want.
+
+## The loop area is energy, and the proof is three lines
+
+The claim is that going once round the loop turns $\oint H\,\mathrm{d}B$ joules per cubic
+metre of core into heat. It is worth deriving rather than asserting, because the derivation
+is short and explains why the two axes are the ones they are.
+
+Take a winding of $N$ turns on a core of cross-section $A$ and magnetic path length $\ell$,
+and ignore the resistance of the wire. Faraday gives the voltage across the winding, and
+Ampère gives the current in it:
+
+$$v = N\frac{\mathrm{d}\Phi}{\mathrm{d}t} = NA\frac{\mathrm{d}B}{\mathrm{d}t},
+\qquad i = \frac{H\ell}{N}$$
+
+The electrical power going into the component is $p = vi$, so
+
+$$p = NA\frac{\mathrm{d}B}{\mathrm{d}t}\cdot\frac{H\ell}{N}
+    = (A\ell)\,H\frac{\mathrm{d}B}{\mathrm{d}t}$$
+
+The turns cancelled, and $A\ell$ is the volume of the core. Integrate over one complete
+cycle:
+
+$$\frac{W_{\text{cycle}}}{\text{volume}} = \oint H\,\mathrm{d}B$$
+
+which is the area the loop encloses, in joules per cubic metre. If $B$ were a
+single-valued function of $H$ the loop would have no area and the integral would be zero —
+everything put in would come back out, which is exactly what happens with an air-cored
+coil. The area *is* the memory, priced.
+
+Two consequences follow immediately. It is energy per **cycle**, so the power lost is
+proportional to frequency. And it is per unit **volume**, so it scales with the size of the
+core and not with the number of turns.
+
+## Worked: the loss in a mains transformer core
+
+Take a core of volume 1000 cm³ — a litre of laminated steel, which is a transformer of a
+few hundred watts — driven to 1.5 T at 50 Hz, where the loop area is around 200 J/m³.
+
+```text
+volume       = 1000 cm^3                     = 1.0e-3 m^3
+P_hyst       = 200 J/m^3 * 1.0e-3 m^3 * 50 /s
+             = 200 * 1.0e-3 * 50             = 10.0 W
+```
+
+Ten watts, produced by nothing moving, in a component with no moving parts, whether or not
+anything is plugged into the secondary. Cross-check it against the way steel is actually
+sold: at a density of 7650 kg/m³ that litre weighs 7.65 kg, so this is
+$10.0/7.65 = 1.31$ W/kg, and grain-oriented steels are catalogued at roughly 1 W/kg at 1.5 T
+and 50 Hz. The order is right.
+
+Now ask what the same material would do at 5 kHz. Hysteresis loss goes as $f$, so the ten
+watts becomes a kilowatt in the same litre of steel — before the second loss mechanism,
+below, has even been counted. That is the answer to why mains transformers are steel and
+switching converters are ferrite, and it is a bigger part of the answer than most people
+assume.
+
+## The second loss: the core is also a lump of conductor
+
+Hysteresis is not the only thing turning flux into heat. A steel core is a conductor
+sitting in a changing magnetic field, so Faraday's law drives currents *round inside the
+core itself* — eddy currents — and they dissipate in the core's own resistance. Nobody
+wound them; they are a consequence of the core being metal.
+
+For a lamination of thickness $t$ driven sinusoidally, the standard result is
+
+$$\frac{P_{\text{eddy}}}{\text{volume}} = \frac{(\pi t f B_{pk})^2}{6\rho}$$
+
+Both the thickness and the frequency are squared, and it is the $t^2$ that decides how
+cores are built. Take 3% silicon steel, $\rho = 4.8\times10^{-7}$ Ω·m, at the same 1.5 T
+and 50 Hz, laminated at 0.35 mm:
+
+```text
+pi t f B = 3.1416 * 3.5e-4 * 50 * 1.5        = 8.247e-2
+squared                                      = 6.801e-3
+6 rho    = 6 * 4.8e-7                        = 2.88e-6
+
+P/vol    = 6.801e-3 / 2.88e-6                = 2361 W/m^3
+per kg   = 2361 / 7650                       = 0.31 W/kg
+```
+
+About a quarter of the hysteresis figure, which is roughly the split a real data sheet
+shows. Now build the same core as one solid 50 mm block instead:
+
+```text
+ratio    = (50 / 0.35)^2 = 142.9^2           = 20400
+P/vol    = 2361 * 20400                      = 4.8e7 W/m^3
+```
+
+Forty-eight megawatts per cubic metre. The core would not run hot; it would be an
+induction furnace, which is precisely what an induction furnace is. Slicing the core into
+0.35 mm sheets, each varnished from its neighbours so the current cannot cross, cuts that
+by a factor of twenty thousand for no change in the magnetic path at all — the laminations
+lie *along* the flux, so $B$ does not care, while the eddy loops are forced into thin
+slices where the enclosed area, and hence the induced voltage, is tiny.
+
+Ferrite takes the other route. It is a ceramic, not a metal: resistivity of order 1 Ω·m for
+manganese-zinc grades against $5\times10^{-7}$ Ω·m for silicon steel, a factor of two
+million, and eddy loss goes down in proportion. That is what buys the right to run at
+hundreds of kilohertz, and it is paid for in saturation flux density — 0.35 T against 2 T,
+so a ferrite core of the same size handles a quarter as much flux.
+
+## Separating the two, without taking anything apart
+
+The two losses have different frequency laws — hysteresis $\propto f$, eddy $\propto f^2$ —
+and that is enough to tell them apart by measurement. Divide the measured core loss per
+unit volume by the frequency:
+
+$$\frac{P}{f} = k_h + k_e f$$
+
+and plot that against $f$. A straight line, whose intercept is the hysteresis loss per
+cycle (the loop area) and whose slope is the eddy coefficient. For the numbers above, at
+50 Hz, $P/f$ is $10\,000/50 = 200$ J/m³ from hysteresis plus $2361/50 = 47$ J/m³ from
+eddies; measure at 100 Hz as well and the first term stays at 200 while the second doubles,
+which is what pins them apart.
+
+## The mistakes people actually make
+
+**Reading the loop area as stored energy.** The area under the *rising* part of the curve
+does look like the $\int H\,\mathrm{d}B$ that stores energy, and it is — but the falling
+part gives most of it back. What the enclosed area measures is the difference: the part
+that did not come back. After a full cycle the material is exactly where it started, so
+nothing is stored, and every joule of that area is heat.
+
+**Assuming the loop you were shown is the loop you will get.** Textbook loops are quasi-static,
+traced slowly. Drive the same material at 100 kHz and the loop is visibly fatter, because
+eddy currents inside each grain oppose the change and the material lags. What a data sheet
+gives you is not a loop at all but a measured loss curve in kW/m³ against $B$ and $f$, and
+it is fitted rather than derived — the Steinmetz form $P = k f^{a} B^{b}$ with $a$ around
+1.2 to 1.7 and $b$ around 2.3 to 2.7, valid over the range it was fitted on and nowhere else.
+
+**Forgetting that loss is per unit volume.** Halving the turns to reduce copper loss does
+nothing to core loss directly; it doubles $B$ for the same voltage and frequency, which
+raises core loss by a factor of five or six through the Steinmetz exponent. Copper loss and
+core loss pull in opposite directions on almost every design variable, and the optimum is
+where they are roughly equal.
+
+## Where this stops holding
+
+**At high enough frequency the permeability itself is complex.** Domain walls have inertia
+and damping, and above a material's cutoff they can no longer follow the field. What replaces
+$\mu_r$ is $\mu = \mu' - j\mu''$: the real part still stores, the imaginary part is pure loss,
+and above the crossover $\mu''$ dominates. A component built on purpose to live there is the
+ferrite bead — sold not as an inductor but as a resistor made of ceramic, whose resistance
+appears only above 10 MHz or so, which is exactly the loss mechanism this unit spent its
+length trying to avoid, deployed deliberately.
+
+**Minor loops are not scaled copies of the major loop.** A material biased at 1.0 T and
+wobbled by ±0.05 T traces a small loop whose slope and area have to be measured, not derived
+from the big one. Converter designers who work with a large DC bias and a small ripple live
+entirely in that regime, and the quantity they need is the incremental permeability, not
+$\mu_r$.
+
+**None of this applies to a powder core.** Iron powder and sendust cores are made of insulated
+particles in a binder, so the distributed air between the grains dominates the behaviour: they
+saturate gently over a decade of drive rather than sharply, and are specified by a *percentage
+of initial permeability against DC bias* rather than by a saturation flux density. They are
+what you use when a soft failure is worth paying for.
+''',
+                },
+                {
+                    "title": "Reluctance, and the half-millimetre that runs the part",
+                    "minutes": 20,
+                    "body": r'''
+Cut a transformer open and the iron goes all the way round. Nobody put the flux in a pipe —
+there is no such thing as a magnetic insulator, and the flux is perfectly free to leave the
+core and take a short cut through the air. It mostly does not. It stays in the iron for the
+same reason current stays in a wire rather than going through the air beside it: the
+alternative is thousands of times harder.
+
+That single observation is enough to turn a field problem into a circuit problem, and the
+circuit that comes out obeys rules you have used since EE101.
+
+## From Ampère's law to Kirchhoff's
+
+Start where the last two units left off. Ampère's law round any closed path says the mmf the
+winding supplies equals the sum of $H\ell$ along the path:
+
+$$NI = \sum_k H_k \ell_k$$
+
+Now suppose the path is made of segments, each of uniform cross-section $A_k$ and uniform
+permeability $\mu_0\mu_{r,k}$, and suppose all the flux stays inside. Then the *same* flux
+$\Phi$ crosses every segment, because flux has nowhere else to go — that is $\nabla\cdot
+\mathbf{B} = 0$, the statement from module 4 that magnetic field lines close on themselves.
+In each segment $B_k = \Phi/A_k$ and $H_k = B_k/(\mu_0\mu_{r,k})$, so
+
+$$NI = \sum_k \frac{\Phi\,\ell_k}{\mu_0\mu_{r,k}A_k}
+     = \Phi \sum_k R_{m,k},
+\qquad R_{m,k} = \frac{\ell_k}{\mu_0\mu_{r,k}A_k}$$
+
+Look at the shape of that: a driving quantity equals a flow multiplied by a sum of
+resistance-like terms, and the terms are (length) over (a material constant times area).
+It is $V = I\sum R$ with $R = \rho\ell/A$, which module 6 derived, and the correspondence is
+exact term for term:
+
+| electric | magnetic |
+| --- | --- |
+| emf $V$, volts | mmf $F_m = NI$, ampere-turns |
+| current $I$, amps | flux $\Phi$, webers |
+| resistance $R = \ell/(\sigma A)$ | reluctance $R_m = \ell/(\mu_0\mu_r A)$ |
+| conductivity $\sigma$ | permeability $\mu_0\mu_r$ |
+| $V = IR$ | $F_m = \Phi R_m$ |
+| KVL round a loop | Ampère's law round the core |
+| KCL at a node | flux continuity at a junction of limbs |
+
+Everything you know about series and parallel comes across intact. Reluctances in series
+add. Reluctances in parallel combine as products over sums. Two reluctances in series divide
+the mmf in proportion to themselves, exactly as two resistors divide a voltage. And the
+inductance falls out in one more line, because $L = N\Phi/I$ and $\Phi = NI/R_m$:
+
+$$L = \frac{N^2}{R_{\text{tot}}}$$
+
+which is the single most useful formula in inductor design. Turns squared, over the sum of
+the reluctances. Nothing else.
+
+## Worked: a ring with half a millimetre missing
+
+Take the ferrite ring from the first reading unit — path $\ell_c = 100$ mm, cross-section
+$A = 100$ mm², $\mu_r = 2000$ — and cut a $g = 0.5$ mm gap across it. Wind 331 turns.
+
+```text
+mu_0 A      = 1.2566e-6 * 1.0e-4              = 1.2566e-10
+
+R_core = l_c / (mu_0 mu_r A)
+       = 0.100 / (1.2566e-10 * 2000)          = 3.979e5  A/Wb
+
+R_gap  = g / (mu_0 A)
+       = 5.0e-4 / 1.2566e-10                  = 3.979e6  A/Wb
+
+R_total                                       = 4.377e6  A/Wb
+```
+
+Stop and look at that before going on. Half a millimetre of *nothing* has ten times the
+reluctance of a hundred millimetres of ferrite. The reason is visible in the formula: the
+gap is 200 times shorter but its permeability is 2000 times lower, so it wins by ten. In
+reluctance terms the ferrite is worth $\ell_c/\mu_r = 100/2000 = 0.05$ mm of air. The
+entire core, magnetically, is a twentieth of a millimetre.
+
+The inductance follows:
+
+```text
+L_gapped   = N^2 / R_total = 331^2 / 4.377e6  = 25.0 mH
+L_ungapped = N^2 / R_core  = 109561 / 3.979e5 = 275.4 mH
+```
+
+Cutting the gap threw away ten elevenths of the inductance — a factor of exactly 11, which
+is the ratio of the total reluctance to the core's alone. Which raises the obvious
+question, and the answer to it is the point of the whole exercise: why would anyone do
+that on purpose?
+
+## What the gap is bought with, and what it buys
+
+**It buys a value that depends on a machined length instead of on a material property.**
+Ten elevenths of the reluctance is now a gap someone ground to a tolerance, and $\mu_r$
+enters only through the remaining eleventh. Halve $\mu_r$ — which a hot ferrite does — and
+the ungapped part loses half its inductance while the gapped part loses 8%. Work through
+it: with $\mu_r = 1000$ the core reluctance doubles to $7.958\times10^5$, the total becomes
+$4.775\times10^6$, and $L$ falls from 25.0 mH to 22.9 mH. That is the difference between a
+part with a specification and a part with a tendency.
+
+**It buys current before saturation.** Ask what current takes the core to $B_{sat} = 0.35$ T,
+gapped and ungapped:
+
+```text
+Phi at saturation = B_sat * A = 0.35 * 1.0e-4 = 3.50e-5 Wb
+
+gapped:   mmf = Phi * R_total = 3.5e-5 * 4.377e6 = 153.2 A-turns
+          I   = 153.2 / 331                      = 0.463 A
+
+ungapped: mmf = Phi * R_core  = 3.5e-5 * 3.979e5 = 13.93 A-turns
+          I   = 13.93 / 331                      = 0.0421 A
+```
+
+Eleven times the current — the same factor of 11 by which the inductance fell, which is not
+a coincidence and is worth understanding rather than noticing. The gap demands mmf of its
+own, and that mmf buys no extra flux, because the flux is fixed by the whole series chain —
+so for a given flux density the winding has to work eleven times harder. And it is the flux
+density, not the current, that the domains care about: the core in the gapped part is at
+exactly the same 0.35 T when it gives up, reached at eleven times the current.
+
+Where does the mmf go? Split the 153.2 ampere-turns between the two reluctances in
+proportion, as with any series divider:
+
+```text
+gap  gets 10/11 of 153.2                      = 139.3 A-turns
+core gets  1/11 of 153.2                      = 13.93 A-turns
+
+H_gap  = 139.3  / 5.0e-4 m                    = 2.786e5 A/m
+H_core = 13.93  / 0.100 m                     = 139.3   A/m
+
+check B on both sides of the boundary:
+  in the gap   B = mu_0 H          = 1.2566e-6 * 2.786e5 = 0.350 T
+  in the core  B = mu_0 mu_r H     = 2.5133e-3 * 139.3   = 0.350 T
+```
+
+$B$ is continuous across the boundary and $H$ jumps by exactly $\mu_r$. That is the
+distinction from the first reading unit doing real work: the flux has to cross, so $B$ is
+forced to be the same on both sides, and the price of dragging it across without a material
+to help is a two-thousand-fold larger $H$ over that short distance.
+
+## Worked: the energy is not where you think it is
+
+An inductor is an energy store, so ask where in the part the energy actually sits. At the
+saturation current above, $I = 0.463$ A:
+
+```text
+W = 0.5 L I^2 = 0.5 * 0.02503 * 0.463^2       = 2.68e-3 J   = 2.68 mJ
+```
+
+Now compute it the other way, from the field energy density region by region — module 4's
+$u = B^2/(2\mu_0)$, with the material's permeability $\mu_0\mu_r$ in place of the vacuum
+one wherever there is material:
+
+```text
+in the gap    u = 0.35^2 / (2 * 1.2566e-6)    = 4.874e4 J/m^3
+              V = A * g = 1.0e-4 * 5.0e-4     = 5.0e-8 m^3
+              W_gap                           = 2.437e-3 J
+
+in the core   u = 4.874e4 / 2000              = 24.37 J/m^3
+              V = A * l_c = 1.0e-4 * 0.100    = 1.0e-5 m^3
+              W_core                          = 2.437e-4 J
+
+              total                           = 2.68e-3 J   ok
+```
+
+The two routes agree, and the split is the answer: **91% of the energy is stored in half a
+millimetre of air**, and the two hundred times larger volume of expensive ferrite holds the
+other 9%. The same $B$ appears in both, but the energy density carries $1/\mu_r$, so the
+core is two thousand times worse per cubic metre at the job.
+
+That inverts what most people assume an inductor is. The ferrite is not the store; it is the
+*guide*, there to route the flux from one face of the gap round to the other with almost no
+mmf spent doing it. The gap is the component. If you want an inductor that holds more energy,
+you make the gap bigger — and the eleven-fold improvement in saturation current above is the
+same statement, since $\tfrac12 LI^2$ at the saturation limit went from 0.244 mJ ungapped to
+2.68 mJ gapped, a factor of eleven, while $L$ itself fell by eleven.
+
+## How the calculation is actually done in industry
+
+Nobody looks up $\mu_r$ for a gapped core. The manufacturer measures the finished core set
+and quotes an **$A_L$ value**, the inductance per turn squared, usually in nH/turn²:
+
+$$A_L = \frac{1}{R_{\text{tot}}}, \qquad L = A_L N^2$$
+
+For the part above, $A_L = 1/4.377\times10^{6} = 2.285\times10^{-7}$ H = 228 nH/turn², and
+$228\,\text{nH} \times 331^2 = 25.0$ mH. Same arithmetic, one measured number instead of four
+guessed ones, and it absorbs the fringing correction below without anyone having to think
+about it.
+
+## The mistakes people actually make
+
+**Believing a gap raises the inductance.** It is a very natural error, because the gap is
+where the useful energy is and because everything else about gapping is an improvement. But
+reluctance is *resistance*: put more in series and less flux flows for the same mmf, so $L$
+goes down. The gapped part is better in every way except the one the name suggests, and it
+needs more turns to get back to the value it started with.
+
+**Adding reluctances the way you would add permeabilities.** A gap in series with a core is
+$R_{\text{core}} + R_{\text{gap}}$, not some average of the two
+$\mu_r$ values weighted by length. Averaging the permeabilities here gives
+$(100\times2000 + 0.5\times1)/100.5 \approx 1990$, hence a total reluctance of
+$4.02\times10^5$ and an inductance of 273 mH — eleven times the true answer, and barely
+distinguishable from the ungapped part, because the quantity that adds in series is the
+*reciprocal* of permeability, not permeability.
+
+**Designing by choosing $\mu_r$.** In a gapped part $\mu_r$ is very nearly irrelevant — that
+was the point of gapping. The design variables are the turns, the gap and the core area; the
+material only has to be good enough not to matter.
+
+## Where this stops holding
+
+**There is no magnetic insulator, so flux leaks.** Copper's conductivity beats air's by
+something like $10^{20}$; ferrite's permeability beats air's by $10^3$. The magnetic circuit
+is a circuit whose "wires" are immersed in mildly conducting salt water, and a few per cent
+of the flux always takes a short cut through the air instead of going round. What that
+leakage becomes, once there is a second winding to miss, is the leakage inductance of a
+transformer, which is module 9's problem.
+
+**A gap fringes.** The flux bulges outwards as it crosses, so the effective area of the gap
+is bigger than $A$ and its reluctance is lower than $g/(\mu_0 A)$. The usual first-order fix
+is to add the gap length to each linear dimension of the cross-section. For a 10 mm × 10 mm
+core with $g = 0.5$ mm that is $10.5 \times 10.5 = 110.25$ mm², 10% more area:
+
+```text
+R_gap (fringed) = 5.0e-4 / (1.2566e-6 * 1.1025e-4) = 3.609e6
+R_total                                            = 4.007e6
+L = 109561 / 4.007e6                               = 27.3 mH
+```
+
+9% above the 25.0 mH the simple formula predicted, and the error grows with the gap. Big
+gaps also spray flux into whatever is nearby, which shows up as eddy heating in the winding
+next to the gap and as radiated interference. What replaces the lumped calculation, when
+this starts to matter, is finite-element field simulation — or, far more often, a measured
+$A_L$.
+
+**Reluctance stores; resistance dissipates.** This is the disanalogy to keep hold of, because
+the mathematics is identical and the physics is not. Current through a resistance turns
+energy into heat at $I^2R$. Flux through a reluctance stores energy at
+$\tfrac12\Phi^2R_m$ and gives it back. A magnetic circuit that looks like a lossy
+resistive network is in fact a lossless energy store; the losses in a real core are the
+hysteresis and eddy terms from the previous unit, and they are nowhere in this model at all.
+Adding them means a resistor across the winding on the *electrical* side, which is what
+module 9 does to build a transformer model you can actually simulate.
+
+**The reluctance of the core is not constant.** $R_{\text{core}}$ carries $\mu_r$
+in it, and $\mu_r$ depends on $B$, which depends on the flux, which is what you were solving
+for. The magnetic circuit is only linear while the core is, and a design driven close to
+saturation has to be solved iteratively or graphically — the magnetic equivalent of a load
+line, with the core's $B$–$H$ curve on one axis and the gap's straight line on the other.
+''',
+                },
             ],
             "quiz": {
                 "title": "Cores, gaps and saturation, checked",
@@ -8100,6 +11234,604 @@ assert abs(loop_torque(400, 0.5, 4e-4, 0.3, np.pi / 2) - 2.0 * _t) < 1e-12, \
                     },
                 ],
             },
+            "blanks": {
+                "title": "The magnetic circuit, term by term",
+                "minutes": 10,
+                "caption": "the eight relations this module runs on, with the load-bearing part removed",
+                "lang": "text",
+                "brief": r'''
+Nothing here is executed. These are the eight expressions the rest of the module is built
+on, and every hole sits where a slip changes the answer rather than the spelling — which
+of the two fields the material multiplies, which quantity adds when two segments sit in
+series, and which power of the turns count survives into the inductance.
+
+Two of them look like the electrical relation they are modelled on and behave in the
+opposite direction, so say why a choice is right before taking it.
+''',
+                "listing": """# H is what the winding imposes, measured along a uniform magnetic
+# path of length l. Note what does NOT appear on the right.
+
+H = N * I / ___
+
+# B is what the material then delivers:
+
+B = mu_0 * ___ * H
+
+# The reluctance of one uniform segment -- length l, area A, and the
+# permeability mu_0 * mu_r of whatever fills it:
+
+R_m = l / (mu_0 * mu_r * ___)
+
+# A core with a gap cut across it. The same flux crosses both, one
+# after the other:
+
+R_total = ___
+
+# The flux that a winding of N turns carrying I drives round that loop:
+
+Phi = N * I / ___
+
+# The inductance of that winding, from the reluctance alone:
+
+L = ___ / R_total
+
+# The energy stored per unit volume, wherever the flux density is B and
+# the stuff it is passing through has relative permeability mu_r:
+
+u = B**2 / ___
+
+# Hysteresis loss, from the B-H loop area U_loop in J/m^3, the volume V
+# of the core and the frequency f it is driven at:
+
+P = U_loop * V * ___
+"""
+,
+                "blanks": [
+                    {
+                        "prompt": "What divides $NI$ to give $H$?",
+                        "hole": "?",
+                        "opts": ["l", "A", "l * A", "mu_r * l"],
+                        "a": 0,
+                        "why": "The path length. Ampère's law says $\\oint H\\,\\mathrm{d}\\ell = NI$, so $H$ is mmf spread along the path, in ampere-turns per metre. The material is deliberately absent: $H$ is what the winding asks for, and it is the same whether the ring is ferrite or cardboard.",
+                        "whys": [
+                            "The path length. Ampère's law says $\\oint H\\,\\mathrm{d}\\ell = NI$, so $H$ is mmf spread along the path, in ampere-turns per metre. The material is deliberately absent: $H$ is what the winding asks for, and it is the same whether the ring is ferrite or cardboard.",
+                            "Dividing by the area gives amps per square metre, which is a current density, not a field strength. The area enters one step later, when the flux density is turned into a flux — $\\Phi = BA$ — and not here.",
+                            "This has the units of a current per unit volume and corresponds to nothing. It is the sort of expression that survives because it contains both of the symbols in the drawing; check the units and it collapses immediately.",
+                            "Putting the permeability in the denominator makes $H$ depend on what the core is made of, which is precisely the property it was invented not to have. That expression is a garbled $B$, and confusing the two is the standard error in this module.",
+                        ],
+                    },
+                    {
+                        "prompt": "What multiplies $\\mu_0 H$ to give $B$?",
+                        "hole": "?",
+                        "opts": ["1 / mu_r", "N", "mu_r", "mu_r**2"],
+                        "a": 2,
+                        "why": "The relative permeability, as a straight multiplier: $B = \\mu_0\\mu_r H$. It is the material joining in — $\\mu_r = 1 + \\chi_m$, where $\\chi_m H$ is the magnetisation the domains contribute on top of what the winding imposed.",
+                        "whys": [
+                            "The reciprocal has it backwards, and by an enormous margin: it would say a ferrite of $\\mu_r = 2000$ delivers two thousand times *less* flux density than empty space. Iron in a coil makes the field larger, which is the one thing about magnetic materials everybody already knows.",
+                            "The turns count is already inside $H = NI/\\ell$, and putting it in again would count the winding twice. The split is clean: $N$ and $I$ belong to $H$, the material belongs to the step from $H$ to $B$.",
+                            "The relative permeability, as a straight multiplier: $B = \\mu_0\\mu_r H$. It is the material joining in — $\\mu_r = 1 + \\chi_m$, where $\\chi_m H$ is the magnetisation the domains contribute on top of what the winding imposed.",
+                            "Squaring it is dimensionally harmless and physically invented. $\\mu_r$ is defined as the ratio $B/(\\mu_0 H)$, so it appears once by construction; a square would make the definition inconsistent with itself.",
+                        ],
+                    },
+                    {
+                        "prompt": "What completes the reluctance of a segment?",
+                        "hole": "?",
+                        "opts": ["l", "A", "A**2", "1"],
+                        "a": 1,
+                        "why": "The area, so $R_m = \\ell/(\\mu_0\\mu_r A)$. It is $R = \\rho\\ell/A$ with the permeability where the conductivity was: longer is harder, fatter is easier, and a better material is easier.",
+                        "whys": [
+                            "That would make the reluctance independent of the length, since the two would cancel. A long core would then be no harder to drive flux round than a short one, which contradicts the whole reason a magnetic path length is quoted on every core data sheet.",
+                            "The area, so $R_m = \\ell/(\\mu_0\\mu_r A)$. It is $R = \\rho\\ell/A$ with the permeability where the conductivity was: longer is harder, fatter is easier, and a better material is easier.",
+                            "The square of the area gets the units wrong and the physics wrong in the same stroke. Reluctance is the magnetic twin of $\\rho\\ell/A$, and there is exactly one power of area in that, for the same reason a cable twice as thick carries twice the current at the same voltage.",
+                            "Leaving the area out makes a hair-thin core and a fist-thick one equally easy to drive flux through. The area is doing real work here: it is why a gap of a given length in a large core has a lower reluctance than the same gap in a small one.",
+                        ],
+                    },
+                    {
+                        "prompt": "How do the core and the gap combine?",
+                        "hole": "?",
+                        "opts": ["R_core * R_gap / (R_core + R_gap)", "R_core", "R_gap - R_core", "R_core + R_gap"],
+                        "a": 3,
+                        "why": "They add. The same flux crosses both, one after the other, so they are in series and their reluctances add exactly as series resistances do. The mmf then divides between them in proportion, which for a 0.5 mm gap in a 100 mm ferrite path of $\\mu_r = 2000$ means the gap takes ten elevenths of it.",
+                        "whys": [
+                            "The product over the sum is the *parallel* rule, and it is the wrong one because the flux does not have a choice of routes: it goes through the core and then through the gap. Using it here would make the total less than either part, so cutting a gap would make the inductance go up.",
+                            "Ignoring the gap is the most expensive mistake available in this module. Half a millimetre of air has ten times the reluctance of the hundred millimetres of ferrite around it, so dropping it overstates the inductance by a factor of eleven.",
+                            "Subtraction has no counterpart anywhere in circuit theory and none here either. Reluctance is a positive quantity that measures how hard it is to drive flux; adding another segment to the path can only make the total larger.",
+                            "They add. The same flux crosses both, one after the other, so they are in series and their reluctances add exactly as series resistances do. The mmf then divides between them in proportion, which for a 0.5 mm gap in a 100 mm ferrite path of $\\mu_r = 2000$ means the gap takes ten elevenths of it.",
+                        ],
+                    },
+                    {
+                        "prompt": "What does the mmf divide by to give the flux?",
+                        "hole": "?",
+                        "opts": ["R_total", "1 / R_total", "R_total**2", "N * R_total"],
+                        "a": 0,
+                        "why": "The total reluctance: $\\Phi = F_m/R_m = NI/R_{\\text{tot}}$, which is Ohm's law with mmf for voltage, flux for current and reluctance for resistance. More reluctance, less flux, exactly as more resistance means less current.",
+                        "whys": [
+                            "The total reluctance: $\\Phi = F_m/R_m = NI/R_{\\text{tot}}$, which is Ohm's law with mmf for voltage, flux for current and reluctance for resistance. More reluctance, less flux, exactly as more resistance means less current.",
+                            "Dividing by the reciprocal is multiplying, which inverts the dependence: it would say that a core made harder to drive flux through carries *more* flux. The permeance $1/R_m$ is a real and useful quantity — it is the conductance of the analogy — but the flux is mmf times permeance, not mmf divided by it.",
+                            "Squaring the reluctance would make the flux fall off far too fast and would break the analogy with $I = V/R$ that the whole magnetic-circuit method rests on. Nothing in the derivation from Ampère's law produces a second factor.",
+                            "The turns count is already inside the mmf $NI$ on top. Putting it underneath as well cancels it, leaving a flux that does not depend on how many turns are wound — which would make every winding on a given core identical.",
+                        ],
+                    },
+                    {
+                        "prompt": "What sits on top in the inductance?",
+                        "hole": "?",
+                        "opts": ["N", "N**3", "N**2", "2 * N"],
+                        "a": 2,
+                        "why": "The turns count squared. $L = N\\Phi/I$ and $\\Phi = NI/R_m$, so the two factors of $N$ multiply: one because every turn helps make the flux, one because every turn then links it. The reluctance is the only other thing in the expression, which is why inductor design is turns and geometry and almost nothing else.",
+                        "whys": [
+                            "One power of $N$ counts the turns making the flux and forgets the turns linking it. The symptom is easy to spot: it predicts that doubling the winding doubles the inductance, when it in fact quadruples it.",
+                            "A cube appears nowhere. The chain is $L = N\\Phi/I$ with $\\Phi \\propto N$, which is two factors and no more — the reluctance carries the geometry and the material, and it has no $N$ in it at all.",
+                            "The turns count squared. $L = N\\Phi/I$ and $\\Phi = NI/R_m$, so the two factors of $N$ multiply: one because every turn helps make the flux, one because every turn then links it. The reluctance is the only other thing in the expression, which is why inductor design is turns and geometry and almost nothing else.",
+                            "Doubling a quantity is not squaring it. This gives the right answer only at $N = 2$, and for a realistic 331-turn winding it is out by a factor of 165.",
+                        ],
+                    },
+                    {
+                        "prompt": "What divides $B^2$ to give the energy density?",
+                        "hole": "?",
+                        "opts": ["2 * mu_0", "2 * mu_0 * mu_r", "mu_0 * mu_r", "2 * mu_r"],
+                        "a": 1,
+                        "why": "$u = B^2/(2\\mu_0\\mu_r)$ — module 4's vacuum result with the material's permeability in place of $\\mu_0$. The $\\mu_r$ in the denominator is what makes a gap the store and the core merely the guide: at the same $B$, ferrite of $\\mu_r = 2000$ holds two thousand times less energy per cubic metre than the air beside it.",
+                        "whys": [
+                            "That is the vacuum form, and it is right only where there is no material. Applied inside a core it overstates the stored energy by $\\mu_r$ — a factor of two thousand — and destroys the result that most of an inductor's energy sits in its gap.",
+                            "$u = B^2/(2\\mu_0\\mu_r)$ — module 4's vacuum result with the material's permeability in place of $\\mu_0$. The $\\mu_r$ in the denominator is what makes a gap the store and the core merely the guide: at the same $B$, ferrite of $\\mu_r = 2000$ holds two thousand times less energy per cubic metre than the air beside it.",
+                            "The permeability is right and the two is missing. It comes from the integral $\\int H\\,\\mathrm{d}B$ over a linear material, which gives one half of the product exactly as $\\tfrac12 CV^2$ and $\\tfrac12 LI^2$ do, and dropping it doubles every answer.",
+                            "Without $\\mu_0$ the units are not joules per cubic metre at all, and the number is out by six orders of magnitude. The vacuum permeability never leaves this expression; the relative permeability joins it.",
+                        ],
+                    },
+                    {
+                        "prompt": "How does hysteresis loss depend on frequency?",
+                        "hole": "?",
+                        "opts": ["f", "f**2", "1 / f", "2 * pi * f"],
+                        "a": 0,
+                        "why": "Linearly. The loop area is energy per *cycle* per cubic metre, so the power is that energy multiplied by the number of cycles per second. Nothing about one trip round the loop knows how fast it was traced.",
+                        "whys": [
+                            "Linearly. The loop area is energy per *cycle* per cubic metre, so the power is that energy multiplied by the number of cycles per second. Nothing about one trip round the loop knows how fast it was traced.",
+                            "The square is the *eddy-current* law, not the hysteresis one, and keeping the two apart is the whole point of measuring core loss at more than one frequency. Eddy loss goes as $f^2$ because both the induced voltage and the resulting current rise with frequency; hysteresis has no such doubling.",
+                            "An inverse dependence would mean a core driven faster loses less, so a transformer would run coolest at the highest frequency. The opposite is true, and by a wide margin — it is the reason a 50 Hz core cannot simply be run at 5 kHz.",
+                            "The $2\\pi$ belongs to angular frequency, and this expression is in cycles, not radians. The loop area is already the energy for one complete cycle, so the count that multiplies it is $f$ in hertz with no conversion at all.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": [
+                {
+                    "title": "The field the winding imposes",
+                    "minutes": 5,
+                    "brief": r'''
+The mechanical rung: one rule, one unknown, everything given. The only thing that can
+catch you here is what is *not* used — one of the four numbers on the drawing plays no
+part in the answer at all, and knowing which one is most of the point of the question.
+''',
+                    "prompt": "What is $H$ inside the core?",
+                    "note": "Answer in amps per metre, to the nearest whole number.",
+                    "figure": r'''
+```text
+   a closed ring core, wound evenly all the way round
+
+        +---------------------------------------+
+        |  [][][][][][][][][][][][][][][][][][] |   <- N = 240 turns
+        |                                       |
+        |  mean magnetic path   l    = 150 mm   |
+        |  core material        mu_r = 2200     |
+        +---------------------------------------+
+
+                   winding current I = 250 mA
+
+   H is wanted inside the core, along that mean path.
+```
+''',
+                    "given": [
+                        {"label": "Turns", "value": "240"},
+                        {"label": "Current", "value": "250 mA"},
+                        {"label": "Mean magnetic path", "value": "150 mm"},
+                        {"label": "Relative permeability", "value": "2200"},
+                    ],
+                    "aside": "Ampère's law counts only the current you put through the wire, and every one "
+                             "of the 240 turns crosses the path once. What the core is made of never enters.",
+                    "answer": 400.0,
+                    "tol": 3.0,
+                    "unit": "A/m",
+                    "hint": "$H = NI/\\ell$, with the path length in metres. $240 \\times 0.250 = 60$ "
+                            "ampere-turns, spread along 0.150 m.",
+                    "wrong": "If you got about $8.8\\times10^5$, the $\\mu_r$ was multiplied in — but that "
+                             "gives $B/\\mu_0$, not $H$. If you got 0.4, the path length went in as "
+                             "millimetres.",
+                    "why": r'''
+```text
+mmf = N I = 240 * 0.250                    = 60.0 ampere-turns
+H   = mmf / l = 60.0 / 0.150               = 400 A/m
+```
+
+The permeability is a distractor, and a deliberate one: $H$ is defined so that the material
+does not appear in it. Swap the ferrite for a wooden ring and $H$ is still 400 A/m, because
+the winding and the geometry have not changed.
+
+What the material decides is what comes *next*. Multiply through:
+
+```text
+B = mu_0 mu_r H = 1.2566e-6 * 2200 * 400   = 1.106 T
+```
+
+which for a ferrite is nonsense — it saturates somewhere near 0.35 T — and for a silicon
+steel would be a perfectly ordinary working point. Same $H$, same winding, entirely
+different component, decided by a number that was not allowed anywhere near this answer.
+''',
+                },
+                {
+                    "title": "What the loop costs, in watts",
+                    "minutes": 7,
+                    "brief": r'''
+The loop area is energy per cycle and per cubic metre, so turning it into a power takes two
+multiplications and one piece of geometry: the volume of a ring core is its cross-section
+times its mean circumference, and the diameter is what the drawing gives you.
+
+Nothing here is a circuit. This is the number that decides whether a transformer runs warm
+or catches fire.
+''',
+                    "prompt": "How much power does hysteresis dissipate in this core?",
+                    "note": "Answer in milliwatts, to one decimal place.",
+                    "figure": r'''
+```text
+   a ring core driven round a full B-H loop, 50 times a second
+
+              mean diameter d = 60.0 mm
+             .-----------------------.
+           .'                         `.
+          /        cross-section        \
+         |          A = 150 mm^2         |
+          \                             /
+           `.                         .'
+             `-----------------------'
+
+   area enclosed by the B-H loop at this drive level:  240 J/m^3
+   frequency:                                          50 Hz
+
+   eddy-current loss is NOT wanted here -- hysteresis only.
+```
+''',
+                    "given": [
+                        {"label": "Mean diameter", "value": "60.0 mm"},
+                        {"label": "Cross-section", "value": "150 mm²"},
+                        {"label": "B–H loop area", "value": "240 J/m³ per cycle"},
+                        {"label": "Frequency", "value": "50 Hz"},
+                    ],
+                    "aside": "The mean magnetic path of a ring is its mean circumference, $\\pi d$ — not "
+                             "the diameter, and not the radius.",
+                    "answer": 339.3,
+                    "tol": 5.0,
+                    "unit": "mW",
+                    "hint": "Volume first: $\\ell = \\pi d$, then $V = A\\ell$ with $A$ in m². Then "
+                            "$P = (\\text{loop area}) \\times V \\times f$.",
+                    "wrong": "If you got about 108, the path length was taken as the diameter rather than "
+                             "the circumference. If you got $3.4\\times10^5$, the 150 mm² went in as "
+                             "$150\\times10^{-3}$ m² — a square millimetre is $10^{-6}$ m².",
+                    "why": r'''
+```text
+l = pi d = 3.14159 * 0.0600               = 0.18850 m
+A                                          = 1.50e-4 m^2
+V = A l = 1.50e-4 * 0.18850                = 2.827e-5 m^3
+
+P = 240 * 2.827e-5 * 50                    = 0.3393 W  = 339.3 mW
+```
+
+Third of a watt in a core the size of a large coin, produced by nothing moving and drawn
+whether or not anything is connected to the secondary. That is the standing cost of having
+iron in the circuit, and it is why a mains transformer left plugged in is warm.
+
+The two multiplications are worth separating in your head, because they scale differently.
+The volume factor says a core twice as big in every dimension loses eight times as much.
+The frequency factor is linear and unforgiving: run this same core at 5 kHz and the 339 mW
+becomes 34 W, in the same lump of material, with the same cooling. That single line is why
+a switching converter is not built out of transformer steel — and the eddy-current loss
+this question excluded scales as $f^2$, so it gets worse faster still.
+''',
+                },
+                {
+                    "title": "The flux density this circuit puts in the core",
+                    "minutes": 10,
+                    "brief": r'''
+A circuit now, and two stages rather than one. The inductor is the 25 mH gapped part this
+module designs: 331 turns on a ferrite ring of cross-section 100 mm², with a 0.5 mm gap.
+
+Long after the switch closed nothing is changing, so $\mathrm{d}i/\mathrm{d}t = 0$ and the
+coil holds no voltage across it — at DC an inductor is a piece of wire. That turns the left
+half into an ordinary resistor problem, but not the one it looks like: with the coil shorted,
+the 68 Ω branch and the 150 Ω branch hang from the same node and share the current between
+them.
+
+Once you have the coil's current, cross into the magnetics. $L = N\Phi/I$ gives the flux,
+and $B = \Phi/A$ gives the flux density the domains actually see.
+''',
+                    "prompt": "What flux density does the core settle at?",
+                    "note": "Answer in millitesla, to one decimal place.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 7, "rot": 1, "value": 12},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                            {"id": "r1", "kind": "R", "x": 6, "y": 3, "rot": 0, "value": 33},
+                            {"id": "r2", "kind": "R", "x": 11, "y": 6, "rot": 1, "value": 150},
+                            {"id": "g1", "kind": "GND", "x": 11, "y": 9},
+                            {"id": "r3", "kind": "R", "x": 17, "y": 5, "rot": 1, "value": 68},
+                            {"id": "l1", "kind": "L", "x": 17, "y": 8, "rot": 1, "value": 0.025},
+                            {"id": "g2", "kind": "GND", "x": 17, "y": 11},
+                        ],
+                        "wires": [
+                            {"a": [3, 8], "b": [3, 10]},
+                            {"a": [3, 6], "b": [3, 3]},
+                            {"a": [3, 3], "b": [5, 3]},
+                            {"a": [7, 3], "b": [17, 3]},
+                            {"a": [11, 3], "b": [11, 5]},
+                            {"a": [11, 7], "b": [11, 9]},
+                            {"a": [17, 3], "b": [17, 4]},
+                            {"a": [17, 6], "b": [17, 7]},
+                            {"a": [17, 9], "b": [17, 11]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Supply", "value": "12 V"},
+                        {"label": "Series resistor", "value": "33 Ω"},
+                        {"label": "Shunt resistor", "value": "150 Ω"},
+                        {"label": "In series with the coil", "value": "68 Ω"},
+                        {"label": "Inductance", "value": "25 mH"},
+                        {"label": "Turns on the core", "value": "331"},
+                        {"label": "Core cross-section", "value": "100 mm²"},
+                    ],
+                    "aside": "Replace the coil with a plain wire on your sketch before doing any arithmetic. "
+                             "What is left is a divider feeding two parallel branches — and only then does "
+                             "the magnetics start.",
+                    # L and the coil current are read out of the solve, so a re-valued schematic is
+                    # re-measured. Only N and the core area, which are given with the question and
+                    # are not drawable, are restated here.
+                    "check": r'''
+const coil = c.net.parts.filter(function (p) { return p.kind === 'L'; })[0];
+const i = Math.abs(c.dc().currents[coil.id]);
+return 1000 * coil.value * i / (331 * 100e-6);
+''',
+                    "answer": 78.2,
+                    "tol": 0.8,
+                    "unit": "mT",
+                    "hint": "With the coil as a wire, $150\\parallel68 = 46.79\\,\\Omega$ hangs below the "
+                            "33 Ω. Find that node's voltage, divide by 68 Ω for the coil's current, then "
+                            "$\\Phi = LI/N$ and $B = \\Phi/A$.",
+                    "wrong": "If you got about 114, that is the current the *supply* delivers — all "
+                             "150 mA of it, before the two branches divide it. If you got 89.7, the "
+                             "150 Ω branch was left out altogether. If you came out around 0.78, the "
+                             "core area went in as $100\\times10^{-3}$ m² instead of $100\\times10^{-6}$.",
+                    "why": r'''
+The coil holds no voltage at DC, so the 68 Ω branch and the 150 Ω branch are simply in
+parallel:
+
+```text
+150 || 68 = 150*68 / 218 = 10200 / 218     = 46.79 ohm
+node V    = 12 * 46.79 / (33 + 46.79)      = 7.037 V
+I_coil    = 7.037 / 68                     = 0.1035 A
+```
+
+Now cross over. $L = N\Phi/I$, so
+
+```text
+Phi = L I / N = 0.025 * 0.1035 / 331       = 7.816e-6 Wb
+B   = Phi / A = 7.816e-6 / 1.00e-4         = 0.0782 T  = 78.2 mT
+```
+
+Two things to take from the number. It is comfortable: this ferrite saturates near 0.35 T,
+so the core is at 22% of its limit and the part is behaving as the 25 mH it was designed to
+be. Scale the supply until it is not — the circuit is linear, so $B$ rises in step with the
+supply, and $12 \times 0.35/0.0782 = 53.7$ V is where the domains run out. Below that the
+inductance is a constant; above it, nothing in this calculation is true any more.
+
+And notice how little the 25 mH did here. It played no part whatever in finding the current
+— at DC the coil is a wire — but it was the only route from that current to the flux, because
+$L$ is precisely the constant that converts one into the other. The same 0.1035 A in the
+*ungapped* version of this part, 275 mH, would give eleven times the flux density, 860 mT,
+which that core cannot produce. The gap is what makes this current safe.
+''',
+                },
+                {
+                    "title": "Grinding the gap to hit a value",
+                    "minutes": 11,
+                    "brief": r'''
+The design calculation, run backwards. You are given the core, the turns and the inductance
+you want, and asked for the one dimension still free: the gap.
+
+The route is fixed by $L = N^2/R_{\text{tot}}$. The wanted inductance names the total
+reluctance; the core's own reluctance comes off the dimensions; what is left over is the
+gap's, and a reluctance converts back into a length.
+
+Watch the subtraction. Two of the three numbers in it are close to each other in no sense
+at all — one is twenty times the other — and it is worth noticing which way round that is
+before you start.
+''',
+                    "prompt": "How long a gap does the core need?",
+                    "note": "Answer in millimetres, to two decimal places.",
+                    "figure": r'''
+```text
+   an ungapped ferrite core, about to have a gap ground across one limb
+
+        +-------------------------------------+
+        |                                     |
+        |   ####   <- N = 90 turns            |
+        |   ####                              |
+        |                                     |
+        +---------------]  [------------------+
+                       g = ?
+
+   magnetic path length (ferrite)   l_c  = 68 mm
+   cross-section, everywhere        A    = 60 mm^2
+   relative permeability            mu_r = 2100
+
+   wanted:                          L    = 1.00 mH
+
+   the gap is narrow enough that the flux crosses it without spreading
+```
+''',
+                    "given": [
+                        {"label": "Turns", "value": "90"},
+                        {"label": "Ferrite path length", "value": "68 mm"},
+                        {"label": "Cross-section", "value": "60 mm²"},
+                        {"label": "Relative permeability", "value": "2100"},
+                        {"label": "Wanted inductance", "value": "1.00 mH"},
+                    ],
+                    "aside": "$L = N^2/R_m$ inverts to $R_m = N^2/L$. Everything after "
+                             "that is the reluctance of two segments in series, one of which you know.",
+                    "answer": 0.578,
+                    "tol": 0.012,
+                    "unit": "mm",
+                    "hint": "$R_{\\text{tot}} = 90^2/1.00\\times10^{-3} = 8.10\\times10^6$. Subtract "
+                            "$R_{\\text{core}} = \\ell_c/(\\mu_0\\mu_r A)$, then turn the remainder "
+                            "back into a length with $g = R_{\\text{gap}}\\,\\mu_0 A$.",
+                    "wrong": "If you got 0.611, the core's reluctance was not subtracted — the gap was "
+                             "asked to supply the whole $8.10\\times10^6$ on its own. If you got 1.21 m, "
+                             "a gap you could put an arm through, $\\mu_r$ was used on the gap as well as "
+                             "on the core. That is the one place it must not go, because a gap is air.",
+                    "why": r'''
+```text
+R_total = N^2 / L = 8100 / 1.00e-3            = 8.100e6 A/Wb
+
+mu_0 A  = 1.2566e-6 * 60e-6                   = 7.540e-11
+R_core  = l_c / (mu_0 mu_r A)
+        = 0.068 / (7.540e-11 * 2100)          = 4.295e5 A/Wb
+
+R_gap   = 8.100e6 - 4.295e5                   = 7.671e6 A/Wb
+g       = R_gap * mu_0 A
+        = 7.671e6 * 7.540e-11                 = 5.783e-4 m  = 0.578 mm
+```
+
+The subtraction removed 5.3% of the total, which is the whole contribution of 68 mm of
+ferrite. Everything else — 94.7% of the reluctance, and by the energy argument in the third
+reading unit, 94.7% of the stored energy — lives in 0.578 mm of air.
+
+That is what makes the part manufacturable. Grinding a gap to ±0.02 mm is ordinary
+machine-shop work, and ±0.02 mm out of 0.578 mm is a 3.5% error in the gap, which is a 3.3%
+error in the inductance. Getting the same 3% out of the ferrite would mean holding $\mu_r$
+to 3%, which no ferrite process can do — the same part number is sold with a ±25% tolerance
+on $\mu_r$, and it drifts further with temperature.
+
+Check the tolerance claim by rerunning the sum at $\mu_r = 1575$, which is 25% low:
+
+```text
+R_core  = 0.068 / (7.540e-11 * 1575)          = 5.727e5
+R_total = 5.727e5 + 7.671e6                   = 8.243e6
+L       = 8100 / 8.243e6                      = 0.983 mH
+```
+
+A 25% error in the material, and the part is 1.7% off. Without the gap the same 25% would
+have been 25%.
+''',
+                },
+                {
+                    "title": "An E-core, and two limbs that share the flux",
+                    "minutes": 14,
+                    "brief": r'''
+The last rung, and the first magnetic circuit with a junction in it. An E-core is the shape
+almost every switching-converter transformer and inductor is actually built on: a centre
+limb carrying the winding, and two outer limbs down which the flux returns.
+
+Flux continuity is the magnetic KCL. Everything that leaves the centre limb has to come
+back through the outer ones, and the two outer limbs are identical and side by side, so
+they are two reluctances in *parallel* carrying half the flux each. The centre limb, its
+gap and that parallel pair are then three reluctances in series.
+
+Four separate reluctances, three different cross-sections, and the answer is an inductance.
+Nothing new is needed — only the series and parallel rules, applied to the right things.
+''',
+                    "prompt": "What is the inductance of the winding?",
+                    "note": "Answer in microhenries, to the nearest microhenry.",
+                    "figure": r'''
+```text
+   an E-core: the winding sits on the centre limb, and the flux it drives
+   splits between the two outer limbs and returns
+
+        +-----------------+-----------------+
+        |                 |                 |
+        |                ###                |
+        |     outer      ###     outer      |
+        |     limb       ###     limb       |
+        |               --+--               |
+        |               gap g               |
+        |                 |                 |
+        +-----------------+-----------------+
+
+   centre limb, carrying the winding and the gap:
+       ferrite path      l_c = 30 mm        area A_c = 80 mm^2
+       gap               g   = 0.40 mm      same 80 mm^2 area
+
+   each outer limb -- there are two, identical:
+       ferrite path      l_o = 60 mm        area A_o = 40 mm^2
+
+   ferrite mu_r = 2000 throughout          winding N = 60 turns
+
+   the gap does not fringe, and no flux leaves the core
+```
+''',
+                    "given": [
+                        {"label": "Turns", "value": "60"},
+                        {"label": "Centre limb, ferrite path", "value": "30 mm"},
+                        {"label": "Centre limb area (and gap area)", "value": "80 mm²"},
+                        {"label": "Gap", "value": "0.40 mm"},
+                        {"label": "Each outer limb, path", "value": "60 mm"},
+                        {"label": "Each outer limb, area", "value": "40 mm²"},
+                        {"label": "Relative permeability", "value": "2000"},
+                    ],
+                    "aside": "Draw it as a resistor network before touching a calculator: a source, then "
+                             "$R_{\\text{centre}}$ and $R_{\\text{gap}}$ in series, then two equal "
+                             "$R_{\\text{outer}}$ in parallel, and back to the source.",
+                    "answer": 813.0,
+                    "tol": 9.0,
+                    "unit": "µH",
+                    "hint": "Three terms: $R_{\\text{centre}} = \\ell_c/(\\mu_0\\mu_r A_c)$, "
+                            "$R_{\\text{gap}} = g/(\\mu_0 A_c)$, and the two outer limbs in parallel, "
+                            "which is $\\tfrac12\\ell_o/(\\mu_0\\mu_r A_o)$. Add them and use "
+                            "$L = N^2/R_m$.",
+                    "wrong": "If you got 762, one outer limb was used and the pair never combined. If "
+                             "you got 676, they were added in series — doubled — when the parallel rule "
+                             "halves them. If you got 872, the outer limbs were left out altogether, and "
+                             "if you got about 8000, $\\mu_r$ was applied to the gap.",
+                    "why": r'''
+```text
+mu_0 mu_r = 1.2566e-6 * 2000                  = 2.5133e-3
+
+centre ferrite:
+  R_c   = 0.030 / (2.5133e-3 * 80e-6)         = 1.492e5 A/Wb
+
+the gap (air, so mu_0 alone, over the same 80 mm^2):
+  R_g   = 4.0e-4 / (1.2566e-6 * 80e-6)        = 3.979e6 A/Wb
+
+one outer limb:
+  R_o   = 0.060 / (2.5133e-3 * 40e-6)         = 5.968e5 A/Wb
+two of them in parallel:
+  R_o||R_o = 5.968e5 / 2                      = 2.984e5 A/Wb
+
+total, all three in series:
+  R_tot = 1.492e5 + 3.979e6 + 2.984e5         = 4.426e6 A/Wb
+
+L = N^2 / R_tot = 3600 / 4.426e6              = 8.133e-4 H = 813 uH
+```
+
+Read the three terms against each other, because the ratio is the design. The gap is 90% of
+the total reluctance; the centre limb and both outer limbs together are the other 10%. Four
+tenths of a millimetre of nothing dominates ninety millimetres of ferrite, and it does so
+for the same reason as in the simple ring: at a given cross-section, ferrite is worth
+$\ell/\mu_r$ of air, so the centre limb's 30 mm counts as 15 µm against a 400 µm gap.
+
+The parallel step is the one that is easy to get wrong, and both errors are instructive.
+Counting a single outer limb and forgetting to combine the pair gives
+$R_{\text{tot}} = 4.725\times10^6$ and $L = 762$ µH — 6% low, small enough to be mistaken
+for rounding and large enough to matter. Adding the two in series instead gives 676 µH, 17%
+low. The reason they are in parallel is flux continuity, not geometry: the flux leaving the
+centre limb has two routes home, so each carries half, and two equal reluctances each
+carrying half the flux are worth one of half the value.
+
+One more thing worth noticing about the areas. The two outer limbs are half the
+cross-section of the centre limb each, which is exactly the ratio that keeps the flux
+density the same everywhere in the core — half the flux through half the area. Real E-cores
+are built that way on purpose, so no part of the core saturates before the rest. Here that
+means $B$ is uniform, and at the 1.5 A this part would carry in a converter,
+$\Phi = LI/N = 8.133\times10^{-4} \times 1.5/60 = 2.03\times10^{-5}$ Wb and
+$B = \Phi/A_c = 0.254$ T — inside a ferrite's limit, but not by a wide margin.
+''',
+                },
+            ],
             "build": {
                 "title": "Measuring the coil you designed, by resonating it",
                 "minutes": 24,
@@ -8192,7 +11924,7 @@ c.close(c.gain(1e4) / c.gain(100), 0.0101, 0.25,
                 ],
                 "hints": [
                     "The source is wired straight across to the resistor. Delete that long wire, drop the inductor into the gap, and rejoin both ends — the same edit as the RL exercise in module 4.",
-                    "Resonance is at $f_0 = 1/(2\\pi\\sqrt{LC})$. With $L = 25$ mH, $C = 1/((2\\pi \\times 1000)^2 \\times 0.025) \\approx 1\\ \\mu$F.",
+                    "Resonance is at $f_0 = 1/(2\\pi\\sqrt{LC})$. With $L = 25$ mH, $C = 1/((2\\pi \\times 1000)^2 \\times 0.025) \\approx 1\\,\\mu$F.",
                     "If the frequency is right but the peak is too small, the resistor is doing it. The peak height is roughly $1/(2\\zeta)$ with $\\zeta = \\tfrac{R}{2}\\sqrt{C/L}$, so a peak of five wants $\\zeta \\approx 0.1$, which for these values is a resistor of a few tens of ohms.",
                     "A peak an order of magnitude away in frequency usually means a prefix: `25m` is 25 millihenries and `25u` is a thousand times less.",
                 ],
@@ -8253,7 +11985,7 @@ Take the gap narrow enough that the flux does not spread out crossing it.
                 ],
                 "closing": r'''
 Read the denominator: the core contributes $L_c/\mu_r$ and the gap contributes $g$, and
-those are the two reluctances $\mathcal{R} = \ell/(\mu_0\mu_r A)$ sitting in series with
+those are the two reluctances $R_m = \ell/(\mu_0\mu_r A)$ sitting in series with
 the $\mu_0 A$ factored out.
 
 Numbers make the point better than the algebra does. With $L_c = 100$ mm and
@@ -8279,6 +12011,573 @@ ring with no gap.
                 "The ideal transformer is the limit $k = 1$ with a core good enough that no current is needed to make the flux. Both windings then link the same $\\mathrm{d}\\Phi/\\mathrm{d}t$, so $V_2/V_1 = N_2/N_1$; and since nothing stores or dissipates anything, $V_1I_1 = V_2I_2$ forces $I_2/I_1 = N_1/N_2$.",
                 "Put those two together and a load $Z$ on the secondary looks like $(N_1/N_2)^2 Z$ from the primary. Changing an impedance is often the *reason* for the transformer rather than a side effect: it is how a 4 Ω loudspeaker was matched to a valve amplifier that wanted to see thousands of ohms.",
                 "Three departures from the ideal are worth drawing. Winding resistance sits in series. Leakage inductance — the $(1-k)$ part of the flux that misses the other winding — also sits in series, and limits the top of the band. And the magnetising inductance sits *across* the primary: a real core needs some current to make flux, and that current is what a transformer draws with its secondary open. It is also why a transformer passes no DC and droops at the bottom of its band.",
+            ],
+            "read": [
+                {
+                    "title": "Two coils that can hear each other: mutual inductance",
+                    "minutes": 19,
+                    "body": r'''
+A bench supply, a coil of wire, and a second coil a few centimetres away with nothing but
+air between them and an oscilloscope across its ends. Wind the supply up slowly and the
+scope trace barely moves. Wind it up quickly and the trace jumps. Switch the supply off
+and the trace jumps the other way, hard, and for a moment reads more volts than the supply
+was ever set to.
+
+Nothing crossed the gap that you can point at. No wire, no charge, no contact. What
+crossed was a *change* in a field, and the second coil is doing exactly what module 4's
+search coil did — obeying Faraday's law about a flux it did not make. The only new thing
+is that the flux is now being made deliberately, by a coil you control. That turns an
+accident into a component, and the component is the subject of the rest of this module.
+
+## The flux one coil puts through another
+
+Push a current $I_1$ through coil 1. It makes a field everywhere around it, by Ampère's
+law; some fraction of that field threads the turns of coil 2. Write the flux through *one*
+turn of coil 2 as $\Phi_{21}$ — the flux in 2 due to 1 — so that the total flux linkage of
+coil 2 is $N_2\Phi_{21}$.
+
+Now the observation that makes a component out of this, and it is the same one that made
+self-inductance a constant back in module 4: every step in that chain is linear. Double
+$I_1$ and every element of the field doubles; the flux through every turn of coil 2
+doubles; the linkage doubles. Provided there is no iron in the way — or the iron is being
+worked well below saturation — the linkage of coil 2 is simply *proportional* to the
+current in coil 1. So give the constant of proportionality a name:
+
+$$M = \frac{N_2\Phi_{21}}{I_1}$$
+
+and Faraday's law does the rest. The voltage appearing across coil 2 is the rate of change
+of its flux linkage, and the only thing in that linkage that can change is $I_1$:
+
+$$v_2 = \frac{\mathrm{d}}{\mathrm{d}t}\left(N_2\Phi_{21}\right) = M\frac{\mathrm{d}i_1}{\mathrm{d}t}$$
+
+$M$ is the **mutual inductance**, its unit is the henry, and it is the same unit as
+self-inductance for the same reason: both are a flux linkage divided by a current. Nothing
+in the definition says the two coils have to be similar, or close, or on a core, or even
+in the same room. If a changing current here makes a voltage there, there is an $M$
+between them, and one of the practical faces of this subject is that $M$ is often
+something you are trying to make *small* — the coupling between a switching converter and
+the signal cable running past it is a mutual inductance nobody designed.
+
+## Worked: a small coil wound over a solenoid
+
+Take the case where the geometry actually lets you compute it. A solenoid of $N_1 = 800$
+turns wound over $\ell = 0.30$ m, cross-section $A = 4.0$ cm², and a short secondary of
+$N_2 = 50$ turns wound tightly round its middle.
+
+Inside a long solenoid the field is uniform and module 4 gives it as $B = \mu_0N_1I_1/\ell$.
+The secondary sits in that field and its turns enclose the same cross-section, so:
+
+```text
+B / I1   = mu0 * N1 / l
+         = 1.2566e-6 * 800 / 0.30            = 3.3510e-3 T per amp
+
+Phi / I1 = (B/I1) * A
+         = 3.3510e-3 * 4.0e-4                = 1.3404e-6 Wb per amp
+
+M        = N2 * Phi / I1
+         = 50 * 1.3404e-6                    = 6.702e-5 H  = 67.0 uH
+```
+
+Sixty-seven microhenries. Ramp the solenoid current at 200 A/s — say from zero to 2 A in
+10 ms — and the secondary produces
+
+```text
+v2 = M * dI1/dt = 6.702e-5 * 200             = 1.34e-2 V = 13.4 mV
+```
+
+Small, and steady for as long as the ramp lasts. Note what it does *not* depend on: not on
+how much current is flowing, only on how fast it is changing. Hold the solenoid at a
+rock-steady 50 A and the secondary produces nothing at all.
+
+## The theorem that should surprise you
+
+Now turn the problem round. Drive the 50-turn coil and ask what voltage appears on the
+800-turn solenoid. That calculation is genuinely nasty: the little coil's field is not
+uniform, it sprays out in all directions, and working out how much of it threads each of
+the 800 turns spread along 30 cm of former is an integral nobody wants.
+
+You do not have to do it. The answer is 67.0 μH again, because
+
+$$M_{12} = M_{21}$$
+
+always — for any two circuits of any shape whatever. This is a theorem, not a definition,
+and it is not obvious. The two coils here differ by a factor of sixteen in turns and by
+orders of magnitude in size, and the flux geometry in one direction looks nothing like the
+flux geometry in the other. It falls out of the energy stored in the pair, which cannot
+depend on the order in which you established the two currents; and it means that whenever
+you meet a coupling problem, you are allowed to compute it in whichever of the two
+directions is easier. That is not a minor convenience. It is how almost every mutual
+inductance in practice is actually worked out.
+
+Here is the trap that reciprocity sets, though, and it catches people who have just
+learned it. $M$ being the same both ways does **not** mean the *voltage* is the same both
+ways. $v_2 = M\,\mathrm{d}i_1/\mathrm{d}t$ and $v_1 = M\,\mathrm{d}i_2/\mathrm{d}t$ share
+one $M$, but they are driven by different currents in circuits with wildly different
+self-inductances. A step-up transformer is precisely the asymmetric case, and it does not
+contradict a symmetric $M$ at all.
+
+## How much of the flux gets across: the coupling coefficient
+
+$M$ has a ceiling. It cannot exceed the geometric mean of the two self-inductances:
+
+$$M \le \sqrt{L_1L_2}, \qquad\text{so write}\qquad M = k\sqrt{L_1L_2},\quad 0 \le k \le 1$$
+
+and $k$ is the **coupling coefficient** — loosely, the fraction of one coil's flux that
+the other one catches.
+
+The ceiling is not a convention. It comes out of the energy stored in a coupled pair,
+which for currents $i_1$ and $i_2$ is
+
+$$W = \tfrac{1}{2}L_1i_1^2 + \tfrac{1}{2}L_2i_2^2 + Mi_1i_2$$
+
+The cross term is the work done pushing the second current up against the voltage the
+first coil induces, and its sign depends on which way the second coil is wound relative to
+the first. Choose the currents to make it negative, and the energy had better still not go
+below zero — a passive pair of coils cannot be a source. Treat the expression as a
+quadratic in $i_1$ with $i_2$ fixed and demand that it never dips below the axis; the
+discriminant must not be positive:
+
+$$M^2i_2^2 - 4\left(\tfrac{1}{2}L_1\right)\left(\tfrac{1}{2}L_2i_2^2\right) \le 0
+\quad\Longrightarrow\quad M^2 \le L_1L_2$$
+
+So $k \le 1$ is conservation of energy, wearing a disguise. Real numbers: two windings
+side by side on a closed ferrite ring reach $k = 0.99$ and better, two windings wound one
+directly on top of the other on the same ring can pass 0.999, a loosely coupled air-cored
+pair a centimetre apart might manage 0.1, and two coils squarely at right angles have
+$k = 0$ however close they are, because the flux from one runs *along* the turns of the
+other and threads none of them.
+
+That last case is the mistake worth naming, because the phrase "how much flux the other
+one catches" invites you to think of $k$ as a distance. It is not. It is a geometry, and
+orientation is half of it. Rotating a coil by 90° while leaving it in exactly the same
+place takes the coupling to zero, which is why a transformer's windings share a core and
+why a sensitive input coil is deliberately mounted at right angles to the mains
+transformer six centimetres away.
+
+## Worked: measuring M with an ordinary inductance meter
+
+You cannot buy a mutual-inductance meter, and you do not need one. Connect the two coils
+in series so that their fluxes add, and the pair behaves as a single inductor of
+
+$$L_{\text{series}} = L_1 + L_2 + 2M$$
+
+— the extra $2M$ because each coil now links its own flux *and* the other's, and there are
+two coils to which that applies. Reverse the connections to one of them so the fluxes
+oppose, and the same argument gives $L_1 + L_2 - 2M$. Three measurements with an ordinary
+LCR bridge then give everything:
+
+```text
+coil 1 alone                    L1     =  60 mH
+coil 2 alone                    L2     = 120 mH
+in series, fluxes adding        L_aid  = 260 mH
+
+L_aid = L1 + L2 + 2M
+260   = 60 + 120 + 2M
+2M    = 260 - 180 = 80          M      =  40 mH
+
+k = M / sqrt(L1 * L2)
+  = 40 / sqrt(60 * 120)
+  = 40 / 84.85                         = 0.471
+```
+
+and as a cross-check the opposing connection should read $180 - 80 = 100$ mH. If it does
+not, one of the three measurements is wrong. Subtracting the two series readings is even
+tidier — $M = (L_{\text{aid}} - L_{\text{opp}})/4 = (260-100)/4 = 40$ mH — and it does not
+need $L_1$ and $L_2$ at all.
+
+Two things to take from the arithmetic. The first is that $\sqrt{L_1L_2}$ is a
+*geometric* mean: $\sqrt{60\times120} = 84.85$ mH, not the arithmetic mean of 90 mH.
+Using the average instead is the standard slip, and here it would make $k$ come out at
+0.444 instead of 0.471. The second is that $k = 0.471$ is poor coupling — these two coils
+share less than half their flux, which is what a pair on an open rod core or spaced along
+a former looks like. A transformer wants the other end of the scale.
+
+## Where this stops being true
+
+Everything above rests on linearity, and there are three places it fails.
+
+**A saturating core.** $M$ was defined as a ratio of flux linkage to current, and that is
+a constant only while flux is proportional to current. Drive a ferrite past its knee and
+$L_1$, $L_2$ and $M$ all collapse together; the numbers on the datasheet are small-signal
+values measured at a stated drive level, and a coupled inductor in a converter running
+near saturation has a different $M$ at the top of each cycle than at the bottom.
+
+**Conducting material nearby.** Put an aluminium plate between the coils and $M$ falls,
+because the plate carries eddy currents whose own field opposes the one crossing it. Worse
+for the model, the coupling becomes *lossy* and frequency-dependent — energy leaves the
+pair as heat in the plate. That is not a defect to be engineered away in every case: it is
+exactly the effect a metal detector, an induction hob and an eddy-current brake are built
+on.
+
+**High frequency.** Two windings sitting close enough to share flux are also two
+conductors sitting close enough to share charge. Above a few hundred kilohertz for a mains
+transformer, the capacitance between the windings passes signal directly, in parallel with
+the magnetic path and obeying none of these rules. An isolation transformer bought to keep
+mains-borne interference out of an instrument does badly at exactly the frequencies the
+interference lives at, which is why the good ones carry an earthed electrostatic screen
+between the windings.
+
+None of that stops $M$ being the right first model. It only means that, like every lumped
+component, it is a small-signal constant with a stated frequency and a stated drive level
+attached.
+''',
+                },
+                {
+                    "title": "The ideal transformer, and the four things it does",
+                    "minutes": 20,
+                    "body": r'''
+Take the two coils of the last unit and stop treating their coupling as a nuisance.
+Put both windings on a closed core of good magnetic material so that $k$ is 0.99 or
+better, and the pair stops behaving like two components that happen to interfere with each
+other. It becomes one component with four terminals and a specification.
+
+The specification is worth stating before deriving it, because there are exactly four
+clauses and every one of them follows from a single premise:
+
+* the voltages are in the ratio of the turns;
+* the currents are in the inverse ratio of the turns;
+* an impedance on one side appears on the other multiplied by the square of that ratio;
+* and none of it works at DC.
+
+The premise is that both windings are threaded by the *same* flux.
+
+## The premise, and why the core makes it true
+
+The flux a winding makes has to return somewhere. In air it sprays out and comes back
+through whatever path it likes, and only a fraction of it finds the other coil. In a
+closed loop of material with $\mu_r$ of a few thousand, the return path *through the core*
+has a reluctance thousands of times lower than any path through the air, so essentially
+all of the flux stays in the core — module 8's magnetic-circuit picture, where the flux is
+the current, the mmf is the voltage, and $\mu_r$ turns the core into a wire and the air
+into an insulator.
+
+If both windings are wound on that loop, both are threaded by the same $\Phi$. Then
+Faraday's law, applied to each winding separately:
+
+$$v_1 = N_1\frac{\mathrm{d}\Phi}{\mathrm{d}t}, \qquad v_2 = N_2\frac{\mathrm{d}\Phi}{\mathrm{d}t}$$
+
+and dividing one by the other removes the flux entirely:
+
+$$\frac{v_2}{v_1} = \frac{N_2}{N_1}$$
+
+That is the whole of the voltage law, and notice what it did not need: no assumption about
+what is connected to the secondary, no mention of current, no $M$, no $k$. Two windings on
+one flux, and the volts per turn are shared.
+
+## Volts per turn, and the number that sizes the iron
+
+That last phrase is more useful than it looks. Rearranged, $v/N$ is the same for every
+winding on the core, and it equals $\mathrm{d}\Phi/\mathrm{d}t$. Integrate it and you get
+the flux itself, which is the quantity the core has a hard limit on.
+
+For a sinusoid of rms value $V$ at frequency $f$ on $N$ turns, integrating
+$V\sqrt{2}\sin\omega t = N\,\mathrm{d}\Phi/\mathrm{d}t$ gives a peak flux
+$\hat\Phi = V\sqrt{2}/(\omega N)$, usually quoted as $V = 4.44fN\hat\Phi$, where 4.44 is
+$2\pi/\sqrt2$ and nothing more mysterious than that. Put a real design through it — a
+mains primary of 1000 turns on a core of cross-section 12 cm²:
+
+```text
+omega    = 2 * pi * 50                        = 314.16 rad/s
+Phi_peak = 230 * sqrt(2) / (314.16 * 1000)    = 1.0354e-3 Wb
+
+B_peak   = Phi_peak / A
+         = 1.0354e-3 / 12e-4                  = 0.863 T
+```
+
+0.86 tesla, against a saturation flux density of about 1.6 T for the silicon steel such a
+core is made of. That is a sensible working point, and it explains two things at once.
+Run the same transformer on 400 V and the peak flux goes to 1.5 T, at which the core is on
+its knee and the magnetising current rises steeply — the transformer is destroyed by
+saturation long before the winding overheats. And run a transformer designed for 60 Hz on
+50 Hz mains and the flux rises by the frequency ratio, 20% — which is why 115 V/60 Hz
+equipment is not simply a matter of the voltage.
+
+## The current, and what actually sets it
+
+The voltage law says nothing about current, so where does $i_2/i_1 = N_1/N_2$ come from?
+
+The lazy route is conservation of energy: an ideal transformer stores nothing and
+dissipates nothing, so $v_1i_1 = v_2i_2$, and dividing that by the voltage ratio gives the
+current ratio. That is true, and it is what the quiz checks, but it does not tell you what
+the transformer is *doing*, and the mechanism is the interesting part.
+
+Here it is. Ampère's law round the core says the total mmf equals the flux times the
+reluctance: $N_1i_1 - N_2i_2 = \Phi\mathcal{R}$, with the minus sign because a loaded
+secondary's current opposes the flux that made it — Lenz again. Now, the flux is not free
+to be whatever it likes: it is pinned by the applied primary *voltage*, through
+$v_1 = N_1\mathrm{d}\Phi/\mathrm{d}t$. And a good core has a very small $\mathcal{R}$, so
+the mmf needed to maintain that pinned flux is nearly nothing. Set it to zero and
+
+$$N_1i_1 = N_2i_2$$
+
+Read that as a mechanism rather than an identity, because it inverts the usual picture of
+cause and effect. Connect a load to the secondary and current flows there, trying to
+reduce the core flux. The primary voltage will not permit the flux to change, so the
+primary draws *exactly* the extra current needed to cancel the secondary's mmf. The
+secondary current is the cause; the primary current is the response. A transformer with
+its secondary open draws almost nothing even though its primary winding might be only a
+few ohms of copper — and if you have ever wondered why that does not blow the fuse, this
+is the answer.
+
+## Impedance: the ratio applied twice
+
+Hang an impedance $Z$ on the secondary and ask what the primary terminals feel. Write
+$n = N_1/N_2$ for the turns ratio, so $v_1 = nv_2$ and $i_1 = i_2/n$:
+
+$$Z_{\text{in}} = \frac{v_1}{i_1} = \frac{n\,v_2}{i_2/n} = n^2\frac{v_2}{i_2} = n^2Z$$
+
+The square is not a rule to memorise; it is one factor of $n$ from the voltage and one
+from the current, and impedance is their ratio. Getting the square wrong — applying the
+turns ratio once — is the single most common transformer error, and it is tempting for a
+good reason: the voltage law is the one everybody learns first, and it is natural to
+assume everything else scales the same way.
+
+This is often the *reason* the transformer is there. A valve output stage is a device that
+wants to work into several thousand ohms; a loudspeaker is eight. Take an output stage
+modelled as 50 V behind 5.0 kΩ, and the speaker connected directly:
+
+```text
+I  = 50 / (5000 + 8)                          = 9.984 mA
+P  = I^2 * 8 = (9.984e-3)^2 * 8               = 7.97e-4 W   = 0.80 mW
+```
+
+Under a milliwatt, because a 5 kΩ source cannot push current into 8 Ω. Now put a
+transformer between them, chosen so the speaker looks like 5 kΩ:
+
+```text
+n^2 = 5000 / 8 = 625        ->    n = 25      (25:1)
+
+reflected load  = 625 * 8                     = 5000 ohm
+primary voltage = 50 * 5000 / (5000 + 5000)   = 25 V
+primary current = 25 / 5000                   = 5.0 mA
+P               = 25^2 / 5000                 = 0.125 W    = 125 mW
+```
+
+and on the secondary side that same 125 mW arrives as $25/25 = 1.0$ V across 8 Ω, drawing
+125 mA. A hundred and fifty-seven times the power, from a component that generates
+nothing, by arranging for the source to see the load it wanted. It is also the maximum
+available: $V^2/4R_s = 2500/20000 = 0.125$ W, which the matched case always delivers.
+
+## The fourth clause: no DC, ever
+
+Every line above began with $\mathrm{d}\Phi/\mathrm{d}t$. Connect a battery to the primary
+and the flux climbs to a steady value and stops climbing; $\mathrm{d}\Phi/\mathrm{d}t$ is
+then zero and the secondary produces nothing, whatever the turns ratio, however large the
+primary voltage, however good the core. Meanwhile the primary current keeps rising until
+the winding resistance is the only thing left limiting it, and the transformer cooks.
+
+There is one instant of exception, and it is famous: while the current is still building
+or — much more violently — at the moment the current is *interrupted*, $\mathrm{d}i/\mathrm{d}t$
+is enormous and so is the secondary voltage. A car ignition coil is a transformer of
+roughly 100:1 turns ratio, run from 12 V DC, whose entire operating principle is opening a
+switch. Nothing in the ratio produces 20 kV; the rate of change does.
+
+## Where the ideal transformer stops
+
+The four clauses describe a component that does not exist, and the next unit builds the
+one that does. Three of the idealisations are worth flagging now:
+
+* the core was assumed to need no mmf, which is false — a real core needs a magnetising
+  current, and that is what a transformer draws with its secondary open;
+* the coupling was assumed perfect, which is false — the flux that misses the other
+  winding appears as a series inductance and limits the top of the usable band;
+* the windings were assumed to be superconductors, which is false — the copper is worth an
+  ohm or two, and that is most of why the output voltage sags under load.
+
+And one idealisation is not a defect but a boundary of the model: the ideal transformer
+has no frequency in it at all, so it neither knows nor cares that a real one is a
+band-pass device. Between the droop at the bottom and the leakage at the top there is a
+band, often two or three decades wide, where the four clauses are accurate to a few per
+cent. Outside it they are not even approximately right.
+''',
+                },
+                {
+                    "title": "The transformer you can buy: three parasitics and the band they leave",
+                    "minutes": 21,
+                    "body": r'''
+Plug a small mains transformer into 230 V with absolutely nothing connected to its
+secondary, and put a meter in the primary lead. The ideal transformer of the last unit
+predicts zero. The meter says about 25 mA, and after ten minutes the transformer is warm.
+
+That 25 mA is the whole of this unit. It is not a fault, it is not leakage through the
+insulation, and it is not the winding resistance passing current — a few ohms of copper
+across 230 V would draw tens of amps and destroy the part in seconds. It is the current a
+real core needs in order to have any flux in it at all, and once you can account for it
+you can account for everything else a real transformer does that the ideal one does not.
+
+## The magnetising inductance, and where the 25 mA comes from
+
+Go back to Ampère's law round the core: $N_1i_1 - N_2i_2 = \Phi\mathcal{R}$. The ideal
+transformer set the right-hand side to zero. A real core has a finite reluctance, so there
+is a residual primary current — present whether or not the secondary is loaded — whose job
+is to establish the flux. With the secondary open it is the *only* primary current, and
+what it flows through is an inductance: the primary winding's own self-inductance, which
+module 8 gives as $L_1 = N_1^2/\mathcal{R}$.
+
+Draw it as an inductor **across** the primary terminals and call it the magnetising
+inductance $L_m$. Numbers, for the transformer of the last unit — 1000 primary turns,
+cross-section 12 cm², a mean magnetic path of 0.20 m round the core, silicon steel at
+$\mu_r = 4000$:
+
+```text
+R_m = l / (mu0 * mu_r * A)
+    = 0.20 / (1.2566e-6 * 4000 * 12e-4)
+    = 0.20 / 6.0319e-6                        = 3.316e4 A/Wb
+
+L_m = N1^2 / R_m = 1e6 / 3.316e4              = 30.2 H
+
+X   = 2 * pi * 50 * 30.16                     = 9475 ohm
+I   = 230 / 9475                              = 24.3 mA
+```
+
+There is the 25 mA, from the geometry of the core and nothing else. And it is consistent
+with the flux calculation of the last unit, which is worth checking rather than assuming:
+$\hat\Phi = L_m\hat I/N_1 = 30.16 \times (24.3\ \mathrm{mA} \times \sqrt2)/1000 = 1.035$
+mWb, exactly the figure the volts-per-turn rule gave. Two routes, same flux.
+
+Two properties of that current matter. It lags the voltage by nearly 90°, so it carries
+almost no real power — energy goes into the field on one quarter-cycle and comes back on
+the next. And it does not go away when you load the transformer: it sits in parallel with
+whatever the load reflects, and simply adds. A transformer rated at 50 VA drawing 24 mA of
+magnetising current is spending about 11% of its rated primary current on filling the core,
+which is ordinary for a small mains part and would be unacceptable for a large one.
+
+## Leakage inductance, and why it is in series
+
+Perfect coupling was the other idealisation. In a real winding some flux takes a path
+through the air and misses the other coil — around the outside of the bobbin, through the
+gap between the two windings, out of the window of the core. That flux is made by the
+primary current and links the primary, so it stores energy and produces a back-emf, but it
+delivers nothing to the secondary. It behaves exactly like an inductance **in series** with
+the winding, and it is called the leakage inductance.
+
+The split is usually written $L_1 = L_{\ell1} + L_m$ with $L_m = kL_1$, so
+$L_{\ell1} = (1-k)L_1$ — an approximation, because referring the secondary's leakage to
+the primary involves the turns ratio and the two halves are rarely symmetric, but a good
+one and the one the datasheets use. For $k = 0.998$ and $L_1 = 30$ H the leakage is about
+60 mH; at 50 Hz that is 19 Ω, against a reflected load of a thousand ohms or so.
+Negligible where the transformer is meant to work, and decisive two decades higher up.
+
+Measuring it is easy and rather elegant: short the secondary. A short across the secondary
+reflects as a short across $L_m$, so all that is left in series with the source is the
+winding resistance and the leakage, and an inductance bridge reads it directly. This is
+the standard "short-circuit test", and its partner — the open-circuit test that reads $L_m$
+and the core loss — is how a transformer's whole model is measured with two meter readings.
+
+## The rest of the model: copper and iron
+
+Two more parts and the picture is complete.
+
+**Winding resistance.** Both windings are copper, both have resistance, and both sit in
+series with their winding. The secondary's resistance reflects into the primary
+multiplied by $n^2$, exactly as any other secondary impedance does, so the model can be
+drawn entirely on the primary side.
+
+**Core loss.** The hysteresis loop and the eddy currents of module 8 turn real power into
+heat in the iron, in proportion to the flux and therefore to the applied voltage, not to
+the load. A quantity that draws constant power from a constant voltage is a resistor, so
+core loss is drawn as a resistor across the primary, in parallel with $L_m$.
+
+The finished model, referred to the primary, reads left to right: primary resistance, then
+primary leakage, then the parallel pair of core-loss resistance and $L_m$, then secondary
+leakage and secondary resistance scaled by $n^2$, then the load scaled by $n^2$. The
+transformer itself has vanished. What is left is a handful of resistors and inductors, and
+that is a thing you can solve.
+
+## Worked: what the nameplate does not tell you
+
+A 240 V : 12 V transformer, 20:1, with a primary resistance of 8.0 Ω and a secondary
+resistance of 0.25 Ω, delivering 2 A into a 6.0 Ω load. Ignore the leakage for the moment
+— at 50 Hz it is small — and work entirely on the primary side:
+
+```text
+load reflected        = 20^2 * 6.0             = 2400 ohm
+secondary R reflected = 20^2 * 0.25            = 100 ohm
+series resistance     = 8.0 + 100              = 108 ohm
+
+V across the load     = 240 * 2400 / 2508      = 229.7 V
+secondary voltage     = 229.7 / 20             = 11.48 V
+```
+
+Not 12 V. The regulation — the sag from no load to full load — is
+$(12 - 11.48)/12 = 4.3\%$, and every bit of it is copper. This is why a "12 V" transformer
+measures more like 13 V on the bench with nothing attached, and why manufacturers wind a
+few extra secondary turns so that the rated voltage appears at the *rated load* rather than
+at no load.
+
+Note also where the loss is: $8.0\ \Omega$ carrying 96 mA is 73 mW, and $0.25\ \Omega$
+carrying 1.91 A is 0.92 W — the secondary does nearly all the dissipating, because current
+and resistance do not scale the same way. The reflected form shows the same thing:
+100 Ω at 96 mA is 0.92 W, as it must be.
+
+## Worked: the band, top and bottom
+
+Now the two inductances, in an audio output transformer feeding a 5.0 kΩ source into a
+reflected 5.0 kΩ load, with $L_m = 20$ H and a leakage of 30 mH.
+
+At the **bottom**, $L_m$ shunts the signal to ground. Looking out from the inductor it sees
+the source resistance in parallel with the reflected load, so the corner is where its
+reactance equals that:
+
+```text
+R seen by L_m = 5000 || 5000                   = 2500 ohm
+w = 2500 / 20                                  = 125 rad/s
+f_lo = 125 / (2 * pi)                          = 19.9 Hz
+```
+
+At the **top**, the leakage is in series and the load and source add:
+
+```text
+R in series with L_leak = 5000 + 5000          = 10000 ohm
+w = 10000 / 0.030                              = 3.333e5 rad/s
+f_hi = 3.333e5 / (2 * pi)                      = 53.1 kHz
+```
+
+20 Hz to 53 kHz, which is what a decent output transformer specifies. Divide the two and
+something instructive drops out:
+
+$$\frac{f_{\text{hi}}}{f_{\text{lo}}} = \frac{R_{\text{series}}}{R_{\text{parallel}}}\cdot\frac{L_m}{L_\ell} = 4 \times \frac{20}{0.03} = 2667$$
+
+The bandwidth is essentially the ratio $L_m/L_\ell$, and by the split above that ratio is
+$k/(1-k)$. The usable band of a transformer is a direct statement about its coupling
+coefficient, and improving it means better coupling — interleaved windings, a tighter
+bobbin, a core with no gap — not more turns. More turns raise $L_m$ and $L_\ell$ together
+and move the whole band down, which helps the bass and hurts the treble by the same
+factor.
+
+## The mistake, and where the model stops
+
+The mistake is treating the nameplate ratio as a promise. A "230 V to 12 V, 1 A"
+transformer does not put out 12 V; it puts out something between about 13.5 V unloaded and
+12 V at exactly 1 A, and if you are rectifying and smoothing it, the capacitor charges to
+the *peak* of the unloaded figure and the DC rail lands near 18 V. Regulators have been
+specified on the strength of the printed number and then run at twice the expected
+dissipation for exactly this reason. It is tempting because the ideal transformer is such a
+clean idea that the ratio feels like a definition, when it is a measurement taken under
+stated conditions.
+
+Three places the model stops holding:
+
+**Saturation.** Everything here is linear, so the model happily predicts a bounded current
+under any conditions. A real core saturates, and the most dramatic consequence is
+switch-on inrush: because the flux is the *integral* of the applied voltage, closing the
+switch at the instant the mains voltage crosses zero starts the integration from the wrong
+place and drives the peak flux to nearly twice its normal value. The core saturates, $L_m$
+collapses towards its air value, and the primary momentarily draws ten or twenty times its
+rated current. That is why transformers blow fuses at switch-on and not while running, and
+why anti-surge fuses exist.
+
+**Any DC at all.** A rectifier drawing asymmetric current, or a few tens of millivolts of
+offset from an amplifier, biases the core towards one end of its loop and eats the
+headroom on that side. The model has no such mechanism, because a linear inductor does not
+care where it is biased.
+
+**High frequency.** Above the leakage corner the next thing to arrive is the capacitance
+between turns and between windings, which resonates with the leakage inductance and makes
+the response peak before it falls. Beyond that self-resonance the part is a capacitor with
+a wire wrapped round it, and no arrangement of $L_m$, $L_\ell$ and resistors describes it.
+''',
+                },
             ],
             "quiz": {
                 "title": "Transformers, checked",
@@ -8563,6 +12862,569 @@ V2                         = ___
                     },
                 ],
             },
+            "numeric": [
+                {
+                    "title": "The volts a changing current makes next door",
+                    "minutes": 5,
+                    "brief": r'''
+The mechanical case: one rule, one unknown, and the only thing to get wrong is reading
+$M\,\mathrm{d}i_1/\mathrm{d}t$ as though it were $M i_1$.
+
+Two coils on a shared former have a measured mutual inductance of 45 mH. The current in
+coil 1 is ramped linearly — a straight line, so its slope is the same at every instant —
+and coil 2 is open-circuit, so nothing flows in it and nothing it does feeds back.
+''',
+                    "prompt": "What voltage appears across coil 2 while the ramp is running?",
+                    "note": "Answer in volts, to one decimal place.",
+                    "figure": r'''
+```text
+   coil 1                        coil 2
+   ~~~~~~~~~~~                   ~~~~~~~~~~~
+   M = 45 mH between them, measured on a bridge
+
+   i1(t):
+
+     4.0 A |                    ,-------------
+           |                 ,-'
+           |              ,-'
+           |           ,-'
+       0 A +--------,-'------------------------->  t
+           0                  12.5 ms
+
+   coil 2 is open-circuit:  i2 = 0 throughout
+```
+''',
+                    "given": [
+                        {"label": "Mutual inductance", "value": "45 mH"},
+                        {"label": "Current in coil 1", "value": "0 to 4.0 A"},
+                        {"label": "Time taken", "value": "12.5 ms"},
+                    ],
+                    "aside": "A straight ramp has one slope for its whole length, so "
+                             "$\\mathrm{d}i_1/\\mathrm{d}t$ is the total change divided by the total time "
+                             "— no calculus needed beyond noticing that.",
+                    "answer": 14.4,
+                    "tol": 0.3,
+                    "unit": "V",
+                    "hint": "Slope first: 4.0 A in 12.5 ms is $4.0/0.0125$ amps per second. Then "
+                            "$v_2 = M\\,\\mathrm{d}i_1/\\mathrm{d}t$ with $M$ in henries.",
+                    "wrong": "If you got 0.18, the 4.0 A was multiplied by $M$ directly — that is "
+                             "$Mi_1$, which is a flux linkage in webers, not a voltage. If you got "
+                             "0.0144, the 12.5 ms went in as 12.5 s.",
+                    "why": r'''
+```text
+di1/dt = 4.0 / 12.5e-3                        = 320 A/s
+v2     = M * di1/dt = 45e-3 * 320             = 14.4 V
+```
+
+Fourteen volts out of two coils and a 4 A ramp, with no source anywhere near coil 2.
+Three things are worth noticing about that number.
+
+It is constant for the whole 12.5 ms and then stops dead, because the ramp's slope is
+constant and then stops. A square pulse of current would give two enormous spikes of
+opposite sign and nothing in between.
+
+It has nothing to do with how much current is flowing. At $t = 1$ ms the current is
+0.32 A and at $t = 12$ ms it is 3.84 A, and the voltage across coil 2 is 14.4 V at both
+instants.
+
+And it scales without limit as the ramp gets steeper. Take the same 4 A away in 100 μs
+instead of building it up over 12.5 ms — which is what opening a switch does — and the
+same $M$ gives $45\times10^{-3} \times 40\,000 = 1800$ V. That is an ignition coil, and
+it is also why the coil driving a relay needs a diode across it.
+''',
+                },
+                {
+                    "title": "What the primary draws for a 15 W lamp",
+                    "minutes": 7,
+                    "brief": r'''
+An ideal transformer, and two of its four clauses used one after the other. The turns are
+given rather than the voltage ratio, so the first job is to turn them into one; then the
+load fixes the secondary current, and the current ratio — the inverse of the voltage ratio
+— gives the primary.
+
+Treat the transformer as ideal: no magnetising current, no winding resistance, no leakage.
+''',
+                    "prompt": "What current does the primary draw from the 230 V supply?",
+                    "note": "Answer in milliamps, to one decimal place.",
+                    "figure": r'''
+```text
+        230 V, 50 Hz                          9.6 ohm lamp
+             o------+                    +--------/\/\/\----+
+                    |  ||| |||           |                  |
+                    |  ||| |||           |                  |
+                   ( ) ||| ||| )         |                  |
+                   ( ) ||| ||| )         |                  |
+                    |  ||| |||           |                  |
+             o------+  ||| |||           +------------------+
+                       ||| |||
+              N1 = 1150 turns    N2 = 60 turns
+
+   ideal:  no magnetising current, no copper loss, no leakage
+```
+''',
+                    "given": [
+                        {"label": "Primary supply", "value": "230 V"},
+                        {"label": "Primary turns", "value": "1150"},
+                        {"label": "Secondary turns", "value": "60"},
+                        {"label": "Lamp (hot)", "value": "9.6 Ω"},
+                    ],
+                    "aside": "The load is on the secondary, so work out what the secondary is doing "
+                             "first and hand the answer back through the turns ratio. Nothing on the "
+                             "primary side can be found until the secondary current is known.",
+                    "answer": 65.2,
+                    "tol": 1.0,
+                    "unit": "mA",
+                    "hint": "$V_2 = V_1N_2/N_1$, then $I_2 = V_2/R$, then $I_1 = I_2N_2/N_1$. The turns "
+                            "ratio is used twice and in the same direction both times — but once on a "
+                            "voltage and once on a current, which is why one is a division and the other "
+                            "a multiplication.",
+                    "wrong": "If you got 1250, that is the secondary current in milliamps and the "
+                             "question asked about the primary. If you got 24 000, the turns ratio was "
+                             "applied to the current the same way round as to the voltage, which would "
+                             "have this transformer delivering 5.5 kW out of a 15 W lamp.",
+                    "why": r'''
+```text
+turns ratio n = N1/N2 = 1150 / 60             = 19.167
+
+V2 = 230 / 19.167                             = 12.0 V
+I2 = 12.0 / 9.6                               = 1.25 A
+I1 = 1.25 / 19.167                            = 0.06522 A  = 65.2 mA
+```
+
+Check it on power, which is the fastest way to catch a ratio used upside down:
+$230 \times 0.06522 = 15.0$ W in, $12.0 \times 1.25 = 15.0$ W out. They agree, as they
+must for a component that neither stores nor dissipates.
+
+The same answer comes straight out of the reflected impedance in one step, and it is worth
+seeing both routes:
+
+```text
+reflected load = n^2 * R = 19.167^2 * 9.6     = 3526.7 ohm
+I1 = 230 / 3526.7                             = 0.06522 A
+```
+
+Sixty-five milliamps out of the mains for a fifteen-watt lamp — which is the point of
+distributing power at high voltage. The same 15 W taken at 12 V needs 1.25 A, and it is
+the *current* that sizes the copper and burns the losses.
+''',
+                },
+                {
+                    "title": "The transformer that gets a speaker its power",
+                    "minutes": 9,
+                    "brief": r'''
+An amplifier output stage behaves like a source of 40 V behind 800 Ω — it is a device
+that wants to work into a large load, and an 8 Ω loudspeaker is not one. So a transformer is
+put between them, with its turns ratio chosen to make the speaker *look* like 800 Ω:
+$n = \sqrt{800/8} = 10$, so 10:1.
+
+The circuit drawn below is what the amplifier sees. The 8 Ω speaker and the transformer
+have been replaced by the single resistor they are equivalent to, $10^2 \times 8 = 800\
+\Omega$, with the probe on the primary terminal. An ideal transformer neither stores nor
+dissipates anything, so **every watt that reaches that reflected resistor reaches the
+speaker**. Work out the power in it and you have the acoustic answer.
+''',
+                    "prompt": "What power reaches the loudspeaker?",
+                    "note": "Answer in milliwatts, to the nearest milliwatt.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 7, "rot": 1, "value": 40},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                            {"id": "rs", "kind": "R", "x": 7, "y": 4, "rot": 0, "value": 800},
+                            {"id": "rl", "kind": "R", "x": 12, "y": 7, "rot": 1, "value": 800},
+                            {"id": "g1", "kind": "GND", "x": 12, "y": 10},
+                            {"id": "out", "kind": "OUT", "x": 14, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 6], "b": [3, 4]},
+                            {"a": [3, 4], "b": [6, 4]},
+                            {"a": [8, 4], "b": [12, 4]},
+                            {"a": [12, 4], "b": [12, 6]},
+                            {"a": [12, 8], "b": [12, 10]},
+                            {"a": [3, 8], "b": [3, 10]},
+                            {"a": [12, 4], "b": [14, 4]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Amplifier open-circuit voltage", "value": "40 V"},
+                        {"label": "Amplifier output resistance", "value": "800 Ω"},
+                        {"label": "Turns ratio", "value": "10:1"},
+                        {"label": "Loudspeaker", "value": "8 Ω"},
+                    ],
+                    "aside": "Two steps. Find the voltage at the probe — it is a divider and nothing "
+                             "more — and then turn that into a power in the resistor it appears across. "
+                             "Do not try to convert the voltage back through the turns ratio first; the "
+                             "power is the same on both sides, so there is nothing to convert.",
+                    # Both the probed voltage and the load it appears across are read out of the
+                    # solved circuit, so a re-valued schematic is re-measured rather than compared
+                    # to a memory of this one.
+                    "check": r'''
+const load = c.net.parts.filter(function (p) { return p.id === 'rl'; })[0];
+const v = c.vout();
+return 1000 * v * v / load.value;
+''',
+                    "answer": 500.0,
+                    "tol": 4.0,
+                    "unit": "mW",
+                    "hint": "The probe sits between two equal 800 Ω resistances, so it is at half the "
+                            "source voltage. Then $P = V^2/R$ using the resistance the voltage is "
+                            "*across*, not the total.",
+                    "wrong": "If you got 250, $P = V^2/R$ was worked with the total 1600 Ω rather than "
+                             "the 800 Ω the 20 V actually sits across. If you got 2000, the full 40 V "
+                             "was used instead of the 20 V at the probe.",
+                    "why": r'''
+```text
+V at the probe = 40 * 800 / (800 + 800)       = 20.0 V
+I              = 20.0 / 800                   = 25.0 mA
+P              = 20.0^2 / 800 = 400 / 800     = 0.500 W = 500 mW
+```
+
+On the secondary side the same 500 mW arrives as $20/10 = 2.0$ V across 8 Ω, drawing
+250 mA — and $2.0 \times 0.25 = 0.500$ W, as it has to be.
+
+Now delete the transformer and wire the speaker straight to the amplifier, which is the
+comparison that justifies the part:
+
+```text
+I = 40 / (800 + 8)                            = 49.50 mA
+P = I^2 * 8 = (0.04950)^2 * 8                 = 0.01961 W = 19.6 mW
+```
+
+More than twenty-five times less. The amplifier is unchanged, the speaker is unchanged, and the
+transformer generates nothing — all it did was arrange for an 800 Ω source to see 800 Ω,
+which is the condition for maximum power transfer. You can confirm 500 mW is the ceiling
+directly: the most any source can deliver is $V^2/4R_s = 40^2/3200 = 0.500$ W, and the
+matched case is exactly the case that reaches it.
+
+One caution about reading too much into that. Matching for maximum power is right for a
+signal source that cannot be made stronger; it is wrong for a mains supply or a solid-state
+amplifier, where you want the source resistance to be *low* compared with the load so that
+the voltage does not sag and half the power is not burnt inside the source. Here, at the
+match, the amplifier is dissipating 500 mW of its own — as much as it delivers.
+''',
+                },
+                {
+                    "title": "Two coils in series, and how tightly they are coupled",
+                    "minutes": 10,
+                    "brief": r'''
+There is no such instrument as a mutual-inductance meter, so $M$ is measured indirectly:
+connect the two coils in series and read the pair as a single inductor. Series with the
+fluxes adding gives $L_1 + L_2 + 2M$; reverse one winding so they oppose and it gives
+$L_1 + L_2 - 2M$.
+
+Three readings are on the bench below — each coil alone, and the two in series with the
+fluxes adding. That is enough for $M$, and then for the coupling coefficient, which is the
+number that actually says whether these two would make a usable transformer.
+''',
+                    "prompt": "What is the coupling coefficient k between the two coils?",
+                    "note": "A pure number between 0 and 1, to three decimal places.",
+                    "figure": r'''
+```text
+   three readings from the same LCR bridge, all at 1 kHz
+
+     coil 1 alone, coil 2 left open .................  L1    =  60 mH
+     coil 2 alone, coil 1 left open .................  L2    = 120 mH
+     the two in series, fluxes ADDING ...............  L_aid = 260 mH
+
+   series-aiding:                     series-opposing:
+
+      o--[ coil 1 ]--+--[ coil 2 ]--o    o--[ coil 1 ]--+--[ coil 2 ]--o
+           * ->            * ->                * ->           <- *
+
+   (the * marks the start of each winding; aiding means the two fluxes
+    point the same way round the shared core)
+```
+''',
+                    "given": [
+                        {"label": "L₁ alone", "value": "60 mH"},
+                        {"label": "L₂ alone", "value": "120 mH"},
+                        {"label": "In series, fluxes adding", "value": "260 mH"},
+                    ],
+                    "aside": "The $2M$ appears rather than $M$ because each coil links the other's flux "
+                             "as well as its own, and there are two coils to which that applies. It is "
+                             "the same double-counting that puts the square on $N$ in $L = \\mu_0N^2A/\\ell$.",
+                    "answer": 0.471,
+                    "tol": 0.006,
+                    "unit": "",
+                    "hint": "$L_{\\text{aid}} = L_1 + L_2 + 2M$ gives $M$ in one line. Then "
+                            "$k = M/\\sqrt{L_1L_2}$ — the geometric mean of the two inductances, not "
+                            "the average of them.",
+                    "wrong": "If you got 0.444, $\\sqrt{L_1L_2}$ was replaced by the arithmetic mean "
+                             "$(60+120)/2 = 90$ mH. If you got 0.943, the $2M$ was read as $M$, doubling "
+                             "the mutual inductance to 80 mH. If you came out above 1, something has gone "
+                             "wrong that no pair of passive coils can do — $k \\le 1$ is conservation of "
+                             "energy.",
+                    "why": r'''
+```text
+L_aid = L1 + L2 + 2M
+260   = 60 + 120 + 2M
+2M    = 80                            M       = 40 mH
+
+sqrt(L1 * L2) = sqrt(60 * 120) = sqrt(7200)   = 84.853 mH
+
+k = 40 / 84.853                               = 0.4714
+```
+
+Check it against the fourth reading you did not use: series-opposing should measure
+$60 + 120 - 80 = 100$ mH. If the bridge says anything else, one of the three numbers above
+is wrong — and the subtraction $M = (L_{\text{aid}} - L_{\text{opp}})/4 = (260-100)/4 = 40$
+mH gets $M$ without needing $L_1$ and $L_2$ at all, which is the version worth remembering.
+
+What 0.471 means in practice: fewer than half the field lines from either coil reach the
+other. As a transformer this pair would be dreadful — the missing flux is leakage
+inductance, and by $L_\ell = (1-k)L_1$ there is 32 mH of it in series with the primary,
+against 28 mH of magnetising inductance. Two windings on a closed ferrite ring reach
+$k > 0.99$ and turn those two numbers round completely. As a *coupled inductor* in a
+converter, or as the tuned pair in a bandpass filter, $k$ near 0.5 is not a defect at all
+but a design parameter — it is what sets the width of the double-humped response.
+
+Note finally the hard ceiling in the arithmetic. Even with perfect coupling this pair
+could not exceed $M = 84.9$ mH, so the series-aiding reading can never exceed
+$60 + 120 + 170 = 350$ mH. A bridge reporting more than that is measuring something other
+than what you think it is.
+''',
+                },
+                {
+                    "title": "How low will this output transformer go?",
+                    "minutes": 13,
+                    "brief": r'''
+The amplifier of the second reading unit, with the transformer's own parts now drawn in.
+The output stage is still 50 V behind 5.0 kΩ and the speaker is still 8 Ω through a 25:1
+transformer, but the ideal component has been replaced by the four it behaves like, all
+referred to the primary side:
+
+- 250 Ω of primary winding copper, in series;
+- 40 mH of leakage inductance, in series;
+- 15 H of magnetising inductance, across the line;
+- the secondary's 0.40 Ω of copper and the 8 Ω speaker, both reflected through
+  $n^2 = 625$ — 250 Ω and 5000 Ω respectively — in series after it.
+
+At 1 kHz all of that behaves like plain resistors and the probe reads about 23.8 V. Go
+down in frequency and the magnetising inductance, whose reactance falls with $f$, starts
+shorting the signal to ground before it ever reaches the load.
+
+The bass end of this amplifier is set entirely by that one part.
+''',
+                    "prompt": "At what frequency has the output fallen 3 dB below its mid-band value?",
+                    "note": "Answer in hertz, to one decimal place.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 7, "rot": 1, "value": 50},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                            {"id": "rs", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 5000},
+                            {"id": "rp", "kind": "R", "x": 9, "y": 4, "rot": 0, "value": 250},
+                            {"id": "ll", "kind": "L", "x": 12, "y": 4, "rot": 0, "value": 0.04},
+                            {"id": "lm", "kind": "L", "x": 15, "y": 7, "rot": 1, "value": 15},
+                            {"id": "g1", "kind": "GND", "x": 15, "y": 10},
+                            {"id": "rw", "kind": "R", "x": 18, "y": 4, "rot": 0, "value": 250},
+                            {"id": "rl", "kind": "R", "x": 22, "y": 7, "rot": 1, "value": 5000},
+                            {"id": "g2", "kind": "GND", "x": 22, "y": 10},
+                            {"id": "out", "kind": "OUT", "x": 24, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 6], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [8, 4]},
+                            {"a": [10, 4], "b": [11, 4]},
+                            {"a": [13, 4], "b": [15, 4]},
+                            {"a": [15, 4], "b": [15, 6]},
+                            {"a": [15, 8], "b": [15, 10]},
+                            {"a": [15, 4], "b": [17, 4]},
+                            {"a": [19, 4], "b": [22, 4]},
+                            {"a": [22, 4], "b": [22, 6]},
+                            {"a": [22, 8], "b": [22, 10]},
+                            {"a": [22, 4], "b": [24, 4]},
+                            {"a": [3, 8], "b": [3, 10]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Amplifier open-circuit voltage", "value": "50 V"},
+                        {"label": "Amplifier output resistance", "value": "5.0 kΩ"},
+                        {"label": "Primary winding resistance", "value": "250 Ω"},
+                        {"label": "Leakage inductance", "value": "40 mH"},
+                        {"label": "Magnetising inductance", "value": "15 H"},
+                        {"label": "Secondary copper, reflected", "value": "250 Ω"},
+                        {"label": "Speaker, reflected (25² × 8 Ω)", "value": "5.0 kΩ"},
+                    ],
+                    "aside": "Look outwards from the magnetising inductance and ask what resistance it "
+                             "is working against. There is a path to ground through the source and a "
+                             "path to ground through the load, and it sees both at once — so they are "
+                             "in parallel, not in series. Getting that wrong is the whole question.",
+                    # The corner is measured on the drawn circuit by bisection between 1 kHz and
+                    # 2 Hz — nothing about the answer is restated here, so a re-valued schematic
+                    # is genuinely re-measured.
+                    "check": r'''
+return c.corner(1000, 2);
+''',
+                    "answer": 27.8,
+                    "tol": 0.4,
+                    "unit": "Hz",
+                    "hint": "This is a first-order high-pass, and its corner is at "
+                            "$\\omega = R/L_m$ with $R$ the resistance the inductor sees looking out "
+                            "into the dead circuit. Add up each side separately — source plus primary "
+                            "copper on the left, secondary copper plus reflected speaker on the right — "
+                            "then put the two totals in parallel.",
+                    "wrong": "If you got 111.4, the two sides were added in series (10.5 kΩ) instead of "
+                             "put in parallel. If you got 55.7, only one side was counted. If you got "
+                             "175, the answer is in radians per second and still needs dividing by "
+                             "$2\\pi$.",
+                    "why": r'''
+The leakage inductance is 40 mH — 10 Ω at 40 Hz, against thousands — so it plays no part
+down here and can be treated as a wire. What is left is one inductor across a node fed
+from the left through $5000 + 250$ and loaded to the right through $250 + 5000$:
+
+```text
+left  of the node  = 5000 + 250                 = 5250 ohm
+right of the node  = 250 + 5000                 = 5250 ohm
+what L_m sees      = 5250 || 5250               = 2625 ohm
+
+w_c  = R / L_m = 2625 / 15                      = 175.0 rad/s
+f_c  = 175.0 / (2 * pi)                         = 27.85 Hz
+```
+
+Just under 28 Hz. Below it the response falls at 6 dB per octave, so an octave lower —
+14 Hz, the bottom note of a large organ — the output is 7 dB down and only a fifth of the
+mid-band power reaches the speaker. In the mid-band the speaker gets
+
+```text
+V at the probe = 50 * 5000 / 10500              = 23.81 V   (reflected)
+P              = 23.81^2 / 5000                 = 113 mW
+```
+
+and at 27.85 Hz that has halved, to 57 mW, which is what −3 dB means.
+
+Two things this question is really about. The first is the parallel combination: the
+inductor does not care which side of it a resistance is on, only that it offers a path to
+ground, and both do. Using 10.5 kΩ instead of 2.6 kΩ puts the corner at 111 Hz — a
+four-fold error, and in the direction that would have you condemn a perfectly good
+transformer.
+
+The second is what to do about it, because a bass corner at 28 Hz is decent but not free.
+$L_m = N_1^2/\mathcal{R}$, so lowering the corner means more turns or less reluctance:
+more primary turns (which also raise the leakage and the copper, moving the treble corner
+down and the efficiency with it), a larger core, or a better material. Chasing the last
+few hertz is exactly why a good output transformer is heavy and expensive.
+
+And the other end, for scale: the leakage sits in series with $5250 + 5250 = 10.5$ kΩ, so
+the top corner is at $10500/0.040 = 2.63\times10^5$ rad/s, or 41.8 kHz. The usable band is
+28 Hz to 42 kHz, a ratio of 1500 — and by the argument in the third reading unit that
+ratio is $4L_m/L_\ell$, which is a statement about the coupling coefficient and nothing
+else.
+''',
+                },
+            ],
+            "derive": {
+                "title": "Where M comes from, and why it cannot beat the geometric mean",
+                "minutes": 14,
+                "vars": ["N_1", "N_2", "I_1", "Phi", "R_m", "L_1", "L_2", "M", "k"],
+                "brief": r'''
+Two windings on one closed core: $N_1$ turns and $N_2$ turns, on a magnetic circuit whose
+total reluctance is $R_m$. Module 8 supplies the one fact needed to start — that the flux
+round a magnetic circuit is the magnetomotive force divided by the reluctance,
+$\Phi = \mathcal{F}/R_m$, which is Ohm's law with the names changed.
+
+Take coil 2 open-circuit throughout, so it carries no current and contributes no mmf of
+its own, and take the core linear.
+
+The point of the exercise is that $M = k\sqrt{L_1L_2}$ is not a definition of $k$ dressed
+up as a formula. With a perfect core the $\sqrt{L_1L_2}$ falls out of the geometry, and
+$k$ is what is left over when the flux does not all arrive.
+''',
+                "steps": [
+                    {
+                        "prompt": "Coil 1 carries $I_1$, so the mmf driving the core is $N_1I_1$. Write the flux $\\Phi$ round the core.",
+                        "answer": "\\frac{N_1 I_1}{R_m}",
+                        "hint": "Flux equals mmf divided by reluctance — the magnetic circuit's version of $I = V/R$.",
+                        "deconstruct": [
+                            "The mmf is $N_1 I_1$ ampere-turns.",
+                            "Divide it by the reluctance $R_m$.",
+                        ],
+                    },
+                    {
+                        "prompt": "All $N_1$ turns link that flux, so coil 1's flux linkage is $N_1\\Phi$. Self-inductance is linkage per amp: write $L_1$ in terms of $N_1$ and $R_m$.",
+                        "answer": "\\frac{N_1^{2}}{R_m}",
+                        "placeholder": "an expression in N_1 and R_m",
+                        "hint": "$L_1 = N_1\\Phi/I_1$. Substitute the $\\Phi$ you just wrote and the current cancels.",
+                        "deconstruct": [
+                            "$L_1 = N_1\\Phi/I_1 = N_1 \\times (N_1I_1/R_m)/I_1$.",
+                            "The $I_1$ cancels top and bottom, leaving $N_1$ twice.",
+                        ],
+                    },
+                    {
+                        "prompt": "Take the core perfect, so every line of that flux also passes through coil 2. Its linkage is then $N_2\\Phi$, and $M$ is that linkage per amp of $I_1$. Write $M$ in terms of $N_1$, $N_2$ and $R_m$.",
+                        "answer": "\\frac{N_1 N_2}{R_m}",
+                        "hint": "Same move as the last step, but the flux is made by $N_1$ and counted by $N_2$, so the two turn counts are different.",
+                        "deconstruct": [
+                            "$M = N_2\\Phi/I_1 = N_2 \\times (N_1I_1/R_m)/I_1$.",
+                            "The current cancels again.",
+                        ],
+                    },
+                    {
+                        "prompt": "By the same argument as step 2, $L_2 = N_2^2/R_m$. Use that and your $L_1$ to eliminate $N_1$, $N_2$ and $R_m$ from $M$: write $M$ in terms of $L_1$ and $L_2$ alone.",
+                        "answer": "\\sqrt{L_1 L_2}",
+                        "placeholder": "an expression in L_1 and L_2",
+                        "hint": "Multiply $L_1$ by $L_2$ and look at what you get: $N_1^2N_2^2/R_m^2$, which is the square of your $M$.",
+                        "deconstruct": [
+                            "$L_1L_2 = (N_1^2/R_m)(N_2^2/R_m) = (N_1N_2/R_m)^2$.",
+                            "That bracket is $M$, so $M^2 = L_1L_2$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now a real core, in which only a fraction $k$ of coil 1's flux reaches coil 2, so coil 2's linkage is $kN_2\\Phi$ rather than $N_2\\Phi$. Redo the last two steps and write $M$ in terms of $k$, $L_1$ and $L_2$.",
+                        "answer": "k \\sqrt{L_1 L_2}",
+                        "hint": "The factor $k$ rides through untouched: it multiplies the linkage, so it multiplies $M$, and $L_1$ and $L_2$ are unaffected because each coil still links all of its own flux.",
+                        "deconstruct": [
+                            "$M = kN_2\\Phi/I_1 = kN_1N_2/R_m$.",
+                            "The $N_1N_2/R_m$ is still $\\sqrt{L_1L_2}$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Finally the turns ratio, hiding in the algebra. With the perfect core of steps 1 to 4, write the ratio $M/L_1$ in terms of $N_1$ and $N_2$.",
+                        "answer": "\\frac{N_2}{N_1}",
+                        "hint": "Divide $N_1N_2/R_m$ by $N_1^2/R_m$. The reluctance cancels, which is the whole point — the ratio does not depend on the core at all.",
+                        "deconstruct": [
+                            "$M/L_1 = (N_1N_2/R_m)\\div(N_1^2/R_m)$.",
+                            "The $R_m$ and one $N_1$ cancel.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+Three results out of six lines, and the third is the one to keep.
+
+$M = \sqrt{L_1L_2}$ for a perfect core says the geometric mean is not an arbitrary
+combination — it is what two windings sharing one reluctance are forced into, because
+$L_1$, $L_2$ and $M$ are all the same $1/R_m$ multiplied by different pairs of turn counts.
+$k$ then has a job: it is the fraction of the flux that actually arrives, and the energy
+argument in the first reading unit says independently that it cannot exceed 1.
+
+And $M/L_1 = N_2/N_1$ is the ideal transformer's voltage law arriving by a side door.
+Coil 2 open-circuit sees $v_2 = M\,\mathrm{d}i_1/\mathrm{d}t$ while coil 1 sees
+$v_1 = L_1\,\mathrm{d}i_1/\mathrm{d}t$, so their ratio is $M/L_1 = N_2/N_1$ — the turns
+ratio, with no reluctance in it. That the core cancelled is why a transformer's ratio is
+a property of the winding machine rather than of the iron.
+
+Numbers, on a ferrite ring of $\mu_r = 2000$, cross-section 100 mm², mean path 100 mm,
+wound with 90 turns and 30 turns:
+
+```text
+R_m = l / (mu0 * mu_r * A)
+    = 0.100 / (1.2566e-6 * 2000 * 1.0e-4)
+    = 0.100 / 2.5133e-7                       = 3.979e5 A/Wb
+
+L1  = 90^2  / 3.979e5 = 8100 / 3.979e5        = 20.36 mH
+L2  = 30^2  / 3.979e5 =  900 / 3.979e5        =  2.262 mH
+M   = 90*30 / 3.979e5 = 2700 / 3.979e5        =  6.786 mH
+
+sqrt(L1 * L2) = sqrt(20.36e-3 * 2.262e-3)     =  6.786 mH   (equal, as derived)
+M / L1 = 6.786 / 20.36                        =  0.3333  = 30/90
+```
+
+Measure that pair on a bridge and $M$ will come out at 6.6 to 6.75 mH rather than 6.786 —
+$k$ of about 0.98 to 0.995, depending on whether the windings are side by side or one on
+top of the other. The missing 1 or 2% is not lost; it is flux going round the outside of
+the bobbin, and it is the leakage inductance of the third reading unit — the part that
+sets the top of the transformer's band.
+''',
+            },
         },
 
         # ---- M10 ----------------------------------------------------------
@@ -8575,6 +13437,769 @@ V2                         = ___
                 "The four equations, in words. Electric field lines begin and end on charge. Magnetic field lines do neither. A changing magnetic flux drives an electric field round a loop. A current *or* a changing electric flux drives a magnetic field round a loop. The first two are the Gauss laws of modules 2 and 4, the third is Faraday, and the fourth is the one that was just repaired.",
                 "The last two now feed each other, and away from all charge they admit a solution with no sources anywhere: a disturbance in which each field's change sustains the other, travelling at $1/\\sqrt{\\mu_0\\varepsilon_0}$. Put in the two constants measured on a bench with capacitors and coils and that comes to $3.00\\times10^8$ m/s, which was already the measured speed of light — the strongest circumstantial evidence in the history of physics.",
                 "In such a wave $\\mathbf{E}$ and $\\mathbf{B}$ are perpendicular to each other and to the direction of travel, in step, with $E = cB$. The ratio $E/H$ is the same everywhere and is a property of the vacuum: $\\eta_0 = \\sqrt{\\mu_0/\\varepsilon_0} = 376.7\\ \\Omega$. Power flows as $\\mathbf{S} = \\mathbf{E}\\times\\mathbf{H}$, which for a sinusoid averages $E_0^2/(2\\eta_0)$ watts per square metre.",
+            ],
+            "read": [
+                {
+                    "title": "The loop that gives two answers, and the term that fixes it",
+                    "minutes": 20,
+                    "body": r'''
+A resistor, a capacitor, a battery and a switch, in one series loop. Close the switch and
+an ammeter in the wire reads a current — a fraction of a milliamp, falling away over a few
+milliseconds as the capacitor fills. Hold a sensitive magnetometer beside that wire and it
+reads a magnetic field circling it, exactly the field module 4 said a current makes,
+$B = \mu_0 I/(2\pi r)$, dying away on the same schedule as the current.
+
+Now slide the magnetometer along the axis until it sits *between the capacitor's plates*,
+the same distance out from the centre line. There is no wire there. No charge crosses that
+gap — not being crossed is the entire point of a capacitor; if charge got across it, it
+would be a resistor. And the magnetometer still reads a field. Same size, same direction,
+dying away on the same schedule.
+
+Ampère's law, as module 4 stated it, says that cannot happen. Repairing it takes exactly
+one extra term, and that term is the one that turns this subject into optics.
+
+## A loop, and the surfaces you can hang on it
+
+Ampère's law connects two things: the circulation of $\mathbf{B}$ round a closed loop, and
+the current "through" the loop.
+
+$$\oint_C \mathbf{B}\cdot\mathrm{d}\boldsymbol{\ell} = \mu_0 I_{\text{enc}}$$
+
+The left-hand side is unambiguous. A loop is a curve, you walk round it, and you add up
+$\mathbf{B}$ along the way. The right-hand side is not unambiguous, and the ambiguity is
+easy to miss because in every example anyone meets first it does not matter.
+
+What does "the current through the loop" mean? A curve has no inside. What has an inside
+is a *surface* whose edge is that curve, and $I_{\text{enc}}$ is the current crossing that
+surface. Picture the loop as a wire hoop and the surface as a soap film stretched across
+it. Blow gently and the film bulges out; its edge is still the hoop, so it is still a
+legitimate surface for the law. Nothing in the statement picks one out of the infinitely
+many available.
+
+For a steady current in an unbroken wire that is harmless. Every surface you can stretch
+across the hoop is pierced by the wire exactly once, so all of them report the same $I$.
+Put a capacitor in the wire and the harmlessness evaporates.
+
+```text
+   loop C encircles the wire, 1 cm out from the axis
+
+                          |         |
+      ----- wire -----+   |         |   +----- wire -----
+                      |   |         |   |
+            (C)       +---+         +---+
+           loop         plate     plate
+
+   surface 1 : the flat disc that fills the loop
+               -> the wire goes straight through it  -> I_enc = I
+
+   surface 2 : a bag bulging sideways, edge still on the loop,
+               closing again between the two plates
+               -> nothing whatever crosses it        -> I_enc = 0
+```
+
+Same loop, so the same left-hand side: the circulation of $\mathbf{B}$ is a property of the
+field and the curve, and it has no idea which surface you had in mind. Two right-hand
+sides: $\mu_0 I$ and zero. A law that returns two answers to one question is not a law.
+
+## It is not a drafting error
+
+You could hope this is a pathological case, patched by some rule about choosing sensible
+surfaces. It is not, and the vector calculus says so in one line.
+
+Take the curl form, $\nabla\times\mathbf{B} = \mu_0\mathbf{J}$, and take the divergence of
+both sides. The divergence of a curl is identically zero for any field whatever, so the
+law as written *demands*
+
+$$\nabla\cdot\mathbf{J} = 0$$
+
+Meanwhile the conservation of charge — which nobody is willing to give up — says
+
+$$\nabla\cdot\mathbf{J} = -\frac{\partial\rho}{\partial t}$$
+
+Read together, the 1820s Ampère law asserts that charge density never changes anywhere.
+It is a law about steady currents that has been quietly applied to unsteady ones for forty
+years. Every circuit that charges a capacitor, every antenna, every switching transition
+violates its precondition. The two-surface paradox is not a curiosity; it is what that
+violation looks like when you draw it.
+
+## Maxwell's term, and why its size was not a choice
+
+Something has to be added to $I_{\text{enc}}$ that is zero for the flat disc and equal to
+$I$ for the bulging bag. Look at what is different about the bag: it passes through the
+region between the plates, where there is no current but there *is* an electric field, and
+that field is growing.
+
+Module 2 already tells you how much. Gauss's law applied to a pillbox round one plate
+gives the field between a pair of closely spaced plates carrying charge $\pm Q$ over area
+$A$:
+
+$$E = \frac{\sigma}{\varepsilon_0} = \frac{Q}{\varepsilon_0 A}$$
+
+so the electric flux through the part of the bag that lies between the plates is
+
+$$\Phi_E = EA = \frac{Q}{\varepsilon_0}$$
+
+Differentiate. $\mathrm{d}Q/\mathrm{d}t$ is the current arriving down the wire, so
+
+$$\varepsilon_0\frac{\mathrm{d}\Phi_E}{\mathrm{d}t} = \frac{\mathrm{d}Q}{\mathrm{d}t} = I$$
+
+That is the whole repair. Define the **displacement current**
+$I_d = \varepsilon_0\,\mathrm{d}\Phi_E/\mathrm{d}t$ and write
+
+$$\oint_C \mathbf{B}\cdot\mathrm{d}\boldsymbol{\ell}
+  = \mu_0\left(I_{\text{enc}} + \varepsilon_0\frac{\mathrm{d}\Phi_E}{\mathrm{d}t}\right)$$
+
+The flat disc now reports $\mu_0(I + 0)$ — the wire pierces it, and there is no electric
+field of consequence at that point on the wire. The bag reports $\mu_0(0 + I)$ — nothing
+crosses it, but the flux through it is growing at exactly the right rate. The two agree,
+and they agree *exactly*, not to within some correction factor.
+
+Nothing about the coefficient was fitted. It was forced twice: once by the requirement
+that the two surfaces agree, and once by the fact that the $\varepsilon_0$ in it is the
+same $\varepsilon_0$ that was already in Gauss's law, measured with a capacitance bridge
+and nothing else. That is why the term earns the right to be believed in situations where
+there are no plates and no wire at all — which is the next reading unit.
+
+## Worked: 1.5 mA into a pair of 60 mm plates
+
+Concrete numbers, all the way down, because "the displacement current equals the wire
+current" is worth watching happen rather than being told.
+
+Two circular plates, radius $r_0 = 30.0$ mm, separated by $d = 0.400$ mm of air, charged
+by a source holding the current steady at $I = 1.50$ mA.
+
+```text
+A     = pi * 0.0300^2                             = 2.8274e-3  m^2
+C     = eps0 * A / d
+      = 8.8542e-12 * 2.8274e-3 / 4.00e-4          = 6.2587e-11 F   = 62.59 pF
+
+dV/dt = I / C
+      = 1.50e-3 / 6.2587e-11                      = 2.3967e7   V/s   (24.0 V per us)
+dE/dt = (dV/dt) / d
+      = 2.3967e7 / 4.00e-4                        = 5.9917e10  V/(m s)
+
+dPhi_E/dt = A * dE/dt
+      = 2.8274e-3 * 5.9917e10                     = 1.6941e8   V m /s
+I_d   = eps0 * dPhi_E/dt
+      = 8.8542e-12 * 1.6941e8                     = 1.5000e-3  A     = 1.50 mA
+```
+
+1.50 mA in the wire, 1.50 mA between the plates. The route from one to the other ran
+through the capacitance, the rate of rise of the voltage, the rate of rise of the field
+and the flux — four quantities, each of which could have been measured on its own — and it
+came back to the number it started from. It had to, and the algebra says why: with
+$C = \varepsilon_0 A/d$ and $\Phi_E = EA = (V/d)A$,
+
+$$\varepsilon_0\frac{\mathrm{d}\Phi_E}{\mathrm{d}t}
+  = \frac{\varepsilon_0 A}{d}\frac{\mathrm{d}V}{\mathrm{d}t}
+  = C\frac{\mathrm{d}V}{\mathrm{d}t} = I$$
+
+Every geometric factor cancels. The displacement current between the plates of *any*
+parallel-plate capacitor is $C\,\mathrm{d}V/\mathrm{d}t$, which is the current the circuit
+was drawing anyway. The plate area and the gap were never needed for that part — only for
+the field and the magnetic field it makes.
+
+Now the field it makes. Take a circular loop of radius $r_0$ sitting in the gap, coaxial
+with the plates. By symmetry $\mathbf{B}$ is the same size everywhere on it and points the
+way round, so the circulation is just $B\,2\pi r_0$, and all of the displacement current is
+enclosed:
+
+```text
+B(rim) = mu0 * I_d / (2 * pi * r0)
+       = 1.25664e-6 * 1.50e-3 / (2 * pi * 0.0300)
+       = 1.88496e-9 / 0.188496                    = 1.000e-8 T = 10.0 nT
+```
+
+Take a smaller loop, at $r = 10.0$ mm. The field between the plates is uniform, so the
+flux through a loop of radius $r$ is only the fraction $(r/r_0)^2$ of the total, and so is
+the displacement current it encloses:
+
+```text
+I_enc(10 mm) = 1.50e-3 * (0.0100/0.0300)^2        = 1.667e-4 A
+B(10 mm)     = 1.25664e-6 * 1.667e-4 / (2 * pi * 0.0100)
+             = 2.0944e-10 / 0.0628319             = 3.333e-9 T = 3.33 nT
+```
+
+which is $10.0\ \mathrm{nT}\times(10/30)$. Inside the gap the field rises linearly from
+zero on the axis to its maximum at the rim, and then falls off as $1/r$ outside — precisely
+the profile of the field inside and outside a wire carrying a uniform current density. The
+gap behaves magnetically like a fat conductor carrying 1.5 mA, and it does so without a
+single charge moving in it.
+
+Ten nanotesla is small — a five-thousandth of the Earth's steady field — which is the
+practical reason the effect was not discovered on a bench before it was deduced on paper.
+
+## Worked: the frequency at which seawater stops being a conductor
+
+The second example is the one that shows the term is not a bookkeeping device for
+capacitors. Any medium carries both kinds of current at once: a conduction current from
+charges that actually move, and a displacement current from the field changing. Module 6
+gives the first, $J_c = \sigma E$; the new term gives the second, and for a field
+oscillating as $E_0\sin\omega t$,
+
+$$J_d = \varepsilon\frac{\partial E}{\partial t}
+      = \omega\varepsilon E_0\cos\omega t$$
+
+so the amplitudes are $\sigma E_0$ and $\omega\varepsilon E_0$. They are equal when
+$\omega = \sigma/\varepsilon$, that is at
+
+$$f = \frac{\sigma}{2\pi\varepsilon}$$
+
+Below that frequency the medium is behaving mostly like a conductor; above it, mostly like
+a dielectric. Two materials, worked out:
+
+```text
+copper:   sigma = 5.96e7 S/m,  eps  ~= eps0 = 8.854e-12 F/m
+  f = 5.96e7 / (6.2832 * 8.854e-12)
+    = 5.96e7 / 5.5632e-11                         = 1.07e18 Hz
+
+seawater: sigma = 4.0 S/m,  eps_r = 81, so eps = 81 * 8.854e-12 = 7.172e-10 F/m
+  f = 4.0 / (6.2832 * 7.172e-10)
+    = 4.0 / 4.5064e-9                             = 8.9e8 Hz   (890 MHz)
+```
+
+Copper's crossover is up in the X-ray band, which is why displacement current can be
+ignored inside any metal in any circuit you will ever build: at 1 GHz the conduction
+current in copper beats the displacement current by a factor of $10^9$. Seawater's
+crossover is at 890 MHz — right in the middle of the mobile telephone bands. Below it, a
+submarine's radio problem is a *conductor* problem, and the field dies away over a skin
+depth of a few metres at the very low frequencies that are used. Above it, seawater is
+just a lossy dielectric with $\varepsilon_r = 81$, which is why microwaves heat a wet thing
+and not a dry one.
+
+The same crossover with $\sigma$ and $\varepsilon$ for dry soil lands in the low megahertz,
+which is exactly why ground-penetrating radar works at 100 MHz and not at 100 kHz.
+
+## The mistake
+
+Almost everyone, on first meeting, takes "displacement current" to mean that something
+flows across the gap — that the vacuum, or the dielectric, carries a current of some
+exotic kind. It is a very tempting reading. The term is called a current, it is measured
+in amps, it sits in the same bracket as $I_{\text{enc}}$, and it comes out *numerically
+identical* to the wire current, which looks exactly like continuity being restored by
+something physically passing through.
+
+Nothing passes through. In a vacuum gap there is not so much as one charge to move. What
+the term says is that a changing electric flux makes a magnetic field circulate, in the
+same way and by the same constant that a current does. Maxwell chose the name because he
+pictured the vacuum as an elastic medium being strained, and the strain "displacing"
+something; the picture is dead and the name outlived it.
+
+Two practical consequences of getting this wrong. First, people expect the gap to
+dissipate power, because currents in things dissipate power. It does not: an ideal
+capacitor takes energy in and gives it back, and module 3 already showed where that energy
+sits. Second, people add the displacement current to the wire current and get $2I$
+somewhere. They never coexist at the same place: in the wire the conduction term carries
+everything and the field there is not changing; in the gap the displacement term carries
+everything and no charge moves. The sum is $I$ at every point along the path, which is
+what makes the law consistent.
+
+## Where this stops holding
+
+The clean statement "$I_d$ between the plates equals $I$ in the wire" rests on the ideal
+parallel plate: uniform field inside, nothing outside. Real plates fringe. Put the bulging
+surface's rim close to the edge of a plate and the flux through it is genuinely less than
+$Q/\varepsilon_0$, because some field lines have escaped sideways. The law is still exact —
+what has changed is that the escaped flux is now crossing a different part of your surface,
+and you have to count it. The convenient equality is a property of the geometry, while the
+law itself is not.
+
+Inside a material the bare $\varepsilon_0\mathbf{E}$ is replaced by $\mathbf{D}$, and the
+two halves of $\partial\mathbf{D}/\partial t$ are physically different animals. The
+$\varepsilon_0\partial\mathbf{E}/\partial t$ part is Maxwell's term and moves nothing. The
+polarisation part $\partial\mathbf{P}/\partial t$ is bound charge genuinely shifting inside
+the molecules — a real current, on a very short leash, and the thing that makes a lossy
+dielectric warm up. Lumping them together as "the displacement current" is standard and
+convenient, and it hides the fact that only one of them is a fiction.
+
+Finally, all of this treats the capacitor as a lumped component with one voltage across it.
+Once the plates are a serious fraction of a wavelength across, the field between them is
+not uniform, "the" voltage is not well defined, and the object has stopped being a
+capacitor and started being a cavity. That boundary is set by the speed the next reading
+unit is about to compute.
+''',
+                },
+                {
+                    "title": "Four equations, and the wave that falls out of them",
+                    "minutes": 22,
+                    "body": r'''
+Look at what the repair did to the shape of the subject.
+
+Before it, the two circulation laws were lopsided. Faraday's law said a changing magnetic
+flux drives an electric field round a loop. Ampère's law said an electric *current* drives
+a magnetic field round a loop. One of them was about a changing field, the other about
+moving charge, and there was no symmetry between them.
+
+After it, they are near mirror images. A changing $\mathbf{B}$ makes $\mathbf{E}$
+circulate; a changing $\mathbf{E}$ makes $\mathbf{B}$ circulate. And notice what that
+allows, which the old pair did not: take a region of space with no charge in it and no
+current anywhere near it. Faraday still has something to say, and so does Ampère–Maxwell.
+Each field's change is now able to sustain the other's, with nothing material involved at
+either end. Whether that possibility is real is a question about the equations, and it can
+be settled by algebra.
+
+## The four, in words and in symbols
+
+$$\oint_S \mathbf{E}\cdot\mathrm{d}\mathbf{A} = \frac{Q_{\text{enc}}}{\varepsilon_0}
+\qquad\text{(module 2)}$$
+
+Electric field lines begin and end on charge. Wrap any closed surface round some charge
+and count the flux out of it; the answer depends on the charge inside and on nothing else.
+
+$$\oint_S \mathbf{B}\cdot\mathrm{d}\mathbf{A} = 0
+\qquad\text{(module 4)}$$
+
+Magnetic field lines do neither. Every line that leaves a closed surface comes back into
+it, because there is no magnetic charge for one to start on. This is the only one of the
+four with a permanent zero on the right, and the deepest asymmetry in the set.
+
+$$\oint_C \mathbf{E}\cdot\mathrm{d}\boldsymbol{\ell}
+  = -\frac{\mathrm{d}\Phi_B}{\mathrm{d}t}
+\qquad\text{(module 4)}$$
+
+A changing magnetic flux drives an electric field round a loop. The minus sign is Lenz's
+law: the driven field opposes the change that made it.
+
+$$\oint_C \mathbf{B}\cdot\mathrm{d}\boldsymbol{\ell}
+  = \mu_0 I_{\text{enc}} + \mu_0\varepsilon_0\frac{\mathrm{d}\Phi_E}{\mathrm{d}t}
+\qquad\text{(module 4, repaired last unit)}$$
+
+A current *or* a changing electric flux drives a magnetic field round a loop.
+
+Everything in this course is in those four lines plus the force law
+$\mathbf{F} = q(\mathbf{E} + \mathbf{v}\times\mathbf{B})$ from module 7, which is what
+turns a field into something you can measure. Coulomb's law is the first equation applied
+to a sphere. Capacitance is the first applied to two conductors. The transformer is the
+third. The rest is geometry.
+
+## Why they have to make a wave
+
+Set $Q = 0$ and $I = 0$ everywhere — empty space, no sources at all — and look for a
+solution in which everything depends on one coordinate $x$ and on time. Guess an electric
+field along $y$ and a magnetic field along $z$:
+
+$$\mathbf{E} = E_y(x,t)\,\hat{\mathbf{y}},\qquad \mathbf{B} = B_z(x,t)\,\hat{\mathbf{z}}$$
+
+Now apply the two circulation laws to two little rectangles.
+
+**Rectangle 1**, lying in the $x$–$y$ plane: width $\Delta x$ along $x$, height $h$ along
+$y$. Walk round it. The two sides that run along $y$ contribute $E_y(x+\Delta x)h$ and
+$-E_y(x)h$; the two that run along $x$ contribute nothing, because $\mathbf{E}$ has no $x$
+component. So the circulation is
+
+$$\left[E_y(x+\Delta x) - E_y(x)\right]h \approx \frac{\partial E_y}{\partial x}h\,\Delta x$$
+
+The area of this rectangle faces along $z$, which is where $\mathbf{B}$ points, so the flux
+through it is $B_z h\Delta x$. Faraday says circulation $= -\mathrm{d}\Phi_B/\mathrm{d}t$,
+and $h\Delta x$ cancels off both sides:
+
+$$\frac{\partial E_y}{\partial x} = -\frac{\partial B_z}{\partial t}$$
+
+**Rectangle 2**, lying in the $x$–$z$ plane: width $\Delta x$ along $x$, height $h$ along
+$z$, oriented so its area faces along $y$. The same walk, now with $\mathbf{B}$, gives a
+circulation of $-(\partial B_z/\partial x)h\Delta x$; the flux through it is $E_y h\Delta x$.
+There is no current, so Ampère–Maxwell says circulation
+$= \mu_0\varepsilon_0\,\mathrm{d}\Phi_E/\mathrm{d}t$:
+
+$$-\frac{\partial B_z}{\partial x} = \mu_0\varepsilon_0\frac{\partial E_y}{\partial t}$$
+
+Two equations, each giving one field's slope in space from the other's slope in time. To
+get one field on its own, differentiate the first with respect to $x$ and the second with
+respect to $t$:
+
+$$\frac{\partial^2 E_y}{\partial x^2} = -\frac{\partial^2 B_z}{\partial x\,\partial t},
+\qquad
+-\frac{\partial^2 B_z}{\partial t\,\partial x} = \mu_0\varepsilon_0\frac{\partial^2 E_y}{\partial t^2}$$
+
+Mixed partial derivatives do not care about order, so the right-hand side of the first is
+the left-hand side of the second, and
+
+$$\frac{\partial^2 E_y}{\partial x^2} = \mu_0\varepsilon_0\frac{\partial^2 E_y}{\partial t^2}$$
+
+That is a wave equation, and there was no wave in the assumptions — only "no sources" and
+"depends on $x$ and $t$".
+
+## The speed, which was already known
+
+Try any function that keeps its shape and slides along, $E_y = f(x - vt)$. Then
+$\partial^2 E_y/\partial x^2 = f''$ and $\partial^2 E_y/\partial t^2 = v^2f''$, and the
+equation is satisfied for every shape $f$ provided
+
+$$1 = \mu_0\varepsilon_0 v^2
+\qquad\Longrightarrow\qquad
+v = \frac{1}{\sqrt{\mu_0\varepsilon_0}}$$
+
+Put the numbers in. $\varepsilon_0$ comes from electrostatics — the force between charges,
+or equivalently the capacitance of a known geometry. $\mu_0$ comes from magnetostatics —
+the force between two current-carrying wires. Neither measurement involves light, a lens,
+a star or a shutter.
+
+```text
+mu0 * eps0 = 1.256637e-6 * 8.854188e-12          = 1.112650e-17  s^2/m^2
+sqrt(...)                                        = 3.335641e-9   s/m
+1 / that                                         = 2.997925e8    m/s
+```
+
+Fizeau had measured the speed of light with a toothed wheel in 1849 and got about
+$3.15\times10^8$ m/s. Weber and Kohlrausch had measured the electromagnetic ratio in 1856
+and got about $3.1\times10^8$. Maxwell put the two side by side in 1862 and drew the only
+available conclusion: light is an electromagnetic wave. Two constants from a bench covered
+in coils and Leyden jars had reproduced a number obtained from a spinning wheel and a
+mirror a mile away. It remains the strongest piece of circumstantial evidence in the
+history of physics, and it is why this course, which opened with two charged spheres, is
+allowed to end here.
+
+## What the wave looks like
+
+Both fields are perpendicular to the direction of travel — there is no component of either
+along $x$ in the solution above, and the two Gauss laws forbid one for a wave with plane
+fronts. They are perpendicular to each other. And they are locked in size and in phase.
+
+Take $E_y = E_0\,g(x - ct)$ and $B_z = B_0\,g(x - ct)$ with the *same* shape function $g$,
+and feed them into Faraday's relation $\partial E_y/\partial x = -\partial B_z/\partial t$:
+
+$$E_0\,g' = -\left(-c B_0\, g'\right) = c B_0\, g'
+\qquad\Longrightarrow\qquad
+E_0 = cB_0$$
+
+The two amplitudes are in a fixed ratio and the two fields rise and fall together — same
+zeros, same peaks, same instant. That is a travelling wave.
+
+## Worked: reading a wave off its formula
+
+A wave in vacuum is described by
+
+$$E_y(x,t) = 45.0\ \sin\!\left(kx - \omega t\right)\ \mathrm{V/m},
+\qquad k = 2.10\times10^{7}\ \mathrm{rad/m}$$
+
+Everything else follows from $k$ and $c$ alone.
+
+```text
+lambda = 2 * pi / k
+       = 6.28319 / 2.10e7                        = 2.992e-7 m  = 299 nm
+
+omega  = c * k
+       = 2.997925e8 * 2.10e7                     = 6.2956e15 rad/s
+f      = omega / (2 * pi)
+       = 6.2956e15 / 6.28319                     = 1.0020e15 Hz  = 1.00 PHz
+
+B0     = E0 / c
+       = 45.0 / 2.997925e8                       = 1.501e-7 T   = 150 nT
+
+H0     = B0 / mu0
+       = 1.501e-7 / 1.256637e-6                  = 0.1194 A/m
+```
+
+299 nm is ultraviolet — the short end of the UVB band, the part of sunlight that burns
+skin and that the ozone layer removes most of. Note the size of the magnetic amplitude:
+150 nanotesla, against 45 volts per metre. Written in those units the magnetic half looks
+negligible, and it is not; the ratio is $c$, which is a large number that says nothing
+about which field matters. The last line makes the point — 0.119 amps per metre against
+45 volts per metre is a ratio of 377, and the next reading unit is about where that number
+comes from.
+
+## Worked: the same wave in polyethylene
+
+Nothing in the derivation used the vacuum except the two constants. In a material with
+permittivity $\varepsilon = \varepsilon_r\varepsilon_0$ and permeability
+$\mu = \mu_r\mu_0$, the same two rectangles give $v = 1/\sqrt{\mu\varepsilon}$.
+
+Take the polyethylene inside an ordinary coaxial cable: $\varepsilon_r = 2.25$,
+$\mu_r = 1$.
+
+```text
+v      = c / sqrt(2.25) = c / 1.50
+       = 2.997925e8 / 1.50                       = 1.9986e8 m/s   (66.7% of c)
+
+at 100.0 MHz:
+lambda(air)   = 2.997925e8 / 1.00e8              = 2.998 m
+lambda(cable) = 1.9986e8   / 1.00e8              = 1.999 m
+quarter wave  = 1.999 / 4                        = 0.4996 m  = 50.0 cm
+                                        (in air it would be 74.9 cm)
+```
+
+The frequency did not change, and it cannot: it is set by whatever is driving the wave,
+and the wave has to arrive at the far end of the cable at the same rate it went in. What
+changed is the wavelength and the speed, together. That factor of 0.667 is printed on
+every reel of coax as the *velocity factor*, and a stub cut to the free-space length would
+be half a wavelength out at the top of the band.
+
+The impedance moves too, but the other way: $\eta = \sqrt{\mu/\varepsilon}
+= \eta_0/1.50 = 251\ \Omega$. That is not the cable's 50 Ω, which is a different quantity
+set by the diameters of the conductors — module 5's coaxial geometry — and it is worth
+keeping the two apart.
+
+## The mistake
+
+The one that catches nearly everybody is expecting $\mathbf{E}$ and $\mathbf{B}$ to be a
+quarter of a cycle apart in *time*, with the electric field at its peak when the magnetic
+field is zero and back again.
+
+It is a very reasonable expectation. That is exactly what an LC circuit does: energy
+sloshes out of the capacitor into the inductor and back, and the voltage peaks when the
+current is zero. The two curl laws look like the same feedback loop written in fields, so
+the same behaviour seems bound to follow. The sandbox unit in this module even draws it
+that way, and draws it correctly.
+
+The resolution is that the sandbox is drawing a *standing* wave — it fixes the spatial
+pattern and lets the amplitudes evolve, which is a cavity, not a beam. In a standing wave
+the two fields are indeed a quarter cycle apart in time, and also a quarter wavelength
+apart in space, and the energy really does slosh between them twice a cycle. In a
+travelling wave they peak together, and the energy does not slosh at all: it moves. A
+standing wave is the sum of two travelling waves going opposite ways, so both pictures are
+solutions of the same equations, and which one you get depends on whether there is
+anything to reflect off.
+
+The give-away in the algebra is the step above where $E_0 = cB_0$ came out real and
+positive. Had the two been in quadrature, that relation would have carried a factor of
+$\mathrm{i}$.
+
+## Where this stops holding
+
+**In a conductor.** Put $\sigma$ back in and Ampère–Maxwell acquires the conduction term
+$\mu_0\sigma E$. Below the crossover frequency of the last unit, that term dominates and
+the second derivative in time is swamped by a first derivative: the wave equation degrades
+into a *diffusion* equation, and the field does not propagate, it soaks in and dies. The
+depth is the skin depth $\delta = \sqrt{2/(\omega\mu\sigma)}$ — for copper at 1 MHz,
+
+```text
+delta = sqrt( 2 / (2*pi*1e6 * 1.2566e-6 * 5.96e7) )
+      = sqrt( 2 / 4.706e8 )                      = 6.5e-5 m = 65 um
+```
+
+which is why a metal box screens radio as effectively as module 5's conductor screened a
+static field, and why a wire's resistance rises with frequency.
+
+**Near a source.** Everything above assumed plane fronts and no charges. Within about
+$\lambda/2\pi$ of an antenna neither holds: the field is still rearranging itself, has
+components along the direction of travel, falls off as $1/r^2$ and $1/r^3$ rather than
+$1/r$, and the ratio $E/H$ is nothing like 377 Ω. Only in the far field does the wave
+become the thing derived here.
+
+**In a waveguide.** Confine the wave in a metal pipe and the boundary conditions add a
+cutoff frequency, below which nothing propagates at all. Above it the field pattern is
+still a solution of the same four equations, but the phase velocity along the pipe exceeds
+$c$ while the energy moves slower than $c$ — the two velocities part company, which they
+never do in free space.
+
+**In a dispersive medium.** $\varepsilon_r$ is a constant only over a limited band. Where
+it varies with frequency, different components of a pulse travel at different speeds and
+the pulse spreads, which is the entire subject of optical fibre design.
+
+**At the bottom.** The classical field is what an enormous number of photons looks like
+from far enough away. Down at the level of one photon at a time these equations describe
+the amplitude and not the event, and that is where the next course starts.
+''',
+                },
+                {
+                    "title": "What the wave carries: energy, impedance, and 377 ohms",
+                    "minutes": 18,
+                    "body": r'''
+Stand in sunlight and your skin warms. Point an antenna at a transmitter and electrons in
+it move. Something is arriving, and by the time it arrives there is nothing but field:
+whatever charges launched the wave are eight minutes or ten kilometres behind it, and the
+wave does not depend on them any more. So the energy has to be in the field itself, and it
+has to be moving.
+
+This unit works out how much, and how fast, and what the ratio 377 Ω is doing in the middle
+of it.
+
+## Where the energy sits
+
+Two results already in this course. Module 3 got the energy stored per unit volume in an
+electric field by charging a capacitor and adding up the work:
+
+$$u_E = \tfrac{1}{2}\varepsilon_0 E^2$$
+
+Module 4 got the magnetic counterpart the same way, by pushing current into an inductor
+against its back-emf:
+
+$$u_B = \frac{B^2}{2\mu_0}$$
+
+Both were derived inside components — a gap between plates, the bore of a solenoid — but
+neither derivation mentions the component. They are statements about the field.
+
+Now put a plane wave into them, using $B = E/c$ and $c^2 = 1/(\mu_0\varepsilon_0)$:
+
+$$u_B = \frac{1}{2\mu_0}\left(\frac{E}{c}\right)^2
+     = \frac{E^2}{2\mu_0c^2}
+     = \frac{\mu_0\varepsilon_0E^2}{2\mu_0}
+     = \tfrac{1}{2}\varepsilon_0E^2 = u_E$$
+
+The two are equal — not on average, not approximately, but at every point and every
+instant, because $E$ and $B$ rise and fall together. Half the energy in any radio wave,
+any beam of light, any radar pulse, is magnetic. The total is
+
+$$u = u_E + u_B = \varepsilon_0E^2$$
+
+## How fast it goes past
+
+Take a flat surface of area $A$ facing the wave. In a time $\Delta t$ the wave moves
+forward by $c\,\Delta t$, so everything in a slab of volume $Ac\,\Delta t$ passes through.
+The energy per unit area per unit time is therefore
+
+$$S = uc = \varepsilon_0E^2c$$
+
+That is already the answer, but it is worth rewriting, because $\varepsilon_0 c$ simplifies:
+
+$$\varepsilon_0 c = \frac{\varepsilon_0}{\sqrt{\mu_0\varepsilon_0}}
+                  = \sqrt{\frac{\varepsilon_0}{\mu_0}}
+                  = \frac{1}{\eta_0},
+\qquad \eta_0 \equiv \sqrt{\frac{\mu_0}{\varepsilon_0}}$$
+
+so
+
+$$S = \frac{E^2}{\eta_0} = E\,\frac{E}{\eta_0} = EH$$
+
+using $H = B/\mu_0 = E/(\mu_0 c) = E/\eta_0$. The general form, valid whether or not the
+wave is plane, is the **Poynting vector** $\mathbf{S} = \mathbf{E}\times\mathbf{H}$: its
+size is the power crossing unit area and its direction is the direction of travel. The
+cross product is doing real work — it is why the wave goes the way it goes, and reversing
+either field reverses the flow.
+
+## The impedance of free space
+
+$\eta_0$ is a ratio of two field amplitudes, $E/H$, and it comes out in ohms because volts
+per metre divided by amps per metre is volts per amp.
+
+```text
+mu0 / eps0 = 1.2566371e-6 / 8.8541878e-12        = 1.419335e5 ohm^2
+eta_0      = sqrt(1.419335e5)                    = 376.73 ohm
+```
+
+Equivalently $\eta_0 = \mu_0 c = 1.2566371\times10^{-6}\times 2.997925\times10^8 = 376.73$,
+which is the quicker route if you already have $c$.
+
+It is worth being clear about what this number is *not*. It is not a resistance. Nothing
+conducts, nothing dissipates, and a vacuum has no charge carriers to have a resistance. It
+is not the ratio of the two field energies either — those are equal, as derived above. And
+it is not the feed impedance of an antenna, which is a related but separate quantity set by
+the antenna's shape (73 Ω for a half-wave dipole, for instance). It is the ratio $E/H$ in a
+travelling wave and nothing else — the price the vacuum charges in volts-per-metre for
+every amp-per-metre it carries.
+
+For a sinusoid, $\langle\sin^2\rangle = \tfrac12$, so the average of $S$ over a cycle is
+
+$$\langle S\rangle = \frac{E_0^2}{2\eta_0}$$
+
+with $E_0$ the *peak* field. That factor of two is the most commonly dropped number in the
+whole subject.
+
+## Worked: sunlight at the ground
+
+Roughly 1000 W/m² arrives at sea level on a clear day at noon.
+
+```text
+E0 = sqrt(2 * eta_0 * S)
+   = sqrt(2 * 376.730 * 1000) = sqrt(7.5346e5)   = 868.0 V/m
+
+B0 = E0 / c
+   = 868.0 / 2.997925e8                          = 2.895e-6 T = 2.90 uT
+
+u  = S / c
+   = 1000 / 2.997925e8                           = 3.336e-6 J/m^3
+
+p  = S / c   (radiation pressure, fully absorbed) = 3.34e-6 Pa
+```
+
+Three of those are worth staring at. 868 volts per metre is not a small field — it is
+comparable to what you get a few centimetres from a rubbed balloon, and it is present in
+every sunlit room. 2.9 microtesla is about a twentieth of the Earth's steady 50 µT, so a
+compass is not troubled by it, and would not be even if it could follow a $10^{15}$ Hz
+oscillation. And the pressure is three micropascals against an atmosphere of 101 kPa, a
+ratio of $3\times10^{-11}$ — which is why radiation pressure was hard to detect on a bench
+and easy to detect on a comet's tail, where there is nothing else pushing.
+
+## Worked: a 5 mW laser pointer
+
+```text
+beam diameter 1.2 mm, so radius 0.60 mm
+A  = pi * (0.60e-3)^2                            = 1.1310e-6 m^2
+
+S  = P / A = 5.0e-3 / 1.1310e-6                  = 4421 W/m^2
+
+E0 = sqrt(2 * 376.730 * 4421) = sqrt(3.3310e6)   = 1825 V/m
+B0 = 1825 / 2.997925e8                           = 6.09e-6 T = 6.09 uT
+
+F  = P / c = 5.0e-3 / 2.997925e8                 = 1.67e-11 N
+```
+
+Four and a half kilowatts per square metre — four times midday sunlight — out of a device
+that runs off two watch batteries, because the power is squeezed into a square millimetre.
+The force on a fully absorbing target is 17 piconewtons, the weight of about two nanograms.
+That is the number that makes solar sails a matter of area rather than of power — and it is
+also, at very nearly this size, the force with which optical tweezers hold a bacterium
+still under a microscope.
+
+## Worked, briefly: how a resistor actually gets its heat
+
+A short check that $\mathbf{S} = \mathbf{E}\times\mathbf{H}$ is not decoration. Take a
+straight wire of radius $a$ and length $L$ carrying a steady current $I$ with a voltage $V$
+across it. Just outside its surface there are two fields: an electric one along the wire,
+$E_z = V/L$, needed to push the current through (module 6), and a magnetic one going round
+it, $H_\phi = I/(2\pi a)$.
+
+Their cross product points *radially inward*, into the metal. Its size is
+
+$$S = \frac{V}{L}\cdot\frac{I}{2\pi a}$$
+
+and the surface area of the wire is $2\pi a L$, so the total power flowing in through the
+sides is
+
+$$S\times 2\pi a L = \frac{V}{L}\cdot\frac{I}{2\pi a}\cdot 2\pi a L = VI$$
+
+Exactly the dissipation. The energy that heats a resistor does not travel along the copper;
+it travels through the space around it, in the field, and enters through the surface. The
+wire's job is to steer the field, not to carry the power. This is one of those results that
+sounds like sophistry until you notice it is the only picture that survives at high
+frequency, where the current is confined to a skin a few microns thick and the interior of
+the conductor is doing nothing at all.
+
+## The mistakes
+
+**Dropping the factor of two.** $S = E_0^2/\eta_0$ rather than $E_0^2/(2\eta_0)$ overstates
+every intensity by a factor of two. It is tempting because the instantaneous relation
+$S = E^2/\eta_0$ is genuinely correct — the two only differ once you average a sinusoid,
+and it is easy to carry the instantaneous form into an averaged calculation. Keeping the
+subscript on $E_0$ is the habit that prevents it.
+
+**Thinking the field falls off as $1/r^2$.** It is the *intensity* that falls as $1/r^2$,
+because a fixed power is spread over a sphere whose area grows as $r^2$. Since
+$S \propto E_0^2$, the field itself falls only as $1/r$. This one is tempting because
+module 1's point charge really does have a field going as $1/r^2$ — but that is the static
+field, and it is not radiation. Get it wrong and the arithmetic tells you a transmitter
+loses a factor of $10^4$ over a stretch where it loses $10^2$.
+
+There is also a hard argument for why radiated fields *must* go as $1/r$: if they fell any
+faster, $S$ would fall faster than $1/r^2$, the power crossing a sphere of radius $r$ would
+shrink as $r$ grew, and energy would be disappearing on the way out.
+
+**Treating 377 Ω as something that dissipates.** Said above, worth saying twice. The
+impedance of free space converts between two field units. It does not consume anything.
+Where it does something resistive-looking — the 377 Ω-per-square film of a Salisbury
+screen, hung a quarter-wave in front of a metal backing so that the wave sees a matched
+sheet instead of a mirror — the dissipation is happening in the film, and the 377 is the
+number the film has to be *given* to match the wave.
+
+## Where this stops holding
+
+Within about $\lambda/2\pi$ of an antenna, $E/H$ is not $\eta_0$ — for a short wire it is
+much higher and for a small loop much lower — and the Poynting vector largely circulates,
+carrying energy out and bringing it back each cycle rather than radiating it. Field-strength
+meters calibrated by assuming $E = \eta_0 H$ read nonsense in that region, which is why
+close-range exposure measurements specify both fields separately.
+
+In a material the same algebra runs with $\eta = \sqrt{\mu/\varepsilon}$, so the
+polyethylene of the last unit presents 251 Ω and a loaded ferrite absorber can be made to
+present very nearly 377 Ω. The mismatch between two media is what produces a reflection,
+and it is the same mismatch arithmetic as a transmission line's.
+
+And $\langle S\rangle = E_0^2/(2\eta_0)$ is a statement about a steady sinusoid. For a
+pulse — a radar transmitter at 1 kW average and 1 MW peak — the peak and the average differ
+by the duty cycle, and which one matters depends on whether you are asking about heating or
+about breakdown.
+''',
+                },
             ],
             "sandbox": {
                 "title": "The two fields, sloshing",
@@ -8703,6 +14328,570 @@ so that both axes are visible.
                     },
                 ],
             },
+            "blanks": {
+                "title": "Maxwell's four, and the two constants in them",
+                "minutes": 10,
+                "caption": "the four equations in integral form, plus what falls out of the last two",
+                "lang": "text",
+                "brief": r'''
+Nothing here is executed. You are choosing symbols, and the point is to be able to
+reconstruct the set from what each line *says* rather than from having memorised four
+lines of notation.
+
+Two of them are about a closed surface and the flux out of it; two are about a closed loop
+and the circulation round it. Keep track of which is which and most of the wrong options
+stop being tempting.
+''',
+                "listing": """# Maxwell's equations, integral form.
+#   S is any CLOSED surface;  C is any closed loop spanning a surface A.
+#   Phi_E is the electric flux through A;  Phi_B is the magnetic flux through A.
+
+# 1. Gauss, for the electric field
+    closed_surface_integral( E . dA )    = ___
+
+# 2. Gauss, for the magnetic field
+    closed_surface_integral( B . dA )    = ___
+
+# 3. Faraday
+    loop_integral( E . dl )              = ___
+
+# 4. Ampere, as Maxwell repaired it
+    loop_integral( B . dl )              = mu0 * I_enclosed  +  ___
+
+# With Q = 0 and I = 0 everywhere, lines 3 and 4 feed each other and admit a
+# travelling solution. Its speed is
+    c                                    = ___
+
+# and in it the two field amplitudes stand in the fixed ratio
+    E / H                                = ___
+""",
+                "blanks": [
+                    {
+                        "prompt": "How much electric flux leaves a closed surface?",
+                        "hole": "?",
+                        "opts": ["0", "Q_enclosed / eps0", "mu0 * Q_enclosed", "eps0 * Q_enclosed"],
+                        "a": 1,
+                        "why": "Electric field lines start and stop on charge, so the net flux out of a closed surface counts the charge inside it — and $\\varepsilon_0$ divides rather than multiplies, which is what makes the flux large when $\\varepsilon_0$ is small. This is module 2's Gauss's law, and it is where the $\\varepsilon_0$ in every other line of this listing was measured.",
+                        "whys": [
+                            "Zero is the answer for the *magnetic* field, and the difference between the two is the deepest fact in the set: electric field lines have ends and magnetic ones do not.",
+                            "Electric field lines start and stop on charge, so the net flux out of a closed surface counts the charge inside it — and $\\varepsilon_0$ divides rather than multiplies, which is what makes the flux large when $\\varepsilon_0$ is small. This is module 2's Gauss's law, and it is where the $\\varepsilon_0$ in every other line of this listing was measured.",
+                            "$\\mu_0$ belongs to magnetism and has no business in a statement about electric flux. The units alone reject it: $\\mu_0 Q$ is henry-coulombs per metre, and electric flux is measured in volt-metres.",
+                            "Multiplying by $\\varepsilon_0$ instead of dividing inverts the dependence. It would say that a vacuum with a smaller permittivity produces *less* flux from the same charge, when in fact a smaller $\\varepsilon_0$ means a stiffer vacuum and a larger field.",
+                        ],
+                    },
+                    {
+                        "prompt": "And how much magnetic flux?",
+                        "hole": "?",
+                        "opts": ["0", "Q_enclosed / eps0", "mu0 * I_enclosed", "d(Phi_B)/dt"],
+                        "a": 0,
+                        "why": "Zero, always, everywhere, for every closed surface. There is no magnetic charge for a field line to begin on, so every line that leaves comes back in. If an isolated magnetic pole were ever found, this is the one equation that would have to be rewritten — and the symmetry of the whole set is the reason people keep looking.",
+                        "whys": [
+                            "Zero, always, everywhere, for every closed surface. There is no magnetic charge for a field line to begin on, so every line that leaves comes back in. If an isolated magnetic pole were ever found, this is the one equation that would have to be rewritten — and the symmetry of the whole set is the reason people keep looking.",
+                            "That belongs to the electric field. Using it here would assert the existence of magnetic charge, which is exactly the thing nobody has ever found.",
+                            "This is a right-hand side for a *loop* integral, not a surface one. A current threads a loop; it does not sit inside a closed surface in any way this equation could count.",
+                            "A rate of change of flux appears in Faraday's law, driving a circulation round a loop. It is not what a closed surface reports, and a flux equal to its own time derivative would be an exponential in time with no cause.",
+                        ],
+                    },
+                    {
+                        "prompt": "What drives an electric field round a closed loop?",
+                        "hole": "?",
+                        "opts": ["+ dPhi_B/dt", "- dPhi_B/dt", "- dPhi_E/dt", "- mu0 * dPhi_B/dt"],
+                        "a": 1,
+                        "why": "Faraday: a changing magnetic flux through the loop drives an emf round it, and the minus sign is Lenz's law — the driven current makes a flux opposing the change that caused it. Note there is no $\\mu_0$: this equation relates a voltage to a rate of change of webers, and both are already in SI units that fit.",
+                        "whys": [
+                            "The size is right and the sign is not, and the sign is the physics. With a plus, the induced current would reinforce the change that made it, a coil would run away the first time anything moved near it, and energy would appear from nowhere.",
+                            "Faraday: a changing magnetic flux through the loop drives an emf round it, and the minus sign is Lenz's law — the driven current makes a flux opposing the change that caused it. Note there is no $\\mu_0$: this equation relates a voltage to a rate of change of webers, and both are already in SI units that fit.",
+                            "A changing *electric* flux drives a magnetic field round a loop, not an electric one. Putting it here would have the electric field induce itself.",
+                            "The $\\mu_0$ is spurious. It appears on the magnetic side, where a current in amps has to be turned into a field in tesla; nothing of that kind is needed to turn webers per second into volts.",
+                        ],
+                    },
+                    {
+                        "prompt": "And what did Maxwell add to the current, to make a magnetic field circulate with no charge moving?",
+                        "hole": "?",
+                        "opts": ["eps0 * dPhi_E/dt", "mu0 * eps0 * dPhi_E/dt", "mu0 * dPhi_E/dt", "dPhi_E/dt"],
+                        "a": 1,
+                        "why": "The displacement current is $I_d = \\varepsilon_0\\,\\mathrm{d}\\Phi_E/\\mathrm{d}t$, and it sits alongside $I_{\\text{enc}}$ inside the bracket that the whole right-hand side multiplies by $\\mu_0$. Written out flat, as this listing does, that means the term carries both constants: $\\mu_0\\varepsilon_0\\,\\mathrm{d}\\Phi_E/\\mathrm{d}t$. Their product is $1/c^2$, which is why this term is invisible at low frequencies and the entire story at high ones.",
+                        "whys": [
+                            "This is the displacement *current* itself, correct as far as it goes — but the line already has $\\mu_0$ multiplying the conduction current explicitly, so the added term needs its own $\\mu_0$ too. This is the version that belongs inside a bracket $\\mu_0(I_{\\text{enc}} + \\ldots)$.",
+                            "The displacement current is $I_d = \\varepsilon_0\\,\\mathrm{d}\\Phi_E/\\mathrm{d}t$, and it sits alongside $I_{\\text{enc}}$ inside the bracket that the whole right-hand side multiplies by $\\mu_0$. Written out flat, as this listing does, that means the term carries both constants: $\\mu_0\\varepsilon_0\\,\\mathrm{d}\\Phi_E/\\mathrm{d}t$. Their product is $1/c^2$, which is why this term is invisible at low frequencies and the entire story at high ones.",
+                            "The $\\varepsilon_0$ is missing, and it is the one that cannot be dropped: it is what converts an electric flux in volt-metres into a charge in coulombs, and without it the term is not a current at all.",
+                            "With no constants at all this is a rate of change of volt-metres being added to amps, which cannot be right on units alone. Both constants are needed, and each is doing a separate job.",
+                        ],
+                    },
+                    {
+                        "prompt": "Combining the last two with no sources gives a wave equation. What speed does it carry?",
+                        "hole": "?",
+                        "opts": ["sqrt(mu0 * eps0)", "1 / (mu0 * eps0)", "1 / sqrt(mu0 * eps0)", "sqrt(mu0 / eps0)"],
+                        "a": 2,
+                        "why": "The wave equation comes out as $\\partial^2E/\\partial x^2 = \\mu_0\\varepsilon_0\\,\\partial^2E/\\partial t^2$, and the standard form has $1/c^2$ in that place, so $c = 1/\\sqrt{\\mu_0\\varepsilon_0} = 2.998\\times10^8$ m/s. Check it on the units if in doubt: $\\mu_0\\varepsilon_0$ works out to s²/m², so its reciprocal square root is metres per second.",
+                        "whys": [
+                            "This is the reciprocal of the speed — $3.336\\times10^{-9}$, in seconds per metre. It is the time light takes to cross one metre, which is a useful number but not a velocity.",
+                            "Without the square root the units come out as m²/s², which is a speed squared. Taking the root is not cosmetic: it is the difference between $9\\times10^{16}$ and $3\\times10^{8}$.",
+                            "The wave equation comes out as $\\partial^2E/\\partial x^2 = \\mu_0\\varepsilon_0\\,\\partial^2E/\\partial t^2$, and the standard form has $1/c^2$ in that place, so $c = 1/\\sqrt{\\mu_0\\varepsilon_0} = 2.998\\times10^8$ m/s. Check it on the units if in doubt: $\\mu_0\\varepsilon_0$ works out to s²/m², so its reciprocal square root is metres per second.",
+                            "That is the impedance of free space, 376.7 Ω — the two constants in a *ratio* rather than a product. Both combinations exist and they are genuinely independent: one fixes the speed, the other fixes the ratio of the two field amplitudes.",
+                        ],
+                    },
+                    {
+                        "prompt": "In that wave, what is the ratio of the electric field to the magnetic field strength?",
+                        "hole": "?",
+                        "opts": ["sqrt(eps0 / mu0)", "mu0 * eps0", "1 / sqrt(mu0 * eps0)", "sqrt(mu0 / eps0)"],
+                        "a": 3,
+                        "why": "$\\eta_0 = E/H = \\mu_0 c = \\sqrt{\\mu_0/\\varepsilon_0} = 376.7\\ \\Omega$. It is in ohms because volts per metre divided by amps per metre is volts per amp — but nothing conducts and nothing dissipates, so it is a conversion between two field units, not a resistance.",
+                        "whys": [
+                            "This is the reciprocal, $1/376.7 = 2.654$ millisiemens, which is $H/E$ rather than $E/H$. Getting it upside down would say the magnetic field of a radio wave is the easy one to measure, when in practice it is much the harder.",
+                            "A product of the two constants is $1/c^2$ and has units of s²/m². An amplitude ratio measured in ohms cannot come out of it however it is arranged.",
+                            "That is the speed of light, which comes from the same two constants combined as a product rather than a ratio. Speed and impedance are independent: two media can carry waves at the same speed with different field ratios.",
+                            "$\\eta_0 = E/H = \\mu_0 c = \\sqrt{\\mu_0/\\varepsilon_0} = 376.7\\ \\Omega$. It is in ohms because volts per metre divided by amps per metre is volts per amp — but nothing conducts and nothing dissipates, so it is a conversion between two field units, not a resistance.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": [
+                {
+                    "title": "How long is a 9.4 GHz wave?",
+                    "minutes": 4,
+                    "brief": r'''
+The mechanical case: one rule, one unknown. A marine navigation radar runs on an X-band
+magnetron, and the only thing that can go wrong here is the prefix on the gigahertz.
+''',
+                    "prompt": "What is the free-space wavelength of the transmitted wave?",
+                    "note": "Give the answer in millimetres, to one decimal place.",
+                    "figure": r'''
+```text
+   ship's X-band radar, transmitting into air (take it as vacuum)
+
+      magnetron ---> waveguide ---> slotted antenna ---> out to sea
+         f = 9.40 GHz
+
+   lambda = ?
+              |<------ one full cycle of the wave in space ------>|
+```
+''',
+                    "given": [
+                        {"label": "Transmitted frequency", "value": "9.40 GHz"},
+                        {"label": "Speed of light in vacuum", "value": "2.998 × 10⁸ m/s"},
+                    ],
+                    "aside": "$\\lambda = c/f$. Write the frequency out as $9.40\\times10^{9}$ Hz before "
+                             "dividing — the answer is a few centimetres, so if you get metres or "
+                             "micrometres a power of ten has gone astray.",
+                    "answer": 31.9,
+                    "tol": 0.3,
+                    "unit": "mm",
+                    "hint": "Divide $2.998\\times10^{8}$ by $9.40\\times10^{9}$. The mantissas give about "
+                            "0.319 and the exponents give $10^{-1}$, so the answer is 0.0319 m.",
+                    "wrong": "If you got 31.4, the division was done the other way up: $f/c = 31.35$ "
+                             "per metre is the wavenumber $1/\\lambda$, and it happens to land within two "
+                             "per cent of the right answer here, so only the units give it away. If you "
+                             "got 319 or 3.19, a power of ten has gone missing from the gigahertz. If you "
+                             "got 0.0319, that is the answer in metres and the question asked for "
+                             "millimetres.",
+                    "why": r'''
+```text
+lambda = c / f
+       = 2.998e8 / 9.40e9
+       = 0.03190 m                                = 31.9 mm
+```
+
+Three centimetres, which is the reason this band was chosen and the reason the antenna on
+a ship's mast looks the way it does. An antenna has to be several wavelengths across to
+make a narrow beam, and at 9.4 GHz "several wavelengths" is a couple of feet of slotted
+waveguide that a small boat can carry. The same beam width at the 500 kHz of a marine
+direction finder — wavelength 600 m — would need an antenna the length of a runway.
+
+It also sets what the radar can resolve in bearing. The beam width of an aperture $D$
+across is roughly $\lambda/D$ radians, so the 0.60 m scanner on a yacht gives
+$0.0319/0.60 = 0.053$ rad — about three degrees, which at one nautical mile is a hundred
+metres wide. Two buoys closer together than that come back as one blob. Choosing the
+frequency is choosing the resolution, and the whole of that choice is this one division.
+
+Worth carrying: 300 divided by the frequency in megahertz gives the wavelength in metres,
+to within a tenth of a per cent. 9400 MHz gives 300/9400 = 0.0319 m without a calculator.
+''',
+                },
+                {
+                    "title": "The current that crosses the gap",
+                    "minutes": 8,
+                    "brief": r'''
+A 12 V supply, a 100 kΩ resistor and a 10 nF capacitor, with the switch closed at $t = 0$
+and the capacitor starting empty. The probe sits on the capacitor.
+
+The question is about the current *between the plates* — the displacement current — one
+time constant after the switch closes. Nothing crosses that gap, so there is a step to
+take before any arithmetic: work out what the displacement current has to equal, and why.
+''',
+                    "prompt": "One millisecond after the switch closes, what is the displacement current between the capacitor's plates?",
+                    "note": "Give the answer in microamps, to one decimal place.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 12},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "r1", "kind": "R", "x": 7, "y": 4, "rot": 0, "value": 100000},
+                            {"id": "c1", "kind": "C", "x": 11, "y": 6, "rot": 1, "value": 1e-8},
+                            {"id": "g1", "kind": "GND", "x": 11, "y": 9},
+                            {"id": "out", "kind": "OUT", "x": 14, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [6, 4]},
+                            {"a": [8, 4], "b": [11, 4]},
+                            {"a": [11, 4], "b": [11, 5]},
+                            {"a": [11, 4], "b": [14, 4]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [11, 7], "b": [11, 9]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Supply", "value": "12 V"},
+                        {"label": "Series resistance", "value": "100 kΩ"},
+                        {"label": "Capacitance", "value": "10 nF"},
+                        {"label": "Time after closing the switch", "value": "1.00 ms"},
+                    ],
+                    "aside": "Ampère's law has to give the same answer for a surface pierced by the wire "
+                             "and one that passes between the plates, so the displacement current between "
+                             "the plates equals the conduction current in the wire at every instant. Find "
+                             "that current and you are done.",
+                    # Measured on the drawn circuit: the transient is run for the millisecond asked
+                    # about and the resistor current is read from the voltage left across it, using
+                    # the supply and the resistance taken off the schematic rather than restated.
+                    "check": r'''
+var s = c.step(1.0e-3);
+var R = c.values('R')[0];
+var V = c.net.parts.filter(function (p) { return p.kind === 'V'; })[0].value;
+return (V - s.v[s.v.length - 1]) / R * 1e6;
+''',
+                    "answer": 44.1,
+                    "tol": 0.6,
+                    "unit": "µA",
+                    "hint": "The time constant is $RC = 10^5 \\times 10^{-8} = 1.00$ ms, so one "
+                            "millisecond is exactly one time constant. The current starts at $V/R$ and "
+                            "decays as $e^{-t/RC}$, so at $t = RC$ it is $V/R$ times $e^{-1} = 0.3679$.",
+                    "wrong": "If you got 120, that is the current at $t = 0$ and the exponential has not "
+                             "been applied. If you got 75.9, the factor used was $1 - e^{-1}$ rather than "
+                             "$e^{-1}$ — that fraction belongs to the capacitor *voltage*, which rises, "
+                             "not the current, which falls. If you got zero, the reasoning was that no "
+                             "charge crosses the gap; true, and not the question.",
+                    "why": r'''
+First the physics, which is the part worth the marks. Draw a loop round the wire feeding
+the capacitor. One surface spanning it is pierced by the wire and reports the conduction
+current; another bulges out and passes between the plates, where nothing crosses at all.
+Ampère's law must give the same circulation either way, so
+
+$$I_d = \varepsilon_0\frac{\mathrm{d}\Phi_E}{\mathrm{d}t} = C\frac{\mathrm{d}V_C}{\mathrm{d}t} = i_R(t)$$
+
+at every instant. The displacement current between the plates is the current in the wire.
+So the question is really "what is the resistor current at $t = 1$ ms?"
+
+```text
+tau = R * C = 1.00e5 * 1.00e-8                    = 1.00e-3 s = 1.00 ms
+
+i(0) = V / R = 12 / 1.00e5                        = 1.200e-4 A = 120.0 uA
+i(t) = i(0) * exp(-t / tau)
+i(1 ms) = 120.0e-6 * exp(-1)
+        = 120.0e-6 * 0.36788                      = 4.415e-5 A = 44.1 uA
+```
+
+Check it the other way round, through the capacitor, because that is the route the module
+is about. At $t = \tau$ the capacitor has reached $12(1 - e^{-1}) = 7.585$ V, so the
+resistor has $12 - 7.585 = 4.415$ V across it and passes 44.15 µA — the same number, and
+the same number that is flowing "through" a gap that nothing can cross.
+
+What is actually happening in the gap. The capacitor voltage is climbing at
+$\mathrm{d}V_C/\mathrm{d}t = i/C = 4.415\times10^{-5}/1.00\times10^{-8} = 4415$ V/s, so the
+field between the plates is climbing at $4415/d$ volts per metre per second. Multiply that
+by $\varepsilon_0$ and by the plate area $A$ and you have
+$\varepsilon_0(A/d)\,\mathrm{d}V_C/\mathrm{d}t = C\,\mathrm{d}V_C/\mathrm{d}t = 44.15$ µA
+again — whatever $A$ and $d$ happen to be, because they only ever appear as the
+capacitance you were already given.
+
+And the magnetic field that displacement current makes, if the plates were 20 mm across:
+$B = \mu_0 I_d/(2\pi r) = 1.2566\times10^{-6}\times4.415\times10^{-5}/(2\pi\times0.0100)
+= 8.8\times10^{-10}$ T. Under a nanotesla, about a fifty-thousandth of the Earth's steady
+field — which is why this term had to be deduced on paper before anyone could think of
+measuring it.
+''',
+                },
+                {
+                    "title": "How long before the gap breaks down?",
+                    "minutes": 9,
+                    "brief": r'''
+A pair of plates being charged by a current source rather than through a resistor, so the
+current — and therefore the rate of rise of the field between the plates — is constant.
+Dry air at atmospheric pressure gives way at about 3.0 MV/m, and the question is when.
+
+There are two routes through this, and they meet: one goes via the capacitance and the
+breakdown *voltage*, the other stays in fields the whole way and uses
+$I_d = \varepsilon_0 A\,\mathrm{d}E/\mathrm{d}t$ directly. The second is shorter and is the
+one this module is for.
+''',
+                    "prompt": "How long after the current is switched on does the air between the plates break down?",
+                    "note": "Give the answer in microseconds, to one decimal place.",
+                    "figure": r'''
+```text
+   two circular plates in dry air, charged by a constant-current source
+
+          diameter 80.0 mm
+     ==================================   <- plate
+                                          gap d = 0.600 mm
+     ==================================   <- plate
+          ^
+          |  I = 8.00 mA, constant, switched on at t = 0
+          |  both plates uncharged at t = 0
+
+   air breaks down when E reaches 3.0 MV/m
+```
+''',
+                    "given": [
+                        {"label": "Plate diameter", "value": "80.0 mm"},
+                        {"label": "Plate separation", "value": "0.600 mm"},
+                        {"label": "Charging current", "value": "8.00 mA, constant"},
+                        {"label": "Breakdown field of air", "value": "3.0 × 10⁶ V/m"},
+                        {"label": "Permittivity of free space", "value": "8.854 × 10⁻¹² F/m"},
+                    ],
+                    "aside": "The current is constant, so every rate in this problem is constant and "
+                             "there is no exponential anywhere. Find how fast the field climbs, in volts "
+                             "per metre per second, then ask how long it takes to reach 3.0 million.",
+                    "answer": 16.7,
+                    "tol": 0.3,
+                    "unit": "µs",
+                    "hint": "The displacement current is $\\varepsilon_0 A\\,\\mathrm{d}E/\\mathrm{d}t$ "
+                            "and it equals the 8.00 mA arriving down the wire, so "
+                            "$\\mathrm{d}E/\\mathrm{d}t = I/(\\varepsilon_0 A)$. The plate radius is "
+                            "40.0 mm, so $A = \\pi(0.0400)^2$.",
+                    "wrong": "If you got 66.8, the diameter was used as the radius: the area comes out "
+                             "four times too big and the field climbs four times too slowly. If you got "
+                             "4.17, the same slip the other way round. If you got 27.8 ms, the 3.0 MV/m "
+                             "was treated as a voltage — it has to be multiplied by the 0.600 mm gap "
+                             "first, to give the 1800 V the plates actually flash over at.",
+                    "why": r'''
+Fields all the way, which keeps the gap out of it:
+
+```text
+A       = pi * (0.0400)^2                         = 5.0265e-3 m^2
+
+dE/dt   = I / (eps0 * A)
+        = 8.00e-3 / (8.854e-12 * 5.0265e-3)
+        = 8.00e-3 / 4.4506e-14                    = 1.7975e11 V/(m s)
+
+t       = E_breakdown / (dE/dt)
+        = 3.00e6 / 1.7975e11                      = 1.669e-5 s = 16.7 us
+```
+
+The longer route arrives at the same place, and it is worth doing once to see the
+cancellation:
+
+```text
+C       = eps0 * A / d
+        = 8.854e-12 * 5.0265e-3 / 6.00e-4         = 7.4177e-11 F = 74.18 pF
+V_bd    = E_bd * d = 3.00e6 * 6.00e-4             = 1800 V
+Q       = C * V_bd = 7.4177e-11 * 1800            = 1.3352e-7 C
+t       = Q / I = 1.3352e-7 / 8.00e-3             = 1.669e-5 s = 16.7 us
+```
+
+The gap appears twice in that second version — once making the capacitance smaller and
+once making the breakdown voltage larger — and the two cancel exactly. Move the plates
+twice as far apart and it still takes 16.7 µs, because doubling the gap doubles the volts
+needed and halves the rate at which the volts arrive. What *would* change the answer is the
+plate area, and only the plate area: spread the same 8 mA over twice the area and the field
+climbs half as fast.
+
+Seventeen microseconds is not long. A capacitor of this shape sitting in a converter that
+runs at 100 kHz has a 10 µs period, so a fault that put a steady 8 mA into it would arc
+before the end of the first cycle — which is why a snubber capacitor is specified by
+$\mathrm{d}V/\mathrm{d}t$ as well as by voltage.
+
+One thing this does *not* model: real breakdown in air needs both the field and a little
+time for an avalanche to develop, so at microsecond timescales the effective strength is
+somewhat above the 3.0 MV/m quoted for a slow ramp. The direction of that error is towards
+a longer time, never a shorter one.
+''',
+                },
+                {
+                    "title": "The magnetic field a capacitor makes in its own gap",
+                    "minutes": 12,
+                    "brief": r'''
+The same geometry, driven by a sine wave instead. There is no wire in the gap and no charge
+crossing it, and there is a magnetic field there anyway — that was the whole argument of the
+first reading unit, and this is it with numbers on.
+
+Four steps: area, capacitance, peak current, and Ampère's law round a loop at the rim. The
+current you need is not given and is not the obvious one; it is the displacement current,
+which happens to be the same size as the current the source is delivering.
+''',
+                    "prompt": "What is the peak magnetic flux density at the rim of the plates, in the plane midway between them?",
+                    "note": "Give the answer in nanotesla, to one decimal place.",
+                    "figure": r'''
+```text
+   circular plates, diameter 40.0 mm, gap 0.500 mm of air,
+   driven by a 25.0 V peak sine wave at 1.00 MHz
+
+     =====================================   <- plate
+              (  loop of radius r = 20.0 mm, coaxial,
+                 lying halfway between the plates  )
+     =====================================   <- plate
+
+     |<------------ 40.0 mm ------------>|
+
+   no wire crosses the loop; no charge crosses the gap
+```
+''',
+                    "given": [
+                        {"label": "Plate diameter", "value": "40.0 mm"},
+                        {"label": "Plate separation", "value": "0.500 mm"},
+                        {"label": "Drive", "value": "25.0 V peak, 1.00 MHz sine"},
+                        {"label": "Loop radius", "value": "20.0 mm (at the rim)"},
+                        {"label": "Permittivity of free space", "value": "8.854 × 10⁻¹² F/m"},
+                        {"label": "Permeability of free space", "value": "1.2566 × 10⁻⁶ H/m"},
+                    ],
+                    "aside": "The loop at the rim encloses all of the flux between the plates, so it "
+                             "encloses all of the displacement current — which makes the last step "
+                             "identical to finding the field round a wire carrying that current.",
+                    "answer": 35.0,
+                    "tol": 0.8,
+                    "unit": "nT",
+                    "hint": "Peak displacement current is $\\omega C V_0$ with "
+                            "$\\omega = 2\\pi\\times10^6$ rad/s, and $C = \\varepsilon_0 A/d$ with "
+                            "$A = \\pi(0.0200)^2$. Then $B = \\mu_0 I_d/(2\\pi r)$ with $r = 0.0200$ m.",
+                    "wrong": "If you got 70.0, the radius and the diameter have been exchanged somewhere "
+                             "— check both the area and the last step, because the two errors partly "
+                             "cancel. If you got 5.57, the $\\omega$ was left as $f$ and the factor "
+                             "$2\\pi$ is missing from the current. If you got 0.0350, the answer is in "
+                             "microtesla and the question asked for nanotesla.",
+                    "why": r'''
+```text
+A     = pi * (0.0200)^2                           = 1.2566e-3 m^2
+
+C     = eps0 * A / d
+      = 8.854e-12 * 1.2566e-3 / 5.00e-4           = 2.2253e-11 F = 22.25 pF
+
+w     = 2 * pi * 1.00e6                           = 6.2832e6 rad/s
+I_d   = w * C * V0
+      = 6.2832e6 * 2.2253e-11 * 25.0              = 3.4955e-3 A = 3.50 mA
+
+B     = mu0 * I_d / (2 * pi * r)
+      = 1.2566e-6 * 3.4955e-3 / (2 * pi * 0.0200)
+      = 4.3926e-9 / 0.12566                       = 3.4955e-8 T = 35.0 nT
+```
+
+Everything cancels rather prettily if you keep it symbolic. With
+$I_d = \omega\varepsilon_0\pi r^2V_0/d$ and $B = \mu_0I_d/(2\pi r)$,
+
+$$B = \frac{\mu_0\varepsilon_0\,\omega\,r\,V_0}{2d} = \frac{\omega r V_0}{2c^2 d}$$
+
+— the plate area has gone, and what is left is the drive, the radius, the gap and $c^2$.
+Substituting: $6.2832\times10^{6}\times0.0200\times25.0 / (2\times8.9875\times10^{16}
+\times5.00\times10^{-4}) = 3.4955\times10^{-8}$ T, the same 35.0 nT.
+
+That $c^2$ in the denominator is the whole reason this effect stayed hidden. It says the
+magnetic field a changing electric field makes is smaller than the electric field itself by
+something of order $\omega\ell/c^2$, and at ordinary laboratory frequencies and sizes that
+is a fantastically small number. Here it is 35 nanotesla against 50 kV/m — measurable with
+a good magnetometer and a shielded room, and hopeless with anything Ampère had.
+
+Two more things worth reading off. The field goes as $\omega$, so raising the drive to
+1 GHz would multiply it by a thousand, to 35 µT — comparable to the Earth's field, and no
+longer a curiosity; though at 40 mm across against a 300 mm wavelength, the plates are only
+just still a lumped capacitor there. And $B$ goes as $r$ inside the gap, so it is zero on
+the axis and largest at the rim; outside the plates it reverts to $1/r$, exactly as it does
+around a wire.
+
+Finally, the sanity check. A 22.25 pF capacitor at 1 MHz has a reactance of
+$1/(\omega C) = 7.15$ kΩ, so 25.0 V peak draws $25.0/7150 = 3.50$ mA peak in the wire — the
+same 3.50 mA the displacement current came to. The two had to agree; if they had not, one
+of the four steps above is where to look.
+''',
+                },
+                {
+                    "title": "How much must the mast radiate?",
+                    "minutes": 13,
+                    "brief": r'''
+The last one runs the whole chain backwards. You are given the field you want at a range
+and asked for the power at the transmitter, which means going from a field to an intensity,
+from an intensity to a power through a sphere, and doing both inversions in the right order.
+
+Take the mast as radiating equally in all directions — an isotropic radiator, which nothing
+real is, but which is the reference every antenna's gain is quoted against.
+''',
+                    "prompt": "What power must the mast radiate for the peak electric field at 10.0 km to be 1.00 V/m?",
+                    "note": "Give the answer in megawatts, to two decimal places.",
+                    "figure": r'''
+```text
+                              . - - - - - - - .
+                        .                          .
+                    .        sphere of radius          .
+                  .            r = 10.0 km               .
+                 .                                        .
+                 .              (*) mast, P watts         .
+                 .           radiating equally in          .
+                  .              all directions           .
+                    .                                   .
+                        .                          .
+                              ' - - - - - - - '
+
+   wanted at the sphere:  peak electric field E0 = 1.00 V/m
+   eta_0 = 376.73 ohm
+```
+''',
+                    "given": [
+                        {"label": "Range", "value": "10.0 km"},
+                        {"label": "Peak field wanted there", "value": "1.00 V/m"},
+                        {"label": "Impedance of free space", "value": "376.73 Ω"},
+                        {"label": "Radiation pattern", "value": "isotropic"},
+                    ],
+                    "aside": "Two steps, and the order matters. Turn the field into watts per square "
+                             "metre first — remembering that the average of a sinusoid brings a factor of "
+                             "two — and only then multiply by the area of the sphere.",
+                    "answer": 1.67,
+                    "tol": 0.03,
+                    "unit": "MW",
+                    "hint": "$\\langle S\\rangle = E_0^2/(2\\eta_0)$, then $P = \\langle S\\rangle "
+                            "\\times 4\\pi r^2$ with $r = 1.00\\times10^{4}$ m.",
+                    "wrong": "If you got 3.34, the factor of two was dropped and the peak intensity was "
+                             "used as though it were the average. If you got 0.42, the sphere's area was "
+                             "taken as $\\pi r^2$ — that is its cross-section, and its surface is four "
+                             "times larger. If you got 1.67 W rather than 1.67 MW, the range went in as "
+                             "10 metres instead of 10 000, and the $r^2$ turned a factor of a thousand "
+                             "into a factor of a million.",
+                    "why": r'''
+```text
+<S>  = E0^2 / (2 * eta_0)
+     = 1.00^2 / (2 * 376.73)
+     = 1.00 / 753.46                              = 1.3272e-3 W/m^2
+
+area = 4 * pi * r^2
+     = 4 * pi * (1.00e4)^2                        = 1.2566e9 m^2
+
+P    = <S> * area
+     = 1.3272e-3 * 1.2566e9                       = 1.668e6 W = 1.67 MW
+```
+
+Nearly two megawatts to put one volt per metre on a receiver ten kilometres away, and that
+is with every watt going in the right direction as well as in every other one. It is a fair
+number: long-wave broadcast transmitters really do run at one or two megawatts, and they
+really do so in order to deliver a field of about this size over a service area of about
+this size.
+
+Three things fall out of the arithmetic that are worth more than the answer.
+
+**The inverse square is in the area, not the field.** $P$ is fixed and the sphere's area
+grows as $r^2$, so the intensity falls as $1/r^2$ and the field, being the square root of
+it, falls only as $1/r$. Double the range and you need four times the power, not sixteen.
+
+**Directivity is worth more than power.** An antenna with 10 dB of gain concentrates ten
+times the isotropic intensity into its main beam, so the same 1.00 V/m at 10 km needs
+167 kW instead of 1.67 MW. Ten times the power costs ten times the electricity bill
+forever; 10 dB of gain costs a bigger antenna once. That trade is why broadcast masts are
+tall and radar dishes are large.
+
+**The magnetic half, for completeness.** $H_0 = E_0/\eta_0 = 1.00/376.73 = 2.65$ mA/m, and
+$B_0 = E_0/c = 3.34$ nT. Both are perfectly ordinary numbers for a strong signal, and both
+are what a loop antenna would actually respond to.
+
+As a cross-check on the whole thing, run it the other way: 1.67 MW spread over
+$1.2566\times10^{9}$ m² is 1.33 mW/m², and $\sqrt{2\times376.73\times1.327\times10^{-3}}
+= 1.00$ V/m. The chain closes.
+''',
+                },
+            ],
             "derive": {
                 "title": "The speed of light, and the impedance of free space",
                 "minutes": 12,

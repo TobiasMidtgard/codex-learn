@@ -8894,6 +8894,1361 @@ assert rms(_clipped) < rms(_sig), "clipping removes energy"
                 "The failure worth fearing returns a number. *Cancellation*: subtract two nearly equal floats and the leading digits agree and vanish, leaving whatever rounding noise was in the last few — promoted, silently, to the whole of the answer.",
                 "A check that cannot fail proves nothing. Before trusting one, break the code on purpose and confirm it goes red; a test suite that stays green against a deliberately wrong answer is measuring the wrong thing.",
             ],
+            "read": [
+                {
+                    "title": "The program stops and tells you where",
+                    "minutes": 15,
+                    "body": r'''
+A running program is a stack of unfinished jobs. `summarise` asked `read_netlist` for
+some records; `read_netlist` asked `parse_line` about one line; `parse_line` asked
+`value_of` what `'4k7'` means. Four jobs, three of them waiting on the one below.
+
+An exception is what happens when the job at the bottom decides it cannot answer. It
+does not return a value, because it has none; it does not guess, because guessing is
+how you get a plausible wrong number. It abandons its own job and hands the problem to
+its caller. If the caller has nothing prepared, that caller abandons its job too, and
+so on up the stack until either somebody catches it or the stack runs out and the
+program stops.
+
+The record of that walk back up is the traceback, and it is the single most useful
+thing Python prints.
+
+## Worked example 1: a traceback, read line by line
+
+```text
+Traceback (most recent call last):
+  File "report.py", line 41, in <module>
+    summarise("divider.net")
+  File "report.py", line 33, in summarise
+    parts = read_netlist(path)
+  File "report.py", line 22, in read_netlist
+    recs.append(parse_line(line))
+  File "report.py", line 14, in parse_line
+    return {"ref": f[0], "value": value_of(f[3])}
+  File "report.py", line 8, in value_of
+    return float(text)
+ValueError: could not convert string to float: '4k7'
+```
+
+Read the bottom two lines first. They say **what** happened and **where it surfaced**:
+line 8, inside `value_of`, `float` was handed the string `'4k7'` and refused. The
+message even quotes the offending text, which is worth noticing — it is the difference
+between a ten-minute fix and an afternoon.
+
+Then read upwards, and you get **how the program arrived there**. Line 14 called
+`value_of` with `f[3]`. Line 22 called `parse_line` with a line of the file. Line 33
+called `read_netlist` with a path. That chain is the question "where did this string
+come from?", already answered.
+
+Now the important part, and the part people skip: *where the innermost frame is is not
+where the bug is*. Line 8 is correct. `float` is correct. The bug is one of
+
+- `value_of` does not know the `4k7` spelling, and should — a repair at line 8;
+- the file is not the format this reader was written for, and line 22 should have said
+  so before feeding it in — a repair at line 22;
+- the file has a bad line in it, which is a fact about the world rather than about the
+  code, and something has to decide what a program does with it — a decision, not a
+  repair.
+
+The traceback narrows five hundred lines to five. It does not choose between them.
+
+## The kinds, and what each one is claiming
+
+The type of the exception is a claim about the *category* of the trouble, and the
+categories are worth keeping straight, because you will shortly be writing code that
+catches one and not another.
+
+| exception | the claim |
+| --- | --- |
+| `ValueError` | right type, wrong value — `float("4k7")`, `math.sqrt(-1)` |
+| `TypeError` | wrong type entirely — `float([1, 2])`, `"3" + 4` |
+| `KeyError` | that key is not in the dictionary — `parts["R9"]` |
+| `IndexError` | that position is off the end — `f[3]` on a two-field line |
+| `ZeroDivisionError` | exactly what it says |
+| `FileNotFoundError` | the path does not exist |
+| `AttributeError` | that object has no such method — usually a `None` you did not expect |
+
+`ValueError` and `TypeError` are the pair that get confused. `float("4k7")` is a
+`ValueError`: a string is a perfectly acceptable argument to `float`, and this
+particular string is not the text of a number. `float([1, 2])` is a `TypeError`: a
+list is not something `float` will even look inside. The distinction matters the
+moment you write `except ValueError` around a parser, because a `TypeError` there
+means you passed the wrong thing entirely — a bug in your code, not in the file — and
+you want that one to fly straight past the handler and reach you.
+
+## Refusing at the top
+
+Your own functions can raise. `raise ValueError("...")` stops the function and hands
+the caller a named failure with a sentence attached.
+
+Do it at the entrance, before any work, while the caller's mistake is still the
+nearest thing to the error. The alternative is not that the program survives; the
+alternative is that it fails later, somewhere further away, in a way that is harder to
+read.
+
+## Worked example 2: the same bug, guarded and unguarded
+
+A moving average over a list, and a caller that reports the largest smoothed value:
+
+```python
+def moving_average(xs, w):
+    return [sum(xs[i:i+w]) / w for i in range(len(xs) - w + 1)]
+
+xs = [4.98, 5.02, 5.11, 4.95, 5.07, 4.99, 5.03, 5.01]   # 8 samples
+peak = max(moving_average(xs, 9))
+```
+
+Eight samples and a window of nine. `len(xs) - w + 1` is $8 - 9 + 1 = 0$, `range(0)`
+is empty, so `moving_average` returns `[]` — cheerfully, with no complaint, because
+an empty list is a perfectly ordinary list. The failure surfaces one line later:
+
+```text
+  File "smooth.py", line 5, in <module>
+    peak = max(moving_average(xs, 9))
+ValueError: max() arg is an empty sequence
+```
+
+The traceback blames `max`, and `max` did nothing wrong. There is no frame for
+`moving_average` in it at all, because `moving_average` had already returned
+successfully by the time anything went bad. You are now looking for a bug in the wrong
+function.
+
+Two lines at the top of `moving_average` change that:
+
+```python
+def moving_average(xs, w):
+    if w < 1:
+        raise ValueError(f"window must be at least 1, got {w}")
+    if w > len(xs):
+        raise ValueError(f"window of {w} does not fit {len(xs)} samples")
+    return [sum(xs[i:i+w]) / w for i in range(len(xs) - w + 1)]
+```
+
+```text
+ValueError: window of 9 does not fit 8 samples
+```
+
+Same crash, one frame earlier, and the message contains both numbers. Notice what is
+in it: the value that was wrong (9), the value it was wrong *against* (8), and the
+relationship being asserted. A message reading `"bad window"` would have cost the same
+to write and saved nobody anything.
+
+## Catching, and the three ways to get it wrong
+
+```python
+try:
+    value = value_of(f[3])
+except ValueError as e:
+    bad.append(f"line {n}: {line!r} — {e}")
+    continue
+```
+
+**The bare `except`.** `except:` — or `except Exception:` — catches everything. Put it
+round the block above and a misspelled `vlaue_of` raises `NameError`, the `NameError`
+is swallowed with the malformed lines, and the parser quietly returns zero records
+from a perfectly good file. The bug you would have found in one minute is now a bug
+you will not find at all. Catch the kind you can actually handle.
+
+**`except ... : pass`.** Catching is a decision about what to do instead. `pass` means
+"nothing", and nothing is almost never the answer: at minimum, count what you skipped
+and say so at the end. A parser that reports `read 9 lines, 4 records, 5 skipped` is
+honest. One that returns four records and says nothing has hidden the fact that it
+threw away more than half the file.
+
+**A `try` block that is too big.** Wrap thirty lines in one `try` and the handler
+cannot know which of the thirty failed, so it cannot say anything useful and cannot
+repair anything specific. Put the `try` round the one operation that is expected to
+fail sometimes.
+
+## `assert` is not input validation
+
+`assert cond, "message"` says: *at this point in my own reasoning, this must be true.*
+It is for invariants — a probability you just computed lying in $[0, 1]$, a filtered
+array coming out the length you predicted, a node index inside the matrix.
+
+It is not for checking input, for one blunt reason: `python -O` removes every
+`assert` statement from the program. Code that validated its arguments with `assert`
+stops validating them, silently, on the day someone runs it with an optimisation flag,
+and the bad input then flows straight through. Input from outside gets a real check and
+a real `raise`.
+
+## Cleanup that happens either way
+
+```python
+fh = open(path)
+try:
+    return parse(fh)
+finally:
+    fh.close()
+```
+
+`finally` runs whether the block succeeded, raised, or returned. `with open(path) as
+fh:` is the same guarantee, written once by the file object instead of by you, and is
+what you should actually write.
+
+## Where this stops holding
+
+- **Vectorised code mostly does not raise.** `np.sqrt(np.array([-1.0, 4.0]))` does not
+  stop the program; it returns `[nan, 2.0]` and prints a `RuntimeWarning` you will not
+  see in a log. Division by zero in an array gives `inf`. NumPy's failures are values,
+  not exceptions, which is the subject of the next unit. `np.seterr(all="raise")` turns
+  them back into exceptions and is worth switching on while you are working.
+- **`nan` propagates and never complains.** One `nan` in an array makes its mean,
+  its sum and its maximum `nan`, and `nan == nan` is `False`, so an equality check
+  against it fails without saying why. `np.isnan(x).any()` is the guard.
+- **Exceptions do not cross a process boundary.** A subprocess signals failure with an
+  exit code, and a web request with a status code; both have to be checked by hand.
+- **`try` is not free in a loop over a million elements.** Setting up the block is
+  cheap and raising is not, so a per-element `try` that fires often is slow. In Python
+  the idiomatic order is nevertheless to try and then handle, not to test first: two
+  threads, or two lines of one file, can change the world between your test and your
+  use.
+- **Some failures should be retried, not reported.** A network read that times out is
+  a different kind of event from a malformed line, and the handler for it is a retry
+  with a delay, not a message. Retrying a `ValueError` from a parser, by contrast, will
+  fail exactly the same way for ever.
+''',
+                },
+                {
+                    "title": "The failure that hands you a number",
+                    "minutes": 17,
+                    "body": r'''
+The last unit was about programs that stop. This one is about the failure that does
+not stop, does not warn, and returns a number of the right sign, the right order of
+magnitude and roughly the right shape — with every digit wrong.
+
+## Two voltages that agree to four figures
+
+A bridge: a 12 V supply, two dividers side by side. On the left, 4.7 kΩ over 6.8 kΩ.
+On the right, 4.7 kΩ over a strain gauge that reads 6.81 kΩ under load. The
+measurement is the difference between the two mid-points.
+
+```text
+left  mid-point   12 x 6800 / 11500  =  7.095652173913043 V
+right mid-point   12 x 6810 / 11510  =  7.099913119026933 V
+                                        ------------------
+difference                               0.004260945113890 V   =  4.2609 mV
+```
+
+Both node voltages are about 7.1 V. The answer is about 4.3 mV. The answer is 0.06% of
+either of the numbers it came from, which means every digit of it lives in the sixth
+significant figure of the inputs — the digits nobody prints, nobody quotes and nobody
+thinks about.
+
+Watch what happens if a simulator reports its node voltages rounded, as simulators do:
+
+```text
+printed as        left      right     difference    error
+-----------------------------------------------------------------
+%.6f            7.095652  7.099913    4.261 mV      0.001%
+%.5f            7.09565   7.09991     4.260 mV      0.02%
+%.4f            7.0957    7.0999      4.200 mV      1.4%
+%.3f            7.096     7.100       4.000 mV      6.1%
+%.2f            7.10      7.10        0.000 mV      100%
+```
+
+Nothing has gone wrong with the *voltages*. Even at two decimals each is within 5 mV of
+the truth — 0.07% of a 7 V node, a perfectly respectable measurement. It is the
+*difference* that has been destroyed, because the subtraction throws away every digit
+the two numbers have in common and keeps only the digits they do not, of which, at two
+decimals, there are none.
+
+That is cancellation. It is not exotic and it is not rare; it is what happens any time
+the quantity you want is small compared with the quantities you computed it from.
+
+## The rule, stated once
+
+Let $a$ and $b$ carry absolute errors $\delta_a$ and $\delta_b$. The difference carries
+$\delta_a + \delta_b$ at worst — an absolute error that is no larger than what went in.
+The *relative* error of the difference is
+
+$$\frac{\delta_a + \delta_b}{|a - b|}$$
+
+and the denominator is the whole story. Divide by a small number and a harmless
+absolute error becomes an enormous relative one. Written as an amplification factor
+against the relative error $\varepsilon$ of the inputs, it is
+
+$$\kappa = \frac{|a| + |b|}{|a - b|}$$
+
+For the bridge: $\kappa = (7.0957 + 7.0999)/0.0042609 = 3330$. Both readings good to
+one part in $10^{6}$ give a difference good to about one part in 300. Both readings
+good to one part in $10^{4}$ — four significant figures — give a difference good to
+about 30%, which is not a measurement.
+
+$\kappa$ is a property of the *problem*, not of your code. No language, no library and
+no amount of precision changes it. This is worth saying plainly because the instinct on
+meeting cancellation is to reach for more digits, and more digits buys you a constant
+factor and nothing more.
+
+## Worked example 1: the root that comes back as zero
+
+Solve $x^2 + 10^{9}x + 1 = 0$ with the formula everyone knows.
+
+```text
+a = 1, b = 1e9, c = 1
+
+b*b        = 1e18
+4*a*c      = 4
+b*b - 4ac  = 999999999999999996        in exact arithmetic
+```
+
+Now ask what a double can hold near $10^{18}$. A double is 53 significant bits, so
+between $2^{59} = 5.76\times10^{17}$ and $2^{60} = 1.15\times10^{18}$ the
+representable numbers are $2^{59-52} = 2^{7} = 128$ apart. And $10^{18}$ sits inside
+that range. So:
+
+```text
+1e18 - 4  ->  rounds to the nearest representable double
+              the neighbours are 1e18 and 1e18 - 128
+              4 is less than half of 128, so it rounds to  1e18   exactly
+sqrt(1e18) ->  1e9,  exactly (1e18 = 2**18 * 5**18, both exact in a double)
+-b + sqrt  ->  -1e9 + 1e9  =  0.0,  exactly
+root       ->  0.0 / 2  =  0.0
+```
+
+Python prints `0.0`. The true root is $-1.000000000000000\times10^{-9}$. The answer is
+not slightly wrong; it has no correct digits at all, and it is a value — zero — that a
+downstream program is very likely to divide by.
+
+Two things about this are worth pausing on. First, the `-4` was lost while the
+discriminant was being formed, *before* the subtraction ever happened; by the time
+`-b + sqrt(...)` ran, its two operands were genuinely equal and it genuinely returned
+zero. The subtraction is not where the information went.
+
+Second, more precision does not repair the failure, it relocates it. The total collapse
+begins where $4ac$ falls below half a step of $b^2$, which for $a = c = 1$ and $p$ bits
+of significand is $b > 2 \cdot 2^{p/2}$:
+
+```text
+double    (p =  53)   collapses from  b > 1.9e8
+                      b = 1e8  ->  root -7.45e-9   true -1.00e-8: right decade,
+                                                   no correct digits
+                      b = 2e8  ->  root  0.0
+binary128 (p = 113)   collapses from  b > 2.0e17
+```
+
+Sixty extra bits of significand buy nine decades of $b$, and no more. What fixes it
+outright is rewriting the expression so the subtraction never occurs, which is what the
+derivation in this module does.
+
+## Worked example 2: the variance that comes out too big
+
+The textbook one-pass formula for variance is $\overline{x^2} - \bar{x}^2$: accumulate
+the sum and the sum of squares in one sweep, subtract at the end. Three ADC readings,
+consecutive codes near full scale:
+
+```text
+x  =  10000, 10001, 10002
+
+exact:   mean          = 10001
+         mean of sq    = (100000000 + 100020001 + 100040004) / 3
+                       = 300060005 / 3
+                       = 100020001.666666...
+         mean squared  = 100020001
+         variance      = 0.666666...          (the population variance, 2/3)
+```
+
+Correct — in exact arithmetic. Now carry only ten significant digits through, which is
+what a 32-bit float does at seven and a double does at sixteen:
+
+```text
+mean of sq    100020001.666...  ->  100020001.7      (ten digits)
+mean squared  100020001         ->  100020001        (nine digits, exact)
+                                    ------------
+variance                            0.7             true value 0.666...
+```
+
+5% high, from data that is exactly right. Take a digit away and it gets worse fast:
+
+```text
+digits carried    reported variance    error
+-------------------------------------------------
+    12                 0.667            0.05%
+    11                 0.670            0.5%
+    10                 0.700            5%
+     9                 1.000            50%
+     8                 0.000            100%
+```
+
+At eight digits the two nine-digit numbers round to the same value and the variance of
+varying data is reported as exactly zero. Nothing raises. Nothing warns. A standard
+deviation of 0.000 goes into the report.
+
+The fix is not more digits either. It is to subtract the mean *first*, while the
+numbers are still small, and square afterwards — the two-pass formula
+$\overline{(x - \bar{x})^2}$, whose operands here are $-1, 0, +1$ and which is exact in
+any precision you like. Welford's algorithm does the same thing in one pass, which is
+what `np.var` and `statistics.variance` use.
+
+## The mistake people actually make
+
+**Blaming the subtraction.** This is the tempting one and it is precisely backwards.
+Sterbenz's lemma says that if two floats satisfy $b/2 \le a \le 2b$, then $a - b$ is
+*exactly representable* and is computed with no error whatsoever. The bridge
+subtraction, the quadratic subtraction, the variance subtraction: all three are exact.
+The subtraction introduced nothing. It only removed the leading digits that were
+hiding the error already sitting in the trailing ones. Cancellation is a *revealing*
+operation, not a destructive one, and that is why "use more precision" only ever helps
+by the size of the constant you added.
+
+**Reading a printed number as a measured one.** `4.200 mV` from the `%.4f` row above
+has four digits printed and two that mean anything. Every digit a program prints looks
+equally authoritative, and a difference of two rounded numbers is where that stops
+being true.
+
+**Adding an epsilon.** `if abs(denominator) < 1e-12: denominator = 1e-12` does not
+rescue a cancelled quantity; it converts a visible failure into an invisible one, and
+picks the magnitude of the resulting lie out of the air.
+
+## What replaces it
+
+- **Rewrite so the subtraction is not there.** The library is full of functions that
+  exist only for this: `math.log1p(x)` for $\ln(1+x)$, `math.expm1(x)` for $e^x - 1$,
+  `math.hypot(a, b)` for $\sqrt{a^2+b^2}$ without overflow. By hand, $a^2 - b^2$
+  becomes $(a-b)(a+b)$, and $1 - \cos x$ becomes $2\sin^2(x/2)$ — which for
+  $x = 10^{-4}$ takes the answer from three correct digits to sixteen.
+- **Measure the difference instead of computing it.** This is the hardware version of
+  the same repair, and it is why bridges are read with an instrumentation amplifier
+  across the two mid-points rather than with two voltmeters and a subtraction. The
+  amplifier's input is 4.26 mV, so its whole dynamic range is spent on the quantity you
+  want, and there are no 7 V readings to lose digits in.
+- **Reorder the arithmetic.** Summing a long array from smallest to largest, or with
+  `math.fsum`, keeps the small terms from being absorbed by the running total.
+- **Watch $\kappa$.** If you can estimate $(|a|+|b|)/|a-b|$ and it is $10^{k}$, you
+  have lost $k$ significant digits and should say so in the units of the answer.
+
+## Where this stops holding
+
+- **When the absolute error is what matters, cancellation is harmless.** If the
+  difference is about to be multiplied by a gain and added to something large, its
+  relative error never gets used. The damage is real only when the small quantity is
+  the answer, or is divided by.
+- **Exact inputs cancel exactly.** Two integers, or two floats that are the exact
+  values you meant, can be subtracted freely. Cancellation needs error in the operands
+  to reveal; the reason it is nearly universal is that measured and computed values
+  always have some.
+- **Absorption is the other half, and behaves oppositely.** `1e16 + 1 - 1e16` is `0.0`
+  because at $10^{16}$ the spacing is 2 and the `1` had nowhere to go — there the small
+  operand vanished into the large one, before any subtraction. Adding numbers of wildly
+  different sizes loses the small ones; subtracting numbers of similar sizes loses the
+  large ones. Both are the same fixed 53 bits, seen from two ends.
+- **`decimal` and `Fraction` do not repeal any of this.** `Decimal` with 50 digits of
+  precision still cancels, just 34 digits later; only `Fraction`, which is exact for
+  rationals, avoids it altogether, and it cannot represent $\sqrt{b^2-4ac}$ at all.
+- **Some problems are ill-conditioned all the way down.** Inverting a nearly singular
+  matrix, or fitting a high-order polynomial to closely spaced points, cancels no
+  matter how the code is written, because $\kappa$ belongs to the question. There the
+  answer is to change the question: fit orthogonal polynomials, solve the system rather
+  than inverting it, regularise.
+''',
+                },
+                {
+                    "title": "A check that cannot fail proves nothing",
+                    "minutes": 14,
+                    "body": r'''
+On the bench there is a failure mode everyone meets once: the probe is not connected,
+the meter reads 0.000 V, and every board on the tray passes the "output below 10 mV
+when disabled" test. The test ran. The test passed. The test was measuring the inside
+of a probe tip.
+
+Software tests have exactly this failure mode, and it is more common there, because
+nothing about a green tick tells you what was on the other end of the lead.
+
+## What a test is actually asserting
+
+A test is three things: an input, a claim about the output, and a tolerance. Get any of
+the three wrong and the test still runs, still passes, and still says nothing.
+
+The claim is the part that goes wrong most often, and it goes wrong in one particular
+way: the "expected" side is computed from the same thing it is supposed to be checking.
+
+## Worked example 1: two tests, both green, one worthless
+
+```python
+import numpy as np
+
+def smooth(x, w):
+    """Box average of width w. Written to work in place, for speed."""
+    x[:] = np.convolve(x, np.ones(w) / w, mode="same")
+    return x
+
+def test_smooth():
+    x = np.array([4.98, 5.02, 5.11, 4.95, 5.07, 4.99, 5.03, 5.01])
+    y = smooth(x, 3)
+    assert np.allclose(y, x)            # <- passes for every possible smooth()
+```
+
+`smooth` writes into its argument and returns the same array object. So `y` **is** `x`
+— not a copy, the same object, as module 3 put it — and `np.allclose(y, x)` is
+comparing an array with itself. Replace the body of `smooth` with `return x`, with
+`x[:] = 0`, with anything at all that returns its argument, and this test still passes.
+
+Here is the same input with a claim that is not derived from the function:
+
+```python
+def test_smooth_flat_stays_flat():
+    x = np.full(8, 5.00)
+    y = smooth(x.copy(), 3)
+    assert np.allclose(y[1:-1], 5.00, rtol=0, atol=1e-12)
+```
+
+The expected value — 5.00 — comes from what a box average of a constant *must* be,
+which is knowledge from outside the code. `x.copy()` stops the in-place write from
+contaminating the comparison. The slice drops the ends, because `mode="same"` pads with
+zeros and the first and last outputs are genuinely not 5.00, which is a fact about the
+function that the test now records rather than hides.
+
+## The tolerance is the test
+
+Two functions, two different meanings, and they are not interchangeable.
+
+```python
+math.isclose(a, b, rel_tol=1e-9, abs_tol=0.0)   # symmetric; abs_tol is 0 by default
+np.isclose(a, b, rtol=1e-5, atol=1e-8)          # |a-b| <= atol + rtol*|b|
+```
+
+`np.isclose` is asymmetric — the tolerance is measured against `b`, the second
+argument — and it carries a default `atol` of $10^{-8}$ that catches people out in both
+directions:
+
+```text
+np.isclose(1e-9, 0.0)       ->  True   |1e-9 - 0| = 1e-9  <=  1e-8 + 0
+np.isclose(1e-9, 2e-9)      ->  True   both are inside the absolute floor
+math.isclose(1e-9, 2e-9)    ->  False  100% apart, and no absolute floor by default
+```
+
+If your signal is measured in volts, an $10^{-8}$ floor is a free pass on numerical
+noise and exactly what you want. If it is measured in microvolts, that floor is larger
+than every value in the array and `np.allclose` will confirm any two arrays you hand
+it. The tolerance has to be chosen against the *scale of the quantity*, and the only
+person who knows that scale is you.
+
+The two failure directions:
+
+```text
+a 3.30 V rail, checked with rtol=1e-5  ->  allows 33 uV.  Sensible: far below the
+                                           meter's own resolution, far above float noise.
+a 3.30 V rail, checked with rtol=1e-15 ->  allows 3 fV.   Fails on a rebuild, on a
+                                           different BLAS, on a different CPU.
+a phase of 0.0, checked with rtol only ->  allows nothing at all: rtol * |0| = 0.
+                                           Use abs_tol for anything that can be zero.
+```
+
+## Break it on purpose
+
+There is one cheap piece of evidence that a test is connected to anything: make the
+code wrong and watch the test go red. If it stays green, the test was measuring the
+probe tip.
+
+## Worked example 2: three mutations, two tests
+
+Back to the plain-Python version from the first unit of this module, which has no
+padding convention to argue about:
+
+```python
+def moving_average(xs, w):
+    return [sum(xs[i:i+w]) / w for i in range(len(xs) - w + 1)]
+```
+
+Two candidate tests, both over eight samples with `w = 3`, so both expect **six**
+outputs:
+
+```python
+def test_flat():
+    assert np.allclose(moving_average([5.00] * 8, 3), 5.00)
+
+def test_step():
+    got  = moving_average([0.0] * 4 + [1.0] * 4, 3)
+    want = [0.0, 0.0, 1/3, 2/3, 1.0, 1.0]
+    np.testing.assert_allclose(got, want, rtol=0, atol=1e-12)
+```
+
+Now break the function on purpose, three ways, and watch:
+
+```text
+mutation                             flat test          step test
+--------------------------------------------------------------------------------
+divide by (w-1) instead of w         RED  5.00 -> 7.50  RED  [0, 0, .5, 1, 1.5, 1.5]
+range(len(xs) - w) : one output short green            RED  6 values wanted, 5 given
+return list(xs) unchanged            green            RED  [0,0,0,0,1,1,1,1]
+```
+
+The flat test catches only the mutation that changes the *scale* of the output. A
+constant signal is its own moving average, so a function that does nothing at all
+passes; and because the claim is written against the scalar `5.00`, NumPy broadcasts
+it to whatever length it is given, so a result of the wrong length passes too. Two of
+the three mutations walk straight through.
+
+None of that makes the flat test worthless — it is a fast, exact check of the
+normalisation, and it will catch a division bug for ever. It makes the flat test
+*insufficient*, and the only way to find that out is to break the code and look.
+
+The step test catches all three, and two of the reasons are structural rather than
+lucky: `assert_allclose` compares shapes before values, and a step is a signal whose
+output genuinely differs from its input. Choose inputs the function is supposed to
+*change*.
+
+The table has one more use. If every mutation you can invent leaves a test green,
+delete the test: it costs time on every run and is buying nothing.
+
+## What a failure message has to contain
+
+```text
+AssertionError
+
+AssertionError: moving_average(step, 3) wrong at index 2: got 0.5000,
+                want 0.3333, |diff| 1.67e-1 > tol 1.0e-12
+```
+
+The first tells you a test failed. The second tells you which input, which element, by
+how much, and against what tolerance — and the ratio of the difference to the tolerance
+is the most informative number in it, because "twice the tolerance" and "ten thousand
+times the tolerance" are different bugs. `pytest` will print this for you if you write
+a plain `assert` on a comparison; if you write `assert np.allclose(...)`, it can only
+print `assert False`, so pass the arrays to `np.testing.assert_allclose`, which
+composes the message itself.
+
+## Where this stops holding
+
+- **Sometimes there is no oracle.** You cannot test a simulator against the answer,
+  because the answer is what the simulator is for. What you can test are *properties*
+  it must have whatever the answer is: energy conserved to within a stated drift, the
+  response to a doubled input exactly doubled, a circuit's answer unchanged when two
+  parallel resistors swap places, and — most useful of all — the error falling by the
+  right power of two when the step size halves. Module 8 measures exactly that.
+- **A known special case is worth more than a hundred random inputs.** An RC step
+  response has a closed form; a divider with equal resistors gives exactly half. Test
+  against those, and the general case is at least anchored at the points where you can
+  check it.
+- **Bit-exact comparison of float results is not portable.** The same NumPy expression
+  can give different last bits on a different BLAS, a different core count or a
+  different compiler, because floating-point addition is not associative and those
+  libraries reorder sums. A test asserting exact equality on a reduction is a test that
+  will fail one day for no reason, and be switched off.
+- **Passing tests are not a proof.** They are a lower bound on how wrong the code can
+  be, over the inputs you thought of. Property-based tools (`hypothesis`) widen the set
+  of inputs; nothing widens it to all of them.
+- **A test that is slow gets skipped, and a skipped test is not a test.** If the honest
+  check takes four minutes, keep a fast version in the loop you run constantly and the
+  slow one in the run you do before shipping — but do run it, and look at the output.
+''',
+                },
+            ],
+            "numeric": [
+                {
+                    "title": "How many lines survive the parser?",
+                    "minutes": 6,
+                    "brief": r'''
+One rule and one count. The reader below skips blank lines and comments before it
+tries anything, so those are not failures; everything else goes through `value_of`,
+and whatever `value_of` raises a `ValueError` on is skipped and lost.
+
+`value_of` understands a suffix only as the **last** character of the field. Read each
+of the nine lines with that sentence in front of you.
+''',
+                    "prompt": "How many records does the program print at the end?",
+                    "note": "A whole number, from 0 to 9.",
+                    "figure": r'''
+```python
+LINES = [
+    "* divider.net, exported 12:04",
+    "V1  in   0    DC 9",
+    "R1  in   mid  4.7k",
+    "",
+    "R2  mid  0    2200",
+    "C1  mid  0    100n",
+    "R3  mid  0    4k7",
+    "L1  mid  out  10m",
+    "R4  out  0    5k6",
+]
+
+def value_of(text):
+    mul = {"k": 1e3, "m": 1e-3, "u": 1e-6, "n": 1e-9}
+    if text[-1] in mul:                        # suffix on the END only
+        return float(text[:-1]) * mul[text[-1]]
+    return float(text)
+
+records = []
+for line in LINES:
+    line = line.strip()
+    if not line or line[0] in "*#":            # comments and blanks are not failures
+        continue
+    f = line.split()
+    try:
+        records.append(value_of(f[3]))
+    except ValueError:
+        continue
+
+print(len(records))
+```
+''',
+                    "given": [
+                        {"label": "Lines in the list", "value": "9"},
+                        {"label": "Guard skips", "value": "blank lines, and lines starting * or #"},
+                        {"label": "Suffixes known", "value": "k, m, u, n — last character only"},
+                        {"label": "Caught", "value": "ValueError, and nothing else"},
+                    ],
+                    "aside": "Every surviving line has at least four fields, so nothing here raises an "
+                             "IndexError. The only question about each line is whether `float` accepts "
+                             "what it is handed.",
+                    "answer": 4.0,
+                    "tol": 0.01,
+                    "unit": "records",
+                    "hint": "Take the fourth field of each line that gets past the guard and ask what "
+                            "`value_of` does with it. `\"4.7k\"` ends in `k`, so it becomes "
+                            "`float(\"4.7\") * 1000`. `\"4k7\"` ends in `7`, so it goes to `float(\"4k7\")` "
+                            "whole.",
+                    "wrong": "6 counts every component line and assumes they all parse. 7 is what you "
+                             "get by treating the source line as a component as well. 5 comes from "
+                             "noticing one of the two `4k7`-style values and not the other.",
+                    "why": r'''
+Four.
+
+```text
+line  field 3   what value_of does                        result
+-----------------------------------------------------------------------
+ 1    —         starts '*'                                skipped by the guard
+ 2    "DC"      last char 'C' not a suffix -> float("DC")  ValueError, skipped
+ 3    "4.7k"    'k' -> float("4.7") * 1e3                  4700.0        record
+ 4    —         empty                                      skipped by the guard
+ 5    "2200"    '0' not a suffix -> float("2200")          2200.0        record
+ 6    "100n"    'n' -> float("100") * 1e-9                  1e-07        record
+ 7    "4k7"     '7' not a suffix -> float("4k7")            ValueError, skipped
+ 8    "10m"     'm' -> float("10") * 1e-3                    0.01        record
+ 9    "5k6"     '6' not a suffix -> float("5k6")            ValueError, skipped
+
+                                                    9 lines in, 4 records out
+```
+
+Three components — R3, R4 and the source — are gone, and the program says nothing.
+Hand those four records to a simulator and it solves a circuit with one resistor, one
+capacitor and one inductor in it, no supply at all, and returns 0 V at every node with
+no complaint that it was never given anything to drive.
+
+Two details are worth keeping. The **source line** fails for the same reason a
+malformed line does, because `f[3]` on `V1 in 0 DC 9` is the word `DC` and the value
+is at `f[4]`. A parser that does not branch on the kind of the part will always lose
+its sources, and losing the source is the one omission that guarantees a zero answer
+rather than a merely wrong one. And `4k7` is not a typo: it is the standard way to
+write 4.7 kΩ on a schematic precisely because a decimal point can be lost in a
+photocopy. A reader that handles `4.7k` and not `4k7` handles half of what it will
+actually be given.
+
+The repair is not to widen the `except`. It is to make the skipped lines visible:
+append the failure to a `bad` list and print `read 9 lines, 4 records, 3 unreadable`
+at the end. The parser is still allowed to skip; it is not allowed to skip silently.
+''',
+                },
+                {
+                    "title": "The voltage the simulator reported instead",
+                    "minutes": 7,
+                    "brief": r'''
+The same divider, off a 9 V supply, read by a parser with a different policy:
+
+```text
+V1  in   0    DC 9
+R1  in   mid  2200
+R2  mid  0    4k7
+```
+
+```python
+def value_of(text, default=1000.0):
+    try:
+        return float(text)
+    except ValueError:
+        return default          # "so the program doesn't fall over"
+```
+
+`float("2200")` is fine. `float("4k7")` raises, and the handler hands back 1000.0
+instead. The schematic drawn here is the circuit the solver was actually given — read
+the values off it, not off the file. Answer in **volts**.
+''',
+                    "prompt": "What voltage does the solver report at the mid node?",
+                    "note": "In volts, to three decimal places.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 9},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "g1", "kind": "GND", "x": 9, "y": 9},
+                            {"id": "r1", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 2200},
+                            {"id": "r2", "kind": "R", "x": 9, "y": 6, "rot": 1, "value": 1000},
+                            {"id": "out", "kind": "OUT", "x": 11, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [9, 4]},
+                            {"a": [9, 4], "b": [9, 5]},
+                            {"a": [9, 4], "b": [11, 4]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [9, 7], "b": [9, 9]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Supply", "value": "9 V"},
+                        {"label": "R1, as the solver got it", "value": "2.2 kΩ"},
+                        {"label": "R2, as the solver got it", "value": "1 kΩ (the default)"},
+                        {"label": "R2, as the file wrote it", "value": "4k7"},
+                    ],
+                    "aside": "An ordinary divider on the values that are drawn. The resistor across "
+                             "the output is the one on top of the fraction.",
+                    "answer": 2.8125,
+                    "tol": 0.005,
+                    "unit": "V",
+                    "hint": "$V_{mid} = 9 \\times R_2/(R_1 + R_2)$ with $R_1 = 2200\\ \\Omega$ and "
+                            "$R_2 = 1000\\ \\Omega$, which is what the schematic shows.",
+                    "wrong": "6.130 V is what the file actually describes — $9 \\times 4700/6900$ — and "
+                            "is the number the program was supposed to produce. 6.188 V is the divider "
+                            "with the two drawn resistors swapped over.",
+                    "why": r'''
+```text
+V_mid = 9 x 1000 / (2200 + 1000) = 9000 / 3200 = 2.8125 V
+```
+
+**2.813 V**, against the 6.130 V the file describes. Both are between 0 V and the
+rail, both are the right order of magnitude, and nothing anywhere printed a warning.
+If this divider was setting a reference, the reference is 3.3 V low and the board that
+depends on it will be debugged from the wrong end.
+
+That is what a `default=` on a parser costs. Look at what the function actually did: it
+was asked what `4k7` means, it did not know, and it answered anyway. Choosing 1000.0 is
+a decision about the physics of the circuit, taken by a routine that has never seen the
+circuit, on the grounds that returning *something* keeps the program running. It does
+keep the program running. That is the problem.
+
+Notice also that the more obviously reckless default would have been easier to catch.
+Had the handler returned `0.0`, the lower resistor would have become a short, the mid
+node would have sat at 0.000 V, and somebody might have wondered. 1000.0 is plausible,
+and plausible is worse: there is nothing about 2.813 V to catch the eye.
+
+Two repairs, and they are separate.
+
+- **Delete the default and let the `ValueError` out.** A caller that genuinely has to
+  carry on can catch it and *say what it skipped*, which is a different program from
+  one that silently substitutes a number. The rule is that a parser reports what it
+  read; it is not entitled to invent what it could not.
+- **Teach `value_of` the `4k7` spelling.** It is not a typo — it is the standard way to
+  write 4.7 kΩ, used because a decimal point survives neither a photocopier nor a
+  small font. A reader that handles `4.7k` and not `4k7` will meet this default on
+  nearly every real file it is given.
+''',
+                    "check": r'''
+return c.vout();
+''',
+                },
+                {
+                    "title": "How much of the difference is uncertainty?",
+                    "minutes": 9,
+                    "brief": r'''
+A 12-bit ADC, 0 to 5.000 V, so 4096 codes and one least significant bit (LSB) worth
+
+```text
+1 LSB = 5.000 / 4096 = 1.2207 mV
+```
+
+Two points in a circuit are measured with it, and the program subtracts them to get the
+drop across a component.
+
+```text
+reading A   code 2703   ->  3.29956 V
+reading B   code 2698   ->  3.29346 V
+difference  5 codes     ->  6.1035 mV
+```
+
+Every conversion is within **half an LSB** of the true voltage — that is what
+quantisation means, and it is the best this converter can do even if everything else
+is perfect. Give the worst-case uncertainty of the **difference**, as a percentage of
+the difference.
+''',
+                    "prompt": "What is the worst-case uncertainty of the difference, as a percentage of it?",
+                    "note": "A percentage, to one decimal place.",
+                    "figure": r'''
+```text
+                 true voltage        code        reported
+                 ------------------------------------------
+  point A        somewhere within    2703        3.29956 V
+                 +/- 0.5 LSB of ->
+  point B        somewhere within    2698        3.29346 V
+                 +/- 0.5 LSB of ->
+
+  1 LSB = 5.000 V / 4096 = 1.220703125 mV
+  reported difference = (2703 - 2698) LSB = 5 LSB = 6.1035 mV
+```
+
+Work in LSBs and the arithmetic almost disappears. Convert to volts at the end, or not
+at all — a percentage does not care what unit you were in.
+''',
+                    "given": [
+                        {"label": "Resolution", "value": "12 bits over 5.000 V"},
+                        {"label": "1 LSB", "value": "1.2207 mV"},
+                        {"label": "Codes", "value": "2703 and 2698"},
+                        {"label": "Error per conversion", "value": "±0.5 LSB, worst case"},
+                    ],
+                    "aside": "Two readings, each allowed to be wrong by half an LSB. Ask how far apart "
+                             "the reported difference and the true difference can be when both errors "
+                             "push the same way round.",
+                    "answer": 20.0,
+                    "tol": 0.2,
+                    "unit": "%",
+                    "hint": "Worst case, A is high by 0.5 LSB while B is low by 0.5 LSB — or the other "
+                            "way round. Either way the difference is out by a full 1 LSB, and the "
+                            "difference itself is 5 LSB.",
+                    "wrong": "0.0185% is the uncertainty of *one reading* — half an LSB out of 2703 of "
+                            "them — and it is the number people quote. 10% comes from using half an LSB "
+                            "for the pair instead of one full LSB: the two errors add, they do not "
+                            "average.",
+                    "why": r'''
+```text
+worst-case error in the difference   =  0.5 LSB + 0.5 LSB  =  1 LSB
+reported difference                  =  5 LSB
+                                        ---------------------------
+relative uncertainty                 =  1 / 5  =  0.20  =  20.0 %
+```
+
+In volts, if you would rather see it that way: $\pm 1.2207$ mV on a reading of
+$6.1035$ mV.
+
+Now put that beside how good the converter is at its actual job. Each reading is
+$\pm 0.5$ LSB out of about 2700 LSB, or **0.018%** — better than four significant
+figures, a thoroughly good measurement. The difference of the two is **20%** — barely
+one significant figure. Nothing degraded between those two sentences except that a
+subtraction happened.
+
+The amplification is the condition number of the subtraction:
+
+$$\kappa = \frac{|a| + |b|}{|a - b|} = \frac{2703 + 2698}{5} = 1080$$
+
+and $1080 \times 0.0185\% = 20\%$, which is where the answer comes from a second way.
+$\kappa$ is fixed by the numbers, not by the code: no amount of averaging, filtering
+or floating-point precision will get you a better difference out of these two readings,
+because the information was never in them.
+
+Three things actually help, and they all attack $\kappa$ rather than the arithmetic:
+
+- **Measure the difference directly.** Put an instrumentation amplifier across the two
+  points and feed the ADC 6 mV instead of 3.3 V. With the same converter the difference
+  now occupies 5 codes out of 5 rather than 5 out of 2700 — the same $\pm 1$ LSB
+  becomes a fraction of a per cent.
+- **Amplify before converting.** A gain of 500 on the difference does the same job.
+- **Average, but only against noise.** Averaging $N$ readings shrinks *random* noise by
+  $\sqrt{N}$ and does nothing at all to quantisation error that is the same every time
+  — which, with a perfectly steady input, it is. (Add a little dither and averaging
+  starts working again, which is why it is deliberately added.)
+
+The same arithmetic decides how many digits your program should print. Reporting
+`6.1035 mV` for this difference claims five significant figures where the measurement
+supports one.
+''',
+                },
+                {
+                    "title": "The variance of three readings that do not vary much",
+                    "minutes": 10,
+                    "brief": r'''
+The one-pass formula for variance is $\overline{x^2} - \bar{x}^2$: sweep the data once,
+keeping a running sum and a running sum of squares, and subtract at the end. It is in
+every textbook and it is what people write.
+
+Three consecutive ADC codes near full scale:
+
+```text
+x = 10000, 10001, 10002        counts
+```
+
+Their true population variance is $\left((-1)^2 + 0^2 + 1^2\right)/3 = 2/3 = 0.6667$.
+
+Now carry the calculation on a machine that keeps **ten significant decimal digits**
+and rounds every result to that. (A 32-bit float keeps about seven; a double keeps
+about sixteen and fails the same way once the readings are up near $10^{8}$.) Work out
+what the one-pass formula reports.
+''',
+                    "prompt": "What variance does the one-pass formula report?",
+                    "note": "In counts², to two decimal places.",
+                    "figure": r'''
+```text
+step                              exact value            kept to 10 digits
+--------------------------------------------------------------------------
+sum of x        = 30003           30003                  30003
+mean            = 30003 / 3       10001                  10001
+sum of x*x      = 100000000
+                + 100020001
+                + 100040004      300060005               300060005
+mean of x*x     = 300060005 / 3   100020001.666666...    ???
+mean squared    = 10001 * 10001   100020001              100020001
+
+variance = (mean of x*x) - (mean squared)
+```
+
+Only one line of the table has more than ten significant digits in it. Round that one,
+then subtract.
+''',
+                    "given": [
+                        {"label": "Readings", "value": "10000, 10001, 10002 counts"},
+                        {"label": "Formula", "value": "mean(x²) − mean(x)²"},
+                        {"label": "Digits carried", "value": "10 significant, rounded"},
+                        {"label": "True variance", "value": "0.6667 counts²"},
+                    ],
+                    "aside": "Count the digits in 100020001.666666 before you round it. Nine of them "
+                             "come before the decimal point.",
+                    "answer": 0.7,
+                    "tol": 0.005,
+                    "unit": "counts²",
+                    "hint": "$100020001.6666\\ldots$ to ten significant digits is $100020001.7$ — nine "
+                            "digits in front of the point and one behind it. Subtract $100020001$, "
+                            "which needs only nine digits and is therefore exact.",
+                    "wrong": "0.67 is the true variance, which is what the formula would give with "
+                             "unlimited digits. 0.0 is the answer at eight digits, where both terms "
+                             "round to 100020000 — worth working out, because it is the same failure "
+                             "one digit further on.",
+                    "why": r'''
+```text
+mean of x*x   100020001.666666...  ->  100020001.7    (10 significant digits)
+mean squared  100020001            ->  100020001      ( 9 digits, so exact)
+                                       ------------
+reported variance                       0.7           true value 0.6667
+```
+
+**0.70**, against a true 0.6667 — 5% high, from data that is exactly right and a
+formula that is algebraically exact. Nothing raised, nothing warned.
+
+Take digits away and watch it come apart:
+
+```text
+digits carried    mean of x*x      reported variance    error
+----------------------------------------------------------------
+    12            100020001.667          0.667           0.05%
+    11            100020001.67           0.670           0.5%
+    10            100020001.7            0.700           5%
+     9            100020002              1.000          50%
+     8            100020000              0.000         100%
+```
+
+At eight digits both terms round to the same value and the variance of varying data is
+reported as exactly zero — a standard deviation of 0.000 counts, printed with the same
+confidence as any other number. That is not a hypothetical: `np.float32` keeps about
+7.2 decimal digits, so a single-precision one-pass variance over readings near $10^4$
+is already in that row.
+
+The cause is on the first line. $\overline{x^2}$ is about $10^{8}$ and the answer is
+about $1$, so the answer lives eight digits down inside a number the machine can only
+hold ten digits of. Subtracting $\bar{x}^2$ then reveals what little is left. This is
+the same failure as two 7 V node voltages differing by 4 mV, in a different costume:
+the quantity you want is tiny compared with the quantities you computed it from.
+
+The repair is to subtract the mean *before* squaring, so nothing large is ever formed:
+
+```python
+mu  = sum(xs) / len(xs)                      # 10001, exact here
+var = sum((x - mu) ** 2 for x in xs) / len(xs)
+```
+
+The operands are now $-1, 0, +1$; the sum is 2; the answer is $2/3$, correct to every
+digit the machine has, at any precision. It costs a second pass over the data.
+Welford's algorithm gets the same stability in one pass by updating the mean and the
+sum of squared deviations together, and it is what `statistics.variance` and `np.var`
+already use — which is the real lesson. The library did not choose the textbook
+formula, and it did not choose it for this reason.
+''',
+                },
+                {
+                    "title": "The bridge, and the digits that reach the answer",
+                    "minutes": 12,
+                    "brief": r'''
+Two dividers across one 12 V supply. On the left, 4.7 kΩ over 6.8 kΩ. On the right,
+4.7 kΩ over a strain gauge which reads **6.81 kΩ** under load. The measurement is the
+difference between the two mid-points — the left one is the reference, the right one
+moves with the strain.
+
+Solve both dividers, then subtract. Answer in **millivolts**, and keep more digits than
+feel necessary while you work: the two node voltages agree to three decimal places, and
+everything you are being asked for lives past that.
+''',
+                    "prompt": "What is the bridge output — the right mid-point minus the left one?",
+                    "note": "In millivolts, to two decimal places.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 12},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "r1", "kind": "R", "x": 8, "y": 4, "rot": 1, "value": 4700},
+                            {"id": "r2", "kind": "R", "x": 8, "y": 8, "rot": 1, "value": 6800},
+                            {"id": "g1", "kind": "GND", "x": 8, "y": 11},
+                            {"id": "r3", "kind": "R", "x": 14, "y": 4, "rot": 1, "value": 4700},
+                            {"id": "r4", "kind": "R", "x": 14, "y": 8, "rot": 1, "value": 6810},
+                            {"id": "g2", "kind": "GND", "x": 14, "y": 11},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 2]},
+                            {"a": [3, 2], "b": [8, 2]},
+                            {"a": [8, 2], "b": [14, 2]},
+                            {"a": [8, 2], "b": [8, 3]},
+                            {"a": [14, 2], "b": [14, 3]},
+                            {"a": [8, 5], "b": [8, 7]},
+                            {"a": [14, 5], "b": [14, 7]},
+                            {"a": [8, 9], "b": [8, 11]},
+                            {"a": [14, 9], "b": [14, 11]},
+                            {"a": [3, 7], "b": [3, 9]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Supply", "value": "12 V"},
+                        {"label": "Left arm", "value": "4.7 kΩ over 6.8 kΩ"},
+                        {"label": "Right arm", "value": "4.7 kΩ over 6.81 kΩ (the gauge)"},
+                        {"label": "Wanted", "value": "right mid-point − left mid-point, in mV"},
+                    ],
+                    "aside": "Each mid-point is an ordinary divider and neither loads the other — "
+                             "nothing is connected between them. Do not round either one before you "
+                             "subtract.",
+                    "answer": 4.261,
+                    "tol": 0.01,
+                    "unit": "mV",
+                    "hint": "Left: $12 \\times 6800/(4700+6800)$. Right: $12 \\times 6810/(4700+6810)$. "
+                            "Both come to about 7.1 V, so carry at least seven digits through the "
+                            "subtraction or the answer will be wrong in its first figure.",
+                    "wrong": "0 is what you get by rounding both node voltages to two decimals before "
+                            "subtracting; 4.20 mV comes from rounding both to four. Neither rounding "
+                            "is wrong about the voltages — each is accurate to better than 0.1% — and "
+                            "both destroy the answer.",
+                    "why": r'''
+```text
+left  mid   12 x 6800 / 11500  =  7.095652173913043 V
+right mid   12 x 6810 / 11510  =  7.099913119026933 V
+                                  ------------------
+output                            0.004260945113890 V  =  4.2609 mV
+```
+
+**4.26 mV.** Now look at what it cost to get it.
+
+```text
+node voltages printed as     left      right     output      error
+---------------------------------------------------------------------
+%.6f                       7.095652  7.099913   4.261 mV     0.001%
+%.5f                       7.09565   7.09991    4.260 mV     0.02%
+%.4f                       7.0957    7.0999     4.200 mV     1.4%
+%.3f                       7.096     7.100      4.000 mV     6.1%
+%.2f                       7.10      7.10       0.000 mV     100%
+```
+
+Every row of that table reports both node voltages correctly. Even the last one is
+within 5 mV of the truth, 0.07% of a 7 V node — a measurement most people would be
+pleased with. And it returns zero for the thing the bridge exists to measure.
+
+The amplification factor is the condition number of the subtraction:
+
+$$\kappa = \frac{|a| + |b|}{|a - b|} = \frac{7.0957 + 7.0999}{0.0042609} \approx 3330$$
+
+so a relative error of $10^{-4}$ in each node voltage — four significant figures —
+becomes about 30% in the output. To get three good figures in the answer you need six
+in each input. $\kappa$ belongs to the circuit, not to the program: it is
+$(R_1+R_2)/\Delta R$ scaled, and it grows without limit as the gauge approaches
+balance, which is exactly the region a bridge is built to work in.
+
+Two consequences, one for the code and one for the hardware.
+
+**In the code**, never print a difference to more figures than the inputs support, and
+never compute a small difference from two large numbers you have already rounded — a
+simulator that hands you `%.4f` node voltages is not giving you a bridge output at all.
+Have it return the difference, computed from the unrounded solution.
+
+**In the hardware**, this is why nobody measures a bridge with two voltmeters. The
+difference is taken by an instrumentation amplifier wired straight across the two
+mid-points, so the 7.1 V common-mode part is rejected before anything is digitised and
+the ADC sees only the 4.26 mV that carries the strain. The circuit does the subtraction
+in analogue, where both operands are exact, and the digits are never lost to be
+recovered.
+''',
+                    "check": r'''
+var d = c.dc(), P = c.net.parts;
+function mid(id) {
+  var p = P.filter(function (x) { return x.id === id; })[0];
+  c.assert(p, "no part called " + id + " in the schematic");
+  return p.n1 === 0 ? p.n2 : p.n1;          /* the end that is not ground */
+}
+return (d.v[mid("r4")] - d.v[mid("r2")]) * 1000;
+''',
+                },
+            ],
+            "blanks": [
+                {
+                    "title": "A reader that refuses, and says what it refused",
+                    "minutes": 9,
+                    "lang": "python",
+                    "caption": "netlist.py — four holes, and the printed summary at the bottom that the filled-in version has to produce",
+                    "brief": r'''
+The same netlist reader as the numeric questions, written the way it should have been
+the first time: it skips what is not a component, refuses what it cannot read, keeps a
+message for every refusal, and states an invariant about its own output.
+
+Nothing runs here. The comment under the last `print` is the anchor — every choice has
+to be consistent with a run over the nine-line file from the first numeric question,
+where two lines were skipped by the guard, four of the remaining seven parsed, and
+three did not.
+''',
+                    "listing": r'''
+# Read a netlist. Skip what is not a component; refuse what cannot be read.
+def read(lines):
+    good, bad = [], []
+    for n, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line or line[0] in "*#":
+            ___                                  # a comment is not a failure
+        f = line.split()
+        try:
+            good.append(value_of(f[3]))
+        except (ValueError, ___) as e:           # short line -> f[3] is off the end
+            bad.append(f"line {n}: {line!r} — {e}")
+    return good, bad
+
+vals, skipped = read(open("divider.net"))
+
+if not vals:
+    ___ ValueError("divider.net produced no components at all")
+
+___ all(v > 0 for v in vals), "value_of returned a non-positive resistance"
+
+print(f"{len(vals) + len(skipped)} component lines, {len(vals)} records, "
+      f"{len(skipped)} unreadable")
+# 7 component lines, 4 records, 3 unreadable
+''',
+                    "blanks": [
+                        {
+                            "prompt": "The guard has just decided this line is a comment or blank. Go to the next line.",
+                            "hole": "keyword",
+                            "opts": ["continue", "break", "pass", "return"],
+                            "a": 0,
+                            "why": "`continue` abandons this pass of the loop and starts the next one, which is exactly what \"this line is not a component\" means. Skipping is the right verb here and it is not a failure — nothing goes in `bad`, because there was nothing wrong.",
+                            "whys": [
+                                "`continue` abandons this pass of the loop and starts the next one, which is exactly what \"this line is not a component\" means. Skipping is the right verb here and it is not a failure — nothing goes in `bad`, because there was nothing wrong.",
+                                "`break` leaves the loop altogether, so the header line at the top of nearly every exported netlist ends the read before a single component has been seen. `vals` comes back empty, the `if not vals` check fires, and the program stops with a message blaming the file for producing nothing — technically true, and entirely misleading.",
+                                "`pass` does nothing at all and falls through to the next statement, so the comment line goes on to `line.split()` and `f[3]`. A header like `* divider.net` splits into two fields and raises `IndexError` — which the handler below would then file as an unreadable line, turning every comment in the file into a reported failure.",
+                                "`return` exits `read` entirely, and with no value, so the caller unpacks `None` into `vals, skipped` and dies on a `TypeError` one line later. A guard clause inside a loop is about this iteration, not about the function.",
+                            ],
+                        },
+                        {
+                            "prompt": "A line with only two fields never reaches `value_of`; `f[3]` fails first, and it does not fail with a ValueError.",
+                            "hole": "exception",
+                            "opts": ["IndexError", "KeyError", "TypeError", "Exception"],
+                            "a": 0,
+                            "why": "`f[3]` on a list of two items raises `IndexError: list index out of range`. Naming it puts short lines in the same category as unparseable values — both are bad data, both get a message, both let the read continue.",
+                            "whys": [
+                                "`f[3]` on a list of two items raises `IndexError: list index out of range`. Naming it puts short lines in the same category as unparseable values — both are bad data, both get a message, both let the read continue.",
+                                "`KeyError` is what a *dictionary* raises for a missing key. `f` is a list, and a list out of range is an `IndexError`; nothing in this loop ever raises `KeyError`, so this clause would catch nothing and the short line would crash the program.",
+                                "`TypeError` means the wrong type entirely, such as `f[\"3\"]`. Indexing a list with an integer that is too large is the right type and the wrong value, so it is an `IndexError`. Catching `TypeError` here would also swallow a genuine bug — passing a string where a list was expected — which is a failure you want to see.",
+                                "`Exception` catches everything: the two failures that belong to bad data, and also the `NameError` from a mistyped variable, the `AttributeError` from a `None`, and the `KeyboardInterrupt`-adjacent errors you meant to leave alone. A misspelling inside the `try` would be filed as an unreadable line, and the file would be blamed for a bug in the code.",
+                            ],
+                        },
+                        {
+                            "prompt": "A file that yielded nothing at all is not a result to carry on with. Stop, and name the reason.",
+                            "hole": "keyword",
+                            "opts": ["raise", "return", "print", "assert"],
+                            "a": 0,
+                            "why": "`raise ValueError(...)` stops the program with a message that names the file and the condition. An empty parse is not a circuit with no parts; it is a read that failed completely, usually because the file is a different format from the one this reader expects.",
+                            "whys": [
+                                "`raise ValueError(...)` stops the program with a message that names the file and the condition. An empty parse is not a circuit with no parts; it is a read that failed completely, usually because the file is a different format from the one this reader expects.",
+                                "`return ValueError(...)` builds an exception object and hands it back as an ordinary value. Nothing is raised, nothing stops, and the caller gets an exception where it expected a number — which will eventually fail somewhere unrelated with a `TypeError`.",
+                                "`print ValueError(...)` is not even valid Python 3 syntax. The idea behind it — say something and carry on — is the one this module argues against: a message on standard output is not read by anything, and the simulator downstream will run on an empty netlist and report 0 V at every node.",
+                                "`assert` would work when you run the program normally and stop working under `python -O`, which strips every assertion. This condition is about the contents of a file that came from outside the program, and input from outside gets a real check that cannot be switched off.",
+                            ],
+                        },
+                        {
+                            "prompt": "Something `value_of` should have guaranteed, checked so a mistake in it surfaces here rather than inside the solver.",
+                            "hole": "keyword",
+                            "opts": ["assert", "raise", "if", "print"],
+                            "a": 0,
+                            "why": "This one *is* an assertion: it states an invariant about code in this program, not a fact about the file. A negative or zero resistance means `value_of` has a bug — a sign lost, a suffix mishandled — and the assertion catches it before the solver is handed a component it cannot stamp.",
+                            "whys": [
+                                "This one *is* an assertion: it states an invariant about code in this program, not a fact about the file. A negative or zero resistance means `value_of` has a bug — a sign lost, a suffix mishandled — and the assertion catches it before the solver is handed a component it cannot stamp.",
+                                "`raise all(...)` tries to raise a `bool`, which is a `TypeError`: `exceptions must derive from BaseException`. And the intent is wrong as well as the syntax — a `raise` on this line would fire only when the condition is met, which is when everything is fine.",
+                                "`if` starts a statement that needs a body, so the string after the comma is a syntax error where a colon and a block were expected. Even repaired into `if not all(...): raise ...` it would be the heavier tool for an internal invariant, and it would not be removed by `-O`, which for a check on this hot a path is the reason assertions exist.",
+                                "`print` reports the condition and carries on regardless, so a negative resistance is announced to a log nobody is reading and then handed to the solver anyway. The whole value of a check is that it stops something.",
+                            ],
+                        },
+                    ],
+                },
+                {
+                    "title": "Four expressions that are algebraically right and one digit long",
+                    "minutes": 9,
+                    "lang": "python",
+                    "caption": "each pair computes the same quantity; the second spelling is the one that still has digits left in it",
+                    "brief": r'''
+Every line below has a version that a mathematician would sign off and a version that
+actually survives in a double. The difference in each case is a subtraction of two
+nearly equal numbers, moved or removed by algebra you already know.
+
+The comments give the sizes involved. Fill in the second spelling of each.
+''',
+                    "listing": r'''
+import math
+
+# a = 1.0000001, b = 1.0000000  -> a*a and b*b agree to their first seven digits
+d_bad  = a*a - b*b
+d_good = (a - b) * ___
+
+# x = 1e-4 radians  ->  cos(x) is 0.999999995, and 1 - it keeps eight digits
+c_bad  = 1 - math.cos(x)
+c_good = 2 * math.sin(x/2) ___ 2
+
+# x = 1e-12  ->  exp(x) is 1.000000000001, and the 1 eats twelve of its digits
+e_bad  = math.exp(x) - 1
+e_good = math.___(x)
+
+# ph is a phase in degrees that should come out at 0.0, give or take rounding
+ok = math.isclose(ph, 0.0, ___=0.05)
+''',
+                    "blanks": [
+                        {
+                            "prompt": "The difference of two squares, with the subtraction moved to where it is exact.",
+                            "hole": "expr",
+                            "opts": ["(a + b)", "(a - b)", "(b - a)", "2 * a"],
+                            "a": 0,
+                            "why": r"$a^2 - b^2 = (a-b)(a+b)$. The subtraction is still there, but it is now between $a$ and $b$ themselves, which are exact inputs — and since $b/2 \le a \le 2b$, Sterbenz's lemma says that difference is computed with no error at all. The sum $a+b$ is about 2 and loses nothing. With $a = 1.0000001$ and $b = 1$ the rewritten form is right to 16 digits and `a*a - b*b` is right to 10, so five significant digits have gone into forming two numbers that were about to be cancelled away again.",
+                            "whys": [
+                                r"$a^2 - b^2 = (a-b)(a+b)$. The subtraction is still there, but it is now between $a$ and $b$ themselves, which are exact inputs — and since $b/2 \le a \le 2b$, Sterbenz's lemma says that difference is computed with no error at all. The sum $a+b$ is about 2 and loses nothing. With $a = 1.0000001$ and $b = 1$ the rewritten form is right to 16 digits and `a*a - b*b` is right to 10, so five significant digits have gone into forming two numbers that were about to be cancelled away again.",
+                                r"$(a-b)^2$ is $10^{-14}$ where the answer is $2\times10^{-7}$ — seven orders of magnitude out. It is numerically well behaved and computes the wrong quantity, which is the failure that no amount of precision will ever reveal.",
+                                r"$(a-b)(b-a) = -(a-b)^2$: wrong magnitude and wrong sign. Getting the order of a subtraction backwards is easy to do and, unlike a cancellation, at least announces itself with a minus sign.",
+                                r"$(a-b)\cdot 2a$ is very nearly right, because $a \approx b$ makes $a + b \approx 2a$ — and 'very nearly right' here means a relative error of $5\times10^{-8}$, about $10^{8}$ times worse than writing $a+b$, for no saving whatever. Approximating a factor you could have written exactly is not a numerical technique.",
+                            ],
+                        },
+                        {
+                            "prompt": "The half-angle identity: $1 - \\cos x = 2\\sin^2(x/2)$. What operator squares the sine?",
+                            "hole": "op",
+                            "opts": ["**", "*", "//", "^"],
+                            "a": 0,
+                            "why": r"`**` is exponentiation in Python, so `2 * math.sin(x/2) ** 2` is $2\sin^2(x/2)$ — and `**` binds tighter than `*`, so the sine is squared before the doubling, which is what the identity says. There is no subtraction of near-equal numbers left: $\sin(10^{-4}/2)$ is about $5\times10^{-5}$, small and accurate, and squaring it is exact to the last bit available.",
+                            "whys": [
+                                r"`**` is exponentiation in Python, so `2 * math.sin(x/2) ** 2` is $2\sin^2(x/2)$ — and `**` binds tighter than `*`, so the sine is squared before the doubling, which is what the identity says. There is no subtraction of near-equal numbers left: $\sin(10^{-4}/2)$ is about $5\times10^{-5}$, small and accurate, and squaring it is exact to the last bit available.",
+                                r"`*` would multiply the sine by 2, giving $4\sin(x/2)$ rather than $2\sin^2(x/2)$ — about $2\times10^{-4}$ where the answer is $5\times10^{-9}$. Numerically stable and answering a different question.",
+                                r"`//` is floor division, and it binds no tighter than `*`, so the line reads $\lfloor 2\sin(x/2) / 2 \rfloor$. For $x = 10^{-4}$ that is `1e-4 // 2`, which is 0.0 — and it is 0.0 for every angle below a couple of radians, so anything downstream that divides by it fails somewhere else entirely.",
+                                r"`^` is bitwise exclusive-or, not a power, and it refuses floats outright: `TypeError: unsupported operand type(s) for ^: 'float' and 'int'`. This one at least fails loudly, which puts it ahead of the others.",
+                            ],
+                        },
+                        {
+                            "prompt": "The library function for $e^{x} - 1$ that never forms the 1.",
+                            "hole": "call",
+                            "opts": ["expm1", "exp", "log1p", "e"],
+                            "a": 0,
+                            "why": r"`math.expm1(x)` computes $e^x - 1$ directly, from a series that starts at $x$ rather than at 1, so for $x = 10^{-12}$ it returns `1.0000000000005e-12` with every digit good. Writing `math.exp(x) - 1` forms 1.000000000001 first, spends twelve of the double's sixteen digits on the leading 1, and returns `1.000088900582341e-12` — four correct digits out of sixteen, and a 0.009% error where the exact answer was available for the same money.",
+                            "whys": [
+                                r"`math.expm1(x)` computes $e^x - 1$ directly, from a series that starts at $x$ rather than at 1, so for $x = 10^{-12}$ it returns `1.0000000000005e-12` with every digit good. Writing `math.exp(x) - 1` forms 1.000000000001 first, spends twelve of the double's sixteen digits on the leading 1, and returns `1.000088900582341e-12` — four correct digits out of sixteen, and a 0.009% error where the exact answer was available for the same money.",
+                                r"`math.exp(x)` is $e^x$, missing the $-1$ entirely: it returns about 1.0 where the answer is $10^{-12}$. This is the mistake that looks least like a mistake, because the returned value is perfectly reasonable — for a different quantity.",
+                                r"`math.log1p(x)` is $\ln(1+x)$, the partner function that cures the same cancellation in the other direction. It is a genuinely dangerous substitution because both are $x$ to first order and differ only in the sign of the second: at $x = 10^{-4}$, `expm1` gives 1.0000500017e-4 and `log1p` gives 0.9999500033e-4, agreeing to four digits and disagreeing about the term you were computing this quantity to see. At $x = 10^{-12}$ they agree to twelve digits, so a test at small $x$ will not tell them apart either.",
+                                r"`math.e` is the constant 2.718..., not a function; `math.e(x)` raises `TypeError: 'float' object is not callable`.",
+                            ],
+                        },
+                        {
+                            "prompt": "A quantity whose expected value is exactly zero. Which tolerance can still pass?",
+                            "hole": "keyword",
+                            "opts": ["abs_tol", "rel_tol", "tol", "atol"],
+                            "a": 0,
+                            "why": r"A relative tolerance against zero allows nothing: the permitted gap is `rel_tol * max(|a|, |b|)`, which is zero when both are. Only `abs_tol` gives a band, and 0.05 says what the band means in the units of the quantity — a twentieth of a degree of phase. Every check on something that can legitimately be zero needs an absolute floor.",
+                            "whys": [
+                                r"A relative tolerance against zero allows nothing: the permitted gap is `rel_tol * max(|a|, |b|)`, which is zero when both are. Only `abs_tol` gives a band, and 0.05 says what the band means in the units of the quantity — a twentieth of a degree of phase. Every check on something that can legitimately be zero needs an absolute floor.",
+                                r"`rel_tol=0.05` asks for the two values to agree to within 5% *of themselves*. With the expected value 0.0 that is 5% of nothing, so the test passes only when `ph` is bit-for-bit zero, which no computed phase ever is. The check would be red on every run and would be deleted within a week.",
+                                r"`tol` is not a parameter of `math.isclose`, so this raises `TypeError: isclose() got an unexpected keyword argument 'tol'`. The signature is `isclose(a, b, *, rel_tol=1e-09, abs_tol=0.0)`, and it is worth knowing that `abs_tol` defaults to zero — `math.isclose(x, 0.0)` alone can never pass.",
+                                r"`atol` is NumPy's spelling — `np.isclose(a, b, rtol=..., atol=...)` — and `math.isclose` rejects it with a `TypeError`. The two libraries also differ in substance: NumPy's tolerance is measured against the second argument only, and it carries a default `atol` of 1e-8, so `np.isclose(1e-9, 0.0)` is `True` where `math.isclose(1e-9, 0.0)` is `False`.",
+                            ],
+                        },
+                    ],
+                },
+            ],
             "quiz": {
                 "title": "Which failure was that?",
                 "minutes": 9,
@@ -9171,6 +10526,1262 @@ $x_1 x_2 = c/a$ rather than from the formula at all.
                 "Too large a step does not merely blur the answer, it destroys it. For this system, `dt` above `2*tau` makes the simulated voltage oscillate and grow without bound.",
                 "Agreeing with an analytic solution validates the *integrator*. It says nothing about whether the equation describes the circuit — only a measurement can say that.",
             ],
+            "read": [
+                {
+                    "title": "Why the voltage does not climb in a straight line",
+                    "minutes": 15,
+                    "body": r'''
+Put a capacitor across a bench supply through a resistor, close the switch, and watch
+the capacitor's voltage on a scope. It does not jump. It does not ramp. It rises
+quickly at first and then more and more slowly, flattening towards the supply and
+never quite arriving. Everybody has seen that shape. This unit is about where it comes
+from, because the differential equation you are about to integrate is nothing more
+than that sentence written in symbols.
+
+## What a capacitor actually is
+
+A capacitor holds charge, and the voltage across it is proportional to how much charge
+is on it:
+
+$$q = Cv$$
+
+That is the definition of capacitance. $C$ is measured in farads, and a farad is one
+coulomb per volt. A 22 nF capacitor sitting at 5 V is holding
+$22 \times 10^{-9} \times 5 = 110$ nC — a tenth of a microcoulomb, which is not much
+charge at all, and that is the point. Small capacitors change their voltage easily.
+
+Now the key move. To change the voltage you must move charge onto or off the plates,
+and current *is* charge per second. Differentiate both sides of $q = Cv$:
+
+$$i = C\frac{dv}{dt}$$
+
+Read it backwards, which is the useful direction: **the rate at which a capacitor's
+voltage changes is set by the current going into it.** Nothing else. A capacitor with
+no current into it holds its voltage exactly, for ever. That is why the equation you
+are about to write is a statement about current.
+
+## The two facts, and the equation they make
+
+In the circuit — supply $V_{in}$, resistor $R$, capacitor $C$ to ground, and a probe on
+the node between them — there are exactly two things carrying current, and they are in
+series, so they carry the same current.
+
+The resistor has $V_{in}$ on one end and the capacitor's voltage $v$ on the other, so
+the drop across it is $V_{in} - v$ and Ohm's law gives
+
+$$i = \frac{V_{in} - v}{R}$$
+
+The capacitor takes that same current, and we already know what current does to it. Set
+the two expressions equal:
+
+$$C\frac{dv}{dt} = \frac{V_{in} - v}{R} \qquad\Longrightarrow\qquad
+\frac{dv}{dt} = \frac{V_{in} - v}{RC}$$
+
+Say what that means out loud before doing anything with it: **the speed the voltage
+rises at is proportional to how far it still has to go.** At the start the gap is the
+whole supply and the voltage moves fast. Near the top the gap is nearly nothing and the
+voltage barely moves. There is no exponential anywhere in that sentence. The exponential
+is a *consequence* of it, and if you only remember one of the two, remember this one —
+it survives into circuits where no closed-form solution exists.
+
+## $RC$ is a length of time
+
+Check the units, because this is the single most useful sanity check in the subject.
+An ohm is a volt per amp; a farad is a coulomb per volt. So
+
+$$\Omega \cdot \mathrm{F} = \frac{\mathrm{V}}{\mathrm{A}} \cdot \frac{\mathrm{C}}{\mathrm{V}}
+= \frac{\mathrm{C}}{\mathrm{A}} = \mathrm{s}$$
+
+because an amp is a coulomb per second. $RC$ is a number of seconds. It is called the
+**time constant** and written $\tau$, and it is the only time anywhere in the problem —
+which is why every question about this circuit turns out to be a question about $\tau$.
+
+```text
+R = 6.8 kΩ, C = 22 nF
+
+    6.8 × 22 = 149.6            the digits
+    10^3 × 10^-9 = 10^-6        the exponents
+
+    tau = 149.6 × 10^-6 s = 149.6 µs
+```
+
+Doing the digits and the exponents separately is worth the extra line. Almost every
+wrong answer in this subject has the right three digits and the wrong power of ten.
+
+## Solving it
+
+Write $u = V_{in} - v$ for the shortfall — how far the voltage still has to climb.
+Since $V_{in}$ is a constant, $du/dt = -dv/dt$, and the equation becomes
+
+$$\frac{du}{dt} = -\frac{u}{\tau}$$
+
+A quantity whose rate of change is a negative multiple of itself decays exponentially;
+that is what the exponential function is for. So $u(t) = u(0)\,e^{-t/\tau}$, and with the
+capacitor starting empty ($v = 0$, so $u(0) = V_{in}$),
+
+$$v(t) = V_{in}\left(1 - e^{-t/\tau}\right)$$
+
+## Worked example 1: five instants on one curve
+
+Take $V_{in} = 5$ V, $R = 6.8$ kΩ, $C = 22$ nF, so $\tau = 149.6$ µs.
+
+```text
+t (µs)    t/tau    1 - e^(-t/tau)      v = 5 × that
+--------------------------------------------------------
+   0.0      0       0.000000            0.000000 V
+ 149.6      1       0.632121            3.160603 V
+ 299.2      2       0.864665            4.323324 V
+ 448.8      3       0.950213            4.751065 V
+ 748.0      5       0.993262            4.966310 V
+```
+
+Look at the middle column. It contains no $R$, no $C$ and no supply voltage — those
+fractions are the same for every first-order settling there has ever been. 63.2% after
+one time constant, 86.5% after two, 95.0% after three, 99.3% after five. That is why
+"five time constants" is the rule of thumb for settled: it is within 0.7% of the
+answer, which is under the tolerance of the parts.
+
+## Worked example 2: the same question, asked backwards
+
+*How long until the node reads 4.50 V?* Start from the solution and unwind it one
+operation at a time.
+
+```text
+    4.50 = 5.00 (1 - e^(-t/tau))
+   0.900 = 1 - e^(-t/tau)
+e^(-t/tau) = 0.100
+   -t/tau = ln(0.100) = -2.302585
+        t = 2.302585 × 149.6 µs = 344.5 µs
+```
+
+Now do it again for 4.99 V, which is within 0.2% of the supply:
+
+```text
+e^(-t/tau) = 0.010/5.00 = 0.002
+        t = -ln(0.002) × 149.6 µs = 6.214608 × 149.6 µs = 929.7 µs
+```
+
+Put the two beside each other. The first 4.50 V takes 344.5 µs. The last 0.49 V takes
+another 585.2 µs — longer than everything before it. Settling to a tight specification
+is dominated entirely by the tail, which is why datasheets quote settling times to
+0.1% rather than to "roughly there", and why a simulation stopped after two time
+constants can look completely finished and be 13.5% wrong.
+
+## The mistake
+
+*"It reaches 63% in one time constant, so two time constants is 126% and it must be
+done in about 1.6 τ."*
+
+The first clause is right, which is what makes the rest so easy to believe. What is
+actually true is that each time constant closes 63.2% of **whatever is left**, not
+63.2% of the supply. The shortfall is *multiplied* by $e^{-1} = 0.368$ each time:
+
+```text
+after 1 tau:  0.368            36.8% still to go
+after 2 tau:  0.368^2 = 0.135  13.5%
+after 3 tau:  0.368^3 = 0.050   5.0%
+after 5 tau:  0.368^5 = 0.0067  0.67%
+```
+
+A quantity that is repeatedly multiplied by 0.368 gets small quickly and never reaches
+zero. Nothing here is ever added or subtracted, and that is the whole difference
+between an exponential and a ramp.
+
+There is a second confusion worth heading off, because both quantities are built out of
+the same two components. The time constant is $\tau = RC$; the corner frequency of the
+same network, which this module's build asks you to hit, is $f_c = 1/(2\pi RC)$. They
+differ by a factor of $2\pi$. For the numbers above, $\tau = 149.6$ µs and
+$f_c = 1064$ Hz, while $1/\tau = 6684\ \mathrm{s}^{-1}$ — which is the corner in
+*radians* per second, not in hertz. Quoting 6684 Hz is wrong by 6.28: small enough to
+look plausible on a plot, large enough to fail a specification.
+
+## Where this stops holding
+
+**The source is not ideal.** A signal generator has 50 Ω of output resistance and a
+logic pin has 30 to 50 Ω, and that resistance is in series with $R$, so the real time
+constant is $(R + R_s)C$. Against 6.8 kΩ it shifts $\tau$ by 0.7% and you will never
+see it. Against a 100 Ω resistor it shifts $\tau$ by 50%, and the simulation that
+ignored it is not slightly wrong.
+
+**The resistance that matters is the one the capacitor sees.** If the capacitor hangs
+on the middle node of a divider, both resistors are routes for charge to arrive and
+leave, and $\tau = (R_1 \parallel R_2)C$ — smaller than either. The final voltage is
+the divider's output, not the supply. Two of the numeric units in this module are
+exactly that circuit, and the resistor you reach for first is the wrong one.
+
+**There is only one place to store energy.** One capacitor means one number describes
+the whole state of the circuit, and one number cannot oscillate — there is nowhere for
+energy to slosh to and back. Add an inductor, or a second capacitor with a resistor
+between them, and you need two numbers, they can trade energy, and the response can
+overshoot and ring. That is the next module, and it is what the sandbox at the top of
+this one is showing you.
+
+**Everything is linear.** $R$ is a constant here. A lamp filament's resistance rises
+by roughly a factor of ten between cold and hot; a diode's is not a resistance at all.
+Then $dv/dt = f(v)$ with $f$ not a straight line, there is no formula to compare
+against, and a numerical method stops being a convenience and becomes the only way to
+get an answer. Which is, in the end, the reason to learn one properly on a problem
+where you *can* check it.
+
+**The capacitor is not ideal either.** Real parts leak — an insulation resistance in
+parallel means the node settles a little below $V_{in}$ — and have a few milliohms to
+a few ohms of series resistance, so a fast step appears instantly at the output as a
+small jump before the exponential starts. Neither matters at 22 nF and kilohms.
+Both matter somewhere.
+''',
+                },
+                {
+                    "title": "Forward Euler, and where its error comes from",
+                    "minutes": 16,
+                    "body": r'''
+You are standing somewhere on a curve you cannot see. You know two things: the value
+right now, and — because the differential equation tells you, given the value — the
+rate right now. Nothing else. What do you do?
+
+Forward Euler's answer is the least imaginative one available: **assume the rate you
+can see holds for the whole of the next step.** Walk along the tangent line for a time
+$h$, and whatever value you land on, treat it as the new starting point and ask for the
+rate again.
+
+$$v(t + h) \approx v(t) + h\,f\big(v(t)\big)$$
+
+For the RC circuit, $f(v) = (V_{in} - v)/\tau$, and the whole method is one line of
+code:
+
+```python
+v = v + dt * (vin - v) / tau
+```
+
+Everything that follows in this module is about the word *approximately*.
+
+## Where the approximation comes from, and how big it is
+
+Taylor's theorem says that for a smooth $v$,
+
+$$v(t + h) = v(t) + h\,v'(t) + \frac{h^{2}}{2}v''(\xi)$$
+
+for some $\xi$ inside the step. Euler keeps the first two terms and throws the third
+away. So the error made in **one** step — the *local truncation error* — is about
+$h^{2}|v''|/2$: it shrinks as the square of the step.
+
+That also tells you the *direction* of the error for this circuit. As the capacitor
+charges, the rate falls, so $v'' < 0$ and the curve bends away below its own tangent.
+Euler follows the tangent. Every single step lands high. The error is not noise that
+averages out; it is one-signed and it accumulates.
+
+## Worked example 1: four steps, by hand
+
+Strip the units out and take $V_{in} = 1$, $\tau = 1$, $h = 0.25$ — a step a quarter of
+a time constant, which is far too coarse for real work and exactly right for watching
+what happens.
+
+```text
+step   v before   rate = (1 - v)/tau   v after = v + 0.25 × rate
+------------------------------------------------------------------
+  1    0.000000   1.000000             0.250000
+  2    0.250000   0.750000             0.437500
+  3    0.437500   0.562500             0.578125
+  4    0.578125   0.421875             0.683594
+```
+
+Four steps of 0.25 is one time constant, so compare with the exact answer:
+
+```text
+    Euler:  0.683594
+    exact:  1 - e^-1 = 0.632121
+    error:  0.051473   →  8.1% of the 1 V swing
+```
+
+Overshot, as promised. And there is a pattern hiding in that table worth extracting:
+each step multiplies the *shortfall* by $1 - h/\tau = 0.75$, so after $n$ steps the
+value is $1 - 0.75^{n}$. Check it: $1 - 0.75^{4} = 1 - 0.31640625 = 0.68359375$,
+which is the last row exactly. The derivation unit in this module works that algebra
+through, and it turns out to explain not just the error but the stability limit too.
+
+## Local error, global error, and the words "first order"
+
+Here is the step almost everybody gets wrong on first meeting.
+
+Each step throws away roughly $h^{2}|v''|/2$. To cover a fixed span $T$ you need $T/h$
+steps. Multiply the two:
+
+$$\text{total error} \approx \frac{T}{h}\cdot\frac{h^{2}|v''|}{2} = \frac{T\,h\,|v''|}{2}$$
+
+Proportional to $h$. Not to $h^{2}$.
+
+The tempting reasoning is *"each step is second-order accurate, so the method is
+second order"* — and its first half is perfectly true. What it misses is that the
+number of steps also depends on $h$, and it eats one of the two powers. So forward
+Euler is called a **first-order** method: halve the step and the error halves, no
+better. A second-order method — midpoint, Heun, trapezoidal — has a local error of
+$O(h^{3})$, a global error of $O(h^{2})$, and halving the step *quarters* the error.
+
+## Worked example 2: measure the order instead of believing it
+
+Take the filter from this module's build: $R = 1.6$ kΩ, $C = 100$ nF, so
+$\tau = 160$ µs. Step a 1 V input, run to 1 ms, and at every sample compare the
+simulation with $V_{in}(1 - e^{-t/\tau})$ evaluated at that same time. Record the
+largest gap over the whole run — which is exactly what `max_error` does in this
+module's lab.
+
+```text
+dt        steps    largest error      ratio to the row above
+-------------------------------------------------------------
+8    µs     125     9.3935e-3          —
+4    µs     250     4.6470e-3          2.021
+2    µs     500     2.3113e-3          2.010
+1    µs    1000     1.1526e-3          2.005
+0.5  µs    2000     5.7556e-4          2.003
+0.25 µs    4000     2.8759e-4          2.002
+```
+
+That last column is the evidence. It is 2, and it approaches 2 from above as $h$
+shrinks and the higher-order terms fade out — which is precisely the fingerprint of a
+first-order method, and precisely what a plot cannot show you. Note also the top row:
+$dt = 8$ µs is $\tau/20$, the error is 0.94% of the full swing, and on a screen that
+curve is indistinguishable from the right one. The eye is not an error metric.
+
+## You do not need the exact answer to measure the error
+
+Which is fortunate, because almost every equation worth integrating numerically has no
+closed form — that is why you were integrating it.
+
+Run the same problem at $h$ and at $h/2$. If the method is first order,
+$E(h) \approx Ch$ and $E(h/2) \approx Ch/2$, so the *difference between the two
+answers* is
+
+$$\text{answer}(h) - \text{answer}(h/2) \approx E(h) - E(h/2) = \frac{Ch}{2} = E(h/2)$$
+
+The gap between the two runs estimates the error still left in the **finer** one. Not
+the coarser one — the finer. Check it against the table above: the largest gap between
+the 2 µs run and the 1 µs run, compared at the times they share, is
+$1.1587\times10^{-3}$; the 1 µs run's true error is $1.1526\times10^{-3}$. Half a per
+cent apart, from two runs and no exact solution at all.
+
+One extra run buys you a number you can put in a report. That is the whole convergence
+test, and there is no excuse for not doing it.
+
+## The mistake
+
+*"I halved dt and the answer barely moved, so it has converged."*
+
+The sentence is the right instinct and it is not yet evidence. The trap is halving
+**once**, from a starting step you had no reason to trust. Two runs can agree closely
+and both be nonsense: at a step past the stability limit both runs are enormous and
+their relative difference can be modest, and at a step far larger than $\tau$ two runs
+can settle on the same final value by the same wrong route.
+
+What makes a convergence test evidence is a *sequence* — three or four steps, each half
+the last — and looking at the **ratios**, not the sizes. If those ratios sit near 2 for
+Euler, the code is doing what the theory says and the error estimate above is
+trustworthy. If they do not, one of two things is true: $h$ is still coarse enough that
+the higher-order terms matter, or there is a bug. Both are worth finding, and neither is
+visible in a single number.
+
+## Where this stops
+
+**Smaller is not always better.** The truncation error falls in proportion to $h$, but
+the number of arithmetic operations — each carrying its own rounding — rises in
+proportion to $1/h$. Below some step the second effect wins and shrinking $dt$ makes
+the answer *worse*. In `float64` that crossover sits far below any step anyone would
+choose. In `float32` it is easy to reach. On this exact run, in single precision:
+
+```text
+dt = 31.2 ns   32 000 steps   error 3.60e-5
+dt = 15.6 ns   64 000 steps   error 1.81e-5     <- best
+dt =  7.8 ns  128 000 steps   error 4.94e-5
+dt =  2.0 ns  512 000 steps   error 5.11e-4
+```
+
+The last row spends half a million steps to buy the accuracy a 440 ns step would have
+given for free. Nothing warns you; the loop is arithmetically flawless and the answer
+just quietly gets worse.
+
+**Stiff problems.** Two time constants a long way apart — a nanosecond parasitic
+alongside a millisecond load — and accuracy would happily let you step at the scale of
+the slow one while stability refuses to let you step past twice the fast one. Forward
+Euler then costs millions of steps to simulate something that does nothing interesting.
+That is what the next reading unit is about, and it is the reason implicit methods
+exist at all.
+
+**Better methods exist and are not hard.** Fourth-order Runge–Kutta costs four rate
+evaluations per step and halving $h$ divides the error by sixteen; on a smooth problem
+it reaches a given accuracy far more cheaply than Euler ever can. The reason to learn
+Euler first is not that it is good. It is that every other method is a correction to
+it, and its two failure modes — the accumulating one-signed error, and the explosion
+when the step is too large — are the ones you have to be able to recognise on a plot
+before you can trust anything else.
+''',
+                },
+                {
+                    "title": "The step that is too big, and the test that catches it",
+                    "minutes": 16,
+                    "body": r'''
+Start with the picture, because the algebra afterwards is only bookkeeping for it.
+
+At $t = 0$ the capacitor is empty, the whole supply is across the resistor, and the
+tangent to the curve is at its steepest. Follow that tangent for a time exactly equal
+to $\tau$ and you land precisely on $V_{in}$ — the tangent at the origin hits the final
+value at one time constant, which is the standard way of reading $\tau$ off a scope
+trace. Now follow it for $2\tau$ instead. You land at $2V_{in}$: above the supply, a
+place the real circuit can never reach, with a *negative* shortfall the same size as
+the one you started with. The next step drives back down past zero and out the other
+side, further than before. Two lines of arithmetic have turned a settling circuit into
+a growing oscillation.
+
+That is the whole of instability, and it happens with no warning, no overflow and no
+error message.
+
+## The amplification factor
+
+Write $u_n = V_{in} - v_n$ for the shortfall after $n$ steps. Take one Euler step and
+subtract both sides from $V_{in}$:
+
+$$v_{n+1} = v_n + \frac{h}{\tau}(V_{in} - v_n)
+\quad\Longrightarrow\quad
+u_{n+1} = u_n - \frac{h}{\tau}u_n = u_n\left(1 - \frac{h}{\tau}\right)$$
+
+So each step multiplies the shortfall by one fixed number,
+
+$$a = 1 - \frac{h}{\tau}, \qquad u_n = u_0\,a^{\,n}$$
+
+and everything the run will ever do is contained in that number:
+
+```text
+h                 a = 1 - h/tau      what the simulation does
+-----------------------------------------------------------------------------
+0 < h < tau       0 < a < 1          climbs towards the supply from below,
+                                     monotonically. The right shape.
+h = tau           a = 0              lands exactly on the final value in one
+                                     step and stays there. Right answer, and
+                                     it tells you nothing about the curve.
+tau < h < 2tau    -1 < a < 0         alternates above and below the final
+                                     value, but each swing is smaller. Wrong
+                                     shape, right destination.
+h = 2tau          a = -1             alternates for ever at constant size.
+                                     Never settles, never grows.
+h > 2tau          |a| > 1            alternates and grows without bound.
+```
+
+The stability condition for forward Euler on this system is therefore
+$0 < h < 2\tau$, and it is a hard edge, not a gradual degradation.
+
+## Worked example 1: past the edge
+
+$R = 1.6$ kΩ, $C = 100$ nF so $\tau = 160$ µs; $V_{in} = 1$ V; $h = 350$ µs. Then
+$h/\tau = 2.1875$ and $a = 1 - 2.1875 = -1.1875$.
+
+```text
+n     v_n            u_n = 1 - v_n      a^n
+------------------------------------------------------
+0      0.000000       1.000000           1.000000
+1      2.187500      -1.187500          -1.187500
+2     -0.410156       1.410156           1.410156
+3      2.674561      -1.674561          -1.674561
+4     -0.988541       1.988541           1.988541
+5      3.361392      -2.361392          -2.361392
+6     -1.804153       2.804153           2.804153
+```
+
+The last two columns match to every digit, which is the point of having derived $a$:
+the run is not doing anything complicated, it is raising $-1.1875$ to a power. By step
+20 the shortfall is $1.1875^{20} = 31.1$, so the simulated node sits around $\pm 30$ V
+on a 1 V supply. By step 40 it is $\pm 967$.
+
+Every step of that is arithmetically perfect. There is no overflow, no `nan`, no
+warning, and if you plot the first two points the curve merely looks fast.
+
+**Now the mistake worth naming.** Plotted in full, that run looks like ringing — a
+growing oscillation about the final value. It is not ringing. A resistor and a
+capacitor have one place to store energy between them and cannot oscillate at all;
+there is nowhere for energy to slosh to and back. Every wiggle on that screen was
+manufactured by the integrator. The confusion is tempting precisely because ringing is
+a real thing that real circuits do, and the sandbox at the top of this module has just
+shown you what it looks like when it is real. The rule is worth memorising in this
+form: **an RC step response that overshoots is an artefact, always.** If you see one,
+the fault is in `dt`, not in the circuit.
+
+## Worked example 2: stable, and still wrong
+
+Same circuit, $h = 200$ µs, so $h/\tau = 1.25$ and $a = -0.25$.
+
+```text
+n     v_n
+-----------------
+0     0.00000000
+1     1.25000000
+2     0.93750000
+3     1.01562500
+4     0.99609375
+5     1.00097656
+6     0.99975586
+```
+
+It settles on 1.000 V, which is the correct final value, and it gets there in six
+steps. It also overshoots to 1.25 V — 25% above a supply the node cannot exceed — on
+the way. If your only check is *"did it end up in the right place"*, this run passes,
+and it is qualitatively wrong about everything that happened before it got there.
+
+The final value is one of the least sensitive things you can test: it is fixed by the
+DC circuit and every stable integrator will find it. Stability and accuracy are
+different properties, and passing the first is not evidence about the second.
+
+## Choosing dt, and then proving the choice
+
+Three steps, in this order.
+
+**1. Work out $\tau$ before you write the loop.** The stability limit $h < 2\tau$ is a
+floor, not a target — it is the step at which the answer stops being *garbage*, which
+is a low bar. A sensible working rule is $h \le \tau/20$. From the convergence table in
+the previous unit, $\tau/20$ on that circuit is 8 µs and gives 0.94% of the full swing;
+$\tau/160$ gives 0.12%. Pick the one your specification needs, not the largest one that
+does not explode.
+
+**2. Halve it and compare, at least twice.** Look at the ratio of successive
+differences, not just at their size. Around 2 means the method is behaving and the
+finer run's error is about the size of the last gap.
+
+**3. Check the answer against something the simulation did not come from.**
+
+## Verification is not validation
+
+That third step deserves its own paragraph, because it is the one people skip.
+
+Comparing your output against $V_{in}(1 - e^{-t/\tau})$ tests whether your code solves
+the equation it was given. That is **verification**, and it is what the lab in this
+module measures. It cannot tell you whether the equation describes the circuit on your
+bench. That is **validation**, and only a measurement can do it. Two ways the code can
+be flawless and the number still wrong:
+
+- The generator driving the filter has 50 Ω of output resistance, in series with the
+  1.6 kΩ. The real time constant is $1650 \times 100\ \mathrm{nF} = 165$ µs, so
+  everything the simulation says is 3.1% fast. The convergence table still converges,
+  beautifully, on the wrong answer.
+- A ×10 scope probe adds around 12 pF across the node you are watching. Against 100 nF
+  that is 0.012% and invisible. Against 100 pF — an ordinary value in a high-impedance
+  divider — it is 12%, and a good deal of what you measured was the probe.
+
+Neither of those can appear in any comparison between the code and the equation the
+code was handed. This is why the capstone of this course does the two in order:
+simulate, verify against the analytic answer, and only then compare with the
+measurement. An unverified simulation that disagrees with a measurement teaches you
+nothing at all, because you have no way to tell which of the two is lying.
+
+## Where this stops, and what replaces it
+
+Forward Euler evaluates the rate at the **start** of the step. Backward Euler evaluates
+it at the **end**:
+
+$$v_{n+1} = v_n + \frac{h}{\tau}\left(V_{in} - v_{n+1}\right)$$
+
+The unknown is now on both sides, which is what "implicit" means. For a linear system
+you can just solve for it:
+
+$$v_{n+1}\left(1 + \frac{h}{\tau}\right) = v_n + \frac{h}{\tau}V_{in}
+\qquad\Longrightarrow\qquad
+u_{n+1} = \frac{u_n}{1 + h/\tau},\qquad a = \frac{1}{1 + h/\tau}$$
+
+For any positive $h$ that $a$ lies strictly between 0 and 1. It never goes negative, so
+the answer never alternates; it is never bigger than 1, so the answer never grows.
+Backward Euler is **unconditionally stable**: no step size can blow it up. That is why
+the schematic simulator in this course integrates with backward Euler — someone
+dragging a capacitor value around should see the circuit's behaviour, not the
+integrator's.
+
+The honest caveat comes straight after: backward Euler is still a **first-order**
+method. It bought stability, not accuracy. A step far too large for the physics gives a
+smooth, stable, plausible, wrong curve, and there is an argument that this is more
+dangerous than an obviously exploding one — nothing on the screen tells you to look.
+The convergence test is the only thing that does, and it is just as necessary here.
+
+The trapezoidal rule averages the rate at both ends, is second order, and is also
+stable at every step size; its amplification factor $\dfrac{1 - h/2\tau}{1 + h/2\tau}$
+does go negative for $h > 2\tau$, so a coarse run rings even though it cannot diverge —
+which is exactly why the solver in this repository chose backward Euler over it for
+teaching.
+
+And the real reason to know the stability condition at all: it tells you when the
+answer is to change *method* rather than to change `dt`. A circuit with a 1 ns
+parasitic and a 1 ms load needs a million steps per millisecond from any explicit
+method, however accurate you are willing to be. No choice of step fixes that. Only an
+implicit method does.
+''',
+                },
+            ],
+            "numeric": [
+                {
+                    "title": "One resistor, one capacitor, one time",
+                    "minutes": 5,
+                    "brief": r'''
+Before a simulation of this circuit can be set up, the timestep has to be chosen, and
+the timestep is chosen against the circuit's own natural time. That number is the
+**time constant**, and for a resistor feeding a capacitor it is simply the product of
+the two values:
+
+$$\tau = RC$$
+
+Ohms times farads is seconds, so no conversion is needed once both values are in their
+own base units. The whole difficulty is the powers of ten, so do the digits and the
+exponents separately.
+''',
+                    "prompt": "How long is one time constant for this circuit?",
+                    "note": "Answer in microseconds, to one decimal place.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 7, "rot": 1, "value": 5},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                            {"id": "r1", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 6800},
+                            {"id": "c1", "kind": "C", "x": 11, "y": 6, "rot": 1, "value": 22e-9},
+                            {"id": "g1", "kind": "GND", "x": 11, "y": 9},
+                            {"id": "out", "kind": "OUT", "x": 13, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 6], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [11, 4]},
+                            {"a": [11, 4], "b": [11, 5]},
+                            {"a": [11, 4], "b": [13, 4]},
+                            {"a": [3, 8], "b": [3, 10]},
+                            {"a": [11, 7], "b": [11, 9]},
+                        ],
+                    },
+                    # Both values are read out of the schematic rather than restated here, so
+                    # re-valuing either part moves this number and the gate says so.
+                    "check": r'''
+var R = c.values("R")[0], C = c.values("C")[0];
+c.assert(R && C, "the schematic needs one resistor and one capacitor");
+return R * C * 1e6;
+''',
+                    "given": [
+                        {"label": "R", "value": "6.8 kΩ"},
+                        {"label": "C", "value": "22 nF"},
+                        {"label": "Supply", "value": "5 V, stepped on at t = 0"},
+                        {"label": "Answer wanted in", "value": "µs"},
+                    ],
+                    "aside": "The supply voltage is not part of this answer at all. How *fast* the node "
+                             "settles is set by R and C alone; how *far* it settles is set by the "
+                             "supply. Those two questions never mix.",
+                    "answer": 149.6,
+                    "tol": 0.5,
+                    "unit": "µs",
+                    "hint": "$6.8 \\times 10^{3} \\times 22 \\times 10^{-9}$. Multiply 6.8 by 22 to get "
+                            "149.6, then add the exponents: $10^{3} \\times 10^{-9} = 10^{-6}$, which "
+                            "is already the micro in microseconds.",
+                    "wrong": "If you got 0.1496, that is the answer in seconds rather than "
+                             "microseconds. If you got 149600, the capacitance was read as 22 µF "
+                             "instead of 22 nF \u2014 three orders of magnitude, and the digits look "
+                             "identical either way.",
+                    "why": r'''
+```text
+    6.8 × 22 = 149.6                the digits
+    10^3 × 10^-9 = 10^-6            the exponents
+
+    tau = 149.6 × 10^-6 s = 149.6 µs
+```
+
+The units are worth confirming once, so that you never have to wonder again. An ohm is
+a volt per amp and a farad is a coulomb per volt, so
+
+$$\Omega\cdot\mathrm{F} = \frac{\mathrm{V}}{\mathrm{A}}\cdot\frac{\mathrm{C}}{\mathrm{V}}
+= \frac{\mathrm{C}}{\mathrm{A}} = \mathrm{s}$$
+
+since an amp is a coulomb per second. Nothing has to be converted; a resistance in ohms
+times a capacitance in farads is a time in seconds, full stop.
+
+What 149.6 µs buys you is every other answer about this circuit. The node reaches 63.2%
+of the supply — 3.16 V — after one of them, and is within 1% of settled after five, at
+748 µs. And it fixes the timestep: forward Euler on this circuit diverges above
+$2\tau = 299.2$ µs, and a step small enough to be *accurate* rather than merely stable
+is somewhere near $\tau/20$, about 7.5 µs.
+''',
+                },
+                {
+                    "title": "How much current is still flowing?",
+                    "minutes": 8,
+                    "brief": r'''
+The same shape of circuit, larger parts, and a question about a quantity that is not a
+node voltage. Two steps: find the voltage at the instant asked about, then use Ohm's
+law on the resistor, whose two ends you now know.
+
+$$v(t) = V_{in}\left(1 - e^{-t/\tau}\right), \qquad
+i(t) = \frac{V_{in} - v(t)}{R}$$
+
+Answer in **microamps**.
+''',
+                    "prompt": "How much current is flowing into the capacitor 1.5 ms after the supply is switched on?",
+                    "note": "Answer in microamps, to one decimal place.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 7, "rot": 1, "value": 9},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                            {"id": "r1", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 10000},
+                            {"id": "c1", "kind": "C", "x": 11, "y": 6, "rot": 1, "value": 1e-7},
+                            {"id": "g1", "kind": "GND", "x": 11, "y": 9},
+                            {"id": "out", "kind": "OUT", "x": 13, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 6], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [11, 4]},
+                            {"a": [11, 4], "b": [11, 5]},
+                            {"a": [11, 4], "b": [13, 4]},
+                            {"a": [3, 8], "b": [3, 10]},
+                            {"a": [11, 7], "b": [11, 9]},
+                        ],
+                    },
+                    # The final voltage comes out of the solver rather than off the drawing: at
+                    # DC a capacitor is an open circuit, so the probed node settles at whatever
+                    # the supply is. R and C are read from the netlist for the same reason.
+                    "check": r'''
+var R = c.values("R")[0], C = c.values("C")[0];
+var vfinal = c.vout();
+var v = vfinal * (1 - Math.exp(-1.5e-3 / (R * C)));
+return (vfinal - v) / R * 1e6;
+''',
+                    "given": [
+                        {"label": "Supply", "value": "9 V, stepped on at t = 0"},
+                        {"label": "R", "value": "10 kΩ"},
+                        {"label": "C", "value": "100 nF"},
+                        {"label": "Instant asked about", "value": "t = 1.5 ms"},
+                        {"label": "Answer wanted in", "value": "µA"},
+                    ],
+                    "aside": "The resistor and the capacitor are in series with nothing else attached, "
+                             "so the current through the resistor and the current into the capacitor "
+                             "are the same current. There is only one to find.",
+                    "answer": 200.8,
+                    "tol": 1.5,
+                    "unit": "µA",
+                    "hint": "$\\tau = 10^{4} \\times 10^{-7} = 10^{-3}$ s, so 1.5 ms is exactly 1.5 time "
+                            "constants and $t/\\tau = 1.5$ with no arithmetic at all. Then "
+                            "$e^{-1.5} = 0.2231$.",
+                    "wrong": "If you got 6.99, you have stopped at the voltage on the node and not "
+                             "gone on to the current. If you got 900, that is the current at t = 0, "
+                             "when the capacitor is still empty and the whole supply is across the "
+                             "resistor. And if you got 774.6, the capacitor was read as 1 \u00b5F rather "
+                             "than 100 nF, which makes tau ten times too long and leaves far more "
+                             "current still flowing at 1.5 ms than really is.",
+                    "why": r'''
+```text
+tau = 10 kΩ × 100 nF = 1e4 × 1e-7 = 1e-3 s = 1 ms
+t / tau = 1.5 ms / 1 ms = 1.5
+
+v(1.5 ms) = 9 × (1 - e^-1.5)
+          = 9 × (1 - 0.2231302)
+          = 9 × 0.7768698 = 6.99183 V
+
+i = (9 - 6.99183) / 10000
+  = 2.00817 / 10000
+  = 2.00817e-4 A = 200.8 µA
+```
+
+There is a shortcut hiding in that arithmetic, and it is the more useful way to hold
+the result. The voltage across the resistor is the *shortfall* $V_{in} - v$, and the
+shortfall is the thing that decays cleanly:
+
+$$i(t) = \frac{V_{in} - v(t)}{R} = \frac{V_{in}}{R}\,e^{-t/\tau}
+= 900\ \mu\mathrm{A} \times 0.2231 = 200.8\ \mu\mathrm{A}$$
+
+So the current has exactly the same time constant as the voltage, but decays from its
+starting value instead of climbing to a final one — the same exponential, seen from the
+other side. That is a general fact about first-order circuits and it saves a
+subtraction every time.
+
+One thing this question deliberately does not let you do: ask the DC solver. At DC a
+capacitor is an open circuit and this current is zero. The 200.8 µA exists only during
+the transient, which is precisely why the transient needs solving at all.
+''',
+                },
+                {
+                    "title": "The step above which the simulation is worthless",
+                    "minutes": 11,
+                    "brief": r'''
+Now the capacitor hangs on the middle of a divider, and neither of the two obvious
+numbers is the right one.
+
+To find the time constant, ask what resistance the **capacitor** sees looking out into
+the rest of the circuit. Turn the source off — an ideal voltage source held at zero
+volts is a short to ground — and both resistors run from the node to ground, in
+parallel. So $\tau = (R_1 \parallel R_2)\,C$.
+
+Forward Euler on this node uses the update $v \mathrel{+}= dt\,(V_{th} - v)/\tau$, and
+each step multiplies the remaining shortfall by $1 - dt/\tau$. Once that factor has a
+magnitude above 1, the shortfall grows every step instead of shrinking.
+''',
+                    "prompt": "Above what timestep does a forward Euler simulation of this node stop converging and start growing without bound?",
+                    "note": "Answer in microseconds, to one decimal place.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 7, "rot": 1, "value": 12},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                            {"id": "r1", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 4700},
+                            {"id": "r2", "kind": "R", "x": 10, "y": 6, "rot": 1, "value": 2200},
+                            {"id": "g1", "kind": "GND", "x": 10, "y": 9},
+                            {"id": "c1", "kind": "C", "x": 14, "y": 6, "rot": 1, "value": 47e-9},
+                            {"id": "g2", "kind": "GND", "x": 14, "y": 9},
+                            {"id": "out", "kind": "OUT", "x": 16, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 6], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [10, 4]},
+                            {"a": [10, 4], "b": [10, 5]},
+                            {"a": [10, 4], "b": [14, 4]},
+                            {"a": [14, 4], "b": [14, 5]},
+                            {"a": [14, 4], "b": [16, 4]},
+                            {"a": [3, 8], "b": [3, 10]},
+                            {"a": [10, 7], "b": [10, 9]},
+                            {"a": [14, 7], "b": [14, 9]},
+                        ],
+                    },
+                    # Nothing here asserts which resistors are in parallel. The solver sweeps the
+                    # network's own frequency response for its 3 dB corner, which for any
+                    # first-order network is 1/(2*pi*tau); the stability limit is 2*tau, so the
+                    # answer in microseconds is 1e6/(pi*fc). A re-drawn schematic is re-measured.
+                    "check": r'''
+var fc = c.corner(1, 1e6);
+return 1e6 / (Math.PI * fc);
+''',
+                    "given": [
+                        {"label": "Supply", "value": "12 V, stepped on at t = 0"},
+                        {"label": "R1, supply to node", "value": "4.7 kΩ"},
+                        {"label": "R2, node to ground", "value": "2.2 kΩ"},
+                        {"label": "C, node to ground", "value": "47 nF"},
+                        {"label": "Answer wanted in", "value": "µs"},
+                    ],
+                    "aside": "The divider's output voltage — 3.83 V — plays no part in this answer. "
+                             "Stability depends on the shape of the decay, not on where it is heading.",
+                    "answer": 140.9,
+                    "tol": 1.0,
+                    "unit": "µs",
+                    "hint": "Two steps. First $R_1 \\parallel R_2 = R_1R_2/(R_1+R_2)$, then "
+                            "$\\tau = R_{th}C$, then the limit is $2\\tau$. The parallel combination "
+                            "is always smaller than either resistor, so a sanity check is that your "
+                            "$R_{th}$ must come out below 2.2 kΩ.",
+                    "wrong": "If you got 441.8, R1 alone was used as the resistance. If you got 206.8, "
+                             "R2 alone was. If you got 648.6, the two were added as though they were "
+                             "in series. And if your answer is half of one of these, the factor of two "
+                             "in the stability limit has gone missing \u2014 that is $\\tau$, not the "
+                             "step at which the method breaks.",
+                    "why": r'''
+```text
+R_th = R1 || R2 = (4700 × 2200) / (4700 + 2200)
+                = 10 340 000 / 6900
+                = 1498.55 Ω           (smaller than either, as it must be)
+
+tau  = 1498.55 × 47e-9 = 7.0432e-5 s = 70.43 µs
+
+limit = 2 tau = 140.86 µs
+```
+
+Two things are doing the work here.
+
+**Why the resistors are in parallel.** The capacitor does not care where charge comes
+from, only how easily it can arrive and leave. Charge reaches the node through $R_1$
+from the supply, and it leaves through $R_2$ to ground. Two routes in parallel are
+easier than either alone, so the node charges *faster* than $R_1$ alone would suggest —
+70.4 µs rather than 220.9 µs. The formal statement is Thévenin's theorem: seen from the
+capacitor, the rest of the circuit is one source of 3.83 V behind one resistance of
+1498.55 Ω, and the circuit is back to the single-resistor case of the previous
+question.
+
+**Why the limit is $2\tau$.** Write $u_n$ for how far the node still has to climb after
+$n$ Euler steps. One step gives
+
+$$u_{n+1} = u_n\left(1 - \frac{dt}{\tau}\right)$$
+
+so after $n$ steps the shortfall is $u_0(1 - dt/\tau)^n$. That shrinks only while
+$|1 - dt/\tau| < 1$, which needs $0 < dt < 2\tau$. At $dt$ just under $2\tau$ the factor
+is a little above $-1$: the answer flips from one side of the final value to the other
+each step while slowly closing in — stable, and quite unlike the real circuit. At
+exactly $2\tau$ it flips for ever at constant size. Past it, the run explodes.
+
+Note what $2\tau$ is *not*: a good timestep. It is the point at which the answer stops
+being an approximation of anything at all. A step you would actually use on this
+circuit is nearer $\tau/20$, about 3.5 µs, which is forty times smaller than the limit
+this question asks for.
+''',
+                },
+                {
+                    "title": "Three steps of Euler, and the gap it opens",
+                    "minutes": 14,
+                    "brief": r'''
+Everything at once. This node is a divider with a capacitor on it, so it settles on the
+divider's output voltage $V_{th}$ with the time constant $(R_1 \parallel R_2)C$. A
+forward Euler simulation starting from an empty capacitor takes the update
+
+```python
+v = v + dt * (vth - v) / tau
+```
+
+Run it three times with `dt` = 20 µs, and compare where it says the node is with where
+the node actually is at that same instant, $t = 60$ µs.
+
+Report the **gap**, in millivolts: the simulated value minus the true value.
+''',
+                    "prompt": "After three steps of forward Euler at dt = 20 µs, by how much does the simulation differ from the true voltage at that instant?",
+                    "note": "Answer in millivolts, to the nearest ten. A positive number means the simulation reads high.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 7, "rot": 1, "value": 5},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 10},
+                            {"id": "r1", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 3300},
+                            {"id": "r2", "kind": "R", "x": 10, "y": 6, "rot": 1, "value": 6800},
+                            {"id": "g1", "kind": "GND", "x": 10, "y": 9},
+                            {"id": "c1", "kind": "C", "x": 14, "y": 6, "rot": 1, "value": 22e-9},
+                            {"id": "g2", "kind": "GND", "x": 14, "y": 9},
+                            {"id": "out", "kind": "OUT", "x": 16, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 6], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [10, 4]},
+                            {"a": [10, 4], "b": [10, 5]},
+                            {"a": [10, 4], "b": [14, 4]},
+                            {"a": [14, 4], "b": [14, 5]},
+                            {"a": [14, 4], "b": [16, 4]},
+                            {"a": [3, 8], "b": [3, 10]},
+                            {"a": [10, 7], "b": [10, 9]},
+                            {"a": [14, 7], "b": [14, 9]},
+                        ],
+                    },
+                    # Both the Thevenin voltage and the time constant come out of the solver -- the
+                    # DC solve gives the settling voltage because a capacitor is open at DC, and
+                    # the 3 dB corner of any first-order network is 1/(2*pi*tau). The check then
+                    # runs the learner's own three Euler steps and subtracts the exact answer, so
+                    # nothing on the drawing is restated anywhere in here.
+                    "check": r'''
+var vth = c.vout();
+var tau = 1 / (2 * Math.PI * c.corner(1, 1e6));
+var dt = 20e-6;
+var v = 0;
+for (var i = 0; i < 3; i++) v = v + dt * (vth - v) / tau;
+var exact = vth * (1 - Math.exp(-3 * dt / tau));
+return (v - exact) * 1000;
+''',
+                    "given": [
+                        {"label": "Supply", "value": "5 V, stepped on at t = 0"},
+                        {"label": "R1, supply to node", "value": "3.3 kΩ"},
+                        {"label": "R2, node to ground", "value": "6.8 kΩ"},
+                        {"label": "C, node to ground", "value": "22 nF"},
+                        {"label": "Timestep", "value": "dt = 20 µs, three steps"},
+                        {"label": "Answer wanted in", "value": "mV"},
+                    ],
+                    "aside": "20 µs is comfortably inside the stability limit for this circuit, so "
+                             "nothing here explodes. The simulation is perfectly well behaved. It is "
+                             "just wrong, and the question is by how much.",
+                    "answer": 292.0,
+                    "tol": 8.0,
+                    "unit": "mV",
+                    "hint": "Four numbers, in order: $V_{th} = 5R_2/(R_1+R_2)$, then "
+                            "$R_{th} = R_1R_2/(R_1+R_2)$, then $\\tau = R_{th}C$, then the two "
+                            "voltages. The shortcut for the Euler side is that each step multiplies "
+                            "the shortfall by $1 - dt/\\tau$, so three steps give "
+                            "$V_{th}\\left(1 - (1 - dt/\\tau)^3\\right)$ without looping at all.",
+                    "wrong": "If you got 434, the node was assumed to settle at the 5 V supply rather "
+                             "than at the divider's 3.37 V — the time constant was right and the "
+                             "destination was not. If you got 193, the capacitor's resistance was "
+                             "taken as R1 alone, which makes tau half as long again and slows both "
+                             "curves. If you got 247, the comparison was made after one step rather "
+                             "than three.",
+                    "why": r'''
+Set the circuit up first. Seen from the capacitor, the divider is one source behind one
+resistance:
+
+```text
+V_th = 5 × 6800 / (3300 + 6800) = 34000 / 10100 = 3.366337 V
+R_th = 3300 × 6800 / 10100      = 22 440 000 / 10100 = 2221.78 Ω
+tau  = 2221.78 × 22e-9          = 4.88792e-5 s = 48.879 µs
+
+dt / tau = 20 / 48.879 = 0.409172        (so 1 - dt/tau = 0.590828)
+```
+
+Now the three steps, written out:
+
+```text
+step   v before    rate = (V_th - v)/tau     v after = v + 20µs × rate
+------------------------------------------------------------------------
+  1    0.000000    68 870.5 V/s              1.377410
+  2    1.377410    40 690.6 V/s              2.191223
+  3    2.191223    24 041.2 V/s              2.672047
+```
+
+or, using the shortfall shortcut,
+$3.366337\left(1 - 0.590828^{3}\right) = 3.366337 \times 0.793756 = 2.672047$ V. Same
+number, one line.
+
+The truth at $t = 60$ µs:
+
+```text
+t / tau = 60 / 48.879 = 1.227516
+e^-1.227516 = 0.293020
+v = 3.366337 × (1 - 0.293020) = 2.379934 V
+```
+
+```text
+gap = 2.672047 - 2.379934 = 0.292113 V = 292 mV
+```
+
+292 mV out of a 3.37 V swing: **8.7% high, after three steps.** That is what a timestep
+of 0.41 τ costs, and it is worth sitting with, because nothing in the run looks wrong.
+The numbers climb, they climb towards the right destination, they never overshoot it,
+and if you plotted the three points nobody would raise an eyebrow.
+
+The error is one-signed for a reason. Forward Euler uses the rate from the *start* of
+each step and holds it for the whole step, but the true rate falls continuously as the
+capacitor charges. So every step is driven by a rate that is too large, every step
+lands high, and the errors add rather than cancel. On a decaying-towards-something
+problem, forward Euler always reads high.
+
+The fix is not cleverness, it is a smaller step.
+
+```text
+dt        v at 60 µs     gap to the truth
+--------------------------------------------
+20   µs   2.672047       292.11 mV
+2    µs   2.405077        25.14 mV
+0.2  µs   2.382415         2.48 mV
+```
+
+The last two rows fall by a factor of ten for a factor of ten in the step, which is a
+first-order method behaving as advertised. The first row gains slightly more than
+tenfold, because 20 µs is 0.41 τ and the estimate "error is proportional to $h$" is
+itself only the leading term — it has not settled in yet. That is the convergence test
+doing its job: it is not proving the answer right, it is telling you how much of the
+answer is still method rather than circuit.
+''',
+                },
+            ],
+            "blanks": [
+                {
+                    "title": "An integrator that refuses a step it cannot survive",
+                    "minutes": 10,
+                    "lang": "python",
+                    "caption": "euler.py — the loop, plus the two lines that decide whether to believe it",
+                    "brief": r'''
+The four lines that step an RC forward, and the four that decide whether the result
+means anything. Every hole is a place where a plausible-looking alternative gives you a
+number with no warning attached: a loop that walks off the end, a rate applied without
+a duration, a stability guard set at the wrong threshold, an error estimate off by a
+factor of two.
+
+Nothing runs here. Each choice is settled by asking what the line is *for*.
+''',
+                    "listing": r'''
+import numpy as np
+
+
+def rc_euler(r, c, vin, dt, tstop):
+    """Forward Euler on dv/dt = (vin - v) / (r*c), starting from an empty cap."""
+    tau = r * c
+    if dt >= ___:
+        raise ValueError(f"dt={dt} is at or past the stability limit for tau={tau}")
+    n = int(round(tstop / dt)) + 1
+    v = np.zeros(n)
+    for i in range(___):
+        v[i + 1] = v[i] + ___
+    return v
+
+
+def converged(r, c, vin, dt, tstop, tol):
+    """Halve the step and see whether the answer moves."""
+    coarse = rc_euler(r, c, vin, dt, tstop)
+    fine = rc_euler(r, c, vin, dt / 2, tstop)
+    gap = abs(coarse[-1] - fine[-1])
+    # First order: the coarse run's error is about twice the fine run's, so the
+    # gap between the two is about all the error still left in `fine`.
+    fine_error = ___
+    return fine_error ___ tol
+''',
+                    "blanks": [
+                        {
+                            "prompt": "Past what step size does forward Euler on this system stop converging?",
+                            "hole": "threshold",
+                            "opts": ["2 * tau", "tau", "tau / 2", "tstop"],
+                            "a": 0,
+                            "why": "Each step multiplies the remaining shortfall by `1 - dt/tau`, and that factor has magnitude below 1 only while `dt < 2*tau`. Past it the shortfall grows every step and the run explodes.",
+                            "whys": [
+                                "Each step multiplies the remaining shortfall by `1 - dt/tau`, and that factor has magnitude below 1 only while `dt < 2*tau`. Past it the shortfall grows every step and the run explodes.",
+                                "A step of exactly `tau` gives a factor of zero: the simulation lands on the final value in a single step and stays there. Inaccurate, certainly, but perfectly stable — refusing it would reject a run that merely tells you nothing about the curve.",
+                                "`tau/2` is a defensible *accuracy* rule of thumb but far too tight for a stability guard, and it is being used here as one. A guard that refuses correct runs gets deleted by the next person to hit it, which loses the protection against the runs that really do explode.",
+                                "`tstop` is the length of the whole simulation and has nothing to do with the circuit. A guard against it would reject only a `dt` so large that the run is a single step, and would happily pass a step ten times the stability limit on a long run.",
+                            ],
+                        },
+                        {
+                            "prompt": "The loop writes into `v[i + 1]`, so how many times may it run?",
+                            "hole": "count",
+                            "opts": ["n - 1", "n", "n + 1", "int(tstop / dt)"],
+                            "a": 0,
+                            "why": "The array has `n` slots, indices 0 to n-1. Writing `v[i + 1]` means `i` may reach n-2 at most, which is `range(n - 1)`.",
+                            "whys": [
+                                "The array has `n` slots, indices 0 to n-1. Writing `v[i + 1]` means `i` may reach n-2 at most, which is `range(n - 1)`.",
+                                "`range(n)` lets `i` reach n-1, so the last pass writes `v[n]` — one past the end. NumPy raises an IndexError there, which is at least loud; a plain Python list would append nothing and raise too.",
+                                "`range(n + 1)` walks off the end twice, and is what you write when the `+ 1` in the definition of `n` is remembered in the wrong place.",
+                                "`int(tstop / dt)` happens to equal n-1 for the values used here, so it works today. It stops working the moment `n` is defined any other way, and it says nothing about the array being written into — which is what the bound is actually about.",
+                            ],
+                        },
+                        {
+                            "prompt": "The Euler increment: the rate now, held for the length of the step.",
+                            "hole": "increment",
+                            "opts": [
+                                "dt * (vin - v[i]) / tau",
+                                "(vin - v[i]) / tau",
+                                "dt * (vin - v[i + 1]) / tau",
+                                "dt * (vin - v[i]) * tau",
+                            ],
+                            "a": 0,
+                            "why": "`(vin - v[i])/tau` is a rate, in volts per second, and it has to be multiplied by a number of seconds before it can be added to a voltage. `dt` is that number, and it is evaluated at `v[i]` — the value at the *start* of the step, which is what makes the method explicit.",
+                            "whys": [
+                                "`(vin - v[i])/tau` is a rate, in volts per second, and it has to be multiplied by a number of seconds before it can be added to a voltage. `dt` is that number, and it is evaluated at `v[i]` — the value at the *start* of the step, which is what makes the method explicit.",
+                                "Without `dt` the units do not even agree: volts per second are being added to volts. The visible symptom is that the simulation's speed depends on how finely you chose to sample it, which is always the sign of a missing timestep.",
+                                "Using `v[i + 1]` on the right is backward Euler, and it cannot be written this way — `v[i + 1]` has not been computed yet, so this reads the zero that `np.zeros` left there and adds the same `dt * vin / tau` every pass — a straight ramp that never levels off. Backward Euler is a real and better method, but it has to be solved for, not assigned.",
+                                "Multiplying by `tau` instead of dividing inverts the dependence on the circuit: a *larger* resistor would make the simulated node charge faster. The increment is too small by a factor of $	au^2$ — about $2	imes10^{-8}$ for a 150 µs time constant — so the curve is a flat line at zero.",
+                            ],
+                        },
+                        {
+                            "prompt": "For a first-order method, what does the gap between the two runs estimate?",
+                            "hole": "estimate",
+                            "opts": ["gap", "2 * gap", "gap / 2", "gap ** 2"],
+                            "a": 0,
+                            "why": "If the error is proportional to the step, then E(dt) is about twice E(dt/2), so the difference between the two answers is E(dt) − E(dt/2) ≈ E(dt/2). The gap estimates the error still in the *finer* run, which is the one you are going to keep.",
+                            "whys": [
+                                "If the error is proportional to the step, then E(dt) is about twice E(dt/2), so the difference between the two answers is E(dt) − E(dt/2) ≈ E(dt/2). The gap estimates the error still in the *finer* run, which is the one you are going to keep.",
+                                "`2 * gap` is the error of the *coarse* run, which is the one being thrown away. Using it makes the test twice as strict as it needs to be — safe, but it will send you looking for a smaller step you did not need.",
+                                "`gap / 2` would be right for a second-order method, where E(dt) is four times E(dt/2) and the difference is three times the finer error. Applying a second-order formula to a first-order method understates the error by a factor of two, in the direction that makes you believe a run that has not converged.",
+                                "Squaring a voltage does not produce a voltage, so this cannot be compared with a tolerance in volts at all. For a gap below 1 it also makes the estimate smaller than the gap, which is the opposite of conservative.",
+                            ],
+                        },
+                        {
+                            "prompt": "The function returns True when the run is fine enough to trust.",
+                            "hole": "comparison",
+                            "opts": ["<", ">", "==", "!="],
+                            "a": 0,
+                            "why": "Converged means the remaining error is *below* the tolerance you were willing to accept, so the estimate has to be less than `tol`.",
+                            "whys": [
+                                "Converged means the remaining error is *below* the tolerance you were willing to accept, so the estimate has to be less than `tol`.",
+                                "This reports success exactly when the error is too large, which is the worst kind of bug in a check: it is silent, it is inverted, and every run that actually converged now gets rejected while every bad one is waved through.",
+                                "Two floats are essentially never exactly equal, so this returns False for every run there has ever been. It is also the comparison this course spent module 1 explaining you must not write about measured quantities.",
+                                "`!=` is True for essentially every pair of floats, so this reports convergence unconditionally — a check that cannot fail, and therefore a check that proves nothing.",
+                            ],
+                        },
+                    ],
+                },
+            ],
+            "derive": {
+                "title": "From one Euler step to the exponential",
+                "minutes": 14,
+                "vars": ["V", "v_n", "v_0", "u_n", "u_0", "h", "tau", "n", "t"],
+                "brief": r'''
+Forward Euler is a rule for getting from one value to the next. Applied to a *linear*
+system it is more than that: the whole run has a closed form, and that closed form
+answers every question this module asks — how large the error is, why it is one-signed,
+where the stability limit comes from, and why the method works at all in the limit.
+
+The system is the RC charging from empty:
+
+$$\frac{dv}{dt} = \frac{V - v}{\tau}, \qquad v_0 = 0$$
+
+$h$ is the timestep and $v_n$ is the simulated voltage after $n$ steps. Answers are
+expressions in $V$, $h$, $\tau$, $n$ and $t$.
+''',
+                "steps": [
+                    {
+                        "prompt": "Write one forward Euler step: $v_{n+1}$ in terms of $v_n$, $V$, $h$ and $\\tau$.",
+                        "answer": "v_n + \\frac{h (V - v_n)}{\\tau}",
+                        "placeholder": "the old value plus one term",
+                        "hint": "Forward Euler is `value + step × rate`, with the rate evaluated at the value you already have. The rate here is $(V - v)/\\tau$.",
+                        "deconstruct": [
+                            "The differential equation gives the rate at the current value: $(V - v_n)/\\tau$.",
+                            "A rate is a change per second, so it must be multiplied by $h$ to become a change.",
+                            "Add that change to where you already were: $v_{n+1} = v_n + h(V - v_n)/\\tau$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Let $u_n = V - v_n$ be how far the simulation still has to climb. Subtract the previous line from $V$ and write $u_{n+1}$ in terms of $u_n$, $h$ and $\\tau$.",
+                        "answer": "u_n \\left(1 - \\frac{h}{\\tau}\\right)",
+                        "placeholder": "u_n times a bracket",
+                        "hint": "$V - v_{n+1} = V - v_n - \\dfrac{h(V - v_n)}{\\tau}$, and every term on the right contains $V - v_n$.",
+                        "deconstruct": [
+                            "$u_{n+1} = V - v_{n+1} = V - \\left(v_n + \\dfrac{h(V - v_n)}{\\tau}\\right)$.",
+                            "Group the first two terms: that is $(V - v_n) - \\dfrac{h(V - v_n)}{\\tau}$, which is $u_n - \\dfrac{h u_n}{\\tau}$.",
+                            "Factor out $u_n$: $u_{n+1} = u_n\\left(1 - h/\\tau\\right)$. One step multiplies the shortfall by one fixed number, and that number is where everything else in this module comes from.",
+                        ],
+                    },
+                    {
+                        "prompt": "The capacitor starts empty, so $u_0 = V$. Apply the previous line $n$ times and write $u_n$ in terms of $V$, $h$, $\\tau$ and $n$.",
+                        "answer": "V \\left(1 - \\frac{h}{\\tau}\\right)^{n}",
+                        "placeholder": "V times a bracket to a power",
+                        "hint": "Multiplying by the same factor $n$ times raises it to the $n$th power. Nothing else changes along the way.",
+                        "deconstruct": [
+                            "$u_1 = u_0(1 - h/\\tau)$, and $u_2 = u_1(1 - h/\\tau) = u_0(1 - h/\\tau)^2$.",
+                            "Continuing, $u_n = u_0(1 - h/\\tau)^n$.",
+                            "With $u_0 = V - v_0 = V - 0 = V$, that is $u_n = V(1 - h/\\tau)^n$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Turn that back into the voltage. Write $v_n$ in terms of $V$, $h$, $\\tau$ and $n$.",
+                        "answer": "V \\left(1 - \\left(1 - \\frac{h}{\\tau}\\right)^{n}\\right)",
+                        "placeholder": "V times one minus something",
+                        "hint": "$u_n$ was defined as $V - v_n$, so $v_n = V - u_n$. Then take $V$ out as a common factor.",
+                        "deconstruct": [
+                            "From $u_n = V - v_n$, rearrange to $v_n = V - u_n$.",
+                            "Substitute: $v_n = V - V(1 - h/\\tau)^n$.",
+                            "Factor: $v_n = V\\left(1 - (1 - h/\\tau)^n\\right)$. Every simulated run in this module is that expression evaluated at some $n$ — including the four hand-worked steps at $h = \\tau/4$, where it reads $1 - 0.75^4 = 0.68359375$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now hold the elapsed time fixed at $t = nh$ and let the step shrink, so $h = t/n$ with $n \\to \\infty$. Using $\\lim_{n\\to\\infty}(1 - x/n)^n = e^{-x}$, write the limit of $v_n$ in terms of $V$, $t$ and $\\tau$.",
+                        "answer": "V \\left(1 - e^{-t/\\tau}\\right)",
+                        "placeholder": "V times one minus an exponential",
+                        "hint": "Substitute $h = t/n$ inside the bracket first. It becomes $\\left(1 - \\dfrac{t/\\tau}{n}\\right)^{n}$, which is the standard limit with $x = t/\\tau$.",
+                        "deconstruct": [
+                            "With $h = t/n$, the bracket is $1 - \\dfrac{t}{n\\tau} = 1 - \\dfrac{t/\\tau}{n}$.",
+                            "So $v_n = V\\left(1 - \\left(1 - \\dfrac{t/\\tau}{n}\\right)^{n}\\right)$, and the inner factor tends to $e^{-t/\\tau}$.",
+                            "The limit is $V\\left(1 - e^{-t/\\tau}\\right)$ — the analytic solution of the differential equation, recovered from the numerical method rather than assumed.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+That last step is the reason the method is allowed to exist. Forward Euler is not an
+approximation that happens to be close; it is an expression that *becomes* the exact
+solution as the step goes to zero. Everything else in this module is a question about
+how fast it gets there and what goes wrong on the way.
+
+Read the closed form for the three things it tells you.
+
+**The error, and its sign.** Compare $v_n = V\left(1 - (1 - h/\tau)^{n}\right)$ with
+$V\left(1 - e^{-t/\tau}\right)$ at the same instant $t = nh$. The whole difference is
+between $(1 - h/\tau)^{n}$ and $e^{-nh/\tau}$. Since
+$\ln(1 - x) < -x$ for $0 < x < 1$, the Euler factor is the *smaller* of the two, so the
+shortfall it reports is too small and the voltage it reports is too large. Forward Euler
+on a settling system always reads high — not sometimes, not on average, always. Put
+numbers in: $h = \tau/4$, $n = 4$, and $0.75^4 = 0.3164$ against $e^{-1} = 0.3679$.
+
+**The order.** Expand the logarithm one more term.
+$n\ln(1 - h/\tau) = n\left(-h/\tau - h^{2}/2\tau^{2} - \dots\right)
+= -t/\tau - \dfrac{t h}{2\tau^{2}} - \dots$, so the exponent is wrong by an amount
+proportional to $h$ with $t$ held fixed. First order, and the constant in front of it
+is $t/2\tau^{2}$ — which says the error grows with how far into the run you are, and
+grows as the square of how fast the circuit is. A faster circuit needs a
+proportionally smaller step to hold the same accuracy, and then a second factor on top
+of that to cover the same span.
+
+**The stability limit.** $(1 - h/\tau)^{n}$ shrinks with $n$ only when
+$|1 - h/\tau| < 1$, that is $0 < h < 2\tau$. Nothing about that is a numerical
+subtlety; it is the same bracket, read for its magnitude instead of its size. Above
+$2\tau$ the factor exceeds 1 in magnitude and the *shortfall* grows every step, which
+is exactly the run that ends at $\pm 967$ V on a 1 V supply.
+
+One caution about what has been proved. Every line above assumed the system is linear —
+that the rate is a straight-line function of the state. That is what let one step become
+a multiplication and $n$ steps become a power. For a non-linear rate there is no such
+closed form, no clean amplification factor, and the stability limit becomes local: it
+depends on the slope $\partial f/\partial v$ where the solution currently is, so a step
+that was safe at the start of the run can become unsafe halfway through. The linear
+result is still the right instinct — compare $h$ against the fastest time constant
+anywhere in the problem — but it stops being a guarantee, and the convergence test stops
+being optional.
+''',
+            },
             "sandbox": {
                 "title": "The shape a simulation has to reproduce",
                 "visualiser": "pole-step",
@@ -9570,7 +12181,955 @@ assert float(np.max(np.abs(_v))) > 2.0, \
                 "The pair oscillates at `w0 = 1/sqrt(L*C)` radians per second, energy moving back and forth between the magnetic field in the inductor and the charge on the capacitor and never leaving.",
                 "The stored energy is `0.5*C*v**2 + 0.5*L*i**2`. Nothing in the equations removes it, so a simulation whose energy climbs is reporting the error of its own integrator and nothing about the circuit.",
                 "*Semi-implicit* Euler updates one state and then uses the value it has just written to update the other. It is a one-character change in the code, and it turns energy that grows without bound into a small bounded wobble.",
+                "A resistor in the loop adds no third state — it stores nothing — but it does take the energy away, at exactly the rate `i**2 * R`. How fast it does so is measured by the *damping ratio* `zeta = R / (2*Z0)`, where `Z0 = sqrt(L/C)`: below 1 the circuit rings, at 1 it returns without overshoot, above it it crawls back with no oscillation at all.",
+                "The reciprocal, `Q = Z0/R = 1/(2*zeta)`, does double duty. It counts how long the circuit rings when left alone — about `Q/pi` cycles to fall to `1/e` — and it says how much a *driven* series loop multiplies its input by at resonance, where the two reactances cancel and the output across the capacitor is `Q` times the source. A passive circuit really can produce more volts than you put into it.",
             ],
+            "read": [
+                {
+                    "title": "One number is not enough to say where the circuit is",
+                    "minutes": 17,
+                    "body": r'''
+A capacitor charged to 5 V and then left alone stays at 5 V. Put a resistor across it
+and it discharges: quickly at first, then more and more slowly, flattening towards zero
+and stopping there for good. That is module 8's circuit, and what made it easy was that
+one number was enough. Tell me the voltage now and I can tell you the voltage at every
+instant afterwards, because the rate of change was a function of the voltage and of
+nothing else.
+
+Take the resistor away and put a coil of wire across the same charged capacitor.
+
+The capacitor discharges again — and does not stop at zero. It shoots straight past,
+charges up the other way to very nearly the five volts it started with, comes back, and
+does the whole thing again. With good enough parts it does this five thousand times a
+second and keeps going. Nothing about the capacitor changed. What changed is that the
+circuit now has a second place to keep its energy, and the capacitor's voltage no longer
+says how much is there.
+
+## What the coil is doing
+
+A current in a wire makes a magnetic field around it. Wind the wire into a coil and each
+turn's field adds to every other turn's, so a modest current makes a field worth talking
+about. Faraday's law says that a *changing* magnetic field induces a voltage, and Lenz's
+law says the induced voltage opposes whatever change produced it. Put those together and
+you have the only fact about an inductor this course needs:
+
+$$v = L\frac{di}{dt}$$
+
+$L$ is the inductance, measured in henries, and a henry is a volt-second per amp: one
+volt held across a 1 H coil ramps its current up by one amp every second. Now read that
+backwards, the way module 8 read the capacitor's law:
+
+$$\frac{di}{dt} = \frac{v}{L}$$
+
+**The rate at which an inductor's current changes is set by the voltage across it.** An
+inductor with no voltage across it holds its current exactly, for as long as you like. A
+capacitor with no current into it holds its voltage exactly. The two parts are mirror
+images of one another, and the mirror is worth writing down before going any further:
+
+```text
+capacitor     q = C v         i = C dv/dt        it holds a VOLTAGE
+inductor      Φ = L i         v = L di/dt        it holds a CURRENT
+
+  a capacitor with no current through it keeps its voltage
+  an inductor with no voltage across it keeps its current
+```
+
+The mechanical version is exact, and worth carrying: a capacitor is a spring and an
+inductor is a mass. A spring holds a displacement, a mass holds a speed. Nobody would
+claim to know where a mass on a spring is going next if all they were told was where it
+is. That is the whole of this module in one sentence.
+
+## Wiring the two together
+
+Call $v$ the capacitor's voltage with its top plate positive, and call $i$ the current
+that leaves that top plate, goes round through the coil, and returns to the bottom
+plate. There are only two components in the loop, so they carry the same $i$.
+
+The capacitor is *losing* charge at that rate. Its own law says the current *into* the
+top plate is $C\,dv/dt$, and the current into the top plate is $-i$, so
+
+$$\frac{dv}{dt} = -\frac{i}{C}$$
+
+The coil is connected straight across the capacitor, so the whole of $v$ appears across
+it, pushing $i$ in the direction it is already going:
+
+$$\frac{di}{dt} = \frac{v}{L}$$
+
+Two states, two rates. The thing that makes this different from module 8 is what the
+rates depend on: **each rate is a function of the *other* state.** In the RC circuit the
+rate of the one state depended on that same state, and every such system runs down and
+settles. Here neither state can settle, because at the moment one of them reaches zero
+the other is at its largest and is driving the first away from zero as hard as it can.
+
+## Why one number cannot do it
+
+Suppose I tell you the capacitor is at 3.00 V, with $C = 100$ nF and $L = 10$ mH, and
+ask what happens next. You cannot answer, and here is the proof:
+
+```text
+  if i = +10 mA :  dv/dt = -10.0e-3 / 100e-9 = -100 000 V/s   falling
+  if i = -10 mA :  dv/dt = +10.0e-3 / 100e-9 = +100 000 V/s   rising
+```
+
+Same voltage, opposite futures. The current is not a detail of the voltage's history —
+it is a second, independent fact about the present, and it has to be carried alongside
+the voltage or the future is not determined.
+
+The count is one number per *independent* place the circuit can store energy. Two
+capacitors wired in parallel share a single voltage and are one store between them, not
+two. A capacitor and an inductor are two. Add a second inductor somewhere that is free
+to carry its own current and there are three. The values of $L$ and $C$ decide how fast
+the thing goes; they never change how many numbers it takes to say where it is.
+
+## What the pair actually does
+
+Differentiate the first equation and substitute the second into it:
+
+$$\frac{d^2v}{dt^2} = -\frac{1}{C}\frac{di}{dt} = -\frac{1}{C}\cdot\frac{v}{L}
+= -\frac{v}{LC}$$
+
+A quantity whose second derivative is a negative constant times itself is a sine or a
+cosine. That is what those functions are for, in the same way that the exponential is
+the function whose *first* derivative is a multiple of itself — which is exactly the
+fact module 8 leaned on. So, starting from $v = V_0$ with no current flowing,
+
+$$v(t) = V_0\cos(\omega_0 t), \qquad \omega_0 = \frac{1}{\sqrt{LC}}$$
+
+and feeding that back through $dv/dt = -i/C$ gives the current that goes with it:
+
+$$i(t) = V_0\sqrt{\frac{C}{L}}\,\sin(\omega_0 t)$$
+
+Two constants deserve names. $\omega_0$ is the **natural frequency** in radians per
+second, and $\sqrt{L/C}$ — call it $Z_0$ — has units of ohms and is the
+**characteristic impedance** of the pair. The peak current is then just the peak voltage
+divided by $Z_0$, exactly as though $Z_0$ were a resistor, even though there is no
+resistor anywhere and nothing is being dissipated.
+
+## Worked example 1: the numbers this module uses everywhere
+
+```text
+L = 10 mH = 1.000e-2 H     C = 100 nF = 1.000e-7 F     V0 = 5.00 V
+
+  L*C      = 1.000e-2 x 1.000e-7 = 1.000e-9 s^2
+  sqrt(LC) = 3.1623e-5 s
+  w0       = 1 / 3.1623e-5       = 3.1623e4 rad/s
+  f0       = w0 / 2pi            = 5033 Hz
+  T        = 1 / f0              = 198.7 us
+
+  Z0       = sqrt(L/C) = sqrt(1.000e-2 / 1.000e-7) = sqrt(1.000e5) = 316.2 ohms
+  i_peak   = V0 / Z0   = 5.00 / 316.2                              = 15.81 mA
+```
+
+Now check that against energy, which is the habit this module is really trying to build.
+All the energy starts on the capacitor and, a quarter of a cycle later, all of it is in
+the coil:
+
+```text
+  0.5 * C * V0^2     = 0.5 x 1.000e-7 x 25.00        = 1.250 uJ
+  0.5 * L * i_peak^2 = 0.5 x 1.000e-2 x (1.5811e-2)^2
+                     = 0.5 x 1.000e-2 x 2.5000e-4    = 1.250 uJ
+```
+
+The two agree, as they must, and that agreement is what the first numeric question asks
+you to reproduce from scratch.
+
+## Worked example 2: different parts, same three steps
+
+```text
+L = 47 mH = 4.700e-2 H     C = 220 nF = 2.200e-7 F     V0 = 2.00 V
+
+  L*C      = 4.700e-2 x 2.200e-7 = 1.0340e-8 s^2
+  sqrt(LC) = 1.0169e-4 s
+  w0       = 9834 rad/s      f0 = 1565 Hz      T = 638.9 us
+
+  Z0       = sqrt(4.700e-2 / 2.200e-7) = sqrt(2.1364e5) = 462.2 ohms
+  i_peak   = 2.00 / 462.2                               = 4.327 mA
+
+  energy:  0.5 x 2.200e-7 x 4.00                        = 0.4400 uJ
+           0.5 x 4.700e-2 x (4.327e-3)^2                = 0.4400 uJ
+```
+
+Nearly five times the inductance and just over twice the capacitance have slowed it down
+by a factor of 3.2 and raised $Z_0$ by 46%. Note which way each dependence runs: more of
+*either* part means a lower frequency, but more inductance raises $Z_0$ while more
+capacitance lowers it. That is why $Z_0$ and $\omega_0$ are two independent knobs — one
+is the product $LC$, the other the ratio $L/C$ — and why a designer specifies both
+rather than quoting a resonant frequency and letting the parts fall where they may.
+
+## The mistakes people actually make
+
+**Reading zero volts as "nothing is happening".** The instant the capacitor's voltage
+passes through zero is the instant the current is at its largest: every joule the
+circuit owns is in the magnetic field just then. It is a tempting error because in an RC
+circuit zero volts really is the end of the story — the state is zero, the rate is zero,
+the run is over. Here zero is the halfway point of the fastest part of the swing.
+
+**Getting the sign wrong.** Writing $dv/dt = +i/C$ is easy to do, because in module 8
+the capacitor was being charged and its rate was positive. Flip that sign and the pair
+stops oscillating altogether: instead of sines you get one growing and one decaying
+exponential, and a simulation of it runs away to infinity in a few dozen steps. If your
+LC run explodes on the very first attempt, check this before you touch the timestep.
+
+**Treating the coil as a resistance of $\omega L$.** Reactance is a statement about the
+steady response to a single frequency that has been applied for a long time. Nothing
+here is being driven by anything; the circuit is coasting on energy it already had, and
+the only honest description is the pair of rate equations.
+
+## Where this stops holding
+
+Real coils are made of copper, and copper is a resistor you did not ask for. A 10 mH
+inductor small enough to sit on a breadboard might carry 20 Ω of winding resistance,
+which is enough to bring the ringing to a stop in a few dozen cycles. Real capacitors
+leak a little too. Nothing above is wrong, but it describes an idealisation, and the
+third reading unit is about what the missing resistor does.
+
+Ferrite-cored inductors *saturate*: past some current the core stops helping and the
+inductance collapses, sometimes by a factor of five. Then $L$ is a function of $i$, the
+equations are still two states but are no longer linear, and no cosine solves them.
+Notice which half of this module survives that and which does not — the closed-form
+solution is gone, but `dv/dt = -i/C` and `di/dt = v/L` are still true with $L$ replaced
+by $L(i)$, and a numerical integrator does not care in the slightest. That is the
+general reason engineers simulate: the closed form is a luxury of the linear case, and
+the stepping is not.
+
+Finally, "two states" is a claim about independent stores, not about how many components
+you can see. Count the places energy can sit and be set independently, and you have the
+number of rate equations you are about to write.
+''',
+                },
+                {
+                    "title": "Stepping two rates at once, and the energy the method invents",
+                    "minutes": 17,
+                    "body": r'''
+Module 8 stepped one state forward with `next = now + dt * rate`. Nothing about that
+changes here. There are simply two states, and the interesting question — the one that
+does not arise when there is only one — is *which* values the rates are allowed to look
+at while they are being worked out. (The code below calls the timestep `dt`, as the lab
+does; the algebra calls it $h$, because it appears in a lot of expressions. Same number.)
+
+## The two orders, and why they are different methods
+
+Here are the two rates again:
+
+```text
+dv/dt = -i / C
+di/dt =  v / L
+```
+
+The rate of $v$ needs $i$, and the rate of $i$ needs $v$. So when you write
+
+```python
+v[k + 1] = v[k] - dt * i[k] / c
+i[k + 1] = i[k] + dt * v[k] / l
+```
+
+both right-hand sides read row `k`, and the order of the two lines does not matter: you
+could swap them and get the same numbers. That is **forward Euler**, and its defining
+property is that every rate is evaluated at the state you are stepping *from*.
+
+Change one index:
+
+```python
+i[k + 1] = i[k] + dt * v[k] / l
+v[k + 1] = v[k] - dt * i[k + 1] / c
+```
+
+and the second line now reads a value written by the first. The order suddenly matters,
+and this is a different method — **semi-implicit Euler**, sometimes called symplectic
+Euler. It costs nothing extra and it behaves, as we are about to see, completely
+differently over a long run. It is also very easy to write by accident, and no plot will
+tell you which of the two you have.
+
+## Five steps by hand
+
+Take the module's parts, $L = 10$ mH and $C = 100$ nF, start at 5 V with no current, and
+step forward with $h = 10\ \mu$s. That step is deliberately coarse — about one twentieth
+of a cycle — so the damage shows up in five rows instead of five hundred.
+
+One step, longhand, from $v = 5.000$ V and $i = 5.000$ mA:
+
+```text
+  dv/dt = -i/C = -5.000e-3 / 1.000e-7 = -5.0000e4 V/s
+  di/dt =  v/L =  5.000    / 1.000e-2 =  5.0000e2 A/s
+
+  v_next = 5.000    + 1.0e-5 x (-5.0000e4) = 5.000 - 0.500      = 4.500 V
+  i_next = 5.000e-3 + 1.0e-5 x   5.0000e2  = 5.000e-3 + 5.000e-3 = 10.000 mA
+```
+
+Five rows of that, with the stored energy $E = \tfrac{1}{2} Cv^2 + \tfrac{1}{2} Li^2$ worked out
+at each one:
+
+```text
+ k    v (V)     i (mA)    dv/dt (V/s)   di/dt (A/s)     E (uJ)    E ratio
+ 0    5.000      0.000              0           500     1.2500       —
+ 1    5.000      5.000        -50 000           500     1.3750     1.100
+ 2    4.500     10.000       -100 000           450     1.5125     1.100
+ 3    3.500     14.500       -145 000           350     1.6638     1.100
+ 4    2.050     18.000       -180 000           205     1.8301     1.100
+```
+
+Two things in that table are worth stopping over.
+
+The first is row 4. The current has reached 18.00 mA. The energy the circuit started
+with can support a current of at most $V_0/Z_0 = 15.81$ mA — that was worked out in the
+first reading unit and it is not negotiable, because it is what conservation of energy
+says. The simulation has produced a current the physics forbids, in four steps, from a
+perfectly ordinary-looking loop with no bug in it.
+
+The second is the last column. The ratio is not roughly constant, it is *exactly* 1.100
+every time. That is not luck.
+
+## Why the ratio is exact
+
+Substitute one forward Euler step into the energy and expand it:
+
+$$E_{n+1} = \tfrac{1}{2} C\left(v - \tfrac{h i}{C}\right)^2
+          + \tfrac{1}{2} L\left(i + \tfrac{h v}{L}\right)^2$$
+
+$$= \tfrac{1}{2} Cv^2 - h v i + \frac{h^2 i^2}{2C}
+  + \tfrac{1}{2} Li^2 + h i v + \frac{h^2 v^2}{2L}$$
+
+The two cross terms are $-hvi$ and $+hiv$ and they cancel exactly. What is left is
+
+$$E_{n+1} = E_n + \frac{h^2}{LC}\left(\frac{L i^2}{2} + \frac{C v^2}{2}\right)
+          = E_n\left(1 + \frac{h^2}{LC}\right) = E_n\left(1 + h^2\omega_0^2\right)$$
+
+Forward Euler multiplies the stored energy by a fixed factor bigger than one, every
+single step, whatever the state. Check it against the table: $\omega_0 h = 3.1623\times
+10^4 \times 10^{-5} = 0.31623$, so $1 + (\omega_0 h)^2 = 1.100$. Exactly the number in
+the last column, and no rounding involved. (The guided derivation in this module walks
+through that algebra step by step; it is written out here so the rest of the unit has
+something to stand on.)
+
+## What that costs over a real run
+
+Geometric growth compounds, so the interesting quantity is the factor over a whole run
+rather than over a step. The lab uses $h = T/200$, which makes $\omega_0 h = 2\pi/200 =
+0.031416$, and runs for five cycles — 1000 steps:
+
+```text
+  per step   1 + (0.031416)^2 = 1.00098696
+  1000 steps 1.00098696^1000  = 2.6818          energy
+  amplitude  sqrt(2.6818)     = 1.6376          voltage and current
+  so 5.00 V  becomes           8.19 V by the end
+```
+
+Halving the step does not halve that. Over a fixed span $t$ the number of steps is
+$t/h$, so the total factor is $(1 + \omega_0^2h^2)^{t/h} \approx e^{\omega_0^2 h t}$:
+the exponent is proportional to $h$, so halving the step halves the exponent — 2.68
+becomes 1.64 — and halving it again gives 1.28. The growth shrinks steadily and never
+goes away. There is no timestep small enough to make forward Euler conserve energy,
+because the factor per step is greater than one for every $h > 0$.
+
+## The one-character repair
+
+Now the semi-implicit version, the one that reads `i[k + 1]` on the second line. It has
+an exactly conserved quantity too, but it is not $E$. It is
+
+$$\tilde{E} = \tfrac{1}{2} C v^2 + \tfrac{1}{2} L i^2 + \frac{h}{2}\,v\,i$$
+
+which is the energy plus a small correction that depends on the timestep. Step the
+semi-implicit map forward as long as you like and that combination does not move at all
+— to fifteen decimal places, which is to say to the limits of double precision.
+
+That is why the method behaves. The real energy $E = \tilde{E} - \tfrac{h}{2}vi$ is a
+fixed quantity minus a term that swings back and forth as $v$ and $i$ do, so $E$ wobbles
+and never drifts. How wide is the wobble? The product $|vi|$ can be at most $\omega_0 E$
+for a given energy, so the correction is at most $\tfrac{1}{2}\omega_0 h E$ either way, and
+the band is about $\omega_0 h$ wide overall:
+
+```text
+  w0 h = 0.031416     ->  predicted band about 3.14% of the energy
+  measured over five cycles: max/min = 1.0319, a spread of 3.14%
+```
+
+The lab's assertion that the semi-implicit energy stays inside a 5% band is testing
+precisely this, and the margin it leaves is small on purpose.
+
+## What neither method buys you
+
+Accuracy per step. Both are first order; both are wrong by an amount proportional to
+$h$ after one step. What differs is whether that error accumulates in one direction or
+cancels against itself, and over a long run that matters far more than the size of a
+single step's error. It is the same idea behind the integrators used for planetary
+orbits, where a simulation that slowly gains energy sends the planet into a spiral that
+no amount of arithmetic precision will fix.
+
+Neither gets the frequency exactly right either, and they miss in opposite directions.
+Forward Euler turns through $\arctan(\omega_0 h)$ radians per step instead of
+$\omega_0 h$, which is slightly less, so it runs slow — by 0.033% at $h = T/200$.
+Semi-implicit turns through $\arccos(1 - \tfrac{1}{2}\omega_0^2h^2)$, which is slightly
+more, so it runs fast — by 0.004%. Small, but one-signed: a semi-implicit run whose
+amplitude is still perfectly respectable after ten thousand cycles has by then drifted
+about four tenths of a cycle out of step with the real circuit.
+
+## The mistakes people actually make
+
+**Writing semi-implicit Euler by accident and calling it Euler.** The plot looks
+plausible either way, the energy plot is the only thing that distinguishes them, and
+nobody plots the energy unless they have been told to. The habit worth forming is the
+one this module is built around: find a quantity the true solution must keep fixed and
+watch what your code does to it.
+
+**Trying to cure a growing run by shrinking the step.** It slows the growth
+proportionally and never stops it. The fix is a different method, not a smaller number.
+
+**Assuming a smooth curve is a correct one.** The five-row table above is smooth,
+continuous, and reports a current that violates conservation of energy by 14% after four
+steps.
+
+## Where this stops holding
+
+Semi-implicit Euler is stable only while $\omega_0 h < 2$. Past that its own step map
+stops being a rotation and the run diverges as surely as the explicit one does — so the
+timestep still has to respect the timescale of the thing being simulated, and $T/200$
+against a stability limit near $T/3$ is the comfortable margin that buys.
+
+The exact energy identity is a gift of linearity. Put a saturating inductor or a diode
+in the loop and there is no such closed-form invariant to check against, and you are
+back to module 8's method: halve the timestep, run it again, and see whether the answer
+moved. That test costs a second run and works on anything.
+''',
+                },
+                {
+                    "title": "What a resistor does to the ring",
+                    "minutes": 15,
+                    "body": r'''
+Build the loop from the first reading unit out of real parts and it does not ring for
+ever. It rings for a few dozen cycles, each swing smaller than the last, and then it is
+flat. Nothing has been done wrong. The coil is made of copper, copper has resistance,
+and a resistor is a place energy leaves and does not come back.
+
+So put the resistor in the equations where it actually is: in series, in the loop, in
+the same path as the current.
+
+## Three components, still two states
+
+Keep the same $v$ (capacitor voltage) and $i$ (current out of the top plate, round the
+loop). The capacitor's law is unchanged, because nothing about the capacitor changed:
+
+$$\frac{dv}{dt} = -\frac{i}{C}$$
+
+The coil no longer has the whole of $v$ across it. The current has to get through the
+resistor as well, and the resistor takes $iR$ of the available voltage, so what is left
+to drive the coil is $v - iR$:
+
+$$\frac{di}{dt} = \frac{v - iR}{L}$$
+
+Note what did *not* happen: no third state appeared. A resistor stores nothing. It has
+no memory, its voltage is decided entirely by the current flowing in it at that instant,
+and so it adds a term to an existing rate rather than a new rate of its own. The number
+of states is the number of stores, and it is still two.
+
+## The referee gets better, not worse
+
+Differentiate the stored energy and substitute both rates:
+
+$$\frac{dE}{dt} = Cv\frac{dv}{dt} + Li\frac{di}{dt}
+= Cv\left(-\frac{i}{C}\right) + Li\left(\frac{v - iR}{L}\right)
+= -vi + iv - i^2R = -i^2R$$
+
+The energy falls at exactly the rate the resistor turns it into heat. That is a stronger
+statement than the ideal case gave you, not a weaker one. Before, you could check that
+the simulated energy did not move. Now you can check that its rate of change matches
+$-i^2R$ computed from the same simulated current — an exact identity, available at every
+step, with no analytic solution needed. A run that loses energy faster than its own
+resistor can account for is telling you about the integrator again.
+
+## Solving it, and the three numbers that come out
+
+Differentiate the current equation and substitute the voltage one into it:
+
+$$L\frac{d^2i}{dt^2} = \frac{dv}{dt} - R\frac{di}{dt} = -\frac{i}{C} - R\frac{di}{dt}
+\qquad\Longrightarrow\qquad
+\frac{d^2i}{dt^2} + \frac{R}{L}\frac{di}{dt} + \frac{i}{LC} = 0$$
+
+Compare that with the standard form $\ddot{x} + 2\zeta\omega_0\dot{x} + \omega_0^2 x =
+0$. The last terms match with $\omega_0 = 1/\sqrt{LC}$, unchanged from the lossless
+case, and the middle ones give $2\zeta\omega_0 = R/L$, so
+
+$$\zeta = \frac{R}{2L\omega_0} = \frac{R}{2}\sqrt{\frac{C}{L}} = \frac{R}{2Z_0}$$
+
+$\zeta$ is the **damping ratio**, and it is dimensionless: the resistance measured
+against the characteristic impedance the first unit defined. Two more names for the same
+information: $\alpha = \zeta\omega_0 = R/(2L)$ is the decay rate in inverse seconds, and
+$Q = 1/(2\zeta) = Z_0/R$ is the **quality factor**. Below $\zeta = 1$ the roots are
+complex and the circuit rings at a slightly lowered frequency
+$\omega_d = \omega_0\sqrt{1-\zeta^2}$; at $\zeta = 1$ it is **critically damped** and
+returns without a single overshoot; above it the roots are real and it crawls back.
+
+## Worked example 1: how long does it ring?
+
+```text
+L = 10 mH, C = 100 nF, R = 47 ohms      (Z0 = 316.2 ohms, w0 = 31 623 rad/s)
+
+  zeta  = R / (2 Z0) = 47 / 632.5           = 0.07431     well under 1: it rings
+  Q     = Z0 / R     = 316.2 / 47           = 6.728
+  alpha = R / (2L)   = 47 / 0.0200          = 2350 per second
+  wd    = w0 sqrt(1 - zeta^2)
+        = 31 623 x sqrt(1 - 0.005522)
+        = 31 623 x 0.997236                 = 31 535 rad/s
+  fd    = 5019 Hz     Td = 199.24 us        (against 198.69 us undamped)
+
+  the envelope e^(-alpha t) is down to 10% when alpha t = ln 10 = 2.3026
+     t      = 2.3026 / 2350                 = 979.8 us
+     cycles = 979.8 / 199.24                = 4.92
+```
+
+So: about five cycles to a tenth of the starting amplitude. There is a rule of thumb
+hiding in that — $Q/\pi$ cycles to fall to $1/e$, hence $2.303\,Q/\pi = 4.93$ cycles to
+a tenth — and the small disagreement with 4.92 is real rather than rounding: the rule of
+thumb counts cycles at $\omega_0$ while the circuit actually rings at $\omega_d$, which
+is 0.28% slower. At $Q = 6.7$ that hardly matters. At $Q = 2$ it does.
+
+## Worked example 2: turning the resistor up
+
+```text
+critical damping:  R = 2 Z0 = 632.5 ohms
+                   zeta = 1 exactly; the fastest return with no overshoot at all
+
+overdamped:        R = 1 kohm
+  alpha = 1000 / 0.0200 = 50 000 per second       w0 = 31 623 rad/s
+  alpha > w0, so the roots are real:
+     sqrt(alpha^2 - w0^2) = sqrt(2.500e9 - 1.000e9) = sqrt(1.500e9) = 38 730
+
+     s1 = -50 000 + 38 730 = -11 270 /s   ->  tau = 88.7 us
+     s2 = -50 000 - 38 730 = -88 730 /s   ->  tau = 11.3 us
+```
+
+Two real roots means two exponentials and no oscillation whatsoever, and — this is the
+part people find counter-intuitive — the *slower* of the two, 88.7 µs, is what you
+actually wait for. Adding more resistance past critical does not speed the settling up;
+it slows it down, because $s_1 \to -\omega_0^2/2\alpha$ as $\alpha$ grows. The fastest
+possible settling is at $\zeta = 1$, which is why critical damping is a design target
+rather than a curiosity.
+
+## Driving it: where the extra volts come from
+
+Now drive the same series loop from a 1 V source at exactly $f_0 = 5033$ Hz and measure
+the voltage across the capacitor. At $\omega_0$ the coil's impedance $+j\omega_0 L$ and
+the capacitor's $-j/(\omega_0 C)$ are both 316.2 Ω in magnitude and opposite in sign, so
+they cancel and the source sees the 47 Ω resistor alone:
+
+```text
+  |I|   = 1.00 / 47                                    = 21.28 mA
+  |V_C| = |I| / (w0 C) = 0.02128 / 3.1623e-3           = 6.73 V
+  |V_L| = |I| x w0 L   = 0.02128 x 316.2               = 6.73 V
+```
+
+A 1 V source, a passive circuit, and 6.73 V across one of the components. That is
+$Q$ times the input, and it is not a trick: the capacitor and the coil are each at
+6.73 V and are exactly out of phase, so their sum is zero and the source only ever has
+to supply the 1 V that the resistor drops. The energy is stored, not created, and it
+takes roughly $Q$ cycles of driving to build up.
+
+The numeric question about a loop driven at its own frequency asks for exactly this
+number, and it is worth having a reason to believe it before the solver confirms it.
+
+## The mistake people actually make
+
+**Expecting the output of a passive circuit never to exceed its input.** Every divider
+obeys that. Every RC filter obeys it. A resonant circuit does not, and the temptation to
+"correct" a simulation that reports 6.73 V from a 1 V source is strong. The check that
+settles it is the one above: add the component voltages as phasors, not as magnitudes.
+
+**Getting the direction of the damping backwards.** In the *series* arrangement,
+$\zeta = R/(2Z_0)$: more resistance, more damping. Put the same resistor in *parallel*
+with the L and the C instead and it becomes $\zeta = Z_0/(2R)$: more resistance, *less*
+damping, because a parallel resistor is a leak and a big one leaks slowly. Same three
+components, same values, opposite dependence. With this module's parts and 47 Ω:
+
+```text
+  series   zeta = 47 / 632.5   = 0.0743      rings for about five cycles
+  parallel zeta = 316.2 / 94   = 3.36        overdamped; no ringing at all
+```
+
+Before quoting either formula, look at where the resistor is.
+
+## Where this stops holding
+
+The coil's own copper sets a ceiling on $Q$ that no external component can lift. A 10 mH
+inductor small enough for a breadboard carries perhaps 20 Ω of winding resistance, so
+$Q$ cannot exceed about $316/20 = 16$ however carefully the rest is chosen — and the
+effective resistance rises with frequency as the current crowds into the surface of the
+wire, so a measured $Q$ usually comes in under the calculated one.
+
+Everything above also assumes $L$, $C$ and $R$ are constants. A saturating core makes
+$L$ depend on $i$; a ceramic capacitor's value falls with applied voltage, sometimes by
+half. The two rate equations survive all of that with $L$ and $C$ replaced by functions;
+$\zeta$, $\omega_d$ and $Q$ do not survive it at all, because they were derived by
+assuming constant coefficients. That is the recurring shape of this course: the stepping
+generalises, the closed form does not.
+''',
+                },
+            ],
+            "blanks": {
+                "title": "One stepper, two methods, and the line that tells them apart",
+                "minutes": 10,
+                "lang": "python",
+                "caption": "lc.py — the pair stepped forward, with the guard and the two predictions that need no loop",
+                "brief": r'''
+The lab's two functions written as one, with a flag choosing the method. Five holes:
+a stability guard, the two voltage updates that are the *only* difference between
+forward and semi-implicit Euler, the energy expression, and the growth factor that
+predicts what the explicit run is about to do to itself.
+
+The two update holes look almost identical on purpose. One index apart is the whole
+distinction, and a plot of either one is a smooth decaying-looking oscillation that
+tells you nothing about which you wrote.
+
+Nothing runs here. Every choice is settled by asking what the line is *for*.
+''',
+                "listing": r'''
+import numpy as np
+
+
+def run(l, c, v0, h, tstop, semi=False):
+    """Step the LC pair forward. `semi` picks semi-implicit Euler over forward Euler."""
+    w0 = 1.0 / np.sqrt(l * c)
+    # Past this the semi-implicit map stops being a rotation and diverges too. The
+    # explicit method was never bounded at any step size; this only catches the case
+    # where the step has also lost the timescale of the circuit entirely.
+    if h * w0 >= ___:
+        raise ValueError(f"h={h} cannot resolve a circuit with w0={w0}")
+    n = int(round(tstop / h)) + 1
+    v = np.zeros(n)
+    i = np.zeros(n)
+    v[0] = v0
+    for k in range(n - 1):
+        if semi:
+            i[k + 1] = i[k] + h * v[k] / l
+            v[k + 1] = v[k] - h * ___ / c
+        else:
+            v[k + 1] = v[k] - h * ___ / c
+            i[k + 1] = i[k] + h * v[k] / l
+    return v, i
+
+
+def energy(l, c, v, i):
+    """Total stored energy, one value per sample. Whole arrays, no loop."""
+    return ___
+
+
+def euler_growth(l, c, h):
+    """The factor forward Euler multiplies the stored energy by, every single step."""
+    return ___
+''',
+                "blanks": [
+                    {
+                        "prompt": "Past what value of `h * w0` does even the semi-implicit run stop working?",
+                        "hole": "limit",
+                        "opts": ["2", "1", "0.5", "np.pi"],
+                        "a": 0,
+                        "why": "Two. The semi-implicit step map has determinant exactly 1 and trace `2 - (h*w0)**2`, and a two-by-two map with unit determinant keeps its eigenvalues on the unit circle only while the trace is between -2 and +2. That gives `h*w0 < 2`, which is a step of about a third of a period.",
+                        "whys": [
+                            "Two. The semi-implicit step map has determinant exactly 1 and trace `2 - (h*w0)**2`, and a two-by-two map with unit determinant keeps its eigenvalues on the unit circle only while the trace is between -2 and +2. That gives `h*w0 < 2`, which is a step of about a third of a period.",
+                            "A guard at 1 refuses runs that are perfectly well behaved: `h*w0 = 1` is about a sixth of a period, coarse and inaccurate but bounded. A guard that rejects correct runs gets deleted by the next person it annoys, and the protection goes with it.",
+                            "`0.5` is a defensible *accuracy* rule of thumb — a dozen steps a cycle — but it is being used here as a stability guard, and the two questions are different. Say which one you are asking before you pick a number.",
+                            "`np.pi` is the number of radians in half a cycle and looks plausible for that reason, but the limit does not come from the geometry of a circle. It comes from the trace of the step map, and that calculation gives 2.",
+                        ],
+                    },
+                    {
+                        "prompt": "The semi-implicit branch has just written a new current. Which current does its voltage line use?",
+                        "hole": "semi",
+                        "opts": ["i[k + 1]", "i[k]", "v[k]", "i[k - 1]"],
+                        "a": 0,
+                        "why": "`i[k + 1]` — the value written on the line above. That is the entire definition of semi-implicit Euler: update one state, then use the fresh value to update the other. It costs nothing and turns unbounded energy growth into a wobble of about `h*w0` in width.",
+                        "whys": [
+                            "`i[k + 1]` — the value written on the line above. That is the entire definition of semi-implicit Euler: update one state, then use the fresh value to update the other. It costs nothing and turns unbounded energy growth into a wobble of about `h*w0` in width.",
+                            "`i[k]` makes both branches of the `if` identical, and the `semi` flag then selects between two spellings of forward Euler. The code would run, the plots would look fine, and the energy test in the lab would fail for a reason nothing in the source points at.",
+                            "`v[k]` puts the voltage into its own rate. That is a different differential equation — one whose solution is an exponential rather than an oscillation — and it has nothing to do with the circuit in front of you.",
+                            "`i[k - 1]` reaches back a step, which on the first pass reads `i[-1]`: the *last* element of the array, still zero, silently. Nothing raises, and the run is wrong from its first step to its last.",
+                        ],
+                    },
+                    {
+                        "prompt": "And in the forward Euler branch, which current does the voltage line use?",
+                        "hole": "explicit",
+                        "opts": ["i[k]", "i[k + 1]", "v[k]", "-i[k]"],
+                        "a": 0,
+                        "why": "`i[k]`. Forward Euler evaluates every rate at the state it is stepping *from*, so both lines read row `k` and the order of the two assignments does not matter. That property is what makes it forward Euler; lose it and you have written the other method.",
+                        "whys": [
+                            "`i[k]`. Forward Euler evaluates every rate at the state it is stepping *from*, so both lines read row `k` and the order of the two assignments does not matter. That property is what makes it forward Euler; lose it and you have written the other method.",
+                            "`i[k + 1]` here has not been assigned yet on this pass, so it reads the zero `np.zeros` left behind. Every voltage update would then use a current of zero and the capacitor would never discharge at all.",
+                            "`v[k]` again mixes up which state supplies which rate. The capacitor's rate is set by the current through it, and by nothing else.",
+                            "`-i[k]` cancels the minus sign already in front of the term, giving `+h*i[k]/c`. That is the sign error from the first reading unit: instead of oscillating, both states run away exponentially.",
+                        ],
+                    },
+                    {
+                        "prompt": "What goes in `energy`?",
+                        "hole": "energy",
+                        "opts": [
+                            "0.5 * c * v**2 + 0.5 * l * i**2",
+                            "0.5 * l * v**2 + 0.5 * c * i**2",
+                            "0.5 * c * v + 0.5 * l * i",
+                            "c * v**2 + l * i**2",
+                        ],
+                        "a": 0,
+                        "why": "The capacitor holds `0.5*c*v**2` and the inductor holds `0.5*l*i**2`. Each part goes with the state it stores: capacitance with voltage, inductance with current.",
+                        "whys": [
+                            "The capacitor holds `0.5*c*v**2` and the inductor holds `0.5*l*i**2`. Each part goes with the state it stores: capacitance with voltage, inductance with current.",
+                            "The two coefficients are swapped. It is dimensionally nonsense — henries times volts squared is not joules — and a units check catches it before any test does.",
+                            "Dropping the squares gives something that changes sign as the states do, so it can be negative, and stored energy cannot be. It also fails the simplest check available: at the start, with 5 V and no current, it returns 250 nJ rather than 1.25 µJ.",
+                            "The factor of one half is not decoration. It comes from integrating `v` d`q` from an empty capacitor up to `v`, and leaving it out doubles every energy the run reports — which happens to leave *ratios* correct, so the lab's energy test would still pass and the printed microjoules would be wrong.",
+                        ],
+                    },
+                    {
+                        "prompt": "By what factor does forward Euler multiply the stored energy at every step?",
+                        "hole": "growth",
+                        "opts": [
+                            "1 + h**2 / (l * c)",
+                            "1 - h**2 / (l * c)",
+                            "1 + h / np.sqrt(l * c)",
+                            "1 + h**2 * l * c",
+                        ],
+                        "a": 0,
+                        "why": "`1 + h**2 * w0**2`, and `w0**2` is `1/(l*c)`. Expanding one Euler step inside the energy leaves the two cross terms cancelling and this factor behind, exactly and for every state — which is why the ratio in the hand-worked table is 1.100 to every decimal place and not merely close to it.",
+                        "whys": [
+                            "`1 + h**2 * w0**2`, and `w0**2` is `1/(l*c)`. Expanding one Euler step inside the energy leaves the two cross terms cancelling and this factor behind, exactly and for every state — which is why the ratio in the hand-worked table is 1.100 to every decimal place and not merely close to it.",
+                            "A factor below 1 would mean the method quietly *removed* energy. Some integrators do, and that is its own kind of lie about the circuit, but forward Euler on an oscillator is not one of them: the sign falls out of the algebra as a plus.",
+                            "First order in `h` is the right instinct for the error of a single *state*, but energy is quadratic in the states, so the first-order parts cancel between the two terms and what survives is second order. That cancellation is the whole reason the factor is exact.",
+                            "Multiplying by `l*c` instead of dividing inverts the dependence: it says a slower circuit, with a longer time constant, is harder to integrate. The opposite is true — the number that matters is `h` measured against the period, which is `h*w0`.",
+                        ],
+                    },
+                ],
+            },
+            "build": {
+                "title": "A loop that rings at 5 kHz, with a Q you choose",
+                "minutes": 25,
+                "brief": r'''
+The simulation in this module was of a loop with nothing in it but an inductor and a
+capacitor. Here is that loop as a circuit you can measure, with the resistor that a
+real one always has drawn in explicitly so that you set it rather than inherit it.
+
+The canvas opens with a **1 V source**, two grounds, and the **10 mH inductor** already
+placed. Add a capacitor from the far end of the chain to ground, a resistor somewhere in
+series with them, and a probe on the capacitor's node. Choose the two values so that:
+
+- the loop rings at **5 kHz**, and
+- the **Q is about 5** — meaning the output at the ring is roughly five times the input.
+
+The three numbers you need, all from the reading units:
+
+```text
+f_0 = 1 / (2 * pi * sqrt(L * C))       the ring frequency
+Z_0 = sqrt(L / C)                      the characteristic impedance, in ohms
+Q   = Z_0 / R                          how tall the peak is, and how long it rings
+```
+
+Note the order they have to be used in. $C$ is fixed by $f_0$ alone; only once $C$ is
+chosen does $Z_0$ exist, and only then can $R$ be worked out from the $Q$ you want.
+Trying to pick $R$ first has nothing to divide.
+
+What the checks measure, all of it on your circuit and none of it on any reference
+drawing: the gain far below the ring, which must be 1; the frequency the output peaks
+at, which must be 5 kHz to within a few per cent; the height of that peak, which must
+land between 4 and 6.5; and the gain a decade above the peak, which must be about a
+hundredth — two energy stores roll off twice as fast as module 8's single capacitor did.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 9},
+                        {"id": "p2", "kind": "GND", "x": 13, "y": 9},
+                        {"id": "p3", "kind": "L", "x": 10, "y": 4, "rot": 0, "value": 0.01},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 4], "b": [5, 4]},
+                        {"a": [3, 7], "b": [3, 9]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 9},
+                        {"id": "p2", "kind": "GND", "x": 13, "y": 9},
+                        {"id": "p3", "kind": "L", "x": 10, "y": 4, "rot": 0, "value": 0.01},
+                        {"id": "p4", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 62},
+                        {"id": "p5", "kind": "C", "x": 13, "y": 6, "rot": 1, "value": 100e-9},
+                        {"id": "p6", "kind": "OUT", "x": 15, "y": 4},
+                    ],
+                    "wires": [
+                        {"a": [3, 5], "b": [3, 4]},
+                        {"a": [3, 4], "b": [5, 4]},
+                        {"a": [3, 7], "b": [3, 9]},
+                        {"a": [7, 4], "b": [9, 4]},
+                        {"a": [11, 4], "b": [13, 4]},
+                        {"a": [13, 4], "b": [13, 5]},
+                        {"a": [13, 4], "b": [15, 4]},
+                        {"a": [13, 7], "b": [13, 9]},
+                    ],
+                },
+                "checks": [
+                    {"name": "one source, and one of each of the three parts", "code": r'''
+c.assert(c.count("V") === 1, "keep exactly one source: the 1 V supply you started with");
+c.close(c.values("V")[0], 1, 0.001, "the source amplitude");
+c.assert(c.count("L") === 1 && c.count("C") === 1 && c.count("R") === 1,
+  "the loop is one resistor, one inductor and one capacitor - nothing else");
+c.close(c.values("L")[0], 0.01, 0.001, "the inductance you were given");
+'''},
+                    {"name": "well below the ring the output follows the input", "code": r'''
+c.close(c.gain(50), 1.0, 0.03,
+  "the gain at 50 Hz, a hundred times below the ring, where the capacitor sees the whole source");
+'''},
+                    {"name": "it rings at 5 kHz", "code": r'''
+var lo = 500, hi = 50000, best = 0, fb = lo;
+for (var k = 0; k < 900; k++) {
+  var f = lo * Math.pow(hi / lo, k / 899);
+  var g = c.gain(f);
+  if (g > best) { best = g; fb = f; }
+}
+c.close(fb, 5000, 0.04, "the frequency where the output peaks");
+'''},
+                    {"name": "the resonant rise is between four and six", "code": r'''
+var lo = 500, hi = 50000, best = 0, fb = lo;
+for (var k = 0; k < 900; k++) {
+  var f = lo * Math.pow(hi / lo, k / 899);
+  var g = c.gain(f);
+  if (g > best) { best = g; fb = f; }
+}
+c.assert(best > 4 && best < 6.5,
+  "the peak output is " + Number(best).toPrecision(3) + " V for a 1 V input; aim for a Q " +
+  "near 5, which with this L and C wants an R near 63 ohms");
+'''},
+                    {"name": "two stores means twice the roll-off", "code": r'''
+var lo = 500, hi = 50000, best = 0, fb = lo;
+for (var k = 0; k < 900; k++) {
+  var f = lo * Math.pow(hi / lo, k / 899);
+  var g = c.gain(f);
+  if (g > best) { best = g; fb = f; }
+}
+c.close(c.gain(10 * fb), 0.01, 0.25,
+  "the gain a decade above the ring, which for two energy stores should be a hundredth");
+'''},
+                ],
+                "hints": [
+                    "Take the frequency first. Rearranged, C = 1 / ((2*pi*f_0)**2 * L), and with 5 kHz and 10 mH that is 101.3 nF. The nearest part anyone stocks is 100 nF, which puts the ring at 5033 Hz — 0.7% out, comfortably inside the check.",
+                    "Now Z_0 = sqrt(L/C) = sqrt(0.01 / 100e-9) = 316 ohms, so a Q of 5 wants R = 316/5 = 63 ohms. 62 ohms is a standard value and gives Q = 5.10; 68 ohms gives 4.65. Both pass, and 47 ohms does not - it peaks at 6.7.",
+                    "The capacitor goes from the end of the chain to ground and the probe goes on that same node. The resistor may sit anywhere in the series path - before the inductor or after it - because a series loop carries one current and the order cannot matter.",
+                    "If the gain at 50 Hz is not 1, the capacitor is in the signal path rather than to ground. That arrangement is a band-pass rather than the low-pass-with-a-peak you are after, and the first frequency check will say so immediately.",
+                ],
+            },
+            "derive": {
+                "title": "Where the invented energy comes from",
+                "minutes": 14,
+                "vars": ["v", "i", "C", "L", "h", "E_n", "E_0", "w_0", "n"],
+                "brief": r'''
+The lab measures a simulated run's energy and finds it climbing. This derivation says
+in advance exactly how fast, and it does so without solving the differential equation
+at all — one Euler step is substituted into the energy expression and the algebra does
+the rest.
+
+The state is the pair $(v, i)$ at step $n$, the timestep is $h$, and the two rates are
+
+$$\frac{dv}{dt} = -\frac{i}{C}, \qquad \frac{di}{dt} = \frac{v}{L}$$
+
+The stored energy at that step is $E_n = \tfrac{1}{2} Cv^2 + \tfrac{1}{2} Li^2$, and
+$w_0^2 = 1/(LC)$.
+''',
+                "steps": [
+                    {
+                        "prompt": "One forward Euler step for the capacitor. Write the new voltage in terms of $v$, $i$, $h$ and $C$.",
+                        "answer": r"v - \frac{h i}{C}",
+                        "placeholder": "the old voltage, plus one term",
+                        "hint": "`value + step x rate`, with the rate taken at the state you already have. The rate here is $-i/C$.",
+                        "deconstruct": [
+                            "The capacitor's rate at the current state is $-i/C$.",
+                            "A rate is a change per second, so multiplying by $h$ turns it into a change.",
+                            "Add that change to where you already were: $v - h i/C$.",
+                        ],
+                    },
+                    {
+                        "prompt": "And for the inductor, still reading the *old* pair. Write the new current in terms of $v$, $i$, $h$ and $L$.",
+                        "answer": r"i + \frac{h v}{L}",
+                        "placeholder": "the old current, plus one term",
+                        "hint": "Same rule, and the other rate. Note that this line reads $v$, not the new voltage from the previous step — that is what makes this forward Euler rather than the semi-implicit method.",
+                        "deconstruct": [
+                            "The inductor's rate at the current state is $v/L$.",
+                            "Multiply by $h$ to get the change over one step: $h v/L$.",
+                            "Add it on: $i + h v/L$. Both updates now read the same old pair, so the order of the two lines cannot matter.",
+                        ],
+                    },
+                    {
+                        "prompt": "Substitute both of those into $\\tfrac{1}{2} C(\\cdot)^2 + \\tfrac{1}{2} L(\\cdot)^2$ and expand completely. Write the new energy in terms of $C$, $L$, $v$, $i$ and $h$.",
+                        "answer": r"\frac{C v^2}{2} + \frac{L i^2}{2} + \frac{h^2 i^2}{2 C} + \frac{h^2 v^2}{2 L}",
+                        "placeholder": "four terms, once the dust settles",
+                        "hint": "Expand each square into three terms, so six in all. Two of them are equal and opposite.",
+                        "deconstruct": [
+                            "$\\tfrac{1}{2} C\\left(v - \\dfrac{h i}{C}\\right)^2 = \\tfrac{1}{2} Cv^2 - hvi + \\dfrac{h^2 i^2}{2C}$.",
+                            "$\\tfrac{1}{2} L\\left(i + \\dfrac{h v}{L}\\right)^2 = \\tfrac{1}{2} Li^2 + hiv + \\dfrac{h^2 v^2}{2L}$.",
+                            "The cross terms are $-hvi$ and $+hiv$, which cancel exactly and for every state. Four terms are left.",
+                        ],
+                    },
+                    {
+                        "prompt": "The two new terms are not new at all. Write $\\dfrac{h^2 i^2}{2 C} + \\dfrac{h^2 v^2}{2 L}$ as a single product, in terms of $E_n$, $h$, $L$ and $C$.",
+                        "answer": r"\frac{h^2 E_n}{L C}",
+                        "placeholder": "a multiple of E_n",
+                        "hint": "Take out a factor of $h^2/(LC)$ and look hard at what is left inside the bracket.",
+                        "deconstruct": [
+                            "$\\dfrac{h^2 i^2}{2C} = \\dfrac{h^2}{LC}\\cdot\\dfrac{Li^2}{2}$, because multiplying and dividing by $L$ changes nothing.",
+                            "Likewise $\\dfrac{h^2 v^2}{2L} = \\dfrac{h^2}{LC}\\cdot\\dfrac{Cv^2}{2}$.",
+                            "Adding them, the bracket is $\\tfrac{1}{2} Li^2 + \\tfrac{1}{2} Cv^2$, which is $E_n$ itself. So the pair is $h^2E_n/(LC)$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Put the four terms back together as the old energy times one factor. Write it in terms of $E_n$, $h$ and $w_0$.",
+                        "answer": r"E_n \left(1 + h^2 w_0^2\right)",
+                        "placeholder": "E_n times a bracket",
+                        "hint": "The first two terms are $E_n$ and the last two are $h^2E_n/(LC)$. Then use $w_0^2 = 1/(LC)$.",
+                        "deconstruct": [
+                            "The four terms are $E_n + \\dfrac{h^2E_n}{LC}$.",
+                            "Factor out $E_n$: $E_n\\left(1 + \\dfrac{h^2}{LC}\\right)$.",
+                            "And $1/(LC)$ is $w_0^2$, so the factor is $1 + h^2w_0^2$. It does not depend on the state at all — only on the step and the circuit.",
+                        ],
+                    },
+                    {
+                        "prompt": "One step multiplies by that fixed number, so $n$ steps multiply by it $n$ times. Write the energy after $n$ steps in terms of $E_0$, $h$, $w_0$ and $n$.",
+                        "answer": r"E_0 \left(1 + h^2 w_0^2\right)^{n}",
+                        "placeholder": "E_0 times a bracket to a power",
+                        "hint": "The factor is the same at every step and does not depend on the state, so it simply compounds.",
+                        "deconstruct": [
+                            "$E_1 = E_0(1 + h^2w_0^2)$ and $E_2 = E_1(1 + h^2w_0^2) = E_0(1 + h^2w_0^2)^2$.",
+                            "Nothing changes along the way, because the factor is independent of $v$ and $i$.",
+                            "So $E_n = E_0\\left(1 + h^2w_0^2\\right)^{n}$, which is the expression the lab's fourth test asserts to one part in a million.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+Read the result for what it forbids as much as for what it predicts.
+
+**It never equals one.** $h^2w_0^2$ is positive for every timestep you could possibly
+choose, so forward Euler on an undamped oscillator gains energy on every step of every
+run. There is no step size that makes it conserve energy, which means no amount of care
+with `dt` turns this method into the right one for a system that is supposed to ring
+forever. That is a statement about the method, and it is why the one-character change to
+semi-implicit Euler is worth knowing.
+
+**It compounds, so the run length matters as much as the step.** Over a fixed span $t$
+there are $t/h$ steps, and
+
+$$\left(1 + h^2w_0^2\right)^{t/h} \approx e^{\,\omega_0^2 h t}$$
+
+The exponent is proportional to $h$, so halving the timestep halves it — first-order
+convergence, exactly as module 8 promised, now visible in a quantity that has an exact
+right answer. With the lab's settings:
+
+```text
+  h = T/200,  so  h*w0 = 2*pi/200 = 0.031416
+  per step        1 + 0.031416^2  = 1.00098696
+  1000 steps      1.00098696^1000 = 2.6818     energy, after five cycles
+  amplitude       sqrt(2.6818)    = 1.6376     so 5.00 V has become 8.19 V
+  and the approximation above     = 2.6831     close enough to be worth using
+```
+
+**It costs nothing to check.** This is the real lesson. You now have an exact prediction
+for a quantity your simulation reports, obtained without solving the differential
+equation, and if the run disagrees with it the disagreement is a bug rather than a
+subtlety. Finding a quantity like that — conserved, or predictable, or bounded — is the
+first thing to do when you write a simulation of anything, and it is worth more than any
+number of plots that look about right.
+''',
+            },
             "sandbox": {
                 "title": "A state is a point, and time is a path",
                 "visualiser": "phase-portrait",
@@ -9696,10 +13255,84 @@ what it calls the result.
                     },
                 ],
             },
-            "numeric": {
-                "title": "How much current does the energy become?",
-                "minutes": 8,
-                "brief": r'''
+            "numeric": [
+                {
+                    "title": "How long is one swing?",
+                    "minutes": 5,
+                    "brief": r'''
+Before anything can be simulated, the timestep has to be chosen, and a timestep is only
+ever chosen against the circuit's own natural time. For a capacitor feeding a resistor
+that was $\tau = RC$. For a capacitor and an inductor exchanging energy it is the
+**period** — the time to go all the way round once and arrive back where it started.
+
+The pair oscillates at
+
+$$\omega_0 = \frac{1}{\sqrt{LC}} \ \text{rad/s}, \qquad T = \frac{2\pi}{\omega_0}
+= 2\pi\sqrt{LC}$$
+
+One rule, one unknown. Answer in **microseconds**.
+''',
+                    "prompt": "How long does this loop take to complete one full cycle?",
+                    "note": "To four significant figures, in microseconds.",
+                    "figure": r'''
+```text
+        +--------UUUU--------+
+        |     L = 47 mH      |
+       ===  C = 220 nF       |
+        |                    |
+        +--------------------+
+
+   no source, no resistance: the pair simply exchanges what it already holds
+```
+
+The same loop as the rest of this module, with different parts in it. Nothing about the
+period depends on how much energy is in the circuit or on which store is holding it at
+the moment — only on the two values.
+''',
+                    "given": [
+                        {"label": "L", "value": "47 mH"},
+                        {"label": "C", "value": "220 nF"},
+                    ],
+                    "aside": "Digits and exponents separately. Almost every wrong answer in this "
+                             "subject has the right three digits and the wrong power of ten.",
+                    "answer": 638.9,
+                    "tol": 4.0,
+                    "unit": "µs",
+                    "hint": "$LC = 4.7\\times10^{-2} \\times 2.2\\times10^{-7}$. Multiply the digits, "
+                            "add the exponents, take the square root of the result, and only then "
+                            "multiply by $2\\pi$.",
+                    "wrong": "If you have about 102 µs you have found $\\sqrt{LC}$ and stopped — that "
+                             "is one radian's worth of the swing, not one cycle, and the factor "
+                             "of $2\\pi$ is still owed. If you have about 1565 you have computed the "
+                             "frequency in hertz instead of the period.",
+                    "why": r'''
+```text
+  L*C      = 4.7e-2 x 2.2e-7
+           = (4.7 x 2.2) x 10^(-2-7)
+           = 10.34 x 10^-9    = 1.034e-8 s^2
+
+  sqrt(LC) = 1.0169e-4 s
+
+  T        = 2 pi x 1.0169e-4 = 6.389e-4 s = 638.9 us
+```
+
+**638.9 µs**, so about 1.6 kHz. The number that matters next is not this one but what it
+implies about a timestep: two hundred steps a cycle, which is the resolution the lab
+uses, means $h = 3.19\ \mu$s. Pick milliseconds instead and a single step would carry
+the simulation one and a half times round the loop, which is not a coarse answer but no
+answer at all.
+
+Notice also what the period does *not* depend on. Charge the capacitor to 2 V or to
+200 V and the period is identical; that independence of amplitude is a property of
+linear systems and it is why a quartz watch keeps time as its battery fades. Put a
+saturating core in the inductor so that $L$ falls when the current is large, and it
+stops being true immediately.
+''',
+                },
+                {
+                    "title": "How much current does the energy become?",
+                    "minutes": 8,
+                    "brief": r'''
 A capacitor is charged to 5 V and then connected across an inductor with no current
 flowing in it yet. Nothing dissipates: the loop is an ideal L and an ideal C.
 
@@ -9713,20 +13346,20 @@ $$E_C = \tfrac{1}{2}Cv^2 \qquad E_L = \tfrac{1}{2}Li^2$$
 
 Answer in **milliamps**.
 ''',
-                "prompt": "What is the largest current the inductor ever carries?",
-                "note": "No resistance anywhere, so nothing is lost on the way across.",
-                # A text figure rather than a schematic, deliberately. The whole
-                # question is about a state the circuit is already in at t = 0 — the
-                # capacitor holding 5 V, the inductor holding no current — and a
-                # drawn schematic cannot say that. The solver starts every capacitor
-                # at zero volts and every inductor at zero amps and takes its
-                # excitation only from sources, so the loop as drawn sits at rest
-                # forever and the number it produces is 0, not 15.81 mA. Redrawing it
-                # as something the solver can excite — a 5 V step into a series L and
-                # C — would give the same peak, but it is a different circuit with a
-                # source feeding it, and the lab immediately below integrates exactly
-                # this one, from exactly these initial conditions.
-                "figure": r'''
+                    "prompt": "What is the largest current the inductor ever carries?",
+                    "note": "No resistance anywhere, so nothing is lost on the way across.",
+                    # A text figure rather than a schematic, deliberately. The whole
+                    # question is about a state the circuit is already in at t = 0 — the
+                    # capacitor holding 5 V, the inductor holding no current — and a
+                    # drawn schematic cannot say that. The solver starts every capacitor
+                    # at zero volts and every inductor at zero amps and takes its
+                    # excitation only from sources, so the loop as drawn sits at rest
+                    # forever and the number it produces is 0, not 15.81 mA. Redrawing it
+                    # as something the solver can excite — a 5 V step into a series L and
+                    # C — would give the same peak, but it is a different circuit with a
+                    # source feeding it, and the lab immediately below integrates exactly
+                    # this one, from exactly these initial conditions.
+                    "figure": r'''
 ```text
                 i(t) -->
         +--------UUUU--------+
@@ -9742,29 +13375,235 @@ One capacitor and one inductor in a loop, and nothing else. There is no source: 
 energy is already in the circuit before the clock starts, sitting in the electric
 field between the capacitor's plates.
 ''',
-                "given": [
-                    {"label": "C", "value": "100 nF"},
-                    {"label": "L", "value": "10 mH"},
-                    {"label": "Capacitor voltage at t = 0", "value": "5.00 V"},
-                    {"label": "Inductor current at t = 0", "value": "0"},
-                ],
-                "aside": "The peak current happens exactly when the capacitor voltage passes through "
-                         "zero, because that is the moment all of the energy has arrived.",
-                "answer": 15.81,
-                "tol": 0.2,
-                "unit": "mA",
-                "hint": "Set the two energies equal: $\\tfrac{1}{2}Cv^2 = \\tfrac{1}{2}Li^2$. The halves "
-                        "cancel, and rearranging gives $i = v\\sqrt{C/L}$.",
-                "wrong": "Check the ratio inside the square root. $\\sqrt{C/L}$ is small here because "
-                         "the capacitance is small and the inductance is not; $\\sqrt{L/C}$ upside down "
-                         "would give 1580 A, which no 100 nF capacitor is going to supply.",
-                "why": "$i = 5\\sqrt{10^{-7}/10^{-2}} = 5\\sqrt{10^{-5}} = 5 \\times 3.162\\times10^{-3}$ "
-                       "= 15.8 mA. The quantity $\\sqrt{L/C}$ has units of ohms and is called the "
-                       "characteristic impedance of the pair — 316 Ω here — and the peak "
-                       "current is simply the peak voltage divided by it, exactly as though it were a "
-                       "resistance. Your simulation must reproduce this number, and how closely it does "
-                       "is one measure of whether the timestep was small enough.",
-            },
+                    "given": [
+                        {"label": "C", "value": "100 nF"},
+                        {"label": "L", "value": "10 mH"},
+                        {"label": "Capacitor voltage at t = 0", "value": "5.00 V"},
+                        {"label": "Inductor current at t = 0", "value": "0"},
+                    ],
+                    "aside": "The peak current happens exactly when the capacitor voltage passes through "
+                             "zero, because that is the moment all of the energy has arrived.",
+                    "answer": 15.81,
+                    "tol": 0.2,
+                    "unit": "mA",
+                    "hint": "Set the two energies equal: $\\tfrac{1}{2}Cv^2 = \\tfrac{1}{2}Li^2$. The halves "
+                            "cancel, and rearranging gives $i = v\\sqrt{C/L}$.",
+                    "wrong": "Check the ratio inside the square root. $\\sqrt{C/L}$ is small here because "
+                             "the capacitance is small and the inductance is not; $\\sqrt{L/C}$ upside down "
+                             "would give 1580 A, which no 100 nF capacitor is going to supply.",
+                    "why": "$i = 5\\sqrt{10^{-7}/10^{-2}} = 5\\sqrt{10^{-5}} = 5 \\times 3.162\\times10^{-3}$ "
+                           "= 15.8 mA. The quantity $\\sqrt{L/C}$ has units of ohms and is called the "
+                           "characteristic impedance of the pair — 316 Ω here — and the peak "
+                           "current is simply the peak voltage divided by it, exactly as though it were a "
+                           "resistance. Your simulation must reproduce this number, and how closely it does "
+                           "is one measure of whether the timestep was small enough.",
+                },
+                {
+                    "title": "Where the pair settles, and what is left stored there",
+                    "minutes": 10,
+                    "brief": r'''
+A circuit with two states does not have to oscillate. Put resistors around the same two
+components, connect it to a supply, leave it alone, and it arrives somewhere and stays —
+and "stays" has an exact meaning here, which is that **both rates are zero at once**.
+
+Read the two rate equations backwards to see what that costs each part:
+
+$$\frac{dv}{dt} = \frac{i_C}{C} = 0 \ \Longrightarrow\ i_C = 0
+\qquad\qquad
+\frac{di}{dt} = \frac{v_L}{L} = 0 \ \Longrightarrow\ v_L = 0$$
+
+A settled capacitor takes no current, so it behaves as a break in the wire. A settled
+inductor has no voltage across it, so it behaves as a piece of wire. Redraw the circuit
+with those two substitutions made and what is left has no states in it at all.
+
+Then answer the question that is actually asked, which is about the **energy** sitting
+in the capacitor once everything has stopped moving. Answer in **microjoules**.
+''',
+                    "prompt": "Long after the supply was switched on, how much energy is stored in the capacitor?",
+                    "note": "In microjoules, to three significant figures.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 12},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "r1", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 1500},
+                            {"id": "c1", "kind": "C", "x": 9, "y": 6, "rot": 1, "value": 100e-9},
+                            {"id": "g1", "kind": "GND", "x": 9, "y": 9},
+                            {"id": "l1", "kind": "L", "x": 12, "y": 4, "rot": 0, "value": 10e-3},
+                            {"id": "r2", "kind": "R", "x": 15, "y": 6, "rot": 1, "value": 3300},
+                            {"id": "g2", "kind": "GND", "x": 15, "y": 9},
+                            {"id": "out", "kind": "OUT", "x": 9, "y": 2},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [9, 4]},
+                            {"a": [9, 4], "b": [9, 5]},
+                            {"a": [9, 4], "b": [9, 2]},
+                            {"a": [9, 4], "b": [11, 4]},
+                            {"a": [13, 4], "b": [15, 4]},
+                            {"a": [15, 4], "b": [15, 5]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [9, 7], "b": [9, 9]},
+                            {"a": [15, 7], "b": [15, 9]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Supply", "value": "12.0 V"},
+                        {"label": "R1, from the supply", "value": "1.5 kΩ"},
+                        {"label": "R2, to ground", "value": "3.3 kΩ"},
+                        {"label": "L", "value": "10 mH"},
+                        {"label": "C", "value": "100 nF"},
+                    ],
+                    "aside": "Two substitutions, then a divider, then one formula. The inductance and "
+                             "the capacitance do not appear in the voltage at all — they decide only "
+                             "how the circuit got there and how long it took.",
+                    "check": "var v = c.vout(); return 0.5 * c.values(\"C\")[0] * v * v * 1e6;",
+                    "answer": 3.40,
+                    "tol": 0.05,
+                    "unit": "µJ",
+                    "hint": "With the inductor replaced by wire, the probe node and the node past the "
+                            "inductor are the same node, and the two resistors are an ordinary "
+                            "divider across the supply. Find that voltage first; the energy is "
+                            "$\\tfrac{1}{2}Cv^2$ afterwards.",
+                    "wrong": "12.0 V on the capacitor — and 7.20 µJ — is what you get by treating the "
+                             "settled inductor as a break rather than a short, which swaps the two "
+                             "substitutions over. 8.25 V is the right voltage; if your answer is "
+                             "near 8.25 you have stopped one step early and reported volts, not "
+                             "microjoules.",
+                    "why": r'''
+```text
+settled:   the capacitor takes no current  ->  it is a break
+           the inductor drops no voltage   ->  it is a wire
+
+so the probe node and the node past the inductor are one node, and the only path
+current can take is 12 V -> R1 -> R2 -> ground:
+
+  I     = 12.0 / (1500 + 3300) = 12.0 / 4800   = 2.50 mA
+  v     = I x 3300 = 2.50e-3 x 3300            = 8.25 V
+
+  E     = 0.5 * C * v^2
+        = 0.5 x 1.00e-7 x 8.25^2
+        = 0.5 x 1.00e-7 x 68.06
+        = 3.403e-6 J                           = 3.40 uJ
+```
+
+**3.40 µJ**, and 2.50 mA is flowing through the coil the whole time it sits there.
+
+Two things are worth taking from this. The first is that the resting state of a system
+with two states is found by setting every rate to zero, not by any special rule about
+capacitors and inductors — "no current" and "no voltage" are what $dv/dt = 0$ and
+$di/dt = 0$ *mean* for those two parts. The same move works on a system of any size and
+is exactly what a simulator does when you ask it for an operating point.
+
+The second is what happens if the supply is now switched off. The 3.40 µJ in the
+capacitor is not the whole story: the coil is holding
+$\tfrac{1}{2}Li^2 = \tfrac{1}{2}\times 10^{-2}\times(2.50\times10^{-3})^2 = 0.031\ \mu$J
+as well, and both stores have to empty through the resistors. The capacitor's store is
+a hundred times the larger here, which is why the collapse looks like an RC discharge
+with a small wrinkle on it rather than like the ringing the rest of this module is
+about. Change $L$ to 1 H and the coil holds 3.1 µJ instead, the same size as the
+capacitor's store — and two stores of comparable size emptying together is a genuinely
+two-state problem, with the same voltage, the same current, and the same picture on the
+page.
+''',
+                },
+                {
+                    "title": "What the capacitor sees when the loop is driven at its own frequency",
+                    "minutes": 12,
+                    "brief": r'''
+The same three components, in series, now with a signal generator in the loop instead of
+an initial charge — and the generator is set to exactly the frequency at which the
+inductor and the capacitor cancel each other out.
+
+At that frequency the coil's impedance $+j\omega_0 L$ and the capacitor's
+$-j/(\omega_0 C)$ are equal in size and opposite in sign, so as far as the source is
+concerned they are not there and the current is set by the resistor alone. That current
+still has to flow through the capacitor, though, and the voltage it develops there is
+whatever $1/(\omega_0 C)$ demands.
+
+Work out the frequency, then the current, then the voltage across the capacitor. The
+probe reads its **amplitude**, in volts.
+''',
+                    "prompt": "What amplitude does the probe read?",
+                    "note": "In volts, to three significant figures. The source amplitude is 1.00 V.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "r1", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 47},
+                            {"id": "l1", "kind": "L", "x": 10, "y": 4, "rot": 0, "value": 10e-3},
+                            {"id": "c1", "kind": "C", "x": 13, "y": 6, "rot": 1, "value": 100e-9},
+                            {"id": "g1", "kind": "GND", "x": 13, "y": 9},
+                            {"id": "out", "kind": "OUT", "x": 15, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [9, 4]},
+                            {"a": [11, 4], "b": [13, 4]},
+                            {"a": [13, 4], "b": [13, 5]},
+                            {"a": [13, 4], "b": [15, 4]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [13, 7], "b": [13, 9]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Source amplitude", "value": "1.00 V"},
+                        {"label": "Drive frequency", "value": "the loop's own $f_0$"},
+                        {"label": "R", "value": "47 Ω"},
+                        {"label": "L", "value": "10 mH"},
+                        {"label": "C", "value": "100 nF"},
+                    ],
+                    "aside": "Three steps, and the middle one is the surprise: at resonance the source "
+                             "sees a bare 47 Ω, because the two reactances have gone.",
+                    "check": ("var L = c.values(\"L\")[0], C = c.values(\"C\")[0];\n"
+                              "var f0 = 1 / (2 * Math.PI * Math.sqrt(L * C));\n"
+                              "return c.gain(f0);"),
+                    "answer": 6.73,
+                    "tol": 0.08,
+                    "unit": "V",
+                    "hint": "There is a shortcut worth knowing: the answer is $Q = Z_0/R$ times the "
+                            "input, where $Z_0 = \\sqrt{L/C}$. Doing it the long way — $f_0$, then "
+                            "$|I| = 1/R$, then $|V_C| = |I|/(\\omega_0 C)$ — gives the same number "
+                            "and shows why.",
+                    "wrong": "If you got about 0.99 V you have treated this as a divider and assumed "
+                             "the output cannot exceed the input. It can, and here it does, by a "
+                             "factor of nearly seven. If you got 21.3 you have stopped at the "
+                             "current in milliamps.",
+                    "why": r'''
+```text
+  w0    = 1 / sqrt(L C) = 1 / sqrt(1.00e-2 x 1.00e-7) = 3.1623e4 rad/s
+  f0    = w0 / 2 pi                                   = 5033 Hz
+
+  at w0 the two reactances are equal and opposite:
+        w0 L      = 3.1623e4 x 1.00e-2                = 316.2 ohms
+        1 / (w0 C)= 1 / (3.1623e4 x 1.00e-7)          = 316.2 ohms
+  so the loop looks like 47 ohms, and nothing else.
+
+  |I|   = 1.00 / 47                                   = 21.28 mA
+  |V_C| = |I| / (w0 C) = 2.128e-2 / 3.1623e-3         = 6.73 V
+```
+
+**6.73 V** across the capacitor, from a 1 V source, through a passive circuit with no
+amplifier in it anywhere. The short way to the same number is $Q = Z_0/R = 316.2/47 =
+6.73$, which is the quality factor from the third reading unit doing double duty: it is
+both how many cycles the loop rings for when left alone and how much it multiplies a
+signal by when driven on its nose.
+
+It is not a violation of anything. The inductor is at 6.73 V as well, in exact
+antiphase, so the two of them sum to zero and the source only ever supplies the 1.00 V
+that appears across the resistor. Nor is it instantaneous: the stored energy has to be
+built up, and it takes roughly $Q$ cycles of driving — about 7 here, or 1.3 ms — before
+the capacitor reaches that amplitude.
+
+The design consequence is worth stating plainly, because it is where this bites people
+in practice. Choosing a capacitor for its capacitance alone and forgetting that it will
+be sitting at seven times the supply voltage is how parts fail on a bench. Raise $Q$ to
+50, which is unremarkable for a good coil, and a 1 V drive puts 50 V across a component
+you chose for a 1 V circuit.
+''',
+                },
+            ],
             "lab": {
                 "title": "An oscillation, and the energy the integrator invents",
                 "runtime": "python",
@@ -10031,6 +13870,618 @@ assert float(_es.max() / _es.min()) < 1.5, \
                 "Bisection cannot fail once bracketed and cannot be fast. Newton can be very fast and can fail. Serious solvers use the first to get close and the second to finish.",
                 "The equations worth this trouble are the ones with no rearrangement at all: `cos x = x`, or the time at which a ringing step response first reaches 90% of where it is going.",
             ],
+            "read": [
+                {
+                    "title": "The question is 'what value', and the answer is 'where does this cross zero'",
+                    "minutes": 12,
+                    "body": r'''
+A bench supply set to 12.00 V, a 10 kΩ resistor soldered down, and a trimpot in the
+lower leg of a divider. You want 3.30 V at the junction between them. So you clip a
+meter on, turn the screw, watch the reading, and stop when it says what you wanted.
+
+Nobody would call that mathematics. It is, though, and the whole of this module is that
+procedure written down carefully enough that a machine can carry it out while you are
+doing something else.
+
+Watch what your hand was doing. You were not computing anything. You had one number you
+could **choose** — the trimpot setting — and one number you could **measure**, and you
+knew which way to turn the screw when the measurement came out low. Those three things
+are a root finder, entire. Everything that follows is about doing them without a
+screwdriver, and about the two ways it can go wrong that your hand would have noticed
+and a program will not.
+
+## The quantity you are actually steering by
+
+The meter reads 2.81 V and you want 3.30. The number that matters is neither of those.
+It is the gap:
+
+$$f(x) = \big(\text{what the choice } x \text{ produces}\big) - \big(\text{what you
+asked for}\big)$$
+
+$f$ is the **residual**. Insisting on the subtraction is not pedantry: the *sign* of $f$
+is the thing that tells you which way to turn the screw. Negative means the output is
+below target, positive means above, and the setting you are hunting for is the one where
+$f$ is exactly zero. A value of $x$ with $f(x) = 0$ is called a **root** of $f$.
+
+That rearrangement — move the target across so that what you want is *zero* — is how
+almost every design question of the form *what value gives me this answer* reaches a
+solver. It is one line, and it is the line people leave out. Handing a root finder
+`vout(r)` when you meant `vout(r) - 3.30` is not a subtle slip; it asks for the
+resistance that produces no output at all, it will find one, and the number that comes
+back looks exactly like a right answer.
+
+## Worked example 1: the divider, which the algebra could also do
+
+The circuit is 12.00 V across a fixed 10 kΩ on top and an adjustable $R_2$ to ground,
+with the output taken between them:
+
+$$V_{out}(R_2) = 12.00\,\frac{R_2}{10\,000 + R_2}, \qquad
+f(R_2) = 12.00\,\frac{R_2}{10\,000 + R_2} - 3.30$$
+
+Evaluate it at two settings and read the signs:
+
+```text
+  R2 = 1 000 :  Vout = 12 x 1000/11000 = 1.090909 V   f = -2.209091
+  R2 = 10 000:  Vout = 12 x 10000/20000 = 6.000000 V   f = +2.700000
+```
+
+One negative, one positive. Somewhere between 1 kΩ and 10 kΩ the residual passes through
+zero, and that somewhere is the resistor the specification is asking for.
+
+## Why a change of sign is worth anything at all
+
+Because $f$ is **continuous**: nudge $R_2$ a little and $V_{out}$ moves a little, with no
+jumps. A continuous quantity cannot get from below a value to above it without passing
+through it. That is the intermediate value theorem, and stated in bench terms it is
+completely obvious — you cannot go from 1.09 V to 6.00 V without the meter reading
+3.30 V on the way, provided the meter is watching the whole time.
+
+So: **opposite signs at the two ends of an interval means at least one root inside it.**
+That single sentence is the only guarantee any of this rests on, and it is worth being
+precise about what it does *not* say. It does not say there is exactly one root — there
+could be three. It does not say anything at all when the signs agree — there might be
+two roots in there, or none. And it needs the continuity: if $f$ jumps, all bets are off,
+which is the failure at the bottom of this unit.
+
+An interval whose ends have opposite signs is called a **bracket**, and a root finder
+that starts from one is said to be *bracketed*.
+
+## Finding a bracket you are entitled to
+
+The bracket has to come from somewhere, and usually it comes from a coarse scan: walk
+across the range the answer could physically be in, evaluate, and look for the place the
+sign flips.
+
+```text
+  R2 (ohms)     Vout (V)      f = Vout - 3.30
+  ---------------------------------------------
+      1 000     1.090909        -2.209091
+      2 000     2.000000        -1.300000
+      3 000     2.769231        -0.530769     <-- last negative
+      4 000     3.428571        +0.128571     <-- first positive
+      5 000     4.000000        +0.700000
+```
+
+The sign flips between 3 kΩ and 4 kΩ, so `[3000, 4000]` is a bracket and the answer is
+inside it. Five function evaluations, and the problem is now boxed.
+
+This one happens to rearrange, so we can check the machinery against an answer we can
+get another way:
+
+```text
+  12 R2 / (10000 + R2) = 3.30
+  12 R2 = 3.30 x 10000 + 3.30 R2
+  8.70 R2 = 33 000
+  R2 = 33000 / 8.70 = 3793.10 ohms
+
+  check:  12 x 3793.10 / 13793.10 = 3.30000 V
+```
+
+3793.10 Ω, comfortably inside `[3000, 4000]`. Being able to do that is exactly why this
+is the example to practise on: when you write your own solver, the first thing you point
+it at should be a problem whose answer you already know.
+
+## Worked example 2: one the algebra will not do
+
+Here is the same shape of question with the rearrangement removed. A circuit with an
+inductor and a capacitor in it, given a step input, does not climb smoothly to its final
+value — it overshoots and rings. For one with damping ratio $\zeta = 0.30$ and natural
+frequency $\omega_n = 10\,000$ rad/s, the output after a 1 V step is
+
+$$v(t) = 1 - e^{-\zeta\omega_n t}\left(\cos\omega_d t +
+\frac{\zeta}{\sqrt{1-\zeta^2}}\sin\omega_d t\right),
+\qquad \omega_d = \omega_n\sqrt{1-\zeta^2} = 9539.4\ \text{rad/s}$$
+
+*When does it first reach 0.90 V?* The residual is $f(t) = v(t) - 0.90$, and now try to
+get $t$ on its own. It is inside an exponential, inside a cosine and inside a sine, all
+at once, being multiplied together. There is no rearrangement. There is no formula. That
+is what the word **transcendental** means, and the moment two different kinds of function
+multiply each other you are almost always in it.
+
+None of which stops you *evaluating* the thing, which is all a root finder ever needs:
+
+```text
+  t = 100 us :  v = 0.381417   f = -0.518583
+  t = 200 us :  v = 1.018631   f = +0.118631
+```
+
+Bracketed, in two evaluations, and the answer — which the numeric units below ask you to
+produce — is 179.4 µs. Notice that the *work* was identical to the divider's. The
+difference between a problem the algebra solves and one it cannot touch turned out to be
+no difference at all, once the question was written as a residual.
+
+## The mistake people actually make
+
+Not the missing subtraction — that one is at least easy to spot once you know to look
+for it. The one that bites is **assuming the bracket** instead of checking it.
+
+It is tempting because when you sketch the problem in your head the root is obviously in
+there. But the bracket is a claim about a function, and the function is a piece of code
+you wrote this morning. If it has a sign error in it, or a unit slip, or the wrong
+resistor in the denominator, then `[3000, 4000]` may hold no root at all. A solver that
+checks its own bracket and refuses tells you that immediately. A solver that assumes it
+runs its forty halvings and returns a number, and the number is somewhere near one end
+of your interval for no reason you can see.
+
+## Where the sign change lies to you
+
+The guarantee needed $f$ continuous. Here is what a discontinuity buys you:
+
+$$f(x) = \frac{1}{x - 2}$$
+
+On `[1, 3.5]`: $f(1) = -1$ and $f(3.5) = +0.667$. Opposite signs, a textbook bracket, and
+there is no root anywhere — the function is never zero. Halve it anyway and watch:
+
+```text
+  step   bracket                m         f(m)
+  ------------------------------------------------
+   1     [1.000000, 3.500000]   2.250000    +4.00
+   2     [1.000000, 2.250000]   1.625000    -2.67
+   3     [1.625000, 2.250000]   1.937500   -16.00
+   4     [1.937500, 2.250000]   2.093750   +10.67
+   5     [1.937500, 2.093750]   2.015625   +64.00
+```
+
+It converges beautifully on $x = 2$, where $f$ is not zero but infinite. The tell is in
+the last column: as the bracket closes, $|f(m)|$ is heading for **infinity** rather than
+for zero, which never happens when a bracket is closing on a real root. A pole is a sign
+change too, and nothing about the sign alone can tell the two apart.
+
+The other half of the same problem is a root the sign change cannot see at all.
+$f(x) = (x-2)^2$ has a perfectly good root at $x = 2$ and is never negative anywhere, so
+no bracket exists. The function touches the axis instead of crossing it, and every
+method in this module is blind to it.
+
+## Where this stops holding, and what replaces it
+
+Bracketing is a one-dimensional idea and does not survive being taken into two. "Between
+$a$ and $b$" means something on a line; on a plane there is no *between*, and two
+equations in two unknowns have no sign change to halve. That case needs Newton's method
+generalised to vectors, which is the last section of the third reading unit and is what
+a nonlinear circuit simulator actually runs.
+
+For a tangential root — the $(x-2)^2$ case — the question has to change shape. Either
+look for a root of $f'$ instead, since the function turns round where it touches, or ask
+a minimiser for the smallest value of $|f|$ rather than asking a root finder for a
+crossing. And when $f$ comes from a measurement rather than a formula it is not smooth
+at all: it has noise on it, it crosses your target several times in a row by accident,
+and no amount of halving improves anything. Fit a curve to the data first and find the
+root of the fit.
+
+But for a single continuous function of one variable with a genuine crossing in it —
+which covers a great deal of practical engineering — a bracket is all you need to be
+*certain*, and the next unit is about spending that certainty.
+''',
+                },
+                {
+                    "title": "Bisection: the guarantee, and what it costs",
+                    "minutes": 14,
+                    "body": r'''
+Think of a number between 1 and 100 and I will guess it, and you say higher or lower. Say
+50; you say higher; now it is between 51 and 100. Say 75. Whatever you answer, half of
+what was left is gone, and after seven guesses there is nothing left to be uncertain
+about. Nobody has ever needed to be taught that strategy, and it is the whole method.
+
+The only translation needed is that "higher or lower" arrives as the **sign of the
+residual** rather than as a word.
+
+## The loop, in words and then in code
+
+You hold a bracket: two ends `a` and `b` whose function values have opposite signs, so a
+root is trapped between them. Evaluate at the midpoint. Its sign matches one end and
+disagrees with the other. Throw away the half you now know contains no crossing, and you
+have a bracket half as wide with the same guarantee attached to it.
+
+```python
+def bisect(f, a, b, tol):
+    fa, fb = f(a), f(b)
+    if fa * fb > 0:            # not a bracket; there is nothing to halve
+        raise ValueError("f(a) and f(b) have the same sign")
+    while b - a > tol:
+        m = 0.5 * (a + b)
+        fm = f(m)
+        if fa * fm < 0:        # the sign flips in the LEFT half
+            b = m
+        else:                  # so it flips in the right half instead
+            a, fa = m, fm
+    return 0.5 * (a + b)
+```
+
+Two things about that body are worth saying out loud. The decision is made on **signs**,
+never on which value is bigger — the size of `f` says nothing about which side the root
+is on. And `fa` is carried alongside `a`, so that each pass costs exactly one evaluation
+of `f`. On a residual that takes a millisecond that is bookkeeping; on one that runs a
+circuit simulation it is the difference between forty seconds and eighty.
+
+## Worked example 1: $\sqrt2$, all the way through
+
+$f(x) = x^2 - 2$ on `[1, 2]`, since $f(1) = -1$ and $f(2) = +2$.
+
+```text
+ step   a             b             m             f(m)          width before
+ --------------------------------------------------------------------------
+   1    1.0000000000  2.0000000000  1.5000000000  +0.2500000000  1.0000000000
+   2    1.0000000000  1.5000000000  1.2500000000  -0.4375000000  0.5000000000
+   3    1.2500000000  1.5000000000  1.3750000000  -0.1093750000  0.2500000000
+   4    1.3750000000  1.5000000000  1.4375000000  +0.0664062500  0.1250000000
+   5    1.3750000000  1.4375000000  1.4062500000  -0.0224609375  0.0625000000
+   6    1.4062500000  1.4375000000  1.4218750000  +0.0217285156  0.0312500000
+   7    1.4062500000  1.4218750000  1.4140625000  -0.0004272461  0.0156250000
+   8    1.4140625000  1.4218750000  1.4179687500  +0.0106353760  0.0078125000
+   9    1.4140625000  1.4179687500  1.4160156250  +0.0051002502  0.0039062500
+  10    1.4140625000  1.4160156250  1.4150390625  +0.0023355484  0.0019531250
+
+  true value 1.4142135623730951
+```
+
+Look at step 7. The midpoint 1.4140625 is right to three decimal places and its residual
+is fifty times smaller than anything before it — and step 8 walks away from it to
+1.41797, which is twenty-five times worse. That is not a bug. Bisection makes no claim
+about the midpoint being good; it claims only that the *bracket* is half as wide as it
+was, and it keeps that promise on every single line. Individual guesses wander inside a
+window that never stops shrinking.
+
+The width column is the useful one, and note what is not in it: any dependence on $f$.
+The right-hand column would be identical for $\cos x - x$, for a divider residual, for
+anything at all. **Bisection's speed is a property of the method, not of the problem.**
+That is its great limitation and the exact reason it is trustworthy.
+
+## Counting the steps before you run any
+
+After $n$ halvings a starting width $w$ has become $w/2^n$, so the step count you need is
+settled in advance:
+
+$$\frac{w}{2^n} \le \text{tol} \quad\Longrightarrow\quad
+n \ge \log_2\!\frac{w}{\text{tol}}$$
+
+For `[1, 2]` and a tolerance of $10^{-6}$: $\log_2(10^6) = 19.93$, so 20 steps, leaving a
+bracket $9.54\times10^{-7}$ wide. Since $\log_2 10 = 3.32$, each extra **decimal digit**
+costs 3.32 steps — ten more digits is 34 more halvings, forever, with no exceptions and
+no good luck. Going from a metre to a picometre is 40 steps. Going from a metre to a
+picometre on a function that is beautifully behaved and nearly linear is also 40 steps.
+
+Returning the *midpoint* rather than an end is a free improvement: the root is somewhere
+in a bracket of width $w/2^n$, and the midpoint is at worst half a bracket from it, so
+the error is at most $w/2^{n+1}$. One extra halving for nothing.
+
+## Worked example 2: the divider, from the bracket the scan found
+
+The previous unit scanned and produced `[3000, 4000]` for $f(R_2) = 12R_2/(10\,000+R_2)
+- 3.30$. Ten steps of halving on a width of 1000 gives 0.977 Ω, which is finer than any
+resistor you can buy:
+
+```text
+ step   a          b          m          f(m)
+ -------------------------------------------------
+   1    3000.000   4000.000   3500.000   -0.188889
+   2    3500.000   4000.000   3750.000   -0.027273
+   3    3750.000   4000.000   3875.000   +0.051351
+   4    3750.000   3875.000   3812.500   +0.012217
+   5    3750.000   3812.500   3781.250   -0.007483
+   6    3781.250   3812.500   3796.875   +0.002378
+   7    3781.250   3796.875   3789.062   -0.002550
+   8    3789.062   3796.875   3792.969   -0.000085
+   9    3792.969   3796.875   3794.922   +0.001147
+  10    3792.969   3794.922   3793.945   +0.000531
+
+  final bracket [3792.969, 3793.945], midpoint 3793.457, width 0.977
+  the algebra said 3793.103, which is inside it, 0.354 away
+```
+
+The bound held: 0.354 is under the promised half-width of 0.488. And the step count was
+ten because the bracket was 1000 Ω wide and the tolerance was 1 Ω — not because dividers
+are easy.
+
+## Stopping, which is where the bugs live
+
+Three rules, in decreasing order of how often they are right.
+
+**`while b - a > tol`** is the default and it is honest: it stops when the *interval* is
+small, which is the only thing bisection actually knows about.
+
+**A relative tolerance** — `b - a > tol * abs(b)` — is what you want when the answer's
+size is unknown in advance. An absolute tolerance of $10^{-9}$ is absurd overkill for a
+resistance of 3793 Ω and unreachable for a capacitance of 100 pF. Root finders that go
+into libraries take both and stop when either is satisfied.
+
+**`while f(m) != 0`** is a bug. In floating point the residual almost never lands exactly
+on zero, and the loop runs for ever.
+
+That last one has a quieter cousin, and it is the reason the versions you are asked to
+write all carry a `maxit`. Ask for a tolerance below the spacing of the floating-point numbers
+themselves and the interval physically cannot shrink any further: near 3793 the gap
+between adjacent doubles is $4.5\times10^{-13}$, so once `a` and `b` are neighbours,
+`0.5 * (a + b)` rounds to one of them, the bracket stops changing, and `b - a > tol`
+stays true for the rest of the afternoon. A count-limited loop that raises turns a hang
+into a message.
+
+## The mistake people actually make
+
+Writing the branch as `if fm > 0: b = m`.
+
+It is tempting because it reads so naturally — *the midpoint is too high, so bring the
+top down* — and because on the example in front of you it works. It works whenever $f$
+increases with $x$, and the residual you tested on probably did.
+
+Now write the same divider residual the other way round, as $h(R_2) = 3.30 -
+V_{out}(R_2)$, which is just as reasonable a way to express the same gap. Now $h$
+*decreases*. Same bracket `[3000, 4000]`, same root at 3793.10, and the wrong rule gives:
+
+```text
+  h(3000) = +0.530769      h(4000) = -0.128571
+
+  step   m          h(m)        bracket after
+  -----------------------------------------------------
+   1     3500.000   +0.188889   [3000.000, 3500.000]
+   2     3250.000   +0.356604   [3000.000, 3250.000]
+   3     3125.000   +0.442857   [3000.000, 3125.000]
+   4     3062.500   +0.486603   [3000.000, 3062.500]
+   5     3031.250   +0.508633   [3000.000, 3031.250]
+   6     3015.625   +0.519688   [3000.000, 3015.625]
+```
+
+It converges — smoothly, quickly, with a shrinking bracket and no error message — on
+3000, where $h$ is 0.53 and nothing is a root. Comparing `fa * fm < 0` instead asks the
+question the theorem asks, and is indifferent to which way the function runs.
+
+The one sharp edge on that spelling: with very small values the product **underflows**.
+In Python `-1e-200 * 1e-200` is `-0.0`, and `-0.0 < 0` is `False`, so the branch goes the
+wrong way in silence. Library implementations compare signs directly — `(fa < 0) !=
+(fm < 0)` — for exactly that reason. At the scale of anything in this course the product
+is fine; know why the careful version exists.
+
+## Where this stops, and what replaces it
+
+Bisection gains **one bit per step**. That is called linear convergence, and no
+implementation detail improves it, because the method never looks at anything except the
+sign — it throws away the actual value of `f(m)` the instant it has read the sign off it,
+and that number contained information about *where* in the half the root was.
+
+Using it is the whole idea of the next unit. Newton's method reads the slope as well and
+roughly doubles the correct digits per step, at the cost of every guarantee bisection
+gives you. The **secant** method uses the last two values and gets most of the speed with
+no derivative. And the method in the standard libraries — Brent's, which is
+`scipy.optimize.brentq` — keeps a bracket at all times and takes a fast step whenever the
+fast step lands inside it, falling back to a plain halving when it does not. That is the
+practical answer, and it is why this module asks you to write both: a hybrid is not a
+third method, it is these two with a rule for choosing.
+
+The other limit is dimensional. There is no bisection in two variables, because "between"
+needs a line. Systems of equations go to Newton and stay there.
+''',
+                },
+                {
+                    "title": "Newton's method: the tangent, the doubling, and the ways it falls over",
+                    "minutes": 15,
+                    "body": r'''
+You are on a hillside in fog, walking downhill towards a shoreline you cannot see. What
+you *can* do is feel the slope under your feet. If the ground carried on at this slope,
+the water would be forty metres ahead — so walk forty metres, and feel the slope again.
+
+That is Newton's method. The hill is $f$, sea level is zero, and the assumption that the
+slope carries on is the entire idea: replace the function by the straight line that
+touches it where you are standing, and solve the straight line instead, because straight
+lines you can solve.
+
+## Getting the step out of the tangent
+
+Near a point $x$, the function is approximated by the first two terms of its Taylor
+series:
+
+$$f(x + \delta) \approx f(x) + f'(x)\,\delta$$
+
+Set that to zero and solve for the step $\delta$:
+
+$$0 = f(x) + f'(x)\delta \quad\Longrightarrow\quad \delta = -\frac{f(x)}{f'(x)}
+\quad\Longrightarrow\quad x_{n+1} = x_n - \frac{f(x_n)}{f'(x_n)}$$
+
+Read the fraction physically. The numerator is how far you are from zero. The denominator
+is how fast the function is moving. A big residual on a steep function is a small step; a
+small residual on a flat function is an enormous one. Both of those are correct, and the
+second is where the method's troubles come from.
+
+## Worked example 1: $\sqrt2$, and the doubling
+
+$f(x) = x^2 - 2$, $f'(x) = 2x$, starting at $x_0 = 1$. The step works out to
+$x - (x^2-2)/2x$, which the derivation unit in this module simplifies to
+$\tfrac12(x + 2/x)$:
+
+```text
+ n   x_n                    error x_n - sqrt(2)     correct digits
+ -------------------------------------------------------------------
+ 0   1.0                    -4.142136e-01           0
+ 1   1.5                    +8.578644e-02           1
+ 2   1.4166666666666665     +2.453104e-03           2 to 3
+ 3   1.4142156862745097     +2.123901e-06           5 to 6
+ 4   1.4142135623746899     +1.594724e-12           11 to 12
+ 5   1.414213562373095      -2.220446e-16           16, the lot
+
+ true value 1.4142135623730951
+```
+
+Count the zeros after the decimal point in the error column: 0, then 1, then 2, then 5,
+then 11, then everything a double can hold. Roughly doubling, which is what **quadratic
+convergence** means and why the phrase *doubles the correct digits per step* is the one
+people remember.
+
+It is not a slogan. The error obeys a law. Write $e_n = x_n - r$ and expand $f$ about the
+root $r$: the linear terms cancel by construction, and what is left is
+
+$$e_{n+1} \approx \frac{f''(r)}{2f'(r)}\,e_n^2$$
+
+For $x^2-2$ that constant is $2/(2\cdot 2\sqrt2) = 1/(2\sqrt2) = 0.35355$. Check it
+against the table:
+
+```text
+  e_n            e_n^2 / 2.828427       actual e_(n+1)     prediction is
+  ---------------------------------------------------------------------
+  -4.142e-01     6.066e-02              8.579e-02         29% low
+   8.579e-02     2.602e-03              2.453e-03          6% high
+   2.453e-03     2.128e-06              2.124e-06         0.2% high
+   2.124e-06     1.5949e-12             1.5947e-12        0.01% high
+```
+
+The first line is poor and every line after it is excellent, which is exactly what
+"asymptotic" means: the law describes what happens *near* the root and says nothing about
+the journey there. Newton is fast once it is close. Whether it gets close is a separate
+question with a much less pleasant answer.
+
+## Worked example 2: an equation with no closed form
+
+$\cos x = x$. Write $f(x) = \cos x - x$, so $f'(x) = -\sin x - 1$, and start at
+$x_0 = 0.5$:
+
+```text
+ n   x_n                   f(x_n)            error
+ ------------------------------------------------------
+ 0   0.5                   +3.775826e-01     -2.391e-01
+ 1   0.7552224171056364    -2.710331e-02     +1.614e-02
+ 2   0.7391416661498792    -9.461538e-05     +5.653e-05
+ 3   0.7390851339208068    -1.180978e-09     +7.056e-10
+ 4   0.7390851332151607     0.000000e+00      0
+```
+
+Four steps, from a starting guess wrong by a third, to every digit a double has. The
+first step by hand, so that nothing here is magic:
+
+```text
+  f(0.5)  = cos(0.5) - 0.5  = 0.8775826 - 0.5      = +0.3775826
+  f'(0.5) = -sin(0.5) - 1   = -0.4794255 - 1       = -1.4794255
+  step    = f/f'            = 0.3775826/(-1.4794255) = -0.2552224
+  x1      = 0.5 - (-0.2552224)                     = 0.7552224
+```
+
+Compare with bisection on the same problem: from a bracket of width 1, getting down to
+the last bit a double holds takes about 53 halvings. Newton took four. That is the case
+for learning it.
+
+Cost per step is not the same, though. Newton evaluates $f$ **and** $f'$; bisection
+evaluates $f$ once. If the residual is a circuit simulation and the derivative costs
+another one, Newton's four steps are eight evaluations against bisection's 53, which is
+still a rout, but count evaluations rather than steps when the function is expensive.
+
+## The mistake people actually make
+
+Stopping when `abs(f(x))` is small.
+
+It looks completely reasonable — the residual is tiny, so we must be at the root. But the
+residual is measured in the units of $f$, and the answer is measured in the units of $x$,
+and the exchange rate between them is the slope. Take
+
+$$f(x) = 10^{-6}(x - 1)$$
+
+whose root is exactly 1. At $x = 1.001$, $f = 10^{-9}$. A test of `abs(f(x)) < 1e-8`
+passes with the answer wrong in its third decimal place. Flatten the function further and
+it gets arbitrarily worse.
+
+Stop on the **step size** instead. `abs(step) <= tol` is Newton's own estimate of how far
+it just had to move, and near a root — where each error is about the square of the last —
+whatever remains after taking that step is far smaller again. So a step-size test is not
+merely better scaled, it is conservative: you are always at least one step better off
+than the number it reports.
+
+## Four ways it falls over, with the numbers
+
+**A flat spot.** $f(x) = x^2 - 2$ from $x_0 = 0$ has $f'(0) = 0$. The tangent is
+horizontal, it never crosses the axis, and the step divides by zero. This is why the lab
+asks you to raise rather than to return an infinity.
+
+**Divergence.** $f(x) = \arctan x$ has one root, at 0, and is perfectly smooth
+everywhere. From $x_0 = 2$:
+
+```text
+  x0 =        2.000000
+  x1 =       -3.535744
+  x2 =       13.950959
+  x3 =     -279.344067
+  x4 =   122016.998918
+```
+
+The function flattens out as $|x|$ grows, so the tangent aims further and further past
+the root, and each overshoot lands somewhere flatter still. Start anywhere inside about
+$|x| < 1.39$ and it converges in a handful of steps; start outside and it leaves. Nothing
+about the algebra warns you which side of that line you are on.
+
+**A cycle.** $f(x) = x^3 - 2x + 2$ from $x_0 = 0$:
+
+```text
+  f(0) = 2,   f'(0) = -2   ->  x1 = 0 - 2/(-2) = 1
+  f(1) = 1,   f'(1) = +1   ->  x2 = 1 - 1/1    = 0
+```
+
+0, 1, 0, 1, for as long as you let it run. No error, no progress, no divergence to catch
+— just an iteration count that eventually runs out. Which it will, if you wrote the
+`maxit` guard.
+
+**A repeated root.** $f(x) = (x-1)^2$ touches zero rather than crossing it. The step
+becomes $x - (x-1)^2/2(x-1) = (x+1)/2$, so from $x_0 = 2$:
+
+```text
+  2.0, 1.5, 1.25, 1.125, 1.0625, 1.03125, 1.015625, ...
+```
+
+The error halves every step. That is bisection's speed, achieved by Newton, with none of
+bisection's guarantee — and the derivation of the quadratic law says why: it divided by
+$f'(r)$, which here is zero. Everything about the doubling assumed a root the function
+passes cleanly through.
+
+## Where this stops, and what replaces it
+
+**No derivative to hand.** Replace $f'(x_n)$ with the slope through the last two points:
+
+$$x_{n+1} = x_n - f(x_n)\,\frac{x_n - x_{n-1}}{f(x_n) - f(x_{n-1})}$$
+
+This is the **secant** method. Its convergence order is the golden ratio, 1.618 — slower
+than Newton per step, but it costs one function evaluation per step instead of two, so on
+an expensive $f$ it usually wins outright. On $x^2-2$ from 1 and 2 it gives 1.33333,
+1.40000, 1.41463, 1.4142114, 1.41421356206, then full precision: six steps against
+Newton's five, and no derivative was ever written down.
+
+Do **not** reach instead for a finite-difference derivative $\big(f(x+h)-f(x)\big)/h$ with
+a tiny $h$. That subtracts two nearly equal numbers, which is the cancellation from
+module 1, and the answer loses about half of its significant digits. The secant method is
+the same idea done properly, using a difference that is large enough to be accurate and
+shrinks on its own as the iteration closes in.
+
+**No guarantee.** Keep a bracket alongside the iterate, take Newton's step when it lands
+inside the bracket, and halve when it does not. That is a **safeguarded** solver, and it
+is what production code does — Brent's method is the standard one, and it is what
+`scipy.optimize.brentq` runs. You get Newton's speed nearly always and bisection's
+certainty always, which is why the summary sentence for this whole module is: *bisection
+to be safe, Newton to be fast, and a rule for choosing between them.*
+
+**More than one unknown.** With $n$ equations in $n$ unknowns, $f'$ becomes the Jacobian
+matrix of every partial derivative, and the step is the solution of a linear system
+$J\,\delta = -f$ rather than a division. Everything else is unchanged, including the
+doubling and including every one of the four failures above. This is not an aside: it is
+how a circuit simulator handles a diode. Each timestep it linearises every nonlinear part
+about the present guess, solves the resulting linear circuit — a circuit of exactly the
+kind the schematic solver in this course handles directly — and repeats until the step
+stops moving. The transistor curves and the halving of a bracket are the same subject,
+and this module is where it starts.
+''',
+                },
+            ],
             "tune": {
                 "title": "Land a second-order system on 500 Hz without a resonant peak",
                 "minutes": 10,
@@ -10164,6 +14615,549 @@ a root finder, run by eye, and the lab writes it down.
                     },
                 ],
             },
+            "blanks": {
+                "title": "Two solvers, five decisions",
+                "minutes": 10,
+                "lang": "python",
+                "caption": "solve.py — bisection and Newton, stripped to the lines where the method lives",
+                "brief": r'''
+The lab's two functions with the conveniences taken out: no shortcut for an end that is
+already a root, no logging, nothing but the decisions. Five holes, and every one of them
+is a place where a plausible-looking alternative produces a run that finishes, returns a
+float, and is wrong.
+
+Nothing executes here. Each choice is settled by asking what the line is *for* — which
+is the only way any of these can be settled, because all five wrong versions run.
+''',
+                "listing": r'''
+def bisect(f, a, b, tol=1e-9, maxit=200):
+    """A root of f between a and b, to within tol. Raises on a bad bracket."""
+    fa, fb = f(a), f(b)
+    # No sign change means no guarantee, and there is nothing to halve.
+    if ___:
+        raise ValueError("f(%g) and f(%g) do not straddle zero" % (a, b))
+    for _ in range(maxit):
+        if ___:
+            break
+        m = 0.5 * (a + b)
+        fm = f(m)
+        if ___:
+            b = m          # the sign flips in the left half
+        else:
+            a, fa = m, fm  # so it flips in the right half instead
+    return 0.5 * (a + b)
+
+
+def newton(f, fp, x0, tol=1e-12, maxit=50):
+    """A root of f from x0, following the tangent. Raises rather than looping."""
+    x = float(x0)
+    for _ in range(maxit):
+        d = fp(x)
+        if d == 0.0:
+            raise ValueError("the tangent at x = %g is horizontal" % x)
+        step = ___
+        x = x - step
+        if ___:
+            return x
+    raise ValueError("no convergence in %d iterations" % maxit)
+''',
+                "blanks": [
+                    {
+                        "prompt": "What makes `[a, b]` unusable as a bracket?",
+                        "hole": "guard",
+                        "opts": ["fa * fb > 0", "fa * fb < 0", "fa > 0 and fb > 0", "a > b"],
+                        "a": 0,
+                        "why": "`fa * fb > 0` — the two ends agree in sign, so the theorem says nothing and bisection has no basis for throwing either half away. There may be no root in the interval, or two; either way the method has nothing to offer and the honest move is to raise.",
+                        "whys": [
+                            "`fa * fb > 0` — the two ends agree in sign, so the theorem says nothing and bisection has no basis for throwing either half away. There may be no root in the interval, or two; either way the method has nothing to offer and the honest move is to raise.",
+                            "This raises on exactly the input the method was written for. A negative product *is* the sign change, which is the one situation in which bisection works, and the guard would reject every good bracket and accept every bad one.",
+                            "Requiring both ends positive catches half of it and lets the other half through: two *negative* ends are just as much of a non-bracket, and this test passes them straight into the loop. The product covers both cases in one comparison.",
+                            "Whether `a` is below `b` is a separate matter — worth fixing by swapping them rather than by raising — and it says nothing at all about whether a root is trapped between them.",
+                        ],
+                    },
+                    {
+                        "prompt": "What ends the halving?",
+                        "hole": "stop",
+                        "opts": ["b - a <= tol", "abs(fm) <= tol", "b - a <= 0", "fa * fb >= 0"],
+                        "a": 0,
+                        "why": "`b - a <= tol`. The width of the bracket is the only thing bisection actually knows: the root is inside it, so half that width is a hard bound on the error of the midpoint. Stop when the bound is small enough.",
+                        "whys": [
+                            "`b - a <= tol`. The width of the bracket is the only thing bisection actually knows: the root is inside it, so half that width is a hard bound on the error of the midpoint. Stop when the bound is small enough.",
+                            "A small residual is not a small error — the exchange rate between them is the slope, and on a flat function `abs(fm)` can be a billionth while `m` is wrong in its third decimal. This spelling has a second problem: `fm` has not been assigned yet the first time round the loop, so it raises a `NameError` before it can mislead anybody.",
+                            "`b - a <= 0` waits for the bracket to collapse to nothing, which floating point will not do — `0.5 * (a + b)` eventually rounds to `a` or `b` and the interval stops shrinking one ulp short. The loop then runs until `maxit` on every single call.",
+                            "This never becomes true. `fa` is only ever replaced by a value of the same sign — that is what the branch below checks before replacing it — and `fb` is never touched again, so the product stays negative for the whole run. The test is false on entry, because otherwise the guard would have raised, and false for ever after, so the loop runs the full `maxit` passes on every call.",
+                        ],
+                    },
+                    {
+                        "prompt": "Which test says the root is in the left half?",
+                        "hole": "half",
+                        "opts": ["fa * fm < 0", "fm > 0", "fa * fm > 0", "fm < fa"],
+                        "a": 0,
+                        "why": "`fa * fm < 0`: the left end and the midpoint disagree in sign, so the crossing is between them and the right end can go. Everything is decided on signs, never on which value is larger.",
+                        "whys": [
+                            "`fa * fm < 0`: the left end and the midpoint disagree in sign, so the crossing is between them and the right end can go. Everything is decided on signs, never on which value is larger.",
+                            "`fm > 0` assumes the function rises with `x`. Write the same residual the other way round — `target - measured` instead of `measured - target` — and it falls instead, and this test then keeps the wrong half every time and converges smoothly onto the end of the interval you started at.",
+                            "The product with the sign reversed keeps the half in which the sign does *not* change, which is the half guaranteed not to contain a root. It converges just as neatly as the correct version, to the wrong end.",
+                            "Comparing the two values asks which is bigger, and size carries no information about which side of a crossing you are on: `f` can be enormous close to the root and tiny far from it.",
+                        ],
+                    },
+                    {
+                        "prompt": "What is Newton's step?",
+                        "hole": "step",
+                        "opts": ["f(x) / d", "d / f(x)", "f(x) * d", "-f(x) / d"],
+                        "a": 0,
+                        "why": "`f(x) / d`, subtracted on the next line to give `x - f(x)/fp(x)`. It is how far you are from zero divided by how fast the function is moving — a big residual on a steep function is a small step, and a small residual on a flat one is a huge step.",
+                        "whys": [
+                            "`f(x) / d`, subtracted on the next line to give `x - f(x)/fp(x)`. It is how far you are from zero divided by how fast the function is moving — a big residual on a steep function is a small step, and a small residual on a flat one is a huge step.",
+                            "Upside down, and a units check kills it immediately: the step has to be a length in `x`, and slope over residual has the dimensions of one over that. It also moves *further* when the function is steep, which is backwards.",
+                            "Multiplying gives a step that grows without bound as the function gets steeper, when a steep function is precisely the case where a short step suffices. It is also dimensionally wrong, in the same way and for the same reason.",
+                            "The sign is already accounted for on the following line, which subtracts. Negating here as well makes the iteration climb away from the root at exactly the rate it should be descending towards it.",
+                        ],
+                    },
+                    {
+                        "prompt": "When has Newton converged?",
+                        "hole": "converged",
+                        "opts": ["abs(step) <= tol", "abs(f(x)) <= tol", "step <= tol", "abs(x) <= tol"],
+                        "a": 0,
+                        "why": "`abs(step) <= tol`. The step is Newton's own estimate of the distance it still had to travel, and near a root the distance remaining after taking it is about the *square* of that — so the test is conservative, and you are always at least one step better off than it reports.",
+                        "whys": [
+                            "`abs(step) <= tol`. The step is Newton's own estimate of the distance it still had to travel, and near a root the distance remaining after taking it is about the *square* of that — so the test is conservative, and you are always at least one step better off than it reports.",
+                            "A small residual means a small error only when the slope is of order one. On `f(x) = 1e-6 * (x - 1)` the residual is under `1e-8` while `x` is still 0.001 away from the root, and flattening the function further makes it arbitrarily worse.",
+                            "Without the absolute value the test passes on the first step that happens to be negative, however enormous — which is the exact situation on a diverging run, where the steps alternate in sign and grow. The method would report success while flying away from the root.",
+                            "That tests whether the *answer* is near zero, which has nothing to do with whether it has settled. A root at 1000 would never satisfy it and a root at 0 would satisfy it from the very first pass.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": [
+                {
+                    "title": "How many halvings does it take?",
+                    "minutes": 5,
+                    "brief": r'''
+Before any of this runs, you can say exactly how long it will take. That is bisection's
+one unqualified virtue, and it is worth using it before writing a loop rather than after.
+
+A bracket of width $w$ becomes $w/2^n$ after $n$ halvings, so the count you need is
+
+$$\frac{w}{2^n} \le \text{tol} \qquad\Longrightarrow\qquad n \ge \log_2\frac{w}{\text{tol}}$$
+
+and $n$ has to be a whole number of steps, so round *up*.
+
+One rule, one unknown. Answer as a whole number of steps.
+''',
+                    "prompt": "How many halvings bring the bracket itself below 1 µs wide?",
+                    "note": "The width of the bracket, not the distance from its midpoint to the root. Give a whole number.",
+                    "figure": r'''
+```text
+   a = 0                                                      b = 0.500 s
+   |------------------------------------------------------------|
+   f < 0                                                      f > 0
+
+   after 1 halving :  0.250 s
+   after 2         :  0.125 s
+   after 3         :  0.0625 s
+        ...
+   after n         :  0.500 / 2^n     <-- when is this under 1 microsecond?
+```
+
+A relay is known to close somewhere in the first half second after the coil is
+energised, and the residual — coil current minus the pull-in threshold — is negative at
+the start of the window and positive at the end of it.
+''',
+                    "given": [
+                        {"label": "Starting bracket", "value": "0 to 0.500 s"},
+                        {"label": "Required width", "value": "1 µs"},
+                    ],
+                    "aside": "Nothing about the function enters this. The same count applies to a "
+                             "relay, a diode, or an equation with no physical meaning at all — which "
+                             "is the whole point of it.",
+                    "answer": 19.0,
+                    "tol": 0.4,
+                    "unit": "steps",
+                    "hint": "You need $0.5/2^n \\le 10^{-6}$, so $2^n \\ge 5\\times10^5$. "
+                            "$2^{18} = 262\\,144$ and $2^{19} = 524\\,288$.",
+                    "wrong": "18 leaves the bracket 1.91 µs wide, which is wider than asked for — this "
+                             "is the rounding that has to go up, not to nearest. 20 works but does one "
+                             "halving more than the question needs. And if you have 500 000, that is "
+                             "the *ratio* $w/\\text{tol}$ rather than the number of steps; taking its "
+                             "base-2 logarithm is the step still owed.",
+                    "why": r'''
+```text
+  w / tol   = 0.500 / 1e-6      = 5.000e5
+  log2(5e5) = 18.93
+
+  n must be a whole number of halvings and 18.93 is not one, so n = 19.
+
+  check:  0.500 / 2^18 = 1.907e-6 s   too wide
+          0.500 / 2^19 = 9.537e-7 s   under 1 us
+```
+
+**19 steps.** Two things follow from that number being computable in advance.
+
+The first is that a bisection loop never needs to be open-ended. You can size the array,
+the timeout and the progress bar before the first evaluation, which is not true of any
+faster method.
+
+The second is the price. Since $\log_2 10 = 3.32$, every extra decimal digit of the
+answer costs 3.32 more halvings, always, on every function. Ten more digits is 34 more
+steps, and no choice of problem, starting point or implementation makes it 30. That fixed
+rate is
+precisely why bisection is the method you fall back on rather than the method you reach
+for, and why the next questions are about the one that is not fixed.
+
+One refinement worth carrying: because the answer returned is the *midpoint* of the final
+bracket, the worst-case error is half the width — 0.48 µs here, not 0.95. The bracket
+width is the honest thing to quote, and the midpoint is a free extra halving.
+''',
+                },
+                {
+                    "title": "The resistor the specification is asking for",
+                    "minutes": 8,
+                    "brief": r'''
+A design question, in the form they actually arrive in: *what value gives me this
+answer.* The first job is not to solve anything, it is to turn the sentence into a
+function whose zero is the answer.
+
+For a divider fed from $V_S$ with $R_1$ on top and $R_2$ to ground,
+
+$$V_{out}(R_2) = V_S\,\frac{R_2}{R_1 + R_2}$$
+
+and the residual is that minus the voltage you were asked for. Answer in **ohms**.
+''',
+                    "prompt": "What value of R2 puts the output at exactly 1.80 V?",
+                    "note": "To the nearest ohm. Assume nothing is connected to the output.",
+                    "figure": r'''
+```text
+        +5.00 V
+           |
+          [ ]  R1 = 4.70 k
+           |
+           +------o  Vout, wanted at 1.80 V
+           |
+          [ ]  R2 = ?
+           |
+          ---  GND
+```
+
+Nothing draws current from the junction, so the same current flows through both
+resistors and the ordinary divider expression holds.
+''',
+                    "given": [
+                        {"label": "Supply", "value": "5.00 V"},
+                        {"label": "R1", "value": "4.70 kΩ"},
+                        {"label": "Wanted output", "value": "1.80 V"},
+                    ],
+                    "aside": "Write the residual before you write anything else: "
+                             "$f(R_2) = 5.00\\,R_2/(4700 + R_2) - 1.80$. A root finder handed the "
+                             "output voltage instead of the residual finds the resistor that gives "
+                             "no output at all, which is 0 Ω, and reports it with total confidence.",
+                    "answer": 2643.75,
+                    "tol": 5.0,
+                    "unit": "Ω",
+                    "hint": "Multiply both sides by $(4700 + R_2)$ to get $R_2$ out of the "
+                            "denominator, gather the $R_2$ terms on one side, and divide.",
+                    "wrong": "1692 Ω is $\\tfrac{1.80}{5.00}\\times 4700$ — the ratio applied as "
+                             "$R_2/R_1$ rather than $R_2/(R_1+R_2)$. It is the commonest slip in this "
+                             "circuit and it gives 1.32 V, not 1.80. If you got 8356 Ω you solved for "
+                             "the *upper* resistor with 4.70 kΩ fixed underneath, which is a different "
+                             "and equally answerable question.",
+                    "why": r'''
+The residual, and the two evaluations that bracket it:
+
+```text
+  f(R2) = 5.00 * R2 / (4700 + R2) - 1.80
+
+  R2 = 2000 :  5 x 2000/6700 = 1.492537 V   f = -0.307463
+  R2 = 3000 :  5 x 3000/7700 = 1.948052 V   f = +0.148052
+```
+
+So the answer is in [2000, 3000] and ten halvings would pin it to within an ohm
+(1000/2^10 = 0.98). This particular residual also rearranges, so do it both ways:
+
+```text
+  5.00 R2 / (4700 + R2) = 1.80
+  5.00 R2 = 1.80 x 4700 + 1.80 R2
+  3.20 R2 = 8460
+      R2  = 8460 / 3.20 = 2643.75 ohms
+
+  check:  5.00 x 2643.75 / 7343.75 = 13218.75 / 7343.75 = 1.80000 V
+```
+
+**2643.75 Ω** — call it 2.7 kΩ off the shelf, which gives 1.824 V, and whether that is
+acceptable is a different question from this one.
+
+The reason to work a problem the algebra can finish is that it is the only kind you can
+test a solver on. Point your `bisect` at this residual and it must land on 2643.75; if
+it lands on 2644.04, as ten halvings from `[2000, 3000]` do, that is the tolerance you
+asked for and not a bug. Point it at something you cannot check and a wrong answer looks
+identical to a right one.
+
+Notice also what stays true when the algebra runs out. Put a real load on the output, or
+a diode in the lower leg, and the rearrangement above collapses — but the residual is
+unchanged in form, the two evaluations that bracketed it still cost one line each, and
+the ten halvings take exactly as long as they did here.
+''',
+                },
+                {
+                    "title": "Where the response has fallen to half",
+                    "minutes": 9,
+                    "brief": r'''
+A resistor feeding a capacitor, driven by a sine wave whose frequency you can sweep. Far
+below the corner the capacitor is effectively an open circuit and the output follows the
+input; far above it, the capacitor shorts the output down and very little gets through.
+In between, the magnitude of the output relative to the input is
+
+$$|H(f)| = \frac{1}{\sqrt{1 + (f/f_c)^2}}, \qquad f_c = \frac{1}{2\pi RC}$$
+
+The question is not where the corner is. It is where the output has fallen to **one
+half** of what it does at DC, which is a different frequency, and the difference is the
+point of the question. Answer in **hertz**.
+''',
+                    "prompt": "At what frequency has the output fallen to half of its low-frequency value?",
+                    "note": "Four significant figures, in hertz. The source amplitude is 1.00 V at every frequency.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "r1", "kind": "R", "x": 8, "y": 5, "rot": 0, "value": 1600},
+                            {"id": "c1", "kind": "C", "x": 13, "y": 7, "rot": 1, "value": 1e-7},
+                            {"id": "g1", "kind": "GND", "x": 13, "y": 10},
+                            {"id": "o1", "kind": "OUT", "x": 13, "y": 5},
+                        ],
+                        "wires": [
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [3, 5], "b": [7, 5]},
+                            {"a": [9, 5], "b": [13, 5]},
+                            {"a": [13, 5], "b": [13, 6]},
+                            {"a": [13, 8], "b": [13, 10]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Source", "value": "1.00 V, swept"},
+                        {"label": "R", "value": "1.60 kΩ"},
+                        {"label": "C", "value": "100 nF"},
+                    ],
+                    "aside": "Half the amplitude is −6.0 dB, not −3.0 dB. The corner is defined at "
+                             "$1/\\sqrt2 = 0.707$, which is where the *power* has halved; the "
+                             "amplitude there is still 71% of its DC value, not 50%.",
+                    "answer": 1722.9,
+                    "tol": 10.0,
+                    "unit": "Hz",
+                    # The gate finds this the way the module teaches: bisect on the solved
+                    # frequency response until the magnitude is half its value at DC. Nothing
+                    # about R, C or f_c is restated here, so a diagram edited without re-working
+                    # the answer is caught, and the geometric midpoint is used because the
+                    # unknown spans decades.
+                    "check": r'''
+c.assert(c.count('R') === 1 && c.count('C') === 1, 'one resistor and one capacitor');
+const dc = c.gain(1);
+let lo = 10, hi = 1e6;
+for (let i = 0; i < 80; i++) {
+  const m = Math.sqrt(lo * hi);
+  if (c.gain(m) > 0.5 * dc) lo = m; else hi = m;
+}
+return Math.sqrt(lo * hi);
+''',
+                    "hint": "Set $|H| = \\tfrac12$ and square both sides: $1 + (f/f_c)^2 = 4$. "
+                            "Work out $f_c = 1/(2\\pi RC)$ first, on its own.",
+                    "wrong": "994.7 Hz is the corner itself, where the output is $0.707$ of the "
+                             "input rather than half of it. 1989 Hz is twice the corner, where the "
+                             "ratio has fallen to $1/\\sqrt5 = 0.447$ — past the answer, not at it. "
+                             "And 10 825 Hz is $\\sqrt3/(RC)$, with the $2\\pi$ left out of $f_c$.",
+                    "why": r'''
+```text
+  2 pi R C = 2 pi x 1600 x 1.00e-7 = 1.00531e-3 s
+  fc       = 1 / 1.00531e-3        = 994.72 Hz
+
+  |H| = 1/2   ->   1 + (f/fc)^2 = 4
+                       (f/fc)^2 = 3
+                        f       = sqrt(3) x fc
+                                = 1.73205 x 994.72
+                                = 1722.9 Hz
+```
+
+**1722.9 Hz**, which is 1.732 times the corner frequency and about 73% above it.
+
+Two remarks, and the second is the reason this question is in a root-finding module.
+
+The number 0.707 is not a rounded-off one half. It is $1/\sqrt2$, and it is where the
+*power* delivered has halved while the amplitude has not; the −3 dB corner is defined
+that way because power is what a filter specification is usually written about. Reading
+"half" as "the corner" is the standard confusion and it is 73% wrong here.
+
+Now the part that matters. This particular equation rearranged, because a one-pole filter
+has an algebraic magnitude. Add a second capacitor and it stops rearranging, and the
+question — *at what frequency has this fallen to half* — is unchanged, still perfectly
+meaningful, and now a job for a solver. The verifier that checked this answer never used
+the formula at all: it swept the circuit, found the DC output, and **bisected on
+frequency** until the magnitude was half of it, geometric midpoints because the unknown
+spans decades. That procedure does not care how many capacitors there are. The formula
+does.
+''',
+                },
+                {
+                    "title": "When does the ringing first reach 0.90 V?",
+                    "minutes": 14,
+                    "brief": r'''
+A resistor, an inductor and a capacitor in one loop, with the output taken across the
+capacitor and a 1.00 V step applied at $t = 0$. This does not settle politely: it
+overshoots, comes back, overshoots less, and rings down to 1 V over several cycles.
+
+Three numbers describe it, and each has to be worked out before the question can even be
+posed:
+
+$$\omega_n = \frac{1}{\sqrt{LC}}, \qquad
+\zeta = \frac{R}{2}\sqrt{\frac{C}{L}}, \qquad
+\omega_d = \omega_n\sqrt{1-\zeta^2}$$
+
+and then the output is
+
+$$v(t) = 1 - e^{-\zeta\omega_n t}\left(\cos\omega_d t +
+\frac{\zeta}{\sqrt{1-\zeta^2}}\sin\omega_d t\right)$$
+
+Now find the first $t$ at which $v = 0.90$. There is no rearrangement — $t$ sits inside
+an exponential and inside two trigonometric functions that multiply it — so this is the
+question the whole module was built for. Answer in **microseconds**.
+''',
+                    "prompt": "At what time does the output first reach 0.90 V?",
+                    "note": "The FIRST crossing, in microseconds, to four significant figures.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "v1", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "r1", "kind": "R", "x": 8, "y": 5, "rot": 0, "value": 60},
+                            {"id": "l1", "kind": "L", "x": 13, "y": 5, "rot": 0, "value": 0.01},
+                            {"id": "c1", "kind": "C", "x": 18, "y": 7, "rot": 1, "value": 1e-6},
+                            {"id": "g1", "kind": "GND", "x": 18, "y": 10},
+                            {"id": "o1", "kind": "OUT", "x": 18, "y": 5},
+                        ],
+                        "wires": [
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [3, 5], "b": [7, 5]},
+                            {"a": [9, 5], "b": [12, 5]},
+                            {"a": [14, 5], "b": [18, 5]},
+                            {"a": [18, 5], "b": [18, 6]},
+                            {"a": [18, 8], "b": [18, 10]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Step", "value": "0 to 1.00 V at t = 0"},
+                        {"label": "R", "value": "60 Ω"},
+                        {"label": "L", "value": "10 mH"},
+                        {"label": "C", "value": "1.00 µF"},
+                        {"label": "Output", "value": "across the capacitor"},
+                    ],
+                    "aside": "The bracket is the engineering here. The response starts at 0 V and its "
+                             "first peak, at $t = \\pi/\\omega_d$, is above 1 V because the circuit "
+                             "overshoots — so $[0,\\ \\pi/\\omega_d]$ always straddles 0.90 and the "
+                             "response climbs the whole way across it.",
+                    "answer": 179.4,
+                    "tol": 1.5,
+                    "unit": "µs",
+                    # Solved, not asserted: the transient is taken from the solver and the
+                    # first upward crossing of 0.9 V is found by linear interpolation between
+                    # the two samples that straddle it. Nothing about R, L, C, zeta or omega
+                    # is repeated here, so the check would catch a component value edited
+                    # without re-working the answer. The transient runs on backward Euler, so
+                    # it lands a couple of tenths of a microsecond late; the tolerance covers
+                    # that and nothing wider.
+                    "check": r'''
+c.assert(c.count('R') === 1 && c.count('L') === 1 && c.count('C') === 1,
+  'one resistor, one inductor and one capacitor');
+const s = c.step(4e-4);
+let t = -1;
+for (let i = 1; i < s.v.length; i++) {
+  if (s.v[i - 1] < 0.9 && s.v[i] >= 0.9) {
+    t = s.t[i - 1] + (0.9 - s.v[i - 1]) * (s.t[i] - s.t[i - 1]) / (s.v[i] - s.v[i - 1]);
+    break;
+  }
+}
+c.assert(t > 0, 'the output never reaches 0.9 V within 400 us');
+return t * 1e6;
+''',
+                    "hint": "$\\sqrt{LC} = \\sqrt{10^{-2}\\times10^{-6}} = 10^{-4}$, so "
+                            "$\\omega_n = 10^4$ rad/s. Then $\\sqrt{L/C} = 100\\ \\Omega$, which "
+                            "makes $\\zeta = R/200$. Scan $v(t)$ at 100 µs and 200 µs to get a "
+                            "bracket, then halve.",
+                    "wrong": "329.3 µs is $\\pi/\\omega_d$, the time of the first *peak* — the right "
+                             "end of the bracket rather than the crossing inside it. 314.2 µs is the "
+                             "same mistake with $\\omega_n$ used in place of $\\omega_d$. And 148.2 µs "
+                             "comes from dropping the sine term out of $v(t)$, which is the term that "
+                             "makes the response start with zero slope; without it the curve leaves "
+                             "the origin far too steeply.",
+                    "why": r'''
+First the three constants, each on its own line:
+
+```text
+  LC        = 1.00e-2 x 1.00e-6 = 1.00e-8 s^2
+  sqrt(LC)  = 1.00e-4 s
+  wn        = 1 / 1.00e-4                  = 1.0000e4 rad/s
+
+  L/C       = 1.00e-2 / 1.00e-6 = 1.00e4
+  sqrt(L/C) = 100.0 ohms                   (the characteristic impedance)
+  zeta      = R / (2 x 100.0) = 60 / 200   = 0.3000
+
+  sqrt(1 - zeta^2) = sqrt(0.9100)          = 0.95394
+  wd        = 1.0000e4 x 0.95394           = 9539.4 rad/s
+  pi / wd                                  = 329.33 us   <- first peak
+```
+
+The bracket comes free: $v(0) = 0$, and the first peak is
+$1 + e^{-\zeta\pi/\sqrt{1-\zeta^2}} = 1.372$ V, so 0.90 V is crossed somewhere in
+$[0,\ 329.33\ \mu s]$ and the response is climbing across the whole of it. Two
+evaluations tighten that:
+
+```text
+  t = 100 us :  v = 0.381417   f = v - 0.9 = -0.518583
+  t = 200 us :  v = 1.018631   f           = +0.118631
+```
+
+Then halve:
+
+```text
+ step   a (us)     b (us)     m (us)     f(m)
+ ------------------------------------------------
+   1    100.0000   200.0000   150.0000   -0.187472
+   2    150.0000   200.0000   175.0000   -0.026901
+   3    175.0000   200.0000   187.5000   +0.048188
+   4    175.0000   187.5000   181.2500   +0.011174
+   5    175.0000   181.2500   178.1250   -0.007737
+   6    178.1250   181.2500   179.6875   +0.001751
+   7    178.1250   179.6875   178.9062   -0.002985
+   8    178.9062   179.6875   179.2969   -0.000615
+
+  bracket after step 8 :  [179.2969, 179.6875],  0.3906 us wide
+  eight more halvings  :  t = 179.3984 us
+  check                :  v(179.3984 us) = 0.90000
+```
+
+**179.4 µs.** Eight halvings took 100 µs of uncertainty down to 0.39 µs and eight more
+take it to 1.5 ns, and both of those counts were known before the first evaluation.
+
+Three things worth taking away.
+
+**The bracket was physics, not searching.** $[0, \pi/\omega_d]$ works for *every*
+underdamped second-order system, because the response always starts at zero and always
+overshoots past its final value at the first peak. A general-purpose scan would have
+found a bracket too, eventually and with no guarantee; knowing the circuit gave one in
+closed form. That is the difference between a numerical method and a numerical method
+used by an engineer.
+
+**Sanity-check against the shape.** The ringing period is $2\pi/\omega_d = 659$ µs, so
+the crossing at 179 µs is about 27% of the way round the first cycle — early, which is
+right for a system that overshoots by 37%. An answer of 400 µs would have been past the
+peak and on the way back down, and the word *first* in the question would have been
+violated.
+
+**The simulator agrees, not exactly.** Solving the same circuit numerically rather than
+from the formula gives 179.7 µs — three tenths of a microsecond late, because the
+transient integrator is backward Euler and, as module 8 showed, backward Euler adds a
+little damping of its own at any finite timestep. Two different methods landing within
+0.2% of each other is the kind of agreement worth trusting; two methods agreeing to
+fifteen digits would mean one of them was quietly calling the other.
+''',
+                },
+            ],
             "derive": {
                 "title": "Newton's method turns into a square root",
                 "minutes": 12,

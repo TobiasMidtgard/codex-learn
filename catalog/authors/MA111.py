@@ -1391,6 +1391,1309 @@ for _bad in (0.0, -1.0):
                 "Limits at infinity: divide by the dominant power to read off a horizontal asymptote; a vertical asymptote is a one-sided infinite limit",
                 "The intermediate value theorem turns a sign change into a guaranteed root, which is the licence bisection runs on",
             ],
+            "read": [
+                {
+                    "title": "Substitution is a theorem, and it has hypotheses",
+                    "minutes": 11,
+                    "body": r'''
+The last module produced exactly two ways of finding a limit, and both are far too
+expensive to use twice. Sampling $f$ near $a$ gives a number that looks convincing and
+proves nothing — a table of values cannot tell a limit of $2$ from a limit of
+$2.000001$, and catastrophic cancellation can make it lie outright. An
+$\epsilon$–$\delta$ argument does prove something, but it takes half a page for a
+straight line.
+
+Meanwhile everybody writes
+
+$$\lim_{x\to 2}\left(x^{2}+1\right) = 5$$
+
+without comment, by putting $2$ where the $x$ was. That step is not the definition of a
+limit — the definition deliberately refuses to look at $f(2)$ — so something has to
+license it. What licenses it is a small family of theorems, and the useful thing about
+them is not the statements, which are what you would guess, but the hypotheses, which
+are not.
+
+## The laws
+
+Suppose $\lim_{x\to a} f(x) = F$ and $\lim_{x\to a} g(x) = G$,
+both existing and both finite. Then
+
+$$\lim_{x\to a}\left(f(x)+g(x)\right) = F+G, \qquad
+\lim_{x\to a}\left(f(x)\,g(x)\right) = F\,G, \qquad
+\lim_{x\to a}\, c\,f(x) = c\,F,$$
+
+and, **provided $G \neq 0$**,
+
+$$\lim_{x\to a}\frac{f(x)}{g(x)} = \frac{F}{G}.$$
+
+Read the shape rather than the content. Each law begins by *assuming* that every piece
+already has a limit of its own, and concludes something about the combination. That
+direction matters, and it is the source of most of the trouble later in this reading:
+when a hypothesis fails, a law does not say the limit fails to exist. It says nothing
+at all.
+
+## Why the sum law is true
+
+The proof is worth seeing once, because it is the only place the number $\epsilon/2$
+ever looks mysterious, and it stops looking mysterious immediately.
+
+Let $\epsilon > 0$ be given. We must produce a $\delta$ that forces
+$\left|(f+g)(x) - (F+G)\right| < \epsilon$.
+
+The definition of $\lim f = F$ holds for *every* positive tolerance, so we may apply it
+to the tolerance $\epsilon/2$ rather than to $\epsilon$: there is a $\delta_{1} > 0$
+with
+
+$$0 < |x-a| < \delta_{1} \;\Rightarrow\; |f(x)-F| < \frac{\epsilon}{2}.$$
+
+Apply it to $g$ as well, getting a $\delta_{2}$ with $|g(x)-G| < \epsilon/2$ on its own
+window. Now take $\delta = \min(\delta_{1},\delta_{2})$, so that both statements hold at
+once, and compute:
+
+$$\left|(f(x)+g(x)) - (F+G)\right| = \left|\,(f(x)-F) + (g(x)-G)\,\right|
+\;\le\; |f(x)-F| + |g(x)-G| \;<\; \frac{\epsilon}{2} + \frac{\epsilon}{2} = \epsilon.$$
+
+The middle step is the triangle inequality; everything else is bookkeeping. The halves
+were chosen at the start precisely so that they would add to $\epsilon$ at the end.
+Nothing about $2$ is special — a sum of five functions would use $\epsilon/5$.
+
+The product law needs one extra idea (a function with a limit is bounded near the
+point, so the cross terms can be controlled) and the quotient law needs one more still,
+which is the hypothesis worth dwelling on.
+
+## The one condition in the quotient law
+
+The quotient law asks for $G \neq 0$ and asks nothing about $F$. Both halves of that
+are worth saying out loud.
+
+$F = 0$ is fine: it just makes the answer $0$. There is nothing indeterminate about
+$0/7$.
+
+$G = 0$ is fatal, and not merely as a technicality about dividing by zero. If $G \neq
+0$, then close enough to $a$ the function $g$ is bounded away from zero — it cannot
+sneak arbitrarily close to $0$ near $a$, because it is busy staying near $G$ — and that
+is what keeps $1/g$ from blowing up. Lose the hypothesis and every behaviour becomes
+possible at once: with $f(x) = x$ and $g(x) = x^{2}$ at $a = 0$ the quotient
+$1/x$ blows up, with $f = x^{2}$ and $g = x$ the quotient $x$ tends to $0$, and with
+$f = 3x$ and $g = x$ it sits at $3$ throughout. Same form, three different answers, so
+the form itself cannot be the answer.
+
+## What the laws actually buy
+
+Chain the sum and product laws finitely many times, starting from the two limits that
+are true by inspection, $\lim_{x\to a} c = c$ and $\lim_{x\to a} x = a$, and you get:
+for any polynomial $p$,
+
+$$\lim_{x\to a} p(x) = p(a),$$
+
+and for a quotient of polynomials $p/q$ with $q(a) \neq 0$, the limit is $p(a)/q(a)$.
+
+That is the licence. Substituting is legal for polynomials and for rational functions
+away from the zeros of the denominator, and it is legal because of a theorem, not
+because a limit means "the value". The class of functions for which substitution works
+has a name — the continuous ones — and this reading has just proved that every rational
+function is continuous wherever it is defined.
+
+## When substitution returns $0/0$
+
+If $q(a) = 0$ the licence lapses and there is algebra to do. Two examples, one routine
+and one that catches people.
+
+### A routine one
+
+$$\lim_{x\to -1}\frac{x^{2}+3x+2}{x^{2}-1}.$$
+
+Substitute first, to find out which case you are in. Numerator: $(-1)^{2} + 3(-1) + 2 =
+1 - 3 + 2 = 0$. Denominator: $(-1)^{2} - 1 = 0$. So the form is $0/0$ and the quotient
+law does not apply.
+
+Both vanish at $-1$, so both carry a factor of $(x+1)$:
+
+$$x^{2}+3x+2 = (x+1)(x+2), \qquad x^{2}-1 = (x-1)(x+1).$$
+
+Hence for every $x \neq -1$,
+
+$$\frac{x^{2}+3x+2}{x^{2}-1} = \frac{(x+1)(x+2)}{(x-1)(x+1)} = \frac{x+2}{x-1}.$$
+
+The cancellation is legal exactly because a limit only ever inspects the punctured
+neighbourhood, where $x + 1 \neq 0$. What is left is a rational function whose
+denominator at $-1$ is $-2 \neq 0$, so the licence is back and we substitute:
+
+$$\lim_{x\to -1}\frac{x+2}{x-1} = \frac{-1+2}{-1-1} = \frac{1}{-2} = -\frac{1}{2}.$$
+
+Sampling agrees: at $x = -1.001$ the original quotient reads $-0.4993$.
+
+### The one people get wrong
+
+$$\lim_{x\to 1}\left(\frac{1}{x-1} - \frac{2}{x^{2}-1}\right).$$
+
+Look at the two pieces separately. Neither has a limit at $1$: $1/(x-1)$ runs to
+$+\infty$ from the right and $-\infty$ from the left, and $2/(x^{2}-1)$ does the same.
+The difference law therefore has nothing to say, since its hypothesis — both pieces
+have limits — fails on both counts.
+
+At this point two wrong conclusions are available, and both get drawn. The first is
+"neither piece has a limit, so the difference has none". The second is
+"$\infty - \infty = 0$". Combine the fractions instead:
+
+$$\frac{1}{x-1} - \frac{2}{(x-1)(x+1)}
+= \frac{(x+1) - 2}{(x-1)(x+1)}
+= \frac{x-1}{(x-1)(x+1)}
+= \frac{1}{x+1} \qquad (x \neq \pm 1),$$
+
+and the last expression is rational with denominator $2 \neq 0$ at the point, so
+
+$$\lim_{x\to 1}\left(\frac{1}{x-1} - \frac{2}{x^{2}-1}\right) = \frac{1}{2}.$$
+
+Check it numerically at $x = 1.001$: the first term is $1000$, the second is
+$2/0.002001 = 999.50$, and the difference is $0.4998$. Two quantities of size a
+thousand, differing by a half. The blow-ups were real and they cancelled exactly.
+
+## The mistake, and why it is tempting
+
+Writing $0/0 = 0$ is tempting because the numerator really is zero, and zero over
+anything *is* zero — for anything except zero. Writing $\infty - \infty = 0$ is
+tempting for the same shape of reason: equal things cancel. What both forget is that
+$0/0$ and $\infty-\infty$ are not values of an expression; they are reports about a
+*form*, and the form is compatible with every answer there is. The $0/0$ examples above
+gave $-1/2$ and $1/2$; $\frac{3x}{x}$ gives $3$; $\frac{x}{x^{2}}$ gives no finite
+limit at all. An indeterminate form is a question, and the algebra is how it gets
+answered.
+
+The subtler mistake is treating a law's silence as a verdict. "The product law does not
+apply, therefore no limit" is a non-sequitur, and the standard counterexample is
+$x\sin(1/x)$ at $0$: the second factor has no limit, the law is mute, and the limit is
+$0$ all the same. Establishing that needs a different tool, which is the next reading.
+
+## Where the laws stop
+
+Three boundaries, all of them live.
+
+**Every piece needs its own limit.** Not "the combination looks fine" — each piece,
+separately, finite. When that fails, combine, factor, or rationalise until it holds.
+
+**The denominator's limit must be non-zero.** $F = 0$ is harmless; $G = 0$ voids the
+law, and $F = G = 0$ signals that a common factor is waiting to be found.
+
+**"Finitely many" is a hypothesis too.** The sum law extends to any fixed number of
+terms by induction, and to no more than that. Take $n$ copies of $1/n$ and add them:
+each term tends to $0$ as $n$ grows, and the sum is $1$ at every $n$. Nothing is wrong
+with the sum law there; it was simply never a statement about a number of terms that
+moves.
+
+One last piece of hygiene. After cancelling, $\frac{x^{2}+3x+2}{x^{2}-1}$ and
+$\frac{x+2}{x-1}$ are the same function *except at $x=-1$*, where the first is
+undefined and the second equals $-1/2$. The limit does not care about that difference,
+which is exactly why the manoeuvre is allowed — but the two expressions are not
+interchangeable in every context, and saying they are is how a genuine discontinuity
+occasionally gets cancelled away and forgotten.
+''',
+                },
+                {
+                    "title": "Squeezing a limit the laws cannot reach",
+                    "minutes": 10,
+                    "body": r'''
+Here is a limit the previous reading cannot touch:
+
+$$\lim_{x\to 0} x\sin\!\left(\frac{1}{x}\right).$$
+
+The product law wants both factors to have limits. The first does; the second does not,
+and not by a small margin. As $x \to 0$ the quantity $1/x$ runs off to infinity, so
+$\sin(1/x)$ runs through the whole of $[-1,1]$ infinitely often in every interval
+around the origin, however short. There is no number it approaches. So the law is
+silent — which, as the last reading insisted, is not the same as saying the limit fails
+to exist.
+
+What is still true, and true everywhere, is an *inequality*: $\sin$ of anything is
+between $-1$ and $1$. The tool that turns an inequality into a limit is the squeeze
+theorem, and it is the only theorem in this module that reaches limits the algebraic
+laws cannot.
+
+## The statement
+
+Suppose that on some punctured neighbourhood of $a$ — every $x$ with
+$0 < |x - a| < r$, for some $r > 0$ — the three functions satisfy
+
+$$g(x) \le f(x) \le h(x),$$
+
+and suppose
+
+$$\lim_{x\to a} g(x) = \lim_{x\to a} h(x) = L.$$
+
+Then $\lim_{x\to a} f(x) = L$.
+
+Three features are worth noticing before any use is made of it. The two outer limits
+must be *equal*; nothing is claimed if they merely both exist. The inequality is only
+required near $a$, and not at $a$ itself, which is what makes the theorem usable on
+functions with a hole. And $f$ is required to have no property of its own — no
+continuity, no formula, no limit assumed in advance. Its limit is a conclusion, forced
+on it by the neighbours.
+
+## Why it is true
+
+Let $\epsilon > 0$. Since $g \to L$, there is $\delta_{1}$ such that
+$L - \epsilon < g(x)$ whenever $0 < |x-a| < \delta_{1}$; that is one half of
+$|g(x) - L| < \epsilon$, and it is the half we need. Since $h \to L$, there is
+$\delta_{2}$ with $h(x) < L + \epsilon$ on its window.
+
+Take $\delta = \min(\delta_{1}, \delta_{2}, r)$, so that all three facts hold together.
+Then for $0 < |x - a| < \delta$,
+
+$$L - \epsilon < g(x) \le f(x) \le h(x) < L + \epsilon,$$
+
+so $L - \epsilon < f(x) < L + \epsilon$, which is $|f(x) - L| < \epsilon$. That is the
+definition, and $\epsilon$ was arbitrary.
+
+The whole proof is one chain of inequalities. There is no cleverness in it, and that is
+the point: the theorem is a way of transferring a definition from functions you
+understand onto one you do not.
+
+## The routine case, worked
+
+$$\lim_{x\to 0} x^{2}\cos\!\left(\frac{1}{x}\right).$$
+
+Start from the fact that holds everywhere the expression is defined, that is, for every
+$x \neq 0$:
+
+$$-1 \le \cos\!\left(\frac{1}{x}\right) \le 1.$$
+
+Multiply through by $x^{2}$. This is legal without flipping anything because $x^{2} > 0$
+for $x \neq 0$ — and *that* is the step to be careful about, since multiplying an
+inequality by a negative quantity reverses it:
+
+$$-x^{2} \le x^{2}\cos\!\left(\frac{1}{x}\right) \le x^{2}.$$
+
+Both outer functions are polynomials, so their limits at $0$ are their values there:
+$\lim_{x\to 0}(-x^{2}) = 0$ and $\lim_{x\to 0} x^{2} = 0$. The outer limits agree, so
+the squeeze applies and
+
+$$\lim_{x\to 0} x^{2}\cos\!\left(\frac{1}{x}\right) = 0.$$
+
+## Closing the opening example
+
+The same argument settles $x\sin(1/x)$, with one wrinkle worth making explicit, because
+it is exactly where a careless copy of the working above goes wrong. Start from the
+bound that holds for every $x \neq 0$:
+
+$$-1 \le \sin\!\left(\frac{1}{x}\right) \le 1 .$$
+
+Multiplying through by $x$ is *not* safe this time: for $x < 0$ the inequalities
+reverse, and the chain as written would be false on the whole left half of every
+neighbourhood of the origin. Two ways round it. One is to handle the two sides
+separately. The shorter one is to multiply by $|x|$, which is positive on both sides,
+and read the result off $\left|x\sin(1/x)\right| = |x|\left|\sin(1/x)\right| \le |x|$:
+
+$$-|x| \;\le\; x\sin\!\left(\frac{1}{x}\right) \;\le\; |x| .$$
+
+Both bounds are continuous with the value $0$ at the origin, so
+$\lim_{x\to 0}\left(-|x|\right) = \lim_{x\to 0}|x| = 0$, the outer limits agree, and
+
+$$\lim_{x\to 0} x\sin\!\left(\frac{1}{x}\right) = 0 .$$
+
+Look at what has been established, and about what. The function oscillates infinitely
+often in every neighbourhood of the origin, crosses zero at $x = 1/(n\pi)$ for every
+non-zero integer $n$, and has no value at $0$ at all. None of that had to be dealt
+with. The two bounds did the entire job and the unruly factor was never evaluated,
+estimated or sampled — which is the characteristic move of this theorem, and the reason
+it reaches where the laws are silent.
+
+## The case worth being fluent in
+
+$$\lim_{x\to 0}\frac{\sin x}{x}.$$
+
+This one is $0/0$, no factoring will help, and it is the limit the whole of
+trigonometric calculus rests on: it is the derivative of $\sin$ at $0$, and every
+derivative of a trigonometric function in Module 6 comes back to it. It cannot be
+proved by the limit laws, and it cannot honestly be proved by sampling. The squeeze
+does it, given one geometric fact.
+
+Take $0 < x < \pi/2$ and work in the unit circle, with $x$ measured in radians so that
+the arc it cuts has length $x$. Compare three areas: the triangle with vertices at the
+centre, at $(1,0)$ and at the point on the circle at angle $x$; the circular sector
+between the same two radii; and the right triangle formed by the tangent at $(1,0)$.
+The first sits inside the second, which sits inside the third, so
+
+$$\frac{1}{2}\sin x \;\le\; \frac{1}{2}x \;\le\; \frac{1}{2}\tan x .$$
+
+Multiply by $2$ and divide by $\sin x$, which is strictly positive on this interval, so
+the inequalities keep their direction:
+
+$$1 \;\le\; \frac{x}{\sin x} \;\le\; \frac{1}{\cos x}.$$
+
+All three quantities are positive, and taking reciprocals of positive quantities
+reverses the order:
+
+$$\cos x \;\le\; \frac{\sin x}{x} \;\le\; 1 .$$
+
+Now $\cos x \to 1$ as $x \to 0$, and the constant $1$ does too. Equal outer limits, so
+
+$$\lim_{x\to 0^{+}}\frac{\sin x}{x} = 1.$$
+
+The restriction $x > 0$ was needed to divide by $\sin x$ without flipping. For the left
+side, note that $\frac{\sin(-x)}{-x} = \frac{-\sin x}{-x} = \frac{\sin x}{x}$: the
+function is even, so the left-hand limit equals the right-hand one, and the two-sided
+limit is $1$.
+
+Two consequences follow immediately and get used constantly. First, for any constant
+$k \neq 0$, substituting $t = kx$ gives
+
+$$\lim_{x\to 0}\frac{\sin (kx)}{x} = \lim_{x \to 0} k\cdot\frac{\sin (kx)}{kx} = k .$$
+
+Second, radians are not a convention here but a hypothesis: the sector area is
+$\frac{1}{2}x$ only when $x$ is in radians. In degrees the same limit comes out
+$\pi/180$, and every derivative formula for $\sin$ and $\cos$ picks up that factor.
+That is the real reason calculus uses radians.
+
+## The mistake
+
+The classic misuse is to squeeze with bounds that do not meet. From
+$-1 \le \sin(1/x) \le 1$ one may write
+
+$$-1 \le \sin\!\left(\frac{1}{x}\right) \le 1$$
+
+and conclude precisely nothing about $\lim_{x\to 0}\sin(1/x)$, because the outer limits
+are $-1$ and $1$ and the theorem requires them to be the same number. The bound is
+correct; it is just not a squeeze. What made the opening example work was not the
+boundedness of the sine on its own, but the factor of $x$ multiplying it, which dragged
+both bounds to the same place.
+
+The second misuse is to assume boundedness is enough regardless of what multiplies it.
+Consider
+
+$$\frac{\sin(1/x)}{x}.$$
+
+The numerator is bounded, exactly as before. The limit at $0$ does not exist, and not
+because of the oscillation alone: the expression is unbounded, taking values of size
+$1/x$ whenever $\sin(1/x)$ happens to be near $1$. Bounded times *small* is small;
+bounded divided by small is anything at all.
+
+## Where it stops
+
+The theorem needs the two outer limits to be equal, needs the inequality only near the
+point, and gives back nothing more than the value $L$. In particular it says nothing
+about *how fast* $f$ approaches $L$, and nothing about $f$ being continuous, monotone
+or even defined at $a$.
+
+It also transfers verbatim to limits at infinity — replace "for $0 < |x - a| < \delta$"
+by "for $x > X$" throughout the proof and nothing else changes — which is how
+$\lim_{x\to\infty}\frac{\sin x}{x} = 0$ is established, with the bounds $-1/x$ and
+$1/x$. That limit is the subject of the next reading, where infinity gets a definition
+of its own.
+''',
+                },
+                {
+                    "title": "Both ends of the line, and a sign change you can trust",
+                    "minutes": 14,
+                    "body": r'''
+Two questions are left over, and they are the two that a graph answers at a glance and
+algebra has to work for. What does a function settle down to far out along the axis?
+And what happens at a point where a denominator vanishes but no cancellation rescues
+it? Both are called limits, both are written with $\infty$, and in neither case is
+$\infty$ a number that has been reached.
+
+The third question in this reading is different in kind. Granted a function is
+continuous, what can be deduced from two of its values? The answer is the theorem that
+makes root-finding by bracketing legitimate, and it is the one result in this module
+that is genuinely deeper than it looks.
+
+## What $x \to \infty$ means
+
+There is no point at infinity to be near, so the definition of Module 1 cannot be
+recycled. The replacement keeps the tolerance and changes what is required of $x$:
+
+$$\lim_{x\to\infty} f(x) = L$$
+
+means that for every $\epsilon > 0$ there is a number $X$ such that $|f(x) - L| <
+\epsilon$ for every $x > X$. "Close enough to $a$" has become "far enough out". The
+graph of $y = L$ is then a **horizontal asymptote** of $f$.
+
+The other use of the symbol runs the other way:
+
+$$\lim_{x\to a} f(x) = \infty$$
+
+means that for every $M$ there is a $\delta > 0$ with $f(x) > M$ whenever
+$0 < |x - a| < \delta$. This is a statement that the limit *fails to exist*, written in
+a form that says how it fails. No arithmetic may be done with the symbol: $\infty$ is
+not available as a value of $F$ or $G$ in any of the limit laws.
+
+## Reading a rational function far out
+
+The technique is one line: divide the numerator and the denominator by the highest
+power of $x$ that appears anywhere in the fraction, then use $\lim_{x\to\infty} 1/x^{k}
+= 0$ for every $k \ge 1$.
+
+$$\lim_{x\to\infty}\frac{5x^{2}-3x+1}{2x^{2}+7}.$$
+
+Both halves grow without bound, so the form is $\infty/\infty$ and the quotient law
+does not apply — for the same reason $0/0$ did not, namely that the hypotheses require
+finite limits. Divide top and bottom by $x^{2}$, which is legal for every $x \neq 0$
+and so in particular throughout the region the limit inspects:
+
+$$\frac{5x^{2}-3x+1}{2x^{2}+7}
+= \frac{5 - \dfrac{3}{x} + \dfrac{1}{x^{2}}}{2 + \dfrac{7}{x^{2}}}.$$
+
+Now every piece has a limit of its own — $5$, $0$, $0$, $2$, $0$ — and the denominator's
+limit is $2 \neq 0$, so the laws finally apply:
+
+$$\lim_{x\to\infty}\frac{5x^{2}-3x+1}{2x^{2}+7} = \frac{5-0+0}{2+0} = \frac{5}{2}.$$
+
+The general rule falls out of the same working: for a quotient of polynomials, compare
+degrees. Equal degrees give the ratio of the leading coefficients; a smaller numerator
+degree gives $0$; a larger numerator degree gives no finite limit. Note what the rule
+throws away — the lower-order terms decide nothing at infinity, which is exactly the
+opposite of the situation at a finite point, where they decide everything.
+
+## The case people get wrong: a root at the far left
+
+$$\lim_{x\to-\infty}\frac{\sqrt{4x^{2}+1}}{3x-2}.$$
+
+The same instinct applies — divide by $x$ — and the trap is inside the root. To take
+$x$ under a square root sign one must write it as $\sqrt{x^{2}}$, and
+
+$$\sqrt{x^{2}} = |x|,$$
+
+which is $x$ when $x \ge 0$ and $-x$ when $x < 0$, because the radical sign denotes the
+*non-negative* root. As $x \to -\infty$ we are firmly in the second case, so dividing
+the numerator by $x$ means dividing it by $-\sqrt{x^{2}}$:
+
+$$\frac{\sqrt{4x^{2}+1}}{x} = \frac{\sqrt{4x^{2}+1}}{-\sqrt{x^{2}}}
+= -\sqrt{\frac{4x^{2}+1}{x^{2}}} = -\sqrt{4 + \frac{1}{x^{2}}}.$$
+
+Dividing the denominator by $x$ is ordinary: $(3x-2)/x = 3 - 2/x$. So
+
+$$\frac{\sqrt{4x^{2}+1}}{3x-2} = \frac{-\sqrt{4 + \dfrac{1}{x^{2}}}}{3 - \dfrac{2}{x}}
+\;\to\; \frac{-\sqrt{4}}{3} = -\frac{2}{3}.$$
+
+Sampling confirms the sign: at $x = -1000$ the numerator is $\sqrt{4{,}000{,}001}
+\approx 2000.0003$ and the denominator is $-3002$, giving $-0.6662$. The answer at the
+other end is $+2/3$, and a function with two different horizontal asymptotes is
+completely ordinary — this one has them.
+
+The error to name: writing $\sqrt{4x^{2}+1} \approx 2x$ for large negative $x$. It is
+false, because the left side is positive and the right side is negative, and it is
+tempting because it is true at the other end of the axis and the algebra looks
+identical. Any time a root is divided by a variable heading to $-\infty$, a minus sign
+is owed.
+
+## A myth about asymptotes
+
+An asymptote is often described as a line the graph approaches but never touches. The
+first half is the definition; the second half is false. Take
+
+$$f(x) = \frac{\sin x}{x}, \qquad x > 0 .$$
+
+Since $-1/x \le f(x) \le 1/x$ and both bounds tend to $0$, the squeeze gives
+$\lim_{x\to\infty} f(x) = 0$, so $y = 0$ is a horizontal asymptote. And $f$ hits that
+asymptote at $x = \pi, 2\pi, 3\pi, \ldots$ — infinitely many times, out to arbitrarily
+large $x$. Nothing in the definition forbids it. Crossing the asymptote is only
+forbidden for the limit's *final* approach in the sense of $\epsilon$: the graph must
+eventually stay within every band around $y = L$, and staying within a band is not the
+same as staying on one side of the line.
+
+## Vertical asymptotes, one side at a time
+
+At a finite point, an infinite limit comes from a denominator that goes to zero over a
+numerator that does not. The test is one substitution:
+
+$$f(x) = \frac{x+4}{x^{2}-4} = \frac{x+4}{(x-2)(x+2)} .$$
+
+At $x = 2$ the denominator is $0$ and the numerator is $6 \neq 0$, so there is no
+common factor to cancel and no hole: this is a genuine blow-up. But *which* infinity
+depends on the side, and the only way to know is to track the signs of the factors.
+
+From the right, at $x = 2.001$: the numerator is near $6 > 0$; the factor $x+2$ is near
+$4 > 0$; the factor $x-2$ is $+0.001$, positive and tiny. A positive number divided by
+a tiny positive number is huge and positive, so
+
+$$\lim_{x\to 2^{+}} \frac{x+4}{x^{2}-4} = +\infty .$$
+
+From the left, at $x = 1.999$, only one sign changes: $x - 2 = -0.001$. So the quotient
+is huge and negative, and $\lim_{x\to 2^{-}} f(x) = -\infty$. The two-sided limit
+therefore does not exist — not even "as an infinity", because the two sides disagree,
+and writing $\lim_{x\to 2} f(x) = \infty$ here would be a false statement rather than a
+loose one.
+
+Contrast $x = -2$, where the numerator is $2 \neq 0$: another asymptote, with the signs
+working out the other way round, since $x-2$ is now negative. And contrast both with a
+point where the numerator vanishes too, such as $x = 2$ in $\frac{x^{2}-4}{x-2}$: there
+the factor cancels, the graph has a hole rather than a pole, and the limit is finite.
+Zero denominator alone decides nothing.
+
+## A sign change is a root
+
+Now the theorem. Let $f$ be continuous on the closed interval $[a,b]$, and let $N$ be
+any number between $f(a)$ and $f(b)$. Then there is at least one $c$ in $(a,b)$ with
+$f(c) = N$. The case that gets used is $N = 0$: **if $f$ is continuous on $[a,b]$ and
+$f(a)$ and $f(b)$ have opposite signs, then $f$ has a root in $(a,b)$.**
+
+It looks obvious. It is not, and the quickest way to see that is to run the same
+sentence over the rational numbers. Let $f(x) = x^{2}-2$, and let $x$ range over
+rationals only. Then $f(1) = -1 < 0$ and $f(2) = 2 > 0$, the function is continuous in
+every sense a rational-valued world can express, and there is no rational $c$ with
+$f(c) = 0$, because $\sqrt{2}$ is irrational. The theorem is false over $\mathbf{Q}$.
+So whatever proves it must use a property the rationals lack, and the property is
+completeness — the reals have no gaps.
+
+Here is the argument, which doubles as an algorithm. Suppose $f(a) < 0 < f(b)$. Look at
+the midpoint $m = (a+b)/2$ and evaluate $f(m)$. If $f(m) = 0$ we are finished. If
+$f(m) > 0$, the sign change now sits in $[a,m]$; if $f(m) < 0$, it sits in $[m,b]$.
+Either way we have a new interval, half as long, whose endpoints still straddle a sign
+change. Repeat forever. The intervals are nested and their lengths $(b-a)/2^{n}$ tend
+to $0$, so by completeness they close down on exactly one point $c$. At every stage the
+left endpoint has $f \le 0$ and the right endpoint has $f \ge 0$; the endpoints both
+converge to $c$, and continuity says $f$ of the limit is the limit of $f$. So $f(c)
+\le 0$ and $f(c) \ge 0$ at once, which leaves $f(c) = 0$.
+
+That procedure is **bisection**, and the proof is also its error bound: after $n$ steps
+the bracket has width $(b-a)/2^{n}$, so the number of steps needed for a given accuracy
+is known in advance, before the function is looked at. Starting from a bracket of width
+$1$, ten steps give $2^{-10} < 10^{-3}$. The method is slow — one binary digit per
+evaluation — and it cannot fail, which is a trade Module 9 will revisit when Newton's
+method offers the opposite bargain.
+
+## Where the theorem stops
+
+**Continuity on the whole closed interval is the hypothesis, and dropping it drops the
+conclusion.** Take $f(x) = 1/x$ on $[-1,1]$. Then $f(-1) = -1$ and $f(1) = 1$, values
+of opposite sign, and $f$ is never zero anywhere. Nothing has gone wrong with the
+theorem: $f$ is not continuous on $[-1,1]$, because it is not even defined at $0$. This
+is also the practical failure mode of bisection — bracket a pole instead of a root and
+the algorithm converges obediently to the pole, reporting a sign change that never was
+a crossing.
+
+**It gives existence, never uniqueness.** A continuous function may cross zero three
+times between the endpoints, and the theorem counts nothing. Getting a count needs a
+separate argument, usually that $f$ is monotone on the interval.
+
+**It has no converse.** No sign change does not mean no root: $f(x) = x^{2}$ on
+$[-1,1]$ has $f(-1) = f(1) = 1$, no sign change at all, and a root sitting at the
+origin. A bracketing method is blind to roots of even multiplicity, which is worth
+remembering the next time a solver reports that no root exists.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Infinity minus infinity, made finite",
+                    "minutes": 13,
+                    "vars": ["x", "L"],
+                    "brief": r'''
+Evaluate $\lim_{x\to\infty}\left(\sqrt{x^{2}+3x}-x\right)$.
+
+Both terms run off to infinity, so the difference law says nothing, and dividing by the
+dominant power gets nowhere because there is no fraction to divide. The form is
+$\infty-\infty$, which is indeterminate: the two terms could separate without bound,
+could settle on any finite gap, or could close up entirely.
+
+The move that decides it is the one used on $0/0$ with a root in it, run in reverse.
+Manufacture a fraction by multiplying by the conjugate over itself, then divide by the
+dominant power in the ordinary way.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Multiply $\\sqrt{x^{2}+3x}-x$ by its conjugate $\\sqrt{x^{2}+3x}+x$ and simplify the product completely. Write the result.",
+                            "answer": "3x",
+                            "placeholder": "a polynomial in x",
+                            "hint": "$(A-B)(A+B) = A^{2}-B^{2}$, with $A = \\sqrt{x^{2}+3x}$ and $B = x$.",
+                            "deconstruct": [
+                                "$\\left(\\sqrt{x^{2}+3x}\\right)^{2} = x^{2}+3x$, since the quantity under the root is positive for large $x$.",
+                                "$B^{2} = x^{2}$, so the difference is $(x^{2}+3x) - x^{2}$.",
+                                "The $x^{2}$ terms cancel, which is the entire point of the manoeuvre.",
+                            ],
+                        },
+                        {
+                            "prompt": "The conjugate cannot be introduced for free, so divide by it as well. Write the original expression as the single fraction this produces.",
+                            "answer": "\\frac{3x}{\\sqrt{x^{2}+3x}+x}",
+                            "hint": "Numerator: the product you just simplified. Denominator: the conjugate itself.",
+                            "deconstruct": [
+                                "Multiplying by $\\dfrac{\\sqrt{x^{2}+3x}+x}{\\sqrt{x^{2}+3x}+x}$ multiplies by $1$, so nothing has changed.",
+                                "That factor is legal for large $x$ because the denominator is then strictly positive, never zero.",
+                            ],
+                        },
+                        {
+                            "prompt": "Now divide numerator and denominator by $x$. Inside the root, $x$ must enter as $\\sqrt{x^{2}}$, which equals $x$ here because $x$ is heading to $+\\infty$. Write the resulting fraction.",
+                            "answer": "\\frac{3}{\\sqrt{1+3/x}+1}",
+                            "placeholder": "\\frac{3}{\\sqrt{\\ldots}+1}",
+                            "hint": "$\\dfrac{\\sqrt{x^{2}+3x}}{x} = \\sqrt{\\dfrac{x^{2}+3x}{x^{2}}} = \\sqrt{1+\\dfrac{3}{x}}$, and $\\dfrac{x}{x} = 1$.",
+                            "deconstruct": [
+                                "Top: $3x/x = 3$.",
+                                "Bottom, first term: bring the $x$ under the root as $\\sqrt{x^{2}}$ and combine, giving $\\sqrt{1+3/x}$.",
+                                "Bottom, second term: $x/x = 1$.",
+                            ],
+                        },
+                        {
+                            "prompt": "The term $3/x$ tends to $0$ and every remaining piece has a limit of its own, so the laws finally apply. Write the value of the limit.",
+                            "answer": "\\frac{3}{2}",
+                            "hint": "The root tends to $\\sqrt{1+0} = 1$, so the denominator tends to $1+1$.",
+                        },
+                        {
+                            "prompt": "Now the other end of the axis. For $x < 0$, write $\\sqrt{x^{2}}$ in terms of $x$ without using a modulus sign.",
+                            "answer": "-x",
+                            "hint": "The radical denotes the non-negative root, and when $x$ itself is negative it is $-x$ that is positive.",
+                            "deconstruct": [
+                                "$\\sqrt{x^{2}} = |x|$ for every real $x$; the square destroys the sign and the root cannot restore it.",
+                                "For $x < 0$ the non-negative one of $x$ and $-x$ is $-x$.",
+                                "Test it: at $x = -5$, $\\sqrt{25} = 5 = -(-5)$.",
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+So $\lim_{x\to\infty}\left(\sqrt{x^{2}+3x}-x\right) = \frac{3}{2}$: the
+curve $y = \sqrt{x^{2}+3x}$ and the line $y = x$ separate for a while and then run
+parallel at a fixed gap of $1.5$. Sampling agrees — at $x = 10^{6}$ the difference is
+$1.49999\ldots$ — but sampling could never have distinguished a gap of $1.5$ from a gap
+that closes very slowly, and the algebra does.
+
+Nothing about $3$ was special. The same three lines give
+$\lim_{x\to\infty}\left(\sqrt{x^{2}+kx}-x\right) = k/2$ for any constant $k$, which is
+a formula worth recognising: the linear term inside the root becomes half of itself
+outside it.
+
+The last step is the guard on the other end. As $x \to -\infty$ the quantity $-x$ is
+large and positive, so $\sqrt{x^{2}+3x} - x$ is a sum of two large positive things and
+runs off to $+\infty$. The limit at $-\infty$ is not $-3/2$, and it is not $3/2$; there
+is no finite limit at all. Every step of the working above assumed $\sqrt{x^{2}} = x$,
+which is true at one end of the axis and false at the other, and forgetting that is the
+single most common way this calculation goes wrong.
+''',
+                },
+                {
+                    "title": "Trapping sin(x)/x between two things that meet",
+                    "minutes": 14,
+                    "vars": ["x", "k", "L"],
+                    "brief": r'''
+The limit $\lim_{x\to 0}\frac{\sin x}{x}$ is $0/0$, and no factoring,
+cancelling or rationalising touches it — there is no polynomial structure to exploit.
+It is also not optional: it is the derivative of $\sin$ at the origin, and every
+trigonometric derivative later in the course is built on it.
+
+The route in is the squeeze, and the inequality it squeezes with comes from geometry.
+In the unit circle, with $x$ in radians and $0 < x < \pi/2$, a triangle sits inside a
+sector which sits inside a larger triangle, and comparing the three areas gives
+
+$$\tfrac{1}{2}\sin x \;\le\; \tfrac{1}{2}x \;\le\; \tfrac{1}{2}\tan x,
+\qquad\text{that is}\qquad \sin x \le x \le \tan x .$$
+
+Take that inequality as given and turn it into the limit.
+
+One note on typing, since several answers below contain a trigonometric function: the
+checker reads plain function names, so enter them as `sin(x)`, `cos(x)` and `tan(x)`,
+with the brackets and without a backslash.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Before anything can be divided, write $\\tan(x)$ in terms of $\\sin(x)$ and $\\cos(x)$.",
+                            "answer": "\\frac{sin(x)}{cos(x)}",
+                            "hint": "The definition of the tangent, not an identity to be derived.",
+                        },
+                        {
+                            "prompt": "Divide the chain $\\sin(x) \\le x \\le \\tan(x)$ through by $\\sin(x)$, which is strictly positive for $0 < x < \\pi/2$, so no inequality flips. The middle term becomes $x/\\sin(x)$ and the left becomes $1$. Write the right-hand bound.",
+                            "answer": "\\frac{1}{cos(x)}",
+                            "hint": "$\\dfrac{\\tan x}{\\sin x} = \\dfrac{\\sin x}{\\cos x}\\cdot\\dfrac{1}{\\sin x}$, and the sines cancel.",
+                            "deconstruct": [
+                                "Write the right-hand term as $\\dfrac{\\sin x}{\\cos x} \\div \\sin x$.",
+                                "Dividing by $\\sin x$ is multiplying by $1/\\sin x$, so the $\\sin x$ factors cancel.",
+                                "Only $1/\\cos x$ survives.",
+                            ],
+                        },
+                        {
+                            "prompt": "All three quantities in $1 \\le \\dfrac{x}{\\sin(x)} \\le \\dfrac{1}{\\cos(x)}$ are positive, and taking reciprocals of positive quantities reverses a chain. The reversed chain reads (lower bound) $\\le \\dfrac{\\sin(x)}{x} \\le 1$. Write that lower bound.",
+                            "answer": "cos(x)",
+                            "hint": "The reciprocal of $1/\\cos x$ is $\\cos x$, and it moves from the right-hand end to the left-hand end.",
+                        },
+                        {
+                            "prompt": "Both outer bounds have limits as $x \\to 0$, and the squeeze theorem needs them to agree. Write the common value, which is therefore $\\lim_{x\\to 0}\\frac{\\sin(x)}{x}$.",
+                            "answer": "1",
+                            "hint": "$\\cos$ is continuous with $\\cos 0 = 1$, and the constant bound is $1$ already.",
+                        },
+                        {
+                            "prompt": "Use it. Rewrite $\\dfrac{\\sin(5x)}{3x}$ as a constant multiplied by $\\dfrac{\\sin(5x)}{5x}$, then take the limit as $x \\to 0$. Write the limit.",
+                            "answer": "\\frac{5}{3}",
+                            "hint": "$\\dfrac{\\sin 5x}{3x} = \\dfrac{5}{3}\\cdot\\dfrac{\\sin 5x}{5x}$, and the second factor tends to $1$ because $5x \\to 0$.",
+                            "deconstruct": [
+                                "Multiply numerator and denominator by $5$: $\\dfrac{\\sin 5x}{3x} = \\dfrac{5\\sin 5x}{15x}$.",
+                                "Regroup as $\\dfrac{5}{3}\\cdot\\dfrac{\\sin 5x}{5x}$.",
+                                "As $x \\to 0$ the quantity $t = 5x$ also tends to $0$, so $\\dfrac{\\sin t}{t} \\to 1$.",
+                            ],
+                        },
+                        {
+                            "prompt": "A harder use. Multiply $\\dfrac{1-\\cos(x)}{x^{2}}$ top and bottom by $1+\\cos(x)$, and simplify the numerator with $1-\\cos^{2} = \\sin^{2}$. Write the whole fraction.",
+                            "answer": "\\frac{sin(x)^{2}}{x^{2}(1+cos(x))}",
+                            "placeholder": "\\frac{\\ldots}{x^{2}(1+cos(x))}",
+                            "hint": "The numerator becomes $(1-\\cos x)(1+\\cos x) = 1-\\cos^{2}x$; the denominator picks up the same conjugate factor.",
+                        },
+                        {
+                            "prompt": "Split that into $\\left(\\dfrac{\\sin(x)}{x}\\right)^{2}\\cdot\\dfrac{1}{1+\\cos(x)}$ — now every factor has a limit — and write $\\lim_{x\\to 0}\\dfrac{1-\\cos(x)}{x^{2}}$.",
+                            "answer": "\\frac{1}{2}",
+                            "hint": "The squared factor tends to $1^{2}$, and $1+\\cos 0 = 2$.",
+                        },
+                    ],
+                    "closing": r'''
+Three results have come out of one inequality:
+
+$$\lim_{x\to 0}\frac{\sin x}{x} = 1, \qquad
+\lim_{x\to 0}\frac{\sin (kx)}{x} = k, \qquad
+\lim_{x\to 0}\frac{1-\cos x}{x^{2}} = \frac{1}{2}.$$
+
+The middle one says the sine is indistinguishable from its argument near $0$ up to a
+first-order factor, and the last says the cosine differs from $1$ by about
+$\tfrac{1}{2}x^{2}$ — which is the first hint of Taylor's theorem, and the reason
+$\cos x \approx 1 - x^{2}/2$ is worth memorising.
+
+Two hypotheses were spent and both matter. **Radians**: the sector area is
+$\tfrac{1}{2}x$ only in radians, and in degrees the first limit is $\pi/180$, not $1$.
+**Positivity**: dividing the chain by $\sin x$ kept its direction only because $\sin x >
+0$ on $(0,\pi/2)$, which is why the argument establishes the right-hand limit first.
+The two-sided result follows because $\frac{\sin x}{x}$ is an even function, so the
+left-hand side is a mirror image and gives the same value.
+
+Where it stops: none of this survives being applied at a point other than $0$.
+$\lim_{x\to\pi}\frac{\sin x}{x}$ is not $1$ — it is $0/\pi = 0$, by plain substitution,
+because there is nothing indeterminate about it. The result is about the *coincidence*
+of a zero in the numerator with a zero in the denominator, and that only happens at
+the origin.
+''',
+                },
+                {
+                    "title": "From a sign change to a bracket you can shrink",
+                    "minutes": 12,
+                    "vars": ["x", "n", "f", "c"],
+                    "brief": r'''
+The cubic $f(x) = x^{3}-x-2$ has no rational root and no formula anyone wants to use.
+The intermediate value theorem does not care: continuity plus two values of opposite
+sign is enough to guarantee that a root exists, and the proof of the theorem is itself
+an algorithm for finding it.
+
+This derivation runs that algorithm by hand for two steps, then reads off the guarantee
+it comes with — a bound on the error that is known before any function value is
+computed.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Take the bracket $[1,2]$. The bracketing test is a statement about the sign of one product. Compute $f(1)\\,f(2)$ for $f(x) = x^{3}-x-2$.",
+                            "answer": "-8",
+                            "hint": "$f(1) = 1-1-2$ and $f(2) = 8-2-2$; multiply them.",
+                            "deconstruct": [
+                                "$f(1) = 1^{3}-1-2 = -2$.",
+                                "$f(2) = 2^{3}-2-2 = 4$.",
+                                "$(-2)(4) = -8$, and a negative product is precisely what 'opposite signs' means.",
+                            ],
+                        },
+                        {
+                            "prompt": "The product is negative and $f$ is a polynomial, hence continuous on $[1,2]$, so a root exists inside. Write the midpoint of the bracket, which is where bisection looks next.",
+                            "answer": "\\frac{3}{2}",
+                            "hint": "Halfway between $1$ and $2$.",
+                        },
+                        {
+                            "prompt": "Evaluate $f$ at that midpoint. Write $f(3/2)$ exactly, as a fraction.",
+                            "answer": "-\\frac{1}{8}",
+                            "hint": "$\\left(\\frac{3}{2}\\right)^{3} = \\frac{27}{8}$, then subtract $\\frac{3}{2}$ and $2$ over a common denominator of $8$.",
+                            "deconstruct": [
+                                "$\\left(\\frac{3}{2}\\right)^{3} = \\frac{27}{8}$.",
+                                "$\\frac{3}{2} = \\frac{12}{8}$ and $2 = \\frac{16}{8}$.",
+                                "$\\frac{27}{8}-\\frac{12}{8}-\\frac{16}{8} = -\\frac{1}{8}$, so the value is negative — small, but negative.",
+                            ],
+                        },
+                        {
+                            "prompt": "That value has the same sign as $f(1)$, so the sign change lies in the other half, $[3/2,\\,2]$. Write the width of this new bracket.",
+                            "answer": "\\frac{1}{2}",
+                            "hint": "The old bracket had width $1$ and the midpoint cut it in two.",
+                        },
+                        {
+                            "prompt": "Each step halves the bracket, and the starting width here is $1$. Write the width after $n$ steps, as a function of $n$.",
+                            "answer": "\\frac{1}{2^{n}}",
+                            "placeholder": "a power of 2",
+                            "hint": "One halving is $1/2$, two halvings are $1/4$; the pattern is a power.",
+                        },
+                        {
+                            "prompt": "Ten decimal places are not needed; three are. Write the smallest whole number $n$ for which the bracket width $2^{-n}$ is at most $10^{-3}$.",
+                            "answer": "10",
+                            "hint": "$2^{9} = 512$ and $2^{10} = 1024$. Which is the first to exceed $1000$?",
+                            "deconstruct": [
+                                "The condition $2^{-n} \\le 10^{-3}$ is the same as $2^{n} \\ge 1000$.",
+                                "$2^{9} = 512 < 1000$, so nine steps are not enough.",
+                                "$2^{10} = 1024 \\ge 1000$, so ten steps suffice and nine do not.",
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+Two bisections have cut the root down to $[1.5, 1.75]$ — the second midpoint is
+$1.75$, where $f = \frac{103}{64} \approx 1.609 > 0$, so the bracket becomes
+$[1.5,\,1.75]$ — and the true root is $c \approx 1.52138$.
+
+What makes this worth doing is the last two steps rather than the first four. The
+error bound $2^{-n}$ does not depend on $f$: it is fixed by the geometry of halving, so
+the cost of a given accuracy is known before the first evaluation, and the method
+cannot diverge, stall or oscillate. That is a rare guarantee, and it is bought entirely
+with the intermediate value theorem.
+
+The price is speed. One binary digit per function evaluation means about $3.3$ steps
+per decimal digit, and no amount of smoothness in $f$ makes it faster — bisection never
+looks at how big $f$ is, only at its sign, so it throws away almost all the information
+it collects. Newton's method in Module 9 uses that information and roughly doubles the
+number of correct digits per step, in exchange for giving up the guarantee entirely.
+
+Where the argument stops: the sign test detects a *crossing*, not a root. On
+$f(x) = 1/x$ over $[-1,1]$ the endpoint values are $-1$ and $1$, the product is
+negative, and bisection converges neatly to $0$ — which is a pole, not a root, and the
+hypothesis that failed is continuity on the closed interval. And a root of even
+multiplicity, such as the one $x^{2}$ has at the origin, produces no sign change at all
+and is invisible to any bracketing method.
+''',
+                },
+            ],
+            "blanks": [
+                {
+                    "title": "A zero over zero, evaluated line by line",
+                    "minutes": 9,
+                    "caption": "the standard evaluation, with five steps removed",
+                    "lang": "text",
+                    "brief": r'''
+A $0/0$ with a square root in the *denominator* rather than the numerator. The strategy
+is unchanged — expose the common factor, cancel it on the punctured neighbourhood, then
+substitute into what is left — but the conjugate now has to be applied downstairs.
+
+Four of the missing pieces are algebra. One is the reason the cancellation is allowed
+at all, which is the step that is usually performed silently and is the only step that
+could be wrong.
+''',
+                    "listing": """Evaluate      lim  (x^2 - 9) / (sqrt(x + 1) - 2)      as  x -> 3
+              ---
+
+
+Step 0.  Substitute first, to find out which case this is.
+
+     numerator      3^2 - 9          =  0
+     denominator    sqrt(3 + 1) - 2  =  0
+
+     so the form is ___ , and the quotient law does not apply.
+
+
+Step 1.  The obstruction is the root downstairs.  Multiply top and
+         bottom by C, the conjugate of the denominator:
+
+     C  =  ___
+
+              (x^2 - 9) * C
+     ---------------------------------
+          (sqrt(x+1) - 2) * C
+
+
+Step 2.  The denominator is now a difference of two squares:
+
+     (sqrt(x+1))^2 - 2^2  =  (x + 1) - 4  =  ___
+
+
+Step 3.  Factor the numerator so that the same factor is visible
+         on top:
+
+     x^2 - 9  =  (x - 3)(x + 3)
+
+     giving       (x - 3)(x + 3) * C
+                  ---------------------
+                        (x - 3)
+
+
+Step 4.  Cancel the common factor (x - 3).  This is legal because
+         ___ .
+
+     leaving      (x + 3) * C
+
+
+Step 5.  What is left is continuous at x = 3, so substitute x = 3,
+         where C = sqrt(3 + 1) + 2 = 4:
+
+     (3 + 3) * 4  =  ___
+""",
+                    "blanks": [
+                        {
+                            "prompt": "Both halves came out zero. Name the form.",
+                            "hole": "?",
+                            "opts": ["0", "0/0", "inf/inf", "undefined, so no limit exists"],
+                            "a": 1,
+                            "why": r"""
+$0/0$ is a report about the shape of the expression, not a value: it says the quotient
+law's hypotheses have failed and algebra is owed. Reading it as the number $0$ takes the
+numerator's value for the quotient's, which would make every limit of this shape zero —
+and this one is $24$. $\infty/\infty$ is the form for two pieces that grow without
+bound, which is not what happened here. And being undefined at the point is no
+obstruction whatsoever: a limit inspects only the punctured neighbourhood, so a hole is
+the normal case rather than a failure.
+""",
+                        },
+                        {
+                            "prompt": "The conjugate of $\\sqrt{x+1}-2$.",
+                            "hole": "?",
+                            "opts": ["sqrt(x-1) + 2", "x + 1 - 4", "sqrt(x+1) + 2", "sqrt(x+1) - 2"],
+                            "a": 2,
+                            "why": r"""
+A conjugate flips the sign between the two terms and changes nothing else, so
+$\sqrt{x+1}-2$ pairs with $\sqrt{x+1}+2$; the product is
+$\left(\sqrt{x+1}\right)^{2}-2^{2}$, which is what kills the root. Repeating the
+expression unchanged squares it instead and leaves the root firmly in place. Moving the
+sign inside the radical, as $\sqrt{x-1}$, changes the function rather than multiplying
+by $1$. Writing $x+1-4$ is the *result* of the multiplication, not the thing multiplied
+by.
+""",
+                        },
+                        {
+                            "prompt": "$(x+1)-4$, simplified.",
+                            "hole": "?",
+                            "opts": ["x - 3", "x + 5", "x - 4", "x + 3"],
+                            "a": 0,
+                            "why": r"""
+$(x+1)-4 = x-3$, and the appearance of exactly the factor that the numerator also
+carries is the whole reason the conjugate was worth introducing. Getting $x+5$ adds
+where the algebra subtracts; $x-4$ forgets the $+1$ that came out of the root; $x+3$ is
+the *other* factor of $x^{2}-9$, which survives the cancellation rather than performing
+it.
+""",
+                        },
+                        {
+                            "prompt": "Why may $(x-3)$ be cancelled here?",
+                            "hole": "?",
+                            "opts": [
+                                "a common factor may always be cancelled from a fraction",
+                                "the numerator and the denominator both vanish at x = 3",
+                                "x is never equal to 3 on the punctured neighbourhood a limit inspects",
+                                "the limit is already known to exist",
+                            ],
+                            "a": 2,
+                            "why": r"""
+Cancelling divides by $x-3$, and division is legal only when that quantity is non-zero
+— which is guaranteed here not by luck but by the definition of a limit, which examines
+$0 < |x-3| < \delta$ and never $x = 3$ itself. The blanket claim that common factors
+always cancel is false precisely at the point in question, and it is the belief that
+turns this manoeuvre into a habit that occasionally destroys a genuine discontinuity.
+Both halves vanishing is the reason a common factor *exists*, not the reason it may be
+divided out. And the existence of the limit is the conclusion of the argument, so
+assuming it here would be circular.
+""",
+                        },
+                        {
+                            "prompt": "$6 \\times 4$.",
+                            "hole": "?",
+                            "opts": ["12", "24", "0", "6"],
+                            "a": 1,
+                            "why": r"""
+$(3+3)(\sqrt{4}+2) = 6 \times 4 = 24$, so the limit is $24$ — a perfectly ordinary
+number produced by an expression that has no value at all at $x = 3$. Answering $12$
+drops the $\sqrt{4} = 2$ and multiplies $6$ by the leftover $2$; answering $6$ keeps
+only the polynomial factor and throws away the conjugate that the rationalisation put
+there; answering $0$ reports the numerator's value at the point, which is the original
+mistake the whole calculation exists to avoid.
+""",
+                        },
+                    ],
+                },
+                {
+                    "title": "Which side of the asymptote",
+                    "minutes": 9,
+                    "caption": "a sign analysis of a pole, one factor at a time",
+                    "lang": "text",
+                    "brief": r'''
+A vanishing denominator is not by itself an asymptote, and an asymptote is not by itself
+an answer: the two sides can run to opposite infinities. Both facts are settled by the
+same routine — check the numerator, then track the sign of every factor as the point is
+approached from one side.
+
+The analysis below is written out for $f(x) = \dfrac{x+4}{x^{2}-4}$ at both of its bad
+points. Five entries are missing.
+''',
+                    "listing": """f(x) = (x + 4) / (x^2 - 4) = (x + 4) / ((x - 2)(x + 2))
+
+A zero denominator is not by itself an asymptote, so look at the
+numerator at each bad point before deciding anything.
+
+     at x =  2 :   numerator = 6 , nonzero   ->  vertical asymptote
+     at x = -2 :   numerator = 2 , nonzero   ->  vertical asymptote
+
+Contrast:  g(x) = (x^2 - 4) / (x - 2).  Its denominator vanishes at
+x = 2 as well -- but so does its numerator, the factor (x - 2)
+cancels, and what the graph of g has at x = 2 is instead ___ .
+
+
+Back to f.  Approach x = 2 from the RIGHT   (test point x = 2.001):
+
+     x + 4    ->    6.001       positive
+     x + 2    ->    4.001       positive
+     x - 2    ->   +0.001       positive and tiny
+     f(x)     ->    6 / (tiny positive)     ->  ___
+     f(2.001) =  1499.9 ...
+
+
+Approach x = 2 from the LEFT    (test point x = 1.999):
+
+     x + 4    ->    5.999       positive
+     x + 2    ->    3.999       positive
+     x - 2    ->   -0.001       ___ and tiny
+     f(x)     ->    6 / (tiny negative)     ->  -inf
+     f(1.999) = -1500.1 ...
+
+
+Approach x = -2 from the RIGHT  (test point x = -1.999):
+
+     x + 4    ->    2.001       positive
+     x - 2    ->   -3.999       negative
+     x + 2    ->   +0.001       positive and tiny
+     f(x)     ->    2 / (tiny negative)     ->  ___
+     f(-1.999) = -500.4 ...
+
+
+Conclusion at x = 2:  the two sides disagree, so the two-sided
+limit ___ .
+""",
+                    "blanks": [
+                        {
+                            "prompt": "For $g(x) = \\dfrac{x^{2}-4}{x-2}$, both halves vanish at $x=2$ and the factor cancels. What does the graph of $g$ have there?",
+                            "hole": "?",
+                            "opts": [
+                                "a vertical asymptote, as for f",
+                                "a hole, with the limit 4",
+                                "a jump, with different one-sided limits",
+                                "an ordinary point, with g(2) = 4",
+                            ],
+                            "a": 1,
+                            "why": r"""
+Cancelling gives $g(x) = x+2$ for every $x \neq 2$, so $g$ approaches $4$ from both
+sides and the discontinuity is removable — a hole, not a pole. The difference from $f$
+is entirely in the numerator: $f$ has $6 \neq 0$ over a vanishing denominator, which is
+unbounded, while $g$ has $0/0$, which the cancellation resolves to a finite value. It is
+not a jump, since the two one-sided limits agree. And it is not an ordinary point:
+$g(2)$ is still $0/0$ and therefore undefined, which is exactly why the word
+*removable* is doing work — the hole can be filled by defining $g(2) = 4$, but nobody
+has filled it yet.
+""",
+                        },
+                        {
+                            "prompt": "A positive number over a tiny positive number.",
+                            "hole": "?",
+                            "opts": ["+inf", "-inf", "0", "6"],
+                            "a": 0,
+                            "why": r"""
+Every factor is positive just to the right of $2$, so the quotient is positive and grows
+without bound as the denominator shrinks: the one-sided limit is $+\infty$. The negative
+infinity is what the *other* side gives, which is exactly why the side has to be tracked.
+A limit of $0$ would need the denominator to grow, not shrink. And $6$ is the numerator's
+value, which would be the answer only if the denominator tended to $1$.
+""",
+                        },
+                        {
+                            "prompt": "Just to the left of $2$, the factor $x-2$ is what?",
+                            "hole": "?",
+                            "opts": ["positive", "zero", "negative", "undefined"],
+                            "a": 2,
+                            "why": r"""
+At $x = 1.999$ the quantity $x-2$ is $-0.001$: small in size but negative in sign, and it
+is the sign that decides which infinity the quotient runs to. Calling it positive is the
+single most common slip in this analysis, because "close to zero" gets read as "close to
+zero from above". It is not zero — the limit never reaches the point — and it is
+perfectly well defined; only the quotient is undefined at $x=2$.
+""",
+                        },
+                        {
+                            "prompt": "At $x = -1.999$: a positive numerator over a tiny negative denominator.",
+                            "hole": "?",
+                            "opts": ["+inf", "0", "-2", "-inf"],
+                            "a": 3,
+                            "why": r"""
+Two of the three factors decide it: $x-2$ is near $-4$, negative, and $x+2$ is tiny and
+positive, so the denominator is tiny and negative while the numerator is near $+2$. The
+quotient is large and negative, so the limit is $-\infty$, and the sample value
+$f(-1.999) = -500.4$ agrees. Answering $+\infty$ drops the sign of $x-2$, which is the
+factor that is easy to ignore because it is nowhere near zero. There is nothing here
+that tends to a finite value.
+""",
+                        },
+                        {
+                            "prompt": "The two sides at $x = 2$ give $+\\infty$ and $-\\infty$. So the two-sided limit...",
+                            "hole": "?",
+                            "opts": ["is +inf", "does not exist", "is 0", "is -inf"],
+                            "a": 1,
+                            "why": r"""
+A two-sided limit exists only when both one-sided limits exist and agree, and here they
+disagree as loudly as possible. Writing $\lim_{x\to 2} f(x) = +\infty$ would be a false
+statement rather than a loose one: it claims $f$ exceeds every bound near $2$, and just
+to the left $f$ is large and *negative*. Averaging the two sides to $0$ is not a
+definition of anything — the function takes no values near $0$ anywhere close to $x=2$.
+Both infinities are genuine, and each belongs to its own side.
+""",
+                        },
+                    ],
+                },
+            ],
+            "numeric": [
+                {
+                    "title": "Reading a horizontal asymptote off the coefficients",
+                    "minutes": 5,
+                    "brief": r'''
+The bottom of the ladder: one division by the dominant power and every term either
+survives or dies. Nothing has to be derived first.
+''',
+                    "prompt": "What is $\\lim_{x\\to\\infty} f(x)$?",
+                    "note": "A pure number, to three decimal places.",
+                    "figure": "The function is $f(x) = \\dfrac{7x^{3}+2x}{2x^{3}-x^{2}+9}$. Both the "
+                              "numerator and the denominator grow without bound as $x$ increases, so "
+                              "the form is $\\infty/\\infty$ and the quotient law does not apply until "
+                              "the expression has been rewritten.",
+                    "given": [
+                        {"label": "Numerator", "value": "$7x^{3}+2x$"},
+                        {"label": "Denominator", "value": "$2x^{3}-x^{2}+9$"},
+                        {"label": "Direction", "value": "$x \\to +\\infty$"},
+                    ],
+                    "aside": "Divide every term, top and bottom, by $x^{3}$.",
+                    "answer": 3.5,
+                    "tol": 0.005,
+                    "unit": "",
+                    "hint": "After dividing by $x^{3}$ the numerator reads $7 + 2/x^{2}$ and the "
+                            "denominator reads $2 - 1/x + 9/x^{3}$. Every term with an $x$ underneath "
+                            "goes to zero.",
+                    "wrong": "If you answered $0$, the numerator's lower-order terms were kept and its "
+                             "leading term dropped. If you answered $0.286$, the leading coefficients "
+                             "were divided the wrong way round: it is numerator over denominator, "
+                             "$7/2$, not $2/7$. At infinity only the highest power in each half "
+                             "survives, so the $-x^{2}$ and the $+9$ contribute nothing.",
+                    "why": "Dividing numerator and denominator by $x^{3}$ gives "
+                           "$\\dfrac{7 + 2/x^{2}}{2 - 1/x + 9/x^{3}}$. Each of $2/x^{2}$, $1/x$ and "
+                           "$9/x^{3}$ tends to $0$, and the denominator's limit is $2 \\neq 0$, so the "
+                           "quotient law finally applies and the value is $7/2 = 3.5$. The general "
+                           "rule is visible in the working: for equal degrees the limit is the ratio "
+                           "of the leading coefficients, and the lower-order terms — which decide "
+                           "everything at a finite point — decide nothing at infinity. Sampling "
+                           "agrees slowly: at $x = 100$ the quotient is $3.5177$, still drifting down "
+                           "towards $3.5$ like $1/x$.",
+                },
+                {
+                    "title": "A trigonometric zero over zero",
+                    "minutes": 7,
+                    "brief": r'''
+One rung up: the form is $0/0$, but there is no polynomial factor to cancel. The only
+tool that reaches it is $\lim_{t\to 0}\frac{\sin t}{t} = 1$, applied twice — once to
+each sine, with the argument arranged to match the denominator underneath it.
+''',
+                    "prompt": "What is $\\lim_{x\\to 0} g(x)$?",
+                    "note": "A pure number, to four decimal places.",
+                    "figure": "The function is $g(x) = \\dfrac{\\sin(7x)}{\\sin(3x)}$, defined for every "
+                              "$x$ near $0$ except $x = 0$ itself, where both the numerator and the "
+                              "denominator vanish. Angles are in radians.",
+                    "given": [
+                        {"label": "Numerator", "value": "$\\sin(7x)$"},
+                        {"label": "Denominator", "value": "$\\sin(3x)$"},
+                        {"label": "Known result", "value": "$\\lim_{t\\to 0} \\dfrac{\\sin t}{t} = 1$"},
+                    ],
+                    "aside": "Multiply the fraction above and below by $x$, then arrange each sine over "
+                             "its own argument.",
+                    "answer": 2.33333,
+                    "tol": 0.0005,
+                    "unit": "",
+                    "hint": "Write $\\dfrac{\\sin 7x}{\\sin 3x} = \\dfrac{7}{3}\\cdot"
+                            "\\dfrac{\\sin 7x}{7x}\\cdot\\dfrac{3x}{\\sin 3x}$ and take the three "
+                            "limits separately.",
+                    "wrong": "If you answered $1$, the two sines were cancelled against each other as "
+                             "though $\\sin$ were a factor rather than a function — $\\sin(7x)$ is "
+                             "not $7\\sin(x)$. If you answered $0.4286$, the ratio came out upside "
+                             "down: $3/7$ rather than $7/3$.",
+                    "why": "Insert the arguments each sine needs: "
+                           "$\\dfrac{\\sin 7x}{\\sin 3x} = \\dfrac{7x}{3x}\\cdot"
+                           "\\dfrac{\\sin 7x}{7x}\\cdot\\dfrac{3x}{\\sin 3x}$. As $x \\to 0$ both "
+                           "$7x$ and $3x$ tend to $0$, so the second factor tends to $1$ and the third "
+                           "to $1/1 = 1$, while the first is the constant $7/3$ for every $x \\neq 0$. "
+                           "Every piece now has a limit and no denominator's limit is zero, so the "
+                           "laws apply and the answer is $7/3 = 2.3333$. Sampling confirms it: at "
+                           "$x = 0.001$ the quotient reads $2.33332$. The result also says something "
+                           "worth remembering — near the origin a sine is indistinguishable from "
+                           "its argument, so a ratio of sines behaves like the ratio of the arguments.",
+                },
+                {
+                    "title": "The end of the axis where the sign flips",
+                    "minutes": 8,
+                    "brief": r'''
+The same division by the dominant power as the first rung, at the other end of the axis
+and with a square root in the way. The arithmetic is easy and the sign is not: this is
+the case that catches people who have done fifty of these at $+\infty$.
+''',
+                    "prompt": "What is $\\lim_{x\\to-\\infty} h(x)$?",
+                    "note": "A pure number, to three decimal places. Mind the sign.",
+                    "figure": "The function is $h(x) = \\dfrac{\\sqrt{9x^{2}+4}}{2x+1}$. The numerator is "
+                              "a square root, so it is positive for every $x$; the denominator is "
+                              "negative once $x < -1/2$. The limit is taken as $x$ runs off to the "
+                              "left.",
+                    "given": [
+                        {"label": "Numerator", "value": "$\\sqrt{9x^{2}+4}$"},
+                        {"label": "Denominator", "value": "$2x+1$"},
+                        {"label": "Direction", "value": "$x \\to -\\infty$"},
+                    ],
+                    "aside": "To take $x$ inside a square root it must be written as $\\sqrt{x^{2}}$, "
+                             "and $\\sqrt{x^{2}} = -x$ when $x$ is negative.",
+                    "answer": -1.5,
+                    "tol": 0.005,
+                    "unit": "",
+                    "hint": "Divide top and bottom by $x$. Dividing the root by $x$ means dividing by "
+                            "$-\\sqrt{x^{2}}$, which leaves a minus sign outside the radical.",
+                    "wrong": "If you answered $+1.5$, the numerator was divided by $x$ as though "
+                             "$\\sqrt{x^{2}} = x$. That identity holds at the right-hand end of the "
+                             "axis and fails at this one, and the failure is easy to see without any "
+                             "algebra: the numerator is positive and the denominator is negative for "
+                             "large negative $x$, so the quotient cannot be positive.",
+                    "why": "For $x < 0$ we have $x = -\\sqrt{x^{2}}$, so "
+                           "$\\dfrac{\\sqrt{9x^{2}+4}}{x} = -\\sqrt{\\dfrac{9x^{2}+4}{x^{2}}} = "
+                           "-\\sqrt{9 + \\dfrac{4}{x^{2}}}$, while $\\dfrac{2x+1}{x} = 2 + "
+                           "\\dfrac{1}{x}$. The quotient is therefore "
+                           "$\\dfrac{-\\sqrt{9+4/x^{2}}}{2+1/x}$, and letting $x \\to -\\infty$ sends "
+                           "both small terms to zero, leaving $-\\sqrt{9}/2 = -3/2 = -1.5$. Sampling "
+                           "agrees: at $x = -1000$ the numerator is $3000.0007$, the denominator is "
+                           "$-1999$, and the quotient is $-1.50075$. At the other end the same "
+                           "function tends to $+1.5$, so its graph has two different horizontal "
+                           "asymptotes.",
+                },
+                {
+                    "title": "Choosing the constant that fixes the gap",
+                    "minutes": 10,
+                    "brief": r'''
+The top of the ladder: the number asked for cannot be evaluated, because it is not the
+value of anything yet. Derive the limit as a formula in the unknown constant first,
+then solve the equation that formula produces.
+
+The expression is an $\infty-\infty$, so the conjugate has to come out before any
+division by the dominant power is possible.
+''',
+                    "prompt": "For which value of $k$ does the limit equal $5$?",
+                    "note": "A pure number, to two decimal places.",
+                    "figure": "Let $k > 0$ and consider $\\lim_{x\\to\\infty}\\left(\\sqrt{4x^{2}+kx} "
+                              "- 2x\\right)$. Both terms grow without bound, so the form is "
+                              "$\\infty-\\infty$, which settles nothing on its own: depending on $k$ "
+                              "the gap between the curve and the line could close, stay fixed, or "
+                              "grow. Find the $k$ that makes the gap settle at exactly $5$.",
+                    "given": [
+                        {"label": "Expression", "value": "$\\sqrt{4x^{2}+kx}-2x$"},
+                        {"label": "Direction", "value": "$x \\to +\\infty$"},
+                        {"label": "Required limit", "value": "$5$"},
+                    ],
+                    "aside": "Multiply by $\\dfrac{\\sqrt{4x^{2}+kx}+2x}{\\sqrt{4x^{2}+kx}+2x}$, then "
+                             "divide numerator and denominator by $x$.",
+                    "answer": 20.0,
+                    "tol": 0.05,
+                    "unit": "",
+                    "hint": "The conjugate leaves $\\dfrac{kx}{\\sqrt{4x^{2}+kx}+2x}$. Dividing by $x$ "
+                            "turns that into $\\dfrac{k}{\\sqrt{4+k/x}+2}$, whose limit is a simple "
+                            "multiple of $k$. Set it equal to $5$.",
+                    "wrong": "If you answered $10$, the limit was taken to be $k/2$ — that is the "
+                             "answer for $\\sqrt{x^{2}+kx}-x$, where the leading coefficient inside "
+                             "the root is $1$. Here it is $4$, so the root contributes $2$ rather than "
+                             "$1$ to the denominator and the limit is $k/4$. If you answered $5$, the "
+                             "conjugate step was skipped and the constant read straight off the "
+                             "target.",
+                    "why": "Multiplying by the conjugate over itself gives "
+                           "$\\dfrac{(4x^{2}+kx)-4x^{2}}{\\sqrt{4x^{2}+kx}+2x} = "
+                           "\\dfrac{kx}{\\sqrt{4x^{2}+kx}+2x}$. Dividing top and bottom by $x$, and "
+                           "taking $x = \\sqrt{x^{2}}$ inside the root as is legal for $x > 0$, gives "
+                           "$\\dfrac{k}{\\sqrt{4+k/x}+2}$. As $x \\to \\infty$ the term $k/x$ vanishes, "
+                           "the root tends to $2$, and the limit is $\\dfrac{k}{4}$. Setting "
+                           "$\\dfrac{k}{4} = 5$ gives $k = 20$. Check it numerically: with $k = 20$ "
+                           "and $x = 10^{6}$, $\\sqrt{4\\times 10^{12}+2\\times 10^{7}} - 2\\times "
+                           "10^{6} = 4.99999\\ldots$, and the convergence is from below like $1/x$.",
+                },
+            ],
             "quiz": {
                 "title": "Evaluating a limit without sampling it",
                 "minutes": 8,
@@ -1497,13 +2800,1385 @@ across a bracket means the root is genuinely inside it.
             "summary": "Difference quotients, their truncation error, and the order that error obeys.",
             "concepts": [
                 "The derivative is the limit of a difference quotient, not a formula to memorise",
+                "A two-sided limit is required: one-sided quotients that disagree mean no derivative, as at the corner of `|x|`",
+                "Differentiability implies continuity; the converse is false",
                 "Forward difference: f'(x) = (f(x+h) - f(x))/h + O(h)",
                 "Central difference: f'(x) = (f(x+h) - f(x-h))/(2h) + O(h^2)",
                 "Taylor expansion is where both error terms come from",
                 "Observed order p from a pair of steps: p = log(e1/e2) / log(h1/h2)",
                 "Richardson extrapolation cancels the leading error term and buys two orders",
                 "Roundoff sets a floor: shrinking h forever makes the answer worse",
+                "A difference formula returns a number whether or not the derivative exists",
             ],
+            "read": [
+                {
+                    "title": "A slope for something that is not straight",
+                    "minutes": 11,
+                    "body": r"""
+A car covers $120$ kilometres in two hours. Its average speed over the journey is
+$60$ km/h, and that number came out of an ordinary division: distance over time. Now
+ask what the speedometer read at the instant $t = 1$. The same division gives nothing,
+because the distance covered in an instant is zero and the time taken is zero, and
+$0/0$ is not a number. It is the report, from Module 2, that a quotient law has been
+applied where its hypotheses fail, and that some algebra is owed.
+
+That gap is the whole problem this module solves. Every rate anyone can actually
+measure is an average over an interval. Every rate anyone actually wants is at a
+point. The bridge between them is a limit, and it holds precisely because the $0/0$
+form is a question rather than a dead end.
+
+## Secants, and the one that cannot be drawn
+
+Fix a function $f$ and a point $a$ where $f$ is defined. Pick a second point at
+distance $h$, namely $a+h$. The straight line through $(a, f(a))$ and
+$(a+h, f(a+h))$ is a *secant*, and its slope is an honest division of a rise by a run:
+
+$$Q(h) \;=\; \frac{f(a+h) - f(a)}{h}.$$
+
+This is the **difference quotient**, and it is the average rate of change of $f$
+across the interval between $a$ and $a+h$. It is defined for every $h$ except $h = 0$
+— which is exactly the value we want.
+
+Watch the geometry as $h$ shrinks. The second point slides along the curve towards the
+first, and the secant pivots about $(a, f(a))$. If the curve is smooth there, the
+secants settle down onto one particular line: the tangent. If the curve has a kink
+there, they do not settle onto anything, because the secants coming from the left
+approach one line and those from the right approach another.
+
+So the object of interest, $Q$, is a perfectly ordinary function of $h$ with a hole at
+the origin. Module 1 said what to do with those. Do not evaluate at the hole. Take a
+limit into it.
+
+## The definition
+
+$$f'(a) \;=\; \lim_{h \to 0} \frac{f(a+h) - f(a)}{h},$$
+
+when that limit exists. If it does, $f$ is **differentiable** at $a$ and the number
+$f'(a)$ is its derivative there. Substituting $x = a + h$ gives the same statement in
+the other common form,
+
+$$f'(a) \;=\; \lim_{x \to a} \frac{f(x) - f(a)}{x - a},$$
+
+which is sometimes more convenient and never says anything different.
+
+Three features are worth reading off before any use is made of it. The limit is
+**two-sided**: $h$ approaches zero through positive and negative values alike, and both
+must give the same answer. Unlike a general limit, this one **does care about the value
+at the point**, because $f(a)$ sits inside the quotient — so $f$ must at least be
+defined at $a$. And the limit **may fail**; differentiability is a property a function
+can lack, not a guarantee that comes free with being a function.
+
+## Worked: a quadratic, at every point at once
+
+Take $f(x) = x^{2} - 3x$ and compute $f'(x)$ at a general point $x$, so that one
+calculation serves every point.
+
+First expand the shifted value:
+
+$$f(x+h) = (x+h)^{2} - 3(x+h) = x^{2} + 2xh + h^{2} - 3x - 3h.$$
+
+Subtract $f(x) = x^{2} - 3x$. The $x^{2}$ and the $-3x$ cancel, leaving
+
+$$f(x+h) - f(x) = 2xh + h^{2} - 3h.$$
+
+Every term carries a factor of $h$, which is not luck: the numerator vanishes at
+$h = 0$, so by the factor theorem $h$ divides it. Divide by $h$, which is legal because
+the limit examines only $0 < |h| < \delta$ and never $h = 0$:
+
+$$\frac{f(x+h) - f(x)}{h} = 2x + h - 3 \qquad (h \neq 0).$$
+
+What is left is a polynomial in $h$, continuous everywhere, so its limit is its value:
+
+$$f'(x) = \lim_{h \to 0}\,(2x + h - 3) = 2x - 3.$$
+
+Check the machinery against arithmetic at $x = 2$, where the formula claims $f'(2) = 1$.
+We have $f(2) = 4 - 6 = -2$ and $f(2.001) = 4.004001 - 6.003 = -1.998999$, so the
+difference quotient at $h = 0.001$ is $0.001001/0.001 = 1.001$. The formula
+$2x + h - 3$ predicts $4 + 0.001 - 3 = 1.001$ exactly, and the excess over $1$ is the
+$h$ that has not yet been sent to zero. That excess is the entire subject of the next
+reading.
+
+One more thing falls out for free. Setting $2x - 3 = 0$ gives $x = 1.5$, and that is
+the vertex of the parabola. A derivative of zero at a point where the graph turns is
+not a coincidence; it is Module 10.
+
+## Worked: the corner that has no slope
+
+Now the case people get wrong. Take $f(x) = |x|$ at $a = 0$:
+
+$$Q(h) = \frac{|0 + h| - |0|}{h} = \frac{|h|}{h}.$$
+
+For $h > 0$ we have $|h| = h$, so $Q(h) = 1$. For $h < 0$ we have $|h| = -h$, so
+$Q(h) = -1$. Therefore
+
+$$\lim_{h \to 0^{+}} Q(h) = 1, \qquad \lim_{h \to 0^{-}} Q(h) = -1,$$
+
+the two one-sided limits disagree, the two-sided limit does not exist, and $f'(0)$ does
+not exist.
+
+Nothing has gone wrong with the arithmetic. Every line is exact, and $Q$ is not even
+close to being badly behaved: it takes only the two values $\pm 1$. What fails is the
+agreement of the sides, which Module 1 made the price of a two-sided limit.
+
+This is the case that catches people, and it is worth saying why it is tempting. The
+function $|x|$ looks harmless. It is continuous everywhere. Its graph is drawn without
+lifting the pen. Away from the origin its slope is perfectly well defined, $-1$ on the
+left and $+1$ on the right. So the instinct is to split the difference and answer $0$,
+or to note that the graph is fine 'almost everywhere' and wave the point through. Worse,
+a machine asked for the symmetric quotient $(|h| - |-h|)/(2h)$ returns
+$(h - h)/(2h) = 0$ at every step size, confidently and forever. None of that makes
+$f'(0)$ exist. Zero is simply what a symmetric formula returns when it cannot tell.
+
+## Two mistakes worth naming
+
+The first is substituting $h = 0$ too early. In the quadratic above, doing it at the
+second line gives $0/0$, and the calculation stops. The definition explicitly excludes
+$h = 0$; the point of the limit is to reach that value without ever evaluating there.
+
+The second is the mirror image: cancelling the $h$ and then worrying about whether that
+was allowed. It was, and for the reason Module 2 gave for cancelling $(x-3)$ from a
+$0/0$ quotient — not because common factors always cancel, which is false exactly at
+the point in question, but because a limit inspects a punctured neighbourhood on which
+$h$ is guaranteed non-zero. Getting the licence right matters, because the same
+manoeuvre performed without it destroys genuine discontinuities.
+
+There is a third, and it is the reason this module has three more readings. Writing
+
+$$f'(a) \;\approx\; \frac{f(a+h) - f(a)}{h} \quad\text{with } h \text{ small}$$
+
+and stopping there is not a derivative. It is a difference quotient with the limit left
+out, and how far apart those two numbers are is a question with a precise answer.
+
+## Differentiable implies continuous, and not the other way
+
+**Theorem.** If $f'(a)$ exists then $f$ is continuous at $a$.
+
+*Proof.* For $x \neq a$ write the identity
+
+$$f(x) - f(a) \;=\; \frac{f(x) - f(a)}{x - a}\cdot (x - a),$$
+
+which is true because the $(x-a)$ cancels. As $x \to a$ the first factor tends to
+$f'(a)$ — that is the definition, in its $x$-form — and the second tends to $0$. Both
+factors have limits, so the product law applies:
+
+$$\lim_{x \to a}\,(f(x) - f(a)) = f'(a) \cdot 0 = 0,$$
+
+that is, $\lim_{x \to a} f(x) = f(a)$, which is continuity at $a$.
+
+Note where the hypothesis was spent: the product law needed the first factor to have a
+limit, and that is precisely the assumption that $f'(a)$ exists.
+
+The converse is false, and $|x|$ at $0$ is the counterexample: continuous, not
+differentiable. Continuity says the graph does not tear. Differentiability says it also
+does not kink. The second is strictly stronger.
+
+## Where it stops
+
+The limit defining $f'(a)$ can fail in three distinct ways, and they look different on
+a graph.
+
+A **corner**, as at $|x|$ at the origin: both one-sided limits exist, are finite, and
+disagree. A **vertical tangent**, as at $f(x) = x^{1/3}$ at the origin, where
+
+$$Q(h) = \frac{h^{1/3} - 0}{h} = h^{-2/3},$$
+
+which is $100$ at $h = 10^{-3}$ and $10^{4}$ at $h = 10^{-6}$: the two sides agree, but
+they agree on $+\infty$, which is not a number, so there is no derivative even though
+the picture has a perfectly good vertical tangent line. And a **discontinuity** of any
+kind, which the theorem above rules out immediately: no continuity, no derivative, and
+no amount of smoothness elsewhere repairs it.
+
+One last caution about what the definition does *not* say. It is a statement about a
+single point. A function can be differentiable at exactly one point and nowhere else —
+take $f(x) = x^{2}$ for rational $x$ and $f(x) = 0$ for irrational $x$, which is
+differentiable at the origin, with $f'(0) = 0$, and is not even continuous anywhere
+else. Every convenient theorem later in the course, from the mean value theorem to
+Newton's method, therefore asks for differentiability on an *interval*, not at a point,
+and says so in its hypotheses.
+
+The definition is the honest object. It is also, as an instrument, useless: no machine
+can take $h \to 0$. It can only choose an $h$ and divide. What that choice costs is the
+next reading.
+""",
+                },
+                {
+                    "title": "The error you pay for choosing an h",
+                    "minutes": 12,
+                    "body": r"""
+The definition says to send $h$ to zero. A machine cannot do that. It can pick one
+value of $h$, evaluate $f$ twice and divide, giving
+
+$$D_{+}(h) \;=\; \frac{f(x+h) - f(x)}{h},$$
+
+the **forward difference**. The question this reading answers is how wrong that number
+is, and the answer is not 'a bit'. It is a formula — and the formula is far more useful
+than any single number, because it says how the wrongness responds to $h$, which is the
+only lever available.
+
+## Taylor's theorem, in the form actually used
+
+Suppose $f$ is twice continuously differentiable on an interval containing $x$ and
+$x+h$. Then there is a point $\xi$ strictly between them with
+
+$$f(x+h) \;=\; f(x) + h\,f'(x) + \frac{h^{2}}{2}f''(\xi).$$
+
+The location of $\xi$ is unknown and does not need to be known: all that is used is
+that $f''(\xi)$ is no larger than whatever bounds $f''$ on the interval. When more
+derivatives exist, more terms can be taken, and it is convenient to write the version
+with everything evaluated at $x$:
+
+$$f(x+h) \;=\; f(x) + h f'(x) + \frac{h^{2}}{2}f''(x) + \frac{h^{3}}{6}f'''(x) + \frac{h^{4}}{24}f''''(x) + \cdots$$
+
+The coefficient of $h^{k}$ is the $k$th derivative over $k!$.
+
+## The forward difference and its error
+
+Take the two-term version, subtract $f(x)$ and divide by $h$:
+
+$$\frac{f(x+h) - f(x)}{h} \;=\; f'(x) + \frac{h}{2}f''(\xi).$$
+
+That is an equation, not an approximation. The forward difference is the derivative
+plus a term that is exactly $\tfrac{h}{2}f''(\xi)$ for some interior $\xi$. Writing
+$M_{2}$ for a bound on $|f''|$ near $x$,
+
+$$|D_{+}(h) - f'(x)| \;\le\; \frac{M_{2}}{2}\,h .$$
+
+The error is proportional to the first power of $h$: the rule is **first order**, and
+halving $h$ halves the error. The bound is also a prediction with a sign, because
+$f''(\xi) \approx f''(x)$ for small $h$: the leading error is about
+$\tfrac{h}{2}f''(x)$, so a forward difference overestimates the derivative where the
+curve is convex and underestimates it where it is concave.
+
+## Checking that against arithmetic
+
+Take $f = \sin$ at $x = 1$, where the exact derivative is $\cos 1 = 0.5403023059$.
+
+| $h$ | $D_{+}(h)$ | error |
+| --- | --- | --- |
+| $0.4$ | $0.3599468630$ | $-0.1803554429$ |
+| $0.2$ | $0.4528405058$ | $-0.0874618001$ |
+| $0.1$ | $0.4973637525$ | $-0.0429385533$ |
+| $0.05$ | $0.5190448157$ | $-0.0212574901$ |
+
+Successive error ratios are $2.062$, $2.037$, $2.020$: each halving of $h$ halves the
+error, converging on a factor of exactly $2$. That is first order, observed.
+
+The theory does better than the trend. At $x = 1$ the second derivative is
+$f''(1) = -\sin 1 = -0.8414710$, so the leading term predicts an error of
+$-0.04207355$ at $h = 0.1$, while the measured error is $-0.04293855$ — a gap of about
+two per cent. The gap is the next term. Adding
+$\tfrac{h^{2}}{6}f'''(1) = \tfrac{0.01}{6}(-0.5403023) = -0.00090050$
+gives $-0.04297405$, and adding
+$\tfrac{h^{3}}{24}f''''(1) = \tfrac{0.001}{24}(0.8414710) = +0.00003506$
+gives $-0.04293899$. The measured error is $-0.04293855$. Six digits, from
+three terms of an expansion, before the calculation was run.
+
+## The central difference: cancelling the $h$ term
+
+The expansion is available in the other direction too. Replacing $h$ by $-h$ flips the
+sign of every odd power:
+
+$$f(x-h) \;=\; f(x) - h f'(x) + \frac{h^{2}}{2}f''(x) - \frac{h^{3}}{6}f'''(x) + \cdots$$
+
+Subtract this from the forward expansion. The $f(x)$ terms cancel, the $f''$ terms
+cancel because they are identical in both, and the odd terms double:
+
+$$f(x+h) - f(x-h) \;=\; 2h f'(x) + \frac{h^{3}}{3}f'''(x) + \cdots$$
+
+Divide by $2h$ to get the **central difference**:
+
+$$D_{0}(h) \;=\; \frac{f(x+h) - f(x-h)}{2h} \;=\; f'(x) + \frac{h^{2}}{6}f'''(x) + O(h^{4}).$$
+
+The $f''$ term did not get smaller. It was *annihilated*, by the symmetry of the two
+sample points about $x$. That is the whole reason the central difference is better, and
+it costs nothing extra in theory — though it does cost in practice, since it needs two
+fresh evaluations while the forward difference needs one fresh evaluation plus an
+$f(x)$ you may already have from somewhere else.
+
+The error bound is now $|D_{0}(h) - f'(x)| \le \tfrac{M_{3}}{6}h^{2}$ with
+$M_{3}$ a bound on $|f'''|$. Second order: halve $h$ and the error falls by four.
+
+| $h$ | $D_{0}(h)$ | error |
+| --- | --- | --- |
+| $0.4$ | $0.5260090707$ | $-0.0142932351$ |
+| $0.2$ | $0.5367074877$ | $-0.0035948182$ |
+| $0.1$ | $0.5394022522$ | $-0.0009000537$ |
+| $0.05$ | $0.5400772080$ | $-0.0002250978$ |
+
+Ratios $3.976$, $3.994$, $3.999$. And the leading term predicts
+$\tfrac{h^{2}}{6}f'''(1) = -0.09005\,h^{2}$, which at $h = 0.1$ is $-0.00090050$
+against a measured $-0.00090005$.
+
+Notice how much the order buys. At $h = 0.05$ the forward difference is wrong in the
+second decimal place and the central difference in the fourth, from the same
+$f$ and comparable work.
+
+## Measuring the order instead of trusting it
+
+Suppose the error obeys $e(h) = C h^{p}$ for some unknown constant $C$ and unknown
+order $p$. Run the rule at two steps and form both errors. Then
+
+$$\frac{e_{1}}{e_{2}} = \left(\frac{h_{1}}{h_{2}}\right)^{p}
+\quad\Rightarrow\quad
+p = \frac{\log(e_{1}/e_{2})}{\log(h_{1}/h_{2})}.$$
+
+The unknown $C$ divides out, which is what makes the measurement possible; and the base
+of the logarithm cancels, because it appears twice.
+
+Apply it to the central-difference table at $h_{1} = 0.2$ and $h_{2} = 0.1$:
+$e_{1}/e_{2} = 0.0035948182/0.0009000537 = 3.99400$ and $h_{1}/h_{2} = 2$, so
+
+$$p = \frac{\log 3.99400}{\log 2} = 1.9978.$$
+
+The same two steps applied to the forward-difference table give $p = 1.026$. The
+numbers are not exactly $2$ and $1$ because the neglected terms are not exactly zero at
+these step sizes; the reading is a diagnosis, not a proof.
+
+One thing the calculation quietly requires: the *exact* answer, to form the errors at
+all. So the observed order is a check you run on a problem whose answer you already
+know, in order to earn the right to trust the rule on one whose answer you do not.
+
+## The mistake
+
+Two of them, and the second is expensive.
+
+The first is reading $O(h^{2})$ as a promise about a particular $h$. It is a statement
+about a limit — about how the error *changes* — not about how big the error is. At
+$h = 0.4$ the second-order central difference on $\sin$ is wrong in the second decimal
+place. Second order is not a synonym for accurate.
+
+The second is assuming an order without checking the smoothness that paid for it. The
+$h^{3}$ term in the subtraction was written down only because $f'''$ exists and is
+bounded near $x$. Remove that hypothesis and the cancellation of the $f''$ terms still
+happens, but nothing at all can be said about what is left.
+
+## Where it stops
+
+Take $f(x) = x|x|$, which is $x^{2}$ for $x \ge 0$ and $-x^{2}$ for $x < 0$, and
+differentiate it at the origin. It is smoother than it looks: $f'(x) = 2|x|$ exists
+everywhere and is continuous, so $f$ is continuously differentiable, and $f'(0) = 0$.
+But $f''(x) = 2$ for $x > 0$ and $-2$ for $x < 0$, so $f''(0)$ does not exist, and
+$f'''$ certainly does not.
+
+Now run the central difference at $x = 0$. Here $f(h) = h^{2}$ and $f(-h) = -h^{2}$, so
+
+$$D_{0}(h) = \frac{h^{2} - (-h^{2})}{2h} = \frac{2h^{2}}{2h} = h .$$
+
+The error is $|h - 0| = h$, exactly, at every step size. Halving $h$ halves the error
+and never quarters it, and the observed order comes out at exactly $1$. There is no
+rounding involved here and no asymptotic regime still to be reached: the second-order
+claim is simply false at this point, and the hypothesis that failed is the existence of
+$f'''$ — indeed of $f''$.
+
+The sharper failure is the one from the previous reading. At $f(x) = |x|$ and $x = 0$,
+
+$$D_{0}(h) = \frac{|h| - |-h|}{2h} = \frac{h - h}{2h} = 0$$
+
+for every $h > 0$. The rule returns $0$, at every step size, with no wobble to suggest
+anything is wrong, and the observed order is not even computable because the error
+never changes. Yet $f'(0)$ does not exist. A difference formula cannot detect its own
+hypotheses. It will always return a number, and the number means nothing unless the
+smoothness is there to be had. That is why the derivative was defined as a limit first
+and computed second, and it is the single most important sentence in this module.
+
+Both error terms shrink without limit as $h$ shrinks, which suggests taking $h$ as
+small as the machine will allow. The next reading is about why that is the worst thing
+you can do.
+""",
+                },
+                {
+                    "title": "The floor that arithmetic puts under h",
+                    "minutes": 12,
+                    "body": r"""
+Everything in the last reading pushed one way: the truncation error of a forward
+difference is bounded by $M_{2}h/2$, so shrink $h$. Here is what actually happens when
+you do. The rule is the forward difference on $f = \sin$ at $x = 1$, in ordinary
+double-precision arithmetic, against the exact $\cos 1 = 0.5403023059$.
+
+| $h$ | $D_{+}(h)$ | error |
+| --- | --- | --- |
+| $10^{-1}$ | $0.497363752535$ | $4.29 \times 10^{-2}$ |
+| $10^{-2}$ | $0.536085981012$ | $4.22 \times 10^{-3}$ |
+| $10^{-3}$ | $0.539881480360$ | $4.21 \times 10^{-4}$ |
+| $10^{-4}$ | $0.540260231419$ | $4.21 \times 10^{-5}$ |
+| $10^{-5}$ | $0.540298098506$ | $4.21 \times 10^{-6}$ |
+| $10^{-6}$ | $0.540301885121$ | $4.21 \times 10^{-7}$ |
+| $10^{-7}$ | $0.540302264040$ | $4.18 \times 10^{-8}$ |
+| $10^{-8}$ | $0.540302302898$ | $2.97 \times 10^{-9}$ |
+| $10^{-9}$ | $0.540302358409$ | $5.25 \times 10^{-8}$ |
+| $10^{-10}$ | $0.540302247387$ | $5.85 \times 10^{-8}$ |
+| $10^{-11}$ | $0.540301137164$ | $1.17 \times 10^{-6}$ |
+| $10^{-12}$ | $0.540345546085$ | $4.32 \times 10^{-5}$ |
+| $10^{-14}$ | $0.544009282066$ | $3.71 \times 10^{-3}$ |
+| $10^{-16}$ | $0.000000000000$ | $5.40 \times 10^{-1}$ |
+
+Read down the error column. It falls by a factor of ten per row, exactly as first order
+predicts, all the way to about $h = 10^{-8}$. Then it turns round and climbs, and by
+$h = 10^{-16}$ the rule returns $0$ and the answer is wrong in the first digit. Taking
+$h$ towards zero, which is what the definition instructs, destroys the calculation.
+
+The truncation theory is not wrong. It is incomplete, because it assumed the arithmetic
+was exact.
+
+## Subtractive cancellation
+
+A double-precision number carries about $16$ significant decimal digits. The spacing
+between $1$ and its neighbour is the machine epsilon,
+$\epsilon \approx 2.22\times10^{-16}$, and the stored value of $f(x)$ differs from the
+true one by up to roughly $\epsilon|f(x)|$ — plus whatever error the routine computing
+$f$ has of its own.
+
+Now look at the numerator $f(x+h) - f(x)$ when $h$ is small. At $h = 10^{-8}$ the
+numbers $\sin(1.00000001)$ and $\sin(1)$ agree in their first eight digits. Those eight
+digits cancel in the subtraction. What survives is carried entirely by the last eight
+digits of each operand — which are the digits the representation is least sure of. The
+subtraction itself is exact; what it does is throw away the trustworthy digits and
+promote the doubtful ones. That is **subtractive cancellation**.
+
+Quantitatively: write $\delta$ for the absolute error in a stored function value, so
+$\delta \approx \epsilon|f|$ here. The numerator inherits up to $2\delta$, and the
+division by $h$ multiplies that by $1/h$. So the rounding contribution to the answer is
+up to $2\delta/h$, which grows without bound as $h$ shrinks.
+
+## The total error curve, and its minimum
+
+Add the two effects:
+
+$$E(h) \;\le\; \frac{M_{2}}{2}h \;+\; \frac{2\delta}{h}.$$
+
+One term falls linearly and one rises like $1/h$, so the sum has a minimum. Find it:
+
+$$E'(h) = \frac{M_{2}}{2} - \frac{2\delta}{h^{2}} = 0
+\quad\Rightarrow\quad
+h^{2} = \frac{4\delta}{M_{2}}
+\quad\Rightarrow\quad
+h_{*} = 2\sqrt{\frac{\delta}{M_{2}}},$$
+
+and substituting back gives
+$E(h_{*}) = \sqrt{M_{2}\delta} + \sqrt{M_{2}\delta} = 2\sqrt{M_{2}\delta}$.
+The two contributions are equal at the optimum, which is a
+useful check on any such calculation.
+
+Two facts are worth carrying away. The best step is the **square root** of the accuracy
+of the function values, not the accuracy you want. And the best error attainable is also
+about the square root of $\delta$ — so a forward difference on double-precision data
+buys about eight correct digits out of sixteen, and no choice of $h$ buys more.
+
+Test it on the table. Here $\delta \approx \epsilon \sin 1 \approx 1.87\times10^{-16}$
+and $M_{2} = |{-\sin 1}| = 0.8415$, so
+
+$$h_{*} = 2\sqrt{\frac{1.87\times10^{-16}}{0.8415}} = 2\sqrt{2.22\times10^{-16}}
+\approx 3.0\times10^{-8},
+\qquad E(h_{*}) \approx 2.5\times10^{-8}.$$
+
+The table's best row is $h = 10^{-8}$, one grid step below the predicted $3\times10^{-8}$,
+with an error of $3.0\times10^{-9}$, about eight times better than the bound. Both
+discrepancies are expected: the table only samples powers of ten, and the bound assumes
+every rounding error takes its worst value with the worst sign simultaneously, which
+they do not.
+
+## The central difference has a different floor
+
+The same accounting, with the numerator error still $2\delta$ but the divisor now $2h$,
+gives a rounding term of $\delta/h$, against a truncation term of $M_{3}h^{2}/6$:
+
+$$E(h) \;\le\; \frac{M_{3}}{6}h^{2} + \frac{\delta}{h},
+\qquad
+E'(h) = \frac{M_{3}}{3}h - \frac{\delta}{h^{2}} = 0
+\quad\Rightarrow\quad
+h_{*} = \left(\frac{3\delta}{M_{3}}\right)^{1/3}.$$
+
+For $\sin$ at $1$, with $M_{3} = |{-\cos 1}| = 0.5403$, that is
+$(1.04\times10^{-15})^{1/3} \approx 1.0\times10^{-5}$. And here is the
+central-difference column of the same experiment:
+
+| $h$ | error |
+| --- | --- |
+| $10^{-3}$ | $9.00 \times 10^{-8}$ |
+| $10^{-4}$ | $9.00 \times 10^{-10}$ |
+| $10^{-5}$ | $1.11 \times 10^{-11}$ |
+| $10^{-6}$ | $2.77 \times 10^{-11}$ |
+| $10^{-7}$ | $1.94 \times 10^{-10}$ |
+| $10^{-8}$ | $2.58 \times 10^{-9}$ |
+
+The minimum sits at $h = 10^{-5}$, exactly where the formula said, with an error near
+$10^{-11}$ — three or four digits better than the forward difference can ever reach.
+The rules of thumb worth memorising are $h \approx \sqrt{\epsilon} \approx 10^{-8}$ for
+a forward difference and $h \approx \epsilon^{1/3} \approx 6\times10^{-6}$ for a central
+one.
+
+## The same curve with measured data
+
+Nothing above used the fact that $\delta$ came from floating point. Replace it by the
+accuracy of an instrument and every line stands.
+
+Suppose readings of $f$ are good to $\delta = 10^{-6}$ and $|f''| \le 2$ near the point.
+Then
+
+$$h_{*} = 2\sqrt{\frac{10^{-6}}{2}} = 2 \times 7.07\times10^{-4} \approx 1.41\times10^{-3},
+\qquad E(h_{*}) = 2\sqrt{2 \times 10^{-6}} \approx 2.83\times10^{-3}.$$
+
+Six good digits in the data support about three in the derivative. That is the honest
+exchange rate, and it is why differentiating noisy measurements is a disaster done
+naively and a smoothing problem done properly.
+
+## Buying two orders back
+
+The central difference has an expansion in even powers only,
+$D_{0}(h) = A + Kh^{2} + Lh^{4} + \cdots$, where $A = f'(x)$ is what we want. Write the
+same thing at half the step:
+
+$$D_{0}(h/2) = A + \frac{K}{4}h^{2} + \frac{L}{16}h^{4} + \cdots$$
+
+Multiply by $4$ and subtract the first line. The $h^{2}$ terms are now identical and go:
+
+$$4D_{0}(h/2) - D_{0}(h) = 3A - \frac{3}{4}Lh^{4} + \cdots
+\quad\Rightarrow\quad
+R(h) = \frac{4D_{0}(h/2) - D_{0}(h)}{3} = A - \frac{L}{4}h^{4} + \cdots$$
+
+This is **Richardson extrapolation**. The $h^{2}$ term was not made smaller; it was
+cancelled, by an algebraic identity, at the cost of one arithmetic line and no new
+theory.
+
+On the running example, $D_{0}(0.2) = 0.5367074877$ and $D_{0}(0.1) = 0.5394022522$
+combine to
+
+$$R = \frac{4(0.5394022522) - 0.5367074877}{3} = \frac{1.6209015211}{3} = 0.5403005070,$$
+
+with an error of $1.80\times10^{-6}$ against $9.0\times10^{-4}$ for the better of its
+two inputs: a factor of $500$ for one line of arithmetic. Halving again gives
+$R = 0.5403021933$ with an error of $1.13\times10^{-7}$, and $1.80\times10^{-6}$ over
+$1.13\times10^{-7}$ is $16 = 2^{4}$, confirming fourth order.
+
+## The mistake
+
+'Shrink $h$ until the answer stops changing.' In the table above the answer settles down
+around $h = 10^{-8}$ to $10^{-9}$ — three or four digits *after* the last correct one —
+and then starts changing again for entirely the wrong reason. What the values do near
+the floor is wander, not converge, and the size of the wandering is the size of the
+error. Stability is not accuracy.
+
+The second mistake is measuring the observed order in the roundoff regime. Take the
+central-difference rows at $h = 10^{-6}$ and $h = 10^{-7}$, with errors
+$2.77\times10^{-11}$ and $1.94\times10^{-10}$. The error *grew*, so
+
+$$p = \frac{\log(2.77\times10^{-11} / 1.94\times10^{-10})}{\log(10^{-6}/10^{-7})}
+= \frac{-0.846}{1} = -0.846 .$$
+
+A negative order is not a broken rule; it is a correct measurement of the wrong regime.
+Order must be measured where truncation dominates, which means at the *large* end of the
+step sizes, not the small.
+
+## Where it stops
+
+Three hypotheses are doing work here, and each fails in practice.
+
+The first is that $\delta \approx \epsilon|f|$ — proportional to the *size* of $f$, and
+nothing to do with the size of its derivative. Take $g(x) = 10^{6} + \sin x$. Its
+derivative is $\cos x$, unchanged, but $\delta$ is a million times larger, so
+$h_{*}$ rises by a factor of about a thousand, to $3\times10^{-5}$, and the attainable
+accuracy falls by the same thousand, to about $3\times10^{-5}$. Adding a constant
+changes nothing mathematically and ruins the numerics.
+
+The second is that rounding the final value is the only error in $f$. A function
+delivered by an iteration, a quadrature or a simulation carries its own error, usually
+far larger than $\epsilon|f|$, and $\delta$ must be set to *that* instead — which is
+what pushes $h_{*}$ up into the region where the truncation analysis of the last reading
+is doing real work.
+
+The third is that there is a truncation analysis at all. On $f(x) = x|x|$ at the origin
+the central difference is first order at every $h$, so there is no second-order regime
+to cross over from, and the optimum computed from $M_{3}$ is meaningless because
+$M_{3}$ does not exist. The floor is real, but it only becomes the binding constraint
+once the smoothness above it has been earned.
+""",
+                },
+            ],
+            "derive": [
+                {
+                    "title": "1/x, from nothing but the definition",
+                    "minutes": 12,
+                    "vars": ["x", "h"],
+                    "brief": r"""
+No differentiation rules exist yet — this module has the definition and nothing else,
+and the point of working a reciprocal by hand is that it is the first case where the
+$h$ in the numerator does not fall out on its own. It has to be manufactured, and the
+tool is a common denominator.
+
+Two conventions for the answer boxes. Write fractions as `\frac{a}{b}`, and give every
+answer as an expression in $x$ and $h$ — no limit signs, no $f$, no equals sign.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Let $f(x) = \\dfrac{1}{x}$ with $x \\neq 0$. Put $f(x+h) - f(x)$ over the common denominator $x(x+h)$ and simplify the numerator completely. Write the result.",
+                            "answer": "\\frac{-h}{x(x+h)}",
+                            "placeholder": "a single fraction in x and h",
+                            "hint": "The numerator is $x - (x+h)$, and the two $x$ terms cancel.",
+                            "deconstruct": [
+                                "$\\dfrac{1}{x+h} = \\dfrac{x}{x(x+h)}$, multiplying top and bottom by $x$.",
+                                "$\\dfrac{1}{x} = \\dfrac{x+h}{x(x+h)}$, multiplying top and bottom by $x+h$.",
+                                "Subtracting the numerators gives $x - (x+h) = -h$, so the difference is $\\dfrac{-h}{x(x+h)}$ — and that factor of $h$ is the one that will cancel the $h$ underneath.",
+                            ],
+                        },
+                        {
+                            "prompt": "The difference quotient divides that by $h$. On the punctured neighbourhood a limit inspects, $h$ is never zero, so the division is legal. Write the difference quotient in lowest terms.",
+                            "answer": "\\frac{-1}{x(x+h)}",
+                            "hint": "Dividing by $h$ multiplies the denominator by $h$; the two factors of $h$ then cancel.",
+                            "deconstruct": [
+                                "$\\dfrac{-h}{x(x+h)} \\div h = \\dfrac{-h}{h\\,x(x+h)}$.",
+                                "Cancel the $h$, which is allowed because $h \\neq 0$ throughout the neighbourhood being examined.",
+                                "What is left is $\\dfrac{-1}{x(x+h)}$, and nothing in it is singular at $h = 0$.",
+                            ],
+                        },
+                        {
+                            "prompt": "That expression is continuous at $h = 0$ as long as $x \\neq 0$, so its limit is its value there. Write $f'(x)$.",
+                            "answer": "-\\frac{1}{x^{2}}",
+                            "hint": "Put $h = 0$ in the denominator $x(x+h)$.",
+                        },
+                        {
+                            "prompt": "Read off a number. Write $f'(2)$.",
+                            "answer": "-\\frac{1}{4}",
+                            "hint": "Evaluate $-1/x^{2}$ at $x = 2$.",
+                        },
+                        {
+                            "prompt": "The same three lines survive a higher power. For $g(x) = \\dfrac{1}{x^{2}}$, put $g(x+h) - g(x)$ over the common denominator $x^{2}(x+h)^{2}$ and expand the numerator fully. Write the result.",
+                            "answer": "\\frac{-2xh-h^{2}}{x^{2}(x+h)^{2}}",
+                            "placeholder": "a single fraction, numerator expanded",
+                            "hint": "The numerator is $x^{2} - (x+h)^{2}$; expand the square, then cancel the $x^{2}$ terms.",
+                            "deconstruct": [
+                                "The numerator is $x^{2} - (x+h)^{2}$.",
+                                "$(x+h)^{2} = x^{2} + 2xh + h^{2}$.",
+                                "So $x^{2} - (x^{2} + 2xh + h^{2}) = -2xh - h^{2}$, which again carries a factor of $h$ in every term.",
+                            ],
+                        },
+                        {
+                            "prompt": "Divide by $h$, cancel, then let $h \\to 0$. Write $g'(x)$.",
+                            "answer": "-\\frac{2}{x^{3}}",
+                            "hint": "After the division the quotient is $\\dfrac{-2x-h}{x^{2}(x+h)^{2}}$; now put $h = 0$.",
+                            "deconstruct": [
+                                "Dividing $-2xh - h^{2}$ by $h$ gives $-2x - h$.",
+                                "At $h = 0$ the numerator is $-2x$ and the denominator is $x^{2}\\cdot x^{2} = x^{4}$.",
+                                "$\\dfrac{-2x}{x^{4}} = \\dfrac{-2}{x^{3}}$.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+Two derivatives, and a pattern already visible. Writing the functions as powers,
+$x^{-1}$ has derivative $-x^{-2}$ and $x^{-2}$ has derivative $-2x^{-3}$: in both cases
+the exponent has come down as a factor and then dropped by one. That is the power rule,
+and Module 4 proves it for every exponent rather than checking it one case at a time.
+The point of doing these two by hand is that the rule is a shortcut for the calculation
+above, not a substitute for knowing what it is a shortcut for.
+
+Two things worth pausing on. The first is that neither numerator produced its factor of
+$h$ by luck. In both cases the numerator vanishes at $h = 0$ — it has to, since it is
+$g(x+h) - g(x)$ — so $h$ divides it, and the cancellation was guaranteed before any
+algebra was done. That is a useful thing to know when a first-principles calculation
+looks stuck: the factor is there, and the job is to expose it.
+
+The second is a sanity check that costs nothing. Both derivatives are negative wherever
+they are defined, which matches the picture: $1/x$ falls as $x$ increases, on each side
+of the origin. But do not upgrade that to 'so $1/x$ is a decreasing function'. Its
+domain is two disconnected pieces, and $f(-1) = -1$ is *less* than $f(1) = 1$, so the
+function is not decreasing across the gap. A statement about a derivative on an
+interval says nothing across a hole in the domain, and that distinction returns with
+force in Module 8.
+
+Where the working stops: everything above assumed $x \neq 0$, and at $x = 0$ there is
+nothing to discuss. The formula $-1/x^{2}$ is not 'infinite at the origin'; it is
+undefined there, because $f$ itself is undefined there, and a function that has no value
+at a point cannot have a rate of change at it either.
+""",
+                },
+                {
+                    "title": "Where the h/2 and the h-squared/6 come from",
+                    "minutes": 14,
+                    "vars": ["h", "F", "A", "B", "C"],
+                    "brief": r"""
+The truncation error of a difference formula is not measured, it is *derived*, and the
+derivation is four lines of Taylor expansion. Doing it once explains why the forward
+difference is first order, why the central difference is second, and — more usefully —
+exactly which hypothesis each of those claims is resting on.
+
+The checker reads expressions, not primes, so fix the point $x$ and write
+
+$$F = f(x), \qquad A = f'(x), \qquad B = f''(x), \qquad C = f'''(x),$$
+
+all of which are constants once $x$ is fixed. Every answer below is a polynomial in $h$
+with those four letters as coefficients. Write $Ah$ for $A$ times $h$, and fractions as
+`\frac{a}{b}`.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Taylor's expansion about $x$, kept as far as the $h^{3}$ term, writes $f(x+h)$ as a polynomial in $h$. Write it in the letters above.",
+                            "answer": "F + Ah + \\frac{B}{2}h^{2} + \\frac{C}{6}h^{3}",
+                            "placeholder": "a cubic in h",
+                            "hint": "The coefficient of $h^{k}$ is the $k$th derivative divided by $k!$, and $2! = 2$, $3! = 6$.",
+                            "deconstruct": [
+                                "The constant term is the value itself, $F$.",
+                                "The linear term is $f'(x)h/1! = Ah$.",
+                                "Then $f''(x)h^{2}/2! = \\dfrac{B}{2}h^{2}$ and $f'''(x)h^{3}/3! = \\dfrac{C}{6}h^{3}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Form the forward difference from that: subtract $F$, then divide the whole thing by $h$. Write the result.",
+                            "answer": "A + \\frac{B}{2}h + \\frac{C}{6}h^{2}",
+                            "hint": "Subtracting $F$ removes the constant term; dividing by $h$ drops every remaining power by one.",
+                        },
+                        {
+                            "prompt": "The quantity actually wanted is $A$. Write the leading term of the error — the largest of the terms left over.",
+                            "answer": "\\frac{B}{2}h",
+                            "hint": "The first term after $A$, the one carrying the lowest power of $h$.",
+                        },
+                        {
+                            "prompt": "Now the other direction. Write the expansion of $f(x-h)$ to the $h^{3}$ term, in the same letters.",
+                            "answer": "F - Ah + \\frac{B}{2}h^{2} - \\frac{C}{6}h^{3}",
+                            "hint": "Replace $h$ by $-h$ in the first expansion: odd powers change sign, even powers do not.",
+                            "deconstruct": [
+                                "$(-h)^{1} = -h$, so the $A$ term changes sign.",
+                                "$(-h)^{2} = h^{2}$, so the $B$ term is unchanged — this is the fact the whole derivation turns on.",
+                                "$(-h)^{3} = -h^{3}$, so the $C$ term changes sign.",
+                            ],
+                        },
+                        {
+                            "prompt": "Subtract the backward expansion from the forward one. Write $f(x+h) - f(x-h)$, simplified.",
+                            "answer": "2Ah + \\frac{C}{3}h^{3}",
+                            "placeholder": "two terms, in odd powers of h",
+                            "hint": "The even-power terms are identical in both expansions and cancel; the odd-power terms double.",
+                            "deconstruct": [
+                                "$F - F = 0$.",
+                                "$Ah - (-Ah) = 2Ah$.",
+                                "$\\dfrac{B}{2}h^{2} - \\dfrac{B}{2}h^{2} = 0$, and that cancellation is the entire purpose of the manoeuvre.",
+                                "$\\dfrac{C}{6}h^{3} - \\left(-\\dfrac{C}{6}h^{3}\\right) = \\dfrac{C}{3}h^{3}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Divide by $2h$ to get the central difference. Write the result.",
+                            "answer": "A + \\frac{C}{6}h^{2}",
+                            "hint": "$\\dfrac{2Ah}{2h} = A$, and $\\dfrac{Ch^{3}/3}{2h} = \\dfrac{C}{6}h^{2}$.",
+                        },
+                        {
+                            "prompt": "Write the leading error term of the central difference.",
+                            "answer": "\\frac{C}{6}h^{2}",
+                            "hint": "Whatever is left once $A$ has been removed.",
+                        },
+                    ],
+                    "closing": r"""
+Both error terms are now derived rather than asserted:
+
+$$D_{+}(h) - f'(x) = \frac{h}{2}f''(x) + O(h^{2}), \qquad
+D_{0}(h) - f'(x) = \frac{h^{2}}{6}f'''(x) + O(h^{4}).$$
+
+With Taylor's theorem in Lagrange form the leading terms are exact rather than
+approximate: the forward error is $\frac{h}{2}f''(\xi)$ for some $\xi$ between $x$ and
+$x+h$, and the central error is $\frac{h^{2}}{6}f'''(\eta)$ for some $\eta$ in
+$(x-h, x+h)$. That is what turns them into bounds.
+
+The step to look at again is the fourth. The $B$ term survived the sign flip because
+$h^{2}$ is even, and that is the only reason it cancelled in the subtraction. Symmetry
+did the work; no extra function evaluations, no cleverer algebra. The same observation
+run the other way — *adding* the two expansions instead of subtracting — kills the odd
+terms and gives the second-derivative formula
+
+$$\frac{f(x+h) - 2f(x) + f(x-h)}{h^{2}} = f''(x) + O(h^{2}),$$
+
+which is the workhorse of every numerical solution of a differential equation.
+
+Where it stops. Every line above used a Taylor expansion, and a Taylor expansion to the
+$h^{3}$ term requires $f'''$ to exist and be bounded near $x$. If it does not, the
+subtraction still happens and the algebra is still valid, but there is nothing left to
+say about the size of the remainder. The concrete failure is $f(x) = x|x|$ at the
+origin, where $f''$ already fails to exist: the central difference there returns exactly
+$h$, so its error is first order at every step size, and no amount of shrinking $h$
+recovers the second order the formula appears to promise.
+""",
+                },
+                {
+                    "title": "One model, two uses",
+                    "minutes": 13,
+                    "vars": ["h", "A", "K", "p", "D_1", "D_2", "e_1", "e_2", "h_1", "h_2"],
+                    "brief": r"""
+Everything in this module rests on one model for what a differencing rule returns:
+
+$$D(h) = A + Kh^{p},$$
+
+where $A$ is the exact answer, $p$ is the order and $K$ is an unknown constant nobody
+ever computes. Two quite different things can be done with it. If $p$ is known, the
+error term can be *cancelled* by combining two runs. If $p$ is unknown, it can be
+*measured* from two errors. This derivation does both, in that order.
+
+Notation for the boxes: subscripts as `D_1`, `e_2`, `h_1`; powers as `2^{p}`;
+logarithms as `log(...)`, with brackets and no backslash.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Start with the central difference, whose model is $D(h) = A + Kh^{2}$. Write $D(h/2)$.",
+                            "answer": "A + \\frac{K}{4}h^{2}",
+                            "hint": "Substitute $h/2$ for $h$; squaring the half makes it a quarter.",
+                        },
+                        {
+                            "prompt": "Write $4D(h/2)$.",
+                            "answer": "4A + Kh^{2}",
+                            "hint": "Multiply both terms of the previous line by $4$.",
+                            "deconstruct": [
+                                "$4 \\times A = 4A$.",
+                                "$4 \\times \\dfrac{K}{4}h^{2} = Kh^{2}$ — the error term has been restored to exactly the size it has in $D(h)$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Now subtract $D(h) = A + Kh^{2}$ from that. Write $4D(h/2) - D(h)$.",
+                            "answer": "3A",
+                            "hint": "The two $h^{2}$ terms are now identical, so they cancel; only multiples of $A$ remain.",
+                        },
+                        {
+                            "prompt": "Name the two computed numbers $D_{1} = D(h)$ and $D_{2} = D(h/2)$. Write the combination of them that equals $A$ under this model.",
+                            "answer": "\\frac{4D_{2}-D_{1}}{3}",
+                            "placeholder": "a weighted combination over 3",
+                            "hint": "Divide the previous line by $3$, and remember it is the *smaller* step that carries the weight $4$.",
+                        },
+                        {
+                            "prompt": "Generalise to an unknown order. For $D(h) = A + Kh^{p}$, write the multiplier $m$ that makes the $h^{p}$ term cancel in $m\\,D(h/2) - D(h)$.",
+                            "answer": "2^{p}",
+                            "hint": "$D(h/2)$ carries $Kh^{p}/2^{p}$, so it must be scaled up by $2^{p}$ to match the $Kh^{p}$ in $D(h)$.",
+                            "deconstruct": [
+                                "$(h/2)^{p} = h^{p}/2^{p}$, so the error term of $D(h/2)$ is $Kh^{p}/2^{p}$.",
+                                "Multiplying by $m$ makes it $mKh^{p}/2^{p}$.",
+                                "For that to equal $Kh^{p}$ and cancel on subtraction, $m = 2^{p}$. Checking against the case just done, $p = 2$ gives $m = 4$.",
+                            ],
+                        },
+                        {
+                            "prompt": "The second use of the same model. Errors $e_{1}$ at step $h_{1}$ and $e_{2}$ at step $h_{2}$ obey $e = Kh^{p}$, so $e_{1}/e_{2} = (h_{1}/h_{2})^{p}$ with $K$ divided out. Solve for $p$.",
+                            "answer": "\\frac{log(e_{1}/e_{2})}{log(h_{1}/h_{2})}",
+                            "placeholder": "a ratio of two logarithms",
+                            "hint": "Take logarithms of both sides: $\\log(e_{1}/e_{2}) = p\\,\\log(h_{1}/h_{2})$, then divide.",
+                        },
+                    ],
+                    "closing": r"""
+The general extrapolation formula follows from the fifth step: since
+$2^{p}D(h/2) - D(h)$ has no $h^{p}$ term and equals $(2^{p}-1)A$ plus smaller terms,
+
+$$R(h) = \frac{2^{p}D(h/2) - D(h)}{2^{p}-1},$$
+
+which for $p = 2$ is the $\dfrac{4D_{2}-D_{1}}{3}$ derived above and for $p = 1$ is the
+simpler $2D_{2} - D_{1}$.
+
+How much this buys depends on what the next term is. In general, killing the $h^{p}$
+term leaves an $h^{p+1}$ term and the extrapolated rule is one order better. The central
+difference is a special case worth knowing, because its expansion contains only even
+powers, so killing $h^{2}$ exposes $h^{4}$ and the rule gains *two* orders. On $\sin$ at
+$x = 1$, combining the central differences at $h = 0.2$ and $h = 0.1$ gives an error of
+$1.80\times10^{-6}$ where the better input was wrong by $9.0\times10^{-4}$, and halving
+the pair again divides the error by $16$ rather than $4$.
+
+Where each half of this stops.
+
+Richardson assumes the error really is $Kh^{p}$ with $K$ constant over the two steps.
+Once the roundoff floor of the previous reading has been reached, the discrepancy is not
+of that form at all, and the combination makes matters worse rather than better: its
+coefficients are $4/3$ and $-1/3$, whose magnitudes sum to $5/3$, so rounding noise is
+amplified by $5/3$ while nothing is cancelled. Extrapolation is for the truncation
+regime only.
+
+The measurement of $p$ has the mirror-image restriction, and needs one thing more: the
+exact answer, in order to form $e_{1}$ and $e_{2}$ at all. So it is a diagnostic run on
+a test problem whose solution is known, and both steps must be taken from the large end
+of the range, where truncation dominates. Two steps from below the floor give a
+meaningless number — often negative, since down there the error grows as $h$ shrinks.
+""",
+                },
+            ],
+            "blanks": [
+                {
+                    "title": "A square root from first principles, line by line",
+                    "minutes": 10,
+                    "caption": "the definition applied to sqrt(x), with six steps removed",
+                    "lang": "text",
+                    "brief": r"""
+The reciprocal exposed its factor of $h$ with a common denominator. A square root will
+not: there is nothing to put over a common denominator and nothing to factor. The move
+that works is the one Module 2 used on a $0/0$ with a root in it — multiply by the
+conjugate — and it is worth seeing that the *same* manoeuvre appears here for the same
+reason.
+
+Four of the missing pieces are algebra. One is the reason the cancellation is allowed,
+which is the step usually performed in silence and the only one that could be wrong.
+One is a number.
+""",
+                    "listing": """Differentiate  f(x) = sqrt(x)  from the definition, at a point x > 0.
+
+
+Step 0.  Write down the difference quotient.
+
+     f(x + h) - f(x)          sqrt(x + h) - sqrt(x)
+     ---------------    =     ---------------------
+            h                           h
+
+
+Step 1.  Substituting h = 0 makes the numerator sqrt(x) - sqrt(x) = 0
+         and the denominator 0, so the form is ___ and the quotient
+         law does not apply yet.
+
+
+Step 2.  There is no factor of h anywhere to cancel.  Manufacture one:
+         multiply top and bottom by C, the conjugate of the numerator.
+
+     C  =  ___
+
+
+Step 3.  The numerator becomes a difference of two squares:
+
+     (sqrt(x + h))^2 - (sqrt(x))^2  =  (x + h) - x  =  ___
+
+
+Step 4.  So the quotient now reads
+
+                     h                                1
+         ---------------------------    =    ---------------------
+          h * (sqrt(x+h) + sqrt(x))           sqrt(x+h) + sqrt(x)
+
+         and cancelling the h is legal because ___ .
+
+
+Step 5.  What is left is continuous at h = 0, so substitute h = 0:
+
+     1 / (sqrt(x + 0) + sqrt(x))  =  ___
+
+
+Step 6.  Read off a number.  At x = 9, the derivative f'(9) is ___ .
+""",
+                    "blanks": [
+                        {
+                            "prompt": "Both halves of the quotient came out zero. Name the form.",
+                            "hole": "?",
+                            "opts": ["0", "0/0", "1", "undefined, so f has no derivative at x"],
+                            "a": 1,
+                            "why": r"""
+$0/0$ is a report about the shape of the expression, not a value: it says the quotient
+law's hypotheses have failed and that algebra is owed. Every difference quotient has
+this form at $h = 0$, which is exactly why the derivative had to be defined as a limit
+in the first place. Reading it as the number $0$ would make every derivative zero.
+Reading it as $1$ treats the two zeros as cancelling, which they do not — the answer
+here turns out to depend on $x$. And being undefined at $h = 0$ is no obstruction
+whatsoever: a limit inspects only the punctured neighbourhood, so a hole at the point
+is the normal case rather than a failure.
+""",
+                        },
+                        {
+                            "prompt": "The conjugate of $\\sqrt{x+h}-\\sqrt{x}$.",
+                            "hole": "?",
+                            "opts": [
+                                "sqrt(x+h) + sqrt(x)",
+                                "sqrt(x+h) - sqrt(x)",
+                                "sqrt(x-h) + sqrt(x)",
+                                "sqrt(x+h) * sqrt(x)",
+                            ],
+                            "a": 0,
+                            "why": r"""
+A conjugate flips the sign between the two terms and changes nothing else, so
+$\sqrt{x+h}-\sqrt{x}$ pairs with $\sqrt{x+h}+\sqrt{x}$, and the product is
+$(\sqrt{x+h})^{2}-(\sqrt{x})^{2}$, which is what removes the roots. Repeating the
+expression unchanged squares it and leaves both roots firmly in place. Moving the sign
+inside the radical, as $\sqrt{x-h}$, changes the function rather than multiplying by
+$1$. And a product of the two roots is not a conjugate at all — it gives
+$\sqrt{x(x+h)}$, a single root and no cancellation.
+""",
+                        },
+                        {
+                            "prompt": "Simplify $(x+h)-x$.",
+                            "hole": "?",
+                            "opts": ["h", "0", "2x + h", "x"],
+                            "a": 0,
+                            "why": r"""
+$(x+h)-x = h$, and the appearance of exactly the factor sitting in the denominator is
+the whole reason the conjugate was worth introducing: it converts a difference of roots
+into the single factor that will cancel. Answering $0$ substitutes $h = 0$ a step early,
+which is the mistake the entire limit construction exists to avoid. $2x+h$ is what
+$(x+h)+x$ gives, from adding instead of subtracting. And $x$ is what survives if the
+$h$ is dropped, which is precisely the term that does not survive.
+""",
+                        },
+                        {
+                            "prompt": "Why may the factor $h$ be cancelled here?",
+                            "hole": "?",
+                            "opts": [
+                                "a common factor may always be cancelled from a fraction",
+                                "h is never 0 on the punctured neighbourhood a limit inspects",
+                                "the numerator and the denominator both vanish at h = 0",
+                                "x is strictly positive, so the roots are defined",
+                            ],
+                            "a": 1,
+                            "why": r"""
+Cancelling divides by $h$, and division is legal only when that quantity is non-zero —
+which is guaranteed here not by luck but by the definition of a limit, which examines
+$0 < |h| < \delta$ and never $h = 0$ itself. The blanket claim that common factors
+always cancel is false at exactly the point in question, and believing it turns this
+step into a habit that will one day destroy a genuine discontinuity. Both halves
+vanishing is the reason a common factor *exists*, not the reason it may be divided out.
+And $x > 0$ is a real hypothesis, but it is the one that keeps $\sqrt{x}$ defined and
+the denominator non-zero at the end; it says nothing about $h$.
+""",
+                        },
+                        {
+                            "prompt": "Simplify $\\dfrac{1}{\\sqrt{x}+\\sqrt{x}}$.",
+                            "hole": "?",
+                            "opts": ["1 / (2*sqrt(x))", "2*sqrt(x)", "1 / sqrt(2*x)", "sqrt(x) / 2"],
+                            "a": 0,
+                            "why": r"""
+Two identical roots add to $2\sqrt{x}$, so the reciprocal is $\dfrac{1}{2\sqrt{x}}$ —
+the standard derivative of the square root, now derived rather than quoted. Answering
+$2\sqrt{x}$ inverts the fraction. Answering $1/\sqrt{2x}$ takes the $2$ inside the
+radical, which is a different number: at $x = 9$ that would give $1/\sqrt{18} = 0.2357$
+rather than $1/6 = 0.1667$. And $\sqrt{x}/2$ inverts only part of the expression.
+Notice what the answer says about the shape of the curve: the derivative grows without
+bound as $x \to 0^{+}$, which is the vertical tangent the graph of $\sqrt{x}$ has at the
+origin, and the reason the hypothesis $x > 0$ could not be dropped.
+""",
+                        },
+                        {
+                            "prompt": "Evaluate $\\dfrac{1}{2\\sqrt{x}}$ at $x = 9$.",
+                            "hole": "?",
+                            "opts": ["1/6", "3", "1/3", "6"],
+                            "a": 0,
+                            "why": r"""
+$\sqrt{9} = 3$, so $\dfrac{1}{2\sqrt{9}} = \dfrac{1}{6} \approx 0.1667$. Check it against
+the quotient it came from: $\sqrt{9.01} = 3.0016662$, so the difference quotient at
+$h = 0.01$ is $0.0016662/0.01 = 0.16662$, already within $5\times10^{-5}$ of
+$1/6 = 0.16667$. Answering $3$
+reports $f(9)$ rather than $f'(9)$; answering $1/3$ forgets the factor of $2$ that came
+from adding two equal roots; answering $6$ inverts the result. The number is also a
+reminder of how flat the square root is out here — nine units along, the curve is rising
+at one sixth of a unit per unit.
+""",
+                        },
+                    ],
+                },
+            ],
+            "numeric": [
+                {
+                    "title": "One forward difference, by hand",
+                    "minutes": 5,
+                    "brief": r"""
+The bottom of the ladder. Nothing has to be derived: two evaluations, one subtraction,
+one division. The only trap is answering the question that was not asked.
+""",
+                    "prompt": "What does the forward difference return?",
+                    "note": "A pure number, to three decimal places.",
+                    "figure": "Estimate the derivative of $f(x) = x^{3}$ at $x = 2$ with the forward "
+                              "difference $\\dfrac{f(x+h)-f(x)}{h}$ at step $h = 0.1$. Report the value "
+                              "the formula returns, not the value of the derivative.",
+                    "given": [
+                        {"label": "Function", "value": "$f(x) = x^{3}$"},
+                        {"label": "Point", "value": "$x = 2$"},
+                        {"label": "Step", "value": "$h = 0.1$"},
+                        {"label": "Rule", "value": "$\\dfrac{f(x+h)-f(x)}{h}$"},
+                    ],
+                    "aside": "$2.1^{3} = 9.261$ exactly.",
+                    "answer": 12.61,
+                    "tol": 0.005,
+                    "unit": "",
+                    "hint": "$f(2.1) = 9.261$ and $f(2) = 8$. Subtract, then divide by $0.1$ — which "
+                            "is the same as multiplying by $10$.",
+                    "wrong": "If you answered $12$, you reported the exact derivative "
+                             "$f'(2) = 3 \\times 2^{2}$ rather than what the formula returns, and the "
+                             "gap between those two numbers is the whole subject of this module. If "
+                             "you answered $1.261$, the division by $h$ was left out. If you answered "
+                             "$12.01$, that is the *central* difference, "
+                             "$(f(2.1)-f(1.9))/0.2$, which is a different and better rule.",
+                    "why": "$\\dfrac{9.261 - 8}{0.1} = \\dfrac{1.261}{0.1} = 12.61$. The exact "
+                           "derivative is $f'(2) = 12$, so the rule is wrong by $0.61$ at this step "
+                           "size — about five per cent, from an $h$ that looks small. For a cubic the "
+                           "Taylor expansion terminates, so the error can be accounted for to the last "
+                           "digit: the forward difference equals "
+                           "$f' + \\tfrac{h}{2}f'' + \\tfrac{h^{2}}{6}f'''$ exactly, and with "
+                           "$f''(2) = 12$ and $f''' = 6$ that is "
+                           "$12 + 0.05 \\times 12 + \\tfrac{0.01}{6}\\times 6 = 12 + 0.6 + 0.01 = "
+                           "12.61$. Nothing was approximated anywhere. The leading term $0.6$ is the "
+                           "one that halves when $h$ halves, which is what first order means.",
+                },
+                {
+                    "title": "How fast is it converging?",
+                    "minutes": 7,
+                    "brief": r"""
+One rung up: a formula applied to two measurements rather than to a function. The order
+of a rule is not something to be taken on trust from a textbook — it can be read off
+two runs, and when the reading disagrees with the textbook it is the textbook's
+hypotheses that have failed.
+""",
+                    "prompt": "What is the observed order $p$?",
+                    "note": "A pure number, to two decimal places.",
+                    "figure": "A differencing rule was run twice on the same test problem, whose exact "
+                              "answer is known, so both errors could be formed: $e_{1} = 3.5948 \\times "
+                              "10^{-3}$ at step $h_{1} = 0.2$, and $e_{2} = 9.0005 \\times 10^{-4}$ at "
+                              "step $h_{2} = 0.1$. Assume the model $e = Kh^{p}$ and report $p$.",
+                    "given": [
+                        {"label": "First run", "value": "$h_{1} = 0.2$, $e_{1} = 3.5948 \\times 10^{-3}$"},
+                        {"label": "Second run", "value": "$h_{2} = 0.1$, $e_{2} = 9.0005 \\times 10^{-4}$"},
+                        {"label": "Model", "value": "$e = Kh^{p}$"},
+                    ],
+                    "aside": "$p = \\dfrac{\\log(e_{1}/e_{2})}{\\log(h_{1}/h_{2})}$, and the base of "
+                             "the logarithm does not matter because it appears twice.",
+                    "answer": 1.998,
+                    "tol": 0.02,
+                    "unit": "",
+                    "hint": "$e_{1}/e_{2} = 3.994$ and $h_{1}/h_{2} = 2$, so $p$ is $\\log 3.994$ "
+                            "divided by $\\log 2$.",
+                    "wrong": "If you answered $3.99$, that is the error ratio itself rather than its "
+                             "logarithm to base $2$ — the ratio answers 'by how much', the order "
+                             "answers 'to what power'. If you answered $0.50$, the fraction is upside "
+                             "down: it is the logarithm of the *error* ratio on top. If you answered "
+                             "$2$ exactly, that is the right conclusion but not the measurement; the "
+                             "measured value is slightly below $2$ and the gap is informative.",
+                    "why": "The unknown constant $K$ divides out of $e_{1}/e_{2} = "
+                           "(h_{1}/h_{2})^{p}$, leaving $p = \\log(3.99400)/\\log 2 = 1.9978$. So the "
+                           "rule is second order, and this is a central difference: the model has been "
+                           "confirmed, not assumed. The reading is not exactly $2$ because the "
+                           "neglected $h^{4}$ term is not exactly zero at $h = 0.2$; running the same "
+                           "test at $h = 0.1$ and $h = 0.05$ gives $1.9995$, closer still. For "
+                           "contrast, the forward difference on the same problem and the same two "
+                           "steps reads $1.026$. Note what the calculation required: the exact answer, "
+                           "in order to form the errors at all. Observed order is therefore a "
+                           "diagnostic you run on a problem you have already solved, to earn the right "
+                           "to trust the rule on one you have not.",
+                },
+                {
+                    "title": "Two estimates, one better answer",
+                    "minutes": 8,
+                    "brief": r"""
+The number asked for is neither of the numbers given, and it is not their average. It is
+the one combination of them whose leading error term is zero — which is worth more than
+either input and costs one line of arithmetic.
+""",
+                    "prompt": "What does Richardson extrapolation give?",
+                    "note": "A pure number, to six decimal places. Keep the sign.",
+                    "figure": "A second-order accurate differencing rule was applied to a quantity "
+                              "available only through an expensive simulation, so the exact derivative "
+                              "is not known in closed form and a third run is not on offer. At "
+                              "$h = 0.2$ the rule returned $D_{1} = -0.83485679$; at $h = 0.1$ it "
+                              "returned $D_{2} = -0.85191951$. Combine the two.",
+                    "given": [
+                        {"label": "Order of the rule", "value": "$p = 2$"},
+                        {"label": "Coarse run", "value": "$D_{1} = D(0.2) = -0.83485679$"},
+                        {"label": "Fine run", "value": "$D_{2} = D(0.1) = -0.85191951$"},
+                    ],
+                    "aside": "For a second-order rule the combination is "
+                             "$\\dfrac{4D_{2}-D_{1}}{3}$.",
+                    "answer": -0.857607,
+                    "tol": 5e-06,
+                    "unit": "",
+                    "hint": "$4 \\times (-0.85191951) = -3.40767804$. Subtracting $D_{1}$, which is "
+                            "itself negative, adds $0.83485679$. Then divide by $3$.",
+                    "wrong": "If you answered $-0.829169$, the two values were swapped: it is the "
+                             "*finer* step that carries the weight $4$, because it is the more nearly "
+                             "correct of the two. If you answered $-0.843388$, you averaged them, "
+                             "which cancels nothing — an average of two estimates with the same-sign "
+                             "error is still wrong in that direction. If you answered $-0.851920$, "
+                             "you reported the better input rather than the combination.",
+                    "why": "$\\dfrac{4(-0.85191951) - (-0.83485679)}{3} = \\dfrac{-2.57282125}{3} = "
+                           "-0.85760708$. The simulation was in fact $e^{-x^{2}}$ at $x = 0.7$, whose "
+                           "derivative is $-1.4e^{-0.49} = -0.85767695$, so the extrapolated value is "
+                           "wrong by $7.0 \\times 10^{-5}$ where the better of its two inputs was "
+                           "wrong by $5.8 \\times 10^{-3}$: a factor of $82$, bought with one "
+                           "subtraction and one division. The mechanism is the model $D(h) = A + "
+                           "Kh^{2}$: quartering the step term means $4D(h/2)$ carries the same "
+                           "$Kh^{2}$ as $D(h)$, so the subtraction annihilates it and leaves $3A$. "
+                           "Nothing here needed the value of $K$, which is why the trick works on a "
+                           "function nobody can differentiate.",
+                },
+                {
+                    "title": "The step size the noise chooses for you",
+                    "minutes": 10,
+                    "brief": r"""
+The top of the ladder. There is no number to look up and nothing to evaluate: the
+quantity asked for is the minimiser of a total-error model, so the model has to be
+written down and differentiated before any arithmetic can start.
+
+This is also the case that matters in practice, because real function values are never
+exact — they come from an instrument, a simulation or a floating-point routine, and all
+three carry a floor.
+""",
+                    "prompt": "Which step size $h$ minimises the error bound?",
+                    "note": "A pure number, in the same units as $x$. Three significant figures.",
+                    "figure": "A quantity $f$ is read off an instrument, and every reading carries an "
+                              "absolute error of at most $\\delta = 10^{-8}$. Near the point of "
+                              "interest $|f''| \\le M = 4$. The derivative is to be estimated by the "
+                              "forward difference $\\dfrac{f(x+h)-f(x)}{h}$, whose truncation "
+                              "contributes at most $Mh/2$ and whose two noisy readings contribute at "
+                              "most $2\\delta/h$ once the division has magnified them. Choose $h$.",
+                    "given": [
+                        {"label": "Reading error", "value": "$\\delta = 10^{-8}$"},
+                        {"label": "Curvature bound", "value": "$M = 4$"},
+                        {"label": "Truncation term", "value": "$Mh/2$"},
+                        {"label": "Noise term", "value": "$2\\delta/h$"},
+                    ],
+                    "aside": "Add the two contributions, differentiate the sum with respect to $h$, "
+                             "and set the derivative to zero.",
+                    "answer": 0.0001,
+                    "tol": 5e-06,
+                    "unit": "",
+                    "hint": "$E(h) = \\dfrac{M}{2}h + \\dfrac{2\\delta}{h}$, so "
+                            "$E'(h) = \\dfrac{M}{2} - \\dfrac{2\\delta}{h^{2}}$. Set that to zero and "
+                            "solve for $h$.",
+                    "wrong": "If you answered $5 \\times 10^{-5}$, the factor of $2$ on the noise term "
+                             "was dropped — both readings are uncertain, so their difference carries "
+                             "twice the error of one. If you answered $10^{-8}$, the step was set "
+                             "equal to the noise itself, which is the natural guess and the worst "
+                             "possible choice: at $h = \\delta$ the noise term alone is $2$. If you "
+                             "answered $4 \\times 10^{-4}$, that is the minimum error $2\\sqrt{M\\delta}$ "
+                             "rather than the step that achieves it.",
+                    "why": "Setting $\\dfrac{M}{2} = \\dfrac{2\\delta}{h^{2}}$ gives "
+                           "$h^{2} = \\dfrac{4\\delta}{M}$ and hence $h_{*} = 2\\sqrt{\\delta/M} = "
+                           "2\\sqrt{2.5 \\times 10^{-9}} = 2 \\times 5 \\times 10^{-5} = 10^{-4}$. "
+                           "Substituting back, the two contributions come out equal — "
+                           "$Mh_{*}/2 = 2\\times10^{-4}$ and $2\\delta/h_{*} = 2\\times10^{-4}$ — "
+                           "which is a free check on any calculation of this shape, and the total "
+                           "bound is $2\\sqrt{M\\delta} = 4\\times10^{-4}$. Two consequences are worth "
+                           "keeping. Data good to eight digits supports a derivative good to about "
+                           "three and a half, because the attainable error goes like $\\sqrt{\\delta}$ "
+                           "rather than $\\delta$. And overshooting downwards is punished hard: at "
+                           "$h = 10^{-5}$, ten times smaller, the bound is "
+                           "$2\\times10^{-5} + 2\\times10^{-3} = 2.02\\times10^{-3}$, five times worse "
+                           "than at the optimum, because the noise term is now doing all the damage.",
+                },
+            ],
+            "quiz": {
+                "title": "Difference quotients and what they cost",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "Before any limit is taken, what does $\\dfrac{f(a+h)-f(a)}{h}$ measure?",
+                        "opts": [
+                            "the slope of the tangent to $y = f(x)$ at $x = a$",
+                            "the slope of the secant through $(a, f(a))$ and $(a+h, f(a+h))$",
+                            "the derivative $f'(a)$, provided $h$ is small enough",
+                            "nothing — it has the form $0/0$",
+                        ],
+                        "a": 1,
+                        "why": r"""
+It is a rise divided by a run between two points that both lie on the curve, which is
+exactly the slope of the secant joining them, and equivalently the average rate of change
+of $f$ across that interval. The tangent slope is the *limit* of this quantity as
+$h \to 0$, not the quantity itself, and the gap between them is what the rest of the
+module measures. Calling it the derivative 'provided $h$ is small' is the same error
+with a hedge attached: at $h = 0.1$ on $f(x) = x^{3}$ at $x = 2$ the quotient is $12.61$
+and the derivative is $12$. And the $0/0$ form arises only at $h = 0$, which the
+definition explicitly excludes.
+""",
+                    },
+                    {
+                        "q": "For $f(x) = |x|$, what is $f'(0)$?",
+                        "opts": [
+                            "$0$, by symmetry",
+                            "$1$, since $|x| = x$ for $x > 0$",
+                            "it does not exist: the quotient is $+1$ for $h > 0$ and $-1$ for $h < 0$",
+                            "it does not exist, because $f$ is not continuous at $0$",
+                        ],
+                        "a": 2,
+                        "why": r"""
+The quotient is $|h|/h$, which is $+1$ on one side and $-1$ on the other, so the
+one-sided limits are $1$ and $-1$, they disagree, and the two-sided limit required by the
+definition does not exist. Symmetry is a real feature of the picture but it is not a
+theorem: the symmetric formula $(|h|-|-h|)/(2h)$ returns $0$ at every step size, which
+shows only that a difference formula will answer a question that has no answer. Taking
+the right-hand slope alone answers a different question, the one-sided derivative.
+And $f$ is perfectly continuous at $0$ — continuity is not what fails here, which is
+precisely why this example matters: it separates the two properties.
+""",
+                    },
+                    {
+                        "q": "Halving $h$ multiplies the error of a forward difference by about $1/2$. For a central difference, by about what?",
+                        "opts": ["$1/2$", "$1/4$", "$1/8$", "$1/16$"],
+                        "a": 1,
+                        "why": r"""
+The central difference has error $\frac{h^{2}}{6}f'''(\xi)$, so the error is proportional
+to $h^{2}$ and halving $h$ divides it by $2^{2} = 4$. Dividing by $2$ would be first
+order, which is what the forward difference does and what the symmetric arrangement was
+designed to improve on. Factors of $8$ and $16$ belong to third- and fourth-order rules;
+$1/16$ is what Richardson extrapolation of a central difference achieves, but that takes
+an extra combination step rather than merely halving.
+""",
+                    },
+                    {
+                        "q": "The central difference applied to $f(x) = x|x|$ at $x = 0$ returns exactly $h$ at every step size, while $f'(0) = 0$. What does that show?",
+                        "opts": [
+                            "the rule was implemented wrongly; the correct central difference gives $0$ here",
+                            "the second-order claim requires $f'''$ to exist near the point, and here not even $f''$ does",
+                            "nothing surprising — the estimate still tends to $0$, so the order claim is unaffected",
+                            "the derivative $f'(0)$ does not actually exist",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Here $f(h) = h^{2}$ and $f(-h) = -h^{2}$, so the rule returns $2h^{2}/(2h) = h$: the
+implementation is correct and the arithmetic is exact. The error is $h$, so the rule is
+first order at every step size, and the $O(h^{2})$ derivation fails because it expanded
+$f$ to the $h^{3}$ term — which needs $f'''$, and this $f$ has no second derivative at
+the origin at all. It is true that the estimate still converges, but converging was never
+the disputed claim; the claim was the *rate*, and that is false here, so halving $h$ buys
+one bit rather than two. And $f'(0)$ does exist and equals $0$, since
+$(h|h| - 0)/h = |h| \to 0$ from both sides.
+""",
+                    },
+                    {
+                        "q": "The error of a forward difference in double precision falls as $h$ shrinks until roughly $h = 10^{-8}$, then grows. Why?",
+                        "opts": [
+                            "the truncation term $\\frac{h}{2}f''$ changes sign there",
+                            "the subtraction $f(x+h)-f(x)$ loses its leading digits to cancellation, and dividing by $h$ magnifies what is left",
+                            "the machine cannot represent numbers below $10^{-8}$",
+                            "$f''$ grows without bound as $h \\to 0$",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The two stored values agree in more and more leading digits as $h$ shrinks; those digits
+cancel exactly in the subtraction, leaving a result carried by the least reliable digits
+of each operand, and the division by $h$ then multiplies that inherited error by $1/h$.
+The rounding contribution is about $2\delta/h$ with $\delta \approx \epsilon|f|$, so it
+grows without bound. The truncation term does not change sign — it falls steadily, and it
+is still falling when the roundoff term overtakes it. Doubles represent numbers far below
+$10^{-8}$ perfectly well; the trouble is with the *difference*, not the step. And $f''$
+is a property of $f$ at the point and does not depend on $h$ at all.
+""",
+                    },
+                    {
+                        "q": "Two runs of a rule give errors $2.77\\times10^{-11}$ at $h = 10^{-6}$ and $1.94\\times10^{-10}$ at $h = 10^{-7}$, so the observed order comes out $-0.85$. What should you conclude?",
+                        "opts": [
+                            "the rule diverges",
+                            "both steps sit below the roundoff floor, so the measurement is of noise rather than truncation — measure the order at larger $h$",
+                            "the rule has order $-0.85$",
+                            "the exact answer used to form the errors must be wrong",
+                        ],
+                        "a": 1,
+                        "why": r"""
+A negative order says the error *grew* when the step shrank, and that is exactly what
+happens below the crossover, where the $1/h$ rounding term dominates the $h^{2}$
+truncation term. The measurement is correct and is telling you which regime you are in.
+The rule does not diverge: at $h = 10^{-3}$ the same rule is converging cleanly at order
+$2$. A negative order is not a property a differencing rule can have, since the model
+$e = Kh^{p}$ describes only the truncation term. And there is no reason to doubt the
+reference answer — the errors are around $10^{-11}$, which is exactly the size the floor
+predicts.
+""",
+                    },
+                    {
+                        "q": "Richardson extrapolation combines two runs of a second-order rule as $\\dfrac{4D_{2}-D_{1}}{3}$, where $D_{2}$ used the halved step. What is the $3$ doing?",
+                        "opts": [
+                            "it cancels the leading error term",
+                            "the numerator has already lost its $h^{2}$ term but equals $3$ times the true value, so dividing restores the scale",
+                            "it counts the function evaluations the two runs used",
+                            "it keeps the rounding error from being amplified",
+                        ],
+                        "a": 1,
+                        "why": r"""
+With $D(h) = A + Kh^{2}$, the combination $4D(h/2) - D(h)$ equals
+$(4A + Kh^{2}) - (A + Kh^{2}) = 3A$: the cancellation of the error is done by the $4$,
+which restores the quartered $h^{2}$ term to full size, and the $3$ is merely the
+leftover coefficient $4 - 1$ on $A$. For a rule of order $p$ the same argument gives
+$2^{p}$ on top and $2^{p}-1$ underneath. The evaluation count has nothing to do with it.
+And far from protecting against rounding, the combination *amplifies* it: the weights
+$4/3$ and $-1/3$ have magnitudes summing to $5/3$, so extrapolating below the roundoff
+floor makes the answer worse.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Finite differences and their error order",
                 "runtime": "python",

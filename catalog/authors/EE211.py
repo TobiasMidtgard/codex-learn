@@ -8078,6 +8078,690 @@ says what happens if it gets the phase wrong.
                 "Which is the practical ceiling on $Q$, and it is EE102 module 8's rule about how deep a real notch goes seen from the other side. A real inductor has series resistance $R_s$ and its own $Q_L = \\omega L/R_s$, typically 50 to 200 at audio and RF; that resistance adds to yours, so no circuit built with it can be more selective than the inductor is — which is why the 40 dB notch quoted there needs component $Q$s in the hundreds. Quoting a design $Q$ higher than the components' own is the commonest way a filter fails to be the filter that was drawn.",
                 "Reading $Q$ off a measurement needs no component values at all: find the peak, find the two frequencies either side where the response is 3 dB down, and divide. That is what EE102 module 7's lab did in code, and what the build below does on a circuit you have drawn. It is also how a $Q$ is quoted for a crystal, a cavity or a piece of ceramic, none of which have an $R$, an $L$ or a $C$ to point at.",
             ],
+            "read": [
+                {
+                    "title": "Why a circuit can prefer one frequency at all",
+                    "minutes": 12,
+                    "body": r'''
+Every filter in this course so far has been a compromise between two monotonic things. A
+resistor is flat with frequency; a capacitor falls; an inductor rises. Divide a flat
+response by a falling one and you get a curve that only ever goes one way, which is why
+an $R$ and a $C$ can give you a low-pass or a high-pass and nothing else. No arrangement
+of them can prefer 5 kHz to both 500 Hz *and* 50 kHz, because nothing in the circuit
+changes its mind as frequency rises.
+
+Put an inductor and a capacitor in the same loop and something does. Their reactances do
+not merely differ in size, they differ in **sign**: one lags the current behind the
+voltage, the other pushes it ahead. Two opinions pointing in opposite directions, one
+growing and one shrinking, must agree at exactly one frequency — and everything in this
+module is a consequence of that single crossing point.
+
+## A loop with somewhere to put energy
+
+Before any algebra, the physical picture, because it explains why the crossing is
+interesting rather than merely arithmetic.
+
+Charge a capacitor to $V$ and then connect an inductor across it. Current starts to flow,
+and the energy that was sitting in the capacitor's electric field, $\tfrac12 CV^2$, moves
+into the inductor's magnetic field, $\tfrac12 LI^2$. When the capacitor is empty the
+current is at its largest — and here is the part that matters: the current in an inductor
+cannot stop instantly, because stopping it would require an infinite $L\,di/dt$. So it
+keeps flowing, and what it does with nowhere else to go is charge the capacitor up the
+other way. Then the whole thing runs backwards. The energy sloshes between the two, over
+and over, and if nothing dissipated it would do so for ever.
+
+That is a pendulum. The capacitor is the spring, storing energy in displacement; the
+inductor is the mass, storing it in motion; and a mass on a spring left alone oscillates
+at one frequency determined by how much of each there is. A resistance in the loop is
+friction. It does not change the rate of the swinging much, it just takes a slice out of
+the energy on every pass, and the swing dies away.
+
+How fast does the swap happen? Dimensionally the answer is already forced. A henry is a
+volt-second per amp and a farad is an amp-second per volt, so $LC$ has units of seconds
+squared and $\sqrt{LC}$ is a time — the only time the two components can make between
+them. The natural frequency has to be its reciprocal:
+
+$$\omega_n = \frac{1}{\sqrt{LC}}$$
+
+## The same statement, in impedance
+
+Now the algebra, which says the same thing and is easier to compute with. From the last
+module, $Z_L = j\omega L$ and $Z_C = 1/(j\omega C) = -j/(\omega C)$. Both are purely
+imaginary and they carry opposite signs. Their magnitudes cross where
+
+$$\omega L = \frac{1}{\omega C} \quad\Longrightarrow\quad \omega^2 = \frac{1}{LC}$$
+
+which is the same $\omega_n$ arrived at from energy. At that frequency the two impedances
+are equal in size and opposite in sign, so **in series they add to nothing**. The loop, at
+that one frequency, behaves as though the inductor and capacitor were not there.
+
+The size they share at the crossing is worth a name of its own, because almost everything
+later is a ratio to it:
+
+$$Z_0 = \omega_n L = \frac{1}{\omega_n C} = \sqrt{\frac{L}{C}}$$
+
+the **characteristic impedance** of the pair. It is an impedance made of $L$ and $C$
+alone, with no frequency in it.
+
+## Watching one loop from outside
+
+Take $R = 100\ \Omega$, $L = 20$ mH and $C = 50$ nF in series across a 1 V source. Then
+
+```
+w_n = 1/sqrt(LC) = 1/sqrt(0.020 * 50e-9) = 1/sqrt(1e-9) = 31623 rad/s
+f_n = 31623 / (2 pi) = 5032.9 Hz
+Z_0 = sqrt(L/C) = sqrt(0.020/50e-9) = sqrt(4e5) = 632.46 ohm
+```
+
+and the impedance the source actually sees, $Z = R + j(X_L - X_C)$, goes like this:
+
+```
+f            X_L = wL     X_C = 1/(wC)     X = X_L - X_C     |Z|          |I| = 1V/|Z|
+-------------------------------------------------------------------------------------
+  1.000 kHz     125.7 ohm     3183.1 ohm      -3057.4 ohm     3059.1 ohm     0.327 mA
+  3.000 kHz     377.0         1061.0           -684.0          691.3         1.447 mA
+  5.033 kHz     632.5          632.5              0.0          100.0        10.000 mA
+  8.000 kHz    1005.3          397.9            607.4          615.6         1.624 mA
+ 20.000 kHz    2513.3          159.2           2354.1         2356.2         0.424 mA
+```
+
+Read the middle column pair rather than the answer. At 1 kHz the capacitor dominates by a
+factor of 25 and the loop is, to the source, a capacitor with a rounding error attached.
+At 20 kHz the inductor dominates by a factor of 16 and the loop is an inductor. Only in
+the narrow region between do the two come close enough to cancel, and at 5033 Hz they
+cancel exactly, leaving the source facing 100 Ω — thirty times less than it faced at 1 kHz,
+and the current is thirty times larger.
+
+Nothing about that is a formula being applied. It is two curves crossing.
+
+## Where you put the probe decides which filter you have
+
+The current is common to everything in a series loop, so each element's voltage is that
+current times its own impedance, and the transfer function is a plain divider ratio.
+Across the resistor:
+
+$$H_R = \frac{R}{R + j\omega L + \frac{1}{j\omega C}}$$
+
+Multiply top and bottom by $j\omega C$ — the same move that cleaned up the RC divider in
+module 4 — and every fraction disappears:
+
+$$H_R = \frac{j\omega RC}{1 - \omega^2 LC + j\omega RC}
+      = \frac{j2\zeta(\omega/\omega_n)}{1 - (\omega/\omega_n)^2 + j2\zeta(\omega/\omega_n)}$$
+
+using module 4's $\omega_n = 1/\sqrt{LC}$ and $\zeta = \frac{R}{2}\sqrt{C/L}$, from which
+$\omega RC = 2\zeta(\omega/\omega_n)$. Do the same with the other three elements and the
+denominator never changes — only the numerator does, because only the numerator knows
+which element you probed:
+
+```
+probe across        numerator                 what you get
+------------------------------------------------------------------
+R                   j 2 zeta (w/w_n)          band-pass
+C                   1                         low-pass
+L                   -(w/w_n)^2                high-pass
+L and C together    1 - (w/w_n)^2             band-stop (notch)
+```
+
+The first three numerators add to the denominator exactly, so $H_R + H_C + H_L = 1$ at
+every frequency. That is not a coincidence and not new physics: it is Kirchhoff's voltage
+law, written as transfer functions.
+
+## Unity gain at the centre, whatever the resistor is
+
+Set $\omega = \omega_n$ in $H_R$. The $1$ and the $-(\omega/\omega_n)^2$ in the
+denominator cancel, leaving $j2\zeta$ on the top and $j2\zeta$ on the bottom:
+
+$$H_R(\omega_n) = \frac{j2\zeta}{j2\zeta} = 1$$
+
+Exactly one, for every value of $R$, $L$ and $C$. It is worth seeing why physically rather
+than just algebraically: at $\omega_n$ the inductor and capacitor in series are a short
+circuit, so the source is connected straight across the resistor, and of course all of it
+appears there. Change $R$ and the peak does not move up or down — it gets wider or
+narrower, which is the whole of the next reading.
+
+## The mistake: "they cancel, so there is nothing across them"
+
+Go back to the table at $f_n$, where 10.00 mA is flowing, and compute what each element
+holds:
+
+```
+across R    10.00 mA x 100.0 ohm  =  1.000 V   in phase with the current
+across L    10.00 mA x 632.5 ohm  =  6.325 V   90 deg ahead of the current
+across C    10.00 mA x 632.5 ohm  =  6.325 V   90 deg behind the current
+                                     -------
+L and C together, as phasors      =  0.000 V   they are 180 deg apart
+```
+
+Six and a third volts across each of two components, from a one volt source. The pair
+sums to zero, and neither half is anywhere near zero.
+
+This is tempting to get wrong because "the $LC$ pair is a short circuit at resonance" is
+a true and useful sentence, and it is about the pair. Applied to either component on its
+own it is false by a factor of $Z_0/R$ — which is 6.3 here and is routinely 50 or 100 in
+a radio circuit. The practical consequence is a component that fails: put 5 V into a
+series resonant circuit with $Z_0/R = 50$ and the capacitor is holding 250 V, so a part
+rated for the supply rail is not merely marginal, it is destroyed. The same magnification
+is what a Tesla coil is for, and what makes a resonant charger able to strike an arc from
+a low-voltage supply.
+
+## A second one, three decades slower, on a different probe
+
+The same four numerators, a circuit a thousand times slower, and this time the probe on
+the $L$–$C$ pair rather than on any single element — so the numerator is
+$1 - (\omega/\omega_n)^2$ and what comes out is a notch. The job: remove 50 Hz mains hum
+and leave the rest of an audio band alone.
+
+```
+null wanted at 50 Hz   w_n = 2 pi x 50                        = 314.16 rad/s
+choose L = 1 H         C = 1/(w_n^2 L) = 1/98696              = 10.13 uF
+choose R = 100 ohm     Z_0 = w_n L                            = 314.16 ohm
+                       Q   = Z_0/R = 314.16/100               = 3.14
+                       BW  = f_n/Q = 50/3.14                  = 15.9 Hz
+```
+
+With $x = f/50$ the magnitude is $|1-x^2|/\sqrt{(1-x^2)^2 + (x/Q)^2}$, and it goes:
+
+```
+   f       x     |1 - x^2|     x/Q        |H|         dB
+---------------------------------------------------------
+  45 Hz   0.90    0.19000    0.28648     0.5527     -5.15
+  50 Hz   1.00    0.00000    0.31831     0.0000     -infinity
+  55 Hz   1.10    0.21000    0.35014     0.5143     -5.77
+  60 Hz   1.20    0.44000    0.38197     0.7551     -2.44
+ 100 Hz   2.00    3.00000    0.63662     0.9782     -0.19
+```
+
+The null is not merely deep, it is exact: the numerator *is* zero at 50 Hz, and it is zero
+for every value of $R$. No amount of staring at the denominator would have told you that,
+which is the whole reason for writing the four placements as four numerators over one
+denominator.
+
+What $R$ does control is how much of the neighbourhood goes into the hole with the hum. At
+$Q = 3.14$ this notch is still 5 dB down at 45 Hz and at 55 Hz, and 2.4 dB down at 60 Hz,
+which for an audio path is far too greedy. Narrowing it means raising $Q$, which means
+dropping $R$ well below 100 Ω — and a 1 H inductor is wound from enough wire to have tens
+to hundreds of ohms of its own, which is already in the loop whether you drew it or not.
+That is the practical reason a 50 Hz notch in an instrument is built from op-amps and
+contains no inductor at all: at these frequencies the coil you would need does not exist
+to buy.
+
+## Where this picture stops
+
+**One inductor and one capacitor.** Everything above assumes exactly one of each, so
+there is exactly one crossing. Real circuits have stray capacitance across the inductor
+and stray inductance in the capacitor's leads, so they have more than one resonance, and
+$\omega_n = 1/\sqrt{LC}$ names only the one you drew. A quartz crystal or a resonant
+cavity has an infinite ladder of them, and the lumped model describes the lowest.
+
+**The capacitor stops being a capacitor.** A 1 nF part with 5 nH of lead and plate
+inductance is series-resonant with itself at $1/(2\pi\sqrt{5\times10^{-9}\times10^{-9}})
+= 71$ MHz, and above that it is an inductor. The tuned circuit you drew simply does not
+exist up there; a different one does, made of parasitics.
+
+**Nothing is allowed to depend on amplitude.** A ferrite-cored inductor loses inductance
+as its core approaches saturation, so a resonant circuit driven hard shifts its own centre
+frequency downward as the drive rises. That is a violation of linearity, and none of this
+module's algebra survives it.
+
+**And it is all steady state.** Every number above is what happens after the circuit has
+settled at one frequency. What it does on the way there — and how long "the way there"
+takes — is a separate question with a surprising answer, and it is the subject of the
+third reading in this module.
+''',
+                },
+                {
+                    "title": "How wide the peak is, and the three ways to say it",
+                    "minutes": 12,
+                    "body": r'''
+The last reading found the crossing point. A crossing point on its own is not yet a
+filter specification, because the interesting question is never only *where* the peak is
+but *how narrow* it is — whether this circuit can separate one radio station from the one
+30 kHz away, or one tone from another a semitone up. That is a question about width, and
+width needs a definition before it can be a number.
+
+## Half-power, and why the name is literal
+
+The convention, everywhere in engineering, is to quote the distance between the two
+frequencies at which the response has fallen to $1/\sqrt2$ of its peak. The reason for
+that particular fraction is not aesthetic. Power in a resistor goes as the square of
+voltage, so a voltage ratio of $1/\sqrt2$ is a power ratio of exactly one half.
+
+Take the loop from the last reading, $R = 100\ \Omega$, $L = 20$ mH, $C = 50$ nF, driven
+by a 1 V amplitude source, and look at the power in the resistor:
+
+```
+at the centre     |V_R| = 1.000 V   ->  P = V^2/(2R) = 1/200      = 5.00 mW
+at either edge    |V_R| = 0.7071 V  ->  P = 0.5/200              = 2.50 mW
+```
+
+Half. Not "about half", not "3 dB which is roughly half" — exactly half, by construction.
+The factor of two in $V^2/2R$ is the amplitude-to-RMS conversion for a sinusoid and it
+cancels out of the ratio, so the same statement holds whichever convention you use.
+
+## Finding the two edges
+
+Write the band-pass magnitude in normalised form with $x = \omega/\omega_n$:
+
+$$|H| = \frac{2\zeta x}{\sqrt{(1-x^2)^2 + (2\zeta x)^2}}$$
+
+Set it to $1/\sqrt2$, square, and clear the fraction. Two copies of $(2\zeta x)^2$ appear
+on the left and one survives, leaving $(1-x^2)^2 = (2\zeta x)^2$, so
+$|1 - x^2| = 2\zeta x$. The absolute value is doing real work: below the centre
+$1-x^2$ is positive and above it is negative, so there are two quadratics, one for each
+edge. The module's derivation walks through them; their positive roots are
+
+$$x_1 = \sqrt{1+\zeta^2} - \zeta, \qquad x_2 = \sqrt{1+\zeta^2} + \zeta$$
+
+and the radical is identical in both, so subtracting kills it: $x_2 - x_1 = 2\zeta$,
+exactly, with no approximation anywhere. In unnormalised terms,
+
+$$\Delta\omega = 2\zeta\omega_n = \frac{R}{L}, \qquad \Delta f = \frac{R}{2\pi L}$$
+
+Run the numbers on the example loop, where $Q = Z_0/R = 632.46/100 = 6.3246$ and
+$\zeta = 1/(2Q) = 0.0790569$:
+
+```
+zeta^2 = 0.00625                sqrt(1 + zeta^2) = 1.0031201
+
+f_2 = 5032.92 x (1.0031201 + 0.0790569) = 5032.92 x 1.0821771 = 5446.51 Hz
+f_1 = 5032.92 x (1.0031201 - 0.0790569) = 5032.92 x 0.9240632 = 4650.74 Hz
+                                                                ----------
+BW  = f_2 - f_1                                                   795.77 Hz
+
+cross-check:  R/(2 pi L) = 100 / (2 pi x 0.020) = 100/0.125664 = 795.77 Hz
+```
+
+Two facts in that last line deserve staring at. **The width contains no $C$.** And **the
+width contains no $\omega_n$.** Change the capacitor and the whole response slides along
+the frequency axis without getting any wider or narrower; change the resistor and it
+widens on the spot.
+
+## $Q$, said three ways
+
+$$Q \equiv \frac{f_n}{\Delta f} = \frac{\omega_n}{\Delta\omega}$$
+
+is the definition, and substituting $\Delta\omega = 2\zeta\omega_n$ gives immediately
+$Q = 1/(2\zeta)$. Two more forms follow. Substituting $\Delta\omega = R/L$ gives the
+design form:
+
+$$Q = \frac{\omega_n L}{R} = \frac{1}{R}\sqrt{\frac{L}{C}} = \frac{Z_0}{R}$$
+
+so $Q$ is nothing but the characteristic impedance measured in units of the loop's
+resistance. And there is a third form which is the one that survives outside circuits
+altogether. Let the current amplitude be $I$. At the peak of each swing all the loop's
+energy is in the inductor, $\tfrac12 LI^2$; over one cycle the resistor dissipates
+$I_{rms}^2 R T = (I^2/2)R/f_n$. So:
+
+```
+Q = 2 pi x (energy stored) / (energy lost per cycle)
+  = 2 pi x (1/2) L I^2 / [ (I^2/2) R / f_n ]
+  = 2 pi L f_n / R
+  = w_n L / R                                   <- the same number
+
+numerically:  2 pi x 0.020 x 5032.92 / 100 = 632.46/100 = 6.3246
+```
+
+The $I^2$ cancels, which is why $Q$ is a property of the circuit and not of how hard you
+drive it. This third form is why a tuning fork, a quartz crystal, a swimming pool and a
+microwave cavity all have a $Q$: each stores energy and loses a fraction of it per cycle,
+and none of them has a resistor to point at.
+
+## The centre is the geometric mean, not the average
+
+$$x_1 x_2 = \left(\sqrt{1+\zeta^2}-\zeta\right)\left(\sqrt{1+\zeta^2}+\zeta\right)
+= (1+\zeta^2) - \zeta^2 = 1$$
+
+a difference of two squares, so $f_1 f_2 = f_n^2$ **exactly, at every damping**. The
+arithmetic mean is $f_n\sqrt{1+\zeta^2}$, which is always too high:
+
+```
+geometric mean   sqrt(4650.74 x 5446.51) = sqrt(25330302) = 5032.92 Hz   = f_n
+arithmetic mean  (4650.74 + 5446.51)/2                    = 5048.62 Hz   0.312% high
+predicted error  1/(8 Q^2) = 1/(8 x 40)                   = 0.3125%
+```
+
+At $Q = 6.3$ that is three parts in a thousand and no one notices. At $Q = 1$ the same
+formula gives 12% and the arithmetic answer is simply wrong. The habit of averaging the
+two edges is imported from low-pass work, where there is only one edge and the question
+never arises.
+
+## The parallel tank, where every sign flips
+
+Put the same three components in parallel instead and drive them with a current source.
+Now it is admittances that add:
+
+$$Y = \frac{1}{R} + j\omega C + \frac{1}{j\omega L}$$
+
+The two susceptances still cancel at $\omega_n = 1/\sqrt{LC}$ — that much is unchanged —
+but now the cancellation leaves $Y$ at its *smallest*, so the impedance is at its
+*largest* and the node voltage peaks. Redo the whole calculation for $R = 10$ kΩ,
+$L = 100\ \mu$H, $C = 1$ nF:
+
+```
+w_n = 1/sqrt(1e-4 x 1e-9) = 1/sqrt(1e-13) = 3.1623e6 rad/s   ->  f_n = 503.29 kHz
+Z_0 = sqrt(L/C) = sqrt(1e-4/1e-9) = sqrt(1e5)               = 316.23 ohm
+Q   = R/Z_0 = 10000/316.23                                  = 31.62
+BW  = f_n/Q = 503292/31.62                                  = 15.92 kHz
+
+cross-check:  BW = 1/(2 pi R C) = 1/(2 pi x 1e4 x 1e-9)     = 15.92 kHz
+```
+
+## The mistake: carrying "small $R$ means high $Q$" across
+
+Compare $Q = Z_0/R$ for the series loop with $Q = R/Z_0$ for the tank. The resistance has
+moved from the bottom to the top. Halving $R$ in a series circuit doubles $Q$; halving $R$
+in a parallel circuit halves it.
+
+This one is genuinely easy to get wrong, and it is worth being explicit about why. The
+three components are the same, the centre frequency is the same, and the word "resonance"
+is the same — so nothing on the page warns you that the formula has inverted. The physics
+does. In the series loop the resistor sits *in the path* of the circulating current, and
+every ohm of it bleeds energy out of the oscillation. In the tank the resistor is a path
+*around* the oscillation, a leak to the outside, and a bigger resistor is a smaller leak.
+
+There is one sentence that covers both, and it is the one to keep: **$Q$ is the reactance
+at resonance divided by the resistance that is effectively in series with the circulating
+current.** For the tank, a shunt resistor $R$ is equivalent, near resonance, to a series
+resistance of $Z_0^2/R$ — here $316.23^2/10000 = 10\ \Omega$ — and $Z_0/10 = 31.62$, the
+same $Q$ as before. The rule did not change; the arrangement did.
+
+## Loaded $Q$: the number you designed is not the number you get
+
+Every resistance in the loop counts, including ones that are not resistors. Drive the
+5 kHz example from a signal generator with 50 Ω of output resistance:
+
+```
+loop resistance     100 + 50            = 150 ohm
+Q                   Z_0/R = 632.46/150  = 4.216      (designed for 6.325)
+BW                  f_n/Q = 5032.92/4.216 = 1193.7 Hz (designed for 795.8)
+peak gain across the 100 ohm resistor    = 100/150 = 0.667, not 1
+```
+
+The distinction has a name: the **unloaded** $Q$ is what the resonator has by itself, the
+**loaded** $Q$ is what it has once the source and the load are attached, and the loaded
+one is always lower. A filter datasheet quotes the loaded figure and specifies the
+impedances it assumes, which is why dropping a filter into a circuit with the wrong
+source impedance broadens it.
+
+## Getting $Q$ off a measurement, with no component values at all
+
+Every form but the first needs $R$, $L$ or $C$. The definition $Q = f_n/\Delta f$ needs
+none of them, which is how $Q$ is obtained in practice — and the only way it can be
+obtained for a crystal, a cavity or a ceramic filter, none of which has a component value
+to look up.
+
+Sweep a generator across an unknown band-pass driven from 1.000 V, record the output, and
+the table looks like this:
+
+```
+f (kHz)     10.00   11.00   11.90   12.20   12.60   13.00   13.35   14.00   16.00
+|V_out| (V)  0.196   0.319   0.582   0.715   0.820   0.721   0.580   0.393   0.190
+```
+
+Three lines of arithmetic and nothing else:
+
+```
+peak                    0.820 V, at 12.60 kHz
+half-power level        0.820/sqrt(2)          = 0.580 V
+lower crossing                                 = 11.90 kHz
+upper crossing                                 = 13.35 kHz
+BW = f_2 - f_1          13.35 - 11.90          = 1.45 kHz
+Q  = f_n/BW             12.60/1.45             = 8.69
+```
+
+Check it against the geometric-mean result, which is free: $\sqrt{11.90 \times 13.35} =
+12.60$ kHz, and the tabulated peak is at 12.60 kHz. The two agree, so the two crossings
+really do belong to one resonance, and the peak was not a bump on the side of something
+else.
+
+There is a second number hiding in that table. The peak reads 0.820 V from a 1.000 V
+drive, and a series band-pass probed across its resistor has a gain of exactly 1 at the
+centre. So the loop contains $1/0.820 = 1.22$ times as much resistance as the resistor
+being measured across, and 18% of the loop's loss is somewhere you did not put it. That
+is a measurement of the coil, made without touching the coil, and the third reading is
+about what to do with it.
+
+## Where the idea stops
+
+**$Q = f_n/\Delta f$ assumes one resonance.** Cascade or couple two resonators — which is
+what any real filter with a flat top and steep sides is — and the $-3$ dB width is no
+longer $f_n/Q$ of anything; it is set by how the two poles are placed relative to each
+other. The single-resonance formula is a special case, not the general one.
+
+**Below about $Q = 0.5$ it stops describing a peak.** The two edges are then more than two
+octaves apart, the geometric and arithmetic centres differ by tens of per cent, and what
+you have is a high-pass and a low-pass that happen to be in the same box.
+
+**$Q$ says nothing about the skirt.** Far from the centre a single resonance rolls off at
+only 6 dB per octave, and the level an octave up is roughly $0.67/Q$:
+
+```
+Q =   6.3   ->  0.105     ->  -19.6 dB at 2 f_n
+Q =  63.2   ->  0.0105    ->  -39.5 dB
+Q = 670     ->  0.000995  ->  -60.0 dB
+```
+
+So 60 dB of rejection one octave out demands $Q \approx 670$ from a single resonance —
+and that same $Q$ makes the passband 680 Hz wide at 455 kHz, far narrower than any signal
+you wanted to keep. You cannot buy skirt steepness with $Q$ without paying for it in
+bandwidth. Buying it instead with *more resonators* is what the rest of filter design is
+about, and it is where DSP510 picks the subject up.
+''',
+                },
+                {
+                    "title": "The price of selectivity: ringing, settling, and the coil you can actually buy",
+                    "minutes": 11,
+                    "body": r'''
+Two things stand between a $Q$ on paper and a filter on a bench. One is physics and
+cannot be negotiated: a narrow filter is a slow filter. The other is the parts bin: the
+inductor brings resistance you did not ask for, and it sets a ceiling on $Q$ that no
+amount of design cleverness lifts. Both are quantitative, and both are easier to respect
+once you have put numbers on them.
+
+## The same poles, looked at in time
+
+The denominator $1 - (\omega/\omega_n)^2 + j2\zeta(\omega/\omega_n)$ has a pair of complex
+roots, and in the time domain those roots are what the circuit does when you stop driving
+it and let go. The pair sits at $-\zeta\omega_n \pm j\omega_n\sqrt{1-\zeta^2}$: the
+imaginary part is the frequency it rings at, the real part is how fast the ringing dies.
+The envelope decays as $e^{-\zeta\omega_n t}$, so
+
+```
+alpha  = zeta w_n = R/(2L)      the decay rate, in nepers per second
+tau    = 1/alpha  = 2L/R        the time to fall to 1/e of the start
+tau f_n = (2L/R)(w_n/2 pi) = w_n L/(pi R) = Q/pi     the same time, counted in cycles
+```
+
+**A resonator rings for $Q/\pi$ cycles.** That one line ties the frequency-domain
+description to the time-domain one, and it is the sentence to remember out of this whole
+reading. Work it both ways on the 5 kHz loop from the earlier examples,
+$R = 100\ \Omega$, $L = 20$ mH:
+
+```
+tau    = 2L/R = 2 x 0.020/100          = 400 us
+cycles = Q/pi = 6.3246/3.1416          = 2.01     -> it rings twice and is gone
+```
+
+and on something sharp — a 1 kHz filter with $Q = 100$:
+
+```
+tau    = Q/(pi f_n) = 100/(pi x 1000)  = 31.83 ms
+cycles = Q/pi                          = 31.83
+BW     = f_n/Q = 1000/100              = 10 Hz
+```
+
+Thirty-two milliseconds. On an oscilloscope that is a visible, slow, decaying wobble long
+after the input has stopped. This is not a defect of the design; it is the design. A
+filter that has decided to respond to a 10 Hz-wide slice of the spectrum has, by that
+decision, agreed to average over about a tenth of a second.
+
+## Why a narrow filter cannot follow a fast envelope
+
+Push the connection one step further, because this is where it stops being an oddity and
+becomes a design constraint. Amplitude-modulate a carrier at $f_n$ and the modulation puts
+sidebands at $f_n \pm f_m$. The filter is only $\Delta f$ wide in total, so it passes
+sidebands out to $\Delta f/2$ either side, and modulation faster than that is attenuated
+along with everything else outside the band.
+
+The two statements — a $\tau$ of 31.8 ms, and a modulation limit of 5 Hz — are the same
+statement:
+
+$$\frac{1}{2\pi\tau} = \frac{1}{2\pi}\cdot\frac{\pi f_n}{Q} = \frac{f_n}{2Q}
+= \frac{\Delta f}{2}$$
+
+```
+1/(2 pi x 0.031831) = 5.00 Hz     and   BW/2 = 10/2 = 5 Hz
+```
+
+An exact identity, not a coincidence of the numbers. The envelope of a narrow band-pass
+behaves like a low-pass filter of half the bandwidth, and its time constant is that
+low-pass's time constant. Narrow in frequency and slow in time are one fact seen twice.
+
+## The same time constant, twice more
+
+$\tau$ turns up in two other places, and it is worth knowing that they are not three
+numbers to remember but one.
+
+**Starting up takes as long as stopping.** Drive a band-pass on tune with a burst and its
+amplitude does not appear instantly; it grows as $1 - e^{-t/\tau}$ with the same $\tau$,
+reaching 95% of its final size at $3\tau$. For the 455 kHz filter designed below that is
+95.5 µs and nobody cares. For the 20 Hz-wide filter a shortwave operator switches in to
+dig one Morse signal out of a crowded band at 800 Hz:
+
+```
+tau  = 1/(pi x 20)               = 15.9 ms
+3tau = time to reach 95%         = 47.7 ms
+Q    = 800/20                    = 40      ->  Q/pi = 12.7 cycles of ring-down
+a Morse dot at 20 words/minute   = 1.2/20  = 60 ms
+```
+
+The filter's start-up is 80% as long as the shortest element it is being asked to pass.
+That is why very narrow CW filters make keying sound soft and rounded, and why they are
+usable at slow sending speeds and not at fast ones. Nothing is broken; the filter is doing
+exactly what a 20 Hz bandwidth means.
+
+**And the envelope arrives late by the same $\tau$.** The group delay of a resonator — how
+long a modulation takes to get through it — is $-d\phi/d\omega$, and at the centre it
+works out to $1/(\zeta\omega_n)$, which is $2L/R$ again. The reason is quick to see: at
+$\omega_n$ the denominator is purely imaginary, so its argument is turning at its fastest,
+and the rate works out to $1/\zeta$ per unit of $\omega/\omega_n$. Divide by $\omega_n$ and
+you have $\tau$.
+
+So "how long it rings after you stop", "how long it takes to build up when you start" and
+"how long it delays what passes through" are one number wearing three hats. A resonator has
+exactly one time constant, and $\Delta f$ fixes it.
+
+## Designing an IF filter backwards from the audio
+
+This is how the trade is actually used. An AM broadcast carries audio to about 5 kHz, so
+its sidebands occupy $\pm 5$ kHz and the receiver's intermediate-frequency filter needs
+10 kHz of bandwidth at 455 kHz — no more, because the next station is 9 or 10 kHz away,
+and no less, because the top of the audio is at the edge.
+
+```
+Q   = f_n/BW = 455000/10000                                   = 45.5
+pick C = 1 nF
+w_n = 2 pi x 455000                                    = 2.8588e6 rad/s
+L   = 1/(w_n^2 C) = 1/(8.1730e12 x 1e-9) = 1/8173.0    = 122.35 uH
+Z_0 = w_n L = 2.8588e6 x 122.35e-6                     = 349.79 ohm
+R   = Z_0/Q = 349.79/45.5                              = 7.688 ohm    <- total, in the loop
+tau = 2L/R = 244.71e-6/7.688                           = 31.83 us
+```
+
+That last figure is 14.5 cycles of ringing, over in a thirtieth of a millisecond, which is
+inaudible — so at 455 kHz the time-domain price of $Q = 45.5$ is nothing at all. It is
+only when the centre frequency is low and the $Q$ is high that the ringing becomes
+something a listener hears, which is exactly the case of a sharp audio notch or a narrow
+CW filter in a shortwave receiver, where the 20 Hz-wide filter people fit for weak-signal
+work rings audibly on every keystroke.
+
+## The ceiling: 7.688 ohms is not a lot of resistance
+
+Look at that $R$ again. It is the **total** resistance in the loop, and a 122 µH coil
+wound with copper wire is not free of it. Quote a coil by its own $Q_L = \omega_n L/R_s$,
+which for a decent air-cored or ferrite part at 455 kHz is somewhere between 50 and 200:
+
+```
+coil with Q_L = 80:   R_s = Z_0/Q_L = 349.79/80 = 4.372 ohm
+
+  budget for the whole loop        7.688 ohm
+  the coil brings                  4.372 ohm      (57% of the budget)
+  left over to add as a resistor   3.316 ohm
+```
+
+More than half the loss is spent before you have added anything. Now ask the same coil for
+$Q = 100$:
+
+```
+budget for the whole loop   Z_0/100 = 3.498 ohm
+the coil brings                       4.372 ohm
+left over                            -0.874 ohm     <- not a part you can order
+```
+
+The design equation $R = Z_0/Q$ returns a number for any $Q$ you ask for, including
+numbers smaller than the resistance already sitting in the circuit, and it gives no
+warning. **A resonator cannot be sharper than the components it is made of.** Losses in
+parallel combine as reciprocals, exactly like conductances:
+
+$$\frac{1}{Q_{total}} = \frac{1}{Q_L} + \frac{1}{Q_C} + \frac{1}{Q_{ext}}$$
+
+so a coil at $Q_L = 80$ with a capacitor at $Q_C = 1000$ and nothing else gives
+$1/Q = 0.012500 + 0.001000 = 0.013500$, or $Q_{total} = 74.1$ — and any external resistor,
+source impedance or load only pulls it further down.
+
+## The mistake, and how to catch it on the bench
+
+The failure looks like this: someone specifies $Q = 45.5$, computes $R = 7.688\ \Omega$,
+fits a 7.68 Ω resistor, and does not subtract what the coil already contributes.
+
+```
+intended    R = 7.688 ohm        Q = 45.5   BW = 10.0 kHz   peak gain 1.00
+actual      R = 7.688 + 4.372 = 12.060 ohm
+            Q = 349.79/12.060  = 29.0
+            BW = 455000/29.0   = 15.7 kHz
+            peak gain = 7.688/12.060 = 0.637
+```
+
+Half again as wide as specified, and the adjacent channel is no longer rejected. The
+correct arithmetic was to fit $7.688 - 4.372 = 3.316\ \Omega$ and let the coil supply the
+rest.
+
+The bench diagnostic is the peak gain, and it is worth knowing because it needs no
+component values at all. A series band-pass probed across its resistor has a gain of
+**exactly 1** at the centre — the first reading proved that, for any $R$. So if the peak
+measures 0.637 instead of 1.000, the loop contains $1/0.637 = 1.57$ times as much
+resistance as the resistor you fitted, and the surplus is the coil. That is a measurement
+of $R_s$, made with a signal generator and a voltmeter, on a circuit whose inductor you
+know nothing about.
+
+## Where this stops, and what replaces it
+
+**Stop using wire.** A quartz crystal reaches $Q$ of $10^4$ to $10^6$ because the energy is
+stored as mechanical strain in a solid rather than as a magnetic field around a coil, and
+the mechanical loss in quartz is orders of magnitude below the ohmic loss in copper. A
+10 MHz crystal with $Q = 10^5$ has a 100 Hz bandwidth and rings for $Q/\pi = 31{,}800$
+cycles, which is 3.2 ms — the same trade, unchanged, just moved to a place where the
+numbers are extreme. Cavity resonators and dielectric pucks do the same thing at
+microwave frequencies.
+
+**Or cancel the loss electronically.** A circuit that presents a negative resistance
+across the tank subtracts from $R_s$ and multiplies the effective $Q$; regenerative
+receivers did this in the 1920s and every crystal oscillator does a version of it now.
+Two limits bite immediately. Take the cancellation too far and the net resistance goes
+negative, at which point the circuit is an oscillator rather than a filter — that is
+CTRL510's stability boundary, seen in its simplest possible form. And the feedback that
+narrows the response also amplifies the noise inside it, so the signal-to-noise ratio
+improves far less than the $Q$ suggests.
+
+**And nothing here survives non-linearity.** All of it — $Q$, bandwidth, ringing time, the
+whole apparatus — rests on the circuit being linear and time-invariant. A ferrite core
+driven into saturation makes $L$ a function of instantaneous current, and a high-$Q$
+circuit built on it pulls its own centre frequency as the drive level changes, which shows
+up as a resonance curve that leans over and can jump discontinuously as you sweep. At that
+point you are outside this course and into non-linear dynamics.
+''',
+                },
+            ],
             "build": {
                 "title": "A band-pass at 5 kHz with a $Q$ of 8",
                 "minutes": 30,
@@ -8320,6 +9004,598 @@ the topology.
                     },
                 ],
             },
+            "blanks": [
+                {
+                    "title": "One loop, four filters, one denominator",
+                    "minutes": 8,
+                    "caption": "the numerators are the only thing that changes",
+                    "lang": "text",
+                    "brief": r'''
+The series loop is drawn once and never redrawn. Moving the probe from one element to
+another changes which filter you have measured, and the algebra records that change in
+one place only: the numerator of $H$.
+
+Fill the four numerators. Then read the table downwards and notice that three of them
+have to add up to the denominator, because the three voltages have to add up to the
+source.
+''',
+                    "listing": """  series loop:   source -> L -> C -> R -> ground        one circuit, four probes
+
+  every one of them shares the denominator
+
+      D = 1 - (w/w_n)^2 + j 2 zeta (w/w_n)
+
+  probe across R          H = ___ / D          band-pass, gain 1 at the centre
+  probe across C          H = ___ / D          low-pass
+  probe across L          H = ___ / D          high-pass
+  probe across L and C    H = ___ / D          band-stop, a null at the centre
+
+  and the R, C and L numerators sum to D itself, which is Kirchhoff's voltage law
+""",
+                    "blanks": [
+                        {
+                            "prompt": "Across the resistor. Multiply $R$ by $j\\omega C$ to clear the fractions, and write the result in terms of $\\zeta$ and $\\omega/\\omega_n$.",
+                            "hole": "?",
+                            "opts": ["1", "j 2 zeta (w/w_n)", "-(w/w_n)^2", "1 - (w/w_n)^2"],
+                            "a": 1,
+                            "why": "$R \\cdot j\\omega C = j\\omega RC$, and $\\omega RC = 2\\zeta(\\omega/\\omega_n)$ because $\\zeta = \\frac{R}{2}\\sqrt{C/L}$ and $\\omega_n = 1/\\sqrt{LC}$. It vanishes at DC and grows without limit, so on its own it is a high-pass — and it is the denominator's growth that pulls it back down again above the centre, which is what makes the result a band-pass rather than either extreme.",
+                            "whys": [
+                                "A numerator of 1 gives a response that starts at gain 1 and falls, which is the low-pass. The resistor cannot give that: at DC no current flows through a series capacitor, so no voltage appears across the resistor.",
+                                "$R \\cdot j\\omega C = j\\omega RC$, and $\\omega RC = 2\\zeta(\\omega/\\omega_n)$ because $\\zeta = \\frac{R}{2}\\sqrt{C/L}$ and $\\omega_n = 1/\\sqrt{LC}$. It vanishes at DC and grows without limit, so on its own it is a high-pass — and it is the denominator's growth that pulls it back down again above the centre, which is what makes the result a band-pass rather than either extreme.",
+                                "That numerator grows as $\\omega^2$, so it belongs to the element whose impedance grows as $\\omega$, which is the inductor rather than the resistor. A resistor's impedance does not depend on frequency at all.",
+                                "That numerator is zero at the centre, which would make the response a null rather than a peak. Across the resistor the centre is where the response is at its very largest.",
+                            ],
+                        },
+                        {
+                            "prompt": "Across the capacitor. Its impedance $1/(j\\omega C)$ multiplied by $j\\omega C$ leaves what?",
+                            "hole": "?",
+                            "opts": ["1", "j 2 zeta (w/w_n)", "-(w/w_n)^2", "1 - (w/w_n)^2"],
+                            "a": 0,
+                            "why": "$\\frac{1}{j\\omega C}\\cdot j\\omega C = 1$, so $H_C = 1/D$ — the standard second-order low-pass of module 4, unit gain at DC and falling at 40 dB per decade. This is the placement that produced the $1/2\\zeta$ peak, and the reason the peak exists is that the numerator is flat while the denominator dips.",
+                            "whys": [
+                                "$\\frac{1}{j\\omega C}\\cdot j\\omega C = 1$, so $H_C = 1/D$ — the standard second-order low-pass of module 4, unit gain at DC and falling at 40 dB per decade. This is the placement that produced the $1/2\\zeta$ peak, and the reason the peak exists is that the numerator is flat while the denominator dips.",
+                                "That numerator is zero at DC, so the response would start at nothing. A capacitor in the shunt position holds the entire source voltage at DC, because no current is flowing and neither of the other two elements can drop anything.",
+                                "That is the high-pass numerator, and it is the capacitor's mirror image. Check it at DC: $-(\\omega/\\omega_n)^2$ is zero there, and the capacitor's voltage is not.",
+                                "That is the notch numerator, which is what the inductor and capacitor give *together*. On its own the capacitor has no null anywhere.",
+                            ],
+                        },
+                        {
+                            "prompt": "Across the inductor. $j\\omega L$ times $j\\omega C$, remembering what $j^2$ is.",
+                            "hole": "?",
+                            "opts": ["1", "j 2 zeta (w/w_n)", "-(w/w_n)^2", "1 - (w/w_n)^2"],
+                            "a": 2,
+                            "why": "$j\\omega L \\cdot j\\omega C = j^2\\omega^2 LC = -\\omega^2 LC = -(\\omega/\\omega_n)^2$. Growing as $\\omega^2$ against a denominator that also grows as $\\omega^2$, the ratio tends to 1 at high frequency: a second-order high-pass, the exact mirror of the capacitor's low-pass. The minus sign is a $180^\\circ$ phase shift and does not touch the magnitude.",
+                            "whys": [
+                                "A flat numerator belongs to the capacitor. The inductor's impedance rises with frequency, so its share of the source voltage must rise too, and a constant numerator cannot express that.",
+                                "That numerator rises only as $\\omega$, which is one power short. Two reactive elements are being multiplied here — $j\\omega L$ by the $j\\omega C$ used to clear the fractions — so the result carries $\\omega^2$.",
+                                "$j\\omega L \\cdot j\\omega C = j^2\\omega^2 LC = -\\omega^2 LC = -(\\omega/\\omega_n)^2$. Growing as $\\omega^2$ against a denominator that also grows as $\\omega^2$, the ratio tends to 1 at high frequency: a second-order high-pass, the exact mirror of the capacitor's low-pass. The minus sign is a $180^\\circ$ phase shift and does not touch the magnitude.",
+                                "That is the sum of the inductor's and the capacitor's numerators rather than the inductor's alone, and it is what you measure with the probe placed on the far side of both of them.",
+                            ],
+                        },
+                        {
+                            "prompt": "Across the inductor and capacitor together, which is the sum of the two you have just written.",
+                            "hole": "?",
+                            "opts": ["1", "j 2 zeta (w/w_n)", "-(w/w_n)^2", "1 - (w/w_n)^2"],
+                            "a": 3,
+                            "why": "$1 + \\left(-(\\omega/\\omega_n)^2\\right) = 1 - (\\omega/\\omega_n)^2$, which is exactly zero at $\\omega = \\omega_n$ for every value of $R$. That is why the null of a series notch is infinitely deep in principle: the numerator, not the denominator, is doing the work, and no resistance appears in it. What $R$ does control is the width of the null, through the same $\\Delta\\omega = 2\\zeta\\omega_n$ as everything else in the module.",
+                            "whys": [
+                                "A flat numerator has no null in it anywhere, and the defining feature of this placement is that the response goes to zero at the centre.",
+                                "That numerator is *largest* at the centre, not smallest — it is the band-pass, which is the resistor's placement and the complement of this one.",
+                                "That is the inductor's numerator alone. The probe here sits beyond both reactive elements, so the capacitor's contribution has to be added to it.",
+                                "$1 + \\left(-(\\omega/\\omega_n)^2\\right) = 1 - (\\omega/\\omega_n)^2$, which is exactly zero at $\\omega = \\omega_n$ for every value of $R$. That is why the null of a series notch is infinitely deep in principle: the numerator, not the denominator, is doing the work, and no resistance appears in it. What $R$ does control is the width of the null, through the same $\\Delta\\omega = 2\\zeta\\omega_n$ as everything else in the module.",
+                            ],
+                        },
+                    ],
+                },
+                {
+                    "title": "Designing a 455 kHz IF filter, line by line",
+                    "minutes": 10,
+                    "caption": "two specifications in, five numbers out",
+                    "lang": "text",
+                    "brief": r'''
+An AM receiver's intermediate-frequency filter, worked from the specification down to the
+component values and back out to the ring-down time. Nothing here is new: it is the
+module's four relations — $\omega_n = 1/\sqrt{LC}$, $Z_0 = \sqrt{L/C}$, $Q = Z_0/R$ and
+$\tau = 2L/R$ — used once each, in order.
+
+The bandwidth of 10 kHz is not arbitrary. AM audio runs to about 5 kHz, the modulation
+puts sidebands at $f_n \pm 5$ kHz, and the neighbouring station is 9 or 10 kHz away.
+''',
+                    "listing": """  specification:  centre 455 kHz,  -3 dB bandwidth 10 kHz
+  topology:       series R-L-C loop, output taken across R
+
+  Q      = ___                                = 455000/10000       = 45.5
+  zeta   = 1/(2Q)                                                  = ___
+  choose  C = 1 nF                            (a round value; L follows)
+  w_n    = 2 pi x 455000                                    = 2.8588e6 rad/s
+  L      = 1/(w_n^2 C) = 1/(8.1730e12 x 1e-9) = 1/8173.0            = ___
+  Z_0    = w_n L = 2.8588e6 x 122.35e-6                     = 349.79 ohm
+  R      = ___                                = 349.79/45.5        = 7.688 ohm
+  tau    = 2L/R = 244.71e-6/7.688                                  = ___
+
+  and R is the TOTAL loop resistance, coil included, not the resistor you fit
+""",
+                    "blanks": [
+                        {
+                            "prompt": "The definition of $Q$, in the form that needs no component values.",
+                            "hole": "?",
+                            "opts": ["f_n / BW", "BW / f_n", "f_n x BW", "2 pi f_n / BW"],
+                            "a": 0,
+                            "why": "$Q = f_n/\\Delta f$: centre divided by width. A high $Q$ is a narrow filter, so $Q$ has to be large when $\\Delta f$ is small, which puts the bandwidth underneath. This is the form that applies to a crystal or a cavity, where there is no $R$, $L$ or $C$ to substitute.",
+                            "whys": [
+                                "$Q = f_n/\\Delta f$: centre divided by width. A high $Q$ is a narrow filter, so $Q$ has to be large when $\\Delta f$ is small, which puts the bandwidth underneath. This is the form that applies to a crystal or a cavity, where there is no $R$, $L$ or $C$ to substitute.",
+                                "Upside down: that would make a *wide* filter the high-$Q$ one, and it gives 0.022 here rather than 45.5. The word selectivity is the check — more selective must mean larger.",
+                                "A product of two frequencies is not dimensionless, and $Q$ must be, because it is also equal to $1/2\\zeta$ and to a ratio of two energies.",
+                                "The $2\\pi$ belongs to the conversion between $f$ and $\\omega$, and here it would have to appear on both the centre and the width, so it cancels. $\\omega_n/\\Delta\\omega$ and $f_n/\\Delta f$ are the same number.",
+                            ],
+                        },
+                        {
+                            "prompt": "The damping ratio, from $Q = 45.5$.",
+                            "hole": "?",
+                            "opts": ["0.01099", "0.02198", "0.1483", "45.5"],
+                            "a": 0,
+                            "why": "$\\zeta = 1/(2 \\times 45.5) = 1/91 = 0.01099$. Very lightly damped, as any filter this selective must be — $\\zeta$ and $Q$ are two names for one property and they move in opposite directions.",
+                            "whys": [
+                                "$\\zeta = 1/(2 \\times 45.5) = 1/91 = 0.01099$. Very lightly damped, as any filter this selective must be — $\\zeta$ and $Q$ are two names for one property and they move in opposite directions.",
+                                "That is $1/Q$, with the factor of two left out. The two is not decoration: it comes from the half-power points being $2\\zeta$ apart in normalised frequency, which is where the whole relation originates.",
+                                "That is $1/\\sqrt{Q} = 1/\\sqrt{45.5}$, which is not a relation this module contains. $\\zeta$ and $Q$ are related by a plain reciprocal with a two in it, not by a square root.",
+                                "That is $Q$ itself. A damping ratio of 45.5 would be enormously overdamped — no oscillation, no peak, no filter.",
+                            ],
+                        },
+                        {
+                            "prompt": "The inductance, from $L = 1/(\\omega_n^2 C)$ with $C = 1$ nF.",
+                            "hole": "?",
+                            "opts": ["12.24 uH", "122.35 uH", "1.2235 mH", "4.83 mH"],
+                            "a": 1,
+                            "why": "$1/8173.0 = 1.2235\\times10^{-4}$ H, which is 122.35 µH — an entirely ordinary small coil, a few tens of turns on a ferrite former. Worth sanity-checking against $Z_0 = \\sqrt{L/C} = \\sqrt{1.2235\\times10^{-4}/10^{-9}} = 349.8\\ \\Omega$, which is the figure the next line uses.",
+                            "whys": [
+                                "A factor of ten out. $1/8173$ is $1.22\\times10^{-4}$, and $10^{-4}$ H is 100 µH, not 10 µH.",
+                                "$1/8173.0 = 1.2235\\times10^{-4}$ H, which is 122.35 µH — an entirely ordinary small coil, a few tens of turns on a ferrite former. Worth sanity-checking against $Z_0 = \\sqrt{L/C} = \\sqrt{1.2235\\times10^{-4}/10^{-9}} = 349.8\\ \\Omega$, which is the figure the next line uses.",
+                                "A factor of ten the other way. A 1.2235 mH coil with 1 nF resonates at 144 kHz, not 455 kHz — worth checking, because putting the resonance in the wrong place is the one error the rest of the design cannot recover from.",
+                                "That is $1/(f_n^2 C)$ — the $2\\pi$ left out of $\\omega_n$. Because $\\omega_n$ is squared in this line, dropping the $2\\pi$ costs a factor of $(2\\pi)^2 = 39.5$, and $122.35\\ \\mu\\text{H} \\times 39.5 = 4.83$ mH accounts for it exactly.",
+                            ],
+                        },
+                        {
+                            "prompt": "The loop resistance that produces $Q = 45.5$, written with $Z_0$.",
+                            "hole": "?",
+                            "opts": ["Z_0 / Q", "Q / Z_0", "Q Z_0", "Z_0 / (2Q)"],
+                            "a": 0,
+                            "why": "$Q = Z_0/R$ for a series loop, so $R = Z_0/Q = 349.79/45.5 = 7.688\\ \\Omega$. Small resistances make sharp series resonators, because the resistor is in the path of the circulating current. The parallel tank inverts this — there $Q = R/Z_0$ — and mixing the two up is the classic error of the subject.",
+                            "whys": [
+                                "$Q = Z_0/R$ for a series loop, so $R = Z_0/Q = 349.79/45.5 = 7.688\\ \\Omega$. Small resistances make sharp series resonators, because the resistor is in the path of the circulating current. The parallel tank inverts this — there $Q = R/Z_0$ — and mixing the two up is the classic error of the subject.",
+                                "That is the parallel form applied to a series circuit, and it gives 0.13 Ω. The rule is that $Q$ is the reactance at resonance divided by the resistance carrying the circulating current, and in a series loop that resistance is the one drawn in the loop.",
+                                "That gives 15.9 kΩ, which would make the loop current negligible and the resonance invisible. A sharper filter needs *less* loss, not more.",
+                                "The factor of two belongs in the relation between $\\zeta$ and $Q$, not in this one. $R = Z_0/Q$ has no two in it; putting one there would double the bandwidth you designed for.",
+                            ],
+                        },
+                        {
+                            "prompt": "The ring-down time constant, $\\tau = 2L/R$.",
+                            "hole": "?",
+                            "opts": ["3.18 us", "31.83 us", "318.3 us", "31.83 ms"],
+                            "a": 1,
+                            "why": "$244.71\\times10^{-6}/7.688 = 3.183\\times10^{-5}$ s, or 31.83 µs. Cross-check it with $\\tau = 1/(\\pi\\,\\Delta f) = 1/(\\pi \\times 10^4) = 31.83$ µs, and count it in cycles: $Q/\\pi = 45.5/\\pi = 14.5$ rings before the envelope is down to $1/e$. At 455 kHz that is a thirtieth of a millisecond and nobody notices; the same $Q$ at 1 kHz would ring for 14.5 ms and be plainly audible.",
+                            "whys": [
+                                "A factor of ten short. $244.71\\times10^{-6}$ divided by 7.688 is about $3.2\\times10^{-5}$, not $3.2\\times10^{-6}$; dividing by roughly 8 cannot move the exponent.",
+                                "$244.71\\times10^{-6}/7.688 = 3.183\\times10^{-5}$ s, or 31.83 µs. Cross-check it with $\\tau = 1/(\\pi\\,\\Delta f) = 1/(\\pi \\times 10^4) = 31.83$ µs, and count it in cycles: $Q/\\pi = 45.5/\\pi = 14.5$ rings before the envelope is down to $1/e$. At 455 kHz that is a thirtieth of a millisecond and nobody notices; the same $Q$ at 1 kHz would ring for 14.5 ms and be plainly audible.",
+                                "A factor of ten long. Sanity-check against the bandwidth instead of the components: $\\tau = 1/(\\pi \\Delta f)$, and with $\\Delta f = 10$ kHz that is unmistakably in the tens of microseconds.",
+                                "Three orders of magnitude out, and worth catching by feel rather than by arithmetic: a filter centred at 455 kHz cannot take 32 ms to settle, because that is fourteen thousand cycles of the carrier and the filter is only 45 cycles' worth of selective.",
+                            ],
+                        },
+                    ],
+                },
+            ],
+            "numeric": [
+                {
+                    "title": "Where the peak of a band-pass sits",
+                    "minutes": 5,
+                    "brief": r'''
+The mechanical rung. One relation, one unknown, and a deliberate distractor sitting in the
+circuit: three components are drawn and only two of them appear in the answer.
+
+The probe is on the resistor, so this is the band-pass placement, and the peak of a
+band-pass across the resistor sits at $\omega_n$ exactly — not slightly below it, as the
+low-pass peak of module 4 did.
+''',
+                    "prompt": "At what frequency does this filter pass the largest fraction of what arrives?",
+                    "note": "Answer in hertz. Three or four significant figures is plenty; the tolerance is about ±25 Hz.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                            {"id": "p1", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "p2", "kind": "L", "x": 6, "y": 4, "rot": 0, "value": 4e-3},
+                            {"id": "p3", "kind": "C", "x": 10, "y": 4, "rot": 0, "value": 1e-7},
+                            {"id": "p4", "kind": "R", "x": 13, "y": 6, "rot": 1, "value": 47},
+                            {"id": "p5", "kind": "GND", "x": 13, "y": 9},
+                            {"id": "p6", "kind": "OUT", "x": 15, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [7, 4], "b": [9, 4]},
+                            {"a": [11, 4], "b": [13, 4]},
+                            {"a": [13, 4], "b": [13, 5]},
+                            {"a": [13, 7], "b": [13, 9]},
+                            {"a": [13, 4], "b": [15, 4]},
+                        ],
+                    },
+                    # The centre is found the way an instrument finds it: bisect on the frequency
+                    # where the probed node comes into phase with the source. That crossing is at
+                    # w_n for every damping, so the measurement does not assume the answer, and it
+                    # follows the drawing rather than repeating the values in the prompt.
+                    "check": r'''
+let lo = 100, hi = 1e6;
+for (let i = 0; i < 90; i++) { const m = Math.sqrt(lo * hi); if (c.phase(m) > 0) lo = m; else hi = m; }
+return Math.sqrt(lo * hi);
+''',
+                    "given": [
+                        {"label": "$L$", "value": "4.0 mH"},
+                        {"label": "$C$", "value": "100 nF"},
+                        {"label": "$R$", "value": "47 Ω"},
+                        {"label": "Source", "value": "1 V sinusoid, swept"},
+                    ],
+                    "aside": "One of the three values on the schematic does not appear in the answer, "
+                             "and it is there on purpose. Decide which before you start.",
+                    "answer": 7957.7,
+                    "tol": 25.0,
+                    "unit": "Hz",
+                    "hint": "$f_n = 1/(2\\pi\\sqrt{LC})$. Do $LC$ first and keep the exponents "
+                            "together: $4\\times10^{-3}$ times $100\\times10^{-9}$.",
+                    "wrong": "If you got 50000, that is $\\omega_n$ in radians per second and still "
+                             "wants dividing by $2\\pi$. If you got 33.9 kHz, the RC corner "
+                             "$1/(2\\pi RC)$ was used out of habit — that formula belongs to a "
+                             "circuit with no inductor in it, and here it is the inductor that "
+                             "decides. If you got 398 MHz, the square root was left out.",
+                    "why": r'''
+```
+LC       = 4e-3 x 100e-9   = 4e-10
+sqrt(LC) = 2e-5 s
+w_n      = 1/2e-5          = 50000 rad/s
+f_n      = 50000/(2 pi)    = 7957.7 Hz
+```
+
+The resistor is absent from every line of that, and it is absent for a reason worth
+holding on to: $R$ sets how *wide* the peak is and never where it is. Change the 47 Ω to
+470 Ω and this filter still peaks at 7957.7 Hz; it is merely ten times broader, and its
+$Q$ has fallen from $Z_0/R = 200/47 = 4.26$ to 0.426.
+
+Two sanity checks on the answer. At 7957.7 Hz the inductor's reactance is
+$\omega_n L = 50000 \times 0.004 = 200\ \Omega$ and the capacitor's is
+$1/(\omega_n C) = 1/(50000 \times 10^{-7}) = 200\ \Omega$ — equal, as they must be at the
+crossing, and both equal to $Z_0 = \sqrt{L/C} = \sqrt{4\times10^{-3}/10^{-7}} =
+\sqrt{4\times10^4} = 200\ \Omega$.
+
+And the placement matters. Probed across the *capacitor* this same circuit would peak
+slightly below $\omega_n$, at $\omega_n\sqrt{1-2\zeta^2}$, which module 4 worked through.
+Probed across the resistor the peak is at $\omega_n$ exactly, for every value of $R$,
+because the numerator and the denominator both reduce to $j2\zeta$ there. That is why the
+band-pass placement is the one an instrument uses to find a resonance.
+''',
+                },
+                {
+                    "title": "What \"half-power point\" means, in milliwatts",
+                    "minutes": 7,
+                    "brief": r'''
+The phrase "$-3$ dB point" is used so often that its meaning gets worn smooth. This
+question puts it back: the two edges of a band are the frequencies at which the power
+delivered to the load is exactly half what it is at the centre, and the $1/\sqrt2$ on the
+voltage axis is a consequence of that rather than a definition of it.
+
+Two steps. Find the power at the centre — which needs one fact about what the loop looks
+like there — and then halve it.
+''',
+                    "prompt": "The source is tuned to the upper of the two half-power frequencies. What average power does the resistor dissipate?",
+                    "note": "Answer in milliwatts. The source is 2.0 V in amplitude, not RMS.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 2},
+                            {"id": "p1", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "p2", "kind": "L", "x": 6, "y": 4, "rot": 0, "value": 0.02},
+                            {"id": "p3", "kind": "C", "x": 10, "y": 4, "rot": 0, "value": 5e-8},
+                            {"id": "p4", "kind": "R", "x": 13, "y": 6, "rot": 1, "value": 100},
+                            {"id": "p5", "kind": "GND", "x": 13, "y": 9},
+                            {"id": "p6", "kind": "OUT", "x": 15, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [7, 4], "b": [9, 4]},
+                            {"a": [11, 4], "b": [13, 4]},
+                            {"a": [13, 4], "b": [13, 5]},
+                            {"a": [13, 7], "b": [13, 9]},
+                            {"a": [13, 4], "b": [15, 4]},
+                        ],
+                    },
+                    # The upper edge is located by bisection on the measured response rather than
+                    # computed, and the power is then taken from the voltage the solver reports
+                    # there and the resistor actually on the canvas. Nothing in the prompt is
+                    # restated, so editing any component value moves the checked answer with it.
+                    "check": r'''
+const R = c.values('R')[0];
+let lo = 100, hi = 1e6;
+for (let i = 0; i < 90; i++) { const m = Math.sqrt(lo * hi); if (c.phase(m) > 0) lo = m; else hi = m; }
+const f0 = Math.sqrt(lo * hi);
+const half = c.gain(f0) / Math.SQRT2;
+lo = f0; hi = 1e7;
+for (let i = 0; i < 90; i++) { const m = Math.sqrt(lo * hi); if (c.gain(m) > half) lo = m; else hi = m; }
+const amp = c.gain(Math.sqrt(lo * hi));
+return 1000 * amp * amp / (2 * R);
+''',
+                    "given": [
+                        {"label": "$R$", "value": "100 Ω"},
+                        {"label": "$L$", "value": "20 mH"},
+                        {"label": "$C$", "value": "50 nF"},
+                        {"label": "Source", "value": "2.0 V amplitude, at $f_2$"},
+                    ],
+                    "aside": "You do not have to find $f_2$ itself. Work out the power at the centre, "
+                             "then take the phrase in the question literally.",
+                    "answer": 10.0,
+                    "tol": 0.15,
+                    "unit": "mW",
+                    "hint": "At the centre the inductor and capacitor cancel and the whole source sits "
+                            "across the resistor. For a sinusoid of amplitude $V$, "
+                            "$P = V^2/(2R)$.",
+                    "wrong": "If you got 20 mW, that is the power at the centre and the question asked "
+                             "for the edge. If you got 14.1 mW, the $1/\\sqrt2$ was applied to the "
+                             "power rather than to the voltage — it belongs on the voltage, and "
+                             "squaring it is what turns it into the half. If you got 40 mW, the 2.0 V "
+                             "was treated as RMS, which drops the factor of two in $V^2/2R$.",
+                    "why": r'''
+```
+at the centre     the L and C impedances are equal and opposite and sum to zero,
+                  so the source is across R alone:
+
+                  |V_R| = 2.000 V  (amplitude)
+                  P     = V^2/(2R) = 4/(2 x 100) = 0.0200 W = 20.0 mW
+
+at either edge    |V_R| = 2.000/sqrt(2) = 1.4142 V
+                  P     = 1.4142^2/(2 x 100) = 2/200 = 0.0100 W = 10.0 mW
+```
+
+Exactly half, and it has to be: power goes as the square of voltage, and
+$(1/\sqrt2)^2 = 1/2$. The $-3$ dB figure is the same statement in logarithms, since
+$10\log_{10}(1/2) = -3.01$ dB on a power ratio and $20\log_{10}(1/\sqrt2) = -3.01$ dB on
+a voltage ratio. They agree, which is the whole reason the decibel is defined with the
+two conventions it has.
+
+For interest, where the edges actually are, though the question did not need them:
+
+```
+Z_0  = sqrt(L/C) = sqrt(0.020/50e-9) = 632.46 ohm
+Q    = Z_0/R = 632.46/100 = 6.3246          zeta = 1/(2Q) = 0.079057
+f_n  = 1/(2 pi sqrt(LC)) = 5032.92 Hz
+f_2  = f_n (sqrt(1+zeta^2) + zeta) = 5446.51 Hz
+f_1  = f_n (sqrt(1+zeta^2) - zeta) = 4650.74 Hz
+BW   = 795.77 Hz  =  R/(2 pi L) = 100/0.125664
+```
+
+Note that the answer would have been the same at the *lower* edge, 4650.74 Hz. The two
+half-power frequencies are not symmetrically placed about the centre — the upper one is
+413.6 Hz above it and the lower one 382.2 Hz below — but the response is $1/\sqrt2$ at
+both, because the definition is about the response and not about the spacing.
+''',
+                },
+                {
+                    "title": "How long the filter rings after the signal stops",
+                    "minutes": 8,
+                    "brief": r'''
+The same circuit family, asked a question in the time domain. A selective filter is a
+slow filter, and this rung puts a number on the second half of that sentence.
+
+Drive the loop, then remove the drive. The stored energy has nowhere to go except the
+resistor, so the oscillation dies away under an envelope $e^{-t/\tau}$. Find $\tau$.
+''',
+                    "prompt": "The drive is switched off. How long does the ringing take to fall to $1/e$ of the amplitude it had?",
+                    "note": "Answer in microseconds, three significant figures.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                            {"id": "p1", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "p2", "kind": "C", "x": 6, "y": 4, "rot": 0, "value": 3.3e-8},
+                            {"id": "p3", "kind": "L", "x": 10, "y": 4, "rot": 0, "value": 0.015},
+                            {"id": "p4", "kind": "R", "x": 13, "y": 6, "rot": 1, "value": 47},
+                            {"id": "p5", "kind": "GND", "x": 13, "y": 9},
+                            {"id": "p6", "kind": "OUT", "x": 15, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [7, 4], "b": [9, 4]},
+                            {"a": [11, 4], "b": [13, 4]},
+                            {"a": [13, 4], "b": [13, 5]},
+                            {"a": [13, 7], "b": [13, 9]},
+                            {"a": [13, 4], "b": [15, 4]},
+                        ],
+                    },
+                    # A decay time is not a node voltage, so the check measures the thing the decay
+                    # time is equivalent to: the two half-power frequencies are found by bisection
+                    # on the drawn circuit's response, and tau = 1/(pi BW) converts the width that
+                    # was measured into the time it implies. No component value is repeated.
+                    "check": r'''
+let lo = 100, hi = 1e6;
+for (let i = 0; i < 90; i++) { const m = Math.sqrt(lo * hi); if (c.phase(m) > 0) lo = m; else hi = m; }
+const f0 = Math.sqrt(lo * hi);
+const half = c.gain(f0) / Math.SQRT2;
+let a = 1, b = f0;
+for (let i = 0; i < 90; i++) { const m = Math.sqrt(a * b); if (c.gain(m) < half) a = m; else b = m; }
+const f1 = Math.sqrt(a * b);
+a = f0; b = 1e7;
+for (let i = 0; i < 90; i++) { const m = Math.sqrt(a * b); if (c.gain(m) > half) a = m; else b = m; }
+const f2 = Math.sqrt(a * b);
+return 1e6 / (Math.PI * (f2 - f1));
+''',
+                    "given": [
+                        {"label": "$R$", "value": "47 Ω"},
+                        {"label": "$L$", "value": "15 mH"},
+                        {"label": "$C$", "value": "33 nF"},
+                        {"label": "Wanted", "value": "the $1/e$ time of the envelope"},
+                    ],
+                    "aside": "The capacitor decides what frequency the ringing happens at. It does not "
+                             "decide how long it lasts.",
+                    "answer": 638.3,
+                    "tol": 8.0,
+                    "unit": "µs",
+                    "hint": "The envelope goes as $e^{-\\zeta\\omega_n t}$, and for this loop "
+                            "$\\zeta\\omega_n = R/(2L)$ — the $\\sqrt{LC}$ in $\\omega_n$ cancels "
+                            "against the $\\sqrt{C/L}$ in $\\zeta$. So you never need $\\omega_n$.",
+                    "wrong": "If you got 160 µs, the expression came out as $L/(2R)$ instead of "
+                             "$2L/R$. If you got 2.01 ms, the ring-down was counted as $Q$ cycles "
+                             "rather than $Q/\\pi$ cycles; the $\\pi$ is not decoration. If you got "
+                             "1.55 µs, that is $RC$, the time constant of a circuit with no inductor "
+                             "in it.",
+                    "why": r'''
+```
+zeta w_n = R/(2L) = 47/(2 x 0.015) = 47/0.030 = 1566.7 nepers per second
+tau      = 1/1566.7                           = 638.3 us
+```
+
+Two lines, and neither of them contains the capacitor. Three independent cross-checks,
+all of which have to agree because they are the same fact written differently:
+
+```
+w_n = 1/sqrt(0.015 x 33e-9) = 1/sqrt(4.95e-10) = 44947 rad/s  ->  f_n = 7153.5 Hz
+Z_0 = sqrt(L/C) = sqrt(0.015/33e-9) = 674.20 ohm
+Q   = Z_0/R = 674.20/47 = 14.345
+
+  from Q and f_n:   tau = Q/(pi f_n) = 14.345/(pi x 7153.5)       = 638.3 us
+  from the width:   BW  = f_n/Q = 7153.5/14.345 = 498.69 Hz
+                    tau = 1/(pi BW) = 1/(pi x 498.69)             = 638.3 us
+  in cycles:        tau f_n = Q/pi = 14.345/3.1416               = 4.57 cycles
+```
+
+Four and a half cycles of ringing. At 7.15 kHz that is a barely visible flick on a scope
+and completely inaudible — but the arithmetic scales in a way that is worth internalising
+before it bites. Keep this $Q$ and move the filter down to 100 Hz, and $\tau$ becomes
+$14.345/(\pi \times 100) = 45.7$ ms: the same 4.57 cycles, now taking a twentieth of a
+second. **Ring-down measured in cycles depends only on $Q$; ring-down measured in seconds
+also depends on where you put the filter.** A sharp filter at a low frequency is the
+combination that produces audible ringing, which is why a notch at 50 Hz has to be gentle
+and a notch at 5 MHz can be brutal.
+''',
+                },
+                {
+                    "title": "The current that goes round and round",
+                    "minutes": 10,
+                    "brief": r'''
+The hard rung, and the one that catches people who have learned the series circuit well.
+Three changes at once: the components are in parallel rather than in series, the source is
+a current source rather than a voltage source, and the quantity asked for is not a node
+voltage but a branch current.
+
+Everything you need is in the module, but one of the formulas is upside down from the one
+you have been using.
+''',
+                    "prompt": "The source delivers 1.00 mA at the tank's resonant frequency. What is the amplitude of the current in the inductor?",
+                    "note": "Answer in milliamps, three significant figures.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "i0", "kind": "I", "x": 3, "y": 6, "rot": 1, "value": 0.001},
+                            {"id": "g0", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "r0", "kind": "R", "x": 7, "y": 6, "rot": 1, "value": 10000},
+                            {"id": "g1", "kind": "GND", "x": 7, "y": 9},
+                            {"id": "l0", "kind": "L", "x": 11, "y": 6, "rot": 1, "value": 1e-4},
+                            {"id": "g2", "kind": "GND", "x": 11, "y": 9},
+                            {"id": "c0", "kind": "C", "x": 15, "y": 6, "rot": 1, "value": 1e-9},
+                            {"id": "g3", "kind": "GND", "x": 15, "y": 9},
+                            {"id": "o0", "kind": "OUT", "x": 17, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [7, 4]},
+                            {"a": [7, 4], "b": [7, 5]},
+                            {"a": [7, 4], "b": [11, 4]},
+                            {"a": [11, 4], "b": [11, 5]},
+                            {"a": [11, 4], "b": [15, 4]},
+                            {"a": [15, 4], "b": [15, 5]},
+                            {"a": [15, 4], "b": [17, 4]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [7, 7], "b": [7, 9]},
+                            {"a": [11, 7], "b": [11, 9]},
+                            {"a": [15, 7], "b": [15, 9]},
+                        ],
+                    },
+                    # A branch current is not something the AC solver reports, so the check takes
+                    # the node voltage it does report and divides by the inductor's own reactance
+                    # at the resonance the drawn L and C set between them. Every number comes off
+                    # the canvas; nothing is copied from the prompt.
+                    "check": r'''
+const L = c.values('L')[0];
+const C = c.values('C')[0];
+const f0 = 1 / (2 * Math.PI * Math.sqrt(L * C));
+return 1000 * c.gain(f0) / (2 * Math.PI * f0 * L);
+''',
+                    "given": [
+                        {"label": "Source", "value": "1.00 mA amplitude, at $f_n$"},
+                        {"label": "$R$", "value": "10 kΩ"},
+                        {"label": "$L$", "value": "100 µH"},
+                        {"label": "$C$", "value": "1 nF"},
+                    ],
+                    "aside": "If the answer comes out larger than the source current, nothing has gone "
+                             "wrong. Kirchhoff's current law holds at every instant — look at what the "
+                             "capacitor is doing while the inductor does this.",
+                    "answer": 31.62,
+                    "tol": 0.4,
+                    "unit": "mA",
+                    "hint": "At resonance the inductive and capacitive susceptances cancel, so the "
+                            "source sees $R$ on its own and the node sits at $IR$. Then divide that "
+                            "voltage by the inductor's reactance $\\omega_n L$.",
+                    "wrong": "If you got 1.00 mA, the tank was treated as though the source current had "
+                             "to pass through each branch in turn. If you got 199 mA, the reactance "
+                             "was computed as $f_n L$ instead of $\\omega_n L$ — a factor of $2\\pi$. "
+                             "If you got 0.0316 mA, $Q$ was taken in its series form $Z_0/R$; a "
+                             "parallel tank uses $R/Z_0$, and the two are reciprocals.",
+                    "why": r'''
+```
+w_n   = 1/sqrt(LC) = 1/sqrt(100e-6 x 1e-9) = 1/sqrt(1e-13) = 3.1623e6 rad/s
+f_n   = 3.1623e6/(2 pi)                                    = 503.29 kHz
+
+at w_n the two susceptances cancel exactly:
+      w_n C     = 3.1623e6 x 1e-9    = 3.1623e-3 S     (capacitive, +j)
+      1/(w_n L) = 1/(3.1623e6 x 1e-4) = 3.1623e-3 S    (inductive,  -j)
+
+so the admittance is just 1/R and the node voltage is
+
+      V = I R = 1.00 mA x 10 kohm                          = 10.0 V
+
+the inductor's reactance there is
+
+      Z_0 = w_n L = 3.1623e6 x 100e-6 = 316.23 ohm     ( = sqrt(L/C) )
+
+      |I_L| = V/Z_0 = 10.0/316.23                          = 31.62 mA
+```
+
+Thirty-one times the current the source is supplying, in a circuit containing nothing that
+can amplify. The capacitor is carrying the same 31.62 mA in the opposite direction at
+every instant, so the two branch currents sum to zero and the source never sees them: all
+it has to supply is the 1.00 mA that the resistor takes. The energy is not being created,
+it is circulating, and the source only tops up what the resistor drains each cycle.
+
+This is the exact dual of the series circuit's voltage magnification. There, one current
+flowed through everything and the two reactive elements developed $Q$ times the source
+*voltage* while cancelling as phasors. Here, one voltage sits across everything and the
+two reactive elements carry $Q$ times the source *current* while cancelling as phasors.
+And $Q$ is 31.62 either way of computing it:
+
+```
+Q = R/Z_0            = 10000/316.23   = 31.62
+Q = f_n/BW           = 503292/15915   = 31.62      (BW = 1/(2 pi R C) = 15.92 kHz)
+Q = |I_L|/|I_source| = 31.62/1.00     = 31.62
+```
+
+The practical bite is the last one. A coil in a tank has to be rated for the circulating
+current, not for the supply current, and its copper loss is $I_L^2R_s$ with the
+circulating figure — which is why the losses in a high-$Q$ tank are so much larger than a
+glance at the supply would suggest, and why the coil is the part that gets warm.
+
+Note the inversion once more, because it is the whole difficulty of this question:
+$Q = R/Z_0$ here, where the series loop had $Q = Z_0/R$. Halving this 10 kΩ resistor
+halves the $Q$; halving the resistor in a series loop doubles it. Same three components,
+same $\omega_n$, opposite dependence.
+''',
+                },
+            ],
             "derive": {
                 "title": "Where the bandwidth comes from, and why $Q = 1/2\\zeta$",
                 "minutes": 14,
@@ -8427,6 +9703,609 @@ $R$, an $L$ or a $C$ to substitute.
                 "**DC gain** is what a constant input settles to. Put $x[n]=1$ into $y[n]=a\\,y[n-1]+x[n]$ and let $y[n]=y[n-1]=G$: then $G = 1/(1-a)$. It must equal $\\sum_n h[n] = \\sum_n a^n$, and it does — the gain at zero frequency is the sum of the impulse response, which is module 1's statement about $\\sum|h|$ with the absolute value removed.",
                 "The trade. An FIR of length $N$ costs $N$ multiplies per output sample, stores nothing, and cannot possibly be unstable. An IIR reaches the same sharpness with a handful of coefficients but carries state, and a coefficient rounded the wrong way can move a root from inside the circle to outside it — a failure mode that has no FIR equivalent and that fixed-point arithmetic makes real.",
                 "Every simulation of an analogue circuit is one of these. Discretise $\\tau\\dot y + y = x$ at step $T$ and you get $y[n] = \\frac{\\tau}{\\tau+T}y[n-1] + \\frac{T}{\\tau+T}x[n]$: an IIR filter with a root at $\\tau/(\\tau+T)$, always inside the unit circle, and a DC gain of exactly 1.",
+            ],
+            "read": [
+                {
+                    "title": "The rule that makes the next sample",
+                    "minutes": 11,
+                    "body": r'''
+A thermocouple on a workbench, read once a millisecond, does not hand you a clean number.
+It hands you a number that wanders half a degree either side of the truth, and if you
+print it to two decimal places the last digit is noise. The fix that gets written, in
+every language, by everyone, is one line inside the sampling loop:
+
+```
+smoothed = 0.9 * smoothed + 0.1 * reading
+```
+
+That line is the whole subject of this module. It is not an approximation to a filter and
+it is not a way of implementing one. It **is** a filter, a complete linear time-invariant
+system, and everything it will ever do to every signal is already fixed by the two numbers
+written in it.
+
+Module 1 came at systems from the other end. It began with the impulse response $h$ — a
+list of numbers you were somehow handed — and showed that convolving with it predicts the
+response to anything. That is the right theory and the wrong starting point for practice,
+because nobody hands you $h$. Nobody has ever tapped a piece of code with an impulse and
+written the answer down before using it. What you are handed is a rule, and the rule is
+the thing that has to be understood first.
+
+## The general form, and what the numbers in it mean
+
+Every rule of this kind is a **difference equation**:
+
+$$y[n] = \sum_{k \ge 0} b_k\,x[n-k] \;+\; \sum_{k \ge 1} a_k\,y[n-k]$$
+
+Two lists of coefficients. The $b_k$ weigh input samples — the one that has just arrived
+and however many previous ones the filter has bothered to keep. The $a_k$ weigh output
+samples the filter produced itself, on earlier passes through the same line of code. Note
+where the sums start: $b$ from zero, because the current input is available; $a$ from one,
+because the current output is what is being computed and cannot appear on both sides.
+
+Everything the filter remembers lives in those stored samples, and they are collectively
+its **state**. The smoothing line above holds exactly one number of state — the previous
+`smoothed` — and that single number is the entire memory the filter has of an arbitrarily
+long history.
+
+One warning about signs before any arithmetic happens. Plenty of textbooks and most
+filter-design libraries move the feedback terms to the left-hand side and write
+$\sum_k a_k y[n-k] = \sum_k b_k x[n-k]$ with $a_0 = 1$, which flips the sign of every
+$a_k$ relative to the form above. Neither convention is wrong and both are common. The
+only fatal thing is mixing them, so check which one a set of coefficients was printed in
+before you feed it into a loop that assumes the other.
+
+## Two families, and the difference is one zero
+
+If every $a_k$ is zero, the output depends on a finite window of the input and on nothing
+the filter has produced itself. That is an **FIR** filter — finite impulse response — and
+its impulse response is its coefficient list, read straight off. The proof is one line:
+put $x = \{1, 0, 0, \dots\}$ into the sum and only the term $b_n x[0]$ survives, so
+$h[n] = b_n$. After the last coefficient there is nothing left to multiply and the output
+is zero forever.
+
+If any $a_k$ is not zero, output feeds back into output and the response can never
+finish. That is an **IIR** filter — infinite impulse response. Its coefficient list is
+short and its impulse response is not, and the gap between those two facts is the entire
+economic argument for feedback.
+
+## Worked example: three taps, run by hand
+
+Take a weighted average of the last three readings, weighted towards the newest:
+
+$$y[n] = 0.5\,x[n] + 0.3\,x[n-1] + 0.2\,x[n-2]$$
+
+and feed it a thermocouple sitting at 20 °C that steps to 26 °C at $n = 2$. The filter
+starts from rest, so $x[-1]$ and $x[-2]$ count as zero.
+
+```
+n     x[n]     y[n] = 0.5 x[n] + 0.3 x[n-1] + 0.2 x[n-2]
+--    ----     -----------------------------------------
+0     20       0.5(20) + 0.3(0)  + 0.2(0)   = 10.0
+1     20       0.5(20) + 0.3(20) + 0.2(0)   = 16.0
+2     26       0.5(26) + 0.3(20) + 0.2(20)  = 13.0 + 6.0 + 4.0 = 23.0
+3     26       0.5(26) + 0.3(26) + 0.2(20)  = 13.0 + 7.8 + 4.0 = 24.8
+4     26       0.5(26) + 0.3(26) + 0.2(26)  = 26.0
+5     26       0.5(26) + 0.3(26) + 0.2(26)  = 26.0
+```
+
+Three things in that table are worth more than the arithmetic.
+
+The first two outputs are wrong, and they are wrong because of the rest condition rather
+than because of the filter. At $n = 0$ the average includes two samples of nothing, so a
+steady 20 °C reads as 10 °C. Every filter with memory does this, every real instrument
+either discards those samples or primes its state with the first reading, and forgetting
+to is the commonest reason a plotted trace starts with a spike that is not in the signal.
+
+The filter settles **exactly**, three samples after the step, and stays settled. That is
+the FIR property: once the last old sample has fallen out of the window, no trace of the
+past remains anywhere in the machine.
+
+And it settles at 26.0, not near it. The DC gain of an FIR is $\sum_k b_k$, here
+$0.5 + 0.3 + 0.2 = 1$, so a constant passes through untouched. Coefficients that do not
+sum to 1 give a smoother with a built-in scale error, which is a mistake you find by
+staring at a plot rather than at the code.
+
+## Worked example: one tap of feedback
+
+Now the line from the top of this page, written properly:
+
+$$y[n] = 0.8\,y[n-1] + 0.2\,x[n]$$
+
+Tap it with an impulse. From rest, $y[-1] = 0$:
+
+```
+n     x[n]    y[n] = 0.8 y[n-1] + 0.2 x[n]
+--    ----    ----------------------------
+0     1       0.8(0)      + 0.2(1) = 0.2000
+1     0       0.8(0.2)    + 0      = 0.1600
+2     0       0.8(0.16)   + 0      = 0.1280
+3     0       0.8(0.128)  + 0      = 0.1024
+4     0       0.8(0.1024) + 0      = 0.08192
+```
+
+The pattern is plain: $h[n] = 0.2 \times 0.8^n$. Two coefficients have produced an
+infinitely long impulse response, and it never reaches zero — at $n = 40$ it is still
+$0.2 \times 0.8^{40} \approx 2.7 \times 10^{-5}$, small but not absent.
+
+Feed the same filter a step of 1 instead:
+
+```
+n     y[n] = 0.8 y[n-1] + 0.2
+--    ----------------------------
+0     0.2(1)          = 0.20000
+1     0.8(0.2)   +0.2 = 0.36000
+2     0.8(0.36)  +0.2 = 0.48800
+3     0.8(0.488) +0.2 = 0.59040
+4     0.8(0.5904)+0.2 = 0.67232
+```
+
+which is $y[n] = 1 - 0.8^{n+1}$ — check it at $n = 3$: $1 - 0.8^4 = 1 - 0.4096 = 0.5904$.
+It approaches 1 and never arrives. Ask when it first passes 95% and the answer is a
+logarithm rather than a count: $0.8^{n+1} \le 0.05$ needs $n + 1 \ge \ln 0.05/\ln 0.8 =
+13.43$, so $n = 13$ — the fourteenth sample, where the FIR above was finished at the
+fourth.
+
+## The mistake: "it averages the last ten readings"
+
+Look at `0.9 * smoothed + 0.1 * reading` and the number 10 suggests itself immediately.
+It is nearly right and it is wrong in both directions at once, and it is worth taking
+apart because the same reasoning gets applied to every recursive filter anybody writes.
+
+The weight this filter puts on the reading from $k$ samples ago is $0.1 \times 0.9^k$:
+0.100, 0.090, 0.081, 0.0729, 0.0656, and so on. Those weights do not stop after ten
+terms. Add the first ten and you get 0.651 — barely two thirds of the total, so a third
+of the answer is coming from readings *older* than the ten a plain average would have
+used. The response is still at 1% of its peak at $n = 44$.
+
+Yet the filter is also *faster* than a ten-sample average in the sense that matters for
+delay. The mean delay of a set of weights is $\sum_n n\,h[n] / \sum_n h[n]$, which for
+$h[n] = (1-a)a^n$ works out to $a/(1-a) = 9$ samples, against $(N-1)/2 = 4.5$ samples for
+a ten-point boxcar. So it lags twice as much as the average it is being compared with,
+while reaching four times further back. "Averages the last ten" gets both halves wrong,
+and it is tempting because ten is the only round number in sight.
+
+## Where this description stops holding
+
+The recursion is an LTI system **only under initial rest**. Start it with a non-zero
+stored value and the output gains a component that came from the state rather than from
+the input; double the input and that component does not double, so superposition fails.
+It is exactly the failure of the $y = 3x + 1$ amplifier in module 1, arriving from a
+different direction, and the standard repair is the same: work with deviations from the
+resting state, which are genuinely linear.
+
+Three more places the description quietly fails, all of them real in fixed-point code.
+Coefficients that change while the filter runs — a smoothing constant on a slider —
+break time invariance, and the honest replacement is a state-space model with
+time-varying coefficients. An accumulator that saturates breaks linearity at exactly the
+moment the signal is largest, which is the moment you were relying on the analysis. And
+rounding the stored state to a fixed number of bits can leave a filter producing a
+non-zero output from an input of zero: a **limit cycle**, an oscillation of one or two
+least-significant bits
+that the linear theory says cannot exist, because the linear theory does not contain the
+rounding. None of these makes the analysis useless. They tell you the analysis describes
+the filter you designed, and the code contains something slightly else.
+''',
+                },
+                {
+                    "title": "Where the response comes from: two numbers on a plane",
+                    "minutes": 11,
+                    "body": r'''
+Running a recursion sample by sample tells you what it does and nothing about why. Change
+one coefficient and you have to run it again. What you want instead is a way of looking at
+the coefficients and saying, before anything executes, how fast this thing decays and how
+fast it oscillates. That is what this unit builds, and it costs one guess and some
+algebra.
+
+## Take the input away
+
+Once the impulse has passed, the input is zero forever and the recursion is left talking
+to itself:
+
+$$y[n] = a_1\,y[n-1] + a_2\,y[n-2]$$
+
+Any sequence obeying that is a candidate for the tail of the impulse response. The guess
+that works — and it works for the same reason $e^{st}$ works on a differential equation —
+is a geometric sequence, $y[n] = \lambda^n$. Substitute it and every term carries a common
+factor:
+
+$$\lambda^n = a_1\lambda^{n-1} + a_2\lambda^{n-2}$$
+
+Divide through by $\lambda^{n-2}$, which is legal for any $\lambda \ne 0$, and the
+sequence disappears completely:
+
+$$\lambda^2 - a_1\lambda - a_2 = 0$$
+
+That is the **characteristic equation**. It has nothing to do with $n$ any more: it is an
+ordinary quadratic in one unknown, and its two roots give the two geometric sequences
+$\lambda_1^n$ and $\lambda_2^n$ that the recursion can produce on its own. Everything
+else the recursion does after the input stops is some combination
+$A\lambda_1^n + B\lambda_2^n$ of those two, with $A$ and $B$ fixed by the first two
+samples.
+
+The minus signs are the sign convention of the previous unit coming back to collect. The
+recursion here *adds* $a_1 y[n-1]$, so the characteristic polynomial *subtracts*
+$a_1\lambda$. Write the polynomial as $\lambda^2 + a_1\lambda + a_2$ out of habit and every
+root comes out with the wrong sign, which turns a decaying response into an alternating
+one and is invisible in the magnitude.
+
+## Worked example: two real roots
+
+$$y[n] = 0.9\,y[n-1] - 0.18\,y[n-2] + x[n]$$
+
+so $a_1 = 0.9$, $a_2 = -0.18$, and the characteristic equation is
+
+```
+lambda^2 - 0.9 lambda + 0.18 = 0
+
+discriminant = 0.81 - 4(0.18) = 0.81 - 0.72 = 0.09      sqrt = 0.3
+lambda = (0.9 +- 0.3)/2  =  0.6  and  0.3
+```
+
+Two real roots, both positive, both inside 1. So $h[n] = A(0.6)^n + B(0.3)^n$, and the
+constants come from running the recursion for exactly two samples. From rest,
+$h[0] = 1$ (the impulse arrives, nothing is stored) and $h[1] = 0.9(1) - 0.18(0) = 0.9$.
+That gives two equations:
+
+```
+n = 0:   A + B          = 1
+n = 1:   0.6 A + 0.3 B  = 0.9
+
+substitute B = 1 - A:   0.6A + 0.3 - 0.3A = 0.9
+                        0.3A              = 0.6
+                        A = 2,  B = -1
+```
+
+so $h[n] = 2(0.6)^n - (0.3)^n$. Test it against the recursion at $n = 2$, which is the
+only honest way to know it is right:
+
+```
+closed form:   2(0.36) - 0.09            = 0.72 - 0.09 = 0.63
+recursion:     0.9(0.9) - 0.18(1)        = 0.81 - 0.18 = 0.63     agree
+
+n = 3
+closed form:   2(0.216) - 0.027          = 0.432 - 0.027 = 0.405
+recursion:     0.9(0.63) - 0.18(0.9)     = 0.567 - 0.162 = 0.405  agree
+```
+
+The 0.3 term dies fast enough to be irrelevant within half a dozen samples, leaving a
+plain $2(0.6)^n$ decay. That is normal: **the root of largest magnitude decides the tail**,
+and every other root is a startup detail.
+
+The DC gain gives a check on all of it. Directly from the coefficients,
+$G = 1/(1 - a_1 - a_2) = 1/(1 - 0.9 + 0.18) = 1/0.28 = 3.5714$. From the closed form, the
+gain at zero frequency is $\sum_n h[n]$, and each geometric term sums on its own:
+
+```
+sum h = 2/(1 - 0.6) - 1/(1 - 0.3) = 5 - 1.42857 = 3.57143
+```
+
+The same number, reached without either route knowing about the other.
+
+## Worked example: a complex pair, which is the interesting case
+
+Nothing forces the discriminant to be positive. Keep $a_1 = 0.9$ from the previous
+example and change nothing but $a_2$, from $-0.18$ to $-0.81$:
+
+$$y[n] = 0.9\,y[n-1] - 0.81\,y[n-2] + x[n]$$
+
+```
+discriminant = 0.81 - 4(0.81) = 0.81 - 3.24 = -2.43        negative
+```
+
+so the roots are a conjugate pair. Write them as $\lambda = re^{\pm j\theta}$. Their
+product is $r^2$ and, by the quadratic, that product is $-a_2$; their sum is $2r\cos\theta$
+and that sum is $a_1$. Two facts, and they read straight off the coefficients with no
+square root of a negative number anywhere:
+
+$$r = \sqrt{-a_2} = \sqrt{0.81} = 0.9 \qquad
+\cos\theta = \frac{a_1}{2r} = \frac{0.9}{1.8} = 0.5 \;\Rightarrow\; \theta = \frac{\pi}{3}$$
+
+A complex root does not mean a complex response — the two are conjugates, so their
+contributions add to something real. Combining them gives the standard form
+
+$$h[n] = r^n\,\frac{\sin\bigl((n+1)\theta\bigr)}{\sin\theta}$$
+
+which for $\theta = \pi/3$ is $0.9^n \times \frac{2}{\sqrt3}\sin\bigl((n+1)\pi/3\bigr)$.
+Tabulated against the recursion, and every entry is exact:
+
+```
+n    from the recursion                     from r^n sin((n+1)th)/sin(th)
+--   ---------------------------------      -----------------------------------------
+0    the impulse alone      =  1.0          (2/sqrt3) sin(pi/3)            =  1.0
+1    0.9(1) - 0.81(0)       =  0.9          0.90000 (2/sqrt3) sin(2pi/3)   =  0.9
+2    0.9(0.9) - 0.81(1)     =  0.0          0.81000 (2/sqrt3) sin(pi)      =  0.0
+3    0.9(0) - 0.81(0.9)     = -0.729        0.72900 (2/sqrt3) sin(4pi/3)   = -0.729
+4    0.9(-0.729) - 0.81(0)  = -0.6561       0.65610 (2/sqrt3) sin(5pi/3)   = -0.6561
+5    0.9(-0.6561)
+       - 0.81(-0.729)       =  0.0          0.59049 (2/sqrt3) sin(2pi)     =  0.0
+6    0.9(0) - 0.81(-0.6561) =  0.531441     0.531441 (2/sqrt3) sin(7pi/3)  =  0.531441
+```
+
+Two independent numbers control two independent behaviours. The angle $\theta = \pi/3$
+gives $2\pi/\theta = 6$ samples per cycle, and that is why the response passes through
+zero at $n = 2$, $n = 5$, $n = 8$ and every third sample after. The radius $r = 0.9$
+shrinks the envelope by 10% per sample — the magnitudes go 1, 0.9, 0.729, 0.6561,
+0.531441, each of them $0.9^n$ — and has no effect whatever on where those zeros fall.
+Push $r$ to 0.99 and the same oscillation rings ten times longer at the same pitch;
+change $\theta$ and the pitch moves while the ring-down time stays put.
+
+The DC gain check works here too: $1/(1 - 0.9 + 0.81) = 1/0.91 = 1.0989$, and summing
+the impulse response above out to three thousand samples gives 1.0989. A response that
+spends as much time negative as positive has a modest DC gain, while its worst-case gain
+$\sum_n|h[n]|$ is 7.011, some 6.4 times larger: at DC the negative lobes cancel most of the
+positive ones, and for the input that maximises the output nothing cancels at all. The two
+sums are equal only when $h$ never changes sign.
+
+$\theta$ is in **radians per sample**, which is the unit that catches people out. A cycle
+needs at least two samples, so the largest useful $\theta$ is $\pi$ — one sign change per
+sample. There is nothing above it, and that is module 3's Nyquist limit arriving from a
+quadratic rather than from a sampler.
+
+## Stability is a radius, and that is the whole of it
+
+$h$ is built from terms $\lambda^n$. A geometric series $\sum_n |\lambda|^n$ converges when
+$|\lambda| < 1$ and diverges when $|\lambda| \ge 1$, with no middle ground, so:
+
+* every root strictly inside the unit circle — $h$ is absolutely summable, the system is
+  stable, and bounded inputs give bounded outputs;
+* any root exactly on the circle — the response neither grows nor decays. Marginally
+  stable: it rings forever, and a sinusoid at the root's own angle drives it without limit;
+* any root outside — every sample larger than the last, and no input is needed to see it.
+
+Nothing gradual happens at the boundary. A radius of 0.99 gives a response down to 1% of
+its peak after $\ln(0.01)/\ln(0.99) = 458$ samples; 1.01 gives one that has grown 2.70-fold
+after a hundred samples and by $10^{43}$ after ten thousand, which at 48 kHz is a fifth of
+a second. The whole of stability, for these systems, is which side of that line the roots
+fall on — and it is answered from the coefficients, before $h$ has been computed at all.
+Module 1 asked the same question of $h$ itself, which required having $h$ first.
+
+## Where the method stops
+
+**Repeated roots.** If the discriminant is exactly zero, $\lambda_1 = \lambda_2$ and
+$A\lambda^n + B\lambda^n$ is really one constant, not two — not enough freedom to match
+both starting samples. The missing second solution is $n\lambda^n$, and the general form
+becomes $(A + Bn)\lambda^n$. It still decays whenever $|\lambda| < 1$, because the
+geometric factor beats the linear one, so stability is unaffected; only the shape near the
+start changes. In practice exact repetition never survives finite-precision coefficients,
+and this case matters more as a boundary than as a design.
+
+**The $b$ coefficients are not here at all.** Everything above used only the $a_k$. The
+feedforward coefficients set $h[0]$, $h[1]$ and so on — the initial conditions the tail is
+launched from, and the zeros of the response — but they cannot move a root and so they
+cannot make a stable filter unstable or the reverse. That is why a filter is stabilised by
+changing its feedback and equalised by changing its feed-forward.
+
+**Constant coefficients.** The substitution $y[n] = \lambda^n$ needed every coefficient to
+be the same at every $n$. A recursion whose coefficients are updated as it runs — an
+adaptive filter, a gain being tracked — has no characteristic equation, and its stability
+is a genuinely harder question that Lyapunov arguments rather than quadratics answer.
+''',
+                },
+                {
+                    "title": "What the recursion does to a sinusoid",
+                    "minutes": 11,
+                    "body": r'''
+The roots tell you how a recursion behaves when it is left alone. They do not tell you
+what it does to a signal that keeps arriving, which is the question anyone reaches for a
+filter to answer. For that, go back to module 4's one useful input.
+
+## The eigenfunction argument, one line shorter than last time
+
+Module 4 established that a complex exponential is the one input an LTI system cannot
+change the shape of: it comes out as the same exponential, scaled by a complex number. In
+discrete time the exponential is $x[n] = e^{j\omega n}$, and a delay of $k$ samples does
+something to it that a delay does to nothing else:
+
+$$x[n-k] = e^{j\omega(n-k)} = e^{-j\omega k}\,e^{j\omega n} = e^{-j\omega k}\,x[n]$$
+
+A shift in time has become multiplication by a constant. So substitute $x[n] =
+e^{j\omega n}$ and $y[n] = H\,e^{j\omega n}$ into the difference equation, and the whole
+of $e^{j\omega n}$ divides out:
+
+$$H = \sum_k b_k e^{-j\omega k} + H\sum_{k\ge1} a_k e^{-j\omega k}
+\qquad\Longrightarrow\qquad
+H(\omega) = \frac{\displaystyle\sum_{k\ge0} b_k e^{-j\omega k}}
+                 {\displaystyle 1 - \sum_{k\ge1} a_k e^{-j\omega k}}$$
+
+Numerator from the feedforward coefficients, denominator from the feedback ones, and the
+whole frequency response of the filter read off the code without running it.
+
+Two properties of $\omega$ before using it. It is in **radians per sample**, so a physical
+frequency only exists once a sample rate is named: $\omega = 2\pi f/f_s$. And $H(\omega)$
+repeats every $2\pi$, because $e^{-j\omega k}$ does — so the entire behaviour of the
+filter lives in $0 \le \omega \le \pi$, and $\pi$ is Nyquist. There is no "above Nyquist"
+to plot.
+
+## Worked example: what a four-point average actually does
+
+$$y[n] = \tfrac14\bigl(x[n] + x[n-1] + x[n-2] + x[n-3]\bigr)$$
+
+No feedback, so the denominator is 1 and
+
+$$H(\omega) = \tfrac14\left(1 + e^{-j\omega} + e^{-j2\omega} + e^{-j3\omega}\right)$$
+
+At $\omega = 0$ the four terms are all 1 and $H = 1$: constants pass untouched, as an
+average of anything should. Now try $\omega = \pi/2$, which is a sinusoid at exactly four
+samples per cycle:
+
+```
+1 + e^{-j pi/2} + e^{-j pi} + e^{-j 3pi/2}
+  = 1    +   (-j)   +   (-1)  +   (+j)     = 0
+```
+
+Exactly zero. Not small — zero, for every amplitude and every phase. The picture is
+worth more than the algebra: four evenly spaced samples of one cycle of a sinusoid are
+two positives and their two exact negatives, and a sum that pairs them cancels. Any
+periodic component whose period divides the window length is annihilated by an average
+over that window, and that is why a four-point average at a sample rate of 8 kHz has a
+hole at 2 kHz — and another at 4 kHz, where $\sin 2\omega$ vanishes again.
+
+Between the nulls it is a gentle low-pass. Summing the geometric series gives the compact
+form $|H(\omega)| = \left|\sin(2\omega)/\bigl(4\sin(\omega/2)\bigr)\right|$, and at
+$\omega = \pi/4$:
+
+```
+|H| = sin(pi/2) / (4 sin(pi/8)) = 1 / (4 x 0.382683) = 1/1.530734 = 0.6533
+                                                     = -3.70 dB
+```
+
+The half-power point, where $|H|$ reaches $0.7071$, is at a slightly lower frequency
+still: $\omega = 0.7153$ rad/sample, which at 8 kHz is 911 Hz. So a "four-point average"
+is a filter with a 911 Hz corner and a notch at
+2 kHz — a description nothing about the phrase "moving average" suggests, and the reason
+these get used by accident to remove a mains hum they happen to be centred on, or to
+destroy a tone they happen to be centred on.
+
+## Worked example: the one-pole smoother, and its corner in hertz
+
+$$y[n] = a\,y[n-1] + (1-a)\,x[n] \qquad\Longrightarrow\qquad
+H(\omega) = \frac{1-a}{1 - a e^{-j\omega}}$$
+
+Take $a = 0.8$. At $\omega = 0$ the denominator is $1 - 0.8 = 0.2$ and $H = 0.2/0.2 = 1$,
+so the DC gain is 1 — which it had to be, since $\sum_n h[n] = \sum_n 0.2(0.8)^n =
+0.2/0.2$. At $\omega = \pi$, $e^{-j\pi} = -1$:
+
+```
+|H(pi)| = 0.2 / (1 + 0.8) = 0.2/1.8 = 0.1111  =  -19.08 dB
+```
+
+so the fastest thing the sequence can carry is attenuated by a factor of nine, and no
+more. A one-pole filter is a gentle instrument; if you need 40 dB at Nyquist you need
+more than one pole, whatever $a$ is set to.
+
+For the corner, work with the squared magnitude, which avoids square roots until the end:
+
+```
+|H|^2 = (1-a)^2 / |1 - a e^{-jw}|^2
+      = (1-a)^2 / (1 - 2a cos w + a^2)
+
+set equal to 1/2 (half power), with (1-a)^2 = 0.04 and a^2 = 0.64:
+
+      0.04 / (1.64 - 1.6 cos w) = 0.5
+      1.64 - 1.6 cos w          = 0.08
+      cos w                     = 1.56/1.6 = 0.975
+      w_c                       = 0.2241 rad/sample
+```
+
+Doing that in symbols instead of numbers gives a formula worth keeping:
+
+$$\cos\omega_c = 1 - \frac{(1-a)^2}{2a}$$
+
+and for $a$ close to 1 the small-angle form $\omega_c \approx (1-a)/\sqrt{a}$ is accurate
+to better than a percent — here it gives 0.2236 against the exact 0.2241.
+
+Only now does a sample rate enter. At $f_s = 8$ kHz,
+
+```
+f_c = w_c f_s / 2pi = 0.2241 x 8000 / 6.28319 = 285.3 Hz
+```
+
+and at 48 kHz the *same coefficient* puts the corner at 1712 Hz. The filter has no
+frequency of its own; it has an $\omega$, and the converter supplies the hertz. Changing
+the sample rate of a system without rescaling its filter coefficients moves every corner
+in it, which is a bug that survives testing because nothing crashes.
+
+## Reading the response off the roots, with no algebra at all
+
+There is a shortcut that turns the two previous calculations into something you can do by
+looking. Write the denominator of $H$ in terms of its roots. For a second-order section
+the denominator $1 - a_1e^{-j\omega} - a_2e^{-j2\omega}$ factors as
+$(1 - \lambda_1e^{-j\omega})(1 - \lambda_2e^{-j\omega})$, and multiplying through by
+$e^{j2\omega}$, which has magnitude 1 and so changes nothing:
+
+$$\bigl|H(\omega)\bigr| = \frac{b_0}{\bigl|e^{j\omega} - \lambda_1\bigr|\;\bigl|e^{j\omega} - \lambda_2\bigr|}$$
+
+Each factor is the **distance on the complex plane** from the point $e^{j\omega}$ — which
+walks anticlockwise round the unit circle as the frequency rises — to one of the roots.
+The gain at any frequency is one over the product of those distances. Walk the circle,
+watch the distances, and you have the magnitude response without evaluating anything.
+
+Try it on the one-pole smoother, whose single root sits at 0.8 on the real axis. At
+$\omega = 0$ the walking point is at $+1$ and the distance is $1 - 0.8 = 0.2$. At
+$\omega = \pi$ it is at $-1$ and the distance is 1.8. The gain has fallen by 1.8/0.2 = 9,
+which is the $-19.08$ dB computed the long way above, obtained here by subtracting two
+numbers.
+
+Now the resonator of the previous unit, roots at $0.9e^{\pm j\pi/3}$:
+
+```
+w = 0:      distance to each root = |1 - 0.9 e^{+-j pi/3}| = 0.95394
+            product = 0.91,        |H| = 1/0.91   = 1.0989
+
+w = pi/3:   distance to the near root  = 1 - 0.9  = 0.1
+            distance to the far  root  = 1.64621
+            product = 0.16462,    |H| = 1/0.16462 = 6.0746
+
+w = pi:     product = 2.71,       |H| = 1/2.71    = 0.3690
+```
+
+The DC figure is the DC gain worked out two entirely different ways in the previous unit,
+1.0989, arriving a third time. And the peak is now obvious rather than surprising: at
+$\omega = \theta$ the walking point passes as close to a root as it ever gets, the near
+distance collapses to $1 - r$, and the reciprocal of a small number is a large one. Push
+$r$ from 0.9 to 0.99 and that distance becomes 0.01 instead of 0.1, so the peak rises from
+6.08 to 58.03 — a factor of 9.5, not quite the factor of 10 the near distance suggests,
+because the far root's distance moves a little too — while the $-3$ dB width falls from
+0.212 to 0.020 rad/sample. Sweeping $r$ towards the circle is the $Q$ control:
+$Q pprox 	heta/igl(2(1-r)igr)$, an estimate that is 6% high at $r = 0.9$ and 0.5%
+high at $r = 0.99$, tightening as the root approaches the circle.
+
+One honest detail. The peak is not exactly at $\omega = \theta$: the far root's distance is
+still changing as the near one bottoms out, so the true maximum here is 6.0774 at
+$\omega = 1.0440$ against $\pi/3 = 1.0472$. The offset is tiny for a root near the circle
+and grows as the root moves in, which is the same effect that put the peak of a lightly
+damped analogue low-pass at $\omega_n\sqrt{1 - 2\zeta^2}$ rather than at $\omega_n$ in
+module 4.
+
+## The trade, priced
+
+The one-pole smoother above costs two multiplies and one stored number per sample. To
+build an FIR reaching as far back — matching $h[n] = 0.2(0.8)^n$ down to 1% of its peak
+— you need taps out to $n = \ln(0.01)/\ln(0.8) = 20.6$, so 21 coefficients: 21 multiplies
+and 20 stored samples for the same job. That ratio only grows as the filter gets sharper,
+and it is why recursive filters exist.
+
+What you pay is the risk. An FIR cannot be unstable however its coefficients are rounded;
+its impulse response is its coefficient list, and a finite list of finite numbers has a
+finite sum. A recursive filter's roots move when its coefficients are quantised, and near
+the unit circle they move a long way. Take a resonator at $r = 0.995$, $\theta = 0.05$,
+so $a_2 = -r^2 = -0.990025$, and store the coefficients with six fractional bits — steps
+of $1/64 = 0.015625$:
+
+```
+a2 / (1/64) = -63.36     nearest representable: -63/64 = -0.984375
+r = sqrt(0.984375) = 0.99216
+
+ring-down to 1%:   r = 0.995    -> ln(0.01)/ln(0.995)   = 919 samples
+                   r = 0.99216  -> ln(0.01)/ln(0.99216) = 585 samples
+```
+
+A rounding in the third decimal place has shortened the ring by 36%. Round the other way,
+to $-64/64 = -1$, and $r$ is exactly 1: a filter that rings forever, from a coefficient
+that was 1% away from the one you asked for. This is not a rare pathology, it is the
+ordinary reason high-$Q$ IIR filters are implemented as cascades of second-order sections
+rather than as one long recursion — the roots of a high-order polynomial are far more
+sensitive to its coefficients than the roots of several quadratics are to theirs.
+
+## Where $H(\omega)$ stops meaning anything
+
+The substitution assumed a steady state: that $e^{j\omega n}$ had been arriving forever
+and the transient had died. If the filter is unstable there is no steady state, the sum
+$\sum_n h[n]e^{-j\omega n}$ does not converge, and the formula still prints a number — a
+finite, plausible, entirely meaningless number. **Check the roots before you plot the
+response.** The general tool that does handle both cases is the $z$-transform, which is
+this same sum with $e^{j\omega}$ replaced by a general complex $z$; the frequency response
+is its value on the unit circle, and it exists precisely when the circle lies inside the
+region where the sum converges.
+
+Two smaller limits. $|H(\omega)|$ describes what happens to a sinusoid that has been
+running long enough, so it says nothing about the first few samples — a filter with a
+perfectly flat magnitude can still smear a pulse badly, because the phase of $H$ decides
+that, and a filter with a beautiful magnitude can overshoot a step by 20%. And $H$
+describes the filter you wrote down, not the arithmetic that runs it: the saturation and
+rounding named at the end of the first of these three units live outside it entirely.
+''',
+                },
             ],
             "sandbox": {
                 "title": "A root's radius and angle, and the response they produce",
@@ -8564,6 +10443,525 @@ difference from the resting state, which is genuinely linear.
                     },
                 ],
             },
+            "blanks": {
+                "title": "One second-order section, and the two lines that decide whether it works",
+                "minutes": 9,
+                "caption": "the loop, and the two predictions that need no loop at all",
+                "lang": "python",
+                "brief": r'''
+This is the filter as it is actually shipped: a loop over samples, two stored numbers, and
+two lines underneath that say what the loop is going to do before it is run.
+
+Six holes. Four of them are in the loop and two are in the predictions. The pair that
+matters most is the state update — the two assignments after the output is appended,
+which have to happen in one particular order and give a plausible-looking wrong filter in
+the other.
+''',
+                "listing": """import math
+
+# y[n] = b0*x[n] + a1*y[n-1] + a2*y[n-2], run from rest
+
+def section(b0, a1, a2, x):
+    y1 = 0.0                       # y[n-1]
+    y2 = 0.0                       # y[n-2]
+    out = []
+    for xn in x:
+        yn = b0 * xn + a1 * ___ + a2 * ___
+        out.append(yn)
+        ___                        # the older store first
+        ___                        # then the newer one
+    return out
+
+# what the loop will do, worked out from three numbers and never run:
+
+radius  = math.sqrt(___)           # valid when a1*a1 + 4*a2 < 0, i.e. a conjugate pair
+dc_gain = b0 / ___                 # the value a constant input of 1 settles at
+""",
+                "blanks": [
+                    {
+                        "prompt": "$a_1$ multiplies the output from one sample ago. Which store is that?",
+                        "hole": "?",
+                        "opts": ["y1", "y2", "yn", "xn"],
+                        "a": 0,
+                        "why": "`y1` is the name the comment gives to $y[n-1]$, and $a_1$ is by definition the coefficient on the output one sample back. The pairing is $a_1$ with `y1` and $a_2$ with `y2`, and it stays that way only because the update at the bottom of the loop keeps the names honest.",
+                        "whys": [
+                            "`y1` is the name the comment gives to $y[n-1]$, and $a_1$ is by definition the coefficient on the output one sample back. The pairing is $a_1$ with `y1` and $a_2$ with `y2`, and it stays that way only because the update at the bottom of the loop keeps the names honest.",
+                            "`y2` holds $y[n-2]$, which is what $a_2$ multiplies. Swapping the two coefficients gives a filter with the same two roots' *product* but a different sum, so it lands somewhere else on the plane entirely — usually still stable, which is what makes the mistake survive testing.",
+                            "`yn` is the sample being computed on this pass. It cannot appear on the right-hand side; that is the difference between a recursion and an equation with no solution.",
+                            "`xn` is the input sample. It is already accounted for by the `b0 * xn` term, and multiplying it again by $a_1$ would make this a two-tap FIR with no feedback at all.",
+                        ],
+                    },
+                    {
+                        "prompt": "And $a_2$ multiplies the output from two samples ago.",
+                        "hole": "?",
+                        "opts": ["y2", "y1", "out[-1]", "0.0"],
+                        "a": 0,
+                        "why": "`y2` is $y[n-2]$. Without this term there is only one root, the response is a plain geometric decay, and no amount of choosing $a_1$ will make it oscillate — the whole point of a second-order section is the pair of roots, and it takes two stored samples to have them.",
+                        "whys": [
+                            "`y2` is $y[n-2]$. Without this term there is only one root, the response is a plain geometric decay, and no amount of choosing $a_1$ will make it oscillate — the whole point of a second-order section is the pair of roots, and it takes two stored samples to have them.",
+                            "`y1` is $y[n-1]$, already used by the $a_1$ term. Using it twice makes the effective coefficient $a_1 + a_2$ on a single delay, which is a first-order filter wearing a second-order filter's coefficients.",
+                            "`out[-1]` is $y[n-1]$ as well — the sample just appended — so this is the same error written a slower way. Indexing back into the output list also stops working on the very first pass, when the list is empty.",
+                            "Multiplying by zero deletes the term and with it one of the two roots. The code would run and produce plausible numbers, which is the worst kind of wrong.",
+                        ],
+                    },
+                    {
+                        "prompt": "First half of the state update: the value that is about to become two samples old.",
+                        "hole": "?",
+                        "opts": ["y2 = y1", "y1 = yn", "y2 = yn", "y1 = y2"],
+                        "a": 0,
+                        "why": "`y2 = y1` moves the old $y[n-1]$ back into the $y[n-2]$ slot while it is still there to be moved. Do this one second, after `y1` has already been overwritten with `yn`, and `y2` receives the *current* output instead of the one before it — the filter then has two copies of the same delay and behaves as a first-order section with coefficient $a_1 + a_2$.",
+                        "whys": [
+                            "`y2 = y1` moves the old $y[n-1]$ back into the $y[n-2]$ slot while it is still there to be moved. Do this one second, after `y1` has already been overwritten with `yn`, and `y2` receives the *current* output instead of the one before it — the filter then has two copies of the same delay and behaves as a first-order section with coefficient $a_1 + a_2$.",
+                            "Overwriting `y1` first destroys the value that `y2` is supposed to inherit. This is the classic version of the bug, and it does not crash, it does not warn, and it produces a filter that is stable and smooth and wrong.",
+                            "That skips a delay: `y2` would hold $y[n]$ rather than $y[n-1]$, so on the next pass the $a_2$ term reaches back one sample instead of two and the section is not second-order at all.",
+                            "Copying `y2` into `y1` runs the shift register backwards. After two passes both stores hold zero and the filter never responds to anything.",
+                        ],
+                    },
+                    {
+                        "prompt": "Second half: the output just computed becomes the one-sample-old value.",
+                        "hole": "?",
+                        "opts": ["y1 = yn", "y2 = y1", "y1 = out[0]", "yn = y1"],
+                        "a": 0,
+                        "why": "`y1 = yn`, and it has to come after `y2 = y1`. Together the two lines are a two-stage shift register clocked once per sample, and the discipline generalises: for an $N$th-order section you copy from the oldest store backwards, or you use a deque and stop thinking about it.",
+                        "whys": [
+                            "`y1 = yn`, and it has to come after `y2 = y1`. Together the two lines are a two-stage shift register clocked once per sample, and the discipline generalises: for an $N$th-order section you copy from the oldest store backwards, or you use a deque and stop thinking about it.",
+                            "That is the line above, repeated. `y1` would then keep its value forever and the filter would respond to a single stale sample for the rest of the run.",
+                            "`out[0]` is the very first output sample and never changes. The filter would be fed a constant from the second pass onward, which is not a filter.",
+                            "Assigning to `yn` writes into a variable that is about to be recomputed at the top of the next pass, so the line has no effect at all and `y1` is never updated.",
+                        ],
+                    },
+                    {
+                        "prompt": "The magnitude of a conjugate pair of roots, from the coefficients. Their product is $r^2$, and for $\\lambda^2 - a_1\\lambda - a_2 = 0$ the product of the roots is $-a_2$.",
+                        "hole": "?",
+                        "opts": ["-a2", "a2", "a1*a1 + 4*a2", "a1 / 2"],
+                        "a": 0,
+                        "why": "$r = \\sqrt{-a_2}$. The branch is only reached when the discriminant is negative, which for $a_1^2 + 4a_2 < 0$ forces $a_2 < 0$, so $-a_2$ is positive and the square root is real. That is the whole stability test for a resonator: $-a_2 < 1$.",
+                        "whys": [
+                            "$r = \\sqrt{-a_2}$. The branch is only reached when the discriminant is negative, which for $a_1^2 + 4a_2 < 0$ forces $a_2 < 0$, so $-a_2$ is positive and the square root is real. That is the whole stability test for a resonator: $-a_2 < 1$.",
+                            "`a2` is negative whenever this branch is reached, so `math.sqrt(a2)` raises a domain error. The sign is not cosmetic: it is the recursion's convention, where the feedback terms are added rather than moved to the left.",
+                            "That is the discriminant, and it is negative here — the quantity that told you the roots were complex in the first place, not their size.",
+                            "$a_1/2$ is the real part of each root, $r\\cos\\theta$. It equals $r$ only when $\\theta = 0$, which is the case this branch exists to exclude.",
+                        ],
+                    },
+                    {
+                        "prompt": "The settled output for a constant input of 1. Put $y[n] = y[n-1] = y[n-2] = G$ into the recursion and solve.",
+                        "hole": "?",
+                        "opts": ["1 - a1 - a2", "1 + a1 + a2", "a1 + a2", "1 + a1 - a2"],
+                        "a": 0,
+                        "why": "$G = b_0 + a_1G + a_2G$ gives $G(1 - a_1 - a_2) = b_0$, so the denominator subtracts both feedback coefficients. It is also $H(\\omega)$ at $\\omega = 0$, where every $e^{-j\\omega k}$ is 1, and it is also $\\sum_n h[n]$ — three routes to one number, which is why it makes such a good check on a filter that has just been coded.",
+                        "whys": [
+                            "$G = b_0 + a_1G + a_2G$ gives $G(1 - a_1 - a_2) = b_0$, so the denominator subtracts both feedback coefficients. It is also $H(\\omega)$ at $\\omega = 0$, where every $e^{-j\\omega k}$ is 1, and it is also $\\sum_n h[n]$ — three routes to one number, which is why it makes such a good check on a filter that has just been coded.",
+                            "Adding them belongs to the other sign convention, the one that writes $y[n] + a_1y[n-1] + a_2y[n-2] = b_0x[n]$. Mixing the two is the single most common way a set of published coefficients produces a filter that howls.",
+                            "That leaves out the 1, which is the $y[n]$ on the left-hand side of the recursion. Without it a filter with $a_1 + a_2 = 1$ — a perfectly ordinary combination — would report an infinite gain.",
+                            "That is the denominator of $H$ at $\\omega = \\pi$ rather than at $\\omega = 0$: $e^{-j\\pi} = -1$ and $e^{-j2\\pi} = +1$, which flips the sign of the $a_1$ term only. It gives the gain at Nyquist, a useful number and not this one.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": [
+                {
+                    "title": "Four passes of the loop",
+                    "minutes": 5,
+                    "brief": r'''
+The mechanical rung. One rule, one stored number, four passes — and the only skill being
+tested is running the recursion without losing count of the index.
+
+Nothing needs to be solved. The recursion is a recipe, and the recipe is the answer.
+''',
+                    "prompt": "What is $y[3]$?",
+                    "note": "Answer in volts, to three decimal places.",
+                    "figure": r'''
+A sensor reading is smoothed in software by the line
+
+```
+y[n] = 0.75 y[n-1] + 0.25 x[n]
+```
+
+which runs once per sample. The filter starts **from rest**: the stored `y` is 0 before
+the first sample arrives.
+
+At $n = 0$ the input steps from 0 to a steady 4.000 V and stays there.
+''',
+                    "given": [
+                        {"label": "Recursion", "value": "$y[n] = 0.75\\,y[n-1] + 0.25\\,x[n]$"},
+                        {"label": "Input", "value": "4.000 V, constant, from $n = 0$"},
+                        {"label": "Stored value before $n = 0$", "value": "0 V"},
+                        {"label": "Wanted", "value": "$y[3]$"},
+                    ],
+                    "aside": "Four passes, not three: the samples are numbered from zero, so $y[3]$ "
+                             "is the fourth output the loop produces.",
+                    "answer": 2.734,
+                    "tol": 0.005,
+                    "unit": "V",
+                    "hint": "Write out a column. Each line is 0.75 times the line above it, plus "
+                            "$0.25 \\times 4 = 1$.",
+                    "wrong": "If you got 2.313 you stopped a pass early — that is $y[2]$, and it is "
+                             "the answer to the question with the indices counted from one. If you "
+                             "got 4.000 you used the DC gain, which is where this filter ends up "
+                             "and not where it is after four samples. If you got 10.94 the input "
+                             "was not scaled by 0.25, which would make the filter's DC gain 4 "
+                             "rather than 1.",
+                    "why": r'''
+```
+n     y[n] = 0.75 y[n-1] + 1
+--    -------------------------------------
+0     0.75(0)        + 1 = 1.000000
+1     0.75(1.0)      + 1 = 1.750000
+2     0.75(1.75)     + 1 = 2.312500
+3     0.75(2.3125)   + 1 = 2.734375
+```
+
+so $y[3] = 2.734$ V.
+
+Two checks worth making a habit of. The closed form is $y[n] = 4\left(1 - 0.75^{n+1}\right)$
+— at $n = 3$ that is $4(1 - 0.31640625) = 4(0.68359375) = 2.734375$, the same number
+without the table. And the destination is right: as $n$ grows, $0.75^{n+1}$ vanishes and
+$y \to 4$ V, which is the DC gain $0.25/(1 - 0.75) = 1$ multiplied by the 4 V input. A
+smoother that settles anywhere other than its input has a scale error built into its
+coefficients.
+
+Note how much of the step is still missing after four samples: it is only 68% of the way
+there. The
+impulse response of this filter is $0.25 \times 0.75^n$, which is at 1% of its peak only
+at $n = 16$, and the step response inherits that same tail. Feedback buys a long memory
+cheaply and charges for it in settling time.
+''',
+                },
+                {
+                    "title": "The radius hiding in two coefficients",
+                    "minutes": 7,
+                    "brief": r'''
+Up one rung: nothing to run, and the answer is not in the recursion's output at all. It is
+in the roots of a quadratic that never appears in the code.
+
+Three coefficients are given and only two of them matter. Decide which before starting.
+''',
+                    "prompt": "What is the magnitude of the characteristic roots of this system?",
+                    "note": "A pure number, no units. Four significant figures.",
+                    "figure": r'''
+A second-order section is shipped with these coefficients:
+
+```
+y[n] = 0.3 x[n] + 1.4 y[n-1] - 0.6 y[n-2]
+```
+
+so $b_0 = 0.3$, $a_1 = 1.4$ and $a_2 = -0.6$, in the convention where the feedback terms
+are **added** to the right-hand side.
+
+Its characteristic equation is $\lambda^2 - a_1\lambda - a_2 = 0$, and the question is how
+far its roots sit from the origin.
+''',
+                    "given": [
+                        {"label": "$b_0$", "value": "0.3"},
+                        {"label": "$a_1$", "value": "1.4"},
+                        {"label": "$a_2$", "value": "−0.6"},
+                        {"label": "Wanted", "value": "$|\\lambda|$"},
+                    ],
+                    "aside": "Work out the discriminant before reaching for the quadratic formula. "
+                             "Its sign changes what the rest of the calculation even looks like.",
+                    "answer": 0.7746,
+                    "tol": 0.002,
+                    "unit": "",
+                    "hint": "$\\lambda^2 - 1.4\\lambda + 0.6 = 0$. The discriminant is "
+                            "$1.4^2 - 4(0.6)$, and if it comes out negative the two roots are a "
+                            "conjugate pair whose product is the constant term.",
+                    "wrong": "If you got 1.032 you took the square root of the discriminant as "
+                             "though it were positive and read off a real root — that route says "
+                             "this filter is unstable, and it is not. If you got 0.7 you used "
+                             "$a_1/2$, which is the real part of each root rather than its "
+                             "magnitude. If you got 0.6 you stopped one step early: that is "
+                             "$r^2$, the product of the two roots.",
+                    "why": r'''
+```
+characteristic equation:  lambda^2 - 1.4 lambda + 0.6 = 0
+
+discriminant = 1.4^2 - 4(0.6) = 1.96 - 2.40 = -0.44      negative
+```
+
+so the roots are a conjugate pair, and there is a shortcut that avoids complex arithmetic
+entirely. For $\lambda^2 - a_1\lambda - a_2 = 0$ the product of the two roots is $-a_2$;
+for a conjugate pair $re^{j\theta}$ and $re^{-j\theta}$ that product is $r^2$. Therefore
+
+$$r = \sqrt{-a_2} = \sqrt{0.6} = 0.7746$$
+
+Inside the unit circle, so the filter is stable. The other coefficient fills in the rest of
+the picture: $\cos\theta = a_1/(2r) = 1.4/1.5492 = 0.9037$, so $\theta = 0.4425$ radians per
+sample — about 14.2 samples per cycle — and the envelope shrinks by 22.5% every sample, so
+the whole response is over in $\ln(0.01)/\ln(0.7746) = 18$ samples. A low-$Q$ resonance, not
+a ringing one.
+
+And $b_0 = 0.3$ never appeared. Feedforward coefficients cannot move a root, so they cannot
+change the stability, the ring-down or the pitch — they set $h[0]$, the zeros, and the
+overall scale. Here they set the DC gain, $0.3/(1 - 1.4 + 0.6) = 0.3/0.2 = 1.5$, and that
+is the only place the 0.3 shows up.
+''',
+                },
+                {
+                    "title": "How long the resonator rings",
+                    "minutes": 8,
+                    "brief": r'''
+The same two coefficients, asked for a time instead of a number. Two conversions have to
+happen and each is a place to go wrong: coefficients to a radius, and radius to
+milliseconds, which is the only step where the sample rate is allowed in.
+
+A physical modelling synthesiser is one of these per string.
+''',
+                    "prompt": "After the impulse, how long does the envelope take to fall to 1% of its starting value?",
+                    "note": "Answer in milliseconds, to three significant figures. Treat the sample index as continuous.",
+                    "figure": r'''
+A struck-string voice in a synthesiser is one second-order section per note, excited by a
+single impulse:
+
+```
+y[n] = x[n] + 1.5 y[n-1] - 0.9216 y[n-2]
+```
+
+running at a sample rate of $f_s = 44.1$ kHz.
+
+Its impulse response is a decaying oscillation, $h[n] = r^n \sin\bigl((n+1)\theta\bigr)/\sin\theta$.
+The **envelope** is the $r^n$ factor, which starts at 1 and shrinks by the same proportion
+every sample.
+''',
+                    "given": [
+                        {"label": "$a_1$", "value": "1.5"},
+                        {"label": "$a_2$", "value": "−0.9216"},
+                        {"label": "$f_s$", "value": "44.1 kHz"},
+                        {"label": "Wanted", "value": "time for $r^n$ to reach 0.01"},
+                    ],
+                    "aside": "The pitch of the note plays no part in this. The angle sets the "
+                             "frequency and the radius sets the duration, and the question only "
+                             "asks about one of them.",
+                    "answer": 2.558,
+                    "tol": 0.02,
+                    "unit": "ms",
+                    "hint": "Get $r$ from $a_2$ first, then solve $r^n = 0.01$ for $n$ by taking "
+                            "logs of both sides, and only then divide by the sample rate.",
+                    "wrong": "If you got 1.279 ms you used $a_2$ itself as the radius and skipped "
+                             "the square root — and the two answers differ by exactly a factor of "
+                             "two, because squaring $r$ halves the number of samples a given decay "
+                             "takes, which makes this a hard slip to spot. If you got 113 the "
+                             "answer is in samples and still wants dividing by 44 100. If you got "
+                             "3.84 ms you decayed to 0.1%, which is 60 dB rather than 40.",
+                    "why": r'''
+```
+r = sqrt(-a2) = sqrt(0.9216) = 0.96
+
+r^n = 0.01
+n   = ln(0.01)/ln(0.96) = (-4.60517)/(-0.0408220) = 112.81 samples
+
+t   = 112.81 / 44100 = 2.5581e-3 s = 2.558 ms
+```
+
+Three sanity checks. Each sample multiplies the envelope by 0.96, which is
+$20\log_{10}(0.96) = -0.3546$ dB, and $-40$ dB at that rate takes $40/0.3546 = 112.8$
+samples — the same number by a route with no logarithms of 0.01 in it. The whole ring is
+about 113 samples long while one cycle of the note takes $2\pi/\theta$ samples with
+$\theta = \arccos\bigl(1.5/(2 \times 0.96)\bigr) = 0.6741$, that is 9.3 samples, so the
+note rings for roughly twelve cycles: audible as a short plucked sound rather than a click
+or a sustained tone. And $\theta = 0.6741$ rad/sample at 44.1 kHz is
+$0.6741 \times 44100/2\pi = 4732$ Hz, a plausible pitch — none of which was needed for the
+answer, which is the point of the aside.
+
+Doubling the ring means halving $\ln r$, so $r \to \sqrt{0.96} = 0.9798$ and
+$a_2 \to -0.96$: at this radius the coefficient has to move by 4% to buy a factor of two,
+which is comfortable. The comfort does not last. Take a resonator at $r = 0.999$
+($a_2 = -0.998001$, a 104 ms ring at this sample rate) and round $a_2$ to $-0.996$ — a
+change of two parts in a thousand — and $r$ becomes 0.998, which rings for 52 ms. A 0.2%
+error in a coefficient has halved the decay. Sensitivity to the coefficients grows without
+limit as the roots approach the circle, and that is why a long resonator has to be stored
+with far more fractional bits than the size of its numbers suggests.
+''',
+                },
+                {
+                    "title": "How fine a step the simulation needs",
+                    "minutes": 9,
+                    "brief": r'''
+A real circuit, and the recursion that stands in for it inside a simulator. Discretising
+$\tau\dot y + y = x$ at a step $T$ gives
+
+$$y[n] = \frac{\tau}{\tau+T}\,y[n-1] + \frac{T}{\tau+T}\,x[n]$$
+
+whose single root sits at $a = \tau/(\tau + T)$. Shrinking the step pushes that root
+towards 1 and the simulation towards the circuit it is modelling.
+
+This question runs that backwards: the root is specified, and the step rate is what has to
+be found. The circuit supplies $\tau$ and nothing else.
+''',
+                    "prompt": "At what sample rate must the simulation run for its root to sit at exactly 0.99?",
+                    "note": "Answer in megahertz, to three decimal places.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 1},
+                            {"id": "p1", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "p2", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 8200},
+                            {"id": "p3", "kind": "C", "x": 9, "y": 6, "rot": 1, "value": 1e-8},
+                            {"id": "p4", "kind": "GND", "x": 9, "y": 9},
+                            {"id": "p5", "kind": "OUT", "x": 11, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [9, 4]},
+                            {"a": [9, 4], "b": [9, 5]},
+                            {"a": [9, 7], "b": [9, 9]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [9, 4], "b": [11, 4]},
+                        ],
+                    },
+                    # tau is MEASURED off the drawn circuit rather than recomputed from the values
+                    # printed in the prompt: bisect for the -3 dB point the way an instrument
+                    # would, then tau = 1/(2 pi f_c). Editing either component moves the answer.
+                    "check": r'''
+const fc = c.corner(1, 1e7);
+const tau = 1 / (2 * Math.PI * fc);
+return (0.99 / (0.01 * tau)) / 1e6;
+''',
+                    "given": [
+                        {"label": "$R$", "value": "8.2 kΩ"},
+                        {"label": "$C$", "value": "10 nF"},
+                        {"label": "Root wanted", "value": "$a = \\tau/(\\tau+T) = 0.99$"},
+                        {"label": "Wanted", "value": "$f_s = 1/T$, in MHz"},
+                    ],
+                    "aside": "Rearranging $a = \\tau/(\\tau+T)$ for $T$ leaves a factor most people "
+                             "drop. $T$ is not $0.01\\tau$.",
+                    "answer": 1.207,
+                    "tol": 0.005,
+                    "unit": "MHz",
+                    "hint": "$\\tau = RC$ first. Then invert $a = \\tau/(\\tau+T)$: multiply up to "
+                            "get $a\\tau + aT = \\tau$, so $T = \\tau(1-a)/a$. The sample rate is "
+                            "$1/T$.",
+                    "wrong": "If you got 1.220 MHz you used $T = 0.01\\tau$, dropping the division "
+                             "by $a$ — a 1% error, which is exactly the size of $1-a$ and therefore "
+                             "no coincidence. If you got 12.20 kHz you computed $1/\\tau$, which is "
+                             "a rate at which the simulation would be useless. If you got 1.941 kHz "
+                             "that is the circuit's own corner frequency $1/(2\\pi RC)$, and the "
+                             "question is not asking where the filter turns over.",
+                    "why": r'''
+```
+tau = R C = 8.2e3 x 10e-9 = 82e-6 s = 82 us
+
+a = tau/(tau + T) = 0.99
+  =>  0.99 tau + 0.99 T = tau
+  =>  0.99 T            = 0.01 tau
+  =>  T = tau (1 - a)/a = 82e-6 x 0.01/0.99 = 828.28e-9 s
+
+f_s = 1/T = 1.20732e6 Hz = 1.207 MHz
+```
+
+The number is worth staring at. This circuit's own corner is
+$1/(2\pi RC) = 1.941$ kHz — it does nothing interesting above a few kilohertz — and the
+simulation of it has to be clocked at 1.207 MHz, a factor of 622 higher, purely to place
+the root where it was asked for. That is the cost of a pole near the unit circle: the
+closer $a$ is to 1, the finer the step, and the relation is not gentle. Asking for
+$a = 0.999$ instead would need ten times the rate again, 12.18 MHz, for the same 82 µs
+circuit.
+
+Which raises the obvious question of why anyone would want $a = 0.99$. The answer is
+accuracy rather than stability. This discretisation is stable at every step size —
+$\tau/(\tau+T)$ is between 0 and 1 for any positive $T$, so the root can never leave the
+circle — but it is only *accurate* when $T \ll \tau$, because the underlying approximation
+replaces $\dot y$ with a difference over one step. At $a = 0.99$ the simulation resolves
+the exponential into a hundred pieces per time constant and tracks it closely; at
+$a = 0.5$, which is $T = \tau$, it is stable, well-behaved, and wrong.
+''',
+                },
+                {
+                    "title": "The coefficient a corner frequency asks for",
+                    "minutes": 11,
+                    "brief": r'''
+The last rung, and the direction real work runs in: the response is specified and the
+coefficient is the unknown.
+
+Every previous question in this ladder went forwards, from coefficients to behaviour.
+Going backwards needs the frequency response written down, set equal to its half-power
+value, and solved — and what comes out is a quadratic with two roots, only one of which is
+a filter.
+''',
+                    "prompt": "What value of $a$ puts the $-3$ dB corner at 100 Hz?",
+                    "note": "A pure number, no units. Four decimal places.",
+                    "figure": r'''
+A one-pole smoother is to run on an 8 kHz data stream:
+
+```
+y[n] = a y[n-1] + (1 - a) x[n]
+```
+
+The $(1-a)$ on the input is there to make the DC gain exactly 1 whatever $a$ turns out to
+be, so the only free parameter is $a$ itself.
+
+Its frequency response is
+
+$$H(\omega) = \frac{1-a}{1 - a\,e^{-j\omega}}
+\qquad\text{so}\qquad
+\left|H(\omega)\right|^2 = \frac{(1-a)^2}{1 - 2a\cos\omega + a^2}$$
+
+with $\omega$ in radians per sample. The requirement is a half-power point at 100 Hz.
+''',
+                    "given": [
+                        {"label": "Sample rate", "value": "8.000 kHz"},
+                        {"label": "Corner wanted", "value": "100 Hz, at $-3$ dB"},
+                        {"label": "DC gain", "value": "1, by construction"},
+                        {"label": "Wanted", "value": "$a$"},
+                    ],
+                    "aside": "Two numbers will come out of the algebra. Only one of them can be "
+                             "used, and the reason has nothing to do with which is closer to the "
+                             "answer you expected.",
+                    "answer": 0.9245,
+                    "tol": 0.0015,
+                    "unit": "",
+                    "hint": "Convert 100 Hz to radians per sample first: $\\omega_c = 2\\pi f/f_s$. "
+                            "Then set $\\left|H\\right|^2 = 1/2$ and clear the fraction — the "
+                            "$(1-a)^2$ expands and what remains is a quadratic in $a$.",
+                    "wrong": "If you got 1.0817 that is the other root of the quadratic, and it is "
+                             "outside the unit circle: it describes a recursion whose output grows "
+                             "without limit, which does have a half-power frequency on paper and "
+                             "none in practice. If you got 0.9215 you used the rough rule "
+                             "$a \\approx 1 - \\omega_c$, which is close but drops the "
+                             "$\\sqrt{a}$ correction. If you got 0.0785 you stopped at $\\omega_c$ "
+                             "and never solved for anything.",
+                    "why": r'''
+```
+w_c = 2 pi (100)/8000 = 0.0785398 rad/sample
+cos w_c = 0.9969173
+
+set |H|^2 = 1/2:
+
+    (1 - a)^2 / (1 - 2a cos w_c + a^2) = 1/2
+    2(1 - 2a + a^2)                    = 1 - 2a cos w_c + a^2
+    2 - 4a + 2a^2                      = 1 - 2a cos w_c + a^2
+    a^2 + a(2 cos w_c - 4) + 1         = 0
+
+    2 cos w_c - 4 = -2.0061653
+
+    a = [2.0061653 +- sqrt(2.0061653^2 - 4)]/2
+      = [2.0061653 +- sqrt(0.0246994)]/2
+      = [2.0061653 +- 0.1571604]/2
+      = 0.9245  or  1.0817
+```
+
+Take $a = 0.9245$. The other root is greater than 1, and a root outside the unit circle is
+an unstable recursion — the algebra cannot tell the difference because the algebra only
+knows about $|H|^2$, and $|H(\omega)|$ for an unstable system is a formula with nothing
+behind it. That the two roots multiply to 1 is not an accident either: reciprocal pairs
+always come out of this construction, which is worth remembering as a way of checking you
+have solved it correctly.
+
+Verify forwards. With $a = 0.9245$, $(1-a)^2 = 0.005700$ and
+$1 - 2(0.9245)(0.9969173) + 0.9245^2 = 1 - 1.843300 + 0.854700 = 0.011400$, so
+$\left|H\right|^2 = 0.005700/0.011400 = 0.5000$ — half power, as asked.
+
+Two things fall out of the answer. The general form, from the same algebra done in
+symbols, is $\cos\omega_c = 1 - (1-a)^2/(2a)$, which is the formula to keep. And the
+approximation $a \approx e^{-\omega_c} = e^{-0.0785398} = 0.92447$ — the coefficient you
+would get by matching the discrete root to the analogue pole $e^{sT}$ — agrees with the
+exact answer to four decimal places here. That agreement is a property of corners well
+below Nyquist, and it decays fast: ask for a corner at 2 kHz on the same 8 kHz stream and
+$\omega_c = \pi/2$, where the exact quadratic gives $a = 2 - \sqrt3 = 0.2679$ while
+$e^{-\pi/2} = 0.2079$ — 22% low. Match the pole when the corner is a small fraction of the
+sample rate; solve the quadratic when it is not.
+''',
+                },
+            ],
             "derive": {
                 "title": "From a recursion to its impulse response, and to its gain",
                 "minutes": 12,
@@ -8859,6 +11257,611 @@ assert abs(stable[40]) < abs(stable[20]), \
                 "Windows cost amplitude. Hann's mean value is about $\\frac12$, so a windowed sinusoid's peak bin reads about half — divide by the window's mean (its **coherent gain**) to get volts back. It also *reduces* scalloping loss, from 36% to about 15%, which is often the real reason to use one.",
                 "**Zero padding is not resolution.** Appending zeros raises $N$ without lengthening the record, so $f_s/N$ shrinks while $1/T_{rec}$ does not. What you get is the same underlying curve sampled on a finer grid — a smoother picture and an easier peak to locate — and two tones that were unresolved stay exactly as unresolved as they were. The only cure for resolution is more time.",
             ],
+            "read": [
+                {
+                    "title": "What a bin is, and the two things you are buying separately",
+                    "minutes": 14,
+                    "body": r'''
+A spectrum analyser has no access to your signal. It has a bucket of numbers — $N$ of
+them, taken $T_s$ apart — and everything it draws is computed from that bucket and
+nothing else. It does not know what the input was doing before the record opened or
+after it closed, and it does not know what happened between one sample and the next.
+Every surprising feature of a measured spectrum is a property of the bucket rather than
+of the signal, and the whole of this module is the business of telling the two apart.
+
+Module 3 defined $X(f) = \int x(t)e^{-j2\pi ft}\,dt$, an integral over all time producing
+a value at every real frequency. A machine has neither. It has a finite record and a
+finite amount of memory for the answer, so what it computes is
+
+$$X[k] = \sum_{n=0}^{N-1} x[n]\,e^{-j2\pi kn/N}$$
+
+$N$ numbers in, $N$ numbers out. That is the **discrete Fourier transform**, and the two
+differences from the integral — a record that stops, and an output that is a list rather
+than a curve — are the entire subject.
+
+## Why exactly $N$ candidate frequencies, and why those ones
+
+Start from the counting. You have $N$ measurements, so you can determine at most $N$
+unknowns; asking for the amplitude at more than $N$ frequencies is asking a question the
+data cannot answer. The question is which $N$.
+
+Take the candidates to be complex exponentials $e^{j2\pi kn/N}$ for $k = 0, 1, \dots N-1$.
+Two facts recommend them and no others.
+
+The first is that they are the only ones that fit the record a whole number of times, and
+that makes them mutually invisible to each other. Correlate candidate $k$ against
+candidate $m$ over the record:
+
+$$\sum_{n=0}^{N-1} e^{j2\pi (k-m)n/N}$$
+
+This is a geometric series with ratio $r = e^{j2\pi(k-m)/N}$. If $k = m$ then $r = 1$ and
+every term is 1, so the sum is $N$. Otherwise $r \neq 1$ and the closed form applies:
+
+$$\frac{1 - r^{N}}{1 - r} = \frac{1 - e^{j2\pi(k-m)}}{1-r} = \frac{1-1}{1-r} = 0$$
+
+because $k - m$ is a whole number and $e^{j2\pi \times \text{integer}} = 1$. So each
+candidate contributes to its own bin and to no other. The measurements do not interfere;
+each one is a clean answer to its own question. Nothing else on the frequency axis has
+that property over a finite record, and holding on to that fact explains most of what
+follows.
+
+The second is that the list closes. Candidate $k + N$ is
+$e^{j2\pi(k+N)n/N} = e^{j2\pi kn/N}e^{j2\pi n} = e^{j2\pi kn/N}$ — the same numbers,
+every one of them. That is module 3's aliasing argument applied to the basis rather than
+to the input, and it says there is no $N{+}1$th independent candidate to ask about.
+
+## The grid, and the two numbers that fall out of it
+
+Candidate $k$ completes exactly $k$ cycles in the record. The record is
+$T_{rec} = N/f_s$ seconds long. So its frequency is
+
+$$f_k = \frac{k}{T_{rec}} = \frac{k f_s}{N}$$
+
+and consecutive bins are apart by
+
+$$\Delta f = \frac{f_s}{N} = \frac{1}{T_{rec}}$$
+
+Two forms of one number, and the second is the one to carry around, because it contains
+no $N$ and no $f_s$ — only the duration of the record. **Resolution is bought with time.**
+
+The other number is where the axis ends. Bin $N/2$ sits at $f_s/2$, and past that the
+bins are the conjugate mirror of the ones below, carrying no new information for a real
+input. So the axis runs 0 to $f_s/2$ and **bandwidth is bought with sample rate**. The
+two purchases are independent, and keeping them apart is the practical content of this
+reading.
+
+## Worked example: a 48 kSa/s logger
+
+```
+N = 1024 samples,   f_s = 48 000 Sa/s
+
+T_rec = N / f_s        = 1024 / 48000       = 21.333 ms
+df    = f_s / N        = 48000 / 1024       = 46.875 Hz
+      = 1 / T_rec      = 1 / 0.0213333      = 46.875 Hz      the same number twice
+top of the axis        = f_s / 2            = 24 000 Hz      which is bin 512
+
+a tone at exactly 3.000 kHz:
+   bin index    = 3000 / 46.875             = 64.000   ->  bin 64, exactly
+   cycles in the record = 3000 x 0.0213333  = 64.000   ->  the same 64
+```
+
+The bin index and the cycle count are the same number. They have to be: bin $k$ *is* the
+candidate that fits $k$ cycles into the record. When someone says a test tone was chosen
+"coherent with the record", that is all they mean — a whole number of cycles, so a whole
+bin index, so no fractional part.
+
+## Worked example: two tones three hertz apart
+
+A motor is being watched for a bearing fault. The line frequency is 50.0 Hz and the
+suspect component is at 53.0 Hz. They must land in different bins.
+
+```
+required:   df <= 3.0 Hz
+so          T_rec >= 1 / 3.0                    = 333 ms
+
+sampling at 1 kSa/s:   N >= 0.333 x 1000 = 334;  take N = 1024
+                       T_rec = 1024 / 1000      = 1.024 s
+                       df    = 1000 / 1024      = 0.9766 Hz     comfortable
+
+now try to buy the same thing with a faster converter, same 1.024 s of record:
+   f_s = 10 kSa/s   ->  N = 10 240 samples
+   df  = 10000 / 10240                          = 0.9766 Hz     unchanged
+   top of axis = 5 kHz instead of 500 Hz
+```
+
+Ten times the data, ten times the storage, ten times the transform, and the two tones sit
+exactly as far apart in bins as they did before. What the money bought was frequency
+range, which was not the problem. The only thing that moves $\Delta f$ is the clock on the
+wall.
+
+## Getting volts back out
+
+$|X[k]|$ is not a voltage; it is a correlation sum, and it grows with $N$. Work out what
+it comes to for a known input and the conversion falls out.
+
+A sinusoid of amplitude $A$ sitting exactly on bin $k_0$ is
+$A\sin(2\pi k_0 n/N)$, which by Euler is two complex exponentials of size $A/2$, one at
+$+k_0$ and one at $-k_0$. Correlating with candidate $k_0$ picks up the first of them and
+nothing else, and by the orthogonality sum above the correlation of a candidate with
+itself is $N$. So $|X[k_0]| = AN/2$, and
+
+$$A = \frac{2\,|X[k_0]|}{N}$$
+
+The 2 is reclaiming the half that went to the negative frequency, which for a real input
+is the mirror bin you are not looking at. Two bins have no mirror partner: bin 0, which
+is DC, and for even $N$ bin $N/2$ at $f_s/2$. Those are divided by $N$ and not doubled.
+
+```
+N = 1024,  a 2.00 V amplitude sine on bin 64
+
+|X[64]|   = A N / 2       = 2.00 x 1024 / 2      = 1024
+amplitude = 2 |X| / N     = 2 x 1024 / 1024      = 2.00 V      correct
+rms       = 2.00 / sqrt2                         = 1.414 V
+
+the same record with 2.00 V of DC added as well:
+X[0]      = sum of 1024 samples of 2.00 V        = 2048
+DC        = X[0] / N      = 2048 / 1024          = 2.00 V      no factor of two
+```
+
+Get the doubling rule wrong in either direction and every amplitude on the screen is out
+by exactly 6.02 dB, which is a large enough error to be obvious and a systematic enough
+one to be mistaken for a gain problem in the hardware.
+
+## The mistake people actually make
+
+Buying a faster converter to separate two close tones. It is the most common mistake in
+practical spectrum work and it is expensive, because the faster converter is usually the
+most costly item in the chain.
+
+It is tempting for good reasons. Everything else in an instrument gets better with sample
+rate: more bandwidth, gentler anti-alias filter, more samples to average. The sample rate
+is the number printed largest on the data sheet. And the transform genuinely does return
+more bins when $N$ goes up, which looks like more detail. But $N$ went up because $f_s$
+went up, and $\Delta f = f_s/N$ held both of them at once. The antidote is to write the
+resolution as $1/T_{rec}$ and notice that no sample rate appears in it anywhere.
+
+The mirror-image error is quieter: treating $N/2 + 1$ bins as $N/2+1$ independent
+measurements. $N$ real samples carry $N$ real numbers of information, and the transform
+returns $N/2+1$ *complex* bins — the same $N$ numbers rearranged, since bin 0 and bin
+$N/2$ are real. Nothing was created by transforming, which is worth remembering the next
+time an averaging scheme appears to reduce noise by more than the data allows.
+
+## Where this stops holding
+
+**The signal has to hold still.** $\Delta f = 1/T_{rec}$ assumes the tone you are
+resolving was the same tone for the whole record. A component drifting 20 Hz over a
+one-second record smears across 20 bins however fine the grid is, and lengthening the
+record makes the smear worse rather than better. That is why speech and machinery
+transients are analysed in short overlapping frames — 20 to 30 ms, giving a coarse 30 to
+50 Hz resolution on purpose — and the resulting time-frequency picture is a spectrogram
+rather than a spectrum. The trade between knowing *when* and knowing *what frequency* is
+not an artefact of the DFT; it is module 6's scaling property, and it is unavoidable.
+
+**Resolution is not accuracy.** $1/T_{rec}$ is the distance at which two tones stop being
+separable. It is not the accuracy with which the frequency of one isolated tone can be
+determined, which is far finer and improves with signal-to-noise ratio — a single clean
+tone in a one-second record can be located to a millihertz by interpolating between bins.
+Two tones half a hertz apart in that same record cannot be separated at all. Two different
+questions, both answered in hertz, which is why they are confused so often.
+
+**And the DFT is not the spectrum of the signal.** It is the spectrum of the *record* —
+of a signal that, as far as the arithmetic is concerned, was switched on when the capture
+began and off when it ended. When the tone does not fit the record a whole number of
+times, that switching has consequences, and they are the subject of the next reading.
+''',
+                },
+                {
+                    "title": "Leakage: the analyser did not see a tone, it saw a burst",
+                    "minutes": 14,
+                    "body": r'''
+Feed a signal generator set to 1.000 V and 137 Hz into an analyser, capture 100 ms, and
+the screen shows a peak of 0.85 V sitting at 140 Hz, with a skirt of rubbish spreading
+twenty bins either side of it. Nothing is broken. The generator is fine, the converter is
+fine, and the transform is exactly right. What went wrong is the question you thought you
+were asking.
+
+The analyser was not given a 137 Hz tone. It was given 13.7 cycles of a 137 Hz tone,
+starting abruptly and ending abruptly. That object — a burst — genuinely does have energy
+spread across a wide band, and the DFT is reporting it faithfully. This reading is about
+what that spread looks like, how big it is, and what it costs.
+
+## Taking a record is a multiplication
+
+Write the capture as an operation on a signal that ran for ever:
+
+$$x_{rec}(t) = x(t)\,w(t), \qquad
+w(t) = \begin{cases} 1 & 0 \le t < T_{rec}\\ 0 & \text{otherwise}\end{cases}$$
+
+Truncation is multiplication by a rectangle. Module 6 established that multiplication in
+one domain is convolution in the other, so
+
+$$X_{rec}(f) = X(f) * W(f)$$
+
+and the spectrum you see is the true spectrum smeared by the transform of the rectangle.
+The rectangle's transform is module 3's result: a pulse of width $T$ transforms to
+$T\,\mathrm{sinc}(fT)$, whose nulls sit at every multiple of $1/T$. And $1/T_{rec}$ is
+exactly $\Delta f$, the bin spacing.
+
+That coincidence is the hinge of the whole subject. Convolving a single spectral line at
+frequency $f_0$ with a $\mathrm{sinc}$ puts a copy of the $\mathrm{sinc}$, centred on
+$f_0$, onto the frequency axis. The DFT then reads that curve at the bin centres. If
+$f_0$ is a bin centre, every other bin lands on one of the $\mathrm{sinc}$'s nulls, and
+the answer is one line with exact zeros beside it. Move $f_0$ by half a bin and every
+other bin lands near a $\mathrm{sinc}$ *peak* instead.
+
+## The exact shape: the Dirichlet kernel
+
+For a record of $N$ samples the smearing function is not quite a $\mathrm{sinc}$; it is
+its periodic cousin. Let the tone sit $\delta$ bins away from bin $k_0$, so its frequency
+is $(k_0 + \delta)\Delta f$. The DFT at bin $k_0$ is a geometric series again, and summing
+it (the derivation unit in this module does it line by line) gives
+
+$$|X[k_0]| = \left|\frac{\sin(\pi\delta)}{\sin(\pi\delta/N)}\right|$$
+
+Everything worth knowing is visible in that expression. It equals $N$ at $\delta = 0$, by
+the limit. It is exactly zero whenever $\delta$ is a non-zero whole number — the nulls,
+one per bin. And between the nulls it does not return to zero, which is the leakage.
+
+## Worked example: sixteen samples, four cycles and four and a half
+
+Small enough to print in full. A 1.000 V sine, $N = 16$, every magnitude scaled by $2/N$
+so that an on-bin tone reads its own amplitude:
+
+```
+bin        0      1      2      3      4      5      6      7      8
+4.0 cyc  0.000  0.000  0.000  0.000  1.000  0.000  0.000  0.000  0.000
+4.5 cyc  0.103  0.110  0.136  0.212  0.628  0.654  0.239  0.168  0.152
+```
+
+Four cycles: one bin holds the whole answer and it is exactly right. Four and a half:
+there is no bin to hold it, the two nearest split it between them, and every remaining
+bin — including bin 0, which is DC, and bin 8, which is $f_s/2$ — has picked up something
+that was never in the signal at all.
+
+The two centre bins are not equal, which is worth a moment. A real sine has a
+negative-frequency image, here at $-4.5$ bins, which the DFT reports at $16 - 4.5 = 11.5$.
+Bin 5 is 6.5 bins from that image and bin 4 is 7.5, so bin 5 collects slightly more of its
+skirt. At $N = 16$ that asymmetry is visible; at $N = 1024$ it is negligible. Real
+measurements are full of small effects like this one, and knowing which are physics and
+which are the transform's own bookkeeping is most of what practice buys you.
+
+## Worked example: scalloping loss, and where $2/\pi$ comes from
+
+The worst case is a tone exactly halfway between two bins, $\delta = 1/2$. Put that into
+the kernel:
+
+$$|X| = \frac{\sin(\pi/2)}{\sin(\pi/2N)} = \frac{1}{\sin(\pi/2N)}$$
+
+and for any usable $N$ the angle $\pi/2N$ is small, so $\sin(\pi/2N) \approx \pi/2N$ and
+the magnitude approaches $2N/\pi$. Against the on-bin peak of $N$, that is a ratio of
+$2/\pi$:
+
+```
+N          |X| at half a bin off      as a fraction of N
+16              10.202                    0.6376
+100             63.665                    0.6366
+1024           651.90                     0.6366
+limit          2N/pi                      0.63662 = 2/pi
+
+as a shortfall   1 - 0.63662 = 0.3634    ->  36.3% low
+in decibels      20 log10(0.63662)       ->  -3.92 dB
+```
+
+This is **scalloping loss**, so named because sweeping a tone across the axis makes the
+peak reading rise and fall in scallops between the bin centres. Note that it converges
+almost immediately: even at $N = 16$ it is within a fifth of a per cent of the limit. A
+single-bin amplitude reading is therefore somewhere between 0 and 3.92 dB low, with no
+way to tell which from the number itself.
+
+That same $2/\pi$ turned up in module 3, as the droop of a zero-order hold at $f_s/2$. It
+is not a coincidence and not a coined constant: both are $\mathrm{sinc}(1/2)$, the value
+of a rectangle's transform halfway to its first null. One rectangle holds a sample for
+$T_s$; the other holds a record for $T_{rec}$.
+
+## Worked example: the harmonic that was never there
+
+An amplifier is being measured for distortion. The fundamental is at full scale, the
+second harmonic is genuinely 40 dB down (1%), and the record has been chosen — through no
+fault of anyone's — so the fundamental lands half a bin off centre. The harmonic sits
+about ten bins away from the fundamental.
+
+The rectangle's skirt at that distance, from the kernel:
+
+```
+distance from the tone      rectangular skirt
+     1.5 bins                  -13.5 dB
+     2.5 bins                  -17.9 dB
+     3.5 bins                  -20.8 dB
+    10.5 bins                  -30.4 dB
+```
+
+At the harmonic's bin the fundamental alone is depositing $-30.4$ dB, and the harmonic
+itself is $-40$ dB. The bin reads the larger of the two, which is the leakage: the
+instrument reports about 3% distortion for an amplifier whose true figure is 1%. Nothing
+in the reading is a measurement of the amplifier.
+
+Notice how slowly that skirt falls — roughly as $1/\delta$, which is 6 dB per doubling of
+distance. Getting 60 dB of clearance from a rectangular window therefore needs the
+interfering tone to be about three hundred bins away: $1/(\pi\delta) = 0.001$ gives
+$\delta = 318$. That is the entire reason windows exist.
+
+## The mistake people actually make
+
+Reading the height of the peak bin as the amplitude of the tone. Every tutorial does it,
+and in every tutorial it works, because every tutorial uses a test signal with a whole
+number of cycles in the record. Then the same code meets a signal whose frequency is set
+by a motor or a crystal rather than by the person writing the test, and the answers come
+back a few per cent low, irregularly, in a way that looks like a calibration drift.
+
+It is tempting because the failure is quiet. There is no error, no warning, and the number
+is nearly right — a 5% amplitude error is exactly the size that gets blamed on a resistor
+tolerance. The habit that prevents it is to ask, before believing any amplitude, what the
+fractional part of the tone's bin index is. If it is not zero, a single bin is not the
+answer; either sum the power in the main lobe, or window and interpolate.
+
+The second mistake is trying to cure leakage by taking more samples. Doubling $N$ at the
+same sample rate doubles the record, halves $\Delta f$, and puts the nulls twice as close
+together in hertz — and the tone's *fractional* bin offset is just as likely to be near
+one half as it was before. Twice the data, the same 3.92 dB worst case. Leakage is not a
+shortage of samples.
+
+## Where it stops holding
+
+**When the record already ends in zero.** The rectangle causes trouble only because it
+creates a discontinuity where the data is cut. If the signal is genuinely zero at both
+ends of the record — an impulse response that has decayed, a gated burst, a radar return
+captured whole — there is no discontinuity, no leakage to fix, and a window would only
+attenuate real data and distort the answer. Impulse-response and time-domain reflectometry
+measurements use a rectangle deliberately, and applying a Hann window to them is a genuine
+error rather than a conservative choice.
+
+**Leakage is not noise.** It is completely deterministic: given the tone's offset, the
+whole pattern is predicted by one closed-form expression with no random part. That means
+it can be undone. Fit the kernel to the peak bin and its two neighbours and both the
+frequency and the amplitude come back to far better than a bin — this is what a modern
+analyser's "marker frequency" readout is doing, and it is why it can report six digits
+from a spectrum whose bins are 10 Hz apart.
+
+**And it does not apply to signals that are not tones.** A broadband or random signal has
+no "distance from a bin centre"; there is no line to smear. Truncation still shapes the
+result, but the relevant property of the window is then how much noise bandwidth each bin
+represents rather than how far its sidelobes reach. That is a different calculation, and
+it is in the next reading.
+''',
+                },
+                {
+                    "title": "Windows, coherent gain, and the resolution you cannot buy",
+                    "minutes": 15,
+                    "body": r'''
+The DFT does not treat your record as a fragment of something longer. It treats it as one
+period of a signal that repeats for ever — that is what the basis functions assume, since
+every one of them fits a whole number of cycles into the record and therefore joins up
+smoothly at the wrap point. Only the *data* need not join up.
+
+That is the picture worth carrying. Lay the record end to end with copies of itself. If
+the tone fits a whole number of times, the last sample flows into the first and the loop
+is a pure sinusoid. If it does not, there is a step at every join — and a step is
+broadband, which is exactly the skirt of the previous reading. Leakage is the spectrum of
+that discontinuity.
+
+Say it that way and the cure is obvious: make the data go to zero at both ends, so
+whatever the frequency, the joins are smooth. That is a **window**.
+
+## What tapering does to the transform
+
+Take the Hann window,
+
+$$w[n] = \tfrac12\left(1 - \cos\frac{2\pi n}{N}\right)$$
+
+and rewrite the cosine with Euler:
+
+$$w[n] = \tfrac12 - \tfrac14 e^{\,j2\pi n/N} - \tfrac14 e^{-j2\pi n/N}$$
+
+(That is the **periodic** Hann, with $N$ in the denominator, which is what an analyser
+uses and what makes this algebra exact — the window is one period of a cosine, so it wraps
+smoothly. The **symmetric** form with $N-1$, which is what `scipy.signal.hann` and this
+module's lab return, is the same window shifted by one sample: it reaches zero at both
+ends rather than at the start and one sample short of the end. At $N = 100$ their means
+are 0.495 and 0.500. Use whichever you like, measure its mean rather than assuming it,
+and do not mix the two inside one calculation.)
+
+Each of those exponentials is a shift of one bin on the frequency axis. So multiplying the
+record by a Hann window produces, in frequency, **half the rectangle's response, plus a
+quarter of it shifted one bin up and a quarter shifted one bin down, both inverted.**
+
+The consequences follow without any further calculation.
+
+The three main lobes, each two bins wide and centred one bin apart, add into a single lobe
+**four bins wide** null to null — twice the rectangle's. That is the cost.
+
+Out in the skirts, the rectangle's response alternates in sign from lobe to lobe. Two
+copies of it, shifted a bin either way and inverted, therefore sit largely opposite in
+sign to the middle one, and they cancel. Not perfectly, but well: the highest sidelobe
+falls from $-13.3$ dB to $-31.5$ dB, and further out the skirt decays as $1/\delta^{3}$
+instead of $1/\delta$ — 18 dB per doubling of distance instead of 6. That is the purchase.
+
+## The bill, in three parts
+
+**Coherent gain.** The window's mean is $\overline{w} = 0.5$ for Hann. Half the record has
+been thrown away, so an on-bin tone's peak bin reads half what it did. Every amplitude must
+be divided by $\overline{w}$ to get volts back, and the full single-sided conversion
+becomes
+
+$$A = \frac{2\,|X[k]|}{N\,\overline{w}}$$
+
+**Main-lobe width.** Two tones a single bin apart, which a rectangle shows as two humps,
+stop being reliably separable under Hann — whether they come out as one hump or two then
+depends on their relative phase, which is not something you control. Resolution has
+genuinely got worse.
+
+**Noise bandwidth.** Each bin now collects noise over a wider slice of frequency. The
+figure of merit is the **equivalent noise bandwidth**,
+
+$$\mathrm{ENBW} = \frac{N\sum w[n]^2}{\left(\sum w[n]\right)^2}$$
+
+which is 1.0 bins for a rectangle and 1.5 bins for Hann. It is the width of the ideal
+brick-wall filter that would pass the same noise power.
+
+Against all that stands one further benefit, and in practice it is often the real motive:
+the wider, flatter main lobe means the worst-case scalloping loss falls from 3.92 dB to
+1.42 dB.
+
+## Worked example: measuring a 1.000 V tone three ways
+
+$N = 4096$, one tone, amplitude 1.000 V, read from the largest bin.
+
+```
+                                on a bin       half a bin off
+rectangle, peak bin              1.000 V         0.6366 V     -3.92 dB
+Hann, peak bin, uncorrected      0.500 V         0.4244 V
+Hann, divided by w_mean = 0.5    1.000 V         0.8488 V     -1.42 dB
+```
+
+The middle row is the one that catches people. A perfectly correct window applied to a
+perfectly correct signal halves every amplitude on the screen, and there is nothing in the
+result to say so. Commercial analysers divide by the coherent gain silently, which is why
+the factor of two only bites the first time you write the transform yourself.
+
+## Worked example: the small tone beside the large one
+
+The distortion measurement from the previous reading, repeated with both windows. Skirt
+level relative to the interfering tone's peak:
+
+```
+offset from the big tone     rectangle      Hann
+       1.0 bins              exactly 0      -6.0 dB
+       1.5 bins               -13.5 dB     -15.4 dB
+       2.5 bins               -17.9 dB     -32.3 dB
+       3.5 bins               -20.8 dB     -41.9 dB
+      10.5 bins               -30.4 dB     -71.1 dB
+```
+
+At ten bins out the harmonic that was buried 10 dB under the rectangle's skirt now stands
+31 dB clear of Hann's, and the 1% distortion figure becomes measurable. That is the
+purchase, and it is a large one.
+
+Now look at the top row, where the rectangle wins outright. At exactly one bin the
+rectangle sits on a null and contributes *nothing whatever* to its neighbour's bin, while
+Hann is only 6 dB down, because one bin is well inside its four-bin main lobe. Put two
+equal tones one bin apart into a 256-sample record and the rectangle returns two humps
+whatever their relative phase; Hann returns two when they happen to be in phase and one
+when they are in quadrature, which is worse than useless because you cannot tell from the
+picture which case you are in. Move the tones two bins apart and Hann separates them
+reliably again. That factor of two is what the sidelobe suppression cost, and it is the
+number the last numeric problem in this module makes you pay for.
+
+There is no window that wins both columns, and that is not a defect of any particular
+window. A short record simply does not contain enough information to be both sharp and
+clean, and every window is a choice about which of the two to spend it on.
+
+## Worked example: noise, where the rectangle is not the worst choice
+
+A noise floor is measured with $N = 4096$ at $f_s = 48$ kSa/s under a Hann window, and one
+bin in the flat part of the floor reads 50.0 µV rms.
+
+```
+df    = 48000 / 4096                     = 11.719 Hz
+ENBW  = 1.5 bins x 11.719                = 17.578 Hz
+density = 50.0 / sqrt(17.578)            = 11.93 uV/sqrtHz     correct
+
+using df instead of ENBW by mistake:
+        = 50.0 / sqrt(11.719)            = 14.61 uV/sqrtHz     22% high
+```
+
+The error is a factor of $\sqrt{1.5}$, and it is entirely systematic — it will not average
+away and it will not show up as scatter. For broadband measurements the rectangle, with
+$\mathrm{ENBW} = 1.0$, gives the narrowest bins and the lowest noise per bin of any window
+there is. The reason not to use it is leakage from any strong tone that happens to be
+present, not noise performance.
+
+## Zero padding: what it fixes, and what it cannot
+
+Append 3072 zeros to a 1024-sample record and transform 4096 points. What have you got?
+
+Not more information: the zeros contribute nothing to any sum. What changes is where the
+transform is evaluated. The windowed record has a genuine continuous spectrum — a smooth
+curve of kernels — and the DFT samples it at $N$ evenly spaced points. Raising $N$ with
+zeros samples the *same curve* at four times as many points.
+
+That is not nothing. For one isolated tone the improvement is real and large:
+
+```
+a 1.000 V tone, 10.5 cycles in a 100-sample record, rectangular window
+
+no padding, tallest bin              0.6499 V      35% low
+padded 16x with zeros, tallest bin   1.0000 V      right
+```
+
+Scalloping loss is an interpolation problem — the peak of the curve fell between the
+points you happened to evaluate — and interpolation fixes it exactly.
+
+Resolution is not that kind of problem, and the following pair of runs is worth staring
+at. Two 1.000 V tones in a 256-sample record, at bin 40 and bin 40.5, rectangular window,
+transformed with 32 times as many zeros appended:
+
+```
+the two tones in phase        one hump, at bin 40.25, 1.273 V
+the two tones in quadrature   two humps, at bins 39.59 and 40.91, 0.651 V each
+
+the tones are 0.5 bins apart in both runs
+```
+
+The quadrature run appears to show two tones — and they are 1.3 bins apart, at neither of
+the frequencies present, with half the right amplitude. Change a phase you never
+controlled and the picture changes completely, because there is nothing in the record
+that distinguishes the two cases. For contrast, the same experiment with the tones 2.5
+bins apart returns two peaks at bins 40.00 and 42.50 reading 1.008 V each: right places,
+right sizes, no padding needed to see them.
+
+So the accurate statement is narrower than either slogan. Zero padding does not improve
+resolution — the two tones sit inside one main lobe, that lobe is $1/T_{rec}$ wide because
+the record is $T_{rec}$ long, and evaluating it at more points cannot split it. What zero
+padding does improve, sometimes dramatically, is the amplitude and frequency you can read
+off an *isolated* peak.
+
+## The mistake people actually make
+
+Applying a window because it is the careful thing to do. It is not a safety measure; it is
+a trade, and it has a wrong side. Windowing a decayed impulse response throws away real
+data. Windowing when the tones are one bin apart destroys the only resolution you had.
+Windowing a broadband noise measurement raises the effective bin width by 50% and, if you
+forget the ENBW, corrupts the answer by $\sqrt{1.5}$.
+
+It is tempting because the failure modes of *not* windowing are loud — skirts sprawling
+across the screen — while the failure modes of windowing are quiet, and because the
+analyser's default is usually Hann, which trains the reflex. The habit worth building is
+to ask what is being looked for. One tone, amplitude wanted, nothing else present: pad and
+interpolate, or use a flat-top. A small tone beside a large one: Hann, or something with
+lower sidelobes still. Two tones almost touching: rectangle, and a longer record. A noise
+floor: rectangle, and do the ENBW arithmetic.
+
+## Where it stops holding
+
+**Windows other than these two.** The Hann/rectangle pair is a good axis to think along,
+but it is not the whole space. A **flat-top** window has a main lobe about nine bins wide
+and a scalloping loss under 0.01 dB — useless for resolving anything, and the correct
+choice when the job is calibrating one tone's amplitude to a fraction of a per cent.
+Kaiser and Dolph–Chebyshev windows have a parameter that moves along the same trade
+continuously, so the choice becomes a number rather than a name.
+
+**Averaging changes the question.** For a random signal a single transform is a very noisy
+estimate of the spectrum, and lengthening the record does not make it less noisy — it just
+gives more bins, each as uncertain as before. The standard cure is Welch's method: cut the
+data into overlapping windowed segments, transform each, and average the magnitudes. That
+buys a steadier estimate by spending resolution, and 50% overlap is used with Hann
+precisely to recover the data the taper had thrown away at the segment edges.
+
+**And $1/T_{rec}$ is not a law of nature.** It is the resolution limit for this family of
+methods — take a record, window it, transform it. If you are willing to assume a model, say
+that the signal is exactly two sinusoids in white noise, then fitting that model to the
+data can separate tones far closer than $1/T_{rec}$; the subspace methods with names like
+MUSIC and ESPRIT do this routinely. The price is honest and severe: when the assumption is
+wrong they do not degrade gracefully, they report a confident wrong answer. The DFT's
+resolution limit is the price of assuming nothing at all, which is usually the right thing
+to pay for it.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "The record is 100 ms long, whatever the sample rate",
                 "visualiser": "spectrum",
@@ -8867,8 +11870,9 @@ assert abs(stable[40]) < abs(stable[20]), \
                 "brief": r'''
 Same two panels as module 3, read for a different purpose. The **top** panel is a fixed
 window of 100 ms — treat it as the whole record a DFT would be handed — and the dots are
-the samples in it. The **bottom** panel is the frequency axis those samples span, with
-the dashed line at $f_s/2$.
+the samples in it. The **bottom** panel is a fixed frequency axis running 0 to 260 Hz,
+carrying a spike at the signal frequency and a dashed line at $f_s/2$ that moves as you
+change the sample rate.
 
 The question this time is not where a tone lands but **what a DFT of this record could
 tell them apart by**. That number is $\Delta f = 1/T_{rec}$, and since the window here
@@ -8878,7 +11882,7 @@ Move the sample rate and count dots.
 ''',
                 "notice": [
                     "It opens at 40 Hz sampled at 200 Hz: a dot every 5 ms across the 100 ms window, so 20 sample intervals in the record. A DFT of it would have bins 10 Hz apart, and 40 Hz falls on the fourth of them exactly — four whole cycles fit in the record, which is the condition for a clean single line.",
-                    "Drag the sample rate to 400 Hz. Twice as many dots, and the window is still 100 ms wide. $N$ has doubled and $f_s$ has doubled, so $\\Delta f = f_s/N$ is unchanged at 10 Hz. What did change is the top of the frequency axis: the dashed Nyquist line moves out to 200 Hz. Sample rate bought bandwidth and bought no resolution at all.",
+                    "Drag the sample rate to 400 Hz. Twice as many dots, and the window is still 100 ms wide. $N$ has doubled and $f_s$ has doubled, so $\\Delta f = f_s/N$ is unchanged at 10 Hz. What did change is the dashed Nyquist line, which moves out to 200 Hz. Sample rate bought bandwidth and bought no resolution at all.",
                     "Now drop the rate to 100 Hz. Half as many dots, the Nyquist line comes in to 50 Hz, and the bin spacing is *still* 10 Hz. The 40 Hz tone is now uncomfortably close to the edge of what can be represented, but it is no harder to distinguish from a 50 Hz tone than it was before.",
                     "Put the rate back to 200 and set the signal to 45 Hz. This picture does not change much — the visualiser draws an ideal line, because it knows the true frequency. A DFT does not: 45 Hz sits exactly halfway between bin 4 and bin 5, no whole number of cycles fits the record, and the transform would put energy in every bin and report a peak about 36% low. The gap between the clean line drawn here and what a finite record actually returns is the subject of this module.",
                     "Finally, 130 Hz at 200 Hz sampling. The alias appears at 70 Hz, exactly as in module 3 — and 70 is a multiple of 10, so it lands cleanly on bin 7. Aliasing *moves* a tone to the wrong bin; leakage *smears* it across all of them. They are different failures, they have different cures, and a spectrum showing both at once is why reading one takes practice.",
@@ -8930,10 +11934,10 @@ resolve two close tones the only lever is a longer record.
 The bins are 10 Hz apart and there is none at 137, so no whole number of cycles fits the
 record. The rectangular window's $\mathrm{sinc}$ nulls miss every bin centre and energy
 appears everywhere — leakage — with the largest bin near 140 Hz reading below the true
-amplitude. Nothing is broken: the record contains a sinusoid that starts and stops, and
-that really does have a broad spectrum. Choosing a record length that holds a whole
-number of cycles is what makes the clean answer possible, which is why test signals are
-specified that way.
+amplitude, about 0.85 of it for a tone this far off centre. Nothing is broken: the record
+contains a sinusoid that starts and stops, and that really does have a broad spectrum.
+Choosing a record length that holds a whole number of cycles is what makes the clean
+answer possible, which is why test signals are specified that way.
 ''',
                     },
                     {
@@ -8993,19 +11997,168 @@ it is not resolution.
                     },
                 ],
             },
-            "numeric": {
-                "title": "How far is the tone from the nearest bin?",
-                "minutes": 7,
+            "blanks": {
+                "title": "One measured spectrum, converted to volts",
+                "minutes": 9,
+                "caption": "raw DFT magnitudes are not volts until four separate things have been divided out",
+                "lang": "text",
                 "brief": r'''
+A vibration logger has returned a record and a transform of it. The peak is obvious; the
+question is what it is worth in volts, and there are four factors between the raw
+magnitude and the answer — the transform length, the single-sided convention, the
+window's coherent gain, and the conversion from amplitude to RMS.
+
+Fill the five holes. Nothing here needs a calculator; every one of them is a rule from
+the readings.
+''',
+                "listing": """  record:   N = 4096 samples at f_s = 32768 Sa/s,   Hann window applied
+
+  T_rec   = N / f_s                     = 4096 / 32768        = 0.125 s
+  df      = ___                                               = 8 Hz
+  the bins that carry new information run k = 0 .. ___
+  the peak is at k = 125, so f = 125 x 8                      = 1000 Hz
+
+  |X[125]| = 2048         (the raw magnitude, nothing divided out yet)
+
+  single-sided factor, because the other half is in the mirror bin      = ___
+  coherent gain of the window, w_mean                                   = ___
+
+  amplitude = (factor x |X[125]|) / (N x w_mean)                        = 2.00 V
+  rms       = amplitude / ___                                           = 1.414 V
+
+  and the tone fits 125 whole cycles into the record, so there is no scalloping
+  loss to correct: the Hann window spreads it over bins 124, 125 and 126 in the
+  ratio 1 : 2 : 1, and dividing the peak bin by the coherent gain recovers the
+  whole amplitude from that one bin alone
+""",
+                "blanks": [
+                    {
+                        "prompt": "The bin spacing, in terms of the two numbers on the line above it.",
+                        "hole": "?",
+                        "opts": ["f_s / N", "N / f_s", "f_s / 2", "1 / N"],
+                        "a": 0,
+                        "why": "$\\Delta f = f_s/N = 32768/4096 = 8$ Hz, and equally $1/T_{rec} = 1/0.125 = 8$ Hz. The second form is the one to keep: the spacing is set by how long you looked, and by nothing else.",
+                        "whys": [
+                            "$\\Delta f = f_s/N = 32768/4096 = 8$ Hz, and equally $1/T_{rec} = 1/0.125 = 8$ Hz. The second form is the one to keep: the spacing is set by how long you looked, and by nothing else.",
+                            "That is $T_{rec}$ in seconds, 0.125 here — the record length rather than the spacing. It is the reciprocal of the answer, which makes it exactly the mistake that turns a 8 Hz grid into a 0.125 Hz one.",
+                            "$f_s/2 = 16384$ Hz is the top of the frequency axis, not the distance between points along it. Confusing the two is confusing bandwidth with resolution, which is the module's central warning.",
+                            "$1/N$ has no units of frequency in it at all — no sample rate appears, so nothing fixes the scale. Whatever the answer is, it has to contain either $f_s$ or a time.",
+                        ],
+                    },
+                    {
+                        "prompt": "How far up the bin index goes before the numbers start repeating as a conjugate mirror.",
+                        "hole": "?",
+                        "opts": ["N/2", "N", "N - 1", "N/4"],
+                        "a": 0,
+                        "why": "For a real input, $X[N-k] = X[k]^{*}$, so everything above $k = N/2$ is the mirror of something below it and carries no new information. Bin $N/2$ sits at $f_s/2$, which is where the axis has to stop anyway.",
+                        "whys": [
+                            "For a real input, $X[N-k] = X[k]^{*}$, so everything above $k = N/2$ is the mirror of something below it and carries no new information. Bin $N/2$ sits at $f_s/2$, which is where the axis has to stop anyway.",
+                            "The transform does return $N$ numbers, but the top half of them are the conjugates of the bottom half for a real input. Plotting all $N$ draws the same spectrum twice, mirrored about $f_s/2$.",
+                            "$N-1$ is the largest index the array has, which is a fact about the array rather than about the information in it. The useful axis stops half way, at $f_s/2$.",
+                            "$N/4$ corresponds to $f_s/4$, which is not a special frequency for anything. Nyquist is at $f_s/2$ and that is where the mirror begins.",
+                        ],
+                    },
+                    {
+                        "prompt": "The factor that reclaims the energy sitting in the negative-frequency bin you are not looking at.",
+                        "hole": "?",
+                        "opts": ["2", "1", "N", "1/2"],
+                        "a": 0,
+                        "why": "A real sinusoid of amplitude $A$ is two complex exponentials of size $A/2$, one at $+f$ and one at $-f$. Looking only at the positive half means seeing only half the amplitude, so the single-sided convention doubles every bin — except DC and, for even $N$, the bin at $f_s/2$, neither of which has a partner.",
+                        "whys": [
+                            "A real sinusoid of amplitude $A$ is two complex exponentials of size $A/2$, one at $+f$ and one at $-f$. Looking only at the positive half means seeing only half the amplitude, so the single-sided convention doubles every bin — except DC and, for even $N$, the bin at $f_s/2$, neither of which has a partner.",
+                            "Leaving it at 1 is the double-sided convention, which is self-consistent but reports every sinusoid at half its amplitude. Here it would give 1.00 V for a 2.00 V tone — a clean 6.02 dB error that looks exactly like a gain fault in the hardware.",
+                            "$N$ is already dividing on the other side of the fraction; putting it on top as well would cancel it and leave a number that grows with the transform length. Whatever the scaling is, the answer in volts cannot depend on how many samples you took.",
+                            "Halving goes the wrong way. The bin is already short of the true amplitude because half of it is in the mirror, so the correction has to make the number larger, not smaller.",
+                        ],
+                    },
+                    {
+                        "prompt": "The mean value of a Hann window, which is what a taper costs in amplitude.",
+                        "hole": "?",
+                        "opts": ["0.5", "1.0", "0.25", "1.5"],
+                        "a": 0,
+                        "why": "$w[n] = \\frac12(1 - \\cos)$ averages to $\\frac12$, because the cosine averages to zero over a whole number of periods. Half the record has been tapered away, so the peak bin reads half, and dividing by the coherent gain puts it back. Check it against the arithmetic: $2 \\times 2048 / (4096 \\times 0.5) = 4096/2048 = 2.00$ V.",
+                        "whys": [
+                            "$w[n] = \\frac12(1 - \\cos)$ averages to $\\frac12$, because the cosine averages to zero over a whole number of periods. Half the record has been tapered away, so the peak bin reads half, and dividing by the coherent gain puts it back. Check it against the arithmetic: $2 \\times 2048 / (4096 \\times 0.5) = 4096/2048 = 2.00$ V.",
+                            "A mean of 1.0 is the rectangular window — no taper at all, nothing removed, nothing to correct. Applying that correction to a Hann-windowed record reports every amplitude at half its true value.",
+                            "0.25 is the mean of $w^2$, not of $w$, and it belongs to the noise-bandwidth calculation rather than the amplitude one. Using it here would over-correct by a factor of two.",
+                            "No window has a mean above 1, since no sample of a taper exceeds 1. A correction factor larger than the rectangle's would be claiming the window added signal.",
+                        ],
+                    },
+                    {
+                        "prompt": "Amplitude to RMS, for a sinusoid.",
+                        "hole": "?",
+                        "opts": ["sqrt(2)", "2", "sqrt(N)", "N"],
+                        "a": 0,
+                        "why": "$V_{rms} = A/\\sqrt2$ for a sinusoid and for nothing else — module 5 derived it, and it is the one conversion in this list that has nothing to do with the DFT. $2.00/\\sqrt2 = 1.414$ V.",
+                        "whys": [
+                            "$V_{rms} = A/\\sqrt2$ for a sinusoid and for nothing else — module 5 derived it, and it is the one conversion in this list that has nothing to do with the DFT. $2.00/\\sqrt2 = 1.414$ V.",
+                            "Dividing by 2 is the peak-to-peak conversion, not the RMS one. It would give 1.00 V here, and the printed answer of 1.414 rules it out immediately.",
+                            "$\\sqrt N$ appears in noise calculations, where independent contributions add in power. A single deterministic tone's RMS has nothing to do with how many samples were taken.",
+                            "Dividing by $N$ again would make the answer depend on the transform length, and the volts on a wire do not.",
+                        ],
+                    },
+                ],
+            },
+            "numeric": [
+                {
+                    "title": "The spacing between the bins",
+                    "minutes": 4,
+                    "brief": r'''
+The first thing to work out about any capture, before looking at a single amplitude: how
+far apart are the points on the frequency axis?
+
+A logger takes **1024 samples at 44.1 kSa/s** and transforms them.
+''',
+                    "prompt": "What is the spacing between adjacent DFT bins, in hertz?",
+                    "note": "Two decimal places. This is one division.",
+                    "figure": r'''
+```
+  the record   |<--------------- N = 1024 samples --------------->|
+               +---+---+---+---+---  ...  ---+---+---+---+---+---+
+                 one sample every 1/44100 s
+
+  the bins       k=0   k=1   k=2   k=3   ...                 k=512
+                  0    df    2df   3df                       f_s/2
+                  |-----|-----|-----|-----  ...  --------------|
+
+                        how wide is one of those steps?
+```
+''',
+                    "given": [
+                        {"label": "Record length", "value": "1024 samples"},
+                        {"label": "Sample rate", "value": "44.1 kSa/s"},
+                    ],
+                    "aside": "44.1 kSa/s is the CD rate and 1024 is the transform length everyone "
+                             "reaches for first, so this particular number turns up constantly in "
+                             "audio work. It is worth recognising on sight.",
+                    "answer": 43.06640625,
+                    "tol": 0.05,
+                    "unit": "Hz",
+                    "hint": "$\\Delta f = f_s/N$, and equivalently $1/T_{rec}$ where "
+                            "$T_{rec} = N/f_s$. Either route gives the same number.",
+                    "wrong": "22050 is $f_s/2$, the top of the axis rather than the step along it. "
+                             "0.0232 is $T_{rec}$, the record length in seconds — the reciprocal of "
+                             "what was asked.",
+                    "why": "$\\Delta f = 44100/1024 = 43.066$ Hz. The other route: "
+                           "$T_{rec} = 1024/44100 = 23.22$ ms, and $1/0.02322 = 43.07$ Hz. Two "
+                           "tones closer together than 43 Hz cannot be separated in this record, "
+                           "whatever is done to it afterwards — and note that nothing about that "
+                           "sentence would change if the converter ran at 96 kSa/s, provided the "
+                           "record stayed 23.22 ms long.",
+                },
+                {
+                    "title": "How far is the tone from the nearest bin?",
+                    "minutes": 7,
+                    "brief": r'''
 A data logger captures **4096 samples at 48 kSa/s** and transforms the lot. Somewhere in
 the record is a tone known to be at exactly 1000.00 Hz, and the question before reading
 any amplitude off the result is whether that tone lands on a bin or between two.
 
 Work out the bin spacing, find the nearest bin centre, and report the distance.
 ''',
-                "prompt": "How far, in hertz, is the 1000.00 Hz tone from the centre of the nearest bin?",
-                "note": "A positive number: the distance, not the signed offset. Two decimal places is plenty.",
-                "figure": r'''
+                    "prompt": "How far, in hertz, is the 1000.00 Hz tone from the centre of the nearest bin?",
+                    "note": "A positive number: the distance, not the signed offset. Two decimal places is plenty.",
+                    "figure": r'''
 ```
   bin      83        84        85        86        87
   Hz    972.66    984.38    996.09   1007.81   1019.53
@@ -9017,32 +12170,316 @@ Work out the bin spacing, find the nearest bin centre, and report the distance.
 The bins are evenly spaced and the tone is not on one of them. That gap is what decides
 whether the peak amplitude can be trusted.
 ''',
-                "given": [
-                    {"label": "Record length", "value": "4096 samples"},
-                    {"label": "Sample rate", "value": "48.0 kSa/s"},
-                    {"label": "Tone", "value": "1000.00 Hz"},
+                    "given": [
+                        {"label": "Record length", "value": "4096 samples"},
+                        {"label": "Sample rate", "value": "48.0 kSa/s"},
+                        {"label": "Tone", "value": "1000.00 Hz"},
+                    ],
+                    "aside": "4096 samples at 48 kSa/s is a record 85.33 ms long, and 1000 Hz puts "
+                             "85.33 cycles in it — the same fraction, which is not a coincidence: "
+                             "the offset in bins and the fractional part of the cycle count are the "
+                             "same number.",
+                    "answer": 3.90625,
+                    "tol": 0.05,
+                    "unit": "Hz",
+                    "hint": "$\\Delta f = f_s/N = 48000/4096$. Divide 1000 by that to find which bin "
+                            "the tone falls between, then multiply the nearest whole bin index back "
+                            "up and subtract.",
+                    "wrong": "If you got about 7.8, you rounded the bin index the wrong way; if you "
+                             "got 11.7, you reported the bin spacing itself rather than the distance "
+                             "to a bin.",
+                    "why": "$\\Delta f = 48000/4096 = 11.71875$ Hz. $1000/11.71875 = 85.333$, so the "
+                           "tone sits a third of a bin above bin 85, whose centre is "
+                           "$85 \\times 11.71875 = 996.09375$ Hz. The distance is "
+                           "$1000 - 996.09375 = 3.90625$ Hz, which is $0.333$ of a bin — far "
+                           "enough off-centre for the peak bin to read several per cent low and for "
+                           "the neighbouring bins to be full of leakage. The fix costs nothing: "
+                           "take 4080 samples instead of 4096. That is $48 \\times 85$, exactly 85 "
+                           "cycles of 1000 Hz, and the tone lands dead on bin 85.",
+                },
+                {
+                    "title": "The smallest transform that separates them",
+                    "minutes": 8,
+                    "brief": r'''
+A gearbox is being monitored. Two components are expected close together — one at
+**118.0 Hz**, one at **121.5 Hz** — and the whole point of the measurement is to see them
+as two peaks rather than one.
+
+The logger's sample rate is fixed at **2000 Sa/s** by hardware you cannot change, and the
+FFT routine on the microcontroller only accepts a length that is a power of two. Choose
+the transform length.
+
+Take "separated" to mean the two tones fall in different bins, which needs the bin
+spacing to be no larger than the gap between them. A rectangular window is used.
+''',
+                    "prompt": "What is the smallest power-of-two transform length N that separates the two components?",
+                    "note": "A whole number of samples.",
+                    "figure": r'''
+```
+   amplitude
+      |              118.0 Hz    121.5 Hz
+      |                  |          |
+      |                  |          |
+      +------------------+----------+---------------> f
+                       |<- 3.5 Hz ->|
+
+   f_s = 2000 Sa/s, fixed.        N must be 256, 512, 1024, 2048, ...
+
+   df = f_s / N   must come out no larger than 3.5 Hz
+```
+''',
+                    "given": [
+                        {"label": "Tones", "value": "118.0 Hz and 121.5 Hz"},
+                        {"label": "Sample rate", "value": "2000 Sa/s (fixed)"},
+                        {"label": "Transform length", "value": "a power of two"},
+                    ],
+                    "aside": "The record this implies is $1024/2000 = 512$ ms, half a second of a "
+                             "gearbox that had better be running at a constant speed throughout — "
+                             "which is a real constraint on the measurement, and the usual reason "
+                             "machinery analysis is done at a held test speed rather than during a "
+                             "run-up.",
+                    "answer": 1024,
+                    "tol": 0.5,
+                    "unit": "samples",
+                    "hint": "Work out the largest $\\Delta f$ that will do, turn it into the "
+                            "smallest $N$ with $N = f_s/\\Delta f$, then round *up* to a power of "
+                            "two.",
+                    "wrong": "512 gives $\\Delta f = 3.906$ Hz, which is wider than the 3.5 Hz gap, "
+                             "so both tones land in the same bin. 2048 works but is twice the "
+                             "record and twice the arithmetic for no benefit.",
+                    "why": "The gap is $121.5 - 118.0 = 3.5$ Hz, so $\\Delta f \\le 3.5$ Hz and "
+                           "$N \\ge f_s/\\Delta f = 2000/3.5 = 571.4$. The powers of two either "
+                           "side are 512 and 1024, and 512 is below the requirement, so "
+                           "$N = 1024$. That gives $\\Delta f = 2000/1024 = 1.953$ Hz and puts the "
+                           "two tones at bins 60.4 and 62.2 — nearly two bins apart, comfortably "
+                           "more than the one bin a rectangle needs, since its main lobe puts its "
+                           "first null exactly one bin from the peak. Note "
+                           "what did *not* enter the calculation: the frequencies themselves. Only "
+                           "the gap between them matters, which is why the same 1024 would serve "
+                           "for a pair at 1180 and 1183.5 Hz.",
+                },
+                {
+                    "title": "From a raw bin magnitude back to volts",
+                    "minutes": 8,
+                    "brief": r'''
+A transform has been run and the largest bin has been found. It holds the number 3072,
+which is not a voltage — it is a correlation sum, and three separate factors stand between
+it and an amplitude in volts.
+
+The record is **4096 samples**, a **Hann window** was applied (coherent gain 0.500), and
+the tone sits exactly on bin 512, so there is no scalloping loss to worry about. The
+accompanying figure gives the three magnitudes around the peak; note that the neighbours
+are each exactly half the peak, which is the signature of an on-bin tone under a Hann
+window.
+
+Report the RMS voltage of the tone, not its amplitude.
+''',
+                    "prompt": "What is the RMS voltage of the tone, in volts?",
+                    "note": "Three decimal places. Amplitude first, then RMS.",
+                    "figure": r'''
+```
+   |X[k]|  (raw DFT magnitude, nothing divided out)
+
+      |                    3072
+      |                     |
+      |            1536     |     1536
+      |              |      |      |
+      +--------------+------+------+---------> k
+                    511    512    513
+
+   N = 4096          Hann window, mean 0.500
+```
+''',
+                    "given": [
+                        {"label": "Peak bin magnitude", "value": "3072"},
+                        {"label": "Record length", "value": "4096 samples"},
+                        {"label": "Window", "value": "Hann, coherent gain 0.500"},
+                    ],
+                    "aside": "A tone on a bin under a Hann window always spreads over exactly three "
+                             "bins, in the ratio 1 : 2 : 1 — that is the three shifted copies the "
+                             "window's cosine produces, and it is a quick way to confirm you are "
+                             "looking at a coherent tone rather than at leakage.",
+                    "answer": 2.1213203435596424,
+                    "tol": 0.01,
+                    "unit": "V",
+                    "hint": "$A = 2|X|/(N\\overline{w})$, then $V_{rms} = A/\\sqrt2$. The 2 is the "
+                            "single-sided convention and $\\overline{w} = 0.5$ undoes the window.",
+                    "wrong": "3.00 V is the amplitude — right, but the question asked for RMS. "
+                             "1.061 V is what you get by forgetting the single-sided factor of two, "
+                             "and 0.530 V by forgetting the coherent gain as well.",
+                    "why": "$A = 2 \\times 3072/(4096 \\times 0.500) = 6144/2048 = 3.000$ V, and "
+                           "$V_{rms} = 3.000/\\sqrt2 = 2.121$ V. Every factor is doing a separate "
+                           "job: the $N$ removes the growth of the correlation sum with record "
+                           "length, the 2 reclaims the half of the amplitude that sits in the "
+                           "mirror bin, the $\\overline{w}$ puts back what the taper removed, and "
+                           "the $\\sqrt2$ is the ordinary sinusoid conversion that has nothing to "
+                           "do with the transform at all. Drop any one of them and the answer is "
+                           "wrong by a clean, constant, entirely plausible-looking factor.",
+                },
+                {
+                    "title": "How long the acquisition has to be",
+                    "minutes": 10,
+                    "brief": r'''
+An audio analyser is being specified. Four requirements, and they interact.
+
+1. It must cover **DC to 20 kHz**, and the converter available runs at **48 kSa/s**.
+2. It must separate two tones **1.5 Hz apart**.
+3. A **Hann window** is used, whose main lobe is four bins wide null to null. Two tones
+   are therefore only distinguishable if they are at least **two bins** apart.
+4. The FFT length must be a power of two.
+
+Work out how long one acquisition takes, from the moment the capture starts to the moment
+the last sample lands.
+''',
+                    "prompt": "How long is one acquisition, in seconds?",
+                    "note": "Three decimal places. The answer is the record length in time, not the number of samples.",
+                    "figure": r'''
+```
+  requirement           what it fixes
+
+  DC .. 20 kHz          f_s = 48 kSa/s          (given; f_s/2 = 24 kHz clears 20 kHz)
+  two tones 1.5 Hz      the tones must be 2 bins apart under Hann,
+                        so df <= 1.5 / 2
+  N a power of two      round the resulting N up
+
+  T_rec = N / f_s   <-- the number asked for
+```
+''',
+                    "given": [
+                        {"label": "Sample rate", "value": "48 kSa/s"},
+                        {"label": "Tones to separate", "value": "1.5 Hz apart"},
+                        {"label": "Window", "value": "Hann, main lobe 4 bins wide"},
+                        {"label": "Transform length", "value": "a power of two"},
+                    ],
+                    "aside": "Note the direction of the penalty. Under a rectangular window one bin "
+                             "of separation would have done, needing only 32768 points and 0.683 s. "
+                             "The window that made the small tones visible has doubled the time the "
+                             "measurement takes, and that is a fair summary of what every window "
+                             "costs.",
+                    "answer": 1.3653333333333333,
+                    "tol": 0.005,
+                    "unit": "s",
+                    "hint": "Two bins must fit inside 1.5 Hz, so $\\Delta f \\le 0.75$ Hz. Then "
+                            "$N \\ge f_s/\\Delta f$, round up to a power of two, and "
+                            "$T_{rec} = N/f_s$.",
+                    "wrong": "0.683 s is the rectangular-window answer, obtained by allowing the "
+                             "tones to be only one bin apart. 1.333 s is $64000/48000$ — right "
+                             "arithmetic, but 64000 is not a power of two and the FFT will not "
+                             "accept it.",
+                    "why": "The Hann main lobe is four bins wide, so two tones need at least two "
+                           "bins between them: $\\Delta f \\le 1.5/2 = 0.75$ Hz. That needs "
+                           "$N \\ge 48000/0.75 = 64000$ samples, and the next power of two is "
+                           "$2^{16} = 65536$. So $T_{rec} = 65536/48000 = 1.365$ s, with an actual "
+                           "bin spacing of $48000/65536 = 0.7324$ Hz. Worth noticing what the "
+                           "sample rate did and did not do here: it was chosen entirely by "
+                           "requirement 1, it appears in both $N$ and $T_{rec}$, and it cancels "
+                           "between them — the acquisition would still take about 1.37 s if the "
+                           "converter ran at 1 MSa/s.",
+                },
+            ],
+            "derive": {
+                "title": "Where the 36% comes from",
+                "minutes": 14,
+                "vars": ["r", "N", "delta", "n", "X"],
+                "brief": r'''
+The claim to be established: a sinusoid sitting exactly halfway between two DFT bins
+produces a peak bin that reads $2/\pi$ of the truth — 36% low, 3.92 dB down — and that
+number depends on nothing, not on $N$, not on the sample rate, not on the frequency.
+
+Set the tone $\delta$ bins above bin $k_0$, so $x[n] = e^{\,j2\pi(k_0+\delta)n/N}$. The
+transform at bin $k_0$ multiplies by $e^{-j2\pi k_0 n/N}$ and sums, and the two $k_0$
+terms cancel:
+
+$$X[k_0] = \sum_{n=0}^{N-1} e^{\,j2\pi\delta n/N} = \sum_{n=0}^{N-1} r^{\,n},
+\qquad r = e^{\,j2\pi\delta/N}$$
+
+A geometric series. Six steps from here to the constant. Take $0 < \delta < 1$ throughout,
+so every sine below is positive and the absolute-value bars can be dropped.
+''',
+                "steps": [
+                    {
+                        "prompt": "Write $\\sum_{n=0}^{N-1} r^{n}$ in closed form, for $r \\neq 1$.",
+                        "given": "The same series that proved the basis functions orthogonal in the first reading, used here with a ratio that is not a root of unity.",
+                        "answer": "\\frac{1 - r^{N}}{1 - r}",
+                        "hint": "Multiply the sum by $(1-r)$ and watch all but two terms cancel.",
+                        "deconstruct": [
+                            "Let $S = 1 + r + r^2 + \\dots + r^{N-1}$.",
+                            "Then $rS = r + r^2 + \\dots + r^{N}$, so $S - rS = 1 - r^{N}$.",
+                            "Divide by $1-r$, which is allowed because $r \\neq 1$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Put $r = e^{\\,j2\\pi\\delta/N}$ back, so the numerator is $1 - e^{\\,j2\\pi\\delta}$. Using $|1 - e^{\\,j\\theta}| = 2\\sin(\\theta/2)$ for $0 < \\theta < 2\\pi$, write $|1 - r^{N}|$. Type $\\sin$ as `sin`.",
+                        "given": "$r^{N} = e^{\\,j2\\pi\\delta}$, so $\\theta = 2\\pi\\delta$.",
+                        "answer": "2 sin(\\pi \\delta)",
+                        "hint": "Half of $2\\pi\\delta$ is $\\pi\\delta$.",
+                        "deconstruct": [
+                            "$1 - e^{j\\theta} = e^{j\\theta/2}(e^{-j\\theta/2} - e^{j\\theta/2})$.",
+                            "The bracket is $-2j\\sin(\\theta/2)$, and $|e^{j\\theta/2}| = 1$.",
+                            "So the magnitude is $2\\sin(\\theta/2)$ with $\\theta = 2\\pi\\delta$.",
+                        ],
+                    },
+                    {
+                        "prompt": "The same identity on the denominator, where the angle is $2\\pi\\delta/N$ instead. Write $|1 - r|$.",
+                        "answer": "2 sin(\\pi \\delta / N)",
+                        "hint": "Nothing new — the same formula with the angle divided by $N$.",
+                        "deconstruct": [
+                            "$\\theta = 2\\pi\\delta/N$.",
+                            "Half of it is $\\pi\\delta/N$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Divide the two and write $|X[k_0]|$. This is the Dirichlet kernel.",
+                        "given": "The twos cancel.",
+                        "answer": "\\frac{sin(\\pi \\delta)}{sin(\\pi \\delta / N)}",
+                        "hint": "A ratio of two sines, with the $N$ appearing only in the lower one.",
+                        "deconstruct": [
+                            "$|X| = |1 - r^{N}| / |1 - r|$.",
+                            "Substitute the two magnitudes just found and cancel the factor 2.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now the worst case: a tone exactly halfway between two bins, $\\delta = \\frac12$. Write the magnitude.",
+                        "given": "$\\sin(\\pi/2) = 1$.",
+                        "answer": "\\frac{1}{sin(\\frac{\\pi}{2 N})}",
+                        "hint": "The numerator collapses to 1; only the denominator keeps its $N$.",
+                        "deconstruct": [
+                            "Numerator: $\\sin(\\pi \\times \\tfrac12) = \\sin(\\pi/2) = 1$.",
+                            "Denominator: $\\sin(\\pi \\times \\tfrac12 / N) = \\sin(\\pi/2N)$.",
+                        ],
+                    },
+                    {
+                        "prompt": "An on-bin tone gives a peak of $N$. For large $N$ the angle $\\pi/2N$ is small, so replace $\\sin(\\pi/2N)$ by $\\pi/2N$ and write the half-bin peak as a fraction of $N$.",
+                        "given": "$\\sin u \\to u$ as $u \\to 0$.",
+                        "answer": "\\frac{2}{\\pi}",
+                        "hint": "$1/(\\pi/2N) = 2N/\\pi$; divide that by $N$.",
+                        "deconstruct": [
+                            "$\\dfrac{1}{\\sin(\\pi/2N)} \\approx \\dfrac{1}{\\pi/2N} = \\dfrac{2N}{\\pi}$.",
+                            "Divide by the on-bin peak $N$ and the $N$ cancels.",
+                        ],
+                    },
                 ],
-                "aside": "4096 samples at 48 kSa/s is a record 85.33 ms long, and 1000 Hz puts "
-                         "85.33 cycles in it — the same fraction, which is not a coincidence: "
-                         "the offset in bins and the fractional part of the cycle count are the "
-                         "same number.",
-                "answer": 3.90625,
-                "tol": 0.05,
-                "unit": "Hz",
-                "hint": "$\\Delta f = f_s/N = 48000/4096$. Divide 1000 by that to find which bin "
-                        "the tone falls between, then multiply the nearest whole bin index back "
-                        "up and subtract.",
-                "wrong": "If you got about 7.8, you rounded the bin index the wrong way; if you "
-                         "got 11.7, you reported the bin spacing itself rather than the distance "
-                         "to a bin.",
-                "why": "$\\Delta f = 48000/4096 = 11.71875$ Hz. $1000/11.71875 = 85.333$, so the "
-                       "tone sits a third of a bin above bin 85, whose centre is "
-                       "$85 \\times 11.71875 = 996.09375$ Hz. The distance is "
-                       "$1000 - 996.09375 = 3.90625$ Hz, which is $0.333$ of a bin — far "
-                       "enough off-centre for the peak bin to read several per cent low and for "
-                       "the neighbouring bins to be full of leakage. The fix costs nothing: "
-                       "take 4080 samples instead of 4096. That is $48 \\times 85$, exactly 85 "
-                       "cycles of 1000 Hz, and the tone lands dead on bin 85.",
+                "closing": r'''
+$2/\pi = 0.63662$, so the peak bin reads 36.3% low, or $20\log_{10}(2/\pi) = -3.92$ dB.
+No $N$ survives the last step and no frequency ever entered, which is why the figure is
+quoted as a constant of the rectangular window rather than as a property of any
+particular measurement. The convergence is fast: at $N = 16$ the exact value is 0.6376,
+already within a fifth of a per cent of the limit.
+
+The same $2/\pi$ appeared in module 3 as the droop of a zero-order hold at $f_s/2$. That
+is not a coincidence: both are $\mathrm{sinc}(\tfrac12)$, the value of a rectangle's
+transform halfway to its first null. One rectangle holds a sample for $T_s$; the other
+holds a record for $T_{rec}$. The arithmetic cannot tell them apart, and neither should
+you.
+
+Two consequences worth carrying out of here. A single-bin amplitude reading is somewhere
+between 0 and 3.92 dB low and the number itself gives no clue which — so if amplitude
+matters, either window, or zero-pad and interpolate, or arrange a whole number of cycles
+in the record. And the kernel is a formula, not a fog: fitting it to the peak bin and its
+neighbours recovers $\delta$, and with it both the true frequency and the true amplitude.
+That is what the frequency readout on a spectrum analyser is doing when it reports six
+digits from a 10 Hz grid.
+''',
             },
             "lab": {
                 "title": "Leakage, and what a window costs to fix it",
@@ -9260,6 +12697,1131 @@ assert half > 0.6498861611437414, \
                 "**Oversampling is what makes it easy.** At $f_s = 2.5B$ the first image is at $1.5B$, half an octave above the band edge, and no first-order filter can separate them. At $f_s = 8B$ it is at $7B$, nearly three octaves up, and one pole is plenty. Running a converter four times faster than it needs to be is cheaper than building the filter it would otherwise need, which is the whole reason cheap converters run fast.",
                 "The same argument explains why the number quoted for a converter is a sample rate rather than a bandwidth. A 192 kSa/s audio converter is not carrying 96 kHz of music; it is carrying the same 20 kHz with the images pushed far enough away that a gentle analogue filter — one whose phase stays nearly linear across the band — is enough to remove them.",
             ],
+            "read": [
+                {
+                    "title": "Coming back is a decision, not a consequence",
+                    "minutes": 15,
+                    "body": r'''
+A converter has an output pin and a clock. Every $T_s$ seconds a new number arrives from
+upstream and the pin does something about it. That is the whole of the physical situation,
+and the first thing worth noticing is how little the numbers determine. Between one clock
+edge and the next there is no data at all — the sequence $x[n]$ says nothing whatever
+about what is happening at $t = 1.5\,T_s$ — and yet the pin sits at some definite voltage
+the entire time. Whatever it does between the samples is a decision taken by hardware, not
+a fact carried by the numbers.
+
+Sampling had no such freedom. Point a converter at a waveform and it takes the values it
+finds. You choose the rate; you do not choose the samples. Module 3 could therefore treat
+sampling as something that *happens to* a signal, an event with a victim. Reconstruction
+is not like that. Nothing turns a list of numbers back into a waveform until some piece of
+hardware volunteers to fill in the gaps, and different volunteers hand back different
+waveforms from the same list. This module is about which volunteer is right, and what the
+ones you can actually buy cost you.
+
+## What sampling left behind
+
+Module 3's result, restated because everything here stands on it. Sampling $x(t)$ at rate
+$f_s$ produces something whose spectrum is the original repeated forever:
+
+$$X_s(f) = f_s\sum_{k=-\infty}^{\infty} X(f - kf_s)$$
+
+One copy sits where the original was, around DC. Every other copy is a duplicate centred
+on a multiple of $f_s$. If $x$ was bandlimited to $B$ and $f_s > 2B$, no copy overlaps its
+neighbours, and that non-overlap is the whole of what the Nyquist condition buys. It does
+not preserve information by magic. It arranges the copies so that they can be told apart.
+
+Told apart by what? By a filter — and that is reconstruction stated in one line:
+
+> **Keep the copy around DC. Discard every other one.**
+
+A low-pass filter does that, and the only question is where to put its cutoff. It must be
+above $B$, or the top of the wanted band goes with the images. It must be below $f_s - B$,
+which is the lower edge of the nearest image. So the cutoff lives in the interval
+$(B,\; f_s - B)$, and there is somewhere for it to live precisely when $f_s > 2B$. The
+Nyquist condition and the existence of a reconstruction filter are the same statement read
+two ways.
+
+### Worked example: where the copies actually sit
+
+Two systems, both real, with the arithmetic written out.
+
+```
+telephone:   fs = 8.0 kSa/s,  band 0.3 .. 3.4 kHz
+
+  baseband copy          0.3  ..  3.4 kHz
+  first image, lower     8.0 - 3.4  =  4.6 kHz
+                         8.0 - 0.3  =  7.7 kHz      so 4.6 .. 7.7 kHz
+  first image, upper     8.0 + 0.3  =  8.3 kHz
+                         8.0 + 3.4  = 11.4 kHz      so 8.3 .. 11.4 kHz
+
+  room for the filter    3.4 -> 4.6 kHz
+  ratio                  4.6 / 3.4  = 1.353         = 0.44 octaves
+
+
+CD audio:    fs = 44.1 kSa/s, band 0 .. 20 kHz
+
+  baseband copy          0    ..  20   kHz
+  first image            44.1 - 20  = 24.1 kHz  ..  44.1 + 20 = 64.1 kHz
+
+  room for the filter    20 -> 24.1 kHz
+  ratio                  24.1 / 20  = 1.205         = 0.27 octaves
+
+
+the same 20 kHz, run at four times the rate: fs = 176.4 kSa/s
+
+  first image            176.4 - 20 = 156.4 kHz
+  room for the filter    20 -> 156.4 kHz
+  ratio                  156.4 / 20 = 7.82          = 2.97 octaves
+```
+
+Nothing in that table is about the signal. All three carry ordinary audio; what changes is
+how much frequency axis the filter has to work in, and measured in octaves that changes by
+a factor of eleven between the second case and the third. Hold that number — the rest of
+the module is about spending it.
+
+## The ideal filter, seen in the time domain
+
+The filter the frequency argument asked for is a brick wall: gain $T_s$ from $-f_s/2$ to
+$+f_s/2$, zero outside. Module 6 already transformed that rectangle. A rectangle of width
+$f_s$ and height $T_s$ in frequency is a $\mathrm{sinc}$ in time:
+
+$$h(t) = \mathrm{sinc}\!\left(\frac{t}{T_s}\right),
+\qquad \mathrm{sinc}(v) \equiv \frac{\sin \pi v}{\pi v}$$
+
+and filtering is convolution, so passing the sampled signal — a train of impulses of area
+$x[n]$ at times $nT_s$ — through this filter puts one copy of $h$ at every sample, scaled
+by that sample. Convolution with an impulse is a shift, so the output is
+
+$$x(t) = \sum_{n=-\infty}^{\infty} x[n]\,\mathrm{sinc}\!\left(\frac{t - nT_s}{T_s}\right)$$
+
+the **Shannon interpolation formula**. It is not a new result. It is the frequency-domain
+instruction — keep one copy — written out in the time domain, and the two are the same
+sentence in different languages.
+
+What makes it an *interpolation* rather than merely a filter is one property of the
+$\mathrm{sinc}$: it is 1 at zero and exactly zero at every non-zero integer, because
+$\sin(\pi m) = 0$ for integer $m$. So evaluate the sum at a sample instant $t = mT_s$ and
+every term except the $m$th has an integer argument and vanishes:
+
+$$x(mT_s) = \sum_n x[n]\,\mathrm{sinc}(m - n) = x[m]$$
+
+exactly, with no residual and no approximation. The reconstruction passes precisely through
+the data it was built from, and does something considerably less obvious in between.
+
+### Worked example: what happens between two samples
+
+Take $f_s = 10$ kSa/s, so $T_s = 100\ \mu$s. Suppose every sample is zero except two:
+$x[1] = x[2] = 2.000$ V. The bandlimited signal that these samples came from is fixed —
+there is only one — and the formula gives it:
+
+$$x(t) = 2.000\,\mathrm{sinc}\!\left(\frac{t}{T_s} - 1\right)
+       + 2.000\,\mathrm{sinc}\!\left(\frac{t}{T_s} - 2\right)$$
+
+The two sinc values needed are worth memorising:
+
+```
+sinc(0.5) = sin(pi/2) / (pi/2)   = 1 / 1.570796   =  0.636620
+sinc(1.5) = sin(3pi/2) / (3pi/2) = -1 / 4.712389  = -0.212207
+sinc(2.5) = sin(5pi/2) / (5pi/2) = 1 / 7.853982   =  0.127324
+```
+
+Now evaluate, remembering that $\mathrm{sinc}$ is even.
+
+```
+t = 1.5 Ts  (midway between the two samples):
+   n=1 term   2.000 x sinc( 0.5)  =  2.000 x  0.636620  =  1.273240
+   n=2 term   2.000 x sinc(-0.5)  =  2.000 x  0.636620  =  1.273240
+   x(1.5 Ts)                                            =  2.546479 V
+
+t = 0.5 Ts  (midway between the zero at n=0 and the 2 V at n=1):
+   n=1 term   2.000 x sinc(-0.5)  =  2.000 x  0.636620  =  1.273240
+   n=2 term   2.000 x sinc(-1.5)  =  2.000 x -0.212207  = -0.424413
+   x(0.5 Ts)                                            =  0.848826 V
+
+t = -0.5 Ts (before the pulse has started):
+   n=1 term   2.000 x sinc(-1.5)  =  2.000 x -0.212207  = -0.424413
+   n=2 term   2.000 x sinc(-2.5)  =  2.000 x  0.127324  =  0.254648
+   x(-0.5 Ts)                                           = -0.169765 V
+```
+
+Three things in that arithmetic are worth stopping on.
+
+The reconstruction reaches **2.546 V** halfway between two 2.000 V samples — it overshoots
+the data by 27%. The exact value is $8/\pi$, and it is not an artefact or an error: it is
+the unique waveform bandlimited to 5 kHz that passes through those samples. A signal that
+did *not* overshoot there would need frequency content above $f_s/2$ to stay flat, and by
+assumption there is none.
+
+The reconstruction is **negative at $t = -0.5T_s$**, before either non-zero sample. A
+symmetric filter rings on both sides, and the ringing that arrives before the event is
+called pre-ringing. It is a real feature of the output of a real converter, not a drawing
+artefact.
+
+And the three candidate reconstructions disagree everywhere except at the samples:
+
+```
+                        t = 0.5 Ts     t = 1.5 Ts
+  zero-order hold          0.000 V       2.000 V
+  straight lines           1.000 V       2.000 V
+  bandlimited (sinc)       0.849 V       2.546 V
+```
+
+All three pass through the samples. Only the third is consistent with the signal having
+been bandlimited, which was the assumption that made sampling lossless in the first place.
+
+## The mistake people actually make
+
+Believing that the reconstruction must stay between the samples, or that a fast enough
+sample rate makes the between-sample question go away.
+
+It is tempting because every picture of sampling ever drawn shows dots sitting on a smooth
+curve, which invites the conclusion that the dots *are* the curve seen coarsely. They are
+not. The dots are constraints, and the bandlimit is a second constraint, and together the
+two pin down a waveform that can perfectly well go somewhere no sample went. This is not
+academic: a digital audio signal whose samples all sit just inside full scale can
+reconstruct to a voltage several per cent above full scale, and the analogue stage after
+the converter will clip it. Mastering engineers call the excess *inter-sample peaks* and
+leave headroom for it, and the calculation above is why they have to.
+
+The quieter version of the same error is reaching for straight lines. Joining the samples
+with segments is a filter too, and a knowable one: its impulse response is a triangle of
+width $2T_s$, which is the hold's rectangle convolved with itself, so its response is
+$\mathrm{sinc}^2$. That means twice as many decibels of droop as the hold — 7.84 dB at
+$f_s/2$ instead of 3.92 — and a first image at $\left(f/(f_s-f)\right)^2$ of the signal
+rather than $f/(f_s-f)$, which is better but nowhere near gone. Straight lines look right on
+a screen because a screen is itself a low-pass filter a few hundred pixels wide. They are
+not right on a pin.
+
+## Where this stops holding
+
+**The formula needs samples that have not been taken yet.** Every $\mathrm{sinc}$ runs from
+$-\infty$ to $+\infty$, so the value at $t = 0$ depends on $x[+1000]$, whose clock edge is
+in the future. No amount of engineering arranges that. Every real interpolator is a
+truncated version handed over late: reconstruct sample $n$ from samples up to $n+m$ and
+accept $mT_s$ of delay.
+
+**Truncation is expensive, because the tail decays slowly.** The envelope of the
+$\mathrm{sinc}$ falls only as $1/(\pi|v|)$, so the 32nd term away from the centre is still
+$1/(32\pi) \approx 1\%$ — a full 1% of one full-scale sample, 40 dB down, contributed by a
+term you were about to discard. And chopping the sum at a finite length multiplies the ideal
+impulse response by a rectangle, which is module 6's argument in reverse: the frequency
+response gets convolved with a $\mathrm{sinc}$, and the brick wall grows exactly the Gibbs
+ripple of module 2. That is why practical interpolators multiply the truncated sinc by a
+window rather than simply cutting it off, and why they are specified by tap count.
+
+**The signal has to have been bandlimited.** If it was not, the samples belong to the
+aliased signal, and the formula reconstructs *that* — perfectly, and with total conviction.
+Nothing downstream of the sampler can tell the difference, which is module 3's point
+arriving from the other side: the reconstruction is never where the failure was.
+''',
+                },
+                {
+                    "title": "What a converter actually does instead",
+                    "minutes": 14,
+                    "body": r'''
+Open a converter and there is no sinc anywhere. There is a register that latches the
+incoming code on a clock edge, a bank of switched current sources or a resistor ladder that
+turns that code into a voltage, and an output buffer. When the code changes, the output
+moves; between changes it sits still. Put a scope on the pin and you see a staircase: flat
+treads $T_s$ wide with vertical risers between them.
+
+The staircase is not a defect of a cheap part. It is what "hold the value until you are
+told otherwise" looks like, and holding is the only thing a latch can do. Every converter
+that is not doing something more elaborate is doing this, and it has a name — the
+**zero-order hold** — and a frequency response that has to be accounted for whether you
+like it or not.
+
+## The hold is an LTI system, so it has an impulse response
+
+Feed the converter a single unit sample: a 1 followed by zeros. The output goes to 1 volt,
+stays there for exactly $T_s$, and returns to zero. That is the impulse response, and it is
+a rectangle:
+
+$$h(t) = \begin{cases}1, & 0 \le t < T_s\\ 0, & \text{otherwise}\end{cases}$$
+
+Everything else follows from transforming it, and the integral is short enough to do here
+rather than quote.
+
+$$H(f) = \int_0^{T_s} 1 \cdot e^{-j2\pi f t}\,dt
+       = \left[\frac{e^{-j2\pi f t}}{-j2\pi f}\right]_0^{T_s}
+       = \frac{1 - e^{-j2\pi f T_s}}{j2\pi f}$$
+
+Now the standard move for turning a difference of exponentials into a sine. Write
+$\theta = 2\pi f T_s$ and pull out the half angle:
+
+$$1 - e^{-j\theta} = e^{-j\theta/2}\left(e^{j\theta/2} - e^{-j\theta/2}\right)
+                   = e^{-j\theta/2}\cdot 2j\sin(\theta/2)$$
+
+Substituting, the $2j$ cancels against the $j2$ in the denominator:
+
+$$H(f) = \frac{\sin(\pi f T_s)}{\pi f}\,e^{-j\pi f T_s}
+       = T_s\,\mathrm{sinc}(f T_s)\,e^{-j\pi f T_s}$$
+
+Three separate facts sit in that expression, and it is worth naming them one at a time.
+
+**The $T_s$ out front is a constant gain.** At DC, $\mathrm{sinc}(0) = 1$ and $H(0) = T_s$.
+That $T_s$ is exactly the factor $f_s$ that sampling put in front of the spectrum in the
+first reading, so the two cancel and a DC input of one volt of code comes out as one volt.
+It normalises away, and from here on the hold's response means $\mathrm{sinc}(f/f_s)$, the
+response *relative to DC*.
+
+**The exponential is a pure delay of half a sample.** Its phase is $-\pi f T_s$, linear in
+$f$, and a linear phase is a delay: $\tau = -\frac{1}{2\pi}\frac{d\phi}{df} = T_s/2$. That
+is geometrically obvious once stated — the centre of gravity of a rectangle spanning $0$ to
+$T_s$ is at $T_s/2$ — and it is harmless, since a constant delay distorts nothing. It is
+also real, and it has to be counted when a control loop's phase margin is being budgeted.
+
+**The $\mathrm{sinc}$ is the part that hurts.** It is not flat across the band, and it does
+not go to zero above it.
+
+## The droop, with numbers
+
+$\mathrm{sinc}(f/f_s)$ falls from 1 at DC to $2/\pi = 0.6366$ at $f_s/2$ and reaches its
+first zero at $f = f_s$. The fall inside the band is called **hold droop**, and it is a
+genuine amplitude error on the wanted signal.
+
+```
+fs = 48 kSa/s
+
+  f        f/fs      sinc(f/fs)     dB
+  1 kHz    0.0208     0.99929      -0.006
+  5 kHz    0.1042     0.98225      -0.156
+ 10 kHz    0.2083     0.93012      -0.629
+ 15 kHz    0.3125     0.84693      -1.443
+ 20 kHz    0.4167     0.73791      -2.640
+ 24 kHz    0.5000     0.63662      -3.922      <- fs/2
+```
+
+Two readings of that table. If the wanted band goes right up to $f_s/2$, the top of it is
+3.92 dB down, and half a decibel of it was already gone by $0.19f_s$. If
+the wanted band stops at a tenth of $f_s$, the worst error is 0.14 dB and can usually be
+ignored. Which regime you are in is decided entirely by how much faster than necessary the
+converter runs.
+
+Droop is correctable, and the correction is digital: multiply the signal by
+$1/\mathrm{sinc}(f/f_s)$ before it reaches the converter, using a short FIR with a gently
+rising response. Nothing analogue is involved and nothing is added to the noise floor that
+matters. What the correction cannot do is work near $f_s$, because the hold's gain there is
+exactly zero and no finite pre-emphasis divides by zero. In practice inverse-sinc filters
+are used over a passband where the boost is a few dB at most.
+
+## The images, and why the hold is not a filter
+
+Correcting the droop does nothing about the copies. They are still there, at $kf_s \pm f$
+for every $k \ge 1$, and the hold attenuates them the same way it attenuates everything —
+by the value of the $\mathrm{sinc}$ at their frequency, which for the nearest image at
+$f_s - f$ is not nearly small enough.
+
+The comparison that matters is not how far down the image is in absolute terms but how far
+down it is **relative to the wanted tone**, since both have passed through the same hold.
+That ratio simplifies beautifully. Writing $u = f/f_s$:
+
+$$\frac{\mathrm{sinc}(1-u)}{\mathrm{sinc}(u)}
+ = \frac{\sin(\pi(1-u))}{\pi(1-u)}\cdot\frac{\pi u}{\sin(\pi u)}
+ = \frac{u}{1-u}$$
+
+because $\sin(\pi(1-u)) = \sin(\pi u)$, so the two sines cancel and nothing transcendental
+survives. In frequencies, the first image comes out at $f/(f_s - f)$ of the wanted tone's
+amplitude. No sinc, no logarithm, one division.
+
+### Worked example: an audio tone at 44.1 kSa/s
+
+A 15.0 kHz tone is reproduced at 44.1 kSa/s, and the sample values are those of a sinusoid
+of amplitude 1.000 V. What appears at the pin?
+
+```
+wanted tone      f/fs = 15.0 / 44.1  = 0.340136
+                 sinc(0.340136) = sin(1.068569) / 1.068569
+                                = 0.876513 / 1.068569   = 0.820268
+                 amplitude at the pin = 1.000 x 0.820268 = 820.3 mV   (-1.72 dB)
+
+first image      at fs - f = 44.1 - 15.0 = 29.1 kHz
+                 f/fs = 29.1 / 44.1  = 0.659864
+                 sinc(0.659864) = sin(2.073024) / 2.073024
+                                = 0.876513 / 2.073024   = 0.422818
+                 amplitude at the pin = 1.000 x 0.422818 = 422.8 mV   (-7.48 dB)
+
+ratio            422.8 / 820.3 = 0.5155
+shortcut         f / (fs - f) = 15.0 / 29.1 = 0.5155     the same number
+in dB            20 log10(0.5155) = -5.76 dB
+```
+
+Notice that the two sines are the same number, 0.876513, in both lines — that is the
+identity above showing up in the arithmetic. And notice the result: after the hold has done
+everything it is going to do, the first image is 5.76 dB below the signal. Not 60 dB. Not
+40. Under six.
+
+### Worked example: the same tone at a quarter of the rate
+
+Push the tone up to $0.4f_s$ and the ratio is $0.4/0.6 = 2/3$, or $-3.5$ dB. Push it to
+$0.5f_s$ exactly and the ratio is 1: the image sits on top of the signal at equal
+amplitude, which is the degenerate case the strict Nyquist inequality was excluding all
+along. Go the other way, to $f = 0.05f_s$, and the ratio is $0.05/0.95 = 0.0526$, or
+$-25.6$ dB — better, and still nothing like enough for a system that wants 60.
+
+## The mistake people actually make
+
+Treating the hold as the reconstruction filter, on the grounds that it is a low-pass and it
+does attenuate the images.
+
+The temptation is real. The hold genuinely is a low-pass; its response genuinely falls with
+frequency; it genuinely puts a null at $f_s$, which looks like exactly the right place for a
+null to be. But the null is at $f_s$, and the image is at $f_s - f$, which is on the skirt of
+the null rather than in it — and the nearer the wanted tone is to $f_s/2$, the further from
+the null its image lands. The hold's rejection of the nearest image is $f/(f_s-f)$ and
+nothing improves it, because it is the same hold acting on both.
+
+The second version of the error is subtler and more expensive: correcting the droop with an
+inverse-sinc filter and concluding that the hold has been dealt with. It has not. Droop and
+images are two consequences of one rectangle, and the digital correction addresses only the
+first. Flattening the passband to $\pm0.05$ dB while leaving an image 5.8 dB down is a real
+and not uncommon result, and it measures beautifully on a passband sweep.
+
+A third, purely numerical: reading the 3.92 dB at $f_s/2$ as a $-3$ dB corner. The numbers
+are close — $0.637$ against $0.707$ — and they come from unrelated mechanisms. There is no
+pole here and no corner frequency; there is a rectangle in time, and its transform has
+nulls, which no single pole has ever had.
+
+## Where this stops holding
+
+**The rectangle is an idealisation.** A real output does not step; it slews, and at the
+instant the code changes some switches close before others open, so the pin briefly goes
+somewhere neither code asked for. That is **glitch energy**, quoted on data sheets in
+picovolt-seconds, and it is code-dependent — worst at the mid-scale carry where every bit
+changes at once — so it produces distortion rather than a clean image, and none of the
+analysis above predicts it.
+
+**Not every converter holds for the full period.** A return-to-zero output holds for
+$\alpha T_s$ and then goes to zero, which replaces $\mathrm{sinc}(f/f_s)$ with
+$\alpha\,\mathrm{sinc}(\alpha f/f_s)$: less droop and the first null pushed out to
+$f_s/\alpha$, bought with a factor $\alpha$ of output amplitude and a much greater
+sensitivity to clock jitter, since the pulse edges now carry the signal. High-speed
+current-steering converters make this trade deliberately.
+
+**A sigma-delta converter is not this analysis at all.** Its output stage runs at a rate
+tens or hundreds of times the signal rate, so the droop over the audio band is thousandths
+of a decibel and the first image is several hundred kilohertz away. What its output filter
+is actually fighting is the modulator's shaped quantisation noise, which rises steeply
+above the band and will slew the next stage if it is left there. Same filter position,
+different reason, different arithmetic — and it is why the analogue filter on a modern
+audio converter can be two components when the direct 44.1 kSa/s design of the next reading
+needs forty-one poles.
+''',
+                },
+                {
+                    "title": "Choosing the filter, and why everybody oversamples",
+                    "minutes": 13,
+                    "body": r'''
+The hold left two problems on the pin: a passband that sags, and copies of the signal
+sitting a few decibels below it. The first is corrected digitally and costs almost nothing.
+The second has to be removed by an analogue filter after the converter, because the images
+did not exist before the converter and no digital filter upstream of it can see them.
+
+That filter is called the **reconstruction filter**, and it is specified backwards from the
+anti-alias filter of module 3 — same two constraints, opposite sides of the converter.
+
+## The two constraints, and the window between them
+
+It must pass the band, $0$ to $B$, without meaningful attenuation or phase distortion. It
+must stop the first image, from $f_s - B$ upwards. Those pull in opposite directions and
+the only variable that separates them is the sample rate. For CD audio at 44.1 kSa/s the
+whole transition has to happen between 20 kHz and 24.1 kHz — 0.27 of an octave — and it is
+worth seeing what that costs in filter order rather than taking it on trust.
+
+## The order arithmetic
+
+A Butterworth low-pass of order $n$ with corner $f_c$ has
+
+$$|H(f)|^2 = \frac{1}{1 + (f/f_c)^{2n}}$$
+
+so its attenuation in decibels is $A(f) = 10\log_{10}\!\left(1 + (f/f_c)^{2n}\right)$.
+Impose the two requirements — at most $A_p$ dB of loss at the passband edge $f_p$, at least
+$A_s$ dB at the stopband edge $f_{st}$ — and divide one by the other so that $f_c$ falls
+out:
+
+$$\frac{(f_{st}/f_c)^{2n}}{(f_p/f_c)^{2n}} = \left(\frac{f_{st}}{f_p}\right)^{2n}
+ \ge \frac{10^{A_s/10} - 1}{10^{A_p/10} - 1}$$
+
+$$n \;\ge\; \frac{\log_{10}\!\left[\dfrac{10^{A_s/10}-1}{10^{A_p/10}-1}\right]}
+                  {2\log_{10}(f_{st}/f_p)}$$
+
+Everything about the signal has vanished except the ratio of the two edge frequencies. The
+numerator is set by how good the filter has to be; the denominator, by how much room it has
+to be good in. Only the denominator is ever cheap to change.
+
+### Worked example: 20 kHz of audio, straight out of a 44.1 kSa/s converter
+
+Take a 1.0 dB passband allowance at 20 kHz and require 60 dB on the first image at
+24.1 kHz.
+
+```
+numerator      10^(60/10) - 1 = 999999
+               10^(1.0/10) - 1 = 1.258925 - 1 = 0.258925
+               ratio           = 999999 / 0.258925 = 3.8621e6
+               log10           = 6.5868
+
+denominator    fst / fp        = 24.1 / 20 = 1.205
+               log10(1.205)    = 0.08098
+               x 2             = 0.16197
+
+order          n >= 6.5868 / 0.16197 = 40.67   ->   n = 41
+```
+
+Forty-one poles. Nobody builds that. Even if the components existed at the tolerance
+required — a 41st-order Butterworth's pole positions have to be held to a fraction of a
+per cent or the response is no longer Butterworth — the group delay near the corner would
+be enormous and grossly non-flat, so the passband would be amplitude-perfect and
+phase-wrecked. The number is not a warning about difficulty. It is a statement that this
+design does not exist.
+
+### Worked example: the same requirement at four times the rate
+
+Change nothing except the converter's clock. Feed it the same 20 kHz of audio at
+176.4 kSa/s, so the first image moves to 156.4 kHz.
+
+```
+numerator      unchanged                       = 6.5868
+
+denominator    fst / fp     = 156.4 / 20 = 7.82
+               log10(7.82)  = 0.89321
+               x 2          = 1.78641
+
+order          n >= 6.5868 / 1.78641 = 3.69    ->   n = 4
+```
+
+Forty-one to four. And at eight times the rate, with the image at 332.8 kHz:
+
+```
+               fst / fp = 332.8 / 20 = 16.64,  2 log10 = 2.44231
+               n >= 6.5868 / 2.44231 = 2.70    ->   n = 3
+```
+
+A fourth-order analogue low-pass is two Sallen–Key sections, or a passive LC ladder of four
+elements, with components of ordinary tolerance and a group delay that barely moves across
+the audio band. That is the entire argument for oversampling, and it is an argument about
+cost, not about quality: the converter core got no better, the filter got possible.
+
+## What the extra samples actually are
+
+A subtlety worth being exact about, because it is where the reasoning usually goes wrong.
+Running the converter at 176.4 kSa/s does not mean anyone measured the music four times as
+often. The recording is still 44 100 samples per second and always will be. What happens is
+**interpolation**, in two steps.
+
+First, **zero-stuffing**: insert three zeros after every sample. The clock is now four times
+faster and the sample count is four times higher, and — this is the part that surprises
+people — the spectrum is completely unchanged. Nothing was added and nothing was removed,
+so the copies are still at every multiple of 44.1 kHz. Within one period of the new
+176.4 kSa/s rate that leaves three unwanted copies where there used to be none, centred
+on 44.1, 88.2 and 132.3 kHz.
+
+Second, a **digital low-pass** running at 176.4 kSa/s removes those three. What comes out is
+a sequence at 176.4 kSa/s whose spectrum holds the baseband and nothing else until 156.4 kHz,
+which is exactly what a converter genuinely running four times faster would have produced.
+The zeros have been filled in with interpolated values, which is where the name comes from.
+
+The trade is the point. That digital filter has the brutal specification the analogue one
+was going to have — 20 kHz pass, 24.1 kHz stop — but it is digital, so it is an FIR: exactly
+linear phase, exactly reproducible, no component tolerances, and its cost is arithmetic. A
+rough estimate of the length needed is $N \approx \frac{f_s}{\Delta f}\cdot\frac{A}{22}$
+with $A$ in dB:
+
+```
+transition   df = 24.1 - 20 = 4.1 kHz at fs = 176.4 kSa/s
+             fs / df = 176400 / 4100 = 43.02
+             A / 22  = 60 / 22       = 2.727
+             N ~ 43.02 x 2.727       = 117 taps
+```
+
+About 120 taps — and cheaper than that, because three of every four inputs are zero, so a
+polyphase arrangement splits the filter into four sub-filters of thirty taps and runs one of
+them per output sample. Thirty multiply-accumulates per output was expensive in 1982 and is
+free now. The hard filtering moved to the side of the converter where filtering is cheap,
+and what was left on the analogue side was four poles. That is the whole trick, and every
+converter data sheet you will ever read is built on it.
+
+## The mistake people actually make
+
+Putting the corner at $f_s/2$ because that is where Nyquist is.
+
+It is an understandable reflex — $f_s/2$ is the number the whole subject revolves around —
+but neither constraint on this filter mentions it. The constraints are $B$ from below and
+$f_s - B$ from above, and the cheapest corner is the one that uses the passband allowance
+up: push $f_c$ down until the loss at $f_p$ is exactly the $A_p$ you were willing to
+tolerate, and every remaining hertz of transition goes to the skirt. For the 41st-order
+design above, that corner is at 20.33 kHz — barely above the band edge.
+
+```
+corner from the 1.0 dB passband allowance, n = 41:
+    (20 / fc)^82 = 0.258925    ->   20 / fc = 0.258925^(1/82) = 0.98365
+                                    fc      = 20 / 0.98365    = 20.33 kHz
+    check at 24.1 kHz: (24.1/20.33)^82 = 1.13e6, so 60.5 dB   ->  spec met
+
+move the corner to fs/2 = 22.05 kHz and re-ask for 60 dB at 24.1 kHz:
+    (24.1 / 22.05)^2n >= 1e6
+    2n >= 13.8155 / ln(1.09297) = 13.8155 / 0.08890 = 155.4
+    n  >= 77.7                                       ->  n = 78
+```
+
+The passband got flatter than anyone had asked for, and the transition band available for
+the skirt shrank from 3.8 kHz to 2.05 kHz, and the order very nearly doubled. At high
+oversampling the same placement is merely wasteful rather than fatal — at 176.4 kSa/s the
+corner belongs somewhere around 25 to 40 kHz, and putting it at 88.2 kHz throws away most
+of the rejection the faster clock was bought for.
+
+The other common error is believing that oversampling improves resolution or adds
+information. It does neither, at least not by itself. The 44.1 kSa/s record still contains
+what it contained; interpolation is a filter, and a filter creates nothing. What
+oversampling buys is *room on the frequency axis*, and room on the frequency axis is
+converted into filter order, which is converted into money.
+
+## Where this stops holding
+
+**When the wanted band is not at baseband.** Everything above assumed the copy to keep is
+the one around DC. In a transmitter it often is not: a converter clocked at 100 MSa/s can be
+used deliberately to place an image at, say, 130 MHz, and the reconstruction filter becomes
+a band-pass that keeps that image and rejects the baseband. The Nyquist condition becomes
+$f_s > 2B$ on the *bandwidth*, not on the highest frequency, and the hold's droop now works
+against you — the image being used is far out on the sinc, so the amplitude is poor and a
+return-to-zero output stage starts to look attractive.
+
+**When phase, not attenuation, sets the order.** For audio the stopband requirement usually
+wins, but in a control loop or a video path the specification is often flat group delay
+across the band, and a Butterworth chosen for its skirt will fail it. Then the filter is a
+Bessel, whose skirts are far worse, and the sample rate has to rise again to compensate.
+
+**When it is a sigma-delta converter.** The order arithmetic above never runs. The images
+are hundreds of kilohertz away and irrelevant; the analogue filter is sized by the shaped
+quantisation noise the modulator pushes out above the band, and the specification is written
+in terms of how much of that noise the next stage can tolerate. The position of the filter
+is the same, the reasoning is different, and confusing the two is how a first-order RC gets
+put where a noise budget was needed.
+''',
+                },
+            ],
+            "numeric": [
+                {
+                    "title": "Where the nearest copy lands",
+                    "minutes": 4,
+                    "brief": r'''
+Before anything else about a reconstruction filter can be decided, one number has to be on
+the page: the frequency of the closest thing it has to remove.
+
+A converter runs at **96 kSa/s** and is reproducing a single tone at **18.0 kHz**.
+''',
+                    "prompt": "At what frequency does the lowest-frequency image appear at the converter's output?",
+                    "note": "In kilohertz, to one decimal place. This is one subtraction.",
+                    "figure": r'''
+```
+   amplitude
+      |
+      |  signal                                     images
+      |    |                                     |         |
+      |    |                                     |         |
+      +----+-------------------|-----------------+----+----+--------> f (kHz)
+          18                  48                 ?   96    ?
+                            fs / 2                  fs
+
+   the copies sit at  k*fs +- f  for every k >= 1
+```
+''',
+                    "given": [
+                        {"label": "Sample rate", "value": "96 kSa/s"},
+                        {"label": "Tone", "value": "18.0 kHz"},
+                    ],
+                    "aside": "Nothing about the amplitude of the tone, the resolution of the converter "
+                             "or what the signal is enters this. Image frequencies are fixed by the "
+                             "clock and the tone alone.",
+                    "answer": 78.0,
+                    "tol": 0.1,
+                    "unit": "kHz",
+                    "hint": "The pair around the first multiple of $f_s$ is at $f_s - f$ and $f_s + f$. "
+                            "The lower of those two is the one that matters.",
+                    "wrong": "114 kHz is $f_s + f$, the *upper* member of the same pair — real, but "
+                             "further away and therefore not the one that sets the filter. 48 kHz is "
+                             "$f_s/2$, which is the line the copies are mirrored about rather than a "
+                             "place any of them sits. 36 kHz is $2f$, a harmonic, and harmonics come "
+                             "from non-linearity — nothing here is non-linear.",
+                    "why": r'''
+```
+first pair    k = 1:   fs - f = 96 - 18 = 78.0 kHz
+                       fs + f = 96 + 18 = 114.0 kHz
+next pair     k = 2:   2fs - f = 174 kHz,  2fs + f = 210 kHz
+```
+
+78.0 kHz, and it is the only one the filter designer has to think about: everything above it
+is further away and no larger, so a filter that deals with 78 kHz deals with all of them.
+
+Worth noticing how much room this leaves. The tone is at 18 kHz and the nearest thing to be
+removed is at 78 kHz — a ratio of 4.33, or 2.1 octaves. Had the same 18 kHz tone been
+reproduced at 40 kSa/s the image would have been at 22 kHz, a ratio of 1.22, and the filter
+would have been a different kind of object entirely.
+''',
+                },
+                {
+                    "title": "How late the waveform comes out",
+                    "minutes": 7,
+                    "brief": r'''
+An interpolating audio converter, in the arrangement of the third reading. A **4×**
+interpolation filter takes 44.1 kSa/s in and produces **176.4 kSa/s** out; it is a
+symmetric FIR of **129 taps** running at the output rate. Its output goes to the converter,
+whose zero-order hold contributes its own delay.
+
+Two facts you need. A symmetric FIR of $N$ taps has exactly linear phase and delays
+everything by $(N-1)/2$ sample periods. A zero-order hold delays by half a sample period —
+the centre of gravity of the rectangle it holds.
+
+Both delays are at the **output** rate, not the input rate.
+''',
+                    "prompt": "What is the total delay through the reconstruction path, from the last input sample to the corresponding point on the analogue output?",
+                    "note": "In microseconds, to one decimal place.",
+                    "figure": r'''
+```
+  44.1 kSa/s        4x interpolation FIR          176.4 kSa/s        DAC + hold
+  ----------->  [ 129 taps, symmetric ]  ----------->  [ zero-order hold ]  ---> analogue
+                         |                                     |
+                delay = (N-1)/2 samples               delay = Ts/2
+                at 176.4 kSa/s                        at 176.4 kSa/s
+```
+''',
+                    "given": [
+                        {"label": "Output sample rate", "value": "176.4 kSa/s"},
+                        {"label": "Interpolation filter", "value": "129 taps, symmetric"},
+                        {"label": "Output stage", "value": "zero-order hold"},
+                    ],
+                    "aside": "About a third of a millisecond, essentially all of it in the digital "
+                             "filter. That is inaudible in a playback path and unacceptable in a live "
+                             "monitoring one, which is why low-latency converters use shorter filters "
+                             "and pay for it in stopband rejection.",
+                    "answer": 365.6,
+                    "tol": 1.2,
+                    "unit": "µs",
+                    "hint": "$T_s = 1/176400$ s. The filter contributes $64\\,T_s$ and the hold "
+                            "$0.5\\,T_s$, so the answer is $64.5\\,T_s$.",
+                    "wrong": "1451.3 µs comes from applying $(N-1)/2 = 64$ samples at the *input* "
+                             "rate of 44.1 kSa/s; the filter runs at the output rate, which is the "
+                             "point of putting it after the zero-stuffing. 725.6 µs is 128 output "
+                             "samples — forgetting that a symmetric filter's delay is half its "
+                             "length, not its length. 2.8 µs is the hold on its own.",
+                    "why": r'''
+```
+output period     Ts = 1 / 176400            = 5.66893 us
+
+FIR delay         (129 - 1) / 2 = 64 samples
+                  64 x 5.66893 us            = 362.812 us
+
+hold delay        Ts / 2 = 5.66893 / 2       =   2.834 us
+
+total             64.5 x 5.66893             = 365.646 us
+```
+
+365.6 µs. Two things are worth taking from the arithmetic rather than the answer.
+
+The hold's contribution is 0.8% of the total. Everything you will ever read about the
+half-sample delay of a zero-order hold is true and, in a path like this one, negligible
+beside the filter in front of it. The place it stops being negligible is a control loop,
+where the converter runs at the loop rate rather than 176.4 kSa/s and there is no
+interpolation filter at all — there $T_s/2$ is the whole of the delay and it eats phase
+margin directly.
+
+And the delay is *constant*, because both stages are linear phase. A constant delay changes
+no waveform; it only moves it. That is precisely what an analogue filter of the order the
+third reading's direct 44.1 kSa/s design demanded could not have promised.
+''',
+                },
+                {
+                    "title": "What the hold has already done, and what is left",
+                    "minutes": 9,
+                    "brief": r'''
+A 44.1 kSa/s converter reproduces a **15.0 kHz** tone, and the system specification says
+that at the output of the reconstruction filter **the first image must be at least 60.0 dB
+below the wanted tone**.
+
+The hold is not a filter, but it is not nothing either: it attenuates the image more than it
+attenuates the signal, and that difference counts towards the 60 dB. Work out how much is
+left for the analogue filter to supply.
+
+The filter's requirement is a *relative* one: how many decibels less gain it must have at
+the image frequency than it has at 15 kHz.
+''',
+                    "prompt": "How many decibels of attenuation must the reconstruction filter provide at the image frequency, relative to its gain at 15 kHz?",
+                    "note": "In dB, to two decimal places. A positive number.",
+                    "figure": r'''
+```
+   level relative to the wanted tone, at the DAC pin
+
+     0 dB  ---- wanted tone, 15.0 kHz
+              |
+              |
+              |     ? dB   <- the hold's own contribution
+              |
+             ---- first image, 29.1 kHz
+              |
+              |     ? dB   <- what the analogue filter must add
+              |
+   -60.0 dB  ---- where the image has to end up
+```
+''',
+                    "given": [
+                        {"label": "Sample rate", "value": "44.1 kSa/s"},
+                        {"label": "Tone", "value": "15.0 kHz"},
+                        {"label": "Requirement", "value": "image ≥ 60.0 dB below the tone"},
+                        {"label": "Output stage", "value": "zero-order hold"},
+                    ],
+                    "aside": "The shortcut is worth having: because $\\sin(\\pi(1-u)) = \\sin(\\pi u)$, "
+                             "the hold leaves the first image at exactly $f/(f_s-f)$ of the wanted "
+                             "tone. No sinc has to be evaluated at all.",
+                    "answer": 54.24,
+                    "tol": 0.3,
+                    "unit": "dB",
+                    "hint": "The image is at $f_s - f$. The hold leaves it at $f/(f_s-f)$ of the "
+                            "signal; put that in dB and subtract it from 60.",
+                    "wrong": "60.00 dB is the answer if the hold is assumed to do nothing — safe, but "
+                             "it over-specifies the filter by nearly six decibels, which at these "
+                             "transition ratios is most of a pole. 7.48 dB is the hold's absolute "
+                             "attenuation at 29.1 kHz, which is not the figure that matters: the "
+                             "wanted tone was attenuated too, by 1.72 dB, and only the difference "
+                             "counts.",
+                    "why": r'''
+```
+image at          fs - f = 44.1 - 15.0 = 29.1 kHz
+
+hold at 15.0 kHz  sinc(15.0/44.1) = sinc(0.34014) = 0.82026    (-1.72 dB)
+hold at 29.1 kHz  sinc(29.1/44.1) = sinc(0.65986) = 0.42282    (-7.48 dB)
+
+ratio             0.42282 / 0.82026 = 0.51547
+shortcut          f / (fs - f) = 15.0 / 29.1 = 0.51546   same number
+in dB             20 log10(0.51546) = -5.76 dB
+
+filter must add   60.00 - 5.76 = 54.24 dB
+```
+
+54.24 dB, and the two sub-results are both worth keeping.
+
+The hold contributed 5.76 dB. That is a real contribution and it is not the tens of decibels
+its falling response might have suggested — a reminder that what a filter does to one
+frequency is meaningless until compared with what it does to the frequency you are keeping.
+
+And the 54.24 dB has to be delivered between 15 kHz and 29.1 kHz, a ratio of 1.94 or 0.96 of
+an octave. A single pole's ultimate slope is 6 dB per octave, so even far above its corner it
+could not manage 6 dB across that ratio — and placed where it would have to be to leave
+15 kHz nearly alone, it manages about 2. Running the third reading's order formula with a
+1.0 dB passband allowance at 15 kHz and 54.24 dB at 29.1 kHz gives $n \ge 10.44$, so eleven
+poles. That is the reason nobody sends a 15 kHz tone straight out of a 44.1 kSa/s converter
+without interpolating first.
+''',
+                },
+                {
+                    "title": "One pole against one image",
+                    "minutes": 10,
+                    "brief": r'''
+The cheapest reconstruction filter there is, measured rather than assumed.
+
+A converter runs at **48 kSa/s** and reproduces a **6.0 kHz** tone. At the pin the wanted
+tone measures **1.400 V** amplitude, and the first image at $48 - 6 = 42$ kHz is at
+$f/(f_s - f) = 6/42 = 1/7$ of that — **200 mV**, which is the source drawn here.
+
+That 200 mV meets a single RC low-pass. Work out what reaches the probe.
+''',
+                    "prompt": "What amplitude does the 42 kHz image have when it reaches the probe?",
+                    "note": "In millivolts, to two decimal places.",
+                    "diagram": {
+                        "parts": [
+                            {"id": "p0", "kind": "V", "x": 3, "y": 6, "rot": 1, "value": 0.2},
+                            {"id": "p1", "kind": "GND", "x": 3, "y": 9},
+                            {"id": "p2", "kind": "R", "x": 6, "y": 4, "rot": 0, "value": 4700},
+                            {"id": "p3", "kind": "C", "x": 9, "y": 6, "rot": 1, "value": 2.2e-9},
+                            {"id": "p4", "kind": "GND", "x": 9, "y": 9},
+                            {"id": "p5", "kind": "OUT", "x": 11, "y": 4},
+                        ],
+                        "wires": [
+                            {"a": [3, 5], "b": [3, 4]},
+                            {"a": [3, 4], "b": [5, 4]},
+                            {"a": [7, 4], "b": [9, 4]},
+                            {"a": [9, 4], "b": [9, 5]},
+                            {"a": [9, 7], "b": [9, 9]},
+                            {"a": [3, 7], "b": [3, 9]},
+                            {"a": [9, 4], "b": [11, 4]},
+                        ],
+                    },
+                    "given": [
+                        {"label": "Image at the pin", "value": "200 mV at 42 kHz"},
+                        {"label": "Series resistor", "value": "4.7 kΩ"},
+                        {"label": "Shunt capacitor", "value": "2.2 nF"},
+                        {"label": "Converter", "value": "48 kSa/s, 6.0 kHz tone"},
+                    ],
+                    "aside": "The probe is across the capacitor, so this is the ordinary first-order "
+                             "low-pass: $|H| = 1/\\sqrt{1 + (f/f_c)^2}$ with $f_c = 1/(2\\pi RC)$.",
+                    # Both the corner and the source amplitude are read out of the drawn circuit by
+                    # the solver, so editing a component re-measures the answer instead of comparing
+                    # it against a number written down somewhere else.
+                    "check": "return c.gain(42000) * 1000;",
+                    "answer": 68.82,
+                    "tol": 0.6,
+                    "unit": "mV",
+                    "hint": "$f_c = 1/(2\\pi RC)$ with 4.7 kΩ and 2.2 nF comes to about 15.4 kHz. Then "
+                            "the ratio at 42 kHz, then multiply the 200 mV that arrived.",
+                    "wrong": "200 mV is the answer if the filter is applied at 6 kHz — the frequency of "
+                             "the tone the image belongs to — rather than at 42 kHz, where the image "
+                             "actually is. 186 mV is the attenuation of the *wanted* tone applied to "
+                             "the image. If you got 68.8 µV, a factor of a thousand slipped in the "
+                             "capacitor.",
+                    "why": r'''
+```
+corner        fc = 1 / (2 pi R C)
+                 = 1 / (2 pi x 4700 x 2.2e-9)
+                 = 15 392 Hz
+
+at 42 kHz     f/fc = 42000 / 15392 = 2.7287
+              |H|  = 1 / sqrt(1 + 2.7287^2)
+                   = 1 / sqrt(8.4456)  =  1 / 2.9061  =  0.34410
+
+image at probe   0.200 V x 0.34410 = 0.06882 V = 68.82 mV
+```
+
+Now the number that says whether this filter was worth fitting. The wanted 6 kHz tone also
+goes through it:
+
+```
+at 6 kHz      f/fc = 6000 / 15392 = 0.38981
+              |H|  = 1 / sqrt(1 + 0.38981^2) = 0.93171
+signal at probe   1.400 V x 0.93171 = 1.3044 V
+
+image / signal    68.82 mV / 1304.4 mV = 0.05276   ->  -25.55 dB
+at the pin it was 200 / 1400 = 0.14286             ->  -16.90 dB
+so the RC bought                                        8.65 dB
+```
+
+One pole, 8.65 dB, and the image ends up 25.6 dB down. Against a typical 60 dB requirement
+that is not close, and there is no cheap way to improve it: the corner cannot be lowered
+much without eating into the 6 kHz tone, which has already lost 0.61 dB. Everything left is
+either more poles or a faster clock, and the third reading is about which of those is
+cheaper.
+
+The order of operations is the thing to carry away. The filter acts on the image *at
+42 kHz*, where it is; the fact that the image was created by a 6 kHz tone does not move it
+back down. That is the exact mirror of module 3's anti-alias rule, where the filter acted at
+the interferer's real frequency and the folding happened afterwards.
+''',
+                },
+                {
+                    "title": "The slowest clock this filter can live with",
+                    "minutes": 12,
+                    "brief": r'''
+A design problem run backwards. The audio band is **DC to 20 kHz**. The analogue
+reconstruction filter has already been chosen — a **5th-order Butterworth** — and its corner
+is placed so that the loss at 20 kHz is exactly **0.50 dB**, which is all the passband error
+the budget allows. The requirement on the first image is **70 dB** of attenuation from that
+filter alone, measured against its DC gain.
+
+Everything is fixed except the sample rate. Find the lowest one that works.
+
+Three steps, in this order: the corner frequency the passband allowance implies; the
+frequency at which that filter reaches 70 dB; and the sample rate that puts the first image
+there. A Butterworth of order $n$ attenuates by
+$A(f) = 10\log_{10}\!\left(1 + (f/f_c)^{2n}\right)$ decibels.
+''',
+                    "prompt": "What is the lowest sample rate that meets both requirements?",
+                    "note": "In kSa/s, to one decimal place.",
+                    "figure": r'''
+```
+  |H| (dB)
+    0 +--------------____
+      |                  \___             5th-order Butterworth
+ -0.5 +- - - - - - - - - - -\ - - - -     0.50 dB at 20 kHz  ->  fixes fc
+      |                      \
+      |                       \
+      |                        \
+  -70 +- - - - - - - - - - - - - \- - -   70 dB here  ->  fixes f_image
+      |                           \
+      +----------+----------------+------------> f
+                20 kHz          f_image
+
+  and the last step:   f_image = fs - 20 kHz   ->   fs = f_image + 20 kHz
+```
+''',
+                    "given": [
+                        {"label": "Band", "value": "DC to 20 kHz"},
+                        {"label": "Filter", "value": "5th-order Butterworth"},
+                        {"label": "Passband allowance", "value": "0.50 dB at 20 kHz"},
+                        {"label": "Image requirement", "value": "70 dB"},
+                    ],
+                    "aside": "The answer falls between the two rates a real design would have to "
+                             "choose from — 96 and 176.4 kSa/s — and therefore forces the higher one. "
+                             "That four-times-CD rate exists precisely so that a filter of this modest "
+                             "order is enough.",
+                    "answer": 143.7,
+                    "tol": 2.0,
+                    "unit": "kSa/s",
+                    "hint": "From $10\\log_{10}(1 + (20/f_c)^{10}) = 0.50$ get $(20/f_c)^{10} = "
+                            "10^{0.05} - 1 = 0.1220$, so $20/f_c = 0.1220^{0.1}$. Then "
+                            "$(f_i/f_c)^{10} = 10^{7}$ gives $f_i = f_c\\,10^{0.7}$. Finally the "
+                            "image sits at $f_s - 20$.",
+                    "wrong": "123.7 kSa/s is $f_i$ itself — the image frequency, not the sample rate; "
+                             "the last step, $f_s = f_i + B$, is the one most often left out. 163.7 is "
+                             "what you get by adding 40 rather than 20, double-counting the band. "
+                             "69.7 kSa/s comes from putting 20 in the exponent instead of 10, which "
+                             "designs a 10th-order filter; the exponent is $2n$ and $n$ is 5.",
+                    "why": r'''
+```
+step 1   the corner, from the passband allowance
+         10 log10(1 + (20/fc)^10) = 0.50
+         (20/fc)^10 = 10^0.05 - 1 = 1.12202 - 1 = 0.12202
+         20/fc      = 0.12202^(1/10)           = 0.81029
+         fc         = 20 / 0.81029              = 24.682 kHz
+
+step 2   where that filter reaches 70 dB
+         10 log10(1 + (fi/fc)^10) = 70
+         (fi/fc)^10 = 10^7 - 1  ~=  10^7
+         fi/fc      = 10^0.7                    = 5.01187
+         fi         = 24.682 x 5.01187          = 123.705 kHz
+
+step 3   the clock that puts the first image there
+         fi = fs - B
+         fs = 123.705 + 20                      = 143.705 kSa/s
+```
+
+**143.7 kSa/s.** Three things worth noticing about it.
+
+It is more than $2B = 40$ kSa/s by a factor of 3.6, so it satisfies Nyquist with enormous
+margin — and the margin was bought entirely by the filter, not by the signal. Nyquist was
+never the binding constraint here.
+
+It is not a rate anyone would build. The nearest standard rates are 96 kSa/s and
+176.4 kSa/s, and 96 does not do: its image at 76 kHz is $76/24.682 = 3.079$ corners out,
+giving $10\log_{10}(1 + 3.079^{10}) = 48.8$ dB — over twenty decibels short. So this filter
+and this specification force 176.4 kSa/s, which delivers 156.4 kHz of image frequency and
+about 80 dB.
+
+And check the direction of the passband dependence, because it is easy to get backwards.
+Tighten the allowance from 0.50 dB to 0.25 dB and the corner has to move *up*, not down —
+the filter must be flatter at 20 kHz, so its corner retreats further from it, to
+$f_c = 26.53$ kHz. A higher corner reaches 70 dB further out, at 132.97 kHz instead of
+123.71, and the required sample rate rises to 153.0 kSa/s. A flatter passband is paid for
+with a faster clock. The mechanism is that a Butterworth's *shape* is fixed by its order;
+the only thing either requirement can do is slide the whole curve along the frequency axis,
+and the two requirements slide it in opposite directions.
+''',
+                },
+            ],
+            "derive": {
+                "title": "How far the hold alone can push the first image",
+                "minutes": 14,
+                "vars": ["u", "r"],
+                "brief": r'''
+The claim to be established, and then turned around: a zero-order hold leaves the first
+image at exactly $f/(f_s - f)$ of the wanted tone's amplitude — a ratio with no sine in it,
+no logarithm, and no dependence on anything but the two frequencies.
+
+Work in normalised frequency. Let $u = f/f_s$, so the wanted tone sits at $u$ and the first
+image, at $f_s - f$, sits at $1 - u$. Take $0 < u < \tfrac12$ throughout, which is the
+Nyquist condition and also keeps every sine below positive.
+
+Everything is measured relative to the hold's DC gain, so the $T_s$ in
+$H(f) = T_s\,\mathrm{sinc}(fT_s)$ has already cancelled and the response in play is simply
+$\mathrm{sinc}(u)$, with $\mathrm{sinc}(v) = \sin(\pi v)/(\pi v)$. Type $\sin$ as `sin`.
+''',
+                "steps": [
+                    {
+                        "prompt": "Write the hold's normalised response at the wanted tone, $\\mathrm{sinc}(u)$, in terms of a sine.",
+                        "given": "The definition, and nothing else. This step is here so the next four have something to cancel against.",
+                        "answer": "\\frac{sin(\\pi u)}{\\pi u}",
+                        "hint": "Substitute $v = u$ into $\\mathrm{sinc}(v) = \\sin(\\pi v)/(\\pi v)$.",
+                        "deconstruct": [
+                            "The definition is $\\mathrm{sinc}(v) = \\sin(\\pi v)/(\\pi v)$.",
+                            "Here $v$ is $u$, so the numerator is $\\sin(\\pi u)$ and the denominator $\\pi u$.",
+                        ],
+                    },
+                    {
+                        "prompt": "The first image sits at $1 - u$ in these units. Write the hold's response there, in the same form.",
+                        "given": "Same function, different argument. The hold does not know which component is the wanted one.",
+                        "answer": "\\frac{sin(\\pi (1 - u))}{\\pi (1 - u)}",
+                        "hint": "Put $v = 1 - u$ into the definition and leave it unsimplified for now.",
+                        "deconstruct": [
+                            "$\\mathrm{sinc}(1-u) = \\sin(\\pi(1-u)) / (\\pi(1-u))$.",
+                            "Both the numerator and the denominator carry the $1-u$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Simplify the numerator of that, using $\\sin(\\pi - \\theta) = \\sin\\theta$.",
+                        "given": "$\\pi(1-u) = \\pi - \\pi u$, so $\\theta = \\pi u$.",
+                        "answer": "sin(\\pi u)",
+                        "hint": "The sine of the image's angle is the sine of the signal's angle. That coincidence is the whole derivation.",
+                        "deconstruct": [
+                            "Expand the bracket: $\\pi(1-u) = \\pi - \\pi u$.",
+                            "$\\sin(\\pi - \\pi u) = \\sin(\\pi u)$ by the supplementary-angle identity.",
+                            "So the two responses have identical numerators and differ only in their denominators.",
+                        ],
+                    },
+                    {
+                        "prompt": "Divide the image response by the wanted response and cancel everything that cancels. Call the result $r$.",
+                        "given": "Both numerators are now $\\sin(\\pi u)$, and both denominators carry a $\\pi$.",
+                        "answer": "\\frac{u}{1 - u}",
+                        "hint": "$\\dfrac{\\sin(\\pi u)}{\\pi(1-u)} \\div \\dfrac{\\sin(\\pi u)}{\\pi u}$ — the sines go, the $\\pi$s go, and a ratio of two linear terms is left.",
+                        "deconstruct": [
+                            "Dividing by a fraction is multiplying by its reciprocal: $\\dfrac{\\sin(\\pi u)}{\\pi(1-u)}\\cdot\\dfrac{\\pi u}{\\sin(\\pi u)}$.",
+                            "$\\sin(\\pi u)$ appears once above and once below, and so does $\\pi$.",
+                            "What survives is $u$ over $1-u$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now run it backwards. Given a required ratio $r$, solve $\\dfrac{u}{1-u} = r$ for $u$.",
+                        "given": "$r$ is a linear amplitude ratio, not decibels: 40 dB of rejection means $r = 0.01$.",
+                        "answer": "\\frac{r}{1 + r}",
+                        "hint": "Multiply both sides by $1-u$ to get $u = r - ru$, then collect the $u$ terms.",
+                        "deconstruct": [
+                            "$u = r(1-u) = r - ru$.",
+                            "Bring the $ru$ across: $u + ru = r$, so $u(1+r) = r$.",
+                            "Divide by $1+r$.",
+                        ],
+                    },
+                    {
+                        "prompt": "The oversampling ratio is $f_s/f = 1/u$. Write it in terms of $r$ alone.",
+                        "given": "Invert the previous answer.",
+                        "answer": "1 + \\frac{1}{r}",
+                        "hint": "$\\dfrac{1+r}{r}$, split into two terms.",
+                        "deconstruct": [
+                            "$u = r/(1+r)$, so $1/u = (1+r)/r$.",
+                            "Split the fraction: $(1+r)/r = 1/r + r/r$.",
+                            "That is $1 + 1/r$.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+$f_s/f = 1 + 1/r$ is a small formula with an unwelcoming message. Put numbers in it:
+
+```
+  rejection wanted     r        fs / f required
+  -----------------------------------------------
+       0 dB           1.000            2      (the Nyquist limit itself)
+     -10 dB           0.3162           4.16
+     -20 dB           0.1              11
+     -40 dB           0.01            101
+     -60 dB           0.001          1001
+```
+
+To make the hold *by itself* put the first image 40 dB down, the converter has to run 101
+times faster than the highest frequency in the signal. For 60 dB, a thousand times. Nobody
+does this, and the table is the reason the reconstruction filter exists at all: the hold
+contributes single-digit decibels over any sensible band, and everything beyond that is the
+filter's work.
+
+Two sanity checks on the algebra. At $r = 1$ the formula gives $f_s = 2f$, exactly the
+Nyquist boundary, where the image sits on top of the signal at equal amplitude — the
+degenerate case the strict inequality excludes. And at $u = 0.4$, meaning $f_s = 2.5f$, the
+ratio is $0.4/0.6 = 2/3$, or $-3.52$ dB, which is the figure quoted in the concepts.
+
+The result also settles a question the second reading raised: does correcting the hold's
+droop with an inverse-sinc filter do anything about the images? It does exactly nothing —
+not a little, nothing. The pre-emphasis is *digital*, so what it scales is the digital
+component at $u$, and the converter builds both the baseband output and its image out of
+that same component. Multiply it by $1/\mathrm{sinc}(u)$ and the baseband comes out flat
+while the image comes out $1/\mathrm{sinc}(u)$ times *larger* than it was, and the ratio
+between the two is $u/(1-u)$ exactly as before. The correction is still right to apply. It
+simply operates on a quantity that does not appear anywhere in this derivation, which is
+the arithmetic reading of the mistake the second reading named.
+'''
+            },
             "tune": {
                 "title": "The filter after the converter",
                 "minutes": 10,
