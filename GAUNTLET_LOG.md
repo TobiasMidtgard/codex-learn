@@ -7842,3 +7842,377 @@ to run. The diff is `catalog/authors/EE221.py`, `catalog/EE221.json` and the `do
 output, and nothing else. No other course, no renderer, no gate and no tool was touched.
 
 ---
+
+## Cycle 24 — TRACK 5: UI, Layout & Visual Aesthetics
+
+*(the runner labels this commit "cycle 5"; its counter restarts per run and this log's does
+not. Run D's cycle 1 was this file's cycle 20, and its cycle 4 was cycle 23.)*
+
+**Target: the type scale — every `font-size` and every positive `letter-spacing` in
+`src/index.head.html` and `Desk.css()`.** One subsystem, defined by what it is rather than
+where it sits: **323 size declarations and 36 tracking declarations**, across every screen
+the application has.
+
+Chosen because it is the one dimension of this design that **nothing has ever measured.**
+Every colour has come from a token since cycle 5 and been held to a computed contrast since
+cycle 11; `verify_theme` has 135 contrast surfaces, a canvas palette section and a topbar
+budget, and **not one number in it is a size.** Cycles 11 and 18 both recorded the
+consequence and both declined it with the same sentence — *"a type-scale pass touches every
+screen and would have meant verifying none of them"* — which is true exactly as long as
+there is no gate. Building the gate is what makes the pass verifiable, so this cycle is
+both halves or neither.
+
+### Baseline, captured before any edit
+
+```
+87 circuit exercises / 369 checks · 593 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1294 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3360 per-option explanations · 6572 draws, 4384 options picked · top slot 24.5%
+     quiz view 1260 mounts, 5464 options pressed, top slot 24.0%
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui    78 driven keys, 10 things said, 15 kinds above their stamp floor
+circuit_model 1487 analyses · 84 refusals · 15 plots · 15 floors, 17 ceilings
+              390 published schematics, 369 with a DC operating point
+circuit_view  26 hostile coordinates · 424 mounts at 7 widths · 150 gestures
+tune_ui       423 clamped openings · 462 targets · 105 paints · 270 drags · 493 mounts
+desk          61 expressions · Desk.css() hands the theme gate 102 lines
+theme         14 exemptions · 135 contrast surfaces x 2 themes · tightest text 4.61:1
+              (.q-hint [light]) · faintest state 1.11:1 · 3 held below the floor on
+              purpose · 74 of 135 read their ink out of the stylesheet
+              canvas 10 palette tiers · 154 paint sites / 9 tiers · quietest 3.77:1
+progress      29 hostile documents
+TYPE          36 distinct sizes in 323 declarations · 20 tracking spellings in 36
+              declarations · 61 rules under 11px · measured by nothing
+build: 3 parts / 111 keys · 32/32 + 30/30 · 13 visualisers · 3 tune models · 15 symbols ·
+       62 payloads, 13129 KB · inlined 14378 KB · shell 1220 KB
+```
+
+### The attacks
+
+**1. Senior Educator** — taken first, because a type scale is a hierarchy, and this
+persona's whole brief is whether a hierarchy explains itself.
+
+- **The scale does not exist. 36 distinct sizes, and the bottom of it is twelve
+  consecutive half-pixel steps.** Counted, not estimated: 9.5, 10, 10.5, 11, 11.5, 12,
+  12.5, 13, 13.5, 14, 14.5, 15, then 16, 16.5, 17. Adjacent ratios **1.034 to 1.053.**
+  **285 of the 323 declarations — 88% — live in that band.** A 4% size difference is not a
+  distinction a reader makes, so two elements written to read as different levels render as
+  the same one. This is the visual form of the defect this persona names in prose: a
+  structure asserted rather than delivered. The fifteen values were not a scale anybody
+  chose; they are fifteen separate decisions taken one rule at a time, and the tell is that
+  **`.1em` and `.10em` both appear** in the tracking beside them — the same number, written
+  twice, by two people-moments that never met.
+- **61 rules are under 11px, nine of them at 9.5px**, and the 9.5px ones are tracked
+  uppercase mono — `.ring span`, `.deg-stats .stat span`, `.pc-stats .stat span`,
+  `.meta-card dt`, `.rubric th`, `.cb-head .lang`, `.cb-out-head b`, `.ftab .ro-tag`,
+  `.ac-kind`. Uppercase, tracked, monospace and 9.5px is four separate legibility taxes on
+  one string. The stylesheet's own comment at `.rail-module h4` says a 9.5px module title
+  was *"the smallest type in the application"* and was raised out of exactly this; the
+  sweep stopped at that one rule. **Fixing the line you were pointed at is not fixing the
+  defect** — the curriculum's own invariant, and this is it in the stylesheet.
+- *Checked and left, so it is not re-derived:* the **display band above 18px is genuinely
+  per-component and three of its entries are not text at all** — `.track-head .t-icon` and
+  `.prof-av` at 24px and `.ch-icon` at 19px are emoji and avatar boxes. Collapsing 19–34px
+  onto a ramp would have flattened real hierarchy between distinct screens and resized
+  three things that are not type. It is held by enumeration instead; see below.
+
+**4. UX & Accessibility Hardener** — this track's brief is mostly its brief, and here it
+produced the cycle's largest finding, which is not about size at all.
+
+- **The rail draws the wrong lesson number on 596 of 1990 rows, and has been doing it since
+  before this cycle.** `.rail-lesson` is `grid-template-columns:30px 22px minmax(0,1fr)` and
+  `.rail-lesson .num` carries `padding-right:8px`, so the number gets **22px of glyph — 3.6
+  characters of JetBrains Mono at the 10px it was set in.** A lesson number is written by
+  `app.js` in one of two forms: `<module>·<kind><n>` for a catalogue course (`app.js:181`)
+  and `<module>.<lesson>` for a foundation track (`app.js:23`). Derived from the catalogue
+  and `src/tracks.js` rather than assumed: **1990 numbers, of which 546 are four glyphs and
+  50 are five** (`1·r2`, `10·r2`). The cell is `text-align:right` inside `overflow:hidden`,
+  which does **not** ellipsise — it cuts the **leading** glyph. So `10·r2` was drawn as
+  `0·r2`: not a truncation a learner can see is a truncation, but a different module's
+  number, sitting in the rail, looking correct. **30% of the rail.**
+- **The gate that would have caught it was written for the rule one line below and stopped
+  there.** `verify_theme`'s `railid` section measures `.rail-course .cid` against the
+  longest of the 62 course ids — and `.rail-lesson .num` **shares the very declaration it
+  reads** (`.rail-lesson .num,.rail-course .cid{...font-size:10px...padding-right:8px}`) and
+  was never measured. The stylesheet even carries a 4-line comment above `.rail-course`
+  doing this arithmetic for the id column. One rule up, same sum, nobody did it. *A gate
+  that skips what it did not expect is worse than no gate*, one more time.
+- **The id column had exactly zero slack, which is why the type could not be raised without
+  finding this.** `CTRL510` is 7 glyphs; at 10px that is 42px of glyph plus 8px of pad =
+  **50.0px in a 50px track.** Raising the tier to 11px needs 54.2. The two columns are the
+  reason a type floor could not be a one-token edit, and they are why this debt looked
+  bigger than it was.
+- *Measured and found sound:* every one of the **7 rules that sit on the raised tier and
+  declare a fixed box** — `.save-state` (a `min-width`, so it grows), `.dv-n` 24px,
+  `.pq-b` 18px, `.pq-arrow` 10px, `.pb-icon` 22px, `.opt .k` 19px, `.ac-ic` 18px — centres a
+  single glyph with `place-items:center` or `text-align:center`. None can overflow
+  meaningfully at 11px, checked individually rather than assumed from the count.
+- *Measured and found sound:* `prefers-reduced-motion` is honoured with
+  `*{animation:none!important;transition:none!important}`, which covers all 26 animations
+  and 35 transitions in the file. No gap to repair.
+
+**3. Simulation Auditor** — no solver in a stylesheet, so pointed at the arithmetic
+downstream of the change, computed from the source rather than eyeballed.
+
+- **Raising the ramp had to not move the topbar, and that was checked before choosing the
+  steps, not after.** The 375px budget reads two type sizes out of the stylesheet:
+  `.metric.streak .fl` at 13px and `.metric.streak b` at 12px. Both are already whole
+  pixels and both are on the chosen ramp, so **204.6px of furniture and 86.4px for the
+  title are unmoved** — confirmed by the gate after the edit, not predicted. Had the ramp
+  been built by rounding to nearest instead of upward, 12.5 and 13.5 would have pulled
+  those two and the phone layout would have moved for no reason.
+- **The rail's title track pays for the wider number column, and the amount was computed:**
+  a lesson row goes from 176px of title to 165px on desktop and 186 to 175 at ≤980px; a
+  course row loses 5px. Both keep `text-overflow:ellipsis`, so the cost is ellipsising ~11px
+  sooner on a 262px rail, against drawing 596 correct numbers. Recorded because it is a real
+  cost and not a free repair.
+- **Every relative size resolved against its actual parent.** Eight rules are `em`-relative,
+  and a declared-size check is blind to them by construction — `.88em` is fine on a 14px
+  parent and 10.56px on a 12px one. Computed: `.explain code` is **11.44px**, the smallest
+  rendered text in the application, and the only one within one ramp step of the floor.
+
+**2. Assessment Inquisitor.** No graded question in a stylesheet, so — as in cycles 2, 5, 6,
+11 and 18 — pointed at the one thing in scope it can judge: whether a distinction announces
+itself or merely exists.
+
+- **The whole cycle is that question.** A distractor that no one could pick is not a
+  distractor, and a type step no one can see is not a step. Twelve half-pixel steps and
+  twelve tracking values are the stylesheet's version of four options where only one is
+  defensible: the structure is present in the source and absent from the reader's
+  experience. That is why the ramp is held to a **minimum ratio** rather than merely to a
+  count of values — a gate that allowed six steps of 1.02 would be counting names, not
+  differences.
+
+### What changed
+
+**A type ramp, in `:root`, and 285 declarations moved onto it.** Six steps, every one a
+whole pixel, every adjacent ratio at least 1.071:
+
+| token | px | absorbs | n |
+|---|---|---|---|
+| `--t-label` | 11 | 9.5, 10, 10.5, 11 | 107 |
+| `--t-meta` | 12 | 11.5, 12 | 52 |
+| `--t-ui` | 13 | 12.5, 13 | 63 |
+| `--t-read` | 14 | 13.5, 14 | 33 |
+| `--t-body` | 15 | 14.5, 15 | 23 |
+| `--t-title` | 17 | 16, 16.5, 17 | 7 |
+
+**Every half-step rounds up and the three tiers under the floor come up to it, so nothing
+in the application got smaller** — every delta in the transform report is ≥ 0. Rounding up
+rather than to nearest is the deliberate choice: this ramp is repairing a legibility floor,
+and a collapse that made 71 half-step surfaces 0.5px *smaller* would have spent the cycle's
+budget against itself.
+
+**The two rail tracks, sized against the strings they actually hold.** `.rail-lesson`'s
+number column **30px → 41px** (5 glyphs at 11px = 33px, plus the 8px pad) and
+`.rail-course`'s id column **50px → 55px**. The module headings that are positioned against
+the lesson grid moved with it, `margin-left` 44 → 55 and the sub-rail's 56 → 67, so the rail
+keeps its alignment rather than acquiring a new one.
+
+**Tracking, which is the same dimension one layer in.** All 36 positive `letter-spacing`
+declarations sit on `--t-label` doing one job — a small mono label, 33 of them uppercase —
+and carried **twelve values from .01em to .16em**, including `.1em` and `.10em` for the same
+number. Two tokens now: `--tr-caps:.14em` (where 13 of the 36 already were, the largest
+group) for uppercase mono micro-labels, and `--tr-mono:.03em` for mono that is not
+uppercase. `.chip`'s `.01em` — 0.11px at 11px, on a sans chip that is not a tracked label —
+became `0`. The negative ramp is **left as literals**: it descends correctly with size
+(-.015 at 14–17px, -.02 at 19–25, -.025 at 20–26, -.03 at 27–38) and each value belongs to a
+display heading this cycle deliberately did not collapse; only its **two duplicate
+spellings** (`-0.03em`, `-0.025em`) were normalised so the set is countable.
+
+**Two repairs to gate machinery that the tokens exposed:**
+
+- **`typePx()`**, because a size now comes from a token the way a colour does, and both
+  existing consumers `parseFloat`-ed the declaration.
+- **The topbar check was reporting `[ok]` on a number it could not compute.** With the sizes
+  tokenised it printed *"NaNpx of furniture, NaNpx for the screen title"* and **passed**,
+  because `NaN < 60` is `false`. Every input is now named and checked finite, and the
+  verdict refuses rather than defaults. This is a pre-existing defect in a check cycle 5
+  wrote; it was invisible while the inputs were literals and would have stayed invisible.
+
+**`railid` became `tracks`, and measures both columns.** The worst case is derived from the
+catalogue and from `app.js`'s own `UNIT_SPEC` — read out of `app.js` rather than copied, so
+a new unit kind cannot silently widen the column — plus `src/tracks.js` for the second num
+format. It reports **how many rows would be cut, not merely whether the worst one is**,
+because a column that clips 0.4% and one that clips 30% are not the same defect.
+
+**A `type` section in `verify_theme.mjs` and a `type` block in `theme_budget.json`**, with
+six checks: the ramp is whole-pixel, ascending, above the floor and above a minimum ratio;
+nothing under 18px declares a literal; the display band is enumerated **in both directions**,
+so a new size fails and a listed size nothing uses also fails; relative sizes are resolved
+against the parent named in the budget; the canvas is held to its own floor and its
+sub-11px count may shrink but not grow; and positive tracking comes from a token.
+
+**The gate was not trusted until it was seen to fail. 16 mutations, 15 it had to reject and
+one it had to pass**, each applied to the real files, run, restored, with the restore
+verified by SHA-256:
+
+```
+   1  the floor back to 10px, where 61 rules were
+   2  a half-pixel step reintroduced on the label tier
+   3  --t-title to 16px — a 1.067 step, under the minimum
+   4  the ramp made non-monotone
+   5  one rule reverted to a literal, the way all fifteen values began
+   6  a new display size nothing wrote down
+   7  a budget display entry whose size nothing uses any more
+   8  the PARENT dropped a step — the only way .88em goes under the floor
+   9  canvas text under the floor the canvas is held to
+  10  one more canvas site under the DOM floor
+  11  the lesson-number column back to 30px, cutting 596 leading glyphs
+  12  the id column back to 50px, which fitted only at 10px type
+  13  one label's tracking hand-picked again
+  14  one display value written two ways again
+  15  a size token the topbar reads pointed at nothing — the NaN that used to pass
+  16  a comment reflowed and nothing else — the control, which passes
+```
+
+### Found in my own work, and fixed
+
+Five, and every one was caught by a measurement rather than by re-reading.
+
+- **My transform's idempotence guard suppressed the thing it was guarding.** It skipped
+  inserting the token block `if '--t-label' not in styles` — but the remap had *already*
+  written `var(--t-label)` into 107 rules, so the test was true and **the six token
+  definitions were never written at all.** The stylesheet referenced a ramp that did not
+  exist. Found because the gate then failed to resolve `var(--t-label)`, not because I
+  re-read the script.
+- **My first measurement of the rail defect used the wrong number format and an incomplete
+  unit list.** I modelled every lesson number as `(mi+1).(li+1)` — which is `app.js:23`, the
+  *foundation track* format — and enumerated unit kinds from a hand-written list that
+  **omitted `sandbox`**. It produced "401 of 1820, 22%", and I had already written that into
+  a stylesheet comment. The real figures, taken from `UNIT_SPEC` and both formats, are **596
+  of 1990, 30%**, and the worst case is `10·r2` rather than `10.10`. The comment was
+  corrected before anything else was built on it. This is the `len()`-on-a-unit-key trap in
+  a new coat: the kinds are a list and I typed the list from memory.
+- **The `underFloor` number I wrote into the budget was wrong, and the gate rejected it.**
+  I put 12, having counted `circuit.js`'s sub-11px draw sites and stopped; `studio.js` has
+  two more. The gate said *"14 canvas draw sites are under the DOM's 11px floor and the
+  budget records 12"* on its first run. Corrected to 14, with the miscount recorded in the
+  budget's own comment so the next reader knows the number was contested.
+- **My mutation harness scored a mutation on the wrong evidence.** Mutation 2 sets
+  `--t-label` to 11.5px; the suite marked it "ok" because the gate exited non-zero — but the
+  failure it printed was the **id column overflowing**, a true side effect and not the
+  half-pixel check under test. A suite that accepts any rejection measures that the gate is
+  noisy, not that the check exists. Each mutation now names a phrase the *right* check
+  produces and only counts if that check spoke. All 16 still pass, and mutation 2 now shows
+  the half-pixel message with "(+3 other checks also objected)" beside it.
+- **My rule walker lost one rule inside `desk.js` and I nearly shipped the gap.** The desk's
+  CSS is an array of JavaScript strings, and the brace walker mistook a function body for a
+  rule, skipping `.dsk-mini`'s `.06em`. The transform's own closing sweep — *"positive
+  letter-spacing literals remaining: 1"* — is what caught it; without that line it would
+  have been a silent one-rule hole in a change whose whole claim is completeness.
+
+### Left alone, deliberately
+
+- **The display band above 18px: 24 declarations across 13 values, uncollapsed.** They are
+  per-component headings on distinct screens, and `.track-head .t-icon`, `.prof-av` and
+  `.ch-icon` are emoji and avatar boxes rather than type at all. Held by enumeration in the
+  budget with a reason per value, and the gate fails in both directions, so the band cannot
+  grow silently — but it is not a ramp and this cycle did not make it one.
+- **The negative tracking ramp stays literal**, for the same reason: five values that
+  descend correctly with size and belong to headings that were not collapsed. Only the
+  duplicate spellings were fixed. Recorded so the next cycle does not read "5 values" as
+  neglect.
+- **The canvas still draws at 8.5px in two places** — `circuit.js:2805` (the breadboard's
+  column numbers) and `:2934` (the MCU supply caption) — and **14 of its 23 draw sites are
+  under the DOM's new 11px floor.** Cycle 18 recorded these two and declined them because
+  the fix means re-laying-out the breadboard's column pitch, which is a Track 2 change to
+  the board. Still true. They are now **held rather than merely recorded**: a floor stops
+  the canvas getting smaller and a count stops the sub-floor set growing. Both numbers are
+  debts that may shrink and be written down and may not grow.
+- **`--lime` is used as ink in 36 places and the light theme puts most at 3.4–4.1:1.**
+  Re-counted rather than inherited: cycle 11 recorded 35, it is **36** now. Cycles 11 and 18
+  both declined it as *"the accent weight of every screen in the application, a decision
+  about the design language rather than a repair"* that *"belongs in a cycle that does
+  nothing else."* This cycle did not take it either, and it is now the debt **three** Track 5
+  cycles have named without anyone taking it. It is the strongest candidate for the next
+  one — the same position the canvas palette was in before cycle 18 took it.
+- **61 of the 135 contrast surfaces still describe rather than enforce.** Re-measured, not
+  inherited: 74 carry a `sel` and read their ink from the stylesheet, 61 do not. Unchanged
+  from cycle 18, which inherited 61 from cycle 11's 58. Cycle 11 called back-filling them
+  *"the first thing the next Track 5 cycle should do"* and no Track 5 cycle has. This one
+  spent its budget on the dimension that had **no** gate rather than on making an existing
+  gate stricter, which is a defensible ordering and is recorded as a choice rather than an
+  oversight.
+- **Five `transition:all` declarations remain** — `.seg button`, `.ftab`, `.ptab` and two
+  card rules. Cycle 11 replaced `.opt`'s with the three properties it actually animates and
+  the rest were never swept. Counted and left: they are tab and segment controls, a
+  different subsystem from the type scale, and folding them in would have been the "cycle
+  that touches everything" the curriculum warns about. `prefers-reduced-motion` neutralises
+  all of them for the readers most affected.
+- **`palette()` still runs a `getComputedStyle` per `frame()` and there are 7 call sites.**
+  Unchanged from cycle 18; a Track 2 change with a lifecycle in it.
+- **No author file, no `catalog/*.json`, no lesson id and no schema was touched**, so
+  `emit.py` was not run and the staleness guard is not armed. The mechanical confirmation is
+  that the payload total is **13129 KB before and after** and `git status` reports **nothing
+  under `docs/programs`** — no course's JSON moved, so no payload could.
+- **`docs/programs` holds 65 payloads against the 62 the current shell names**, verified
+  rather than assumed: 62 named, **0 missing**, 3 retained from earlier generations. It was
+  65 before this cycle too — the build wrote byte-identical payloads — so the rolling window
+  grew during cycles 19–23, not here.
+
+### Gates, after
+
+Every pre-existing number unmoved. Four moved: the theme gate's three new `type` lines and
+its `railid` line becoming `tracks`, and the two artifact sizes, by the CSS, the tokens and
+the gate's own new code.
+
+```
+verify_theme         All good: 14 exemptions · 135 contrast surfaces x 2 themes — unmoved
+                     — tightest text 4.61:1 (.q-hint [light]), faintest state 1.11:1,
+                     3 held below the floor on purpose, 74 read from source
+                     topbar  at 375px: 291px of bar, 204.6px of furniture, 86.4px for
+                             the screen title — UNMOVED across a whole-file type change
+                     tracks  55px holds "CTRL510", the longest of 62 course ids, at
+                             54.2px · 41px holds "10·r2", the longest of 1990 lesson
+                             numbers the rail can draw, at 41.0px            [WAS railid]
+                     canvas  10 palette tiers, both fallback tables agree
+                     canvas  154 paint sites across 9 tiers, quietest 3.77:1 (rule
+                             [light]), 2 decorations under their ceiling
+                     type    6 steps from 11px to 17px hold every one of 285 sized
+                             declarations · tightest step 1.071 · 13 display sizes
+                             enumerated · smallest relative 11.44px (.explain code) [NEW]
+                     type    23 canvas draw sites across 2 files, smallest 8.5px, 14
+                             under the DOM floor — held from growing              [NEW]
+                     type    36 positive tracking declarations come from 2 tokens, and
+                             the display ramp's 5 negative values are each written one
+                             way                                                  [NEW]
+verify_desk          All good: 61 expressions · Desk.css() hands the gate 102 lines
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_circuit_ui    All good: 78 driven keys and gestures, says 10 things, holds 15
+                     kinds above their stamp floor
+verify_tune_ui       All good: 423 hostile openings clamped, 462 targets, 105 paints at
+                     5 widths, 270 drags, 493 mounts
+verify_circuit_view  All good: 26 hostile coordinates · 424 mounts at 7 widths · 150
+                     gestures · 390 published schematics
+verify_progress      All good: 29 hostile documents · 12 accessibility contracts
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3360 per-option explanations · 6572 draws · 24.5%
+verify_circuits      All good: 87 circuit exercises, 369 checks · 593 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_circuit_model All good: 1487 analyses, 84 refusals · 15 plots · 390 published
+                     schematics, 369 with a DC point
+verify_derivations   All good: 1294 steps across 46 courses
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 13129 KB — unchanged ·
+                     inlined 14378 -> 14384 KB · shell 1220 -> 1226 KB, of 1536
+```
+
+Beyond the gates: all 323 size declarations and 36 tracking declarations classified from
+source rather than sampled; the fifteen-value bottom band and its 1.034–1.053 ratios
+computed rather than described; the 61 sub-11px rules listed by selector; **1990 lesson
+numbers generated from `app.js`'s own two formats and `UNIT_SPEC` read out of `app.js`**,
+which is what turned "the rail is a bit tight" into 596 rows drawing another lesson's
+number; the id column's 50.0px-in-50px shown to be the reason the floor could not be raised
+in one edit; the topbar's two type inputs checked to be on-ramp **before** the ramp was
+chosen, so a whole-file type change moved neither 204.6 nor 86.4; all 7 fixed boxes on the
+raised tier checked individually; all 8 relative sizes resolved against their real parents;
+and the new gate run against **16 mutations — 15 it had to reject and one it had to pass** —
+which is the run that found the suite was scoring one of them on the wrong check.
+
+---

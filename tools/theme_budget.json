@@ -167,6 +167,74 @@
     {"name":".dsk-ta::placeholder — quieter than the note, on purpose","kind":"text","fg":"var(--on-editor-hint)","bg":["var(--editor)"],"sel":".dsk-ta::placeholder","floor":2.5,"ceiling":3.2},
     {"name":".dsk-notefoot — the character and line count","kind":"text","fg":"var(--ink-3)","bg":["var(--sunk)","var(--surface-solid)"],"sel":".dsk-notefoot"}
   ],
+ "type": {
+  "_": [
+   "The type ramp. Every colour in this application has been held to a token since cycle 5",
+   "and to a measured contrast since cycle 11; nothing had ever measured a SIZE, and an",
+   "unheld dimension drifts. At the start of cycle 24 there were 36 distinct type sizes and",
+   "no scale: 285 of the 323 font-size declarations sat under 18px across FIFTEEN values in",
+   "half-pixel steps (9.5 10 10.5 11 11.5 12 12.5 13 13.5 14 14.5 15 16 16.5 17), adjacent",
+   "ratios 1.034 to 1.053. A 4% step is not a distinction a reader makes, so the hierarchy",
+   "those fifteen values expressed on paper did not exist on the screen. 61 rules were under",
+   "11px, nine of them 9.5px tracked uppercase mono.",
+   "",
+   "floor        no DOM text below this",
+   "displayFloor at and above this a size is a per-component display decision, listed below",
+   "             rather than put on the ramp",
+   "minRatio     the smallest adjacent step that is still a step someone can see"
+  ],
+  "floor": 11,
+  "displayFloor": 18,
+  "minRatio": 1.07,
+  "ramp": ["--t-label", "--t-meta", "--t-ui", "--t-read", "--t-body", "--t-title"],
+  "tracking": ["--tr-caps", "--tr-mono"],
+
+  "display": [
+   {"px":19,"why":"section heads on the profile, the year band and the capstone card; .ch-icon is an emoji box at this size rather than text"},
+   {"px":20,"why":".pc-head h2, and the numeric answer input in focus mode where the answer is the subject of the screen"},
+   {"px":21,"why":".q-prompt — the question itself, the one line every graded unit is built around; and .article h2"},
+   {"px":22,"why":".ring b — the percentage inside the 110px degree ring"},
+   {"px":23,"why":".deg-stats .stat b and the task pane's lesson title"},
+   {"px":24,"why":".track-head .t-icon and .prof-av are emoji and avatar boxes, not text"},
+   {"px":25,"why":".pd-title, and .q-prompt promoted in focus mode"},
+   {"px":26,"why":".resume h3 — the card that names where the learner left off"},
+   {"px":27,"why":".stat .val b, the dashboard's own numbers; and the hero h1 at phone width"},
+   {"px":29,"why":".app.focus .lesson-title h1"},
+   {"px":30,"why":".pf-pct and .page-head h1"},
+   {"px":32,"why":".quiz-result .score"},
+   {"px":34,"why":".hero h1 and .pl-h1 — the largest type in the application"}
+  ],
+
+  "relative": [
+   {"sel":"math","em":1.06,"parent":".dv-ask","why":"MathML set slightly above its surrounding prose so an inline formula does not read as smaller than the sentence holding it"},
+   {"sel":".math-raw","em":0.9,"parent":".dv-ask","why":"the raw LaTeX fallback shown when MathML cannot render"},
+   {"sel":".blk","em":0.95,"parent":".blk-listing","why":"a hole sits inline in the listing and is set just under it so the box does not grow the line"},
+   {"sel":".article code","em":0.88,"parent":".article","why":"inline code in a reading unit"},
+   {"sel":".quiz-q .qt code","em":0.9,"parent":".quiz-q .qt","why":"inline code in a question stem"},
+   {"sel":".opt code","em":0.9,"parent":".opt","why":"inline code in an answer option — an option is full of identifiers and this is the smallest text a learner must read to choose between them"},
+   {"sel":".explain code","em":0.88,"parent":".explain","why":"inline code in the per-option explanation; at 0.88em of --t-ui this is the smallest rendered text in the application at 11.44px, and dropping .explain one step to --t-meta would put it at 10.56 with nothing else objecting"},
+   {"sel":".pcard code","em":0.88,"parent":".pcard p","why":"inline code in a profile card"}
+  ],
+
+  "canvas": {
+   "floor": 8.5,
+   "underFloor": 14,
+   "_why": [
+    "Canvas text is not text. A browser's text zoom, the one remedy a reader has for type",
+    "that is too small, does nothing to it at all, and none of the CSS above reaches it.",
+    "23 draw sites across studio.js and circuit.js use 8 sizes bottoming at 8.5px — the",
+    "breadboard column numbers (circuit.js:2805) and the MCU supply caption (:2934) — which",
+    "is smaller than anything in the DOM even before this cycle raised the DOM's floor to 11.",
+    "14 of the 23 are under that floor: 12 in circuit.js and 2 in studio.js. The first draft",
+    "of this entry said 12, having counted circuit.js and stopped, and the gate rejected it.",
+    "Cycle 18 recorded these two and declined them because fixing them means re-laying-out",
+    "the breadboard's column pitch, which is a Track 2 change to the board rather than a",
+    "colour or a size. Still true, so they are held rather than repaired: `floor` stops the",
+    "canvas getting smaller and `underFloor` stops the count of sub-11px sites growing. Both",
+    "numbers are debts. They may shrink and be written down; they may not grow."
+   ]
+  }
+ },
  "canvas": {
   "_": [
    "Sandbox.palette() in src/studio.js: the ink of every pixel this application draws that is",

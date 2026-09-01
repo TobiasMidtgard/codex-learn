@@ -100,6 +100,24 @@ const dark = tokensFrom(':root');
 const light = Object.assign({}, dark, tokensFrom('[data-theme=light]'));
 if (!dark['--ground'] || !light['--ground']) { bad('tokens', 'could not read both token tables'); process.exit(1); }
 
+/* ---------- type ---------- */
+/* A size now comes from --t-* the way a colour comes from --ink-*, so anything that
+   reasons about a length in glyphs has to resolve the token first. Both consumers below
+   used to parseFloat the declaration, which was a literal; the moment it stopped being
+   one the id column threw and the topbar printed "NaNpx of furniture" and still reported
+   [ok], because NaN < 60 is false. Neither of those is a colour bug and neither would
+   have been found by the contrast pass — a gate that cannot compute its own number has
+   to say so rather than pass. */
+function typePx(v, depth) {
+  if (v == null) return NaN;
+  v = String(v).trim(); depth = depth || 0;
+  if (depth > 8) return NaN;
+  const m = v.match(/^var\(\s*(--[\w-]+)\s*(?:,\s*([\s\S]*))?\)$/);
+  if (m) return dark[m[1]] !== undefined ? typePx(dark[m[1]], depth + 1) : typePx(m[2], depth + 1);
+  const p = v.match(/^([\d.]+)px$/);
+  return p ? parseFloat(p[1]) : NaN;
+}
+
 /* ---------- colour ---------- */
 function parseColor(c, tbl, depth) {
   c = String(c).trim(); depth = depth || 0;
@@ -314,9 +332,20 @@ const FLOOR = { text: 4.5, large: 3.0, graphic: 3.0, state: 1.1 };
   const mgap = px(declIn('.metric', 'gap') || '6px');
   const btn = px(declIn('.tbtn', 'width') || '32px');
   const menu = px(declIn('.menu-btn', 'width') || '32px');
-  const flame = px(declIn('.metric.streak .fl', 'font-size') || '13px') * EMOJI_ADVANCE;
-  const digit = px(declIn('.metric.streak b', 'font-size') || '12px') * MONO_ADVANCE;
+  const flameSize = typePx(declIn('.metric.streak .fl', 'font-size') || '13px');
+  const digitSize = typePx(declIn('.metric.streak b', 'font-size') || '12px');
+  const flame = flameSize * EMOJI_ADVANCE;
+  const digit = digitSize * MONO_ADVANCE;
   const xpHidden = /^none$/.test(declIn('.metric.xp', 'display', phone) || '');
+
+  /* Every input named, so an unresolved one is reported as itself rather than as a NaN
+     that propagates into the total and then passes the floor test by being unordered. */
+  for (const [what, v] of [['--rail-icon', railIcon], ['--topbar-gap', gap], ['--topbar-pad', pad],
+                           ['--metric-pad', mpad], ['.metric gap', mgap], ['.tbtn width', btn],
+                           ['.menu-btn width', menu], ['.metric.streak .fl font-size', flameSize],
+                           ['.metric.streak b font-size', digitSize]]) {
+    if (!Number.isFinite(v)) bad('topbar', 'could not resolve ' + what + ' — this check cannot be computed, so it is not passing');
+  }
 
   /* worst case a learner can actually reach: a 365-day streak, a six-character XP */
   const streakBox = 2 * mpad + flame + mgap + 3 * digit;
@@ -327,7 +356,8 @@ const FLOOR = { text: 4.5, large: 3.0, graphic: 3.0, state: 1.1 };
   const left = avail - furniture;
   const line = 'at ' + VIEWPORT + 'px: ' + avail.toFixed(0) + 'px of bar, ' + furniture.toFixed(1) +
     'px of furniture, ' + left.toFixed(1) + 'px for the screen title' + (xpHidden ? ' (XP pill stands down)' : '');
-  if (left < TITLE_FLOOR) bad('topbar', line + ' — under the ' + TITLE_FLOOR + 'px floor');
+  if (!Number.isFinite(left)) bad('topbar', line + ' — the bar\'s own arithmetic did not resolve');
+  else if (left < TITLE_FLOOR) bad('topbar', line + ' — under the ' + TITLE_FLOOR + 'px floor');
   else ok('topbar', line);
 
   /* a control that can shrink is a control that can shrink past a finger */
@@ -339,33 +369,110 @@ const FLOOR = { text: 4.5, large: 3.0, graphic: 3.0, state: 1.1 };
   if (held) ok('topbar', '.tbtn, .menu-btn and .metric hold their box (WCAG 2.5.8 target size)');
 }
 
-/* ---------- 4. the rail's id column holds the ids the catalogue actually has ---------- */
-/* The track was 32px wide against a 9px right pad. Fifteen of the sixty-two ids are
-   seven characters, which does not fit in 23px of any font, so text-align:right spilled
-   them leftwards out of the row. A column sized against the data cannot drift back. */
+/* ---------- 4. the fixed tracks that are sized against the type they hold ---------- */
+/* This check used to be about one column. The id track was 32px against a 9px right pad
+   and fifteen of the sixty-two ids are seven characters, so text-align:right spilled them
+   leftwards out of the row; a track sized against the data cannot drift back.
+ *
+ * It was written for `.rail-course .cid` and stopped there — and `.rail-lesson .num`, the
+ * rule immediately ABOVE it in the stylesheet, sharing its font-size declaration and its
+ * padding, had exactly the same defect and was never measured. 596 of the 1990 lesson
+ * numbers the rail can draw are four or five glyphs, and 22px of track holds 3.6, so
+ * 30% of the rail was drawing a number with its leading glyph cut off — "10·r2" as
+ * "0·r2", which is not a truncation a learner can see is a truncation. It is the
+ * curriculum's own invariant: a gate that skips what it did not expect is worse than no
+ * gate. Both tracks are entries now, and adding a third is a row rather than a rewrite.
+ *
+ * The worst case is derived from the catalogue and from app.js's own two num formats,
+ * not written down here, because a literal would stop tracking the data the moment a
+ * course gained an eleventh module. */
 {
   const MONO_ADVANCE = 0.6;
-  let ids = [];
+
+  /* every course id, for the id column */
+  const ids = [];
   for (const f of fs.readdirSync(path.join(ROOT, 'catalog'))) {
     if (!/^_spine.*\.json$/.test(f)) continue;
     const d = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalog', f), 'utf8'));
     for (const c of (d.courses || [])) ids.push(c.id);
   }
-  const longest = ids.reduce((a, b) => (b.length > a.length ? b : a), '');
-  const rule = rules.find(r => r.sel === '.rail-course' && !r.media.length && /grid-template-columns/.test(r.body));
-  const cidRule = rules.find(r => r.sel.indexOf('.rail-course .cid') >= 0 && /font-size/.test(r.body));
-  const track = rule && parseFloat(rule.body.match(/grid-template-columns\s*:\s*([\d.]+)px/)[1]);
-  const size = cidRule && parseFloat(cidRule.body.match(/font-size\s*:\s*([\d.]+)px/)[1]);
-  const padR = cidRule && parseFloat((cidRule.body.match(/padding-right\s*:\s*([\d.]+)px/) || [0, 0])[1]);
-  const need = longest.length * size * MONO_ADVANCE + padR;
-  if (!track || !size) bad('railid', 'could not read the id column or its type size');
-  else if (need > track + 1e-9) {
-    bad('railid', 'the id column is ' + track + 'px and "' + longest + '" needs ' + need.toFixed(1) +
-      'px (' + longest.length + ' glyphs at ' + size + 'px JetBrains Mono, plus ' + padR + 'px of pad)');
-  } else {
-    ok('railid', 'the ' + track + 'px id column holds "' + longest + '", the longest of ' + ids.length +
-      ' course ids, at ' + need.toFixed(1) + 'px');
+
+  /* every lesson number, built the way src/app.js builds it. UNIT_SPEC's order and tags
+     are read out of app.js rather than copied, so a new unit kind cannot silently widen
+     the column without this gate noticing. */
+  const appSrc = fs.readFileSync(path.join(ROOT, 'src', 'app.js'), 'utf8');
+  const spec = [...appSrc.matchAll(/\{\s*key:\s*'(\w+)',\s*sfx:\s*'\w+',\s*type:\s*'\w+',\s*tag:\s*'(\w+)'/g)]
+    .map(m => [m[1], m[2]]);
+  if (!spec.length) bad('tracks', 'could not read UNIT_SPEC out of src/app.js, so the lesson numbers cannot be derived');
+  const nums = [];
+  const asList = v => (v == null ? [] : (Array.isArray(v) ? v : [v]));
+  for (const f of fs.readdirSync(path.join(ROOT, 'catalog'))) {
+    if (!/\.json$/.test(f) || f.startsWith('_')) continue;
+    const d = JSON.parse(fs.readFileSync(path.join(ROOT, 'catalog', f), 'utf8'));
+    (d.modules || []).forEach((m, mi) => {
+      for (const [key, tag] of spec) {
+        asList(m[key]).forEach((u, ui) => { if (u) nums.push((mi + 1) + '·' + tag + (ui ? (ui + 1) : '')); });
+      }
+      asList(m.lab).forEach((lab, li) => { if (lab) nums.push('' + (mi + 1) + (li ? '·L' + (li + 1) : '')); });
+    });
   }
+  /* the foundation tracks in src/tracks.js use the other format — app.js:23 */
+  {
+    const tj = fs.readFileSync(path.join(ROOT, 'src', 'tracks.js'), 'utf8');
+    const arrayAt = (text, from) => {
+      let d = 0, j = from;
+      for (; j < text.length; j++) { if (text[j] === '[') d++; else if (text[j] === ']' && --d === 0) break; }
+      return text.slice(from, j);
+    };
+    for (const mm of tj.matchAll(/modules:\s*\[/g)) {
+      const block = arrayAt(tj, mm.index + mm[0].length - 1);
+      let mi = 0;
+      for (const lm of block.matchAll(/lessons:\s*\[/g)) {
+        const lessons = arrayAt(block, lm.index + lm[0].length - 1);
+        const n = (lessons.match(/\{\s*id:/g) || []).length;
+        for (let li = 0; li < n; li++) nums.push((mi + 1) + '.' + (li + 1));
+        mi++;
+      }
+    }
+  }
+
+  const longestOf = a => a.reduce((x, y) => (y.length > x.length ? y : x), '');
+  const COLUMNS = [
+    { name: 'the course id column', row: '.rail-course', cell: '.rail-course .cid',
+      col: 0, strings: ids, what: 'course ids' },
+    { name: 'the lesson number column', row: '.rail-lesson', cell: '.rail-lesson .num',
+      col: 0, strings: nums, what: 'lesson numbers the rail can draw' },
+  ];
+  const said = [];
+  for (const c of COLUMNS) {
+    const rowRule = rules.find(r => r.sel === c.row && !r.media.length && /grid-template-columns/.test(r.body));
+    const cellRule = rules.find(r => r.sel.split(',').map(s => s.trim()).indexOf(c.cell) >= 0 && /font-size/.test(r.body));
+    if (!rowRule || !cellRule) { bad('tracks', c.name + ': could not find ' + c.row + '\'s grid or ' + c.cell + '\'s type'); continue; }
+    const tracks = rowRule.body.match(/grid-template-columns\s*:\s*([^;}]+)/)[1].trim().split(/\s+/);
+    const track = parseFloat(tracks[c.col]);
+    const size = typePx((cellRule.body.match(/font-size\s*:\s*([^;}]+)/) || [])[1]);
+    const padR = parseFloat((cellRule.body.match(/padding-right\s*:\s*([\d.]+)px/) || [0, 0])[1]) || 0;
+    if (!Number.isFinite(track) || !Number.isFinite(size)) {
+      bad('tracks', c.name + ': could not resolve the track (' + tracks[c.col] + ') or the type size (' +
+        (cellRule.body.match(/font-size\s*:\s*([^;}]+)/) || [])[1] + ')');
+      continue;
+    }
+    const longest = longestOf(c.strings);
+    const need = longest.length * size * MONO_ADVANCE + padR;
+    /* how many would be cut, not merely whether the worst one is — a column that clips
+       0.4% of its rows and one that clips 30% are not the same defect */
+    const room = (track - padR) / (size * MONO_ADVANCE);
+    const over = c.strings.filter(s => s.length > room + 1e-9).length;
+    if (need > track + 1e-9) {
+      bad('tracks', c.name + ' is ' + track + 'px and "' + longest + '" needs ' + need.toFixed(1) +
+        'px (' + longest.length + ' glyphs at ' + size + 'px JetBrains Mono, plus ' + padR + 'px of pad) — ' +
+        over + ' of ' + c.strings.length + ' ' + c.what + ' lose their leading glyph, and text-align:right ' +
+        'inside overflow:hidden cuts the FRONT, so what is drawn is another row\'s number');
+    } else {
+      said.push(track + 'px holds "' + longest + '", the longest of ' + c.strings.length + ' ' + c.what + ', at ' + need.toFixed(1) + 'px');
+    }
+  }
+  if (clean('tracks')) ok('tracks', said.join(' · '));
 }
 
 /* ---------- 5. the mobile drawer leaves the tab order when it closes ---------- */
@@ -539,8 +646,174 @@ const FLOOR = { text: 4.5, large: 3.0, graphic: 3.0, state: 1.1 };
   }
 }
 
+/* ---------- 7. the type ramp, which had no gate and so had no scale ----------
+ *
+ * Every colour in this application has been held to a token since cycle 5 and to a
+ * measured contrast since cycle 11. Nothing has ever measured a SIZE. The result was
+ * what an unheld dimension always becomes: 36 distinct type sizes, 285 of the 323
+ * declarations below 18px spread across fifteen values in half-pixel steps, and 61
+ * rules under 11px. Adjacent ratios of 1.034 mean the hierarchy those values were
+ * chosen to express does not survive being drawn.
+ *
+ *   a. The ramp is a scale — whole pixels, strictly increasing, no step so small that
+ *      it cannot be seen, and a floor under the smallest.
+ *   b. Nothing below the display band declares a literal. This is the check that stops
+ *      a sixteenth value being added the way the first fifteen were.
+ *   c. The display band is enumerated. It is deliberately NOT collapsed — those sizes
+ *      are per-component headings and three of them are emoji boxes rather than text —
+ *      so it is held by being listed, and a new one has to be written down.
+ *   d. Relative sizes are resolved against the parent they inherit from. `.88em` is
+ *      fine on a 14px parent and 10.56px on a 12px one, and no check on the DECLARED
+ *      size can see the difference.
+ *   e. The canvas draws text the DOM never sees, at sizes the DOM does not use, on a
+ *      surface where a browser's text zoom does nothing at all.
+ */
+{
+  const budget = JSON.parse(fs.readFileSync(BUDGET, 'utf8'));
+  const T = budget.type;
+  if (!T) bad('type', 'tools/theme_budget.json has no `type` block');
+  else {
+    /* --- a. the ramp is a scale --- */
+    const ramp = T.ramp.map(name => ({ name, px: typePx(dark[name]) }));
+    const missing = ramp.filter(s => !Number.isFinite(s.px));
+    if (missing.length) bad('type', 'the budget names ' + missing.map(s => s.name).join(', ') + ', which :root does not define as a length');
+    else {
+      for (const s of ramp) {
+        if (s.px !== Math.round(s.px)) bad('type', s.name + ' is ' + s.px + 'px — a half pixel is not a step, it is the defect this ramp replaced');
+        if (s.px < T.floor) bad('type', s.name + ' is ' + s.px + 'px, under the ' + T.floor + 'px floor');
+      }
+      for (let i = 1; i < ramp.length; i++) {
+        const r = ramp[i].px / ramp[i - 1].px;
+        if (ramp[i].px <= ramp[i - 1].px) {
+          bad('type', ramp[i].name + ' (' + ramp[i].px + 'px) is not above ' + ramp[i - 1].name + ' (' + ramp[i - 1].px + 'px) — the ramp has to ascend to be one');
+        } else if (r < T.minRatio - 1e-9) {
+          bad('type', ramp[i - 1].name + ' -> ' + ramp[i].name + ' is a ratio of ' + r.toFixed(3) +
+            ', under the ' + T.minRatio + ' this ramp holds. Two steps a reader cannot tell apart are one step wearing two names.');
+        }
+      }
+    }
+
+    /* --- b. nothing under the display band is a literal --- */
+    const literals = [];
+    for (const r of rules) {
+      for (const m of r.body.matchAll(/font-size\s*:\s*([\d.]+)px/g)) {
+        const v = parseFloat(m[1]);
+        if (v < T.displayFloor) literals.push({ sel: r.sel, px: v });
+      }
+    }
+    for (const l of literals) {
+      bad('type', l.sel + ' declares font-size:' + l.px + 'px directly. Sizes under ' + T.displayFloor +
+        'px come from the --t-* ramp; a literal here is how the ramp stops being one.');
+    }
+
+    /* --- c. the display band, enumerated rather than collapsed --- */
+    const seen = new Map();
+    for (const r of rules) {
+      for (const m of r.body.matchAll(/font-size\s*:\s*([\d.]+)px/g)) {
+        const v = parseFloat(m[1]);
+        if (v >= T.displayFloor) seen.set(v, (seen.get(v) || []).concat([r.sel]));
+      }
+    }
+    const listed = new Set(T.display.map(d => d.px));
+    for (const [v, sels] of [...seen].sort((a, b) => a[0] - b[0])) {
+      if (!listed.has(v)) {
+        bad('type', 'font-size:' + v + 'px is used by ' + sels.join(', ') + ' and is not in the budget\'s display band. ' +
+          'Either it belongs on the ramp, or it is a display size and needs a line saying which component it is for.');
+      }
+    }
+    for (const d of T.display) {
+      if (!seen.has(d.px)) bad('type', 'the budget lists ' + d.px + 'px in the display band and nothing uses it — a list that outlives its entries stops being a record of anything');
+    }
+
+    /* --- d. relative sizes, resolved against the parent they inherit from --- */
+    /* Declared-size checks are blind here by construction: `.88em` is a legal, sensible
+       declaration whose rendered size is a fact about some OTHER rule. Each entry names
+       the parent it inherits from, and the parent's size is read from the stylesheet, so
+       dropping a parent onto a smaller step is what trips this rather than editing the
+       child. */
+    let smallestRel = Infinity, smallestRelName = '';
+    for (const e of (T.relative || [])) {
+      const parentRule = rules.filter(r => r.sel.split(',').map(s => s.trim()).indexOf(e.parent) >= 0 && /font-size/.test(r.body)).pop();
+      if (!parentRule) { bad('type', e.sel + ': its parent ' + e.parent + ' declares no font-size, so this size cannot be resolved'); continue; }
+      const parentPx = typePx((parentRule.body.match(/font-size\s*:\s*([^;}]+)/) || [])[1]);
+      if (!Number.isFinite(parentPx)) { bad('type', e.sel + ': ' + e.parent + '\'s font-size did not resolve'); continue; }
+      const computed = parentPx * e.em;
+      if (computed < smallestRel) { smallestRel = computed; smallestRelName = e.sel; }
+      if (computed + 1e-9 < T.floor) {
+        bad('type', e.sel + ' is ' + e.em + 'em of ' + e.parent + ' (' + parentPx + 'px) = ' + computed.toFixed(2) +
+          'px, under the ' + T.floor + 'px floor — ' + e.why);
+      }
+    }
+
+    /* --- e. the canvas, which is type no stylesheet holds and no text zoom reaches --- */
+    const canvasSizes = [];
+    for (const file of ['studio.js', 'circuit.js']) {
+      const text = fs.readFileSync(path.join(ROOT, 'src', file), 'utf8');
+      for (const m of text.matchAll(/font\s*=\s*['"`](?:bold\s+)?([\d.]+)px/g)) canvasSizes.push({ file, px: parseFloat(m[1]) });
+    }
+    const cfloor = T.canvas.floor;
+    for (const c of canvasSizes) {
+      if (c.px + 1e-9 < cfloor) {
+        bad('type', 'src/' + c.file + ' draws canvas text at ' + c.px + 'px, under the ' + cfloor +
+          'px this surface is held to. Canvas text is not text: a browser\'s text zoom does not reach it.');
+      }
+    }
+    const under = canvasSizes.filter(c => c.px < T.floor).length;
+    if (under > T.canvas.underFloor) {
+      bad('type', under + ' canvas draw sites are under the DOM\'s ' + T.floor + 'px floor and the budget records ' +
+        T.canvas.underFloor + '. This number is a debt, so it may shrink and be written down — it may not grow.');
+    }
+
+    /* --- f. tracking, which is the same dimension one layer in --- */
+    /* All 36 positive letter-spacing declarations sit on --t-label doing one job, and
+       they carried twelve values — .1em and .10em among them, the same number written
+       twice. A size ramp that does not hold its tracking is half a scale: the tier is
+       one decision and it had twelve answers. The negative ramp is NOT held, on the same
+       argument as the display band — it descends correctly with size and each value
+       belongs to a heading this cycle deliberately did not collapse — but its two
+       duplicate spellings were normalised so the set is countable. */
+    const trackLits = [];
+    let tracked = 0;
+    for (const r of rules) {
+      for (const m of r.body.matchAll(/letter-spacing\s*:\s*([^;}]+)/g)) {
+        const v = m[1].trim();
+        if (/^var\(--tr-/.test(v)) { tracked++; continue; }
+        if (/^-/.test(v) || v === '0') continue;          /* the display ramp, and no tracking at all */
+        trackLits.push({ sel: r.sel, v });
+      }
+    }
+    for (const l of trackLits) {
+      bad('type', l.sel + ' tracks by ' + l.v + ' directly. Positive tracking on the label tier comes ' +
+        'from --tr-caps or --tr-mono; twelve hand-picked values is what this replaced.');
+    }
+    for (const name of (T.tracking || [])) {
+      if (dark[name] === undefined) bad('type', 'the budget names ' + name + ', which :root does not define');
+    }
+    const negSpellings = new Set();
+    for (const r of rules) {
+      for (const m of r.body.matchAll(/letter-spacing\s*:\s*(-[\d.]+em)/g)) negSpellings.add(m[1]);
+    }
+    const dupes = [...negSpellings].filter(s => negSpellings.has(s.replace(/^-\./, '-0.')) && /^-\./.test(s));
+    for (const d of dupes) bad('type', 'the display ramp writes ' + d + ' and ' + d.replace(/^-\./, '-0.') + ' for one value');
+
+    if (clean('type')) {
+      const smallestCanvas = canvasSizes.reduce((a, c) => Math.min(a, c.px), Infinity);
+      ok('type', ramp.length + ' steps from ' + ramp[0].px + 'px to ' + ramp[ramp.length - 1].px +
+        'px hold every one of ' + (rules.reduce((n, r) => n + (r.body.match(/font-size\s*:\s*var\(--t-/g) || []).length, 0)) +
+        ' sized declarations · tightest step ' +
+        Math.min(...ramp.slice(1).map((s, i) => s.px / ramp[i].px)).toFixed(3) +
+        ' · ' + seen.size + ' display sizes enumerated · smallest relative ' + smallestRel.toFixed(2) +
+        'px (' + smallestRelName + ')');
+      ok('type', canvasSizes.length + ' canvas draw sites across 2 files, smallest ' + smallestCanvas +
+        'px, ' + under + ' under the DOM floor — recorded as a debt and held from growing');
+      ok('type', tracked + ' positive tracking declarations come from ' + (T.tracking || []).length +
+        ' tokens, and the display ramp\'s ' + negSpellings.size + ' negative values are each written one way');
+    }
+  }
+}
+
 console.log('');
 if (fails) { console.log('FAILED: ' + fails + ' problem(s).'); process.exit(1); }
 console.log('All good: theme tokens, ' + JSON.parse(fs.readFileSync(BUDGET, 'utf8')).surfaces.length +
-  ' contrast surfaces in both themes, the canvas palette every drawing shares, ' +
-  'the 375px topbar and the mobile drawer.');
+  ' contrast surfaces in both themes, the type ramp every size comes from, ' +
+  'the canvas palette every drawing shares, the 375px topbar and the mobile drawer.');
