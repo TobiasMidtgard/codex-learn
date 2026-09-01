@@ -529,7 +529,11 @@ function updateXp() {
   const av = $('#avatar');
   if (av) {
     av.textContent = initials(P.name) || String(level());
-    av.title = (P.name ? P.name + ' · ' : '') + 'Level ' + level() + ' · ' + P.xp + ' XP · open Profile';
+    const who = (P.name ? P.name + ' · ' : '') + 'Level ' + level() + ' · ' + P.xp + ' XP';
+    av.title = who + ' · open Profile';
+    /* The visible text is two initials or a bare digit; without this a screen reader
+       reads "T A, button" or "4, button" and the label is doing no work. */
+    av.setAttribute('aria-label', 'Profile — ' + who);
   }
 }
 function completeLesson(id) {
@@ -616,9 +620,11 @@ const NAV = [
 
 function renderShell() {
   $('#app').innerHTML =
+    '<a class="skip" href="#main">Skip to content</a>' +
     '<div class="blob a"></div><div class="blob b"></div>' +
     '<aside class="iconrail">' +
-      '<button class="logo" id="brand" title="Codex Learn"><span>&lt;/&gt;</span></button>' +
+      /* the visible glyph is "</>", which is what a screen reader would read out */
+      '<button class="logo" id="brand" title="Codex Learn" aria-label="Codex Learn — home"><span>&lt;/&gt;</span></button>' +
       '<nav class="iconnav" id="iconnav" aria-label="Sections">' +
         NAV.map(function (n) {
           return '<button class="inav" data-nav="' + n.id + '" title="' + n.label + '" aria-label="' + n.label + '">' +
@@ -628,12 +634,18 @@ function renderShell() {
       '</nav>' +
       '<div class="rail-foot">' +
         '<div class="div"></div>' +
-        '<div class="avatar" id="avatar" title="Level">1</div>' +
+        /* This was a <div> with a click handler, and it is the only route to Profile
+           anywhere in the app — no NAV entry points there, and the two other
+           go({view:'profile'}) calls are import and reset, both already on that
+           screen. So export, import, reset and the learner's own name were reachable
+           by mouse only, and warnNoStorage's toast said "open Profile (avatar, bottom
+           left)" about a control a keyboard cannot get to. */
+        '<button class="avatar" id="avatar" aria-label="Profile">1</button>' +
       '</div>' +
     '</aside>' +
     '<div class="frame">' +
       '<header class="topbar">' +
-        '<button class="menu-btn" id="menu-btn" aria-label="Open curriculum">' +
+        '<button class="menu-btn" id="menu-btn" aria-label="Open curriculum" aria-expanded="false" aria-controls="rail">' +
           '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14"/></svg>' +
         '</button>' +
         '<button class="tbtn rail-btn on" id="rail-btn" aria-pressed="true" aria-label="Toggle the curriculum panel">' +
@@ -661,7 +673,10 @@ function renderShell() {
       '<div class="runbar" id="runbar" hidden></div>' +
       '<div class="body" id="body">' +
         '<aside class="rail" id="rail" aria-label="Curriculum"></aside>' +
-        '<main class="main" id="main"></main>' +
+        /* tabindex -1 so the skip link can actually move focus here; without it the
+           href jumps the scroll and leaves focus where it was, so the next Tab goes
+           back to the topbar and the link has done nothing for a keyboard. */
+        '<main class="main" id="main" tabindex="-1"></main>' +
       '</div>' +
       '<div class="runfoot" id="runfoot" hidden></div>' +
     '</div>' +
@@ -675,7 +690,7 @@ function renderShell() {
     });
   });
   $('#avatar').addEventListener('click', function () { go({ view: 'profile' }); });
-  $('#menu-btn').addEventListener('click', function () { toggleRail(); });
+  $('#menu-btn').addEventListener('click', function () { toggleRail(undefined, true); });
   $('#rail-btn').addEventListener('click', toggleRailPanel);
   window.addEventListener('resize', debounce(syncRailToggle, 150));
   const omni = $('#omni');
@@ -707,9 +722,9 @@ function renderShell() {
     applyTheme();
     saveSoon();
   });
-  $('#scrim').addEventListener('click', function () { toggleRail(false); });
+  $('#scrim').addEventListener('click', function () { toggleRail(false, true); });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') toggleRail(false);
+    if (e.key === 'Escape') toggleRail(false, true);
   });
   document.addEventListener('click', function (e) {
     const btn = e.target.closest && e.target.closest('.cb-btn');
@@ -754,11 +769,30 @@ function toggleRailPanel() {
   syncRailToggle();
   saveSoon();
 }
-function toggleRail(force) {
-  const rail = $('#rail'), scrim = $('#scrim');
-  const open = (force === undefined) ? !rail.classList.contains('open') : !!force;
+/* `restore` is what separates the two ways this closes. Escape, the scrim and the menu
+   button are the reader dismissing the drawer, and focus has to come back to the
+   button they opened it with — leaving it on a control that visibility:hidden has just
+   removed drops it on <body>. Closing because a lesson was picked is not a dismissal:
+   the renderer is about to take the focus itself, and pulling it to the menu button on
+   the way past would undo that. */
+function toggleRail(force, restore) {
+  const rail = $('#rail'), scrim = $('#scrim'), btn = $('#menu-btn');
+  const was = rail.classList.contains('open');
+  const open = (force === undefined) ? !was : !!force;
   rail.classList.toggle('open', open);
   scrim.classList.toggle('open', open);
+  if (btn) {
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.setAttribute('aria-label', open ? 'Close curriculum' : 'Open curriculum');
+  }
+  if (open && !was) {
+    /* the row the reader is on, not the top of the tree: the rail is scrolled to where
+       they were and focusing its first button would jump it back to the beginning */
+    const land = $('#rail .rail-course.active, #rail .rail-lesson.active') || $('#rail button');
+    if (land) land.focus();
+  } else if (!open && was && restore) {
+    if (btn && btn.offsetParent !== null) btn.focus();
+  }
 }
 
 /* ---------- rail ---------- */
@@ -822,7 +856,10 @@ function renderRail() {
       const open = !!openBands[bandKey(pr.id, y.n)];
       const doneC = list.filter(courseComplete).length;
       h += '<div class="rail-track' + (open ? ' open' : '') + '">' +
-        '<button data-band="' + y.n + '" data-program="' + esc(pr.id) + '">' +
+        /* the button opens and closes the band's course list and said so nowhere: no
+           aria-expanded, and the only visual cue is the list appearing below it */
+        '<button data-band="' + y.n + '" data-program="' + esc(pr.id) + '"' +
+          ' aria-expanded="' + (open ? 'true' : 'false') + '">' +
           '<span class="t-icon" style="--tt:' + y.tint + '">' + y.icon + '</span>' +
           '<span class="t-name">' + esc(bandLabel(pr, y.n)) + '</span>' +
           '<span class="t-pct">' + doneC + '/' + list.length + '</span>' +
@@ -837,8 +874,10 @@ function renderRail() {
                unit of work, the same way a course's modules are. */
             const topen = !!openTracks[c.id];
             h += '<div class="rail-sub' + (topen ? ' open' : '') + '" data-track="' + esc(c.id) + '">' +
-              '<button class="rail-course" data-toggle="' + esc(c.id) + '">' +
-                '<span class="cid">' + (topen ? UNI.down : UNI.right) + '</span>' +
+              /* the same disclosure, one level down: the chevron is the whole cue */
+              '<button class="rail-course" data-toggle="' + esc(c.id) + '"' +
+                ' aria-expanded="' + (topen ? 'true' : 'false') + '">' +
+                '<span class="cid" aria-hidden="true">' + (topen ? UNI.down : UNI.right) + '</span>' +
                 '<span class="gmark ' + (units && d === units ? 'done' : (d > 0 ? 'part' : '')) + '"></span>' +
                 '<span class="ttl">' + esc(c.title) + '</span>' +
                 '<span class="lk">' + d + '/' + units + '</span>' +
@@ -891,19 +930,31 @@ function renderRail() {
       renderRail();
     });
   });
+  /* Picking something out of the mobile drawer closes it, and the row that was picked
+     is inside what closes — so focus had nowhere to go but <body>, and the next Tab
+     restarted at the skip link. The content is where the reader just asked to be. */
+  function leaveDrawer() {
+    const wasOpen = $('#rail').classList.contains('open');
+    toggleRail(false);
+    /* preventScroll because go() has just restored this pane's remembered scrollTop,
+       and focusing the scroll container itself would be allowed to undo that */
+    return function () { if (wasOpen) { const m = $('#main'); if (m) m.focus({ preventScroll: true }); } };
+  }
   $all('[data-lesson]', rail).forEach(function (b) {
     b.addEventListener('click', function () {
-      toggleRail(false);
+      const land = leaveDrawer();
       go({ view: 'lesson', id: b.dataset.lesson });
+      land();
     });
   });
   $all('[data-course]', rail).forEach(function (b) {
     b.addEventListener('click', function () {
-      toggleRail(false);
+      const land = leaveDrawer();
       const c = COURSE_OF[b.dataset.course];
       go(c && c.kind === 'track'
         ? { view: 'track', track: b.dataset.course }
         : { view: 'course', id: b.dataset.course });
+      land();
     });
   });
 }
@@ -947,9 +998,17 @@ function go(r) {
   const section = (route.view === 'course' || route.view === 'programs') ? 'degree'
     : (route.view === 'track' || route.view === 'lesson') ? navSectionFor(route)
     : route.view;
+  /* The class was the only "you are here" signal, so a screen reader met four
+     identically-described buttons with nothing to say which one it was on. */
   $all('[data-nav]').forEach(function (b) {
-    b.classList.toggle('active', b.dataset.nav === section);
+    const on = b.dataset.nav === section;
+    b.classList.toggle('active', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
+  /* Profile is the one screen no icon claims — it is reached from the avatar, so the
+     avatar is what has to carry the state. */
+  const av = $('#avatar');
+  if (av) { if (route.view === 'profile') av.setAttribute('aria-current', 'page'); else av.removeAttribute('aria-current'); }
 
   /* header identity */
   const meta = screenMeta(route);

@@ -96,6 +96,25 @@
   --bad-32:rgba(255,138,148,0.32);
   --code-ink:var(--lime);
   --link:var(--lime);
+  /* The accent used as ink ON its own tint, which is not the same job as --lime.
+     --lime is also .btn.primary's BACKGROUND against --on-lime, so it cannot be
+     darkened for the light theme without dropping the button. Every "current" and
+     "on" affordance in the shell — the lit section icon, the rail-panel toggle, the
+     XP figure, the rail's programme headings — is --lime drawn on --lime-08, and in
+     the light theme that measured 3.61–3.93:1 while the IDLE state beside it measured
+     4.82–4.95. The current section was fainter than the ones you are not on. */
+  --accent-ink:var(--lime);
+  /* Ink on the avatar's blue-to-purple gradient. Those two tokens are pale in the
+     dark theme and dark in the light one, so a fixed near-black ink measured 7.2:1
+     dark and 3.2:1 light on 12px text. Defined per theme, not once. */
+  --on-avatar:#0B0C0E;
+  /* The unfilled status ring. It was --line-3, the generic hairline, which is 1.43:1
+     dark and 1.61:1 light on the rail — invisible, in a column whose whole job is to
+     say "not started yet", and which renderBuild also uses for a check that has not
+     run. Aimed at WCAG 1.4.11's 3:1 rather than past it, on every surface a .gmark is
+     drawn on: 3.44 rail, 3.33 card, 3.27 mobile drawer here, and 3.22/3.33/3.36 in
+     the light block. Quiet, and over the floor. */
+  --mark-idle:#666666;
 
   --ok:var(--lime);
   --bad:#FF8A94;
@@ -106,6 +125,14 @@
 
   --r-sm:6px; --r:9px; --r-md:12px; --r-lg:16px; --r-xl:18px;
   --rail-icon:72px; --topbar-h:60px; --rail-w:262px;
+  /* The topbar's furniture is fixed-width and it did not fit a phone. At 375px the
+     icon rail takes 60, the bar's own padding 44 and its six gaps 96, leaving 131 for
+     three 32px buttons and two metric pills whose padding alone is 48 — 275.4px of
+     content in 271px of bar, before a single character of the screen title. .screen-id
+     has min-width:0 and the largest flex base, so it absorbed the whole overflow and
+     the title vanished; the bar was still over, so the buttons shrank below their
+     32px box. These two knobs are what the 640px block turns down. */
+  --topbar-gap:16px; --topbar-pad:22px;
   --ease:cubic-bezier(.2,.8,.2,1);
   --pop:cubic-bezier(.2,.9,.3,1.4);
   color-scheme:dark;
@@ -167,6 +194,12 @@
      element in a 2000-word reading; #3F6212 is this palette's .tk-str and 5.9:1. */
   --code-ink:#3F6212;
   --link:#4C7005;                /* var(--lime) is 3.76:1 on the ground; this is 5.3:1 */
+  /* the same ink the links use: 5.13:1 on --lime-08 over the icon rail, 5.10 over the
+     topbar, 5.01 over the rail, 5.55 on the rail's own ground. No new hue enters the
+     palette — this is --lime-hi, named for the job it is doing. */
+  --accent-ink:#4C7005;
+  --on-avatar:#FFFFFF;           /* 5.98:1 on the blue end, 6.17:1 on the purple */
+  --mark-idle:#8C8C8C;           /* 3.22 rail, 3.33 card, 3.36 drawer */
   --bad:#C1373F;
   color-scheme:light;
 }
@@ -212,6 +245,17 @@ input{font-family:inherit}
    auto-sized to its content, so a tall screen grows past 100dvh and .app's
    overflow:hidden clips it — .main never becomes the scroll container. */
 .app{display:grid;grid-template-columns:var(--rail-icon) minmax(0,1fr);grid-template-rows:minmax(0,1fr);height:100vh;height:100dvh;position:relative;overflow:hidden}
+/* On every screen the DOM runs brand, four section icons, avatar, drawer, panel
+   toggle, search, notepad, theme — and then, before a word of the lesson, the entire
+   curriculum rail. With one band open that is upwards of forty controls between the
+   keyboard and the content, on every page. */
+.skip{position:absolute;left:8px;top:-60px;z-index:20;height:34px;display:inline-flex;align-items:center;
+  padding:0 14px;border-radius:var(--r);font-size:12.5px;font-weight:600;
+  background:var(--lime);color:var(--on-lime);text-decoration:none;
+  transition:top .16s var(--ease)}
+.skip:focus{top:8px}
+.skip:hover{color:var(--on-lime)}
+#main:focus{outline:none}
 .blob{position:absolute;pointer-events:none;z-index:0}
 .blob.a{top:-260px;left:180px;width:820px;height:520px;filter:blur(30px);
   background:radial-gradient(ellipse at center,rgba(199,247,81,0.10),transparent 62%);
@@ -231,7 +275,7 @@ input{font-family:inherit}
 .logo{
   width:36px;height:36px;border-radius:11px;flex:none;display:grid;place-items:center;
   background:linear-gradient(150deg,var(--lime),var(--lime-deep));
-  box-shadow:0 6px 22px rgba(199,247,81,0.30);
+  box-shadow:0 6px 22px color-mix(in srgb,var(--lime) 30%,transparent);
   animation:popIn .5s var(--pop) both;
 }
 .logo span{font-family:var(--mono);font-weight:700;font-size:16px;color:var(--on-lime)}
@@ -240,12 +284,21 @@ input{font-family:inherit}
   position:relative;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
   color:var(--ink-4);transition:color .18s,background .18s;
 }
+/* The wash was rgba(255,255,255,0.05) with no light override, over --nav, which the
+   light theme makes rgba(255,255,255,0.80). White on white: the hover state on the
+   primary navigation measured 1.00:1 against its own idle state — not faint, absent.
+   .tbtn, .rail-track>button and the rail rows all carry the override; this one was
+   missed, and it is the only nav on the screen. */
 .inav:hover{color:var(--ink);background:rgba(255,255,255,0.05)}
-.inav.active{color:var(--lime);background:var(--lime-08)}
+[data-theme=light] .inav:hover{background:rgba(15,25,5,0.06)}
+/* --lime-08 separated the current section from the others by 1.17:1 in the dark theme
+   and 1.11:1 in the light one. --lime-22 makes that 1.77 and 1.30 while the icon,
+   which is a graphical object and not text, still measures 8.78:1 and 4.38:1. */
+.inav.active{color:var(--accent-ink);background:var(--lime-22)}
 .inav.active::before{
   content:"";position:absolute;left:-17px;top:50%;transform:translateY(-50%);
   width:2px;height:20px;border-radius:2px;background:var(--lime);
-  box-shadow:0 0 10px rgba(199,247,81,0.8);
+  box-shadow:0 0 10px color-mix(in srgb,var(--lime) 80%,transparent);
 }
 .inav svg{width:19px;height:19px}
 .rail-foot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:14px}
@@ -253,18 +306,26 @@ input{font-family:inherit}
 .avatar{
   width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
   background:linear-gradient(140deg,var(--blue),var(--purple));
-  font-size:12px;font-weight:600;color:#0B0C0E;border:1px solid var(--line-3);cursor:pointer;
+  font-size:12px;font-weight:600;color:var(--on-avatar);border:1px solid var(--line-3);
+  cursor:pointer;flex:none;
 }
+.avatar[aria-current]{box-shadow:0 0 0 2px var(--ground),0 0 0 4px var(--lime)}
 
 /* header */
 .frame{display:grid;grid-template-columns:minmax(0,1fr);/* topbar, then the degraded-state banner (auto: zero when it is display:none),   then the body. Adding a child without adding a row put the banner in the   body’s 1fr track and pushed the body into an implicit one. */grid-template-rows:var(--topbar-h) auto auto minmax(0,1fr) auto;min-width:0;min-height:0;position:relative;z-index:2}
 .topbar{
-  height:var(--topbar-h);display:flex;align-items:center;gap:16px;padding:0 22px;
+  height:var(--topbar-h);display:flex;align-items:center;gap:var(--topbar-gap);padding:0 var(--topbar-pad);
   border-bottom:1px solid var(--line);background:var(--head);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
 }
+/* min-width:0 was already here and is what lets this shrink; it does not need to grow,
+   and giving it flex-grow would split the free space with .spacer and stop the metrics
+   and tool buttons sitting against the right edge on a wide screen. */
 .screen-id{display:flex;align-items:baseline;gap:10px;min-width:0;overflow:hidden}
-.screen-id b{font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+/* b was nowrap with no overflow rule of its own, so a long title was clipped mid-glyph
+   at .screen-id's edge rather than ellipsised. */
+.screen-id b{font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;
+  min-width:0;overflow:hidden;text-overflow:ellipsis}
 .screen-id span{font-family:var(--mono);font-size:11px;color:var(--ink-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .topbar .spacer{flex:1}
 .search{
@@ -275,22 +336,28 @@ input{font-family:inherit}
 .search input{flex:1;min-width:0;background:none;border:0;outline:none;color:var(--ink);font-size:12.5px}
 .search input::placeholder{color:var(--ink-4)}
 .search .kbd{font-family:var(--mono);font-size:10px;color:var(--ink-4);border:1px solid var(--line-2);border-radius:4px;padding:1px 4px}
-.metric{display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:var(--r);white-space:nowrap}
+/* flex:none on every fixed control in the bar. A flex item's automatic minimum size
+   is its min-content, which for .tbtn is one 14px glyph and for .menu-btn an 18px
+   svg — so under pressure the theme, notepad and drawer buttons shrank straight
+   through WCAG 2.5.8's 24x24 floor. They are the affordances, not the slack. */
+.metric{display:flex;align-items:center;gap:6px;height:32px;padding:0 var(--metric-pad,12px);
+  border-radius:var(--r);white-space:nowrap;flex:none}
 .metric.streak{border:1px solid var(--amber-22);background:var(--amber-08)}
 .metric.streak b{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--amber)}
 .metric.streak .fl{font-size:13px;display:inline-block;animation:flame 2.4s ease-in-out infinite}
 .metric.xp{border:1px solid var(--lime-22);background:var(--lime-08)}
-.metric.xp b{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--lime)}
+.metric.xp b{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent-ink)}
 .metric span{font-size:11px;color:var(--ink-3)}
-.tbtn{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:var(--r);color:var(--ink-3);font-size:14px}
+.tbtn{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:var(--r);
+  color:var(--ink-3);font-size:14px;flex:none}
 .tbtn:hover{background:rgba(255,255,255,0.06);color:var(--ink)}
 [data-theme=light] .tbtn:hover{background:rgba(15,25,5,0.06)}
-.save-state{font-size:11px;font-family:var(--mono);color:var(--ink-4);min-width:44px;text-align:right}
+.save-state{font-size:11px;font-family:var(--mono);color:var(--ink-4);min-width:44px;text-align:right;flex:none}
 .save-state.bad{color:var(--amber);font-weight:600}
-.menu-btn{display:none;width:32px;height:32px;border-radius:var(--r);place-items:center;color:var(--ink-3)}
+.menu-btn{display:none;width:32px;height:32px;border-radius:var(--r);place-items:center;color:var(--ink-3);flex:none}
 .rail-btn{flex:none;color:var(--ink-4)}
 .rail-btn svg{width:17px;height:17px}
-.rail-btn.on{color:var(--lime);background:var(--lime-08)}
+.rail-btn.on{color:var(--accent-ink);background:var(--lime-22)}
 @media (max-width:980px){.rail-btn{display:none}}
 .menu-btn svg{width:18px;height:18px}
 
@@ -312,40 +379,68 @@ input{font-family:inherit}
 
 .rail-sec{
   margin:6px 0 4px;padding:10px 18px 6px;display:flex;align-items:center;gap:9px;
-  font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--lime);
+  font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink);
 }
 .rail-sec::after{content:"";flex:1;height:1px;background:var(--line)}
 .rail-track{margin:1px 0}
-.rail-track>button{display:flex;align-items:center;gap:10px;width:100%;padding:8px 16px;text-align:left;border-radius:0}
-.rail-track>button:hover{background:rgba(255,255,255,0.04)}
-[data-theme=light] .rail-track>button:hover{background:rgba(15,25,5,0.04)}
+.rail-track>button{display:flex;align-items:center;gap:10px;width:100%;padding:8px 16px;text-align:left;
+  border-radius:0;transition:background .15s var(--ease)}
+/* 0.04 separated a hovered row from an unhovered one by 1.07:1 dark and 1.08:1 light,
+   while .tbtn two hundred lines up used 0.06 and reached 1.12/1.13. Same wash, same
+   number, so the whole shell answers a pointer with the same weight. */
+.rail-track>button:hover{background:rgba(255,255,255,0.06)}
+[data-theme=light] .rail-track>button:hover{background:rgba(15,25,5,0.06)}
+/* The band's tint is authored in the spine, passed into this element as --tt by
+   renderRail, and was then dropped: the rule read --surface-2 and every band icon in
+   the rail was the same grey, while .year-badge and .pb-icon — the same icon, the same
+   band, two screens away — carried the colour. The tint layers OVER --surface-2 rather
+   than replacing it, and the border stays neutral, because the six spine tints are
+   pale (#E4EEFA, #FFE9DC …) and tuned for a dark ground: against the rail they measure
+   1.56–1.59:1 in the dark theme and 1.01–1.02:1 in the light one, so replacing the
+   grey outright would have traded a visible chip for an invisible one on half the
+   installs. This way dark goes 1.03 -> 1.62 and light stays where it was. */
 .rail-track .t-icon{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:13px;flex:none;
-  background:var(--surface-2);border:1px solid var(--line)}
+  background-color:var(--surface-2);
+  background-image:linear-gradient(color-mix(in srgb,var(--tt,transparent) 18%,transparent),
+                                   color-mix(in srgb,var(--tt,transparent) 18%,transparent));
+  border:1px solid var(--line)}
 .rail-track .t-name{font-weight:600;font-size:13.5px;letter-spacing:-.01em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rail-track .t-pct{font-family:var(--mono);font-size:10.5px;color:var(--ink-4)}
 .rail-module{padding:4px 0 6px}
-/* a track nested inside a band: its lessons indent one step further than a course */
-.rail-sub>button .cid{font-size:9px}
+/* a track nested inside a band: its lessons indent one step further than a course, and
+   its id cell carries the disclosure chevron rather than a course id. It was 9px — the
+   only expand/collapse affordance in the rail, at the smallest size in the file. */
+.rail-sub>button .cid{font-size:11px}
 .rail-module.sub{padding:2px 0 4px}
 .rail-module.sub h4{margin-left:56px}
 .rail-module.sub .rail-lesson{padding-left:12px}
-.rail-module h4{margin:8px 18px 5px 44px;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);font-weight:500}
+/* was 9.5px, the smallest type in the application, on a module title — the same
+   inversion the reading surface's 9.5px table headers were raised out of. */
+.rail-module h4{margin:9px 18px 5px 44px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-4);font-weight:500}
 .rail-lesson,.rail-course{
   display:grid;align-items:center;width:100%;text-align:left;font-size:13px;color:var(--ink-3);
   padding:5px 16px;border-left:2px solid transparent;
+  transition:background .15s var(--ease),color .15s var(--ease);
 }
-.rail-lesson{grid-template-columns:30px 26px 1fr}
-.rail-course{grid-template-columns:32px 26px 1fr auto}
-.rail-lesson:hover,.rail-course:hover{background:rgba(255,255,255,0.04);color:var(--ink)}
-[data-theme=light] .rail-lesson:hover,[data-theme=light] .rail-course:hover{background:rgba(15,25,5,0.04)}
-.rail-lesson.active,.rail-course.active{background:var(--lime-08);color:var(--ink);border-left-color:var(--lime)}
-.rail-lesson .num,.rail-course .cid{font-family:var(--mono);font-size:10px;color:var(--ink-4);text-align:right;padding-right:9px}
+.rail-lesson{grid-template-columns:30px 22px minmax(0,1fr)}
+/* The id track was 32px against a 9px right pad, so it held 23px of text. Fifteen of
+   the sixty-two course ids are seven characters (CTRL510, VLSI510, ELEC430 …), which
+   at 10px JetBrains Mono — 0.6em per glyph — is 42px: text-align:right spilled 19px
+   leftwards, through the row's 16px padding and 3px past the rail's own edge. */
+.rail-course{grid-template-columns:50px 22px minmax(0,1fr) auto}
+.rail-lesson:hover,.rail-course:hover{background:rgba(255,255,255,0.06);color:var(--ink)}
+[data-theme=light] .rail-lesson:hover,[data-theme=light] .rail-course:hover{background:rgba(15,25,5,0.06)}
+/* same argument as .inav.active: 1.16/1.11 against the rail becomes 1.75/1.29, and the
+   row's own title still measures 9.83:1 and 13.42:1 on it. */
+.rail-lesson.active,.rail-course.active{background:var(--lime-22);color:var(--ink);border-left-color:var(--lime)}
+.rail-lesson .num,.rail-course .cid{font-family:var(--mono);font-size:10px;color:var(--ink-4);text-align:right;padding-right:8px;overflow:hidden}
 .rail-lesson .ttl,.rail-course .ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rail-course .lk{font-family:var(--mono);font-size:10px;color:var(--ink-4);padding-left:6px}
+.rail-miss{padding:6px 14px 12px;font-size:12px;color:var(--ink-3);font-style:italic}
 
 /* status marks */
-.gmark{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--line-3);display:inline-block;justify-self:center;position:relative;flex:none}
-.gmark.done{background:var(--lime);border-color:var(--lime);box-shadow:0 0 8px rgba(199,247,81,.35)}
+.gmark{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--mark-idle);display:inline-block;justify-self:center;position:relative;flex:none}
+.gmark.done{background:var(--lime);border-color:var(--lime);box-shadow:0 0 8px color-mix(in srgb,var(--lime) 35%,transparent)}
 .gmark.done::after{content:"";position:absolute;left:3.5px;top:1.5px;width:3px;height:6px;border:solid var(--on-lime);border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
 .gmark.now{border-color:var(--lime);background:var(--lime);box-shadow:0 0 0 3px var(--lime-12)}
 .gmark.part{border-color:var(--lime);background:linear-gradient(90deg,var(--lime) 50%,transparent 50%)}
@@ -366,13 +461,22 @@ input{font-family:inherit}
 .btn:hover{border-color:var(--line-3);color:var(--ink)}
 .btn.primary{background:var(--lime);border-color:var(--lime);color:var(--on-lime);font-weight:700}
 .btn.primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(199,247,81,0.28);color:var(--on-lime)}
-.btn.accent{background:var(--lime-12);border-color:var(--lime-30);color:var(--lime)}
-.btn.accent:hover{background:var(--lime-22);color:var(--lime)}
+/* The same accent-on-its-own-tint as the shell's XP figure and lit toggles: a --lime
+   label on --lime-12 measures 3.48:1 in the light theme. --accent-ink makes it 4.92. */
+.btn.accent{background:var(--lime-12);border-color:var(--lime-30);color:var(--accent-ink)}
+.btn.accent:hover{background:var(--lime-22);color:var(--accent-ink)}
 .btn.ghost{border-color:transparent}
+/* and the same white-on-white as .inav:hover, three more times. In the light theme
+   .btn.dark had NO fill (1.00:1 against the card it sits on), its hover was invisible
+   (1.00:1), and so was .btn.ghost's. .btn.dark ships inside the shell's own degraded
+   -state banner as the "Try again" button, which is why they are in this cycle. */
 .btn.ghost:hover{background:rgba(255,255,255,0.05)}
+[data-theme=light] .btn.ghost:hover{background:rgba(15,25,5,0.06)}
 .btn.sm{height:30px;padding:0 12px;font-size:12px;border-radius:8px}
 .btn.dark{background:rgba(255,255,255,0.05);border-color:var(--line-2);color:var(--ink-2)}
+[data-theme=light] .btn.dark{background:rgba(15,25,5,0.05)}
 .btn.dark:hover{background:rgba(255,255,255,0.09);color:var(--ink)}
+[data-theme=light] .btn.dark:hover{background:rgba(15,25,5,0.10)}
 .btn.run{background:var(--lime);border-color:var(--lime);color:var(--on-lime);font-weight:700}
 .btn.run:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(199,247,81,0.28)}
 .btn.run:disabled{background:rgba(255,255,255,0.06);border-color:var(--line-2);color:var(--ink-4);transform:none;box-shadow:none}
@@ -1081,7 +1185,9 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   color:var(--ink-3);border:1px solid color-mix(in srgb,var(--amber) 34%,transparent);
   background:color-mix(in srgb,var(--amber) 10%,transparent)}
 .pc-lost b{color:var(--ink-2)}
-.rail-miss{padding:6px 14px 12px;font-size:12px;color:var(--ink-5);font-style:italic}
+/* .rail-miss moved up beside the rest of the rail; it was --ink-5, the placeholder and
+   disabled tier, at 1.87:1 dark and 2.01:1 light — on the one line in the rail that
+   tells the learner a whole programme failed to load. */
 
 /* ---------- circuit editor ---------- */
 /* In a lesson the editor sits in the flow at its natural height; in the Playground
@@ -1223,7 +1329,12 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .mod-list{display:flex;flex-direction:column;gap:10px;margin:0 0 24px}
 .mod{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
 .mod>.mod-head{display:flex;align-items:center;gap:12px;width:100%;padding:14px 18px;text-align:left}
-.mod>.mod-head:hover{background:rgba(255,255,255,.03)}
+/* the sixth and last instance of the white-on-white hover, and the only one outside the
+   shell, the button component and the editor chrome: 1.06:1 dark, 1.00:1 light. Left
+   alone it would have been the one exception to a defect class this cycle otherwise
+   closed, which serves the scope boundary rather than the reader. */
+.mod>.mod-head:hover{background:rgba(255,255,255,.06)}
+[data-theme=light] .mod>.mod-head:hover{background:rgba(15,25,5,0.06)}
 .mod .mnum{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-4);flex:none}
 .mod .mtitle{flex:1;min-width:0;font-size:15px;font-weight:600;letter-spacing:-.015em}
 .mod .msum{display:block;margin-top:3px;font-family:var(--sans);font-weight:400;font-size:12.5px;color:var(--ink-4)}
@@ -1446,7 +1557,7 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .prof-head{display:flex;align-items:center;gap:22px;margin-bottom:28px;flex-wrap:wrap}
 .prof-av{
   width:72px;height:72px;flex:none;border-radius:50%;display:grid;place-items:center;
-  background:linear-gradient(140deg,var(--blue),var(--purple));color:#0B0C0E;
+  background:linear-gradient(140deg,var(--blue),var(--purple));color:var(--on-avatar);
   font-family:var(--mono);font-size:24px;font-weight:700;letter-spacing:-.02em;
   border:1px solid var(--line-3);animation:popIn .5s var(--pop) both;
 }
@@ -1760,9 +1871,19 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   :root{--rail-icon:60px;--rail-w:272px}
   .menu-btn{display:grid}
   .body{grid-template-columns:minmax(0,1fr)}
+  /* A closed drawer is translated off-screen, and a transform does not take anything
+     out of the tab order. So on a phone, Tab from the menu button walked the whole
+     curriculum tree — every programme heading, every band, every course in an open
+     band — before reaching a word of the lesson. visibility:hidden removes it from
+     both the tab order and the accessibility tree with no script and no feature test;
+     it is delayed by the length of the slide so the closing animation still plays,
+     and dropped to 0s on the way in so the drawer is focusable the moment it moves. */
   .rail{position:fixed;top:var(--topbar-h);left:var(--rail-icon);bottom:0;width:var(--rail-w);z-index:9;
-    transform:translateX(-110%);transition:transform .22s var(--ease);background:var(--surface-solid)}
-  .rail.open{transform:none;box-shadow:16px 0 48px rgba(0,0,0,.5)}
+    transform:translateX(-110%);visibility:hidden;
+    transition:transform .22s var(--ease),visibility 0s linear .22s;background:var(--surface-solid)}
+  .rail.open{transform:none;visibility:visible;transition:transform .22s var(--ease),visibility 0s;
+    box-shadow:16px 0 48px rgba(0,0,0,.5)}
+  [data-theme=light] .rail.open{box-shadow:16px 0 48px rgba(15,25,5,.18)}
   /* .frame's z-index:2 traps the drawer in a stacking context below #scrim (z 8),
      which is .frame's sibling — every tap in the open drawer would hit the scrim
      and just close it. Dropping the context here lets .rail's z 9 win. */
@@ -1799,7 +1920,22 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   .cb-btn.cb-open .lbl{display:none}
   .hero h1{font-size:27px}
   .stats{grid-template-columns:1fr 1fr}
-  .metric.streak span,.metric.xp span{display:none}
+  /* Turning the two knobs the token block describes: 24px of the bar's own padding
+     instead of 44, and 60px of gaps instead of 96. */
+  .topbar{--topbar-gap:10px;--topbar-pad:12px}
+  .metric{--metric-pad:8px}
+  /* Even turned down that far it does not fit: a six-figure XP pill and a three-figure
+     streak are 273.8px of furniture in 291px of bar, which leaves the screen title 17px.
+     The streak is the one that changes what a reader does today, and it is the narrower
+     of the two; the XP figure is a running total that is also on the avatar's label, on
+     Progress and on Profile. It stands down here, and the title gets 86.4px. */
+  .metric.xp{display:none}
+  /* The pill labels were display:none, which takes them out of the accessibility tree
+     too: what remained was a lime bubble reading "1,250" and an amber one reading "4".
+     Hidden visually, kept for a screen reader — same zero contribution to the layout. */
+  .metric.streak span,.metric.xp span{position:absolute;width:1px;height:1px;padding:0;
+    margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+  .screen-id span{display:none}
   .save-state{display:none}
   .deg-progress{flex-direction:column;align-items:flex-start}
 }
@@ -19649,7 +19785,11 @@ function updateXp() {
   const av = $('#avatar');
   if (av) {
     av.textContent = initials(P.name) || String(level());
-    av.title = (P.name ? P.name + ' · ' : '') + 'Level ' + level() + ' · ' + P.xp + ' XP · open Profile';
+    const who = (P.name ? P.name + ' · ' : '') + 'Level ' + level() + ' · ' + P.xp + ' XP';
+    av.title = who + ' · open Profile';
+    /* The visible text is two initials or a bare digit; without this a screen reader
+       reads "T A, button" or "4, button" and the label is doing no work. */
+    av.setAttribute('aria-label', 'Profile — ' + who);
   }
 }
 function completeLesson(id) {
@@ -19700,7 +19840,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '046f81f41c2b';
+const BUILD_ID = '5e5f33f23558';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */
@@ -19736,9 +19876,11 @@ const NAV = [
 
 function renderShell() {
   $('#app').innerHTML =
+    '<a class="skip" href="#main">Skip to content</a>' +
     '<div class="blob a"></div><div class="blob b"></div>' +
     '<aside class="iconrail">' +
-      '<button class="logo" id="brand" title="Codex Learn"><span>&lt;/&gt;</span></button>' +
+      /* the visible glyph is "</>", which is what a screen reader would read out */
+      '<button class="logo" id="brand" title="Codex Learn" aria-label="Codex Learn — home"><span>&lt;/&gt;</span></button>' +
       '<nav class="iconnav" id="iconnav" aria-label="Sections">' +
         NAV.map(function (n) {
           return '<button class="inav" data-nav="' + n.id + '" title="' + n.label + '" aria-label="' + n.label + '">' +
@@ -19748,12 +19890,18 @@ function renderShell() {
       '</nav>' +
       '<div class="rail-foot">' +
         '<div class="div"></div>' +
-        '<div class="avatar" id="avatar" title="Level">1</div>' +
+        /* This was a <div> with a click handler, and it is the only route to Profile
+           anywhere in the app — no NAV entry points there, and the two other
+           go({view:'profile'}) calls are import and reset, both already on that
+           screen. So export, import, reset and the learner's own name were reachable
+           by mouse only, and warnNoStorage's toast said "open Profile (avatar, bottom
+           left)" about a control a keyboard cannot get to. */
+        '<button class="avatar" id="avatar" aria-label="Profile">1</button>' +
       '</div>' +
     '</aside>' +
     '<div class="frame">' +
       '<header class="topbar">' +
-        '<button class="menu-btn" id="menu-btn" aria-label="Open curriculum">' +
+        '<button class="menu-btn" id="menu-btn" aria-label="Open curriculum" aria-expanded="false" aria-controls="rail">' +
           '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14"/></svg>' +
         '</button>' +
         '<button class="tbtn rail-btn on" id="rail-btn" aria-pressed="true" aria-label="Toggle the curriculum panel">' +
@@ -19781,7 +19929,10 @@ function renderShell() {
       '<div class="runbar" id="runbar" hidden></div>' +
       '<div class="body" id="body">' +
         '<aside class="rail" id="rail" aria-label="Curriculum"></aside>' +
-        '<main class="main" id="main"></main>' +
+        /* tabindex -1 so the skip link can actually move focus here; without it the
+           href jumps the scroll and leaves focus where it was, so the next Tab goes
+           back to the topbar and the link has done nothing for a keyboard. */
+        '<main class="main" id="main" tabindex="-1"></main>' +
       '</div>' +
       '<div class="runfoot" id="runfoot" hidden></div>' +
     '</div>' +
@@ -19795,7 +19946,7 @@ function renderShell() {
     });
   });
   $('#avatar').addEventListener('click', function () { go({ view: 'profile' }); });
-  $('#menu-btn').addEventListener('click', function () { toggleRail(); });
+  $('#menu-btn').addEventListener('click', function () { toggleRail(undefined, true); });
   $('#rail-btn').addEventListener('click', toggleRailPanel);
   window.addEventListener('resize', debounce(syncRailToggle, 150));
   const omni = $('#omni');
@@ -19827,9 +19978,9 @@ function renderShell() {
     applyTheme();
     saveSoon();
   });
-  $('#scrim').addEventListener('click', function () { toggleRail(false); });
+  $('#scrim').addEventListener('click', function () { toggleRail(false, true); });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') toggleRail(false);
+    if (e.key === 'Escape') toggleRail(false, true);
   });
   document.addEventListener('click', function (e) {
     const btn = e.target.closest && e.target.closest('.cb-btn');
@@ -19874,11 +20025,30 @@ function toggleRailPanel() {
   syncRailToggle();
   saveSoon();
 }
-function toggleRail(force) {
-  const rail = $('#rail'), scrim = $('#scrim');
-  const open = (force === undefined) ? !rail.classList.contains('open') : !!force;
+/* `restore` is what separates the two ways this closes. Escape, the scrim and the menu
+   button are the reader dismissing the drawer, and focus has to come back to the
+   button they opened it with — leaving it on a control that visibility:hidden has just
+   removed drops it on <body>. Closing because a lesson was picked is not a dismissal:
+   the renderer is about to take the focus itself, and pulling it to the menu button on
+   the way past would undo that. */
+function toggleRail(force, restore) {
+  const rail = $('#rail'), scrim = $('#scrim'), btn = $('#menu-btn');
+  const was = rail.classList.contains('open');
+  const open = (force === undefined) ? !was : !!force;
   rail.classList.toggle('open', open);
   scrim.classList.toggle('open', open);
+  if (btn) {
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.setAttribute('aria-label', open ? 'Close curriculum' : 'Open curriculum');
+  }
+  if (open && !was) {
+    /* the row the reader is on, not the top of the tree: the rail is scrolled to where
+       they were and focusing its first button would jump it back to the beginning */
+    const land = $('#rail .rail-course.active, #rail .rail-lesson.active') || $('#rail button');
+    if (land) land.focus();
+  } else if (!open && was && restore) {
+    if (btn && btn.offsetParent !== null) btn.focus();
+  }
 }
 
 /* ---------- rail ---------- */
@@ -19942,7 +20112,10 @@ function renderRail() {
       const open = !!openBands[bandKey(pr.id, y.n)];
       const doneC = list.filter(courseComplete).length;
       h += '<div class="rail-track' + (open ? ' open' : '') + '">' +
-        '<button data-band="' + y.n + '" data-program="' + esc(pr.id) + '">' +
+        /* the button opens and closes the band's course list and said so nowhere: no
+           aria-expanded, and the only visual cue is the list appearing below it */
+        '<button data-band="' + y.n + '" data-program="' + esc(pr.id) + '"' +
+          ' aria-expanded="' + (open ? 'true' : 'false') + '">' +
           '<span class="t-icon" style="--tt:' + y.tint + '">' + y.icon + '</span>' +
           '<span class="t-name">' + esc(bandLabel(pr, y.n)) + '</span>' +
           '<span class="t-pct">' + doneC + '/' + list.length + '</span>' +
@@ -19957,8 +20130,10 @@ function renderRail() {
                unit of work, the same way a course's modules are. */
             const topen = !!openTracks[c.id];
             h += '<div class="rail-sub' + (topen ? ' open' : '') + '" data-track="' + esc(c.id) + '">' +
-              '<button class="rail-course" data-toggle="' + esc(c.id) + '">' +
-                '<span class="cid">' + (topen ? UNI.down : UNI.right) + '</span>' +
+              /* the same disclosure, one level down: the chevron is the whole cue */
+              '<button class="rail-course" data-toggle="' + esc(c.id) + '"' +
+                ' aria-expanded="' + (topen ? 'true' : 'false') + '">' +
+                '<span class="cid" aria-hidden="true">' + (topen ? UNI.down : UNI.right) + '</span>' +
                 '<span class="gmark ' + (units && d === units ? 'done' : (d > 0 ? 'part' : '')) + '"></span>' +
                 '<span class="ttl">' + esc(c.title) + '</span>' +
                 '<span class="lk">' + d + '/' + units + '</span>' +
@@ -20011,19 +20186,31 @@ function renderRail() {
       renderRail();
     });
   });
+  /* Picking something out of the mobile drawer closes it, and the row that was picked
+     is inside what closes — so focus had nowhere to go but <body>, and the next Tab
+     restarted at the skip link. The content is where the reader just asked to be. */
+  function leaveDrawer() {
+    const wasOpen = $('#rail').classList.contains('open');
+    toggleRail(false);
+    /* preventScroll because go() has just restored this pane's remembered scrollTop,
+       and focusing the scroll container itself would be allowed to undo that */
+    return function () { if (wasOpen) { const m = $('#main'); if (m) m.focus({ preventScroll: true }); } };
+  }
   $all('[data-lesson]', rail).forEach(function (b) {
     b.addEventListener('click', function () {
-      toggleRail(false);
+      const land = leaveDrawer();
       go({ view: 'lesson', id: b.dataset.lesson });
+      land();
     });
   });
   $all('[data-course]', rail).forEach(function (b) {
     b.addEventListener('click', function () {
-      toggleRail(false);
+      const land = leaveDrawer();
       const c = COURSE_OF[b.dataset.course];
       go(c && c.kind === 'track'
         ? { view: 'track', track: b.dataset.course }
         : { view: 'course', id: b.dataset.course });
+      land();
     });
   });
 }
@@ -20067,9 +20254,17 @@ function go(r) {
   const section = (route.view === 'course' || route.view === 'programs') ? 'degree'
     : (route.view === 'track' || route.view === 'lesson') ? navSectionFor(route)
     : route.view;
+  /* The class was the only "you are here" signal, so a screen reader met four
+     identically-described buttons with nothing to say which one it was on. */
   $all('[data-nav]').forEach(function (b) {
-    b.classList.toggle('active', b.dataset.nav === section);
+    const on = b.dataset.nav === section;
+    b.classList.toggle('active', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
+  /* Profile is the one screen no icon claims — it is reached from the avatar, so the
+     avatar is what has to carry the state. */
+  const av = $('#avatar');
+  if (av) { if (route.view === 'profile') av.setAttribute('aria-current', 'page'); else av.removeAttribute('aria-current'); }
 
   /* header identity */
   const meta = screenMeta(route);

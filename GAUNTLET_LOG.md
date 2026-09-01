@@ -1048,3 +1048,354 @@ claim; the option-length tell measured on all ten new questions and driven to ze
 the whole-catalogue re-emit run, read, and reverted rather than shipped.
 
 ---
+
+## Cycle 5 — TRACK 5: UI, Layout & Visual Aesthetics
+
+**Target: the application shell — the icon rail, the top bar and the curriculum rail.**
+`renderShell`, `renderRail`, `toggleRail`, `syncRailToggle` and `renderDegradeBanner` in
+`src/app.js`; `.app`, `.iconrail`, `.logo`, `.inav`, `.avatar`, `.topbar`, `.screen-id`,
+`.search`, `.metric`, `.tbtn`, `.menu-btn`, `.rail-btn`, `.body`, `.rail`, `.rail-*`,
+`.gmark` and `.scrim` in `src/index.head.html`. One subsystem, and the one that is on
+the screen on every route — a defect here is a defect on all 1873 units at once.
+
+Chosen because the alternative was already done: the previous run's Track 5 cycle took
+the *reading* surface, and its work is landed (`--code-ink`, `.article`'s `66ch`
+measure, the `.tw` table scroller, the pre-paint theme resolution — all present and
+verified in the file, not assumed). The shell had never been audited. Track 5's four
+sub-headings each have something to answer for in it, and three of the four turned out
+to be answering for the same thing.
+
+### Baseline, captured before any edit
+
+```
+80 circuit exercises / 340 checks · 21 tune units
+216 numeric answers verified, 0 unchecked, 218 figure-only
+1140 derivation steps across 46 courses
+1366 questions in 252 quiz units · 160 per-option explanations
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+build: 3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers · 3 tune models ·
+       15 symbols · 62 payloads · inlined 13726 KB · shell 1089 KB
+```
+
+### The attacks
+
+**4. UX & Accessibility Hardener** — taken first, because this track's brief is mostly
+its brief. Every ratio below was computed from the WCAG 2.1 sRGB formula against the
+*composited* stack — the tint over the surface over `--ground` — not against the ground.
+
+- **The hover state on the primary navigation is not faint in the light theme. It is
+  absent: 1.00:1.** `.inav:hover` is `rgba(255,255,255,0.05)` with no
+  `[data-theme=light]` override, painted over `--nav`, which the light theme makes
+  `rgba(255,255,255,0.80)`. White at 5% over white. The discipline exists and had been
+  applied three times in the same file — `.tbtn:hover`, `.rail-track>button:hover` and
+  the rail rows all carry their override — and was missed on the one element that is
+  the app's only navigation.
+- **It is five more places.** Sweeping for the pattern rather than fixing the line:
+  `.btn.ghost:hover` 1.00, `.btn.dark`'s own fill 1.00 (the button has no background at
+  all in the light theme), `.btn.dark:hover` 1.00, `.mod>.mod-head:hover` 1.00. The
+  sixth was `.inav`. Every other bare white wash in the stylesheet — `.ftab`, `.ptab`,
+  `.mobile-tabs`, `.wbar`, `.btn.run:disabled` — sits on `--editor`, which is
+  deliberately dark in both themes, and is correct.
+- **The current section is fainter than the sections you are not on.** `.inav.active` is
+  `--lime` on `--lime-08`: 13.34:1 in the dark theme and **3.63:1** in the light one,
+  against an idle `.inav` at 4.82 / **4.95**. The light theme inverts the emphasis.
+  Same inversion, same cause, three more times: `.rail-btn.on` 3.61 against an idle
+  4.92, `.metric.xp b` **3.61 as text** at 12px bold, `.rail-sec` **3.93** on 10px
+  uppercase mono with 0.16em tracking. And `.btn.accent`'s label, **3.48**.
+  The cause is one thing: `--lime` in the light theme is `#5F8A0B`, which is 3.76:1 on
+  the ground and drops further on its own tint — and it cannot simply be darkened,
+  because it is also `.btn.primary`'s *background* against a near-black `--on-lime`.
+  This is the trap the previous run measured on `.article code` and on `--amber`; it
+  had four more instances and a fifth in the button component.
+- **The avatar's ink is a hard-coded `#0B0C0E` on a gradient that flips.** `--blue` and
+  `--purple` are pale in the dark theme and dark in the light one, so the level number
+  measures 7.26 / 7.19 dark and **3.27 / 3.17 light**, at 12px weight 600. `.prof-av`
+  shares the literal at 24px bold, where 3:1 applies and it passes — which is why it
+  had never looked broken.
+- **The status ring is invisible in both themes: 1.43:1 dark, 1.61:1 light.** `.gmark`
+  took its border from `--line-3`, the generic hairline. The unfilled ring is what says
+  "not started" in the rail, and `renderBuild` uses the same element for a check that
+  has not run yet — so a build exercise's check list drew its pending rows with nothing
+  in the status column.
+- **"Could not be loaded" was written in the disabled-text tier.** `.rail-miss` is
+  `--ink-5`: **1.87 / 2.01**. It is the line that tells a learner an entire programme's
+  courses are missing from every total on screen.
+- **The avatar is a `<div>`, and it is the only route to Profile in the application.**
+  No `NAV` entry points there; the two other `go({view:'profile'})` calls are inside
+  import and reset, both already on that screen. So the learner's name, the progress
+  export, the import and the reset were reachable by mouse only — and `warnNoStorage`
+  raises a toast reading "open Profile (avatar, bottom left)" about a control a keyboard
+  cannot reach. `navSectionFor` even returns `'profile'`, for a section with no icon.
+- **The closed mobile drawer is still in the tab order.** At ≤980px `.rail` is
+  `transform:translateX(-110%)`, and a transform removes nothing from focus. Tab from
+  the menu button on a phone and you walk every programme heading, every band and every
+  course in an open band — the current route opens its own band, so this is the normal
+  case, not the worst one — before reaching a word of the lesson.
+- **There is no skip link.** On desktop the DOM order is brand, four section icons,
+  avatar, drawer button, panel toggle, search, notepad, theme — and then the entire
+  curriculum rail, before `<main>`. On every page.
+- **Nothing announces state.** Four `[data-nav]` buttons carry `.active` as a class and
+  no `aria-current`, so a screen reader meets four identically-described buttons with
+  nothing to say which one it is on. The band buttons and the track disclosure expand
+  and collapse lists with no `aria-expanded`. `#menu-btn` never changes from "Open
+  curriculum" and has no `aria-expanded`. `#brand`'s accessible name is its glyph, `</>`.
+
+**3. Simulation Auditor** — pointed at the layout, computed rather than trusted, since
+this repository has no browser and this subsystem has no solver.
+
+- **The top bar does not fit a phone, and the screen title is what pays.** At 375px the
+  icon rail takes 60px and the bar's own padding 44, leaving 271. Its six gaps are 96.
+  Three 32px buttons are 96. Two metric pills are 48px of padding before any digits.
+  That is **275.4px of fixed furniture in 271px of bar** with a one-digit streak and a
+  one-digit XP, and none of it is text I had to estimate. `.screen-id` has `min-width:0`
+  and the largest flex base, so it absorbs the entire overflow first and collapses to
+  zero — and the bar is *still* over, so `.tbtn` and `.menu-btn` shrink. Their automatic
+  minimum size is min-content: one 14px glyph, an 18px svg. The theme toggle, the
+  notepad and the only way to open the curriculum on a phone all shrink through WCAG
+  2.5.8's 24×24 floor. With a realistic five-character XP it is 298px in 271.
+- **Fifteen course ids do not fit their column.** `.rail-course` gave the id a 32px
+  track with a 9px right pad — 23px of text — and `text-align:right`, so anything wider
+  spills leftwards. Fifteen of the 62 ids in the two spines are seven characters
+  (`CTRL510`, `VLSI510`, `EMAG510`, `RFIC510`, `ELEC430`…), which at 10px JetBrains Mono
+  — 0.6em per glyph, the font's own metric, every glyph — is 42.0px. That is 19px of
+  overflow into a 16px row padding, so the id ends 3px past the rail's own edge and
+  under the active row's 2px marker.
+- **A band's colour is authored, passed into the rail, and dropped.** `renderRail`
+  writes `style="--tt:<tint>"` onto `.rail-track .t-icon`, and the rule read
+  `background:var(--surface-2)`. `.year-badge` on the study plan and `.pb-icon` on the
+  programmes card — the same icon, the same band — both read `--tt`. Every band in both
+  spines has a real tint, checked; none is undefined.
+
+**1. Senior Educator** — this persona has no prose here, so it was pointed at the
+type scale, which is the shell's equivalent of whether the thing explains itself.
+
+- **`.rail-module h4` is 9.5px.** It is a module *title* in the curriculum tree, and it
+  is the smallest type in the application — smaller than the 9.5px table headers the
+  previous run raised to 11px on the reading surface for exactly this reason.
+- **`.rail-sub>button .cid` is 9px**, and it is not an id: it holds `▸`/`▾`, the only
+  expand/collapse affordance in the rail.
+- **`.screen-id b` is `white-space:nowrap` with no overflow rule of its own.** The
+  parent clips, so a long lesson title is cut mid-glyph rather than ellipsised.
+
+**2. Assessment Inquisitor.** No graded question in this subsystem. Pointed at the one
+thing in scope it can judge — whether a state *announces itself or merely exists* — and
+that is the `aria-current` / `aria-expanded` finding above, plus one more: at ≤640px
+`.metric span` was `display:none`, which removes the label from the accessibility tree
+as well as the screen. What was left was a lime bubble reading "1,250" and an amber one
+reading "4", with no word anywhere saying what either number counts.
+
+### What changed
+
+**Tokens — `src/index.head.html`.** Three, each named for the job rather than the hue,
+following the `--code-ink` precedent the previous run set.
+
+| token | dark | light | why |
+|---|---|---|---|
+| `--accent-ink` | `var(--lime)` | `#4C7005` | the accent used as *ink on its own tint* |
+| `--on-avatar` | `#0B0C0E` | `#FFFFFF` | ink on a gradient that flips lightness |
+| `--mark-idle` | `#666666` | `#8C8C8C` | the unfilled status ring |
+
+`#4C7005` is already this palette's `--lime-hi` and `--link`, so no new hue enters the
+design. `--mark-idle` is per theme because the surfaces are: aimed at WCAG 1.4.11's 3:1
+rather than past it, so the ring stays quiet.
+
+| surface | dark before → after | light before → after |
+|---|---|---|
+| `.inav.active` current section | 13.34 → 12.01 | **3.63 → 4.89** |
+| `.rail-btn.on` lit panel toggle | 13.75 → 12.42 | **3.61 → 4.86** |
+| `.metric.xp b` the XP figure | 13.75 | **3.61 → 5.10** |
+| `.rail-sec` programme heading | 15.86 | **3.93 → 5.55** |
+| `.btn.accent` label | 11.71 | **3.48 → 4.92** |
+| `.avatar` blue end / purple end | 7.26 / 7.19 | **3.27 / 3.17 → 5.98 / 6.17** |
+| `.rail-miss` "could not be loaded" | **1.87 → 6.16** | **2.01 → 5.36** |
+| `.gmark` idle ring, rail / card / drawer | **1.43 → 3.44 / 3.33 / 3.27** | **1.61 → 3.22 / 3.33 / 3.36** |
+| `.inav:hover` against its own idle | 1.11 | **1.00 → 1.13** |
+| `.btn.dark` fill, `.btn.dark:hover`, `.btn.ghost:hover`, `.mod-head:hover` | 1.06–1.12 | **1.00 → 1.11–1.13** |
+| rail row hover against idle | **1.07 → 1.12** | **1.08 → 1.13** |
+| `.inav.active` / rail row *background* against idle | **1.17 → 1.77** / 1.16 → 1.75 | **1.11 → 1.30** / 1.11 → 1.29 |
+
+The current-state tints went `--lime-08` → `--lime-22` because 1.11:1 is not a state.
+The icon on it is a graphical object, not text, and still measures 8.78 / 4.38. Three
+glows and a shadow that were baked `rgba(199,247,81,…)` now go through
+`color-mix(… var(--lime) …)` so they follow the theme, and the mobile drawer's
+`rgba(0,0,0,.5)` shadow gained the light-theme override `.ac-sighint` already had.
+
+**Layout.** `--topbar-gap` and `--topbar-pad` became tokens so the 640px block can turn
+them down: padding 44 → 24, gaps 96 → 60, metric padding 12 → 8. That is still not
+enough — a six-character XP and a three-figure streak leave the title 17px — so the XP
+pill stands down below 640px, which is the one real trade in this cycle. It is a running
+total, it is on the avatar's label, on Progress and on Profile, and the streak is both
+narrower and the number that changes what a reader does today. The title gets **86.4px**
+and an ellipsis instead of nothing. `.tbtn`, `.menu-btn`, `.metric` and `.save-state`
+became `flex:none` so no pressure can shrink a control through its own box. The rail's
+id column went 32px → 50px against a measured 50.0px requirement, and its gmark column
+26 → 22 to pay for it.
+
+**Type.** `.rail-module h4` 9.5px → 11px (tracking eased 0.14em → 0.1em to suit),
+`.rail-sub>button .cid` 9px → 11px, `.screen-id b` gained `overflow:hidden` and an
+ellipsis. Rail rows and band buttons gained a 150ms background transition, which
+`.inav` and `.btn` already had and they did not.
+
+**The band tint, restored without a light-theme regression.** The six spine tints are
+pale (`#E4EEFA`, `#FFE9DC`, …) and tuned for a dark ground: against the rail they
+measure 1.56–1.59:1 dark and **1.01–1.02:1 light**, while the grey chip they would have
+replaced measures 1.03 dark and 1.04 light. Swapping outright would have traded a
+visible chip for an invisible one on every light install. So the tint layers over
+`--surface-2` as a `background-image` and the border stays `--line`: dark goes
+1.03 → 1.62, light stays where it was.
+
+**Behaviour — `src/app.js`.** A skip link as the first focusable element, with
+`tabindex="-1"` on `<main>` so it actually moves focus rather than only scrolling. The
+avatar is a `<button>` with a label carrying the name, level and XP — Profile is
+reachable from a keyboard for the first time — and takes `aria-current` on that screen,
+since it is the one route no icon claims. `aria-current="page"` on the lit section icon;
+`aria-expanded` on `#menu-btn`, on every band button and on the track disclosure, whose
+chevron is now `aria-hidden` so it is not read as content. `#brand` gained a name that
+is not `</>`. `toggleRail` learned the difference between a dismissal and a navigation:
+Escape, the scrim and the menu button return focus to the button that opened the drawer,
+while picking a lesson lands focus on `<main>` with `preventScroll` so it does not undo
+the scroll `go()` has just restored. Opening the drawer focuses the *current* row rather
+than the first, so the rail does not jump to the top of the tree.
+
+**The closed drawer leaves the tab order, with no script.** `visibility:hidden` on
+`.rail` at ≤980px, `visible` on `.rail.open`, with the transition delayed by the length
+of the slide on the way out and 0s on the way in. That removes it from focus *and* the
+accessibility tree in every browser, needs no `inert` feature test, and keeps the
+closing animation.
+
+**A new gate — `tools/verify_theme.mjs` and `tools/theme_budget.json`.** This track had
+no gate, which is why five of the defects above are years old. It does not judge the
+design; it checks the parts of it that are arithmetic, reading `src/index.head.html` as
+shipped through a rule walker that understands `@media` (the obvious regex reads
+`@media (max-width:980px){ :root` as one selector and then enforces nothing inside).
+
+- **Every colour comes from a token**, or from an exemption written down with its reason
+  — 14 of them, each naming a surface a theme cannot help: the editor chrome, the
+  scrims, the iframe that renders the learner's own HTML. This is the curriculum's own
+  invariant, and it has now been broken twice.
+- **49 surfaces × 2 themes** against WCAG floors by kind: 4.5 for text, 3.0 for large
+  text and graphical objects, and 1.1 between two *backgrounds* — which is not a WCAG
+  number but is the only way to ask whether a hover exists, and 1.1 is the floor that
+  catches 1.00. A `state` entry names the rule it is asking about and the gate reads the
+  colour out of the stylesheet, from `sel` and from `[data-theme=light] sel`, falling
+  back to the dark value when the light rule is missing — that fallback *is* the
+  `.inav:hover` defect, so it is measured rather than restated.
+- **The 375px top bar**, summed from the stylesheet's own knobs, against a 60px floor
+  for the screen title; and `flex:none` on the controls that must not shrink.
+- **The rail's id column against the catalogue**, so the 50px is tied to the data rather
+  than to today's longest id.
+- **The closed drawer is out of the tab order.**
+
+The gate was not trusted until it was seen to fail. **Ten mutations, ten intended
+verdicts:** the light override removed; the light override *weakened back to white*
+rather than removed, which only the `from` mechanism can see; a bare hex planted on a
+shell rule; `--accent-ink` reverted; `flex:none` dropped; the XP pill put back on the
+phone; the drawer returned to transform-only; the id column returned to 32px;
+`--mark-idle` returned to the hairline token; and the untouched control, which passes.
+
+### Found in my own work, and fixed
+
+- **A desktop regression I introduced.** I gave `.screen-id` `flex:1 1 auto` to make it
+  survive at 375px. It already had `min-width:0`, which is what lets a flex item shrink;
+  `flex-grow` would have made it *expand* on a wide screen and split the free space with
+  `.spacer`, so the metrics and tool buttons would no longer sit against the right edge.
+  Caught by re-reading the diff and asking what each declaration was for, rather than by
+  any gate — none of them measures a desktop layout.
+- **A comment that contradicted the comment four lines below it.** The 640px block said
+  the knobs leave the title "67.6px", a figure from an earlier draft with a one-digit XP;
+  the next comment said 17px and then 86.4px. Three numbers for one bar. The stale one
+  came from before the XP pill stood down.
+- **A gate bug that read a property name as a value.** `xpHidden` tested the *returned
+  value* `"none"` against `/display\s*:\s*none/`, which never matches, so the gate
+  silently believed the XP pill was still visible and reported 27.3px where the truth was
+  86.4. It was reporting a failure, so it looked like the stylesheet was wrong. Found by
+  printing the parsed inputs instead of re-reading the CSS.
+- **A gate whose per-section summaries vanished after any earlier failure.** Every `ok()`
+  was guarded on the global `fails` count, so a tokens failure hid the contrast result
+  entirely — the operator sees one problem and fixes it, runs again, and meets the next.
+  Now each section tracks its own.
+- **`--tt` would have been a light-theme regression**, caught by measuring the tint
+  against the rail in both themes *before* shipping it rather than after: 1.01:1. The
+  layered form above is the result.
+- **`--mark-idle` was one value for both themes and I split it.** A single `#919191`
+  does clear 3:1 everywhere, but it lands at 6.27 in the dark theme — twice the floor,
+  on an element whose whole point is to be quiet.
+
+### Left alone, deliberately
+
+- **`P.dim` at 2.93:1 and `P.faint` at 1.86:1 on the canvas.** Cycle 2 measured these
+  and handed them to Track 5 by name, and this cycle did not take them. Re-measured and
+  confirmed, so the numbers do not need finding again: `--on-editor-3` is 2.93:1 on
+  `--editor` and `--on-editor-4` is 1.86:1, and `faint` is used for *text*. They are
+  the axis grid, tick labels and legends on 13 visualisers and the circuit canvas — a
+  different subsystem in different files, and raising them changes the visual weight of
+  every canvas in the app. Candidate values, measured, so the next cycle can start from
+  one: `#6B7280` → 4.07, `#767D8A` → 4.75, `#7E8694` → 5.36. A cycle that did the shell
+  *and* the canvas would have verified neither.
+- **`--ink-5` is still roughly 2:1 in both themes.** `.rail-miss` moved to `--ink-3`
+  rather than the tier being repaired, because `--ink-5` is placeholder and disabled
+  text and darkening it to AA stops a placeholder being distinguishable from a filled
+  value. That is a design decision, as the previous run recorded; what this cycle fixed
+  is a status message that had no business in that tier.
+- **`.btn.accent`'s border at 1.48:1 in the light theme.** `--lime-30` against the card.
+  It is a border on a button that already has a filled background and an AA label, so it
+  is decoration rather than the affordance. Recorded with the number.
+- **The search box is `display:none` below 980px.** So is `⌘K`'s target, which means the
+  keyboard shortcut is live on a phone and focuses an invisible input. Pre-existing, not
+  introduced here, and giving mobile a search is a feature rather than a repair.
+- **`.screen-id span`, the crumb, is hidden below 640px** along with `.save-state`.
+  Deliberate: 86.4px holds a title or a title and a crumb badly.
+- **`syncRailToggle` flips the panel toggle's `title` but not its `aria-label`**, so a
+  screen reader hears "Toggle the curriculum panel" and its `aria-pressed` state rather
+  than "Hide"/"Show". That is a defensible reading of the pattern and was left as is.
+- **`.rail-module h4` is an `h4` inside a `nav` with no h1–h3 above it.** A heading-level
+  jump in a landmark. Changing the element changes the rail's markup contract with
+  nothing measuring it; recorded instead.
+- **The webfont still reflows on a cold load.** `fonts.googleapis.com` with
+  `display=swap` and no metric-matched fallback, as the previous run recorded. The fix
+  wants `size-adjust`/`ascent-override` tuned to Instrument Sans's real metrics, which
+  cannot be guessed without measuring, and a decision about self-hosting.
+- **`docs/programs` holds 64 payloads against 62 in the current generation.** The
+  rolling window, as cycles 1–4 all established, and this cycle built four times.
+  Verified rather than assumed: 3 generations retained at 62 files each, **0 orphaned
+  and 0 missing**, the current generation covering 62 distinct courses.
+- **No author file, no `catalog/*.json`, no lesson id and no schema was touched**, so
+  `emit.py` was not run and the staleness guard is not armed. Presentation and behaviour
+  only.
+
+### Gates, after
+
+Every pre-existing number unmoved. The only new numbers are the new gate's; the only
+others that moved are the two artifact sizes, by the CSS, script and comments added.
+
+```
+verify_theme         All good: theme tokens (14 written exemptions) · 49 contrast
+                     surfaces in both themes, tightest text 4.63:1, faintest state
+                     1.11:1 · the 375px topbar (204.6px of furniture in 291px of bar,
+                     86.4px for the title) · the 50px id column holds CTRL510, the
+                     longest of 62 course ids · the closed drawer is out of the tab
+                     order                                                      [NEW]
+verify_derivations   All good: 1140 steps across 46 courses
+verify_quiz          All good: 1366 questions in 252 quiz units · 160 per-option
+                     explanations · every course within its answer-tell budget
+verify_circuits      All good: 80 circuit exercises, 340 checks · 527 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_labs MA101    All good: 5 labs
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads ·
+                     inlined 13726 -> 13740 KB · shell 1089 -> 1103 KB, of 1536
+```
+
+Beyond the gates: every ratio in this entry computed from the WCAG 2.1 sRGB formula
+against the composited stack rather than the ground; the 375px bar summed from fixed
+CSS lengths with only two font advances involved, both the fonts' own published metrics;
+the seven-character course ids counted from both spines rather than assumed; every band
+tint checked to exist before `--tt` was made load-bearing; the band tint measured in
+both themes *before* shipping, which is what stopped it; and the new gate run against
+ten mutations it had to reject and one it had to pass.
+
+---
