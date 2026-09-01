@@ -1333,6 +1333,46 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   transition:background .14s,color .14s,border-color .14s}
 .ckt-t:hover{color:var(--ink);border-color:var(--line-3)}
 .ckt-t.on{background:var(--lime);border-color:var(--lime);color:var(--on-lime)}
+
+/* ---- the parts palette ----
+   A drawer per category, opened by its own summary. The panel is absolutely
+   positioned so opening one does not reflow the toolbar under the pointer that is
+   about to click into it — a menu that moves as it opens is a menu you misclick. */
+/* The two convention buttons on the profile each preview the resistor they would
+   draw, so the choice is made by looking rather than by knowing what ANSI means. */
+.pcard-acts [data-sym-style]{display:inline-flex;align-items:center;gap:10px}
+.sym-eg{width:52px;height:22px;display:block;flex:none}
+
+.ckt-cat{position:relative}
+.ckt-cat>summary{display:flex;align-items:center;gap:5px;list-style:none;user-select:none}
+.ckt-cat>summary::-webkit-details-marker{display:none}
+.ckt-caret{font-size:9px;opacity:.7;transition:transform .14s}
+.ckt-cat[open]>summary{color:var(--ink);border-color:var(--line-3);background:var(--card)}
+.ckt-cat[open] .ckt-caret{transform:rotate(180deg)}
+/* the category that holds the part in hand says so while it is shut */
+.ckt-cat.holds>summary{border-color:var(--lime);color:var(--lime)}
+.ckt-cat[open].holds>summary{color:var(--lime)}
+.ckt-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:12;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px;
+  width:max(300px,100%);padding:6px;border-radius:var(--r);
+  border:1px solid var(--line-2);background:var(--card);
+  box-shadow:0 14px 34px rgba(0,0,0,.34)}
+.ckt-p{position:relative;display:grid;grid-template-rows:auto auto;justify-items:center;
+  gap:2px;padding:7px 6px 6px;border-radius:var(--r);border:1px solid transparent;
+  background:transparent;color:var(--ink-3);cursor:pointer;
+  transition:background .14s,color .14s,border-color .14s}
+.ckt-p:hover{background:var(--sunk);border-color:var(--line-2);color:var(--ink)}
+.ckt-p.on{border-color:var(--lime);color:var(--lime);background:var(--lime-08)}
+.ckt-ico{width:100%;height:34px;display:block}
+.ckt-pn{font:600 10px var(--mono);text-align:center;line-height:1.25}
+/* The shortcut rides in the corner rather than on its own line: it is a reminder for
+   the second visit, not something to read on the first. */
+.ckt-kb{position:absolute;top:3px;right:4px;font:600 8.5px var(--mono);
+  color:var(--ink-4);letter-spacing:.02em}
+.ckt-p:hover .ckt-kb,.ckt-p.on .ckt-kb{color:inherit;opacity:.8}
+@media (prefers-reduced-motion:reduce){
+  .ckt-caret,.ckt-p,.ckt-cat>summary{transition:none}
+}
 .ckt-main{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:340px;
   flex:1;min-width:0}
 #ckt-mount .ckt-main{min-height:0}
@@ -15745,6 +15785,41 @@ function mcuRig(net) {
  * So this is a separate table on purpose. Adding a symbol here teaches it; it does
  * not claim the solver can do anything with it.
  */
+/* ---- ANSI or IEC ----
+ *
+ * The zigzag resistor is a North American convention. IEC 60617 — the standard behind
+ * every schematic printed in Europe, and what anyone taught outside the US will have
+ * in their hand — draws a plain rectangle. The same split runs through the whole
+ * resistor family: a photoresistor, a thermistor and a potentiometer are all a
+ * resistor body with something done to it, so all four move together or none of them
+ * should.
+ *
+ * One module-level setting rather than a parameter threaded through forty drawing
+ * calls, because there is exactly one answer per reader and it does not vary by
+ * canvas. The profile writes it; every drawing in the app reads it.
+ */
+let SYM_STYLE = 'ansi';
+function symbolStyle(s) {
+  if (s !== undefined) SYM_STYLE = (s === 'iec') ? 'iec' : 'ansi';
+  return SYM_STYLE;
+}
+
+/* The body of the resistor family, between x0 and x1, h being the half-height of the
+   IEC rectangle. The zigzag reaches half again as far, which is what keeps the two
+   conventions the same visual weight at the same size. The path arrives at (x0, 0) and
+   leaves the caller to continue from (x1, 0) — true of both, so a caller does not have
+   to know which one it drew. */
+function resistorBody(c, x0, x1, h) {
+  if (SYM_STYLE === 'iec') {
+    c.moveTo(x0, -h); c.lineTo(x1, -h); c.lineTo(x1, h); c.lineTo(x0, h); c.closePath();
+    return;
+  }
+  const n = 6, w = (x1 - x0) / n, a = h * 1.5;
+  c.moveTo(x0, 0);
+  for (let i = 0; i < n; i++) c.lineTo(x0 + (i + 0.5) * w, i % 2 ? a : -a);
+  c.lineTo(x1, 0);
+}
+
 const Symbols = (function () {
   const DEF = {};
   function define(id, name, draw) { DEF[id] = { id: id, name: name, draw: draw }; }
@@ -15754,9 +15829,93 @@ const Symbols = (function () {
   /* Every draw() works in a box from (-60,-40) to (60,40); the caller scales. */
   define('R', 'Resistor', function (c) {
     c.moveTo(-60, 0); c.lineTo(-30, 0);
-    const n = 6, w = 60 / n;
-    for (let i = 0; i < n; i++) c.lineTo(-30 + (i + 0.5) * w, i % 2 ? 17 : -17);
-    c.lineTo(30, 0); c.lineTo(60, 0);
+    resistorBody(c, -30, 30, 11);
+    c.moveTo(30, 0); c.lineTo(60, 0);
+  });
+
+  /* The rest of the resistor family, and the parts that had no symbol at all. Each is
+     the drawing the editor was already making on its own canvas, at the registry's
+     scale — one drawing per part, so a palette icon and the thing it places cannot
+     come to disagree. */
+  define('LDR', 'Photoresistor', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-30, 0);
+    resistorBody(c, -30, 30, 11);
+    c.moveTo(30, 0); c.lineTo(60, 0);
+    /* light arriving: the arrows point IN, where an LED's point away */
+    for (const ax of [-18, 4]) {
+      c.moveTo(ax - 20, -46); c.lineTo(ax, -26);
+      c.moveTo(ax, -26); c.lineTo(ax - 11, -29);
+      c.moveTo(ax, -26); c.lineTo(ax - 3, -37);
+    }
+  });
+
+  define('NTC', 'Thermistor', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-30, 0);
+    resistorBody(c, -30, 30, 11);
+    c.moveTo(30, 0); c.lineTo(60, 0);
+    c.moveTo(-36, 26); c.lineTo(-25, 26); c.lineTo(30, -26);
+  });
+
+  define('POT', 'Potentiometer', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-30, 0);
+    resistorBody(c, -30, 30, 11);
+    c.moveTo(30, 0); c.lineTo(60, 0);
+    c.moveTo(0, -40); c.lineTo(0, -22);
+    c.moveTo(-8, -30); c.lineTo(0, -21); c.lineTo(8, -30);
+  });
+
+  define('LAMP', 'Lamp', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-24, 0);
+    c.moveTo(24, 0); c.lineTo(60, 0);
+    c.moveTo(24, 0); c.arc(0, 0, 24, 0, Math.PI * 2);
+    c.moveTo(-17, -17); c.lineTo(17, 17);
+    c.moveTo(-17, 17); c.lineTo(17, -17);
+  });
+
+  define('METER', 'Ammeter', function (c) {
+    c.moveTo(-60, 0); c.lineTo(-24, 0);
+    c.moveTo(24, 0); c.lineTo(60, 0);
+    c.moveTo(24, 0); c.arc(0, 0, 24, 0, Math.PI * 2);
+    /* the A, drawn rather than typed, so it turns with the symbol */
+    c.moveTo(-10, 11); c.lineTo(0, -12); c.lineTo(10, 11);
+    c.moveTo(-5.5, 0); c.lineTo(5.5, 0);
+  });
+
+  define('BAR', 'Bar display', function (c) {
+    c.moveTo(0, -40); c.lineTo(0, -26);
+    c.moveTo(-30, -26); c.lineTo(30, -26); c.lineTo(30, 26);
+    c.lineTo(-30, 26); c.closePath();
+    for (let i = 0; i < 4; i++) {
+      c.moveTo(-22 + i * 13, -16); c.lineTo(-22 + i * 13, 16);
+    }
+  });
+
+  define('OUT', 'Test point', function (c) {
+    c.moveTo(0, 40); c.lineTo(0, 8);
+    c.moveTo(0, 8); c.arc(0, 0, 8, Math.PI / 2, Math.PI * 2.5);
+    c.moveTo(-22, -22); c.lineTo(22, -22);
+  });
+
+  define('BB', 'Breadboard', function (c) {
+    c.moveTo(-56, -34); c.lineTo(56, -34); c.lineTo(56, 34);
+    c.lineTo(-56, 34); c.closePath();
+    c.moveTo(-56, 0); c.lineTo(56, 0);
+    for (let i = 0; i < 7; i++) {
+      const x = -42 + i * 14;
+      c.moveTo(x, -22); c.lineTo(x, -12);
+      c.moveTo(x, 12); c.lineTo(x, 22);
+    }
+  });
+
+  define('MCU', 'Microcontroller', function (c) {
+    c.moveTo(-34, -34); c.lineTo(34, -34); c.lineTo(34, 34);
+    c.lineTo(-34, 34); c.closePath();
+    for (let i = 0; i < 4; i++) {
+      const y = -21 + i * 14;
+      c.moveTo(-34, y); c.lineTo(-56, y);
+      c.moveTo(34, y); c.lineTo(56, y);
+    }
+    c.moveTo(-34, -20); c.arc(-34, -34, 14, Math.PI / 2, 0, true);
   });
 
   define('C', 'Capacitor', function (c) {
@@ -15927,6 +16086,103 @@ const Symbols = (function () {
  * graded unit no keyboard can reach is a unit some learners cannot sit.
  */
 
+/* Attribute-safe text, for the markup the palette builds before any editor exists.
+   createCircuit has its own copy under the same job; this one is out here because the
+   tables above are module-level and cannot reach into a function scope. */
+function cktEsc(t) {
+  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+
+/* ---- the palette ----
+ *
+ * Each entry is [kind, name, shortcut, description]. The name is what a screen reader
+ * gets and what sits under the icon; the description is the hover text and carries the
+ * one thing about the part that is worth knowing before you place it.
+ *
+ * Shortcuts are plain letters, which is what the hand expects and what every drawing
+ * program uses. That cost rotate, group and ungroup their bare `R`, `G` and `U` — they
+ * moved to Shift — because a resistor is placed a hundred times in a session and a
+ * block is grouped twice, and the commoner action should have the cheaper key. A
+ * modifier was not an option in the other direction: Ctrl+R reloads the page.
+ */
+const BAR_TOOLS = [
+  ['select', 'Select', 'S', 'Select, move and rotate what is already on the canvas'],
+  ['wire', 'Wire', 'W', 'Draw a wire — or just drag from any terminal, which needs no tool at all'],
+];
+
+const PART_CATS = [
+  { name: 'Passive', hint: 'Resistors, capacitors, inductors', parts: [
+    ['R', 'Resistor', 'R', 'Resistor'],
+    ['C', 'Capacitor', 'C', 'Capacitor'],
+    ['L', 'Inductor', 'L', 'Inductor'],
+    ['POT', 'Potentiometer', '', 'Potentiometer — three pins, a wiper along the track'],
+  ] },
+  { name: 'Sources', hint: 'Supplies, ground and probes', parts: [
+    ['V', 'Voltage source', 'V', 'Voltage source'],
+    ['I', 'Current source', 'I', 'Current source'],
+    ['GND', 'Ground', 'G', 'Ground — the node every voltage is measured against'],
+    ['OUT', 'Test point', 'P', 'Mark the output node'],
+  ] },
+  { name: 'Switching', hint: 'Switches and sensors', parts: [
+    ['SW', 'Switch', 'K', 'Switch — click it on the canvas to open and close it'],
+    ['LDR', 'Photoresistor', '', 'Light sensor — resistance falls as light rises'],
+    ['NTC', 'Thermistor', '', 'Thermistor — resistance falls as temperature rises'],
+  ] },
+  { name: 'Semiconductors', hint: 'Diodes, transistors, op-amps', parts: [
+    ['D', 'Diode', 'D', 'Diode — Shockley, solved by iteration rather than by a 0.7 V rule'],
+    ['LED', 'LED', 'E', 'LED — the same junction, and it lights when it conducts'],
+    ['NPN', 'NPN transistor', 'Q', 'NPN bipolar — Ebers-Moll'],
+    ['PNP', 'PNP transistor', '⇧Q', 'PNP bipolar — Ebers-Moll'],
+    ['NMOS', 'N-channel MOSFET', 'M', 'N-channel MOSFET — level 1 square law'],
+    ['PMOS', 'P-channel MOSFET', '⇧M', 'P-channel MOSFET — level 1 square law'],
+    ['OPAMP', 'Op-amp', 'O', 'Op-amp — finite gain, output limited to its rails'],
+  ] },
+  { name: 'Readouts', hint: 'Parts that show you a number', parts: [
+    ['LAMP', 'Lamp', '', 'Indicator lamp — a resistance that lights with the power in it'],
+    ['METER', 'Ammeter', '', 'Ammeter — reads the current through it'],
+    ['BAR', 'Bar display', '', 'Bar display — reads the node it sits on'],
+  ] },
+  { name: 'Boards', hint: 'Breadboard and microcontroller', parts: [
+    ['BB', 'Breadboard', 'B', 'Breadboard — a strip of five holes is already one node, with no wire drawn'],
+    ['MCU', 'Microcontroller', 'U', 'Microcontroller — twelve pins and a sketch you write; run it with a transient'],
+  ] },
+];
+
+/* kind -> shortcut, and the reverse, built from the one table above so a key and the
+   caption that advertises it cannot disagree. */
+const PART_KEYS = (function () {
+  const byKey = {};
+  BAR_TOOLS.concat.apply(BAR_TOOLS, PART_CATS.map(function (c) { return c.parts; }))
+    .forEach(function (t) {
+      if (!t[2]) return;
+      /* the cap reads ⇧Q because "Shift+Q" does not fit in a tile corner; the
+         handler asks for "shift+q", so the two are reconciled here rather than by
+         keeping a second table that can drift */
+      byKey[t[2].replace('⇧', 'shift+').toLowerCase()] = t[0];
+    });
+  return byKey;
+})();
+
+function toolBtn(t) {
+  return '<button class="ckt-t ckt-bare" data-tool="' + t[0] + '" title="' + cktEsc(t[3]) +
+    ' (' + t[2] + ')" aria-label="' + cktEsc(t[1]) + '" aria-keyshortcuts="' + t[2] +
+    '" aria-pressed="false">' + cktEsc(t[1]) + '</button>';
+}
+
+function partBtn(t) {
+  /* The icon is painted from the symbol registry after mount, so it is the same
+     drawing the canvas will make — including which convention the reader has chosen.
+     A picture of an ANSI resistor on the button that places an IEC one would be worse
+     than no picture. */
+  return '<button class="ckt-p" data-tool="' + t[0] + '" title="' + cktEsc(t[3]) +
+    (t[2] ? ' (' + t[2] + ')' : '') + '" aria-label="' + cktEsc(t[1]) +
+    '" aria-pressed="false">' +
+    '<canvas class="ckt-ico" data-sym="' + t[0] + '" aria-hidden="true"></canvas>' +
+    '<span class="ckt-pn">' + cktEsc(t[1]) + '</span>' +
+    (t[2] ? '<kbd class="ckt-kb">' + cktEsc(t[2]) + '</kbd>' : '') +
+    '</button>';
+}
+
 /* One counter for every editor ever mounted, so `aria-describedby` and the ids it
    points at cannot collide when a lesson shows a diagram beside an editor. */
 let cktUid = 0;
@@ -16017,52 +16273,29 @@ function createCircuit(root, opts) {
     '<div class="ckt">' +
       '<div class="ckt-bar">' +
         '<div class="ckt-tools" role="group" aria-label="Tools and parts">' +
-          [['select', 'Select', 'Select and move parts'], ['wire', 'Wire', 'Draw a wire'],
-           /* Next to the wire, because the two of them are the only ways anything on
-              this canvas gets connected — and the board is the one you place first. */
-           ['BB', 'Board', 'Breadboard — a strip of five holes is already one node, ' +
-            'with no wire drawn'],
-           ['R', 'R', 'Resistor'], ['C', 'C', 'Capacitor'], ['L', 'L', 'Inductor'],
-           ['V', 'V', 'Voltage source'], ['I', 'I', 'Current source'],
-           ['GND', 'GND', 'Ground'], ['OUT', 'Probe', 'Mark the output node'],
-           ['SW', 'SW', 'Switch — click it on the canvas to open and close it'],
-           ['LDR', 'LDR', 'Light sensor — resistance falls as light rises'],
-           ['NTC', 'NTC', 'Thermistor — resistance falls as temperature rises'],
-           ['POT', 'POT', 'Potentiometer — three pins, a wiper along the track'],
-           ['LAMP', 'Lamp', 'Indicator lamp — a resistance that lights with the power in it'],
-           ['METER', 'Meter', 'Ammeter — reads the current through it'],
-           ['BAR', 'Bar', 'Bar display — reads the node it sits on'],
-           ['D', 'D', 'Diode — Shockley, solved by iteration rather than by a 0.7 V rule'],
-           ['LED', 'LED', 'LED — the same junction, and it lights when it conducts'],
-           ['NPN', 'NPN', 'NPN bipolar — Ebers-Moll'],
-           ['PNP', 'PNP', 'PNP bipolar — Ebers-Moll'],
-           ['NMOS', 'NMOS', 'N-channel MOSFET — level 1 square law'],
-           ['PMOS', 'PMOS', 'P-channel MOSFET — level 1 square law'],
-           ['OPAMP', 'Op-amp', 'Op-amp — finite gain, output limited to its rails'],
-           /* Last on the bar because it is the only part whose behaviour is written
-              rather than typed, and because everything to its left is what a sketch
-              would be wired to. */
-           ['MCU', 'MCU', 'Microcontroller — twelve pins and a sketch you write; ' +
-            'run it with a transient']].map(function (t) {
-            /* The label a screen reader gets is the name, not the glyph on the key cap:
-               eighteen of these buttons read "R", "C", "L", "D", "I" and "V" as their
-               whole text, which is a legend for the eye and nothing at all for the ear.
-               Taken from the title's own first clause rather than from a second list —
-               a name and a description that can drift apart is how one of them ends up
-               wrong. aria-pressed because exactly one tool is on, and the class that
-               said so was doing it in CSS only. */
-            return '<button class="ckt-t" data-tool="' + t[0] + '" title="' + t[2] +
-              '" aria-label="' + esc2(t[2].split(' — ')[0]) + '" aria-pressed="false">' +
-              t[1] + '</button>';
+          /* Two buttons stay on the bar itself, because they are the two you reach for
+             between every other action and a menu you have to open first would be a
+             menu you never close. Everything else is a part, and parts live in the
+             drawers below. */
+          BAR_TOOLS.map(toolBtn).join('') +
+          PART_CATS.map(function (cat) {
+            /* <details> rather than a hand-rolled popover: it opens on click and on
+               Enter, closes on Escape, and is in the tab order — all of which a div
+               with a click handler has to be taught, usually badly. */
+            return '<details class="ckt-cat"><summary class="ckt-t" title="' +
+              esc2(cat.hint) + '">' + esc2(cat.name) +
+              '<span class="ckt-caret" aria-hidden="true">\u25be</span></summary>' +
+              '<div class="ckt-menu" role="group" aria-label="' + esc2(cat.name) + '">' +
+              cat.parts.map(partBtn).join('') + '</div></details>';
           }).join('') +
         '</div>' +
         '<span class="spacer"></span>' +
         '<button class="ckt-t" data-act="zoomout" title="Zoom out (-)" aria-label="Zoom out">−</button>' +
         '<button class="ckt-t" data-act="zoomin" title="Zoom in (+)" aria-label="Zoom in">+</button>' +
         '<button class="ckt-t" data-act="fit" title="Fit the drawing to the window (0)">Fit</button>' +
-        '<button class="ckt-t" data-act="group" title="Fold the selection into one block (G)">Group</button>' +
-        '<button class="ckt-t" data-act="ungroup" title="Open a block back out onto the canvas (U)">Ungroup</button>' +
-        '<button class="ckt-t" data-act="rotate" title="Rotate the selection (R)">Rotate</button>' +
+        '<button class="ckt-t" data-act="group" title="Fold the selection into one block (Shift+G)">Group</button>' +
+        '<button class="ckt-t" data-act="ungroup" title="Open a block back out onto the canvas (Shift+U)">Ungroup</button>' +
+        '<button class="ckt-t" data-act="rotate" title="Rotate the selection (Shift+R)">Rotate</button>' +
         '<button class="ckt-t" data-act="delete" title="Delete the selection (Del)">Delete</button>' +
         '<button class="ckt-t" data-act="clear">Clear</button>' +
       '</div>' +
@@ -16084,9 +16317,14 @@ function createCircuit(root, opts) {
             'hold Shift to move the selection instead. Enter places the part the toolbar ' +
             'has chosen, draws a wire between two presses, or picks up what is under the ' +
             'caret; Enter again on a block that is already selected opens it, and on a ' +
-            'switch throws it. R rotates, G groups, U ungroups, Delete removes, and ' +
-            'Escape lets go and then closes a block. Plus and minus zoom, 0 fits the ' +
-            'drawing. Tab leaves the canvas.</p>' +
+            'switch throws it. A letter picks a part up: S select, W wire, R resistor, ' +
+            'C capacitor, L inductor, V voltage source, I current source, G ground, ' +
+            'P test point, K switch, D diode, E light emitting diode, Q and Shift+Q the ' +
+            'two bipolars, M and Shift+M the two MOSFETs, O op-amp, B breadboard, ' +
+            'U microcontroller. Shift+R rotates, Shift+G groups, Shift+U ungroups, ' +
+            'Delete removes the selected parts and wires, and Escape lets go and then ' +
+            'closes a block. Plus and minus zoom, 0 fits the drawing. Tab leaves the ' +
+            'canvas.</p>' +
           /* Every action on this canvas changes a picture and nothing else. This is
              where it is said in words. */
           '<p class="ckt-vh" data-say role="status" aria-live="polite"></p>' +
@@ -16783,8 +17021,8 @@ function createCircuit(root, opts) {
     ctx.beginPath();
     if (p.kind === 'R') {
       ctx.moveTo(-L, 0); ctx.lineTo(-13, 0);
-      for (let i = 0; i < 6; i++) ctx.lineTo(-13 + (i + 0.5) * 26 / 6, (i % 2 ? 6 : -6));
-      ctx.lineTo(13, 0); ctx.lineTo(L, 0);
+      resistorBody(ctx, -13, 13, 4);
+      ctx.moveTo(13, 0); ctx.lineTo(L, 0);
       ctx.stroke();
     } else if (p.kind === 'C') {
       ctx.moveTo(-L, 0); ctx.lineTo(-4, 0);
@@ -16810,8 +17048,8 @@ function createCircuit(root, opts) {
     } else if (p.kind === 'LDR' || p.kind === 'NTC' || p.kind === 'POT') {
       /* all three are a resistor body with something done to it */
       ctx.moveTo(-L, 0); ctx.lineTo(-13, 0);
-      for (let i = 0; i < 6; i++) ctx.lineTo(-13 + (i + 0.5) * 26 / 6, (i % 2 ? 6 : -6));
-      ctx.lineTo(13, 0); ctx.lineTo(L, 0);
+      resistorBody(ctx, -13, 13, 4);
+      ctx.moveTo(13, 0); ctx.lineTo(L, 0);
       if (p.kind === 'LDR') {
         /* two arrows pointing IN at the body: light arriving, the sense the symbol
            has always had — an LED's arrows point away because it emits */
@@ -19277,9 +19515,22 @@ function createCircuit(root, opts) {
       e.preventDefault();
       announce(deleteSaid(nP, nW));
     }
-    else if (e.key === 'r' || e.key === 'R') { doRotate(); announce(rotationSaid()); }
-    else if (e.key === 'g' || e.key === 'G') { doGroup(); announce(blockSaid('Grouped')); }
-    else if (e.key === 'u' || e.key === 'U') { doUngroup(); announce(blockSaid('Ungrouped')); }
+    /* Shift for the three verbs, plain letters for the parts. A resistor is placed a
+       hundred times in a session and a block is grouped twice, so the commoner action
+       gets the cheaper key. It could not go the other way: Ctrl+R reloads the page. */
+    else if (e.shiftKey && e.key === 'R') { doRotate(); announce(rotationSaid()); }
+    else if (e.shiftKey && e.key === 'G') { doGroup(); announce(blockSaid('Grouped')); }
+    else if (e.shiftKey && e.key === 'U') { doUngroup(); announce(blockSaid('Ungrouped')); }
+    else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1 &&
+             PART_KEYS[(e.shiftKey ? 'shift+' : '') + e.key.toLowerCase()]) {
+      /* Picking up a part cancels a half-drawn wire, the way reaching for a different
+         tool always has. */
+      const picked = PART_KEYS[(e.shiftKey ? 'shift+' : '') + e.key.toLowerCase()];
+      wireFrom = null; wireDown = null;
+      setTool(picked);
+      e.preventDefault();
+      announce(toolSaid(picked));
+    }
     else if (e.key === 'Escape') {
       /* Escape drops whatever is in hand first, and only then backs out of a block:
          inside one, the gesture that cancels a half-drawn wire must not also throw
@@ -19400,19 +19651,80 @@ function createCircuit(root, opts) {
   /* A diagram has no tools, no analysis panel and nothing to click, so there is
      nothing below this line to wire up. Returning early is what makes the read-only
      DOM safe to shrink: every lookup after this point assumes the full chrome. */
+  /* Only one drawer open at a time, and choosing a part closes the one it came from:
+     a menu that stays open over the canvas you are about to click is a menu in the
+     way. <details> gives the open/close, the Enter key and the tab stop for free —
+     everything below is the part that is specific to a palette. */
+  const cats = Array.prototype.slice.call(root.querySelectorAll('.ckt-cat'));
+  function closeCats() { cats.forEach(function (d) { d.open = false; }); }
+  cats.forEach(function (d) {
+    d.addEventListener('toggle', function () {
+      if (!d.open) return;
+      cats.forEach(function (o) { if (o !== d) o.open = false; });
+      /* A closed drawer's canvases have no layout, so their first paint would land in
+         a zero-width backing store. Paint them when the drawer opens instead. */
+      requestAnimationFrame(paintIcons);
+    });
+  });
+  /* A press anywhere outside a drawer closes it. Captured on this editor rather than
+     on the document, because a lesson can hold two of these and one palette has no
+     business reacting to the other's clicks. */
+  root.addEventListener('pointerdown', function (e) {
+    if (!cats.some(function (d) { return d.open; })) return;
+    if (e.target && e.target.closest && e.target.closest('.ckt-cat')) return;
+    closeCats();
+  }, true);
+
+  /* The icons are the registry's own paths, so a button shows the drawing the canvas
+     will make — including which convention the reader has chosen. A picture of an ANSI
+     resistor on the button that places an IEC one would be worse than no picture. */
+  const icons = Array.prototype.slice.call(root.querySelectorAll('.ckt-ico'));
+  function paintIcons() {
+    const ink = getComputedStyle(document.documentElement)
+      .getPropertyValue('--ink').trim() || '#EDEFF3';
+    icons.forEach(function (c) { Symbols.paint(c, c.dataset.sym, ink); });
+  }
+  paintIcons();
+  requestAnimationFrame(paintIcons);
+  root.__cktIcons = paintIcons;
+
+  /* One place that records which tool is on, so the bar, the drawers and the key map
+     cannot end up disagreeing about it. The class was the only record before, and a
+     class is not a state any assistive technology can read. */
+  function paintTools() {
+    root.querySelectorAll('[data-tool]').forEach(function (o) {
+      const on = o.dataset.tool === tool;
+      o.classList.toggle('on', on);
+      o.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    /* A drawer whose part is the one in hand says so on its own face, since the
+       chosen button inside it is not visible while it is shut. */
+    cats.forEach(function (d) {
+      d.classList.toggle('holds', !!d.querySelector('[data-tool].on'));
+    });
+  }
+
+  function toolSaid(kind) {
+    const b = root.querySelector('[data-tool="' + kind + '"]');
+    const name = b ? b.getAttribute('aria-label') : kind;
+    if (kind === 'select') return 'Select. Click a part or a wire; drag from a terminal to wire.';
+    if (kind === 'wire') return 'Wire. Click a cell, then another.';
+    return name + ' chosen. Click the canvas, or press Enter, to place one.';
+  }
+
+  function setTool(kind) {
+    tool = kind;
+    closeCats();
+    paintTools();
+    paintPart();
+    paint();
+  }
+
   root.querySelectorAll('[data-tool]').forEach(function (b) {
     b.addEventListener('click', function () {
-      tool = b.dataset.tool;
-      wireFrom = null;
-      root.querySelectorAll('[data-tool]').forEach(function (o) {
-        o.classList.toggle('on', o === b);
-        /* the class was the only record that a tool was chosen, and a class is not a
-           state any assistive technology can read */
-        o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
-      });
-      paintPart();
-      paint();
-      announce(b.getAttribute('aria-label') + ' chosen. Enter places one at the caret.');
+      wireFrom = null; wireDown = null;
+      setTool(b.dataset.tool);
+      announce(toolSaid(b.dataset.tool));
     });
   });
   root.querySelector('[data-act="zoomin"]').addEventListener('click', function () { zoomTo(view.s * 1.2); });
@@ -19444,10 +19756,10 @@ function createCircuit(root, opts) {
   root.querySelector('.ckt-run').addEventListener('click', solve);
 
   root.querySelector('[data-act="fit"]').setAttribute('aria-keyshortcuts', '0');
-  root.querySelector('[data-act="rotate"]').setAttribute('aria-keyshortcuts', 'R');
+  root.querySelector('[data-act="rotate"]').setAttribute('aria-keyshortcuts', 'Shift+R');
   root.querySelector('[data-act="delete"]').setAttribute('aria-keyshortcuts', 'Delete');
-  root.querySelector('[data-act="group"]').setAttribute('aria-keyshortcuts', 'G');
-  root.querySelector('[data-act="ungroup"]').setAttribute('aria-keyshortcuts', 'U');
+  root.querySelector('[data-act="group"]').setAttribute('aria-keyshortcuts', 'Shift+G');
+  root.querySelector('[data-act="ungroup"]').setAttribute('aria-keyshortcuts', 'Shift+U');
 
 
   let ro = null;
@@ -19456,9 +19768,7 @@ function createCircuit(root, opts) {
     ro.observe(cv.parentElement);
   }
 
-  const firstTool = root.querySelector('[data-tool="R"]');
-  firstTool.classList.add('on');
-  firstTool.setAttribute('aria-pressed', 'true');
+  paintTools();
   paintCrumbs();
   paintPart();
   paintEnv();
@@ -21973,6 +22283,19 @@ function typeChip(type) {
   return '<span class="chip ' + type + '">' + label + '</span>';
 }
 
+/* ---------- schematic convention ----------
+   A zigzag resistor is North American; IEC 60617 — what every schematic printed in
+   Europe uses, and what anyone taught outside the US has in their hand — draws a
+   rectangle. Neither is more correct and each is unreadable to the people who did not
+   grow up with it, so it is the reader's call rather than the app's.
+
+   Applied through circuit.js's own module-level switch, which every drawing in the
+   app already reads: the editor's canvas, the read-only diagrams in a question, and
+   the icons in the parts palette. */
+function applySymbols() {
+  if (typeof symbolStyle === 'function') symbolStyle(P.symbols === 'iec' ? 'iec' : 'ansi');
+}
+
 /* ---------- theme ---------- */
 function effectiveTheme() {
   if (P.theme === 'dark' || P.theme === 'light') return P.theme;
@@ -21999,7 +22322,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '23239b1d9a9f';
+const BUILD_ID = '5f27631d8bd0';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */
@@ -22866,6 +23189,7 @@ function adopt(progress) {
     P = sanitiseProgress(progress);
     recomputeXp();
     applyTheme();
+    applySymbols();
     updateXp();
     renderRail();
   } finally { adopting = false; }
@@ -22994,6 +23318,7 @@ function sanitiseProgress(inc) {
   out.name = typeof src.name === 'string' ? src.name.slice(0, 40) : '';
   out.railHidden = src.railHidden === true;
   if (src.theme === 'dark' || src.theme === 'light') out.theme = src.theme;
+  if (src.symbols === 'iec' || src.symbols === 'ansi') out.symbols = src.symbols;
   out.last = typeof src.last === 'string' ? src.last : null;
   out.playground = (src.playground && typeof src.playground === 'object' && !Array.isArray(src.playground))
     ? src.playground : null;
@@ -23047,6 +23372,7 @@ function importProgress(file) {
     P.clearedAt = Date.now();
     recomputeXp();
     applyTheme();
+    applySymbols();
     updateXp();
     renderRail();
     saveNow();
@@ -23061,7 +23387,8 @@ function resetProgress() {
   /* the seed rides along with name and theme: clearing progress should not silently
      reshuffle every quiz in the catalogue as well */
   P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
-        activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme, seed: P.seed };
+        activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme,
+        symbols: P.symbols, seed: P.seed };
   /* Without this the card's "this cannot be undone" was the one thing here that was not
      true. The server merges every field forward and never back, so a signed-in learner
      pressing Reset had the whole document handed back by the next sync about two seconds
@@ -23239,8 +23566,26 @@ function renderProfile(main) {
     accountCardHtml() +
 
     '<div class="pcard">' +
+      '<div class="pcard-h"><b>Schematic symbols</b></div>' +
+      '<p>Which convention the app draws in. It changes the resistor, the ' +
+        'potentiometer and the two sensors \u2014 every part that is a resistor body ' +
+        'with something done to it \u2014 everywhere they appear: the editor, the ' +
+        'diagrams in a question, and the parts palette.</p>' +
+      '<div class="pcard-acts" role="radiogroup" aria-label="Schematic symbols">' +
+        ['ansi', 'iec'].map(function (k) {
+          const on = (P.symbols === 'iec' ? 'iec' : 'ansi') === k;
+          return '<button class="btn' + (on ? ' success' : ' dark') + '" data-sym-style="' + k +
+            '" role="radio" aria-checked="' + (on ? 'true' : 'false') + '">' +
+            (k === 'ansi' ? 'ANSI \u2014 zigzag' : 'IEC \u2014 rectangle') +
+            '<canvas class="sym-eg" data-sym="R" aria-hidden="true"></canvas></button>';
+        }).join('') +
+      '</div>' +
+    '</div>' +
+
+    '<div class="pcard">' +
       '<div class="pcard-h"><b>Start over</b></div>' +
-      '<p>Clears every completed unit, your XP and your saved code. Your name and theme stay. ' +
+      '<p>Clears every completed unit, your XP and your saved code. Your name, theme and ' +
+        'symbol style stay. ' +
         'Export first if you might want it back \u2014 this cannot be undone.</p>' +
       '<div class="pcard-acts">' +
         '<button class="btn dark" id="prof-reset">Reset progress</button>' +
@@ -23256,6 +23601,31 @@ function renderProfile(main) {
   '</div>';
 
   wireAccountCard(main);
+
+  /* Each button previews the convention it would set, which means painting the two of
+     them under DIFFERENT settings — so the switch is moved, the icon painted, and the
+     reader's own setting put back before anything else can read it. */
+  const symBtns = $all('[data-sym-style]', main);
+  const paintSymEg = function () {
+    if (typeof symbolStyle !== 'function') return;
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+    const was = symbolStyle();
+    symBtns.forEach(function (b) {
+      symbolStyle(b.dataset.symStyle);
+      Symbols.paint($('.sym-eg', b), 'R', ink || '#EDEFF3');
+    });
+    symbolStyle(was);
+  };
+  paintSymEg();
+  requestAnimationFrame(paintSymEg);
+  symBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      P.symbols = b.dataset.symStyle;
+      applySymbols();
+      updateXp();
+      renderProfile($('#main'));
+    });
+  });
   if (serverUp === null && !Sync.signedIn()) {
     Sync.health().then(function (h) {
       serverUp = h.ok;
@@ -26177,6 +26547,7 @@ async function boot() {
      existed; renderShell has just built it, so this is the first moment it can speak */
   paintSaveState();
   applyTheme();
+  applySymbols();
 
   /* The catalog has to be indexed before anything below this line runs, and the
      ordering is load-bearing rather than tidy:

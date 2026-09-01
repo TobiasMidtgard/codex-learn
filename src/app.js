@@ -639,6 +639,19 @@ function typeChip(type) {
   return '<span class="chip ' + type + '">' + label + '</span>';
 }
 
+/* ---------- schematic convention ----------
+   A zigzag resistor is North American; IEC 60617 — what every schematic printed in
+   Europe uses, and what anyone taught outside the US has in their hand — draws a
+   rectangle. Neither is more correct and each is unreadable to the people who did not
+   grow up with it, so it is the reader's call rather than the app's.
+
+   Applied through circuit.js's own module-level switch, which every drawing in the
+   app already reads: the editor's canvas, the read-only diagrams in a question, and
+   the icons in the parts palette. */
+function applySymbols() {
+  if (typeof symbolStyle === 'function') symbolStyle(P.symbols === 'iec' ? 'iec' : 'ansi');
+}
+
 /* ---------- theme ---------- */
 function effectiveTheme() {
   if (P.theme === 'dark' || P.theme === 'light') return P.theme;
@@ -1532,6 +1545,7 @@ function adopt(progress) {
     P = sanitiseProgress(progress);
     recomputeXp();
     applyTheme();
+    applySymbols();
     updateXp();
     renderRail();
   } finally { adopting = false; }
@@ -1660,6 +1674,7 @@ function sanitiseProgress(inc) {
   out.name = typeof src.name === 'string' ? src.name.slice(0, 40) : '';
   out.railHidden = src.railHidden === true;
   if (src.theme === 'dark' || src.theme === 'light') out.theme = src.theme;
+  if (src.symbols === 'iec' || src.symbols === 'ansi') out.symbols = src.symbols;
   out.last = typeof src.last === 'string' ? src.last : null;
   out.playground = (src.playground && typeof src.playground === 'object' && !Array.isArray(src.playground))
     ? src.playground : null;
@@ -1713,6 +1728,7 @@ function importProgress(file) {
     P.clearedAt = Date.now();
     recomputeXp();
     applyTheme();
+    applySymbols();
     updateXp();
     renderRail();
     saveNow();
@@ -1727,7 +1743,8 @@ function resetProgress() {
   /* the seed rides along with name and theme: clearing progress should not silently
      reshuffle every quiz in the catalogue as well */
   P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
-        activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme, seed: P.seed };
+        activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme,
+        symbols: P.symbols, seed: P.seed };
   /* Without this the card's "this cannot be undone" was the one thing here that was not
      true. The server merges every field forward and never back, so a signed-in learner
      pressing Reset had the whole document handed back by the next sync about two seconds
@@ -1905,8 +1922,26 @@ function renderProfile(main) {
     accountCardHtml() +
 
     '<div class="pcard">' +
+      '<div class="pcard-h"><b>Schematic symbols</b></div>' +
+      '<p>Which convention the app draws in. It changes the resistor, the ' +
+        'potentiometer and the two sensors \u2014 every part that is a resistor body ' +
+        'with something done to it \u2014 everywhere they appear: the editor, the ' +
+        'diagrams in a question, and the parts palette.</p>' +
+      '<div class="pcard-acts" role="radiogroup" aria-label="Schematic symbols">' +
+        ['ansi', 'iec'].map(function (k) {
+          const on = (P.symbols === 'iec' ? 'iec' : 'ansi') === k;
+          return '<button class="btn' + (on ? ' success' : ' dark') + '" data-sym-style="' + k +
+            '" role="radio" aria-checked="' + (on ? 'true' : 'false') + '">' +
+            (k === 'ansi' ? 'ANSI \u2014 zigzag' : 'IEC \u2014 rectangle') +
+            '<canvas class="sym-eg" data-sym="R" aria-hidden="true"></canvas></button>';
+        }).join('') +
+      '</div>' +
+    '</div>' +
+
+    '<div class="pcard">' +
       '<div class="pcard-h"><b>Start over</b></div>' +
-      '<p>Clears every completed unit, your XP and your saved code. Your name and theme stay. ' +
+      '<p>Clears every completed unit, your XP and your saved code. Your name, theme and ' +
+        'symbol style stay. ' +
         'Export first if you might want it back \u2014 this cannot be undone.</p>' +
       '<div class="pcard-acts">' +
         '<button class="btn dark" id="prof-reset">Reset progress</button>' +
@@ -1922,6 +1957,31 @@ function renderProfile(main) {
   '</div>';
 
   wireAccountCard(main);
+
+  /* Each button previews the convention it would set, which means painting the two of
+     them under DIFFERENT settings — so the switch is moved, the icon painted, and the
+     reader's own setting put back before anything else can read it. */
+  const symBtns = $all('[data-sym-style]', main);
+  const paintSymEg = function () {
+    if (typeof symbolStyle !== 'function') return;
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+    const was = symbolStyle();
+    symBtns.forEach(function (b) {
+      symbolStyle(b.dataset.symStyle);
+      Symbols.paint($('.sym-eg', b), 'R', ink || '#EDEFF3');
+    });
+    symbolStyle(was);
+  };
+  paintSymEg();
+  requestAnimationFrame(paintSymEg);
+  symBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      P.symbols = b.dataset.symStyle;
+      applySymbols();
+      updateXp();
+      renderProfile($('#main'));
+    });
+  });
   if (serverUp === null && !Sync.signedIn()) {
     Sync.health().then(function (h) {
       serverUp = h.ok;
@@ -4843,6 +4903,7 @@ async function boot() {
      existed; renderShell has just built it, so this is the first moment it can speak */
   paintSaveState();
   applyTheme();
+  applySymbols();
 
   /* The catalog has to be indexed before anything below this line runs, and the
      ordering is load-bearing rather than tidy:

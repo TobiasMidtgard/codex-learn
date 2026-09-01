@@ -33,7 +33,7 @@
  * `clearedAt` and are tested against it rather than against each other.
  */
 
-const SCALARS = ['name', 'theme', 'railHidden', 'last'];
+const SCALARS = ['name', 'theme', 'symbols', 'railHidden', 'last'];
 
 function obj(v) {
   return v && typeof v === 'object' && !Array.isArray(v) ? v : {};

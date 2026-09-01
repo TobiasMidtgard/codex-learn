@@ -1333,6 +1333,46 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   transition:background .14s,color .14s,border-color .14s}
 .ckt-t:hover{color:var(--ink);border-color:var(--line-3)}
 .ckt-t.on{background:var(--lime);border-color:var(--lime);color:var(--on-lime)}
+
+/* ---- the parts palette ----
+   A drawer per category, opened by its own summary. The panel is absolutely
+   positioned so opening one does not reflow the toolbar under the pointer that is
+   about to click into it — a menu that moves as it opens is a menu you misclick. */
+/* The two convention buttons on the profile each preview the resistor they would
+   draw, so the choice is made by looking rather than by knowing what ANSI means. */
+.pcard-acts [data-sym-style]{display:inline-flex;align-items:center;gap:10px}
+.sym-eg{width:52px;height:22px;display:block;flex:none}
+
+.ckt-cat{position:relative}
+.ckt-cat>summary{display:flex;align-items:center;gap:5px;list-style:none;user-select:none}
+.ckt-cat>summary::-webkit-details-marker{display:none}
+.ckt-caret{font-size:9px;opacity:.7;transition:transform .14s}
+.ckt-cat[open]>summary{color:var(--ink);border-color:var(--line-3);background:var(--card)}
+.ckt-cat[open] .ckt-caret{transform:rotate(180deg)}
+/* the category that holds the part in hand says so while it is shut */
+.ckt-cat.holds>summary{border-color:var(--lime);color:var(--lime)}
+.ckt-cat[open].holds>summary{color:var(--lime)}
+.ckt-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:12;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px;
+  width:max(300px,100%);padding:6px;border-radius:var(--r);
+  border:1px solid var(--line-2);background:var(--card);
+  box-shadow:0 14px 34px rgba(0,0,0,.34)}
+.ckt-p{position:relative;display:grid;grid-template-rows:auto auto;justify-items:center;
+  gap:2px;padding:7px 6px 6px;border-radius:var(--r);border:1px solid transparent;
+  background:transparent;color:var(--ink-3);cursor:pointer;
+  transition:background .14s,color .14s,border-color .14s}
+.ckt-p:hover{background:var(--sunk);border-color:var(--line-2);color:var(--ink)}
+.ckt-p.on{border-color:var(--lime);color:var(--lime);background:var(--lime-08)}
+.ckt-ico{width:100%;height:34px;display:block}
+.ckt-pn{font:600 10px var(--mono);text-align:center;line-height:1.25}
+/* The shortcut rides in the corner rather than on its own line: it is a reminder for
+   the second visit, not something to read on the first. */
+.ckt-kb{position:absolute;top:3px;right:4px;font:600 8.5px var(--mono);
+  color:var(--ink-4);letter-spacing:.02em}
+.ckt-p:hover .ckt-kb,.ckt-p.on .ckt-kb{color:inherit;opacity:.8}
+@media (prefers-reduced-motion:reduce){
+  .ckt-caret,.ckt-p,.ckt-cat>summary{transition:none}
+}
 .ckt-main{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:340px;
   flex:1;min-width:0}
 #ckt-mount .ckt-main{min-height:0}

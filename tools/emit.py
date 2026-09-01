@@ -172,7 +172,11 @@ def norm_numeric(q, ctx):
 
 # the symbols src/circuit.js knows how to draw; build.mjs re-checks against the source
 MATCH_SYMBOLS = {"R", "C", "L", "D", "LED", "GND", "V", "BATT", "I", "NPN", "PNP",
-                 "SW", "OPAMP", "NMOS", "PMOS"}
+                 "SW", "OPAMP", "NMOS", "PMOS",
+                 # drawn for the parts palette, which needs an icon per placeable kind,
+                 # and worth naming in a drill for the same reason they were worth
+                 # drawing: a learner meets all nine on the canvas
+                 "LDR", "NTC", "POT", "LAMP", "METER", "BAR", "OUT", "BB", "MCU"}
 
 # what the schematic painter in src/circuit.js can put on a canvas. Narrower than the
 # symbol list above on purpose: these are the kinds the SOLVER also understands, and a
