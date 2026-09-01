@@ -56,11 +56,27 @@ export function loadApp(opts) {
     if (!byId.has(id)) { const e = new El('div'); e.setAttribute('id', id); byId.set(id, e); }
     return byId.get(id);
   };
+  /* Kept rather than dropped. A document listener used to go nowhere, so a gate could
+     not tell a handler that is registered from one that is not — and `visibilitychange`
+     is the only signal a phone sends when it backgrounds a tab and then kills it, which
+     is the commonest way a session ends and the one that fires no unload event at all.
+     Purely additive: nothing dispatches unless a gate asks it to. */
+  const docListeners = new Map();
   const doc = {
     readyState: 'complete',
+    visibilityState: 'visible',
     getElementById: shellEl,
     createElement: (t) => new El(t),
-    addEventListener: () => {},
+    addEventListener: (t, f) => {
+      if (!docListeners.has(t)) docListeners.set(t, []);
+      docListeners.get(t).push(f);
+    },
+    removeEventListener: (t, f) => {
+      const l = docListeners.get(t);
+      if (l) docListeners.set(t, l.filter((g) => g !== f));
+    },
+    /** fire a document-level event the way the browser would */
+    emit: (t, ev) => { for (const f of (docListeners.get(t) || []).slice()) f(ev || { type: t }); },
     documentElement: new El('html'),
     body: new El('body'),
     activeElement: null,
@@ -75,7 +91,11 @@ export function loadApp(opts) {
     'ResizeObserver', 'devicePixelRatio', 'fetch', 'location', 'navigator', 'matchMedia',
     'getComputedStyle', 'cancelAnimationFrame', 'setTimeout', 'clearTimeout', src)(
     mod, windowShim, doc,
-    { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    /* A store that always answers null and always accepts is the right default for a
+       gate about something else. A gate about persistence has to be able to hand in one
+       that refuses, one that is already full, and one that remembers — so it is an
+       option rather than a constant. */
+    opts.localStorage || { getItem: () => null, setItem: () => {}, removeItem: () => {} },
     opts.raf || ((fn) => { fn(); return 1; }),
     opts.ResizeObserver || class { observe() {} disconnect() {} },
     1,

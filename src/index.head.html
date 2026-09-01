@@ -243,6 +243,13 @@ body{
 }
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 button:disabled{cursor:default;opacity:.5}
+/* Same look as :disabled, without the blur. A button that disables itself while a
+   request is in flight takes focus with it — the browser will not keep focus on a
+   disabled element — so the keyboard user who pressed it is thrown to the top of the
+   document and has to find their way back to read the answer. aria-disabled says the
+   same thing to assistive technology and leaves focus where the learner put it; the
+   handler's own re-entry guard is what actually refuses the second press. */
+button[aria-disabled=true],.is-busy{cursor:default;opacity:.5}
 a{color:var(--lime);text-decoration:none}
 a:hover{color:var(--lime-hi)}
 ::selection{background:rgba(199,247,81,0.25)}
@@ -384,6 +391,12 @@ input{font-family:inherit}
 [data-theme=light] .tbtn:hover{background:rgba(15,25,5,0.06)}
 .save-state{font-size:11px;font-family:var(--mono);color:var(--ink-4);min-width:44px;text-align:right;flex:none}
 .save-state.bad{color:var(--amber);font-weight:600}
+/* Read by assistive technology, no box on the page. Not display:none, which takes the
+   node out of the accessibility tree along with the layout — the mistake the topbar's
+   own metric pills shipped with until they were measured, and the one the 640px rule
+   below made with the whole save indicator. */
+.vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap;border:0}
 .menu-btn{display:none;width:32px;height:32px;border-radius:var(--r);place-items:center;color:var(--ink-3);flex:none}
 .rail-btn{flex:none;color:var(--ink-4)}
 .rail-btn svg{width:17px;height:17px}
@@ -2056,7 +2069,15 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   .metric.streak span,.metric.xp span{position:absolute;width:1px;height:1px;padding:0;
     margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
   .screen-id span{display:none}
-  .save-state{display:none}
+  /* This was `.save-state{display:none}`, which took the element out of the
+     accessibility tree as well as out of the layout. On every phone the one channel
+     that says progress is not being stored was gone entirely — and a phone in a private
+     tab is exactly where it is not being stored. There is genuinely no room for the
+     word: the topbar gate's furniture arithmetic has no column for this element and
+     291px of bar has none to spare. So the word stands down and the announcement stays,
+     which costs nothing because #save-state-say is .vh and out of flow. */
+  .save-state{min-width:0}
+  .save-state .ss-txt{display:none}
   .deg-progress{flex-direction:column;align-items:flex-start}
 }
 @media (prefers-reduced-motion:reduce){

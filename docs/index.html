@@ -243,6 +243,13 @@ body{
 }
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 button:disabled{cursor:default;opacity:.5}
+/* Same look as :disabled, without the blur. A button that disables itself while a
+   request is in flight takes focus with it — the browser will not keep focus on a
+   disabled element — so the keyboard user who pressed it is thrown to the top of the
+   document and has to find their way back to read the answer. aria-disabled says the
+   same thing to assistive technology and leaves focus where the learner put it; the
+   handler's own re-entry guard is what actually refuses the second press. */
+button[aria-disabled=true],.is-busy{cursor:default;opacity:.5}
 a{color:var(--lime);text-decoration:none}
 a:hover{color:var(--lime-hi)}
 ::selection{background:rgba(199,247,81,0.25)}
@@ -384,6 +391,12 @@ input{font-family:inherit}
 [data-theme=light] .tbtn:hover{background:rgba(15,25,5,0.06)}
 .save-state{font-size:11px;font-family:var(--mono);color:var(--ink-4);min-width:44px;text-align:right;flex:none}
 .save-state.bad{color:var(--amber);font-weight:600}
+/* Read by assistive technology, no box on the page. Not display:none, which takes the
+   node out of the accessibility tree along with the layout — the mistake the topbar's
+   own metric pills shipped with until they were measured, and the one the 640px rule
+   below made with the whole save indicator. */
+.vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap;border:0}
 .menu-btn{display:none;width:32px;height:32px;border-radius:var(--r);place-items:center;color:var(--ink-3);flex:none}
 .rail-btn{flex:none;color:var(--ink-4)}
 .rail-btn svg{width:17px;height:17px}
@@ -2056,7 +2069,15 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   .metric.streak span,.metric.xp span{position:absolute;width:1px;height:1px;padding:0;
     margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
   .screen-id span{display:none}
-  .save-state{display:none}
+  /* This was `.save-state{display:none}`, which took the element out of the
+     accessibility tree as well as out of the layout. On every phone the one channel
+     that says progress is not being stored was gone entirely — and a phone in a private
+     tab is exactly where it is not being stored. There is genuinely no room for the
+     word: the topbar gate's furniture arithmetic has no column for this element and
+     291px of bar has none to spare. So the word stands down and the announcement stays,
+     which costs nothing because #save-state-say is .vh and out of flow. */
+  .save-state{min-width:0}
+  .save-state .ss-txt{display:none}
   .deg-progress{flex-direction:column;align-items:flex-start}
 }
 @media (prefers-reduced-motion:reduce){
@@ -9764,6 +9785,27 @@ const Store = (function () {
   async function save(obj) {
     try { return await backendSet(JSON.stringify(obj)); } catch (e) { return false; }
   }
+  /* The unload write. A page that is going away cannot await anything: `pagehide` runs
+     its handlers and the document is gone, and a promise continuation queued inside one
+     may never be reached at all. save() defers its whole body through `await`, so the
+     app's debounced save had no way to land the last few hundred milliseconds of work.
+     This is backendSet's localStorage half with the awaits taken out — everything it can
+     honestly finish before the handler returns, and nothing it cannot. The backend needs
+     a round trip, so it is deliberately not attempted here; the next open syncs it. */
+  function saveSync(obj) {
+    let value;
+    try { value = JSON.stringify(obj); } catch (e) { return false; }
+    mem[KEY] = value;
+    try {
+      localStorage.setItem(KEY, value);
+      if (mode !== 'backend') mode = 'local';
+      return true;
+    } catch (e) {
+      lastError = String((e && e.name) || e);
+      if (mode !== 'backend') mode = 'memory';
+      return false;
+    }
+  }
   /* Called before the first save so the UI can warn straight away rather than after
      the learner has already earned progress they are about to lose. */
   function status() {
@@ -9778,7 +9820,7 @@ const Store = (function () {
       fromFile: (typeof location !== 'undefined' && location.protocol === 'file:'),
     };
   }
-  return { load: load, save: save, status: status, key: KEY };
+  return { load: load, save: save, saveSync: saveSync, status: status, key: KEY };
 })();
 
 /* ============ studio: mathematics, checking, sandboxes ============
@@ -20923,6 +20965,16 @@ function isMobile() {
   return window.innerWidth <= 980;
 }
 
+/* A renderer that owns main.innerHTML destroys whatever was focused inside it, and the
+   browser drops focus to <body> — so a keyboard user who presses a button that repaints
+   the screen is silently returned to the top of the document. Put focus back on the
+   control that did the thing, which is where it would have stayed had the DOM survived. */
+function focusAfterRender(sel) {
+  const e = $(sel);
+  if (e && e.focus) { try { e.focus(); } catch (err) {} }
+  return e;
+}
+
 let toastTimer = null;
 function toast(text, good) {
   const t = $('#toast');
@@ -20935,13 +20987,36 @@ function toast(text, good) {
 
 /* ---------- persistence ---------- */
 let saveChain = Promise.resolve();
+/* null until the first answer, then true while progress is being stored and false while
+   it is not. The transition is what gets announced; the word in the topbar is not. */
+let saveHealth = null;
 function setSaveState(s, bad) {
   const e = $('#save-state');
-  if (!e) return;
-  e.textContent = s;
-  e.classList.toggle('bad', !!bad);
-  if (bad) e.title = 'Progress is not being stored in this browser — open Profile to export it';
-  else e.removeAttribute('title');
+  if (e) {
+    /* The word moved into a child so the element itself can be the live region without
+       the word being what it reads. Falls back to the box for any shell that predates
+       the split. */
+    const txt = $('#save-state-txt') || e;
+    txt.textContent = s;
+    e.classList.toggle('bad', !!bad);
+    if (bad) e.title = 'Progress is not being stored in this browser — open Profile to export it';
+    else e.removeAttribute('title');
+  }
+  /* The visible word changes on every save, and a session is hundreds of saves. Piping
+     that into a live region would read "Saving, Saved, Saving, Saved" over the top of
+     whatever the learner was actually listening to, which is how a live region gets
+     switched off. What is worth announcing is the *health* changing: the moment progress
+     stops being stored, and the moment it starts again. Nothing in between. */
+  if (s === 'Saving…') return;
+  const healthy = !bad;
+  if (healthy === saveHealth) return;
+  const first = saveHealth === null;
+  saveHealth = healthy;
+  const say = $('#save-state-say');
+  if (!say) return;
+  say.textContent = healthy
+    ? (first ? '' : 'Progress is being saved again.')
+    : 'Progress is not being saved in this browser. Open Profile to export it before you close this tab.';
 }
 let warnedNoStorage = false;
 function warnNoStorage() {
@@ -20949,8 +21024,28 @@ function warnNoStorage() {
   warnedNoStorage = true;
   toast('Progress is not being saved — open Profile (avatar, bottom left)');
 }
-const saveSoon = debounce(function () { saveNow(); }, 900);
+/* Store.status()'s own comment says it is "called before the first save so the UI can
+   warn straight away rather than after the learner has already earned progress they are
+   about to lose". Nothing ever called it. setSaveState ran only from inside saveNow, so
+   the indicator was blank from boot until the first write, and in a private window the
+   first thing it ever said was "Not saved", after the work was already at risk. Asked at
+   boot instead. Silent when the answer is good: a store that works is not news, and the
+   strip is 44px wide. */
+function paintSaveState() {
+  const st = Store.status();
+  if (st.persistent) { saveHealth = true; return; }
+  setSaveState('Not saved', true);
+  warnNoStorage();
+}
+/* saveSoon is debounced by 900 ms, which is the right cadence for a slider being dragged
+   and the wrong one for a tab being closed. `saveDirty` is set when the intent to save is
+   formed rather than when the timer fires, so the unload path knows something is owed
+   even though nothing has been written yet. */
+let saveDirty = false;
+const saveDebounced = debounce(function () { saveNow(); }, 900);
+function saveSoon() { saveDirty = true; saveDebounced(); }
 function saveNow() {
+  saveDirty = false;
   setSaveState('Saving\u2026');
   P.updatedAt = Date.now();          /* the merge uses this to settle scalar fields */
   syncSoon();
@@ -20961,6 +21056,34 @@ function saveNow() {
     });
   });
   return saveChain;
+}
+/* The last 900 ms of every session were never written. Finish a unit and close the tab
+   inside the debounce window and the completion, its XP and the day's activity were
+   simply gone; on a phone the tab is backgrounded and killed with no close at all.
+   desk.js has flushed the *calculator* on pagehide since cycle 12. The file that carries
+   every completed unit, every quiz score and every saved file did not.
+   This cannot go through saveChain: that queues a microtask, and an unloading document is
+   under no obligation to run one. Store.saveSync writes on the spot. */
+function flushSave() {
+  if (!saveDirty) return false;
+  saveDirty = false;
+  P.updatedAt = Date.now();
+  const ok = Store.saveSync(P);
+  setSaveState(ok ? 'Saved' : 'Not saved', !ok);
+  if (!ok) warnNoStorage();
+  return ok;
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+  /* pagehide rather than beforeunload: beforeunload never fires on iOS, and it also asks
+     the browser for a dialog this has no business showing. visibilitychange is the one
+     that catches a phone backgrounding the tab, which is the common case and the one that
+     sends no unload event at all. */
+  window.addEventListener('pagehide', flushSave);
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') flushSave();
+    });
+  }
 }
 
 function level() { return Math.floor(P.xp / 150) + 1; }
@@ -21027,7 +21150,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '1d65c367bd61';
+const BUILD_ID = '1681ae1883f5';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */
@@ -21108,7 +21231,14 @@ function renderShell() {
         '<div class="metric xp" title="Experience earned"><b id="xp-val">0</b><span>XP</span></div>' +
         '<button class="tbtn" id="desk-btn" aria-label="Notepad and calculator" aria-haspopup="dialog" aria-expanded="false" title="Notepad and calculator (Alt+K)">▤</button>' +
         '<button class="tbtn" id="theme-btn" aria-label="Switch theme">☾</button>' +
-        '<span class="save-state" id="save-state"></span>' +
+        /* The only channel in the app that says whether progress is being kept, and it
+           was a bare span: no role, no name, no live region. It went to "Not saved" and
+           a screen reader said nothing at all. The word is a child so the box can carry
+           the announcement without reading the word — see setSaveState. */
+        '<span class="save-state" id="save-state">' +
+          '<span class="ss-txt" id="save-state-txt" aria-hidden="true"></span>' +
+          '<span class="vh" id="save-state-say" role="status" aria-live="polite"></span>' +
+        '</span>' +
       '</header>' +
       '<div class="degrade" id="degrade" role="status" hidden></div>' +
       /* The runner's two bars. They live in the shell rather than inside <main>
@@ -21880,9 +22010,11 @@ function adopt(progress) {
   if (!progress || typeof progress !== 'object') return;
   adopting = true;
   try {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
-                        activity: {}, name: '', railHidden: false }, progress);
-    if (!P.activity || typeof P.activity !== 'object') P.activity = {};
+    /* Three doors led into P — boot, adopt and import — and each trusted the document
+       it was handed to a different degree. That disagreement was the defect, not any
+       one of the three: the loosest door was the one opening onto a file off a disk.
+       One rule now, applied at all three. */
+    P = sanitiseProgress(progress);
     recomputeXp();
     applyTheme();
     updateXp();
@@ -21953,6 +22085,84 @@ function storageNote() {
 function progressSnapshot() {
   return { format: 'codex-learn-progress', version: 1, exported: new Date().toISOString(), progress: P };
 }
+
+/* ---------- taking a progress document from outside ----------
+   The import path took whatever the file said and assigned it straight into P. What
+   that actually allowed, driven rather than reasoned about:
+
+     "xp": "9999"      reached the topbar as a level-67 badge — a string has its own
+                       toLocaleString, so nothing threw and nothing looked wrong;
+     "xp": {"a":1}     reached it as "[object Object]", at level NaN;
+     "activity": [..]  passed `typeof === 'object'` (an array is one), and then every
+                       lookup was undefined, so the streak read 0 for ever;
+     "completed"       counted `{"B": false}` as a finished unit in the toast;
+     "__proto__"       reached Object.assign, whose writes go through [[Set]] — so an
+                       inherited setter ran and the prototype of P itself was replaced.
+
+   None of these threw. All of them were then saved, and pushed: the server settles xp
+   with `Math.max(Number(a.xp) || 0, ...)`, so a non-numeric xp does not merely display
+   wrongly, it silently zeroes the XP the account already held.
+
+   The rule below is the one adopt() has always followed on the sync path — collections
+   are objects of the shape we declare, scalars are coerced, and XP is derived from
+   `completed` rather than believed. The two doors into P disagreed, and the trusting one
+   was the door that opens onto a file off a disk. */
+/* Inside the function rather than beside it on purpose: boot() and adopt() both call
+   sanitiseProgress, a function declaration hoists and a `const` does not, and cycle 6
+   already shipped one temporal-dead-zone read in this codebase from exactly that
+   asymmetry. Nothing here is hot enough for the allocation to matter. */
+function plainObject(v) {
+  /* Array.isArray is the half `typeof` cannot do. `__proto__` is skipped rather than
+     copied because copying it is the pollution. */
+  const out = {};
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+  for (const k of Object.keys(v)) {
+    if (k === '__proto__') continue;
+    out[k] = v[k];
+  }
+  return out;
+}
+function sanitiseProgress(inc) {
+  const SLOTS = ['completed', 'quiz', 'code', 'derive', 'build', 'blanks',
+                 'numeric', 'match', 'tune', 'activity'];
+  const src = plainObject(inc);
+  const out = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {},
+                numeric: {}, match: {}, tune: {}, activity: {},
+                xp: 0, last: null, playground: null, name: '', railHidden: false };
+  for (const k of SLOTS) out[k] = plainObject(src[k]);
+  /* completed is the one collection whose values are read as truth rather than as data,
+     so a falsy entry is not a completion and must not be counted as one */
+  const done = {};
+  for (const k of Object.keys(out.completed)) if (out.completed[k]) done[k] = true;
+  out.completed = done;
+  /* a count of units finished that day; a string that happens to parse is still not one */
+  const act = {};
+  for (const k of Object.keys(out.activity)) {
+    const n = Number(out.activity[k]);
+    if (isFinite(n) && n > 0) act[k] = Math.floor(n);
+  }
+  out.activity = act;
+  out.name = typeof src.name === 'string' ? src.name.slice(0, 40) : '';
+  out.railHidden = src.railHidden === true;
+  if (src.theme === 'dark' || src.theme === 'light') out.theme = src.theme;
+  out.last = typeof src.last === 'string' ? src.last : null;
+  out.playground = (src.playground && typeof src.playground === 'object' && !Array.isArray(src.playground))
+    ? src.playground : null;
+  const seed = Number(src.seed);
+  if (isFinite(seed) && seed >= 0) out.seed = Math.floor(seed);
+  /* A floor only. recomputeXp() replaces it with the exact figure the moment the catalog
+     can value every completed unit, and holds this number when a payload is missing —
+     which is the same contract adopt() has. */
+  const xp = Number(src.xp);
+  out.xp = isFinite(xp) && xp > 0 ? Math.floor(xp) : 0;
+  const at = Number(src.updatedAt);
+  if (isFinite(at) && at > 0) out.updatedAt = Math.floor(at);
+  /* The reset tombstone has to survive every door into P, or a reload re-offers the
+     document the learner erased and the merge lets it back in */
+  const cl = Number(src.clearedAt);
+  if (isFinite(cl) && cl > 0) out.clearedAt = Math.floor(cl);
+  return out;
+}
 function exportProgress() {
   try {
     const text = JSON.stringify(progressSnapshot(), null, 2);
@@ -21980,14 +22190,19 @@ function importProgress(file) {
       toast('That does not look like a Codex Learn progress file');
       return;
     }
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
-                        activity: {}, name: '', railHidden: false }, inc);
-    if (!P.activity || typeof P.activity !== 'object') P.activity = {};
+    P = sanitiseProgress(inc);
+    /* An import replaces — that is what it has always done locally, and what "Restored
+       N completed units" claims. Remotely it merged, so importing a one-unit export onto
+       a three-unit account left all three and said 1. `clearedAt` is what makes the two
+       agree; without it the sentence below is false about the account within seconds. */
+    P.clearedAt = Date.now();
+    recomputeXp();
     applyTheme();
     updateXp();
     renderRail();
     saveNow();
     go({ view: 'profile' });
+    focusAfterRender('#prof-import');
     const n = Object.keys(P.completed).length;
     toast('Restored ' + n + ' completed unit' + (n === 1 ? '' : 's'), true);
   };
@@ -21998,10 +22213,20 @@ function resetProgress() {
      reshuffle every quiz in the catalogue as well */
   P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
         activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme, seed: P.seed };
+  /* Without this the card's "this cannot be undone" was the one thing here that was not
+     true. The server merges every field forward and never back, so a signed-in learner
+     pressing Reset had the whole document handed back by the next sync about two seconds
+     later — locally as well, because syncNow adopts what comes back and writes it to the
+     store. The toast stayed on screen saying "Progress cleared" over the top of it. */
+  P.clearedAt = Date.now();
   updateXp();
   renderRail();
   saveNow();
   go({ view: 'profile' });
+  /* go() replaces main.innerHTML, so the button that was just pressed no longer exists
+     and focus falls to <body> — a keyboard user is dropped at the top of the document
+     with nothing said. Put it back on the control that did the thing. */
+  focusAfterRender('#prof-reset');
   toast('Progress cleared');
 }
 
@@ -22065,7 +22290,10 @@ function accountCardHtml() {
     '<div class="pcard-acts">' +
       '<button class="btn success" id="acc-in">Sign in</button>' +
       '<button class="btn dark" id="acc-new">Create account</button>' +
-      '<span class="prof-warn" id="acc-msg"></span>' +
+      /* "Wrong email or password" was written into a bare span. A screen-reader user
+         pressed Sign in, heard nothing, and had no way to find out why they were still
+         on the form. It is the same span as the reset note and it needed the same fix. */
+      '<span class="prof-warn" id="acc-msg" role="status" aria-live="polite"></span>' +
     '</div>' +
   '</div>';
 }
@@ -22095,10 +22323,22 @@ function wireAccountCard(main) {
 
   const email = $('#acc-email', main), pw = $('#acc-pw', main), msg = $('#acc-msg', main);
   if (!email) return;
+  /* `disabled` on the button that was just pressed takes focus with it — the browser
+     blurs a disabled element and focus falls to <body>, so a keyboard user pressing Sign
+     in was thrown to the top of the page for the length of the request and then had to
+     find their way back to read the failure. aria-disabled says the same thing to
+     assistive technology without moving anything, and `attempting` is what actually
+     stops the second press. */
+  let attempting = false;
   const busy = function (on) {
-    ['#acc-in', '#acc-new'].forEach(function (sel) { const b = $(sel, main); if (b) b.disabled = on; });
+    attempting = on;
+    ['#acc-in', '#acc-new'].forEach(function (sel) {
+      const b = $(sel, main);
+      if (b) { b.setAttribute('aria-disabled', on ? 'true' : 'false'); b.classList.toggle('is-busy', on); }
+    });
   };
   const attempt = async function (fn, verb) {
+    if (attempting) return;
     if (!email.value.trim() || !pw.value) { msg.textContent = 'Email and password, please.'; return; }
     busy(true);
     msg.textContent = verb + '\u2026';
@@ -22155,7 +22395,13 @@ function renderProfile(main) {
         'Export first if you might want it back \u2014 this cannot be undone.</p>' +
       '<div class="pcard-acts">' +
         '<button class="btn dark" id="prof-reset">Reset progress</button>' +
-        '<span class="prof-warn" id="prof-reset-note" hidden>Press again to confirm</span>' +
+        /* The note used to be `hidden` with its sentence already inside it, and arming
+           the button un-hid it. Revealing text that a live region already held announces
+           nothing in most screen readers — the region has to be present and empty, and
+           the text has to arrive. So the sentence moved into the handler.
+           assertive, not polite: the very next thing this learner does is press the
+           button again, and a queued announcement arrives after the erase. */
+        '<span class="prof-warn" id="prof-reset-note" role="status" aria-live="assertive"></span>' +
       '</div>' +
     '</div>' +
   '</div>';
@@ -22185,15 +22431,39 @@ function renderProfile(main) {
     file.value = '';
   });
 
-  let armed = false;
+  /* The two-press confirmation was invisible to the people most likely to press twice.
+     Arming it un-hid a span and changed nothing else: the button's accessible name stayed
+     "Reset progress" in both states, so a screen-reader user pressed it, heard nothing at
+     all, pressed it again because nothing had happened — and that second press erased
+     everything. A confirmation that is silent is not a confirmation; it is a delay.
+     Three changes: the sentence is announced, the button says which press this is, and
+     the window is long enough to read it in. The visible label changes with the
+     accessible name rather than instead of it, because a name that does not contain the
+     visible label is its own defect (WCAG 2.5.3). */
+  let armed = false, disarmTimer = null;
   const resetBtn = $('#prof-reset', main), resetNote = $('#prof-reset-note', main);
+  const ARMED_LABEL = 'Confirm — erase all progress';
+  const disarm = function () {
+    clearTimeout(disarmTimer);
+    disarmTimer = null;
+    armed = false;
+    if (resetBtn) resetBtn.textContent = 'Reset progress';
+    /* cleared rather than re-announced: disarming fails safe, and a live region that
+       reports both edges of a four-second timer is noise on top of a destructive act */
+    if (resetNote) resetNote.textContent = '';
+  };
   resetBtn.addEventListener('click', function () {
     if (!armed) {
       armed = true;
-      resetNote.hidden = false;
-      setTimeout(function () { armed = false; if (resetNote) resetNote.hidden = true; }, 4000);
+      resetBtn.textContent = ARMED_LABEL;
+      resetNote.textContent = 'Press again to erase every completed unit, your XP and your saved code. This cannot be undone.';
+      /* 4000 ms was not long enough to hear the sentence, find the button again and
+         press it. Re-armed from scratch each time rather than stacking timers. */
+      clearTimeout(disarmTimer);
+      disarmTimer = setTimeout(disarm, 12000);
       return;
     }
+    disarm();
     resetProgress();
   });
 }
@@ -25047,12 +25317,16 @@ async function boot() {
   const bundleEl = document.getElementById('bundle');
   BUNDLE = parseBundle(bundleEl ? bundleEl.textContent : '');
   const saved = await Store.load();
-  if (saved && typeof saved === 'object') {
-    P = Object.assign({ completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
-                       activity: {}, name: '', railHidden: false }, saved);
-    if (!P.activity || typeof P.activity !== 'object') P.activity = {};
-  }
+  /* Store.load already refuses anything that will not parse. What it cannot refuse is a
+     document that parses and is the wrong shape — a half-written entry, a hand-edited
+     one, or one written by a build that held a field differently. The XP figure is the
+     one exception to the rule and is left as stored rather than recomputed here: this
+     runs before loadDegreeChunks, so the catalog cannot yet value a course unit. */
+  if (saved && typeof saved === 'object') P = sanitiseProgress(saved);
   renderShell();
+  /* the indicator has been blank from boot until the first write for as long as it has
+     existed; renderShell has just built it, so this is the first moment it can speak */
+  paintSaveState();
   applyTheme();
 
   /* The catalog has to be indexed before anything below this line runs, and the

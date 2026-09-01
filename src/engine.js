@@ -1532,6 +1532,27 @@ const Store = (function () {
   async function save(obj) {
     try { return await backendSet(JSON.stringify(obj)); } catch (e) { return false; }
   }
+  /* The unload write. A page that is going away cannot await anything: `pagehide` runs
+     its handlers and the document is gone, and a promise continuation queued inside one
+     may never be reached at all. save() defers its whole body through `await`, so the
+     app's debounced save had no way to land the last few hundred milliseconds of work.
+     This is backendSet's localStorage half with the awaits taken out — everything it can
+     honestly finish before the handler returns, and nothing it cannot. The backend needs
+     a round trip, so it is deliberately not attempted here; the next open syncs it. */
+  function saveSync(obj) {
+    let value;
+    try { value = JSON.stringify(obj); } catch (e) { return false; }
+    mem[KEY] = value;
+    try {
+      localStorage.setItem(KEY, value);
+      if (mode !== 'backend') mode = 'local';
+      return true;
+    } catch (e) {
+      lastError = String((e && e.name) || e);
+      if (mode !== 'backend') mode = 'memory';
+      return false;
+    }
+  }
   /* Called before the first save so the UI can warn straight away rather than after
      the learner has already earned progress they are about to lose. */
   function status() {
@@ -1546,5 +1567,5 @@ const Store = (function () {
       fromFile: (typeof location !== 'undefined' && location.protocol === 'file:'),
     };
   }
-  return { load: load, save: save, status: status, key: KEY };
+  return { load: load, save: save, saveSync: saveSync, status: status, key: KEY };
 })();

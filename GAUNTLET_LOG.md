@@ -5913,3 +5913,403 @@ mutations — 12 it had to reject and one it had to pass** — which is the run 
 was accepting two of them.
 
 ---
+
+---
+
+## Cycle 19 — TRACK 6: Edge Cases, Resilience & Accessibility
+
+*(the runner labels this commit "cycle 6"; its counter restarts per run and this log's
+does not. Cycles 1–5 of the current run are entries 14–18 above.)*
+
+**Target: `src/app.js`'s progress persistence layer** — `P` and the three doors into it,
+`saveSoon`/`saveNow`, `warnNoStorage` and the save indicator, `exportProgress`,
+`importProgress`, `resetProgress`, and the profile controls that drive them. With it the
+two files it cannot be audited apart from: `Store` in `src/engine.js`, which is the thing
+that actually writes, and `server/merge.mjs`, which is what decides whether a write means
+anything once an account is involved.
+
+One subsystem, and the one this track was explicitly left. Cycle 12 closed with it named
+as the debt it was leaving: *"`src/app.js`'s own persistence layer was not audited — `P`,
+`saveSoon`, `resetProgress`, the progress export and import, `warnNoStorage`. It is the
+third file in Track 6's row, it is where a storage defect costs a learner their whole
+record rather than their calculator history, and it is a cycle of its own."* Seven cycles
+have passed and no Track 6 cycle has run since. This is that cycle.
+
+### Baseline, captured before any edit
+
+```
+85 circuit exercises / 360 checks · 564 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1248 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     · 3260 per-option explanations · 6572 live draws
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys, 10 things said
+circuit_model 1475 analyses, 84 refusals · 15 plots
+     · 386 published schematics / 365 with a DC point
+tune_ui 21 tune units · 423 hostile opening values · 462 targets · 270 drags · 493 mounts
+desk 61 expressions · 6 worst-case shapes · 10 readings · 102 css lines
+theme 135 contrast surfaces x 2 themes · 154 paint sites / 9 tiers · quietest 3.77:1
+api 30 passed, 0 failed
+build: 3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers · 3 tune models ·
+       15 symbols · 62 payloads totalling 12967 KB · inlined 14186 KB · shell 1191 KB
+```
+
+`test_api.mjs` was captured too, and it is not in the curriculum's list. It is the only
+gate that covers `mergeProgress`, this cycle changes `mergeProgress`, and a baseline taken
+after the edit is not a baseline.
+
+### The defect that made this cycle worth doing
+
+**"Reset progress" did not reset anything, for exactly the learners who had most to lose.**
+
+`server/merge.mjs` states its own rule in its header: *"Every field here has a rule chosen
+so that a merge can only ever move progress forward."* Union on `completed`, max on `quiz`
+and `activity` and `xp`, newest-wins per key on `code`. That rule is right for two devices
+both doing work. It is wrong for the one action whose entire purpose is removal, and the
+server has no other endpoint — `PUT /api/progress` is merge-only, there is no replace.
+
+So for a signed-in learner the sequence was: press Reset, confirm, `resetProgress()` empties
+`P` and calls `saveNow()`; `saveNow()` calls `syncSoon()`; 2.5 seconds later `syncNow()`
+pushes the empty document; the server unions it with the full one and hands everything
+back; `adopt()` puts it into `P`; and `Store.save(P)` writes it to local storage as well —
+so even the local copy, which really had been cleared, is restored from the server. The
+toast is on screen for 2.6 seconds. It says "Progress cleared".
+
+Driven, not reasoned about — the real `mergeProgress` with the document `resetProgress`
+actually produces:
+
+```
+completed after "Progress cleared": {"EE101-M1":true,"EE101-QZ":true,"EE111-M3":true}
+xp after "Progress cleared": 260
+quiz: {"EE101-QZ":100}   activity: {"2026-08-30":5}
+```
+
+The card above the button reads *"this cannot be undone"*. It was the only sentence on
+that card that was not true.
+
+**Import had the same shape in the other direction.** It replaces `P` locally and merged
+remotely, so importing a one-unit export onto a three-unit account left all three on the
+server and told the learner *"Restored 1 completed unit"*.
+
+### The attacks
+
+**4. UX & Accessibility Hardener** — taken first, because this track's brief is mostly its
+brief.
+
+- **The one channel in the app that says whether progress is being kept was a bare
+  `<span>`.** `#save-state` goes to "Saving…", "Saved" and "Not saved", and it had no
+  role, no accessible name and no live region. Driven against a store that refuses: the
+  element reads `"Not saved"`, carries class `bad`, and `aria-live` is `null`. A screen
+  reader is told nothing. The only other channel is `warnNoStorage`'s toast, which is
+  latched to fire **once per session** and shows for 2.6 seconds.
+- **`.save-state{display:none}` below 640px.** Every phone. `display:none` takes the node
+  out of the accessibility tree as well as the layout, so on a phone the indicator did not
+  exist at all — and a phone in a private tab is precisely where progress is not being
+  stored. This is the same mistake the topbar's own metric pills shipped with until cycle
+  11 measured them, three rules further up the same media block, with the correction
+  written in a comment beside it.
+- **The reset confirmation was invisible to the people most likely to press twice.**
+  Arming un-hid `<span hidden>Press again to confirm</span>` and changed nothing else. Two
+  compounding faults: revealing text a live region *already holds* announces nothing in
+  most screen readers — the region has to be present and empty and the text has to arrive
+  — and the button's accessible name stayed "Reset progress" in both states. So a
+  screen-reader user pressed it, heard nothing, pressed it again because nothing had
+  happened, and erased everything. A confirmation that cannot be perceived is not a
+  confirmation; it is a delay that only sighted users get the benefit of.
+- **The 4-second disarm window** was not long enough to hear a sentence, find the button
+  again and press it.
+- **`#acc-msg` — "Wrong email or password" — was a bare span too.** Press Sign in with a
+  bad password and a screen-reader user is left on the form with no way to find out why.
+- **The sign-in buttons disable themselves while the request is in flight,** and a browser
+  will not keep focus on a disabled element. So a keyboard user pressing Sign in was
+  thrown to the top of the document for the length of the round trip, and then had to find
+  their way back to read the failure they could not hear.
+- **Reset and import both call `go({view:'profile'})`,** which replaces `main.innerHTML`.
+  The control that was just pressed is destroyed, focus falls to `<body>`, and a keyboard
+  user is silently returned to the top of the page.
+
+**3. Simulation Auditor.** Its brief is zero, negative, enormous and identical values, and
+here the "model" is the progress document: a JSON file a learner is invited to hand the
+app from their own disk.
+
+- **`importProgress` believed the file.** `Object.assign` straight into `P`, guarded only
+  by `typeof inc.completed === 'object'`. Driven with hostile documents, and none of them
+  threw — which is what made them survivable long enough to be saved and pushed:
+
+  | file says | what the learner got |
+  |---|---|
+  | `"xp": "9999"` | level **67**, topbar reads `9999` — a string has its own `toLocaleString` |
+  | `"xp": {"a":1}` | level **NaN**, topbar reads `[object Object]` |
+  | `"activity": [1,2,3]` | passes `typeof === 'object'`; every lookup then misses, so the streak reads 0 for ever |
+  | `"completed": {"B": false}` | counted as a finished unit in "Restored N completed units" |
+  | `"__proto__": {…}` | `Object.assign` writes through `[[Set]]`, so the inherited setter ran and **the prototype of `P` was replaced** |
+
+  And the consequence is worse than the display. `mergeProgress` settles XP with
+  `Math.max(Number(a.xp) || 0, Number(b.xp) || 0)`, so a non-numeric `xp` does not merely
+  look wrong — it pushes as 0 and **zeroes the XP the account already held**.
+- **The three doors into `P` trusted their input to three different degrees.** `adopt()`
+  (sync) recomputed XP from `completed` and repaired `activity`; `boot()` (local store)
+  repaired `activity` only; `importProgress()` (a file off a disk) did neither. The
+  disagreement was the defect, not any one door, and the loosest one was the door that
+  opens onto the least trustworthy source.
+- **Checked and found sound, recorded so the next cycle does not re-derive it:** `Store.save`
+  catches everything and returns `false`, so `saveChain` cannot be poisoned by a rejection
+  — I expected it could be, drove it, and it cannot: `setSaveState` runs *before* the chain,
+  so a throw there throws out of `saveNow` synchronously and leaves the chain untouched.
+  `Store.load` already refuses anything that will not parse. `parseEng`-style clamping is
+  not this file's problem. `syncNow` is guarded by `syncState.busy` against re-entry, and
+  `Sync.call` bounds every request with an `AbortController` so an unreachable server
+  cannot hold boot hostage. `bootFailed` already catches an unhandled boot rejection and
+  paints something explaining it.
+
+**1. Senior Educator** and **2. Assessment Inquisitor** have no prose and no graded
+question in a storage layer, so both were pointed at the thing in scope they can judge:
+whether what the app *says about the learner's own record* is true.
+
+- **"Progress cleared" was false.** So was **"Restored 1 completed unit"**. So was
+  **"this cannot be undone"** — it could be, and was, automatically, within seconds. Three
+  sentences the app tells a learner about their own work, and all three were wrong for
+  anyone signed in. The Inquisitor's rule that an explanation must be true whichever
+  option was taken applies exactly here: the sentence has to be true about the account as
+  well as about the tab.
+- **`Store.status()`'s own comment describes a call that did not exist.** It reads:
+  *"Called before the first save so the UI can warn straight away rather than after the
+  learner has already earned progress they are about to lose."* Nothing called it.
+  `setSaveState` ran only from inside `saveNow`, and `Store.status()` was reached only
+  from `storageNote()`, which runs only if the learner opens Profile. So the indicator was
+  blank from boot until the first write, and in a private window the first thing it ever
+  said was "Not saved" — after the loss it was written to prevent. The mechanism existed;
+  nothing was wired to it.
+
+### The persistence defect
+
+**The last 900 ms of every session were never written.**
+
+`saveSoon` is `debounce(saveNow, 900)`, and nothing flushed it. Finish a unit and close the
+tab inside that window and the completion, its XP and the day's activity were simply gone.
+On a phone there is no close at all — the tab is backgrounded and then killed, and
+`visibilitychange` is the only warning there is.
+
+`src/desk.js` has flushed on `pagehide` and `visibilitychange` since cycle 12. The file
+that carries every completed unit, every quiz score and every saved code file did not. The
+discipline existed in the codebase, in the file holding the least valuable data of the two.
+
+It also could not simply be wired to the existing save. `saveNow` queues its write through
+`saveChain.then(...)` — a microtask, which an unloading document is under no obligation to
+run — and `Store.save` is an `async` function that `await`s the backend before it ever
+reaches `localStorage`. Measured rather than assumed: with `window.storage` present,
+`Store.save()` returns with **nothing** in `localStorage`, and `Store.saveSync()` returns
+with the document in it.
+
+### What changed
+
+**A synchronous unload write.** `Store.saveSync` in `src/engine.js` — `backendSet`'s
+localStorage half with the awaits taken out, everything it can honestly finish before the
+handler returns and nothing it cannot. The backend needs a round trip and is deliberately
+not attempted; the next open syncs it. `flushSave` in `app.js` is bound to `pagehide` and
+to `visibilitychange`-when-hidden, and writes only when something is actually owed —
+`saveDirty` is set when the *intent* to save is formed rather than when the timer fires,
+so an unload knows about a write the debounce has not made yet, and a tab switch with
+nothing pending does not serialise the whole record.
+
+**A reset that crosses the wire — `clearedAt`.** A document carries it when its owner
+cleared or replaced it wholesale. `mergeProgress` takes the larger of the two sides' and
+discards any document whose own `updatedAt` predates it. Still order-independent, because
+both sides compute the same value and are tested against it rather than against each other
+— asserted, not asserted-to-be: `merge(a,b)` and `merge(b,a)` are byte-identical.
+
+A timestamp rather than a `replace: true` flag on the endpoint, and the difference is the
+whole point. A replace fixes the resetting device and nothing else: a second machine that
+has been asleep since before the reset pushes the copy it still holds and the union brings
+everything back. The tombstone travels with the document, so the second machine honours a
+clear it has never seen. And because it is a *time* and not a flag, work genuinely done on
+another machine *after* the reset is not the reset's to delete — both directions are
+gated, and both are checked.
+
+**One rule for taking a document into `P`.** `sanitiseProgress` — collections are objects
+of the shape we declare (`Array.isArray` is the half `typeof` cannot do), scalars are
+coerced, `__proto__` is skipped rather than copied because copying it *is* the pollution,
+and XP is a floor that `recomputeXp` replaces with the exact figure. Applied at all three
+doors: `boot`, `adopt` and `importProgress`. XP is deliberately left as stored at boot and
+not recomputed there, because boot runs before `loadDegreeChunks` and the catalog cannot
+yet value a course unit — the same reasoning `recomputeXp`'s own `MISSING_PROGRAMS` guard
+already encodes.
+
+**The save indicator says something, to somebody, without saying it constantly.** The word
+moved into `#save-state-txt`, which is `aria-hidden`; the announcement goes to
+`#save-state-say`, a `.vh` `role="status"` sibling. A session is hundreds of saves, and a
+live region wired to the visible word would read "Saving, Saved, Saving, Saved" over the
+top of the lesson — which is how a live region gets switched off, and then the one
+announcement that mattered is gone with it. Only a change of *health* is announced.
+Measured: **2 announcements across 62 state writes**, one when it breaks and one when it
+recovers, with the visible word still tracking every save.
+
+**And it survives a phone.** The 640px rule no longer hides the element; it hides the
+*word* and zeroes the box's `min-width`. The announcement channel is `position:absolute`
+and out of flow, so this costs nothing — which matters, because the theme gate's topbar
+arithmetic has no column for this element and 291px of bar has none to spare. Standing the
+word down rather than the element is what keeps both true at once.
+
+**The confirmation can be heard, and says which press this is.** The note is an empty
+`aria-live="assertive"` region and the sentence arrives when the button is armed —
+assertive rather than polite because the very next thing this learner does is press again,
+and a queued announcement arrives after the erase. The button's *visible* label changes to
+"Confirm — erase all progress", so the accessible name changes with it rather than
+diverging from it (WCAG 2.5.3). The window is 12 s, re-armed from scratch rather than
+stacking timers.
+
+**Focus is returned** after reset and import, to the control that did the thing.
+**`#acc-msg` is a live region.** **The sign-in buttons report busy with `aria-disabled`
+and a re-entry guard** instead of `disabled`, so the button that was pressed keeps focus;
+`button[aria-disabled=true]` takes the same dimming `button:disabled` already had, so
+nothing new was introduced to the palette.
+
+**A new gate — `tools/verify_progress.mjs`.** This subsystem had none, which is why several
+of the defects above are as old as the files. It mounts the **real app** through the
+existing `app_stage.mjs` and drives it, in seven sections: the unload flush (including with
+a backend in front of it, and `visibilitychange` separately from `pagehide`); a store that
+refuses, reported on the panel **and** in the live region, asked separately; the live
+region's silence across 20 healthy saves; 29 hostile documents; the reset and the import
+driven through the real `mergeProgress`; the confirmation driven by actually pressing the
+button twice; and the markup and stylesheet contract. Two small additive changes to shared
+harness made it possible — `app_stage` now takes a `localStorage` (a store that never fails
+cannot show a failure is reported) and records document listeners (a listener that went
+nowhere could not tell a registered handler from an absent one).
+
+The gate was not trusted until it was seen to fail. **29 mutations, 29 rejected**, with the
+control run passing before and after: both unload listeners removed separately, the dirty
+flag dropped, the flush made unconditional, the flush put back through the async save,
+`saveSync` stopped from writing, the boot-time status check removed, the panel warned with
+the region silenced and the region warned with the panel silenced, the live region wired to
+every save and wired to none, the word un-hidden from screen readers, the import returned to
+`Object.assign`, `xp` uncoerced, `Array.isArray` dropped, the `__proto__` skip dropped, the
+falsy-completion filter dropped, the tombstone unstamped, the merge stopped from honouring
+it, the tombstone's own `>=` narrowed to `>`, the confirmation returned to un-hiding its
+text, arming silenced, the button's label frozen, the second press made unnecessary, focus
+left dropped, the phone rule returned to `display:none` and inverted, `.vh` returned to
+`display:none`, and the sign-in buttons disabled again.
+
+### Found in my own work, and fixed
+
+- **A hypothesis I had to kill.** I was confident `saveChain` could be poisoned — one
+  throwing continuation leaves a rejected promise, and every later `.then` skips its
+  callback, so all persistence would die silently for the rest of the session. Drove it:
+  it cannot happen. `setSaveState` runs before the chain, so a throw there throws out of
+  `saveNow` synchronously and the chain is untouched, and `Store.save` catches everything
+  internally. Recorded rather than quietly dropped, because a plausible defect that turns
+  out not to exist is worth the next cycle not re-deriving.
+- **My first gate read a different node than the app writes to, and three sections were
+  wrong because of it.** `app_stage` memoises one element per id and hands *that* to every
+  `$('#thing')` the app makes, while `renderShell` parses a string of HTML into `#app` —
+  two trees, and nothing re-points the memo at the parsed children. So the gate asserted
+  behaviour against nodes nobody writes to and reported correct code broken. It would have
+  reported broken code clean just as readily. Behaviour is now checked through `shellEl`
+  and markup through the parsed shell, each labelled, with the reason in the file header.
+- **Five mutations walked straight through the first run — 24 of 29 — and every one was a
+  real hole.** `visibilitychange` was never fired, so half the flush was untested. The
+  async-save mutation passed because the stage had no `window.storage`, and without a
+  backend `Store.save` *is* synchronous — so the check that mattered most was passing for
+  a reason that would evaporate in the browser it was written for. `boot()`'s call to
+  `paintSaveState` was never checked, only the function itself. The array check asked
+  whether the *result* was an array rather than whether anything had survived being one —
+  drop `Array.isArray` and `completed: ["A","B"]` becomes `{0:true,1:true}`, two units
+  nobody finished, and every assertion passed. And the `__proto__` check tested the
+  document, which is rebuilt from a fixed key list and is clean whether the guard exists
+  or not; what the guard actually protects is the **slots**, which are carried through.
+  All five are cycle 11's finding happening again: a check that reads plausibly and
+  enforces nothing. It is the entire argument for the mutation run.
+- **A stray `—` left as literal text in a comment**, from an escape-swapping edit.
+  Cosmetic, caught reading my own diff rather than by any gate.
+
+### Left alone, deliberately
+
+- **A second device can still resurrect work if its clock is wrong.** The tombstone
+  compares timestamps across machines, so a device running ten minutes fast keeps a stale
+  document through a reset. The alternatives are a server-assigned logical clock or
+  per-key tombstones, both of which are a redesign of `mergeProgress` rather than a repair
+  to it. Recorded with the reason.
+- **`P.activity` still grows without bound** — one key per active day, for ever. A day is
+  a short string and a small integer; pruning would silently delete a streak's evidence,
+  which is worse than the leak. Same judgement cycle 12 made about `state.vars`.
+- **No size cap on the progress document.** `P.build` holds whole schematics and `P.code`
+  whole files, and `localStorage` will eventually refuse — which is now *reported* on both
+  channels and at boot, and that is the honest half of the fix. Capping would mean
+  choosing which of the learner's own work to discard, which is not a decision this layer
+  should make silently.
+- **`Store.status()` can still report `backend` while writes are actually landing in
+  localStorage.** `backendSet` sets `mode = 'backend'` on a successful backend write and
+  never demotes it, so a backend that starts failing while localStorage keeps working
+  leaves the Profile card claiming progress "follows this page wherever you open it".
+  Found while reading, not fixed: the demotion rule needs to distinguish a transient
+  network failure from a dead backend, and getting that wrong makes the card flap between
+  two claims. Handed on with the mechanism named.
+- **The empty `#prof-reset-note` now contributes one 10px flex gap** where `hidden`
+  contributed nothing. Checked rather than assumed: `.pcard-acts` is a left-aligned
+  `display:flex` with `flex-wrap`, the note is the last child, and a zero-width element at
+  the end of a left-aligned row moves nothing visible. The alternative — `:empty
+  {display:none}` — would reintroduce the exact defect being fixed, because a live region
+  that is `display:none` when its text arrives announces nothing.
+- **`src/mcu.js` and the workbench were not touched.** Cycle 6 recorded the sketch panel
+  as its own subsystem and cycle 12 agreed; nothing here changes that.
+- **`P.dim` at 2.93:1 and `P.faint` at 1.86:1 on the canvas.** Cycle 2 measured them and
+  handed them to Track 5; cycles 5, 6, 8, 11 and 12 have each recorded them again without
+  taking them. That is now **six cycles**. They are in `src/studio.js`, they are not this
+  subsystem, and a Track 6 cycle taking them would change the visual weight of 13
+  visualisers. Cycle 5's candidate values still stand: `#6B7280` → 4.07, `#767D8A` → 4.75,
+  `#7E8694` → 5.36. This has stopped being a leftover and is now the clearest single
+  target Track 5 has.
+- **No author file, no `catalog/*.json`, no lesson id and no schema was touched**, so
+  `emit.py` was not run and the staleness guard is not armed. The mechanical confirmation
+  is that the payload total is **12967 KB before and after**.
+- **`docs/programs` holds 66 files against 62 in the current generation.** The rolling
+  window, as every cycle since 1 has established. Verified rather than assumed: 62 named
+  by the shell, **0 referenced but missing**, and the 4 unnamed are `_generations.json`
+  plus three older payloads (`EE121`, `EE202`, `EE241`) whose courses each have a current
+  payload on disk.
+
+### Gates, after
+
+Every pre-existing number unmoved, including `test_api`'s, which is the one this cycle put
+most at risk. Two numbers moved by exactly what was added — the two artifact sizes.
+
+```
+verify_progress      All good: the progress store lands 6 unload writes without
+                     outrunning the document, coerces 29 hostile documents into shape,
+                     keeps a reset cleared across 7 merges, announces 2 things in
+                     62 state writes, and holds 12 accessibility contracts      [NEW]
+test_api             30 passed, 0 failed — against a server restarted on the new merge
+verify_desk          All good: 61 expressions at the extremes · 6 worst-case shapes ·
+                     10 readings that round-trip · a refusing store reported on both
+                     channels · the stylesheet handed to the theme gate
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_theme         All good: 135 contrast surfaces x 2 themes · 154 paint sites
+                     across 9 tiers, quietest 3.77:1 · the 375px topbar ·
+                     the 50px id column · the closed drawer is out of the tab order
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3260 per-option explanations · 6572 live draws
+verify_tune_ui       All good: 21 tune units · 423 hostile opening values · 462 targets
+                     · 105 paints at 5 widths · 270 drags · 493 mounts
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_circuits      All good: 85 circuit exercises, 360 checks · 564 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_circuit_model All good: 1475 analyses, 84 refusals · 15 plots · 386 published
+                     schematics, 365 with a DC point, all three ways
+verify_derivations   All good: 1248 steps across 46 courses
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12967 KB — unchanged ·
+                     inlined 14186 -> 14202 KB · shell 1191 -> 1207 KB, of 1536
+```
+
+Beyond the gates: the new gate run against **29 mutations, 29 intended verdicts** — a run
+that began by letting 5 through and is the reason this entry has a finding about each of
+them; the reset and the import driven through the **real** `mergeProgress` rather than a
+restatement of it, in both directions and for order-independence; `Store.save` measured
+against `Store.saveSync` with a backend present, which is the measurement that justifies
+the second function existing at all; `test_api` captured before the edit and re-run against
+a server restarted on the new merge, because a sync test run against a stale process
+verifies the code it replaced; and the payload window checked for orphans and for missing
+files rather than assumed.
