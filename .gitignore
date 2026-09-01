@@ -2,3 +2,6 @@ build/
 data/
 node_modules/
 __pycache__/
+
+# the runner writes its own stdout here; it is a session artifact, not source
+gauntlet.out
