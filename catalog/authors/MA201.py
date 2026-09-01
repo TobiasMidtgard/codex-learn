@@ -1145,6 +1145,268 @@ at least one double six in twenty-four rolls of two dice
                 r"Independence means $P(A \cap B) = P(A) P(B)$; disjoint events with non-zero probability are the opposite of independent, since one occurring rules the other out",
                 r"The law of total probability partitions the sample space and weights the branches: $P(B) = \sum_i P(B | A_i) P(A_i)$",
                 r"$P(A | B)$ and $P(B | A)$ share a numerator but divide by different things, so they are equal only by coincidence — reversing them is a fallacy with a body count",
+                'Conditioning is renormalisation, and $P(\\cdot | B)$ satisfies the same three axioms, so every theorem derived from them holds for conditional probabilities without being re-proved',
+                '$P(A^{c} | B) = 1 - P(A | B)$ is exact, but $P(A | B^{c}) \\ne 1 - P(A | B)$ — the complement is over the event being measured, never over the one you were told',
+                'Independence is a property of the numbers, not of the mechanism: ace and spade are independent in a full deck and dependent once one unrelated card is removed from it',
+                'Pairwise independence is not mutual independence — two fair coins and the event that they agree are independent in every pair and rigid in all three, and mutual independence is $2^{n} - n - 1$ separate equations',
+            ],
+            "read": [
+                {
+                    "title": 'The world where B already happened, and the rule that survives the move',
+                    "minutes": 13,
+                    "body": r'''
+Module 1 left a cohort on the table: $200$ students, $120$ who have taken algorithms,
+$100$ who have taken statistics, $60$ who have taken both. Pick one at random and the
+probability they have taken algorithms is $120/200 = 0.60$.
+
+Now someone tells you the student they picked has taken statistics. What is the
+probability they have taken algorithms?
+
+There are $100$ statistics students and $60$ of them also took algorithms, so the
+answer is $60/100 = 0.60$ — **exactly what it was before you were told anything**. That
+is not a coincidence and it is not a general rule. It is a numerical accident of the
+three numbers in the cohort, and this unit is about what makes it happen and what
+happens when it does not.
+
+## Conditioning is renormalisation, and it is not a new axiom
+
+Fix an event $B$ with $P(B) > 0$. Being told that $B$ occurred does two things: it
+discards every outcome outside $B$, and it rescales what is left so the surviving mass
+totals one again. Both are in one line.
+
+$$P(A | B) = \frac{P(A \cap B)}{P(B)}$$
+
+The numerator is the part of $A$ that survived the news. The denominator is the total
+mass that survived, and dividing by it is the rescaling. Nothing here is postulated —
+it is a definition, and the reason it is *the* definition rather than one of many is
+what follows.
+
+Read $P(\cdot | B)$ as a probability model in its own right, defined on the same sample
+space, and check it against module 1's three axioms.
+
+**A1.** $P(A | B) = P(A \cap B)/P(B)$ is a non-negative number over a positive one, so
+it is non-negative.
+
+**A2.** $P(S | B) = P(S \cap B)/P(B) = P(B)/P(B) = 1$.
+
+**A3.** If $A_1$ and $A_2$ are disjoint then $A_1 \cap B$ and $A_2 \cap B$ are disjoint
+too, so the old A3 applies to them and
+
+$$P(A_1 \cup A_2 | B) = \frac{P(A_1 \cap B) + P(A_2 \cap B)}{P(B)}
+= P(A_1 | B) + P(A_2 | B) .$$
+
+That is the whole payoff, and it is worth more than it looks. $P(\cdot | B)$ satisfies
+the same three axioms, so **every theorem module 1 derived from them holds for
+conditional probabilities without being re-proved**. The complement rule becomes
+
+$$P(A^{c} | B) = 1 - P(A | B) ,$$
+
+monotonicity becomes $P(A | B) \le P(C | B)$ whenever $A \subseteq C$, and
+inclusion-exclusion becomes
+$P(A \cup C | B) = P(A | B) + P(C | B) - P(A \cap C | B)$. None of these is a new fact
+to memorise. They are old facts read in a smaller world.
+
+## The complement that does not survive
+
+Here is where the transfer stops, and it is the most common error in the subject.
+
+The bar in $P(A^{c} | B) = 1 - P(A | B)$ is over $A$. The complement is taken on the
+**left** of the bar, the event being measured. Nothing at all follows about complementing
+the event on the **right**, the one you were told. In general
+
+$$P(A | B^{c}) \ne 1 - P(A | B) .$$
+
+Take $P(A) = 0.5$, $P(B) = 0.4$, $P(A \cap B) = 0.3$. Then
+
+$$P(A | B) = \frac{0.3}{0.4} = 0.75, \qquad 1 - P(A | B) = 0.25 ,$$
+
+while $A \cap B^{c}$ has probability $0.5 - 0.3 = 0.2$ and $B^{c}$ has probability
+$0.6$, so
+
+$$P(A | B^{c}) = \frac{0.2}{0.6} = \frac{1}{3} \approx 0.333 .$$
+
+$0.333$ is not $0.25$. The two conditionals live in different worlds — one inside $B$,
+one outside it — and there is no reason for them to add to anything in particular. What
+*does* always hold is the pair inside a single world: $P(A | B) + P(A^{c} | B) = 1$,
+because those two split the world $B$ between them.
+
+## Worked: two machines, forwards and backwards
+
+Machine 1 makes $70$ per cent of a part with a $2$ per cent defect rate; machine 2 makes
+$30$ per cent with a $5$ per cent defect rate. Write $M_1$, $M_2$ for the sources and
+$D$ for "defective".
+
+Forwards, the law of total probability partitions the output and weights the branches:
+
+$$P(D) = P(D | M_1)P(M_1) + P(D | M_2)P(M_2)
+= 0.02 \times 0.70 + 0.05 \times 0.30 = 0.014 + 0.015 = 0.029 .$$
+
+So $2.9$ per cent of parts are defective. Averaging $2$ and $5$ per cent to get $3.5$
+assumes the machines make equal numbers, and they do not.
+
+Backwards is the question a factory actually asks. A defective part is in front of you;
+where did it come from? The numerator is the branch you want and the denominator is the
+total you computed:
+
+$$P(M_2 | D) = \frac{P(D | M_2)P(M_2)}{P(D)} = \frac{0.015}{0.029}
+= \frac{15}{29} \approx 0.517 .$$
+
+Machine 2 makes $30$ per cent of the parts and **$51.7$ per cent of the defects**. Notice
+what just happened: $P(D | M_2) = 0.05$ and $P(M_2 | D) = 0.517$, two numbers differing
+by a factor of ten, and swapping them is the fallacy the concepts list warns about. The
+reversal above is Bayes' rule, arrived at with nothing but the definition and the
+partition — module 10 will give it a name and a great deal more work to do.
+
+## Independence is arithmetic, not physics
+
+$A$ and $B$ are **independent** when
+
+$$P(A \cap B) = P(A)P(B) ,$$
+
+equivalently, when $P(B) > 0$, when $P(A | B) = P(A)$: being told $B$ moves nothing.
+
+Now return to the cohort. $P(A) = 0.60$, $P(B) = 0.50$, $P(A \cap B) = 60/200 = 0.30$,
+and $0.60 \times 0.50 = 0.30$. The cohort was independent all along, which is why
+conditioning on statistics returned $0.60$ unchanged. Move a single student — make it
+$70$ who took both — and the four cells become $50$, $30$, $70$, $50$. Now
+$P(A \cap B) = 0.35$ against a product of $0.30$, and
+
+$$P(A | B) = \frac{70}{100} = 0.70, \qquad P(B | A) = \frac{70}{120} \approx 0.583 .$$
+
+Knowing about statistics moves algorithms from $0.60$ to $0.70$, the two conditionals
+disagree, and nothing about the world changed except one student's transcript.
+
+That is the point worth carrying: independence is a property of the *numbers*, not of
+the mechanism. A cleaner demonstration uses a deck. "The card is an ace" and "the card
+is a spade" are independent in a full deck, since
+$P(\text{ace})P(\text{spade}) = \frac{4}{52} \times \frac{13}{52} = \frac{1}{52}$,
+which is exactly $P(\text{ace of spades})$. Remove one card — the two of clubs, which is
+neither an ace nor a spade — and independence is gone:
+
+$$\frac{4}{51} \times \frac{13}{51} = \frac{52}{2601} \approx 0.019992, \qquad
+P(\text{ace of spades}) = \frac{1}{51} \approx 0.019608 .$$
+
+No physical relationship between suits and ranks was disturbed. A card was removed from
+a box. Independence is a coincidence of ratios that the world is under no obligation to
+maintain.
+
+## The mistake, and why it is tempting
+
+Disjoint and independent sound like synonyms for "unrelated", and they are close to
+opposites. If $A$ and $B$ are disjoint with $P(A), P(B) > 0$, then $P(A \cap B) = 0$
+while $P(A)P(B) > 0$, so they are dependent — maximally so, because learning that $A$
+occurred tells you with certainty that $B$ did not. The word "exclusive" is doing the
+damage: exclusive events are *strongly* informative about each other, and independent
+events are the ones that say nothing.
+
+## Where it stops
+
+Two limits, both easy to walk past.
+
+**$P(B) = 0$ makes the definition undefined, not zero.** The formula divides by
+$P(B)$. For a continuous variable every single outcome has probability zero, so
+conditioning on "the arrival was at exactly $10{:}03$" is asking for $0/0$; module 4
+meets this properly.
+
+**Pairwise independence is not mutual independence.** Toss two fair coins. Let $A$ be
+"the first is heads", $B$ "the second is heads", $C$ "the two agree". Each has
+probability $\frac{1}{2}$, and every pair is independent: $P(A \cap B)$, $P(A \cap C)$
+and $P(B \cap C)$ all equal $\frac{1}{4}$, matching every product. Yet
+
+$$P(A \cap B \cap C) = P(\text{HH}) = \frac{1}{4}, \qquad
+P(A)P(B)P(C) = \frac{1}{8} .$$
+
+Checking the pairs is not enough — and it is worse than incomplete, because here any two
+of the three genuinely carry no information about each other while all three together
+are rigid: $A$ and $B$ determine $C$ outright. Mutual independence demands the product
+rule for **every** sub-collection, which is $2^{n} - n - 1$ separate equations for $n$
+events. Module 6 will assume it for a whole sequence of simulated draws, and the
+assumption is doing more work than the phrase "independent trials" suggests.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": 'The complement that survives conditioning, and the one that does not',
+                    "minutes": 12,
+                    "vars": ['P_A', 'P_B', 'P_AB', 'P_AcB'],
+                    "brief": r'''
+Conditioning on $B$ makes $P(\cdot | B)$ a probability model in its own right, and every
+theorem about the axioms then applies to it. This derivation gets the conditional
+complement rule out of that, and then shows precisely which neighbouring statement it
+does *not* license.
+
+Write $P_{A}$ for $P(A)$, $P_{B}$ for $P(B)$, $P_{AB}$ for $P(A \cap B)$, and $P_{AcB}$
+for $P(A^{c} \cap B)$ — the part of $B$ lying outside $A$. Assume $P_{B} > 0$ and
+$P_{B} < 1$ throughout.
+''',
+                    "steps": [
+                        {
+                            "prompt": '$B$ splits into the part inside $A$ and the part outside it, and those two share no outcome. Write $P_{B}$ in terms of $P_{AB}$ and $P_{AcB}$.',
+                            "answer": 'P_{AB} + P_{AcB}',
+                            "placeholder": 'the third axiom, on two pieces of B',
+                            "hint": 'This is A3 again: $B = (A \\cap B) \\cup (A^{c} \\cap B)$, and the two pieces are disjoint by construction.',
+                        },
+                        {
+                            "prompt": 'Divide the definition through. Write $P(A^{c} | B) = P_{AcB}/P_{B}$ using only $P_{AB}$ and $P_{B}$.',
+                            "answer": '\\frac{P_{B} - P_{AB}}{P_{B}}',
+                            "hint": 'Rearrange step 1 to get $P_{AcB}$ on its own, then divide by $P_{B}$.',
+                            "deconstruct": [
+                                'Step 1 gives $P_{AcB} = P_{B} - P_{AB}$.',
+                                'The definition of conditional probability divides that by $P_{B}$.',
+                                'Nothing else is needed; the answer is a single fraction.',
+                            ],
+                        },
+                        {
+                            "prompt": 'Add $P(A | B) = P_{AB}/P_{B}$ to the previous line and simplify. What is $P(A | B) + P(A^{c} | B)$?',
+                            "answer": '1',
+                            "hint": 'The two fractions share the denominator $P_{B}$, and their numerators add to $P_{B}$.',
+                            "deconstruct": [
+                                '$\\frac{P_{AB}}{P_{B}} + \\frac{P_{B} - P_{AB}}{P_{B}} = \\frac{P_{AB} + P_{B} - P_{AB}}{P_{B}}$.',
+                                'The $P_{AB}$ terms cancel, leaving $P_{B}/P_{B}$.',
+                                'So conditioning keeps the complement rule intact — the bar is over $A$, and $A$ with $A^{c}$ splits the world $B$.',
+                            ],
+                        },
+                        {
+                            "prompt": 'Now the neighbouring statement. Condition on $B^{c}$ instead. Since $P(A \\cap B^{c}) = P_{A} - P_{AB}$ and $P(B^{c}) = 1 - P_{B}$, write $P(A | B^{c})$ in terms of $P_{A}$, $P_{AB}$ and $P_{B}$.',
+                            "answer": '\\frac{P_{A} - P_{AB}}{1 - P_{B}}',
+                            "placeholder": 'a ratio built from the three named quantities',
+                            "hint": 'Apply the definition with $B^{c}$ in the role of the conditioning event; both numerator and denominator are given to you in the prompt.',
+                        },
+                        {
+                            "prompt": 'Put numbers in: $P_{A} = 0.5$, $P_{B} = 0.4$, $P_{AB} = 0.3$. Evaluate the expression from step 4, as an exact fraction.',
+                            "answer": '\\frac{1}{3}',
+                            "hint": 'The numerator is $0.5 - 0.3 = 0.2$ and the denominator is $1 - 0.4 = 0.6$.',
+                            "deconstruct": [
+                                '$P(A | B^{c}) = \\frac{0.2}{0.6} = \\frac{1}{3} \\approx 0.333$.',
+                                'Meanwhile $P(A | B) = \\frac{0.3}{0.4} = 0.75$, so $1 - P(A | B) = 0.25$.',
+                                '$0.333 \\ne 0.25$: complementing the event on the right of the bar is not the complement rule, and this is the counterexample.',
+                            ],
+                        },
+                        {
+                            "prompt": 'Finally, suppose $A$ and $B$ are independent, so $P_{AB} = P_{A}P_{B}$. Substitute that into $P(A \\cap B^{c}) = P_{A} - P_{AB}$ and factorise. Write $P(A \\cap B^{c})$ in terms of $P_{A}$ and $P_{B}$.',
+                            "answer": 'P_{A}(1 - P_{B})',
+                            "hint": 'Substitute, then take the common factor $P_{A}$ outside the bracket.',
+                            "deconstruct": [
+                                '$P_{A} - P_{A}P_{B} = P_{A}(1 - P_{B})$.',
+                                'And $1 - P_{B}$ is $P(B^{c})$, so this reads $P(A \\cap B^{c}) = P(A)P(B^{c})$.',
+                                'Independence therefore survives complementing either event, which the definition never said outright.',
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+Two results that look alike and are not. $P(A | B) + P(A^{c} | B) = 1$ is exact, always,
+and follows from conditioning being a probability model. $P(A | B) + P(A | B^{c}) = 1$
+is not a theorem, and step 5 is a counterexample with the numbers to prove it: $0.75$
+and $0.333$ sum to $1.083$.
+
+Step 6 is the small result the concepts list assumes without stating. If $A$ is
+independent of $B$ it is independent of $B^{c}$, and by symmetry $A^{c}$ is independent
+of both. Independence is a property of the *partition* into $B$ and $B^{c}$, not of the
+particular one you happened to name — which is why a simulation may condition on either
+branch of a coin flip without disturbing anything else it is measuring.
+''',
+                },
             ],
             "quiz": {
                 "title": "What the condition changes",
@@ -1225,7 +1487,9 @@ at least one double six in twenty-four rolls of two dice
                         "a": 2,
                         "why": (
                             r"Both are $P(A \cap B)$ over something: one divides by $P(B)$ and the other by $P(A)$, "
-                            r"so they agree only when $P(A) = P(B)$. Swapping them is the reasoning behind 'most "
+                            r"so they agree only when $P(A) = P(B)$ — or when the shared numerator is itself zero, "
+                            r"which is why two disjoint events have both conditionals equal to $0$ however far apart "
+                            r"their marginals are. Swapping them is the reasoning behind 'most "
                             r"accidents happen close to home, so driving close to home is dangerous' — and the "
                             r"correct conversion from one to the other is exactly what Bayes' rule performs later in "
                             r"this course."
@@ -1542,9 +1806,251 @@ assert variance({4: 1.0}) == 0.0, "A point mass has no spread"
             "concepts": [
                 r"A density is not a probability: $f(x)$ may exceed 1, the probability is the area $\int_a^b f(x) dx$, and $P(X = c) = 0$ for every single point",
                 r"The cdf $F(x) = P(X \le x)$ is the running integral of the density and $f = F'$ undoes it; every sum from the discrete module becomes an integral, including $E[X] = \int x f(x) dx$",
-                r"Uniform, exponential and normal are the three shapes most of computing runs on; the normal is fixed by $\mu$ and $\sigma$, and $z = (x - \mu)/\sigma$ puts any of them on one scale",
+                r"Uniform, exponential and normal are the three shapes most of computing runs on, and the normal is fixed by $\mu$ and $\sigma$ alone",
+                r"$z = (x - \mu)/\sigma$ rescales any variable to mean $0$ and spread $1$, which fixes location and scale and never shape: a normal table read off a standardised exponential is wrong by $8.5$ percentage points at $z = -0.5$",
                 r"The exponential is the continuous memoryless distribution — $P(X > s + t | X > s) = P(X > t)$ — which is why it models arrivals well and wear-out not at all",
                 r"Quantiles invert the cdf, and inverse-transform sampling turns a uniform draw into a draw from any distribution whose cdf you can invert",
+                'Every single point carries probability zero, by monotonicity, so on a continuum $P = 0$ stops meaning impossible and conditioning on a single outcome is undefined rather than zero',
+                'A density is a rate: $P(x < X \\le x + h) \\approx f(x)h$, so $f$ is probability per unit length and nothing caps its height — only $f \\ge 0$ and a total area of $1$',
+                'The exponential follows from one assumption, a constant hazard $h(t) = f(t)/S(t) = \\lambda$; memorylessness and $E[T] = 1/\\lambda$ are consequences rather than extra properties',
+                'A rising hazard is what wear-out means, and no $\\lambda$ expresses it: a Weibull of shape $2$ and scale $100$ has hazard $0.002$ per hour at $t = 10$ and $0.040$ at $t = 200$',
+            ],
+            "read": [
+                {
+                    "title": 'Where the probability went, and the rate that replaced it',
+                    "minutes": 14,
+                    "body": r'''
+A bus is due between $10{:}00$ and $10{:}10$, and you are willing to say that no instant
+in that window is favoured over any other. What is the probability it arrives at exactly
+$10{:}03{:}00.000$?
+
+Zero. Not small — zero. And the same argument gives zero for every other instant, while
+the bus certainly arrives at *some* instant. So an event of probability zero happens on
+every single run of this experiment, which is the moment module 1's warning that
+$P = 0$ stops meaning "impossible" becomes concrete rather than a footnote.
+
+## Why every point must carry nothing
+
+The argument is short and it is worth doing rather than accepting. Suppose the arrival
+$X$ lies in a window of length $L$, uniformly. Fix an instant $c$ and any $n$. The event
+$X = c$ is contained in the sub-interval of length $L/n$ around $c$, so monotonicity —
+module 1, derived from A1 and A3 — gives
+
+$$P(X = c) \le \frac{L/n}{L} = \frac{1}{n} .$$
+
+That holds for every $n$. A non-negative number below $\frac{1}{n}$ for all $n$ is zero.
+Nothing about uniformity was essential; the same squeeze runs whenever the cumulative
+distribution function is continuous.
+
+The consequence is that on a continuum, probability cannot be carried by points. It has
+to be carried by *intervals*, and the object that says how much each interval carries is
+a density.
+
+## The density is a rate, which is why it may exceed one
+
+Define the **cumulative distribution function** $F(x) = P(X \le x)$. Then for a small
+step $h$,
+
+$$P(x < X \le x + h) = F(x + h) - F(x) ,$$
+
+and dividing by $h$ and letting it shrink gives the derivative. Write $f = F'$. Then
+
+$$P(x < X \le x + h) \approx f(x)\,h .$$
+
+Read the units off that line. The left side is a probability, a pure number. The right
+side is $f$ times a length. So $f$ is **probability per unit length** — a rate, not a
+probability. The two constraints on it are that it is never negative, because $F$ never
+decreases, and that $\int_{-\infty}^{\infty} f = 1$, because the total must be one.
+Neither of those caps its height.
+
+A uniform variable on $[0, 0.5]$ therefore has $f(x) = 2$ across that interval, and the
+area is $2 \times 0.5 = 1$ exactly as required. A density of $2$ is not a probability of
+$2$, and the difference is the same one as between $90$ kilometres per hour and $90$
+kilometres.
+
+## Worked: the exponential, out of one assumption
+
+Most treatments announce $f(t) = \lambda e^{-\lambda t}$ and verify it afterwards. It is
+more useful to see where it comes from, because the assumption it comes from is exactly
+the assumption that fails in practice.
+
+Let $T$ be a time to failure and define the **survival function**
+$S(t) = P(T > t) = 1 - F(t)$. The **hazard rate** is
+
+$$h(t) = \frac{f(t)}{S(t)} ,$$
+
+the rate of failing right now given that you have survived until now. Suppose the hazard
+is a constant $\lambda$: the component is no more likely to fail in its second hour than
+in its first. Since $f = F' = -S'$,
+
+$$-\frac{S'(t)}{S(t)} = \lambda .$$
+
+The left side is the derivative of $-\ln S(t)$. Integrating from $0$ to $t$ and using
+$S(0) = 1$ gives $\ln S(t) = -\lambda t$, so
+
+$$S(t) = e^{-\lambda t}, \qquad F(t) = 1 - e^{-\lambda t}, \qquad
+f(t) = \lambda e^{-\lambda t} .$$
+
+Memorylessness now falls out rather than being a separate property:
+
+$$P(T > s + t \,|\, T > s) = \frac{S(s+t)}{S(s)}
+= \frac{e^{-\lambda(s+t)}}{e^{-\lambda s}} = e^{-\lambda t} = P(T > t) .$$
+
+And the mean, using $E[T] = \int_{0}^{\infty} S(t)\,\mathrm{d}t$, is
+$\int_{0}^{\infty} e^{-\lambda t}\,\mathrm{d}t = 1/\lambda$.
+
+## Worked: manufacturing an arrival time
+
+Take $\lambda = 1/100$ per hour, so the mean time to failure is $100$ hours. Your
+generator hands you $U = 0.37$, uniform on $[0,1)$. Inverse-transform sampling says to
+solve $F(t) = U$:
+
+$$1 - e^{-\lambda t} = 0.37 \quad \Rightarrow \quad
+t = -\frac{\ln(1 - 0.37)}{\lambda} = -100 \ln 0.63 = 46.2035 \text{ hours} .$$
+
+Check it in the other direction: $F(46.2035) = 1 - e^{-0.462035} = 0.370000$. The draw
+lands where it was asked to. The reason this works at all is one line —
+$P(F^{-1}(U) \le t) = P(U \le F(t)) = F(t)$, the last equality being the uniform's own
+cdf — and it is how a simulation makes arrival times out of nothing but a stream of
+uniforms.
+
+## The mistake, and why it is tempting
+
+Memorylessness reads as a claim that the machine is immortal, and people reject it on
+those grounds. A component that has run $100$ hours is expected to run $100$ more; run
+it $500$ hours and it still expects $100$ more. That sounds like a broken model.
+
+It is not broken, it is *assumed*. Constant hazard was the input, and everything above is
+its consequence. The right response is not to distrust the arithmetic but to ask whether
+constant hazard describes the thing in front of you. For arrivals at a queue —
+independent users deciding independently — it is a good description. For anything that
+wears out it is a bad one, and no choice of $\lambda$ repairs it, because $\lambda$ sets
+the scale and the fault is in the shape.
+
+Make that concrete. A Weibull time-to-failure with shape $2$ and scale $100$ has hazard
+$h(t) = 2t/100^{2}$: at $t = 10$ hours it is $0.002$ per hour, and at $t = 200$ hours it
+is $0.040$ per hour, **twenty times higher**. That rising hazard is what wear-out means,
+and an exponential has no parameter that can express it.
+
+## Memorylessness is not a property the exponential happens to have
+
+The concepts list calls the exponential *the* continuous memoryless distribution, and the
+definite article is a uniqueness claim worth checking rather than accepting. Suppose only
+that $T$ is memoryless — that $P(T > s + t \,|\, T > s) = P(T > t)$ for all
+$s, t \ge 0$ — and say nothing about its form. Multiplying up, that condition is
+
+$$S(s + t) = S(s)\,S(t) .$$
+
+A survival function is non-increasing and satisfies $S(0) = 1$, and the only such
+functions turning sums into products are $S(t) = e^{-\lambda t}$. So memorylessness does
+not merely hold for the exponential; it *forces* it. There is no second memoryless
+continuous distribution to choose instead.
+
+It is worth seeing the condition fail, so that it reads as a restriction rather than a
+formality. Take $S(t) = 1/(1+t)$, a legitimate survival function with a heavy tail. Then
+
+$$S(1)S(2) = \tfrac{1}{2} \times \tfrac{1}{3} = \tfrac{1}{6},
+\qquad S(3) = \tfrac{1}{4} ,$$
+
+and $\frac{1}{6} \ne \frac{1}{4}$. Having survived to time $1$ genuinely changes the
+outlook for this variable, which is what a non-constant hazard means.
+
+## Where it stops: standardising is not normalising
+
+The concepts list says $z = (x - \mu)/\sigma$ puts distributions on one scale, and it is
+worth being exact about what that buys. Subtracting the mean and dividing by the standard
+deviation always produces a variable with mean $0$ and standard deviation $1$. It does
+**not** produce a normal variable, and reading a normal table off the result is a
+mistake with a measurable size.
+
+An exponential with $\lambda = 1$ has mean $1$ and standard deviation $1$, so it is
+already standardised. Ask for $P(Z \le -0.5)$, which is $P(X \le 0.5)$:
+
+$$P(X \le 0.5) = 1 - e^{-0.5} = 0.393469 ,$$
+
+while the normal table at $z = -0.5$ returns $0.308538$. The gap is **$8.5$ percentage
+points**, on a variable that has been standardised perfectly. Standardising fixes
+location and scale. It never touches shape, and shape is what a table is a table of.
+
+Two further limits worth carrying. $P(X \le c)$ and $P(X < c)$ are the same number for a
+continuous variable, because the point between them carries nothing — a convenience that
+is false for every discrete variable in module 3. And $f$ is recovered from $F$ by
+differentiating only where $F$ is differentiable: a variable that is continuous in part
+and atomic in part, such as a latency that is exactly zero whenever a cache hits, has no
+density at the atom and needs both descriptions at once.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": 'The exponential, out of one assumption about its hazard',
+                    "minutes": 12,
+                    "vars": ['S', 'f', 't', 's', 'lambda'],
+                    "brief": r'''
+The exponential is usually announced and then checked. Here it is built, from the single
+assumption that the hazard rate is constant — which is also the assumption that decides
+where the model may be used.
+
+Write $S(t) = P(T > t)$ for the survival function and $f$ for the density. Since
+$S = 1 - F$ and $f = F'$, we have $f = -S'$, and the hazard is $h = f/S$. Take
+$h(t) = \lambda$ for every $t$, with $S(0) = 1$.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Constant hazard says $-S'(t)/S(t) = \\lambda$, and the left side is the derivative of $-\\ln S(t)$. Integrate both sides from $0$ to $t$ and use $S(0) = 1$. Write $\\ln S(t)$.",
+                            "answer": '-\\lambda t',
+                            "placeholder": 'a linear function of t',
+                            "hint": 'Integrating $\\frac{\\mathrm{d}}{\\mathrm{d}t}\\ln S = -\\lambda$ gives $\\ln S(t) - \\ln S(0) = -\\lambda t$, and $\\ln 1 = 0$.',
+                        },
+                        {
+                            "prompt": 'Exponentiate the previous line. Write the survival function $S(t)$.',
+                            "answer": 'e^{-\\lambda t}',
+                            "hint": 'Undo the logarithm: $S(t) = e^{\\ln S(t)}$.',
+                        },
+                        {
+                            "prompt": 'The cumulative distribution function is $F(t) = 1 - S(t)$. Write $F(t)$.',
+                            "answer": '1 - e^{-\\lambda t}',
+                            "hint": 'Substitute the previous answer into $F = 1 - S$.',
+                        },
+                        {
+                            "prompt": 'Differentiate $F$ to recover the density. Write $f(t)$.',
+                            "answer": '\\lambda e^{-\\lambda t}',
+                            "hint": 'The derivative of $-e^{-\\lambda t}$ is $\\lambda e^{-\\lambda t}$ by the chain rule.',
+                            "deconstruct": [
+                                '$F(t) = 1 - e^{-\\lambda t}$, and the derivative of the constant $1$ is zero.',
+                                'The chain rule on $e^{-\\lambda t}$ brings down a factor of $-\\lambda$.',
+                                "So $F'(t) = -(-\\lambda e^{-\\lambda t}) = \\lambda e^{-\\lambda t}$, which is the announced density — now derived.",
+                            ],
+                        },
+                        {
+                            "prompt": 'Memorylessness is a ratio of survivals: $P(T > s + t \\,|\\, T > s) = S(s+t)/S(s)$. Form that ratio and simplify. Write the result.',
+                            "answer": 'e^{-\\lambda t}',
+                            "hint": '$e^{-\\lambda(s+t)}/e^{-\\lambda s}$: subtract the exponents.',
+                            "deconstruct": [
+                                '$S(s+t) = e^{-\\lambda(s+t)} = e^{-\\lambda s}e^{-\\lambda t}$.',
+                                'Dividing by $S(s) = e^{-\\lambda s}$ cancels the first factor.',
+                                'What is left is $e^{-\\lambda t} = S(t)$: the elapsed $s$ has vanished from the answer, which is exactly what memorylessness says.',
+                            ],
+                        },
+                        {
+                            "prompt": 'For a non-negative variable, $E[T] = \\int_{0}^{\\infty} S(t)\\,\\mathrm{d}t$. Evaluate that integral for this $S$. Write $E[T]$.',
+                            "answer": '\\frac{1}{\\lambda}',
+                            "hint": '$\\int_{0}^{\\infty} e^{-\\lambda t}\\,\\mathrm{d}t = [-e^{-\\lambda t}/\\lambda]_{0}^{\\infty}$, and the exponential vanishes at the top limit for $\\lambda > 0$.',
+                        },
+                    ],
+                    "closing": r'''
+Every property of the exponential in this module came out of one line: the hazard does
+not change with age. The density was not assumed, memorylessness was not a separate
+axiom, and the mean $1/\lambda$ is a consequence rather than a definition.
+
+That also locates the model's edge precisely. Constant hazard is a strong claim, and it
+is testable: plot the empirical hazard against age and see whether it is flat. If it
+rises, the component wears out and a Weibull with shape above $1$ is the honest choice;
+if it falls, the population has early failures burning off. Choosing an exponential
+because the algebra is convenient is choosing a flat hazard whether or not the thing has
+one, and step 5 is what that choice commits you to.
+''',
+                },
             ],
             "quiz": {
                 "title": "Area, not height",
@@ -1647,6 +2153,256 @@ assert variance({4: 1.0}) == 0.0, "A point mass has no spread"
                 r"$\mathrm{Cov}(X, Y) = E[XY] - E[X]E[Y]$, and $\mathrm{Var}(X + Y) = \mathrm{Var}(X) + \mathrm{Var}(Y) + 2\mathrm{Cov}(X, Y)$, so variances add only when the covariance vanishes",
                 r"Correlation is the covariance divided by both standard deviations: unitless, bounded in $[-1, 1]$, and therefore comparable across quantities that a raw covariance is not",
                 "Independence forces zero covariance, but zero covariance does not force independence, because covariance only sees the linear part of a relationship",
+                'Covariance is defined as $E[(X - \\mu_X)(Y - \\mu_Y)]$, and $E[XY] - E[X]E[Y]$ is what expanding that bracket gives — a consequence, not a second definition',
+                '$|\\rho| \\le 1$ follows from the non-negativity of $\\mathrm{Var}(X/\\sigma_X \\pm Y/\\sigma_Y)$, read twice; reaching $\\pm 1$ forces a variance to vanish, so the endpoints mean an exact linear relation and nothing else',
+                '$\\mathrm{Var}(X - Y) = \\mathrm{Var}(X) + \\mathrm{Var}(Y) - 2\\mathrm{Cov}(X, Y)$, so positively correlated quantities have a *less* variable difference — which is the whole statistical argument for a paired design',
+                'Correlation divides by $\\sigma_X \\sigma_Y$, so it needs both variances finite and non-zero: a constant correlates with nothing, and a heavy-tailed variable may have no variance to divide by at all',
+            ],
+            "read": [
+                {
+                    "title": 'Two variables at once, and the bound a correlation cannot cross',
+                    "minutes": 13,
+                    "body": r'''
+A service retries a failed request up to twice, and each request either completes or
+times out. Two numbers describe a single request: $X$, the number of retries, in
+$\left\{0, 1, 2\right\}$; and $Y$, which is $1$ on a timeout and $0$ otherwise. Neither variable on
+its own answers the question you care about, which is whether retrying is associated with
+timing out. That question lives in the **joint** distribution.
+
+Here is one, with masses in twentieths.
+
+```text
+                Y = 0     Y = 1     row total
+    X = 0        2/20      3/20        5/20
+    X = 1        4/20      5/20        9/20
+    X = 2        3/20      3/20        6/20
+    column      9/20     11/20       20/20
+```
+
+The six masses are non-negative and total one, so this is a legitimate model. Everything
+below is read off it.
+
+## Marginals are the addition axiom, applied
+
+The event $X = 0$ is the union of the two disjoint events $(X = 0, Y = 0)$ and
+$(X = 0, Y = 1)$, so A3 adds them:
+$P(X = 0) = \frac{2}{20} + \frac{3}{20} = \frac{5}{20}$.
+Doing that along each row and each column gives the **marginal**
+distributions in the margins of the table, which is where the name comes from.
+
+$$p_X = \left(\tfrac{5}{20}, \tfrac{9}{20}, \tfrac{6}{20}\right), \qquad
+p_Y = \left(\tfrac{9}{20}, \tfrac{11}{20}\right)$$
+
+Summing a variable out is not an approximation and loses nothing about the variable that
+remains. It does lose the relationship: two different joint tables can have identical
+margins, which is why the margins alone can never answer the question this module asks.
+
+Check independence first, because if it holds everything afterwards is easier.
+Independence requires $p(x,y) = p_X(x)p_Y(y)$ for **every** cell. The first cell already
+fails:
+
+$$p(0,0) = \frac{2}{20} = 0.100, \qquad
+p_X(0)p_Y(0) = \frac{5}{20} \times \frac{9}{20} = \frac{9}{80} = 0.1125 .$$
+
+One failing cell is enough. $X$ and $Y$ are dependent.
+
+## Covariance, derived from the definition
+
+Covariance is defined as the mean of the product of the two deviations:
+
+$$\mathrm{Cov}(X,Y) = E[(X - \mu_X)(Y - \mu_Y)] .$$
+
+Expand the bracket and use linearity of expectation, which holds whatever the dependence:
+
+$$E[XY] - \mu_Y E[X] - \mu_X E[Y] + \mu_X\mu_Y
+= E[XY] - \mu_X\mu_Y - \mu_X\mu_Y + \mu_X\mu_Y = E[XY] - E[X]E[Y] .$$
+
+The computational form is a consequence, not a second definition. Now the numbers.
+$E[X] = 0 \cdot \frac{5}{20} + 1 \cdot \frac{9}{20} + 2 \cdot \frac{6}{20} = 1.05$
+and $E[Y] = \frac{11}{20} = 0.55$. For $E[XY]$ only the cells with
+both values non-zero contribute:
+
+$$E[XY] = 1 \cdot 1 \cdot \tfrac{5}{20} + 2 \cdot 1 \cdot \tfrac{3}{20}
+= \tfrac{11}{20} = 0.55 .$$
+
+$$\mathrm{Cov}(X,Y) = 0.55 - 1.05 \times 0.55 = -\frac{11}{400} = -0.0275$$
+
+Negative: more retries go very slightly with fewer timeouts in this table. Whether
+$-0.0275$ is a large number is a question the covariance cannot answer, and that is the
+next problem.
+
+## What the dependence actually looks like
+
+Before summarising the relationship with one number, it is worth reading it off the table
+directly, because the summary is going to throw most of it away. Conditioning each row on
+its own total — module 2's renormalisation, applied to a slice — gives the chance of a
+timeout at each retry count:
+
+$$P(Y = 1 | X = 0) = \frac{3/20}{5/20} = 0.600, \qquad
+P(Y = 1 | X = 1) = \frac{5/20}{9/20} = 0.556,$$
+$$P(Y = 1 | X = 2) = \frac{3/20}{6/20} = 0.500 .$$
+
+Against an unconditional $P(Y = 1) = 0.550$. The three conditionals are not equal to it
+and not equal to each other, which is dependence stated in the most direct way available:
+being told the retry count moves the timeout probability. The movement is small and
+monotone downward, from $0.600$ to $0.500$ — and it is that downward drift, weighted by
+how much mass sits in each row, that the single negative covariance below is measuring.
+
+## Correlation, and why it cannot leave its interval
+
+The trouble with covariance is units. $X$ is a count and $Y$ is an indicator, so
+$-0.0275$ is in units of retries times timeouts, and rescaling either variable rescales
+it. Measure a latency in seconds instead of milliseconds and its covariance with anything
+changes by a factor of a thousand while nothing about the relationship has moved.
+
+Divide the units out. With $\sigma_X^2 = \frac{219}{400} = 0.5475$ and
+$\sigma_Y^2 = \frac{99}{400} = 0.2475$,
+
+$$\rho = \frac{\mathrm{Cov}(X,Y)}{\sigma_X \sigma_Y}
+= \frac{-0.0275}{\sqrt{0.5475}\sqrt{0.2475}} = -0.0747 .$$
+
+Now, why is $\rho$ trapped in $[-1, 1]$? The concepts list states the bound. It follows
+from one fact — a variance is never negative — in two lines. Standardise both variables
+and add them. Using
+$\mathrm{Var}(U + V) = \mathrm{Var}(U) + \mathrm{Var}(V) + 2\mathrm{Cov}(U,V)$, each
+standardised variable has variance $1$ and their covariance is $\rho$:
+
+$$0 \le \mathrm{Var}\!\left(\frac{X}{\sigma_X} + \frac{Y}{\sigma_Y}\right)
+= 1 + 1 + 2\rho = 2 + 2\rho \quad \Rightarrow \quad \rho \ge -1$$
+
+$$0 \le \mathrm{Var}\!\left(\frac{X}{\sigma_X} - \frac{Y}{\sigma_Y}\right)
+= 2 - 2\rho \quad \Rightarrow \quad \rho \le 1$$
+
+The bound is not a convention and it is not an empirical observation. It is the
+non-negativity of variance, read twice. The equality case is just as informative:
+$\rho = -1$ forces a variance to be exactly zero, and a variable with zero variance is a
+constant, so the two standardised variables differ by a constant and $Y$ is an exact
+linear function of $X$. Correlation reaches its endpoints only for a perfect straight
+line.
+
+## Worked: what a sum costs, and what a difference saves
+
+$$\mathrm{Var}(X + Y) = 0.5475 + 0.2475 + 2(-0.0275) = 0.74$$
+$$\mathrm{Var}(X - Y) = 0.5475 + 0.2475 - 2(-0.0275) = 0.85$$
+
+The sign flip on the cross term is worth more attention than it usually gets. For
+**positively** correlated quantities the difference is the *less* variable of the two
+combinations — which is why measuring the same servers before and after a change, and
+analysing the differences, beats comparing two independent groups. The shared variation
+cancels. That is the whole statistical argument for a paired design, and it is one line
+of algebra.
+
+## The mistake, and why it is tempting
+
+Zero covariance does not mean independence. The standard counterexample takes $X$
+uniform on $\left\{-1, 0, 1\right\}$ and $Y = X^{2}$. Then $E[X] = 0$ and
+$E[XY] = E[X^{3}] = \frac{(-1) + 0 + 1}{3} = 0$, so
+
+$$\mathrm{Cov}(X,Y) = 0 - 0 \times E[Y] = 0 ,$$
+
+while $Y$ is a *function* of $X$ — knowing $X$ pins $Y$ down exactly. The relationship is
+a perfect parabola and covariance sees none of it.
+
+The reason the error is tempting is that the implication runs one way and people
+remember it as an equivalence. Independence does force zero covariance: if the joint
+factorises then $E[XY] = E[X]E[Y]$, and the covariance vanishes. The converse fails
+because covariance is a single number summarising the *linear* part of a relationship,
+and a symmetric dependence has no linear part to find. Correlation is not a general
+measure of association; it is a measure of straight-line association, and a coefficient
+of zero rules out only that.
+
+## Where it stops
+
+**Both variances must be finite and non-zero.** $\rho$ divides by $\sigma_X\sigma_Y$, so
+a constant has no correlation with anything — the ratio is $0/0$, not $0$. Worse, a
+distribution with heavy enough tails has no finite variance at all, and then covariance
+and correlation are undefined rather than large. Module 7's Chebyshev bound runs into the
+same wall from the other side.
+
+**Linearity of expectation needs nothing; the variance rule needs the covariance.**
+$E[X + Y] = E[X] + E[Y]$ holds for any pair, dependent or not, because expectation is a
+weighted sum and sums split. Variances add **only** when the covariance is zero. Applying
+the expectation rule's freedom to the variance is the most common route to a standard
+error that is quietly too small, and in a benchmark where the runs share a machine the
+covariance is exactly the term you have most reason to expect is not zero.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": 'Why a correlation cannot leave the interval from minus one to one',
+                    "minutes": 11,
+                    "vars": ['sigma_X', 'sigma_Y', 'C', 'rho'],
+                    "brief": r'''
+The bound $-1 \le \rho \le 1$ is usually stated and left. It is a consequence of one
+fact — a variance is never negative — and this derivation extracts it, together with the
+condition under which the endpoints are actually reached.
+
+Write $\sigma_{X}$ and $\sigma_{Y}$ for the two standard deviations, both taken positive,
+$C$ for $\mathrm{Cov}(X, Y)$, and $\rho$ for the correlation.
+''',
+                    "steps": [
+                        {
+                            "prompt": 'Start from the definition of variance and expand $E[((X - \\mu_X) + (Y - \\mu_Y))^{2}]$. Write $\\mathrm{Var}(X + Y)$ in terms of $\\sigma_{X}$, $\\sigma_{Y}$ and $C$.',
+                            "answer": '\\sigma_{X}^{2} + \\sigma_{Y}^{2} + 2C',
+                            "placeholder": 'two variances and a cross term',
+                            "hint": 'Squaring a sum gives three terms; the cross term is $2E[(X-\\mu_X)(Y-\\mu_Y)]$, which is $2C$ by definition.',
+                        },
+                        {
+                            "prompt": 'Correlation is the covariance with the units divided out. Write $\\rho$ in terms of $C$, $\\sigma_{X}$ and $\\sigma_{Y}$.',
+                            "answer": '\\frac{C}{\\sigma_{X}\\sigma_{Y}}',
+                            "hint": 'Divide the covariance by both standard deviations, which is what makes the result unitless.',
+                        },
+                        {
+                            "prompt": 'Now standardise: let $U = X/\\sigma_{X}$ and $V = Y/\\sigma_{Y}$, so each has variance $1$ and $\\mathrm{Cov}(U,V) = \\rho$. Apply step 1 to $U + V$. Write $\\mathrm{Var}(U + V)$ in terms of $\\rho$.',
+                            "answer": '2 + 2\\rho',
+                            "hint": 'Both variances are now $1$, and the cross term is $2\\rho$.',
+                            "deconstruct": [
+                                '$\\mathrm{Var}(U) = \\mathrm{Var}(X)/\\sigma_{X}^{2} = 1$, and likewise for $V$.',
+                                '$\\mathrm{Cov}(U, V) = C/(\\sigma_{X}\\sigma_{Y}) = \\rho$ by step 2.',
+                                'Substituting into step 1 gives $1 + 1 + 2\\rho$.',
+                            ],
+                        },
+                        {
+                            "prompt": 'A variance is never negative, so $2 + 2\\rho \\ge 0$. Solve that for $\\rho$ and write the smallest value $\\rho$ can take.',
+                            "answer": '-1',
+                            "hint": 'Divide by $2$ and subtract $1$: the inequality reads $\\rho \\ge -1$.',
+                        },
+                        {
+                            "prompt": 'Repeat the argument on the difference. $\\mathrm{Var}(U - V)$ has the cross term subtracted instead of added. Write $\\mathrm{Var}(U - V)$ in terms of $\\rho$.',
+                            "answer": '2 - 2\\rho',
+                            "hint": 'The only change from step 3 is the sign of the covariance term, because $\\mathrm{Cov}(U, -V) = -\\rho$.',
+                            "deconstruct": [
+                                '$\\mathrm{Var}(U - V) = \\mathrm{Var}(U) + \\mathrm{Var}(V) - 2\\mathrm{Cov}(U,V)$.',
+                                'That is $1 + 1 - 2\\rho$.',
+                                'Non-negativity then forces $\\rho \\le 1$, which closes the interval from the other end.',
+                            ],
+                        },
+                        {
+                            "prompt": 'Combining, $|\\rho| \\le 1$. Substitute $\\rho = C/(\\sigma_{X}\\sigma_{Y})$ into that and write the largest value $|C|$ can take, in terms of $\\sigma_{X}$ and $\\sigma_{Y}$.',
+                            "answer": '\\sigma_{X}\\sigma_{Y}',
+                            "hint": '$|C|/(\\sigma_{X}\\sigma_{Y}) \\le 1$, so multiply both sides by $\\sigma_{X}\\sigma_{Y}$.',
+                            "deconstruct": [
+                                '$|\\rho| \\le 1$ means $|C| \\le \\sigma_{X}\\sigma_{Y}$.',
+                                'So a covariance is bounded by the product of the standard deviations — the Cauchy-Schwarz inequality, in the only form this course needs.',
+                                'It also shows why a large covariance on its own says nothing: the scale it should be compared against is $\\sigma_{X}\\sigma_{Y}$.',
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+The bound came from one inequality used twice, and the equality case is the part worth
+keeping. $\mathrm{Var}(U - V) = 0$ exactly when $\rho = 1$, and a variable with zero
+variance is a constant — so $U - V$ is constant, which unwinds to $Y$ being an exact
+increasing linear function of $X$. Correlation reaches $\pm 1$ for a perfect straight
+line and for nothing else.
+
+That is also the sharpest available statement of what $\rho$ measures. It is not "how
+strongly the variables are related"; it is how close they are to a straight line. The
+parabola $Y = X^{2}$ on $\left\{-1, 0, 1\right\}$ is a complete functional relationship with
+$\rho = 0$, and no amount of extra data will move that number, because there is nothing
+linear in it to find.
+''',
+                },
             ],
             "quiz": {
                 "title": "Moving together",
@@ -2027,6 +2783,257 @@ assert _counts[2] > _counts[1] and _counts[3] > _counts[4], \
                 r"Applied to a sample mean, whose variance is $\sigma^2/n$, Chebyshev proves the weak law of large numbers in one line",
                 r"Chernoff and Hoeffding bounds decay like $e^{-2n\varepsilon^2}$ rather than $1/n$, which is why a few thousand samples pin a proportion tightly",
                 r"The union bound $P(A_1 \cup \cdots \cup A_n) \le P(A_1) + \cdots + P(A_n)$ assumes no independence, and turns a per-item failure rate into a whole-system one",
+                'Chebyshev is Markov applied to $(X - \\mu)^{2}$, which is non-negative whatever $X$ does — one result used twice, not two results to remember',
+                "Markov's derivation drops a sum of non-negative terms, so without $X \\ge 0$ it inverts: a uniform variable on $[-10, 10]$ has mean $0$ and true $P(X \\ge 5) = 1/4$, against a formula returning $0$",
+                'A bound is not an estimate — on $10{,}000$ fair flips $P(X \\ge 5500)$ is at most $0.909$ by Markov, $0.01$ by Chebyshev and $1.93 \\times 10^{-22}$ by Hoeffding, against an exact $7.76 \\times 10^{-24}$',
+                "Chebyshev prices a confidence at $\\sigma^{2}/(\\delta\\varepsilon^{2})$ samples, linear in $1/\\delta$; Hoeffding's stronger assumptions buy a logarithmic price instead, which is why the assumptions are worth having",
+            ],
+            "read": [
+                {
+                    "title": 'Guarantees you can prove without knowing the distribution',
+                    "minutes": 14,
+                    "body": r'''
+A queue has average length $10$. Nobody will tell you the distribution of its length —
+not the shape, not the variance, nothing beyond the mean and the fact that a queue cannot
+be shorter than empty. What can you honestly say about the probability that it exceeds
+$50$?
+
+Something, as it turns out, and the something is provable in three lines. That is the
+business of this module: results that hold for **every** distribution satisfying a short
+list of conditions, bought by giving up any hope of an exact answer.
+
+## Markov, derived
+
+Let $X \ge 0$ and let $a > 0$. Split the expectation over the two regions:
+
+$$E[X] = \sum_{x < a} x\,p(x) + \sum_{x \ge a} x\,p(x) .$$
+
+Drop the first sum. This is where non-negativity earns its place — every term in it is
+$\ge 0$, so removing them can only decrease the total:
+
+$$E[X] \ge \sum_{x \ge a} x\,p(x) .$$
+
+In the remaining sum every $x$ is at least $a$, so replacing each by $a$ decreases it
+again:
+
+$$E[X] \ge a \sum_{x \ge a} p(x) = a\,P(X \ge a) .$$
+
+Divide by $a$:
+
+$$P(X \ge a) \le \frac{E[X]}{a} .$$
+
+The queue: $P(\text{length} \ge 50) \le 10/50 = 0.2$. An upper bound, from the mean
+alone.
+
+## Chebyshev is Markov, applied to the right variable
+
+The concepts list gives Markov and Chebyshev as two facts. They are one fact used twice,
+and seeing that is worth more than memorising both.
+
+Let $X$ have mean $\mu$ and standard deviation $\sigma$. The variable $Y = (X - \mu)^{2}$
+is non-negative — whatever $X$ does — so Markov applies to it. Its mean is
+$E[(X-\mu)^{2}] = \sigma^{2}$, by definition of variance. Take the threshold
+$a = k^{2}\sigma^{2}$:
+
+$$P\left((X-\mu)^{2} \ge k^{2}\sigma^{2}\right) \le \frac{\sigma^{2}}{k^{2}\sigma^{2}}
+= \frac{1}{k^{2}} .$$
+
+The event on the left is exactly $|X - \mu| \ge k\sigma$, since squaring is monotone on
+non-negative numbers. So
+
+$$P(|X - \mu| \ge k\sigma) \le \frac{1}{k^{2}} ,$$
+
+for every distribution with a finite variance, whatever its shape. Squaring was the whole
+trick: it manufactured a non-negative variable out of one that was free to be negative,
+and non-negativity was Markov's only structural demand.
+
+The weak law of large numbers is now one more substitution. The mean of $n$ independent
+draws has $\mathrm{Var}(\bar{X}) = \sigma^{2}/n$, so Chebyshev at a fixed distance
+$\varepsilon$ gives
+
+$$P(|\bar{X} - \mu| \ge \varepsilon) \le \frac{\sigma^{2}}{n\varepsilon^{2}}
+\to 0 .$$
+
+Note what it does not say. It does not say $\bar{X}$ equals $\mu$ for large $n$, and it
+does not say the running average approaches $\mu$ without wobbling. It says the
+probability of being far off shrinks, and the rate is $1/n$.
+
+## Worked: three bounds on one question
+
+Flip a fair coin $n = 10{,}000$ times and let $X$ be the number of heads. Then
+$E[X] = 5000$, $\mathrm{Var}(X) = np(1-p) = 2500$, and $\sigma = 50$. What is
+$P(X \ge 5500)$?
+
+**Markov.** $X \ge 0$, so $P(X \ge 5500) \le 5000/5500 = 0.909$.
+
+**Chebyshev.** $5500$ is $500$ above the mean, which is $k = 10$ standard deviations, so
+$P(|X - 5000| \ge 500) \le 1/100 = 0.01$.
+
+**Hoeffding.** The flips are independent and each contributes between $0$ and $1$, which
+licenses $P(X - E[X] \ge t) \le e^{-2t^{2}/n}$. With $t = 500$ that is
+$e^{-50} = 1.93 \times 10^{-22}$.
+
+**The truth.** Summing the binomial exactly gives $7.76 \times 10^{-24}$.
+
+```text
+    Markov       <= 0.909                needs: X >= 0
+    Chebyshev    <= 0.01                 needs: a finite variance
+    Hoeffding    <= 1.93 x 10^-22        needs: independent, bounded terms
+    exact              7.76 x 10^-24     needs: the whole distribution
+```
+
+Four rows spanning twenty-two orders of magnitude, and every one of them is a true
+statement. What separates them is not cleverness but how much was assumed. Markov knows
+the mean; Chebyshev knows the spread; Hoeffding knows the terms are independent and
+bounded. Each extra assumption buys an enormous amount of tightness, and the exact answer
+costs the entire distribution.
+
+That is also the answer to why anyone would use Chebyshev when Hoeffding exists.
+Hoeffding needs independence. Chebyshev does not care where the variance came from, so it
+survives correlated data that would make Hoeffding's bound a false statement rather than
+a loose one.
+
+## The mistake, and why it is tempting
+
+Markov's $0.909$ is not an estimate of anything. It is a ceiling, and the true value here
+is below it by a factor of $10^{23}$. The error is reading a bound as an approximation
+and reporting "about a $90$ per cent chance the queue exceeds $50$", when what was proved
+is "no more than".
+
+The reason the error is tempting is that a bound and an estimate are both single numbers
+with the same units, and the inequality sign is the only thing distinguishing them. The
+defence is to ask what the bound would say in a case you can check. Chebyshev at $k = 2$
+promises at most $1/4$; for a normal variable the true two-sided tail is $0.0455$, five
+and a half times smaller. A bound that is loose by five times on a distribution you know
+is not going to be tight on one you do not.
+
+The union bound has the same character and one extra failure mode. For $1000$ tasks each
+failing with probability at most $0.0001$,
+
+$$P(\text{at least one fails}) \le 1000 \times 0.0001 = 0.1 ,$$
+
+assuming nothing about independence, which is exactly why it survives correlated failures
+— tasks sharing a rack, a disk, a deployment. But push it: at $20{,}000$ tasks the same
+sum gives $2$, and the bound degenerates into the true and useless claim $P \le 1$. A
+union bound that has passed one is not wrong; it has stopped saying anything.
+
+## When the union bound is exact, and when it is worst
+
+The union bound is the one result here with a clean account of its own tightness, which
+makes it a good place to see what "loose" means precisely.
+
+$$P(A_1 \cup \cdots \cup A_n) \le P(A_1) + \cdots + P(A_n)$$
+
+Module 1 derived it by noting that inclusion-exclusion subtracts the overlaps, and
+dropping every correction can only overshoot. So the bound is **exact** when there are no
+overlaps: two disjoint events at $0.3$ and $0.4$ have union $0.7$, and the bound says
+$0.7$. It is at its worst when the events coincide: two copies of the same event at
+$0.4$ have union $0.4$, and the bound says $0.8$ — too large by a factor of two, and by a
+factor of $n$ for $n$ copies.
+
+That gives a usable rule of thumb. The union bound costs little when the failure modes
+are close to disjoint — one disk failing, a different rack losing power, a distinct
+service timing out — and costs a factor approaching $n$ when they are really the same
+failure counted $n$ times. Its indifference to independence is what makes it safe; its
+indifference to *overlap* is what makes it loose.
+
+## Where each one stops
+
+**Markov needs non-negativity, and silently gives nonsense without it.** Let $X$ be
+uniform on $[-10, 10]$, so $E[X] = 0$. The true $P(X \ge 5)$ is $\frac{1}{4}$. The
+formula $E[X]/a$ returns $0/5 = 0$, so the "bound" asserts $0.25 \le 0$. The dropped sum
+in the derivation was the step that required $x \ge 0$, and when negative values are
+present dropping it *increases* rather than decreases the total.
+
+**Chebyshev needs a finite variance.** Not a small one — a finite one. Latency and file
+sizes are routinely modelled with heavy tails, and a Pareto distribution with shape
+parameter below $2$ has infinite variance, so $1/k^{2}$ is not loose there but
+inapplicable. The bound cannot be rescued by using the sample variance either: that
+number is finite for every finite sample, including samples drawn from a distribution
+that has none.
+
+**Hoeffding needs independence and boundedness together.** Dropping either breaks it, and
+the exponential rate is what is lost. The bound also decays in $n$ at fixed $\varepsilon$
+— asking for higher precision as $n$ grows changes the trade entirely, which is the
+calculation behind choosing a sample size rather than reporting one.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": 'Markov, then Chebyshev, then the law of large numbers',
+                    "minutes": 12,
+                    "vars": ['E_X', 'a', 'mu', 'sigma', 'k', 'n', 'epsilon', 'delta'],
+                    "brief": r'''
+Three results that are usually presented as three facts. They are one fact and two
+substitutions, and doing it in that order means only the first has to be remembered.
+
+Write $E_{X}$ for $E[X]$, $\mu$ and $\sigma$ for the mean and standard deviation of $X$,
+and $\varepsilon$, $\delta$ for a tolerance and a failure probability. Assume $X \ge 0$
+wherever Markov is applied, and a finite $\sigma$ throughout.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Markov's inequality, for $X \\ge 0$ and $a > 0$: dropping the terms below $a$ and replacing every remaining $x$ by $a$ gives $E_{X} \\ge a\\,P(X \\ge a)$. Solve for the bound and write the upper bound on $P(X \\ge a)$.",
+                            "answer": '\\frac{E_{X}}{a}',
+                            "placeholder": 'the mean over the threshold',
+                            "hint": 'Divide both sides of $E_{X} \\ge a\\,P(X \\ge a)$ by the positive number $a$.',
+                        },
+                        {
+                            "prompt": 'To reach Chebyshev, apply Markov to $Y = (X - \\mu)^{2}$, which is non-negative whatever $X$ does. Write $E[Y]$ in terms of $\\sigma$.',
+                            "answer": '\\sigma^{2}',
+                            "hint": 'The mean of the squared deviation from the mean is the definition of the variance.',
+                        },
+                        {
+                            "prompt": 'Now take the threshold $a = k^{2}\\sigma^{2}$ in step 1, with $E_{X}$ replaced by $E[Y]$ from step 2. Write the resulting bound on $P(Y \\ge k^{2}\\sigma^{2})$.',
+                            "answer": '\\frac{1}{k^{2}}',
+                            "hint": 'The bound is $\\sigma^{2}/(k^{2}\\sigma^{2})$, and the $\\sigma^{2}$ factors cancel.',
+                            "deconstruct": [
+                                'Markov gives $P(Y \\ge a) \\le E[Y]/a = \\sigma^{2}/(k^{2}\\sigma^{2})$.',
+                                'Cancelling leaves $1/k^{2}$, with no $\\sigma$ in it at all.',
+                                "And $Y \\ge k^{2}\\sigma^{2}$ is the same event as $|X - \\mu| \\ge k\\sigma$, so this is Chebyshev's inequality.",
+                            ],
+                        },
+                        {
+                            "prompt": 'Turn to the sample mean of $n$ independent draws. Since the draws are independent their variances add, and dividing by $n$ divides the variance by $n^{2}$. Write $\\mathrm{Var}(\\bar{X})$ in terms of $\\sigma$ and $n$.',
+                            "answer": '\\frac{\\sigma^{2}}{n}',
+                            "hint": '$\\mathrm{Var}(\\sum X_i) = n\\sigma^{2}$, and $\\mathrm{Var}(cZ) = c^{2}\\mathrm{Var}(Z)$ with $c = 1/n$.',
+                        },
+                        {
+                            "prompt": 'Apply Chebyshev to $\\bar{X}$, whose standard deviation is $\\sigma/\\sqrt{n}$, at an absolute distance $\\varepsilon$. Write the upper bound on $P(|\\bar{X} - \\mu| \\ge \\varepsilon)$ in terms of $\\sigma$, $n$ and $\\epsilon$.',
+                            "answer": '\\frac{\\sigma^{2}}{n\\epsilon^{2}}',
+                            "hint": "Chebyshev's $1/k^{2}$ with $k\\sigma/\\sqrt{n} = \\varepsilon$, so $k = \\varepsilon\\sqrt{n}/\\sigma$; substitute and simplify.",
+                            "deconstruct": [
+                                'Set the distance $k$ standard deviations equal to $\\varepsilon$: $k \\cdot \\sigma/\\sqrt{n} = \\varepsilon$.',
+                                'So $k^{2} = n\\varepsilon^{2}/\\sigma^{2}$.',
+                                'The bound $1/k^{2}$ is therefore $\\sigma^{2}/(n\\varepsilon^{2})$, which tends to zero as $n$ grows — the weak law.',
+                            ],
+                        },
+                        {
+                            "prompt": 'Sizing a sample. Set the bound of step 5 equal to a failure probability $\\delta$ and solve for $n$. Write the required $n$ in terms of $\\sigma$, $\\delta$ and $\\epsilon$.',
+                            "answer": '\\frac{\\sigma^{2}}{\\delta\\epsilon^{2}}',
+                            "hint": 'From $\\sigma^{2}/(n\\varepsilon^{2}) = \\delta$, multiply up and divide by $\\delta$.',
+                            "deconstruct": [
+                                '$\\sigma^{2}/(n\\varepsilon^{2}) = \\delta$ rearranges to $n = \\sigma^{2}/(\\delta\\varepsilon^{2})$.',
+                                'Halving $\\varepsilon$ multiplies the cost by four; making $\\delta$ ten times smaller multiplies it by ten.',
+                                'That linear price in $\\delta$ is exactly what Hoeffding improves to a logarithmic one, which is the whole reason to want the stronger assumptions.',
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+Everything above rests on the one line in step 1, and that line rests on being allowed to
+drop a sum of non-negative terms. Take away $X \ge 0$ and the first inequality reverses:
+a uniform variable on $[-10, 10]$ has mean $0$, so the formula would claim
+$P(X \ge 5) \le 0$ while the true probability is $\frac{1}{4}$.
+
+Step 6 is the practical form and the one to carry. Chebyshev prices a confidence at
+$\sigma^{2}/(\delta\varepsilon^{2})$ samples — linear in $1/\delta$. Hoeffding, at the
+cost of assuming the terms are independent and bounded, prices the same confidence at
+about $\ln(1/\delta)/(2\varepsilon^{2})$ — logarithmic in $1/\delta$. Going from
+$95$ per cent confidence to $99.9999$ per cent costs twenty thousand times more data
+under Chebyshev and about five times more under Hoeffding, on the identical question.
+''',
+                },
             ],
             "quiz": {
                 "title": "Bounding what you cannot compute",
@@ -2130,6 +3137,261 @@ assert _counts[2] > _counts[1] and _counts[3] > _counts[4], \
                 r"Maximum likelihood: write $P(\text{data} | \theta)$, take logs, differentiate and solve — for Bernoulli it returns $\hat{p} = k/n$, which is how you know the method is sane",
                 r"A confidence interval is $\hat{\theta} \pm t \cdot \mathrm{SE}$, and the 95% is a property of the procedure across repeated samples, not of the one interval in front of you",
                 "The bootstrap resamples the observed data with replacement, giving a sampling distribution for a median, a ratio or a trimmed mean when no formula exists",
+                '$E\\left[\\sum (x_i - \\bar{x})^{2}\\right] = (n-1)\\sigma^{2}$ exactly, because $\\bar{x}$ minimises that sum and $E[n(\\bar{x} - \\mu)^{2}] = \\sigma^{2}$ whatever $n$ is — the correction is a cost, not a safety margin',
+                'An unbiased $s^{2}$ does not give an unbiased $s$: the square root is concave, so $E[s] < \\sigma$ strictly — about $6$ per cent low at $n = 5$, and no divisor repairs it',
+                'Maximum likelihood need not be unbiased in small samples: for $n$ draws from $[0, \\theta]$ it returns $\\max x_i$, whose expectation is $n\\theta/(n+1)$ and which is below $\\theta$ every time',
+                'The bootstrap needs a statistic that is smooth in the data, and fails for the maximum, whose resamples can never exceed the largest value already observed',
+            ],
+            "read": [
+                {
+                    "title": 'The degree of freedom the mean spends, and the correction it does not buy',
+                    "minutes": 14,
+                    "body": r'''
+An estimator is a recipe: hand it data, it hands back a number. The thing that takes
+getting used to is that the number is **random**, because the data were. Run the same
+recipe on a second sample from the same population and you get a different answer, and
+the distribution of those answers — over samples you did not take — is what "how good is
+this estimate" is a question about.
+
+That distribution has a centre and a spread, and the two failure modes have names. The
+**bias** is $E[\hat{\theta}] - \theta$, how far the recipe is off on average. The
+**variance** is how much it moves from sample to sample. They combine as
+
+$$\mathrm{MSE} = \mathrm{bias}^{2} + \mathrm{variance} ,$$
+
+which is why neither on its own recommends anything. An estimator returning $5.0$
+regardless of the data, when the truth is $4.0$, has variance $0$ and is worthless.
+
+## Where the decomposition comes from, and what it licenses
+
+The claim that mean squared error splits into bias squared plus variance is worth
+deriving, because the derivation shows why the cross term disappears and the result then
+licenses something surprising. Write $b = E[\hat{\theta}] - \theta$ for the bias and
+insert $E[\hat{\theta}]$ into the square:
+
+$$E[(\hat{\theta} - \theta)^{2}]
+= E[((\hat{\theta} - E[\hat{\theta}]) + b)^{2}]
+= \mathrm{Var}(\hat{\theta}) + 2b\,E[\hat{\theta} - E[\hat{\theta}]] + b^{2} .$$
+
+The middle term vanishes because $E[\hat{\theta} - E[\hat{\theta}]] = 0$ — a deviation
+from the mean has mean zero — and $b$ is a constant that comes outside. So
+$\mathrm{MSE} = \mathrm{Var} + \mathrm{bias}^{2}$, exactly.
+
+Now the surprise. Since the two terms trade against each other, a *biased* estimator can
+beat an unbiased one. Shrink an unbiased $\hat{\theta}$ toward zero by a factor $c$: the
+bias becomes $(c-1)\theta$ and the variance becomes $c^{2}\sigma^{2}$, so
+
+$$\mathrm{MSE}(c) = (c-1)^{2}\theta^{2} + c^{2}\sigma^{2} ,$$
+
+which is minimised at $c = \theta^{2}/(\sigma^{2} + \theta^{2})$, a number strictly below
+$1$ whenever $\sigma > 0$. When $\theta^{2} = \sigma^{2}$ the best $c$ is $\frac{1}{2}$,
+and the resulting mean squared error is $\theta^{2}/2$ against the unbiased estimator's
+$\sigma^{2} = \theta^{2}$ — **half the error, from an estimator that is wrong on
+average**. Unbiasedness is a property, not a virtue, and this is the calculation behind
+every shrinkage and regularisation method later in the degree.
+
+## Worked: eight measurements, all the way through
+
+Eight response times, in milliseconds:
+
+```text
+    12.1   14.3   11.8   15.2   13.4   12.9   14.8   13.1
+```
+
+The sample mean is $\bar{x} = 107.6/8 = 13.45$. The sum of squared deviations about it is
+
+$$\sum (x_i - \bar{x})^{2} = 10.58 .$$
+
+Now the question the concepts list answers with an assertion. Why divide that by $7$
+rather than by $8$?
+
+Compute the same sum about two other centres:
+
+```text
+    about  x-bar = 13.45     10.58     <- the smallest, necessarily
+    about          13.00     12.20
+    about          14.00     13.00
+```
+
+The sample mean is the value that makes the sum of squared deviations as small as it can
+possibly be — that is a one-line calculus fact, and it is the entire reason for the
+correction. The deviations you can compute are taken about $\bar{x}$, which was fitted
+from the same eight numbers. The deviations you *want* are about the true $\mu$, which
+you do not know. The first sum is systematically smaller than the second, so dividing by
+$8$ would understate the spread every time, not on average by luck but structurally.
+
+The exact size of the shortfall comes out of one identity. Writing $\mu$ for the true
+mean,
+
+$$\sum (x_i - \bar{x})^{2} = \sum (x_i - \mu)^{2} - n(\bar{x} - \mu)^{2} .$$
+
+Take expectations. The first term is $n\sigma^{2}$. For the second,
+$E[(\bar{x} - \mu)^{2}]$ is the variance of the sample mean, which is $\sigma^{2}/n$, so
+the whole second term has expectation $\sigma^{2}$. Therefore
+
+$$E\left[\sum (x_i - \bar{x})^{2}\right] = n\sigma^{2} - \sigma^{2} = (n-1)\sigma^{2} .$$
+
+Dividing by $n - 1$ gives an estimator with expectation exactly $\sigma^{2}$. The
+correction is not a safety margin and not a rounding convention: it is the precise cost,
+in expectation, of having spent the data once already to locate the centre. One
+constraint was imposed — the deviations about $\bar{x}$ sum to zero, so any $n-1$ of them
+determine the last — and one degree of freedom is what it cost.
+
+Finishing the example:
+
+$$s^{2} = \frac{10.58}{7} = 1.511429, \qquad s = 1.229402, \qquad
+\mathrm{SE} = \frac{s}{\sqrt{8}} = 0.434659 .$$
+
+With $t_{0.975,\,7} = 2.364624$, the $95$ per cent interval is
+$13.45 \pm 2.364624 \times 0.434659$, or $[12.4222,\, 14.4778]$. Dividing by $8$ instead
+would have given $s^{2} = 1.3225$ and an interval about $6$ per cent narrower — an
+overconfident answer, in the direction that matters.
+
+## Maximum likelihood, on a case you can check
+
+Write down the probability of the data as a function of the parameter, then pick the
+parameter that makes what happened most probable. For $k$ successes in $n$ Bernoulli
+trials the likelihood is proportional to $p^{k}(1-p)^{n-k}$, so the log-likelihood is
+
+$$\ell(p) = k \ln p + (n - k)\ln(1 - p) .$$
+
+Differentiate and set to zero:
+
+$$\frac{k}{p} - \frac{n-k}{1-p} = 0 \quad \Rightarrow \quad k(1-p) = (n-k)p
+\quad \Rightarrow \quad \hat{p} = \frac{k}{n} .$$
+
+For $7$ successes in $20$ trials that is $0.35$. The method returns the obvious answer,
+which is the point of running it somewhere obvious: it is how you learn to trust it on
+the models where intuition offers nothing at all.
+
+## The mistake, and why it is tempting
+
+Here is the one that survives most courses. The sample variance $s^{2}$ is unbiased for
+$\sigma^{2}$. **The sample standard deviation $s$ is not unbiased for $\sigma$**, and no
+choice of divisor makes it so.
+
+The reason is that the square root is a concave function, and Jensen's inequality says
+$E[\sqrt{Y}] \le \sqrt{E[Y]}$ with equality only when $Y$ is constant. Since $s^{2}$
+genuinely varies, $E[s] < \sigma$ strictly. For normal data the shortfall is a known
+factor:
+
+```text
+    n =  2      E[s] = 0.7979 sigma
+    n =  5      E[s] = 0.9400 sigma
+    n = 10      E[s] = 0.9727 sigma
+    n = 30      E[s] = 0.9914 sigma
+```
+
+At $n = 5$ the standard deviation you report is on average $6$ per cent too small, and
+the correction that fixed the variance did nothing about it. The error is tempting
+because unbiasedness feels like a property of a quantity rather than of a *function* of
+it, and it does not survive nonlinear transformation. It is the same reason the mean of
+the reciprocals is not the reciprocal of the mean, met here in a place where the word
+"unbiased" has already been used to signal correctness.
+
+## Where it stops
+
+**Maximum likelihood is not unbiased in general.** Draw $n$ values uniformly from
+$[0, \theta]$. The likelihood is zero for any $\theta$ below the largest observation and
+decreasing above it, so the maximum-likelihood estimate is $\hat{\theta} = \max x_i$ —
+which is below $\theta$ with probability $1$. Its expectation is $n\theta/(n+1)$, so at
+$n = 10$ it is about $9$ per cent low, and the bias never changes sign. What maximum
+likelihood does promise is consistency and, asymptotically, minimum variance. Those are
+large-sample statements, and reading them as small-sample guarantees is a mistake this
+example is designed to prevent.
+
+**A confidence interval's $95$ per cent belongs to the procedure, not the interval.**
+$[12.4222,\, 14.4778]$ either contains $\mu$ or does not; there is no probability left in
+the statement once the data are in. The claim is about the method across repeated
+samples. The interval also says nothing about where individual observations fall — that
+is a prediction interval, and it is much wider.
+
+**The bootstrap needs the statistic to be smooth in the data.** Resampling with
+replacement and recomputing works well for a mean, a median, a ratio or a trimmed mean,
+and it is how you get a standard error where no formula exists. It fails for the
+*maximum*: a resample can never exceed the largest observed value, so the bootstrap
+distribution of the maximum piles mass on that one point and reports far too little
+uncertainty — the same $\max x_i$ whose bias was the previous paragraph.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": 'The degree of freedom the mean spends',
+                    "minutes": 12,
+                    "vars": ['n', 'sigma', 'mu', 'S'],
+                    "brief": r'''
+Dividing by $n - 1$ is usually asserted, sometimes with a gesture at "degrees of
+freedom". Here it is derived, and what comes out is an exact statement: the sum of
+squared deviations about the sample mean falls short by exactly one $\sigma^{2}$,
+whatever the distribution.
+
+Write $S = \sum_{i=1}^{n}(x_i - \bar{x})^{2}$ for the sum of squared deviations about the
+sample mean, $\mu$ and $\sigma$ for the true mean and standard deviation, and take the
+draws independent. The identity
+$S = \sum (x_i - \mu)^{2} - n(\bar{x} - \mu)^{2}$ is algebra and may be used freely.
+''',
+                    "steps": [
+                        {
+                            "prompt": 'Take expectations of the first term on the right. Each $E[(x_i - \\mu)^{2}]$ is the variance of a single draw. Write $E\\left[\\sum (x_i - \\mu)^{2}\\right]$ in terms of $n$ and $\\sigma$.',
+                            "answer": 'n\\sigma^{2}',
+                            "placeholder": 'n copies of one variance',
+                            "hint": 'There are $n$ terms and each has expectation $\\sigma^{2}$; expectation is linear, so they add.',
+                        },
+                        {
+                            "prompt": 'Now the second term. $E[(\\bar{x} - \\mu)^{2}]$ is the variance of the sample mean. Write it in terms of $\\sigma$ and $n$.',
+                            "answer": '\\frac{\\sigma^{2}}{n}',
+                            "hint": 'Independent variances add, and dividing the sum by $n$ divides its variance by $n^{2}$.',
+                        },
+                        {
+                            "prompt": 'The identity carries a factor of $n$ on that term. Write $E\\left[n(\\bar{x} - \\mu)^{2}\\right]$ in terms of $\\sigma$.',
+                            "answer": '\\sigma^{2}',
+                            "hint": 'Multiply the previous answer by $n$ and cancel.',
+                            "deconstruct": [
+                                '$E[n(\\bar{x} - \\mu)^{2}] = n \\cdot E[(\\bar{x} - \\mu)^{2}]$ because $n$ is a constant.',
+                                'That is $n \\times \\sigma^{2}/n$.',
+                                "The $n$ cancels, leaving exactly one $\\sigma^{2}$ — one variance's worth, whatever $n$ is.",
+                            ],
+                        },
+                        {
+                            "prompt": 'Subtract step 3 from step 1, as the identity instructs. Write $E[S]$ in terms of $n$ and $\\sigma$.',
+                            "answer": '(n - 1)\\sigma^{2}',
+                            "hint": '$n\\sigma^{2} - \\sigma^{2}$, with $\\sigma^{2}$ taken out as a common factor.',
+                        },
+                        {
+                            "prompt": 'To make an unbiased estimator of $\\sigma^{2}$, divide $S$ by whatever makes its expectation exactly $\\sigma^{2}$. Write that estimator in terms of $S$ and $n$.',
+                            "answer": '\\frac{S}{n - 1}',
+                            "placeholder": 'S over something',
+                            "hint": 'If $E[S] = (n-1)\\sigma^{2}$, then dividing $S$ by $n - 1$ gives an expectation of $\\sigma^{2}$.',
+                        },
+                        {
+                            "prompt": 'Finally, price the mistake. If you divided by $n$ instead, what would the expectation of $S/n$ be? Write it in terms of $n$ and $\\sigma$.',
+                            "answer": '\\frac{(n - 1)\\sigma^{2}}{n}',
+                            "hint": 'Divide the result of step 4 by $n$.',
+                            "deconstruct": [
+                                '$E[S/n] = E[S]/n = (n-1)\\sigma^{2}/n$.',
+                                'That is $\\sigma^{2}$ multiplied by $(n-1)/n$, a number below $1$.',
+                                'So dividing by $n$ understates the variance by a factor of $(n-1)/n$ — $50$ per cent too small at $n = 2$, and $10$ per cent at $n = 10$.',
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+The shortfall is exactly one $\sigma^{2}$, and step 3 shows why it does not depend on
+$n$: the factor of $n$ in the identity cancels the $1/n$ in the variance of the mean. One
+parameter was estimated from the data, and it cost one variance's worth of squared
+deviation — which is what "one degree of freedom" means, stated as an equation rather
+than as a slogan.
+
+The same accounting runs through the rest of the course. Fitting a straight line in
+module 11 estimates two parameters from the data, and the residual sum of squares is then
+divided by $n - 2$ for exactly this reason. The pattern is the number of observations
+minus the number of quantities the data were used to locate.
+
+One warning the derivation earns the right to make. Everything above is a statement about
+$S$, hence about $s^{2}$. It says nothing about $s$: the square root of an unbiased
+estimator is not unbiased, and $E[s] < \sigma$ strictly whenever $s^{2}$ varies at all.
+''',
+                },
             ],
             "quiz": {
                 "title": "Judging an estimate",
@@ -2831,6 +4093,265 @@ except ValueError:
                 r"$R^2$ is the fraction of the variance in $y$ the fit accounts for; it can never fall when a predictor is added, so it cannot judge whether a model is too large",
                 "Residual plots test what the summary number cannot: curvature, spread that grows with the fitted value, and single points dragging the line",
                 "A fitted slope is an association inside the observed range — extrapolation beyond it and any causal reading of it are both outside what least squares supports",
+                'The residual is measured vertically, which makes the two variables asymmetric: the slopes of $y$ on $x$ and of $x$ on $y$ multiply to $r^{2}$, so the two lines coincide only for a perfect fit',
+                'In standardised units the fit is $z_{\\hat{y}} = r z_{x}$, so every prediction is pulled toward the mean by the factor $r$ — that is regression to the mean, and where the technique got its name',
+                'The first normal equation forces the residuals to sum to zero and the fitted line to pass through the centroid $(\\bar{x}, \\bar{y})$, always',
+                "In a simple regression with an intercept $R^{2}$ is exactly $r^{2}$, which is what makes 'the fraction of variance explained' a concrete claim rather than a slogan",
+            ],
+            "read": [
+                {
+                    "title": 'The line that minimises squares, and the two claims it cannot make',
+                    "minutes": 14,
+                    "body": r'''
+Five measurements of a service, batch size against mean latency:
+
+```text
+    batch x      2      4      6      8     10
+    ms    y    3.1    4.2    6.5    7.1    9.6
+```
+
+Fitting a straight line to that looks like an obvious thing to want, and it is. What is
+not obvious — and what the arithmetic will not tell you — is that three separate
+decisions have already been made by the time anyone writes "least squares".
+
+## The decisions inside the phrase
+
+**The residual is measured vertically.** The quantity minimised is
+$\sum (y_i - \hat{y}_i)^{2}$: the gap in $y$ at a given $x$. Not the perpendicular
+distance to the line, which would be a different fit. This makes the two variables
+asymmetric — $x$ is treated as known and $y$ as the thing carrying the error — and that
+asymmetry has a consequence taken up at the end of this unit.
+
+**The errors are squared.** Squaring is a claim about the noise, not a neutral default.
+Write the likelihood of the data under independent normal errors of constant variance:
+the only term containing the coefficients is $-\sum(y_i - \hat{y}_i)^{2}/(2\sigma^{2})$,
+so maximising the likelihood **is** minimising the squared error. Least squares is
+maximum likelihood for normal noise. When the noise has heavy tails, a different loss is
+the principled response rather than a robustness trick bolted on afterwards.
+
+**The relationship is a straight line.** Nothing in the fitting procedure checks this,
+and $R^{2}$ will not check it either.
+
+## Deriving the two coefficients
+
+Minimise $Q(\beta_0, \beta_1) = \sum (y_i - \beta_0 - \beta_1 x_i)^{2}$ by setting both
+partial derivatives to zero.
+
+$$\frac{\partial Q}{\partial \beta_0} = -2\sum (y_i - \beta_0 - \beta_1 x_i) = 0$$
+
+The sum of the residuals is therefore zero — which is a consequence, not an assumption —
+and dividing by $n$ gives $\bar{y} = \beta_0 + \beta_1 \bar{x}$, so
+
+$$\beta_0 = \bar{y} - \beta_1\bar{x} .$$
+
+The fitted line passes through the centroid $(\bar{x}, \bar{y})$, always. For the slope,
+
+$$\frac{\partial Q}{\partial \beta_1} = -2\sum x_i(y_i - \beta_0 - \beta_1 x_i) = 0 ,$$
+
+and substituting $\beta_0$ from above turns this into
+$\sum (x_i - \bar{x})(y_i - \bar{y}) = \beta_1 \sum (x_i - \bar{x})^{2}$, so writing
+$S_{xy}$ and $S_{xx}$ for those two sums,
+
+$$\beta_1 = \frac{S_{xy}}{S_{xx}} = \frac{\mathrm{Cov}(x,y)}{\mathrm{Var}(x)} .$$
+
+The spread of the **predictor** is in the denominator, because that is the range the line
+has to span.
+
+## Worked, end to end
+
+$\bar{x} = 6$ and $\bar{y} = 6.1$. The three sums are
+
+$$S_{xx} = 40, \qquad S_{yy} = 26.02, \qquad S_{xy} = 31.8 .$$
+
+$$\beta_1 = \frac{31.8}{40} = 0.795, \qquad
+\beta_0 = 6.1 - 0.795 \times 6 = 1.33$$
+
+So $\hat{y} = 1.33 + 0.795x$ — about $0.8$ ms per unit of batch. The fitted values and
+residuals:
+
+```text
+    x        2       4       6       8      10
+    y      3.10    4.20    6.50    7.10    9.60
+    fit    2.92    4.51    6.10    7.69    9.28
+    res    0.18   -0.31    0.40   -0.59    0.32     sum = 0
+```
+
+The residuals sum to zero, as the first normal equation guarantees. Their squared total
+is $\mathrm{SSE} = 0.739$, against a total spread of $S_{yy} = 26.02$, so
+
+$$R^{2} = 1 - \frac{0.739}{26.02} = 0.971599 .$$
+
+The correlation is $r = 31.8/\sqrt{40 \times 26.02} = 0.985697$, and
+
+$$r^{2} = 0.971599 = R^{2} .$$
+
+That is not a coincidence of these numbers. In a simple regression with an intercept,
+$R^{2}$ **is** the squared correlation, which is what makes the phrase "the fraction of
+variance explained" mean anything concrete.
+
+## How uncertain is that slope
+
+$R^{2}$ says how much of the spread the line accounts for. It says nothing about whether
+the slope could plausibly have been zero, and that needs the residuals turned into a
+standard error.
+
+Module 8 derived the rule: divide a sum of squared deviations by the number of
+observations minus the number of quantities the data were used to locate. A line costs
+two — an intercept and a slope — so the residual variance is
+
+$$s^{2} = \frac{\mathrm{SSE}}{n - 2} = \frac{0.739}{3} = 0.246333,
+\qquad s = 0.49632 \text{ ms} .$$
+
+The divisor $3$ is the same accounting as module 8's $n - 1$, with one more parameter
+paid for. The standard error of the slope then divides that by the spread of the
+predictor, which is the second appearance of $S_{xx}$ in the denominator and for the same
+reason — a predictor spread thinly over a wide range pins the slope down better:
+
+$$\mathrm{SE}(\beta_1) = \frac{s}{\sqrt{S_{xx}}} = \frac{0.49632}{\sqrt{40}} = 0.078475 .$$
+
+So $t = 0.795/0.078475 = 10.13$ on $3$ degrees of freedom, and with
+$t_{0.975,\,3} = 3.182446$ the $95$ per cent interval for the slope is
+$[0.5453,\, 1.0447]$. It excludes zero, so the association survives the question "could
+this have been noise". Note how wide it is regardless: five points buy an estimate of
+$0.795$ that is consistent with anything from $0.55$ to $1.04$, which is the honest
+statement and is invisible in $R^{2} = 0.97$.
+
+## The mistake, and why it is tempting
+
+Regressing $y$ on $x$ and regressing $x$ on $y$ do not give the same line, and the reason
+is the first decision above. Swapping the roles minimises horizontal gaps instead of
+vertical ones. The slope of $x$ on $y$ is
+
+$$\frac{S_{xy}}{S_{yy}} = \frac{31.8}{26.02} = 1.222137 ,$$
+
+and the product of the two slopes is
+
+$$0.795 \times 1.222137 = 0.971599 = r^{2} .$$
+
+If the two lines were inverses of each other the product would be $1$. It is $r^{2}$, so
+they coincide only when $r^{2} = 1$ — a perfect fit — and otherwise the second line is
+flatter than inverting the first would suggest. This is the same fact as **regression to
+the mean**, and it is where the technique got its name. In standardised units the fitted
+line is
+
+$$z_{\hat{y}} = r\,z_x ,$$
+
+so a point two standard deviations above average in $x$ is predicted to be $2r$ — not $2$
+— above average in $y$. With $r = 0.9857$ that is a slight pull toward the mean; with
+$r = 0.5$ it is a strong one. The prediction is shrunk toward the average by the factor
+$r$, always, and nothing about the underlying process is "regressing" anywhere. It is
+what minimising vertical squared error does.
+
+## Where it stops
+
+**$R^{2}$ cannot judge model size.** Add a column of pure random noise as an extra
+predictor and $R^{2}$ cannot fall, because the larger model can always reproduce the
+smaller one by giving the new column a coefficient of zero. It will usually rise a
+little. So $R^{2}$ measured on training data is not evidence that a model is better than
+a smaller one, and held-out data or an adjusted criterion is needed instead.
+
+**A high $R^{2}$ does not mean the model is right.** $R^{2}$ counts how much variance is
+left over; it never inspects the *shape* of what is left. A regression scoring $0.94$
+whose residuals plotted against $x$ form a clear U is telling you the relationship is
+curved: the line sits above the data at both ends and below it in the middle, which is
+what fitting a straight line to a curve always produces. The residual plot sees that
+immediately and the summary number cannot see it at all.
+
+**The fit is an association inside the observed range.** Two limits, both routinely
+crossed. Extrapolation: this line at $x = 40$ predicts $33.13$ ms, and the data end at
+$x = 10$ — nothing in the fit knows whether the service saturates, thrashes or falls over
+somewhere in between. And causation: a regression of drowning deaths on ice-cream sales
+gives a strongly positive, highly significant slope, because summer drives both. A
+p-value asks whether the association could plausibly be zero. It does not ask about
+direction or mechanism, and separating those needs an intervention or a design that
+controls the confounder, not more data.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": 'The normal equations, and the shrinkage hiding in the slope',
+                    "minutes": 12,
+                    "vars": ['S_xx', 'S_xy', 'S_yy', 'b_0', 'b_1', 'm_x', 'm_y', 'r', 's_x', 's_y'],
+                    "brief": r'''
+Least squares is two partial derivatives set to zero. Doing it rather than quoting it
+produces the coefficients and, at the end, an identity that explains the name of the
+whole technique.
+
+Write $m_{x}$ and $m_{y}$ for the two sample means (the reference answers use $m_{x}$
+and $m_{y}$ rather than a bar, so that each mean is a symbol in its own right),
+$s_{x}$ and $s_{y}$ for the two sample standard deviations, $b_{0}$ and $b_{1}$ for the
+intercept and slope, $r$ for the correlation, and
+
+$$S_{xx} = \sum (x_i - m_x)^{2}, \quad S_{yy} = \sum (y_i - m_y)^{2}, \quad
+S_{xy} = \sum (x_i - m_x)(y_i - m_y) .$$
+''',
+                    "steps": [
+                        {
+                            "prompt": 'Setting $\\partial Q/\\partial b_{0} = 0$ gives $\\sum (y_i - b_0 - b_1 x_i) = 0$; divide by $n$. Write $b_{0}$ in terms of $m_{x}$, $m_{y}$ and $b_{1}$.',
+                            "answer": 'm_{y} - b_{1} m_{x}',
+                            "placeholder": 'rearrange the centroid equation',
+                            "hint": 'Dividing by $n$ turns the sum into $m_y - b_0 - b_1 m_x = 0$; solve for $b_{0}$.',
+                        },
+                        {
+                            "prompt": 'Setting $\\partial Q/\\partial b_{1} = 0$ and substituting the intercept gives $S_{xy} = b_{1}S_{xx}$. Write $b_{1}$ in terms of $S_{xy}$ and $S_{xx}$.',
+                            "answer": '\\frac{S_{xy}}{S_{xx}}',
+                            "hint": 'Divide both sides by $S_{xx}$, which is positive whenever the predictor is not constant.',
+                        },
+                        {
+                            "prompt": 'The correlation puts the same cross-product on a unitless scale by dividing by both spreads. Write $r$ in terms of $S_{xy}$, $S_{xx}$ and $S_{yy}$.',
+                            "answer": '\\frac{S_{xy}}{\\sqrt{S_{xx} \\cdot S_{yy}}}',
+                            "hint": 'Divide $S_{xy}$ by the square root of the product of the two sums of squares.',
+                            "deconstruct": [
+                                '$r = \\mathrm{Cov}(x,y)/(s_x s_y)$, and each of the three is a sum divided by $n - 1$.',
+                                'Those divisors cancel, leaving $S_{xy}$ over $\\sqrt{S_{xx}S_{yy}}$.',
+                                'Write the two factors under the root separated, not run together.',
+                            ],
+                        },
+                        {
+                            "prompt": 'Now connect them. Since $s_{x}^{2} = S_{xx}/(n-1)$ and $s_{y}^{2} = S_{yy}/(n-1)$, substitute $S_{xy} = r\\sqrt{S_{xx} \\cdot S_{yy}}$ into step 2. Write $b_{1}$ in terms of $r$, $s_{x}$ and $s_{y}$.',
+                            "answer": '\\frac{r s_{y}}{s_{x}}',
+                            "hint": '$b_1 = r\\sqrt{S_{xx}S_{yy}}/S_{xx} = r\\sqrt{S_{yy}/S_{xx}}$, and that ratio of root sums is $s_{y}/s_{x}$.',
+                            "deconstruct": [
+                                '$b_1 = S_{xy}/S_{xx} = r\\sqrt{S_{xx} \\cdot S_{yy}}/S_{xx}$.',
+                                'Simplifying the roots gives $r\\sqrt{S_{yy}/S_{xx}}$.',
+                                'The common divisor $n-1$ turns that into $r s_{y}/s_{x}$, so in standardised units the slope is exactly $r$.',
+                            ],
+                        },
+                        {
+                            "prompt": 'Swap the roles of the variables. Regressing $x$ on $y$ minimises horizontal gaps, so the same algebra runs with $S_{yy}$ in the denominator. Write that slope in terms of $S_{xy}$ and $S_{yy}$.',
+                            "answer": '\\frac{S_{xy}}{S_{yy}}',
+                            "hint": 'Step 2 with $x$ and $y$ interchanged throughout.',
+                        },
+                        {
+                            "prompt": 'Multiply the two slopes from steps 2 and 5 together and simplify using step 3. Write the product.',
+                            "answer": 'r^{2}',
+                            "hint": '$\\frac{S_{xy}}{S_{xx}} \\cdot \\frac{S_{xy}}{S_{yy}} = \\frac{S_{xy}^{2}}{S_{xx}S_{yy}}$, and step 3 says that is $r$ squared.',
+                            "deconstruct": [
+                                'The product is $S_{xy}^{2}/(S_{xx}S_{yy})$.',
+                                'Step 3 gives $r = S_{xy}/\\sqrt{S_{xx}S_{yy}}$, so squaring it gives exactly that ratio.',
+                                'Hence the product of the two slopes is $r^{2}$, which is $1$ only for a perfect fit.',
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+Step 6 settles a question that trips people up: the line of $y$ on $x$ and the line of
+$x$ on $y$ are not the same line, and they are not inverses of each other. Their slopes
+multiply to $r^{2}$, so they coincide only when $r^{2} = 1$. For the worked data
+$0.795 \times 1.222137 = 0.971599$, which is $r^{2}$ to every digit shown.
+
+Step 4 is the same fact wearing its more famous name. In standardised units the fitted
+line is $z_{\hat{y}} = r z_{x}$, so every prediction is pulled toward the mean by the
+factor $r$. That is **regression to the mean**, and it is not a force acting on the data
+— it is what minimising vertical squared error does, visible here as a factor of $r$ that
+appears the moment the slope is written in standardised form.
+
+One consequence worth keeping. Because $|r| \le 1$ — module 5 derived that from the
+non-negativity of a variance — the predicted spread is always narrower than the observed
+spread. A fitted model under-disperses by construction, which is why fitted values should
+never be used as though they were fresh data.
+''',
+                },
             ],
             "quiz": {
                 "title": "Fitting a line, and reading it honestly",

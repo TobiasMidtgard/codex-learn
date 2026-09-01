@@ -4154,3 +4154,371 @@ and `emit.py` and `build.mjs` were safe to run. The diff is `catalog/MA112.json`
 `catalog/authors/MA112.py` and the `docs/` build output, and nothing else.
 
 ---
+
+## Cycle 14 — TRACK 1: Content & Conceptual Depth
+
+*(The runner labels this cycle 1 — a third run began at 11:05 and its counter restarted,
+while this log kept counting. Commit "cycle 1" of run C is this file's cycle 14, exactly
+as `ee95ded` was its cycle 7 and `f1a161b` its cycle 13.)*
+
+**Target: MA201 (Probability & Statistics for Computing), the six modules holding a
+quiz and nothing else — M2, M4, M5, M7, M8 and M11.** Conditional probability,
+continuous densities, joint distributions, tail bounds, estimators, and least squares. A
+learner met each as five concepts bullets and was examined on it in the next unit.
+
+This is the course cycle 13 named on its way out, and the measurement holds: **23 units
+across 11 modules, 2.09 per module, ten of eleven modules with neither a `read` nor a
+`derive`** — the worst in the catalogue now that MA112 has been repaired, and MA112 is
+its only prerequisite, so the two compound.
+
+M1 was excluded because it is already the densest module in the course (3 readings, 4
+derivations, 4 numerics, a quiz and a blanks unit) and is visibly the model the rest was
+never built up to. **M3, M6, M9 and M10 were excluded because each carries a full lab
+with a reference solution the gate runs** — they teach by construction rather than
+examining cold, which is cycle 13's MA112 reasoning and cycle 1's MA111 reasoning applied
+unchanged. That leaves exactly the six modules that examine without teaching.
+
+### Baseline, captured before any edit
+
+```
+82 circuit exercises / 348 checks · 21 tune units
+216 numeric answers verified, 0 unchecked, 218 figure-only
+1212 derivation steps across 46 courses (MA201: 18)
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3160 per-option explanations · 6572 live draws
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys · circuit_model 1457 analyses, 84 refusals, 380 schematics
+desk 61 expressions · theme 14 exemptions, 135 contrast surfaces
+MA201: 11 modules · 23 units · 3 read · 4 derive · 10 bare modules · 5 labs
+       35 questions · 901 math fragments: 901 render, 0 raw, 0 swallowed, 0 unpaired
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads, 12796 KB ·
+       inlined 13993 KB · shell 1168 KB
+catalogue: 62 courses, 368 modules, 1899 units, 246 readings
+```
+
+### The attacks
+
+**1. Senior Educator.** Six modules, six findings acted on, plus two false or misleading
+claims found in prose the cycle was not pointed at.
+
+- *Announced, never derived, six times over.* Fixed: six readings and six derivations,
+  each deriving what its module asserts. Conditioning is shown to satisfy the three
+  axioms, so every module-1 theorem transfers instead of being restated; the exponential
+  is built from a constant hazard rather than quoted and checked; the correlation bound
+  comes out of the non-negativity of a variance, read twice; Chebyshev is derived *from*
+  Markov by squaring; the $n-1$ divisor is derived to an exact identity; and the normal
+  equations are obtained from two partial derivatives.
+
+- **A concepts bullet in M4 licenses a mistake it does not name.** It said
+  $z = (x-\mu)/\sigma$ "puts any of them on one scale", immediately after naming the
+  uniform, exponential and normal. Read as "so you can use a normal table", that is
+  false, and the size is measurable: an $\mathrm{Exp}(1)$ variable is *already*
+  standardised, has mean $1$ and standard deviation $1$, and $P(X \le 0.5) = 1 - e^{-0.5}
+  = 0.393469$ against the normal table's $0.308538$ — **$8.5$ percentage points apart on
+  a perfectly standardised variable**. The bullet was split into two: one saying what the
+  normal is fixed by, one saying that standardising fixes location and scale and never
+  shape, with the number. The reading works it.
+
+- **M2/Q5's explanation states something false.** It said $P(A|B)$ and $P(B|A)$ "agree
+  only when $P(A) = P(B)$". They also agree whenever the shared numerator is zero:
+  disjoint events with $P(A) = 0.3$ and $P(B) = 0.5$ give $P(A|B) = P(B|A) = 0$ with
+  marginals nowhere near each other. Verified symbolically. The `why` now carries both
+  cases. **No option text was touched**, so the answer-tell budget could not move, and
+  the gate confirms it did not.
+
+- **The module teaches the complement rule for conditionals and never says which
+  neighbouring statement is false.** $P(A^{c}|B) = 1 - P(A|B)$ is exact — it is A3
+  inside the world $B$. $P(A|B^{c}) = 1 - P(A|B)$ is not, and the derivation ends on the
+  counterexample: $P(A) = 0.5$, $P(B) = 0.4$, $P(A \cap B) = 0.3$ give $P(A|B) = 0.75$
+  and $P(A|B^{c}) = \frac{1}{3}$, which sum to $1.083$.
+
+- **"Independence" is presented as though it were a fact about mechanism.** The reading
+  makes it arithmetic: ace and spade are independent in a full deck
+  ($\frac{4}{52}\times\frac{13}{52} = \frac{1}{52}$ exactly) and dependent once the two
+  of clubs — neither an ace nor a spade — is removed ($\frac{1}{51} = 0.019608$ against
+  $\frac{52}{2601} = 0.019992$). Nothing physical changed. The module's own cohort
+  example turns out to be exactly the independent case, which is why conditioning on it
+  returns $0.60$ unchanged; moving one student breaks it.
+
+- **Pairwise independence is not mutual independence, and M6 assumes the stronger one.**
+  Two fair coins with $A$ = first heads, $B$ = second heads, $C$ = they agree: every pair
+  is independent at $\frac{1}{4}$, and $P(A \cap B \cap C) = \frac{1}{4}$ against
+  $P(A)P(B)P(C) = \frac{1}{8}$. Mutual independence is $2^{n}-n-1$ equations, and
+  "independent trials" in module 6 is doing more work than it looks.
+
+- **The concepts list calls the exponential *the* memoryless distribution and never
+  justifies the article.** The reading closes the uniqueness: $S(s+t) = S(s)S(t)$ with
+  $S(0)=1$ and $S$ non-increasing forces $S(t) = e^{-\lambda t}$, and $S(t) = 1/(1+t)$ is
+  shown failing it ($\frac{1}{6}$ against $\frac{1}{4}$).
+
+- **M8 asserts that dividing by $n-1$ "corrects that shortfall exactly" and never shows
+  the shortfall.** Derived: $E[\sum(x_i-\bar{x})^{2}] = (n-1)\sigma^{2}$, with the
+  worked sample showing the deviations about $\bar{x}$ ($10.58$) genuinely smaller than
+  about $13.0$ ($12.20$) or $14.0$ ($13.00$). And the correction's limit is named:
+  $s^{2}$ unbiased does **not** make $s$ unbiased — $E[s] = 0.9400\sigma$ at $n=5$ —
+  because the square root is concave.
+
+- *Left alone:* M7's existing bullets on Markov, Chebyshev, Hoeffding and the union bound
+  are all correct as stated, including the $e^{-2n\varepsilon^{2}}$ rate. The reading
+  spends its space on deriving them and on what separates them, rather than restating.
+
+**2. Assessment Inquisitor.** All 35 questions checked against the mathematics rather
+than skimmed. **Every key is correct and no option text was changed**, confirmed
+mechanically: the 35 stems, option sets and keys are byte-identical to `HEAD`, and the
+quiz gate reports every catalogue figure unmoved. One `why` gained the case it was
+missing (M2/Q5, above).
+
+Recomputed rather than assumed: $4/12 = 1/3$; $\frac{4}{52}\cdot\frac{3}{51} =
+\frac{1}{221}$; $0.70(0.02) + 0.30(0.05) = 0.029$ against the unweighted $0.035$;
+$2 \times 0.5 = 1$ for the uniform density; $300/(20 \times 30) = 0.5$; $4+4 = 8$ with
+$\sqrt{8} = 2.828$; $E[X^{3}] = 0$ for the symmetric counterexample; $10/50 = 0.2$;
+Chebyshev's $1/4$ at $k=2$ against a normal's true $0.0455$; $1000 \times 0.0001 = 0.1$
+against an independent $0.0952$; $7/20 = 0.35$; bias $1$, variance $0$, MSE $1$; and
+$\mathrm{Cov}(x,y)/\mathrm{Var}(x)$ as the slope. All hold.
+
+**3. Simulation Auditor.** M2, M4, M5, M7, M8 and M11 contain no sandbox, tune, build or
+schematic `numeric`, so there is no draw loop or solver in the target. The persona was
+pointed at the two things in scope no gate covers — **what the renderer actually draws**
+and **arithmetic in prose** — and at the derivation checker, where the largest finding
+is.
+
+- **`\varepsilon` renders correctly and is silently dropped by the answer checker.**
+  `MathCheck.latexToPy` translates `\frac{\sigma^{2}}{n\varepsilon^{2}}` to
+  `sigma**2/n**2` — the `\varepsilon` vanishes and the exponent attaches itself to the
+  wrong symbol. `MathML.render` draws it perfectly, so a prompt would show $\varepsilon$
+  while the checker graded a different expression. `\epsilon` is handled correctly.
+  This was found by testing candidate answers *before* writing them; all six M7 answers
+  use `\epsilon`.
+
+- **`\bar` and `\hat` are dropped by the same translator.** `\bar{x}` becomes plain `x`,
+  so a barred mean silently collides with the variable it is the mean of. This is why
+  the M11 derivation declares `m_x` and `m_y` rather than using bars in its answers, and
+  says so in its brief.
+
+- **Two subscripted multi-letter symbols juxtaposed corrupt each other.**
+  `\sqrt{S_{xx}S_{yy}}` parses as `sqrt(S_xxS*y*y)`. With a space or `\cdot` between them
+  it is correct. M11 step 3 uses `\cdot`.
+
+- **Every number written into the six readings was computed before it was written**, in
+  SymPy: the two-machine partition forwards ($0.029$) and backwards
+  ($\frac{15}{29} = 0.517$, so machine 2 makes $30$ per cent of parts and $51.7$ per cent
+  of defects); the deck independence at $52$ and $51$ cards; the pairwise/mutual coin
+  triple; the constant-hazard integration and $E[T] = 1/\lambda$; inverse-transform
+  sampling at $U = 0.37$ giving $t = 46.2035$ hours and $F(46.2035) = 0.370000$ back;
+  the Weibull hazard at $0.002$ and $0.040$ per hour; the standardised-exponential gap of
+  $8.49$ points; the joint table's marginals, $\mathrm{Cov} = -0.0275$,
+  $\rho = -0.0747$, $\mathrm{Var}(X+Y) = 0.74$ and $\mathrm{Var}(X-Y) = 0.85$, and its
+  three row conditionals $0.600$, $0.556$, $0.500$ against an unconditional $0.550$; the
+  four-row bound comparison on $10{,}000$ flips (Markov $0.909$, Chebyshev $0.01$,
+  Hoeffding $e^{-50} = 1.93\times10^{-22}$, **exact binomial $7.76\times10^{-24}$** —
+  twenty-two orders of magnitude, and the exact figure summed rather than approximated);
+  the union bound's exact and worst cases; Markov's failure on $[-10,10]$; the eight-point
+  sample through $\bar{x} = 13.45$, $S = 10.58$, $s^{2} = 1.511429$, $s = 1.229402$,
+  $\mathrm{SE} = 0.434659$ and $[12.4222,\ 14.4778]$; $c_4(n)$ at $n = 2, 5, 10, 30$; the
+  shrinkage optimum $c = \theta^{2}/(\sigma^{2}+\theta^{2})$ and its halved error; and
+  the whole regression — $\beta_1 = 0.795$, $\beta_0 = 1.33$, residuals summing to $0$,
+  $\mathrm{SSE} = 0.739$, $R^{2} = r^{2} = 0.971599$, the reverse slope $1.222137$ with
+  the product equal to $r^{2}$, $s = 0.49632$ on $n-2 = 3$, $\mathrm{SE}(\beta_1) =
+  0.078475$, $t = 10.13$ and a slope interval of $[0.5453,\ 1.0447]$.
+
+- **All 36 new derivation answers were truth-checked separately from the gate**, each
+  against an expression written independently of the one in the catalogue — 36 of 36
+  agree.
+
+**4. UX & Accessibility Hardener.** Content-side, as cycles 1, 4, 7, 10 and 13
+established. Checked rather than assumed: every figure is a fenced `text` block inside
+`overflow-x:auto`, which is cycle 4's rule for staying safe at 375px; **no markdown
+table, no hard-coded colour and no raw HTML was introduced**, all three verified
+mechanically over the draft. The fenced listings are prose figures rather than runnable
+programs, so none makes a claim about its own output that a **▶ Run** button would be
+needed to check.
+
+### The defect this cycle found beyond its own course
+
+**CTRL510/M4 step 1 accepts any answer that is zero, including `0`.** The step asks for
+$\dot{e}$ in terms of $A$, $x$, $\hat{x}$, $L$ and $C$, and its reference answer is
+`A x - A \hat{x} - L C x + L C \hat{x}`. Because `\hat` is dropped by the translator,
+`\hat{x}` and `x` become the same symbol and the whole expression translates to
+
+```
+A * x - A * x - L * C * x + L * C * x     ==  0
+```
+
+`verify_derivations.py` passes it, and cannot do otherwise: the gate checks each answer
+**against itself**, so both sides lose the same term and $0 = 0$. The step therefore
+grades as correct anything a learner types that collapses to zero — the right answer
+$(A - LC)(x - \hat{x})$, and equally `0` or `x - x`.
+
+Swept the whole catalogue for the general case — any answer containing a command that
+contributes nothing, tested by translating it twice, once as written and once with the
+command deleted, and comparing. **Exactly one of the catalogue's 1248 steps is affected**,
+and it is this one. Not fixed here: the right repair is in `src/studio.js`, mapping
+`\hat{z}` to a distinct symbol the way `\lambda` is already mapped to `lambda_`, and that
+is a Track 2 machinery cycle. Recorded with the diff so it starts from the cause rather
+than the symptom.
+
+### Found in my own work, and fixed
+
+Every one of these was found by a mechanical sweep run *before* applying, and most are
+defects this cycle was in the middle of repairing in somebody else's text.
+
+- **My own render harness condemned correct content on its first run.** It reported
+  `\frac{n!}{k! \, (n-k)!}` as a swallowed fraction, because `<mspace …/>` is
+  self-closing and the child counter treated it as an opening tag that never closed. A
+  measurement that condemns correct content is the failure cycle 3 recorded about its own
+  gate and cycle 13 recorded about its unpaired-dollar count, and reporting that hit as a
+  finding would have been the same error a third time. Fixed, then self-tested on nine
+  cases — four that must flag and five that must not.
+- **The same harness then missed the worse half of the defect.** Cycle 13 recorded that
+  `\frac13` mid-expression eats the relation
+  (`<mfrac><mn>13</mn><mo>=</mo></mfrac>`); that `mfrac` has exactly two children, so a
+  child count cannot see it. Added the source-level signature (`\frac` followed by an
+  unbraced multi-digit run) alongside the structural one.
+- **Ten of my own fragments would have shipped as raw markup.** Three classes: `\big[`
+  and `\big(` (five), `\{…\}` set braces (three), and — for the third cycle running —
+  **cycle 10's escaped space `\ `**, in `[12.4222,\ 14.4778]` and `[0.5453,\ 1.0447]`.
+  Repaired to `\left(`/`\right)`, `\left\{`/`\right\}` and `\,`, each verified against
+  the renderer's own tables rather than assumed.
+- **Ten of my own inline fragments crossed a source line**, which is cycle 13's third
+  defect class, discovered because I was auditing for it. Rewrapped, and the rewrap
+  itself missed one because I wrote `\tfrac` in the pattern where the text had `\frac` —
+  caught by re-running the checker rather than by trusting the first pass.
+- **Five of my six readings came in under the 1200-word target** (1058–1195, all above
+  the emitter's 400 floor, so nothing would have failed) — the identical finding cycle 13
+  made about its own work. Extended with material rather than padding: the uniqueness of
+  the exponential among memoryless distributions; the row conditionals read straight off
+  the joint table; when the union bound is exact and when it is worst by a factor of $n$;
+  the bias–variance decomposition derived, with the shrinkage estimator that beats the
+  unbiased one on MSE; and the residual standard error on $n-2$ with a confidence
+  interval for the slope, which connects M11 back to M8's derivation.
+- **My first catalogue survey ranked MA201 at 6.82 units per module, and the true figure
+  is 2.09.** `lab` holds a dict, and `len()` on a dict counts its keys, so every
+  lab-bearing module was scored as eight units instead of one. The ranking survived
+  because the error is roughly uniform, but the number was wrong by a factor of three and
+  would have gone into this entry. The corrected count agrees exactly with the 2.09 cycle
+  13 reported, which is what caught it.
+- **My truth harness scored 32 of 36 on its first run against the emitted file, and was
+  wrong about all four.** All four are cycle 13's finding restated: a bare `e` in a
+  derive answer is a free symbol, not Euler's number. Confirmed rather than changed —
+  **13 pre-existing answers across 7 other courses** already use a bare `e^`, so these
+  four follow the convention.
+- **My payload-window check reported 65 orphaned files.** It read `docs/version.json`,
+  which holds only a build hash and names no payload at all; the manifest is
+  `docs/programs/_generations.json`. Corrected, the window is 3 generations at 62 each,
+  64 files, **0 orphaned and 0 missing**.
+
+### What changed
+
+**Twelve new units in six modules** — one `read` and one `derive` each.
+
+| Module | Reading | Words | Derivation | Steps |
+|---|---|---|---|---|
+| M2 | The world where B already happened, and the rule that survives the move | 1442 | The complement that survives conditioning, and the one that does not | 6 |
+| M4 | Where the probability went, and the rate that replaced it | 1386 | The exponential, out of one assumption about its hazard | 6 |
+| M5 | Two variables at once, and the bound a correlation cannot cross | 1326 | Why a correlation cannot leave the interval from minus one to one | 6 |
+| M7 | Guarantees you can prove without knowing the distribution | 1351 | Markov, then Chebyshev, then the law of large numbers | 6 |
+| M8 | The degree of freedom the mean spends, and the correction it does not buy | 1353 | The degree of freedom the mean spends | 6 |
+| M11 | The line that minimises squares, and the two claims it cannot make | 1302 | The normal equations, and the shrinkage hiding in the slope | 6 |
+
+**8,160 new words**, every reading inside the 1200–2500 target and in line with M1's
+existing three. MA201: 23 units → 35, 3 readings → 9, 4 derivations → 10, 18 derivation
+steps → 54, 10 bare modules → 4, and **2.09 units per module → 3.18**. Every reading
+carries a worked example through to a checked number, names the mistake people make and
+says why it is tempting, and closes on where the idea stops holding.
+
+**Twenty-five concepts bullets added or repaired** across the six modules, so the new
+material is reachable from the list a learner skims and not only from the reading: that
+conditioning is a probability model in its own right, the complement that does not
+survive it, independence as arithmetic, pairwise against mutual; the vanishing of every
+point, the density as a rate, the constant hazard and the rising one; covariance as a
+definition rather than a formula, the bound from non-negativity, the difference that is
+less variable than the sum, the finite-variance requirement; Chebyshev as Markov twice,
+Markov's inversion without non-negativity, a bound against an estimate, the price of a
+confidence; the exact $(n-1)\sigma^{2}$, the standard deviation that stays biased,
+maximum likelihood's small-sample bias, the bootstrap's failure on the maximum; the
+vertical residual and the two slopes, regression to the mean, the residuals summing to
+zero, and $R^{2} = r^{2}$. **The M4 z-score bullet was replaced** by two that state the
+claim correctly; **every other pre-existing bullet in these modules is untouched.**
+
+**One `why` extended** (M2/Q5), adding the zero-numerator case to a claim that was false
+without it. No option text, stem or key was changed anywhere in the course.
+
+### Left alone, deliberately
+
+- **M3, M6, M9 and M10 still hold a lone lab.** Each is a full lab whose reference
+  solution the gate runs, so they teach by construction rather than examining cold, which
+  is not the defect this cycle was chasing. They should get readings; that is a following
+  cycle. Four bare modules remain against ten.
+- **The 35 questions were audited and, apart from the one `why`, not changed.** They are
+  Track 3's ground. No option text moved, so the answer-tell budget could not move, and
+  the gate confirms every catalogue figure unchanged.
+- **`\varepsilon`, `\bar` and `\hat` are dropped by `MathCheck.latexToPy` and were not
+  fixed there.** Writing `\epsilon` and `m_x` repairs this course; it does not stop the
+  next author writing `\varepsilon` in an answer and shipping a step that grades a
+  different expression from the one it displays. The fix is the same shape as the
+  existing `lambda` → `lambda_` rename and is a Track 2 machinery cycle. Handed on with
+  the three reproductions above and the one live casualty (CTRL510/M4).
+- **`verify_derivations.py` still proves translation rather than truth**, as cycles 1, 7
+  and 13 established — and the CTRL510 finding is the sharpest demonstration yet, since a
+  step translating to `0` self-checks perfectly. All 36 new answers were therefore
+  truth-checked separately, and the harness is in this session's scratchpad. Nothing about
+  the gate was changed: rewriting the spec from inside a cycle it governs remains the
+  wrong move.
+- **1041 raw fragments, 138 swallowed and 312 unpaired remain catalogue-wide.** MA201 is
+  at zero in all three, before and after. These figures come from *this* cycle's harness,
+  which is independently written from cycle 13's lost one, so they are not directly
+  comparable to its 1053 / 139 / 273 — the durable claim is that only MA201 changed, and
+  it changed from zero to zero.
+- **MA201's four lab modules and the capstone were not touched**, and neither was M1,
+  which is already the model the rest of the course has now been brought toward.
+- **`docs/programs` holds 64 payloads against 62 in the current generation.** The rolling
+  window, as every cycle since 1 has established. Verified rather than assumed: 3
+  generations retained at 62 each, 64 files on disk, all 64 named by a retained
+  generation, **0 orphaned and 0 missing**, covering 62 distinct courses.
+
+### Gates, after
+
+Every pre-existing number unmoved. Three moved by exactly what was added — the
+derivation-step count by the 36 new steps, and the two artifact sizes by the content.
+
+```
+verify_derivations   All good: 1248 steps across 46 courses   (1212 + 36 new;
+                     MA201 18 -> 54)
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3160 per-option explanations · 6572 live draws —
+                     unmoved, and no stem, option or key changed
+verify_labs MA201    All good: 5 labs  (M3 7/7, M6 7/7, M9 7/7, M10 7/7, CAP 11/11)
+verify_circuits      All good: 82 circuit exercises, 348 checks
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_circuit_model All good: 1457 analyses, 84 refusals · 15 plots · 380 schematics
+verify_desk          All good: 61 expressions at the extremes
+verify_theme         All good: 14 exemptions · 135 contrast surfaces x 2 themes
+emit.py MA201        ok — 11 modules, 4 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12796 -> 12875 KB ·
+                     inlined 13993 -> 14072 KB · shell 1168 KB — unchanged
+catalogue            62 courses, 368 modules, 1899 -> 1911 units, 246 -> 252 readings
+```
+
+Beyond the gates: every MA201 math fragment pushed through the shipped `MathML.render` —
+**1892 of 1892 draw, 0 raw, 0 swallowed, 0 unpaired**, against 901 of 901 with the same
+three zeros at baseline, so 991 fragments were added and none of them is a defect; all 36
+new derivation answers truth-checked against independently written expressions, 36 of 36;
+every number in 8,160 new words recomputed in SymPy before it was written; the 35
+question stems, option sets and keys diffed against `HEAD` at **0 changes**; **12 lesson
+ids added and 0 lost**, so no completed work is orphaned; hedge words counted at 0 in the
+new prose; no markdown table, hard-coded colour or raw HTML introduced; the whole
+catalogue swept for answers containing a silently-dropped command, finding exactly one,
+in CTRL510; and the payload window checked at 0 orphaned, 0 missing.
+
+**A note on the working tree.** The runner's lock (`.gauntlet.pid`, pid 9133) was live
+throughout, and this cycle is the process it launched — so the lock is this cycle's own
+and `emit.py` and `build.mjs` were safe to run. The diff is `catalog/MA201.json`,
+`catalog/authors/MA201.py` and the `docs/` build output, and nothing else.
+
+---
