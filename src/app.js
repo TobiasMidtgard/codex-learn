@@ -651,7 +651,7 @@ function renderShell() {
           '<span class="fl">🔥</span><b id="streak-val">0</b><span>day streak</span>' +
         '</div>' +
         '<div class="metric xp" title="Experience earned"><b id="xp-val">0</b><span>XP</span></div>' +
-        '<button class="tbtn" id="desk-btn" aria-label="Notepad and calculator" title="Notepad and calculator (Alt+K)">▤</button>' +
+        '<button class="tbtn" id="desk-btn" aria-label="Notepad and calculator" aria-haspopup="dialog" aria-expanded="false" title="Notepad and calculator (Alt+K)">▤</button>' +
         '<button class="tbtn" id="theme-btn" aria-label="Switch theme">☾</button>' +
         '<span class="save-state" id="save-state"></span>' +
       '</header>' +
@@ -2438,7 +2438,11 @@ function renderQuiz(main, l) {
         '<button class="btn dark" id="quiz-retry">Retry</button>' +
         (pass && nav.next ? '<button class="btn primary" id="quiz-next">' + esc(nav.next.title) + ' →</button>' : '') +
       '</div></div>';
-    $('#quiz-out', main).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    /* the CSS reduced-motion block cannot reach a scroll the script asks for */
+    $('#quiz-out', main).scrollIntoView({
+      behavior: (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth',
+      block: 'nearest'
+    });
     $('#quiz-retry', main).addEventListener('click', function () { go({ view: 'lesson', id: l.id, top: true }); });
     const qn = $('#quiz-next', main);
     if (qn) qn.addEventListener('click', function () { go({ view: 'lesson', id: nav.next.id }); });

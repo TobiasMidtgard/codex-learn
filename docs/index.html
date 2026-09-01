@@ -36,7 +36,10 @@
   --ink:#EDEFF3;
   --ink-2:#B7BCC6;
   --ink-3:#8A909C;
-  --ink-4:#565C68;
+  /* was #565C68 - 2.97:1 on --ground. This tier carries the breadcrumb, the lesson
+     meta row, table headers and the code-block language label. None of that is
+     decorative, and all of it is under 13px. 4.95:1. */
+  --ink-4:#787F8D;
   --ink-5:#3A3F49;
 
   --line:rgba(255,255,255,0.06);
@@ -58,10 +61,28 @@
   --purple:#A78BFA;
   --amber:#FFC66D;
   --rose:#FF8A94;
+  /* sky, teal and pink existed only as literal hexes inside .chip rules, which is why
+     seven of the eleven unit-type chips had no light theme at all. */
+  --sky:#9CD5FF;
+  --teal:#5EEAD4;
+  --pink:#F472B6;
   --blue-12:rgba(110,155,255,0.12);
+  --blue-28:rgba(110,155,255,0.28);
   --purple-12:rgba(167,139,250,0.12);
+  --purple-28:rgba(167,139,250,0.28);
   --amber-08:rgba(255,198,109,0.08);
   --amber-22:rgba(255,198,109,0.22);
+  --sky-12:rgba(156,213,255,0.12);
+  --sky-28:rgba(156,213,255,0.28);
+  --teal-12:rgba(94,234,212,0.12);
+  --teal-28:rgba(94,234,212,0.28);
+  --pink-12:rgba(244,114,182,0.12);
+  --pink-28:rgba(244,114,182,0.28);
+  --bad-08:rgba(255,138,148,0.08);
+  --bad-28:rgba(255,138,148,0.28);
+  --bad-32:rgba(255,138,148,0.32);
+  --code-ink:var(--lime);
+  --link:var(--lime);
 
   --ok:var(--lime);
   --bad:#FF8A94;
@@ -89,7 +110,7 @@
   --ink:#131712;
   --ink-2:#3D4539;
   --ink-3:#616B59;
-  --ink-4:#89927F;
+  --ink-4:#69725F;               /* was #89927F - also 2.97:1; now 4.62:1 */
   --ink-5:#AEB6A5;
 
   --line:rgba(15,25,5,0.09);
@@ -107,11 +128,32 @@
   --lime-30:rgba(95,138,11,0.32);
   --lime-glow:0 0 12px rgba(135,194,42,0.35);
 
-  --blue:#2C5BD0; --purple:#6D48C7; --amber:#9A6512; --rose:#C1373F;
+  /* --amber was #9A6512: 4.54:1 on the ground, but 4.15:1 on its own --amber-08 tint,
+     which is where .chip.blanks and .chip.project actually sit. #8A5A12 is 4.97:1
+     there, and is already this palette's .tk-unit. */
+  --blue:#2C5BD0; --purple:#6D48C7; --amber:#8A5A12; --rose:#C1373F;
+  --sky:#0B6382;
+  --teal:#0B6B5E;
+  --pink:#A81F6B;
   --blue-12:rgba(44,91,208,0.10);
+  --blue-28:rgba(44,91,208,0.28);
   --purple-12:rgba(109,72,199,0.10);
-  --amber-08:rgba(154,101,18,0.08);
-  --amber-22:rgba(154,101,18,0.22);
+  --purple-28:rgba(109,72,199,0.28);
+  --amber-08:rgba(138,90,18,0.08);
+  --amber-22:rgba(138,90,18,0.22);
+  --sky-12:rgba(11,99,130,0.10);
+  --sky-28:rgba(11,99,130,0.28);
+  --teal-12:rgba(11,107,94,0.10);
+  --teal-28:rgba(11,107,94,0.28);
+  --pink-12:rgba(168,31,107,0.10);
+  --pink-28:rgba(168,31,107,0.28);
+  --bad-08:rgba(193,55,63,0.08);
+  --bad-28:rgba(193,55,63,0.28);
+  --bad-32:rgba(193,55,63,0.32);
+  /* var(--lime) is 3.41:1 as text on var(--lime-08). Inline code is the most repeated
+     element in a 2000-word reading; #3F6212 is this palette's .tk-str and 5.9:1. */
+  --code-ink:#3F6212;
+  --link:#4C7005;                /* var(--lime) is 3.76:1 on the ground; this is 5.3:1 */
   --bad:#C1373F;
   color-scheme:light;
 }
@@ -330,18 +372,24 @@ kbd{font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:4px;bor
   border:1px solid var(--line);color:var(--ink-3);white-space:nowrap;
 }
 .chip.mono{font-family:var(--mono);font-size:10.5px;font-weight:500}
-.chip.read{color:var(--blue);border-color:rgba(110,155,255,.28);background:var(--blue-12)}
-.chip.sandbox{background:rgba(110,155,255,.14);color:#9CD5FF}
-.chip.derive{background:rgba(167,139,250,.16);color:#C084FC}
-.chip.blanks{background:rgba(255,176,32,.16);color:#FFB020}
-.chip.tune{background:rgba(94,234,212,.16);color:#5EEAD4}
-.chip.match{background:rgba(167,139,250,.16);color:#A78BFA}
-.chip.numeric{background:rgba(110,155,255,.16);color:#6E9BFF}
+/* Ten of these render on every lesson page, in .lesson-meta, and again in the rail.
+   Seven carried a dark-theme pastel as a literal hex with no light override - and
+   effectiveTheme() (app.js:558) returns 'light' whenever the OS is not set to dark,
+   so the first thing a new visitor on a light machine saw was a `Tune` chip at 1.28:1
+   and a `Fill in` chip at 1.56:1. Each chip now takes its hue from a token that has a
+   value in both themes. The hue families are the ones the original author picked. */
+.chip.read{color:var(--blue);border-color:var(--blue-28);background:var(--blue-12)}
+.chip.sandbox{color:var(--sky);border-color:var(--sky-28);background:var(--sky-12)}
+.chip.derive{color:var(--purple);border-color:var(--purple-28);background:var(--purple-12)}
+.chip.blanks{color:var(--amber);border-color:var(--amber-22);background:var(--amber-08)}
+.chip.tune{color:var(--teal);border-color:var(--teal-28);background:var(--teal-12)}
+.chip.match{color:var(--purple);border-color:var(--purple-28);background:var(--purple-12)}
+.chip.numeric{color:var(--blue);border-color:var(--blue-28);background:var(--blue-12)}
 /* `build` had no colour of its own, so a circuit-building unit rendered as an
    unstyled chip among nine styled ones. Rose, because it is the only kind that
    asks the learner to draw rather than to answer. */
-.chip.build{background:rgba(244,114,182,.16);color:#F472B6}
-.chip.quiz{color:var(--purple);border-color:rgba(167,139,250,.28);background:var(--purple-12)}
+.chip.build{color:var(--pink);border-color:var(--pink-28);background:var(--pink-12)}
+.chip.quiz{color:var(--purple);border-color:var(--purple-28);background:var(--purple-12)}
 .chip.code,.chip.lab{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}
 .chip.project,.chip.capstone{color:var(--amber);border-color:var(--amber-22);background:var(--amber-08)}
 .chip.done{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}
@@ -350,7 +398,7 @@ kbd{font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:4px;bor
 .chip.prereq{font-family:var(--mono);font-size:10.5px;font-weight:700;cursor:pointer;color:var(--ink-3)}
 .chip.prereq:hover{border-color:var(--line-3);color:var(--ink)}
 .chip.prereq.met{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}
-.chip.prereq.unmet{color:var(--bad);border-color:rgba(255,138,148,.28);background:rgba(255,138,148,.08)}
+.chip.prereq.unmet{color:var(--bad);border-color:var(--bad-28);background:var(--bad-08)}
 
 .toast{
   position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(18px);z-index:60;
@@ -1240,22 +1288,54 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .lesson-meta{display:flex;gap:9px;align-items:center;color:var(--ink-4);font-size:12.5px;margin-bottom:24px;flex-wrap:wrap}
 .article{font-size:15px;line-height:1.72;color:var(--ink-2)}
 .article>*:first-child{margin-top:0}
+/* The measure. .lesson-read is 780px wide with 40px of padding either side, so prose
+   ran at 700px - about 93 characters at 15px, against the 45-75 a reader can track
+   without losing the return sweep. The design already knew this: .pcard p caps at 64ch
+   and .ckt-note at 70ch. The one surface carrying 1200-2500-word readings was the one
+   that did not. Only prose is capped - code boxes, tables and display math keep the
+   full column, so nothing that needs width loses it. */
+.article>p,.article>ul,.article>ol,.article>blockquote,
+.article>h2,.article>h3,.article>h4{max-width:66ch}
+/* protectMath substitutes a display equation into the paragraph flow before renderMd
+   ever sees it, so a $$...$$ line arrives as a <p> and would inherit the prose cap.
+   MathML.render stamps display="block" (studio.js:293), which is the one hook that
+   tells the two apart. A display equation gets the whole column, as it did before. */
+.article>p:has(math[display=block]){max-width:none}
 .article h2{margin:32px 0 10px;font-size:21px;font-weight:600;letter-spacing:-.025em;line-height:1.2;color:var(--ink)}
 .article h3{margin:24px 0 8px;font-size:16.5px;font-weight:600;letter-spacing:-.015em;color:var(--ink)}
-.article h4{margin:20px 0 6px;font-size:14px;font-weight:600;color:var(--ink)}
+/* was 14px, i.e. smaller than the 15px body it introduces */
+.article h4{margin:20px 0 6px;font-size:15px;font-weight:600;color:var(--ink)}
 .article p{margin:0 0 14px;text-wrap:pretty}
 .article ul,.article ol{margin:0 0 14px;padding-left:22px}
 .article li{margin:5px 0}
 .article li p{margin:0}
 .article b,.article strong{color:var(--ink);font-weight:600}
-.article code{font-size:.88em;color:var(--lime);background:var(--lime-08);padding:1px 5px;border-radius:4px}
+/* var(--lime) on var(--lime-08) is 3.41:1 in the light theme, and inline code is the
+   most repeated element in a reading. --code-ink is legible in both. */
+.article code{font-size:.88em;color:var(--code-ink);background:var(--lime-08);padding:1px 5px;border-radius:4px}
 .article pre code{background:none;padding:0;color:inherit;font-size:inherit}
+/* A link in prose was hue alone, and the hue is 1.53:1 against the body text beside it
+   in dark and 2.40:1 in light - under WCAG 1.4.1 that is not a distinguishable link.
+   No authored reading contains one yet, which is exactly why nothing has caught it. */
+.article a{color:var(--link);text-decoration:underline;text-decoration-thickness:1px;
+  text-underline-offset:2px;transition:text-decoration-thickness .12s var(--ease)}
+.article a:hover{color:var(--link);text-decoration-thickness:2px}
 .article blockquote{margin:16px 0;padding:2px 0 2px 16px;border-left:2px solid var(--lime);color:var(--ink-2)}
 .article blockquote p:last-child{margin:0}
 .article hr{border:0;border-top:1px solid var(--line);margin:26px 0}
+/* renderMd emits a bare <table> and .main is the page's scroll container, so a table
+   wider than the column scrolled the whole pane sideways and took every line of prose
+   with it. MA111's convergence tables are three columns of ten-significant-figure
+   MathML, which cannot wrap: about 348px of cells against 335px of column at 375px.
+   The table scrolls inside its own box now, and the box is focusable so that the
+   scroll is reachable without a pointer. */
+.article .tw{max-width:100%;overflow-x:auto;margin:0 0 16px;-webkit-overflow-scrolling:touch}
+.article .tw>table{margin:0}
 .article table{border-collapse:collapse;width:100%;margin:0 0 16px;font-size:13.5px}
 .article th,.article td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-.article th{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-4);font-weight:500}
+/* 9.5px uppercase at .13em is under the legibility floor for the label that says what
+   a column means - and it is the label a reader needs most when the cells are numbers. */
+.article th{font-family:var(--mono);font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-4);font-weight:500}
 /* A runnable example: header strip, the code, and an output drawer that opens
    underneath it. Running never navigates away, so the reader keeps their place. */
 .cbx{position:relative;margin:0 0 18px;border:1px solid var(--line);border-radius:var(--r-md);
@@ -1305,15 +1385,19 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   font-size:13.5px;line-height:1.5;color:var(--ink-2);transition:all .16s;
 }
 .opt:hover:not(:disabled){border-color:var(--line-3);background:rgba(255,255,255,.04)}
+/* a white wash over a white card is not a hover state */
+[data-theme=light] .opt:hover:not(:disabled){background:rgba(15,25,5,.05)}
 .opt .k{font-family:var(--mono);font-size:10.5px;font-weight:700;min-width:19px;height:19px;flex:none;margin-top:1px;
   border-radius:6px;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-4)}
 .opt code{color:var(--lime);background:var(--lime-08);padding:0 4px;border-radius:3px;font-size:.9em}
 .opt.correct{border-color:var(--lime-30);background:var(--lime-08)}
 .opt.correct .k{background:var(--lime-12);border-color:var(--lime-30);color:var(--lime)}
-.opt.wrong{border-color:rgba(255,138,148,.32);background:rgba(255,138,148,.07)}
+/* the dark theme's rose, hard-coded - a wrong answer in the light theme was painted
+   from the wrong palette while var(--bad) beside it was the right one */
+.opt.wrong{border-color:var(--bad-32);background:var(--bad-08)}
 .explain{margin-top:12px;padding:12px 14px;border-radius:var(--r-md);font-size:13px;line-height:1.6;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2)}
 .explain.good{border-color:var(--lime-30);background:var(--lime-08)}
-.explain.bad{border-color:rgba(255,138,148,.28);background:rgba(255,138,148,.07)}
+.explain.bad{border-color:var(--bad-28);background:var(--bad-08)}
 .quiz-result{border:1px solid var(--lime-30);background:var(--lime-08);border-radius:var(--r-lg);padding:22px;margin:12px 0 0;animation:popIn .45s var(--pop) both}
 .quiz-result .score{font-size:32px;font-weight:600;letter-spacing:-.03em;line-height:1;color:var(--ink)}
 .quiz-result p{margin:8px 0 14px;color:var(--ink-3);font-size:13px}
@@ -1387,6 +1471,7 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .helper{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden}
 .helper>button{display:flex;justify-content:space-between;align-items:center;width:100%;padding:11px 15px;text-align:left;font-size:13.5px;font-weight:600}
 .helper>button:hover{background:rgba(255,255,255,.03)}
+[data-theme=light] .helper>button:hover{background:rgba(15,25,5,.04)}
 .helper>button span.k{font-family:var(--mono);font-size:10.5px;color:var(--ink-4);font-weight:500}
 .helper .hint-body{padding:0 15px 13px;font-size:13.5px;color:var(--ink-2)}
 .hint-item{padding:10px 12px;margin:7px 0 0;border-left:2px solid var(--amber);background:var(--amber-08);border-radius:0 8px 8px 0;line-height:1.6}
@@ -1666,6 +1751,11 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   .cap-cols{grid-template-columns:1fr}
 }
 @media (max-width:640px){
+  /* Each nav button carries a whole lesson title and .btn is white-space:nowrap, so
+     one long title pushed the article foot wider than the column. Let it grow down. */
+  .article-foot{gap:8px}
+  .article-foot .btn{white-space:normal;height:auto;min-height:36px;padding:8px 12px;
+    text-align:center;max-width:100%;line-height:1.35}
   .cb-btn.cb-open .lbl{display:none}
   .hero h1{font-size:27px}
   .stats{grid-template-columns:1fr 1fr}
@@ -1681,7 +1771,14 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 try {
   var cwSaved = localStorage.getItem('codewright-progress-v1');
   var cwTheme = cwSaved ? JSON.parse(cwSaved).theme : null;
-  if (cwTheme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  /* P has no `theme` key until the reader picks one (app.js:414), and effectiveTheme()
+     resolves an unset theme to light unless the OS asks for dark. Reading only the saved
+     value here meant a fresh visit on a light machine painted the dark palette and then
+     flipped, after app.js booted. Same condition, before first paint. */
+  if (cwTheme !== 'dark' && (cwTheme === 'light' ||
+      !window.matchMedia || !window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
 } catch (e) {}
 </script>
 </head>
@@ -7835,7 +7932,7 @@ const TRACKS = [
 
 const DEGREE_DATA = {"programs":[{"id":"cs-degree","name":"Computer Science — 5 Year Program","subtitle":"Integrated BSc + MSc track: a foundation year, then 32 courses, every module ending in code that runs.","short":"Computer Science","emphasis":"Computer Science","bands":[{"n":0,"title":"Foundations","theme":"The hands-on tracks the degree assumes you have done: write and run code, put a page on the web, serve it from a backend, reason about data structures, and learn the tools every later year uses.","icon":"◌","tint":"#E9F7D6"},{"n":1,"title":"Foundations & Mathematics","theme":"Learn to express ideas as programs, and to reason about them formally.","icon":"◴","tint":"#E4EEFA"},{"n":2,"title":"Core CS & Systems","theme":"How machines actually execute, store and organise work.","icon":"◵","tint":"#FFE9DC"},{"n":3,"title":"Theory, Networks & Design","theme":"Limits of computation, and the systems built up to those limits.","icon":"◶","tint":"#E1F4E8"},{"n":4,"title":"Advanced & Specialisations","theme":"Scale, learning, parallelism, and a chosen depth track.","icon":"◷","tint":"#F1E8FB"},{"n":5,"title":"Advanced Topics & Capstone","theme":"Frontier subjects, verification, ethics and a portfolio build.","icon":"⬤","tint":"#FFF3D6"}],"bandNoun":"Year"},{"id":"ee-msc","name":"Electrical Engineering — 5 Year Program","short":"Electrical Engineering","emphasis":"Electrical Engineering","subtitle":"Integrated BSc + MSc track, 30 courses, from Ohm’s law to a silicon pipeline. Every topic opens in something you can push on, derives the mathematics with you, and ends at a bench.","bandNoun":"Year","accent":"#6E9BFF","bands":[{"n":1,"title":"Circuits, Fields & Foundations","theme":"What a current is, what a field is, and the mathematics needed to say anything precise about either.","icon":"◴","tint":"#E4EEFA"},{"n":2,"title":"Devices, Signals & Instruments","theme":"Semiconductors that switch and amplify, signals described as spectra, and the discipline of actually measuring something.","icon":"◵","tint":"#FFE9DC"},{"n":3,"title":"Systems & Analysis","theme":"State space, sampling, transmission lines, converters and pipelines — the working language of every specialisation above.","icon":"◶","tint":"#E1F4E8"},{"n":4,"title":"Advanced Practice","theme":"Optimal control, adaptive filtering, noise, matching networks, drives and memory hierarchies.","icon":"◷","tint":"#F1E8FB"},{"n":5,"title":"Specialisation & Capstone","theme":"Non-linear control, fixed-point DSP, synthesis, photonics, magnetics and verification, each ending in something built.","icon":"⬤","tint":"#FFF3D6"}]}],"courses":[]};
 
-const DEGREE_CHUNKS = [{"id":"cs-degree","band":1,"course":"CS101","url":"programs/cs-degree.CS101.16a9f87b.json"},{"id":"cs-degree","band":1,"course":"CS102","url":"programs/cs-degree.CS102.747d7998.json"},{"id":"cs-degree","band":1,"course":"MA101","url":"programs/cs-degree.MA101.d0f73e99.json"},{"id":"cs-degree","band":1,"course":"MA111","url":"programs/cs-degree.MA111.68194188.json"},{"id":"cs-degree","band":1,"course":"MA112","url":"programs/cs-degree.MA112.c5542d7c.json"},{"id":"cs-degree","band":1,"course":"MA121","url":"programs/cs-degree.MA121.539a22c4.json"},{"id":"cs-degree","band":1,"course":"CE101","url":"programs/cs-degree.CE101.9dc4f8cc.json"},{"id":"cs-degree","band":2,"course":"CS201","url":"programs/cs-degree.CS201.861d5c5e.json"},{"id":"cs-degree","band":2,"course":"CE201","url":"programs/cs-degree.CE201.45334b7e.json"},{"id":"cs-degree","band":2,"course":"CS210","url":"programs/cs-degree.CS210.99ad8311.json"},{"id":"cs-degree","band":2,"course":"MA201","url":"programs/cs-degree.MA201.2e1ba85b.json"},{"id":"cs-degree","band":2,"course":"CS220","url":"programs/cs-degree.CS220.951b2229.json"},{"id":"cs-degree","band":2,"course":"SE201","url":"programs/cs-degree.SE201.97291acb.json"},{"id":"cs-degree","band":3,"course":"CS301","url":"programs/cs-degree.CS301.1139a406.json"},{"id":"cs-degree","band":3,"course":"CS310","url":"programs/cs-degree.CS310.b496c30c.json"},{"id":"cs-degree","band":3,"course":"CS320","url":"programs/cs-degree.CS320.ddc5e2cc.json"},{"id":"cs-degree","band":3,"course":"CS330","url":"programs/cs-degree.CS330.84b34f18.json"},{"id":"cs-degree","band":3,"course":"SEC301","url":"programs/cs-degree.SEC301.9479a2ea.json"},{"id":"cs-degree","band":3,"course":"WEB301","url":"programs/cs-degree.WEB301.667277ed.json"},{"id":"cs-degree","band":4,"course":"CS401","url":"programs/cs-degree.CS401.8f0c3dac.json"},{"id":"cs-degree","band":4,"course":"ML401","url":"programs/cs-degree.ML401.0d077e8c.json"},{"id":"cs-degree","band":4,"course":"HPC401","url":"programs/cs-degree.HPC401.e491a83d.json"},{"id":"cs-degree","band":4,"course":"GFX401","url":"programs/cs-degree.GFX401.d1670917.json"},{"id":"cs-degree","band":4,"course":"ELEC410","url":"programs/cs-degree.ELEC410.414bc4f4.json"},{"id":"cs-degree","band":4,"course":"ELEC420","url":"programs/cs-degree.ELEC420.f63d4091.json"},{"id":"cs-degree","band":4,"course":"ELEC430","url":"programs/cs-degree.ELEC430.2615345e.json"},{"id":"cs-degree","band":5,"course":"DL501","url":"programs/cs-degree.DL501.594da50f.json"},{"id":"cs-degree","band":5,"course":"FM501","url":"programs/cs-degree.FM501.fc856aea.json"},{"id":"cs-degree","band":5,"course":"ETH501","url":"programs/cs-degree.ETH501.8146fdf2.json"},{"id":"cs-degree","band":5,"course":"QC510","url":"programs/cs-degree.QC510.30506e98.json"},{"id":"cs-degree","band":5,"course":"ROB520","url":"programs/cs-degree.ROB520.8f3ee1d7.json"},{"id":"cs-degree","band":5,"course":"CAP501","url":"programs/cs-degree.CAP501.5a934be1.json"},{"id":"ee-msc","band":1,"course":"EE101","url":"programs/ee-msc.EE101.1c526e65.json"},{"id":"ee-msc","band":1,"course":"EE102","url":"programs/ee-msc.EE102.776c8388.json"},{"id":"ee-msc","band":1,"course":"EE111","url":"programs/ee-msc.EE111.816c08f1.json"},{"id":"ee-msc","band":1,"course":"EE121","url":"programs/ee-msc.EE121.b1df618d.json"},{"id":"ee-msc","band":1,"course":"EE131","url":"programs/ee-msc.EE131.37e73cac.json"},{"id":"ee-msc","band":1,"course":"EE141","url":"programs/ee-msc.EE141.ca48320e.json"},{"id":"ee-msc","band":2,"course":"EE201","url":"programs/ee-msc.EE201.6db6d69d.json"},{"id":"ee-msc","band":2,"course":"EE202","url":"programs/ee-msc.EE202.1875c0ad.json"},{"id":"ee-msc","band":2,"course":"EE211","url":"programs/ee-msc.EE211.23917523.json"},{"id":"ee-msc","band":2,"course":"EE221","url":"programs/ee-msc.EE221.cd056230.json"},{"id":"ee-msc","band":2,"course":"EE231","url":"programs/ee-msc.EE231.c9f82c0c.json"},{"id":"ee-msc","band":2,"course":"EE241","url":"programs/ee-msc.EE241.423379d5.json"},{"id":"ee-msc","band":3,"course":"CTRL510","url":"programs/ee-msc.CTRL510.00c901fd.json"},{"id":"ee-msc","band":3,"course":"DSP510","url":"programs/ee-msc.DSP510.6346ffe9.json"},{"id":"ee-msc","band":3,"course":"EMAG510","url":"programs/ee-msc.EMAG510.ae9729d0.json"},{"id":"ee-msc","band":3,"course":"PWR510","url":"programs/ee-msc.PWR510.163010fd.json"},{"id":"ee-msc","band":3,"course":"RFIC510","url":"programs/ee-msc.RFIC510.25184b63.json"},{"id":"ee-msc","band":3,"course":"VLSI510","url":"programs/ee-msc.VLSI510.b7d046a9.json"},{"id":"ee-msc","band":4,"course":"CTRL520","url":"programs/ee-msc.CTRL520.133f957a.json"},{"id":"ee-msc","band":4,"course":"DSP520","url":"programs/ee-msc.DSP520.7627c0eb.json"},{"id":"ee-msc","band":4,"course":"EMAG520","url":"programs/ee-msc.EMAG520.19e021b9.json"},{"id":"ee-msc","band":4,"course":"PWR520","url":"programs/ee-msc.PWR520.ed1f2365.json"},{"id":"ee-msc","band":4,"course":"RFIC520","url":"programs/ee-msc.RFIC520.3ddfaca5.json"},{"id":"ee-msc","band":4,"course":"VLSI520","url":"programs/ee-msc.VLSI520.3ddec31b.json"},{"id":"ee-msc","band":5,"course":"CTRL530","url":"programs/ee-msc.CTRL530.b2d07443.json"},{"id":"ee-msc","band":5,"course":"DSP530","url":"programs/ee-msc.DSP530.8164b749.json"},{"id":"ee-msc","band":5,"course":"EMAG530","url":"programs/ee-msc.EMAG530.b1328209.json"},{"id":"ee-msc","band":5,"course":"PWR530","url":"programs/ee-msc.PWR530.c46c2aa0.json"},{"id":"ee-msc","band":5,"course":"RFIC530","url":"programs/ee-msc.RFIC530.11c96dd8.json"},{"id":"ee-msc","band":5,"course":"VLSI530","url":"programs/ee-msc.VLSI530.dcc1a419.json"}];
+const DEGREE_CHUNKS = [{"id":"cs-degree","band":1,"course":"CS101","url":"programs/cs-degree.CS101.cdb55492.json"},{"id":"cs-degree","band":1,"course":"CS102","url":"programs/cs-degree.CS102.747d7998.json"},{"id":"cs-degree","band":1,"course":"MA101","url":"programs/cs-degree.MA101.d0f73e99.json"},{"id":"cs-degree","band":1,"course":"MA111","url":"programs/cs-degree.MA111.68194188.json"},{"id":"cs-degree","band":1,"course":"MA112","url":"programs/cs-degree.MA112.c5542d7c.json"},{"id":"cs-degree","band":1,"course":"MA121","url":"programs/cs-degree.MA121.539a22c4.json"},{"id":"cs-degree","band":1,"course":"CE101","url":"programs/cs-degree.CE101.9dc4f8cc.json"},{"id":"cs-degree","band":2,"course":"CS201","url":"programs/cs-degree.CS201.861d5c5e.json"},{"id":"cs-degree","band":2,"course":"CE201","url":"programs/cs-degree.CE201.45334b7e.json"},{"id":"cs-degree","band":2,"course":"CS210","url":"programs/cs-degree.CS210.99ad8311.json"},{"id":"cs-degree","band":2,"course":"MA201","url":"programs/cs-degree.MA201.2e1ba85b.json"},{"id":"cs-degree","band":2,"course":"CS220","url":"programs/cs-degree.CS220.951b2229.json"},{"id":"cs-degree","band":2,"course":"SE201","url":"programs/cs-degree.SE201.97291acb.json"},{"id":"cs-degree","band":3,"course":"CS301","url":"programs/cs-degree.CS301.1139a406.json"},{"id":"cs-degree","band":3,"course":"CS310","url":"programs/cs-degree.CS310.b496c30c.json"},{"id":"cs-degree","band":3,"course":"CS320","url":"programs/cs-degree.CS320.ddc5e2cc.json"},{"id":"cs-degree","band":3,"course":"CS330","url":"programs/cs-degree.CS330.84b34f18.json"},{"id":"cs-degree","band":3,"course":"SEC301","url":"programs/cs-degree.SEC301.9479a2ea.json"},{"id":"cs-degree","band":3,"course":"WEB301","url":"programs/cs-degree.WEB301.667277ed.json"},{"id":"cs-degree","band":4,"course":"CS401","url":"programs/cs-degree.CS401.8f0c3dac.json"},{"id":"cs-degree","band":4,"course":"ML401","url":"programs/cs-degree.ML401.0d077e8c.json"},{"id":"cs-degree","band":4,"course":"HPC401","url":"programs/cs-degree.HPC401.e491a83d.json"},{"id":"cs-degree","band":4,"course":"GFX401","url":"programs/cs-degree.GFX401.d1670917.json"},{"id":"cs-degree","band":4,"course":"ELEC410","url":"programs/cs-degree.ELEC410.414bc4f4.json"},{"id":"cs-degree","band":4,"course":"ELEC420","url":"programs/cs-degree.ELEC420.f63d4091.json"},{"id":"cs-degree","band":4,"course":"ELEC430","url":"programs/cs-degree.ELEC430.2615345e.json"},{"id":"cs-degree","band":5,"course":"DL501","url":"programs/cs-degree.DL501.594da50f.json"},{"id":"cs-degree","band":5,"course":"FM501","url":"programs/cs-degree.FM501.fc856aea.json"},{"id":"cs-degree","band":5,"course":"ETH501","url":"programs/cs-degree.ETH501.8146fdf2.json"},{"id":"cs-degree","band":5,"course":"QC510","url":"programs/cs-degree.QC510.30506e98.json"},{"id":"cs-degree","band":5,"course":"ROB520","url":"programs/cs-degree.ROB520.8f3ee1d7.json"},{"id":"cs-degree","band":5,"course":"CAP501","url":"programs/cs-degree.CAP501.5a934be1.json"},{"id":"ee-msc","band":1,"course":"EE101","url":"programs/ee-msc.EE101.1c526e65.json"},{"id":"ee-msc","band":1,"course":"EE102","url":"programs/ee-msc.EE102.776c8388.json"},{"id":"ee-msc","band":1,"course":"EE111","url":"programs/ee-msc.EE111.816c08f1.json"},{"id":"ee-msc","band":1,"course":"EE121","url":"programs/ee-msc.EE121.b1df618d.json"},{"id":"ee-msc","band":1,"course":"EE131","url":"programs/ee-msc.EE131.37e73cac.json"},{"id":"ee-msc","band":1,"course":"EE141","url":"programs/ee-msc.EE141.ca48320e.json"},{"id":"ee-msc","band":2,"course":"EE201","url":"programs/ee-msc.EE201.6db6d69d.json"},{"id":"ee-msc","band":2,"course":"EE202","url":"programs/ee-msc.EE202.1875c0ad.json"},{"id":"ee-msc","band":2,"course":"EE211","url":"programs/ee-msc.EE211.23917523.json"},{"id":"ee-msc","band":2,"course":"EE221","url":"programs/ee-msc.EE221.cd056230.json"},{"id":"ee-msc","band":2,"course":"EE231","url":"programs/ee-msc.EE231.c9f82c0c.json"},{"id":"ee-msc","band":2,"course":"EE241","url":"programs/ee-msc.EE241.423379d5.json"},{"id":"ee-msc","band":3,"course":"CTRL510","url":"programs/ee-msc.CTRL510.00c901fd.json"},{"id":"ee-msc","band":3,"course":"DSP510","url":"programs/ee-msc.DSP510.6346ffe9.json"},{"id":"ee-msc","band":3,"course":"EMAG510","url":"programs/ee-msc.EMAG510.ae9729d0.json"},{"id":"ee-msc","band":3,"course":"PWR510","url":"programs/ee-msc.PWR510.163010fd.json"},{"id":"ee-msc","band":3,"course":"RFIC510","url":"programs/ee-msc.RFIC510.25184b63.json"},{"id":"ee-msc","band":3,"course":"VLSI510","url":"programs/ee-msc.VLSI510.b7d046a9.json"},{"id":"ee-msc","band":4,"course":"CTRL520","url":"programs/ee-msc.CTRL520.133f957a.json"},{"id":"ee-msc","band":4,"course":"DSP520","url":"programs/ee-msc.DSP520.7627c0eb.json"},{"id":"ee-msc","band":4,"course":"EMAG520","url":"programs/ee-msc.EMAG520.19e021b9.json"},{"id":"ee-msc","band":4,"course":"PWR520","url":"programs/ee-msc.PWR520.ed1f2365.json"},{"id":"ee-msc","band":4,"course":"RFIC520","url":"programs/ee-msc.RFIC520.3ddfaca5.json"},{"id":"ee-msc","band":4,"course":"VLSI520","url":"programs/ee-msc.VLSI520.3ddec31b.json"},{"id":"ee-msc","band":5,"course":"CTRL530","url":"programs/ee-msc.CTRL530.b2d07443.json"},{"id":"ee-msc","band":5,"course":"DSP530","url":"programs/ee-msc.DSP530.8164b749.json"},{"id":"ee-msc","band":5,"course":"EMAG530","url":"programs/ee-msc.EMAG530.b1328209.json"},{"id":"ee-msc","band":5,"course":"PWR530","url":"programs/ee-msc.PWR530.c46c2aa0.json"},{"id":"ee-msc","band":5,"course":"RFIC530","url":"programs/ee-msc.RFIC530.11c96dd8.json"},{"id":"ee-msc","band":5,"course":"VLSI530","url":"programs/ee-msc.VLSI530.dcc1a419.json"}];
 
 /* ============ Codewright engine ============ */
 'use strict';
@@ -8201,12 +8298,16 @@ function renderMdInner(src) {
       const rows = [];
       while (i < lines.length && /^\|/.test(lines[i])) { rows.push(lines[i]); i++; }
       const cells = r => r.replace(/^\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
-      let t = '<table><thead><tr>' + cells(rows[0]).map(c => '<th>' + mdInline(c) + '</th>').join('') + '</tr></thead><tbody>';
+      /* Wrapped, because .main is the page's scroll container: a table wider than the
+         prose column scrolled the whole pane sideways. tabindex puts the scroll box in
+         the tab order, since a scrollable region reachable only by pointer is not
+         reachable at all. */
+      let t = '<div class="tw" tabindex="0"><table><thead><tr>' + cells(rows[0]).map(c => '<th>' + mdInline(c) + '</th>').join('') + '</tr></thead><tbody>';
       for (let r = 1; r < rows.length; r++) {
         if (/^\|\s*:?-{2,}/.test(rows[r])) continue;
         t += '<tr>' + cells(rows[r]).map(c => '<td>' + mdInline(c) + '</td>').join('') + '</tr>';
       }
-      out += t + '</tbody></table>';
+      out += t + '</tbody></table></div>';
       continue;
     }
     if (/^\s*[-*]\s+/.test(line)) {
@@ -17583,7 +17684,24 @@ const Desk = (function () {
     log2: function (a, env, n) { need(n, a, 1); return logOf(a[0], 2, 'log2'); },
     sin: function (a, env, n) { need(n, a, 1); return Math.sin(toRad(a[0], env)); },
     cos: function (a, env, n) { need(n, a, 1); return Math.cos(toRad(a[0], env)); },
-    tan: function (a, env, n) { need(n, a, 1); return Math.tan(toRad(a[0], env)); },
+    tan: function (a, env, n) {
+      need(n, a, 1);
+      /* Math.tan does not report the asymptote, because the double nearest π/2
+         is not π/2: tan(90) came back 1.633e16, survived the isFinite check,
+         and printed as "16331239 G" — an engineering reading of infinity, in
+         the same font as every honest answer. Name the degree case exactly;
+         catch the radian one by magnitude, where no equality test can. */
+      if (env.deg && ((a[0] % 180) + 180) % 180 === 90) {
+        throw calcErr('the tangent of ' + a[0] + '° is undefined — ' +
+          'the ratio runs off to infinity there');
+      }
+      const v = Math.tan(toRad(a[0], env));
+      if (Math.abs(v) > 1e15) {
+        throw calcErr('that is close enough to a right angle that the tangent ' +
+          'has no value this can hold');
+      }
+      return v;
+    },
     asin: function (a, env, n) {
       need(n, a, 1);
       if (a[0] < -1 || a[0] > 1) throw calcErr('asin only takes a value between -1 and 1');
@@ -17854,9 +17972,9 @@ const Desk = (function () {
       '.dsk-tab:hover{color:var(--ink)}',
       '.dsk-tab[aria-selected=true]{background:var(--lime);color:var(--on-lime)}',
       '.dsk-where{flex:1;min-width:0;text-align:right;font-family:var(--mono);font-size:10.5px;',
-      '  color:var(--ink-5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '  color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dsk-x{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;',
-      '  color:var(--ink-4);font-size:15px;line-height:1}',
+      '  color:var(--ink-3);font-size:15px;line-height:1}',
       '.dsk-x:hover{background:var(--surface-2);color:var(--ink)}',
 
       '.dsk-pane{flex:1;min-height:0;display:none;flex-direction:column}',
@@ -17865,26 +17983,26 @@ const Desk = (function () {
       /* calculator */
       '.dsk-hist{flex:1;min-height:0;overflow:auto;padding:12px 14px;display:flex;',
       '  flex-direction:column;justify-content:flex-end;gap:9px}',
-      '.dsk-empty{color:var(--ink-4);font-size:12.5px;line-height:1.75;margin:auto 0}',
+      '.dsk-empty{color:var(--ink-3);font-size:12.5px;line-height:1.75;margin:auto 0}',
       '.dsk-empty code{font-family:var(--mono);font-size:12px;color:var(--lime);',
       '  background:var(--lime-08);padding:1px 5px;border-radius:4px}',
       '.dsk-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;',
       '  padding:7px 9px;border-radius:var(--r);border:1px solid transparent}',
       '.dsk-row:hover{border-color:var(--line);background:var(--surface-2)}',
       '.dsk-ex{grid-column:1;text-align:left;font-family:var(--mono);font-size:12px;',
-      '  color:var(--ink-4);white-space:pre-wrap;word-break:break-word;line-height:1.5}',
-      '.dsk-row:hover .dsk-ex{color:var(--ink-3)}',
+      '  color:var(--ink-3);white-space:pre-wrap;word-break:break-word;line-height:1.5}',
+      '.dsk-row:hover .dsk-ex{color:var(--ink-2)}',
       '.dsk-val{grid-column:1;text-align:left;font-family:var(--mono);font-size:15px;',
       '  color:var(--lime);word-break:break-word;line-height:1.4}',
-      '.dsk-val small{display:block;font-size:10.5px;color:var(--ink-5);margin-top:2px}',
+      '.dsk-val small{display:block;font-size:10.5px;color:var(--ink-3);margin-top:2px}',
       '.dsk-row.err .dsk-val{color:var(--bad);font-size:12.5px}',
       '.dsk-send{grid-row:1/span 2;grid-column:2;align-self:center;width:26px;height:26px;',
-      '  border-radius:7px;color:var(--ink-5);font-size:12px;opacity:0;transition:opacity .14s}',
+      '  border-radius:7px;color:var(--ink-3);font-size:12px;opacity:0;transition:opacity .14s}',
       '.dsk-row:hover .dsk-send,.dsk-send:focus-visible{opacity:1}',
       '.dsk-send:hover{background:var(--lime-12);color:var(--lime)}',
 
       '.dsk-foot{flex:none;border-top:1px solid var(--line);background:var(--sunk);padding:9px 12px}',
-      '.dsk-prev{min-height:16px;font-family:var(--mono);font-size:11px;color:var(--ink-5);',
+      '.dsk-prev{min-height:16px;font-family:var(--mono);font-size:11px;color:var(--ink-3);',
       '  padding:0 2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dsk-prev b{color:var(--ink-3);font-weight:500}',
       '.dsk-in{display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:var(--r);',
@@ -17911,7 +18029,7 @@ const Desk = (function () {
       '  white-space:nowrap;text-overflow:ellipsis}',
       '.dsk-pick:hover{color:var(--ink)}',
       '.dsk-pick[aria-pressed=true]{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}',
-      '.dsk-saved{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-5);',
+      '.dsk-saved{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);',
       '  white-space:nowrap}',
       '.dsk-saved.warn{color:var(--amber)}',
       '.dsk-ta{flex:1;min-height:0;width:100%;resize:none;border:0;outline:none;padding:14px 16px;',
@@ -17920,8 +18038,13 @@ const Desk = (function () {
       '.dsk-ta::placeholder{color:var(--on-editor-3)}',
       '.dsk-notefoot{flex:none;display:flex;align-items:center;gap:8px;padding:8px 12px;',
       '  border-top:1px solid var(--line);background:var(--sunk);',
-      '  font-family:var(--mono);font-size:10.5px;color:var(--ink-5)}',
+      '  font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}',
       '.dsk-notefoot .sp{flex:1}',
+
+      /* The one live region in the modal. The stylesheet carries no visually-hidden
+         utility, so it is declared here and travels with the component. */
+      '.dsk-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;',
+      '  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}',
 
       '@media (max-width:560px){',
       '  .dsk-back{padding:0}',
@@ -17959,36 +18082,43 @@ const Desk = (function () {
       '  <div class="dsk-head" data-head>',
       '    <span class="dsk-grip" aria-hidden="true"><i></i><i></i><i></i></span>',
       '    <span class="dsk-title">Desk</span>',
-      '    <div class="dsk-tabs" role="tablist">',
-      '      <button class="dsk-tab" role="tab" data-tab="calc">Calculator</button>',
-      '      <button class="dsk-tab" role="tab" data-tab="notes">Notes</button>',
+      '    <div class="dsk-tabs" role="tablist" aria-label="Desk sections">',
+      '      <button class="dsk-tab" role="tab" id="dsk-tab-calc" aria-controls="dsk-pane-calc"',
+      '        data-tab="calc" tabindex="-1">Calculator</button>',
+      '      <button class="dsk-tab" role="tab" id="dsk-tab-notes" aria-controls="dsk-pane-notes"',
+      '        data-tab="notes" tabindex="-1">Notes</button>',
       '    </div>',
       '    <span class="dsk-where" data-where></span>',
       '    <button class="dsk-x" data-close aria-label="Close the desk (Esc)">✕</button>',
       '  </div>',
 
-      '  <div class="dsk-pane" role="tabpanel" data-pane="calc">',
+      '  <div class="dsk-pane" role="tabpanel" id="dsk-pane-calc"',
+      '    aria-labelledby="dsk-tab-calc" data-pane="calc">',
       '    <div class="dsk-hist" data-hist></div>',
       '    <div class="dsk-foot">',
-      '      <div class="dsk-prev" data-prev aria-live="polite"></div>',
+      '      <div class="dsk-prev" data-prev></div>',
       '      <div class="dsk-in">',
       '        <span class="car" aria-hidden="true">›</span>',
       '        <input data-input type="text" spellcheck="false" autocomplete="off"',
       '          autocapitalize="off" autocorrect="off" aria-label="Expression"',
       '          placeholder="4k7 || 10k">',
       '        <button class="dsk-mini" data-angle title="Degrees or radians"></button>',
-      '        <button class="dsk-mini" data-tonote title="Send the last result to the note">→ note</button>',
-      '        <button class="dsk-mini" data-help title="What this calculator understands">?</button>',
+      '        <button class="dsk-mini" data-tonote aria-label="Send the last result to the note"',
+      '          title="Send the last result to the note">→ note</button>',
+      '        <button class="dsk-mini" data-help id="dsk-help" aria-controls="dsk-tips"',
+      '          aria-expanded="false" aria-label="What this calculator understands"',
+      '          title="What this calculator understands">?</button>',
       '      </div>',
-      '      <div class="dsk-tips" data-tips></div>',
+      '      <div class="dsk-tips" id="dsk-tips" data-tips></div>',
       '    </div>',
       '  </div>',
 
-      '  <div class="dsk-pane" role="tabpanel" data-pane="notes">',
+      '  <div class="dsk-pane" role="tabpanel" id="dsk-pane-notes"',
+      '    aria-labelledby="dsk-tab-notes" data-pane="notes">',
       '    <div class="dsk-notebar">',
       '      <button class="dsk-pick" data-pick="lesson" aria-pressed="false"></button>',
       '      <button class="dsk-pick" data-pick="scratch" aria-pressed="false">Scratch pad</button>',
-      '      <span class="dsk-saved" data-saved aria-live="polite"></span>',
+      '      <span class="dsk-saved" data-saved></span>',
       '    </div>',
       '    <textarea class="dsk-ta" data-ta spellcheck="true"',
       '      placeholder="Working, values, the thing you will forget by tomorrow."></textarea>',
@@ -17998,6 +18128,7 @@ const Desk = (function () {
       '      <button class="dsk-mini" data-clear>clear</button>',
       '    </div>',
       '  </div>',
+      '  <p class="dsk-say" data-say role="status" aria-live="polite"></p>',
       '</div>',
     ].join('\n');
 
@@ -18023,6 +18154,7 @@ const Desk = (function () {
       count: back.querySelector('[data-count]'),
       copy: back.querySelector('[data-copy]'),
       clear: back.querySelector('[data-clear]'),
+      say: back.querySelector('[data-say]'),
     };
 
     elems.tips.innerHTML = [
@@ -18042,6 +18174,7 @@ const Desk = (function () {
 
     elems.tabs.forEach(function (b) {
       b.addEventListener('click', function () { show(b.dataset.tab); });
+      b.addEventListener('keydown', onTabKey);
     });
     back.querySelector('[data-close]').addEventListener('click', function () { close(); });
 
@@ -18168,7 +18301,8 @@ const Desk = (function () {
       return '<div class="dsk-row' + (r.ok ? '' : ' err') + '">' +
         '<button class="dsk-ex" data-ex="' + i + '" title="Put this expression back in the box">' +
         esc(r.src) + '</button>' + val +
-        (r.ok ? '<button class="dsk-send" data-send="' + i + '" title="Send to the note">↴</button>' : '') +
+        (r.ok ? '<button class="dsk-send" data-send="' + i + '" ' +
+          'aria-label="Send this result to the note" title="Send to the note">↴</button>' : '') +
         '</div>';
     }).join('');
     elems.hist.scrollTop = elems.hist.scrollHeight;
@@ -18209,7 +18343,21 @@ const Desk = (function () {
     return p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
+  /* The modal's only live region. Cleared and re-set rather than assigned, so
+     that working the same expression twice is announced twice: an assignment of
+     identical text is not a mutation, and assistive tech would stay silent. */
+  let sayTimer = 0;
+  function say(msg) {
+    if (!elems || !elems.say) return;
+    clearTimeout(sayTimer);
+    elems.say.textContent = '';
+    sayTimer = setTimeout(function () {
+      if (elems && elems.say) elems.say.textContent = msg;
+    }, 60);
+  }
+
   function flash(msg) {
+    say(msg);
     elems.saved.classList.remove('warn');
     elems.saved.textContent = msg;
     setTimeout(function () {
@@ -18261,6 +18409,11 @@ const Desk = (function () {
       ? { src: src, ok: true, value: r.value, display: r.display, raw: r.raw }
       : { src: src, ok: false, error: r.error };
     if (r.ok) state.ans = r.value;
+    /* The result was the one thing in this modal a screen reader never heard:
+       the input clears, the preview clears, and the history is not a live
+       region. The preview used to be one, and read a running total over the
+       user's own typing echo instead. */
+    say(r.ok ? src + ' equals ' + r.display : r.error);
     state.history.push(row);
     if (state.history.length > HIST_MAX) state.history.splice(0, state.history.length - HIST_MAX);
     elems.input.value = '';
@@ -18301,6 +18454,20 @@ const Desk = (function () {
     saveTimer = setTimeout(flushSave, SAVE_MS);
   }
 
+  /* currentNote() creates the row for whichever lesson is open, so opening the
+     desk on a lesson and reading on leaves an empty row behind for every lesson
+     walked past — and the next real save serialises the lot. The delete above
+     only ever reached the note being written; by the time it runs, the walked-past
+     rows belong to lessons that are no longer current, so it never reached them.
+     Prune the whole map on the way out instead. */
+  function saveNotes() {
+    Object.keys(notes.lessons).forEach(function (id) {
+      const n = notes.lessons[id];
+      if (!n || !String(n.text || '').trim()) delete notes.lessons[id];
+    });
+    return writeJSON(K_NOTES, notes);
+  }
+
   function flushSave() {
     clearTimeout(saveTimer);
     if (!open_ || !elems) return;
@@ -18318,9 +18485,10 @@ const Desk = (function () {
        for every lesson the learner merely walked past. */
     const k = currentNoteKey();
     if (k && !text.trim()) delete notes.lessons[k];
-    const ok = writeJSON(K_NOTES, notes);
+    const ok = saveNotes();
     elems.saved.classList.toggle('warn', !ok);
     elems.saved.textContent = ok ? 'saved ' + clock(note.at) : 'could not save — storage is full';
+    if (!ok) say('Could not save — storage is full');
   }
 
   /* ================================================================ dragging */
@@ -18411,11 +18579,15 @@ const Desk = (function () {
 
   /* ================================================================ focus */
 
-  const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
-    'textarea:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  /* Deliberately broad, with the exclusions moved into the filter: the old
+     selector could not say "a button that is not a tab stop", so the roving
+     tabindex on the tablist would have let Tab wrap onto the unselected tab. */
+  const FOCUSABLE = 'a[href],button,input,textarea,select,[tabindex]';
 
   function focusables() {
     return Array.prototype.filter.call(panel.querySelectorAll(FOCUSABLE), function (el) {
+      if (el.disabled) return false;
+      if (el.getAttribute('tabindex') === '-1') return false;
       return el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement;
     });
   }
@@ -18482,13 +18654,37 @@ const Desk = (function () {
     const t = tab === 'notes' ? 'notes' : 'calc';
     state.tab = t;
     elems.tabs.forEach(function (b) {
-      b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false');
+      const on = b.dataset.tab === t;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      /* A tablist is one Tab stop, not one per tab. That is what role=tab
+         promises, and it is what makes the arrow keys below load-bearing
+         rather than decorative. */
+      b.tabIndex = on ? 0 : -1;
     });
     elems.panes.calc.classList.toggle('on', t === 'calc');
     elems.panes.notes.classList.toggle('on', t === 'notes');
     if (t === 'notes') { paintNotes(); elems.ta.focus(); }
     else { paintHistory(); elems.input.focus(); }
     saveState();
+  }
+
+  /* Left/Right/Home/End across the tablist. With the roving tabindex above, this
+     is the only keyboard route to the unselected tab. */
+  function onTabKey(e) {
+    const i = elems.tabs.indexOf(e.target);
+    if (i < 0) return;
+    const n = elems.tabs.length;
+    let j = -1;
+    if (e.key === 'ArrowRight') j = (i + 1) % n;
+    else if (e.key === 'ArrowLeft') j = (i - 1 + n) % n;
+    else if (e.key === 'Home') j = 0;
+    else if (e.key === 'End') j = n - 1;
+    if (j < 0) return;
+    e.preventDefault();
+    /* show() ends by focusing the pane's own field, which is right for a click
+       and wrong for an arrow key: focus belongs on the tab being arrowed to. */
+    show(elems.tabs[j].dataset.tab);
+    elems.tabs[j].focus();
   }
 
   function open(tab) {
@@ -18523,6 +18719,7 @@ const Desk = (function () {
     document.addEventListener('visibilitychange', onHide);
     elems.hist.addEventListener('click', onHistClick);
     elems.hist.addEventListener('keydown', onHistKey);
+    markTrigger(true);
   }
 
   function onHistKey(e) {
@@ -18533,6 +18730,15 @@ const Desk = (function () {
   }
 
   function onHide() { if (document.visibilityState === 'hidden') flushSave(); }
+
+  /* The toolbar button opens this dialog, so its expanded state is part of the
+     dialog's contract. Queried each time rather than cached: the shell owns its
+     header markup and re-renders it, and a cached node would be kept honest
+     forever while the live one never was. */
+  function markTrigger(on) {
+    const b = document.getElementById('desk-btn');
+    if (b) b.setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
 
   function close() {
     if (!open_) return;
@@ -18549,6 +18755,7 @@ const Desk = (function () {
 
     if (hidden) { hidden.removeAttribute('aria-hidden'); hidden = null; }
     back.hidden = true;
+    markTrigger(false);
 
     /* Focus goes back to whatever had it. Losing it to <body> means the next Tab
        starts from the top of the page, which is a long way from the lesson. */
@@ -19178,7 +19385,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '3dec54add4fe';
+const BUILD_ID = '6a78d24cdbc9';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */
@@ -19249,7 +19456,7 @@ function renderShell() {
           '<span class="fl">🔥</span><b id="streak-val">0</b><span>day streak</span>' +
         '</div>' +
         '<div class="metric xp" title="Experience earned"><b id="xp-val">0</b><span>XP</span></div>' +
-        '<button class="tbtn" id="desk-btn" aria-label="Notepad and calculator" title="Notepad and calculator (Alt+K)">▤</button>' +
+        '<button class="tbtn" id="desk-btn" aria-label="Notepad and calculator" aria-haspopup="dialog" aria-expanded="false" title="Notepad and calculator (Alt+K)">▤</button>' +
         '<button class="tbtn" id="theme-btn" aria-label="Switch theme">☾</button>' +
         '<span class="save-state" id="save-state"></span>' +
       '</header>' +
@@ -21036,7 +21243,11 @@ function renderQuiz(main, l) {
         '<button class="btn dark" id="quiz-retry">Retry</button>' +
         (pass && nav.next ? '<button class="btn primary" id="quiz-next">' + esc(nav.next.title) + ' →</button>' : '') +
       '</div></div>';
-    $('#quiz-out', main).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    /* the CSS reduced-motion block cannot reach a scroll the script asks for */
+    $('#quiz-out', main).scrollIntoView({
+      behavior: (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth',
+      block: 'nearest'
+    });
     $('#quiz-retry', main).addEventListener('click', function () { go({ view: 'lesson', id: l.id, top: true }); });
     const qn = $('#quiz-next', main);
     if (qn) qn.addEventListener('click', function () { go({ view: 'lesson', id: nav.next.id }); });

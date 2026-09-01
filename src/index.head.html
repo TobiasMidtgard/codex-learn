@@ -36,7 +36,10 @@
   --ink:#EDEFF3;
   --ink-2:#B7BCC6;
   --ink-3:#8A909C;
-  --ink-4:#565C68;
+  /* was #565C68 - 2.97:1 on --ground. This tier carries the breadcrumb, the lesson
+     meta row, table headers and the code-block language label. None of that is
+     decorative, and all of it is under 13px. 4.95:1. */
+  --ink-4:#787F8D;
   --ink-5:#3A3F49;
 
   --line:rgba(255,255,255,0.06);
@@ -58,10 +61,28 @@
   --purple:#A78BFA;
   --amber:#FFC66D;
   --rose:#FF8A94;
+  /* sky, teal and pink existed only as literal hexes inside .chip rules, which is why
+     seven of the eleven unit-type chips had no light theme at all. */
+  --sky:#9CD5FF;
+  --teal:#5EEAD4;
+  --pink:#F472B6;
   --blue-12:rgba(110,155,255,0.12);
+  --blue-28:rgba(110,155,255,0.28);
   --purple-12:rgba(167,139,250,0.12);
+  --purple-28:rgba(167,139,250,0.28);
   --amber-08:rgba(255,198,109,0.08);
   --amber-22:rgba(255,198,109,0.22);
+  --sky-12:rgba(156,213,255,0.12);
+  --sky-28:rgba(156,213,255,0.28);
+  --teal-12:rgba(94,234,212,0.12);
+  --teal-28:rgba(94,234,212,0.28);
+  --pink-12:rgba(244,114,182,0.12);
+  --pink-28:rgba(244,114,182,0.28);
+  --bad-08:rgba(255,138,148,0.08);
+  --bad-28:rgba(255,138,148,0.28);
+  --bad-32:rgba(255,138,148,0.32);
+  --code-ink:var(--lime);
+  --link:var(--lime);
 
   --ok:var(--lime);
   --bad:#FF8A94;
@@ -89,7 +110,7 @@
   --ink:#131712;
   --ink-2:#3D4539;
   --ink-3:#616B59;
-  --ink-4:#89927F;
+  --ink-4:#69725F;               /* was #89927F - also 2.97:1; now 4.62:1 */
   --ink-5:#AEB6A5;
 
   --line:rgba(15,25,5,0.09);
@@ -107,11 +128,32 @@
   --lime-30:rgba(95,138,11,0.32);
   --lime-glow:0 0 12px rgba(135,194,42,0.35);
 
-  --blue:#2C5BD0; --purple:#6D48C7; --amber:#9A6512; --rose:#C1373F;
+  /* --amber was #9A6512: 4.54:1 on the ground, but 4.15:1 on its own --amber-08 tint,
+     which is where .chip.blanks and .chip.project actually sit. #8A5A12 is 4.97:1
+     there, and is already this palette's .tk-unit. */
+  --blue:#2C5BD0; --purple:#6D48C7; --amber:#8A5A12; --rose:#C1373F;
+  --sky:#0B6382;
+  --teal:#0B6B5E;
+  --pink:#A81F6B;
   --blue-12:rgba(44,91,208,0.10);
+  --blue-28:rgba(44,91,208,0.28);
   --purple-12:rgba(109,72,199,0.10);
-  --amber-08:rgba(154,101,18,0.08);
-  --amber-22:rgba(154,101,18,0.22);
+  --purple-28:rgba(109,72,199,0.28);
+  --amber-08:rgba(138,90,18,0.08);
+  --amber-22:rgba(138,90,18,0.22);
+  --sky-12:rgba(11,99,130,0.10);
+  --sky-28:rgba(11,99,130,0.28);
+  --teal-12:rgba(11,107,94,0.10);
+  --teal-28:rgba(11,107,94,0.28);
+  --pink-12:rgba(168,31,107,0.10);
+  --pink-28:rgba(168,31,107,0.28);
+  --bad-08:rgba(193,55,63,0.08);
+  --bad-28:rgba(193,55,63,0.28);
+  --bad-32:rgba(193,55,63,0.32);
+  /* var(--lime) is 3.41:1 as text on var(--lime-08). Inline code is the most repeated
+     element in a 2000-word reading; #3F6212 is this palette's .tk-str and 5.9:1. */
+  --code-ink:#3F6212;
+  --link:#4C7005;                /* var(--lime) is 3.76:1 on the ground; this is 5.3:1 */
   --bad:#C1373F;
   color-scheme:light;
 }
@@ -330,18 +372,24 @@ kbd{font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:4px;bor
   border:1px solid var(--line);color:var(--ink-3);white-space:nowrap;
 }
 .chip.mono{font-family:var(--mono);font-size:10.5px;font-weight:500}
-.chip.read{color:var(--blue);border-color:rgba(110,155,255,.28);background:var(--blue-12)}
-.chip.sandbox{background:rgba(110,155,255,.14);color:#9CD5FF}
-.chip.derive{background:rgba(167,139,250,.16);color:#C084FC}
-.chip.blanks{background:rgba(255,176,32,.16);color:#FFB020}
-.chip.tune{background:rgba(94,234,212,.16);color:#5EEAD4}
-.chip.match{background:rgba(167,139,250,.16);color:#A78BFA}
-.chip.numeric{background:rgba(110,155,255,.16);color:#6E9BFF}
+/* Ten of these render on every lesson page, in .lesson-meta, and again in the rail.
+   Seven carried a dark-theme pastel as a literal hex with no light override - and
+   effectiveTheme() (app.js:558) returns 'light' whenever the OS is not set to dark,
+   so the first thing a new visitor on a light machine saw was a `Tune` chip at 1.28:1
+   and a `Fill in` chip at 1.56:1. Each chip now takes its hue from a token that has a
+   value in both themes. The hue families are the ones the original author picked. */
+.chip.read{color:var(--blue);border-color:var(--blue-28);background:var(--blue-12)}
+.chip.sandbox{color:var(--sky);border-color:var(--sky-28);background:var(--sky-12)}
+.chip.derive{color:var(--purple);border-color:var(--purple-28);background:var(--purple-12)}
+.chip.blanks{color:var(--amber);border-color:var(--amber-22);background:var(--amber-08)}
+.chip.tune{color:var(--teal);border-color:var(--teal-28);background:var(--teal-12)}
+.chip.match{color:var(--purple);border-color:var(--purple-28);background:var(--purple-12)}
+.chip.numeric{color:var(--blue);border-color:var(--blue-28);background:var(--blue-12)}
 /* `build` had no colour of its own, so a circuit-building unit rendered as an
    unstyled chip among nine styled ones. Rose, because it is the only kind that
    asks the learner to draw rather than to answer. */
-.chip.build{background:rgba(244,114,182,.16);color:#F472B6}
-.chip.quiz{color:var(--purple);border-color:rgba(167,139,250,.28);background:var(--purple-12)}
+.chip.build{color:var(--pink);border-color:var(--pink-28);background:var(--pink-12)}
+.chip.quiz{color:var(--purple);border-color:var(--purple-28);background:var(--purple-12)}
 .chip.code,.chip.lab{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}
 .chip.project,.chip.capstone{color:var(--amber);border-color:var(--amber-22);background:var(--amber-08)}
 .chip.done{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}
@@ -350,7 +398,7 @@ kbd{font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:4px;bor
 .chip.prereq{font-family:var(--mono);font-size:10.5px;font-weight:700;cursor:pointer;color:var(--ink-3)}
 .chip.prereq:hover{border-color:var(--line-3);color:var(--ink)}
 .chip.prereq.met{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}
-.chip.prereq.unmet{color:var(--bad);border-color:rgba(255,138,148,.28);background:rgba(255,138,148,.08)}
+.chip.prereq.unmet{color:var(--bad);border-color:var(--bad-28);background:var(--bad-08)}
 
 .toast{
   position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(18px);z-index:60;
@@ -1240,22 +1288,54 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .lesson-meta{display:flex;gap:9px;align-items:center;color:var(--ink-4);font-size:12.5px;margin-bottom:24px;flex-wrap:wrap}
 .article{font-size:15px;line-height:1.72;color:var(--ink-2)}
 .article>*:first-child{margin-top:0}
+/* The measure. .lesson-read is 780px wide with 40px of padding either side, so prose
+   ran at 700px - about 93 characters at 15px, against the 45-75 a reader can track
+   without losing the return sweep. The design already knew this: .pcard p caps at 64ch
+   and .ckt-note at 70ch. The one surface carrying 1200-2500-word readings was the one
+   that did not. Only prose is capped - code boxes, tables and display math keep the
+   full column, so nothing that needs width loses it. */
+.article>p,.article>ul,.article>ol,.article>blockquote,
+.article>h2,.article>h3,.article>h4{max-width:66ch}
+/* protectMath substitutes a display equation into the paragraph flow before renderMd
+   ever sees it, so a $$...$$ line arrives as a <p> and would inherit the prose cap.
+   MathML.render stamps display="block" (studio.js:293), which is the one hook that
+   tells the two apart. A display equation gets the whole column, as it did before. */
+.article>p:has(math[display=block]){max-width:none}
 .article h2{margin:32px 0 10px;font-size:21px;font-weight:600;letter-spacing:-.025em;line-height:1.2;color:var(--ink)}
 .article h3{margin:24px 0 8px;font-size:16.5px;font-weight:600;letter-spacing:-.015em;color:var(--ink)}
-.article h4{margin:20px 0 6px;font-size:14px;font-weight:600;color:var(--ink)}
+/* was 14px, i.e. smaller than the 15px body it introduces */
+.article h4{margin:20px 0 6px;font-size:15px;font-weight:600;color:var(--ink)}
 .article p{margin:0 0 14px;text-wrap:pretty}
 .article ul,.article ol{margin:0 0 14px;padding-left:22px}
 .article li{margin:5px 0}
 .article li p{margin:0}
 .article b,.article strong{color:var(--ink);font-weight:600}
-.article code{font-size:.88em;color:var(--lime);background:var(--lime-08);padding:1px 5px;border-radius:4px}
+/* var(--lime) on var(--lime-08) is 3.41:1 in the light theme, and inline code is the
+   most repeated element in a reading. --code-ink is legible in both. */
+.article code{font-size:.88em;color:var(--code-ink);background:var(--lime-08);padding:1px 5px;border-radius:4px}
 .article pre code{background:none;padding:0;color:inherit;font-size:inherit}
+/* A link in prose was hue alone, and the hue is 1.53:1 against the body text beside it
+   in dark and 2.40:1 in light - under WCAG 1.4.1 that is not a distinguishable link.
+   No authored reading contains one yet, which is exactly why nothing has caught it. */
+.article a{color:var(--link);text-decoration:underline;text-decoration-thickness:1px;
+  text-underline-offset:2px;transition:text-decoration-thickness .12s var(--ease)}
+.article a:hover{color:var(--link);text-decoration-thickness:2px}
 .article blockquote{margin:16px 0;padding:2px 0 2px 16px;border-left:2px solid var(--lime);color:var(--ink-2)}
 .article blockquote p:last-child{margin:0}
 .article hr{border:0;border-top:1px solid var(--line);margin:26px 0}
+/* renderMd emits a bare <table> and .main is the page's scroll container, so a table
+   wider than the column scrolled the whole pane sideways and took every line of prose
+   with it. MA111's convergence tables are three columns of ten-significant-figure
+   MathML, which cannot wrap: about 348px of cells against 335px of column at 375px.
+   The table scrolls inside its own box now, and the box is focusable so that the
+   scroll is reachable without a pointer. */
+.article .tw{max-width:100%;overflow-x:auto;margin:0 0 16px;-webkit-overflow-scrolling:touch}
+.article .tw>table{margin:0}
 .article table{border-collapse:collapse;width:100%;margin:0 0 16px;font-size:13.5px}
 .article th,.article td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-.article th{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-4);font-weight:500}
+/* 9.5px uppercase at .13em is under the legibility floor for the label that says what
+   a column means - and it is the label a reader needs most when the cells are numbers. */
+.article th{font-family:var(--mono);font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-4);font-weight:500}
 /* A runnable example: header strip, the code, and an output drawer that opens
    underneath it. Running never navigates away, so the reader keeps their place. */
 .cbx{position:relative;margin:0 0 18px;border:1px solid var(--line);border-radius:var(--r-md);
@@ -1305,15 +1385,19 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   font-size:13.5px;line-height:1.5;color:var(--ink-2);transition:all .16s;
 }
 .opt:hover:not(:disabled){border-color:var(--line-3);background:rgba(255,255,255,.04)}
+/* a white wash over a white card is not a hover state */
+[data-theme=light] .opt:hover:not(:disabled){background:rgba(15,25,5,.05)}
 .opt .k{font-family:var(--mono);font-size:10.5px;font-weight:700;min-width:19px;height:19px;flex:none;margin-top:1px;
   border-radius:6px;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-4)}
 .opt code{color:var(--lime);background:var(--lime-08);padding:0 4px;border-radius:3px;font-size:.9em}
 .opt.correct{border-color:var(--lime-30);background:var(--lime-08)}
 .opt.correct .k{background:var(--lime-12);border-color:var(--lime-30);color:var(--lime)}
-.opt.wrong{border-color:rgba(255,138,148,.32);background:rgba(255,138,148,.07)}
+/* the dark theme's rose, hard-coded - a wrong answer in the light theme was painted
+   from the wrong palette while var(--bad) beside it was the right one */
+.opt.wrong{border-color:var(--bad-32);background:var(--bad-08)}
 .explain{margin-top:12px;padding:12px 14px;border-radius:var(--r-md);font-size:13px;line-height:1.6;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2)}
 .explain.good{border-color:var(--lime-30);background:var(--lime-08)}
-.explain.bad{border-color:rgba(255,138,148,.28);background:rgba(255,138,148,.07)}
+.explain.bad{border-color:var(--bad-28);background:var(--bad-08)}
 .quiz-result{border:1px solid var(--lime-30);background:var(--lime-08);border-radius:var(--r-lg);padding:22px;margin:12px 0 0;animation:popIn .45s var(--pop) both}
 .quiz-result .score{font-size:32px;font-weight:600;letter-spacing:-.03em;line-height:1;color:var(--ink)}
 .quiz-result p{margin:8px 0 14px;color:var(--ink-3);font-size:13px}
@@ -1387,6 +1471,7 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .helper{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden}
 .helper>button{display:flex;justify-content:space-between;align-items:center;width:100%;padding:11px 15px;text-align:left;font-size:13.5px;font-weight:600}
 .helper>button:hover{background:rgba(255,255,255,.03)}
+[data-theme=light] .helper>button:hover{background:rgba(15,25,5,.04)}
 .helper>button span.k{font-family:var(--mono);font-size:10.5px;color:var(--ink-4);font-weight:500}
 .helper .hint-body{padding:0 15px 13px;font-size:13.5px;color:var(--ink-2)}
 .hint-item{padding:10px 12px;margin:7px 0 0;border-left:2px solid var(--amber);background:var(--amber-08);border-radius:0 8px 8px 0;line-height:1.6}
@@ -1666,6 +1751,11 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   .cap-cols{grid-template-columns:1fr}
 }
 @media (max-width:640px){
+  /* Each nav button carries a whole lesson title and .btn is white-space:nowrap, so
+     one long title pushed the article foot wider than the column. Let it grow down. */
+  .article-foot{gap:8px}
+  .article-foot .btn{white-space:normal;height:auto;min-height:36px;padding:8px 12px;
+    text-align:center;max-width:100%;line-height:1.35}
   .cb-btn.cb-open .lbl{display:none}
   .hero h1{font-size:27px}
   .stats{grid-template-columns:1fr 1fr}
@@ -1681,7 +1771,14 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 try {
   var cwSaved = localStorage.getItem('codewright-progress-v1');
   var cwTheme = cwSaved ? JSON.parse(cwSaved).theme : null;
-  if (cwTheme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  /* P has no `theme` key until the reader picks one (app.js:414), and effectiveTheme()
+     resolves an unset theme to light unless the OS asks for dark. Reading only the saved
+     value here meant a fresh visit on a light machine painted the dark palette and then
+     flipped, after app.js booted. Same condition, before first paint. */
+  if (cwTheme !== 'dark' && (cwTheme === 'light' ||
+      !window.matchMedia || !window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
 } catch (e) {}
 </script>
 </head>

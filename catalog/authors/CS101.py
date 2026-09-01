@@ -21,6 +21,8 @@ COURSE = {
         "Decompose a task into functions that return values instead of printing them",
         "Use lists and dictionaries to hold and aggregate structured data",
         "Read and write text and JSON files without leaking file handles",
+        "Raise an exception when an argument is outside what a function can accept",
+        "Read a comprehension, a generator expression and a `sorted` key, and write the plain ones",
         "Read a traceback and locate the defect it names",
     ],
     "assessment": "4 lab checkpoints (10% each) + capstone build (60%).",
@@ -40,6 +42,179 @@ COURSE = {
                 "String formatting with f-strings, including `:.2f` for fixed decimals",
                 "Comments explain *why*; the code already says what",
                 "Reading a NameError / TypeError traceback from the bottom up",
+            ],
+            "read": [
+                {
+                    "title": "Names, values, and three ways to divide",
+                    "minutes": 13,
+                    "body": r'''
+Almost the first thing any program does is give a value a name.
+
+```python
+price = 45
+```
+
+Two things happen, in this order. The right-hand side is evaluated first, producing the
+integer 45. Then the name `price` is made to refer to it. The order matters more than it
+looks: it is why `total = total + 1` is legal — the old value of `total` is read before
+the name is re-pointed — and why `total = total + 1` on a name that does not exist yet is
+a `NameError` rather than a quiet zero.
+
+## Names are labels, not boxes
+
+The box picture says a name is a container you pour a value into. It survives about three
+lines of real code. Try it on this:
+
+```python
+x = 5
+y = x
+x = 9
+print(y)
+```
+
+If names were boxes, `y = x` copied 5 into the `y` box and `x = 9` refilled the `x` box,
+so `y` is 5. That happens to be the right answer, and it is right for the wrong reason,
+which is the sort of thing that catches up with you later. What actually happened is that
+`y = x` pointed `y` at the value `x` was pointing at, and `x = 9` pointed `x` somewhere
+else entirely. Nothing was poured, nothing was copied, and `y` was never touched by the
+third line.
+
+Hold the label picture and a second question answers itself: nothing anyone does to `x`
+afterwards can reach `y`, because `x` is not connected to `y` — they were both connected
+to 5, briefly, and one of them moved on.
+
+## Four types, and one way to ask
+
+```python
+count   = 12         # int    — a whole number, no size limit
+ratio   = 0.75       # float  — a number with a fractional part
+label   = "amps"     # str    — text
+ready   = True       # bool   — True or False
+```
+
+`type(count)` will tell you at any point, and `print(type(count))` is a perfectly
+respectable thing to put in a program you are trying to understand. Most beginner
+`TypeError`s are a value being one type where the code assumed another, and the fastest
+way to find one is to stop guessing which.
+
+The one that surprises people is that `bool` is a kind of `int`: `True + True` is 2. It
+is a curiosity here, but it is the reason `sum(flags)` counts how many are true.
+
+## Three ways to divide, and only one of them is division
+
+Split 8735 cents between four people.
+
+```text
+8735 /  4   ->  2183.75     true division, always a float
+8735 // 4   ->  2183        floor division, the whole part
+8735 %  4   ->  3           the remainder
+```
+
+`/` is the one that surprises: it hands back a float **even when the division comes out
+even**. `6 / 3` is `3.0`, not `3`. If a stray `.0` has appeared in your output, this is
+almost always where it came from.
+
+`//` and `%` are a pair, and they come with a guarantee:
+
+```text
+(a // b) * b + (a % b)  ==  a
+
+     2183  * 4  +   3   ==  8735
+```
+
+That identity is the reason the pair is worth thinking of as one operation. The whole
+part and the leftover between them account for every cent; nothing can go missing between
+the two lines that compute them. Asserting it, as this module's fill-in-the-blanks
+exercise does, is a cheap way to catch a `/` that should have been a `//`.
+
+**Where it stops being obvious.** With a negative numerator, `//` rounds *down*, not
+towards zero:
+
+```text
+-7 // 2  ->  -4        not -3
+-7 %  2  ->   1        not -1
+```
+
+The identity still holds — `(-4) * 2 + 1` is `-7` — which is exactly why the results
+look odd: Python keeps the guarantee and lets the rounding fall where it must. C and
+Java make the opposite choice and truncate towards zero. If you are converting a
+formula from one of those languages and the numbers go wrong only for negative inputs,
+this is the reason.
+
+## Floats are not decimals
+
+```python
+print(0.1 + 0.2)      # 0.30000000000000004
+```
+
+This is not a bug and it is not Python. A float is a binary fraction, and 0.1 is no more
+expressible in binary than a third is in decimal — you get the nearest available value,
+and the error shows up when it is magnified. `round(2.675, 2)` gives `2.67` for the same
+reason: the float nearest to 2.675 is a hair below it.
+
+Two habits follow. Compare floats with a tolerance — `abs(a - b) < 1e-9` — rather than
+with `==`. And keep money in whole cents as an `int` for as long as you can, converting
+to the main unit only at the moment of printing. That is why this module's bill exercise
+works in cents throughout and divides by 100 on the last line.
+
+## Getting it on the screen
+
+```python
+print(f"Each pays {as_currency:.2f} ({each} cents)")
+```
+
+Inside an f-string, `{` starts an expression and `:` starts the *format spec* for it.
+`.2f` means fixed-point with exactly two digits after the point, so 21.83 prints as
+`21.83` and 21.8 prints as `21.80` — which is what you want for money, where the second
+digit has to be there even when it is a zero.
+
+The format spec changes the string, never the value. `f"{7/3:.2f}"` is `"2.33"`, and
+`7/3` is still 2.3333333333333335 afterwards. Leave the spec off and you get the float's
+own repr — the shortest text that reads back as that exact float — which is honest and
+almost never what a reader wants.
+
+## Text is a value too
+
+Strings have methods, and this course leans on four of them:
+
+```python
+"  Ada Lovelace ".strip()      ->  "Ada Lovelace"     trim both ends
+"Ada Lovelace".lower()         ->  "ada lovelace"     case-folded copy
+"Ada Lovelace".split()         ->  ["Ada", "Lovelace"]   split on whitespace
+"-".join(["A", "L"])           ->  "A-L"              glue a list back together
+```
+
+`split()` with no argument splits on any run of whitespace and drops the empties, which
+is the forgiving behaviour you want for text a human typed. `split(",")` with an argument
+is strict: it splits on every single comma and *keeps* the empties, which is the
+behaviour you want for a data file, where a missing field is information.
+
+The thing to hold on to is that **none of these change the string**. Strings are
+immutable; every one of those methods builds and returns a new one. `name.strip()` on a
+line by itself is a statement that computes something and throws it away. You have to
+catch it: `name = name.strip()`.
+
+## When it goes wrong, read the bottom line first
+
+```text
+Traceback (most recent call last):
+  File "main.py", line 7, in <module>
+    print(f"Each pays {totl}")
+                       ^^^^
+NameError: name 'totl' is not defined
+```
+
+Read it bottom-up. The last line is the *kind* of failure and it is doing real work:
+`NameError` means a name was read with nothing bound to it, `TypeError` means an
+operation met a value of the wrong type, `ZeroDivisionError` means what it says. Above
+it is the line number where it happened. Only above that is the call history, and on a
+one-file program it is usually one line long and tells you nothing you did not know.
+
+`NameError` has two usual causes and it is worth knowing both, because they need
+different fixes: a misspelling — `totl` for `total` — and an assignment that sits inside
+an `if` or a loop that never ran, so the name was never created at all.
+''',
+                },
             ],
             "quiz": {
                 "title": "Names, types, and the shape of a number",
@@ -358,6 +533,184 @@ for _line in ["Distance: 435.0 km", "Litres: 27.84", "Fuel cost: 552.62", "Cost 
                 "`for` walks a known sequence; `while` repeats on a condition",
                 "Accumulator patterns: running total, running best, counter",
                 "`break` and `continue`, and why an unreachable base case hangs the tab",
+            ],
+            "read": [
+                {
+                    "title": "Loops that stop, four accumulators, and saying no",
+                    "minutes": 14,
+                    "body": r'''
+There are two loops, and one question chooses between them: **do you already know how
+many times?**
+
+If the answer is yes — walk these ten records, try each of these five options, count from
+1 to 100 — the sequence exists before the loop starts and `for` walks it. If the answer is
+no — keep reading lines until the user types `quit`, keep halving until you reach 1 — then
+the stopping point depends on something that has not happened yet, and that is `while`.
+
+You can force either to do the other's job. A `for` faking a `while` needs a `break`; a
+`while` faking a `for` needs you to manage an index by hand, which is where off-by-one
+errors are born. Choosing the one that matches the problem is not style. It is how you
+avoid writing the bookkeeping that goes wrong.
+
+## `for`, and the endpoint rule
+
+```python
+for i in range(2, 11, 3):
+    print(i)
+```
+
+`range(start, stop, step)` yields 2, 5, 8 — and then stops, because the next value would
+be 11 and **`stop` is never included**. Three iterations.
+
+Do not reason about that arithmetically. Say the values out loud: two, five, eight, next
+would be eleven, stop. The endpoint rule is the single most common source of a loop that
+runs once too many or once too few, and saying the values costs a second.
+
+The same rule is why `range(n)` gives exactly `n` values — 0 up to `n - 1` — and why
+`range(0)` gives none at all rather than erroring. A loop that should do nothing does
+nothing, without a special case.
+
+## `while`, and the failure with no traceback
+
+```python
+n = 40
+while n != 1:
+    if n % 2 == 0:
+        n = n // 2
+    else:
+        n = 3 * n + 1
+```
+
+Every `while` makes you a promise: something in the body moves the condition towards
+false. Break the promise and the program does not crash — there is nothing to crash. It
+sits there. No traceback, no error line, no clue.
+
+The classic way to break it:
+
+```python
+while n != 1:
+    if n > 1000:
+        continue          # <-- skips everything below, including the update
+    n = n // 2
+```
+
+`continue` jumps straight back to the condition. The line that would have changed `n`
+never runs, so the condition is tested against a value that has not moved and comes out
+the same way it did last time, forever. The same mistake is harmless in a `for` loop,
+because there the sequence advances on its own and `continue` cannot stop it.
+
+When something hangs, look for the update and ask whether every path through the body
+reaches it.
+
+## The four accumulators
+
+Nearly every loop you write in this course is one of four shapes. Learn them as shapes
+and you will stop re-deriving them.
+
+```python
+total = 0                          # running total
+for n in numbers:
+    total += n
+
+best = numbers[0]                  # running best  — seed with a real value
+for n in numbers:
+    if n > best:
+        best = n
+
+count = 0                          # counter
+for n in numbers:
+    if n % 2 == 0:
+        count += 1
+
+evens = []                         # collector
+for n in numbers:
+    if n % 2 == 0:
+        evens.append(n)
+```
+
+The one that goes wrong is the running best, and it goes wrong at the seed. Start it at
+`0` and a list of freezing temperatures reports a maximum of 0 — no error, no crash, a
+plausible wrong number, which is the worst kind of bug there is. Seed with the first
+element and the answer is always a value the data actually contains. (`float("-inf")` is
+the other safe seed, and it is the one to use when the list may be empty and you would
+rather get infinity than an `IndexError`.)
+
+## Worked: counting a Collatz chain by hand
+
+Halve an even number; on an odd one go to `3n + 1`. From 6:
+
+```text
+    6  even  ->  3        step 1
+    3  odd   ->  10       step 2
+   10  even  ->  5        step 3
+    5  odd   ->  16       step 4
+   16  even  ->  8        step 5
+    8  even  ->  4        step 6
+    4  even  ->  2        step 7
+    2  even  ->  1        step 8      condition n != 1 now false, stop
+```
+
+Eight steps. Notice that the count is of *rule applications*, not of numbers visited —
+nine numbers appear and the answer is eight. That is the counter accumulator, and the
+reason it starts at 0 is that a chain starting at 1 is already finished.
+
+## Two values out of one expression
+
+```python
+pair = (871, 178)
+n, steps = pair          # unpacking: two names, one tuple
+```
+
+A tuple is an ordered group of values written with commas; the brackets are usually
+optional and usually written anyway for clarity. It is the normal way for one expression
+to produce more than one thing — a function returning `(n, steps)`, a loop variable over
+`.items()`, or swapping two names in one line with `a, b = b, a`.
+
+A tuple is **immutable**: `pair[0] = 5` raises `TypeError`. That is not a restriction so
+much as a signal. A list is a collection that may grow; a tuple is one record whose shape
+is fixed, and the fixed shape is what makes unpacking safe to write.
+
+Tuples compare left to right — `(9, 19) < (9, 20)` is `True` because the first elements
+tie and the second decides. That rule is doing quiet work later in the course, when a
+sort key is a tuple.
+
+## Saying no
+
+Not every input is one a function can do anything with. The Collatz rule says nothing
+about zero or about negative numbers, so the honest response is to refuse:
+
+```python
+def collatz_steps(n):
+    if n < 1:
+        raise ValueError("n must be 1 or greater")
+    ...
+```
+
+`raise` stops the function immediately and hands the problem to the caller. If nobody
+catches it the program stops with a traceback naming your message — which is the correct
+outcome, because a caller passing 0 has a bug and needs to be told.
+
+The tempting alternative is to return something instead — `return 0`, or `return None`.
+It is worse, and it is worth knowing why. `0` is a legitimate answer for `n = 1`, so the
+caller now cannot distinguish "no steps needed" from "your input was nonsense". `None`
+is not a legitimate answer, but it is silent: it flows on to the next line and fails
+there, in a different function, with a `TypeError` that names neither the bad value nor
+where it came from. Raising fails at the place that knows what went wrong.
+
+Validate first, before any real work, so a rejected call never half-happens.
+
+## One small convenience
+
+Python lets you chain comparisons the way mathematics does:
+
+```python
+if 0 <= score <= 100:
+```
+
+That is one test, and `score` is evaluated once. Most languages require
+`score >= 0 && score <= 100`; Python does not, and the chained form is the idiomatic one.
+''',
+                },
             ],
             "quiz": {
                 "title": "Which branch runs, and how many times",
@@ -730,6 +1083,193 @@ assert (_n, _s) == (2, 1), f"longest_under(3) gave {(_n, _s)!r}, expected (2, 1)
                 "Default and keyword arguments",
                 "Local scope: names created inside a function do not escape it",
                 "Docstrings, and building one function out of another",
+            ],
+            "read": [
+                {
+                    "title": "Return, not print — and the shape of a function you can build on",
+                    "minutes": 14,
+                    "body": r'''
+Here is the mistake, and it is worth meeting deliberately rather than by accident:
+
+```python
+def double(x):
+    print(x * 2)
+
+result = double(5)
+print(result + 1)
+```
+
+The first call puts `10` on the screen, so the function looks like it works. The next
+line raises `TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'`.
+
+`double` never handed anything back. A function that falls off the end without a `return`
+returns `None` — always, silently, no warning. `result` is bound; it is bound to `None`.
+
+`print` puts characters on a screen for a human to read. `return` hands a value back to
+the calling code. Only the second one composes: you cannot add one to something that was
+printed, cannot store it, cannot pass it on. Almost every function you write should
+return; the printing belongs at the outside edge of the program, where a human is.
+
+The error is worth recognising by sight, because it almost never points at the function
+that caused it. `NoneType` in an arithmetic `TypeError` means "something returned None a
+few lines ago" far more often than it means anything else.
+
+## `return` names a value and leaves
+
+```python
+def sign(n):
+    if n > 0:
+        return 1
+    if n < 0:
+        return -1
+    return 0
+```
+
+Three `return` statements; exactly one runs per call. Reaching a `return` ends the call
+on the spot — nothing after it in that call happens.
+
+That is why an early return can stand in for an `else`: once the positive case has
+returned, the code below it is *already* the not-positive case and needs no guard. It is
+also why an unconditional `return` part-way down a function makes everything below it
+dead code that can never run, whatever the input.
+
+## Parameters and arguments, and why the distinction earns its keep
+
+```python
+def area(w, h):        # w and h are the parameters — the slots
+    return w * h
+
+area(3, 4)             # 3 and 4 are the arguments — the values
+```
+
+The distinction sounds like pedantry until you read an error message.
+`TypeError: area() missing 1 required positional argument: 'h'` is telling you a *slot*
+went unfilled, and it names the slot. Knowing that the name in the message comes from the
+`def` header, not from the call, is the fastest route to the value you forgot.
+
+## Defaults and keywords
+
+```python
+def initials(full_name, separator="."):
+    ...
+
+initials("ada lovelace")                        # "A.L"
+initials("ada lovelace", separator="-")         # "A-L"
+```
+
+A default makes a parameter optional. Naming an argument at the call site makes the
+intent readable and lets you skip past parameters you do not care about.
+
+Two rules come with it. Passing both by position fills the slots in header order, so
+`greet("Hi", "Ada")` on `def greet(name, greeting="Hello")` sets `name` to `"Hi"` and
+returns `"Ada, Hi"` — a bug that produces plausible-looking output, which is the
+dangerous kind. And a positional argument after a keyword one is a `SyntaxError`: once
+you start naming, you cannot go back to counting.
+
+**Where defaults stop behaving.** The default expression is evaluated **once**, when the
+`def` runs — not on each call. With an immutable default like `"."` or `0` you will never
+notice. With a mutable one you will:
+
+```python
+def collect(item, into=[]):     # do not do this
+    into.append(item)
+    return into
+
+collect(1)      # [1]
+collect(2)      # [1, 2]   <- the same list as last time, still holding 1
+```
+
+Every call that omits `into` shares one list, created when the function was defined. The
+fix is to default to `None` and build a fresh one inside:
+
+```python
+def collect(item, into=None):
+    if into is None:
+        into = []
+    into.append(item)
+    return into
+```
+
+## What happens inside stays inside
+
+```python
+count = 0
+
+def bump():
+    count = 1        # creates a *local* count; the outer one is untouched
+
+bump()
+print(count)         # 0
+```
+
+Assigning to a name anywhere inside a function makes that name local for the whole call.
+The function made its own `count`, set it to 1, and discarded it on return.
+
+This is a feature. It is what lets you write a function without first auditing every name
+you used against the rest of the program. To get a value out, `return` it.
+
+## Building one function out of another
+
+The third lab asks you to write `normalise(text)` and then build `word_frequencies`,
+`top_n` and `average_word_length` on top of it rather than re-splitting the text in each.
+The reason is not speed — the extra call makes it very slightly slower — and it is not
+memory. It is that **"what counts as a word" is a decision, and a decision should be
+written down once.**
+
+Today the rule is: lowercase it, strip `.,!?;:()` off both ends. The day you decide
+apostrophes should survive so that `don't` stays one word, you change `normalise` and
+every function built on it changes with it. Write the rule out three times and you will
+change two of them, and the third goes quietly out of step — quietly, because nothing
+errors. Decomposition buys you one place to change your mind.
+
+## Two idioms the exercises hand you
+
+Both appear in this module's lab hints, and neither is obvious on sight.
+
+**A generator expression inside a call.**
+
+```python
+sum(len(word) for word in words)
+```
+
+Read it right to left: for each `word` in `words`, produce `len(word)`; `sum` adds them
+as they arrive. It is the running-total accumulator from the previous module, written as
+one expression. Nothing is built in between — the lengths are produced one at a time,
+which is why `sum(...)` over a huge file does not need memory for a huge list.
+
+**A sort key.**
+
+```python
+ranked = sorted(freqs.items(), key=lambda pair: (-pair[1], pair[0]))
+```
+
+`freqs.items()` gives `(word, count)` pairs. `key=` takes a function, and `sorted` calls
+it on each item and sorts by whatever comes back rather than by the item itself.
+`lambda pair: ...` is that function, written inline: `lambda` builds a small anonymous
+function whose body is a single expression.
+
+The key here returns a tuple, and tuples compare left to right — so this sorts by
+`-count` first and only uses `word` to break ties. The negation is the trick worth
+keeping: there is no "descending" option inside a key, so you negate the number and let
+ascending order do the work. Sorting the word ascending in the same tuple is what makes
+ties alphabetical.
+
+Worked on `{"a": 3, "c": 1, "b": 3}`:
+
+```text
+.items() order      key            sorted ascending by key
+("a", 3)            (-3, "a")      (-3, "a")   ->  ("a", 3)
+("c", 1)            (-1, "c")      (-3, "b")   ->  ("b", 3)
+("b", 3)            (-3, "b")      (-1, "c")   ->  ("c", 1)
+```
+
+`.items()` hands the pairs back in insertion order, not sorted order — the sorting is
+entirely `sorted`'s doing.
+
+`[:2]` off the front of that gives `[("a", 3), ("b", 3)]`, biggest first, ties
+alphabetical — which is exactly what `top_n` is specified to return.
+''',
+                },
             ],
             "quiz": {
                 "title": "What a call hands back",
@@ -1130,6 +1670,183 @@ assert len(_calls) >= 2, "word_frequencies and average_word_length should both c
                 "`with open(...)` closes the file even when the block raises",
                 "`json.dump` / `json.load` for structure that survives a restart",
                 "Handling `FileNotFoundError` instead of crashing on a first run",
+            ],
+            "read": [
+                {
+                    "title": "Records, files, and what survives the trip to disk",
+                    "minutes": 14,
+                    "body": r'''
+Everything so far has lived for as long as the program ran and then vanished. This module
+is about the two things that fix that: a shape to hold records in, and a way to write them
+somewhere that outlives the process.
+
+The shape is a **list of dicts**.
+
+```python
+rows = [
+    {"name": "Ada",   "score": 90, "team": "red"},
+    {"name": "Linus", "score": 75, "team": "blue"},
+    {"name": "Grace", "score": 88, "team": "red"},
+]
+```
+
+The two containers are doing different jobs, and that split is the whole reason it works.
+The dict gives every field a name, so `row["team"]` says what it means where `row[2]`
+does not — and stays correct when a column is inserted. The list gives the rows an order,
+which is often the order they were read in and is worth not losing.
+
+It is also exactly what `json.load` produces from a file of records, so almost no
+conversion code is needed at the boundary.
+
+## Two ways to read a key, and they mean different things
+
+```python
+row["score"]            # KeyError if it is missing
+row.get("score", 0)     # 0 if it is missing
+row.get("score")        # None if it is missing
+```
+
+This is not a choice between a safe one and a risky one. It is a place to say what you
+believe about the data.
+
+Square brackets mean *this must be here*: a record with no `team` is broken and you want
+to be told, loudly, at the row that broke. `.get` with a default means *this may be
+absent, and absent means zero* — a form field left blank, an optional column. Both are
+correct; using the wrong one either hides a corrupt file or crashes on an ordinary one.
+
+`.get` with no default is a third behaviour and the usual cause of a `TypeError` a few
+lines later, because `None + 90` has no meaning. If you see that message, look for a
+`.get` that lost its default.
+
+The accumulate-into-a-dict pattern is built on exactly this:
+
+```python
+totals[team] = totals.get(team, 0) + int(score)
+```
+
+The default is the entire trick. The first line for each team arrives before the key
+exists, and `0` is what makes that first line ordinary instead of a special case.
+
+## Reading a comprehension
+
+```python
+parts = [part.strip() for part in line.split(",")]
+```
+
+This is the collector accumulator compressed into one expression: for each `part` in
+`line.split(",")`, put `part.strip()` in a new list. Read it as *expression — for —
+source*, and read the middle first.
+
+Written out it is four lines and means the same thing. Use whichever is clearer; a
+comprehension with a condition and a nested loop in it has stopped being clearer.
+
+## Opening a file
+
+```python
+with open("results.csv") as f:
+    for line in f:
+        ...
+```
+
+`with` closes the file on the way out of the block whichever way you leave — falling off
+the end, returning early, or raising half-way through. A bare `open` is not wrong so much
+as fragile: it needs a matching `close()`, and the one path that skips it is the exception
+path, which is the path you did not test.
+
+The mode is the second argument and the default is `"r"`:
+
+```text
+"r"   read; the file must exist                     (the default)
+"w"   write; creates it, and TRUNCATES it if it existed
+"a"   append; creates it, and adds to the end
+"x"   create; raises FileExistsError if it is there
+```
+
+`"w"` is the one to be careful with. It is right for a summary regenerated from scratch
+each run, and it is the wrong answer to "make sure the file exists", because the way it
+makes sure is by emptying it.
+
+Iterating an open file gives you one line at a time, including its trailing newline —
+which is why `line.strip()` is almost always the next thing to happen.
+
+## JSON, and what does not survive the trip
+
+```python
+with open("totals.json", "w") as out:
+    json.dump(totals, out)
+```
+
+`json.dump(obj, file)` writes into an open file; `json.dumps(obj)` builds a string and
+hands it to you. The `s` is for *string*. `load` and `loads` are the same pair going the
+other way.
+
+JSON is a text format with six types, and Python has more than six. What comes back is
+not always what went in:
+
+```text
+dict            ->  object     ->  dict            unchanged
+list            ->  array      ->  list            unchanged
+tuple           ->  array      ->  LIST            (1, 2) comes back as [1, 2]
+str             ->  string     ->  str             unchanged
+int / float     ->  number     ->  int / float     unchanged
+True / False    ->  true/false ->  True / False    unchanged
+None            ->  null       ->  None            unchanged
+int as a KEY    ->  "1"        ->  STRING key      {1: "a"} comes back as {"1": "a"}
+set             ->  TypeError: Object of type set is not JSON serializable
+```
+
+The bottom three are the ones that bite. A set fails loudly, which is the good case. A
+tuple and an integer key both fail *quietly*: the file is valid, the load succeeds, and
+`back[1]` raises `KeyError` while `back["1"]` works. Keep keys as strings from the start
+when data is going to disk, and expect tuples to come back as lists.
+
+## Catching exactly what you expect
+
+On the very first run the data file does not exist. That is a normal situation, not an
+error, and catching the one exception that describes it says so:
+
+```python
+try:
+    with open(path) as f:
+        return json.load(f)
+except FileNotFoundError:
+    return []
+```
+
+The narrowness is the point. A bare `except:` swallows everything — the permission error,
+the corrupt-file error, the typo in your own code, and the reader's Ctrl-C, because
+`KeyboardInterrupt` is an exception too. The bug it hides is always the one you did not
+know you had.
+
+Note also what is *not* wrapped: only the opening and loading. The wider you draw the
+`try`, the more unrelated failures it catches by accident.
+
+## Your own files are modules too
+
+The capstone is in two files, and the second one starts:
+
+```python
+from expenses import Expense, Ledger
+```
+
+`import expenses` looks for `expenses.py` beside the file being run, **executes it top to
+bottom**, and keeps the names it defined. `from expenses import Expense` does the same and
+lifts two of those names into your namespace.
+
+"Executes it top to bottom" is the part with consequences. Anything at the top level of
+`expenses.py` — a `print`, a file being written, a long computation — happens on import,
+before your program has done anything. That is why the capstone's constraints say
+`expenses.py` must define classes and print nothing: a module is a thing to be imported,
+and importing it should be quiet.
+
+Which is also the honest place to say what the capstone assumes. It asks you to write two
+classes, and classes are the one topic this course uses without teaching — they are
+covered in the Python Foundations track that the degree assumes you have done, and they
+are the entire subject of CS102, which comes next. If `class`, `__init__` and `self` are
+unfamiliar when you reach the capstone, that is where to go and get them; nothing in these
+four modules will have supplied them.
+''',
+                },
             ],
             "quiz": {
                 "title": "Records in, records out",

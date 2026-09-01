@@ -362,12 +362,16 @@ function renderMdInner(src) {
       const rows = [];
       while (i < lines.length && /^\|/.test(lines[i])) { rows.push(lines[i]); i++; }
       const cells = r => r.replace(/^\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
-      let t = '<table><thead><tr>' + cells(rows[0]).map(c => '<th>' + mdInline(c) + '</th>').join('') + '</tr></thead><tbody>';
+      /* Wrapped, because .main is the page's scroll container: a table wider than the
+         prose column scrolled the whole pane sideways. tabindex puts the scroll box in
+         the tab order, since a scrollable region reachable only by pointer is not
+         reachable at all. */
+      let t = '<div class="tw" tabindex="0"><table><thead><tr>' + cells(rows[0]).map(c => '<th>' + mdInline(c) + '</th>').join('') + '</tr></thead><tbody>';
       for (let r = 1; r < rows.length; r++) {
         if (/^\|\s*:?-{2,}/.test(rows[r])) continue;
         t += '<tr>' + cells(rows[r]).map(c => '<td>' + mdInline(c) + '</td>').join('') + '</tr>';
       }
-      out += t + '</tbody></table>';
+      out += t + '</tbody></table></div>';
       continue;
     }
     if (/^\s*[-*]\s+/.test(line)) {

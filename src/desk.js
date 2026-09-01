@@ -392,7 +392,24 @@ const Desk = (function () {
     log2: function (a, env, n) { need(n, a, 1); return logOf(a[0], 2, 'log2'); },
     sin: function (a, env, n) { need(n, a, 1); return Math.sin(toRad(a[0], env)); },
     cos: function (a, env, n) { need(n, a, 1); return Math.cos(toRad(a[0], env)); },
-    tan: function (a, env, n) { need(n, a, 1); return Math.tan(toRad(a[0], env)); },
+    tan: function (a, env, n) {
+      need(n, a, 1);
+      /* Math.tan does not report the asymptote, because the double nearest π/2
+         is not π/2: tan(90) came back 1.633e16, survived the isFinite check,
+         and printed as "16331239 G" — an engineering reading of infinity, in
+         the same font as every honest answer. Name the degree case exactly;
+         catch the radian one by magnitude, where no equality test can. */
+      if (env.deg && ((a[0] % 180) + 180) % 180 === 90) {
+        throw calcErr('the tangent of ' + a[0] + '° is undefined — ' +
+          'the ratio runs off to infinity there');
+      }
+      const v = Math.tan(toRad(a[0], env));
+      if (Math.abs(v) > 1e15) {
+        throw calcErr('that is close enough to a right angle that the tangent ' +
+          'has no value this can hold');
+      }
+      return v;
+    },
     asin: function (a, env, n) {
       need(n, a, 1);
       if (a[0] < -1 || a[0] > 1) throw calcErr('asin only takes a value between -1 and 1');
@@ -663,9 +680,9 @@ const Desk = (function () {
       '.dsk-tab:hover{color:var(--ink)}',
       '.dsk-tab[aria-selected=true]{background:var(--lime);color:var(--on-lime)}',
       '.dsk-where{flex:1;min-width:0;text-align:right;font-family:var(--mono);font-size:10.5px;',
-      '  color:var(--ink-5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '  color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dsk-x{flex:none;width:28px;height:28px;border-radius:8px;display:grid;place-items:center;',
-      '  color:var(--ink-4);font-size:15px;line-height:1}',
+      '  color:var(--ink-3);font-size:15px;line-height:1}',
       '.dsk-x:hover{background:var(--surface-2);color:var(--ink)}',
 
       '.dsk-pane{flex:1;min-height:0;display:none;flex-direction:column}',
@@ -674,26 +691,26 @@ const Desk = (function () {
       /* calculator */
       '.dsk-hist{flex:1;min-height:0;overflow:auto;padding:12px 14px;display:flex;',
       '  flex-direction:column;justify-content:flex-end;gap:9px}',
-      '.dsk-empty{color:var(--ink-4);font-size:12.5px;line-height:1.75;margin:auto 0}',
+      '.dsk-empty{color:var(--ink-3);font-size:12.5px;line-height:1.75;margin:auto 0}',
       '.dsk-empty code{font-family:var(--mono);font-size:12px;color:var(--lime);',
       '  background:var(--lime-08);padding:1px 5px;border-radius:4px}',
       '.dsk-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;',
       '  padding:7px 9px;border-radius:var(--r);border:1px solid transparent}',
       '.dsk-row:hover{border-color:var(--line);background:var(--surface-2)}',
       '.dsk-ex{grid-column:1;text-align:left;font-family:var(--mono);font-size:12px;',
-      '  color:var(--ink-4);white-space:pre-wrap;word-break:break-word;line-height:1.5}',
-      '.dsk-row:hover .dsk-ex{color:var(--ink-3)}',
+      '  color:var(--ink-3);white-space:pre-wrap;word-break:break-word;line-height:1.5}',
+      '.dsk-row:hover .dsk-ex{color:var(--ink-2)}',
       '.dsk-val{grid-column:1;text-align:left;font-family:var(--mono);font-size:15px;',
       '  color:var(--lime);word-break:break-word;line-height:1.4}',
-      '.dsk-val small{display:block;font-size:10.5px;color:var(--ink-5);margin-top:2px}',
+      '.dsk-val small{display:block;font-size:10.5px;color:var(--ink-3);margin-top:2px}',
       '.dsk-row.err .dsk-val{color:var(--bad);font-size:12.5px}',
       '.dsk-send{grid-row:1/span 2;grid-column:2;align-self:center;width:26px;height:26px;',
-      '  border-radius:7px;color:var(--ink-5);font-size:12px;opacity:0;transition:opacity .14s}',
+      '  border-radius:7px;color:var(--ink-3);font-size:12px;opacity:0;transition:opacity .14s}',
       '.dsk-row:hover .dsk-send,.dsk-send:focus-visible{opacity:1}',
       '.dsk-send:hover{background:var(--lime-12);color:var(--lime)}',
 
       '.dsk-foot{flex:none;border-top:1px solid var(--line);background:var(--sunk);padding:9px 12px}',
-      '.dsk-prev{min-height:16px;font-family:var(--mono);font-size:11px;color:var(--ink-5);',
+      '.dsk-prev{min-height:16px;font-family:var(--mono);font-size:11px;color:var(--ink-3);',
       '  padding:0 2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dsk-prev b{color:var(--ink-3);font-weight:500}',
       '.dsk-in{display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:var(--r);',
@@ -720,7 +737,7 @@ const Desk = (function () {
       '  white-space:nowrap;text-overflow:ellipsis}',
       '.dsk-pick:hover{color:var(--ink)}',
       '.dsk-pick[aria-pressed=true]{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}',
-      '.dsk-saved{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-5);',
+      '.dsk-saved{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);',
       '  white-space:nowrap}',
       '.dsk-saved.warn{color:var(--amber)}',
       '.dsk-ta{flex:1;min-height:0;width:100%;resize:none;border:0;outline:none;padding:14px 16px;',
@@ -729,8 +746,13 @@ const Desk = (function () {
       '.dsk-ta::placeholder{color:var(--on-editor-3)}',
       '.dsk-notefoot{flex:none;display:flex;align-items:center;gap:8px;padding:8px 12px;',
       '  border-top:1px solid var(--line);background:var(--sunk);',
-      '  font-family:var(--mono);font-size:10.5px;color:var(--ink-5)}',
+      '  font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}',
       '.dsk-notefoot .sp{flex:1}',
+
+      /* The one live region in the modal. The stylesheet carries no visually-hidden
+         utility, so it is declared here and travels with the component. */
+      '.dsk-say{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;',
+      '  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}',
 
       '@media (max-width:560px){',
       '  .dsk-back{padding:0}',
@@ -768,36 +790,43 @@ const Desk = (function () {
       '  <div class="dsk-head" data-head>',
       '    <span class="dsk-grip" aria-hidden="true"><i></i><i></i><i></i></span>',
       '    <span class="dsk-title">Desk</span>',
-      '    <div class="dsk-tabs" role="tablist">',
-      '      <button class="dsk-tab" role="tab" data-tab="calc">Calculator</button>',
-      '      <button class="dsk-tab" role="tab" data-tab="notes">Notes</button>',
+      '    <div class="dsk-tabs" role="tablist" aria-label="Desk sections">',
+      '      <button class="dsk-tab" role="tab" id="dsk-tab-calc" aria-controls="dsk-pane-calc"',
+      '        data-tab="calc" tabindex="-1">Calculator</button>',
+      '      <button class="dsk-tab" role="tab" id="dsk-tab-notes" aria-controls="dsk-pane-notes"',
+      '        data-tab="notes" tabindex="-1">Notes</button>',
       '    </div>',
       '    <span class="dsk-where" data-where></span>',
       '    <button class="dsk-x" data-close aria-label="Close the desk (Esc)">✕</button>',
       '  </div>',
 
-      '  <div class="dsk-pane" role="tabpanel" data-pane="calc">',
+      '  <div class="dsk-pane" role="tabpanel" id="dsk-pane-calc"',
+      '    aria-labelledby="dsk-tab-calc" data-pane="calc">',
       '    <div class="dsk-hist" data-hist></div>',
       '    <div class="dsk-foot">',
-      '      <div class="dsk-prev" data-prev aria-live="polite"></div>',
+      '      <div class="dsk-prev" data-prev></div>',
       '      <div class="dsk-in">',
       '        <span class="car" aria-hidden="true">›</span>',
       '        <input data-input type="text" spellcheck="false" autocomplete="off"',
       '          autocapitalize="off" autocorrect="off" aria-label="Expression"',
       '          placeholder="4k7 || 10k">',
       '        <button class="dsk-mini" data-angle title="Degrees or radians"></button>',
-      '        <button class="dsk-mini" data-tonote title="Send the last result to the note">→ note</button>',
-      '        <button class="dsk-mini" data-help title="What this calculator understands">?</button>',
+      '        <button class="dsk-mini" data-tonote aria-label="Send the last result to the note"',
+      '          title="Send the last result to the note">→ note</button>',
+      '        <button class="dsk-mini" data-help id="dsk-help" aria-controls="dsk-tips"',
+      '          aria-expanded="false" aria-label="What this calculator understands"',
+      '          title="What this calculator understands">?</button>',
       '      </div>',
-      '      <div class="dsk-tips" data-tips></div>',
+      '      <div class="dsk-tips" id="dsk-tips" data-tips></div>',
       '    </div>',
       '  </div>',
 
-      '  <div class="dsk-pane" role="tabpanel" data-pane="notes">',
+      '  <div class="dsk-pane" role="tabpanel" id="dsk-pane-notes"',
+      '    aria-labelledby="dsk-tab-notes" data-pane="notes">',
       '    <div class="dsk-notebar">',
       '      <button class="dsk-pick" data-pick="lesson" aria-pressed="false"></button>',
       '      <button class="dsk-pick" data-pick="scratch" aria-pressed="false">Scratch pad</button>',
-      '      <span class="dsk-saved" data-saved aria-live="polite"></span>',
+      '      <span class="dsk-saved" data-saved></span>',
       '    </div>',
       '    <textarea class="dsk-ta" data-ta spellcheck="true"',
       '      placeholder="Working, values, the thing you will forget by tomorrow."></textarea>',
@@ -807,6 +836,7 @@ const Desk = (function () {
       '      <button class="dsk-mini" data-clear>clear</button>',
       '    </div>',
       '  </div>',
+      '  <p class="dsk-say" data-say role="status" aria-live="polite"></p>',
       '</div>',
     ].join('\n');
 
@@ -832,6 +862,7 @@ const Desk = (function () {
       count: back.querySelector('[data-count]'),
       copy: back.querySelector('[data-copy]'),
       clear: back.querySelector('[data-clear]'),
+      say: back.querySelector('[data-say]'),
     };
 
     elems.tips.innerHTML = [
@@ -851,6 +882,7 @@ const Desk = (function () {
 
     elems.tabs.forEach(function (b) {
       b.addEventListener('click', function () { show(b.dataset.tab); });
+      b.addEventListener('keydown', onTabKey);
     });
     back.querySelector('[data-close]').addEventListener('click', function () { close(); });
 
@@ -977,7 +1009,8 @@ const Desk = (function () {
       return '<div class="dsk-row' + (r.ok ? '' : ' err') + '">' +
         '<button class="dsk-ex" data-ex="' + i + '" title="Put this expression back in the box">' +
         esc(r.src) + '</button>' + val +
-        (r.ok ? '<button class="dsk-send" data-send="' + i + '" title="Send to the note">↴</button>' : '') +
+        (r.ok ? '<button class="dsk-send" data-send="' + i + '" ' +
+          'aria-label="Send this result to the note" title="Send to the note">↴</button>' : '') +
         '</div>';
     }).join('');
     elems.hist.scrollTop = elems.hist.scrollHeight;
@@ -1018,7 +1051,21 @@ const Desk = (function () {
     return p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
+  /* The modal's only live region. Cleared and re-set rather than assigned, so
+     that working the same expression twice is announced twice: an assignment of
+     identical text is not a mutation, and assistive tech would stay silent. */
+  let sayTimer = 0;
+  function say(msg) {
+    if (!elems || !elems.say) return;
+    clearTimeout(sayTimer);
+    elems.say.textContent = '';
+    sayTimer = setTimeout(function () {
+      if (elems && elems.say) elems.say.textContent = msg;
+    }, 60);
+  }
+
   function flash(msg) {
+    say(msg);
     elems.saved.classList.remove('warn');
     elems.saved.textContent = msg;
     setTimeout(function () {
@@ -1070,6 +1117,11 @@ const Desk = (function () {
       ? { src: src, ok: true, value: r.value, display: r.display, raw: r.raw }
       : { src: src, ok: false, error: r.error };
     if (r.ok) state.ans = r.value;
+    /* The result was the one thing in this modal a screen reader never heard:
+       the input clears, the preview clears, and the history is not a live
+       region. The preview used to be one, and read a running total over the
+       user's own typing echo instead. */
+    say(r.ok ? src + ' equals ' + r.display : r.error);
     state.history.push(row);
     if (state.history.length > HIST_MAX) state.history.splice(0, state.history.length - HIST_MAX);
     elems.input.value = '';
@@ -1110,6 +1162,20 @@ const Desk = (function () {
     saveTimer = setTimeout(flushSave, SAVE_MS);
   }
 
+  /* currentNote() creates the row for whichever lesson is open, so opening the
+     desk on a lesson and reading on leaves an empty row behind for every lesson
+     walked past — and the next real save serialises the lot. The delete above
+     only ever reached the note being written; by the time it runs, the walked-past
+     rows belong to lessons that are no longer current, so it never reached them.
+     Prune the whole map on the way out instead. */
+  function saveNotes() {
+    Object.keys(notes.lessons).forEach(function (id) {
+      const n = notes.lessons[id];
+      if (!n || !String(n.text || '').trim()) delete notes.lessons[id];
+    });
+    return writeJSON(K_NOTES, notes);
+  }
+
   function flushSave() {
     clearTimeout(saveTimer);
     if (!open_ || !elems) return;
@@ -1127,9 +1193,10 @@ const Desk = (function () {
        for every lesson the learner merely walked past. */
     const k = currentNoteKey();
     if (k && !text.trim()) delete notes.lessons[k];
-    const ok = writeJSON(K_NOTES, notes);
+    const ok = saveNotes();
     elems.saved.classList.toggle('warn', !ok);
     elems.saved.textContent = ok ? 'saved ' + clock(note.at) : 'could not save — storage is full';
+    if (!ok) say('Could not save — storage is full');
   }
 
   /* ================================================================ dragging */
@@ -1220,11 +1287,15 @@ const Desk = (function () {
 
   /* ================================================================ focus */
 
-  const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),' +
-    'textarea:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  /* Deliberately broad, with the exclusions moved into the filter: the old
+     selector could not say "a button that is not a tab stop", so the roving
+     tabindex on the tablist would have let Tab wrap onto the unselected tab. */
+  const FOCUSABLE = 'a[href],button,input,textarea,select,[tabindex]';
 
   function focusables() {
     return Array.prototype.filter.call(panel.querySelectorAll(FOCUSABLE), function (el) {
+      if (el.disabled) return false;
+      if (el.getAttribute('tabindex') === '-1') return false;
       return el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement;
     });
   }
@@ -1291,13 +1362,37 @@ const Desk = (function () {
     const t = tab === 'notes' ? 'notes' : 'calc';
     state.tab = t;
     elems.tabs.forEach(function (b) {
-      b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false');
+      const on = b.dataset.tab === t;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      /* A tablist is one Tab stop, not one per tab. That is what role=tab
+         promises, and it is what makes the arrow keys below load-bearing
+         rather than decorative. */
+      b.tabIndex = on ? 0 : -1;
     });
     elems.panes.calc.classList.toggle('on', t === 'calc');
     elems.panes.notes.classList.toggle('on', t === 'notes');
     if (t === 'notes') { paintNotes(); elems.ta.focus(); }
     else { paintHistory(); elems.input.focus(); }
     saveState();
+  }
+
+  /* Left/Right/Home/End across the tablist. With the roving tabindex above, this
+     is the only keyboard route to the unselected tab. */
+  function onTabKey(e) {
+    const i = elems.tabs.indexOf(e.target);
+    if (i < 0) return;
+    const n = elems.tabs.length;
+    let j = -1;
+    if (e.key === 'ArrowRight') j = (i + 1) % n;
+    else if (e.key === 'ArrowLeft') j = (i - 1 + n) % n;
+    else if (e.key === 'Home') j = 0;
+    else if (e.key === 'End') j = n - 1;
+    if (j < 0) return;
+    e.preventDefault();
+    /* show() ends by focusing the pane's own field, which is right for a click
+       and wrong for an arrow key: focus belongs on the tab being arrowed to. */
+    show(elems.tabs[j].dataset.tab);
+    elems.tabs[j].focus();
   }
 
   function open(tab) {
@@ -1332,6 +1427,7 @@ const Desk = (function () {
     document.addEventListener('visibilitychange', onHide);
     elems.hist.addEventListener('click', onHistClick);
     elems.hist.addEventListener('keydown', onHistKey);
+    markTrigger(true);
   }
 
   function onHistKey(e) {
@@ -1342,6 +1438,15 @@ const Desk = (function () {
   }
 
   function onHide() { if (document.visibilityState === 'hidden') flushSave(); }
+
+  /* The toolbar button opens this dialog, so its expanded state is part of the
+     dialog's contract. Queried each time rather than cached: the shell owns its
+     header markup and re-renders it, and a cached node would be kept honest
+     forever while the live one never was. */
+  function markTrigger(on) {
+    const b = document.getElementById('desk-btn');
+    if (b) b.setAttribute('aria-expanded', on ? 'true' : 'false');
+  }
 
   function close() {
     if (!open_) return;
@@ -1358,6 +1463,7 @@ const Desk = (function () {
 
     if (hidden) { hidden.removeAttribute('aria-hidden'); hidden = null; }
     back.hidden = true;
+    markTrigger(false);
 
     /* Focus goes back to whatever had it. Losing it to <body> means the next Tab
        starts from the top of the page, which is a long way from the lesson. */
