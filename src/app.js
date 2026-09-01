@@ -872,11 +872,15 @@ function renderShell() {
         '</button>' +
         '<div class="screen-id"><b id="screen-title">Dashboard</b><span id="screen-crumb"></span></div>' +
         '<span class="spacer"></span>' +
+        '<div class="search-wrap">' +
         '<label class="search">' +
           '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="color:var(--ink-4)"><circle cx="11" cy="11" r="7"/><path d="m16.5 16.5 4 4"/></svg>' +
-          '<input id="omni" placeholder="Search lessons" autocomplete="off" aria-label="Search lessons">' +
-          '<span class="kbd">⌘K</span>' +
+          '<input id="omni" placeholder="Search lessons" autocomplete="off" aria-label="Search lessons" ' +
+            'role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="omni-list" aria-haspopup="listbox">' +
+          '<span class="kbd">' + (/Mac|iPhone|iPad/.test((typeof navigator !== 'undefined' && navigator.platform) || '') ? '⌘K' : 'Ctrl K') + '</span>' +
         '</label>' +
+        '<div class="omni-list" id="omni-list" role="listbox" aria-label="Search results" hidden></div>' +
+        '</div>' +
         '<div class="metric streak" title="Consecutive days with a completed unit">' +
           '<span class="fl">🔥</span><b id="streak-val">0</b><span>day streak</span>' +
         '</div>' +
@@ -919,10 +923,7 @@ function renderShell() {
   $('#rail-btn').addEventListener('click', toggleRailPanel);
   window.addEventListener('resize', debounce(syncRailToggle, 150));
   const omni = $('#omni');
-  omni.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') { runSearch(omni.value); }
-    if (e.key === 'Escape') { omni.value = ''; omni.blur(); }
-  });
+  wireSearch(omni);
   document.addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault(); omni.focus(); omni.select();
@@ -1468,20 +1469,106 @@ function screenMeta(r) {
 }
 
 /* ---------- search ---------- */
-function runSearch(q) {
+/* Everything that matches, courses first, then lessons whose own title matches,
+   then lessons matched through their module or course name. */
+function searchHits(q) {
   q = String(q || '').trim().toLowerCase();
-  if (!q) return;
-  const hits = [];
-  for (const id in LESSON_INDEX) {
-    const info = LESSON_INDEX[id];
-    const hay = (info.lesson.title + ' ' + info.track.name + ' ' + info.module.title).toLowerCase();
-    if (hay.indexOf(q) !== -1) hits.push({ id: id, title: info.lesson.title });
-  }
+  if (!q) return [];
+  const courses = [], byTitle = [], byPlace = [];
   for (const c of DEGREE.courses) {
-    if ((c.id + ' ' + c.title + ' ' + c.summary).toLowerCase().indexOf(q) !== -1) {
-      hits.unshift({ course: c.id, title: c.id + ' · ' + c.title });
+    if ((c.id + ' ' + c.title + ' ' + (c.summary || '')).toLowerCase().indexOf(q) !== -1) {
+      const pr = programOf(c);
+      courses.push({ course: c.id, title: c.id + ' · ' + c.title, type: 'course',
+        sub: c.kind === 'track' ? 'Foundation track' : (pr ? (pr.short || pr.name) + ' · ' + bandLabel(pr, c.band) : '') });
     }
   }
+  for (const id in LESSON_INDEX) {
+    const info = LESSON_INDEX[id];
+    const title = info.lesson.title.toLowerCase();
+    const hay = title + ' ' + info.track.name.toLowerCase() + ' ' + info.module.title.toLowerCase();
+    if (hay.indexOf(q) === -1) continue;
+    (title.indexOf(q) !== -1 ? byTitle : byPlace).push({ id: id, title: info.lesson.title, type: info.lesson.type,
+      sub: info.track.id + ' · ' + info.module.title });
+  }
+  return courses.concat(byTitle, byPlace);
+}
+function openHit(h) {
+  if (h.course) {
+    const c = COURSE_OF[h.course];
+    go(c && c.kind === 'track' ? { view: 'track', track: h.course } : { view: 'course', id: h.course });
+  } else go({ view: 'lesson', id: h.id });
+}
+/* The results list under the search box: painted on every keystroke, walked with
+   the arrow keys, opened with Enter or a click. The input is a combobox for a
+   screen reader, with the active row named through aria-activedescendant. */
+function wireSearch(omni) {
+  const list = $('#omni-list');
+  const LIMIT = 8;
+  let hits = [], total = 0, sel = -1;
+  function close() {
+    hits = []; total = 0; sel = -1;
+    list.hidden = true; list.innerHTML = '';
+    omni.setAttribute('aria-expanded', 'false');
+    omni.removeAttribute('aria-activedescendant');
+  }
+  function paint() {
+    if (!omni.value.trim()) { close(); return; }
+    list.hidden = false;
+    omni.setAttribute('aria-expanded', 'true');
+    list.innerHTML = hits.map(function (h, i) {
+      return '<button type="button" role="option" id="omni-opt-' + i + '" class="omni-opt' + (i === sel ? ' on' : '') +
+        '" aria-selected="' + (i === sel ? 'true' : 'false') + '" data-i="' + i + '">' +
+        '<span class="chip ' + esc(h.type) + '">' + esc(h.type === 'course' ? 'Course' : (UNIT_KIND[h.type] || h.type)) + '</span>' +
+        '<span class="omni-t"><b>' + esc(h.title) + '</b><span>' + esc(h.sub) + '</span></span></button>';
+    }).join('') +
+      (!hits.length ? '<div class="omni-none">Nothing matches “' + esc(omni.value.trim()) + '”' +
+        (MISSING_PROGRAMS.length ? ' in what has loaded' : '') + '</div>' : '') +
+      (total > hits.length ? '<div class="omni-more">' + (total - hits.length) + ' more — keep typing to narrow it</div>' : '');
+    if (sel >= 0) omni.setAttribute('aria-activedescendant', 'omni-opt-' + sel);
+    else omni.removeAttribute('aria-activedescendant');
+    const on = $('.omni-opt.on', list);
+    if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
+  }
+  function refresh() {
+    const all = searchHits(omni.value);
+    total = all.length;
+    hits = all.slice(0, LIMIT);
+    sel = hits.length ? 0 : -1;
+    paint();
+  }
+  function pick(h) { close(); omni.value = ''; omni.blur(); openHit(h); }
+  omni.addEventListener('input', refresh);
+  omni.addEventListener('focus', function () { if (omni.value.trim() && list.hidden) refresh(); });
+  omni.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (list.hidden) { refresh(); if (list.hidden) return; }
+      if (!hits.length) return;
+      e.preventDefault();
+      sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length;
+      paint();
+      return;
+    }
+    if (e.key === 'Enter') {
+      if (hits.length) pick(hits[sel >= 0 ? sel : 0]);
+      else runSearch(omni.value);
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (!list.hidden) { close(); e.stopPropagation(); return; }
+      omni.value = ''; omni.blur();
+    }
+  });
+  /* mousedown would blur the input and close the list before the click landed */
+  list.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  list.addEventListener('click', function (e) {
+    const b = e.target.closest && e.target.closest('.omni-opt');
+    if (b && hits[+b.dataset.i]) pick(hits[+b.dataset.i]);
+  });
+  omni.addEventListener('blur', function () { setTimeout(function () { if (document.activeElement !== omni) close(); }, 120); });
+}
+function runSearch(q) {
+  const hits = searchHits(q);
+  if (!String(q || '').trim()) return;
   if (!hits.length) {
     /* "Nothing matches" about a course the learner worked through last week is not a
        claim the search is in any position to make while part of the catalog is absent. */
@@ -1492,8 +1579,7 @@ function runSearch(q) {
   }
   const top = hits[0];
   toast(hits.length + ' match' + (hits.length > 1 ? 'es' : '') + ' — opening ' + top.title);
-  if (top.course) go({ view: 'course', id: top.course });
-  else go({ view: 'lesson', id: top.id });
+  openHit(top);
 }
 function lessonNav(l) {
   const flat = TRACK_LESSONS[l.trackId];
@@ -2523,6 +2609,24 @@ function renderDegree(main, programId) {
         '</button>';
     }).join('');
     const goal = firstOpen || sel;
+    /* what the subject teaches, module by module, with the reader's own progress */
+    const perModule = {}, doneModule = {};
+    units.forEach(function (l) {
+      const li = LESSON_INDEX[l.id];
+      if (!li) return;
+      perModule[li.mi] = (perModule[li.mi] || 0) + 1;
+      if (P.completed[l.id]) doneModule[li.mi] = (doneModule[li.mi] || 0) + 1;
+    });
+    const modRows = (sel.modules || []).map(function (m, i) {
+      const n = perModule[i] || 0, dn = doneModule[i] || 0;
+      return '<li' + (n && dn === n ? ' class="done"' : '') + '><span class="pd-mn">' + (i + 1) + '</span>' +
+        '<span class="pd-mt">' + esc(m.title) + '</span>' +
+        '<span class="pd-mc">' + dn + '/' + n + '</span></li>';
+    }).join('');
+    const learn = (sel.outcomes && sel.outcomes.length)
+      ? '<h3 class="pd-h">You will be able to</h3><ul class="pd-list">' +
+        sel.outcomes.slice(0, 5).map(function (o) { return '<li>' + mdInline(o) + '</li>'; }).join('') + '</ul>'
+      : '';
     detail =
       '<div class="pd-eyebrow">' + esc(sel.id) + ' \u00b7 ' + esc(sel.title.toUpperCase()) + '</div>' +
       '<h2 class="pd-title">' + esc(sel.title.split(/\s+\u2014\s+/)[0]) + '</h2>' +
@@ -2541,7 +2645,9 @@ function renderDegree(main, programId) {
         '<button class="btn success" data-open="' + esc(goal.id) + '">\u25b6 ' +
           (goal === sel ? 'Open this subject' : 'Start ' + esc(goal.id)) + '</button>' +
         '<button class="btn dark" data-preview="' + esc(sel.id) + '">Preview subject</button>' +
-      '</div>';
+      '</div>' +
+      learn +
+      (modRows ? '<h3 class="pd-h">Modules</h3><ol class="pd-mods">' + modRows + '</ol>' : '');
   }
 
   const bandMeta = bands.find(function (b) { return b.n === st.band; }) || {};
@@ -2575,6 +2681,7 @@ function renderDegree(main, programId) {
       '<div class="yr-row"><span class="yr-lbl">' + esc((prog.bandNoun || 'Year').toUpperCase()) + '</span>' + years + '</div>' +
       '<h2 class="pl-h2">' + esc(bandLabel(prog, st.band)) + ' subjects' +
         (bandMeta.title ? ' <span>\u2014 ' + esc(bandMeta.title) + '</span>' : '') + '</h2>' +
+      (bandMeta.theme ? '<p class="pl-theme">' + esc(bandMeta.theme) + '</p>' : '') +
       '<div class="subj-grid">' + (cards || '<p class="pl-empty">Nothing authored in this year yet.</p>') + '</div>' +
       /* A "view every subject in this year" link used to sit here. Every subject in
          the year is already on screen above it, and it navigated to the programme
