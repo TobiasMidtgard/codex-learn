@@ -781,3 +781,270 @@ one seed, for reaching all four slots, and for 25% uniformity over 20000 install
 new gate checked against seven mutations it had to reject.
 
 ---
+
+## Cycle 4 — TRACK 4: Subject Breadth & Progression
+
+**Target: MA101 (Discrete Mathematics).** One course, chosen on measurement. Two
+numbers picked it out of 62.
+
+*Progression.* Scoring every course by units per module, MA101 sits at **1.0** — eleven
+modules holding eleven units, seven of which are a lone `quiz` and four a lone `lab`.
+Seven modules therefore go from a list of concept bullets straight to being examined,
+which tests whether you already knew, and the course has **no reading unit at all**.
+Only the fifteen syllabus-only stubs score as low, and none of those is a prerequisite
+of anything.
+
+*Prerequisite bridge.* MA101 is a declared prerequisite of **CS201, CS301, CS310 and
+MA121** — four courses, including the one cycle 3 rebuilt to a 30-question,
+120-explanation standard. Counting occurrences of asymptotic notation:
+
+| | MA101 | CS201 | CS301 | CS310 | MA121 |
+|---|---|---|---|---|---|
+| `O(...)` | **2** | 91 | 13 | 6 | 8 |
+| `Theta` | 0 | 1 | 16 | 0 | 0 |
+| "geometric series" | 0 | 8 | 2 | 0 | 0 |
+| countability | 0 | 0 | 0 | 1 | 0 |
+
+MA101's two uses are `O(log e)` in M9 and `O(n^3)` in M10 — the notation **used and
+never defined**. And a search of all 62 courses for the definition behind it (a
+constant, a threshold, `f(n) <= c*g(n)` beyond it) returns **nothing anywhere in the
+catalogue**. The language four downstream courses are written in was defined by no
+course in the repository, including the one they name as the place it comes from.
+
+### Baseline, captured before any edit
+
+```
+80 circuit exercises / 340 checks · 21 tune units
+216 numeric answers verified, 0 unchecked, 217 figure-only
+1128 derivation steps across 45 courses
+1356 questions in 250 quiz units · 120 per-option explanations
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+MA101: 11 modules · 11 units · 0 read · 0 derive · 28 questions
+       (longest-is-key 21, budget 21, margin +28.8) · 5 labs
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads · inlined 13667 KB
+62 courses, 366 modules, 1864 units
+```
+
+### The attacks
+
+**1. Senior Educator.** Pointed at the progression, which is this track's half of the
+persona's brief.
+
+- **Seven modules examine before they explain.** M2, M3, M4, M5, M6, M8 and M11 hold a
+  quiz and nothing else. Recorded, mostly **not fixed** — see below; that is Track 1's
+  ground and cycle 1 established that a density pass is its own cycle.
+- **The two `O(...)` claims are announcements.** Both were swept for — exactly two in
+  the whole course, both in concept bullets — and both are now picked up in M12 and
+  turned into counts with the constant and threshold attached: Warshall's innermost line
+  runs exactly `n^3` times, so `c = 1`, `n0 = 1`; square-and-multiply costs at most
+  `2(floor(log2 e) + 1) <= 4 log2 e`, so `c = 4`, `n0 = 2`, and at `e = 1000` that is 20
+  multiplications against the naive loop's 999.
+- **M5 states pigeonhole without its scope doing any work.** "No injection runs from a
+  larger finite set into a smaller one" is correct and the word *finite* is load-bearing,
+  and nothing said so. It is exactly what `n -> 2n` stops obeying, which is the first
+  thing M13 needs.
+- **M8's characteristic-equation method is presented as the way to solve a recurrence.**
+  It handles linear homogeneous recurrences with constant coefficients and cannot touch
+  `T(n) = a*T(n/b) + f(n)`, whose argument is divided rather than decremented — and that
+  is the shape CS301's entire first module is about. The boundary was nowhere stated.
+
+**2. Assessment Inquisitor.** The existing 28 questions were audited and **not changed**:
+every key is correct, every `why` walks the options, and none uses a positional
+reference. The one measured defect is inherited debt cycle 3 already recorded — MA101
+scores **21/28 (75%)** on "pick the longest option" — and it is pinned by the budget
+file. The persona's real work this cycle was on my own new questions, and it caught them:
+see below.
+
+**3. Simulation Auditor.** No sandbox, tune or schematic in this course, so the persona
+was pointed at what it can still check — arithmetic in prose, and code that claims an
+output.
+
+- **Every number written into the two new modules was recomputed independently**: 62
+  checks covering the geometric sums, the harmonic block bound for `k = 1..11`, the
+  threshold table, the exponentiation bound over `e = 2..10000`, the pairing function's
+  bijectivity over 200 diagonals, and the diagonal-argument table. All agree.
+- **Both new code listings were filled with their own answer key and executed.** The M12
+  sweep prints 35, 1 and `limit + 1`, matching all three claims made about it; the M13
+  listing's asserts pass, including `pair(*unpair(n)) == n` for `n` in `range(1000)`.
+  Nothing in the repository would have caught a wrong stated output — the blanks gate
+  checks structure and never runs anything.
+
+**4. UX & Accessibility Hardener.** Content-side only, as cycle 1's reading surface work
+still holds. Checked rather than assumed: every equation is `$...$` or `$$...$$` and
+inherits the token ramp, the two fenced listings are the block markup `renderMd` and
+`quizProse` both draw, and no hard-coded colour, raw HTML or wide table was introduced.
+The one thing an author can still break at 375px — a wide table — was avoided by writing
+the threshold data as a fenced text figure inside `overflow-x:auto` rather than as a
+markdown table.
+
+### The defect this cycle found in the machinery
+
+**`emit.py --all` is not the drift detector the log says it is.** Running it rewrote
+**41 courses this cycle never touched**. The diff is 78 lines and every one of them is
+the same thing: `"check": ""` appended to 26 figure-only `numeric` units, because
+`norm_numeric` has emitted `check` unconditionally since `verify_numeric.mjs` was written
+and those 41 files were never re-emitted afterwards. Cycle 3's line — "all 46 untouched
+courses still round-trip byte for byte" — was true of the `whys` key it added and not of
+the emitter as a whole.
+
+**Reverted, not landed.** The field is inert (`verify_numeric` already reports 0
+schematics with no check, and figure-only units are exactly the ones that carry an empty
+one), and a 41-file whole-catalogue reformat has nothing to do with subject breadth.
+Burying it inside a Track 4 content cycle would make this cycle's diff unreviewable. It
+is a one-command mechanical change and belongs in its own commit.
+
+### What changed
+
+**Two new modules, appended.** MA101 goes 11 modules to 13, 11 units to 20.
+
+| | M12 | M13 |
+|---|---|---|
+| title | Growth of functions: sums, and what an O actually claims | Infinite sets: counting past the finite |
+| reading | 1580 words | 1516 words |
+| derivation | the geometric sum, 6 steps | the pairing function, 6 steps |
+| quiz | 5 questions, 20 per-option explanations | 5 questions, 20 per-option explanations |
+| blanks | 5 holes, 20 per-option explanations | 5 holes, 20 per-option explanations |
+| numeric | the threshold at `c = 4` | — |
+| concepts | 9 bullets | 8 bullets |
+
+**Appended, not inserted, and that is deliberate.** M12 belongs after M8 by subject. A
+lesson id is `MA101-M<n>-<KIND>` and it is the record of what a learner has finished, so
+inserting would renumber M9–M11 and orphan their progress — the invariant the curriculum
+names. Appending costs nothing here: M12 needs induction (M6), the sums of M7 and the
+recurrences of M8, and M13 needs the bijections of M5 and the triangular number of M7.
+All of it is already behind them. The reason is written into the source beside the module.
+
+**M12 derives rather than announces.** The geometric sum comes out of multiply-and-
+subtract, not from a table; the `1 + 2 + 4 + ... + 2^k = 2^(k+1) - 1` that CS201's
+amortised argument leans on is then read off it, together with the sentence that argument
+actually needs — *the total is less than twice the last term*. The harmonic sum is pinned
+between `1 + k/2` and `1 + k` by blocking on powers of two, since it has no closed form
+and looking for one is the mistake rather than the exercise. Then the definition, with a
+worked witness: `3n^2 + 20n + 500 <= 4n^2` fails at `n = 34` (4648 against 4624) and holds
+at `n = 35` (4875 against 4900), the positive root being `10 + sqrt(600) = 34.4949` — and
+`c = 523, n0 = 1` is a second witness to the same claim, because the pair is never unique
+and the two trade against each other.
+
+Four misreadings are named and refuted: that `O` means worst case (it is a claim about
+functions, and best and worst are two different functions); that `O` is tight (`n = O(n^2)`
+is true and useless); that the hidden constant is always constant (`2^(n+1) = 2*2^n` is
+`O(2^n)`, `2^(2n) = (2^n)^2` is not, and no fixed `c` bounds `2^n`); and that
+asymptotically better means better (`100n` beats `n log2 n` only past `n = 2^100`, about
+`1.27e30`, so the correct mathematics recommends the slower program on every input that
+will ever exist).
+
+**M12 stops exactly where CS301 starts.** CS301 already derives the master theorem from
+the recursion tree, and this module does not duplicate it. It supplies the layer under it
+— the sum, and the notation — and its closing says so explicitly: the ratio between
+consecutive levels is `a/b^d`, the three cases are the three things this geometric series
+can do, and the algorithms course does that sum with the sum proved here.
+
+**M13 completes M5 rather than opening a new topic.** Same definition of size, applied
+where counting is impossible: the hotel, then `n -> 2n` onto the evens, then the integers
+by interleaving — with the *failed* listing shown first, because "all the naturals, then
+the negatives" is the attempt everyone makes and its failure is the definition doing its
+work. Then the diagonal sweep of the pairs, the Cantor pairing function derived from M7's
+triangular number, the countable union, the rationals, and the finite strings — which is
+the one that matters, because a program is a finite string. Then Cantor's diagonal on a
+worked 4x4 table, with the objection everyone raises (*just add `d` to the list*) stated
+in its own voice and answered: the hypothesis was an arbitrary list, so patching an
+instance answers a claim nobody made. It closes on the counting argument for
+undecidability — countably many programs, uncountably many languages, no injection — and
+is careful to say what that does **not** deliver: no example, no construction, and nothing
+about any language anyone cares about. CS310 builds the specific one.
+
+**Six bridge bullets in the existing modules**, so the new material is reachable from
+where it is needed rather than only from the end: M5 (pigeonhole is finite, and `n -> 2n`
+is what that permits), M6 (induction confirms a closed form but never proposes one), M7
+(the triangular number, spent on numbering an infinite grid), M8 (the divide-and-conquer
+shape the characteristic equation cannot touch), M9 and M10 (the two undefined `O`s, now
+pointing at their definition). Plus the course summary, two outcomes, and the two
+references the new modules are actually written from.
+
+### Found in my own work, and fixed
+
+**Eight of my ten new questions had the longest option as the key**, and two had the
+shortest. That is precisely the defect cycle 3 measured across the catalogue and named the
+cause of: the key gets written as a complete hedged correct sentence and the distractors
+as short dismissals. Left alone it would have taken MA101 from 21/28 to 29/38 and the gate
+would have failed it — correctly. All ten option sets were rewritten to a tight length band
+and re-measured: **0 longest-is-key, 0 shortest-is-key**, mean margin −2.6 characters
+against the course's existing +28.8. Writing the fix is not the same as having internalised
+it; the measurement is what caught it.
+
+**A comment in the M13 listing described the wrong loop condition** — it said the test was
+on diagonal `s+1` when the code tests diagonal `s`. Caught by executing the filled listing
+rather than by re-reading it.
+
+**One "obviously", one "simply" and one hand-waving "just"** in prose I had just written
+against a persona brief that names them as the tells. Removed. The two remaining `just`s
+are temporal ("the bound has just failed at `n`") and one is a quoted objection in the
+objector's voice, which is deliberate.
+
+### Left alone, deliberately
+
+- **The seven modules that still examine before explaining.** M2, M3, M4, M5, M6, M8 and
+  M11 each still hold one quiz and nothing else, and MA101 is still at 1.5 units per
+  module against EE101's 12.6. This is the largest remaining defect in the course and it
+  is real. It is also a density pass over seven modules — cycle 1's MA111 shape, and its
+  own cycle. Widening this one to cover it would have meant two new modules built to no
+  standard and seven readings written in a hurry.
+- **No lab in either new module.** MA101's four labs are its assessment structure ("4 lab
+  checkpoints, 10% each") and a fifth would change the weighting. More to the point,
+  CS201's M1 lab already instruments a growable array and asserts its write count, so an
+  MA101 lab counting array copies would duplicate the course this module exists to feed.
+  The blanks units carry the code instead, and both were executed. A pairing-function lab
+  in M13 would duplicate nothing and is the honest next step.
+- **The 41-file `check` drift, reverted and recorded above.**
+- **Topics considered and rejected for want of downstream demand.** Boolean CNF/DNF and
+  satisfiability: my first search flagged CS310 with 13 hits, and reading them showed
+  every one is *Chomsky* normal form in the CYK module — a false lead from an ambiguous
+  regex, and a topic no course in the catalogue actually needs from here. Likewise
+  MA121's six "diagonalis-" hits are matrix diagonalisation, not Cantor. DAG and
+  topological order: zero hits anywhere in the catalogue, downstream included, so adding
+  it would be padding. Complexity reductions (CS301, 11 hits) are CS301's own subject and
+  not a discrete-maths prerequisite. Recording all four so the next cycle does not
+  re-derive them.
+- **`credits` and `hours` unchanged at 10 and 110**, and `catalog/_spine.json` untouched.
+  The spine carries course metadata only, no module counts, and 13 modules holding 20
+  units remains far lighter than MA111's 11 modules and 59 units at the same nominal load.
+- **A pre-existing "is simply" in M8's quiz explanation** was seen and left; sweeping the
+  prose of modules this cycle did not otherwise touch is Track 1's job.
+- **`docs/programs` aged out two CS201 payloads and gained two MA101 ones.** The rolling
+  generation window, as cycles 1, 2 and 3 all established — and this cycle built twice, so
+  it could also have left an orphan the pruner never knew about. Verified rather than
+  assumed: 64 payload files on disk, all 64 referenced by one of the 3 retained
+  generations, covering 62 distinct courses, **0 orphaned and 0 missing**.
+
+### Gates, after
+
+Every pre-existing number unmoved. Four numbers moved, each by exactly what was added.
+
+```
+verify_derivations   All good: 1140 steps across 46 courses   (1128 + 12 new; MA101 0 -> 12,
+                     and MA101 is the 46th course to have any)
+verify_quiz          All good: 1366 questions in 252 quiz units · 160 per-option
+                     explanations · every course within its answer-tell budget
+                     (1356 + 10 · 250 + 2 · 120 + 40)
+                     MA101: 38 questions · longest-is-key 21 (budget 21, unmoved in count,
+                     75% -> 55% in rate) · shortest-is-key 0 · margin +28.8 -> +20.6
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+                     (217 + the 1 new)
+verify_labs MA101    All good: 5 labs   (M1 7/7, M7 7/7, M9 7/7, M10 8/8, CAP 12/12)
+verify_circuits      All good: 80 circuit exercises, 340 checks
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+emit.py MA101        ok — 13 modules, 4 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads · inlined 13726 KB
+catalogue            62 courses, 368 modules, 1873 units, 234 readings
+```
+
+Beyond the gates: 62 arithmetic claims recomputed independently before being written;
+both code listings filled with their own key and executed against every output they
+claim; the option-length tell measured on all ten new questions and driven to zero; and
+the whole-catalogue re-emit run, read, and reverted rather than shipped.
+
+---

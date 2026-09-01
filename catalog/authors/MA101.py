@@ -13,9 +13,11 @@ COURSE = {
     "summary": (
         "The mathematics computers are actually made of: statements that are true or "
         "false, objects you can count exactly, integers under a modulus, and the "
-        "relations and graphs that structure everything else. Every definition in the "
-        "course is turned into code, so a claim you cannot implement is a claim you "
-        "have not yet understood."
+        "relations and graphs that structure everything else. It closes on the two "
+        "ideas the rest of the degree runs on and nothing else here supplies — how a "
+        "cost is bounded as the input grows, and what counting can still mean once the "
+        "set is infinite. Every definition in the course is turned into code, so a "
+        "claim you cannot implement is a claim you have not yet understood."
     ),
     "outcomes": [
         "Translate an English argument into propositional logic and test it mechanically",
@@ -25,12 +27,16 @@ COURSE = {
         "Apply Euclid's algorithm, modular inverses and fast exponentiation to integers",
         "Decide whether a relation is reflexive, symmetric, transitive or an equivalence",
         "Compute transitive closures and two-colourings on graphs and explain their meaning",
+        "Sum a geometric series in closed form and exhibit the constant and threshold behind an O, Omega or Theta claim",
+        "Show a set countable by exhibiting a listing, and show one uncountable by the diagonal argument",
     ],
     "assessment": "4 lab checkpoints (10% each) + capstone toolkit (60%).",
     "reading": [
         "Rosen, *Discrete Mathematics and Its Applications*, 8th ed. — chapters 1-2, 5-6, 9-10",
         "Lehman, Leighton & Meyer, *Mathematics for Computer Science* (MIT 6.042 notes) — parts I-III",
         "Graham, Knuth & Patashnik, *Concrete Mathematics*, 2nd ed. — chapter 5",
+        "Cormen, Leiserson, Rivest & Stein, *Introduction to Algorithms*, 4th ed. — chapter 3, for the asymptotic definitions in the form the algorithms courses use them",
+        "Sipser, *Introduction to the Theory of Computation*, 3rd ed. — section 4.2, for countability and the diagonal argument",
     ],
     "modules": [
         # ------------------------------------------------------------ M1
@@ -680,6 +686,7 @@ consequence of this correspondence rather than the reason for it.
                 "Composition is associative but rarely commutative, and a composition of bijections is again a bijection",
                 "The pigeonhole principle: no injection runs from a larger finite set into a smaller one, so some value must be hit twice",
                 "Generalised pigeonhole: `n` items in `k` boxes force some box to hold at least `ceil(n/k)` of them",
+                "Pigeonhole is a theorem about *finite* sets, and the word is load-bearing: `n -> 2n` is an injection from the naturals into a proper subset of themselves, which Module 13 takes as the definition of being infinite",
             ],
             "quiz": {
                 "title": "Injections, inverses and pigeons",
@@ -777,6 +784,7 @@ pair off one-for-one with all the integers.
                 "Strong induction assumes `P(0)` through `P(k)` at once, which is what a recursion reaching further back than one step needs",
                 "A recursive definition names base objects and rules for building more; structural induction then proves a property of exactly the objects those rules generate",
                 "Nearly every failed induction is a missing base case or a step valid only above some threshold — the all-horses-one-colour argument fails on exactly this",
+                "A closed form for a sum is the standard thing induction is asked to prove: it can confirm a formula but never propose one, which is why Module 12 derives the geometric sum by cancellation first and only then checks it",
             ],
             "quiz": {
                 "title": "Base cases, hypotheses and what induction proves",
@@ -873,6 +881,7 @@ the naturals that yields `S = {3, 6, 9, ...}`. The clause naming `3` is the base
                 "Pascal's rule C(n, k) = C(n-1, k-1) + C(n-1, k) and the triangle it generates",
                 "Symmetry C(n, k) = C(n, n-k) and the row sum 2^n",
                 "Vandermonde's identity as a counting argument, not an algebraic one",
+                "The triangular number C(n+1, 2) = 1 + 2 + ... + n counts the pairs drawn from n+1 things, and Module 13 spends it on numbering the diagonals of an infinite grid",
             ],
             "lab": {
                 "title": "Counting from first principles",
@@ -1144,6 +1153,7 @@ assert catalan(10) == 16796, f"catalan(10) gave {catalan(10)!r}, expected 16796"
                 "Distinct roots give `a_n = c_1 r_1^n + ... + c_d r_d^n`, with the initial conditions fixing the constants; Fibonacci's golden-ratio formula is this in three lines",
                 "A root repeated `m` times contributes `r^n, n r^n, ..., n^(m-1) r^n`, because one term cannot carry two initial conditions",
                 "Where the characteristic method does not apply, iterate the recurrence, guess the closed form, and prove the guess by induction",
+                "It does not apply to `T(n) = a*T(n/b) + f(n)`, where the argument is divided rather than decremented: that shape is priced by summing the cost of each level, which is the geometric series of Module 12 and the master theorem of the algorithms course",
             ],
             "quiz": {
                 "title": "From a recurrence to a formula",
@@ -1242,7 +1252,7 @@ mathematics.
                 "`a` is invertible modulo `m` exactly when gcd(a, m) = 1",
                 "The sieve of Eratosthenes, and why crossing out can start at p squared",
                 "The fundamental theorem of arithmetic: a unique multiset of prime factors",
-                "Fast modular exponentiation: O(log e) multiplications, never a huge intermediate",
+                "Fast modular exponentiation: O(log e) multiplications, never a huge intermediate — Module 12 defines that notation and puts the constant and the threshold on this very claim",
             ],
             "lab": {
                 "title": "Euclid, inverses, sieves and fast powers",
@@ -1537,7 +1547,7 @@ for _message in [0, 1, 42, 65, 3232]:
                 "An equivalence relation partitions its ground set into disjoint classes",
                 "The boolean adjacency matrix, and matrix entry (i, j) as the edge i to j",
                 "The transitive closure is the smallest transitive relation containing R",
-                "Warshall's algorithm: O(n^3) with the intermediate vertex k on the outside",
+                "Warshall's algorithm: O(n^3) with the intermediate vertex k on the outside — three nested loops, so the innermost line runs exactly n^3 times, which Module 12 turns from a notation into a count",
                 "A graph is bipartite exactly when it has no odd cycle — decided by two-colouring",
             ],
             "lab": {
@@ -1924,6 +1934,1092 @@ needs exactly 2 — colour by depth parity, which works because a tree closes no
 This is the same fact the two-colouring of Module 10 decided: a graph is bipartite, and
 so 2-colourable, exactly when it contains no odd cycle.
 """,
+                    },
+                ],
+            },
+        },
+        # ------------------------------------------------------------ M12
+        # Appended rather than inserted after M8, where the subject would sit more
+        # naturally: a lesson id is `MA101-M<n>-<KIND>` and it is the record of what
+        # someone has finished, so renumbering M9 through M11 would orphan their
+        # progress. Appending costs nothing pedagogically here — this module needs
+        # induction (M6), the sums of M7 and the recurrences of M8, and all three are
+        # already behind it.
+        {
+            "title": "Growth of functions: sums, and what an O actually claims",
+            "summary": "The two sums every cost argument leans on, and the definition behind a notation this course has already used twice without stating.",
+            "concepts": [
+                "A closed form for a sum is proved, not spotted: `1 + r + ... + r^n = (1 - r^(n+1))/(1 - r)` for every `r` other than 1, by subtract-and-telescope or by induction from Module 6",
+                "Doubling makes a geometric sum: `1 + 2 + 4 + ... + 2^k = 2^(k+1) - 1`, under twice its own last term — which is why a growable array's copying is cheap",
+                "The harmonic sum `H_n = 1 + 1/2 + ... + 1/n` has no such closed form, but blocking it by powers of two pins `H_(2^k)` between `1 + k/2` and `1 + k`",
+                "`f = O(g)` means there are constants `c > 0` and `n0` with `f(n) <= c*g(n)` for every `n >= n0` — a claim about all large `n`, with the small ones deliberately exempt",
+                "The pair `(c, n0)` is never unique, and the two trade against each other: a larger `c` buys a smaller `n0`",
+                "`Omega` reverses the inequality and `Theta` asks for both at once — and only `Theta` pins a growth rate down",
+                "`O` is an upper bound, not a description: `n = O(n^2)` is true and uninformative, so an `O` never rules a smaller bound out",
+                "`O` says nothing about which input: worst, best and average case are three different functions, each with its own `O`, `Omega` and `Theta`",
+                "The base of a logarithm is a constant factor and drops out; the base of an exponent is not and does not — `2^(n+1)` is `O(2^n)`, `2^(2n)` is not",
+            ],
+            "read": {
+                "title": "Two sums, and the definition behind the notation",
+                "minutes": 14,
+                "body": r"""
+This course has already written down two costs without defining either of them.
+Module 9 said fast modular exponentiation takes $O(\log e)$ multiplications. Module 10
+said Warshall's algorithm is $O(n^3)$. Both claims are true and neither was earned:
+nothing so far has said what that notation asserts, and nothing has added up the series
+that most such claims reduce to. This module pays both debts. It is worth paying,
+because every course that lists this one as a prerequisite is written in that notation
+from its first page, and a notation you have only ever seen used is a notation you can
+misread without noticing.
+
+## A count worth doing exactly
+
+Start with something concrete. A growable array keeps a fixed backing store and a
+length. When the store fills, it allocates one of twice the capacity, copies everything
+across, and carries on. Begin at capacity 1 and append until the store has doubled five
+times. How many individual slot copies has that cost?
+
+The resizes copy 1, then 2, then 4, 8 and 16 elements — the store's contents at the
+moment it overflowed. The total is
+
+$$1 + 2 + 4 + 8 + 16 = 31$$
+
+and 31 is $2^5 - 1$. That is not a coincidence about the number five. Write the sum as
+$S = 1 + r + r^2 + \cdots + r^n$ and multiply it by $r$:
+
+$$rS = r + r^2 + \cdots + r^n + r^{n+1}$$
+
+Subtract. Every term in the middle appears in both lines and cancels, and what survives
+is the head of one and the tail of the other:
+
+$$S - rS = 1 - r^{n+1} \qquad\Longrightarrow\qquad S = \frac{1 - r^{n+1}}{1 - r}$$
+
+valid whenever $r \neq 1$, which is exactly the case the division would forbid. At
+$r = 2$ this reads $2^{n+1} - 1$, so five doublings cost 31 copies and twenty cost
+$2^{21} - 1 = 2\,097\,151$. The shape that matters is not the formula but its
+consequence: the total is *less than twice the last term*. All the copying a doubling
+array has ever done is cheaper than doing the most recent copy twice. That single
+sentence is the whole of the amortised argument the data structures course spends two
+units on, and it is a fact about geometric series rather than about arrays.
+
+When $r < 1$ the same formula runs the other way. As $n$ grows, $r^{n+1}$ goes to zero
+and the sum settles at $1/(1 - r)$: halving forever totals 2, thirding forever totals
+1.5. A ratio at least 1 has no such limit, which is the entire difference between a
+loop that costs a constant per item and one that does not.
+
+## The sum that has no closed form
+
+Not every sum closes. The harmonic sum
+
+$$H_n = 1 + \tfrac{1}{2} + \tfrac{1}{3} + \cdots + \tfrac{1}{n}$$
+
+has no expression in elementary functions, and looking for one is the mistake to avoid
+rather than the exercise. It can still be pinned down, by a trick worth keeping: group
+the terms into blocks whose lengths are powers of two.
+
+$$1 \;+\; \underbrace{\tfrac12}_{\text{1 term}} \;+\; \underbrace{\tfrac13 + \tfrac14}_{\text{2 terms}} \;+\; \underbrace{\tfrac15 + \cdots + \tfrac18}_{\text{4 terms}} \;+\; \cdots$$
+
+Every term in a block is at most the block's first and greater than its last. The block
+of 4 terms starting at $1/5$ therefore sums to at most $4 \times \tfrac14 = 1$ and more
+than $4 \times \tfrac18 = \tfrac12$. Each block contributes between $\tfrac12$ and $1$,
+and $H_{2^k}$ has $k$ of them after the leading 1:
+
+$$1 + \tfrac{k}{2} \;\le\; H_{2^k} \;\le\; 1 + k$$
+
+Check it at $k = 3$. $H_8 = 1 + 0.5 + 0.3333 + 0.25 + 0.2 + 0.1667 + 0.1429 + 0.125 =
+2.7179$, and the bounds are $2.5$ and $4$. Both hold, neither is tight, and both are
+enough to say the thing that matters: $H_n$ grows like a logarithm, so it grows without
+limit and does so unbelievably slowly. Summing a million terms gets you to about 14.4.
+
+## Now the notation
+
+Here is the definition, and it is the whole of it.
+
+> $f = O(g)$ when there exist a constant $c > 0$ and a threshold $n_0$ such that
+> $f(n) \le c\,g(n)$ for every $n \ge n_0$.
+
+Two things in that sentence do all the work, and both are usually skipped. There is a
+constant you are allowed to choose, and there is a threshold below which the claim says
+nothing whatever.
+
+Work one all the way through. Is $f(n) = 3n^2 + 20n + 500$ in $O(n^2)$? The claim is
+that some $c$ makes $3n^2 + 20n + 500 \le c\,n^2$ hold from some point on. Try $c = 4$.
+Then the requirement is $n^2 - 20n - 500 \ge 0$, whose positive root is
+$10 + \sqrt{600} = 34.49$, so the inequality holds from $n = 35$ upward. It genuinely
+fails below: at $n = 34$ the left side is $4648$ against $4\times 1156 = 4624$, and at
+$n = 35$ it is $4875$ against $4900$. So $c = 4$, $n_0 = 35$ is a witness, and the claim
+is established.
+
+It is not the only witness. Take $c = 523$ instead. Since $n^2 \ge n \ge 1$ for every
+$n \ge 1$, we get $3n^2 + 20n + 500 \le 3n^2 + 20n^2 + 500n^2 = 523n^2$ immediately, so
+$c = 523$, $n_0 = 1$ works too. The pair is never unique and the two halves trade
+against each other: pay a bigger constant and the threshold comes down. Anyone who
+insists on *the* constant has misread the definition.
+
+Reverse the inequality and you get the lower bound: $f = \Omega(g)$ when
+$f(n) \ge c\,g(n)$ eventually. Ask for both and you get $f = \Theta(g)$, the only one of
+the three that says what the growth rate *is* rather than what it is not.
+
+## Four things this notation does not say
+
+**It does not say "worst case".** These are functions being compared, and which
+function you chose is a separate decision. Insertion sort's best case is $\Theta(n)$ and
+its worst is $\Theta(n^2)$; both statements are about insertion sort, and $O$ appears in
+neither role by itself. Writing "the algorithm is $O(n^2)$" without saying which of its
+cases you measured is an unfinished sentence, and it is the most common one in the
+subject.
+
+**It does not say "tight".** $n = O(n^2)$ is true — take $c = 1$, $n_0 = 1$. So is
+$n = O(2^n)$. An $O$ bound rules nothing smaller out, which is why a claim of $O(n^2)$
+is compatible with the true cost being linear. If you mean the growth rate, $\Theta$ is
+the symbol that means it.
+
+**The constant hidden inside is not always constant.** $2^{n+1} = 2 \cdot 2^n$, so
+$2^{n+1} = O(2^n)$ with $c = 2$. But $2^{2n} = (2^n)^2$, and if $2^{2n} \le c\,2^n$ held
+for all large $n$ then $2^n \le c$ would too, which no fixed $c$ survives. So
+$2^{2n} \neq O(2^n)$. The same distinction settles logarithms in the other direction:
+$\log_a n = \log_b n / \log_b a$, a fixed multiple, so the base of a logarithm is
+absorbed by $c$ and nobody writes it. The base of an exponent is not absorbed by
+anything.
+
+**It does not say two things cost the same.** $\Theta$ places two functions in one
+class; it does not equate them. Scanning an array and walking a linked list are both
+$\Theta(n)$, and the array is several times faster on real hardware because its elements
+sit next to each other. That is not the notation failing. It is the notation doing what
+it was defined to do, which is to answer a question about scaling and not a question
+about seconds.
+
+## Where the whole idea stops being useful
+
+Asymptotics is a statement about large $n$, and "large" is set by $n_0$, which the
+notation hides. Compare an algorithm costing $100n$ against one costing $n\log_2 n$.
+Divide both by $n$: the comparison is $100$ against $\log_2 n$, so the $n\log_2 n$
+algorithm is the cheaper of the two until $\log_2 n$ passes 100 — that is,
+until $n$ passes $2^{100} \approx 1.27 \times 10^{30}$. Asymptotically the linear one
+wins. On every input that will ever exist, it loses. The mathematics is correct and the
+recommendation drawn from it is wrong, and the only defence is to ask where the
+threshold sits before quoting the bound.
+
+## The two debts, paid
+
+Warshall's algorithm runs three nested loops, each over all $n$ vertices, with a
+constant-time body inside. The innermost line executes exactly $n^3$ times — not at
+most, exactly — so the count is $\Theta(n^3)$ with $c = 1$ and $n_0 = 1$, and at
+$n = 100$ that is a million updates.
+
+Fast modular exponentiation squares once per bit of the exponent and multiplies once
+more for each bit that is set. An exponent $e \ge 2$ has $\lfloor \log_2 e\rfloor + 1$
+bits, so the count is at most $2(\lfloor \log_2 e\rfloor + 1)$, and since
+$\lfloor \log_2 e \rfloor + 1 \le 2\log_2 e$ for $e \ge 2$, the bound is $4\log_2 e$:
+witnesses $c = 4$, $n_0 = 2$. For $e = 1000$ that is at most 20 multiplications where
+the naive loop does 999. The notation was never doing the work in those two sentences.
+The count was, and now the count is written down.
+""",
+            },
+            "derive": {
+                "title": "The geometric sum, and the bound it hands to a doubling array",
+                "minutes": 12,
+                "brief": r"""
+The one sum that most cost arguments reduce to, derived rather than quoted, and then
+spent on the question it exists to answer: how much copying a store that doubles has
+done by the time it holds $n$ things.
+
+Write $S = 1 + r + r^{2} + \cdots + r^{n}$ throughout.
+""",
+                "vars": ["S", "r", "n", "k"],
+                "steps": [
+                    {
+                        "prompt": r"Multiply $S$ by $r$ and subtract the result from $S$. Every term of the middle appears in both lines and cancels. What is left, in terms of $r$ and $n$?",
+                        "answer": r"1 - r^{n+1}",
+                        "placeholder": "1 - ...",
+                        "hint": r"$S$ starts at $1$ and stops at $r^{n}$; $rS$ starts at $r$ and stops at $r^{n+1}$. Only the two ends survive.",
+                        "deconstruct": [
+                            r"Which term of $S$ has no partner in $rS$?",
+                            r"Which term of $rS$ has no partner in $S$?",
+                            "The subtraction is S minus rS, so the second of those arrives negated.",
+                        ],
+                    },
+                    {
+                        "prompt": r"That left side is $S(1 - r)$. Divide, and write $S$ in closed form. State it for $r \neq 1$, which is the case the division itself forbids.",
+                        "answer": r"\frac{1 - r^{n+1}}{1 - r}",
+                        "placeholder": r"\frac{?}{?}",
+                        "hint": r"Nothing new is needed — divide the previous line by $1 - r$.",
+                        "deconstruct": [
+                            r"$S - rS$ factors as $S(1 - r)$.",
+                            r"At $r = 1$ the formula divides by zero, and the sum is $n + 1$ instead.",
+                        ],
+                    },
+                    {
+                        "prompt": r"A store that doubles copies $1, 2, 4, \ldots, 2^{k}$ elements across its resizes. Put $r = 2$ and $n = k$ into the closed form, and simplify to a single power minus a constant.",
+                        "answer": r"2^{k+1} - 1",
+                        "placeholder": r"2^{?} - ?",
+                        "hint": r"$1 - 2 = -1$, so dividing by the denominator negates the numerator and nothing else happens.",
+                        "deconstruct": [
+                            r"Substituting gives $(1 - 2^{k+1})/(1 - 2)$.",
+                            r"The denominator is $-1$.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Compare that total against the single largest copy in it, which is $2^{k}$. Write the total as a multiple of $2^{k}$, ignoring the $-1$ — that is, give the number the total stays strictly below.",
+                        "answer": r"2 \cdot 2^{k}",
+                        "placeholder": r"? \cdot 2^{k}",
+                        "hint": r"$2^{k+1}$ is $2^{k}$ doubled.",
+                        "deconstruct": [
+                            r"$2^{k+1} - 1 < 2^{k+1}$.",
+                            r"Rewrite $2^{k+1}$ with $2^{k}$ as a factor.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Now the other regime. Hold $r$ below 1 and let $n$ grow without bound, so $r^{n+1}$ goes to zero. What does the closed form settle to?",
+                        "answer": r"\frac{1}{1 - r}",
+                        "placeholder": r"\frac{1}{?}",
+                        "hint": r"Only the numerator changes: $1 - r^{n+1}$ tends to $1 - 0$.",
+                        "deconstruct": [
+                            r"$r^{n+1} \to 0$ precisely when $|r| < 1$.",
+                            "The denominator has no n in it, so it is untouched.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Halving forever is $r = \tfrac{1}{2}$. Evaluate the limit there, and read off how much a store that shrinks by half at every step costs in total relative to its first step.",
+                        "answer": r"2",
+                        "placeholder": "a single number",
+                        "hint": r"$1 - \tfrac12 = \tfrac12$, and $1$ divided by $\tfrac12$ is not $\tfrac12$.",
+                        "deconstruct": [
+                            r"Substitute $r = 1/2$ into $1/(1-r)$.",
+                            "Dividing by a half doubles.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+Both regimes came out of one formula. A ratio below 1 gives a total that is a fixed
+multiple of its first term no matter how long the process runs, and a ratio of 2 gives a
+total under twice its *last* term. That second reading is the one the rest of the degree
+uses: all the copying a doubling array has ever done costs less than doing the most
+recent copy a second time, so the copying spread over $n$ appends is a constant each.
+Nothing there is a fact about arrays. It is this sum, and you have now proved it.
+
+Note what is *not* here. This is a sum over levels, and a divide-and-conquer recurrence
+such as $T(n) = a\,T(n/b) + n^{d}$ becomes exactly such a sum once you price one level
+and add them up — the ratio between consecutive levels is $a/b^{d}$, and the three cases
+of the master theorem are the three things the geometric series above can do. Module 8's
+characteristic equation cannot touch that recurrence, because $T(n/b)$ is not a step
+back by a fixed number of terms. The algorithms course does that sum; this is the sum it
+does it with.
+""",
+            },
+            "numeric": {
+                "title": "Where the threshold actually sits",
+                "minutes": 7,
+                "brief": r"""
+The definition of $O$ hands you two things to choose: a constant $c$, and a threshold
+$n_0$ past which the bound must hold. Fixing one fixes the other, and the arithmetic is
+worth doing once by hand rather than waving at.
+""",
+                "prompt": r"""
+Take $f(n) = 3n^2 + 20n + 500$ and $g(n) = n^2$, and fix $c = 4$. What is the smallest
+integer $n_0$ for which $f(n) \le 4g(n)$ holds at every $n \ge n_0$?
+""",
+                "figure": r"""
+```text
+    n  |  f(n) = 3n^2 + 20n + 500  |  4n^2   |  f(n) <= 4n^2 ?
+  -----+---------------------------+---------+-----------------
+    10 |                     1 000 |     400 |       no
+    20 |                     2 100 |   1 600 |       no
+    30 |                     3 800 |   3 600 |       no
+    34 |                     4 648 |   4 624 |       no
+    35 |                     4 875 |   4 900 |       ?
+    40 |                     6 100 |   6 400 |       yes
+```
+""",
+                "given": [
+                    {"label": "$f(n)$", "value": "$3n^2 + 20n + 500$"},
+                    {"label": "$g(n)$", "value": "$n^2$"},
+                    {"label": "$c$", "value": "4"},
+                ],
+                "answer": 35,
+                "tol": 0,
+                "unit": "",
+                "hint": r"""
+$3n^2 + 20n + 500 \le 4n^2$ rearranges to $n^2 - 20n - 500 \ge 0$. Solve the quadratic
+and take the positive root; the smallest integer at or above it is the threshold,
+because an upward parabola stays non-negative once it has passed its larger root.
+""",
+                "wrong": r"""
+If you answered 34, you found where the table's last *failure* is rather than the first
+success — the threshold is the first $n$ at which the bound holds, not the last at which
+it breaks. If you answered 30 or 40 you read a row of the table rather than solving for
+the crossing; the table skips from 30 to 34 and from 35 to 40 on purpose.
+""",
+                "why": r"""
+The requirement $3n^2 + 20n + 500 \le 4n^2$ is $n^2 - 20n - 500 \ge 0$, whose roots are
+$10 \pm \sqrt{600}$; the positive one is $34.4949$. The parabola opens upward, so the
+inequality holds from the first integer past that root and never fails again — which is
+what makes a single threshold meaningful rather than a list of intervals. At $n = 34$
+the left side is $3(1156) + 680 + 500 = 4648$ against $4624$, and it fails. At $n = 35$
+it is $3(1225) + 700 + 500 = 4875$ against $4900$, and it holds. So $n_0 = 35$.
+
+The number is not a property of $f$ and $g$ alone: it belongs to the pair $(c, n_0)$
+together. Choose $c = 523$ instead and $n_0 = 1$ works, since $n^2 \ge n \ge 1$ makes
+$3n^2 + 20n + 500 \le 3n^2 + 20n^2 + 500n^2$ for every $n \ge 1$. Both pairs prove the
+same statement, $f = O(n^2)$. What the definition demands is that *some* pair exists,
+which is why nobody quotes either number afterwards — and why a bound whose threshold
+sits past every input you will ever see is still, correctly, a true statement about
+nothing you care about.
+""",
+            },
+            "blanks": {
+                "title": "Finding the constant and the threshold by machine",
+                "minutes": 9,
+                "lang": "python",
+                "caption": "smallest_n0.py",
+                "brief": r"""
+The definition of $O$ is a search for two numbers. Written as code it stops being an
+incantation: fix the constant, sweep $n$, and remember the last place the bound broke.
+""",
+                "listing": r'''
+def smallest_n0(f, g, c, limit=10 ** 6):
+    """Smallest n0 such that f(n) <= c*g(n) for every n from n0 up to limit.
+
+    Sweep upward and move the threshold past every failure. Whatever is left when
+    the sweep ends is the first point after which nothing failed."""
+    n0 = 1
+    for n in range(1, limit + 1):
+        if f(n) > c * g(n):
+            n0 = ___
+    return n0
+
+
+f = lambda n: 3 * n * n + 20 * n + 500
+g = lambda n: ___
+
+print(smallest_n0(f, g, 4))            # -> ___
+print(smallest_n0(f, g, 523))          # -> ___
+print(smallest_n0(f, g, ___))          # -> no such n0 exists below the limit
+''',
+                "blanks": [
+                    {
+                        "prompt": "The bound has just failed at `n`. Where must the threshold move to?",
+                        "opts": ["n + 1", "n", "n - 1", "n0 + 1"],
+                        "a": 0,
+                        "why": r"""
+A threshold of `n` would include the very point that just failed, so it has to sit one
+past it. Setting it to `n + 1` and letting later failures push it further is what makes
+the sweep correct without any backtracking: when the loop ends, every `n` at or above
+the surviving value passed, because any that did not would have moved it again.
+""",
+                        "whys": [
+                            "Correct. The failure at `n` disqualifies `n` itself, and any later failure pushes the threshold further along again.",
+                            "This keeps the failing point inside the claimed range, so the returned threshold would assert a bound that demonstrably breaks at its own first value.",
+                            "This moves the threshold backwards, to a point already swept, and would leave both the failure at `n` and everything before it inside the claim.",
+                            "The running value is irrelevant here — the new threshold depends on where the failure happened, not on where the threshold was, and incrementing it once per failure would undercount a run of them.",
+                        ],
+                    },
+                    {
+                        "prompt": "`g` is the function `f` is being compared against.",
+                        "opts": ["n * n", "n", "n * n * n", "2 ** n"],
+                        "a": 0,
+                        "why": r"""
+The claim under test is $f = O(n^2)$, so `g` is $n^2$. The others are all true bounds
+too — $f$ is $O(n^3)$ and $O(2^n)$ as well — which is exactly the point that $O$ is an
+upper bound and not a description. Only $n^2$ is the one that is also a lower bound, and
+so the one that makes the statement $\Theta$.
+""",
+                        "whys": [
+                            "Correct, and it is the only choice here for which the reverse inequality also holds, so it is the $\\Theta$ as well as the $O$.",
+                            "$f$ grows quadratically, so no constant multiple of $n$ can contain it: the ratio $f(n)/n$ is about $3n$ and runs away.",
+                            "A true bound — $f$ really is $O(n^3)$ — but a loose one, and taking it would make the threshold 1 for every constant and teach nothing about where a bound bites.",
+                            "Also true and far looser still; an exponential swallows any polynomial from a small $n$ onward, so the search would answer 1 and the exercise would collapse.",
+                        ],
+                    },
+                    {
+                        "prompt": "The threshold reported for `c = 4`.",
+                        "opts": ["35", "34", "36", "10"],
+                        "a": 0,
+                        "why": r"""
+$3n^2 + 20n + 500 \le 4n^2$ is $n^2 - 20n - 500 \ge 0$, whose positive root is
+$10 + \sqrt{600} = 34.4949$. The last failure is at $n = 34$ ($4648 > 4624$), so the
+sweep sets the threshold to 35 and nothing after that moves it again.
+""",
+                        "whys": [
+                            "Correct: 34 is the last failure, so the threshold lands one past it, and $4875 \\le 4900$ holds from there on.",
+                            "This is where the bound last *broke*, not where it started holding — at $n = 34$ the left side is $4648$ against $4624$.",
+                            "One too far. The bound already holds at 35, so 36 would be a valid threshold but not the smallest one, and the function returns the smallest.",
+                            "Far too early: at $n = 10$ the left side is $1000$ against $400$, and the bound is not close to holding.",
+                        ],
+                    },
+                    {
+                        "prompt": "The threshold reported for `c = 523`.",
+                        "opts": ["1", "0", "35", "523"],
+                        "a": 0,
+                        "why": r"""
+Since $n^2 \ge n \ge 1$ for every $n \ge 1$, the inequality
+$3n^2 + 20n + 500 \le 3n^2 + 20n^2 + 500n^2 = 523n^2$ holds from the very first term,
+so the sweep never fires and the threshold keeps its initial value. A bigger constant
+buys a smaller threshold; the two are traded against each other and neither is a
+property of $f$ on its own.
+""",
+                        "whys": [
+                            "Correct — the bound never fails, so the initial value survives the whole sweep.",
+                            "The sweep starts at 1 and the initial value is 1, so 0 is never reachable; it would also be a claim about $n = 0$, which the range never tests.",
+                            "That is the threshold for $c = 4$. Raising the constant to 523 makes the bound hold everywhere, so the threshold falls rather than staying put.",
+                            "The constant and the threshold are different quantities that happen to be adjacent in the call; a larger constant makes the threshold smaller, not equal to itself.",
+                        ],
+                    },
+                    {
+                        "prompt": "A constant for which the sweep finds no threshold at all below the limit.",
+                        "opts": ["2", "4", "523", "1000"],
+                        "a": 0,
+                        "why": r"""
+The leading coefficient of $f$ is 3, so $f(n)/n^2 \to 3$ from above and no constant at
+or below 3 can ever contain it: $3n^2 + 20n + 500 \le 2n^2$ would need
+$n^2 + 20n + 500 \le 0$, and that left side is positive for every $n$. The sweep
+therefore fails at the last value it tests and reports a threshold of `limit + 1` — a
+number that is not a witness to anything, and the case worth knowing about, since a
+search of this shape can only ever say "not below here".
+""",
+                        "whys": [
+                            "Correct: 2 is below the leading coefficient 3, so the bound fails at every $n$ and the threshold is pushed to the end of the sweep.",
+                            "4 exceeds the leading coefficient, so the bound holds from 35 onward — a threshold is found.",
+                            "523 is generous enough to hold from $n = 1$, which is the opposite of failing.",
+                            "Larger still, and larger constants only make the bound easier to satisfy; the threshold would again be 1.",
+                        ],
+                    },
+                ],
+            },
+            "quiz": {
+                "title": "What the definition does and does not promise",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Someone shows that `f(n) <= 4n^2` for every `n >= 35`, and someone else shows `f(n) <= 523n^2` for every `n >= 1`. Which of them has established `f = O(n^2)`?",
+                        "opts": [
+                            "Neither, until the two witnesses are reconciled into one bound",
+                            "Both, since the definition asks only that some such pair exist",
+                            "Only the one with `c = 523`, whose threshold is as low as it goes",
+                            "Only the one with `c = 4`, whose constant is the smaller of the two",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The definition is existential: it asks whether *some* $(c, n_0)$ works. Two different
+witnesses to the same statement are no more in conflict than two proofs of one theorem,
+and the pair is never unique — a larger constant always buys a smaller threshold, since
+raising $c$ can only make the inequality easier. There is nothing to reconcile and no
+reason to prefer either witness, which is why neither number is ever quoted once the
+claim is made. What the numbers are good for is the separate and much more practical
+question of *where* the bound starts to bite.
+""",
+                        "whys": [
+                            "There is nothing to reconcile: the two are witnesses to one existential claim, and a statement proved twice is not thereby in doubt.",
+                            "Correct. Both exhibit a constant and a threshold that work, which is all the definition asks for.",
+                            "A threshold of 1 is convenient but carries no special standing; the definition never asks for the smallest threshold, only for one that exists.",
+                            "Smallness of the constant is not part of the definition either, and in any case the constants here are traded against the thresholds rather than ranked.",
+                        ],
+                    },
+                    {
+                        "q": "Is the statement `n = O(n^2)` true?",
+                        "opts": [
+                            "No — the two grow at different rates, so neither one bounds the other",
+                            "Only for `n <= 1`, which is where the two functions cross over",
+                            "Yes, with `c = 1` and `n0 = 1`; the claim is weak rather than wrong",
+                            "No — `O` demands that the two functions grow at the very same rate",
+                        ],
+                        "a": 2,
+                        "why": r"""
+$n \le n^2$ for every $n \ge 1$, so $c = 1$ and $n_0 = 1$ is a witness and the statement
+holds. It is also almost useless, and that is the lesson: $O$ is an upper bound and
+nothing more, so quoting one never rules a smaller bound out. If you want to say that a
+cost really does grow like $n^2$, the symbol that says it is $\Theta$, which demands the
+matching lower bound as well. Reading $O$ as though it meant $\Theta$ is the single most
+common misuse of the notation, and it is what makes "this algorithm is $O(n^2)$" so
+often an admission rather than a measurement.
+""",
+                        "whys": [
+                            "Differing growth rates are the ordinary case for an upper bound; $O$ relates a function to anything that eventually dominates it.",
+                            "The crossing is where the inequality *starts* holding, not where it stops — beyond $n = 1$ the gap only widens in the bound's favour.",
+                            "Correct, and the point is that a true $O$ can still be a very loose one.",
+                            "That is the definition of $\\Theta$, not of $O$; requiring equal growth would make the notation unable to express an upper bound at all.",
+                        ],
+                    },
+                    {
+                        "q": "Insertion sort finishes in about `n` steps on already-sorted input and about `n^2/4` on random input. Which statement is written correctly?",
+                        "opts": [
+                            "It is `O(n)`, because that bound does hold on some inputs",
+                            "It is `Theta(n^2)`, because the hard case is the one that matters",
+                            "It is `O(n^2)` and `Omega(n)`, and those two together give a `Theta`",
+                            "Its best case is `Theta(n)`, its worst `Theta(n^2)` — separately",
+                        ],
+                        "a": 3,
+                        "why": r"""
+The notation compares functions, and "insertion sort" is not a function until you say
+which input you are measuring over. Best case and worst case are two different
+functions, and each has its own $\Theta$. Quoting a bound without naming the case is an
+unfinished sentence, and the two unfinished versions here go wrong in opposite
+directions: one takes the friendliest input as though it settled the matter, the other
+takes the hardest. Mixing an $O$ from one case with an $\Omega$ from another does not
+produce a $\Theta$ of anything, because the two inequalities are about different
+functions and $\Theta$ requires both of a single one.
+""",
+                        "whys": [
+                            "A bound that holds on one family of inputs says nothing about the others; this is the friendly case quoted as though it were the whole story.",
+                            "This takes the hard case as the only one worth naming, which is a defensible convention but not what the sentence says — and it silently drops the best case, which is genuinely linear.",
+                            "The $O$ comes from the worst case and the $\\Omega$ from the best, so they are inequalities about two different functions and cannot be combined into a $\\Theta$ of either.",
+                            "Correct: name the case, then the function it defines has a growth rate of its own.",
+                        ],
+                    },
+                    {
+                        "q": "Which of these is **not** true?",
+                        "opts": [
+                            "`2^(2n) = O(2^n)` — the exponent is doubled here",
+                            "`log_10 n = O(log_2 n)` — the log base changes",
+                            "`2^(n+1) = O(2^n)` — one is added to the exponent",
+                            "`n log_2 n = O(n^2)` — a log against a factor of n",
+                        ],
+                        "a": 0,
+                        "why": r"""
+$2^{2n} = (2^n)^2$, so a bound $2^{2n} \le c\,2^n$ would force $2^n \le c$ for all large
+$n$, and no fixed constant survives that. The near neighbour is true and is what makes
+the false one tempting: $2^{n+1} = 2\cdot 2^n$, where the extra factor really is the
+constant 2. Adding to an exponent multiplies by a constant; multiplying an exponent
+raises to a power, and a power is not a constant factor. Changing the base of a
+*logarithm* is safe for the same reason read backwards — $\log_{10} n = \log_2 n /
+\log_2 10$, a fixed multiple — which is why logarithm bases are never written inside
+this notation and exponent bases always are.
+""",
+                        "whys": [
+                            "Correct — this is the false one. It would require $2^n$ itself to be bounded by a constant.",
+                            "True: the two logarithms differ by the fixed factor $1/\\log_2 10$, and a fixed factor is exactly what the constant absorbs.",
+                            "True, with $c = 2$: adding one to the exponent doubles, and doubling is a constant factor.",
+                            "True, since $\\log_2 n \\le n$ for $n \\ge 1$; a loose bound, but the question asks which fails, not which is tight.",
+                        ],
+                    },
+                    {
+                        "q": "One algorithm costs `100n` and another costs `n log_2 n`. Which is the sound reading?",
+                        "opts": [
+                            "`100n` is asymptotically better, overtaking at about `n = 2^100`",
+                            "`n log_2 n` is asymptotically better, since a logarithm grows slowly",
+                            "They are `Theta` of each other, the difference being a constant",
+                            "`100n` is better at every size, a logarithm passing 100 at once",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Divide both by $n$ and the comparison is $100$ against $\log_2 n$. The logarithm passes
+100 only when $n$ passes $2^{100} \approx 1.27\times10^{30}$, so the linear algorithm is
+asymptotically the better of the two and loses on every input that will ever exist. This
+is the honest limit of the whole notation: it is a statement about large $n$, and how
+large is hidden inside the threshold. The temptation is to treat "asymptotically better"
+as advice, and here it is advice to use the slower program. A logarithm is not a
+constant, so the two are not $\Theta$ of each other — the ratio $\log_2 n / 100$ is
+unbounded, however slowly it climbs.
+""",
+                        "whys": [
+                            "Correct on both counts, and the second is what stops the first from being useful advice.",
+                            "This has the comparison backwards: dividing by $n$ leaves $\\log_2 n$ against the constant 100, and an unbounded quantity eventually exceeds a constant.",
+                            "A constant factor would make them $\\Theta$ of each other, but $\\log_2 n$ is unbounded, so the ratio never settles.",
+                            "$\\log_2 n$ reaches 100 only at $n = 2^{100}$, so \"almost immediately\" is off by every size that exists — though the practical conclusion happens to be right.",
+                        ],
+                    },
+                ],
+            },
+        },
+        # ------------------------------------------------------------ M13
+        {
+            "title": "Infinite sets: counting past the finite",
+            "summary": "What 'the same size' can still mean when nothing can be counted, and the one argument that shows some sets are out of reach.",
+            "concepts": [
+                "Two sets have the same size when a bijection exists between them — Module 5's definition, kept unchanged and applied where counting is impossible",
+                "A set is countable when it can be listed as a sequence in which every member appears at some finite position",
+                "A proper subset can have the same size as the whole: `n -> 2n` is a bijection from the naturals onto the even naturals",
+                "Pigeonhole is a theorem about *finite* sets, and the previous bullet is exactly what it stops forbidding once the sets are infinite",
+                "The integers are countable by interleaving, and the pairs of naturals by sweeping the diagonals — the Cantor pairing function names each pair's position outright",
+                "A countable union of countable sets is countable, which is why the rationals are countable and so is the set of all finite strings over a finite alphabet",
+                "Cantor's diagonal argument: against *any* proposed list of infinite bit strings, the string differing from the k-th at position k is on no line of it",
+                "Programs are finite strings and so countable; languages are arbitrary sets of strings and so are not — some language is therefore decided by no program at all",
+            ],
+            "read": {
+                "title": "The same size, when nothing can be counted",
+                "minutes": 13,
+                "body": r"""
+Module 5 defined what it means for two sets to have the same size, and the definition
+never mentioned numbers: two sets have the same size when a bijection runs between them.
+For finite sets that is a roundabout way of saying they have equally many elements. It
+was written that way because it is the only version that survives contact with sets that
+cannot be counted at all, and this module is where that matters.
+
+## A hotel with no vacancies and a room for the new guest
+
+Picture a hotel with one room for each natural number — room 0, room 1, room 2, and so
+on without end — and every room occupied. A guest arrives. There is no free room, in the
+plain sense that no room number is unoccupied. Ask everyone to move from room $n$ to
+room $n+1$. Everyone still has a room, each room still holds one guest, and room 0 is
+now empty.
+
+Nothing was smuggled in. The move is a function $n \mapsto n+1$ from the naturals into
+the naturals; it is injective, so nobody was doubled up, and its image is everything
+except 0, so exactly one room came free. What broke is not logic but the expectation
+that a set cannot be put in one-to-one correspondence with a proper part of itself. That
+expectation has a name in this course: it is the pigeonhole principle from Module 5, and
+Module 5 was careful to say *finite*. Pigeonhole is not a fact about sets in general
+that happens to be provable for finite ones. It is a fact about finite sets specifically,
+and infinity is precisely where it stops.
+
+The same thing, stripped of the hotel: $n \mapsto 2n$ maps the naturals onto the even
+naturals. It is injective, since $2a = 2b$ forces $a = b$, and it is surjective onto the
+evens by construction. So there are exactly as many even numbers as numbers, even though
+the evens leave out infinitely much. A set with this property — a bijection with a
+proper subset of itself — is exactly what "infinite" means, and it is worth taking as
+the definition rather than as a paradox about one.
+
+## Countable means listable
+
+Call a set **countable** when its members can be arranged in a list $x_0, x_1, x_2,
+\ldots$ in which every member appears at some finite position. That is the same thing as
+a bijection with the naturals, written in the form that is easiest to check: to prove a
+set countable, exhibit the list.
+
+The integers are countable. Listing them as $0, 1, 2, 3, \ldots$ and then hoping to
+reach the negatives afterwards fails — no negative number ever gets a finite position —
+but interleaving works: $0, -1, 1, -2, 2, -3, 3, \ldots$, which is the function
+$g(n) = n/2$ for even $n$ and $-(n+1)/2$ for odd $n$. Every integer appears, and appears
+once. The lesson from the failed attempt is the one to keep: the list must reach
+everything at a *finite* index, and "after the whole of an infinite run" is not a
+position.
+
+The pairs of naturals are countable too, and here the listing has to be cleverer, since
+the obvious sweep — all pairs $(0, y)$, then all pairs $(1, y)$ — never finishes its
+first row. Sweep the diagonals instead. Take all pairs with $x + y = 0$, then all with
+$x + y = 1$, then $x + y = 2$, and so on. Each diagonal is finite, holding exactly
+$s + 1$ pairs when $x + y = s$, so every pair is reached after finitely many others.
+
+That sweep can be written in closed form. Before the diagonal $x + y = s$ begins, the
+earlier diagonals have contributed $1 + 2 + \cdots + s = s(s+1)/2$ pairs — the
+triangular number from Module 7 — and within the diagonal the pair $(x, y)$ sits at
+offset $y$. So
+
+$$\pi(x, y) = \frac{(x+y)(x+y+1)}{2} + y$$
+
+which is the Cantor pairing function. It sends $(0,0) \mapsto 0$, $(1,0) \mapsto 1$,
+$(0,1) \mapsto 2$, $(2,0) \mapsto 3$, $(1,1) \mapsto 4$, $(0,2) \mapsto 5$, and it is a
+bijection from $\mathbb{N} \times \mathbb{N}$ onto $\mathbb{N}$ — two coordinates encoded
+in one number with nothing lost and nothing repeated.
+
+From there the results come quickly. A countable union of countable sets is countable:
+index the sets by $i$ and their members by $j$, and $\pi(i, j)$ lists the union. The
+positive rationals are countable, because $p/q$ is a pair, so they inject into the pairs;
+duplicates like $2/4$ are dropped by keeping only lowest terms, and a subset of a
+countable set is countable. Add the negatives by interleaving and $\mathbb{Q}$ is
+countable — a set that is dense, so that between any two rationals lie infinitely many
+more, is nevertheless no bigger than $\mathbb{N}$. That is the first sign that "same
+size" carries less information than intuition expects it to.
+
+And the finite strings over a finite alphabet are countable: list them by length, and
+alphabetically within each length. Every string of length $k$ appears after fewer than
+$2^{k+1}$ others. This is the one to remember, because a program *is* a finite string
+over a finite alphabet. **There are only countably many programs.**
+
+## The argument that cannot be beaten
+
+Now consider the infinite bit strings: functions from $\mathbb{N}$ to $\{0, 1\}$. Are
+there countably many?
+
+Suppose there were. Then some list $s_0, s_1, s_2, \ldots$ contains all of them. Write
+the first few rows out and look down the diagonal:
+
+```text
+        pos 0   1   2   3
+  s0  [   0    1   1   0  ... ]
+  s1  [   1    1   0   0  ... ]
+  s2  [   0    0   1   1  ... ]
+  s3  [   1    0   1   1  ... ]
+```
+
+The diagonal entries are $s_0[0] = 0$, $s_1[1] = 1$, $s_2[2] = 1$, $s_3[3] = 1$. Build a
+new string $d$ by flipping every one of them: $d[k] = 1 - s_k[k]$, giving
+$d = 1, 0, 0, 0, \ldots$.
+
+Where is $d$ in the list? It is not $s_0$, because they differ at position 0. It is not
+$s_1$, because they differ at position 1. It is not $s_k$ for any $k$ at all, because
+$d$ was built to differ from $s_k$ exactly there. So the list does not contain every
+infinite bit string, and since the list was arbitrary, no list does. The set is
+**uncountable**.
+
+The tempting objection is worth stating plainly, because nearly everyone raises it: *just
+add $d$ to the list.* You can. The result is a different list, with a different diagonal,
+and the construction applied to that one produces a string missing from it too. The
+argument was never about one particular list — it takes an arbitrary list as its
+hypothesis and destroys it, so patching an instance is answering a claim that was not
+made. Recognising that a proof is universally quantified over its hypothesis is the
+skill Module 2 and Module 3 were building, and this is where it earns its keep.
+
+## Where the idea stops holding
+
+The diagonal argument needs two things, and both are easy to lose sight of. The list
+must be indexed by the naturals, and each object in it must be indexed by the naturals,
+so that position $k$ of row $k$ exists. Applied to finite strings it fails immediately,
+and it should: the finite strings are countable, and a diagonal over a list of strings of
+growing length has nothing to read once it passes the end of a row.
+
+The other limit is a limit on what countability tells you. $\mathbb{N}$ and $\mathbb{Q}$
+are the same size while being utterly unalike in order and density; "same size" was
+defined by bijection alone, and a bijection is free to shatter every other structure the
+sets carry. It is a coarse notion deliberately, and reading more into it than it says is
+its own error.
+
+## What this is for
+
+A language over $\{0,1\}$ is a set of strings, that is, a subset of a countably infinite
+set. Naming a subset is the same as naming, for each string in turn, whether it is in —
+which is an infinite bit string. So there are exactly as many languages as infinite bit
+strings: uncountably many. And there are only countably many programs.
+
+No injection runs from an uncountable set into a countable one. So there is no
+assignment of a distinct program to every language, and almost every language is decided
+by no program whatever. Notice what that argument did *not* do: it exhibited no
+particular undecidable problem, and it needed no clever construction. It counted. The
+theory of computation course later builds a specific undecidable problem — the halting
+problem, by running the diagonal argument on a supposed decider instead of on a list of
+strings — and it is the same argument in different clothes. The counting comes first,
+and it says that such a problem has to exist before anyone goes looking for one.
+""",
+            },
+            "derive": {
+                "title": "Numbering the diagonals: the pairing function, built",
+                "minutes": 12,
+                "brief": r"""
+The sweep that lists $\mathbb{N} \times \mathbb{N}$ takes the diagonals $x + y = 0$,
+then $x + y = 1$, then $x + y = 2$, and so on. It reaches every pair, because each
+diagonal is finite and a given pair's diagonal is fixed by its coordinates. What is less
+apparent is that the position of a pair can be written down in closed form, with no
+counting, and that is what this derivation builds.
+
+Write $s = x + y$ for the diagonal a pair sits on.
+""",
+                "vars": ["x", "y", "s", "k", "n"],
+                "steps": [
+                    {
+                        "prompt": r"How many pairs of naturals $(x, y)$ satisfy $x + y = k$ exactly? Give the count in terms of $k$.",
+                        "answer": r"k + 1",
+                        "placeholder": "a count in k",
+                        "hint": r"Once $x$ is chosen, $y$ is forced. So count the legal values of $x$.",
+                        "deconstruct": [
+                            r"$x$ can be $0, 1, \ldots, k$.",
+                            "Both coordinates are naturals, so neither may be negative — that is what caps x at k.",
+                        ],
+                    },
+                    {
+                        "prompt": r"The sweep finishes every earlier diagonal before starting diagonal $s$. Add up the counts for $k = 0$ through $k = s-1$ to get the number of pairs listed before it begins.",
+                        "answer": r"\frac{s(s+1)}{2}",
+                        "placeholder": r"\frac{?}{2}",
+                        "hint": r"Summing $k+1$ for $k = 0 \ldots s-1$ is the same as summing $j$ for $j = 1 \ldots s$ — the triangular number of Module 7.",
+                        "deconstruct": [
+                            r"The terms are $1, 2, 3, \ldots, s$.",
+                            r"Pair the first with the last: each pair sums to $s+1$, and there are $s/2$ of them.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Inside diagonal $s$ the sweep runs from $(s, 0)$ to $(0, s)$, one step at a time, so the pair $(x, y)$ sits at offset $y$ within it. Write the pair's overall position, in terms of $s$ and $y$.",
+                        "answer": r"\frac{s(s+1)}{2} + y",
+                        "placeholder": "everything before it, plus its offset",
+                        "hint": "The position is the number of pairs listed before this diagonal, plus how far into this diagonal the pair sits.",
+                        "deconstruct": [
+                            r"The count before the diagonal is the previous step's answer.",
+                            r"The offset within the diagonal is $y$, because $y$ climbs from 0 as the sweep advances.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Now eliminate $s$ by substituting $s = x + y$, to get the pairing function in its two arguments.",
+                        "answer": r"\frac{(x+y)(x+y+1)}{2} + y",
+                        "placeholder": r"\frac{(?)(?)}{2} + ?",
+                        "hint": "Only the s inside the fraction changes; the trailing offset is already in terms of y.",
+                        "deconstruct": [
+                            r"Replace both occurrences of $s$ in $s(s+1)/2$.",
+                            r"Leave the $+ y$ alone.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Evaluate the result at $(x, y) = (1, 1)$.",
+                        "answer": r"4",
+                        "placeholder": "a single number",
+                        "hint": r"$s = 2$ here, so the triangular part is $2\cdot3/2$.",
+                        "deconstruct": [
+                            r"$(x+y) = 2$ and $(x+y+1) = 3$.",
+                            r"Then add $y = 1$.",
+                        ],
+                    },
+                    {
+                        "prompt": r"The first pair on diagonal $s$ is $(s, 0)$, where the offset is zero. Write its position — the smallest index the diagonal occupies.",
+                        "answer": r"\frac{s(s+1)}{2}",
+                        "placeholder": r"\frac{?}{2}",
+                        "hint": r"Put $y = 0$ into the position formula in terms of $s$ and $y$.",
+                        "deconstruct": [
+                            r"The offset term vanishes.",
+                            "What is left is the count of everything on the earlier diagonals.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+The first six positions come out as $\pi(0,0) = 0$, $\pi(1,0) = 1$, $\pi(0,1) = 2$,
+$\pi(2,0) = 3$, $\pi(1,1) = 4$, $\pi(0,2) = 5$ — every natural number used exactly once,
+which is what makes $\pi$ a bijection rather than merely an injection. Two coordinates
+have been folded into one number reversibly.
+
+That is more than a curiosity. It is the machine behind two of the results this module
+states: a countable union of countable sets is countable, because $\pi(i, j)$ lists the
+$j$-th member of the $i$-th set at a single finite position; and the rationals are
+countable, because a rational is a pair. And it is worth noticing that the argument
+never counted anything. It exhibited a formula and checked it was a bijection — which is
+the only kind of proof available once the sets stop being finite.
+""",
+            },
+            "blanks": {
+                "title": "Pairing, unpairing, and defeating a list",
+                "minutes": 9,
+                "lang": "python",
+                "caption": "cantor.py",
+                "brief": r"""
+Two constructions from this module, written out. The first folds a pair of naturals into
+one number and takes it apart again; the second takes any proposed list of infinite bit
+strings and returns a string that is not on it.
+""",
+                "listing": r'''
+def pair(x, y):
+    """Cantor's pairing function: the position of (x, y) in the diagonal sweep."""
+    s = x + y
+    return ___ + y
+
+
+def unpair(n):
+    """The inverse. Find the diagonal first, then read the offset off it."""
+    s = 0
+    while pair(s, 0) <= n:          # diagonal s starts at or before n, so try the next
+        s += 1
+    s -= 1                          # step back to the diagonal that contains n
+    y = n - pair(s, 0)
+    return (___, y)
+
+
+def diagonal(rows):
+    """Given rows[k][k] for each k, return a string on none of the listed rows."""
+    return [___ for k in range(len(rows))]
+
+
+assert [pair(0, 0), pair(1, 0), pair(0, 1), pair(2, 0), pair(1, 1)] == [0, 1, 2, ___, 4]
+assert all(pair(*unpair(n)) == n for n in range(1000))
+assert diagonal([[0, 1, 1, 0], [1, 1, 0, 0], [0, 0, 1, 1], [1, 0, 1, 1]]) == ___
+''',
+                "blanks": [
+                    {
+                        "prompt": "The number of pairs the sweep lists before diagonal `s` begins.",
+                        "opts": ["s * (s + 1) // 2", "s * (s - 1) // 2", "s * s // 2", "(s + y) * (s + y + 1) // 2"],
+                        "a": 0,
+                        "why": r"""
+Diagonal $k$ holds $k+1$ pairs, so the diagonals before $s$ contribute
+$1 + 2 + \cdots + s = s(s+1)/2$. Integer division is exact here because one of $s$ and
+$s+1$ is always even.
+""",
+                        "whys": [
+                            "Correct — the triangular number of $s$, which counts $1 + 2 + \\cdots + s$.",
+                            "This counts $1 + 2 + \\cdots + (s-1)$, one diagonal short, so every index past the first diagonal comes out too small.",
+                            "Close numerically but wrong: it drops the $+1$ that makes diagonal $k$ hold $k+1$ pairs rather than $k$, and $\\pi(0,0)$ would still be 0 while $\\pi(1,0)$ came out 0 as well.",
+                            "The variable $s$ already *is* $x + y$, so this squares the diagonal index and lands far past the pair's true position.",
+                        ],
+                    },
+                    {
+                        "prompt": "The first coordinate, recovered from the diagonal and the offset.",
+                        "opts": ["s - y", "s + y", "y - s", "s"],
+                        "a": 0,
+                        "why": r"""
+The pair sits on diagonal $s = x + y$, and the offset within the diagonal is $y$, so
+$x = s - y$. That is the whole of the inversion: find which diagonal $n$ falls on, then
+subtract.
+""",
+                        "whys": [
+                            "Correct, straight from $s = x + y$.",
+                            "This would make $x + y$ equal $s + 2y$ rather than $s$, so the recovered pair would sit on the wrong diagonal entirely.",
+                            "Negative whenever the offset exceeds the diagonal index, which the naturals do not permit; it also has the subtraction the wrong way round.",
+                            "This ignores the offset, so every pair on a diagonal would decode to the same first coordinate and `unpair` would not be injective.",
+                        ],
+                    },
+                    {
+                        "prompt": "The k-th bit of a string guaranteed to be on none of the rows.",
+                        "opts": ["1 - rows[k][k]", "rows[k][k]", "1 - rows[0][k]", "1 - rows[k][0]"],
+                        "a": 0,
+                        "why": r"""
+To differ from row $k$ it is enough to differ from it at a single position, and position
+$k$ is the one the construction reserves for that purpose. Flipping the diagonal entry
+does exactly that, simultaneously for every $k$, which is why one string can defeat an
+entire list at once.
+""",
+                        "whys": [
+                            "Correct: at position $k$ this is the opposite of row $k$, so it matches no row anywhere.",
+                            "This copies the diagonal instead of flipping it, producing a string that agrees with every row at the one position that was supposed to separate them.",
+                            "This flips a single row and differs from that row alone; every other row is left free to equal it.",
+                            "This reads down the first column rather than the diagonal, so it is built to differ from row $k$ at position 0 for every $k$ at once — which is impossible for more than two rows and produces no guarantee at all.",
+                        ],
+                    },
+                    {
+                        "prompt": "The position of the pair `(2, 0)` in the sweep.",
+                        "opts": ["3", "2", "4", "5"],
+                        "a": 0,
+                        "why": r"""
+$(2,0)$ opens the diagonal $x + y = 2$, and the diagonals before it held $1 + 2 = 3$
+pairs, so it takes index 3. The sweep so far is $(0,0), (1,0), (0,1), (2,0), (1,1),
+(0,2)$ at indices 0 through 5.
+""",
+                        "whys": [
+                            "Correct — the first index of diagonal 2, which is the triangular number $2\\cdot3/2 = 3$.",
+                            "Index 2 belongs to $(0,1)$, the last pair of diagonal 1.",
+                            "Index 4 belongs to $(1,1)$, the pair one step further along diagonal 2.",
+                            "Index 5 belongs to $(0,2)$, which closes diagonal 2.",
+                        ],
+                    },
+                    {
+                        "prompt": "The string the diagonal construction returns for those four rows.",
+                        "opts": ["[1, 0, 0, 0]", "[0, 1, 1, 1]", "[1, 1, 0, 1]", "[0, 0, 1, 0]"],
+                        "a": 0,
+                        "why": r"""
+The diagonal entries are $0, 1, 1, 1$, and flipping each gives $1, 0, 0, 0$. Check it
+against each row in turn: it differs from the first at position 0, from the second at
+position 1, from the third at position 2 and from the fourth at position 3 — one
+disagreement per row, which is all that is needed.
+""",
+                        "whys": [
+                            "Correct: the diagonal reads $0, 1, 1, 1$ and every bit is flipped.",
+                            "This is the diagonal copied rather than flipped, so it agrees with each row exactly where it was meant to differ.",
+                            "This is the first row's contents with one bit altered; it differs from that row but is under no constraint at all with respect to the others.",
+                            "This flips the first column rather than the diagonal, and it happens to equal the third row's opening bits, so it defeats nothing.",
+                        ],
+                    },
+                ],
+            },
+            "quiz": {
+                "title": "Bijections, listings and what the diagonal destroys",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The map `n -> 2n` is a bijection from the naturals onto the even naturals. What does that establish?",
+                        "opts": [
+                            "That defining size by bijection breaks down once sets are infinite",
+                            "That they are the same size, and pigeonhole is a finite theorem",
+                            "That the evens are half the size, exactly as one would expect",
+                            "Nothing — a bijection onto a proper subset cannot really exist",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The bijection is real: $2a = 2b$ forces $a = b$, and every even number is hit. So by the
+only definition of size available — the one Module 5 gave — the two sets are the same
+size, even though one omits infinitely much. Nothing is broken by this. What it shows is
+that the intuition being violated, "a proper subset must be smaller", is the pigeonhole
+principle, and Module 5 stated pigeonhole for *finite* sets on purpose. Having a
+bijection with a proper subset of itself is not an anomaly of the naturals; it is what
+being infinite means, and it can be taken as the definition.
+""",
+                        "whys": [
+                            "The definition survives intact — it is the finite intuition about subsets that does not, and that intuition was never part of the definition.",
+                            "Correct, and the second half is why the first half is not a paradox.",
+                            "Halving is what the map does to the *numbers*; it does nothing to the size of the set, since every even number still receives exactly one natural.",
+                            "Such a bijection is impossible for finite sets and routine for infinite ones — the map here is an explicit example of one.",
+                        ],
+                    },
+                    {
+                        "q": "Why does listing the integers as `0, 1, 2, 3, ...` and then the negatives afterwards fail to show they are countable?",
+                        "opts": [
+                            "It does show it — the two runs together cover every integer",
+                            "Because the set of the negative integers is itself uncountable",
+                            "Because no negative integer would ever sit at a finite index",
+                            "Because a listing has to run in increasing numerical order",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Countable means every member sits at a *finite* index. The first run never ends, so
+nothing after it is ever reached, and "position infinity plus one" is not a position. The
+fix is not to work harder on the ordering but to interleave: $0, -1, 1, -2, 2, \ldots$
+puts $-k$ at index $2k-1$ and $k$ at index $2k$, both finite, and covers everything. The
+requirement is finiteness of each index, not any particular order — a listing is free to
+jump about, and the interleaved one does.
+""",
+                        "whys": [
+                            "The two runs do cover every integer as sets, but a listing needs each member at a finite index, and the second run begins at no index at all.",
+                            "The negatives are countable — $n \\mapsto -n-1$ lists them — so the failure is in the arrangement rather than the set.",
+                            "Correct: the first run exhausts every finite index before the second begins.",
+                            "Order is not a requirement; the interleaved listing that works is not increasing, and it is a perfectly good witness.",
+                        ],
+                    },
+                    {
+                        "q": "You show someone the diagonal argument and they say: fine, add the new string `d` to the list. What is wrong with that reply?",
+                        "opts": [
+                            "Nothing is wrong — the argument only rules out lists omitting `d`",
+                            "The hypothesis was an arbitrary list, so the new one fails too",
+                            "`d` is not a genuine bit string, so it cannot be added at all",
+                            "The list is already infinite, so nothing can be appended to it",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The proof does not say "here is a list, and here is what it misses". It says: take any
+list whatever, and it misses something. Producing a second list is producing a second
+instance of the hypothesis, and the construction runs again on that one. Patching an
+instance answers a claim nobody made — the statement is universally quantified over the
+list, and that is exactly the shape Module 2 gave for such statements and Module 3 gave
+for refuting them. Appending to an infinite list is perfectly legal, and $d$ is an
+ordinary bit string, so neither of those is the objection.
+""",
+                        "whys": [
+                            "The argument rules out every list, because it begins by assuming an arbitrary one rather than a particular one.",
+                            "Correct, and this is the whole force of a universally quantified hypothesis.",
+                            "$d$ is a perfectly ordinary infinite bit string — it is built one bit at a time from the entries of the list.",
+                            "An infinite list can be extended; shifting every entry up by one leaves room at the front, exactly as the hotel did.",
+                        ],
+                    },
+                    {
+                        "q": "The rationals are countable and the infinite bit strings are not. Which reading is right?",
+                        "opts": [
+                            "The rationals list as pairs, and their density is beside the point",
+                            "The rationals are countable because they lie thinly along the line",
+                            "The bit strings are uncountable because each is infinitely long",
+                            "The bit strings are uncountable because they outnumber the naturals",
+                        ],
+                        "a": 0,
+                        "why": r"""
+A rational is a pair of integers, the pairs of naturals are listable by the diagonal
+sweep, and duplicates are removed by keeping lowest terms — so the rationals inject into
+a countable set and are countable. That they are dense, with infinitely many between any
+two, plays no part: "same size" was defined by bijection and is blind to order and
+spacing. The uncountability of the bit strings likewise has nothing to do with any
+individual string's length; the finite-position sequences $\mathbb{N} \to \mathbb{N}$
+listed by the pairing function are infinite objects too. It is the diagonal construction
+that does the work, and no restatement of the conclusion replaces it.
+""",
+                        "whys": [
+                            "Correct, and noting that density is irrelevant is the part that usually goes missing.",
+                            "The rationals are dense rather than thinly spread — between any two lie infinitely many more — so this gets the geometry backwards as well as making it do work it cannot do.",
+                            "Length is not the issue: the diagonal sweep lists infinitely many infinite objects quite happily, so being infinite cannot be what puts a set out of reach.",
+                            "True as a statement, but it restates the conclusion rather than giving the reason; what establishes it is the diagonal construction defeating every proposed list.",
+                        ],
+                    },
+                    {
+                        "q": "The counting argument says some language over `{0,1}` is decided by no program. What does it deliver?",
+                        "opts": [
+                            "A specific undecidable language, built by the diagonal construction",
+                            "A proof that no program is able to read its own source code",
+                            "Existence only: countably many programs, uncountably many languages",
+                            "A proof that the languages anyone cares about are undecidable",
+                        ],
+                        "a": 2,
+                        "why": r"""
+A program is a finite string over a finite alphabet, so the programs are countable. A
+language is a subset of the strings, which is the same thing as an infinite bit string,
+so the languages are uncountable — and no injection runs from an uncountable set into a
+countable one. That settles existence and exhibits nothing: no particular language is
+named, and none of the languages anyone cares about is implicated. Building a specific
+undecidable problem takes the diagonal argument applied to a supposed decider rather
+than to a list, which is the halting problem and is done elsewhere. The counting comes
+first and says the search is not futile.
+""",
+                        "whys": [
+                            "No language is named here; the diagonal is applied to the abstract list of bit strings, which fixes nothing in particular.",
+                            "Self-reference is the engine of the halting-problem construction, and a program can in fact be handed its own source; the counting argument uses neither idea.",
+                            "Correct — pure existence, from a comparison of two cardinalities.",
+                            "Most of the uncountably many languages are arbitrary and of interest to nobody, and plenty of interesting languages are perfectly decidable.",
+                        ],
                     },
                 ],
             },
