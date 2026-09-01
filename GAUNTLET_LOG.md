@@ -4522,3 +4522,310 @@ and `emit.py` and `build.mjs` were safe to run. The diff is `catalog/MA201.json`
 `catalog/authors/MA201.py` and the `docs/` build output, and nothing else.
 
 ---
+
+## Cycle 15 — TRACK 2: Interactive Models & Visualisers
+
+*(The runner labels this cycle 2 — run 2's counter, started 11:05, while this log keeps
+counting. Commit "cycle 2" of run C is this file's cycle 15, exactly as `997eaef` was its
+cycle 1 and this file's cycle 14.)*
+
+**Target: the "hit the target" unit end to end — `renderTune` in `src/app.js`, the three
+tune models in `src/studio.js`, and the 21 tune units that depend on both.** One
+subsystem, and the third of this track's three slider surfaces. Cycle 2 took the first
+and hardened `Sandbox.mount`: `initial` clamped, a `log` parameter kind, `aria-live` on
+the readout with a change guard, `role="img"` and a name on the canvas, `aria-valuetext`
+carrying the formatted value, per-parameter lookups resolved once, a one-shot rAF
+coalescer. Cycle 8 took the second, the circuit editor's numerical core, and wrote the
+same discipline into the plot. **`renderTune` is a hand-rolled copy of `mount()` that
+predates both and received none of it** — twelve of cycle 2's framework fixes are absent
+from it one by one — and no gate has ever mounted it. `verify_tune.mjs` asks whether a
+target can be reached; `verify_sandbox.mjs` asks whether the model's plot survives its
+extremes, using the model's own constants and never the catalogue's overrides. Nobody had
+fed this renderer a value the slider cannot hold, resized it, or clicked faster than it
+could redraw, which is this track's brief almost word for word.
+
+### Baseline, captured before any edit
+
+```
+82 circuit exercises / 348 checks · 21 tune units
+216 numeric answers verified, 0 unchecked, 218 figure-only
+1248 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3160 per-option explanations · 6572 live draws
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys · circuit_model 1457 analyses, 84 refusals, 380 schematics
+desk 61 expressions · theme 135 contrast surfaces in both themes
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads, 12875 KB ·
+       inlined 14072 KB · shell 1168 KB
+```
+
+### The attacks
+
+**3. Simulation Auditor** — taken first, because this is its track and its brief. Every
+number below was measured through the shipped renderer before it was changed.
+
+- **An unsanitised saved value freezes the tab and then kills it.** `renderTune` took
+  three numbers on trust — an author's `initial`, a model's `def`, and the learner's own
+  saved position — and put them straight into `v`, the range input's `value` attribute,
+  the readout, the plot and the grading. A range input silently clamps its own value and
+  snaps it to its step; `v` did neither. Measured: a saved `r1` of **−100** printed
+  "−100 Ω" beside a thumb resting at 100 and put **Infinity in all three graded
+  readouts**; a saved **`"2200"`** — a string, which is what an older save or a
+  hand-edited store yields — concatenated instead of adding and reported **0.000 V for a
+  divider actually sitting at 2.5 V**; a saved **NaN** read "NaN" in every readout, the
+  exact rot `verify_sandbox.mjs` rejects in a sandbox and nothing rejected here. And the
+  worst case is not a wrong number at all: a saved `r` of **1e308** on `rc-lowpass` makes
+  `2 * Math.PI * v.r * c` overflow to Infinity, so `fc` is exactly **0**, `log10(0)` is
+  −Infinity, `10 ** -Infinity` is 0, and the plot's `for (let f = 0; f <= hi; f *= 1.06)`
+  **never advances** — it pushes a point per iteration until the heap dies. It killed
+  Node outright during the mutation run rather than reporting a failure.
+- **Sixteen of the twenty-one tune units drew no target at all, and the one that tried
+  drew it off the canvas.** `drawPlot` drew a dashed line wherever a constraint's key
+  matched `plotKey || 'vout'`, and `vout` is a readout of the `divider` model alone. So
+  every `rc-lowpass` and `rlc` unit that did not override the key matched nothing. EE111
+  M6, which *does* override it and asks for a **1 kHz resonance**, got a **horizontal**
+  line at **y = 1000** on an axis running **0 to 2.375** — a frequency drawn on a gain
+  axis, off the frame entirely, invisible rather than wrong-looking. Counted at the
+  opening position: **4 targets visible across the whole catalogue**, and a fifth drawn
+  where nobody could see it.
+- **EE121 M8 states a requirement at a frequency its own plot does not reach.** Found by
+  the new gate on its first run, not by hand. `rc-lowpass`'s axis floor was
+  `min(10, 10^floor(log10(fc/4)))` and never went below 10 Hz however low `fsig` was set
+  — and EE121 M8 is a debounce filter whose whole subject is a **5 Hz** button press.
+- **A readout row graded by one of the two constraints on it.** `refresh` used
+  `ts.find`, which returns the first match. **Two units state two bounds on one readout**
+  — EE121 M5 wants the divider current under 0.50 mA *and* over 0.25 mA, EE211 M5 under
+  0.50 and over 0.20. A learner satisfying only the first saw the "I total" row drawn
+  **green** while the constraint chip immediately below it was still unticked: one panel
+  disagreeing with itself about one number. Reproduced at `r1 = 100, r2 = 20400`.
+- **The app and its own gate were grading by different rules.** `renderTune`'s `holdsC`
+  tested the bounds before the equality; `verify_tune.mjs`'s `holds` tested the equality
+  first. At `{eq: 6, tol: 0.05, max: 8}` and x = 7 the **app passes it and the gate fails
+  it**. Swept: **0 catalogue constraints carry both**, so nothing published was ever
+  mis-graded — but the gate whose one job is to say whether a target can be hit was
+  answering about a rule the learner is not scored against, and that divergence only ever
+  surfaces as "this exercise is impossible" from somebody who has just solved it.
+- **The model ran twice a frame and the canvas was rebuilt sixty times a second.**
+  `refresh()` called `readouts()` and then `tests()` called it again; there was no
+  coalescing of any kind. Measured: **60 slider events → 120 `compute()` calls, 60
+  `plot()` calls, 60 canvas backing-store reallocations, 0 requestAnimationFrame.** The
+  model itself is cheap — **0.13 ms an event** — so this is not an arithmetic problem;
+  assigning `canvas.width` clears and reallocates the backing store even at an unchanged
+  size, which at the shipped 900×296 and a dpr of 2 is **4.3 MB of zeroing per event of a
+  drag**, and `saveSoon()` ran on every one beside it.
+- **Checked and found sound, recorded so the next cycle does not re-derive them:**
+  `compute()` is finite everywhere on the reachable grid for all three models — swept at
+  every corner of every parameter against every unit's real constants, zero non-finite
+  readouts, so the Infinity above comes only from the unvalidated path. The
+  `ResizeObserver` cannot loop: `#tn-cv` is `width:100%; height:296px` in the stylesheet,
+  so its layout box is settled by CSS and `drawPlot`'s writes to the backing store cannot
+  reach it — read in `index.head.html` rather than assumed, the way cycle 2 checked
+  `.sbx-canvas` and cycle 8 checked `.ckt-canvas`. `divider`'s plot loop is literal
+  (`100` to `47000`) and cannot be driven off its ends by a saved value. `.tune` collapses
+  to one column at 900px, so the 375px case is the stacked one and the canvas is floored
+  at 240.
+
+**4. UX & Accessibility Hardener.** Everything cycle 2 gave a sandbox, absent here.
+
+- **The plot canvas had no role and no name** — `role` null, `aria-label` null. Cycle 8
+  called the schematic plot "the only canvas left in the app with no accessible name".
+  This was the one after it.
+- **Neither slider had an accessible name at all.** Bare `<input type="range">`, no
+  wrapping `<label>`, no `aria-label`, no `for`. A screen reader announces "slider" and
+  nothing else, twice.
+- **No `aria-valuetext`**, so a range input announced its own raw number: "2200" where the
+  page reads 2200 Ω, "2.5" where it reads 2.5 µF.
+- **The block that says whether the exercise is finished was not a live region.** Neither
+  `#tn-read` nor `#tn-state` had one, and `#tn-state` is the only thing on the page that
+  says the unit is done.
+- **Focus was stranded on a discarded button.** Reset and a passing Check both call
+  `paint()`, which replaces the whole page; the button that was pressed no longer exists
+  and the keyboard lands back on the body. Verified by identity, not by id.
+
+**1. Senior Educator** and **2. Assessment Inquisitor** have no prose and no graded
+question in a slider, so both were pointed at the thing in scope they can judge — whether
+what the panel says **explains** or merely **announces**, which is the standard cycle 8
+set with the solver's failure messages.
+
+- **The refusal restated the target and stopped.** Pressing Check on EE101 M4 said
+  *"2 constraints still unmet: Vout = 3.30 V ± 0.03; I ≤ 1.00 mA"* — the two sentences
+  already printed on the panel the learner is staring at, and not the one thing they do
+  not know, which is how far off they are. It now reads *"2 constraints still unmet: Vout
+  = 3.30 V ± 0.03 — you have 2.500 V; I ≤ 1.00 mA — you have 1.136 mA"*, and the
+  constraint chips carry the same pairing permanently, which is also what makes the live
+  region worth having: "one of two met" gives a screen-reader user nothing to act on.
+
+### What changed
+
+**`src/app.js` — `renderTune`, held to `Sandbox.mount`'s standard.**
+
+| Fix | Before | After |
+|---|---|---|
+| every value sanitised | `initial`, `def` and the saved position taken on trust | clamped, type-checked and snapped to the step grid |
+| the readout row | graded by the first constraint on its key | graded by every constraint on its key |
+| the constraint rule | a private copy that disagreed with the gate | `Tune.holds`, shared with `verify_tune.mjs` |
+| the target | `plotKey \|\| 'vout'`, matching one model | the model says where it belongs |
+| repaint | none coalesced, model run twice | one rAF-coalesced repaint, model run once |
+| the canvas | reallocated every event | written only when the size moves; dpr capped at 2 |
+| the canvas | no role, no name | `role="img"` and a name built from what was drawn |
+| the sliders | no accessible name, no valuetext | wrapped in a `<label>`, value `aria-hidden`, `aria-valuetext` |
+| the goal block | silent | `aria-live="polite"` with a change guard |
+| focus | stranded on a discarded button | restored to the same button in the new page |
+| a refusal | restated the target | names the value too |
+| `plot()` throwing | a stale picture | a drawn message, and a name that says so |
+
+**`src/studio.js` — the models say where a target lives.** A new `marks(c, v, k)` on each
+spec returning a mark in that model's own plot coordinates: `divider` puts a `vout`
+constraint on the y-axis; `rlc` puts `fn` on the **x**-axis and `peak` on the y-axis, and
+`zeta` on neither because it shapes the curve rather than sitting on it; `rc-lowpass`
+puts `fc` on the x-axis and treats `keep` and `reject` as **points on the curve** — they
+are |H| read at one stated frequency each, so they become two gates the response has to
+thread between, converted out of dB where the model that chose the units is. `frame()`
+gains `vline`, the mirror of `hline`, which is what EE111 M6's target needed and did not
+have. A boundary outside the axis is not drawn and neither is a fill that reaches for
+one, which is the honest answer rather than a compromise: EE102 M7's `peak ≤ 30` cannot
+be violated on a frame ending at 2.4, and the line arrives on its own once the learner
+winds the Q up far enough for the axis to grow to meet it.
+
+**The result, counted at every unit's opening position: 4 targets drawn before, 27 after;
+19 of the 21 units now show what they are asking for.** The two that do not are correct
+to show nothing — EE111 M10 constrains a ratio and a current on a Vout-against-R2 axis,
+and EE231 M3 constrains a time constant. **All three notices that claim a dashed line
+still have one**, checked mechanically rather than by reading.
+
+**Two unbounded loops bounded.** `rc-lowpass` and `rlc` both build their point lists with
+a geometric loop from a computed start, and a start of zero never advances. Both now
+refuse a degenerate axis and cap the iteration count, because "the caller is careful" is
+not a property of a loop — and the caller was not careful.
+
+**A new gate — `tools/verify_tune_ui.mjs`, on `tools/tune_stage.mjs`.** Ten sections
+driving the shipped `renderTune`: the value clamp over **423 hostile opening values**
+(below the floor, negative, above the ceiling, 1e308, off the step grid, a string, NaN,
+null, an object — every parameter of every unit); a readout row graded by every
+constraint on its key; **462 targets** required to lie inside their own axes over the
+extremes grid **and the catalogue's overridden constants, which `verify_sandbox.mjs`
+never passes**; a mark that is never drawable anywhere, which is how a coordinate in the
+wrong units fails silently; **105 paints at five widths** on the recording canvas from
+`dom_stub.mjs`; sixty drags inside one frame required to be one repaint and one model
+evaluation and zero reallocations; the canvas named out of what it drew; one live region
+that does not flood; focus after both repainting buttons; a refusal that names the value;
+and the app's rule and `verify_tune.mjs`'s required to agree — asked of the **renderer**,
+through a synthetic unit whose constraint carries both an equality and a bound.
+
+**`tools/app_stage.mjs`.** Two gates now mount real views out of `app.js`, and the 360 KB
+they each stand up was about to exist twice. Extracted, for the reason cycle 8 extracted
+`dom_stub.mjs`: two copies drift, and then two different applications are under test and
+neither is the one that ships. **`verify_quiz.mjs` reports byte-identically before and
+after, checked by diff.**
+
+### Verification beyond the gates
+
+**The gate was not trusted until it had been seen to fail. Eighteen mutations, eighteen
+intended verdicts** — and on the first run **it got five of them wrong**, which is the
+whole argument for doing it:
+
+- *The unclamped saved value* killed Node instead of failing. That was the gate telling
+  the truth about something worse than the defect I was chasing, and it is where the
+  infinite plot loop above came from.
+- *The first-constraint grading* passed. My search for a discriminating position asked
+  for "some but not all" constraints holding, and the first such position has the **first**
+  one failing — so a renderer grading by the first marks the row failing too and the check
+  never discriminates. It now requires the first to hold and a later one to fail.
+- *The raw-number `aria-valuetext`* passed, because I read the attribute off the opening
+  markup and the mutation was in the drag handler. It is now read after a drag as well.
+- *The removed canvas-size guard* passed, because I compared `cv.width` before and after
+  and reassigning the same number does not change the value. It now counts **assignments**
+  through a property setter, which is what a browser reacts to.
+- *The restored private `holdsC`* passed, because section 9 tested `Tune.holds` — proving
+  studio.js consistent with itself and saying nothing about what the renderer uses. It now
+  drives the real view.
+
+After those five repairs: **18 of 18**, including the unmodified tree as a control.
+
+Every defect was measured before it was fixed and re-measured after: the Infinity, the
+0.000 V, the "NaN", the 120-computes-per-60-events, the 60 reallocations, the 4-versus-27
+targets, the y = 1000 on an axis ending at 2.375, and the 5 Hz target on an axis starting
+at 10 Hz. `verify_tune.mjs` reports **byte-identically** before and after its rule was
+replaced by the shared one, so unifying the rule moved no verdict and no example
+solution. The catalogue was swept for a constraint carrying both an equality and a bound
+before that unification was written — **0 of them** — rather than assumed. Every notice
+claiming a drawn line was checked against what is now drawn. The payload window was
+checked rather than assumed: **3 generations, 64 files, 0 orphaned, 0 missing**.
+
+### Left alone, deliberately
+
+- **`plotKey` is now vestigial on two units and was not removed.** Every authored
+  `plotKey` in the catalogue is legitimate — seven `vout` on `divider` units where it was
+  redundant, and EE111 M6's `fn`, which the model now places correctly — so **no catalogue
+  edit was needed and none was made**. The two that name a key their model cannot place
+  (EE111 M7's `fc`, EE111 M10's `vout`) drew nothing before and draw nothing now.
+  Removing the field means re-emitting EE111 for no behaviour change, so the gate
+  **reports** them in a note instead. Recorded so the next author is not the one to find it.
+- **`sliding-mode` still keeps forward Euler** and **`P.dim` (2.93:1) and `P.faint`
+  (1.86:1) still fail contrast on every canvas.** Cycle 2 measured them and handed them to
+  Track 5; cycles 5, 6 and 8 each re-recorded them without taking them. This cycle adds
+  the tune plot's own axis labels to the list and takes them no further, for the reason
+  that has held every time: changing them changes the visual weight of 13 visualisers and
+  two more canvases, which is a decision about the design language.
+- **The `rlc` marker at `(fₙ, 1/2ζ)` is not the peak, and the readout beside it calls
+  1/(2ζ√(1−ζ²)) the "peak gain".** Both are correct — the dot marks where you are at ωₙ,
+  the readout reports the true maximum — and they are different numbers by design. With
+  `peak` now drawn as a horizontal target the picture finally shows the constraint the
+  learner is steering, so the dot's meaning matters less than it did. Recorded rather than
+  changed, because moving the dot would be changing what the plot is about.
+- **`Sandbox.mount`'s own coalescer has the same `raf = requestAnimationFrame(cb)` shape**
+  that made an immediate rAF stub wedge it shut. It is correct in a browser, where the
+  assignment lands before the callback runs; only a synchronous test stub inverts it. Not
+  changed — recorded, because it is the reason `tune_stage.mjs`'s frame queue is deferred
+  and `blanks_stage.mjs`'s is not.
+- **Nothing here animates on a timer**, so `prefers-reduced-motion` has nothing to honour;
+  the single `requestAnimationFrame` is a one-shot coalescer. Cycle 2's finding, still true.
+- **No `emit.py` run, and no author file, `catalog/*.json`, lesson id or schema touched.**
+  Presentation, behaviour and gates only, so the staleness guard is not armed — and the
+  payload total is unchanged at **12875 KB**, which is the mechanical confirmation that no
+  content moved. `git status` reports **0 changes under `catalog/` and 0 under
+  `docs/programs`**.
+
+### Gates, after
+
+Every pre-existing number unmoved. The only new numbers are the new gate's; the only two
+that moved are the artifact sizes, by exactly the source that was added.
+
+```
+verify_tune_ui       All good: 21 tune units mount and answer — 423 hostile opening
+                     values clamped onto the grid, 462 targets inside their own axes,
+                     105 paints at 5 widths, 270 drags, 493 mounts, one repaint a
+                     frame, and a refusal that names the value                    [NEW]
+verify_tune          All good: 21 tune units reachable and not pre-solved
+                     — byte-identical to before the rule was unified
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_circuits      All good: 82 circuit exercises, 348 checks
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_circuit_model All good: 1457 analyses, 84 refusals · 15 plots · 380 schematics
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3160 explanations · 6572 live draws
+                     — byte-identical to before app_stage.mjs was extracted
+verify_derivations   All good: 1248 steps across 46 courses
+verify_desk          All good: 61 expressions at the extremes
+verify_theme         All good: 135 contrast surfaces x 2 themes
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12875 KB — unchanged ·
+                     inlined 14072 -> 14091 KB · shell 1168 -> 1187 KB, of 1536
+```
+
+Beyond the gates: **18 mutations the new gate had to reject and one it had to pass**, five
+of which it failed on its first run and was repaired for; `verify_quiz.mjs` and
+`verify_tune.mjs` both reporting byte-identically across the refactors under them, checked
+by diff rather than by reading; the catalogue swept for a constraint carrying both an
+equality and a bound before the rule was unified; every notice claiming a drawn line
+checked against what is now drawn; and the payload window checked at 0 orphaned, 0 missing.
+
+**A note on the working tree.** The runner's lock (`.gauntlet.pid`, pid 9133) was live
+throughout and this cycle is the process it launched, so `build.mjs` was safe to run. The
+diff is `src/app.js`, `src/studio.js`, `src/index.head.html`, four files under `tools/`
+and the `docs/` build output, and nothing else.
+
+---

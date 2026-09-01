@@ -31,13 +31,15 @@ new Function('module', 'PyRunner',
 )(mod, { run: async () => {} });
 const { Tune } = mod.exports;
 
-function holds(c, x) {
-  if (c.eq !== undefined) return Math.abs(x - c.eq) <= (c.tol === undefined ? 0.01 : c.tol);
-  if (c.min !== undefined && c.max !== undefined) return x >= c.min && x <= c.max;
-  if (c.max !== undefined) return x <= c.max;
-  if (c.min !== undefined) return x >= c.min;
-  return false;
-}
+/* The rule lives in studio.js, next to the models, and this reaches for it rather than
+   keeping a copy. The copy that used to be here tested the equality first while
+   renderTune tested the bounds first, so a constraint carrying both was swept under one
+   rule and graded under the other: at {eq: 6, tol: 0.05, max: 8} and x = 7 this gate
+   said unreachable and the app said met. No catalogue constraint carries both, so no
+   published unit was ever mis-swept — but this gate's one job is to say whether a
+   target can be hit, and it was answering about a rule the learner is not scored
+   against. verify_tune_ui.mjs now checks the two agree, over that case among others. */
+const holds = Tune.holds;
 
 function allHold(spec, consts, cons, v) {
   const out = spec.compute(v, consts);

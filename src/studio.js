@@ -785,6 +785,21 @@ const Sandbox = (function () {
         ctx.stroke();
         ctx.restore();
       },
+      /* The mirror of hline. Added for the tune plots, where half the targets are on
+         the frequency axis rather than the response one: EE111 M6 asks for a resonance
+         at 1 kHz and the only way to draw that was a horizontal line at y = 1000 on an
+         axis running 0 to 2.4, which is off the canvas entirely. */
+      vline: function (x, colour, dash) {
+        ctx.save();
+        if (dash) ctx.setLineDash(dash);
+        ctx.beginPath();
+        ctx.moveTo(Math.round(fx(x)) + 0.5, y0);
+        ctx.lineTo(Math.round(fx(x)) + 0.5, y1);
+        ctx.strokeStyle = colour || P.dim;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      },
       text: function (str, x, y, colour, align) {
         ctx.font = '11px ui-monospace, monospace';
         ctx.fillStyle = colour || P.dim;
@@ -991,12 +1006,48 @@ const Sandbox = (function () {
  * The constraints live in the catalog and the physics lives here, which is the same
  * split the circuit builds use: content says what must be true, code says what is.
  */
+/* A constraint states its target either as an equality with a tolerance or as a bound
+   at one or both ends. To everything downstream those are the same thing — an interval
+   the quantity has to land in, with either end possibly open — so the interval is
+   computed once, here, and the grading, the drawing and the gates all read it.
+
+   They did not agree before. renderTune tested the bounds before the equality and
+   verify_tune.mjs tested the equality first, so a constraint carrying both would have
+   been graded one way by the app and swept the other by the gate: at {eq:6, tol:0.05,
+   max:8} and x = 7 the app passed it and the gate failed it. No catalogue constraint
+   carries both today, so nothing published was mis-graded — but the gate whose one job
+   is to say whether a target can be hit was answering about a different rule than the
+   one the learner is scored against, which is the kind of divergence that only ever
+   surfaces as "the exercise is impossible" from someone who has just solved it. */
+function tuneSpan(c) {
+  if (!c) return null;
+  if (c.eq !== undefined) {
+    const tol = c.tol === undefined ? 0.01 : c.tol;
+    return { lo: c.eq - tol, hi: c.eq + tol, eq: c.eq, tol: tol };
+  }
+  if (c.min !== undefined || c.max !== undefined) {
+    return {
+      lo: c.min === undefined ? -Infinity : c.min,
+      hi: c.max === undefined ? Infinity : c.max,
+      eq: undefined, tol: 0,
+    };
+  }
+  return null;                       /* a constraint that states nothing holds nothing */
+}
+/* isFinite is part of the rule, not a guard bolted onto it: a `max`-only constraint is
+   satisfied by -Infinity on a plain comparison, so a model that had overflowed used to
+   report a target met. */
+function tuneHolds(c, x) {
+  const s = tuneSpan(c);
+  return !!s && typeof x === 'number' && isFinite(x) && x >= s.lo && x <= s.hi;
+}
+
 const Tune = (function () {
   const REG = {};
   function define(spec) { REG[spec.id] = spec; return spec; }
   function get(id) { return REG[id] || null; }
   function ids() { return Object.keys(REG); }
-  return { define: define, get: get, ids: ids };
+  return { define: define, get: get, ids: ids, span: tuneSpan, holds: tuneHolds };
 })();
 
 /* Two resistors from a rail. The whole of a divider design is in the tension between
@@ -1009,6 +1060,21 @@ Tune.define({
     { k: 'r2', label: 'R2 (bottom)', min: 100, max: 47000, step: 100, def: 2200, unit: 'Ω' },
   ],
   constants: { vin: 5 },
+  /* Where a constraint on one of this model's readouts belongs on this model's own
+     plot. app.js knows how to draw a line and nothing else: only the model knows which
+     of its readouts the axes carry and in what units, which is the same split the rest
+     of this file uses — content says what must be true, code says what is.
+
+     Before this, app.js guessed: it drew a band wherever a constraint's key matched
+     `plotKey || 'vout'`, and `vout` is a readout of this model alone. So sixteen of the
+     twenty-one tune units in the catalogue drew no target at all, and the one that
+     overrode the key — EE111 M6, asking for a 1 kHz resonance — got a horizontal line
+     at y = 1000 on an axis running 0 to 2.4. */
+  marks: function (c) {
+    if (c.k !== 'vout') return null;
+    const s = tuneSpan(c);
+    return s && { axis: 'y', lo: s.lo, hi: s.hi, eq: s.eq };
+  },
   compute: function (v, k) {
     const vin = (k && k.vin) || 5;
     const vout = vin * v.r2 / (v.r1 + v.r2);
@@ -1044,6 +1110,24 @@ Tune.define({
      reading: one constraint pushes the corner up, the other pushes it down, and the
      answer is the window where they overlap. */
   constants: { fsig: 100, fnoise: 10000 },
+  /* `keep` and `reject` are the same quantity this plot's y-axis draws — |H| — read at
+     one stated frequency each, so they are points ON the curve rather than levels
+     across it. Drawn where they actually are, the exercise's two requirements become
+     two gates the response has to thread between, which is the design tension the unit
+     is about and was the one thing its picture did not show. `reject` is quoted in dB
+     and the axis is linear, so it is converted here, where the model that chose the
+     units is. `tau` is a time and belongs to neither axis. */
+  marks: function (c, v, k) {
+    const s = tuneSpan(c);
+    if (!s) return null;
+    if (c.k === 'fc') return { axis: 'x', lo: s.lo, hi: s.hi, eq: s.eq };
+    const unDb = function (d) { return isFinite(d) ? Math.pow(10, d / 20) : (d < 0 ? 0 : Infinity); };
+    if (c.k === 'keep') return { axis: 'point', x: (k && k.fsig) || 100, lo: s.lo, hi: s.hi };
+    if (c.k === 'reject') {
+      return { axis: 'point', x: (k && k.fnoise) || 10000, lo: unDb(s.lo), hi: unDb(s.hi) };
+    }
+    return null;
+  },
   compute: function (v, k) {
     const c = v.c * 1e-9;
     const fc = 1 / (2 * Math.PI * v.r * c);
@@ -1056,17 +1140,38 @@ Tune.define({
       tau: { label: 'Time constant', value: v.r * c * 1000, unit: 'ms', dp: 3 },
     };
   },
-  plot: function (v) {
+  plot: function (v, k) {
     const c = v.c * 1e-9;
     const fc = 1 / (2 * Math.PI * v.r * c);
     /* The corner runs from 1.59 Hz (100 kΩ, 1 µF) to 1.59 MHz (100 Ω, 1 nF) and the axis
        was pinned at 10 Hz..1 MHz, so at either end of the sliders the marker for the one
        quantity this model is about was drawn outside its own frame. Open both ends far
-       enough to hold whatever the sliders reach. */
-    const lo = Math.min(10, Math.pow(10, Math.floor(Math.log10(fc / 4))));
-    const hi = Math.max(1e6, Math.pow(10, Math.ceil(Math.log10(fc * 4))));
+       enough to hold whatever the sliders reach.
+
+       And far enough to hold the two frequencies the EXERCISE names, which is a
+       separate question and was not being asked: the axis floor never went below 10 Hz
+       however low `fsig` was set, so EE121 M8 — a debounce filter whose whole subject is
+       a 5 Hz button press — stated a requirement at a frequency its own plot did not
+       reach. Found by verify_tune_ui.mjs the first time it checked that a drawn target
+       lands inside the axes it is drawn on. */
+    const fsig = (k && k.fsig) || 100, fnoise = (k && k.fnoise) || 10000;
+    const lo = Math.min(10, Math.pow(10, Math.floor(Math.log10(fc / 4))), fsig / 2);
+    const hi = Math.max(1e6, Math.pow(10, Math.ceil(Math.log10(fc * 4))), fnoise * 2);
+    /* A geometric loop whose start can be zero does not draw a wrong picture, it never
+       returns: `0 * 1.06` is 0, so `f <= hi` stays true and a point is pushed until the
+       heap dies. It is reachable — `2 * Math.PI * v.r * c` overflows to Infinity at a
+       large enough R, which makes fc exactly 0, `log10(0)` -Infinity and `10 ** -Infinity`
+       zero. The value clamp keeps a slider away from it, and this keeps the loop bounded
+       whoever calls it, because "the caller is careful" is not a property of a loop.
+       Found by the mutation run for verify_tune_ui.mjs, which killed Node rather than
+       reporting a failure. */
+    if (!isFinite(lo) || lo <= 0 || !isFinite(hi) || hi <= lo) {
+      throw new Error('the frequency axis is degenerate at these component values');
+    }
     const pts = [];
-    for (let f = lo; f <= hi; f *= 1.06) pts.push([f, 1 / Math.sqrt(1 + Math.pow(f / fc, 2))]);
+    for (let f = lo, n = 0; f <= hi && n < 2000; f *= 1.06, n++) {
+      pts.push([f, 1 / Math.sqrt(1 + Math.pow(f / fc, 2))]);
+    }
     return { x: 'f', y: '|H|', logX: true, yRange: [0, 1.05], xRange: [lo, hi],
              points: pts, at: [fc, 1 / Math.SQRT2],
              caption: '|H| vs frequency · corner at ' + fmtHz(fc) };
@@ -1083,6 +1188,21 @@ Tune.define({
     { k: 'l', label: 'L', min: 1, max: 200, step: 1, def: 100, unit: 'mH' },
     { k: 'c', label: 'C', min: 0.1, max: 20, step: 0.1, def: 2.5, unit: 'µF' },
   ],
+  /* This plot's x-axis is frequency and its y-axis is |H|, so `fn` is a vertical target
+     and `peak` a horizontal one. `zeta` is on neither: it shapes the curve rather than
+     sitting anywhere on it, and a unit constrained only on ζ correctly gets no target
+     line — the picture it should be read from is the height of the resonance, which is
+     what `peak` measures. A boundary outside the axis is simply not drawn, which is
+     right rather than a compromise: EE102 M7's `peak ≤ 30` cannot be violated anywhere
+     on a frame that ends at 2.4, and the line arrives on its own as soon as the learner
+     winds the Q up far enough for the axis to grow to meet it. */
+  marks: function (c) {
+    const s = tuneSpan(c);
+    if (!s) return null;
+    if (c.k === 'fn') return { axis: 'x', lo: s.lo, hi: s.hi, eq: s.eq };
+    if (c.k === 'peak') return { axis: 'y', lo: s.lo, hi: s.hi, eq: s.eq };
+    return null;
+  },
   compute: function (v) {
     const L = v.l * 1e-3, C = v.c * 1e-6;
     const wn = 1 / Math.sqrt(L * C);
@@ -1099,8 +1219,14 @@ Tune.define({
     const L = v.l * 1e-3, C = v.c * 1e-6;
     const wn = 1 / Math.sqrt(L * C);
     const zeta = (v.r / 2) * Math.sqrt(C / L);
+    /* the same bound as rc-lowpass, for the same reason: L*C overflowing to Infinity
+       makes wn exactly 0, and this loop then starts at 0 and never advances */
+    if (!isFinite(wn) || wn <= 0) {
+      throw new Error('the resonance is undefined at these component values');
+    }
     const pts = [];
-    for (let f = wn / (2 * Math.PI) / 60; f <= wn / (2 * Math.PI) * 60; f *= 1.05) {
+    for (let f = wn / (2 * Math.PI) / 60, n = 0; f <= wn / (2 * Math.PI) * 60 && n < 2000;
+         f *= 1.05, n++) {
       const x = 2 * Math.PI * f / wn;
       pts.push([f, 1 / Math.sqrt(Math.pow(1 - x * x, 2) + Math.pow(2 * zeta * x, 2))]);
     }

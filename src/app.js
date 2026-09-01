@@ -2922,81 +2922,224 @@ function renderMatch(main, l) {
 function renderTune(main, l) {
   const spec = Tune.get(l.model);
   const saved = (P.tune && P.tune[l.id]) || {};
+
+  /* Every number this view trusts arrives from somewhere that cannot be trusted: an
+     author's `initial`, a model's `def`, and — the one nothing had ever looked at — the
+     learner's own saved position, which outlives any change to a slider's range and is
+     plain text in localStorage besides. A range input silently clamps its own value and
+     snaps it to its step; `v` did neither, so the thumb, the number printed beside the
+     label, the plot and the grading could all be describing different circuits.
+
+     Measured through this renderer before it was fixed: a saved r1 of -100 printed
+     "-100 Ohm" beside a thumb resting at 100 and put Infinity in all three graded
+     readouts; a saved "2200" — a string, which is what an older save or a hand-edited
+     store yields — concatenated instead of adding and reported 0.000 V for a divider
+     actually sitting at 2.5 V; a saved NaN reported "NaN" in every readout, the exact
+     rot verify_sandbox.mjs rejects in a sandbox and nothing rejected here.
+
+     Cycle 2 closed this in Sandbox.mount for `initial`. This is the same rule plus the
+     step grid, because a tune position persists where a sandbox's does not — so
+     off-grid is the reachable case here rather than the exotic one. The arithmetic is
+     deliberately the same as verify_sandbox.mjs's and verify_tune.mjs's grid, so a
+     value those gates call reachable is one this leaves alone. */
+  function snap(p, x) {
+    const n = typeof x === 'number' ? x : Number(x);
+    if (!isFinite(n)) return p.def;
+    const st = p.step || (p.max - p.min) / 100;
+    const k = Math.round((Math.min(p.max, Math.max(p.min, n)) - p.min) / st);
+    return Math.min(p.max, +(p.min + k * st).toFixed(6));
+  }
+
   const v = {};
   (spec ? spec.params : []).forEach(function (p) {
     const start = (l.initial && l.initial[p.k] !== undefined) ? l.initial[p.k] : p.def;
-    v[p.k] = saved.v && saved.v[p.k] !== undefined ? saved.v[p.k] : start;
+    const want = saved.v && saved.v[p.k] !== undefined ? saved.v[p.k] : start;
+    v[p.k] = snap(p, want);
   });
   const consts = Object.assign({}, spec && spec.constants, l.constants || {});
-  let plotCv = null;
+  let plotCv = null, raf = 0, dead = false, lastGoal = null;
 
-  function readouts() { return spec.compute(v, consts); }
+  /* Tune.holds is the rule the gates sweep with. Reaching for it rather than keeping a
+     private copy is the point of moving it into studio.js: this function and
+     verify_tune.mjs's disagreed on a constraint carrying both an equality and a bound —
+     at {eq:6, tol:0.05, max:8} and x = 7 the app passed it and the gate failed it. */
+  const holdsC = Tune.holds;
 
-  function holdsC(c, x) {
-    if (c.max !== undefined && c.min !== undefined) return x >= c.min && x <= c.max;
-    if (c.max !== undefined) return x <= c.max;
-    if (c.min !== undefined) return x >= c.min;
-    if (c.eq !== undefined) return Math.abs(x - c.eq) <= (c.tol === undefined ? 0.01 : c.tol);
-    return false;
-  }
-
-  function tests() {
-    const out = readouts();
+  function tests(out) {
     return (l.constraints || []).map(function (c) {
       const r = out[c.k];
-      const x = r ? r.value : NaN;
-      return { c: c, ok: r ? holdsC(c, x) : false, got: x, r: r };
+      return { c: c, ok: !!r && holdsC(c, r.value), got: r ? r.value : NaN, r: r };
     });
+  }
+
+  /* What a constraint reads as once you know what the learner actually has. The refusal
+     used to restate the target and stop — "2 constraints still unmet: Vout = 3.30 V
+     ± 0.03; I ≤ 1.00 mA" — which tells someone already staring at the panel nothing the
+     panel was not showing them. */
+  function said(t) {
+    const r = t.r;
+    if (!r) return t.c.label + ' (this model reports no "' + t.c.k + '")';
+    return t.c.label + ' — you have ' + (+r.value).toFixed(r.dp) +
+      (r.unit ? ' ' + r.unit : '');
+  }
+
+  /* ---- the target, drawn where the model says it lives ----
+
+     app.js used to guess: it drew a dashed line wherever a constraint's key matched
+     `plotKey || 'vout'`, and `vout` is a readout of the divider model alone. So sixteen
+     of the twenty-one tune units in the catalogue drew no target whatever, and the one
+     unit that overrode the key — EE111 M6, which asks for a 1 kHz resonance — got a
+     horizontal line at y = 1000 on an axis running 0 to 2.375, drawn off the canvas.
+     Only the model knows which of its readouts its axes carry, so it is asked.
+
+     A boundary outside the axis is not drawn, and neither is a fill that would reach
+     for one. That is the honest answer rather than a compromise: EE102 M7's `peak ≤ 30`
+     cannot be violated anywhere on a frame that ends at 2.4, and the line arrives on
+     its own as soon as the learner winds the Q up far enough for the axis to grow. */
+  function paintMark(ctx, f, m, pl) {
+    const range = m.axis === 'x' ? (pl.xRange || [0, 1]) : (pl.yRange || [0, 1]);
+    const near = Math.min(range[0], range[1]), far = Math.max(range[0], range[1]);
+    const inside = function (x) { return isFinite(x) && x >= near && x <= far; };
+    const edges = [m.lo, m.hi].filter(inside);
+    if (!edges.length) return 0;
+    const lo = Math.max(isFinite(m.lo) ? m.lo : near, near);
+    const hi = Math.min(isFinite(m.hi) ? m.hi : far, far);
+    if (hi > lo) {
+      ctx.save();
+      ctx.fillStyle = f.P.amber;
+      ctx.globalAlpha = 0.12;
+      if (m.axis === 'y') ctx.fillRect(f.x0, f.fy(hi), f.x1 - f.x0, f.fy(lo) - f.fy(hi));
+      else if (m.axis === 'x') ctx.fillRect(f.fx(lo), f.y0, f.fx(hi) - f.fx(lo), f.y1 - f.y0);
+      else ctx.fillRect(f.fx(m.x) - 7, f.fy(hi), 14, f.fy(lo) - f.fy(hi));
+      ctx.restore();
+    }
+    if (m.axis === 'point') {
+      /* a point target is the window the curve has to pass through at one stated
+         frequency, so it gets a hairline at that frequency and a tick at each end */
+      f.vline(m.x, f.P.amber, [2, 4]);
+      ctx.save();
+      ctx.strokeStyle = f.P.amber;
+      ctx.lineWidth = 1.8;
+      edges.forEach(function (e) {
+        ctx.beginPath();
+        ctx.moveTo(f.fx(m.x) - 8, Math.round(f.fy(e)) + 0.5);
+        ctx.lineTo(f.fx(m.x) + 8, Math.round(f.fy(e)) + 0.5);
+        ctx.stroke();
+      });
+      ctx.restore();
+      return edges.length;
+    }
+    edges.forEach(function (e) {
+      if (m.axis === 'y') f.hline(e, f.P.amber, [7, 6]);
+      else f.vline(e, f.P.amber, [7, 6]);
+    });
+    return edges.length;
+  }
+
+  function marksFor() {
+    if (!spec.marks) return [];
+    const got = [];
+    (l.constraints || []).forEach(function (c) {
+      let m = null;
+      try { m = spec.marks(c, v, consts); } catch (e) { m = null; }
+      if (m && (isFinite(m.lo) || isFinite(m.hi))) got.push({ c: c, m: m });
+    });
+    return got;
+  }
+
+  /* The sentence a screen reader is given for the canvas, built out of the same arrays
+     the curve is drawn from rather than out of the authored prose — cycle 8's rule for
+     the schematic plot, which it called the last canvas in the app with no accessible
+     name. This was the one after it. */
+  function describe(pl, drawn) {
+    /* Sandbox.fmt is tuned for a tick label, where space is the constraint and "2e3" is
+       the right answer; read aloud it is not. Four significant figures, plain. */
+    const num = function (x) {
+      if (typeof x !== 'number' || !isFinite(x)) return String(x);
+      const a = Math.abs(x);
+      if (a >= 1e6 || (a > 0 && a < 0.001)) return x.toExponential(2);
+      return String(+x.toPrecision(4));
+    };
+    let s = (spec.title || 'Design plot') + '. ' + (pl.y || 'y') + ' against ' +
+      (pl.x || 'x') + ', ' + (pl.points || []).length + ' points.';
+    if (pl.at) {
+      s += ' The marker sits at ' + (pl.x || 'x') + ' ' + num(pl.at[0]) + ', ' +
+        (pl.y || 'y') + ' ' + num(pl.at[1]) + '.';
+    }
+    s += drawn.length
+      ? ' ' + drawn.length + ' target' + (drawn.length > 1 ? 's are' : ' is') +
+        ' drawn on it: ' + drawn.map(function (d) { return d.c.label; }).join('; ') + '.'
+      : ' No target is drawn on it; the panel beside it carries the numbers.';
+    return s;
   }
 
   function drawPlot() {
     if (!plotCv || !spec.plot) return;
-    const pl = spec.plot(v, consts);
-    const dpr = window.devicePixelRatio || 1;
-    const w = plotCv.clientWidth || 600, h = plotCv.clientHeight || 300;
-    plotCv.width = Math.round(w * dpr); plotCv.height = Math.round(h * dpr);
+    let pl = null;
+    try { pl = spec.plot(v, consts); } catch (e) { pl = null; }
+    /* The backing store was reassigned on every repaint, and assigning to canvas.width
+       reallocates and clears it: at the shipped 900x296 and a dpr of 2 that is 4.3 MB
+       of zeroing per event of a drag, sixty times a second, for a size that has not
+       moved. Only touch it when it actually changes — the guard Sandbox.mount has
+       always had, and the dpr is capped at 2 for the same reason it is capped there. */
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(240, plotCv.clientWidth || 600);
+    const h = Math.max(160, plotCv.clientHeight || 296);
+    if (plotCv.width !== Math.round(w * dpr) || plotCv.height !== Math.round(h * dpr)) {
+      plotCv.width = Math.round(w * dpr);
+      plotCv.height = Math.round(h * dpr);
+    }
     const ctx = plotCv.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!pl) {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = Sandbox.palette().dim;
+      ctx.font = '12px ui-monospace, monospace';
+      ctx.fillText('This plot could not be drawn at these values.', 14, 24);
+      plotCv.setAttribute('aria-label', (spec.title || 'Design plot') +
+        '. This plot could not be drawn at these values.');
+      return;
+    }
     const f = Sandbox.frame(ctx, w, h, {
       xRange: pl.xRange, yRange: pl.yRange, logX: !!pl.logX,
       xTicks: 6, yTicks: 5, margin: { l: 52, r: 16, t: 16, b: 30 },
     });
-    /* the target band, drawn first so the curve sits on top of it */
-    (l.constraints || []).forEach(function (c) {
-      if (c.k !== (l.plotKey || 'vout') || c.eq === undefined) return;
-      ctx.save();
-      ctx.strokeStyle = f.P.amber;
-      ctx.setLineDash([7, 6]);
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(f.x0, f.fy(c.eq)); ctx.lineTo(f.x1, f.fy(c.eq));
-      ctx.stroke();
-      ctx.restore();
-    });
+    /* the targets first, so the curve sits on top of them */
+    const drawn = marksFor().filter(function (d) { return paintMark(ctx, f, d.m, pl) > 0; });
     f.line(pl.points, f.P.accent, 2.2);
     if (pl.at) f.dot(pl.at[0], pl.at[1], f.P.accent, 5);
     const cap = $('#tn-cap', main);
     if (cap) cap.textContent = pl.caption || '';
+    plotCv.setAttribute('aria-label', describe(pl, drawn));
   }
 
   function refresh() {
-    const out = readouts();
-    const ts = tests();
+    if (dead) return;
+    /* Once. refresh() called readouts() and then tests() called it again, so every frame
+       of a drag ran the model twice — 60 slider events produced 120 compute() calls,
+       measured through this renderer. */
+    const out = spec.compute(v, consts);
+    const ts = tests(out);
     const box = $('#tn-read', main);
     if (box) {
       box.innerHTML = Object.keys(out).map(function (k) {
         const r = out[k];
-        const t = ts.find(function (x) { return x.c.k === k; });
+        /* EVERY constraint on this key, not the first one. `ts.find` returned the first
+           match, and two units state two bounds on the same readout — EE121 M5 wants the
+           divider current under 0.50 mA and over 0.25 mA, EE211 M5 under 0.50 and over
+           0.20. A learner satisfying only the first saw the "I total" row drawn green
+           while the constraint chip immediately below it was still unticked: one panel
+           disagreeing with itself about one number. */
+        const on = ts.filter(function (x) { return x.c.k === k; });
+        const ok = on.length ? on.every(function (x) { return x.ok; }) : null;
         /* A readout is graded on its exact value and displayed rounded, so the two
            can disagree: 1.0004 mA shows as 1.000 and fails a 1.00 cap, which reads as
            the app being broken. Add digits only when that actually happens — when the
-           number as displayed would satisfy the constraint the raw value fails. */
+           number as displayed would satisfy a constraint the raw value fails. */
         let dp = r.dp;
-        if (t && !t.ok) {
-          const shown = Number((+r.value).toFixed(r.dp));
-          if (holdsC(t.c, shown)) dp = r.dp + 3;
-        }
-        return '<div class="tn-r' + (t ? (t.ok ? ' ok' : ' no') : '') + '">' +
+        const shown = Number((+r.value).toFixed(r.dp));
+        if (on.some(function (x) { return !x.ok && holdsC(x.c, shown); })) dp = r.dp + 3;
+        return '<div class="tn-r' + (ok === null ? '' : (ok ? ' ok' : ' no')) + '">' +
           '<span>' + esc(r.label) + '</span><b>' + (+r.value).toFixed(dp) +
           (r.unit ? ' ' + r.unit : '') + '</b></div>';
       }).join('');
@@ -3005,18 +3148,42 @@ function renderTune(main, l) {
     if (st) {
       const pass = ts.length && ts.every(function (t) { return t.ok; });
       st.className = 'tn-goal' + (pass ? ' met' : '');
-      st.innerHTML = (l.constraints || []).map(function (c, i) {
+      /* The chip now carries the measured value beside the target. It is the only place
+         on the screen that says both at once, and it is what makes this block worth
+         announcing at all: "one of two met" gives a screen-reader user nothing to act
+         on, and this is the block that says whether the exercise is finished. */
+      const html = (l.constraints || []).map(function (c, i) {
         const t = ts[i];
         return '<span class="tn-c' + (t && t.ok ? ' ok' : '') + '">' +
-          (t && t.ok ? '\u2713 ' : '\u00b7 ') + esc(c.label) + '</span>';
+          (t && t.ok ? '\u2713 ' : '\u00b7 ') + esc(said(t)) + '</span>';
       }).join('');
+      /* Only touch the live region when the sentence changed. A drag fires this on every
+         frame, and rewriting identical HTML gives a screen reader sixty things a second
+         to consider saying \u2014 cycle 2's finding about the sandbox readout, which becomes
+         this block's hazard the moment it is announced at all. */
+      if (html !== lastGoal) { st.innerHTML = html; lastGoal = html; }
     }
     drawPlot();
-    const ck = $('#tn-check', main);
-    if (ck) ck.disabled = false;
   }
 
-  function paint() {
+  /* One repaint per frame however fast the slider is dragged. The model is cheap here \u2014
+     0.13 ms an event, measured \u2014 so this is not about arithmetic: it is the canvas
+     reallocation, the write to saved progress and the live region, none of which should
+     happen more than once between two things a learner can actually see. */
+  function schedule() {
+    if (raf || dead) return;
+    raf = requestAnimationFrame(function () { raf = 0; refresh(); });
+  }
+
+  function paint(focusId) {
+    /* The previous view's observer and its pending frame go before the DOM they watch
+       is thrown away. paint() is re-entrant — Reset and a passing Check both call it —
+       and every call closes over the SAME `dead`, so running the old teardown here also
+       marks this invocation dead; clearing it immediately is what makes the page that
+       is now on the screen the live one. Doing this at the end, as it was, would have
+       left every repaint after the first ignoring its own sliders. */
+    if (teardown) { try { teardown(); } catch (e) {} teardown = null; }
+    dead = false;
     const done = !!P.completed[l.id];
     if (!spec) {
       main.innerHTML = '<div class="page reading">' + lessonHeader(l) +
@@ -3032,18 +3199,28 @@ function renderTune(main, l) {
       '<h3 class="q-prompt">' + mdInline(l.prompt || '') + '</h3>' +
       (l.note ? '<p class="q-note">' + mdInline(l.note) + '</p>' : '') +
       '<div class="tune">' +
-        '<div class="tn-plot"><div class="tn-cap" id="tn-cap"></div><canvas id="tn-cv"></canvas></div>' +
+        '<div class="tn-plot"><div class="tn-cap" id="tn-cap"></div>' +
+          '<canvas id="tn-cv" role="img" aria-label="' + esc(spec.title || 'Design plot') +
+            '"></canvas></div>' +
         '<div class="tn-side">' +
+          /* a <label> around the input, so the slider has an accessible name at all —
+             these were bare range inputs, which a screen reader announces as "slider"
+             and nothing else. The value is aria-hidden for cycle 2's reason: left
+             visible inside the label it lands in the input's NAME, so the name would
+             change on every drag and the aria-valuetext below could never be heard. */
           spec.params.map(function (p) {
-            return '<div class="tn-p">' +
-              '<div class="tn-ph"><span>' + esc(p.label) + '</span><b data-out="' + p.k + '">' +
-                v[p.k] + (p.unit ? ' ' + p.unit : '') + '</b></div>' +
+            return '<label class="tn-p" data-k="' + p.k + '">' +
+              '<span class="tn-ph"><span>' + esc(p.label) + '</span>' +
+              '<b data-out="' + p.k + '" aria-hidden="true">' +
+                v[p.k] + (p.unit ? ' ' + p.unit : '') + '</b></span>' +
               '<input type="range" data-k="' + p.k + '" min="' + p.min + '" max="' + p.max +
-                '" step="' + p.step + '" value="' + v[p.k] + '">' +
-            '</div>';
+                '" step="' + p.step + '" value="' + v[p.k] + '"' +
+                ' aria-valuetext="' + esc(p.label + ' ' + v[p.k] + (p.unit ? ' ' + p.unit : '')) +
+                '">' +
+            '</label>';
           }).join('') +
           '<div class="tn-reads" id="tn-read"></div>' +
-          '<div class="tn-goal" id="tn-state"></div>' +
+          '<div class="tn-goal" id="tn-state" aria-live="polite"></div>' +
         '</div>' +
       '</div>' +
       '<div class="q-acts">' +
@@ -3057,20 +3234,31 @@ function renderTune(main, l) {
     wireFootNav(main, l);
     plotCv = $('#tn-cv', main);
 
+    /* resolved once: these were looked up by selector on every event of a drag */
+    const byKey = {};
+    spec.params.forEach(function (p) { byKey[p.k] = p; });
     $all('input[type=range]', main).forEach(function (sl) {
+      const k = sl.dataset.k, p = byKey[k];
+      const lab = $('[data-out="' + k + '"]', main);
       sl.addEventListener('input', function () {
-        v[sl.dataset.k] = Number(sl.value);
-        const p = spec.params.find(function (x) { return x.k === sl.dataset.k; });
-        const lab = $('[data-out="' + sl.dataset.k + '"]', main);
-        if (lab) lab.textContent = sl.value + (p && p.unit ? ' ' + p.unit : '');
+        /* snap() again rather than trusting the input: the number it reports is the one
+           it holds, and a browser that has clamped or stepped it has already changed it.
+           Taking it back through the same rule is what keeps `v`, the thumb, the printed
+           number and the grade describing one circuit. */
+        v[k] = snap(p, sl.value);
+        const shown = v[k] + (p && p.unit ? ' ' + p.unit : '');
+        if (lab) lab.textContent = shown;
+        /* a range input announces its own raw number, which is not what the page shows
+           the moment a unit is involved: "2200" where the label reads 2200 ohms */
+        sl.setAttribute('aria-valuetext', (p.label || k) + ' ' + shown);
         P.tune = P.tune || {};
         P.tune[l.id] = { v: Object.assign({}, v) };
         saveSoon();
-        refresh();
+        schedule();
       });
     });
     $('#tn-check', main).addEventListener('click', function () {
-      const ts = tests();
+      const ts = tests(spec.compute(v, consts));
       const pass = ts.length && ts.every(function (t) { return t.ok; });
       if (pass) {
         const first = completeLesson(l.id);
@@ -3080,33 +3268,49 @@ function renderTune(main, l) {
            saying the unit is unfinished after it has just been finished. */
         toast(first ? 'All constraints hold \u00b7 +' + XP.tune + ' XP'
                     : 'All constraints hold at once.', true);
-        paint();
+        paint('tn-check');
         return;
       } else {
+        /* the refusal names what the learner has, not only what was asked for — see
+           said(). It used to restate the constraint labels and stop, which is the one
+           thing the panel beside it was already showing. */
         const bad = ts.filter(function (t) { return !t.ok; });
         toast(bad.length + ' constraint' + (bad.length > 1 ? 's' : '') + ' still unmet: ' +
-          bad.map(function (t) { return t.c.label; }).join('; '));
+          bad.map(said).join('; '));
       }
       refresh();
     });
     $('#tn-reset', main).addEventListener('click', function () {
       spec.params.forEach(function (p) {
-        v[p.k] = (l.initial && l.initial[p.k] !== undefined) ? l.initial[p.k] : p.def;
+        const start = (l.initial && l.initial[p.k] !== undefined) ? l.initial[p.k] : p.def;
+        v[p.k] = snap(p, start);
       });
       P.tune = P.tune || {};
       P.tune[l.id] = { v: Object.assign({}, v) };
       saveSoon();
-      paint();
+      paint('tn-reset');
     });
 
     refresh();
-    /* paint() is re-entrant — Reset and Check both call it — so the previous
-       observer has to go before a new one is made, or every press leaves one behind
-       redrawing a canvas that is no longer on the page. */
-    if (teardown) { try { teardown(); } catch (e) {} }
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(drawPlot) : null;
+    /* paint() throws the whole page away and builds it again, so the button that was
+       just pressed no longer exists and the keyboard lands back on the body. Put focus
+       on the button of the same name in the page that replaced it. */
+    if (focusId) {
+      const again = $('#' + focusId, main);
+      if (again && again.focus) again.focus();
+    }
+    /* The observer watches the canvas and drawPlot() writes that canvas's width and
+       height, which cannot loop: #tn-cv is width:100% and height:296px in the
+       stylesheet, so its layout box is settled by CSS and the backing store cannot
+       reach it. Checked in index.head.html rather than assumed, the way cycle 2 checked
+       .sbx-canvas and cycle 8 checked .ckt-canvas. */
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
     if (ro && plotCv) ro.observe(plotCv);
-    teardown = function () { if (ro) ro.disconnect(); };
+    teardown = function () {
+      dead = true;
+      if (raf) cancelAnimationFrame(raf);
+      if (ro) ro.disconnect();
+    };
   }
 
   paint();
