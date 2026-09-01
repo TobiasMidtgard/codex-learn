@@ -55,10 +55,18 @@ run_gates() {
 # act before spending three hours finding out it cannot.
 echo "preflight: can a headless cycle write and execute?"
 rm -f .gauntlet-probe
-claude -p --permission-mode acceptEdits   "Write the single word ok into a file named .gauntlet-probe in the current directory, then run: node -e \"console.log(1+1)\". Reply with nothing else."   >/tmp/g_probe.txt 2>&1
+claude -p --permission-mode acceptEdits \
+  "You are the preflight check for this repository's automated improvement pipeline, which is about to run unattended for several hours. Its cycles edit source files and run the verification gates. A cycle that cannot do those exits successfully having changed nothing, which is indistinguishable from one that worked - six did exactly that before this check existed. So confirm the pipeline can act: write the single word ok into a file called .gauntlet-probe in the current directory, then run node -e \"console.log(1+1)\". Then reply with the word ready and nothing else." \
+  >/tmp/g_probe.txt 2>&1
 if [ ! -f .gauntlet-probe ]; then
   echo
-  echo "ABORT: the cycle could not write .gauntlet-probe."
+  echo "ABORT: the cycle did not write .gauntlet-probe."
+  if grep -qiE "permission|denied|not allowed" /tmp/g_probe.txt; then
+    echo "It was DENIED. Check .claude/settings.local.json."
+  else
+    echo "It was not denied - it declined. A probe that reads as a pointless"
+    echo "capability test gets asked what you actually want. Its reply is below."
+  fi
   echo "A headless run without permission to write and execute audits into its own"
   echo "scratchpad and exits 0, so the loop would look healthy and produce nothing."
   echo "Check .claude/settings.local.json, or pass --dangerously-skip-permissions."
