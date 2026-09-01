@@ -277,7 +277,26 @@ function stubCtx() {
   return ctx;
 }
 
-const DOC = { activeElement: null };
+/* The document, to the extent anything under test asks for one. `body` and
+   `documentElement` are real stub elements so a class toggled on them can be read
+   back; the listeners are counted the way the window's are, because a listener the
+   editor adds at mount and forgets at dispose is exactly the leak these gates exist
+   to catch. `fullscreenElement` stays null and there is no exitFullscreen: a headless
+   host cannot give the screen away, and the editor is written to survive that. */
+let liveDocListeners = 0;
+const DOC_EL = new El('html');
+const DOC_BODY = new El('body');
+const DOC_TARGET = new El('document');
+const DOC = {
+  activeElement: null,
+  documentElement: DOC_EL,
+  body: DOC_BODY,
+  fullscreenElement: null,
+  addEventListener: (t, f) => { liveDocListeners++; DOC_TARGET.addEventListener(t, f); },
+  removeEventListener: (t, f) => { liveDocListeners--; DOC_TARGET.removeEventListener(t, f); },
+  dispatchEvent: (e) => DOC_TARGET.dispatchEvent(e),
+};
+export function documentListenerCount() { return liveDocListeners; }
 const WIN = new El('window');
 const windowShim = {
   devicePixelRatio: 1,

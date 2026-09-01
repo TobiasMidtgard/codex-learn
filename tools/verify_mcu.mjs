@@ -51,7 +51,7 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { El, windowShim, WIN } from './dom_stub.mjs';
+import { El, windowShim, WIN, DOC } from './dom_stub.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -74,10 +74,12 @@ function section(tag, fn) {
 function load(mcuSrc, cktSrc) {
   const mod = { exports: {} };
   new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'devicePixelRatio',
+  /* the editor listens for the browser's own way out of fullscreen */
+  'document',
     (mcuSrc === undefined ? readFileSync(join(ROOT, 'src', 'mcu.js'), 'utf8') : mcuSrc) + '\n' +
     (cktSrc === undefined ? readFileSync(join(ROOT, 'src', 'circuit.js'), 'utf8') : cktSrc) +
     '\nmodule.exports = { MCU, createCircuit, MCU_SKETCH };'
-  )(mod, windowShim, (fn) => fn(), undefined, 1);
+  )(mod, windowShim, (fn) => fn(), undefined, 1, DOC);
   return mod.exports;
 }
 const LIVE = load();

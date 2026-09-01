@@ -30,7 +30,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { El, windowShim } from './dom_stub.mjs';
+import { El, windowShim, DOC } from './dom_stub.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = readFileSync(join(ROOT, 'src', 'circuit.js'), 'utf8');
@@ -65,9 +65,11 @@ const resizeTo = (el, w, h) => {
 
 const mod = { exports: {} };
 new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'devicePixelRatio',
+  /* the editor listens for the browser's own way out of fullscreen */
+  'document',
   SRC + '\nmodule.exports = { createCircuit, Netlist, MNA, sanitiseDrawing, cellOf, ' +
         'CELL_LIMIT, DRAW_DEPTH, PART_KINDS, VALUE_CEIL };'
-)(mod, windowShim, raf, RO, 1);
+)(mod, windowShim, raf, RO, 1, DOC);
 const { createCircuit, Netlist, sanitiseDrawing, cellOf, CELL_LIMIT, DRAW_DEPTH, PART_KINDS } = mod.exports;
 
 const problems = [];
@@ -497,6 +499,9 @@ section('named', () => {
       ' — it should say there is nothing on it, and still offer the key map');
   }
   m.cv.focus();
+  /* The editor opens on select now — opening in a placing mode meant the first click
+     anywhere dropped a part nobody asked for — so the resistor is picked up first. */
+  m.key('r');
   m.key('Enter');                       /* the caret */
   m.key('Enter');                       /* places a resistor */
   m.key('ArrowRight'); m.key('ArrowRight');

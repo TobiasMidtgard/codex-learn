@@ -44,7 +44,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { El, stubCtx, windowShim } from './dom_stub.mjs';
+import { El, stubCtx, windowShim, DOC } from './dom_stub.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -77,6 +77,8 @@ const fireResize = () => observers.slice().forEach((o) => o.fn([]));
 
 const mod = { exports: {} };
 new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'devicePixelRatio',
+  /* the editor listens for the browser's own way out of fullscreen */
+  'document',
   'Sandbox',
   readFileSync(join(ROOT, 'src', 'circuit.js'), 'utf8') +
   /* typeof, so a build with no ceiling at all is a finding this gate REPORTS rather
@@ -84,7 +86,7 @@ new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'dev
   '\nmodule.exports = { createCircuit, Netlist, MNA, PART_KINDS, VALUE_FLOOR,' +
   ' VALUE_CEIL: (typeof VALUE_CEIL === "undefined" ? null : VALUE_CEIL),' +
   ' clampValue, parseEng, fmtEng, ohmsOf, potSplit, Sensors };'
-)(mod, windowShim, raf, RO, 1, Sandbox);
+)(mod, windowShim, raf, RO, 1, DOC, Sandbox);
 const { createCircuit, Netlist, MNA, PART_KINDS, VALUE_FLOOR, VALUE_CEIL, clampValue,
   ohmsOf, potSplit, Sensors } = mod.exports;
 

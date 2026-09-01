@@ -520,7 +520,8 @@
     "aside": "One reference in a thousand faults. That sounds like a rounding error and is not.",
     "hint": "Convert the service time to nanoseconds before you weight anything: $8\\ \\mathrm{ms} = 8 \\times 10^{6}\\ \\mathrm{ns}$. Then 999 references in a thousand cost 100 ns each and one costs $8 \\times 10^{6}$.",
     "wrong": "Two slips account for nearly all of these: leaving the service time in milliseconds, so the second term comes out a million times too small, and dropping the $(1-p)$ weight on the first. Check both terms are in nanoseconds before adding them.",
-    "why": "$0.999 \\times 100 + 0.001 \\times 8000000 = 99.9 + 8000 = 8099.9$ ns. Memory that looks\nlike 100 ns behaves like 8.1 µs — a slowdown of 81 times — and notice how lopsided the\nsum is: the resident term contributes 99.9 ns out of 8099.9, so the answer is almost\nentirely the faults. Turn the arithmetic round and it tells you what fault rate you can\nafford: holding the slowdown under 10% needs $p$ below about $1.25 \\times 10^{-6}$, or\nroughly one fault per million references. That gap, between one in a thousand and one\nin a million, is the whole reason the working-set model exists."
+    "why": "$0.999 \\times 100 + 0.001 \\times 8000000 = 99.9 + 8000 = 8099.9$ ns. Memory that looks\nlike 100 ns behaves like 8.1 µs — a slowdown of 81 times — and notice how lopsided the\nsum is: the resident term contributes 99.9 ns out of 8099.9, so the answer is almost\nentirely the faults. Turn the arithmetic round and it tells you what fault rate you can\nafford: holding the slowdown under 10% needs $p$ below about $1.25 \\times 10^{-6}$, or\nroughly one fault per million references. That gap, between one in a thousand and one\nin a million, is the whole reason the working-set model exists.",
+    "check": ""
    },
    "match": null,
    "tune": null,
@@ -1071,7 +1072,8 @@
     "aside": "Twelve pointers cover the small files; two more cover everything else.",
     "hint": "Pointers per block first: $4096 / 4$. The single indirect then reaches that many data blocks, and the double indirect reaches that many squared.",
     "wrong": "Almost every wrong answer here is one of two things: forgetting to square for the double indirect, or counting the pointer blocks as data. Only the 12 direct, the $k$ under the single indirect and the $k^2$ under the double indirect hold file content.",
-    "why": "$k = 4096/4 = 1024$ pointers per block, so the total is\n$12 + 1024 + 1024^2 = 12 + 1024 + 1048576 = 1049612$ blocks — about 4.0 GiB at 4 KiB\neach. What is worth noticing is how lopsided that is. The double indirect supplies\n99.9% of the reach and costs one pointer in the inode; the twelve direct pointers cover\nonly 48 KiB between them. That asymmetry is deliberate and it is a statement about\nfiles, not about disks: most files are small, and for a small file all twelve pointers\nare in the inode you have already read, so the data is one disk access away with no\npointer block fetched at all. A byte near the end of a large file costs three."
+    "why": "$k = 4096/4 = 1024$ pointers per block, so the total is\n$12 + 1024 + 1024^2 = 12 + 1024 + 1048576 = 1049612$ blocks — about 4.0 GiB at 4 KiB\neach. What is worth noticing is how lopsided that is. The double indirect supplies\n99.9% of the reach and costs one pointer in the inode; the twelve direct pointers cover\nonly 48 KiB between them. That asymmetry is deliberate and it is a statement about\nfiles, not about disks: most files are small, and for a small file all twelve pointers\nare in the inode you have already read, so the data is one disk access away with no\npointer block fetched at all. A byte near the end of a large file costs three.",
+    "check": ""
    },
    "match": null,
    "tune": null,

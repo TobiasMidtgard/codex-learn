@@ -820,6 +820,44 @@ function pointOf(pt) {
   const x = cellOf(pt[0]), y = cellOf(pt[1]);
   return x === null || y === null ? null : [x, y];
 }
+/* R1, R2, C1 — a part's number among its own KIND, on its own CANVAS.
+
+   The label used to be the part's creation index across every kind, so a canvas that
+   already held a ground and a source gave you "R8" for your first resistor, and every
+   schematic in the catalog — all of which predate this — read V0 and R3. The number a
+   learner sees has to be the one they would write on paper.
+
+   The table lives out here rather than inside the editor because the sanitiser needs
+   it: designators are stamped on the way IN, which is the one place that covers the
+   catalog's drawings, a learner's saved circuit and a read-only diagram alike. */
+const REF_PREFIX = { R: 'R', C: 'C', L: 'L', V: 'V', I: 'I', D: 'D', LED: 'LED',
+  SW: 'SW', LDR: 'LDR', NTC: 'NTC', POT: 'POT', LAMP: 'LA', METER: 'ME', BAR: 'BA',
+  NPN: 'Q', PNP: 'Q', NMOS: 'M', PMOS: 'M', OPAMP: 'U', IC: 'U', MCU: 'MCU',
+  GND: 'GND', OUT: 'TP', BB: 'BB' };
+
+function refPrefix(kind) { return REF_PREFIX[kind] || kind; }
+
+/* A part that already carries a number keeps it — that is what stops a canvas somebody
+   is halfway through annotating from renumbering itself when it is reopened — and the
+   gaps are filled in drawing order, skipping numbers already claimed. */
+function stampRefs(parts) {
+  const used = {};
+  parts.forEach(function (p) {
+    if (typeof p.ref !== 'number') return;
+    const pre = refPrefix(p.kind);
+    (used[pre] = used[pre] || {})[p.ref] = 1;
+  });
+  parts.forEach(function (p) {
+    if (typeof p.ref === 'number') return;
+    const pre = refPrefix(p.kind);
+    const seen = used[pre] = used[pre] || {};
+    let n = 1;
+    while (seen[n]) n++;
+    seen[n] = 1;
+    p.ref = n;
+  });
+}
+
 function sanitiseDrawing(m, depth) {
   const out = { parts: [], wires: [] };
   if (!m || typeof m !== 'object' || Array.isArray(m)) return out;
@@ -885,6 +923,9 @@ function sanitiseDrawing(m, depth) {
     if (a === null || b === null) return;
     out.wires.push({ a: a, b: b });
   });
+  /* Each block's insides were stamped by their own recursive call above, because a
+     block is its own schematic and its own namespace. */
+  stampRefs(out.parts);
   return out;
 }
 
@@ -2426,8 +2467,8 @@ function partBtn(t) {
     (t[2] ? ' (' + t[2] + ')' : '') + '" aria-label="' + cktEsc(t[1]) +
     '" aria-pressed="false">' +
     '<canvas class="ckt-ico" data-sym="' + t[0] + '" aria-hidden="true"></canvas>' +
-    '<span class="ckt-pn">' + cktEsc(t[1]) + '</span>' +
-    (t[2] ? '<kbd class="ckt-kb">' + cktEsc(t[2]) + '</kbd>' : '') +
+    '<span class="ckt-pl"><span class="ckt-pn">' + cktEsc(t[1]) + '</span>' +
+    (t[2] ? '<kbd class="ckt-kb">' + cktEsc(t[2]) + '</kbd>' : '') + '</span>' +
     '</button>';
 }
 
@@ -2546,6 +2587,8 @@ function createCircuit(root, opts) {
         '<button class="ckt-t" data-act="rotate" title="Rotate the selection (Shift+R)">Rotate</button>' +
         '<button class="ckt-t" data-act="delete" title="Delete the selection (Del)">Delete</button>' +
         '<button class="ckt-t" data-act="clear">Clear</button>' +
+        '<button class="ckt-t" data-act="full" title="Fill the screen (F)" ' +
+          'aria-keyshortcuts="F" aria-pressed="false">Expand</button>' +
       '</div>' +
       /* Where you are, and the way back. A block that opens onto a canvas identical to
          the one you came from is a place you can get lost in, so the trail is always on
@@ -2916,13 +2959,6 @@ function createCircuit(root, opts) {
 
      Assigned once, when the part is placed, and kept: deleting R1 does not renumber
      R2 to R1 underneath a drawing someone is halfway through annotating. */
-  const REF_PREFIX = { R: 'R', C: 'C', L: 'L', V: 'V', I: 'I', D: 'D', LED: 'LED',
-    SW: 'SW', LDR: 'LDR', NTC: 'NTC', POT: 'POT', LAMP: 'LA', METER: 'ME', BAR: 'BA',
-    NPN: 'Q', PNP: 'Q', NMOS: 'M', PMOS: 'M', OPAMP: 'U', IC: 'U', MCU: 'MCU',
-    GND: 'GND', OUT: 'TP', BB: 'BB' };
-
-  function refPrefix(kind) { return REF_PREFIX[kind] || kind; }
-
   function nextRef(kind, within) {
     const pre = refPrefix(kind);
     const used = {};
@@ -2936,10 +2972,9 @@ function createCircuit(root, opts) {
     return n;
   }
 
+  /* The fallback is for a part that somehow reached the canvas without passing the
+     sanitiser; everything that came in through a model has been stamped already. */
   function refOf(p) {
-    /* Models saved before designators existed have no `ref`; their old id-derived
-       number is kept rather than renumbered, so a stored circuit does not relabel
-       itself the first time it is opened. */
     return refPrefix(p.kind) + (typeof p.ref === 'number' ? p.ref : p.id.replace('p', ''));
   }
 
@@ -3470,8 +3505,13 @@ function createCircuit(root, opts) {
     } else if (wide) {
       if (turnsOf(p) % 2) { ctx.textAlign = 'left'; ctx.fillText(lab, x + wide, y); }
       else ctx.fillText(lab, x, y - 26);
-    } else if (turnsOf(p) % 2) ctx.fillText(lab, x + 34, y);
-    else ctx.fillText(lab, x, y - 17);
+    } else if (turnsOf(p) % 2) {
+      /* Left-aligned, not centred. A centred label grows in BOTH directions, so
+         "V1  12 V" reached back across the source it names while "R1" sat clear —
+         the longer the value, the worse the overlap, which is the wrong way round. */
+      ctx.textAlign = 'left';
+      ctx.fillText(lab, x + 17, y);
+    } else ctx.fillText(lab, x, y - 17);
   }
 
   function paint() {
@@ -5766,6 +5806,7 @@ function createCircuit(root, opts) {
     /* Shift for the three verbs, plain letters for the parts. A resistor is placed a
        hundred times in a session and a block is grouped twice, so the commoner action
        gets the cheaper key. It could not go the other way: Ctrl+R reloads the page. */
+    else if (e.key === 'f' || e.key === 'F') { announce(toggleFull()); e.preventDefault(); }
     else if (e.shiftKey && e.key === 'R') { doRotate(); announce(rotationSaid()); }
     else if (e.shiftKey && e.key === 'G') { doGroup(); announce(blockSaid('Grouped')); }
     else if (e.shiftKey && e.key === 'U') { doUngroup(); announce(blockSaid('Ungrouped')); }
@@ -5789,6 +5830,10 @@ function createCircuit(root, opts) {
         paintPart(); paint();
         announce('Let go.');
       } else if (path.length) { closeTo(path.length - 1); announce('Closed the block.'); }
+      /* Last in the chain on purpose: Escape drops what is in hand, then backs out of
+         a block, and only when there is neither does it give the screen back. Leaving
+         a canvas you are lost on should not also close the block you were lost in. */
+      else if (isFull()) { setFull(false); announce('Back in the page.'); }
     }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
       selIds.clear(); selWires.clear();
@@ -5928,9 +5973,11 @@ function createCircuit(root, opts) {
      resistor on the button that places an IEC one would be worse than no picture. */
   const icons = Array.prototype.slice.call(root.querySelectorAll('.ckt-ico'));
   function paintIcons() {
-    const ink = getComputedStyle(document.documentElement)
-      .getPropertyValue('--ink').trim() || '#EDEFF3';
-    icons.forEach(function (c) { Symbols.paint(c, c.dataset.sym, ink); });
+    /* P() rather than a second read of the document: it is the palette every other
+       drawing on this canvas is already made from, it carries its own fallback for a
+       build with no Sandbox, and it is what keeps a palette icon the same colour as
+       the part it places. */
+    icons.forEach(function (c) { Symbols.paint(c, c.dataset.sym, P().ink); });
   }
   paintIcons();
   requestAnimationFrame(paintIcons);
@@ -5975,6 +6022,58 @@ function createCircuit(root, opts) {
       announce(toolSaid(b.dataset.tool));
     });
   });
+  /* ---- filling the screen ----
+   *
+   * Two mechanisms for one gesture. The class is what actually lays the editor out
+   * over the page, and it works everywhere — inside an iframe, on a browser that
+   * refuses the request, on a phone. The native request is asked for on top of it so
+   * the browser's own chrome goes too, and if it is refused the class alone still does
+   * the job. Which is why the class is applied FIRST and never waits on the promise.
+   *
+   * The canvas is sized by a ResizeObserver already, so nothing here has to repaint:
+   * changing the box is the whole of it.
+   */
+  const shell = root.querySelector('.ckt');
+  const fullBtn = root.querySelector('[data-act="full"]');
+  function isFull() { return shell.classList.contains('full'); }
+  function setFull(on) {
+    shell.classList.toggle('full', !!on);
+    /* .page carries an entry animation, and an element with an animation that can
+       touch transform is a containing block for position:fixed — so `inset:0` was
+       measured against the article rather than the window, and the editor came out
+       887px tall inside a 1320px window. The class below turns that animation off
+       while the editor is expanded, and stops the page behind from scrolling. */
+    document.body.classList.toggle('ckt-expanded', !!on);
+    fullBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    fullBtn.textContent = on ? 'Shrink' : 'Expand';
+    fullBtn.title = on ? 'Back into the page (F, or Escape)' : 'Fill the screen (F)';
+    if (on && shell.requestFullscreen) {
+      /* A rejected request is the ordinary case on a page that has not been clicked
+         yet, and the class has already done the useful half. */
+      shell.requestFullscreen().catch(function () {});
+    } else if (!on && document.fullscreenElement === shell && document.exitFullscreen) {
+      document.exitFullscreen().catch(function () {});
+    }
+    /* Expanding is asking for room, so the drawing is refitted into the room it just
+       got. Without this the circuit stays the size it was in a 340px box, marooned in
+       the top-left corner of a screen-sized canvas, and the first thing anyone does is
+       press Fit. Only on the way out, and only when there is something to fit. */
+    if (on && (cur.parts.length || cur.wires.length)) zoomFit();
+    paintSoon();
+  }
+  function toggleFull() {
+    setFull(!isFull());
+    return isFull() ? 'Filling the screen. F or Escape puts it back.'
+      : 'Back in the page.';
+  }
+  fullBtn.addEventListener('click', function () { announce(toggleFull()); });
+  /* Leaving fullscreen by the browser's own route — Escape, or F11 — has to take the
+     class with it, or the editor stays pinned over the page with nothing to say so. */
+  function onFsChange() {
+    if (document.fullscreenElement !== shell && isFull()) setFull(false);
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+
   root.querySelector('[data-act="zoomin"]').addEventListener('click', function () { zoomTo(view.s * 1.2); });
   root.querySelector('[data-act="zoomout"]').addEventListener('click', function () { zoomTo(view.s / 1.2); });
   root.querySelector('[data-act="fit"]').addEventListener('click', function () {
@@ -6041,6 +6140,14 @@ function createCircuit(root, opts) {
          keeps two for the rest of the session. */
       window.removeEventListener('blur', onWinBlur);
       window.removeEventListener('pagehide', flushEdit);
+      /* Same reasoning for the document listener the expand button needs, and one step
+         further: a lesson navigated away from while the editor filled the screen would
+         otherwise leave the browser in fullscreen with nothing in it. */
+      document.removeEventListener('fullscreenchange', onFsChange);
+      if (isFull()) document.body.classList.remove('ckt-expanded');
+      if (document.fullscreenElement === shell && document.exitFullscreen) {
+        document.exitFullscreen().catch(function () {});
+      }
       if (ro) ro.disconnect();
       root.innerHTML = '';
     },

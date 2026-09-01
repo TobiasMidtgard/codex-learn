@@ -43,9 +43,11 @@ import { El, stubCtx, DOC, WIN, windowShim, windowListenerCount } from './dom_st
 /* ================================================================== the editor */
 const mod = { exports: {} };
 new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'devicePixelRatio',
+  /* the editor listens for the browser's own way out of fullscreen */
+  'document',
   readFileSync(join(ROOT, 'src', 'circuit.js'), 'utf8') +
   '\nmodule.exports = { createCircuit, Netlist, MNA, PART_KINDS, VALUE_FLOOR, clampValue, parseEng };'
-)(mod, windowShim, (fn) => fn(), undefined, 1);
+)(mod, windowShim, (fn) => fn(), undefined, 1, DOC);
 const { createCircuit, Netlist, MNA, PART_KINDS, VALUE_FLOOR, clampValue } = mod.exports;
 
 const problems = [];
@@ -164,10 +166,20 @@ section('keyboard', () => {
   h.key(h.cv, 'Enter'); drives++;
   if (h.model().parts.length !== 1) note('keyboard', 'Enter twice on one cell stacked two parts');
 
-  /* rotate, and see the model move */
+  /* rotate, and see the model move. Shift+R, because the bare letters place parts —
+     and the bare R is checked below to be sure it does NOT rotate, since a key that
+     does two things depending on what is selected is the failure mode this split was
+     meant to avoid. */
   const rot0 = h.model().parts[0].rot || 0;
+  collect(h, () => h.key(h.cv, 'R', { shiftKey: true }));
+  if (((h.model().parts[0].rot || 0) - rot0 + 4) % 4 !== 1) {
+    note('keyboard', 'Shift+R did not turn the part a quarter');
+  }
+  const rot1 = h.model().parts[0].rot || 0;
   collect(h, () => h.key(h.cv, 'r'));
-  if (((h.model().parts[0].rot || 0) - rot0 + 4) % 4 !== 1) note('keyboard', 'R did not turn the part a quarter');
+  if ((h.model().parts[0].rot || 0) !== rot1) {
+    note('keyboard', 'a bare R turned the part as well as picking the resistor up');
+  }
 
   /* a wire, drawn between two presses */
   h.tool('wire');
@@ -353,7 +365,7 @@ section('dispose', () => {
   }
   /* the abandoned editor must not be able to write the learner's circuit */
   cv.dispatchEvent({ type: 'keydown', key: 'Delete', code: 'Delete', target: cv });
-  cv.dispatchEvent({ type: 'keydown', key: 'r', code: 'r', target: cv });
+  cv.dispatchEvent({ type: 'keydown', key: 'R', code: 'R', shiftKey: true, target: cv });
   if (h.saveCount() !== saved) note('dispose', 'a disposed editor still called onChange');
   h.handle.dispose();          /* idempotent */
   if (windowListenerCount() !== before) note('dispose', 'a second dispose() unbalanced the window listeners');

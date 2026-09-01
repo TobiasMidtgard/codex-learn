@@ -248,7 +248,8 @@
     "aside": "The set never looks at your attributes. It calls `__hash__` to choose a bucket and `__eq__` to settle what shares one.",
     "hint": "Sort the six cards into piles that `__eq__` cannot tell apart, then count the piles.",
     "wrong": "Count the piles `__eq__` makes — not the cards, and not the suits. `Card` was written to compare ranks alone, and the set has no other opinion available to it.",
-    "why": "Three: one ace, one king, one queen. The set asks `__hash__` for a bucket and `__eq__` to\nsettle ties, and this `__eq__` looks at `rank` alone — so the three aces collapse into one\nmember, the two kings into another, and the queen makes the third. The suit is real data,\nsitting on every one of the six objects, and completely invisible to the container,\nbecause nothing the container calls ever mentions it. That is the lesson worth carrying\nout of this module: a set, a dict key, `list.remove`, `in` — every one of them is only as\ngood as the two methods you wrote. Compare rank *and* suit and the same six cards give\nsix members."
+    "why": "Three: one ace, one king, one queen. The set asks `__hash__` for a bucket and `__eq__` to\nsettle ties, and this `__eq__` looks at `rank` alone — so the three aces collapse into one\nmember, the two kings into another, and the queen makes the third. The suit is real data,\nsitting on every one of the six objects, and completely invisible to the container,\nbecause nothing the container calls ever mentions it. That is the lesson worth carrying\nout of this module: a set, a dict key, `list.remove`, `in` — every one of them is only as\ngood as the two methods you wrote. Compare rank *and* suit and the same six cards give\nsix members.",
+    "check": ""
    },
    "match": null,
    "tune": null,
@@ -532,7 +533,8 @@
     "aside": "`super()` is not a synonym for *my parent*. It means *whatever follows me in this object's MRO*.",
     "hint": "Write out `Both.__mro__` first. Every `super().__init__()` hands over to the next name on that one list, not to a parent on the diagram.",
     "wrong": "Five is the answer the diagram suggests, because `Base` sits at the end of two arrows. Follow the MRO instead: it is a single ordered list, and every class appears on it once.",
-    "why": "Four — `Both`, `Left`, `Right`, `Base`. The MRO of `Both` is `Both, Left, Right, Base,\nobject`, and each `super().__init__()` hands over to the next name on that list rather\nthan to a parent in the picture. So `Left`'s `super()` goes sideways to `Right`, not up to\n`Base`, and `Base` runs once however many arrows point at it.\n\nCooperative `super()` is what makes that work, and it only works if everyone plays.\nChange `Left` to call `Base.__init__(self)` directly and the trace comes out at three\nentries with `Right` missing entirely, because `Left` has jumped over its sibling. That\nis the bug the MRO exists to prevent, and it stays invisible until the day somebody\ninherits from two classes at once."
+    "why": "Four — `Both`, `Left`, `Right`, `Base`. The MRO of `Both` is `Both, Left, Right, Base,\nobject`, and each `super().__init__()` hands over to the next name on that list rather\nthan to a parent in the picture. So `Left`'s `super()` goes sideways to `Right`, not up to\n`Base`, and `Base` runs once however many arrows point at it.\n\nCooperative `super()` is what makes that work, and it only works if everyone plays.\nChange `Left` to call `Base.__init__(self)` directly and the trace comes out at three\nentries with `Right` missing entirely, because `Left` has jumped over its sibling. That\nis the bug the MRO exists to prevent, and it stays invisible until the day somebody\ninherits from two classes at once.",
+    "check": ""
    },
    "match": null,
    "tune": null,
@@ -796,7 +798,8 @@
     "aside": "`award_bonus` reads `self.bonus_rate`, and that lookup starts at the instance every single time.",
     "hint": "Take the two accounts separately. For each one, ask where the lookup of `self.bonus_rate` stops.",
     "wrong": "The order of the two writes is a red herring. `Loyalty.bonus_rate = 0.10` never reaches into `ada`'s own dictionary, and it would not have mattered if it had come first.",
-    "why": "430.0. `ada.bonus_rate = 0.05` created an attribute on `ada` herself, and `self.bonus_rate`\nfinds it before ever consulting the class, so she earns 10 and finishes on 210. `bo` has\nnothing of his own, so his lookup falls through to the class, finds the 0.10 written there,\nand he earns 20 to finish on 220.\n\nThe instance attribute is not a stale copy of the class one. It is a different attribute\nin a different dictionary, and while it exists the class value is invisible to that\nobject: `del ada.bonus_rate` removes the shadow and 0.10 becomes visible again, which is\nthe proof that nothing was ever overwritten. Had `award_bonus` read `Loyalty.bonus_rate`\ninstead of `self.bonus_rate`, both accounts would have earned 20 and the per-instance\noverride would be dead code."
+    "why": "430.0. `ada.bonus_rate = 0.05` created an attribute on `ada` herself, and `self.bonus_rate`\nfinds it before ever consulting the class, so she earns 10 and finishes on 210. `bo` has\nnothing of his own, so his lookup falls through to the class, finds the 0.10 written there,\nand he earns 20 to finish on 220.\n\nThe instance attribute is not a stale copy of the class one. It is a different attribute\nin a different dictionary, and while it exists the class value is invisible to that\nobject: `del ada.bonus_rate` removes the shadow and 0.10 becomes visible again, which is\nthe proof that nothing was ever overwritten. Had `award_bonus` read `Loyalty.bonus_rate`\ninstead of `self.bonus_rate`, both accounts would have earned 20 and the per-instance\noverride would be dead code.",
+    "check": ""
    },
    "match": null,
    "tune": null,
@@ -1080,7 +1083,8 @@
     "aside": "Neither the slice nor the concatenation copies a single `Track`. All three playlists point at the same three objects.",
     "hint": "Total `jazz`, total the slice, then add the two. Nothing is de-duplicated along the way.",
     "wrong": "Two things to check: `0:2` takes indices 0 and 1 and stops before 2, and concatenation keeps duplicates — a track appearing in both operands is counted twice.",
-    "why": "2648. `jazz` runs 617 + 545 + 324 = 1486. The slice `jazz[0:2]` is a *new* `Playlist`\nholding the first two tracks, 617 + 545 = 1162 — stopping before index 2 is what leaves\nTake Five out of it. Concatenation then builds a third playlist out of both, so `both`\nholds five entries and totals 1486 + 1162 = 2648, with Blue Train and So What counted\ntwice because the same objects appear twice in the list.\n\nNote what was *not* copied. `half` and `both` hold references to the very same three\n`Track` objects, so three tracks exist in memory throughout, and `jazz` still runs 1486 —\nneither operation touched it. Returning new containers is what makes that safe to say."
+    "why": "2648. `jazz` runs 617 + 545 + 324 = 1486. The slice `jazz[0:2]` is a *new* `Playlist`\nholding the first two tracks, 617 + 545 = 1162 — stopping before index 2 is what leaves\nTake Five out of it. Concatenation then builds a third playlist out of both, so `both`\nholds five entries and totals 1486 + 1162 = 2648, with Blue Train and So What counted\ntwice because the same objects appear twice in the list.\n\nNote what was *not* copied. `half` and `both` hold references to the very same three\n`Track` objects, so three tracks exist in memory throughout, and `jazz` still runs 1486 —\nneither operation touched it. Returning new containers is what makes that safe to say.",
+    "check": ""
    },
    "match": null,
    "tune": null,

@@ -261,7 +261,7 @@
   {"tier":"dim","kind":"text","sites":24,"why":"the working ink of every canvas: plot axes, legends, the truth trace, MCU pin names, the H/L pin tags, the bar-graph range, junction dots, and the stroke of every wire the learner draws"},
   {"tier":"faint","kind":"text","sites":32,"why":"tick labels and axis captions on 13 visualisers and both analysis plots, at 10px — WCAG 1.4.3 small text, whatever the tier is called"},
   {"tier":"rule","kind":"graphic","sites":6,"why":"a reference mark found by position rather than by reading it: 0 dB, -90 degrees, the thermal floor, the settling band, the breadboard channel edge"},
-  {"tier":"accent","kind":"graphic","sites":33,"why":"the selected part, a driving pin, the focus ring"},
+  {"tier":"accent","kind":"graphic","sites":37,"why":"the selected part, a driving pin, the focus ring, the selected wire, and the ring that says a wire can start here"},
   {"tier":"amber","kind":"graphic","sites":24,"why":"a value outside its own range"},
   {"tier":"blue","kind":"graphic","sites":10,"why":"a second trace"},
   {"tier":"purple","kind":"graphic","sites":9,"why":"the Nyquist line, the 1/f corner, the constant-VSWR circle, the sliding surface"},

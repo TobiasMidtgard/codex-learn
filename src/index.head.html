@@ -1324,6 +1324,25 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .ckt{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);
   overflow:hidden;display:flex;flex-direction:column;min-height:0}
 #ckt-mount>.ckt{flex:1;min-height:0;border-radius:0;border-left:0;border-right:0}
+/* Filling the screen. `fixed` rather than the Fullscreen API alone, because the API
+   can be refused and this cannot; the two are applied together and the class is the
+   one that does the layout. A backdrop of --bg, since the editor is now over a page
+   that would otherwise show round its edges. */
+.ckt.full{position:fixed;inset:0;z-index:70;border:0;border-radius:0;background:var(--ground)}
+/* An animation that can touch transform makes its element a containing block for
+   position:fixed, so .page's own entry animation was quietly scoping the overlay to
+   the article it sits in. Off while an editor is expanded — and the page behind it
+   does not scroll, since nothing on it is reachable. */
+body.ckt-expanded{overflow:hidden}
+body.ckt-expanded .page{animation:none;transform:none}
+/* The side panel widens by its GRID TRACK, not by its own width: .ckt-main lays the
+   two out with template columns, so a width on the child would simply overflow the
+   250px track it was placed in. */
+.ckt.full .ckt-main{min-height:0;flex:1;grid-template-columns:minmax(0,1fr) 300px}
+.ckt.full .ckt-canvas{min-height:0}
+/* The element the browser hands the screen to is the same one, so it needs no second
+   layout — only the reminder that its own background is not the page's. */
+.ckt:fullscreen{background:var(--ground)}
 .ckt-bar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);
   background:var(--sunk);flex-wrap:wrap}
 .ckt-bar .spacer{flex:1}
@@ -1346,33 +1365,36 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .ckt-cat{position:relative}
 .ckt-cat>summary{display:flex;align-items:center;gap:5px;list-style:none;user-select:none}
 .ckt-cat>summary::-webkit-details-marker{display:none}
-.ckt-caret{font-size:9px;opacity:.7;transition:transform .14s}
-.ckt-cat[open]>summary{color:var(--ink);border-color:var(--line-3);background:var(--card)}
+.ckt-caret{font-size:var(--t-label);line-height:1;opacity:.7;transition:transform .14s}
+.ckt-cat[open]>summary{color:var(--ink);border-color:var(--line-3);background:var(--sunk)}
 .ckt-cat[open] .ckt-caret{transform:rotate(180deg)}
 /* the category that holds the part in hand says so while it is shut */
 .ckt-cat.holds>summary{border-color:var(--lime);color:var(--lime)}
 .ckt-cat[open].holds>summary{color:var(--lime)}
 .ckt-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:12;
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px;
-  width:max(300px,100%);padding:6px;border-radius:var(--r);
-  border:1px solid var(--line-2);background:var(--card);
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:4px;
+  width:max(392px,100%);padding:6px;border-radius:var(--r);
+  border:1px solid var(--line-2);background:var(--surface-solid);
   box-shadow:0 14px 34px rgba(0,0,0,.34)}
-.ckt-p{position:relative;display:grid;grid-template-rows:auto auto;justify-items:center;
-  gap:2px;padding:7px 6px 6px;border-radius:var(--r);border:1px solid transparent;
+/* A shadow tuned for a dark ground reads as a smudge on a light one — the account
+   menu two hundred lines down carries the same pair for the same reason. */
+[data-theme=light] .ckt-menu{box-shadow:0 14px 34px rgba(15,25,5,.14)}
+.ckt-p{display:grid;grid-template-rows:auto auto;justify-items:center;
+  gap:3px;padding:7px 6px 6px;border-radius:var(--r);border:1px solid transparent;
   background:transparent;color:var(--ink-3);cursor:pointer;
   transition:background .14s,color .14s,border-color .14s}
 .ckt-p:hover{background:var(--sunk);border-color:var(--line-2);color:var(--ink)}
 .ckt-p.on{border-color:var(--lime);color:var(--lime);background:var(--lime-08)}
 .ckt-ico{width:100%;height:34px;display:block}
-.ckt-pn{font:600 10px var(--mono);text-align:center;line-height:1.25}
-/* The shortcut rides in the corner rather than on its own line: it is a reminder for
-   the second visit, not something to read on the first. */
-.ckt-kb{position:absolute;top:3px;right:4px;font:600 8.5px var(--mono);
-  color:var(--ink-4);letter-spacing:.02em}
-.ckt-p:hover .ckt-kb,.ckt-p.on .ckt-kb{color:inherit;opacity:.8}
-@media (prefers-reduced-motion:reduce){
-  .ckt-caret,.ckt-p,.ckt-cat>summary{transition:none}
-}
+/* Name and shortcut on one line, wrapping together. The cap sat in the tile corner
+   until the ramp's 11px floor made it collide with the icon — and beside the name it
+   reads as what it is, the same part reached a second way. */
+.ckt-pl{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:5px}
+.ckt-pn{font-family:var(--mono);font-weight:600;font-size:var(--t-label);
+  text-align:center;line-height:1.3}
+.ckt-kb{font-family:var(--mono);font-weight:600;font-size:var(--t-label);
+  color:var(--ink-4);letter-spacing:var(--tr-mono)}
+.ckt-p:hover .ckt-kb,.ckt-p.on .ckt-kb{color:inherit;opacity:.75}
 .ckt-main{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:340px;
   flex:1;min-width:0}
 #ckt-mount .ckt-main{min-height:0}

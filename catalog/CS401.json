@@ -225,7 +225,8 @@
     "aside": "Dynamo caps the clock at ten entries and drops the oldest, accepting that two versions may then be reported as conflicting when one really did precede the other. Bounded bytes, occasional false conflicts.",
     "hint": "One entry per process, and each entry is a node id next to a counter. Nothing depends on how busy the processes have been.",
     "wrong": "The usual slip is to count only the processes that have a non-zero counter. The vector is dense — a process that has never been heard from still occupies an entry, because that is what distinguishes 'nothing yet' from 'not in the system'.",
-    "why": "$200 \\times (16 + 8) = 4800$ bytes, against a 120-byte payload: the bookkeeping is forty times the message. This is the cost that makes vector clocks unusable at fleet scale and perfectly reasonable at the scale of one key's replica set, which is why Dynamo keeps a clock per *object* — three or five entries — rather than per cluster. Halving the node id to 8 bytes only takes it to 3200; the term that hurts is the process count, and it is linear."
+    "why": "$200 \\times (16 + 8) = 4800$ bytes, against a 120-byte payload: the bookkeeping is forty times the message. This is the cost that makes vector clocks unusable at fleet scale and perfectly reasonable at the scale of one key's replica set, which is why Dynamo keeps a clock per *object* — three or five entries — rather than per cluster. Halving the node id to 8 bytes only takes it to 3200; the term that hurts is the process count, and it is linear.",
+    "check": ""
    },
    "match": null,
    "tune": null,
@@ -503,7 +504,8 @@
     "aside": "The same cluster with n4 and n5 removed commits faster, not slower: a majority of three is two, the leader is one of them, so n2's reply at 16 ms is on its own enough. What the smaller cluster gives up is margin. Lose n2 and every commit falls onto n3 at 22 ms, and the tail latency of the cluster becomes the tail latency of that one machine.",
     "hint": "A majority of five is three, and the leader is one of them at zero cost. Which follower's reply is the one that tips the count over?",
     "wrong": "Two traps sit here. Forgetting that the leader counts itself pushes you to the third-fastest follower, and quoting a one-way delay forgets that the leader learns nothing until the acknowledgement comes back.",
-    "why": "A majority of five is three. The leader has the entry at $t = 0$, so two follower acknowledgements are enough. `AppendEntries` reaches n2 at 8 ms and n3 at 11 ms; their replies land at 16 ms and 22 ms. At 22 ms the leader counts itself, n2 and n3 — a majority — and `advance_commit` moves. n4 and n5 contribute nothing to the answer, and would not even if they were down. The client's own latency is this plus the leader's reply to it; the *follower's* view of the commit arrives a further round later, on the next `AppendEntries`."
+    "why": "A majority of five is three. The leader has the entry at $t = 0$, so two follower acknowledgements are enough. `AppendEntries` reaches n2 at 8 ms and n3 at 11 ms; their replies land at 16 ms and 22 ms. At 22 ms the leader counts itself, n2 and n3 — a majority — and `advance_commit` moves. n4 and n5 contribute nothing to the answer, and would not even if they were down. The client's own latency is this plus the leader's reply to it; the *follower's* view of the commit arrives a further round later, on the next `AppendEntries`.",
+    "check": ""
    },
    "match": null,
    "tune": null,

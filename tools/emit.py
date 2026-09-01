@@ -156,7 +156,7 @@ def norm_numeric(q, ctx):
         "brief": clean_md(q.get("brief", "")),
         "prompt": clean_md(q["prompt"]),
         "note": clean_md(q.get("note", "")),
-        "diagram": dia,
+        "diagram": stamp_refs(dia) if dia else dia,
         "figure": clean_md(q.get("figure", "")),
         "given": [{"label": clean_md(g["label"]), "value": clean_md(str(g["value"]))} for g in given],
         "answer": float(q["answer"]),
@@ -355,6 +355,49 @@ def norm_blanks(b, ctx):
     }
 
 
+# Which letter a kind is numbered under, matching REF_PREFIX in src/circuit.js. Two
+# copies of a table is a thing that can drift, so build.mjs checks them against each
+# other the way it already checks the symbol lists.
+REF_PREFIX = {
+    "R": "R", "C": "C", "L": "L", "V": "V", "I": "I", "D": "D", "LED": "LED",
+    "SW": "SW", "LDR": "LDR", "NTC": "NTC", "POT": "POT", "LAMP": "LA",
+    "METER": "ME", "BAR": "BA", "NPN": "Q", "PNP": "Q", "NMOS": "M", "PMOS": "M",
+    "OPAMP": "U", "IC": "U", "MCU": "MCU", "GND": "GND", "OUT": "TP", "BB": "BB",
+}
+
+
+def stamp_refs(model):
+    """R1, R2, C1 — a part's number among its own kind, on its own canvas.
+
+    Written into the published drawing so that what the learner reads is fixed at
+    authoring time and visible in review, rather than depending on the order a
+    runtime happened to walk the parts. A part that already carries a `ref` keeps it,
+    which is what lets an author pin a number a question refers to by name."""
+    if not isinstance(model, dict):
+        return model
+    parts = model.get("parts")
+    if not isinstance(parts, list):
+        return model
+    used = {}
+    for p in parts:
+        if isinstance(p, dict) and isinstance(p.get("ref"), int):
+            used.setdefault(REF_PREFIX.get(p.get("kind"), p.get("kind")), set()).add(p["ref"])
+    for p in parts:
+        if not isinstance(p, dict) or isinstance(p.get("ref"), int):
+            continue
+        pre = REF_PREFIX.get(p.get("kind"), p.get("kind"))
+        seen = used.setdefault(pre, set())
+        n = 1
+        while n in seen:
+            n += 1
+        seen.add(n)
+        p["ref"] = n
+        # a block is its own schematic, so its insides are their own namespace
+        if isinstance(p.get("inner"), dict):
+            stamp_refs(p["inner"])
+    return model
+
+
 def norm_build(b, ctx):
     """A circuit the learner draws, graded by measuring it.
 
@@ -384,8 +427,8 @@ def norm_build(b, ctx):
         "title": b["title"],
         "minutes": int(b.get("minutes", 20)),
         "brief": clean_md(b["brief"]),
-        "start": b.get("start") or {"parts": [], "wires": []},
-        "solution": sol,
+        "start": stamp_refs(b.get("start") or {"parts": [], "wires": []}),
+        "solution": stamp_refs(sol),
         "checks": out,
         "hints": [clean_md(h) for h in b.get("hints", [])],
     }

@@ -1324,6 +1324,25 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .ckt{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);
   overflow:hidden;display:flex;flex-direction:column;min-height:0}
 #ckt-mount>.ckt{flex:1;min-height:0;border-radius:0;border-left:0;border-right:0}
+/* Filling the screen. `fixed` rather than the Fullscreen API alone, because the API
+   can be refused and this cannot; the two are applied together and the class is the
+   one that does the layout. A backdrop of --bg, since the editor is now over a page
+   that would otherwise show round its edges. */
+.ckt.full{position:fixed;inset:0;z-index:70;border:0;border-radius:0;background:var(--ground)}
+/* An animation that can touch transform makes its element a containing block for
+   position:fixed, so .page's own entry animation was quietly scoping the overlay to
+   the article it sits in. Off while an editor is expanded — and the page behind it
+   does not scroll, since nothing on it is reachable. */
+body.ckt-expanded{overflow:hidden}
+body.ckt-expanded .page{animation:none;transform:none}
+/* The side panel widens by its GRID TRACK, not by its own width: .ckt-main lays the
+   two out with template columns, so a width on the child would simply overflow the
+   250px track it was placed in. */
+.ckt.full .ckt-main{min-height:0;flex:1;grid-template-columns:minmax(0,1fr) 300px}
+.ckt.full .ckt-canvas{min-height:0}
+/* The element the browser hands the screen to is the same one, so it needs no second
+   layout — only the reminder that its own background is not the page's. */
+.ckt:fullscreen{background:var(--ground)}
 .ckt-bar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);
   background:var(--sunk);flex-wrap:wrap}
 .ckt-bar .spacer{flex:1}
@@ -1346,33 +1365,36 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .ckt-cat{position:relative}
 .ckt-cat>summary{display:flex;align-items:center;gap:5px;list-style:none;user-select:none}
 .ckt-cat>summary::-webkit-details-marker{display:none}
-.ckt-caret{font-size:9px;opacity:.7;transition:transform .14s}
-.ckt-cat[open]>summary{color:var(--ink);border-color:var(--line-3);background:var(--card)}
+.ckt-caret{font-size:var(--t-label);line-height:1;opacity:.7;transition:transform .14s}
+.ckt-cat[open]>summary{color:var(--ink);border-color:var(--line-3);background:var(--sunk)}
 .ckt-cat[open] .ckt-caret{transform:rotate(180deg)}
 /* the category that holds the part in hand says so while it is shut */
 .ckt-cat.holds>summary{border-color:var(--lime);color:var(--lime)}
 .ckt-cat[open].holds>summary{color:var(--lime)}
 .ckt-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:12;
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px;
-  width:max(300px,100%);padding:6px;border-radius:var(--r);
-  border:1px solid var(--line-2);background:var(--card);
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:4px;
+  width:max(392px,100%);padding:6px;border-radius:var(--r);
+  border:1px solid var(--line-2);background:var(--surface-solid);
   box-shadow:0 14px 34px rgba(0,0,0,.34)}
-.ckt-p{position:relative;display:grid;grid-template-rows:auto auto;justify-items:center;
-  gap:2px;padding:7px 6px 6px;border-radius:var(--r);border:1px solid transparent;
+/* A shadow tuned for a dark ground reads as a smudge on a light one — the account
+   menu two hundred lines down carries the same pair for the same reason. */
+[data-theme=light] .ckt-menu{box-shadow:0 14px 34px rgba(15,25,5,.14)}
+.ckt-p{display:grid;grid-template-rows:auto auto;justify-items:center;
+  gap:3px;padding:7px 6px 6px;border-radius:var(--r);border:1px solid transparent;
   background:transparent;color:var(--ink-3);cursor:pointer;
   transition:background .14s,color .14s,border-color .14s}
 .ckt-p:hover{background:var(--sunk);border-color:var(--line-2);color:var(--ink)}
 .ckt-p.on{border-color:var(--lime);color:var(--lime);background:var(--lime-08)}
 .ckt-ico{width:100%;height:34px;display:block}
-.ckt-pn{font:600 10px var(--mono);text-align:center;line-height:1.25}
-/* The shortcut rides in the corner rather than on its own line: it is a reminder for
-   the second visit, not something to read on the first. */
-.ckt-kb{position:absolute;top:3px;right:4px;font:600 8.5px var(--mono);
-  color:var(--ink-4);letter-spacing:.02em}
-.ckt-p:hover .ckt-kb,.ckt-p.on .ckt-kb{color:inherit;opacity:.8}
-@media (prefers-reduced-motion:reduce){
-  .ckt-caret,.ckt-p,.ckt-cat>summary{transition:none}
-}
+/* Name and shortcut on one line, wrapping together. The cap sat in the tile corner
+   until the ramp's 11px floor made it collide with the icon — and beside the name it
+   reads as what it is, the same part reached a second way. */
+.ckt-pl{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:5px}
+.ckt-pn{font-family:var(--mono);font-weight:600;font-size:var(--t-label);
+  text-align:center;line-height:1.3}
+.ckt-kb{font-family:var(--mono);font-weight:600;font-size:var(--t-label);
+  color:var(--ink-4);letter-spacing:var(--tr-mono)}
+.ckt-p:hover .ckt-kb,.ckt-p.on .ckt-kb{color:inherit;opacity:.75}
 .ckt-main{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:340px;
   flex:1;min-width:0}
 #ckt-mount .ckt-main{min-height:0}
@@ -8329,7 +8351,7 @@ const TRACKS = [
 
 const DEGREE_DATA = {"programs":[{"id":"cs-degree","name":"Computer Science — 5 Year Program","subtitle":"Integrated BSc + MSc track: a foundation year, then 32 courses, every module ending in code that runs.","short":"Computer Science","emphasis":"Computer Science","bands":[{"n":0,"title":"Foundations","theme":"The hands-on tracks the degree assumes you have done: write and run code, put a page on the web, serve it from a backend, reason about data structures, and learn the tools every later year uses.","icon":"◌","tint":"#E9F7D6"},{"n":1,"title":"Foundations & Mathematics","theme":"Learn to express ideas as programs, and to reason about them formally.","icon":"◴","tint":"#E4EEFA"},{"n":2,"title":"Core CS & Systems","theme":"How machines actually execute, store and organise work.","icon":"◵","tint":"#FFE9DC"},{"n":3,"title":"Theory, Networks & Design","theme":"Limits of computation, and the systems built up to those limits.","icon":"◶","tint":"#E1F4E8"},{"n":4,"title":"Advanced & Specialisations","theme":"Scale, learning, parallelism, and a chosen depth track.","icon":"◷","tint":"#F1E8FB"},{"n":5,"title":"Advanced Topics & Capstone","theme":"Frontier subjects, verification, ethics and a portfolio build.","icon":"⬤","tint":"#FFF3D6"}],"bandNoun":"Year"},{"id":"ee-msc","name":"Electrical Engineering — 5 Year Program","short":"Electrical Engineering","emphasis":"Electrical Engineering","subtitle":"Integrated BSc + MSc track, 30 courses, from Ohm’s law to a silicon pipeline. Every topic opens in something you can push on, derives the mathematics with you, and ends at a bench.","bandNoun":"Year","accent":"#6E9BFF","bands":[{"n":1,"title":"Circuits, Fields & Foundations","theme":"What a current is, what a field is, and the mathematics needed to say anything precise about either.","icon":"◴","tint":"#E4EEFA"},{"n":2,"title":"Devices, Signals & Instruments","theme":"Semiconductors that switch and amplify, signals described as spectra, and the discipline of actually measuring something.","icon":"◵","tint":"#FFE9DC"},{"n":3,"title":"Systems & Analysis","theme":"State space, sampling, transmission lines, converters and pipelines — the working language of every specialisation above.","icon":"◶","tint":"#E1F4E8"},{"n":4,"title":"Advanced Practice","theme":"Optimal control, adaptive filtering, noise, matching networks, drives and memory hierarchies.","icon":"◷","tint":"#F1E8FB"},{"n":5,"title":"Specialisation & Capstone","theme":"Non-linear control, fixed-point DSP, synthesis, photonics, magnetics and verification, each ending in something built.","icon":"⬤","tint":"#FFF3D6"}]}],"courses":[]};
 
-const DEGREE_CHUNKS = [{"id":"cs-degree","band":1,"course":"CS101","url":"programs/cs-degree.CS101.cdb55492.json"},{"id":"cs-degree","band":1,"course":"CS102","url":"programs/cs-degree.CS102.747d7998.json"},{"id":"cs-degree","band":1,"course":"MA101","url":"programs/cs-degree.MA101.6039e5d7.json"},{"id":"cs-degree","band":1,"course":"MA111","url":"programs/cs-degree.MA111.2052bcfc.json"},{"id":"cs-degree","band":1,"course":"MA112","url":"programs/cs-degree.MA112.d2ecab3b.json"},{"id":"cs-degree","band":1,"course":"MA121","url":"programs/cs-degree.MA121.e2c28e4f.json"},{"id":"cs-degree","band":1,"course":"CE101","url":"programs/cs-degree.CE101.9dc4f8cc.json"},{"id":"cs-degree","band":2,"course":"CS201","url":"programs/cs-degree.CS201.dd638bd2.json"},{"id":"cs-degree","band":2,"course":"CE201","url":"programs/cs-degree.CE201.45334b7e.json"},{"id":"cs-degree","band":2,"course":"CS210","url":"programs/cs-degree.CS210.99ad8311.json"},{"id":"cs-degree","band":2,"course":"MA201","url":"programs/cs-degree.MA201.30a58376.json"},{"id":"cs-degree","band":2,"course":"CS220","url":"programs/cs-degree.CS220.951b2229.json"},{"id":"cs-degree","band":2,"course":"SE201","url":"programs/cs-degree.SE201.97291acb.json"},{"id":"cs-degree","band":3,"course":"CS301","url":"programs/cs-degree.CS301.ce830c64.json"},{"id":"cs-degree","band":3,"course":"CS310","url":"programs/cs-degree.CS310.a12b233f.json"},{"id":"cs-degree","band":3,"course":"CS320","url":"programs/cs-degree.CS320.ddc5e2cc.json"},{"id":"cs-degree","band":3,"course":"CS330","url":"programs/cs-degree.CS330.84b34f18.json"},{"id":"cs-degree","band":3,"course":"SEC301","url":"programs/cs-degree.SEC301.9479a2ea.json"},{"id":"cs-degree","band":3,"course":"WEB301","url":"programs/cs-degree.WEB301.667277ed.json"},{"id":"cs-degree","band":4,"course":"CS401","url":"programs/cs-degree.CS401.8f0c3dac.json"},{"id":"cs-degree","band":4,"course":"ML401","url":"programs/cs-degree.ML401.0d077e8c.json"},{"id":"cs-degree","band":4,"course":"HPC401","url":"programs/cs-degree.HPC401.e491a83d.json"},{"id":"cs-degree","band":4,"course":"GFX401","url":"programs/cs-degree.GFX401.d1670917.json"},{"id":"cs-degree","band":4,"course":"ELEC410","url":"programs/cs-degree.ELEC410.414bc4f4.json"},{"id":"cs-degree","band":4,"course":"ELEC420","url":"programs/cs-degree.ELEC420.f63d4091.json"},{"id":"cs-degree","band":4,"course":"ELEC430","url":"programs/cs-degree.ELEC430.2615345e.json"},{"id":"cs-degree","band":5,"course":"DL501","url":"programs/cs-degree.DL501.594da50f.json"},{"id":"cs-degree","band":5,"course":"FM501","url":"programs/cs-degree.FM501.fc856aea.json"},{"id":"cs-degree","band":5,"course":"ETH501","url":"programs/cs-degree.ETH501.8146fdf2.json"},{"id":"cs-degree","band":5,"course":"QC510","url":"programs/cs-degree.QC510.30506e98.json"},{"id":"cs-degree","band":5,"course":"ROB520","url":"programs/cs-degree.ROB520.8f3ee1d7.json"},{"id":"cs-degree","band":5,"course":"CAP501","url":"programs/cs-degree.CAP501.5a934be1.json"},{"id":"ee-msc","band":1,"course":"EE101","url":"programs/ee-msc.EE101.1c526e65.json"},{"id":"ee-msc","band":1,"course":"EE102","url":"programs/ee-msc.EE102.776c8388.json"},{"id":"ee-msc","band":1,"course":"EE111","url":"programs/ee-msc.EE111.816c08f1.json"},{"id":"ee-msc","band":1,"course":"EE121","url":"programs/ee-msc.EE121.ff4eec23.json"},{"id":"ee-msc","band":1,"course":"EE131","url":"programs/ee-msc.EE131.616320b3.json"},{"id":"ee-msc","band":1,"course":"EE141","url":"programs/ee-msc.EE141.040d7bc2.json"},{"id":"ee-msc","band":2,"course":"EE201","url":"programs/ee-msc.EE201.84a872fc.json"},{"id":"ee-msc","band":2,"course":"EE202","url":"programs/ee-msc.EE202.357b6f1f.json"},{"id":"ee-msc","band":2,"course":"EE211","url":"programs/ee-msc.EE211.1195212a.json"},{"id":"ee-msc","band":2,"course":"EE221","url":"programs/ee-msc.EE221.99ac3956.json"},{"id":"ee-msc","band":2,"course":"EE231","url":"programs/ee-msc.EE231.c9f82c0c.json"},{"id":"ee-msc","band":2,"course":"EE241","url":"programs/ee-msc.EE241.1a513a34.json"},{"id":"ee-msc","band":3,"course":"CTRL510","url":"programs/ee-msc.CTRL510.00c901fd.json"},{"id":"ee-msc","band":3,"course":"DSP510","url":"programs/ee-msc.DSP510.6346ffe9.json"},{"id":"ee-msc","band":3,"course":"EMAG510","url":"programs/ee-msc.EMAG510.ae9729d0.json"},{"id":"ee-msc","band":3,"course":"PWR510","url":"programs/ee-msc.PWR510.163010fd.json"},{"id":"ee-msc","band":3,"course":"RFIC510","url":"programs/ee-msc.RFIC510.25184b63.json"},{"id":"ee-msc","band":3,"course":"VLSI510","url":"programs/ee-msc.VLSI510.b7d046a9.json"},{"id":"ee-msc","band":4,"course":"CTRL520","url":"programs/ee-msc.CTRL520.133f957a.json"},{"id":"ee-msc","band":4,"course":"DSP520","url":"programs/ee-msc.DSP520.7627c0eb.json"},{"id":"ee-msc","band":4,"course":"EMAG520","url":"programs/ee-msc.EMAG520.19e021b9.json"},{"id":"ee-msc","band":4,"course":"PWR520","url":"programs/ee-msc.PWR520.75d91788.json"},{"id":"ee-msc","band":4,"course":"RFIC520","url":"programs/ee-msc.RFIC520.3ddfaca5.json"},{"id":"ee-msc","band":4,"course":"VLSI520","url":"programs/ee-msc.VLSI520.e44a9aa4.json"},{"id":"ee-msc","band":5,"course":"CTRL530","url":"programs/ee-msc.CTRL530.b2d07443.json"},{"id":"ee-msc","band":5,"course":"DSP530","url":"programs/ee-msc.DSP530.8164b749.json"},{"id":"ee-msc","band":5,"course":"EMAG530","url":"programs/ee-msc.EMAG530.b1328209.json"},{"id":"ee-msc","band":5,"course":"PWR530","url":"programs/ee-msc.PWR530.c46c2aa0.json"},{"id":"ee-msc","band":5,"course":"RFIC530","url":"programs/ee-msc.RFIC530.11c96dd8.json"},{"id":"ee-msc","band":5,"course":"VLSI530","url":"programs/ee-msc.VLSI530.dcc1a419.json"}];
+const DEGREE_CHUNKS = [{"id":"cs-degree","band":1,"course":"CS101","url":"programs/cs-degree.CS101.cdb55492.json"},{"id":"cs-degree","band":1,"course":"CS102","url":"programs/cs-degree.CS102.3b80e92c.json"},{"id":"cs-degree","band":1,"course":"MA101","url":"programs/cs-degree.MA101.6039e5d7.json"},{"id":"cs-degree","band":1,"course":"MA111","url":"programs/cs-degree.MA111.2052bcfc.json"},{"id":"cs-degree","band":1,"course":"MA112","url":"programs/cs-degree.MA112.d2ecab3b.json"},{"id":"cs-degree","band":1,"course":"MA121","url":"programs/cs-degree.MA121.e2c28e4f.json"},{"id":"cs-degree","band":1,"course":"CE101","url":"programs/cs-degree.CE101.9dc4f8cc.json"},{"id":"cs-degree","band":2,"course":"CS201","url":"programs/cs-degree.CS201.dd638bd2.json"},{"id":"cs-degree","band":2,"course":"CE201","url":"programs/cs-degree.CE201.45334b7e.json"},{"id":"cs-degree","band":2,"course":"CS210","url":"programs/cs-degree.CS210.9391f5ab.json"},{"id":"cs-degree","band":2,"course":"MA201","url":"programs/cs-degree.MA201.30a58376.json"},{"id":"cs-degree","band":2,"course":"CS220","url":"programs/cs-degree.CS220.d0fcf134.json"},{"id":"cs-degree","band":2,"course":"SE201","url":"programs/cs-degree.SE201.83d5ccd6.json"},{"id":"cs-degree","band":3,"course":"CS301","url":"programs/cs-degree.CS301.ce830c64.json"},{"id":"cs-degree","band":3,"course":"CS310","url":"programs/cs-degree.CS310.a12b233f.json"},{"id":"cs-degree","band":3,"course":"CS320","url":"programs/cs-degree.CS320.696918e2.json"},{"id":"cs-degree","band":3,"course":"CS330","url":"programs/cs-degree.CS330.5bfc9516.json"},{"id":"cs-degree","band":3,"course":"SEC301","url":"programs/cs-degree.SEC301.9479a2ea.json"},{"id":"cs-degree","band":3,"course":"WEB301","url":"programs/cs-degree.WEB301.fd1bf9c1.json"},{"id":"cs-degree","band":4,"course":"CS401","url":"programs/cs-degree.CS401.6c060a53.json"},{"id":"cs-degree","band":4,"course":"ML401","url":"programs/cs-degree.ML401.0d077e8c.json"},{"id":"cs-degree","band":4,"course":"HPC401","url":"programs/cs-degree.HPC401.e491a83d.json"},{"id":"cs-degree","band":4,"course":"GFX401","url":"programs/cs-degree.GFX401.d1670917.json"},{"id":"cs-degree","band":4,"course":"ELEC410","url":"programs/cs-degree.ELEC410.414bc4f4.json"},{"id":"cs-degree","band":4,"course":"ELEC420","url":"programs/cs-degree.ELEC420.f63d4091.json"},{"id":"cs-degree","band":4,"course":"ELEC430","url":"programs/cs-degree.ELEC430.2615345e.json"},{"id":"cs-degree","band":5,"course":"DL501","url":"programs/cs-degree.DL501.594da50f.json"},{"id":"cs-degree","band":5,"course":"FM501","url":"programs/cs-degree.FM501.fc856aea.json"},{"id":"cs-degree","band":5,"course":"ETH501","url":"programs/cs-degree.ETH501.8146fdf2.json"},{"id":"cs-degree","band":5,"course":"QC510","url":"programs/cs-degree.QC510.30506e98.json"},{"id":"cs-degree","band":5,"course":"ROB520","url":"programs/cs-degree.ROB520.8f3ee1d7.json"},{"id":"cs-degree","band":5,"course":"CAP501","url":"programs/cs-degree.CAP501.5a934be1.json"},{"id":"ee-msc","band":1,"course":"EE101","url":"programs/ee-msc.EE101.66210877.json"},{"id":"ee-msc","band":1,"course":"EE102","url":"programs/ee-msc.EE102.3208596d.json"},{"id":"ee-msc","band":1,"course":"EE111","url":"programs/ee-msc.EE111.75d63df9.json"},{"id":"ee-msc","band":1,"course":"EE121","url":"programs/ee-msc.EE121.ce590ded.json"},{"id":"ee-msc","band":1,"course":"EE131","url":"programs/ee-msc.EE131.9fa5b076.json"},{"id":"ee-msc","band":1,"course":"EE141","url":"programs/ee-msc.EE141.5663104b.json"},{"id":"ee-msc","band":2,"course":"EE201","url":"programs/ee-msc.EE201.20de37de.json"},{"id":"ee-msc","band":2,"course":"EE202","url":"programs/ee-msc.EE202.c87b50bc.json"},{"id":"ee-msc","band":2,"course":"EE211","url":"programs/ee-msc.EE211.1319876f.json"},{"id":"ee-msc","band":2,"course":"EE221","url":"programs/ee-msc.EE221.7fcc250b.json"},{"id":"ee-msc","band":2,"course":"EE231","url":"programs/ee-msc.EE231.bc8cd84a.json"},{"id":"ee-msc","band":2,"course":"EE241","url":"programs/ee-msc.EE241.ce3383f7.json"},{"id":"ee-msc","band":3,"course":"CTRL510","url":"programs/ee-msc.CTRL510.20a8a958.json"},{"id":"ee-msc","band":3,"course":"DSP510","url":"programs/ee-msc.DSP510.6346ffe9.json"},{"id":"ee-msc","band":3,"course":"EMAG510","url":"programs/ee-msc.EMAG510.ef9d4e03.json"},{"id":"ee-msc","band":3,"course":"PWR510","url":"programs/ee-msc.PWR510.b389bca3.json"},{"id":"ee-msc","band":3,"course":"RFIC510","url":"programs/ee-msc.RFIC510.94bc6dab.json"},{"id":"ee-msc","band":3,"course":"VLSI510","url":"programs/ee-msc.VLSI510.b7d046a9.json"},{"id":"ee-msc","band":4,"course":"CTRL520","url":"programs/ee-msc.CTRL520.133f957a.json"},{"id":"ee-msc","band":4,"course":"DSP520","url":"programs/ee-msc.DSP520.7627c0eb.json"},{"id":"ee-msc","band":4,"course":"EMAG520","url":"programs/ee-msc.EMAG520.43180c19.json"},{"id":"ee-msc","band":4,"course":"PWR520","url":"programs/ee-msc.PWR520.1064c02e.json"},{"id":"ee-msc","band":4,"course":"RFIC520","url":"programs/ee-msc.RFIC520.cd810bad.json"},{"id":"ee-msc","band":4,"course":"VLSI520","url":"programs/ee-msc.VLSI520.e44a9aa4.json"},{"id":"ee-msc","band":5,"course":"CTRL530","url":"programs/ee-msc.CTRL530.b2d07443.json"},{"id":"ee-msc","band":5,"course":"DSP530","url":"programs/ee-msc.DSP530.8164b749.json"},{"id":"ee-msc","band":5,"course":"EMAG530","url":"programs/ee-msc.EMAG530.b1328209.json"},{"id":"ee-msc","band":5,"course":"PWR530","url":"programs/ee-msc.PWR530.b9de2aa0.json"},{"id":"ee-msc","band":5,"course":"RFIC530","url":"programs/ee-msc.RFIC530.c44556f4.json"},{"id":"ee-msc","band":5,"course":"VLSI530","url":"programs/ee-msc.VLSI530.dcc1a419.json"}];
 
 /* ============ Codewright engine ============ */
 'use strict';
@@ -14572,6 +14594,44 @@ function pointOf(pt) {
   const x = cellOf(pt[0]), y = cellOf(pt[1]);
   return x === null || y === null ? null : [x, y];
 }
+/* R1, R2, C1 — a part's number among its own KIND, on its own CANVAS.
+
+   The label used to be the part's creation index across every kind, so a canvas that
+   already held a ground and a source gave you "R8" for your first resistor, and every
+   schematic in the catalog — all of which predate this — read V0 and R3. The number a
+   learner sees has to be the one they would write on paper.
+
+   The table lives out here rather than inside the editor because the sanitiser needs
+   it: designators are stamped on the way IN, which is the one place that covers the
+   catalog's drawings, a learner's saved circuit and a read-only diagram alike. */
+const REF_PREFIX = { R: 'R', C: 'C', L: 'L', V: 'V', I: 'I', D: 'D', LED: 'LED',
+  SW: 'SW', LDR: 'LDR', NTC: 'NTC', POT: 'POT', LAMP: 'LA', METER: 'ME', BAR: 'BA',
+  NPN: 'Q', PNP: 'Q', NMOS: 'M', PMOS: 'M', OPAMP: 'U', IC: 'U', MCU: 'MCU',
+  GND: 'GND', OUT: 'TP', BB: 'BB' };
+
+function refPrefix(kind) { return REF_PREFIX[kind] || kind; }
+
+/* A part that already carries a number keeps it — that is what stops a canvas somebody
+   is halfway through annotating from renumbering itself when it is reopened — and the
+   gaps are filled in drawing order, skipping numbers already claimed. */
+function stampRefs(parts) {
+  const used = {};
+  parts.forEach(function (p) {
+    if (typeof p.ref !== 'number') return;
+    const pre = refPrefix(p.kind);
+    (used[pre] = used[pre] || {})[p.ref] = 1;
+  });
+  parts.forEach(function (p) {
+    if (typeof p.ref === 'number') return;
+    const pre = refPrefix(p.kind);
+    const seen = used[pre] = used[pre] || {};
+    let n = 1;
+    while (seen[n]) n++;
+    seen[n] = 1;
+    p.ref = n;
+  });
+}
+
 function sanitiseDrawing(m, depth) {
   const out = { parts: [], wires: [] };
   if (!m || typeof m !== 'object' || Array.isArray(m)) return out;
@@ -14637,6 +14697,9 @@ function sanitiseDrawing(m, depth) {
     if (a === null || b === null) return;
     out.wires.push({ a: a, b: b });
   });
+  /* Each block's insides were stamped by their own recursive call above, because a
+     block is its own schematic and its own namespace. */
+  stampRefs(out.parts);
   return out;
 }
 
@@ -16178,8 +16241,8 @@ function partBtn(t) {
     (t[2] ? ' (' + t[2] + ')' : '') + '" aria-label="' + cktEsc(t[1]) +
     '" aria-pressed="false">' +
     '<canvas class="ckt-ico" data-sym="' + t[0] + '" aria-hidden="true"></canvas>' +
-    '<span class="ckt-pn">' + cktEsc(t[1]) + '</span>' +
-    (t[2] ? '<kbd class="ckt-kb">' + cktEsc(t[2]) + '</kbd>' : '') +
+    '<span class="ckt-pl"><span class="ckt-pn">' + cktEsc(t[1]) + '</span>' +
+    (t[2] ? '<kbd class="ckt-kb">' + cktEsc(t[2]) + '</kbd>' : '') + '</span>' +
     '</button>';
 }
 
@@ -16298,6 +16361,8 @@ function createCircuit(root, opts) {
         '<button class="ckt-t" data-act="rotate" title="Rotate the selection (Shift+R)">Rotate</button>' +
         '<button class="ckt-t" data-act="delete" title="Delete the selection (Del)">Delete</button>' +
         '<button class="ckt-t" data-act="clear">Clear</button>' +
+        '<button class="ckt-t" data-act="full" title="Fill the screen (F)" ' +
+          'aria-keyshortcuts="F" aria-pressed="false">Expand</button>' +
       '</div>' +
       /* Where you are, and the way back. A block that opens onto a canvas identical to
          the one you came from is a place you can get lost in, so the trail is always on
@@ -16668,13 +16733,6 @@ function createCircuit(root, opts) {
 
      Assigned once, when the part is placed, and kept: deleting R1 does not renumber
      R2 to R1 underneath a drawing someone is halfway through annotating. */
-  const REF_PREFIX = { R: 'R', C: 'C', L: 'L', V: 'V', I: 'I', D: 'D', LED: 'LED',
-    SW: 'SW', LDR: 'LDR', NTC: 'NTC', POT: 'POT', LAMP: 'LA', METER: 'ME', BAR: 'BA',
-    NPN: 'Q', PNP: 'Q', NMOS: 'M', PMOS: 'M', OPAMP: 'U', IC: 'U', MCU: 'MCU',
-    GND: 'GND', OUT: 'TP', BB: 'BB' };
-
-  function refPrefix(kind) { return REF_PREFIX[kind] || kind; }
-
   function nextRef(kind, within) {
     const pre = refPrefix(kind);
     const used = {};
@@ -16688,10 +16746,9 @@ function createCircuit(root, opts) {
     return n;
   }
 
+  /* The fallback is for a part that somehow reached the canvas without passing the
+     sanitiser; everything that came in through a model has been stamped already. */
   function refOf(p) {
-    /* Models saved before designators existed have no `ref`; their old id-derived
-       number is kept rather than renumbered, so a stored circuit does not relabel
-       itself the first time it is opened. */
     return refPrefix(p.kind) + (typeof p.ref === 'number' ? p.ref : p.id.replace('p', ''));
   }
 
@@ -17222,8 +17279,13 @@ function createCircuit(root, opts) {
     } else if (wide) {
       if (turnsOf(p) % 2) { ctx.textAlign = 'left'; ctx.fillText(lab, x + wide, y); }
       else ctx.fillText(lab, x, y - 26);
-    } else if (turnsOf(p) % 2) ctx.fillText(lab, x + 34, y);
-    else ctx.fillText(lab, x, y - 17);
+    } else if (turnsOf(p) % 2) {
+      /* Left-aligned, not centred. A centred label grows in BOTH directions, so
+         "V1  12 V" reached back across the source it names while "R1" sat clear —
+         the longer the value, the worse the overlap, which is the wrong way round. */
+      ctx.textAlign = 'left';
+      ctx.fillText(lab, x + 17, y);
+    } else ctx.fillText(lab, x, y - 17);
   }
 
   function paint() {
@@ -19518,6 +19580,7 @@ function createCircuit(root, opts) {
     /* Shift for the three verbs, plain letters for the parts. A resistor is placed a
        hundred times in a session and a block is grouped twice, so the commoner action
        gets the cheaper key. It could not go the other way: Ctrl+R reloads the page. */
+    else if (e.key === 'f' || e.key === 'F') { announce(toggleFull()); e.preventDefault(); }
     else if (e.shiftKey && e.key === 'R') { doRotate(); announce(rotationSaid()); }
     else if (e.shiftKey && e.key === 'G') { doGroup(); announce(blockSaid('Grouped')); }
     else if (e.shiftKey && e.key === 'U') { doUngroup(); announce(blockSaid('Ungrouped')); }
@@ -19541,6 +19604,10 @@ function createCircuit(root, opts) {
         paintPart(); paint();
         announce('Let go.');
       } else if (path.length) { closeTo(path.length - 1); announce('Closed the block.'); }
+      /* Last in the chain on purpose: Escape drops what is in hand, then backs out of
+         a block, and only when there is neither does it give the screen back. Leaving
+         a canvas you are lost on should not also close the block you were lost in. */
+      else if (isFull()) { setFull(false); announce('Back in the page.'); }
     }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
       selIds.clear(); selWires.clear();
@@ -19680,9 +19747,11 @@ function createCircuit(root, opts) {
      resistor on the button that places an IEC one would be worse than no picture. */
   const icons = Array.prototype.slice.call(root.querySelectorAll('.ckt-ico'));
   function paintIcons() {
-    const ink = getComputedStyle(document.documentElement)
-      .getPropertyValue('--ink').trim() || '#EDEFF3';
-    icons.forEach(function (c) { Symbols.paint(c, c.dataset.sym, ink); });
+    /* P() rather than a second read of the document: it is the palette every other
+       drawing on this canvas is already made from, it carries its own fallback for a
+       build with no Sandbox, and it is what keeps a palette icon the same colour as
+       the part it places. */
+    icons.forEach(function (c) { Symbols.paint(c, c.dataset.sym, P().ink); });
   }
   paintIcons();
   requestAnimationFrame(paintIcons);
@@ -19727,6 +19796,58 @@ function createCircuit(root, opts) {
       announce(toolSaid(b.dataset.tool));
     });
   });
+  /* ---- filling the screen ----
+   *
+   * Two mechanisms for one gesture. The class is what actually lays the editor out
+   * over the page, and it works everywhere — inside an iframe, on a browser that
+   * refuses the request, on a phone. The native request is asked for on top of it so
+   * the browser's own chrome goes too, and if it is refused the class alone still does
+   * the job. Which is why the class is applied FIRST and never waits on the promise.
+   *
+   * The canvas is sized by a ResizeObserver already, so nothing here has to repaint:
+   * changing the box is the whole of it.
+   */
+  const shell = root.querySelector('.ckt');
+  const fullBtn = root.querySelector('[data-act="full"]');
+  function isFull() { return shell.classList.contains('full'); }
+  function setFull(on) {
+    shell.classList.toggle('full', !!on);
+    /* .page carries an entry animation, and an element with an animation that can
+       touch transform is a containing block for position:fixed — so `inset:0` was
+       measured against the article rather than the window, and the editor came out
+       887px tall inside a 1320px window. The class below turns that animation off
+       while the editor is expanded, and stops the page behind from scrolling. */
+    document.body.classList.toggle('ckt-expanded', !!on);
+    fullBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    fullBtn.textContent = on ? 'Shrink' : 'Expand';
+    fullBtn.title = on ? 'Back into the page (F, or Escape)' : 'Fill the screen (F)';
+    if (on && shell.requestFullscreen) {
+      /* A rejected request is the ordinary case on a page that has not been clicked
+         yet, and the class has already done the useful half. */
+      shell.requestFullscreen().catch(function () {});
+    } else if (!on && document.fullscreenElement === shell && document.exitFullscreen) {
+      document.exitFullscreen().catch(function () {});
+    }
+    /* Expanding is asking for room, so the drawing is refitted into the room it just
+       got. Without this the circuit stays the size it was in a 340px box, marooned in
+       the top-left corner of a screen-sized canvas, and the first thing anyone does is
+       press Fit. Only on the way out, and only when there is something to fit. */
+    if (on && (cur.parts.length || cur.wires.length)) zoomFit();
+    paintSoon();
+  }
+  function toggleFull() {
+    setFull(!isFull());
+    return isFull() ? 'Filling the screen. F or Escape puts it back.'
+      : 'Back in the page.';
+  }
+  fullBtn.addEventListener('click', function () { announce(toggleFull()); });
+  /* Leaving fullscreen by the browser's own route — Escape, or F11 — has to take the
+     class with it, or the editor stays pinned over the page with nothing to say so. */
+  function onFsChange() {
+    if (document.fullscreenElement !== shell && isFull()) setFull(false);
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+
   root.querySelector('[data-act="zoomin"]').addEventListener('click', function () { zoomTo(view.s * 1.2); });
   root.querySelector('[data-act="zoomout"]').addEventListener('click', function () { zoomTo(view.s / 1.2); });
   root.querySelector('[data-act="fit"]').addEventListener('click', function () {
@@ -19793,6 +19914,14 @@ function createCircuit(root, opts) {
          keeps two for the rest of the session. */
       window.removeEventListener('blur', onWinBlur);
       window.removeEventListener('pagehide', flushEdit);
+      /* Same reasoning for the document listener the expand button needs, and one step
+         further: a lesson navigated away from while the editor filled the screen would
+         otherwise leave the browser in fullscreen with nothing in it. */
+      document.removeEventListener('fullscreenchange', onFsChange);
+      if (isFull()) document.body.classList.remove('ckt-expanded');
+      if (document.fullscreenElement === shell && document.exitFullscreen) {
+        document.exitFullscreen().catch(function () {});
+      }
       if (ro) ro.disconnect();
       root.innerHTML = '';
     },
@@ -22322,7 +22451,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '5f27631d8bd0';
+const BUILD_ID = '71c01c6861ce';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */

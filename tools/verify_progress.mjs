@@ -528,8 +528,27 @@ await section('aria', async () => {
      along with the layout — so on every phone the one channel that says progress is not
      being stored was gone. The word may stand down; the element may not. */
   const css = fs.readFileSync(path.join(ROOT, 'src', 'index.head.html'), 'utf8');
-  const phone = css.slice(css.indexOf('@media (max-width:640px)'));
-  const block = phone.slice(0, phone.indexOf('@media (prefers-reduced-motion'));
+  /* The phone block, taken by matching ITS OWN braces rather than by cutting at the
+     next at-rule that happened to follow it. The cut version read as far as the first
+     @media (prefers-reduced-motion) after the first 640px block, so adding one
+     anywhere between the two moved the window off the rule this is about and reported
+     a missing rule that was still there. Two rounds of the stylesheet growing is
+     enough to say the window has to come from the source, not from a landmark. */
+  const block = (() => {
+    let out = '';
+    for (let i = css.indexOf('@media (max-width:640px)'); i >= 0;
+         i = css.indexOf('@media (max-width:640px)', i + 1)) {
+      let depth = 0, j = css.indexOf('{', i);
+      if (j < 0) continue;
+      let k = j;
+      for (; k < css.length; k++) {
+        if (css[k] === '{') depth++;
+        else if (css[k] === '}' && --depth === 0) break;
+      }
+      out += css.slice(i, k + 1) + '\n';
+    }
+    return out;
+  })();
   if (/(^|[},;\s])\.save-state\s*\{[^}]*display\s*:\s*none/.test(block)) {
     bad('aria', 'the 640px rule still takes the whole save indicator out of the accessibility tree'); return;
   }
