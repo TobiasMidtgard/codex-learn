@@ -318,6 +318,10 @@ const deskJs = existsSync(join(SRC, 'desk.js')) ? read(join(SRC, 'desk.js')) : '
    is a build whose MCU part draws and solves but does not run a sketch. Read the same
    defensive way as the desk. */
 const mcuJs = existsSync(join(SRC, 'mcu.js')) ? read(join(SRC, 'mcu.js')) : '';
+/* Natural notation -> LaTeX for the derivation input. Read defensively like the
+   others: app.js guards its use, so a build without the file is a build that
+   still expects LaTeX rather than a broken page. */
+const mathInputJs = existsSync(join(SRC, 'mathinput.js')) ? read(join(SRC, 'mathinput.js')) : '';
 const head = read(join(SRC, 'index.head.html'));
 
 /* A literal `</script>` inside any JSON string would terminate the host <script>, and
@@ -345,6 +349,7 @@ function assemble(label, degreeLiteral, chunkLiteral) {
     'const DEGREE_CHUNKS = ' + chunkLiteral + ';\n',
     engineJs,
     studioJs,
+    mathInputJs,
     mcuJs,
     circuitJs,
     deskJs,

@@ -717,6 +717,12 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .dv-prog .bar{flex:1;height:5px;border-radius:3px;background:var(--line-2);overflow:hidden}
 .dv-prog .bar i{display:block;height:100%;background:var(--lime);transition:width .3s var(--ease)}
 .dv-prog span{font-family:var(--mono);font-size:11px;color:var(--ink-4);white-space:nowrap}
+/* The label above is uppercased; this line is not, because it shows what to TYPE
+   and `(A+B)/C` is not what anyone should type. */
+.dv-in .dv-how{display:block;font-size:11.5px;color:var(--ink-3);margin-top:3px;
+  font-weight:400;text-transform:none;letter-spacing:0}
+.dv-how code{font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  background:var(--surface-2);border-radius:4px;padding:0 4px}
 .dv-steps{display:flex;flex-direction:column;gap:12px}
 .dv-step{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);padding:16px 18px}
 .dv-step.active{border-color:var(--lime-30);background:var(--lime-04,var(--surface))}
@@ -1126,8 +1132,19 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   color:var(--ink-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rb-at{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:none}
 
-.runfoot{display:flex;align-items:center;gap:12px;padding:14px 22px;
+/* The answer bar is furniture, not content: every row it grows comes straight out of
+   the question above it. Two buttons and a long next-lesson label were wrapping to
+   three rows on a narrow window — 111px of a 569px viewport, which is what pushed the
+   active derivation step behind it. It stays one row and the long label truncates. */
+.runfoot{display:flex;align-items:center;gap:10px;padding:10px 16px;flex-wrap:nowrap;
   border-top:1px solid var(--line);background:var(--surface-solid)}
+.runfoot .run-next{min-width:0;max-width:34vw;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;display:block}
+@media (max-width:640px){
+  .runfoot{padding:8px 12px;gap:8px}
+  .runfoot .btn{min-width:0;padding:10px 14px}
+  .runfoot .run-next{max-width:30vw}
+}
 .runfoot[hidden]{display:none}
 .runfoot .spacer{flex:1}
 .runfoot .q-acts,.runfoot .blk-acts,.runfoot .build-acts,.runfoot .dv-acts{

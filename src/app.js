@@ -1066,6 +1066,26 @@ function go(r) {
 
   const host = scrollHost();
   if (host) host.scrollTop = SCROLL_MEM[routeKey(route)] || 0;
+
+  /* Put the step you are being asked about where you can read it.
+
+     A derivation opens at whatever scroll position the route restores, which on a
+     first visit is the top — and the brief above the steps is long enough that on a
+     short window the active step begins below the fold and ends behind the answer
+     bar. The question is then half-visible and its input is not visible at all, which
+     reads as an incomprehensible question rather than a scrolling problem. Only
+     scrolls when the step is actually out of view, so it never fights a reader who
+     has scrolled somewhere deliberately. */
+  requestAnimationFrame(function () {
+    if (!host || route.view !== 'lesson') return;
+    const step = $('.dv-step.active', $('#main')) || $('.blk-active', $('#main'));
+    if (!step) return;
+    const hb = host.getBoundingClientRect(), sb = step.getBoundingClientRect();
+    const foot = $('#runfoot');
+    const floor = foot && !foot.hidden ? foot.getBoundingClientRect().top : hb.bottom;
+    if (sb.top >= hb.top && sb.bottom <= floor) return;
+    host.scrollTop += sb.top - hb.top - 16;
+  });
 }
 
 /* Which unit kinds become the screen.
@@ -3364,11 +3384,18 @@ function renderSandbox(main, l) {
    one copied — set it equal to the answer, so the thing being asked for was printed
    in the box before the learner typed a character. Rejecting it here fixes every one
    of them at once, and tools/verify_derivations.py fails the build if it comes back. */
+/* Natural notation to LaTeX, when the translator is in the build. Without it the
+   input behaves exactly as it did: LaTeX in, LaTeX rendered. */
+function asLatex(src, vars) {
+  if (typeof MathInput === 'undefined') return src;
+  return MathInput.toLatex(src, vars || []);
+}
+
 function placeholderFor(st) {
   const ph = String(st.placeholder || '').replace(/\s+/g, '');
   const an = String(st.answer || '').replace(/\s+/g, '');
   if (ph && ph !== an) return st.placeholder;
-  return 'your expression in LaTeX, e.g. \\frac{a}{b + c}';
+  return 'e.g.  (a+b)/c   or   n A L';
 }
 
 function renderDerive(main, l) {
@@ -3390,7 +3417,8 @@ function renderDerive(main, l) {
         (solved
           ? '<div class="dv-answer">' + MathML.render(st.answer, true) + '</div>'
           : '<div class="dv-work">' +
-              '<label class="dv-in"><span>Your expression, in LaTeX</span>' +
+              '<label class="dv-in"><span>Your expression</span>' +
+                '<span class="dv-how">type it plainly \u2014 <code>(a+b)/c</code>, <code>x^2</code>, <code>sqrt(x)</code>, <code>pi</code></span>' +
                 '<input type="text" data-ans="' + i + '" placeholder="' + esc(placeholderFor(st)) + '" autocomplete="off" spellcheck="false"></label>' +
               '<div class="dv-preview" data-prev="' + i + '"></div>' +
               '<div class="dv-acts">' +
@@ -3438,7 +3466,11 @@ function renderDerive(main, l) {
     const st = steps[i];
 
     const preview = debounce(function () {
-      prev.innerHTML = input.value.trim() ? MathML.render(input.value, false) : '';
+      /* What the reader typed, as mathematics, while they type it. Natural
+         notation is translated to LaTeX first; anything already containing a
+         backslash is passed through, so an author's LaTeX still works. */
+      prev.innerHTML = input.value.trim()
+        ? MathML.render(asLatex(input.value, l.vars), false) : '';
     }, 140);
     input.addEventListener('input', preview);
     input.focus();
@@ -3466,7 +3498,11 @@ function renderDerive(main, l) {
       btn.disabled = true;
       msg.className = 'dv-msg';
       msg.textContent = 'Checking\u2026';
-      const r = await MathCheck.check(typed, st.answer, { vars: l.vars || [], tol: st.tol });
+      /* The checker speaks LaTeX, so the same translation runs here. Doing it in
+         one place would be better still, but the preview needs it per keystroke
+         and the check needs it once, and they are far apart in this function. */
+      const r = await MathCheck.check(asLatex(typed, l.vars), st.answer,
+        { vars: l.vars || [], tol: st.tol });
       busy = false;
       btn.disabled = false;
       if (r.ok) {

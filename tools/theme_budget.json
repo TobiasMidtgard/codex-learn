@@ -72,6 +72,15 @@
     { "name": "STATE .btn.dark — its fill against the card", "kind": "state", "from": ".btn.dark", "vs": ["var(--surface)", "var(--ground)"] },
     { "name": "STATE .btn.dark — hover against its own fill", "kind": "state", "from": ".btn.dark:hover", "vs": ["rgba(255,255,255,0.05)", "var(--surface)", "var(--ground)"], "vsLight": ["rgba(15,25,5,0.05)", "var(--surface)", "var(--ground)"] },
     { "name": "STATE .btn.ghost — hover against the card", "kind": "state", "from": ".btn.ghost:hover", "vs": ["var(--surface)", "var(--ground)"] },
-    { "name": "STATE .mod-head — hover against the card", "kind": "state", "from": ".mod>.mod-head:hover", "vs": ["var(--surface)", "var(--ground)"] }
+    { "name": "STATE .mod-head — hover against the card", "kind": "state", "from": ".mod>.mod-head:hover", "vs": ["var(--surface)", "var(--ground)"] },
+
+    { "name": ".ckt-tab td:first-child — which node the answer is for", "kind": "text", "fg": "var(--ink-3)", "bg": ["var(--surface)", "var(--ground)"] },
+    { "name": ".ckt-tab td:last-child — the answer itself", "kind": "text", "fg": "var(--lime)", "bg": ["var(--surface)", "var(--ground)"] },
+    { "name": ".ckt-panel h4 — a panel heading", "kind": "text", "fg": "var(--lime)", "bg": ["var(--surface)", "var(--ground)"] },
+    { "name": ".ckt-hint — the panel's own prose", "kind": "text", "fg": "var(--ink-4)", "bg": ["var(--surface)", "var(--ground)"] },
+    { "name": ".ckt-err — the solver could not solve it", "kind": "text", "fg": "var(--amber)", "bg": ["var(--surface)", "var(--ground)"] },
+    { "name": ".ckt-t — an idle tool button", "kind": "text", "fg": "var(--ink-3)", "bg": ["var(--sunk)", "var(--ground)"] },
+    { "name": ".ckt-t.on — the chosen tool", "kind": "text", "fg": "var(--on-lime)", "bg": ["var(--lime)", "var(--sunk)", "var(--ground)"] },
+    { "name": "the focus ring on the schematic canvas", "kind": "graphic", "fg": "var(--lime)", "bg": ["var(--editor)"] }
   ]
 }
