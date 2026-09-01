@@ -17,7 +17,7 @@
  "outcomes": [
   "Explain what doping does to silicon, and calculate the built-in potential and depletion width of a pn junction from the doping levels.",
   "Use the Shockley diode equation quantitatively: find the current from the voltage, the voltage from the current, and the 60 mV per decade slope that connects them.",
-  "Find a diode's operating point by the load-line method and by numerical solution, and replace it with a piecewise-linear model that a linear solver can handle.",
+  "Find a diode's operating point by the load-line method and by numerical solution, replace it with a piecewise-linear model when a hand calculation needs one, and measure the real device beside the model to find where the straight line stops being the curve.",
   "Distinguish a diode's static resistance from its dynamic resistance, and say which one governs which measurement.",
   "Design a full-wave rectifier and reservoir capacitor to meet a stated ripple, and account for the diode drops, the peak inverse voltage and the peak repetitive current.",
   "Design a Zener shunt regulator that holds its output across the full range of line and load, and compute its line regulation from the dynamic resistance.",
@@ -274,7 +274,8 @@
     "Numerically, the same intersection is found by bisection or by Newton's method in a few iterations. Every circuit simulator does exactly this at every node, at every time step.",
     "**Static resistance** $V/I$ and **dynamic resistance** $r_d = dV/dI = nV_T/I$ are different numbers for a diode, and they answer different questions. At 10 mA a 1N4148 has a static resistance of about 70 Ω and a dynamic resistance of 2.59 Ω.",
     "Static resistance answers 'how much current at this voltage'. Dynamic resistance answers 'how much does the voltage move if the current wobbles'. Confusing them is the most expensive mistake in this course.",
-    "The **piecewise-linear model** replaces the diode by a fixed voltage $V_{D0}$ in series with $r_d$ — the tangent to the exponential at the chosen operating point. It is exact at that point and useful for a decade either side."
+    "The **piecewise-linear model** replaces the diode by a fixed voltage $V_{D0}$ in series with $r_d$ — the tangent to the exponential at the chosen operating point. It is exact at that point and useful for a decade either side.",
+    "How far either side is a number rather than a feeling, and the second build measures it against the device. Two decades below the tangent point the real drop has fallen by $nV_T\\ln 100 = 119$ mV; the tangent says 26 mV and the static resistance says 689 mV. A model you have never taken outside its range is a model whose range you do not know."
    ],
    "read": null,
    "sandbox": null,
@@ -354,236 +355,496 @@
    "numeric": null,
    "match": null,
    "tune": null,
-   "build": {
-    "title": "A diode a linear solver can swallow",
-    "minutes": 28,
-    "brief": "The schematic editor solves linear circuits, and a diode is not linear. That is not an\nobstacle — it is the exercise. You are going to replace the diode by its\n**piecewise-linear equivalent** and then measure two things that prove the equivalent\nis doing the diode's job rather than a resistor's.\n\n## The device\n\nA small-signal silicon diode with $I_S = 2.0\\times10^{-14}$ A and $n = 1$, at 300 K\nwhere $V_T = 25.852$ mV. At 10 mA it drops\n\n$$V_D = nV_T\\ln\\!\\left(1 + \\frac{I}{I_S}\\right) = 0.6964\\ \\text{V},\n\\qquad r_d = \\frac{nV_T}{I} = 2.585\\ \\Omega$$\n\nThe tangent to the curve at that point passes through $V_D$ at 10 mA with slope\n$r_d$, so it meets the voltage axis at $V_{D0} = 0.6964 - 0.010\\times2.585 = 0.6705$ V.\nThe model is therefore a **0.6705 V source in series with 2.585 Ω**.\n\n## What to build\n\nThe canvas gives you a 5 V supply, a 100 µF capacitor from the output node to ground,\nand a probe on that node. Nothing works yet, because that node has no DC path anywhere.\nAdd:\n\n- a series resistor from the 5 V rail to the output node, sized so that **10 mA** flows,\n- the diode model — the 0.6705 V source and the 2.585 Ω resistor in series — from the\n  output node down to ground, with the source's **+ terminal facing the output**.\n\nLeave the capacitor alone; it is there for the last check.\n\n## The trap, and why the last check exists\n\nAt the operating point the diode's static resistance is $0.6964/0.010 = 69.6\\ \\Omega$.\nA single 69.6 Ω resistor in place of the whole model gives the *same* DC voltage and\nthe *same* DC current, and it passes the first three checks. It is wrong, and the\ncapacitor is what catches it. The capacitor charges through whatever incremental\nresistance it sees, which for the real model is $r_d$ in parallel with your series\nresistor — about 2.57 Ω, a time constant of 0.26 ms. For the 69.6 Ω impostor it is\nabout 60 Ω, a time constant of 6 ms, twenty-three times slower.\n\nA diode is not a resistor, and this is the measurement that says so.",
-    "start": {
-     "parts": [
+   "build": [
+    {
+     "title": "A diode a linear solver can swallow",
+     "minutes": 28,
+     "brief": "A piecewise-linear equivalent is how a diode enters a calculation you intend to finish\nby hand: replace the curve by the straight line tangent to it at the current you expect,\nand the algebra stops needing an iteration. That is the exercise. You are going to build\nthe equivalent and measure two things that prove it is doing the diode's job rather than\na resistor's.\n\nThe editor will also solve the diode itself — it carries a Newton-Raphson loop for\nexactly that, and the next exercise uses it. Building the model first is not a way round\na limitation of the tool. It is what every data sheet, every hand calculation and every\nestimate in this subject actually does, and knowing where it stops being true is worth\nmore than knowing the equation.\n\n## The device\n\nA small-signal silicon diode with $I_S = 2.0\\times10^{-14}$ A and $n = 1$, at 300 K\nwhere $V_T = 25.852$ mV. At 10 mA it drops\n\n$$V_D = nV_T\\ln\\!\\left(1 + \\frac{I}{I_S}\\right) = 0.6964\\ \\text{V},\n\\qquad r_d = \\frac{nV_T}{I} = 2.585\\ \\Omega$$\n\nThe tangent to the curve at that point passes through $V_D$ at 10 mA with slope\n$r_d$, so it meets the voltage axis at $V_{D0} = 0.6964 - 0.010\\times2.585 = 0.6705$ V.\nThe model is therefore a **0.6705 V source in series with 2.585 Ω**.\n\n## What to build\n\nThe canvas gives you a 5 V supply, a 100 µF capacitor from the output node to ground,\nand a probe on that node. Nothing works yet, because that node has no DC path anywhere.\nAdd:\n\n- a series resistor from the 5 V rail to the output node, sized so that **10 mA** flows,\n- the diode model — the 0.6705 V source and the 2.585 Ω resistor in series — from the\n  output node down to ground, with the source's **+ terminal facing the output**.\n\nLeave the capacitor alone; it is there for the last check.\n\n## The trap, and why the last check exists\n\nAt the operating point the diode's static resistance is $0.6964/0.010 = 69.6\\ \\Omega$.\nA single 69.6 Ω resistor in place of the whole model gives the *same* DC voltage and\nthe *same* DC current, and it passes the first three checks. It is wrong, and the\ncapacitor is what catches it. The capacitor charges through whatever incremental\nresistance it sees, which for the real model is $r_d$ in parallel with your series\nresistor — about 2.57 Ω, a time constant of 0.26 ms. For the 69.6 Ω impostor it is\nabout 60 Ω, a time constant of 6 ms, twenty-three times slower.\n\nA diode is not a resistor, and this is the measurement that says so.",
+     "start": {
+      "parts": [
+       {
+        "id": "p0",
+        "kind": "V",
+        "x": 3,
+        "y": 6,
+        "rot": 1,
+        "value": 5
+       },
+       {
+        "id": "p1",
+        "kind": "GND",
+        "x": 3,
+        "y": 9
+       },
+       {
+        "id": "p6",
+        "kind": "C",
+        "x": 17,
+        "y": 9,
+        "rot": 1,
+        "value": 0.0001
+       },
+       {
+        "id": "p7",
+        "kind": "GND",
+        "x": 17,
+        "y": 11
+       },
+       {
+        "id": "p8",
+        "kind": "OUT",
+        "x": 11,
+        "y": 8
+       }
+      ],
+      "wires": [
+       {
+        "a": [
+         3,
+         7
+        ],
+        "b": [
+         3,
+         9
+        ]
+       },
+       {
+        "a": [
+         11,
+         8
+        ],
+        "b": [
+         17,
+         8
+        ]
+       },
+       {
+        "a": [
+         17,
+         10
+        ],
+        "b": [
+         17,
+         11
+        ]
+       }
+      ]
+     },
+     "solution": {
+      "parts": [
+       {
+        "id": "p0",
+        "kind": "V",
+        "x": 3,
+        "y": 6,
+        "rot": 1,
+        "value": 5
+       },
+       {
+        "id": "p1",
+        "kind": "GND",
+        "x": 3,
+        "y": 9
+       },
+       {
+        "id": "p2",
+        "kind": "R",
+        "x": 9,
+        "y": 6,
+        "rot": 1,
+        "value": 430
+       },
+       {
+        "id": "p3",
+        "kind": "R",
+        "x": 13,
+        "y": 9,
+        "rot": 1,
+        "value": 2.5852
+       },
+       {
+        "id": "p4",
+        "kind": "V",
+        "x": 13,
+        "y": 11,
+        "rot": 1,
+        "value": 0.6705
+       },
+       {
+        "id": "p5",
+        "kind": "GND",
+        "x": 13,
+        "y": 13
+       },
+       {
+        "id": "p6",
+        "kind": "C",
+        "x": 17,
+        "y": 9,
+        "rot": 1,
+        "value": 0.0001
+       },
+       {
+        "id": "p7",
+        "kind": "GND",
+        "x": 17,
+        "y": 11
+       },
+       {
+        "id": "p8",
+        "kind": "OUT",
+        "x": 11,
+        "y": 8
+       }
+      ],
+      "wires": [
+       {
+        "a": [
+         3,
+         7
+        ],
+        "b": [
+         3,
+         9
+        ]
+       },
+       {
+        "a": [
+         3,
+         5
+        ],
+        "b": [
+         9,
+         5
+        ]
+       },
+       {
+        "a": [
+         9,
+         7
+        ],
+        "b": [
+         9,
+         8
+        ]
+       },
+       {
+        "a": [
+         9,
+         8
+        ],
+        "b": [
+         17,
+         8
+        ]
+       },
+       {
+        "a": [
+         13,
+         12
+        ],
+        "b": [
+         13,
+         13
+        ]
+       },
+       {
+        "a": [
+         17,
+         10
+        ],
+        "b": [
+         17,
+         11
+        ]
+       }
+      ]
+     },
+     "checks": [
       {
-       "id": "p0",
-       "kind": "V",
-       "x": 3,
-       "y": 6,
-       "rot": 1,
-       "value": 5
+       "name": "the 5 V supply delivers 10 mA",
+       "code": "const sources = c.net.parts.filter(function (p) { return p.kind === 'V'; });\nconst supply = sources.filter(function (p) { return Math.abs(p.value - 5) < 0.5; });\nc.assert(supply.length === 1,\n  'Exactly one 5 V supply, so that \"the supply current\" means one thing. Found ' +\n  supply.length + ' source(s) near 5 V.');\nconst i = Math.abs(c.dc().currents[supply[0].id]);\nc.close(i, 0.010, 0.03,\n  'the current out of the 5 V supply — size the series resistor from (5 - 0.6964)/0.010');"
       },
       {
-       "id": "p1",
-       "kind": "GND",
-       "x": 3,
-       "y": 9
+       "name": "the diode model sits at 0.696 V",
+       "code": "c.close(c.vout(), 0.6964, 0.015,\n  'the voltage at the probed node. At 10 mA this diode drops 0.6964 V, so that is what ' +\n  'the top of the model must sit at; check the offset source is the right way up');"
       },
       {
-       "id": "p6",
-       "kind": "C",
-       "x": 17,
-       "y": 9,
-       "rot": 1,
-       "value": 0.0001
+       "name": "the power splits 43 mW in the resistor, 7 mW in the diode",
+       "code": "const sources = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 5) < 0.5; });\nconst i = Math.abs(c.dc().currents[sources[0].id]);\nconst v = c.vout();\nc.close(v * i, 0.006969, 0.06, 'the power in the diode branch (its voltage times the current)');\nc.close((5 - v) * i, 0.04307, 0.06, 'the power in the series resistor');"
       },
       {
-       "id": "p7",
-       "kind": "GND",
-       "x": 17,
-       "y": 11
-      },
-      {
-       "id": "p8",
-       "kind": "OUT",
-       "x": 11,
-       "y": 8
+       "name": "the capacitor charges with a 0.26 ms time constant, not 6 ms",
+       "code": "const s = c.step(1.0e-3);\nconst settled = s.v[s.v.length - 1];\nconst target = c.vout();\nc.assert(target > 0.05, 'The probed node should settle near 0.7 V; it is at ' + c.fmt(target, 'V') + '.');\nconst frac = settled / target;\nc.assert(frac > 0.90,\n  'After 1 ms the node has only reached ' + (100 * frac).toFixed(1) + '% of its final value. ' +\n  'With the real diode model the incremental resistance is about 2.6 ohms and 1 ms is nearly ' +\n  'four time constants, so it should be past 97%. A single resistor of the diode\\'s static ' +\n  'resistance gives the same DC answer but charges twenty-three times more slowly, which is ' +\n  'what this check is looking for.');"
       }
      ],
-     "wires": [
-      {
-       "a": [
-        3,
-        7
-       ],
-       "b": [
-        3,
-        9
-       ]
-      },
-      {
-       "a": [
-        11,
-        8
-       ],
-       "b": [
-        17,
-        8
-       ]
-      },
-      {
-       "a": [
-        17,
-        10
-       ],
-       "b": [
-        17,
-        11
-       ]
-      }
+     "hints": [
+      "The series resistor carries the same 10 mA and drops the rest of the supply: $(5 - 0.6964)/0.010 = 430.4\\ \\Omega$. Type `430` — the checks allow 3% on the current.",
+      "Build the model as a chain: output node, down through the 2.585 Ω resistor, then down through the 0.6705 V source, then to ground. Order does not matter electrically, but the polarity does.",
+      "For a vertical source the **+ terminal is the top pin**. The offset battery must push the output node upwards, so its + must face the output, not ground.",
+      "Type small values plainly: `2.585` for the resistor and `0.6705` for the source. The editor also understands `430` and `100u`.",
+      "If the last check fails but the first three pass, you have almost certainly used one resistor for the whole diode. Look at what the capacitor is charging through."
      ]
     },
-    "solution": {
-     "parts": [
+    {
+     "title": "The diode itself, and the decade it lives in",
+     "minutes": 24,
+     "brief": "The last exercise replaced the diode by a straight line. This one puts the diode back,\nbecause the editor solves it directly: a non-linear part is stamped as the tangent to\nits own curve at a guess, the circuit is solved, and the answer becomes the next guess.\nThat loop is Newton-Raphson, and it converges in a handful of passes. Nothing on this\ncanvas stands in for anything.\n\n## What to build\n\nTwo independent branches off the same **5 V** rail, each a resistor in series with a\n**real diode** down to ground. Both diodes are already placed, with\n$I_S = 2.0\\times10^{-14}$ A and $n = 1$ — the same device module 2 has been about. Both\nare missing their series resistor, so nothing is conducting yet.\n\nSize the two resistors so that\n\n- the left branch carries **0.1 mA**, and\n- the right branch carries **10 mA**,\n\nwhich is two decades apart. Then read the forward drop of each.\n\n## What you are measuring\n\nBecause $V_D = nV_T\\ln(1 + I/I_S)$, a **ratio** of currents becomes a **difference** of\nvoltages:\n\n$$V_2 - V_1 = nV_T\\ln\\!\\left(\\frac{I_2}{I_1}\\right) = 0.025852 \\times \\ln 100\n= 119.05\\,\\text{mV}$$\n\nThat is this module's 60 mV per decade, spent twice. The last check asks for it to\nwithin 8%.\n\n## Why this is not the last exercise again\n\nThe three descriptions of this diode barely disagree at 10 mA, which is why the previous\nexercise needed a capacitor to tell them apart at all. Ask the same question two decades\ndown and they separate immediately:\n\n```text\n                       0.1 mA       10 mA      change\n  the real device      0.5773 V    0.6964 V    119.05 mV\n  the tangent model    0.6708 V    0.6964 V     25.59 mV\n  a 69.64 ohm resistor 0.0070 V    0.6964 V    689.44 mV\n```\n\nThe tangent is exact where it was taken and understates the change by a factor of 4.7\ntwo decades away. The static resistance is out by 5.8 the other way. Neither is wrong as\nsuch — a tangent is a local statement and nothing promised otherwise — but a model whose\nerror you have never measured is a model whose range you do not know, and this is the\nmeasurement.\n\n## The trap\n\nIt is tempting to size the quiet branch as $5/0.0001 = 50\\,\\text{k}\\Omega$, ignoring the\ndrop. That gives 88 µA, 12% low, and the check refuses it. At 0.1 mA the diode still\nkeeps 0.577 V, which is 11.5% of the supply: the drop matters most as a *fraction*\nexactly where it is smallest in volts.",
+     "start": {
+      "parts": [
+       {
+        "id": "p0",
+        "kind": "V",
+        "x": 3,
+        "y": 6,
+        "rot": 1,
+        "value": 5
+       },
+       {
+        "id": "p1",
+        "kind": "GND",
+        "x": 3,
+        "y": 9
+       },
+       {
+        "id": "p2",
+        "kind": "D",
+        "x": 9,
+        "y": 10,
+        "rot": 1,
+        "value": 2e-14,
+        "n": 1
+       },
+       {
+        "id": "p3",
+        "kind": "GND",
+        "x": 9,
+        "y": 12
+       },
+       {
+        "id": "p4",
+        "kind": "D",
+        "x": 15,
+        "y": 10,
+        "rot": 1,
+        "value": 2e-14,
+        "n": 1
+       },
+       {
+        "id": "p5",
+        "kind": "GND",
+        "x": 15,
+        "y": 12
+       },
+       {
+        "id": "p6",
+        "kind": "OUT",
+        "x": 9,
+        "y": 9
+       }
+      ],
+      "wires": [
+       {
+        "a": [
+         3,
+         7
+        ],
+        "b": [
+         3,
+         9
+        ]
+       },
+       {
+        "a": [
+         9,
+         11
+        ],
+        "b": [
+         9,
+         12
+        ]
+       },
+       {
+        "a": [
+         15,
+         11
+        ],
+        "b": [
+         15,
+         12
+        ]
+       }
+      ]
+     },
+     "solution": {
+      "parts": [
+       {
+        "id": "p0",
+        "kind": "V",
+        "x": 3,
+        "y": 6,
+        "rot": 1,
+        "value": 5
+       },
+       {
+        "id": "p1",
+        "kind": "GND",
+        "x": 3,
+        "y": 9
+       },
+       {
+        "id": "p7",
+        "kind": "R",
+        "x": 9,
+        "y": 6,
+        "rot": 1,
+        "value": 44200
+       },
+       {
+        "id": "p2",
+        "kind": "D",
+        "x": 9,
+        "y": 10,
+        "rot": 1,
+        "value": 2e-14,
+        "n": 1
+       },
+       {
+        "id": "p3",
+        "kind": "GND",
+        "x": 9,
+        "y": 12
+       },
+       {
+        "id": "p8",
+        "kind": "R",
+        "x": 15,
+        "y": 6,
+        "rot": 1,
+        "value": 430
+       },
+       {
+        "id": "p4",
+        "kind": "D",
+        "x": 15,
+        "y": 10,
+        "rot": 1,
+        "value": 2e-14,
+        "n": 1
+       },
+       {
+        "id": "p5",
+        "kind": "GND",
+        "x": 15,
+        "y": 12
+       },
+       {
+        "id": "p6",
+        "kind": "OUT",
+        "x": 9,
+        "y": 9
+       }
+      ],
+      "wires": [
+       {
+        "a": [
+         3,
+         7
+        ],
+        "b": [
+         3,
+         9
+        ]
+       },
+       {
+        "a": [
+         3,
+         5
+        ],
+        "b": [
+         9,
+         5
+        ]
+       },
+       {
+        "a": [
+         9,
+         5
+        ],
+        "b": [
+         15,
+         5
+        ]
+       },
+       {
+        "a": [
+         9,
+         7
+        ],
+        "b": [
+         9,
+         9
+        ]
+       },
+       {
+        "a": [
+         15,
+         7
+        ],
+        "b": [
+         15,
+         9
+        ]
+       },
+       {
+        "a": [
+         9,
+         11
+        ],
+        "b": [
+         9,
+         12
+        ]
+       },
+       {
+        "a": [
+         15,
+         11
+        ],
+        "b": [
+         15,
+         12
+        ]
+       }
+      ]
+     },
+     "checks": [
       {
-       "id": "p0",
-       "kind": "V",
-       "x": 3,
-       "y": 6,
-       "rot": 1,
-       "value": 5
+       "name": "two real diodes, and nothing standing in for them",
+       "code": "c.assert(c.count('D') === 2,\n  'This exercise wants two actual diodes on the canvas; found ' + c.count('D') + '. A ' +\n  'voltage source and a resistor in series is the model you built last time, and the ' +\n  'whole point here is to measure the thing that model was standing in for.');\nc.assert(c.count('V') === 1,\n  'Exactly one voltage source, the 5 V rail; found ' + c.count('V') + '. A second source ' +\n  'is a piecewise-linear model creeping back in.');"
       },
       {
-       "id": "p1",
-       "kind": "GND",
-       "x": 3,
-       "y": 9
+       "name": "the quiet branch settles at 0.1 mA",
+       "code": "const ds = c.net.placed.filter(function (p) { return p.kind === 'D'; });\nc.assert(ds.length === 2, 'Two diodes have to be on the canvas before the currents mean anything.');\nconst i = ds.map(function (p) { return Math.abs(c.device(p.id).i[0]); })\n            .sort(function (a, b) { return a - b; });\nc.close(i[0], 1e-4, 0.06,\n  'The lower of the two diode currents. Remember that the diode keeps 0.577 V of the ' +\n  '5 V for itself even here');"
       },
       {
-       "id": "p2",
-       "kind": "R",
-       "x": 9,
-       "y": 6,
-       "rot": 1,
-       "value": 430
+       "name": "the loud branch settles at 10 mA, two decades up",
+       "code": "const ds = c.net.placed.filter(function (p) { return p.kind === 'D'; });\nc.assert(ds.length === 2, 'Two diodes have to be on the canvas before the currents mean anything.');\nconst i = ds.map(function (p) { return Math.abs(c.device(p.id).i[0]); })\n            .sort(function (a, b) { return a - b; });\nc.close(i[1], 1e-2, 0.06, 'The upper of the two diode currents');\nconst ratio = i[1] / i[0];\nc.assert(ratio > 50 && ratio < 200,\n  'The two branches have to sit two decades apart; this pair is a factor of ' +\n  ratio.toFixed(1) + '.');"
       },
       {
-       "id": "p3",
-       "kind": "R",
-       "x": 13,
-       "y": 9,
-       "rot": 1,
-       "value": 2.5852
-      },
-      {
-       "id": "p4",
-       "kind": "V",
-       "x": 13,
-       "y": 11,
-       "rot": 1,
-       "value": 0.6705
-      },
-      {
-       "id": "p5",
-       "kind": "GND",
-       "x": 13,
-       "y": 13
-      },
-      {
-       "id": "p6",
-       "kind": "C",
-       "x": 17,
-       "y": 9,
-       "rot": 1,
-       "value": 0.0001
-      },
-      {
-       "id": "p7",
-       "kind": "GND",
-       "x": 17,
-       "y": 11
-      },
-      {
-       "id": "p8",
-       "kind": "OUT",
-       "x": 11,
-       "y": 8
+       "name": "the forward drop moves by 119 mV, not by 26 and not by 689",
+       "code": "const ds = c.net.placed.filter(function (p) { return p.kind === 'D'; });\nc.assert(ds.length === 2, 'Two diodes have to be on the canvas before the drops mean anything.');\nconst m = ds.map(function (p) {\n  const d = c.device(p.id);\n  return { i: Math.abs(d.i[0]), v: d.v[0] - d.v[1] };\n}).sort(function (a, b) { return a.i - b.i; });\nconst dv = (m[1].v - m[0].v) * 1000;\nc.close(dv, 119.05, 0.08,\n  'The difference between the two forward drops, in mV. This is n*VT*ln(100), a ' +\n  'property of the device rather than of the resistors you chose');"
       }
      ],
-     "wires": [
-      {
-       "a": [
-        3,
-        7
-       ],
-       "b": [
-        3,
-        9
-       ]
-      },
-      {
-       "a": [
-        3,
-        5
-       ],
-       "b": [
-        9,
-        5
-       ]
-      },
-      {
-       "a": [
-        9,
-        7
-       ],
-       "b": [
-        9,
-        8
-       ]
-      },
-      {
-       "a": [
-        9,
-        8
-       ],
-       "b": [
-        17,
-        8
-       ]
-      },
-      {
-       "a": [
-        13,
-        12
-       ],
-       "b": [
-        13,
-        13
-       ]
-      },
-      {
-       "a": [
-        17,
-        10
-       ],
-       "b": [
-        17,
-        11
-       ]
-      }
+     "hints": [
+      "For the 10 mA branch the diode drops $0.025852\\ln(1 + 0.01/2\\times10^{-14}) = 0.6964$ V, so the resistor takes $5 - 0.6964 = 4.3036$ V and has to be $430.4\\,\\Omega$. Type `430`.",
+      "For the 0.1 mA branch the drop is $0.5773$ V, so the resistor takes $4.4227$ V and has to be $44.2\\,\\text{k}\\Omega$. Type `44.2k` — the editor reads engineering notation.",
+      "Both diodes point the same way: anode at the top, on the resistor's side, cathode to ground. A diode drawn upside down blocks, and its branch then sits at the full 5 V with no current in it.",
+      "The two branches share the rail and the ground and nothing else. If they share the node above the diodes as well, you have built module 10's mistake eight modules early.",
+      "If the last check fails while both current checks pass, look at whether both diodes really are diodes. A `D` and a `V`+`R` pair can be made to carry the same current, and cannot possibly show the same 119 mV."
      ]
-    },
-    "checks": [
-     {
-      "name": "the 5 V supply delivers 10 mA",
-      "code": "const sources = c.net.parts.filter(function (p) { return p.kind === 'V'; });\nconst supply = sources.filter(function (p) { return Math.abs(p.value - 5) < 0.5; });\nc.assert(supply.length === 1,\n  'Exactly one 5 V supply, so that \"the supply current\" means one thing. Found ' +\n  supply.length + ' source(s) near 5 V.');\nconst i = Math.abs(c.dc().currents[supply[0].id]);\nc.close(i, 0.010, 0.03,\n  'the current out of the 5 V supply — size the series resistor from (5 - 0.6964)/0.010');"
-     },
-     {
-      "name": "the diode model sits at 0.696 V",
-      "code": "c.close(c.vout(), 0.6964, 0.015,\n  'the voltage at the probed node. At 10 mA this diode drops 0.6964 V, so that is what ' +\n  'the top of the model must sit at; check the offset source is the right way up');"
-     },
-     {
-      "name": "the power splits 43 mW in the resistor, 7 mW in the diode",
-      "code": "const sources = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 5) < 0.5; });\nconst i = Math.abs(c.dc().currents[sources[0].id]);\nconst v = c.vout();\nc.close(v * i, 0.006969, 0.06, 'the power in the diode branch (its voltage times the current)');\nc.close((5 - v) * i, 0.04307, 0.06, 'the power in the series resistor');"
-     },
-     {
-      "name": "the capacitor charges with a 0.26 ms time constant, not 6 ms",
-      "code": "const s = c.step(1.0e-3);\nconst settled = s.v[s.v.length - 1];\nconst target = c.vout();\nc.assert(target > 0.05, 'The probed node should settle near 0.7 V; it is at ' + c.fmt(target, 'V') + '.');\nconst frac = settled / target;\nc.assert(frac > 0.90,\n  'After 1 ms the node has only reached ' + (100 * frac).toFixed(1) + '% of its final value. ' +\n  'With the real diode model the incremental resistance is about 2.6 ohms and 1 ms is nearly ' +\n  'four time constants, so it should be past 97%. A single resistor of the diode\\'s static ' +\n  'resistance gives the same DC answer but charges twenty-three times more slowly, which is ' +\n  'what this check is looking for.');"
-     }
-    ],
-    "hints": [
-     "The series resistor carries the same 10 mA and drops the rest of the supply: $(5 - 0.6964)/0.010 = 430.4\\ \\Omega$. Type `430` — the checks allow 3% on the current.",
-     "Build the model as a chain: output node, down through the 2.585 Ω resistor, then down through the 0.6705 V source, then to ground. Order does not matter electrically, but the polarity does.",
-     "For a vertical source the **+ terminal is the top pin**. The offset battery must push the output node upwards, so its + must face the output, not ground.",
-     "Type small values plainly: `2.585` for the resistor and `0.6705` for the source. The editor also understands `430` and `100u`.",
-     "If the last check fails but the first three pass, you have almost certainly used one resistor for the whole diode. Look at what the capacitor is charging through."
-    ]
-   },
+    }
+   ],
    "derive": null,
    "lab": {
     "title": "Solving the diode equation, both ways round",
@@ -3253,7 +3514,8 @@
     "Its saturation current is four to six orders of magnitude larger than a pn junction's, so the same current arrives at 0.3 to 0.45 V instead of 0.7 V. Those two facts are one fact: $\\Delta V_F = V_T\\ln(I_{S2}/I_{S1})$, so saving 0.35 V of forward drop means $I_S$ larger by $e^{0.35/0.02585} = 7.6\\times10^5$ — and the reverse leakage is larger by the same factor. A Schottky is not a better diode; it is the same trade made differently, and its breakdown is lower too, typically 20 to 100 V.",
     "An **LED** is a junction in a direct-gap compound — AlGaInP, InGaN — where a recombining electron gives its energy to a photon rather than to the lattice. The photon's energy is the band gap, so $E_g[\\text{eV}] = 1240/\\lambda[\\text{nm}]$, and the forward voltage follows the *colour* rather than the semiconductor's reputation: about 1.9 V for red at 630 nm, and 2.67 V at the very least for blue at 465 nm.",
     "That is a hard floor, not a preference. No arrangement of resistors will light a blue LED from a single 1.5 V cell, which is why a blue torch has a boost converter in it and a red one does not.",
-    "LEDs are current-driven for module 2's reason and paralleled at your peril for module 6's. Two nominally identical parts modelled as 1.85 V and 1.95 V in series with 12 $\\Omega$, sharing one resistor at 20 mA, split it 14.1 mA and 5.8 mA — a 100 mV spread in $V_F$ becoming a 2.4:1 spread in brightness and in ageing. Give each its own ballast.",
+    "LEDs are current-driven for module 2's reason and paralleled at your peril for module 6's. Two nominally identical parts *modelled* as 1.85 V and 1.95 V in series with 12 $\\Omega$, sharing one resistor at 20 mA, split it 14.1 mA and 5.8 mA — 2.4:1 in brightness and in ageing. Give each its own ballast.",
+    "That 2.4:1 is the straight line's answer, and the junctions themselves are worse: **6.92:1**. Two LEDs on one node are held at one voltage, so $I_A/I_B = I_{SA}/I_{SB}$ exactly — the ratio of the saturation currents, and therefore the same number whatever ballast is chosen, measured unchanged from 50 $\\Omega$ to 10 k$\\Omega$. The linearised model cannot express that at all, because it makes the ratio depend on the node voltage. The second build measures both.",
     "A **photodiode** is the same junction run backwards with light making the carriers. The photocurrent is proportional to optical power and almost independent of the reverse voltage, so the small-signal model is a current source in parallel with $C_j$ — which makes module 7's capacitance the thing that sets its speed. Its **responsivity** is $R = \\eta q\\lambda/hc$, or $\\eta\\lambda[\\mu\\text{m}]/1.24$ A/W, about 0.6 A/W for silicon at 900 nm.",
     "Reverse bias it — photoconductive mode — and $C_j$ shrinks, the response is fast and linear, and you pay in dark current. Leave it at zero volts — photovoltaic mode — and the dark current vanishes while $C_j$ is at its largest and the device is slow. Push the same curve into the fourth quadrant, delivering power rather than absorbing it, and it is a solar cell."
    ],
@@ -3369,372 +3631,632 @@
    },
    "match": null,
    "tune": null,
-   "build": {
-    "title": "Two LEDs that are meant to look the same",
-    "minutes": 26,
-    "brief": "An indicator with two LEDs side by side, driven from a 5 V rail, and they have to be the\nsame brightness. That is the whole specification, and it is enough to rule out the\ncircuit almost everyone draws first.\n\n## The parts\n\nTwo nominally identical red LEDs from the same reel, modelled the way module 2 modelled\na diode — a fixed offset in series with a resistance, the tangent to the real curve near\nthe working current:\n\n- **LED A**: 1.85 V in series with 12 $\\Omega$\n- **LED B**: 1.95 V in series with 12 $\\Omega$\n\nThe 100 mV between them is not a fault. It is the ordinary bin-to-bin spread a data\nsheet allows, and any two parts you pull off a reel will differ by something like it.\n\nBoth models are already on the canvas, each running down to its own ground, and both are\nunconnected at the top. The 5 V rail is there and unconnected too.\n\n## The specification\n\n- each LED must carry between **8 mA and 12 mA**\n- the two currents must be within **10%** of each other, or the difference in brightness\n  shows\n- the rail must supply no more than **22 mA** in total\n\n## The circuit almost everyone draws\n\nOne resistor from the rail, feeding both LEDs in parallel. Size it for 20 mA total and\n150 $\\Omega$ is the answer, and it delivers exactly 19.87 mA — bang on budget. Both LEDs\nthen sit at the same node, 2.02 V, so LED A carries $(2.02-1.85)/12 = 14.1$ mA and LED B\ncarries $(2.02-1.95)/12 = 5.8$ mA. Same total current, same power out of the rail,\ntwo-and-a-half times the brightness on one side.\n\nNothing in that circuit is broken. The two LEDs share a node, so they must share a\nvoltage, and at a shared voltage the one that needs less takes more. The only fix is to\nstop them sharing.\n\n## What to build\n\nGive each LED its own ballast resistor from the 5 V rail. Choose the value from the\nspecification above, and note as you do it that the ballast is not overhead — it is the\ncomponent that makes the mismatch stop mattering, because the current is now set mostly\nby a resistor you chose rather than by a 100 mV difference you did not.",
-    "start": {
-     "parts": [
+   "build": [
+    {
+     "title": "Two LEDs that are meant to look the same",
+     "minutes": 26,
+     "brief": "An indicator with two LEDs side by side, driven from a 5 V rail, and they have to be the\nsame brightness. That is the whole specification, and it is enough to rule out the\ncircuit almost everyone draws first.\n\n## The parts\n\nTwo nominally identical red LEDs from the same reel, modelled the way module 2 modelled\na diode — a fixed offset in series with a resistance, the tangent to the real curve near\nthe working current:\n\n- **LED A**: 1.85 V in series with 12 $\\Omega$\n- **LED B**: 1.95 V in series with 12 $\\Omega$\n\nThe 100 mV between them is not a fault. It is the ordinary bin-to-bin spread a data\nsheet allows, and any two parts you pull off a reel will differ by something like it.\n\nBoth models are already on the canvas, each running down to its own ground, and both are\nunconnected at the top. The 5 V rail is there and unconnected too.\n\n## The specification\n\n- each LED must carry between **8 mA and 12 mA**\n- the two currents must be within **10%** of each other, or the difference in brightness\n  shows\n- the rail must supply no more than **22 mA** in total\n\n## The circuit almost everyone draws\n\nOne resistor from the rail, feeding both LEDs in parallel. Size it for 20 mA total and\n150 $\\Omega$ is the answer, and it delivers exactly 19.87 mA — bang on budget. Both LEDs\nthen sit at the same node, 2.02 V, so LED A carries $(2.02-1.85)/12 = 14.1$ mA and LED B\ncarries $(2.02-1.95)/12 = 5.8$ mA. Same total current, same power out of the rail,\ntwo-and-a-half times the brightness on one side.\n\nNothing in that circuit is broken. The two LEDs share a node, so they must share a\nvoltage, and at a shared voltage the one that needs less takes more. The only fix is to\nstop them sharing.\n\nThose two figures are what the *models* do. The junctions themselves are worse — 18.2 mA\nagainst 2.6 mA, a ratio of 6.92 rather than 2.4 — and the next exercise builds the same\nspecification out of real LEDs and measures it.\n\n## What to build\n\nGive each LED its own ballast resistor from the 5 V rail. Choose the value from the\nspecification above, and note as you do it that the ballast is not overhead — it is the\ncomponent that makes the mismatch stop mattering, because the current is now set mostly\nby a resistor you chose rather than by a 100 mV difference you did not.",
+     "start": {
+      "parts": [
+       {
+        "id": "p0",
+        "kind": "V",
+        "x": 3,
+        "y": 6,
+        "rot": 1,
+        "value": 5
+       },
+       {
+        "id": "p1",
+        "kind": "GND",
+        "x": 3,
+        "y": 9
+       },
+       {
+        "id": "a1",
+        "kind": "R",
+        "x": 11,
+        "y": 9,
+        "rot": 1,
+        "value": 12
+       },
+       {
+        "id": "a2",
+        "kind": "V",
+        "x": 11,
+        "y": 12,
+        "rot": 1,
+        "value": 1.85
+       },
+       {
+        "id": "a3",
+        "kind": "GND",
+        "x": 11,
+        "y": 14
+       },
+       {
+        "id": "b1",
+        "kind": "R",
+        "x": 17,
+        "y": 9,
+        "rot": 1,
+        "value": 12
+       },
+       {
+        "id": "b2",
+        "kind": "V",
+        "x": 17,
+        "y": 12,
+        "rot": 1,
+        "value": 1.95
+       },
+       {
+        "id": "b3",
+        "kind": "GND",
+        "x": 17,
+        "y": 14
+       },
+       {
+        "id": "pr",
+        "kind": "OUT",
+        "x": 9,
+        "y": 8
+       }
+      ],
+      "wires": [
+       {
+        "a": [
+         3,
+         7
+        ],
+        "b": [
+         3,
+         9
+        ]
+       },
+       {
+        "a": [
+         9,
+         8
+        ],
+        "b": [
+         11,
+         8
+        ]
+       },
+       {
+        "a": [
+         11,
+         10
+        ],
+        "b": [
+         11,
+         11
+        ]
+       },
+       {
+        "a": [
+         11,
+         13
+        ],
+        "b": [
+         11,
+         14
+        ]
+       },
+       {
+        "a": [
+         17,
+         10
+        ],
+        "b": [
+         17,
+         11
+        ]
+       },
+       {
+        "a": [
+         17,
+         13
+        ],
+        "b": [
+         17,
+         14
+        ]
+       }
+      ]
+     },
+     "solution": {
+      "parts": [
+       {
+        "id": "p0",
+        "kind": "V",
+        "x": 3,
+        "y": 6,
+        "rot": 1,
+        "value": 5
+       },
+       {
+        "id": "p1",
+        "kind": "GND",
+        "x": 3,
+        "y": 9
+       },
+       {
+        "id": "r1",
+        "kind": "R",
+        "x": 11,
+        "y": 5,
+        "rot": 1,
+        "value": 300
+       },
+       {
+        "id": "r2",
+        "kind": "R",
+        "x": 17,
+        "y": 5,
+        "rot": 1,
+        "value": 300
+       },
+       {
+        "id": "a1",
+        "kind": "R",
+        "x": 11,
+        "y": 9,
+        "rot": 1,
+        "value": 12
+       },
+       {
+        "id": "a2",
+        "kind": "V",
+        "x": 11,
+        "y": 12,
+        "rot": 1,
+        "value": 1.85
+       },
+       {
+        "id": "a3",
+        "kind": "GND",
+        "x": 11,
+        "y": 14
+       },
+       {
+        "id": "b1",
+        "kind": "R",
+        "x": 17,
+        "y": 9,
+        "rot": 1,
+        "value": 12
+       },
+       {
+        "id": "b2",
+        "kind": "V",
+        "x": 17,
+        "y": 12,
+        "rot": 1,
+        "value": 1.95
+       },
+       {
+        "id": "b3",
+        "kind": "GND",
+        "x": 17,
+        "y": 14
+       },
+       {
+        "id": "pr",
+        "kind": "OUT",
+        "x": 9,
+        "y": 8
+       }
+      ],
+      "wires": [
+       {
+        "a": [
+         3,
+         7
+        ],
+        "b": [
+         3,
+         9
+        ]
+       },
+       {
+        "a": [
+         3,
+         5
+        ],
+        "b": [
+         9,
+         5
+        ]
+       },
+       {
+        "a": [
+         9,
+         5
+        ],
+        "b": [
+         9,
+         4
+        ]
+       },
+       {
+        "a": [
+         9,
+         4
+        ],
+        "b": [
+         11,
+         4
+        ]
+       },
+       {
+        "a": [
+         11,
+         4
+        ],
+        "b": [
+         17,
+         4
+        ]
+       },
+       {
+        "a": [
+         11,
+         6
+        ],
+        "b": [
+         11,
+         8
+        ]
+       },
+       {
+        "a": [
+         9,
+         8
+        ],
+        "b": [
+         11,
+         8
+        ]
+       },
+       {
+        "a": [
+         17,
+         6
+        ],
+        "b": [
+         17,
+         8
+        ]
+       },
+       {
+        "a": [
+         11,
+         10
+        ],
+        "b": [
+         11,
+         11
+        ]
+       },
+       {
+        "a": [
+         11,
+         13
+        ],
+        "b": [
+         11,
+         14
+        ]
+       },
+       {
+        "a": [
+         17,
+         10
+        ],
+        "b": [
+         17,
+         11
+        ]
+       },
+       {
+        "a": [
+         17,
+         13
+        ],
+        "b": [
+         17,
+         14
+        ]
+       }
+      ]
+     },
+     "checks": [
       {
-       "id": "p0",
-       "kind": "V",
-       "x": 3,
-       "y": 6,
-       "rot": 1,
-       "value": 5
+       "name": "both LED models are present and unedited",
+       "code": "const a = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.85) < 0.02; });\nconst b = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.95) < 0.02; });\nc.assert(a.length === 1 && b.length === 1,\n  'One 1.85 V offset and one 1.95 V offset, which are the two LEDs. Found ' + a.length +\n  ' and ' + b.length + '. Editing them until they match is solving the exercise by ' +\n  'assuming the parts are identical, which is the assumption that fails on a reel.');\nconst twelves = c.values('R').filter(function (v) { return Math.abs(v - 12) <= 0.6; });\nc.assert(twelves.length === 2,\n  'Each LED model needs its own 12 ohm slope resistance; found ' + twelves.length +\n  ' resistors near 12 ohms.');\nconst sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 5) < 0.2; });\nc.assert(sup.length === 1, 'Exactly one 5 V rail; found ' + sup.length + '.');"
       },
       {
-       "id": "p1",
-       "kind": "GND",
-       "x": 3,
-       "y": 9
+       "name": "each LED carries between 8 mA and 12 mA",
+       "code": "const d = c.dc();\nconst a = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.85) < 0.02; })[0];\nconst b = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.95) < 0.02; })[0];\nconst ia = Math.abs(d.currents[a.id]), ib = Math.abs(d.currents[b.id]);\nc.assert(ia >= 0.008 * 0.99 && ia <= 0.012 * 1.01,\n  'LED A is carrying ' + c.fmt(ia, 'A') + ', outside the 8 mA to 12 mA window.');\nc.assert(ib >= 0.008 * 0.99 && ib <= 0.012 * 1.01,\n  'LED B is carrying ' + c.fmt(ib, 'A') + ', outside the 8 mA to 12 mA window.');"
       },
       {
-       "id": "a1",
-       "kind": "R",
-       "x": 11,
-       "y": 9,
-       "rot": 1,
-       "value": 12
+       "name": "and the two are within ten per cent of each other",
+       "code": "const d = c.dc();\nconst a = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.85) < 0.02; })[0];\nconst b = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.95) < 0.02; })[0];\nconst ia = Math.abs(d.currents[a.id]), ib = Math.abs(d.currents[b.id]);\nconst hi = Math.max(ia, ib), lo = Math.min(ia, ib);\nc.assert(lo > 1e-9, 'One of the LEDs is carrying nothing at all.');\nc.assert(hi / lo <= 1.10 * 1.001,\n  'The two LEDs are carrying ' + c.fmt(lo, 'A') + ' and ' + c.fmt(hi, 'A') + ', a ratio of ' +\n  (hi / lo).toFixed(2) + '. A single shared resistor gives 2.44 here, because both LEDs ' +\n  'then sit at one node voltage and the one with the lower offset takes the difference. ' +\n  'Each LED needs its own path back to the rail.');"
       },
       {
-       "id": "a2",
-       "kind": "V",
-       "x": 11,
-       "y": 12,
-       "rot": 1,
-       "value": 1.85
-      },
-      {
-       "id": "a3",
-       "kind": "GND",
-       "x": 11,
-       "y": 14
-      },
-      {
-       "id": "b1",
-       "kind": "R",
-       "x": 17,
-       "y": 9,
-       "rot": 1,
-       "value": 12
-      },
-      {
-       "id": "b2",
-       "kind": "V",
-       "x": 17,
-       "y": 12,
-       "rot": 1,
-       "value": 1.95
-      },
-      {
-       "id": "b3",
-       "kind": "GND",
-       "x": 17,
-       "y": 14
-      },
-      {
-       "id": "pr",
-       "kind": "OUT",
-       "x": 9,
-       "y": 8
+       "name": "the rail supplies no more than 22 mA",
+       "code": "const sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 5) < 0.2; })[0];\nconst i = Math.abs(c.dc().currents[sup.id]);\nc.assert(i > 1e-4,\n  'The 5 V rail is delivering ' + c.fmt(i, 'A') + '. Nothing is connected to it yet, so ' +\n  'neither LED is lit and there is nothing to measure.');\nc.assert(i <= 0.022 * 1.01,\n  'The rail is being asked for ' + c.fmt(i, 'A') + ', over the 22 mA budget. Two LEDs at ' +\n  '10 mA each is 20 mA and the budget allows a little over that, so if you are well above ' +\n  'it the ballast resistors are too small.');"
       }
      ],
-     "wires": [
-      {
-       "a": [
-        3,
-        7
-       ],
-       "b": [
-        3,
-        9
-       ]
-      },
-      {
-       "a": [
-        9,
-        8
-       ],
-       "b": [
-        11,
-        8
-       ]
-      },
-      {
-       "a": [
-        11,
-        10
-       ],
-       "b": [
-        11,
-        11
-       ]
-      },
-      {
-       "a": [
-        11,
-        13
-       ],
-       "b": [
-        11,
-        14
-       ]
-      },
-      {
-       "a": [
-        17,
-        10
-       ],
-       "b": [
-        17,
-        11
-       ]
-      },
-      {
-       "a": [
-        17,
-        13
-       ],
-       "b": [
-        17,
-        14
-       ]
-      }
+     "hints": [
+      "Size each ballast for about 10 mA through its own LED. For LED A: $(5 - 1.85)/(R + 12) = 0.010$ gives $R = 303\\ \\Omega$, so 300 $\\Omega$ is the standard value to reach for.",
+      "The same 300 $\\Omega$ works for both: LED A then takes 10.10 mA and LED B takes 9.78 mA, a ratio of 1.03 and a total of 19.87 mA. Trimming the two ballasts to different values to equalise them exactly is possible and pointless — the next pair off the reel will be mismatched differently.",
+      "330 $\\Omega$ also passes, at 9.21 mA and 8.92 mA. 390 $\\Omega$ does not: it drops LED B to 7.59 mA, under the 8 mA floor. 220 $\\Omega$ does not either: it asks the rail for 26.7 mA.",
+      "Lay it out as two independent columns: rail, ballast, LED model, ground, twice over. The only thing the two branches may share is the rail and the ground.",
+      "Notice what the shared-resistor version and the correct one have in common: both draw 19.87 mA from the rail and both dissipate the same total power. The mismatch costs nothing in current and everything in what the current is doing, which is why measuring the supply rail would never have found it."
      ]
     },
-    "solution": {
-     "parts": [
+    {
+     "title": "The same two LEDs, with the junctions left in",
+     "minutes": 24,
+     "brief": "Same specification, same reel, same 5 V rail — and this time the two LEDs are LEDs. The\neditor solves them directly, so nothing on the canvas stands in for anything.\n\n## The parts\n\nTwo red LEDs, $n = 2$, differing only in saturation current:\n\n- **LED A**: $I_S = 2.889\\times10^{-18}$ A, which puts it at **1.850 V** at 10 mA\n- **LED B**: $I_S = 4.176\\times10^{-19}$ A, which puts it at **1.950 V** at 10 mA\n\nThese are the same two parts the last exercise modelled, with the spread written as the\nparameter it actually comes from rather than as the drop it happens to produce at one\ncurrent.\n\n## The specification, unchanged\n\n- each LED carries between **8 mA and 12 mA**\n- the two currents within **10%** of each other\n- the rail supplies no more than **22 mA**\n\n## What the shared resistor really does\n\nLast time a single 150 $\\Omega$ ballast split the current 14.1 mA and 5.8 mA. Build the\nsame circuit out of junctions and it splits **18.17 mA and 2.63 mA** — a ratio of\n**6.92**, not 2.4. The linearised model understated the effect it was introduced to\ndemonstrate by a factor of nearly three.\n\nThe reason is worth more than the number. Two LEDs on one node are held at one voltage\n$V$, and each carries $I = I_S\\left(e^{V/nV_T} - 1\\right)$. Divide one by the other and\nthe exponential cancels:\n\n$$\\frac{I_A}{I_B} = \\frac{I_{SA}}{I_{SB}}\n= \\frac{2.889\\times10^{-18}}{4.176\\times10^{-19}} = 6.92$$\n\n$V$ has gone. The split does not depend on the ballast, on the supply, or on how hard\nthe pair is driven — 6.92 at 50 $\\Omega$, 6.92 at 10 k$\\Omega$, and 6.92 at every value\nbetween. The piecewise-linear model cannot say this: its ratio is\n$(V - 1.85)/(V - 1.95)$, which moves with $V$, and that is why it gave a smaller and\nballast-dependent answer.\n\n## What to build\n\nGive each LED its own ballast from the rail. **300 $\\Omega$** each puts LED A at\n10.49 mA and LED B at 10.16 mA — a ratio of 1.032, and 20.66 mA out of the rail.\n\nDo not adjust the two saturation currents until they agree. That is solving the exercise\nby deleting its premise, and the first check refuses it.",
+     "start": {
+      "parts": [
+       {
+        "id": "q0",
+        "kind": "V",
+        "x": 3,
+        "y": 6,
+        "rot": 1,
+        "value": 5
+       },
+       {
+        "id": "q1",
+        "kind": "GND",
+        "x": 3,
+        "y": 9
+       },
+       {
+        "id": "q2",
+        "kind": "LED",
+        "x": 13,
+        "y": 10,
+        "rot": 1,
+        "value": 2.8886e-18,
+        "n": 2
+       },
+       {
+        "id": "q3",
+        "kind": "GND",
+        "x": 13,
+        "y": 12
+       },
+       {
+        "id": "q4",
+        "kind": "LED",
+        "x": 17,
+        "y": 10,
+        "rot": 1,
+        "value": 4.1756e-19,
+        "n": 2
+       },
+       {
+        "id": "q5",
+        "kind": "GND",
+        "x": 17,
+        "y": 12
+       },
+       {
+        "id": "q6",
+        "kind": "OUT",
+        "x": 13,
+        "y": 9
+       }
+      ],
+      "wires": [
+       {
+        "a": [
+         3,
+         7
+        ],
+        "b": [
+         3,
+         9
+        ]
+       },
+       {
+        "a": [
+         13,
+         11
+        ],
+        "b": [
+         13,
+         12
+        ]
+       },
+       {
+        "a": [
+         17,
+         11
+        ],
+        "b": [
+         17,
+         12
+        ]
+       }
+      ]
+     },
+     "solution": {
+      "parts": [
+       {
+        "id": "q0",
+        "kind": "V",
+        "x": 3,
+        "y": 6,
+        "rot": 1,
+        "value": 5
+       },
+       {
+        "id": "q1",
+        "kind": "GND",
+        "x": 3,
+        "y": 9
+       },
+       {
+        "id": "q7",
+        "kind": "R",
+        "x": 13,
+        "y": 6,
+        "rot": 1,
+        "value": 300
+       },
+       {
+        "id": "q2",
+        "kind": "LED",
+        "x": 13,
+        "y": 10,
+        "rot": 1,
+        "value": 2.8886e-18,
+        "n": 2
+       },
+       {
+        "id": "q3",
+        "kind": "GND",
+        "x": 13,
+        "y": 12
+       },
+       {
+        "id": "q8",
+        "kind": "R",
+        "x": 17,
+        "y": 6,
+        "rot": 1,
+        "value": 300
+       },
+       {
+        "id": "q4",
+        "kind": "LED",
+        "x": 17,
+        "y": 10,
+        "rot": 1,
+        "value": 4.1756e-19,
+        "n": 2
+       },
+       {
+        "id": "q5",
+        "kind": "GND",
+        "x": 17,
+        "y": 12
+       },
+       {
+        "id": "q6",
+        "kind": "OUT",
+        "x": 13,
+        "y": 9
+       }
+      ],
+      "wires": [
+       {
+        "a": [
+         3,
+         7
+        ],
+        "b": [
+         3,
+         9
+        ]
+       },
+       {
+        "a": [
+         3,
+         5
+        ],
+        "b": [
+         13,
+         5
+        ]
+       },
+       {
+        "a": [
+         13,
+         5
+        ],
+        "b": [
+         17,
+         5
+        ]
+       },
+       {
+        "a": [
+         13,
+         7
+        ],
+        "b": [
+         13,
+         9
+        ]
+       },
+       {
+        "a": [
+         17,
+         7
+        ],
+        "b": [
+         17,
+         9
+        ]
+       },
+       {
+        "a": [
+         13,
+         11
+        ],
+        "b": [
+         13,
+         12
+        ]
+       },
+       {
+        "a": [
+         17,
+         11
+        ],
+        "b": [
+         17,
+         12
+        ]
+       }
+      ]
+     },
+     "checks": [
       {
-       "id": "p0",
-       "kind": "V",
-       "x": 3,
-       "y": 6,
-       "rot": 1,
-       "value": 5
+       "name": "two real LEDs from the same reel, unedited",
+       "code": "c.assert(c.count('LED') === 2,\n  'Two LEDs, drawn as LEDs rather than modelled; found ' + c.count('LED') + '.');\nconst is = c.values('LED').slice().sort(function (a, b) { return a - b; });\nc.assert(Math.abs(is[0] / 4.1756e-19 - 1) < 0.02 && Math.abs(is[1] / 2.8886e-18 - 1) < 0.02,\n  'The two saturation currents are the reel spread, and they are what this exercise is ' +\n  'about. Editing them until they match solves the problem by assuming it away.');\nc.assert(c.count('V') === 1,\n  'One rail and one rail only; found ' + c.count('V') + ' voltage sources.');"
       },
       {
-       "id": "p1",
-       "kind": "GND",
-       "x": 3,
-       "y": 9
+       "name": "each LED carries between 8 mA and 12 mA",
+       "code": "const ls = c.net.placed.filter(function (p) { return p.kind === 'LED'; });\nc.assert(ls.length === 2, 'Both LEDs have to be on the canvas.');\nls.forEach(function (p) {\n  const i = Math.abs(c.device(p.id).i[0]);\n  c.assert(i >= 0.008 && i <= 0.012,\n    'One LED is carrying ' + c.fmt(i, 'A') + ', outside the 8 to 12 mA the ' +\n    'specification allows.');\n});"
       },
       {
-       "id": "r1",
-       "kind": "R",
-       "x": 11,
-       "y": 5,
-       "rot": 1,
-       "value": 300
+       "name": "the two currents are within 10% of each other",
+       "code": "const ls = c.net.placed.filter(function (p) { return p.kind === 'LED'; });\nc.assert(ls.length === 2, 'Both LEDs have to be on the canvas.');\nconst i = ls.map(function (p) { return Math.abs(c.device(p.id).i[0]); })\n            .sort(function (a, b) { return a - b; });\nc.assert(i[0] > 1e-6,\n  'One LED is carrying essentially nothing, so the two cannot be compared. Check that ' +\n  'both are the right way up and that both have a path to the rail.');\nc.assert(i[1] / i[0] <= 1.10,\n  'The brighter LED carries ' + (i[1] / i[0]).toFixed(2) + ' times the dimmer one. ' +\n  'A shared ballast gives 6.92 here whatever its value, because at one shared voltage ' +\n  'the two currents are in the ratio of the saturation currents.');"
       },
       {
-       "id": "r2",
-       "kind": "R",
-       "x": 17,
-       "y": 5,
-       "rot": 1,
-       "value": 300
-      },
-      {
-       "id": "a1",
-       "kind": "R",
-       "x": 11,
-       "y": 9,
-       "rot": 1,
-       "value": 12
-      },
-      {
-       "id": "a2",
-       "kind": "V",
-       "x": 11,
-       "y": 12,
-       "rot": 1,
-       "value": 1.85
-      },
-      {
-       "id": "a3",
-       "kind": "GND",
-       "x": 11,
-       "y": 14
-      },
-      {
-       "id": "b1",
-       "kind": "R",
-       "x": 17,
-       "y": 9,
-       "rot": 1,
-       "value": 12
-      },
-      {
-       "id": "b2",
-       "kind": "V",
-       "x": 17,
-       "y": 12,
-       "rot": 1,
-       "value": 1.95
-      },
-      {
-       "id": "b3",
-       "kind": "GND",
-       "x": 17,
-       "y": 14
-      },
-      {
-       "id": "pr",
-       "kind": "OUT",
-       "x": 9,
-       "y": 8
+       "name": "the rail delivers no more than 22 mA",
+       "code": "const d = c.dc();\nconst v = c.net.parts.filter(function (p) { return p.kind === 'V'; })[0];\nc.assert(v, 'There is no voltage source in this circuit.');\nconst tot = Math.abs(d.currents[v.id]);\nc.assert(tot <= 0.022,\n  'The rail is supplying ' + c.fmt(tot, 'A') + ', over the 22 mA budget.');"
       }
      ],
-     "wires": [
-      {
-       "a": [
-        3,
-        7
-       ],
-       "b": [
-        3,
-        9
-       ]
-      },
-      {
-       "a": [
-        3,
-        5
-       ],
-       "b": [
-        9,
-        5
-       ]
-      },
-      {
-       "a": [
-        9,
-        5
-       ],
-       "b": [
-        9,
-        4
-       ]
-      },
-      {
-       "a": [
-        9,
-        4
-       ],
-       "b": [
-        11,
-        4
-       ]
-      },
-      {
-       "a": [
-        11,
-        4
-       ],
-       "b": [
-        17,
-        4
-       ]
-      },
-      {
-       "a": [
-        11,
-        6
-       ],
-       "b": [
-        11,
-        8
-       ]
-      },
-      {
-       "a": [
-        9,
-        8
-       ],
-       "b": [
-        11,
-        8
-       ]
-      },
-      {
-       "a": [
-        17,
-        6
-       ],
-       "b": [
-        17,
-        8
-       ]
-      },
-      {
-       "a": [
-        11,
-        10
-       ],
-       "b": [
-        11,
-        11
-       ]
-      },
-      {
-       "a": [
-        11,
-        13
-       ],
-       "b": [
-        11,
-        14
-       ]
-      },
-      {
-       "a": [
-        17,
-        10
-       ],
-       "b": [
-        17,
-        11
-       ]
-      },
-      {
-       "a": [
-        17,
-        13
-       ],
-       "b": [
-        17,
-        14
-       ]
-      }
+     "hints": [
+      "Size each ballast from the drop you want across it: $(5 - 1.85)/0.010 = 315\\,\\Omega$ for LED A and $(5 - 1.95)/0.010 = 305\\,\\Omega$ for LED B. One 300 $\\Omega$ part does for both, and lands at 10.49 mA and 10.16 mA.",
+      "330 $\\Omega$ also passes, at 9.55 mA and 9.26 mA. 390 $\\Omega$ does not — LED B falls to 7.85 mA, under the 8 mA floor — and 220 $\\Omega$ fails twice, at 14.2 mA through LED A and 28.0 mA out of the rail.",
+      "Two independent columns: rail, ballast, LED, ground, twice over. The only things the branches may share are the rail and the ground.",
+      "Notice how little the current *ratio* moves as the ballast changes — 1.032 at 220 $\\Omega$ and 1.032 at 390 $\\Omega$. Separate ballasts do not equalise the junctions; they hand the decision to the resistor instead of the junction.",
+      "If the second check passes and the third fails, you have built the shared-ballast version. Both LEDs are lit and the rail is inside budget, which is exactly why this fault ships."
      ]
-    },
-    "checks": [
-     {
-      "name": "both LED models are present and unedited",
-      "code": "const a = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.85) < 0.02; });\nconst b = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.95) < 0.02; });\nc.assert(a.length === 1 && b.length === 1,\n  'One 1.85 V offset and one 1.95 V offset, which are the two LEDs. Found ' + a.length +\n  ' and ' + b.length + '. Editing them until they match is solving the exercise by ' +\n  'assuming the parts are identical, which is the assumption that fails on a reel.');\nconst twelves = c.values('R').filter(function (v) { return Math.abs(v - 12) <= 0.6; });\nc.assert(twelves.length === 2,\n  'Each LED model needs its own 12 ohm slope resistance; found ' + twelves.length +\n  ' resistors near 12 ohms.');\nconst sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 5) < 0.2; });\nc.assert(sup.length === 1, 'Exactly one 5 V rail; found ' + sup.length + '.');"
-     },
-     {
-      "name": "each LED carries between 8 mA and 12 mA",
-      "code": "const d = c.dc();\nconst a = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.85) < 0.02; })[0];\nconst b = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.95) < 0.02; })[0];\nconst ia = Math.abs(d.currents[a.id]), ib = Math.abs(d.currents[b.id]);\nc.assert(ia >= 0.008 * 0.99 && ia <= 0.012 * 1.01,\n  'LED A is carrying ' + c.fmt(ia, 'A') + ', outside the 8 mA to 12 mA window.');\nc.assert(ib >= 0.008 * 0.99 && ib <= 0.012 * 1.01,\n  'LED B is carrying ' + c.fmt(ib, 'A') + ', outside the 8 mA to 12 mA window.');"
-     },
-     {
-      "name": "and the two are within ten per cent of each other",
-      "code": "const d = c.dc();\nconst a = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.85) < 0.02; })[0];\nconst b = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 1.95) < 0.02; })[0];\nconst ia = Math.abs(d.currents[a.id]), ib = Math.abs(d.currents[b.id]);\nconst hi = Math.max(ia, ib), lo = Math.min(ia, ib);\nc.assert(lo > 1e-9, 'One of the LEDs is carrying nothing at all.');\nc.assert(hi / lo <= 1.10 * 1.001,\n  'The two LEDs are carrying ' + c.fmt(lo, 'A') + ' and ' + c.fmt(hi, 'A') + ', a ratio of ' +\n  (hi / lo).toFixed(2) + '. A single shared resistor gives 2.44 here, because both LEDs ' +\n  'then sit at one node voltage and the one with the lower offset takes the difference. ' +\n  'Each LED needs its own path back to the rail.');"
-     },
-     {
-      "name": "the rail supplies no more than 22 mA",
-      "code": "const sup = c.net.parts.filter(function (p) { return p.kind === 'V' && Math.abs(p.value - 5) < 0.2; })[0];\nconst i = Math.abs(c.dc().currents[sup.id]);\nc.assert(i > 1e-4,\n  'The 5 V rail is delivering ' + c.fmt(i, 'A') + '. Nothing is connected to it yet, so ' +\n  'neither LED is lit and there is nothing to measure.');\nc.assert(i <= 0.022 * 1.01,\n  'The rail is being asked for ' + c.fmt(i, 'A') + ', over the 22 mA budget. Two LEDs at ' +\n  '10 mA each is 20 mA and the budget allows a little over that, so if you are well above ' +\n  'it the ballast resistors are too small.');"
-     }
-    ],
-    "hints": [
-     "Size each ballast for about 10 mA through its own LED. For LED A: $(5 - 1.85)/(R + 12) = 0.010$ gives $R = 303\\ \\Omega$, so 300 $\\Omega$ is the standard value to reach for.",
-     "The same 300 $\\Omega$ works for both: LED A then takes 10.10 mA and LED B takes 9.78 mA, a ratio of 1.03 and a total of 19.87 mA. Trimming the two ballasts to different values to equalise them exactly is possible and pointless — the next pair off the reel will be mismatched differently.",
-     "330 $\\Omega$ also passes, at 9.21 mA and 8.92 mA. 390 $\\Omega$ does not: it drops LED B to 7.59 mA, under the 8 mA floor. 220 $\\Omega$ does not either: it asks the rail for 26.7 mA.",
-     "Lay it out as two independent columns: rail, ballast, LED model, ground, twice over. The only thing the two branches may share is the rail and the ground.",
-     "Notice what the shared-resistor version and the correct one have in common: both draw 19.87 mA from the rail and both dissipate the same total power. The mismatch costs nothing in current and everything in what the current is doing, which is why measuring the supply rail would never have found it."
-    ]
-   },
+    }
+   ],
    "derive": null,
    "lab": null
   }

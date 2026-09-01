@@ -2775,3 +2775,310 @@ through the shipped renderer; and the payload window checked for orphans rather 
 assumed.
 
 ---
+
+## Cycle 10 — TRACK 4: Subject Breadth & Progression
+
+**Target: EE201 (Semiconductor Devices and Diodes).** One course, and the debt cycle 8
+handed this track by name: *"Not one published schematic uses a non-linear device …
+That is a large piece of working machinery no lesson spends, and it is a breadth debt
+rather than a defect — Track 4's ground, and a content cycle, not a widening of this
+one."* Nothing had picked it up.
+
+Re-measured before starting, because a handed-on number is still a number somebody else
+took. Across **376 published schematics** the whole catalogue draws **7 part kinds**:
+
+```
+GND 814 · R 713 · V 392 · OUT 328 · C 171 · L 91 · I 53
+never drawn: D · LED · NPN · PNP · NMOS · PMOS · OPAMP · SW · LDR · NTC · POT · LAMP · METER · BAR
+```
+
+Fourteen placeable kinds, zero uses. EE201 is where that costs the most, and it is not
+close: its own summary opens *"Every component in the first year was linear … The diode
+is the first one that is not"*, its module 4 is titled *"why a diode is not a resistor"*,
+and its **14 schematics contain no diode**. EE202 (*Transistor Amplifiers*, the one
+course EE201 is a prerequisite of) has 13 schematics and no transistor.
+
+Chosen over the alternative on the evidence below rather than on taste. EE201 is also
+thin: 3.5 units per module against EE101's 12.6, no `read` unit at all, and six of its
+ten modules holding neither a reading nor a derivation. It is one of the four courses
+cycle 0 flagged as *"full syllabi, still need density"* (EE201, EE202, EE221, EE241),
+so the progression half of this track's brief lands in the same course as the breadth
+half.
+
+### Baseline, captured before any edit
+
+```
+80 circuit exercises / 340 checks · 527 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1170 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3160 per-option explanations · 6572 draws · answer in the top slot 24.5%
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui: 78 driven keys and gestures · 10 things said · 15 floored kinds
+circuit_model: 1445 analyses · 84 refusals · 15 plots · 15 floors, 17 ceilings
+               376 published schematics, 355 with a DC operating point
+theme: 14 exemptions · 58 contrast surfaces in both themes
+EE201: 10 modules · 35 units · 0 read · 4 derive · 7 build · 9 labs
+       14 schematics, 0 containing a diode
+build: 3 parts / 111 keys · 32/32 + 30/30 · 13 visualisers · 3 tune models · 15 symbols ·
+       62 payloads, 12693 KB · inlined 13880 KB · shell 1159 KB
+catalogue: 62 courses, 368 modules, 1883 units
+```
+
+### The attacks
+
+**1. Senior Educator** — taken first, because the defect turned out to be a false
+sentence rather than a missing one.
+
+- **The course tells the learner the tool cannot do the thing the tool does.** EE201/M2's
+  build opens: *"The schematic editor solves linear circuits, and a diode is not
+  linear."* That is false, and has been since cycle 0 built the Newton-Raphson loop.
+  `src/circuit.js` carries a full Shockley junction with `pnjlim` limiting, a `vcrit`
+  cold start and an `EXP_CAP` guard, and `PART_KINDS.D` has shipped the whole time. The
+  exercise then teaches the piecewise-linear model **as a workaround for a limitation
+  that does not exist**, which is the one framing that makes a genuinely important
+  modelling technique look like a chore.
+- **Swept rather than repaired in place**, per the invariant. Four sites in EE201 make
+  the claim in some form: the M2 build brief (false about the app), the M2 quiz `why`
+  and the build's title (true of *a* linear solver, and defensible), and a course
+  outcome. Only the first is false; the others are about the technique and were left
+  saying what they say, with the outcome extended rather than replaced.
+- **The model's number is stated as the device's number, in a concepts bullet.** M10's
+  bullet reads *"sharing one resistor at 20 mA, split it 14.1 mA and 5.8 mA — a 100 mV
+  spread in $V_F$ becoming a 2.4:1 spread in brightness"*. 14.1 and 5.8 are what the
+  **straight-line stand-ins** do. The junctions split **18.17 mA and 2.63 mA**, a ratio
+  of **6.92**. The bullet asserts a property of the linearisation as a property of LEDs,
+  three lines above an exercise that does the same — exactly the shape the curriculum
+  warns about.
+
+**3. Simulation Auditor** — this persona had unusual purchase here, because for once the
+thing under audit is a *stated answer* that the app's own solver can be made to check.
+Every number below was computed by loading `src/circuit.js` as shipped and solving, not
+by hand.
+
+- **The exercise's own headline number understates its own lesson by 2.8×.** M10 is
+  called *"Two LEDs that are meant to look the same"* and contains no LED: two `V`
+  sources (1.85 V, 1.95 V) and two 12 Ω resistors. Solved as authored it reproduces the
+  brief exactly — 14.1026 mA and 5.7692 mA, ratio 2.4444 — so the brief is right about
+  its own circuit. Rebuild it out of `LED` parts carrying the saturation currents those
+  drops imply and the split is 18.1679 mA and 2.6263 mA, **ratio 6.9178**.
+- **And the real ratio is a constant the model cannot express.** Measured at six ballast
+  values from 50 Ω to 10 kΩ: **6.9178 every time**, to four decimal places. At a shared
+  node both junctions are held at one voltage, so $I_A/I_B = I_{SA}/I_{SB}$ — the
+  exponential cancels and the ballast drops out. The piecewise-linear ratio is
+  $(V-1.85)/(V-1.95)$, which moves with $V$. The stand-in does not merely get the number
+  wrong; it gets the *shape of the answer* wrong.
+- **The three descriptions of a diode are indistinguishable at the design point and
+  separate immediately away from it.** Solved on the same 430 Ω branch:
+
+```
+                       0.1 mA       10 mA      change
+  the real device      0.5773 V    0.6964 V    119.05 mV
+  the tangent model    0.6708 V    0.6964 V     25.59 mV
+  a 69.64 ohm resistor 0.0070 V    0.6964 V    689.44 mV
+```
+
+  119.05 mV is $nV_T\ln 100$ to five figures, and the device reproduces the 59.5 mV per
+  decade **three consecutive times** across 0.1 mA → 100 mA (0.05952, 0.05953, 0.05952 V).
+  That is module 2's own concepts bullet, and until this cycle the course had no way to
+  show it happening.
+- **Checked and found correct, recorded so the next cycle does not re-derive it:** the
+  existing M2 brief's arithmetic is right in every particular — $V_D = 0.6964$ V,
+  $r_d = 2.5852$ Ω, $V_{D0} = 0.6705$ V, and the shipped `VT` is 25.8520 mV, so the
+  brief's `25.852` is the solver's own constant rather than a rounded quote. The M10
+  hints' claims that 330 Ω passes and 390 Ω and 220 Ω fail hold against the real
+  junctions too (9.55/9.26 mA; 7.85 mA under the 8 mA floor; 14.2 mA and 28.0 mA out of
+  the rail).
+
+**2. Assessment Inquisitor.** EE201's questions are Track 3's ground and were not
+rewritten. Audited for the one thing this cycle could falsify — whether any *key*
+depends on the linear stand-in being the device — and **none does**: the M2 question
+that asks where a piecewise-linear model is exact answers "at 10 mA and nowhere else,
+though it stays useful for a decade either side", which the measurement above confirms
+rather than contradicts. Recorded so it is not re-audited. The new material adds no
+question, deliberately: the two new units are graded by the solver, which is a stronger
+check than a distractor set.
+
+**4. UX & Accessibility Hardener.** Content-side, as cycles 1, 4 and 7 established.
+Every math fragment this cycle wrote was pushed through the shipped `MathML.render` —
+which is how the defect in *my own* work below was found. No hard-coded colour, no raw
+HTML and no wide table was introduced; the one table is a fenced `text` block inside
+`overflow-x:auto` rather than a markdown table, which is cycle 4's rule for staying safe
+at 375px. The two new schematics were driven through `verify_circuit_model`'s recording
+canvas at five widths as part of the catalogue sweep: no non-finite coordinate.
+
+### The machinery finding this cycle did not spend
+
+**`emit.py` forbids the device from the one unit kind whose answer a gate checks.**
+`DIAGRAM_KINDS = {"R", "C", "L", "V", "I", "GND", "OUT"}`, so a `numeric` unit — the kind
+that *must* carry a `check` run against the MNA solver, by the curriculum's own
+invariant — cannot draw a diode. `MATCH_SYMBOLS` next to it already contains `D`, `LED`,
+`NPN`, `PNP`, `NMOS`, `PMOS` and `OPAMP`, and `drawPart` renders all of them, so the two
+lists in one file disagree about which devices exist.
+
+**Not changed, and the reason is scope.** Widening it is provably safe — a kind that
+currently raises can only start being accepted — but it is an emitter change whose value
+is entirely in units nobody has written yet, and this cycle's content did not need it:
+a `build` unit carries a real schematic and is graded by the same solver. Adding a rule
+to serve content that does not exist is how a gate ends up enforcing a comment. Recorded
+with both list contents so the next cycle starts from the diff rather than the symptom.
+
+### Found in my own work, and fixed
+
+- **Six of my own new fragments would have shipped as raw LaTeX markup.** `$430.4\ \Omega$`
+  and five like it. The offender is the **escaped space `\ `**, which `src/studio.js` has
+  no rule for, so `MathML.render` returns `<code class="math-raw">` holding the source —
+  no error, nothing for a gate to catch. Caught by rendering the draft rather than by
+  trusting that `$…$` is enough, which is cycle 7's discipline applied to its own lesson.
+  Repaired to `\,`, which renders; `~` and a plain space also work, `\text`, `\!`,
+  `\frac`, `\left`/`\right`, `\Omega` and `\times` were all confirmed fine.
+- **That is a refinement of cycle 7's catalogue-wide measurement, and worth carrying.**
+  Cycle 7 listed 37 unsupported commands and did not name this one, because it probed
+  `\[a-zA-Z]+` and `\ ` is not a word. Measured now: of the **1053** raw-markup fragments
+  in the catalogue, **369 (35%) are caused by the escaped space alone** — EE231 110,
+  EE111 45, EE141 34, EE101 29, EE121 20, EE201 20, EE211 19, EE131 17, MA111 14,
+  EE102 13. It is by some distance the cheapest third of that debt to retire: one rule in
+  the tokeniser, or a mechanical `\ ` → `\,` sweep.
+- **My first patch script would have written `r\'\'\'` into the source and searched for
+  the wrong bytes.** The target file writes a LaTeX backslash doubled inside `"…"` and
+  single inside `r'''…'''`, so a non-raw anchor matched neither. Rewritten with raw
+  strings throughout and a triple-quote assembled at runtime. Every anchor is asserted
+  unique before anything is written, so the script cannot half-apply — it was run
+  `--check` first and reported all nine.
+- **A check that said `NaN` when both LEDs were dark.** The within-10% check divided one
+  current by the other, and on the starting circuit both are zero. It now refuses with a
+  sentence about the LEDs being unpowered or upside down, because the repository's
+  standard since cycle 2 is that nothing a unit says contains `NaN`.
+
+### What changed
+
+**Two new build exercises, both graded against the real device**, appended to the module
+they belong to. Each existing build kept its unsuffixed lesson id (`-M2`, `-M10`) and the
+new ones took `M2.2` and `M10.2`, so no completed work is orphaned — the invariant, and
+confirmed by the gate's own labelling.
+
+| | EE201/M2.2 | EE201/M10.2 |
+|---|---|---|
+| title | The diode itself, and the decade it lives in | The same two LEDs, with the junctions left in |
+| parts | 2 × `D`, $I_S = 2\times10^{-14}$, $n = 1$ | 2 × `LED`, $n = 2$, $I_S$ 2.889e-18 / 4.176e-19 |
+| asks for | 0.1 mA and 10 mA, two decades apart | the same 8–12 mA / 10% / 22 mA specification |
+| the measurement | the drop moves **119.05 mV** | the split is **6.92**, not 2.4 |
+| reference / start | 4/4 · 1/4 | 4/4 · 2/4 |
+
+**M2.2** is the exercise the module was missing: the previous unit builds the tangent,
+this one puts the device beside it and measures where the tangent stops being the curve.
+The four checks read the junctions through `c.device()` — an API written for exactly this
+and, until now, called by nothing in the catalogue. Its last check is the interesting
+one: it asks for 119 mV and names the two wrong answers, so a learner who has quietly
+left a `V`+`R` pair in place fails on the number the model cannot produce.
+
+**M10.2** rebuilds M10's specification out of junctions, and the shared-ballast trap
+now fails on the physics rather than on a stipulation: 18.17 mA against 2.63 mA. The
+brief derives why the ratio is the ratio of saturation currents and therefore independent
+of the ballast, which is a fact the course could state and could not previously show.
+
+**Four repairs to what was already there**, all in the two modules touched:
+the false sentence about the editor; a course outcome extended to name checking the model
+against the device; M2's concepts gaining the *range* of the piecewise-linear model as
+three measured numbers rather than "a decade either side"; and M10's concepts and brief
+corrected so the 2.4:1 is attributed to the model and the junction's 6.92:1 stated beside
+it. Verified structurally rather than by reading the diff: **2 units added, 0 removed,
+and exactly 4 pre-existing items changed** — the two briefs and the two concept lists.
+
+EE201: 35 units → 37 · 7 build units → 9 · 14 schematics → 18, of which **4 contain a
+non-linear device**, against 0 in the whole catalogue before this cycle.
+
+### Left alone, deliberately
+
+- **The other twelve unused part kinds, and EE202.** `NPN`, `PNP`, `NMOS`, `PMOS` and
+  `OPAMP` are still drawn by nothing, and EE202 — *Transistor Amplifiers*, 11 modules,
+  13 schematics, no transistor — is the obvious next instalment of exactly this cycle.
+  It is also a second course, and the brief says one. The bridge is now at least
+  half-built: EE201 ends by pointing at EE202, and EE202's M1 introduces the MOSFET from
+  first principles rather than assuming it, so the prerequisite chain is sound even while
+  the practice is thin. Recorded with the count.
+- **M3 cannot have a device-bearing build, and this was checked rather than assumed.**
+  *Rectifiers, the reservoir capacitor and ripple* is the canonical diode circuit and
+  the obvious third exercise. `MNA.tran` has **no time-varying source** — there is no
+  `Math.sin` anywhere in the solver, and `V` carries a DC value and an `ac` field used
+  only by the small-signal path — so a rectifier cannot be run. That is a Track 2
+  machinery gap, not a content one, and it is the single change that would unlock the
+  most catalogue content: rectifiers, clippers, clamps and multipliers are four of
+  EE201's ten modules.
+- **M4's Zener and M7's varactor have no part kind either.** `D` has no breakdown
+  voltage and no junction capacitance, so *Zener regulation* and *the junction as a
+  capacitor* cannot be drawn even now. M9's reverse recovery is the same: the model is
+  static and stores no charge. Three more modules whose device exists in the prose and
+  not in the solver, recorded so the next cycle does not rediscover them one at a time.
+- **EE201 still has no `read` unit and six modules hold neither a reading nor a
+  derivation.** Six real courses are thinner still on units per module (MA112 and MA201
+  at 2.09, MA101 2.31, EE202 3.18, EE221 and EE241 3.20), so this is a shared debt rather
+  than a worst case. That is Track 1's ground and cycle 1 established that a density pass
+  is its own cycle. There is also a **stranded patch for exactly this work** — six EE201
+  readings, written by a cycle that could not write to the repo, sitting in another
+  session's scratchpad at the path recorded in `memory/unapplied-gauntlet-patches-on-disk.md`.
+  This cycle deliberately touched neither M2's nor M10's `read` slot (both modules
+  already have neither), so that patch's anchors are undisturbed and it can still land.
+- **Cycle 4's claim that "none of the fifteen syllabus-only stubs is a prerequisite of
+  anything" is false, and this cycle checked before relying on it.** Built the
+  prerequisite graph from both spines: **CE101 → CE201 → CS210 and HPC401**, **ML401 →
+  DL501, ELEC410, ETH501, ROB520**, **SEC301 → ELEC420**. Four of the fifteen are
+  prerequisites of eight courses between them, and CE101 (*Digital Logic & Computer
+  Systems*, no prerequisites of its own, 4 modules holding one lab each) is a **root** of
+  the CS degree's hardware chain. That is a stronger Track 4 target than its stub status
+  suggested and it was the serious alternative to EE201 this cycle weighed; EE201 won on
+  being a handed-over debt with gates that can prove the fix, where CE101 is a
+  build-a-course cycle whose only checks would be `verify_quiz` and the emitter.
+  Recorded with the graph so the next cycle starts from it.
+- **`emit.py`'s `DIAGRAM_KINDS`, above.**
+- **The 21 catalogue JSONs that sit CRLF on disk**, EE201 among them before and after.
+  `.gitattributes` is `* text=auto eol=lf`, so the committed bytes are LF and only EE201
+  shows as modified — verified rather than assumed, since cycle 9 recorded that `git
+  diff` normalises line endings and can mislead in both directions.
+- **`docs/programs` aged out one MA101 payload and one EE211 payload and gained two for
+  EE201.** Two, not one, because this cycle built twice — the second build followed the
+  escaped-space repair — and both EE201 payloads are still inside a retained generation.
+  The rolling generation window, as cycles 1–9 all established. Verified rather than
+  assumed: **64 files named by a retained generation, 64 on disk, 0 orphaned and 0
+  missing.**
+
+### Gates, after
+
+Every pre-existing number unmoved. Four numbers moved, each by exactly what was added.
+
+```
+verify_circuits      All good: 82 circuit exercises, 348 checks · 543 labels
+                     (80 + 2 · 340 + 8 · 527 + 16)
+                     EE201/M2.2 reference 4/4 · start 1/4
+                     EE201/M10.2 reference 4/4 · start 2/4
+verify_circuit_model All good: 1457 analyses vouch for every number they return and 84
+                     refuse rather than guess · 15 plots · 15 floors, 17 ceilings ·
+                     380 published schematics, 359 with a DC point   (1445 + 12 · 376 + 4)
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_quiz          All good: 1366 questions in 252 quiz units and 1103 holes in 217
+                     blanks units · 3160 per-option explanations · 6572 draws · 24.5%
+verify_derivations   All good: 1170 steps across 46 courses
+verify_circuit_ui    All good: 78 driven keys and gestures, says 10 things while doing it
+verify_theme         All good: 14 exemptions · 58 contrast surfaces in both themes
+verify_labs EE201    All good: 9 labs
+emit.py EE201        ok — 10 modules, 8 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12693 -> 12706 KB ·
+                     inlined 13880 -> 13893 KB · shell 1159 KB unchanged
+```
+
+Beyond the gates: every number written into the two new units computed by loading
+`src/circuit.js` as shipped and solving, before it was written — the 119.05 mV against
+$nV_T\ln 100$, the 59.5 mV per decade reproduced three times, the 6.9178 split measured
+at six ballasts from 50 Ω to 10 kΩ, and the authored stand-ins re-solved to confirm the
+brief they already had; all 32 math fragments of the new units rendered through the
+shipped `MathML.render` (**32 of 32, 0 raw, 0 swallowed**) and the catalogue's raw count
+confirmed unmoved at 1053; hedge words counted at HEAD and now by diff rather than by
+counting twice (**5 and 5, 0 introduced**); the EE201 diff compared structurally against
+HEAD rather than as lines; and the payload window checked for orphans.
+
+---
