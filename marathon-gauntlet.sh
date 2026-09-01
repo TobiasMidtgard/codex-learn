@@ -49,6 +49,27 @@ run_gates() {
   return $ok
 }
 
+# A headless cycle that cannot write the repo or run node still exits 0, still
+# prints a thoughtful audit, and changes nothing. Six cycles did exactly that before
+# anyone noticed, and the only durable trace was a memory file. So prove the loop can
+# act before spending three hours finding out it cannot.
+echo "preflight: can a headless cycle write and execute?"
+rm -f .gauntlet-probe
+claude -p --permission-mode acceptEdits   "Write the single word ok into a file named .gauntlet-probe in the current directory, then run: node -e \"console.log(1+1)\". Reply with nothing else."   >/tmp/g_probe.txt 2>&1
+if [ ! -f .gauntlet-probe ]; then
+  echo
+  echo "ABORT: the cycle could not write .gauntlet-probe."
+  echo "A headless run without permission to write and execute audits into its own"
+  echo "scratchpad and exits 0, so the loop would look healthy and produce nothing."
+  echo "Check .claude/settings.local.json, or pass --dangerously-skip-permissions."
+  echo
+  tail -20 /tmp/g_probe.txt
+  exit 1
+fi
+rm -f .gauntlet-probe
+echo "preflight: ok"
+echo
+
 CYCLE=1
 CONSEC_FAIL=0
 
@@ -63,7 +84,7 @@ while [ "$(date +%s)" -lt "$END_TIME" ]; do
   echo "----------------------------------------------------------"
 
   started=$(date +%s)
-  claude -p "Read GAUNTLET_CURRICULUM.md and GAUNTLET_LOG.md. Execute cycle $CYCLE, focused strictly on: $TRACK.
+  claude -p --permission-mode acceptEdits "Read GAUNTLET_CURRICULUM.md and GAUNTLET_LOG.md. Execute cycle $CYCLE, focused strictly on: $TRACK.
 
 Pick ONE course or ONE subsystem — a cycle that touches everything verifies nothing.
 Capture the gate baseline BEFORE editing. Audit through all four personas and write
@@ -111,7 +132,8 @@ GAUNTLET_LOG.md."
         } >> "$LOG"
       fi
     else
-      echo "no changes this cycle"
+      echo "no changes this cycle — counting it as unproductive"
+      CONSEC_FAIL=$(( CONSEC_FAIL + 1 ))
     fi
   fi
 
