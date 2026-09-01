@@ -44,6 +44,18 @@
   --on-editor-blue:#6E9BFF;
   --on-editor-purple:#A78BFA;
   --on-editor-amber:#FFC66D;
+  /* The same argument a third time, for the three answer-state colours. --ans-ok/no/wait
+     flip dark in the light theme because they are drawn on cards; the blanks listing and
+     the numeric answer box are on --editor, which does not flip. Measured on #12151A the
+     flipped values are 3.21, 2.90 and 3.07:1, on a surface whose whole content is the
+     learner's own answer. Defined only here, so both themes get 8.45, 5.17 and 8.02.
+     A tinted fill and a small lifted panel on that surface, for the same reason: --sunk
+     and --surface-2 follow the theme and would paint a near-white bar on a dark box. */
+  --on-editor-ok:#5BE58A;
+  --on-editor-no:#FF5C7A;
+  --on-editor-wait:#FFB020;
+  --on-editor-sunk:rgba(255,255,255,0.04);
+  --on-editor-fill:rgba(255,255,255,0.06);
   --sunk:rgba(8,9,11,0.60);
 
   --ink:#EDEFF3;
@@ -785,29 +797,34 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   --ans-no:#C0264A;
   --ans-wait:#9A5B00;
 }
+/* This whole box is on --editor, so every colour in it comes from the on-editor family
+   and none from the page's. It had the surface of one pattern and the ink of the other:
+   the listing was --ink-2 (1.84:1 in the light theme), a filled hole was --ink on
+   --surface-2 (1.01:1 — black on black), and the bar was --sunk, a near-white strip
+   across the top of a dark box. See --on-editor-ok above for the measured set. */
 .blk-wrap{margin:18px 0 14px;border:1px solid var(--line-3);border-radius:var(--r-lg);
   background:var(--editor);overflow:hidden}
-.blk-bar{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);
-  background:var(--sunk)}
-.blk-file{font-family:var(--mono);font-size:11.5px;color:var(--ink-4)}
-.blk-count{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--ink-5)}
+.blk-bar{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--on-editor-line);
+  background:var(--on-editor-sunk)}
+.blk-file{font-family:var(--mono);font-size:11.5px;color:var(--on-editor-2)}
+.blk-count{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--on-editor-2)}
 .blk-listing{margin:0;padding:18px 20px;overflow-x:auto;font-family:var(--mono);
-  font-size:13.5px;line-height:2.05;color:var(--ink-2);white-space:pre}
+  font-size:13.5px;line-height:2.05;color:var(--on-editor-2);white-space:pre}
 .blk{
   display:inline-block;min-width:92px;padding:1px 10px;margin:0 1px;
-  border-radius:6px;border:1px dashed var(--ans-wait);
-  background:color-mix(in srgb,var(--ans-wait) 12%,transparent);
-  color:var(--ans-wait);font:inherit;font-size:.95em;cursor:pointer;text-align:center;
+  border-radius:6px;border:1px dashed var(--on-editor-wait);
+  background:color-mix(in srgb,var(--on-editor-wait) 12%,transparent);
+  color:var(--on-editor-wait);font:inherit;font-size:.95em;cursor:pointer;text-align:center;
   transition:background .14s,border-color .14s,color .14s;
 }
-.blk:hover{background:color-mix(in srgb,var(--ans-wait) 22%,transparent)}
-.blk.open{outline:2px solid var(--ans-wait);outline-offset:1px}
-.blk.filled{border-style:solid;border-color:var(--line-3);
-  background:var(--surface-2);color:var(--ink)}
-.blk.right{border-style:solid;border-color:var(--ans-ok);
-  background:color-mix(in srgb,var(--ans-ok) 14%,transparent);color:var(--ans-ok)}
-.blk.wrong{border-style:solid;border-color:var(--ans-no);
-  background:color-mix(in srgb,var(--ans-no) 14%,transparent);color:var(--ans-no)}
+.blk:hover{background:color-mix(in srgb,var(--on-editor-wait) 22%,transparent)}
+.blk.open{outline:2px solid var(--on-editor-wait);outline-offset:1px}
+.blk.filled{border-style:solid;border-color:var(--on-editor-line);
+  background:var(--on-editor-fill);color:var(--on-editor)}
+.blk.right{border-style:solid;border-color:var(--on-editor-ok);
+  background:color-mix(in srgb,var(--on-editor-ok) 14%,transparent);color:var(--on-editor-ok)}
+.blk.wrong{border-style:solid;border-color:var(--on-editor-no);
+  background:color-mix(in srgb,var(--on-editor-no) 14%,transparent);color:var(--on-editor-no)}
 .blk-pick{margin:0 0 14px;padding:14px 16px;border:1px solid var(--line-3);
   border-radius:var(--r-lg);background:var(--surface);animation:fadeUp .18s var(--ease) both}
 .blk-pick-h{font-size:13px;color:var(--ink-2);margin-bottom:10px}
@@ -824,8 +841,12 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .blk-fb:focus-visible{outline:2px solid var(--lime);outline-offset:4px;border-radius:var(--r-lg)}
 .blk-row{display:grid;grid-template-columns:18px 1fr;gap:11px;padding:12px 14px;
   border-radius:var(--r-lg);border:1px solid var(--line);background:var(--surface)}
-.blk-row.right{border-color:color-mix(in srgb,var(--ans-ok) 30%,transparent)}
-.blk-row.wrong{border-color:color-mix(in srgb,var(--ans-no) 30%,transparent)}
+/* 80%, and the same 80% on .q-verdict and .mt-card below. The three unit kinds drew one
+   fact — right or wrong — at 30%, 34% and 45%, which measured 1.61 to 3.21:1 against the
+   card and so was a state you could not see in the light theme. 80% is the lowest mix
+   that clears 3:1 on all four of {ok,no} x {dark,light}: 7.82, 3.45, 4.45, 4.17. */
+.blk-row.right{border-color:color-mix(in srgb,var(--ans-ok) 80%,transparent)}
+.blk-row.wrong{border-color:color-mix(in srgb,var(--ans-no) 80%,transparent)}
 .blk-row b{font-family:var(--mono);font-size:13px;color:var(--ink)}
 .blk-yours{font-family:var(--mono);font-size:11.5px;color:var(--ans-no)}
 .blk-row p{margin:5px 0 0;font-size:13px;line-height:1.6;color:var(--ink-3);text-wrap:pretty}
@@ -856,8 +877,8 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   background:color-mix(in srgb,var(--amber) 8%,transparent)}
 .q-verdict{display:grid;grid-template-columns:18px 1fr;gap:12px;padding:14px 16px;margin:16px 0 0;
   border-radius:var(--r-lg);border:1px solid var(--line);background:var(--surface)}
-.q-verdict.ok{border-color:color-mix(in srgb,var(--ans-ok) 34%,transparent)}
-.q-verdict.no{border-color:color-mix(in srgb,var(--ans-no) 34%,transparent)}
+.q-verdict.ok{border-color:color-mix(in srgb,var(--ans-ok) 80%,transparent)}
+.q-verdict.no{border-color:color-mix(in srgb,var(--ans-no) 80%,transparent)}
 .q-verdict b{font-size:14px;color:var(--ink)}
 .q-verdict p{margin:5px 0 0;font-size:13px;line-height:1.6;color:var(--ink-3);text-wrap:pretty}
 
@@ -867,19 +888,29 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   overflow:hidden;min-height:340px}
 .numq-fig .ckt-ro .ckt-main{grid-template-columns:minmax(0,1fr)}
 .numq-fig .ckt-ro .ckt-canvas{min-height:340px}
-.numq-nofig{padding:24px;color:var(--ink-3);font-size:14px;line-height:1.7}
+.numq-nofig{padding:24px;color:var(--on-editor-2);font-size:14px;line-height:1.7}
 .numq-side{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);padding:16px}
-.nq-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
-  color:var(--ink-5);margin-bottom:9px}
+/* --ink-5 is the placeholder-and-disabled tier, roughly 2:1 in both themes. This is the
+   label above the one input the unit exists for, not a disabled control. Same repair
+   cycle 5 made on .rail-miss, and 11px for the same reason it raised the rail's 9.5px. */
+.nq-lbl{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-4);margin-bottom:9px}
 .nq-lbl.mt{margin-top:20px}
+/* The box is --editor. The answer being typed into it was --ink: 17.09:1 in the dark
+   theme and 1.01:1 in the light one, where --ink is #131712 and --editor is #12151A.
+   The placeholder was --ink-5, which inverted the pair — 8.74:1 light against the
+   value's 1.01, so the hint was legible and the answer was not. */
 .nq-in{display:flex;align-items:stretch;border:1px solid var(--line-3);border-radius:var(--r-lg);
   overflow:hidden;background:var(--editor)}
-.nq-in input{flex:1;min-width:0;padding:12px 14px;border:0;background:transparent;color:var(--ink);
+.nq-in input{flex:1;min-width:0;padding:12px 14px;border:0;background:transparent;color:var(--on-editor);
   font-family:var(--mono);font-size:17px;outline:none}
-.nq-in input::placeholder{color:var(--ink-5)}
+/* 2.93 / 2.72:1 deliberately, and quieter than the 13.68:1 value it stands in for: a
+   placeholder that reaches AA stops being distinguishable from a filled one, which is
+   the decision cycle 5 recorded when it left --ink-5 alone rather than darkening it. */
+.nq-in input::placeholder{color:var(--on-editor-3)}
 .nq-in:focus-within{border-color:var(--lime-30)}
-.nq-u{display:grid;place-items:center;padding:0 14px;border-left:1px solid var(--line);
-  font-family:var(--mono);font-size:13px;color:var(--ink-4);background:var(--sunk)}
+.nq-u{display:grid;place-items:center;padding:0 14px;border-left:1px solid var(--on-editor-line);
+  font-family:var(--mono);font-size:13px;color:var(--on-editor-2);background:var(--on-editor-sunk)}
 .nq-given{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
 .nq-given td{padding:6px 0;border-bottom:1px solid var(--line);color:var(--ink-3)}
 .nq-given tr:last-child td{border-bottom:0}
@@ -899,8 +930,8 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   background:var(--surface);cursor:pointer;overflow:hidden;transition:border-color .14s,transform .14s}
 .mt-card:hover{border-color:var(--line-3);transform:translateY(-1px)}
 .mt-card.filled{border-color:var(--line-3)}
-.mt-card.right{border-color:color-mix(in srgb,var(--ans-ok) 45%,transparent)}
-.mt-card.wrong{border-color:color-mix(in srgb,var(--ans-no) 45%,transparent)}
+.mt-card.right{border-color:color-mix(in srgb,var(--ans-ok) 80%,transparent)}
+.mt-card.wrong{border-color:color-mix(in srgb,var(--ans-no) 80%,transparent)}
 .mt-cv{width:100%;height:130px;display:block}
 .mt-slot{padding:10px;text-align:center;font-size:12.5px;color:var(--ink-3);
   border-top:1px solid var(--line);font-family:var(--mono);min-height:38px}
@@ -1547,23 +1578,44 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 
 /* quiz */
 .quiz-q{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);padding:20px 22px;margin:0 0 14px}
-.quiz-q .qn{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);margin-bottom:10px}
+.quiz-q .qn{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);margin-bottom:10px}
 .quiz-q .qt{margin:0 0 14px;font-size:16px;font-weight:600;letter-spacing:-.015em;line-height:1.5;color:var(--ink)}
-.quiz-q .qt code{color:var(--lime);background:var(--lime-08);padding:1px 5px;border-radius:4px;font-size:.9em}
+/* --code-ink, not --lime: the light theme's --lime is #5F8A0B on its own 8% tint, which
+   measures 3.65:1 as text. .explain code below has been on --code-ink since cycle 3 and
+   these two were left with the note that changing them was Track 5's call. It is. */
+.quiz-q .qt code{color:var(--code-ink);background:var(--lime-08);padding:1px 5px;border-radius:4px;font-size:.9em}
 .opts{display:grid;gap:9px}
 .opt{
   display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;padding:12px 14px;
   border:1px solid var(--line-2);border-radius:var(--r-md);background:var(--surface-2);
-  font-size:13.5px;line-height:1.5;color:var(--ink-2);transition:all .16s;
+  font-size:13.5px;line-height:1.5;color:var(--ink-2);
+  transition:border-color .16s,background .16s,color .16s;
 }
-.opt:hover:not(:disabled){border-color:var(--line-3);background:rgba(255,255,255,.04)}
+/* .04 over an .02 card is a 2% step: 1.10:1, the faintest state in the application and
+   under the 1.1 floor cycle 5 set for exactly this. .07 makes it a 5% step. */
+.opt:hover:not(:disabled){border-color:var(--line-3);background:rgba(255,255,255,.07)}
 /* a white wash over a white card is not a hover state */
 [data-theme=light] .opt:hover:not(:disabled){background:rgba(15,25,5,.05)}
+/* Answering disables all four, and two of them get no class at all — so the options
+   nobody picked and nobody was told about kept the exact styling of a live button, with
+   only the missing hover to say otherwise. They lose the raised fill and their key chip
+   and sit flat on the card instead. Deliberately NOT opacity: at .62 the option text
+   measured 4.41 / 3.38:1 and its A/B/C/D key 2.91 / 2.47, which would have made three
+   quarters of every answered question harder to read than before — a repair that breaks
+   what it was fixing. Here the option's own ink is untouched at 10.03 / 9.86 and the key
+   goes to --ink-4 at 4.95 / 4.62, still over the floor. Two channels, because the fill
+   alone is only 1.04:1 against the card. */
+.opt:disabled{cursor:default}
+.opt:disabled:not(.correct):not(.wrong){background:transparent;border-color:var(--line)}
+.opt:disabled:not(.correct):not(.wrong) .k{background:transparent;border-color:var(--line);color:var(--ink-4)}
 .opt .k{font-family:var(--mono);font-size:10.5px;font-weight:700;min-width:19px;height:19px;flex:none;margin-top:1px;
-  border-radius:6px;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-4)}
-.opt code{color:var(--lime);background:var(--lime-08);padding:0 4px;border-radius:3px;font-size:.9em}
+  border-radius:6px;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-3)}
+.opt code{color:var(--code-ink);background:var(--lime-08);padding:0 4px;border-radius:3px;font-size:.9em}
 .opt.correct{border-color:var(--lime-30);background:var(--lime-08)}
-.opt.correct .k{background:var(--lime-12);border-color:var(--lime-30);color:var(--lime)}
+/* --code-ink, not --accent-ink: this key sits on --lime-12 over the option's own
+   --lime-08, two tints deep, where --accent-ink still measures 4.47:1 — under the floor
+   by three hundredths. The darker of the two accent inks clears it at 5.47. */
+.opt.correct .k{background:var(--lime-12);border-color:var(--lime-30);color:var(--code-ink)}
 /* the dark theme's rose, hard-coded - a wrong answer in the light theme was painted
    from the wrong palette while var(--bad) beside it was the right one */
 .opt.wrong{border-color:var(--bad-32);background:var(--bad-08)}
@@ -20723,7 +20775,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '6bc707179913';
+const BUILD_ID = '6074bddae663';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */

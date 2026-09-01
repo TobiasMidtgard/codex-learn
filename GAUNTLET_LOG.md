@@ -3082,3 +3082,349 @@ counting twice (**5 and 5, 0 introduced**); the EE201 diff compared structurally
 HEAD rather than as lines; and the payload window checked for orphans.
 
 ---
+
+## Cycle 11 — TRACK 5: UI, Layout & Visual Aesthetics
+
+*(the runner labels this commit "cycle 5"; its counter restarts per run and this log's
+does not. Cycles 1–4 of the current run are entries 7–10 above.)*
+
+**Target: the answering surface — the chrome the four graded unit kinds are delivered
+on.** `.blk*` (fill in the blanks), `.opt` / `.quiz-q` / `.explain` (quiz), `.nq-*` /
+`.numq-*` (find the value) and `.mt-*` (symbol drill), plus the `.q-*` pieces the last
+three share, all in `src/index.head.html`. One subsystem, defined by what it does rather
+than by where it sits: it is every surface on which a learner gives an answer and is told
+whether it was right. **217 blanks units holding 1103 holes, 252 quiz units holding 1366
+questions, 434 numeric units and 11 match units.**
+
+Chosen because the two obvious Track 5 targets are already taken and this one had never
+been looked at by anybody. The previous run's Track 5 cycle took the *reading* surface;
+cycle 5 above took the *shell*. Both left `theme_budget.json` behind them, and the 58
+surfaces in it are the shell, the buttons and the circuit editor's panel — **not one entry
+for any of the four kinds a learner is actually graded on.** Cycle 3 hardened the quiz's
+focus and live regions and cycle 9 did the same for blanks, so this surface has had two
+accessibility passes; neither was a *visual* pass, and both recorded a colour defect they
+declined to fix on the grounds that the token ramp is Track 5's call. It is.
+
+### Baseline, captured before any edit
+
+```
+82 circuit exercises / 348 checks · 543 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1170 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     · 3160 per-option explanations · 6572 live draws
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys · circuit_model 1457 analyses, 84 refusals,
+     380 published schematics / 359 with a DC point
+theme: 14 written exemptions · 58 contrast surfaces x 2 themes · tightest text 4.63:1
+build: 3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers · 3 tune models ·
+       15 symbols · 62 payloads totalling 12706 KB · inlined 13893 KB · shell 1159 KB
+```
+
+### The attacks
+
+**4. UX & Accessibility Hardener** — taken first, because this track's brief is mostly its
+brief. Every ratio below is from the WCAG 2.1 sRGB formula against the *composited* stack,
+computed before the fix and again after, not eyeballed.
+
+- **The whole of a blanks unit is unreadable in the light theme, and the mechanism is one
+  sentence.** `.blk-wrap` is `background:var(--editor)`, and `--editor` is `#0A0B0E` dark
+  and `#12151A` light — deliberately dark in both, with the comment `/* code stays dark in
+  both themes */` sitting on the token. Everything painted inside it took the *page's* ink.
+  So in the light theme the listing itself, `--ink-2` = `#3D4539`, measures **1.84:1** on
+  that ground, and **a hole with an answer typed into it is `--ink` `#131712` on
+  `--surface-2` over `#12151A`: 1.01:1.** Black on black. The three answer-state colours
+  are the same story — `--ans-ok/-no/-wait` flip dark for a light ground, so a hole marked
+  right is 3.21, marked wrong 2.90 and still waiting 3.07. And the bar across the top of
+  the box is `--sunk`, which *does* follow the theme, so a near-white strip sat over a dark
+  listing. **This is the trap cycle 2 measured on the canvas and minted `--on-editor-*`
+  for, in CSS rather than in a draw loop, in the one unit kind whose entire content is the
+  learner's own answer.**
+- **The number you type into a numeric question is invisible in the light theme, and the
+  placeholder is not.** `.nq-in` is also `--editor`; its input was `color:var(--ink)` —
+  **1.01:1** — while `::placeholder` was `--ink-5`, which in the light theme is a *pale*
+  grey on a dark ground and so measures **8.74:1**. The hint was eight times more legible
+  than the answer it stood in for, in both directions at once: 1.86 against 17.09 in the
+  dark theme, the exact inversion. 434 numeric units.
+- **`--ink-5` used for two labels that are not disabled controls.** `.nq-lbl` — the
+  "Your answer" above the only input the unit has — at **1.81 / 2.07**, and `.blk-count`,
+  the "4 / 6 right" a learner reads after checking, at **1.88 / 1.77**. Cycle 5 made this
+  exact repair on `.rail-miss` and recorded why the tier itself must stay where it is.
+- **The same fact — right or wrong — is drawn at three different strengths in three unit
+  kinds, and two of them are invisible.** `.blk-row` 30%, `.q-verdict` 34%, `.mt-card` 45%,
+  all `color-mix` of the answer colour against the card: 2.32 / **1.61** for ok and 1.70 /
+  1.76 for wrong, against a 3:1 floor. Three numbers for one idea, none of them chosen.
+- **`--lime` as ink on its own tint, three more times**, which is the trap cycle 5 minted
+  `--accent-ink` for: `.quiz-q .qt code` **3.65** and `.opt code` **3.51** — both recorded
+  by cycle 3 as left alone because "changing it is a Track 5 decision about the token ramp
+  rather than something a Track 3 cycle should do on its own" — and `.opt.correct .k`, the
+  letter of the right answer, at **3.16**.
+- **`.opt .k` at 4.37:1 in the dark theme**, marginally under the floor. It is the A/B/C/D
+  key, `--ink-4` on `--surface-2` over `--surface-2` over the card — two tints deep, which
+  is what takes it under.
+- **`.numq-nofig` at 3.27 light** — the prose shown when a numeric unit has no schematic.
+  Same editor ground, same page ink.
+
+**1. Senior Educator** — no prose in a stylesheet, so this persona was pointed at the type
+scale, which is the visual equivalent of whether a thing explains itself.
+
+- **`.nq-lbl` is 10px.** It is the label on the primary input of an entire unit kind, in
+  uppercase mono with 0.13em tracking. `.quiz-q .qn` — "QUESTION 3 / 6", the only thing
+  telling a learner where they are in a bank of six — is 10px for the same reason. Cycle 5
+  raised the rail's 9.5px module titles to 11px on precisely this argument and the
+  answering surface was never swept for the same thing.
+- *Checked and left:* the `.q-prompt` at 21px / 1.3 with `text-wrap:balance`, the `.explain`
+  at 13px / 1.6 with `text-wrap:pretty`, and `.blk-listing` at 13.5px / 2.05 — the tall
+  line height is there to give the inline holes room and it is correct. The hierarchy above
+  11px is sound; the defect is only at the bottom of the ramp.
+
+**3. Simulation Auditor** — no solver here, so it was pointed at the layout, computed from
+the stylesheet's own lengths rather than trusted.
+
+- **The narrowest real lesson column is 275px, and two earlier cycles have been reasoning
+  about 343.** At 375px: `.app` is `grid-template-columns:var(--rail-icon) minmax(0,1fr)`
+  with `--rail-icon:60px` below 980px and the icon rail present at every width outside
+  focus mode, so `.main` is 315px; `.body` drops to one column at 980px so the rail's 272px
+  track is not reserved; `.lesson-read` is `padding:24px 20px` there, and `box-sizing` is
+  `border-box` globally. **315 − 40 = 275px.** Cycle 2 concluded that `paint()`'s
+  `Math.max(240, …)` floor "never bites at 375px, where the stacked column is ~343px", and
+  cycle 8's gate resizes the schematic at 343px as its narrowest case. The *conclusion*
+  survives — 275 is still above 240 — but the number both rest on is 68px too generous, and
+  a future floor chosen against 343 would be chosen against a column that does not exist.
+  Recorded rather than acted on: changing another track's gate from inside this one is the
+  move cycle 4 reverted and cycle 7 declined.
+- **Checked at 275px and found sound, so the next cycle need not re-derive it:** `.numq`
+  and `.tune` collapse to one column at 900px; `.mt-grid` is `minmax(160px,1fr)` and gives
+  one 275px card; `.blk-listing` is `white-space:pre` with `overflow-x:auto` **and a
+  `tabindex="0"`**, which cycle 9 added, so the sideways scroller is reachable; `.opt`,
+  `.blk`, `.blk-opt` and `.mt-lb` all compute to 28–32px tall against WCAG 2.5.8's 24px;
+  and `.nq-in input` is **17px**, over the 16px at which iOS Safari stops zooming the
+  viewport when a field takes focus — which is a real property of this surface and not an
+  accident, since it is the one field on a phone a learner types into.
+- **`prefers-reduced-motion` needs nothing here.** The blanket `*{animation:none!important;
+  transition:none!important}` covers `.blk-pick`'s `fadeUp`, `.quiz-result`'s `popIn` and
+  `.mt-card:hover`'s `translateY`; and `renderQuiz`'s `scrollIntoView` already tests the
+  media query in script, because a CSS rule cannot reach a scroll the script asks for.
+
+**2. Assessment Inquisitor.** No graded question in a stylesheet, so — as in cycles 2, 5
+and 6 — it was pointed at the one thing in scope it can judge: whether a state *announces
+itself or merely exists*.
+
+- **After answering, the two options nobody picked look exactly like live buttons.**
+  `renderQuiz` sets `disabled` on all four and adds `.correct` to the key and `.wrong` to
+  the one that was picked. The other two get no class, and **there was no `.opt:disabled`
+  rule at all** — same fill, same border, same key chip, the only difference being that
+  the hover no longer fires, which is not a thing you can see without trying it.
+- **The hover on a quiz option is 1.10:1 in the dark theme** — `rgba(255,255,255,.04)` over
+  a card that is already `rgba(255,255,255,.02)`, a two-per-cent step. That is under the
+  1.1 floor cycle 5 set for exactly this question, and it is the faintest state in the
+  application. Found by the gate, not by hand, on the first run after this surface was
+  written into the budget.
+- *Checked and found sound:* right and wrong are **not** conveyed by colour alone anywhere
+  here. The quiz's `.ex-head` writes "✓ Right." or "✗ Not quite — the answer is **B**";
+  `.q-verdict` and `.blk-row` each carry a `.gmark` in an 18px column beside the text; and
+  `.mt-slot` states the name it was given. The colour is confirmation in all four kinds,
+  which is why the border strengths above are a *state* defect rather than a 1.4.1 one.
+
+### The defect this cycle found in the machinery, which is the largest thing in it
+
+**`verify_theme.mjs` was describing the stylesheet, not enforcing it.** For every entry
+except a `state` one, the gate took the ink from `theme_budget.json` and the background
+stack from `theme_budget.json`, and read out of `src/index.head.html` only the token
+*table*. So an entry said "`.blk-listing` is `--on-editor-2` on `--editor`" and the gate
+dutifully measured 7.20:1 — **whether or not `.blk-listing` still said that.**
+
+This is not a hypothetical. Fourteen mutations were built, each one putting a surface this
+cycle had just repaired back on the token it had that morning, and the gate was asked to
+object. **It rejected two and accepted twelve** — including the blanks listing back to
+1.84:1, the numeric answer box back to 1.01:1, and every one of the `--lime`-as-ink
+reverts. The two it caught were the option hover (a `state` entry, which has always read
+the stylesheet through `hoverBg`) and a bare hex planted on `.blk-file` (the *tokens*
+section, which reads the stylesheet too).
+
+Cycle 6 came within one step of this. Its entry records writing the editor's rows "**as the
+stylesheet actually declares them**" and letting the gate find the 4.06:1 — which worked,
+because at that moment the budget and the source disagreed. What neither of us noticed is
+that the technique is a one-shot: the instant the CSS is repaired and the entry matches, the
+tie is cut and nothing holds it. Fifty-eight surfaces had been in that state for two cycles.
+
+**Fixed.** `hoverBg` is generalised to `declared(sel, prop, theme)` — the same lookup, for
+any property: `sel` in the dark theme, `[data-theme=light] sel` in the light one, falling
+back to the dark rule when the light one is missing, which *is* the `.inav:hover` defect and
+so stays measured rather than restated. An entry that names `sel` now takes its ink from the
+stylesheet and its declared `fg` is ignored; an entry whose named rule declares no such
+property is a failure, which is what catches a rule being deleted outright. `bg` stays in
+the budget, and that is deliberate: a background *stack* is a fact about the DOM's nesting,
+not about one rule, and inventing it from a stylesheet would mean modelling the cascade.
+
+**46 of the 107 surfaces now read their ink from the source** — the 46 this cycle added and
+annotated. Back-filling the shell's 58 is mechanical and is the obvious next Track 5 job;
+it is not this cycle's, because those 58 name rules this cycle has no business reading.
+The gate prints the count, so the number cannot quietly stop growing.
+
+### What changed
+
+**Tokens — five, all in `:root` only, so no theme can override them.** They follow the
+`--on-editor-{lime,blue,purple,amber}` precedent exactly, and their values are the dark
+theme's own answer colours, which were already tuned for a dark ground.
+
+| token | value | why |
+|---|---|---|
+| `--on-editor-ok` | `#5BE58A` | the answer state, on a surface that does not flip |
+| `--on-editor-no` | `#FF5C7A` | " |
+| `--on-editor-wait` | `#FFB020` | " |
+| `--on-editor-sunk` | `rgba(255,255,255,0.04)` | a recessed bar on that surface |
+| `--on-editor-fill` | `rgba(255,255,255,0.06)` | a filled chip on it |
+
+**The measurements, before → after. The dark theme barely moves, which is the point: this
+repairs the broken theme without redesigning the working one.**
+
+| surface | dark | light |
+|---|---|---|
+| `.blk.filled` — the answer put into a hole | 16.54 → 15.17 | **1.01 → 13.68** |
+| `.blk-listing` — the code around the holes | 10.33 → 7.74 | **1.84 → 7.20** |
+| `.blk` — a hole still waiting | 8.91 | **3.07 → 8.02** |
+| `.blk.right` / `.blk.wrong` | 9.45 / 5.68 | **3.21 → 8.45 · 2.90 → 5.17** |
+| `.blk-count` — "4 / 6 right" | **1.88 → 7.20** | **1.77 → 6.55** |
+| `.blk-file` · `.nq-u` | 4.95 → 7.20 | 4.27 → 6.55 |
+| `.nq-in input` — the answer being typed | 17.09 | **1.01 → 15.89** |
+| `.nq-in input::placeholder` | **1.86 → 2.93** | **8.74 → 2.72** |
+| `.nq-lbl` — "Your answer" | **1.81 → 4.75** | **2.07 → 4.98** |
+| `.numq-nofig` | 6.14 → 7.74 | **3.27 → 7.20** |
+| `.quiz-q .qt code` · `.opt code` | 13.03 · 12.35 | **3.65 → 6.31 · 3.51 → 6.07** |
+| `.opt.correct .k` — the right answer's letter | 9.43 | **3.16 → 5.47** |
+| `.opt .k` — an idle letter | **4.37 → 5.49** | 4.60 → 5.11 |
+| `.q-verdict` / `.mt-card` / `.blk-row` borders, ok | **2.32–3.21 → 7.82** | **1.61–1.91 → 3.45** |
+| the same, wrong | **1.70–2.15 → 4.45** | **1.76–2.16 → 4.17** |
+| STATE `.opt` hover against idle | **1.10 → clears** | 1.11 |
+
+The placeholder is the one figure that went *down* in the light theme, deliberately: 2.72:1
+against the value's 15.89, with its own floor written into the budget. A placeholder that
+reaches AA stops being distinguishable from a filled field, which is the decision cycle 5
+recorded when it declined to darken `--ink-5`, and the defect here was never that the
+placeholder was too quiet — it was that it was **louder than the answer**.
+
+The three answer-state borders are one number now, 80%, chosen rather than inherited: it is
+the lowest mix that clears 3:1 on all four of {ok, no} × {dark, light} — 7.82, 3.45, 4.45,
+4.17. 60% and 70% both leave the light theme's `ok` under the floor.
+
+**Type.** `.nq-lbl` 10px → 11px and `.quiz-q .qn` 10px → 11px, matching what cycle 5 did to
+the rail.
+
+**Micro-interactions.** A spent quiz option loses its raised fill *and* its key chip, so an
+answered card reads as answered: two channels, because the fill alone is 1.04:1 against the
+card. The option hover goes from a 2% step to a 5% one. `.opt`'s `transition:all .16s`
+became the three properties it actually animates.
+
+**The gate**, as above, plus two smaller repairs to its reporting: a surface with a declared
+`floor` no longer sets the headline "tightest text" — adding the placeholder made the
+summary read 2.72:1 where it had read 4.63, which looks exactly like a regression and is
+not — and the count of source-read surfaces is printed.
+
+### Found in my own work, and fixed
+
+Three, and every one of them was caught by measuring rather than by re-reading.
+
+- **My fix for the spent quiz option was a contrast regression.** The first version was
+  `opacity:.62`, which is the obvious way to say "spent" and which drops the option's own
+  text to **4.41 / 3.38:1** and its key to **2.91 / 2.47** — so three quarters of every
+  answered question would have become harder to read than before the cycle that was
+  repairing it. This is the failure mode the curriculum names: a correction that inverts
+  what it was written to fix. Replaced with a change to the surfaces only; the option's ink
+  is untouched at 10.03 / 9.86 and the key lands on `--ink-4` at 4.95 / 4.62.
+- **`--accent-ink` was not enough for `.opt.correct .k`.** I reached for the token cycle 5
+  minted for this, measured, and got **4.47:1** — under the floor by three hundredths,
+  because that key sits on `--lime-12` over the option's own `--lime-08`, two tints deep,
+  where `.btn.accent` sits on one. `--code-ink`, the darker of the two accent inks, clears
+  it at 5.47. The token being *for* this problem is not the same as it solving this
+  instance of it.
+- **The option hover I did not touch was the one the gate rejected.** `rgba(255,255,255,.04)`
+  had been there all along and my own hand audit had walked past it, because a 2% step over
+  a 2% card looks fine written down. It failed on the first run after the entry existed.
+
+### Left alone, deliberately
+
+- **`--lime` is still used as ink in 35 places, and the light theme puts most of them at
+  3.4–4.1:1.** Counted, not estimated: `a` — every link in the app — at **3.76**,
+  `.eyebrow` 3.76, `.lesson-title .lnum` **3.40**, `.chip.done` / `.chip.lab` /
+  `.chip.prereq.met` 3.65, `.pcard code` 3.65, `.dv-substep b` and `.sbx-v` 4.06. Each is a
+  one-token edit; together they are the accent weight of every screen in the application,
+  which is a decision about the design language rather than a repair, and it belongs in a
+  cycle that does nothing else. This cycle took only the three inside its own subsystem.
+- **55 rules are still under 11px.** The two in the answering surface were raised; the rest
+  are across the course screen, the profile, the workbench and the planner. Same argument:
+  a type-scale pass is its own cycle, and doing it from inside this one would have meant
+  touching every screen and verifying none of them.
+- **The 58 shell and editor surfaces still describe rather than enforce.** The mechanism now
+  exists and 45 surfaces use it; annotating the other 58 with their `sel` is mechanical, and
+  it is the first thing the next Track 5 cycle should do. Recorded as the debt this cycle
+  created the tool for and did not spend.
+- **`P.dim` at 2.93:1 and `P.faint` at 1.86:1 on the canvas.** Cycle 2 measured them and
+  handed them to Track 5 by name; cycle 5 re-measured them and did not take them; cycles 6
+  and 8 both recorded them again, cycle 8 adding the analysis plot's axis labels to the
+  list. This cycle did not take them either, and the reason has not changed: they are the
+  grid, ticks and legends of 13 visualisers plus two canvases, in `src/studio.js` rather
+  than in the stylesheet, and moving them changes the visual weight of every drawing in the
+  app. Cycle 5's three candidate values still stand — `#6B7280` → 4.07, `#767D8A` → 4.75,
+  `#7E8694` → 5.36 — and it is now the *only* Track 5 debt that four separate cycles have
+  named without anyone taking it. It should be the target, not the leftovers.
+- **`.blk.open`'s outline and `.blk`'s dashed border are budgeted without a `sel`.** Both
+  are composite shorthands (`outline:2px solid …`, `border:1px dashed …`) and teaching
+  `declared()` to parse shorthand is a real parser, not a regex. They measure 10.76 / 10.00
+  and are nowhere near a floor; recorded so the gap in coverage is known rather than
+  implied by silence.
+- **`.q-prompt` has no `sel` either**, for the opposite reason: it declares no colour at all
+  and inherits `--ink` from the body. An entry naming it would fail. Left declarative.
+- **The 275px column, above.** Cycle 2's and cycle 8's numbers are wrong and their
+  conclusions are not; correcting another track's gate from inside this one is what cycle 4
+  reverted the 41-file re-emit for.
+- **No author file, no `catalog/*.json`, no lesson id and no schema was touched**, so
+  `emit.py` was not run and the staleness guard is not armed. The mechanical confirmation is
+  that the payload total is **12706 KB before and after** and `git status` reports nothing
+  under `docs/programs` — no course's JSON moved, so no payload could.
+- **`docs/programs` holds 64 payloads against 62 in the current generation.** The rolling
+  window, as cycles 1–10 all established, and this cycle built twice. Verified rather than
+  assumed: 3 generations retained, 64 files on disk, all 64 named by a retained generation,
+  **0 orphaned and 0 missing**.
+
+### Gates, after
+
+Every pre-existing number unmoved. Two moved by exactly what was added — the theme gate's
+surface count, by the 49 answering-surface rows written into its budget, and the two
+artifact sizes, by the CSS and the gate's own new code.
+
+```
+verify_theme         All good: 14 exemptions · 58 -> 107 contrast surfaces x 2 themes,
+                     tightest text 4.61:1 (.q-hint [light]), faintest state 1.11:1
+                     (.opt hover [light]) · 1 held below the standard floor on purpose ·
+                     46 read their ink out of the stylesheet · the 375px topbar ·
+                     the 50px id column · the closed drawer is out of the tab order
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3160 per-option explanations · 6572 live draws,
+                     4384 options picked and read back · every bank within its budget
+verify_circuits      All good: 82 circuit exercises, 348 checks · 543 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_circuit_model All good: 1457 analyses, 84 refusals · 15 plots · 380 published
+                     schematics, 359 with a DC point, all three ways
+verify_derivations   All good: 1170 steps across 46 courses
+verify_labs CS201    All good: 6 labs
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12706 KB — unchanged ·
+                     inlined 13893 -> 13897 KB · shell 1159 -> 1163 KB, of 1536
+```
+
+Beyond the gates: every ratio in this entry computed from the WCAG 2.1 sRGB formula against
+the composited stack, before the fix and again after; the 375px column summed from the
+stylesheet's own lengths and the grid it actually declares at that width; the target sizes
+of four control kinds computed rather than assumed; the `--lime`-as-ink instances and the
+sub-11px rules **counted** rather than estimated, at 35 and 55; and the gate run against
+**16 mutations — 15 it had to reject and one it had to pass** — which is the run that found
+it was rejecting only 2 of 14 to begin with, and the reason this entry has a machinery
+section at all.
+
+---

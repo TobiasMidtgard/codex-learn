@@ -169,19 +169,40 @@ const FLOOR = { text: 4.5, large: 3.0, graphic: 3.0, state: 1.1 };
      not exist. That fallback is the defect this cycle opened on: .inav:hover had no
      light rule, so it painted white over white and measured 1.00:1. Reading it here
      rather than restating it in the budget is what makes the check load-bearing. */
-  function hoverBg(sel, theme) {
+  /* The value a rule actually declares, read out of the stylesheet. Same lookup for both
+     themes: `sel` for dark, `[data-theme=light] sel` for light, falling back to the dark
+     rule when the light one does not exist — that fallback IS the .inav:hover defect.
+
+     This started as hoverBg, for `state` entries only, and that was the whole weakness of
+     this gate: every other entry took its colour from the BUDGET, so the budget described
+     the stylesheet instead of enforcing it. Reverting a fixed rule to the token it had
+     before left the gate green, because nothing ever asked the stylesheet what colour it
+     was using. Demonstrated: 14 mutations of the answering surface, of which this gate
+     rejected 2. An entry that names `sel` is now read from the source and the budget's own
+     `fg` is ignored, so a revert moves the measured number. See GAUNTLET_LOG cycle 11. */
+  function declared(sel, prop, theme) {
     const want = theme === 'light' ? '[data-theme=light] ' + sel : sel;
+    const re = new RegExp('(?:^|;)\\s*' + prop + '\\s*:\\s*([^;]+)');
     for (let i = rules.length - 1; i >= 0; i--) {
       const r = rules[i];
       if (r.media.length) continue;
       if (r.sel.split(',').map(s => s.trim()).indexOf(want) < 0) continue;
-      const m = r.body.match(/(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/);
+      const m = r.body.match(re);
       if (m) return m[1].trim();
     }
-    return theme === 'light' ? hoverBg(sel, 'dark') : null;
+    return theme === 'light' ? declared(sel, prop, 'dark') : null;
   }
+  const hoverBg = (sel, theme) => declared(sel, 'background(?:-color)?', theme);
   let worstText = Infinity, worstName = '';
   let worstState = Infinity, worstStateName = '';
+  /* An entry that carries its own `floor` is one the design deliberately holds below the
+     standard — a placeholder that must stay quieter than the value it stands in for. It
+     still has to clear the floor it declares, but it must not set the headline: letting
+     it do so makes the summary read like a regression every time such a surface is added,
+     and the headline is the number the log compares between cycles. Counted instead. */
+  let relaxed = 0;
+  /* how many surfaces take their ink from the stylesheet rather than from this file */
+  let sourceRead = 0;
   for (const e of budget.surfaces) {
     const floor = e.floor !== undefined ? e.floor : FLOOR[e.kind];
     if (floor === undefined) { bad('contrast', e.name + ': unknown kind "' + e.kind + '"'); continue; }
@@ -203,18 +224,29 @@ const FLOOR = { text: 4.5, large: 3.0, graphic: 3.0, state: 1.1 };
         if (r < worstState) { worstState = r; worstStateName = e.name + ' [' + theme + ']'; }
       } else {
         const bg = flatten((theme === 'light' && e.bgLight) ? e.bgLight : e.bg, tbl);
-        const fg = parseColor(e.fg, tbl);
+        /* `sel` names the rule the ink comes from, and the stylesheet is then the
+           authority; `fg` alone is a description and cannot fail when the source moves. */
+        let fgSrc = e.fg;
+        if (e.sel) {
+          fgSrc = declared(e.sel, e.prop || 'color', theme);
+          if (!fgSrc) { bad('contrast', e.name + ' [' + theme + ']: `' + e.sel + '` declares no ' + (e.prop || 'color')); continue; }
+          if (theme === 'dark') sourceRead++;
+        }
+        const fg = parseColor(fgSrc, tbl);
         if (!bg || !fg) { bad('contrast', e.name + ' [' + theme + ']: a colour did not resolve'); continue; }
         r = contrast(overlay(fg, bg), bg);
-        if (e.kind === 'text' && r < worstText) { worstText = r; worstName = e.name + ' [' + theme + ']'; }
+        if (e.kind === 'text' && e.floor === undefined && r < worstText) { worstText = r; worstName = e.name + ' [' + theme + ']'; }
       }
+      if (e.floor !== undefined && theme === 'dark') relaxed++;
       if (r + 1e-9 < floor) {
         bad('contrast', e.name + ' [' + theme + '] ' + r.toFixed(2) + ':1 is under the ' + floor + ':1 floor for ' + e.kind);
       }
     }
   }
   if (clean('contrast')) ok('contrast', budget.surfaces.length + ' surfaces x 2 themes clear their floor · tightest text ' +
-    worstText.toFixed(2) + ':1 (' + worstName + ') · faintest state ' + worstState.toFixed(2) + ':1 (' + worstStateName + ')');
+    worstText.toFixed(2) + ':1 (' + worstName + ') · faintest state ' + worstState.toFixed(2) + ':1 (' + worstStateName + ')' +
+    (relaxed ? ' · ' + relaxed + ' held below the standard floor on purpose, each with its own' : '') +
+    ' · ' + sourceRead + ' read their ink out of the stylesheet');
 }
 
 /* ---------- 3. the topbar fits a phone ---------- */
