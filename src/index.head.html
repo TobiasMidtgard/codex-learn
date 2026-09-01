@@ -1212,6 +1212,15 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   overflow:hidden}
 #ckt-mount .ckt-canvas{min-height:0}
 .ckt-canvas canvas{display:block}
+/* The canvas is a focus stop now — it is the only way to reach the editor without a
+   mouse — so the ring has to be visible against --editor, which is dark in both themes
+   and so does not take the page's own :focus-visible offset well. Inset instead. */
+.ckt-canvas canvas:focus-visible{outline:2px solid var(--lime);outline-offset:-2px}
+/* The key map and the status line: read by assistive technology, no box on the page.
+   Not display:none, which would take both out of the accessibility tree — the mistake
+   the metric pill labels shipped with until it was measured. */
+.ckt-vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap;border:0}
 .ckt-side{border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
 .ckt-panel{padding:12px 14px;border-bottom:1px solid var(--line)}
 .ckt-panel h4{margin:0 0 9px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;
@@ -1229,7 +1238,11 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .ckt-out{padding:12px 14px;overflow:auto;flex:1;min-height:0}
 .ckt-tab{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
 .ckt-tab td{padding:3px 0;color:var(--ink-2)}
-.ckt-tab td:first-child{color:var(--ink-5)}
+/* --ink-5 is the placeholder-and-disabled tier and measures about 2:1 in both themes;
+   cycle 5 moved .rail-miss off it for the same reason. This column is not a
+   placeholder, it is the half of the answer that says WHICH node the volts beside it
+   belong to — the row is unreadable without it. */
+.ckt-tab td:first-child{color:var(--ink-3)}
 .ckt-tab td:last-child{text-align:right;color:var(--lime)}
 .ckt-nodes{flex-wrap:wrap}
 .ckt-nodes button{font-size:10.5px;padding:0 8px}

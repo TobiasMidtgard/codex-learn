@@ -2651,7 +2651,13 @@ function renderNumeric(main, l) {
     if (l.diagram) {
       const host = $('#numq-dia', main);
       if (host && typeof createCircuit === 'function') {
-        const h = createCircuit(host, { model: l.diagram, readOnly: true });
+        /* Same re-entrancy as the build unit: paint() runs again on Hint and on Check,
+           and each pass left the previous diagram's ResizeObserver behind. */
+        if (teardown) { try { teardown(); } catch (e) {} }
+        const h = createCircuit(host, {
+          model: l.diagram, readOnly: true,
+          label: 'Schematic for this question: ' + (l.title || 'the circuit described above'),
+        });
         teardown = function () { h.dispose(); };
       }
     }
@@ -3254,6 +3260,13 @@ function renderBuild(main, l) {
     wireCrumb(main, l);
     wireFootNav(main, l);
 
+    /* paint() is re-entrant — "Start over" calls it — and `teardown` is one slot, so
+       assigning a second editor into it dropped the first on the floor with its
+       document listeners, its ResizeObserver and its model still live. Pressing R or
+       Delete afterwards then ran doDelete on the abandoned copy, which called
+       onChange, which wrote that copy over the learner's saved circuit. The tune
+       renderer already carries this line and says why; the editor did not. */
+    if (teardown) { try { teardown(); } catch (e) {} }
     const handle = createCircuit($('#build-mount', main), {
       model: model,
       onChange: function (m2) {

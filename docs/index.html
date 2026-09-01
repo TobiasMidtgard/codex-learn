@@ -1212,6 +1212,15 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   overflow:hidden}
 #ckt-mount .ckt-canvas{min-height:0}
 .ckt-canvas canvas{display:block}
+/* The canvas is a focus stop now — it is the only way to reach the editor without a
+   mouse — so the ring has to be visible against --editor, which is dark in both themes
+   and so does not take the page's own :focus-visible offset well. Inset instead. */
+.ckt-canvas canvas:focus-visible{outline:2px solid var(--lime);outline-offset:-2px}
+/* The key map and the status line: read by assistive technology, no box on the page.
+   Not display:none, which would take both out of the accessibility tree — the mistake
+   the metric pill labels shipped with until it was measured. */
+.ckt-vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap;border:0}
 .ckt-side{border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
 .ckt-panel{padding:12px 14px;border-bottom:1px solid var(--line)}
 .ckt-panel h4{margin:0 0 9px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;
@@ -1229,7 +1238,11 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .ckt-out{padding:12px 14px;overflow:auto;flex:1;min-height:0}
 .ckt-tab{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
 .ckt-tab td{padding:3px 0;color:var(--ink-2)}
-.ckt-tab td:first-child{color:var(--ink-5)}
+/* --ink-5 is the placeholder-and-disabled tier and measures about 2:1 in both themes;
+   cycle 5 moved .rail-miss off it for the same reason. This column is not a
+   placeholder, it is the half of the answer that says WHICH node the volts beside it
+   belong to — the row is unreadable without it. */
+.ckt-tab td:first-child{color:var(--ink-3)}
 .ckt-tab td:last-child{text-align:right;color:var(--lime)}
 .ckt-nodes{flex-wrap:wrap}
 .ckt-nodes button{font-size:10.5px;padding:0 8px}
@@ -13687,6 +13700,30 @@ function parseEng(text, fallback) {
   return isFinite(v) ? v : fallback;
 }
 
+/* The kinds whose value is a quantity that cannot be zero or negative, and the floor
+   each one is held above. A source may sit at zero and may be negative — that is a
+   direction, and the whole of superposition depends on being able to write it. A
+   resistance, a capacitance, an inductance, a saturation current, a transconductance
+   and an open-loop gain may not: none of them has a meaning at zero, and every stamp
+   that consumes one already defends itself against the number, which is exactly why
+   nothing ever reported the value that got in.
+   Floors are set far below anything a lesson uses — a femtofarad, a picohenry, a
+   micro-ohm — because the job here is to reject the impossible, not to police the
+   unusual. `SW` is absent: its resistance comes from its state, not from the box, and
+   it has no value field on the panel at all. */
+const VALUE_FLOOR = {
+  R: 1e-6, LDR: 1e-6, NTC: 1e-6, POT: 1e-6, LAMP: 1e-6, METER: 1e-9,
+  C: 1e-15, L: 1e-12,
+  D: 1e-30, LED: 1e-30, NPN: 1e-30, PNP: 1e-30,
+  NMOS: 1e-12, PMOS: 1e-12, OPAMP: 1,
+};
+function clampValue(kind, v, fallback) {
+  if (!isFinite(v)) return fallback;
+  const floor = VALUE_FLOOR[kind];
+  if (floor === undefined) return v;
+  return v < floor ? floor : v;
+}
+
 /* Quarter turns clockwise, normalised. Module level rather than tucked inside the
    netlist because the pins, the polarity, the drawing and the panel all have to agree
    about which way round a part is, and one function is how they are made to. */
@@ -14950,7 +14987,16 @@ const Symbols = (function () {
  * A schematic canvas: pick a part, click to place it, drag to wire. Everything is
  * on a grid so a pin either meets a wire or it does not — no near-misses, and no
  * hunting for the one connection that was two pixels out.
+ *
+ * And on a grid, so a caret can be moved along it: every gesture below has a key
+ * that does the same thing, because 80 circuit exercises are graded work and a
+ * graded unit no keyboard can reach is a unit some learners cannot sit.
  */
+
+/* One counter for every editor ever mounted, so `aria-describedby` and the ids it
+   points at cannot collide when a lesson shows a diagram beside an editor. */
+let cktUid = 0;
+
 function createCircuit(root, opts) {
   opts = opts || {};
   const GRID = 26;
@@ -14992,6 +15038,13 @@ function createCircuit(root, opts) {
   let wireFrom = null;         /* grid point a wire is being drawn from */
   let hover = null;
   let hoverSp = null;          /* the pointer in screen pixels, for the hover card */
+  /* Where the keyboard is on the grid, and whether the canvas holds focus. Declared up
+     here with the rest of the editor's state rather than beside the key handlers,
+     because paint() reads both and a read-only diagram paints and returns long before
+     the handlers are reached — a `let` further down would be in its temporal dead zone
+     and every schematic in the catalogue would throw on first draw. */
+  let caret = null;
+  let cvFocused = false;
   let analysis = { mode: 'dc', node: 1, f1: 10, f2: 1e6, tstop: 5e-3 };
   let result = null;
   /* The machines the last transient ran, kept only so the panel can show what they
@@ -15004,14 +15057,19 @@ function createCircuit(root, opts) {
   /* A question that shows a circuit wants the drawing and nothing else — no tools,
      no analysis panel, nothing to click. Same painter, so a diagram can never drift
      from what the editor would show for the same model. */
+  const uid = 'ckt' + (cktUid++);
   if (opts.readOnly) {
+    /* A diagram is a picture and is labelled as one. role=img with a name is what
+       stops a screen reader announcing a bare, empty "canvas" in the middle of a
+       question — the same treatment the sandboxes got. */
     root.innerHTML = '<div class="ckt ckt-ro"><div class="ckt-main">' +
-      '<div class="ckt-canvas"><canvas></canvas></div></div></div>';
+      '<div class="ckt-canvas"><canvas role="img" aria-label="' +
+      esc2(opts.label || 'Schematic diagram for this question') + '"></canvas></div></div></div>';
   } else {
   root.innerHTML =
     '<div class="ckt">' +
       '<div class="ckt-bar">' +
-        '<div class="ckt-tools">' +
+        '<div class="ckt-tools" role="group" aria-label="Tools and parts">' +
           [['select', 'Select', 'Select and move parts'], ['wire', 'Wire', 'Draw a wire'],
            /* Next to the wire, because the two of them are the only ways anything on
               this canvas gets connected — and the board is the one you place first. */
@@ -15039,12 +15097,21 @@ function createCircuit(root, opts) {
               would be wired to. */
            ['MCU', 'MCU', 'Microcontroller — twelve pins and a sketch you write; ' +
             'run it with a transient']].map(function (t) {
-            return '<button class="ckt-t" data-tool="' + t[0] + '" title="' + t[2] + '">' + t[1] + '</button>';
+            /* The label a screen reader gets is the name, not the glyph on the key cap:
+               eighteen of these buttons read "R", "C", "L", "D", "I" and "V" as their
+               whole text, which is a legend for the eye and nothing at all for the ear.
+               Taken from the title's own first clause rather than from a second list —
+               a name and a description that can drift apart is how one of them ends up
+               wrong. aria-pressed because exactly one tool is on, and the class that
+               said so was doing it in CSS only. */
+            return '<button class="ckt-t" data-tool="' + t[0] + '" title="' + t[2] +
+              '" aria-label="' + esc2(t[2].split(' — ')[0]) + '" aria-pressed="false">' +
+              t[1] + '</button>';
           }).join('') +
         '</div>' +
         '<span class="spacer"></span>' +
-        '<button class="ckt-t" data-act="zoomout" title="Zoom out (-)">−</button>' +
-        '<button class="ckt-t" data-act="zoomin" title="Zoom in (+)">+</button>' +
+        '<button class="ckt-t" data-act="zoomout" title="Zoom out (-)" aria-label="Zoom out">−</button>' +
+        '<button class="ckt-t" data-act="zoomin" title="Zoom in (+)" aria-label="Zoom in">+</button>' +
         '<button class="ckt-t" data-act="fit" title="Fit the drawing to the window (0)">Fit</button>' +
         '<button class="ckt-t" data-act="group" title="Fold the selection into one block (G)">Group</button>' +
         '<button class="ckt-t" data-act="ungroup" title="Open a block back out onto the canvas (U)">Ungroup</button>' +
@@ -15058,21 +15125,37 @@ function createCircuit(root, opts) {
          not. */
       '<div class="ckt-bar" data-crumbs style="display:none"></div>' +
       '<div class="ckt-main">' +
-        '<div class="ckt-canvas"><canvas></canvas></div>' +
+        /* The canvas is a focus stop and says what it is. role=application because the
+           key map below is the whole interface — arrows, Enter and Escape have meanings
+           here that are not the browser's, and a screen reader in browse mode would eat
+           every one of them before this file saw it. The description is where the map
+           lives for someone who cannot see the panel that repeats it. */
+        '<div class="ckt-canvas">' +
+          '<canvas tabindex="0" role="application" aria-describedby="' + uid + '-keys"' +
+            ' aria-label="Schematic canvas. Press Enter for the key map."></canvas>' +
+          '<p class="ckt-vh" id="' + uid + '-keys">Arrow keys move the caret one cell; ' +
+            'hold Shift to move the selection instead. Enter places the part the toolbar ' +
+            'has chosen, draws a wire between two presses, or picks up what is under the ' +
+            'caret. R rotates, G groups, U ungroups, Delete removes, and Escape lets go. ' +
+            'Plus and minus zoom, 0 fits the drawing. Tab leaves the canvas.</p>' +
+          /* Every action on this canvas changes a picture and nothing else. This is
+             where it is said in words. */
+          '<p class="ckt-vh" data-say role="status" aria-live="polite"></p>' +
+        '</div>' +
         '<div class="ckt-side">' +
           '<div class="ckt-panel" data-panel="part"></div>' +
           '<div class="ckt-panel" data-panel="env" hidden></div>' +
           '<div class="ckt-panel">' +
             '<h4>Analysis</h4>' +
-            '<div class="seg ckt-modes">' +
-              '<button data-an="dc" class="active">Operating point</button>' +
-              '<button data-an="ac">Frequency</button>' +
-              '<button data-an="tran">Transient</button>' +
+            '<div class="seg ckt-modes" role="group" aria-label="Analysis">' +
+              '<button data-an="dc" class="active" aria-pressed="true">Operating point</button>' +
+              '<button data-an="ac" aria-pressed="false">Frequency</button>' +
+              '<button data-an="tran" aria-pressed="false">Transient</button>' +
             '</div>' +
             '<div class="ckt-opts" data-opts></div>' +
             '<button class="btn success ckt-run">Solve</button>' +
           '</div>' +
-          '<div class="ckt-out" data-out></div>' +
+          '<div class="ckt-out" data-out role="region" aria-label="Analysis result"></div>' +
         '</div>' +
       '</div>' +
       '<div class="ckt-plot" data-plot hidden><canvas></canvas></div>' +
@@ -15089,6 +15172,21 @@ function createCircuit(root, opts) {
   const envPanel = root.querySelector('[data-panel="env"]');
   const optsEl = root.querySelector('[data-opts]');
   const crumbEl = root.querySelector('[data-crumbs]');
+  const sayEl = root.querySelector('[data-say]');
+
+  /* Everything this editor does, it does by redrawing. Said here in words, once, so a
+     learner who is not watching the canvas is told what just happened to it — and
+     re-stamped with a hair space when the same sentence repeats, because a live region
+     whose text has not changed announces nothing, and "placed a resistor" four times
+     running is four real events. U+200A rather than a plain space: a trailing ordinary
+     space is collapsed out of the computed name, so it would change the DOM and not the
+     string, which is the half of the fix that does not work. */
+  let saidTwice = false;
+  function announce(msg) {
+    if (!sayEl || !msg) return;
+    saidTwice = !saidTwice;
+    sayEl.textContent = msg + (saidTwice ? ' ' : '');
+  }
 
   /* The simulated world, held beside the model rather than in it: a schematic is the
      same schematic in the dark and in the light, and a saved circuit should not
@@ -15983,16 +16081,39 @@ function createCircuit(root, opts) {
 
     paintMarquee();
 
-    /* the wire being drawn */
-    if (wireFrom && hover) {
+    /* The wire being drawn, from whichever of the two pointers is live. The caret is
+       second so a mouse still wins while it is on the canvas. */
+    const lead = hover || (cvFocused ? caret : null);
+    if (wireFrom && lead) {
       ctx.save();
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = pal.accent;
       ctx.beginPath();
       ctx.moveTo(gx(wireFrom[0]), gy(wireFrom[1]));
-      const straight = Math.abs(hover[0] - wireFrom[0]) > Math.abs(hover[1] - wireFrom[1])
-        ? [hover[0], wireFrom[1]] : [wireFrom[0], hover[1]];
+      const straight = Math.abs(lead[0] - wireFrom[0]) > Math.abs(lead[1] - wireFrom[1])
+        ? [lead[0], wireFrom[1]] : [wireFrom[0], lead[1]];
       ctx.lineTo(gx(straight[0]), gy(straight[1]));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    /* The caret. A ring rather than a filled cell, because what matters is the cell it
+       is around and not the mark itself, and drawn from `accent` so it carries the same
+       contrast on this ground as everything else the learner is meant to see. */
+    if (cvFocused && caret) {
+      ctx.save();
+      ctx.strokeStyle = pal.accent;
+      ctx.lineWidth = 2 / view.s;
+      ctx.beginPath();
+      ctx.arc(gx(caret[0]), gy(caret[1]), GRID * 0.44, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([3 / view.s, 3 / view.s]);
+      ctx.lineWidth = 1 / view.s;
+      ctx.beginPath();
+      ctx.moveTo(gx(caret[0]) - GRID * 0.8, gy(caret[1]));
+      ctx.lineTo(gx(caret[0]) + GRID * 0.8, gy(caret[1]));
+      ctx.moveTo(gx(caret[0]), gy(caret[1]) - GRID * 0.8);
+      ctx.lineTo(gx(caret[0]), gy(caret[1]) + GRID * 0.8);
       ctx.stroke();
       ctx.restore();
     }
@@ -16123,10 +16244,15 @@ function createCircuit(root, opts) {
     if (p && p.kind === 'IC') { paintBlock(p); return; }
     if (p && p.kind === 'MCU') { paintMcu(p); return; }
     if (!p || p.kind === 'GND' || p.kind === 'OUT') {
+      /* The keyboard route is written where a sighted keyboard learner will actually
+         meet it. The same map is on the canvas's own description for a screen reader,
+         and the two are kept short enough to stay in step. */
       partPanel.innerHTML = '<h4>Component</h4><p class="ckt-hint">' +
         (tool === 'wire' ? 'Click a pin, then click where the wire should end.'
           : tool === 'select' ? 'Click a component to select it.'
-          : 'Click the grid to place a ' + PART_KINDS[tool].name.toLowerCase() + '.') + '</p>';
+          : 'Click the grid to place a ' + PART_KINDS[tool].name.toLowerCase() + '.') +
+        ' Or tab to the canvas and use the arrow keys: Enter does what a click does, ' +
+        'Shift with an arrow moves what is selected, and Escape lets go.</p>';
       return;
     }
     const k = PART_KINDS[p.kind];
@@ -16143,7 +16269,13 @@ function createCircuit(root, opts) {
       }).join('') +
       (p.kind === 'POT'
         ? '<div class="ckt-f" style="grid-template-columns:auto 1fr auto">' +
-          '<span>Wiper</span><input type="range" data-wiper min="0" max="1000" step="1" value="' +
+          /* The slider carries thousandths so the drag is smooth; the label beside it,
+             the model and the note all speak in the 0..1 the wiper actually is. A range
+             input announces its own raw value, so without aria-valuetext this control
+             reads "500" to a screen reader and "0.50" to everyone else. */
+          '<span>Wiper</span><input type="range" data-wiper min="0" max="1000" step="1" ' +
+          'aria-label="Wiper position, 0 to 1" aria-valuetext="' +
+          (p.wiper === undefined ? 0.5 : p.wiper).toFixed(2) + '" value="' +
           Math.round((p.wiper === undefined ? 0.5 : p.wiper) * 1000) +
           '" style="height:18px;padding:0;border:0;background:none;accent-color:var(--lime);width:100%">' +
           '<span data-wiperval style="color:var(--lime)">' +
@@ -16153,9 +16285,21 @@ function createCircuit(root, opts) {
 
     const inp = partPanel.querySelector('[data-val]');
     if (inp) inp.addEventListener('change', function () {
-      p.value = parseEng(inp.value, p.value);
+      /* Every OTHER field on this panel is clamped to the range its kind declares, two
+         lines below. The value box — the one field every part has — was not, so a
+         resistance of 0 or of −5 was accepted, written into the model, and saved. The
+         stamps guard themselves (`1 / Math.max(p.value, 1e-12)`), so what shipped was
+         worse than a crash: the solver quietly treated it as a 1 pΩ short while the
+         panel beside it went on reading −5 Ω, and the learner's own saved circuit was
+         the one lying to them. */
+      const want = parseEng(inp.value, p.value);
+      p.value = clampValue(p.kind, want, p.value);
       changed();
       paintPart();
+      if (p.value !== want) {
+        announce('A ' + (PART_KINDS[p.kind].name || p.kind).toLowerCase() +
+          ' has to be more than zero, so this is now ' + fmtEng(p.value, k.unit) + '.');
+      }
     });
     partPanel.querySelectorAll('[data-x]').forEach(function (el) {
       el.addEventListener('change', function () {
@@ -16172,6 +16316,7 @@ function createCircuit(root, opts) {
     if (wip) wip.addEventListener('input', function () {
       p.wiper = Math.min(Math.max(+wip.value / 1000, 0), 1);
       partPanel.querySelector('[data-wiperval]').textContent = p.wiper.toFixed(2);
+      wip.setAttribute('aria-valuetext', p.wiper.toFixed(2));
       /* The note quotes the two stamped resistances, so it goes stale the instant the
          wiper moves — and it is the one label that exists so the learner can read the
          model rather than trust it. Rewritten in place rather than through
@@ -17053,6 +17198,9 @@ function createCircuit(root, opts) {
       mcuRun = null;
       plotWrap.hidden = true;
       outEl.innerHTML = '<div class="ckt-err">' + esc2(r.error) + '</div>';
+      /* The one message on this screen a learner most needs and is least likely to be
+         looking at: they pressed Solve and are watching the drawing, not the panel. */
+      announce('Did not solve. ' + r.error);
       paint();
       refreshNote();
       paintPart();
@@ -17067,17 +17215,37 @@ function createCircuit(root, opts) {
         rows.push('<tr><td>' + id.replace('p', 'part ') + '</td><td>' + fmtEng(Math.abs(r.currents[id]), 'A') + '</td></tr>');
       });
       outEl.innerHTML = '<table class="ckt-tab">' + rows.join('') + '</table>';
+      /* The table is a region with a name rather than a live one: making it live would
+         read every node and every current on every solve, which is the whole answer
+         shouted at someone who asked for one number. The headline goes to the status
+         line and the table is there to be read at leisure. */
+      announce(net.nodeCount - 1 === 0
+        ? 'Solved. Nothing but ground: no node to report.'
+        : 'Solved. ' + (net.nodeCount - 1) + (net.nodeCount - 1 === 1 ? ' node, ' : ' nodes, ') +
+          'node 1 at ' + fmtEng(r.v[1], 'V') + '. The full table is in the analysis result panel.');
     } else {
       plotWrap.hidden = false;
       const picks = [];
       for (let n = 1; n < net.nodeCount; n++) {
-        picks.push('<button data-node="' + n + '"' + (n === analysis.node ? ' class="active"' : '') + '>node ' + n + '</button>');
+        picks.push('<button data-node="' + n + '"' + (n === analysis.node ? ' class="active"' : '') +
+          ' aria-pressed="' + (n === analysis.node ? 'true' : 'false') + '">node ' + n + '</button>');
       }
-      outEl.innerHTML = '<div class="seg ckt-nodes">' + picks.join('') + '</div>' + mcuStatus();
+      outEl.innerHTML = '<div class="seg ckt-nodes" role="group" aria-label="Which node to plot">' +
+        picks.join('') + '</div>' + mcuStatus();
       outEl.querySelectorAll('[data-node]').forEach(function (b) {
-        b.addEventListener('click', function () { analysis.node = +b.dataset.node; solveRepaint(); });
+        b.addEventListener('click', function () {
+          analysis.node = +b.dataset.node;
+          outEl.querySelectorAll('[data-node]').forEach(function (o) {
+            o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+          });
+          solveRepaint();
+          announce('Plotting node ' + analysis.node + '.');
+        });
       });
       paintPlot();
+      announce((analysis.mode === 'ac' ? 'Frequency sweep' : 'Transient run') + ' finished over ' +
+        (net.nodeCount - 1) + (net.nodeCount - 1 === 1 ? ' node' : ' nodes') +
+        '. The plot is under the canvas; the node buttons choose what it shows.');
     }
     paint();
     /* the numbers the note quotes are the ones that just changed */
@@ -17160,6 +17328,12 @@ function createCircuit(root, opts) {
   }
 
   function changed() {
+    /* An editor that has been disposed must never reach onChange. Its `cur` is a model
+       nothing on screen is showing, and onChange is what writes the learner's circuit
+       into their saved progress — so a stale editor that still hears a key would save a
+       drawing over the one they can see. Nothing can deliver that key now, but this is
+       the line that makes it a rule rather than a consequence. */
+    if (disposed) return;
     result = null;
     mcuRun = null;
     plotWrap.hidden = true;
@@ -17191,6 +17365,7 @@ function createCircuit(root, opts) {
       getModel: function () { return snapshot(); },
       solve: function () { return null; },
       dispose: function () {
+        if (disposed) return;
         disposed = true;
         if (dro) dro.disconnect();
         root.innerHTML = '';
@@ -17264,65 +17439,56 @@ function createCircuit(root, opts) {
     zoomTo(view.s * (e.deltaY < 0 ? 1.12 : 1 / 1.12), sp[0], sp[1]);
   }, { passive: false });
 
-  cv.addEventListener('pointerdown', function (e) {
-    const sp = evPt(e);
-    const pt = toGrid(sp[0], sp[1]);
-
-    /* Middle button, or space held: pan. Both are what a drawing tool does, and the
-       second is the one people already have in their fingers. */
-    if (e.button === 1 || spaceDown) {
-      panFrom = { sx: sp[0], sy: sp[1], px: view.px, py: view.py };
-      cv.setPointerCapture(e.pointerId);
-      e.preventDefault();
-      return;
+  /* ---- what a gesture at a cell means ----
+   *
+   * Lifted out of the pointer handler so the keyboard can do the same thing rather
+   * than a near-miss of it. The wire Enter draws and the wire a click draws are now
+   * the same three lines, and the refusal to stack two parts on one cell is enforced
+   * once. Each returns the sentence for the live region, or '' when nothing happened.
+   */
+  function wireAt(pt) {
+    if (!wireFrom) { wireFrom = pt; paint(); return 'Wire started at ' + cellName(pt) + '.'; }
+    /* wires stay orthogonal: take the dominant direction */
+    const end = Math.abs(pt[0] - wireFrom[0]) > Math.abs(pt[1] - wireFrom[1])
+      ? [pt[0], wireFrom[1]] : [wireFrom[0], pt[1]];
+    let msg = 'Wire cancelled.';
+    if (end[0] !== wireFrom[0] || end[1] !== wireFrom[1]) {
+      cur.wires.push({ a: wireFrom, b: end });
+      msg = 'Wire drawn from ' + cellName(wireFrom) + ' to ' + cellName(end) + '.';
+      changed();
     }
-    if (e.button !== 0) return;
+    wireFrom = null;
+    paint();
+    return msg;
+  }
 
-    if (tool === 'wire') {
-      if (!wireFrom) { wireFrom = pt; paint(); return; }
-      /* wires stay orthogonal: take the dominant direction */
-      const end = Math.abs(pt[0] - wireFrom[0]) > Math.abs(pt[1] - wireFrom[1])
-        ? [pt[0], wireFrom[1]] : [wireFrom[0], pt[1]];
-      if (end[0] !== wireFrom[0] || end[1] !== wireFrom[1]) {
-        cur.wires.push({ a: wireFrom, b: end });
-        changed();
+  /* The selection change a click at a cell makes, with no drag in it. */
+  function selectAt(pt, shift) {
+    const hit = partAt(pt);
+    if (hit) {
+      if (shift) {
+        if (selIds.has(hit.id)) selIds.delete(hit.id); else selIds.add(hit.id);
+      } else if (!selIds.has(hit.id)) {
+        selIds.clear();
+        selIds.add(hit.id);
       }
-      wireFrom = null;
-      paint();
-      return;
+    } else if (!shift) {
+      selIds.clear();
     }
+    return hit;
+  }
 
-    if (tool === 'select') {
-      const hit = partAt(pt);
-      cv.setPointerCapture(e.pointerId);
-      if (hit) {
-        if (e.shiftKey) {
-          if (selIds.has(hit.id)) selIds.delete(hit.id); else selIds.add(hit.id);
-        } else if (!selIds.has(hit.id)) {
-          selIds.clear();
-          selIds.add(hit.id);
-        }
-        /* Dragging a part that is already part of a multiple selection moves the
-           whole selection; that is why the clear above is conditional. `shift` is
-           carried so the click-to-use gesture below can tell a plain click from one
-           that was only ever adjusting the selection. */
-        down = { sx: sp[0], sy: sp[1], grid: pt, mode: 'maybe-move', hit: hit.id, shift: e.shiftKey };
-      } else {
-        if (!e.shiftKey) selIds.clear();
-        down = { sx: sp[0], sy: sp[1], grid: pt, mode: 'maybe-marquee' };
-      }
-      paintPart();
-      paint();
-      return;
-    }
-
+  function placeAt(pt) {
     /* Placing: refuse to stack two parts on one cell. A body is not a part on that
        cell, it is the ground under it — the whole point of a board is that you put
        things on it — so only a symbol blocks. Two bodies on one cell is still
        refused, since a board laid across a block, or across another board, is a
        drawing nobody can read and a hole nobody can say the owner of. */
     const existing = cellPartAt(pt) || (bodyOf({ kind: tool }) ? bodyAt(pt) : undefined);
-    if (existing) { selIds.clear(); selIds.add(existing.id); paintPart(); paint(); return; }
+    if (existing) {
+      selIds.clear(); selIds.add(existing.id); paintPart(); paint();
+      return partName(existing) + ' is already at ' + cellName(pt) + '; selected it instead.';
+    }
     const kind = tool;
     const p = { id: 'p' + (seq++), kind: kind, x: pt[0], y: pt[1], rot: 0,
                 value: PART_KINDS[kind].def };
@@ -17335,6 +17501,55 @@ function createCircuit(root, opts) {
     selIds.add(p.id);
     changed();
     paintPart();
+    return 'Placed ' + partName(p) + ' at ' + cellName(pt) + '.';
+  }
+
+  /* A cell and a part, in the words the live region uses. Column and row rather than
+     raw grid numbers, because the origin moves when a block is opened and "column 3,
+     row 6" is a place on the drawing in front of you rather than a coordinate in a
+     space nothing on screen shows. */
+  function cellName(pt) { return 'column ' + (pt[0] - originX + 1) + ', row ' + (pt[1] - originY + 1); }
+  function partName(p) {
+    const k = PART_KINDS[p.kind];
+    return (k ? k.name : p.kind) + ' ' + String(p.id).replace('p', '');
+  }
+
+  cv.addEventListener('pointerdown', function (e) {
+    const sp = evPt(e);
+    const pt = toGrid(sp[0], sp[1]);
+    /* A click is also how this canvas is reached from a keyboard: without it the tab
+       order runs straight past the one control on the page that has any work in it. */
+    focusCanvas();
+    caret = pt;
+
+    /* Middle button, or space held: pan. Both are what a drawing tool does, and the
+       second is the one people already have in their fingers. */
+    if (e.button === 1 || spaceDown) {
+      panFrom = { sx: sp[0], sy: sp[1], px: view.px, py: view.py };
+      cv.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+    if (e.button !== 0) return;
+
+    if (tool === 'wire') { announce(wireAt(pt)); return; }
+
+    if (tool === 'select') {
+      cv.setPointerCapture(e.pointerId);
+      const hit = selectAt(pt, e.shiftKey);
+      /* Dragging a part that is already part of a multiple selection moves the whole
+         selection; that is why selectAt's clear is conditional. `shift` is carried so
+         the click-to-use gesture below can tell a plain click from one that was only
+         ever adjusting the selection. */
+      down = hit
+        ? { sx: sp[0], sy: sp[1], grid: pt, mode: 'maybe-move', hit: hit.id, shift: e.shiftKey }
+        : { sx: sp[0], sy: sp[1], grid: pt, mode: 'maybe-marquee' };
+      paintPart();
+      paint();
+      return;
+    }
+
+    announce(placeAt(pt));
   });
 
   function endPointer(e) {
@@ -17386,48 +17601,187 @@ function createCircuit(root, opts) {
     if (hit && hit.kind === 'IC') { e.preventDefault(); openBlock(hit); }
   });
 
-  /* Space is held to pan, the way it is in every drawing tool. Tracked on the
-     document because the canvas does not take keyboard focus. */
+  /* ---- the keyboard ----
+   *
+   * All of this was on `document`, guarded only against a keydown whose target was an
+   * input or a textarea. Three things followed, none of them local to this canvas:
+   *
+   *   * `Space` was preventDefault()ed for the whole page. A <button> is activated on
+   *     keyup only if the keydown left it active, and the browser sets that in the
+   *     keydown default action — so cancelling the keydown cancels the press. With a
+   *     build exercise on screen, Space no longer worked on "Check the circuit", on the
+   *     footer navigation, on the rail, or on anything in the desk modal, and no longer
+   *     scrolled the reading above the canvas either.
+   *   * `Ctrl+A` was taken, with preventDefault, from the whole document — so a lesson
+   *     carrying an editor was a lesson whose text could not be selected.
+   *   * `R`, `G`, `U`, `Delete` and `Backspace` fired from anywhere outside an input.
+   *     Pressing R while the focus was on a footer button rotated a part somewhere down
+   *     the page, and Backspace deleted the selection.
+   *
+   * Everything is now on the canvas, which is a focus stop. A key with a meaning here
+   * has that meaning while the caret is here and no other time.
+   */
+  /* The caret itself is declared with the editor's other state, above. Null until the
+     canvas is used, and drawn only while the canvas holds focus: a caret on a canvas
+     nobody is steering is one more mark on a busy drawing. */
   let spaceDown = false;
-  function onSpaceDown(e) {
-    if (e.code !== 'Space' || spaceDown) return;
-    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
-    spaceDown = true;
-    cv.style.cursor = 'grab';
-    e.preventDefault();
+
+  function focusCanvas() {
+    try { cv.focus({ preventScroll: true }); } catch (e2) { try { cv.focus(); } catch (e3) {} }
   }
-  function onSpaceUp(e) {
-    if (e.code !== 'Space') return;
-    spaceDown = false;
-    cv.style.cursor = '';
+
+  /* The cell the caret starts on: whatever is selected, else the middle of what can be
+     seen — never (0,0), which on a panned canvas is off screen and reads as a caret
+     that did not appear. */
+  function caretHome() {
+    const one = selParts()[0];
+    if (one) return [one.x, one.y];
+    const box = cv.parentElement.getBoundingClientRect();
+    return toGrid(Math.max(320, box.width) / 2, Math.max(260, box.height) / 2);
   }
-  document.addEventListener('keydown', onSpaceDown);
-  document.addEventListener('keyup', onSpaceUp);
+
+  /* Keep the caret on screen: a caret arrowed past the edge of the viewport is a caret
+     the learner has lost, and every key after that lands somewhere invisible. */
+  function revealCaret() {
+    if (!caret) return;
+    const box = cv.parentElement.getBoundingClientRect();
+    const w = Math.max(320, box.width), h = Math.max(260, box.height);
+    const sx = (gx(caret[0]) - view.px) * view.s, sy = (gy(caret[1]) - view.py) * view.s;
+    const m = GRID * view.s;
+    if (sx < m) view.px -= (m - sx) / view.s;
+    if (sx > w - m) view.px += (sx - (w - m)) / view.s;
+    if (sy < m) view.py -= (m - sy) / view.s;
+    if (sy > h - m) view.py += (sy - (h - m)) / view.s;
+  }
+
+  const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
   function onKey(e) {
-    if (e.target && /input|textarea/i.test(e.target.tagName)) return;
-    if (e.key === 'Delete' || e.key === 'Backspace') { doDelete(); e.preventDefault(); }
-    else if (e.key === 'r' || e.key === 'R') { doRotate(); }
-    else if (e.key === 'g' || e.key === 'G') { doGroup(); }
-    else if (e.key === 'u' || e.key === 'U') { doUngroup(); }
+    /* The value boxes and the sketch live inside this editor, and a caret in one of
+       them is typing, not drawing. */
+    if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
+    if (e.target && e.target.isContentEditable) return;
+
+    const step = ARROWS[e.key];
+    if (step) {
+      e.preventDefault();
+      if (!caret) { caret = caretHome(); revealCaret(); paint(); announce('Caret at ' + cellName(caret) + '.'); return; }
+      if (e.shiftKey) {
+        /* Shift+arrow moves the selection, which is the drag gesture without a pointer.
+           One changed() per press rather than per cell is wrong for a drag and right
+           here: each press is a deliberate step the learner can see the result of. */
+        if (!selIds.size) { announce('Nothing is selected, so there is nothing to move.'); return; }
+        moveBy(step[0], step[1]);
+        caret = [caret[0] + step[0], caret[1] + step[1]];
+        changed();
+        revealCaret();
+        paint();
+        announce('Moved the selection to ' + cellName(caret) + '.');
+        return;
+      }
+      caret = [caret[0] + step[0], caret[1] + step[1]];
+      revealCaret();
+      paint();
+      const under = partAt(caret);
+      announce(cellName(caret) + (under ? ', ' + partName(under) + '.' : '.'));
+      return;
+    }
+
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar' || e.code === 'Space') {
+      e.preventDefault();
+      /* Space held with the pointer over the drawing is the pan modifier, the way it is
+         in every drawing tool. That is the only situation in which it is a modifier for
+         a drag rather than the key the learner just pressed, so it is the only one that
+         takes it — and it is reached only through the canvas, so the page keeps its own
+         Space everywhere else. */
+      if (e.key !== 'Enter' && hoverSp) {
+        if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; }
+        return;
+      }
+      if (!caret) { caret = caretHome(); revealCaret(); paint(); announce('Caret at ' + cellName(caret) + '.'); return; }
+      if (tool === 'wire') { announce(wireAt(caret)); return; }
+      if (tool === 'select') {
+        const hit = selectAt(caret, e.shiftKey);
+        paintPart(); paint();
+        /* A switch is used by clicking it, and Enter is the click. Not on shift, which
+           is aimed at the selection — the same rule endPointer applies to the mouse. */
+        if (hit && hit.kind === 'SW' && !e.shiftKey) {
+          toggleSwitch(hit); paintPart();
+          announce(partName(hit) + ' is now ' + (hit.closed ? 'closed' : 'open') + '.');
+        } else if (hit && hit.kind === 'IC' && !e.shiftKey && e.key === 'Enter' && e.altKey) {
+          openBlock(hit);
+          announce('Opened ' + partName(hit) + '.');
+        } else {
+          announce(hit ? 'Selected ' + partName(hit) + '.' : 'Selection cleared.');
+        }
+        return;
+      }
+      announce(placeAt(caret));
+      return;
+    }
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      const n = selIds.size;
+      doDelete();
+      e.preventDefault();
+      announce(n ? 'Deleted ' + n + (n === 1 ? ' part.' : ' parts.') : 'Nothing is selected.');
+    }
+    else if (e.key === 'r' || e.key === 'R') { doRotate(); announce(rotationSaid()); }
+    else if (e.key === 'g' || e.key === 'G') { doGroup(); announce(blockSaid('Grouped')); }
+    else if (e.key === 'u' || e.key === 'U') { doUngroup(); announce(blockSaid('Ungrouped')); }
     else if (e.key === 'Escape') {
       /* Escape drops whatever is in hand first, and only then backs out of a block:
          inside one, the gesture that cancels a half-drawn wire must not also throw
          away where you are. */
       if (wireFrom || marquee || selIds.size) {
         wireFrom = null; marquee = null; selIds.clear(); paintPart(); paint();
-      } else if (path.length) closeTo(path.length - 1);
+        announce('Let go.');
+      } else if (path.length) { closeTo(path.length - 1); announce('Closed the block.'); }
     }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
       selIds.clear();
       cur.parts.forEach(function (p) { selIds.add(p.id); });
       paintPart(); paint(); e.preventDefault();
+      announce('Selected all ' + selIds.size + (selIds.size === 1 ? ' part.' : ' parts.'));
     }
-    else if (e.key === '+' || e.key === '=') { zoomTo(view.s * 1.2); }
-    else if (e.key === '-' || e.key === '_') { zoomTo(view.s / 1.2); }
-    else if (e.key === '0') { zoomFit(); }
+    else if (e.key === '+' || e.key === '=') { zoomTo(view.s * 1.2); announce(zoomSaid()); }
+    else if (e.key === '-' || e.key === '_') { zoomTo(view.s / 1.2); announce(zoomSaid()); }
+    else if (e.key === '0') { zoomFit(); announce('Fitted the drawing to the window.'); }
   }
-  document.addEventListener('keydown', onKey);
+
+  function zoomSaid() { return 'Zoom ' + Math.round(view.s * 100) + ' per cent.'; }
+  function rotationSaid() {
+    const ps = selParts().filter(function (p) { const k = PART_KINDS[p.kind]; return !k || k.pins > 1; });
+    if (!ps.length) return 'Nothing here can be turned.';
+    return 'Rotated ' + ps.length + (ps.length === 1 ? ' part to ' : ' parts to ') +
+      (turnsOf(ps[0]) * 90) + ' degrees.';
+  }
+  function blockSaid(verb) { return verb + '. ' + cur.parts.length + ' parts on this drawing.'; }
+
+  function releaseSpace() {
+    if (!spaceDown) return;
+    spaceDown = false;
+    cv.style.cursor = '';
+  }
+  function onSpaceUp(e) { if (e.code === 'Space' || e.key === ' ') releaseSpace(); }
+
+  /* Alt-tabbing away with space held used to leave the flag set for the rest of the
+     session: the keyup went to another window, and the next plain click on the canvas
+     panned instead of placing a part, with the cursor still reading "grab". Two ways
+     out of the window, and both of them end the hold. */
+  function onWinBlur() { releaseSpace(); }
+  function onCanvasFocus() { cvFocused = true; paint(); }
+  /* The caret is kept, not cleared: tabbing to a value box to type a resistance and
+     tabbing back is one gesture, and coming back to the middle of the canvas instead of
+     to where you were is the sort of thing that makes a keyboard route unusable. Only
+     the drawing of it goes. */
+  function onCanvasBlur() { cvFocused = false; releaseSpace(); paint(); }
+
+  cv.addEventListener('keydown', onKey);
+  cv.addEventListener('keyup', onSpaceUp);
+  cv.addEventListener('focus', onCanvasFocus);
+  cv.addEventListener('blur', onCanvasBlur);
+  window.addEventListener('blur', onWinBlur);
 
   function doRotate() {
     /* one-pin parts sit on their cell and have no direction to turn — which is now a
@@ -17461,9 +17815,15 @@ function createCircuit(root, opts) {
     b.addEventListener('click', function () {
       tool = b.dataset.tool;
       wireFrom = null;
-      root.querySelectorAll('[data-tool]').forEach(function (o) { o.classList.toggle('on', o === b); });
+      root.querySelectorAll('[data-tool]').forEach(function (o) {
+        o.classList.toggle('on', o === b);
+        /* the class was the only record that a tool was chosen, and a class is not a
+           state any assistive technology can read */
+        o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+      });
       paintPart();
       paint();
+      announce(b.getAttribute('aria-label') + ' chosen. Enter places one at the caret.');
     });
   });
   root.querySelector('[data-act="zoomin"]').addEventListener('click', function () { zoomTo(view.s * 1.2); });
@@ -17477,15 +17837,26 @@ function createCircuit(root, opts) {
     cur.parts = []; cur.wires = []; selIds.clear();
     view = { s: 1, px: 0, py: 0 };
     changed(); paintPart();
+    announce('Cleared the drawing.');
   });
   root.querySelectorAll('[data-an]').forEach(function (b) {
     b.addEventListener('click', function () {
       analysis.mode = b.dataset.an;
-      root.querySelectorAll('[data-an]').forEach(function (o) { o.classList.toggle('active', o === b); });
+      root.querySelectorAll('[data-an]').forEach(function (o) {
+        o.classList.toggle('active', o === b);
+        o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+      });
       paintOpts();
     });
   });
   root.querySelector('.ckt-run').addEventListener('click', solve);
+
+  root.querySelector('[data-act="fit"]').setAttribute('aria-keyshortcuts', '0');
+  root.querySelector('[data-act="rotate"]').setAttribute('aria-keyshortcuts', 'R');
+  root.querySelector('[data-act="delete"]').setAttribute('aria-keyshortcuts', 'Delete');
+  root.querySelector('[data-act="group"]').setAttribute('aria-keyshortcuts', 'G');
+  root.querySelector('[data-act="ungroup"]').setAttribute('aria-keyshortcuts', 'U');
+
 
   let ro = null;
   if (typeof ResizeObserver !== 'undefined') {
@@ -17493,7 +17864,9 @@ function createCircuit(root, opts) {
     ro.observe(cv.parentElement);
   }
 
-  root.querySelector('[data-tool="R"]').classList.add('on');
+  const firstTool = root.querySelector('[data-tool="R"]');
+  firstTool.classList.add('on');
+  firstTool.setAttribute('aria-pressed', 'true');
   paintCrumbs();
   paintPart();
   paintEnv();
@@ -17504,13 +17877,14 @@ function createCircuit(root, opts) {
     getModel: function () { return snapshot(); },
     solve: solve,
     dispose: function () {
+      /* Idempotent, and the first line rather than the last: a second dispose used to
+         be harmless only by luck, and everything below is written to be safe to skip. */
+      if (disposed) return;
       disposed = true;
-      document.removeEventListener('keydown', onKey);
-      /* space-to-pan is tracked on the document because the canvas takes no keyboard
-         focus, so it has to be released here or every editor ever opened keeps
-         listening for the rest of the session */
-      document.removeEventListener('keydown', onSpaceDown);
-      document.removeEventListener('keyup', onSpaceUp);
+      /* The keyboard now lives on the canvas, which goes with the DOM below — but the
+         window listener does not, so it is released here or every editor ever opened
+         keeps one for the rest of the session. */
+      window.removeEventListener('blur', onWinBlur);
       if (ro) ro.disconnect();
       root.innerHTML = '';
     },
@@ -19840,7 +20214,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '5e5f33f23558';
+const BUILD_ID = '038739180196';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */
@@ -22510,6 +22884,13 @@ function renderBuild(main, l) {
     wireCrumb(main, l);
     wireFootNav(main, l);
 
+    /* paint() is re-entrant — "Start over" calls it — and `teardown` is one slot, so
+       assigning a second editor into it dropped the first on the floor with its
+       document listeners, its ResizeObserver and its model still live. Pressing R or
+       Delete afterwards then ran doDelete on the abandoned copy, which called
+       onChange, which wrote that copy over the learner's saved circuit. The tune
+       renderer already carries this line and says why; the editor did not. */
+    if (teardown) { try { teardown(); } catch (e) {} }
     const handle = createCircuit($('#build-mount', main), {
       model: model,
       onChange: function (m2) {
