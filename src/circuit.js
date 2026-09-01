@@ -4189,10 +4189,7 @@ function createCircuit(root, opts) {
       '<button class="ckt-t" data-codefull aria-pressed="' + (codeFull ? 'true' : 'false') +
       '" title="' + (codeFull ? 'Back into the panel (Escape)' : 'Write it full size') + '">' +
       (codeFull ? 'Shrink' : 'Expand') + '</button></div>' +
-      '<textarea id="' + uid + '" data-code rows="14" spellcheck="false" ' +
-      'aria-labelledby="' + uid + '-lab" ' +
-      'aria-describedby="' + uid + '-err" aria-invalid="' + (built && built.error ? 'true' : 'false') + '">' +
-      esc2(code) + '</textarea>' +
+      '<div class="ckt-ed"><div data-ed></div></div>' +
       /* The syntax error is the one thing on this panel that changes while the learner
          is typing, and it was written into a plain <div>: on screen the moment a
          bracket was missed, and silent to a screen reader for ever. A live region, and
@@ -4219,7 +4216,28 @@ function createCircuit(root, opts) {
       '</div>' +
       '<p class="ckt-hint" data-note>' + modelNote(p) + '</p>';
 
-    const ta = partPanel.querySelector('[data-code]');
+    /* The same editor the Python and JavaScript labs use, in the sketch language.
+       Highlighting, a gutter, completion out of the interpreter's own builtin table,
+       auto-indent, bracket pairs, Ctrl+/ to comment and Ctrl+Enter to run — all of it
+       already written, and none of it reachable from here until now.
+
+       Ctrl+Enter solves the circuit rather than "running the sketch", because a sketch
+       on this canvas has no meaning apart from the transient it drives. It is the same
+       key the labs use for the same idea: make the thing happen. */
+    const ed = createEditor(partPanel.querySelector('[data-ed]'), {
+      lang: 'mcu',
+      onRun: function () { solve(); },
+    });
+    ed.setValue(code);
+    const ta = partPanel.querySelector('.ed-ta');
+    /* The editor names its box "Code editor", which is true of every one of them and
+       therefore says nothing about this one. The caption above it does. */
+    ta.setAttribute('data-code', '');
+    ta.removeAttribute('aria-label');
+    ta.setAttribute('aria-labelledby', uid + '-lab');
+    ta.setAttribute('id', uid);
+    ta.setAttribute('aria-describedby', uid + '-err');
+    ta.setAttribute('aria-invalid', built && built.error ? 'true' : 'false');
 
     /* Filling the screen with the sketch. The flag is module-level and the class is
        re-read from it on every repaint, because this panel is rebuilt whenever the
@@ -4300,7 +4318,7 @@ function createCircuit(root, opts) {
        role and a name so that arriving in it by Tab says what it is; NOT a live region,
        because a sketch printing every time step would read hundreds of lines aloud. */
     return '<h4 style="margin-top:10px" id="' + uid + '-con">Console</h4>' +
-      '<pre tabindex="0" role="group" aria-labelledby="' + uid + '-con" ' +
+      '<pre data-console tabindex="0" role="group" aria-labelledby="' + uid + '-con" ' +
       'style="max-height:150px;overflow:auto;' +
       'margin:0 0 8px;padding:6px 8px;border-radius:var(--r);border:1px solid var(--line-2);' +
       'font-family:var(--mono,ui-monospace,monospace);font-size:11px;line-height:1.5;' +

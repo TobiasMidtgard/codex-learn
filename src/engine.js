@@ -207,6 +207,51 @@ const Highlight = (function () {
   ]);
   jsTok = js;
 
+  /* ------------------------------------------------------------ mcu sketches
+   *
+   * The C-like subset that runs on the schematic's microcontroller. Its words come
+   * from lang.js's completion tables — the same list the menu offers — rather than a
+   * second copy here, because a name painted as a builtin that the menu does not know
+   * (or the other way round) is the drift this arrangement exists to prevent.
+   *
+   * A type followed by a name and a bracket is a definition, which is how `void
+   * setup()` reads as one: there is no `function` keyword to hang it on, so the type
+   * does the work `def` and `function` do in the two languages above. */
+  const MCU_FN_WORDS = MCU_GLOBALS
+    .filter(function (e) { return e.k === K.FN; }).map(function (e) { return e.n; });
+  const MCU_CONST_WORDS = MCU_GLOBALS
+    .filter(function (e) { return e.k === K.CONST; }).map(function (e) { return e.n; });
+
+  function mcuDef(m) {
+    const mm = m.match(/^([A-Za-z_]\w*)(\s+)([A-Za-z_]\w*)([\s\S]*)$/);
+    if (!mm) return span('kw-decl', m);
+    return span('kw-decl', mm[1]) + esc(mm[2]) + span('fn-def', mm[3]) +
+      (mm[4] ? jsParams(mm[4]) : '');
+  }
+
+  const mcu = makeTokenizer([
+    [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'cm'],
+    /* #define is the one preprocessor line this machine reads, and it takes a plain
+       number. The whole line is one token so the name and value inside are not painted
+       as ordinary code. */
+    [/#\s*\w+[^\n]*/, 'dec'],
+    [/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/, function (m) { return strBody(m); }],
+    [new RegExp('\\b(?:' + MCU_TYPE_WORDS.join('|') + ')\\s+[A-Za-z_]\\w*\\s*(?=\\()'), mcuDef],
+    [words(MCU_CONST_WORDS), 'const'],
+    [words(MCU_KW_WORDS), 'kw-ctl'],
+    [words(MCU_TYPE_WORDS), 'kw-decl'],
+    [/\bSerial\b/, 'bi'],
+    [/\b\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?\b|\b0[xX][\da-fA-F]+\b/, 'num'],
+    [/\.\s*[A-Za-z_]\w*(?=\s*\()/, function (m) { return span('punc', '.') + span('method', m.slice(1)); }],
+    [words(MCU_FN_WORDS), 'bi'],
+    [/\b[A-Za-z_]\w*(?=\s*=[^=])/, function (m) { return span(/^[A-Z_0-9]+$/.test(m) ? 'const' : 'var-def', m); }],
+    [/\b[A-Z][A-Z_0-9]{1,}\b/, 'const'],
+    [/\b[A-Za-z_]\w*(?=\s*\()/, 'fn'],
+    [/\+\+|--|[-+*/%=<>!&|^~?]+/, 'op'],
+    [/[()[\]{}]/, 'bracket'],
+    [/[,.;:]/, 'punc'],
+  ]);
+
   /* ------------------------------------------------------------ css */
   const css = makeTokenizer([
     [/\/\*[\s\S]*?\*\//, 'cm'],
@@ -270,6 +315,7 @@ const Highlight = (function () {
       if (lang === 'js') return js(code);
       if (lang === 'css') return css(code);
       if (lang === 'html') return html(code);
+      if (lang === 'mcu') return mcu(code);
     } catch (e) { /* fall through to plain text */ }
     return esc(code);
   }
@@ -646,6 +692,30 @@ function createEditor(root, opts) {
     return charW;
   }
 
+  /* The rendered line box, asked for rather than assumed. The two places below used
+     to carry 21.6 against a real 22.68, so the completion menu drifted a pixel further
+     from the caret with every line — thirty lines down it was a line and a half out.
+     Measured once and kept, like the character width above it, and re-measured if the
+     editor is ever laid out at a size that gives a nonsense answer. */
+  let lineH = 0;
+  function measureLine() {
+    if (lineH) return lineH;
+    let h = 0;
+    try { h = parseFloat(getComputedStyle(ta).lineHeight); } catch (e) { h = 0; }
+    lineH = h > 1 ? h : 21.6;
+    return lineH;
+  }
+  /* The top inset the first line sits at — the textarea's own padding, for the same
+     reason: it was written as 12 against a padding of 14. */
+  let padT = 0;
+  function measurePadTop() {
+    if (padT) return padT;
+    let p = 0;
+    try { p = parseFloat(getComputedStyle(ta).paddingTop); } catch (e) { p = 0; }
+    padT = p > 0 ? p : 14;
+    return padT;
+  }
+
   function acClose() {
     if (acEl) { acEl.remove(); acEl = null; }
     if (acDoc) { acDoc.remove(); acDoc = null; }
@@ -724,7 +794,8 @@ function createEditor(root, opts) {
     let col = 0;
     for (let i = 0; i < lineText.length; i++) col = lineText[i] === '\t' ? (Math.floor(col / 4) + 1) * 4 : col + 1;
     const line = nl === -1 ? 0 : (upto.match(/\n/g) || []).length;
-    return { x: 14 + col * measureChar() - ta.scrollLeft, y: 12 + line * 21.6 - ta.scrollTop };
+    return { x: 14 + col * measureChar() - ta.scrollLeft,
+             y: measurePadTop() - 2 + line * measureLine() - ta.scrollTop };
   }
 
   function place(node, beside, above) {
@@ -737,7 +808,7 @@ function createEditor(root, opts) {
       return;
     }
     const menu = acEl ? (acEl.offsetHeight || 120) : 0;
-    let top = at.y + 21.6 + 2;
+    let top = at.y + measureLine() + 2;
     if (top + menu > bh - 4 && at.y - menu - 2 > 0) top = at.y - menu - 2;
     top = clamp(top, 2, Math.max(2, bh - Math.max(menu, nh) - 2));
     if (beside) {

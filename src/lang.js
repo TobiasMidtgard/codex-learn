@@ -711,6 +711,113 @@ const JS_LIT = [
   [/^new Set\b/, 'set'], [/^new Promise\b/, 'promise'], [/^\/[^/]/, 'regexp'],
 ];
 
+/* ---------------------------------------------------------------- mcu sketches
+ *
+ * The C-like subset src/mcu.js runs on the schematic's microcontroller. It is NOT
+ * Arduino: it has no objects, no strings beyond literals, no arrays, and twenty-four
+ * builtins. Everything below is taken from that file's own TYPES, BUILTIN and
+ * CONSTANTS tables, and build.mjs fails if the two lists drift apart — a completion
+ * for a name the machine does not have teaches the wrong thing twice, once when it is
+ * offered and again when the sketch is refused.
+ */
+const MCU_KW_WORDS = ['if', 'else', 'while', 'for', 'return', 'break', 'continue'];
+
+const MCU_TYPE_WORDS = ['void', 'int', 'long', 'byte', 'char', 'bool', 'boolean',
+  'float', 'double'];
+
+/* `long`, `byte`, `bool`, `boolean` and `char` are all the one integer type, and
+   `double` is `float`. The machine has one integer width and one float width, so
+   there is nothing to widen to; the doc says so rather than letting a learner infer
+   precision that is not there. */
+const MCU_TYPE_SET = {};
+MCU_TYPE_WORDS.forEach(function (w) { MCU_TYPE_SET[w] = 1; });
+
+const MCU_KW_DOC = {
+  void: 'No value. The return type of setup(), loop() and every builtin that acts.',
+  int: 'A whole number.',
+  long: 'The same type as int — this machine has one integer width.',
+  byte: 'The same type as int.',
+  char: 'The same type as int.',
+  bool: 'The same type as int. 0 is false, anything else is true.',
+  boolean: 'The same type as int.',
+  float: 'A number with a fractional part.',
+  double: 'The same type as float — this machine has one float width.',
+  if: 'Runs the block when the condition is not zero.',
+  else: 'Runs when the if above it did not.',
+  while: 'Repeats while the condition is not zero.',
+  for: 'init, condition, step — the counting loop.',
+  return: 'Leaves the function, with a value if it has one.',
+  break: 'Leaves the innermost loop.',
+  continue: 'Skips to the next turn of the innermost loop.',
+};
+
+const MCU_GLOBALS = [
+  fn('pinMode', '(pin, mode) -> void', 'Sets a pin to INPUT, OUTPUT or INPUT_PULLUP. A pin must be an OUTPUT before digitalWrite or analogWrite will drive it.'),
+  fn('digitalWrite', '(pin, value) -> void', 'Drives an OUTPUT pin to HIGH or LOW.'),
+  fn('analogWrite', '(pin, duty) -> void', 'Drives an OUTPUT pin at a duty between 0 and 255, which the solver sees as that fraction of the supply.'),
+  fn('digitalRead', '(pin) -> int', 'Reads a pin as HIGH or LOW.', 'int'),
+  fn('analogRead', '(pin) -> int', 'Reads a pin through its converter, 0 to 1023. Only the A pins have one.', 'int'),
+  fn('millis', '() -> int', 'Milliseconds since the sketch started.', 'int'),
+  fn('micros', '() -> int', 'Microseconds since the sketch started.', 'int'),
+  fn('delay', '(ms) -> void', 'Waits, in milliseconds. Time here is the transient the canvas is solving, not real time.'),
+  fn('delayMicroseconds', '(us) -> void', 'Waits, in microseconds.'),
+  fn('print', '(value, ...) -> void', 'Writes to the console under the panel, with no newline.'),
+  fn('println', '(value, ...) -> void', 'Writes to the console under the panel and starts a new line.'),
+  fn('map', '(x, inLo, inHi, outLo, outHi) -> int', 'Rescales x from one range to another.', 'int'),
+  fn('constrain', '(x, lo, hi) -> int', 'Clamps x between lo and hi.', 'int'),
+  fn('min', '(a, b) -> int', 'The smaller of two numbers.', 'int'),
+  fn('max', '(a, b) -> int', 'The larger of two numbers.', 'int'),
+  fn('abs', '(x) -> int', 'The magnitude, sign dropped.', 'int'),
+  fn('sqrt', '(x) -> float', 'The square root.', 'float'),
+  fn('pow', '(x, y) -> float', 'x raised to the power y.', 'float'),
+  fn('sin', '(x) -> float', 'Sine, in radians.', 'float'),
+  fn('cos', '(x) -> float', 'Cosine, in radians.', 'float'),
+  fn('tan', '(x) -> float', 'Tangent, in radians.', 'float'),
+  fn('floor', '(x) -> int', 'Rounded down.', 'int'),
+  fn('ceil', '(x) -> int', 'Rounded up.', 'int'),
+  fn('round', '(x) -> int', 'Rounded to the nearest whole number.', 'int'),
+  konst('HIGH', 'int = 1', 'The supply rail.'),
+  konst('LOW', 'int = 0', 'Ground.'),
+  konst('INPUT', 'int = 0', 'A pin that reads and drives nothing.'),
+  konst('OUTPUT', 'int = 1', 'A pin that drives the circuit.'),
+  konst('INPUT_PULLUP', 'int = 2', 'A pin that reads, with the internal pull-up on.'),
+  konst('true', 'int = 1', 'Anything other than zero is true.'),
+  konst('false', 'int = 0', ''),
+  konst('PI', 'float', '3.14159…'),
+  konst('TWO_PI', 'float', 'Two whole turns of phase.'),
+  konst('HALF_PI', 'float', 'A quarter turn.'),
+  konst('A0', 'int = 14', 'The first analogue pin. A0 to A3 are the four with converters behind them.'),
+  konst('A1', 'int = 15', 'An analogue pin.'),
+  konst('A2', 'int = 16', 'An analogue pin.'),
+  konst('A3', 'int = 17', 'An analogue pin.'),
+];
+
+/* The one name with a full stop in it. This subset has no objects — `Serial` is a
+   name that happens to contain a dot, which is why only these two exist. */
+const MCU_MODULES = {
+  Serial: [
+    meth('print', '(value, ...) -> void', 'The same as print().'),
+    meth('println', '(value, ...) -> void', 'The same as println().'),
+  ],
+};
+
+const MCU_SNIPPETS = [
+  { n: 'setup', detail: 'the run-once function', doc: 'Called once, before loop().',
+    body: 'void setup() {\n  $0\n}' },
+  { n: 'loop', detail: 'the repeating function', doc: 'Called over and over until the transient ends.',
+    body: 'void loop() {\n  $0\n}' },
+  { n: 'if', detail: 'if statement', doc: '', body: 'if ($1) {\n  $0\n}' },
+  { n: 'for', detail: 'counting loop', doc: '',
+    body: 'for (int i = 0; i < $1; i++) {\n  $0\n}' },
+  { n: 'while', detail: 'while loop', doc: '', body: 'while ($1) {\n  $0\n}' },
+  { n: 'blink', detail: 'drive a pin on and off', doc: 'The smallest complete sketch that changes the circuit.',
+    body: 'void setup() {\n  pinMode($1, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite($1, HIGH);\n  delay(200);\n  digitalWrite($1, LOW);\n  delay(200);\n}' },
+];
+
+const MCU_LIT = [
+  [/^\d/, 'int'], [/^\d+\.\d/, 'float'], [/^(true|false|HIGH|LOW)\b/, 'int'],
+];
+
 function langOf(lang) {
   if (lang === 'python') {
     return { types: PY_TYPES, globals: PY_GLOBALS.concat(PY_EXCEPTIONS), modules: PY_MODULES,
@@ -719,6 +826,16 @@ function langOf(lang) {
   if (lang === 'js') {
     return { types: JS_TYPES, globals: JS_GLOBALS, modules: JS_MODULES,
              snippets: JS_SNIPPETS, keywords: JS_KW_WORDS, lits: JS_LIT, id: /[A-Za-z_$][\w$]*/ };
+  }
+  if (lang === 'mcu') {
+    /* No `types` table: this subset has no objects, so there are no members to offer
+       after a dot on anything except Serial, which is a module here for exactly that
+       reason. An empty object rather than a missing one, because the member-access
+       path reads it without asking. */
+    return { types: {}, globals: MCU_GLOBALS, modules: MCU_MODULES,
+             snippets: MCU_SNIPPETS, keywords: MCU_KW_WORDS.concat(MCU_TYPE_WORDS),
+             keywordDoc: MCU_KW_DOC, typeWords: MCU_TYPE_SET,
+             lits: MCU_LIT, id: /[A-Za-z_]\w*/ };
   }
   return null;
 }
@@ -1374,7 +1491,13 @@ Complete.suggest = function (code, pos, lang, extraCode) {
     add({ n: alias, k: K.MOD, detail: 'module ' + table.imports[alias], doc: 'Imported in this file.' }, 280);
   }
   addAll(L.globals, 100);
-  L.keywords.forEach(function (kw) { add({ n: kw, k: K.KW, detail: 'keyword', doc: '' }, 40); });
+  L.keywords.forEach(function (kw) {
+    /* Optional, and absent for python and js, which have no aliases worth a sentence
+       and whose keywords are the ones every learner already met. */
+    const isType = !!(L.typeWords && L.typeWords[kw]);
+    add({ n: kw, k: isType ? K.TYPE : K.KW, detail: isType ? 'type' : 'keyword',
+          doc: (L.keywordDoc && L.keywordDoc[kw]) || '' }, 40);
+  });
   L.snippets.forEach(function (sn) { add({ n: sn.n, k: K.SNIP, detail: sn.detail, doc: sn.doc, body: sn.body }, 160); });
 
   /* de-duplicate, best score wins */

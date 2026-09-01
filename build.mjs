@@ -250,6 +250,44 @@ for (const c of allCourses) {
     }
   }
 }
+/* ---- the sketch language: what the machine has, and what the editor offers ----
+ *
+ * src/mcu.js is the only definition of this language. lang.js describes it to the
+ * editor — highlighting and completion both read the same tables — and the two are
+ * held together here rather than by anybody remembering. */
+{
+  const mcuJsSrc = read(join(ROOT, 'src', 'mcu.js'));
+  const langJsSrc = read(join(ROOT, 'src', 'lang.js'));
+
+  /* the interpreter's own tables */
+  const builtinBlock = mcuJsSrc.slice(mcuJsSrc.indexOf('const BUILTIN = bare({'));
+  const machineHas = new Set(
+    [...builtinBlock.slice(0, builtinBlock.indexOf('\n    });'))
+      .matchAll(/^      ([A-Za-z_]\w*)\s*:\s*\{\s*n:/gm)].map((m) => m[1]));
+  const constBlock = mcuJsSrc.slice(mcuJsSrc.indexOf('const CONSTANTS = bare({'));
+  for (const m of constBlock.slice(0, constBlock.indexOf('});'))
+    .matchAll(/([A-Za-z_]\w*)\s*:\s*num\(/g)) machineHas.add(m[1]);
+
+  /* what the editor offers: the fn()/konst() entries of MCU_GLOBALS */
+  const globalsBlock = langJsSrc.slice(langJsSrc.indexOf('const MCU_GLOBALS = ['));
+  const editorOffers = new Set(
+    [...globalsBlock.slice(0, globalsBlock.indexOf('\n];'))
+      .matchAll(/^  (?:fn|konst)\('([A-Za-z_]\w*)'/gm)].map((m) => m[1]));
+
+  if (!machineHas.size || !editorOffers.size) {
+    problems.push('the sketch-language guard found no names on one side — its ' +
+      'assumptions about mcu.js or lang.js have gone stale, so it is now checking nothing');
+  }
+  for (const n of [...machineHas].filter((x) => !editorOffers.has(x))) {
+    problems.push(`the sketch builtin "${n}" exists in src/mcu.js but the editor does not ` +
+      `offer it — a name the machine has that nothing tells the learner about`);
+  }
+  for (const n of [...editorOffers].filter((x) => !machineHas.has(x))) {
+    problems.push(`the editor offers "${n}" in the sketch language, but src/mcu.js has no ` +
+      `such name — the sketch would be refused on the line that used it`);
+  }
+}
+
 /* Read emit.py's copies back and compare. Without this the guard above only caught
    a unit naming something nothing defines — it never noticed emit.py and the source
    disagreeing, which is the failure that actually happens: a model gains a readout,

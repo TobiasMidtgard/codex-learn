@@ -77,6 +77,11 @@ function load(mcuSrc, cktSrc) {
   /* the editor listens for the browser's own way out of fullscreen, and paints its
      palette icons in whichever ink the page is using */
   'document', 'getComputedStyle',
+    /* lang.js and engine.js because the sketch panel mounts the app's real code
+       editor now — the same one the Python labs use, in the sketch language. A stub
+       would be a gate checking a fake against the contracts of the real thing. */
+    readFileSync(join(ROOT, 'src', 'lang.js'), 'utf8') + '\n' +
+    readFileSync(join(ROOT, 'src', 'engine.js'), 'utf8') + '\n' +
     (mcuSrc === undefined ? readFileSync(join(ROOT, 'src', 'mcu.js'), 'utf8') : mcuSrc) + '\n' +
     (cktSrc === undefined ? readFileSync(join(ROOT, 'src', 'circuit.js'), 'utf8') : cktSrc) +
     '\nmodule.exports = { MCU, createCircuit, MCU_SKETCH };'
@@ -571,7 +576,10 @@ async function panelAsync() {
   h2.tran();
   h2.handle.solve();
   drives++;
-  const pre = h2.root.querySelectorAll('pre')[0];
+  /* By its own marker, not by tag. The sketch box is the app's code editor now, and
+     that editor paints its highlighting into a <pre> of its own — so "the first pre"
+     stopped being the console and this check quietly moved to a different element. */
+  const pre = h2.root.querySelector('[data-console]');
   if (!pre) {
     bad('panel', 'a sketch that printed produced no console');
   } else {
@@ -732,13 +740,17 @@ async function mutations() {
       [mcu, ckt.replace('function onWinBlur() { releaseSpace(); flushEdit(); }',
         'function onWinBlur() { releaseSpace(); }')]],
     ['the sketch box loses its name', () =>
-      [mcu, ckt.replace("'aria-labelledby=\"' + uid + '-lab\" ' +", "'' +")]],
+      [mcu, ckt.replace("ta.setAttribute('aria-labelledby', uid + '-lab');", '')]],
     ['the sketch box is named after an element that is not there', () =>
-      [mcu, ckt.replace("'aria-labelledby=\"' + uid + '-lab\" ' +",
-        "'aria-labelledby=\"' + uid + '-gone\" ' +")]],
+      [mcu, ckt.replace("ta.setAttribute('aria-labelledby', uid + '-lab');",
+        "ta.setAttribute('aria-labelledby', uid + '-gone');")]],
+    ['the sketch box keeps the editor\'s own generic name', () =>
+      [mcu, ckt.replace("ta.removeAttribute('aria-label');", '')]],
     ['the error box stops being a live region', () =>
       [mcu, ckt.replace('role="status" aria-live="polite">', '>')]],
-    ['the console stops taking focus', () => [mcu, ckt.replace("'<pre tabindex=\"0\" role=\"group\"", "'<pre role=\"group\"")]],
+    ['the console stops taking focus', () =>
+      [mcu, ckt.replace("'<pre data-console tabindex=\"0\" role=\"group\"",
+        "'<pre data-console role=\"group\"")]],
   ];
   let caught = 0, missed = [], unloadable = [];
   for (const [what, mk] of MUT) {

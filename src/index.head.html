@@ -169,6 +169,10 @@
      the job rather than numbered, because a size is chosen by what it labels. Held by
      the `type` section of tools/verify_theme.mjs, which is what stops a sixteenth value
      being added the way the first fifteen were. */
+  /* The code editor's line box. It is a ratio rather than a size because the gutter
+     multiplies it by the code font to get its own row height, and the two being one
+     number is the whole point — see .ed-gutter div. */
+  --ed-lh:1.62;
   --t-label:11px;   /* tracked mono labels, ids, keys, badges — the floor */
   --t-meta:12px;    /* counts, captions, secondary meta */
   --t-ui:13px;      /* dense controls: chips, buttons, rail rows */
@@ -1353,10 +1357,18 @@ body.ckt-expanded .frame{z-index:auto}
 .ckt-code{display:flex;flex-direction:column;gap:6px;min-width:0}
 .ckt-code-h{display:flex;align-items:center;justify-content:space-between;gap:8px;
   font-family:var(--mono);font-size:var(--t-label);color:var(--ink-3)}
-.ckt-code textarea{width:100%;padding:6px 8px;border-radius:var(--r);
-  border:1px solid var(--line-2);background:var(--surface-2);color:inherit;
-  font-family:var(--mono);font-size:var(--t-label);line-height:1.5;
-  resize:vertical;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+/* .cw-editor is position:absolute;inset:0, so it needs a box with a size. In the
+   panel that is a fixed height; expanded it is whatever is left after the caption,
+   the diagnosis and the console. */
+.ckt-ed{position:relative;height:300px;min-height:0;border-radius:var(--r);
+  border:1px solid var(--line-2);overflow:hidden}
+.ckt-ed>div{position:absolute;inset:0}
+.ckt-code.full .ckt-ed{flex:1;height:auto}
+/* The gutter is 54px in a full-width lab and the panel is 250px wide, which left
+   about twenty characters of code. Narrower here; the row height is untouched,
+   because the gutter and the code lines are stepped to the same number. */
+.ckt-code .ed-gutter{width:36px;padding-right:9px}
+.ckt-code.full .ed-gutter{width:54px;padding-right:18px}
 .ckt-code.full{position:fixed;inset:0;z-index:75;background:var(--ground);
   padding:16px;gap:10px;overflow:auto}
 .ckt-code.full textarea{flex:1;min-height:0;font-size:var(--t-ui);resize:none}
@@ -1956,10 +1968,14 @@ body.ckt-expanded .frame{z-index:auto}
 .cw-editor{position:absolute;inset:0;display:flex;background:var(--editor)}
 .ed-gutter{width:54px;flex:none;padding:14px 18px 14px 0;text-align:right;user-select:none;overflow:hidden;
   color:var(--ink-5);font-family:var(--mono);font-size:var(--t-ui);line-height:1.62}
-.ed-gutter div{height:21.9px}
+/* The gutter row is the code row. It was a literal 21.9px against a code line of
+   1.62 x 14px = 22.68px, so the numbers climbed 0.79px a line and sat a line and a
+   half above their own code by line 40. Derived from the same two values now, so the
+   only way for them to disagree again is for someone to change one of them. */
+.ed-gutter div{height:calc(var(--t-read) * var(--ed-lh))}
 .ed-body{position:relative;flex:1;min-width:0}
 .ed-hl,.ed-ta{position:absolute;inset:0;margin:0;padding:14px 18px 14px 2px;border:0;border-radius:0;
-  font-family:var(--mono);font-size:var(--t-read);line-height:1.62;white-space:pre;overflow:auto;tab-size:4;
+  font-family:var(--mono);font-size:var(--t-read);line-height:var(--ed-lh);white-space:pre;overflow:auto;tab-size:4;
   letter-spacing:0;word-break:normal;overflow-wrap:normal}
 .ed-hl{pointer-events:none;overflow:hidden;color:var(--ink-2);background:transparent}
 .ed-ta{background:transparent;color:transparent;-webkit-text-fill-color:transparent;caret-color:var(--lime);outline:0;resize:none;appearance:none}
