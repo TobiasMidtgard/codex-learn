@@ -3771,3 +3771,386 @@ limits were set against measured behaviour and not guessed; and the payload wind
 checked for orphans rather than assumed.
 
 ---
+
+## Cycle 13 — TRACK 1: Content & Conceptual Depth
+
+*(The runner labels this cycle 7 — its counter restarted when the second run began,
+while this log kept counting. Commit `ee95ded`, labelled "cycle 1", is this file's
+cycle 7. Recorded so the next cycle does not go looking for cycles 7–12 in the
+history under those names.)*
+
+**Target: MA112 (Calculus II — Integration & Series), modules 5–11 — the analytic
+core.** One course, one contiguous block: the Fundamental Theorem, substitution,
+parts, trigonometric integrals, partial fractions, applications and power series.
+Each of the seven held **a `quiz` and nothing else**, so a learner met the technique
+as a bulleted claim and was examined on it in the next unit.
+
+Chosen on measurement rather than on the shape. Scoring all 62 courses by units per
+module, MA112 sits at **2.09**, the lowest in the catalogue among courses with a real
+question bank — 11 modules holding 23 units. It is also the course cycle 1's target
+runs into: MA111's modules 4–9 were six consecutive quiz-only modules, cycle 1 gave
+them readings, and its sequel had seven of the identical defect that nothing had
+picked up. And it is a prerequisite of MA201, which is the *next* worst at 2.09 with
+ten bare modules, so repairing it in this order is the one that compounds.
+
+M1–M4 were excluded: M1 is the densest module in the course (3 readings, 3
+derivations, a lab) and M2–M4 each carry a full lab and teach by construction, which
+is cycle 1's MA111 reasoning applied unchanged.
+
+### Baseline, captured before any edit
+
+```
+82 circuit exercises / 348 checks · 543 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1170 derivation steps across 46 courses (MA112: 18)
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3160 per-option explanations · 6572 live draws
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys · circuit_model 1457 analyses, 84 refusals, 380 schematics
+desk 61 expressions · theme 14 exemptions, 135 contrast surfaces
+MA112: 11 modules · 23 units · 3 read · 3 derive · 10 bare modules · 5 labs
+       42 questions (longest-is-key 21, budget 21, margin +7.4)
+       1164 math fragments: 1164 render, 0 raw, 22 swallowed, 0 unpaired
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads, 12706 KB ·
+       inlined 13903 KB · shell 1168 KB
+catalogue: 62 courses, 368 modules, 1885 units, 239 readings
+       46030 math fragments: 1053 raw, 161 swallowed
+```
+
+### The attacks
+
+**1. Senior Educator.** Seven findings, all acted on.
+
+- *Announced, never derived, seven times over.* Fixed: seven readings and seven
+  derivations, each deriving what its module states. Substitution comes out of the
+  chain rule plus the Fundamental Theorem in two lines; parts out of the product rule
+  in the same two; LIATE is replaced by the criterion underneath it; the three
+  orthogonality integrals are computed rather than listed; the partial-fraction
+  decomposition is shown to exist by counting unknowns against equations; the five
+  formulas of module 10 are shown to be one template; and the arctangent series is
+  derived at the endpoint where the licence to derive it does not reach.
+
+- **The course teaches the Fundamental Theorem twice and says so nowhere.** M1's
+  second reading — *"The Fundamental Theorem, and the two things it says"*, 1498 words
+  — proves both parts, works the moving-limit trap, reads $\mathrm{Si}(x)$ off part
+  one, and closes on $\int_{-1}^{1}\frac{\mathrm{d}x}{x^{2}} = -2$. M5 then
+  re-announces the same theorem in five concepts bullets and examines it. The two
+  halves of this course — M1–M4 numerical, M5–M11 analytic — were written
+  independently and never joined. This was found by reading M1 before drafting M5, and
+  it changed what M5 became: not a second proof, but the search the theorem leaves
+  open. Obtaining a $G$ with $G' = f$ has no algorithm and no composition rule, and
+  M6–M9 are the collected techniques for conducting it. M5's summary was rewritten to
+  say that, and its reading is now the hinge between the two halves rather than a
+  duplicate of M1.
+
+- **The one orthogonality claim that matters is stated falsely, in a concepts
+  bullet.** M8 said $\int\sin(mx)\sin(nx)$ and $\int\sin(mx)\cos(nx)$ over a full
+  period "vanish unless the frequencies match". True of the first pair; **false of the
+  second**, which is zero for *every* $m$ and $n$ including $m = n$, because
+  $\sin(nx)\cos(nx) = \frac{1}{2}\sin(2nx)$ is a pure sinusoid at double the frequency.
+  The false version is not a harmless simplification: it says the sine coefficient at
+  frequency $n$ picks up the cosine content at frequency $n$, which would mean Fourier
+  analysis does not separate. Verified by integrating all three products symbolically
+  at $(m,n) = (3,5), (3,3), (2,2), (1,4)$, and worked in the reading on
+  $f(x) = 2\sin 3x + 5\cos 3x - \sin 5x$, where extracting $b_3$ returns exactly $2$
+  and the $5\cos 3x$ term — larger than the one being measured, and at precisely the
+  frequency being measured — contributes zero.
+
+- **The module teaches "solve for the integral" and never says when it is legal.**
+  M7/Q3 walks the learner through $I = e^{x}\sin x - e^{x}\cos x - I$ and cancelling.
+  The identical manoeuvre on $\int\frac{\mathrm{d}x}{x}$ with $u = \frac{1}{x}$ gives
+  $I = 1 + I$ and hence $0 = 1$. The difference is the coefficient: $-1$ collects to
+  $2I$ and divides, $+1$ collects to $0\cdot I = 1$ and does not. The reading derives
+  the condition, gives the second reading of the same fault (an indefinite integral is
+  a family, and the two $I$s are different members of it), shows the definite version
+  reading $0 = 0$, and then points out that the sine reduction formula is safe for
+  exactly this reason — collecting leaves a factor of $n$.
+
+- **The classical $\frac{\pi}{4}$ series is obtained by a step the next question
+  forbids.** M11/Q3's explanation puts $x = 1$ into the integrated series; M11/Q4
+  answers that term-by-term integration is valid "strictly inside the radius, and the
+  endpoints must be checked separately". At $t = 1$ the series being integrated is
+  $1 - 1 + 1 - \cdots$, which has no sum. The reading and the derivation replace the
+  appeal with an argument that needs no endpoint theorem: integrate the **finite**
+  identity $\frac{1}{1+t^{2}} = \sum_{k=0}^{n}(-1)^{k}t^{2k} + R_n(t)$, which is exact
+  algebra at every real $t$, and bound $|R_n| \le \frac{1}{2n+3}$ by dropping the
+  denominator. That establishes convergence *and* prices it: 500 terms for three
+  digits, against module 2's adaptive Simpson reaching nine on the same integrand.
+
+- **The slice template's admissibility condition is missing, and it is not
+  decorative.** M10 lists five formulas and never says why a curved slice may be
+  replaced by a straight one. The condition is that the per-slice error carry one more
+  power of $\Delta x$ than the slice contributes. Slicing a cone into cylinders
+  satisfies it for volume and violates it for lateral area: the disc integral gives
+  $\frac{\pi}{3}$, correct, and the cylinder integral gives $\pi = 3.1416$ against the
+  true $\pi\sqrt2 = 4.4429$ — **29.3 per cent short, at every panel count**. The
+  general factor is $\sqrt{1+m^{2}}$, equal to $1$ exactly when the surface is flat,
+  which is why nobody meets this failure until the first cone.
+
+- **`+C` is one constant only on an interval.** The general antiderivative of
+  $\frac{1}{x}$ carries two independent constants, because the mean value theorem
+  argument behind "any two antiderivatives differ by a constant" runs inside one
+  interval at a time and the domain is in two pieces. Stated nowhere; it is the same
+  hypothesis whose absence produces M1's $-2$.
+
+- *Left alone:* M6's existing bullet that a reverse substitution needs $h$
+  one-to-one was already correct **and** already said the forward direction needs no
+  such condition. The reading spends that rather than restating it, showing
+  $\int_{-1}^{1}2x\cos(x^{2})\,\mathrm{d}x$ substituting to an integral from $1$ to
+  $1$ — alarming, and right, confirmed against the odd-symmetry argument.
+
+**2. Assessment Inquisitor.** All 42 questions in the course were checked against the
+mathematics rather than skimmed. **Every key is correct and no option text was
+changed**, which is confirmed mechanically rather than asserted: the 42 stems, option
+sets and keys are byte-identical to `HEAD`, and the gate reports MA112 unmoved at
+longest-is-key 21 against a budget of 21 with margin +7.4. Three explanations gained
+scope they lacked — the coefficient condition in M7/Q3, the mixed-pair case in
+M8/Q2, the endpoint licence in M11/Q3 — all in the `why`, none in an option, so the
+answer-tell budget could not move.
+
+Recomputed rather than assumed, so the next cycle need not: $\int_1^e\frac{dx}{x} = 1$;
+$\int_5^3 f = +5$ from $\int_3^5 f = -5$; $A'(x) = \sin(x^{2})$; the area between
+$y = x$ and $y = x^{2}$ as $\frac12 - \frac13 = \frac16$; $\frac{5}{(1+4)} = 1$ by
+cover-up; $\int_0^{\pi}x\sin x\,dx = \pi$; $\frac12 kL^{2}$; the discriminant
+$36 - 52 = -16$; $\int e^{x}\sin x = \frac12 e^{x}(\sin x - \cos x)$; and the geometric
+series at $x = \frac12$ summing to $2$. All hold.
+
+**3. Simulation Auditor.** M5–M11 contain no sandbox, tune, build or schematic
+`numeric`, so there is no draw loop or solver in the target. The persona was pointed
+at the two things in scope that no gate covers — **what the renderer actually draws**,
+and **arithmetic in prose** — and the first is where the largest finding is.
+
+- **22 fragments in MA112 draw a fraction as a single wrong number, and it is worse
+  than cycle 7 recorded.** `src/studio.js` tokenises `12` as one number, so
+  `\tfrac`/`\frac`'s first `group()` swallows it whole. Cycle 7 described the symptom
+  as "a single wrong number"; driving the shipped renderer over each fragment shows
+  **two** distinct failures. At the end of an expression, `\frac13` produces
+  `<mfrac><mn>13</mn></mfrac>` — an `mfrac` with one child — so
+  $\int_0^1 x^{2}\,\mathrm{d}x = \frac13$ reads **"= 13"**. Mid-expression it is
+  worse: `R_n - \frac13 = \frac{1}{2n}` produces `<mfrac><mn>13</mn><mo>=</mo></mfrac>`
+  — **the equals sign is eaten as the denominator**, and the equation loses its
+  relation entirely. Likewise `\frac13 + 0.125 + …` draws "13 over +". All 22 were in
+  M1, the one dense module, including its derivation's closing line and three blanks
+  explanations. All 22 repaired by bracing; MA112 is now **0 swallowed**.
+
+- **A third failure mode nothing in this repository had measured: inline mathematics
+  broken across a source line is not rendered at all.** `protectMath` in
+  `src/engine.js` matches inline maths with `/(^|[^\\])\$([^$\n]+?)\$/` — the character
+  class excludes a newline — and it runs on the raw source *before* markdown, so a
+  `$…$` that wraps onto the next line is never matched and reaches the page as literal
+  dollar signs and LaTeX. It renders nothing and throws nothing, which is why no gate
+  and no review round has ever caught it. **273 prose lines across 18 courses** are in
+  this state, led by EE141 64, EE211 30, EE231 26, EE102 22, EE111 and MA111 20 each.
+  MA112 was at zero and is still at zero.
+
+- **Every number written into the seven readings was computed before it was written,**
+  in SymPy: the trapezoid rule on $\int_1^2\frac{dx}{x}$ giving $T_4 = 0.6970238$
+  against $\ln 2$, with M1's own error term solved for $\xi = 1.39025$ and confirmed to
+  lie in $(1,2)$; $n = \lceil 1000/\sqrt6\rceil = 409$ panels for six digits, and
+  $|T_{409} - \ln 2| = 3.74\times10^{-7}$ under the promised $9.96\times10^{-7}$;
+  $\int_0^2 xe^{x^{2}}dx = 26.799$ against the unmoved-limits $3.1945$, a factor of
+  $e^{2}+1 = 8.39$; $W_6 = \frac{5\pi}{32} = 0.490874$; $\ln(1+\sqrt2) = 0.881374$;
+  $230\sqrt2 = 325.27$; the three orthogonality integrals at four frequency pairs;
+  $\int_3^4\frac{dx}{x(x-2)^{2}} = \frac14\ln\frac23 + \frac14 = 0.148634$, with the
+  claimed antiderivative of $\frac{3x+5}{x^{2}+4x+13}$ differentiated back to the
+  integrand; the cone's $\frac{\pi}{3}$, $\pi\sqrt2$ and $\pi$; the arc length of
+  $y = x^{2}$ as $1.478943$, bracketed by the chord $1.41421$ and the two-segment path
+  $1.46043$; $|\frac{\pi}{4} - \frac{13}{15}| = 0.081269$ under the bound
+  $\frac17 = 0.142857$; seven terms of $\int_0^1 e^{-x^{2}}$ giving $0.7468360$ with an
+  error of $1.19\times10^{-5}$ under the next term's $1.32\times10^{-5}$; $\sqrt{1.2}$
+  to four binomial terms as $1.09550$ against $1.0954451$; $\sum n(\frac12)^{n-1} = 4$;
+  and $\int_2^3\frac{x^{3}}{x^{2}-1}dx = 2.99042$.
+
+- **All 42 new derivation answers were truth-checked separately from the gate,** each
+  against an expression derived independently of the one written into the catalogue —
+  42 of 42 agree. Three of them ($R_n$, the $k$-th term's integral, the bound's
+  integral) are checked over the integers they are about, because SymPy will only
+  answer those with a `Piecewise` carrying edge conditions at $t = -i$, $k = -\frac12$
+  and $n = -\frac32$.
+
+**4. UX & Accessibility Hardener.** Content-side, as cycles 1, 4, 7 and 10 established.
+Checked rather than assumed: `math[display=block]` carries its own `overflow-x:auto`
+and `.article .tw` wraps tables in a scroller, both re-verified in
+`src/index.head.html`; no hard-coded colour, no raw HTML and no markdown table was
+introduced. Every figure is a fenced `text` block inside `overflow-x:auto`, which is
+cycle 4's rule for staying safe at 375px. The fenced listings in these readings are
+prose figures rather than runnable programs, so none makes a claim about its own
+output that a **▶ Run** button would be needed to check.
+
+### Found in my own work, and fixed
+
+Every one of these was found by a mechanical sweep, and every one is a defect this
+cycle had just finished repairing in somebody else's text.
+
+- **Four of my own fractions would have shipped swallowed** — `\frac12 v^2`,
+  `x = \frac12`, `x = \frac13`, and `1 - \frac13 + \frac15` — written in the same
+  session that rebraced 23 of them. The rebracing pass runs last now, after the
+  reading extensions are inserted; running it before them is how the last two were
+  left behind.
+- **Six of my own fragments would have shipped as raw markup.** Five are the escaped
+  space `\ ` — cycle 10's finding, in `20\ \mathrm{m/s}` and four like it — and one is
+  `\overset`, which I had already removed from one reading and not from another. Two
+  more, `\begin{cases}` and a second `\overset`, were caught before the first apply by
+  checking the draft against the renderer's own command tables.
+- **Fifteen of my own inline fragments crossed a source line**, which is the third
+  defect class above, discovered *because* I was auditing for it. Repaired by a reflow
+  pass that joins any line leaving an inline `$…$` open, and the pass itself had a bug
+  worth recording: the module 11 extension begins on the last line of a fenced listing,
+  so the fence toggle was inverted for the whole block and nothing was joined. The
+  reflow now takes the starting fence state as an argument.
+- **Four of my seven readings came in under the 1200-word target** (1042–1156, all
+  above the emitter's 400 floor, so nothing would have failed). Extended with material
+  rather than padding: three lookalike integrands over $1+x^{2}$ needing three
+  unrelated methods; $\int_0^1\arctan x\,dx$, where parts creates a second factor out
+  of nothing; the long division that must precede a decomposition, with the argument
+  for *why* — a sum of $\frac{A}{x-r}$ terms tends to zero at infinity and
+  $\frac{x^{3}}{x^{2}-1}$ does not; and term-by-term *differentiation*, which the
+  module's own bullet claims and my reading had covered in only one direction.
+- **Four hedge words in prose I had just written against a brief that names them.**
+  Three `simply` and one `obviously`, found by diffing against `HEAD` rather than by
+  counting — the file was at 11 before and is at 16 now, and all five additions are
+  temporal `just` or contrastive `merely`, which carry meaning.
+- **My unpaired-dollar detector over-counted by 54 on its first run**, reporting 357
+  where the truth is 273. A `$` inside code is not mathematics: CAP501's
+  `^[a-z0-9_]{3,32}$` and its `pbkdf2_sha256$rounds$salt$digest` accounted for most of
+  it. Fenced blocks, inline code spans and whole source-bearing fields are excluded
+  now. A measurement that condemns correct content is the failure cycle 3 recorded
+  about its own gate, and reporting 357 in this entry would have been the same error
+  one layer up.
+- **My first truth-check harness scored 30 of 42** and was wrong about all twelve. Six
+  were stale: I had planned M5's derivation as a mean-value-theorem telescope, changed
+  it to the logarithm once M1's reading made the telescope a duplicate, and left the
+  old expected values in the harness. Three were `e` read as a symbol rather than as
+  Euler's number — which is the repository's own convention, confirmed rather than
+  changed: **15 derive answers in 8 courses already use a bare `e^`**. Three were
+  SymPy `Piecewise` results, handled above.
+
+### What changed
+
+**Fourteen new units in seven modules** — one `read` and one `derive` each.
+
+| Module | Reading | Words | Derivation | Steps |
+|---|---|---|---|---|
+| M5 | The antiderivative as something you have to go and find | 1367 | The exponent the power rule misses, and the function that fills the gap | 6 |
+| M6 | One line of chain rule, and the hypothesis that appears only in one direction | 1390 | One substitution, done twice: once with the limits moved and once without | 6 |
+| M7 | The product rule backwards, and when solving for the integral is allowed | 1445 | The sine reduction formula, and the coefficient that licences it | 6 |
+| M8 | Which products vanish, computed rather than remembered | 1350 | Three orthogonality integrals, and the one that is zero even at equal frequencies | 6 |
+| M9 | Why the decomposition exists, and what its coefficients cost | 1308 | Three coefficients, one check, and the piece that is not a logarithm | 6 |
+| M10 | One template, five formulas, and the slice that is not good enough | 1417 | One cone, two slicings, and the factor a cylinder leaves out | 6 |
+| M11 | Term-by-term integration, with the remainder carried instead of assumed | 1370 | The arctangent series at the endpoint, with its remainder carried | 6 |
+
+**9,644 new words**, every reading inside the 1200–2500 target and in line with M1's
+existing three (1322, 1333, 1498). MA112: 23 units → 37, 3 readings → 10, 3 derivations → 10,
+10 bare modules → 3, and 2.09 units per module → 3.36. Every reading carries a worked
+example through to a checked number, names the mistake people make and says why it is
+tempting, and closes on where the idea stops holding.
+
+**Sixteen concepts bullets added or repaired** across M5–M11, so the new material is
+reachable from the list a learner skims and not only from the reading: the search the
+Fundamental Theorem leaves open, the two constants on a disconnected domain, the
+logarithm as the antiderivative the power rule cannot reach, differentiating to check
+and to correct, Liouville; the two-line proof of substitution and the folding $g$ it
+survives, and the unmoved limits priced at $e^{2}+1$; the terminating-derivative-chain
+criterion behind LIATE, and the coefficient that licences solving for $I$; the counting
+argument for the decomposition, cover-up's reach, the check at an unused $x$, and the
+ill-conditioning at near-equal roots; the slice-error order and the cone that violates
+it; the endpoint, the non-analytic smooth function, and a radius with no real-line
+explanation. The M8 orthogonality bullet was **replaced** by two that state the two
+cases correctly; every other bullet in these modules is untouched.
+
+**Twenty-three swallowed fractions repaired in M1** — the whole of MA112's share of
+the catalogue-wide debt cycle 7 measured and handed on, in 22 fragments, one of which
+carried two.
+
+### Left alone, deliberately
+
+- **M2, M3 and M4 still hold a lone lab.** Each is a full lab with a reference
+  solution the gate runs, so they teach by construction rather than examining cold,
+  which is not the defect this cycle was chasing. They should get readings; that is a
+  following cycle. Three bare modules remain against ten.
+- **The 42 questions were audited and, apart from three `why` extensions, not
+  changed.** They are Track 3's ground, and MA112's inherited answer-tell figure (21 of
+  42) is cycle 3's recorded debt pinned by `quiz_budget.json`, not this cycle's to
+  spend. No option text moved, so it could not have.
+- **273 unpaired inline fragments in 18 courses**, measured above and handed on with
+  the per-course numbers rather than the symptom. It is the cheapest of the three
+  render debts to retire and the only one with no fix in the catalogue at all: it can
+  be repaired mechanically, by joining the offending lines, with no judgement about
+  what the author meant — and unlike the other two it can also be *prevented*, by
+  widening `protectMath`'s inline rule to allow a single newline. Which of those is
+  right is a Track 2/5 machinery decision, not a Track 1 one.
+- **1053 raw-markup fragments and 139 swallowed fractions outside MA112.** Cycle 7
+  measured the first at 1053 and the second at 161; both are unmoved except by this
+  cycle's own 22. Cycle 10's refinement stands: 369 of the 1053 are the escaped space
+  `\ ` alone, which is one rule in the tokeniser.
+- **`\frac` swallowing its argument is still a `studio.js` defect and was not fixed
+  there.** Bracing 23 fragments repairs this course; it does not stop the next author
+  writing `\frac12`. The tokeniser fix — make `group()` take one digit when it follows
+  `\frac` — is provably safe in the same way cycle 10's `DIAGRAM_KINDS` widening would
+  be, and it is a Track 2 machinery cycle. Recorded with the two failure modes above so
+  it starts from the diff rather than the symptom.
+- **`verify_derivations.py` still proves translation rather than truth**, as cycle 1
+  established and cycle 7 restated. All 42 new answers were therefore truth-checked
+  separately, and the harness is in this session's scratchpad. Nothing about the gate
+  was changed: rewriting the spec from inside a cycle it governs remains the wrong move.
+- **A bare `e` in a derive answer is read as a free symbol, not as Euler's number.**
+  So the reference `\frac{e^4-1}{2}` matches a learner who types `e^4` and not one who
+  types `exp(4)`. This is pre-existing and established — 15 answers across 8 courses,
+  including EE102, EE131 and CTRL510 — so this cycle followed the convention rather
+  than inventing a second one. Recorded because it looks like a defect in the new
+  answers and is a property of `MathCheck`.
+- **MA201 is the next-worst course in the catalogue and was not touched.** 2.09 units
+  per module, ten bare modules, and MA112 is its only prerequisite. It is the obvious
+  next Track 1 target and widening this cycle to cover it would have meant fourteen
+  units built to no standard.
+- **`docs/programs` holds 65 payloads against 62 in the current generation.** The
+  rolling window, as cycles 1–12 all established. Verified rather than assumed: 3
+  generations retained at 62 each, 65 files on disk, all 65 named by a retained
+  generation, **0 orphaned and 0 missing**, covering 62 distinct courses.
+
+### Gates, after
+
+Every pre-existing number unmoved. Three moved by exactly what was added — the
+derivation-step count by the 42 new steps, and the two artifact sizes by the content.
+
+```
+verify_derivations   All good: 1212 steps across 46 courses   (1170 + 42 new;
+                     MA112 18 -> 60)
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3160 per-option explanations · 6572 live draws —
+                     unmoved.  MA112: 42 questions · longest-is-key 21 (budget 21) ·
+                     margin +7.4 — unmoved, and no option text changed
+verify_labs MA112    All good: 5 labs  (M1 8/8, M2 7/7, M3 7/7, M4 8/8, CAP 12/12)
+verify_circuits      All good: 82 circuit exercises, 348 checks · 543 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_circuit_model All good: 1457 analyses, 84 refusals · 15 plots · 380 schematics
+verify_desk          All good: 61 expressions at the extremes
+verify_theme         All good: 14 exemptions · 135 contrast surfaces x 2 themes
+emit.py MA112        ok — 11 modules, 4 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12706 -> 12796 KB ·
+                     inlined 13903 -> 13993 KB · shell 1168 KB — unchanged
+catalogue            62 courses, 368 modules, 1885 -> 1899 units, 239 -> 246 readings
+```
+
+Beyond the gates: every MA112 math fragment pushed through the shipped
+`MathML.render` — **2163 of 2163 draw, 0 raw, 0 swallowed, 0 unpaired**, against
+1164 of 1164 with 22 swallowed at baseline; the catalogue-wide totals confirmed to have
+moved only by MA112's share (raw 1053 unmoved, swallowed 161 → 139); all 42 derivation
+answers truth-checked against independently derived expressions, 42 of 42; every number
+in 9,644 new words recomputed in SymPy before it was written; the 42 question stems,
+option sets and keys diffed against `HEAD` at 0 changes; 14 lesson ids added and **0
+lost**, so no completed work is orphaned; hedge words counted by diff against `HEAD`
+rather than by counting twice; and the payload window checked at 0 orphaned, 0 missing.
+
+**A note on the working tree.** The runner's lock (`.gauntlet.pid`, pid 5975) was live
+throughout, and this cycle is the process it launched — so the lock is this cycle's own
+and `emit.py` and `build.mjs` were safe to run. The diff is `catalog/MA112.json`,
+`catalog/authors/MA112.py` and the `docs/` build output, and nothing else.
+
+---

@@ -115,12 +115,12 @@ R_n  = (1/n^3) * n(n+1)(2n+1)/6
 Let $n\to\infty$ and the last two terms vanish, so $R_n \to \frac{1}{3}$. The left sum
 gives the same limit — replace $i$ running from $1$ to $n$ by $i$ running from $0$ to
 $n-1$ and you get $\frac{1}{3} - \frac{1}{2n} + \frac{1}{6n^2}$ — and it can be shown
-that every other sampling choice does too. So $\int_0^1 x^2\,\mathrm{d}x = \frac13$,
+that every other sampling choice does too. So $\int_0^1 x^2\,\mathrm{d}x = \frac{1}{3}$,
 and that is a statement about a limit of sums, not about anything differentiated.
 
 Keep the error term, because it is the first quantitative fact in this module:
 
-$$R_n - \frac13 = \frac{1}{2n} + \frac{1}{6n^2} \approx \frac{1}{2n}$$
+$$R_n - \frac{1}{3} = \frac{1}{2n} + \frac{1}{6n^2} \approx \frac{1}{2n}$$
 
 Double $n$ and the error roughly halves. That is what "first order" means, and at
 $n = 4$ it is $0.135$ — a 40% error from four rectangles.
@@ -543,7 +543,7 @@ the *degree of precision* of Simpson's rule, the answer is $3$, not $2$.
 
 Every error term above contains a derivative of $f$ evaluated somewhere in the
 interval, which quietly assumes that derivative exists and is bounded. When it is not,
-the order collapses. Take $\int_0^1\sqrt x\,\mathrm{d}x = \frac23$, where
+the order collapses. Take $\int_0^1\sqrt x\,\mathrm{d}x = \frac{2}{3}$, where
 $f'' = -\frac{1}{4}x^{-3/2}$ blows up at the left endpoint. Measured orders:
 
 ```
@@ -576,7 +576,7 @@ argument for using a higher-order rule rather than a finer grid.
                     "minutes": 12,
                     "vars": ["n", "i", "h", "S"],
                     "brief": r'''
-The integral $\int_0^1 x^2\,\mathrm{d}x$ is going to come out as $\frac13$, and you
+The integral $\int_0^1 x^2\,\mathrm{d}x$ is going to come out as $\frac{1}{3}$, and you
 already know that from the Fundamental Theorem. The point of doing it from the
 definition is that no theorem is used: only $n$ rectangles, one algebraic identity, and
 a limit.
@@ -618,20 +618,20 @@ $\sum_{i=1}^{n} i^2 = \frac{n(n+1)(2n+1)}{6}$.
                             "hint": "$(n+1)(2n+1) = 2n^2 + 3n + 1$. Divide each of those three terms by $6n^2$ separately.",
                         },
                         {
-                            "prompt": "The limit as $n\\to\\infty$ is $\\frac13$. Write the error $S_n - \\frac13$ that the $n$-panel sum still carries.",
+                            "prompt": "The limit as $n\\to\\infty$ is $\\frac{1}{3}$. Write the error $S_n - \\frac{1}{3}$ that the $n$-panel sum still carries.",
                             "answer": "\\frac{1}{2n}+\\frac{1}{6n^2}",
                             "hint": "Everything except the constant term survives.",
                         },
                     ],
                     "closing": r'''
-Two things come out of that last line. The limit exists and equals $\frac13$, so
-$\int_0^1 x^2\,\mathrm{d}x = \frac13$ by the definition alone — no antiderivative was
+Two things come out of that last line. The limit exists and equals $\frac{1}{3}$, so
+$\int_0^1 x^2\,\mathrm{d}x = \frac{1}{3}$ by the definition alone — no antiderivative was
 used anywhere.
 
 And the error is dominated by $\frac{1}{2n}$: **first order**. Doubling the panel count
 halves the error, so squeezing out one more decimal digit costs ten times the work, and
 six digits would need about a million rectangles. At $n = 4$ the sum is
-$\frac13 + 0.125 + 0.0104 = 0.4688$, a 40% overestimate. That number is the reason the
+$\frac{1}{3} + 0.125 + 0.0104 = 0.4688$, a 40% overestimate. That number is the reason the
 rest of this module exists.
 
 Compare it with the general prediction from the reading,
@@ -773,8 +773,8 @@ trapezoid estimate $T = \frac{h}{2}\left(f(a) + f(b)\right)$.
                             "hint": "Try $\\alpha M + (1-\\alpha)T$. Its error is $\\alpha(I-M) + (1-\\alpha)(I-T) = \\alpha\\frac{Ph^3}{24} - (1-\\alpha)\\frac{Ph^3}{12}$. Set that to zero and solve for $\\alpha$.",
                             "deconstruct": [
                                 "Zero error needs $\\frac{\\alpha}{24} = \\frac{1-\\alpha}{12}$, so $\\alpha = 2(1-\\alpha)$.",
-                                "That gives $3\\alpha = 2$, so $\\alpha = \\frac23$ and the trapezoid weight is $\\frac13$.",
-                                "The trapezoid is wrong by twice as much, so it gets half the weight: the combination is $\\frac{2}{3}M + \\frac13 T$.",
+                                "That gives $3\\alpha = 2$, so $\\alpha = \\frac{2}{3}$ and the trapezoid weight is $\\frac{1}{3}$.",
+                                "The trapezoid is wrong by twice as much, so it gets half the weight: the combination is $\\frac{2}{3}M + \\frac{1}{3} T$.",
                             ],
                         },
                         {
@@ -1063,7 +1063,7 @@ trapezoid. Three routes, one rule.
                 "lang": "text",
                 "brief": r'''
 The derivation in this module took $\int_0^1 x^2\,\mathrm{d}x$ from the definition to
-$\frac13$. Here is the same argument on $x^3$, written out with the working steps
+$\frac{1}{3}$. Here is the same argument on $x^3$, written out with the working steps
 removed. Everything you need is in the listing except one power-sum identity, and the
 options will tell you which one.
 
@@ -1139,9 +1139,9 @@ of the error does not.
                                  "1/4 + 1/(2n)"],
                         "a": 0,
                         "why": "$(n+1)^2 = n^2 + 2n + 1$, and dividing each term by $4n^2$ gives "
-                               "$\\frac14 + \\frac{2n}{4n^2} + \\frac{1}{4n^2} = "
-                               "\\frac14 + \\frac{1}{2n} + \\frac{1}{4n^2}$. The middle term is the one "
-                               "that decides everything: $\\frac{2}{4} = \\frac12$, not $\\frac14$ and "
+                               "$\\frac{1}{4} + \\frac{2n}{4n^2} + \\frac{1}{4n^2} = "
+                               "\\frac{1}{4} + \\frac{1}{2n} + \\frac{1}{4n^2}$. The middle term is the one "
+                               "that decides everything: $\\frac{2}{4} = \\frac{1}{2}$, not $\\frac{1}{4}$ and "
                                "not $1$. Check it at $n = 4$ — the expansion gives "
                                "$0.25 + 0.125 + 0.015625 = 0.390625$, and summing the four rectangles "
                                "directly gives $0.25(0.015625 + 0.125 + 0.421875 + 1) = 0.390625$.",
@@ -1151,9 +1151,9 @@ of the error does not.
                         "hole": "?",
                         "opts": ["1/3", "1/4", "1/2", "0"],
                         "a": 1,
-                        "why": "Both tails vanish and $\\frac14$ is left, so "
-                               "$\\int_0^1 x^3\\,\\mathrm{d}x = \\frac14$ — which is what "
-                               "$\\left[\\frac{x^4}{4}\\right]_0^1$ gives, as it must. $\\frac13$ is the "
+                        "why": "Both tails vanish and $\\frac{1}{4}$ is left, so "
+                               "$\\int_0^1 x^3\\,\\mathrm{d}x = \\frac{1}{4}$ — which is what "
+                               "$\\left[\\frac{x^4}{4}\\right]_0^1$ gives, as it must. $\\frac{1}{3}$ is the "
                                "answer to the $x^2$ version of this derivation. The error left at finite "
                                "$n$ is $\\frac{1}{2n} + \\frac{1}{4n^2}$, dominated by $\\frac{1}{2n}$: "
                                "first order again, and the same leading coefficient as the $x^2$ case, "
@@ -1233,8 +1233,8 @@ error term involves $f^{(4)}$ and the composite rule is $O(h^4)$.
                         ],
                         "a": 0,
                         "why": r'''
-Order $p$ means the error behaves like $Ch^p$, so scaling $h$ by $\frac12$ scales the
-error by $\left(\frac12\right)^p$. With $p = 2$ that is a factor of $4$. A factor of
+Order $p$ means the error behaves like $Ch^p$, so scaling $h$ by $\frac{1}{2}$ scales the
+error by $\left(\frac{1}{2}\right)^p$. With $p = 2$ that is a factor of $4$. A factor of
 $2$ would be first order — the left and right Riemann sums. A factor of $16$ is $p=4$,
 which is Simpson. Running this backwards is the standard diagnostic: measure
 $p = \log_2\left(E(n)/E(2n)\right)$ and see whether the rule is achieving the order it
@@ -1271,7 +1271,7 @@ other is where Simpson comes from.
                         ],
                         "a": 0,
                         "why": r'''
-$f(x) = \sqrt x$ has $f'' = -\frac14 x^{-3/2}$, which blows up at the left endpoint. The
+$f(x) = \sqrt x$ has $f'' = -\frac{1}{4} x^{-3/2}$, which blows up at the left endpoint. The
 error term $-\frac{(b-a)h^2}{12}f''(\xi)$ presumes a bounded $f''$, and without it the
 theory says nothing. The measured $1.5$ is real and stable — it does not drift towards
 $2$ as $n$ grows, so a too-small $n$ is not the cause, and a broken implementation
@@ -2313,13 +2313,254 @@ except ValueError:
         # ------------------------------------------------------------ M5
         {
             "title": "Antiderivatives and the Fundamental Theorem",
-            "summary": "The theorem that turns an area problem into an algebra problem, and the table of antiderivatives that makes it pay.",
+            "summary": "Module 1 proved the theorem. This is the search it leaves open: obtaining an antiderivative, for which there is no algorithm.",
             "concepts": [
                 r"An antiderivative is a family, not a function: if $F' = f$ then so is $F + C$, and the constant is what an initial condition exists to fix",
                 r"Fundamental Theorem, first half: the accumulation function $A(x) = \int_a^x f(t)\,dt$ satisfies $A'(x) = f(x)$, so every continuous function has an antiderivative even when no formula for it exists",
                 r"Fundamental Theorem, second half: $\int_a^b f = F(b) - F(a)$, which is why a closed form beats every quadrature rule in module 1 whenever you can find one",
                 r"The standard table is the derivative table read backwards, with one exception: $\int x^n\,dx$ is $x^{n+1}/(n+1)$ for every $n$ except $-1$, where it is $\ln|x|$",
                 r"Linearity, additivity over adjoining subintervals, and the convention $\int_b^a = -\int_a^b$ that keeps the theorem true whichever way the limits run",
+                r"Module 1 proved the theorem; this module is about the search it leaves open. Obtaining a $G$ with $G' = f$ has no algorithm and no composition rule — nothing turns antiderivatives of $f_1$ and $f_2$ into one for $f_1 f_2$ — and modules 6 to 9 are the collected techniques for conducting it",
+                r"On a domain in two pieces there are two constants, not one: the general antiderivative of $\frac{1}{x}$ carries an independent constant on $x < 0$ and on $x > 0$, because the mean value theorem argument behind $+C$ runs inside one interval at a time",
+                r"$\ln$ is the antiderivative the power rule cannot reach, not an extra table entry. Define $L(x) = \int_1^x\frac{\mathrm{d}t}{t}$; part one gives $L' = \frac{1}{x}$, and $L(ab) = L(a) + L(b)$ falls out of the substitution $t = au$",
+                r"Check an antiderivative by differentiating it, never by integrating again — and the discrepancy is usually the correction. Differentiating a guess of $x\ln x$ overshoots by exactly $1$, so $\int\ln x\,\mathrm{d}x = x\ln x - x$",
+                r"Some continuous functions have no elementary antiderivative, and that is Liouville's theorem rather than a gap in anyone's technique. $e^{-x^2}$, $\frac{\sin x}{x}$ and $\frac{1}{\ln x}$ are all proved impossible, which is what module 2's quadrature and module 11's series exist to answer",
+            ],
+            "read": [
+                {
+                    "title": "The antiderivative as something you have to go and find",
+                    "minutes": 12,
+                    "body": r"""
+Module 1 already proved the Fundamental Theorem, both halves, and used it. So this
+module is not about the theorem. It is about the word inside it that the theorem never
+explains.
+
+$\int_a^b f = G(b) - G(a)$ is an instruction with a hole in it: *first obtain a $G$ with
+$G' = f$*. Differentiation is an algorithm — the rules of Calculus I compose, so any
+expression built out of the standard functions can be differentiated by a machine, in
+one pass, with no cleverness anywhere. Going the other way is a search. There is no
+composition rule for antiderivatives: nothing turns $G_1$ for $f_1$ and $G_2$ for $f_2$
+into an antiderivative of $f_1 f_2$, and the next four modules are the collected
+techniques for conducting that search. This module is the hinge between the numerical
+half of the course and the algebraic half, and the first thing to establish is what an
+antiderivative actually is.
+
+## A family, and how many constants it really has
+
+If $G' = f$ then $(G + C)' = f$ for every constant $C$, so an antiderivative is never a
+function; it is a whole family. The usual statement — *any two antiderivatives of $f$
+differ by a constant* — is a corollary of the mean value theorem from MA111's module 8,
+and it needs a hypothesis that is almost always left out. If $H' = 0$ on an
+**interval**, then for any two points $p < q$ in it the mean value theorem gives
+$H(q) - H(p) = H'(c)(q - p) = 0$, so $H$ is constant. The argument needs $[p, q]$ to lie
+inside the domain, and it says nothing at all when the domain is in two pieces.
+
+That is not a technicality. Take $f(x) = \frac{1}{x}$, whose domain is
+$(-\infty, 0) \cup (0, \infty)$, and build a function out of two different constants:
+
+```
+G(x) = ln|x| + 5      for x > 0
+G(x) = ln|x| - 2      for x < 0
+```
+
+$G' = \frac{1}{x}$ at every point of the domain, and $G$ is not $\ln|x|$ plus any single
+constant. The general
+antiderivative of $\frac1x$ carries **two** independent constants, one per interval, and
+software that reports `log(x) + C` is telling you about one of the two branches. The
+same thing happens for $\tan x$, for $\frac{1}{x^2-1}$, and for every integrand with a
+pole in the middle of the region of interest. Module 1 already showed what ignoring the
+gap costs: $\int_{-1}^{1}\frac{\mathrm{d}x}{x^2}$ evaluates by bracket to $-2$, a
+negative number for a positive integrand.
+
+## The one exponent the power rule cannot reach
+
+Read the power rule backwards. Since
+$\frac{\mathrm{d}}{\mathrm{d}x}\frac{x^{n+1}}{n+1} = x^{n}$, the antiderivative of
+$x^n$ is $\frac{x^{n+1}}{n+1} + C$ — for every $n$ except $-1$, where the construction
+divides by zero. The gap is real rather than cosmetic: no power of $x$ has derivative
+$\frac1x$, because differentiating $x^k$ always lowers the exponent by one and $k - 1 = -1$ forces $k = 0$, whose derivative is $0$ and not $\frac1x$.
+
+So where does the missing function come from? Part one of the Fundamental Theorem
+manufactures it. Define
+
+$$L(x) = \int_1^{x}\frac{\mathrm{d}t}{t}, \qquad x > 0$$
+
+Part one says immediately that $L'(x) = \frac1x$, and $L(1) = 0$ because the interval is
+empty. That is an antiderivative of $\frac1x$ obtained without knowing any logarithm
+exists. Its defining property arrives from a substitution — the technique of the next
+module, used here one module early because this is the cleanest place it ever appears.
+In $L(ab) = \int_1^{ab}\frac{\mathrm{d}t}{t}$ put $t = au$, so $\mathrm{d}t = a\, \mathrm{d}u$ and the integrand $\frac{\mathrm{d}t}{t} = \frac{a\,\mathrm{d}u}{au} = \frac{\mathrm{d}u}{u}$ — the $a$ cancels completely. The limits $t = a$ and $t = ab$
+become $u = 1$ and $u = b$, so
+
+$$L(ab) - L(a) = \int_{a}^{ab}\frac{\mathrm{d}t}{t} = \int_{1}^{b}\frac{\mathrm{d}u}{u}
+= L(b)$$
+
+which is $L(ab) = L(a) + L(b)$: the logarithm law, derived from an integral rather than
+assumed from a table. Everything else follows. $L$ is strictly increasing because
+$L' = \frac1x > 0$, so it has an inverse, and that inverse is $\exp$. For $x < 0$ the
+chain rule gives $\frac{\mathrm{d}}{\mathrm{d}x}\ln(-x) = \frac{-1}{-x} = \frac1x$
+again, which is what the modulus in $\ln|x|$ is doing — and, per the previous section,
+the two branches keep separate constants.
+
+## Checking an answer, and repairing it with the same move
+
+Because differentiation is the algorithm and integration is the search, **every**
+antiderivative you produce in the next four modules should be differentiated before it
+is used. The check is cheap, it is complete, and it is the only one available.
+
+It also repairs. Suppose you want $\int \ln x\,\mathrm{d}x$ and guess $x\ln x$, on the
+grounds that a logarithm ought to come with an $x$ in front of it. Differentiate:
+
+```
+d/dx (x ln x) = ln x + x * (1/x)
+              = ln x + 1
+```
+
+That is the integrand plus $1$, so the guess overshoots by exactly the antiderivative of
+$1$. Subtract it: $x\ln x - x$. Differentiate again to confirm — $\ln x + 1 - 1 = \ln x$. The answer is $x\ln x - x + C$, obtained by guessing, checking, and correcting by
+the size of the error, which is a method rather than a lucky guess. Module 7 turns the
+same move into integration by parts.
+
+## Worked: the constant is what the initial condition is for
+
+A stone is thrown straight up at $20\,\mathrm{m/s}$ from ground level, with
+$a(t) = -9.81\,\mathrm{m/s^2}$. Antidifferentiate twice, fixing each constant as it
+appears.
+
+```
+a(t) = -9.81
+v(t) = -9.81 t + C1          v(0) = 20   =>  C1 = 20
+v(t) = 20 - 9.81 t
+
+s(t) = 20 t - 4.905 t^2 + C2 s(0) = 0    =>  C2 = 0
+s(t) = 20 t - 4.905 t^2
+
+apex:  v = 0  =>  t = 20/9.81 = 2.0387 s
+       s     =  20(2.0387) - 4.905(2.0387)^2
+             =  40.7747 - 20.3874
+             =  20.387 m
+```
+
+Cross-check by an argument that never integrates: kinetic energy $\frac{1}{2} v^2$ converts
+to $g h$, so $h = \frac{v^2}{2g} = \frac{400}{19.62} = 20.387$ m. The two agree to five
+figures, which they must, because the energy argument is the integral
+$\int v\,\mathrm{d}v = \int -g\,\mathrm{d}s$ in disguise. Note where each constant was
+pinned: $C_1$ from a condition on the velocity, $C_2$ from a condition on the position.
+Two antidifferentiations need two conditions, and a family of curves becomes one curve
+only when they are supplied.
+
+## The mistake, and why it is tempting
+
+The tempting move is to treat an integral sign as an operator that can be *applied*, the
+way $\frac{\mathrm{d}}{\mathrm{d}x}$ can. It reads like one and it is written like one.
+But $\frac{\mathrm{d}}{\mathrm{d}x}$ always terminates, and $\int$ may not terminate at
+all. There is no product rule, no quotient rule and no chain rule for integrals; the
+techniques ahead are each a *partial* inverse of one differentiation rule, which is why
+each of them works on a shape rather than on everything. Substitution inverts the chain
+rule and needs the inner derivative to be present. Parts inverts the product rule and
+needs one factor to get simpler. Partial fractions is not the inverse of anything — it
+is algebra applied before integrating at all.
+
+## Where this stops holding
+
+Some perfectly ordinary continuous functions have no elementary antiderivative, and
+that is a theorem rather than an admission of ignorance. *Elementary* has a precise
+meaning: built from rational functions by finitely many roots, exponentials and
+logarithms. Liouville's theorem, and its algorithmic descendant, decides membership,
+and it rules out $\int e^{-x^2}\,\mathrm{d}x$, $\int\frac{\sin x}{x}\,\mathrm{d}x$ and
+$\int\frac{\mathrm{d}x}{\ln x}$. Nobody will find these by trying harder.
+
+The antiderivatives still exist — module 1 built one, $\mathrm{Si}(x)$, and read its
+graph off part one of the theorem without a formula. What is missing is a formula in
+that particular vocabulary. Two routes remain and this course owns both: module 2's
+adaptive quadrature evaluates such an integral to a requested tolerance, and module 11
+expands the integrand as a series and integrates it term by term with a remainder bound.
+Neither is a consolation prize. They are the reason the numerical half of this course
+came first.
+"""
+                },
+            ],
+            "derive": [
+                {
+                    "title": "The exponent the power rule misses, and the function that fills the gap",
+                    "minutes": 12,
+                    "vars": ["x", "a", "b", "u", "n", "L"],
+                    "brief": r"""
+Reading the power rule backwards produces the antiderivative of $x^n$ for every
+exponent but one. This derivation finds the exponent, then builds the missing
+antiderivative out of the Fundamental Theorem instead of quoting it from a table — and
+gets the logarithm law for free, out of a substitution.
+
+Throughout, $L$ is the function defined by $L(x) = \int_1^{x}\frac{\mathrm{d}t}{t}$ for
+$x > 0$.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Differentiate $\\frac{x^{n+1}}{n+1}$, treating $n$ as a constant. Write the result in terms of $x$ and $n$.",
+                            "answer": "x^{n}",
+                            "placeholder": "a power of x",
+                            "hint": "The power rule drops the exponent by one and multiplies by the old exponent; the $n+1$ underneath cancels the $n+1$ the rule brings down.",
+                        },
+                        {
+                            "prompt": "That construction is an antiderivative of $x^n$ for every exponent except one. Which value of $n$ does it fail at?",
+                            "answer": "-1",
+                            "placeholder": "?",
+                            "hint": "Look at the denominator, not the numerator. The expression has to be a function before it can be differentiated.",
+                            "deconstruct": [
+                                "The candidate antiderivative is $\\frac{x^{n+1}}{n+1}$.",
+                                "It is undefined exactly when $n + 1 = 0$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Part one of the Fundamental Theorem is applied to $L(x) = \\int_1^{x}\\frac{\\mathrm{d}t}{t}$ for $x > 0$. Write $L'(x)$.",
+                            "answer": "\\frac{1}{x}",
+                            "placeholder": "?",
+                            "hint": "Part one hands back the integrand evaluated at the upper limit. No integration is performed anywhere.",
+                        },
+                        {
+                            "prompt": "In $L(ab) - L(a) = \\int_{a}^{ab}\\frac{\\mathrm{d}t}{t}$, substitute $t = au$ with $a > 0$ fixed, so $\\mathrm{d}t = a\\,\\mathrm{d}u$. Write the integrand that is left, in terms of $u$.",
+                            "answer": "\\frac{1}{u}",
+                            "placeholder": "?",
+                            "hint": "The $a$ appears once on the top from $\\mathrm{d}t$ and once on the bottom from $t = au$.",
+                            "deconstruct": [
+                                "$\\frac{\\mathrm{d}t}{t} = \\frac{a\\,\\mathrm{d}u}{au}$.",
+                                "The factor $a$ cancels completely, which is the whole point of the substitution.",
+                                "The limits move with it: $t = a$ gives $u = 1$, and $t = ab$ gives $u = b$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Those new limits run from $1$ to $b$, so the right-hand side is $L(b)$ and therefore $L(ab) = L(a) + L(b)$. Put $a = b = 1$ in that identity and write the value of $L(1)$.",
+                            "answer": "0",
+                            "placeholder": "?",
+                            "hint": "The identity gives $L(1) = 2L(1)$. Only one number satisfies that.",
+                            "deconstruct": [
+                                "$L(1 \\cdot 1) = L(1) + L(1)$.",
+                                "So $L(1) = 2L(1)$, hence $L(1) = 0$ — which agrees with the integral running from $1$ to $1$.",
+                            ],
+                        },
+                        {
+                            "prompt": "$L$ only covers $x > 0$. For $x < 0$, differentiate $\\ln(-x)$ by the chain rule and write the result.",
+                            "answer": "\\frac{1}{x}",
+                            "placeholder": "?",
+                            "hint": "The outer derivative is $\\frac{1}{-x}$ and the inner derivative is $-1$. The two minus signs cancel.",
+                        },
+                    ],
+                    "closing": r"""
+The two halves join into $\int\frac{\mathrm{d}x}{x} = \ln|x| + C$, and the modulus is
+not decoration: it is the statement that the same formula covers both branches. What it
+does **not** cover is a single constant. The domain $(-\infty,0)\cup(0,\infty)$ is two
+intervals, the mean value theorem argument runs inside one interval at a time, and the
+general antiderivative therefore carries one constant on each — a fact every computer
+algebra system suppresses when it prints `log(x) + C`.
+
+Steps three to five never mentioned the exponential, the number $e$, or any property of
+$\ln$. They built a function with the right derivative and then derived its defining law
+from a change of variable. The exponential can now be *defined* as the inverse of $L$,
+which exists because $L' = \frac{1}{x} > 0$ makes $L$ strictly increasing, and $e$ can
+be defined as the unique solution of $L(e) = 1$. That is the honest order: the
+logarithm is an integral first and a table entry second.
+"""
+                },
             ],
             "quiz": {
                 "title": "Antiderivatives and the two halves of the theorem",
@@ -2401,7 +2642,260 @@ except ValueError:
                 r"The whole skill is spotting a $g'$ already present in the integrand, up to a constant factor you are free to move outside",
                 r"For a definite integral, push the limits through the substitution to $g(a)$ and $g(b)$ and never change back to $x$",
                 r"Run the other way, writing $x = h(u)$, the map must be one-to-one on the interval — the requirement behind both trigonometric substitution and the infinite-domain maps of module 2",
-                r"Symmetry falls out of the same move: over $[-a, a]$ an odd integrand gives $0$ and an even one gives twice the half-integral",
+                r"Symmetry falls out of the same move: over $[-a, a]$ an odd integrand gives $0$ and an even one gives twice the half-integral — both needing $f$ integrable across the whole of $[-a,a]$, which $\frac{1}{x}$ is not",
+                r"The proof is two lines: the chain rule gives $\frac{\mathrm{d}}{\mathrm{d}x}F(g(x)) = f(g(x))\,g'(x)$, and part two of the Fundamental Theorem integrates both sides over $[a,b]$",
+                r"That proof never assumes $g$ is one-to-one, so the forward direction survives a $g$ that folds: $\int_{-1}^{1}2x\cos(x^2)\,\mathrm{d}x$ substitutes to an integral from $1$ to $1$, and $0$ is the right answer",
+                r"Forgetting to move the limits does not fail loudly — it returns a clean positive number answering a different question. On $\int_0^2 x e^{x^2}\,\mathrm{d}x$ that number is too small by a factor of $e^2 + 1 = 8.39$",
+            ],
+            "read": [
+                {
+                    "title": "One line of chain rule, and the hypothesis that appears only in one direction",
+                    "minutes": 12,
+                    "body": r"""
+Every technique in this half of the course is one differentiation rule, run backwards,
+with the conditions that survive the reversal written down. Substitution is the first
+and the most used, and its entire proof is two lines. Seeing those two lines is worth
+more than a page of practice, because they decide precisely what has to be checked and
+what does not — and the answer is different for the two directions in which the
+technique is used.
+
+## The proof, in full
+
+Let $F$ be an antiderivative of $f$, so $F' = f$. Apply the chain rule to the
+composition:
+
+$$\frac{\mathrm{d}}{\mathrm{d}x}F(g(x)) = F'(g(x))\,g'(x) = f(g(x))\,g'(x)$$
+
+That is the chain rule and nothing else. Now integrate both sides over $[a,b]$ and use
+part two of the Fundamental Theorem from module 1 on the left:
+
+$$\int_a^b f(g(x))\,g'(x)\,\mathrm{d}x = F(g(b)) - F(g(a)) = \int_{g(a)}^{g(b)}
+f(u)\,\mathrm{d}u$$
+
+Done. The theorem needed $g$ differentiable with $g'$ integrable, and $f$ continuous on
+the range of $g$. Read the list again and notice what is *not* on it: nothing requires
+$g$ to be one-to-one, and nothing requires $g(a) < g(b)$.
+
+## The case that looks broken and is not
+
+Take $\int_{-1}^{1} 2x\cos(x^2)\,\mathrm{d}x$ with $u = x^2$. On $[-1,1]$ the map
+$x \mapsto x^2$ is emphatically not one-to-one — it folds the interval in half. The
+formula does not care:
+
+```
+u = x^2          du = 2x dx
+lower  x = -1 -> u = 1
+upper  x =  1 -> u = 1
+
+integral = integral of cos u du from 1 to 1 = 0
+```
+
+Both limits land on $1$ and the answer is $0$. Check it independently: $2x\cos(x^2)$ is
+an odd function integrated over an interval symmetric about the origin, so it is $0$ by
+symmetry. The two agree. What the fold destroys is the *picture* of $u$ sweeping an
+interval once — the substituted integral is not an area under $\cos u$ over any
+interval — but the algebra was never about that picture. It was about a composition and
+the chain rule, and both survive folding.
+
+## The other direction, where injectivity is compulsory
+
+Now run it backwards: write $x = h(u)$ and replace $\mathrm{d}x$ by $h'(u)\,\mathrm{d}u$.
+Here you are choosing the new variable and *inventing* the old one from it, and the
+requirement is real. To convert $\int_a^b\ldots\mathrm{d}x$ into an integral in $u$ you
+must produce endpoints $\alpha,\beta$ with $h(\alpha) = a$ and $h(\beta) = b$, and the
+formula then reports $\int_\alpha^\beta$. If $h$ doubles back, $[\alpha,\beta]$ covers
+part of $[a,b]$ twice and part not at all, and the integral it computes is a different
+one.
+
+The concrete failure is a sign. Take $\int_0^1\sqrt{1-x^2}\,\mathrm{d}x$ with
+$x = \sin\theta$. Then
+
+$$\sqrt{1-x^2} = \sqrt{1-\sin^2\theta} = \sqrt{\cos^2\theta} = |\cos\theta|$$
+
+and the modulus is the whole issue. Restricting $\theta$ to $[0,\frac{\pi}{2}]$ makes
+$\cos\theta \ge 0$, the modulus disappears, and the integral becomes
+$\int_0^{\pi/2}\cos^2\theta\,\mathrm{d}\theta = \frac{\pi}{4}$ — which is right, being a
+quarter of the unit disc. Allow $\theta$ to reach $\pi$ and $\cos\theta$ turns negative
+while $|\cos\theta|$ does not, so writing $\cos\theta$ for the root silently integrates
+the wrong function over half the range. Module 2 chose $x = a + \frac{t}{1-t}$ for
+infinite domains for exactly this reason: it increases strictly across $[0,1)$, so it is
+one-to-one and the limits transfer.
+
+## Worked: the error the arithmetic does not object to
+
+$$\int_0^2 x e^{x^2}\,\mathrm{d}x$$
+
+with $u = x^2$, so $\mathrm{d}u = 2x\,\mathrm{d}x$ and $x\,\mathrm{d}x = \frac{1}{2}\mathrm{d}u$. Push the limits: $x = 0$ gives $u = 0$, and $x = 2$ gives
+$u = 4$.
+
+```
+correct     (1/2) * integral of e^u du from 0 to 4
+          = (e^4 - 1)/2
+          = 26.799
+
+careless    (1/2) * integral of e^u du from 0 to 2      <- old limits, new variable
+          = (e^2 - 1)/2
+          = 3.1945
+```
+
+The wrong answer is not absurd. It is positive, it has the right units, it came out of
+an expression that simplified cleanly, and it is too small by a factor of
+$\frac{e^4-1}{e^2-1} = e^2 + 1 = 8.39$. Nothing in the working objects, because the
+integral $\int_0^2 e^u\,\mathrm{d}u$ is a perfectly good integral. It is the
+answer to a different question. This is the characteristic failure of substitution: it
+does not crash, it answers something else.
+
+Two habits close it off. Push the limits at the same moment you write $\mathrm{d}u$,
+never afterwards. Or convert back to $x$ before evaluating, and then use the original
+limits — which is slower and never wrong.
+
+## Worked: three integrands that look alike and need three different moves
+
+The technique is a pattern-matcher, so the skill it really trains is telling near-misses
+apart. All three of these are a power of $x$ over $1 + x^{2}$ on $[0,1]$.
+
+```
+integral of x/(1+x^2) dx      numerator IS the derivative of the denominator,
+                              up to a factor 2  ->  substitution, u = 1 + x^2
+
+  = (1/2) ln(1+x^2) from 0 to 1  =  (1/2) ln 2  =  0.34657
+
+
+integral of 1/(1+x^2) dx      no x on top at all, so nothing can be du
+                              ->  no substitution exists; it is a standard form
+
+  = arctan x from 0 to 1         =  pi/4        =  0.78540
+
+
+integral of x^2/(1+x^2) dx    degree on top is not below degree underneath
+                              ->  divide first, which is module 9's opening move
+
+  x^2/(1+x^2) = 1 - 1/(1+x^2)
+  = 1 - pi/4                     =  0.21460
+```
+
+One character of difference between the numerators, and three unrelated methods. The
+first is the $\frac{f'}{f}$ pattern and takes one line. The second cannot be substituted
+at all — there is no inner function whose derivative is present, because there is no
+inner function — and has to be recognised. The third is not an integration problem until
+a division has been done, and attempting a substitution on it wastes the effort before
+discovering that.
+
+Notice the arithmetic check available on the third without doing any of it: the
+integrand $\frac{x^{2}}{1+x^{2}}$ is below $\frac{1}{2}$ everywhere on $[0,1]$ and below
+$\frac{1}{2}$ at the right-hand end, so the answer must be under $0.5$. And the three
+values must satisfy $0.78540 + 0.21460 = 1$, since the second and third integrands add to
+$1$ identically. They do, which checks two of the three at once.
+
+## The mistake, and why it is tempting
+
+The other standard error is manufacturing the missing $g'$. Faced with
+$\int\cos(x^2)\,\mathrm{d}x$, the inner function is $x^2$ and its derivative is $2x$,
+which is nowhere in the integrand — so the temptation is to insert it and compensate,
+claiming that
+
+$$\int\cos(x^2)\,\mathrm{d}x = \frac{1}{2x}\int 2x\cos(x^2)\,\mathrm{d}x$$
+
+This is tempting because it is a move that *is* legal when the missing factor is a
+constant, and it has been used correctly a dozen times by the point it appears. It fails
+here because $\frac{1}{2x}$ is not constant and cannot leave the integral sign;
+$\int u\,v = u\int v$ is false for non-constant $u$. Test the claim with the crudest
+possible check: at any single value of $x$ the right-hand side would have to have
+derivative $\cos(x^2)$, and differentiating a product of $\frac{1}{2x}$ with an
+integral produces an extra term from the product rule, which nothing cancels.
+
+$\int\cos(x^2)\,\mathrm{d}x$ is in fact the Fresnel integral, one of the functions
+module 5 named as having no elementary antiderivative at all. The manufacturing move is
+attempting to prove a theorem false by notation.
+
+## Where this stops holding
+
+Substitution requires the inner derivative to be present *up to a constant factor*, and
+that is a narrow condition. It reduces $\int\frac{2x+3}{x^2+3x+7}\,\mathrm{d}x$ to
+$\int\frac{\mathrm{d}u}{u}$ in one step because the numerator is exactly the derivative
+of the denominator — the $\frac{f'}{f}$ pattern, always a logarithm, and worth checking
+for before anything else is tried. Change the numerator to $2x + 4$ and no substitution
+touches it; the extra $1$ has to be split off and handled by module 9's machinery
+instead.
+
+The symmetry rules come from the same theorem and inherit its hypotheses. Over
+$[-a,a]$, put $x = -t$: an odd integrand gives $\int_{-a}^{a}f = 0$ and an even one
+gives $2\int_0^a f$. Both are proofs rather than estimates, and both need $f$ integrable
+on the whole of $[-a,a]$ — which $\frac{1}{x}$, odd and unbounded at the origin, is not.
+Its integral over $[-1,1]$ does not exist, and answering $0$ by symmetry is the same
+error module 1 made with $\frac{1}{x^2}$, wearing a different hat.
+"""
+                },
+            ],
+            "derive": [
+                {
+                    "title": "One substitution, done twice: once with the limits moved and once without",
+                    "minutes": 11,
+                    "vars": ["x", "u", "e"],
+                    "brief": r"""
+$\int_0^2 x e^{x^2}\,\mathrm{d}x$ has no chance without a substitution — $e^{x^2}$ has
+no elementary antiderivative on its own — and it falls in one line with $u = x^2$.
+
+The point of the last two steps is that the commonest error in the technique produces a
+clean, plausible, positive number, and this derivation prices it.
+""",
+                    "steps": [
+                        {
+                            "prompt": "With $u = x^2$, write $\\frac{\\mathrm{d}u}{\\mathrm{d}x}$.",
+                            "answer": "2x",
+                            "placeholder": "?",
+                            "hint": "The power rule on $x^2$.",
+                        },
+                        {
+                            "prompt": "The integrand carries $x\\,\\mathrm{d}x$, not $2x\\,\\mathrm{d}x$. Write the constant $c$ for which $x\\,\\mathrm{d}x = c\\,\\mathrm{d}u$.",
+                            "answer": "\\frac{1}{2}",
+                            "placeholder": "?",
+                            "hint": "Divide $\\mathrm{d}u = 2x\\,\\mathrm{d}x$ through by $2$.",
+                        },
+                        {
+                            "prompt": "The limits belong to the old variable and must be pushed through $u = x^2$. Write the new upper limit.",
+                            "answer": "4",
+                            "placeholder": "?",
+                            "hint": "The old upper limit is $x = 2$.",
+                        },
+                        {
+                            "prompt": "Evaluate $\\frac{1}{2}\\int_0^{4}e^{u}\\,\\mathrm{d}u$. Write the exact value in terms of $e$.",
+                            "answer": "\\frac{e^4-1}{2}",
+                            "placeholder": "?",
+                            "hint": "The antiderivative of $e^u$ is $e^u$, so this is $\\frac{1}{2}\\left(e^4 - e^0\\right)$.",
+                        },
+                        {
+                            "prompt": "Now the careless version: the same $\\frac{1}{2}$, but the limits left at $0$ and $2$. Write what that returns.",
+                            "answer": "\\frac{e^2-1}{2}",
+                            "placeholder": "?",
+                            "hint": "Identical working, with $4$ replaced by $2$ in the upper limit.",
+                        },
+                        {
+                            "prompt": "Divide the correct value by the careless one and simplify. Write the factor by which the error understates the answer.",
+                            "answer": "e^2+1",
+                            "placeholder": "?",
+                            "hint": "$e^4 - 1$ is a difference of two squares: $\\left(e^2-1\\right)\\left(e^2+1\\right)$.",
+                            "deconstruct": [
+                                "$\\frac{e^4-1}{e^2-1}$, after the halves cancel.",
+                                "Factor the top as $(e^2-1)(e^2+1)$ and cancel.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+The correct value is $\frac{e^4-1}{2} = 26.799$ and the careless one is
+$\frac{e^2-1}{2} = 3.1945$, a factor of $e^2 + 1 = 8.39$ apart. Neither number looks
+wrong. Both are positive, both are finite, and both came out of an expression that
+simplified without complaint — which is why forgetting to move the limits is a mistake
+that survives being checked over.
+
+There is a check that does catch it, and it costs nothing. The integrand $x e^{x^2}$
+exceeds $x$ on $[0,2]$ and $\int_0^2 x\,\mathrm{d}x = 2$; at $x = 2$ alone the
+integrand is $2e^4 \approx 109$. An answer of $3.19$ for a function that reaches $109$
+on the interval is not credible, and an order-of-magnitude bound of this kind is
+available before any substitution is attempted. Module 1's staircase bounds are the same
+idea used deliberately: any Riemann sum, however crude, brackets the answer.
+"""
+                },
             ],
             "quiz": {
                 "title": "Substitution done carefully",
@@ -2499,6 +2993,271 @@ except ValueError:
                 r"$\int\ln x\,dx$ and $\int\arctan x\,dx$ take $dv = dx$: there is only one factor, and differentiating it is the entire move",
                 r"$\int e^{ax}\cos(bx)\,dx$ reproduces itself after two rounds, and the answer comes from solving the resulting equation for the unknown integral",
                 r"A reduction formula expresses $\int\sin^n x\,dx$ through $\int\sin^{n-2}x\,dx$, turning an integral into a recurrence with a base case — the same recurrences that generate Fourier coefficients",
+                r"The choice of $u$ is not a mnemonic. It is a search for the factor with a *terminating* derivative chain: a polynomial loses one degree per step and stops, an exponential or a sinusoid never changes difficulty in either direction, and one round of the formula shows which way the trade is running",
+                r"Solving for a reproduced integral is legal exactly when it comes back with a coefficient other than $1$. The identical manoeuvre on $\int\frac{\mathrm{d}x}{x}$ gives $I = 1 + I$, and cancelling proves $0 = 1$; the sine recurrence is safe because collecting leaves a factor of $n$",
+            ],
+            "read": [
+                {
+                    "title": "The product rule backwards, and when solving for the integral is allowed",
+                    "minutes": 13,
+                    "body": r"""
+Substitution inverts the chain rule. Integration by parts inverts the product rule, and
+its derivation is the same two lines with a different starting identity. Start from the
+product rule,
+
+$$(uv)' = u'v + uv'$$
+
+integrate both sides over $[a,b]$, and apply part two of the Fundamental Theorem to the
+left-hand side, which is a derivative:
+
+$$\left[uv\right]_a^b = \int_a^b u'v\,\mathrm{d}x + \int_a^b uv'\,\mathrm{d}x$$
+
+Rearranged, $\int_a^b u\,\mathrm{d}v = \left[uv\right]_a^b - \int_a^b v\,\mathrm{d}u$.
+The formula is a *trade*: it does not evaluate anything, it exchanges one integral for
+another plus a boundary term you can read off. Whether that is progress depends entirely
+on the choice of $u$, and the choice is not a matter of taste.
+
+## LIATE, and the reason underneath it
+
+The usual advice is a mnemonic — logarithmic, inverse trigonometric, algebraic,
+trigonometric, exponential — and a mnemonic is a rule with the reason removed. The
+reason is that the trade is worth making when $\int v\,\mathrm{d}u$ is a smaller problem
+than $\int u\,\mathrm{d}v$, and "smaller" is measurable. Differentiating $x^n$ lowers
+the degree by one, so repeated differentiation of a polynomial *terminates* in $n$
+steps. Differentiating $e^{x}$ or $\sin x$ changes nothing about the difficulty.
+Integrating $e^{x}$ or $\sin x$ also changes nothing about the difficulty. So in
+$\int x^n e^{x}\,\mathrm{d}x$ the polynomial must be $u$: it is the only factor with a
+terminating chain, and the exponential is the only factor that can be integrated
+repeatedly at no cost.
+
+The front of the list has a different reason. $\ln x$ and $\arctan x$ are there not
+because they simplify pleasantly but because *nothing else can be done with them*:
+neither has an antiderivative you already know, so neither can serve as $\mathrm{d}v$.
+For $\int\ln x\,\mathrm{d}x$ the assignment is forced — $u = \ln x$, $\mathrm{d}v = \mathrm{d}x$ — and the technique's contribution is turning an unintegrable factor into
+$\frac{1}{x}$, which is integrable against the $v = x$ it is now multiplied by.
+
+## Worked: the wrong choice, carried far enough to see it fail
+
+$\int x e^{x}\,\mathrm{d}x$ with the assignment backwards, $u = e^x$ and $\mathrm{d}v = x\,\mathrm{d}x$:
+
+```
+u  = e^x          du = e^x dx
+dv = x dx         v  = x^2/2
+
+integral = (x^2/2) e^x - integral of (x^2/2) e^x dx
+```
+
+The remaining integral has degree $2$ where the original had degree $1$. Push once more
+and it is degree $3$, then $4$. The trade is running the wrong way and it is visible
+after a single step, which is the practical test: **do parts once and compare the new
+integral with the old one**. If it is worse, swap the assignment. With $u = x$ instead,
+$\int x e^x = xe^x - \int e^x = (x-1)e^x + C$, and differentiating that returns
+$e^x + (x-1)e^x = xe^x$.
+
+## Solving for the integral, and the coefficient that makes it legal
+
+Some integrands reproduce themselves. $\int e^{x}\sin x\,\mathrm{d}x$, called $I$, gives
+after two rounds of parts
+
+$$I = e^{x}\sin x - e^{x}\cos x - I$$
+
+Collecting, $2I = e^{x}(\sin x - \cos x)$, so $I = \frac{1}{2}e^{x}(\sin x - \cos x) + C$. Differentiate to check: $\frac{1}{2}e^x(\sin x - \cos x) + \frac{1}{2}e^x(\cos x + \sin x) = e^x\sin x$.
+
+Now the same move on a different integral. Let $I = \int\frac{\mathrm{d}x}{x}$ and take
+$u = \frac{1}{x}$, $\mathrm{d}v = \mathrm{d}x$, so $v = x$ and $\mathrm{d}u = -\frac{\mathrm{d}x}{x^2}$:
+
+$$I = \frac{1}{x}\cdot x - \int x\left(-\frac{1}{x^{2}}\right)\mathrm{d}x
+    = 1 + \int\frac{\mathrm{d}x}{x} = 1 + I$$
+
+Cancel $I$ from both sides and $0 = 1$. Every line of that is correct except the last
+one, and the last one is the move the previous paragraph just endorsed. The difference
+is the coefficient. In the first case the reproduced integral arrived with coefficient
+$-1$, so collecting gave $2I$ and dividing by $2$ is legal. Here it arrives with
+coefficient $+1$, collecting gives $0 \cdot I = 1$, and dividing by zero is what
+produces the contradiction.
+
+There is a second reading of the same fault, and it is worth having both.
+$\int\frac{\mathrm{d}x}{x}$ denotes a *family* of functions differing by a constant, not
+a number, and the two occurrences of $I$ in $I = 1 + I$ are not the same member of that
+family — one is $\ln|x| + C_1$ and the other is $\ln|x| + C_2$, with $C_1 - C_2 = 1$.
+Cancelling treats a family as a number. In the definite version the ambiguity is gone
+and so is the contradiction: $\int_1^2\frac{\mathrm{d}x}{x} = \left[1\right]_1^2 + \int_1^2\frac{\mathrm{d}x}{x}$ reads $0 = 0$, true and useless.
+
+So the rule is: solving for $I$ is valid exactly when the reproduced integral comes back
+with a coefficient other than $1$. Reduction formulae satisfy that condition by
+construction, which is the next section.
+
+## A reduction formula, derived, and taken to a number
+
+Let $W_n = \int_0^{\pi/2}\sin^{n}x\,\mathrm{d}x$. Split off one factor of sine to serve
+as $\mathrm{d}v$:
+
+```
+u  = sin^(n-1) x      du = (n-1) sin^(n-2) x cos x dx
+dv = sin x dx         v  = -cos x
+
+W_n = [-sin^(n-1) x cos x] from 0 to pi/2
+      + (n-1) * integral of sin^(n-2) x cos^2 x dx
+```
+
+The boundary term vanishes at both ends — $\cos\frac{\pi}{2} = 0$ at the top and
+$\sin 0 = 0$ at the bottom for $n \ge 2$. Replace $\cos^2 x$ by $1 - \sin^2 x$ and the
+remaining integral splits into $W_{n-2} - W_{n}$:
+
+$$W_n = (n-1)\left(W_{n-2} - W_{n}\right) \quad\Rightarrow\quad
+n\,W_n = (n-1)W_{n-2} \quad\Rightarrow\quad W_n = \frac{n-1}{n}W_{n-2}$$
+
+The reproduced integral came back with coefficient $-(n-1)$, so collecting gave $n$, and
+$n \neq 0$ is exactly the licence the previous section demanded. Two base cases finish
+it: $W_0 = \frac{\pi}{2}$ and $W_1 = 1$. Then
+
+```
+W_2 = (1/2) W_0 = pi/4      = 0.785398
+W_4 = (3/4) W_2 = 3 pi/16   = 0.589049
+W_6 = (5/6) W_4 = 5 pi/32   = 0.490874
+```
+
+One derivation has answered infinitely many integrals, and it is structurally a
+recursive function with a base case. The odd and even branches never mix, which is why
+$\pi$ appears in every even $W_n$ and in no odd one.
+
+## Worked: the factor that has no antiderivative of its own
+
+The front of LIATE is where the technique does something no other technique can, and
+$\int_0^1\arctan x\,\mathrm{d}x$ is the cleanest example. There is one factor. There is
+nothing to substitute, no product to split, and no rational function to decompose —
+$\arctan$ is not in the table of antiderivatives at all.
+
+Parts creates the second factor out of nothing by taking $\mathrm{d}v = \mathrm{d}x$:
+
+```
+u  = arctan x        du = dx/(1+x^2)
+dv = dx              v  = x
+
+integral = [x arctan x] from 0 to 1  -  integral of x/(1+x^2) dx from 0 to 1
+         = pi/4                      -  (1/2) ln 2
+         = 0.78540 - 0.34657
+         = 0.43882
+```
+
+The whole move is that differentiating $\arctan$ produces $\frac{1}{1+x^{2}}$, which is
+rational — and multiplied by the $v = x$ that has just appeared, it becomes the
+$\frac{f'}{f}$ pattern of module 6 and integrates in one step. An unintegrable factor
+was converted into an integrable one by differentiating it, which is what parts is for
+and what no amount of substitution would have achieved.
+
+Check the size before believing the number: $\arctan x$ runs from $0$ to
+$\frac{\pi}{4} = 0.7854$ across $[0,1]$ and is concave, so the answer must lie between
+half of $0.7854$ and $0.7854$ itself. It does, at $0.4388$. And check it exactly by
+differentiating the antiderivative: $\frac{\mathrm{d}}{\mathrm{d}x}\left(x\arctan x - \frac{1}{2}\ln(1+x^{2})\right) = \arctan x + \frac{x}{1+x^{2}} - \frac{x}{1+x^{2}} = \arctan x$.
+
+$\int\ln x\,\mathrm{d}x = x\ln x - x$ is the same manoeuvre, and module 5 found it by
+guessing and correcting instead. The two routes agree because they are the same
+calculation: the correction module 5 subtracted is precisely the $\int v\,\mathrm{d}u$
+that parts writes down in advance.
+
+## Where this stops holding
+
+Parts trades one integral for another and offers no guarantee the new one is easier. On
+$\int e^{x^2}\,\mathrm{d}x$ every assignment produces something worse, and it must,
+since module 5 recorded that no elementary antiderivative exists — a technique cannot
+manufacture one. On $\int\sin(x^2)\,\mathrm{d}x$ the same. The useful reading of a
+failed attempt is that it is evidence about the shape of the integrand, never a
+conclusion about the integral.
+
+The tabular short-cut, in which one column is differentiated to zero and the other
+integrated repeatedly, is this same formula applied $n$ times with the signs alternating.
+It works precisely when one factor's derivative chain terminates, which is the criterion
+this reading started from — so it is a layout, not a new method, and it is silent on
+every integrand where the polynomial is absent.
+"""
+                },
+            ],
+            "derive": [
+                {
+                    "title": "The sine reduction formula, and the coefficient that licences it",
+                    "minutes": 13,
+                    "vars": ["n", "x", "W"],
+                    "brief": r"""
+Write $W_n = \int_0^{\pi/2}\sin^{n}x\,\mathrm{d}x$. One application of integration by
+parts turns this into a recurrence, and the recurrence answers every $n$ at once.
+
+Take $u = \sin^{n-1}x$ and $\mathrm{d}v = \sin x\,\mathrm{d}x$. The last two steps are
+the ones that matter: the reproduced integral has to come back with a coefficient other
+than $1$, or solving for it is the step that proves $0 = 1$.
+
+Write the trigonometric functions as `sin(x)` and `cos(x)`.
+""",
+                    "steps": [
+                        {
+                            "prompt": "With $\\mathrm{d}v = \\sin x\\,\\mathrm{d}x$, write $v$.",
+                            "answer": "-cos(x)",
+                            "placeholder": "?",
+                            "hint": "An antiderivative of $\\sin$, and the sign is the whole of the answer.",
+                        },
+                        {
+                            "prompt": "With $u = \\sin^{n-1}x$, write $\\frac{\\mathrm{d}u}{\\mathrm{d}x}$ using the chain rule.",
+                            "answer": "(n-1)cos(x)sin(x)^{n-2}",
+                            "placeholder": "(n-1) * ... * ...",
+                            "hint": "Differentiate the outer power, then multiply by the derivative of $\\sin x$.",
+                            "deconstruct": [
+                                "The outer function is $t \\mapsto t^{n-1}$, whose derivative is $(n-1)t^{n-2}$.",
+                                "The inner function is $\\sin x$, whose derivative is $\\cos x$.",
+                            ],
+                        },
+                        {
+                            "prompt": "The leftover integral is $(n-1)\\int_0^{\\pi/2}\\sin^{n-2}x\\,\\cos^{2}x\\,\\mathrm{d}x$, which is not yet a $W$. Rewrite $\\cos^{2}x$ so that it is.",
+                            "answer": "1-sin(x)^2",
+                            "placeholder": "?",
+                            "hint": "The Pythagorean identity, arranged so that only sines are left.",
+                        },
+                        {
+                            "prompt": "The boundary term vanishes at both ends, so $W_n = (n-1)\\left(W_{n-2} - W_n\\right)$. Collect the $W_n$ terms on the left and write the coefficient multiplying $W_n$ there.",
+                            "answer": "n",
+                            "placeholder": "?",
+                            "hint": "One $W_n$ is already on the left and $(n-1)$ more come across from the right.",
+                            "deconstruct": [
+                                "$W_n + (n-1)W_n = (n-1)W_{n-2}$.",
+                                "The left-hand side is $\\left(1 + n - 1\\right)W_n$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Divide by that coefficient. Writing $W$ for $W_{n-2}$, write $W_n$.",
+                            "answer": "\\frac{n-1}{n}W",
+                            "placeholder": "? * W",
+                            "hint": "The recurrence steps down by two, never by one, so the even and odd families never meet.",
+                        },
+                        {
+                            "prompt": "Apply that recurrence three times starting from $W_0 = \\frac{\\pi}{2}$, and write $W_6$.",
+                            "answer": "\\frac{5\\pi}{32}",
+                            "placeholder": "?",
+                            "hint": "$W_2 = \\frac{1}{2}W_0$, then $W_4 = \\frac{3}{4}W_2$, then $W_6 = \\frac{5}{6}W_4$.",
+                            "deconstruct": [
+                                "$W_2 = \\frac{1}{2}\\cdot\\frac{\\pi}{2} = \\frac{\\pi}{4}$.",
+                                "$W_4 = \\frac{3}{4}\\cdot\\frac{\\pi}{4} = \\frac{3\\pi}{16}$.",
+                                "$W_6 = \\frac{5}{6}\\cdot\\frac{3\\pi}{16} = \\frac{15\\pi}{96}$, which reduces.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+$W_6 = \frac{5\pi}{32} = 0.490874$. Check the size before believing it: $\sin^{6}x$ sits
+below $1$ across $\left[0,\frac{\pi}{2}\right]$ and is small over most of it, so an
+answer somewhere under $\frac{\pi}{2} = 1.5708$ and above zero is what to expect, and
+$0.49$ is plausible where $4.9$ would not have been.
+
+Step four is where the whole method rests. The reproduced integral came back with
+coefficient $-(n-1)$, collecting produced $n$, and dividing by $n$ is legal for every
+$n \ge 1$. Run the same manoeuvre on $\int\frac{\mathrm{d}x}{x}$ with $u = \frac1x$ and
+$\mathrm{d}v = \mathrm{d}x$ and the integral comes back with coefficient $+1$: collecting
+gives $0 \cdot I = 1$, and the division that looked identical is a division by zero. The
+recurrence above is safe not because it is a reduction formula but because $n \neq 0$.
+
+Odd $n$ runs down to $W_1 = 1$ and never meets a $\pi$; even $n$ runs down to
+$W_0 = \frac{\pi}{2}$ and always carries one. Taking the ratio of the two families as
+$n$ grows is how Wallis obtained his product for $\pi$ — from this recurrence and
+nothing else.
+"""
+                },
             ],
             "quiz": {
                 "title": "Choosing u, and knowing when to stop",
@@ -2552,7 +3311,10 @@ except ValueError:
                             r"$I = \frac{1}{2}e^x(\sin x - \cos x) + C$. A third round walks straight back to the starting "
                             r"point, because sine and cosine close under differentiation after two steps. The integral "
                             r"certainly exists — the integrand is continuous everywhere — and no substitution touches it, "
-                            r"since neither factor is the derivative of the other."
+                            r"since neither factor is the derivative of the other. The cancellation is legal here because "
+                            r"the integral returns with coefficient $-1$, so collecting leaves $2I$. Run the same "
+                            r"manoeuvre on $\int\frac{\mathrm{d}x}{x}$ and it returns with coefficient $+1$: collecting "
+                            r"gives $0\cdot I = 1$, and the identical-looking final step is a division by zero."
                         ),
                     },
                     {
@@ -2597,6 +3359,252 @@ except ValueError:
                 r"The three substitutions: $x = a\sin\theta$ for $\sqrt{a^2 - x^2}$, $x = a\tan\theta$ for $\sqrt{a^2 + x^2}$, $x = a\sec\theta$ for $\sqrt{x^2 - a^2}$",
                 r"Complete the square first to reach one of those three forms, and come back through a right triangle rather than through nested inverse functions",
             ],
+            "read": [
+                {
+                    "title": "Which products vanish, computed rather than remembered",
+                    "minutes": 13,
+                    "body": r"""
+A signal is a sum of sinusoids and you want one of them out. Multiply the signal by
+$\sin(3x)$, integrate over a full period, and the answer is the amount of $\sin(3x)$
+that was in it — every other component contributes nothing. That procedure is the whole
+of Fourier analysis, and it works only because of three definite integrals. This module
+lists them; here they are computed, because one of the three behaves differently from
+the way the list suggests and the difference is what makes the procedure work at all.
+
+## Power reduction, derived from one identity
+
+The addition formula gives $\cos(2\theta) = \cos^{2}\theta - \sin^{2}\theta$, and
+$\cos^{2}\theta + \sin^{2}\theta = 1$. Add and subtract:
+
+$$\cos^{2}\theta = \frac{1 + \cos 2\theta}{2}, \qquad
+  \sin^{2}\theta = \frac{1 - \cos 2\theta}{2}$$
+
+Nothing here is a new fact. Both are the addition formula rearranged, and both say the
+same thing: a squared sinusoid is a constant $\frac{1}{2}$ plus a sinusoid at twice the
+frequency. Over a whole number of periods the doubled sinusoid integrates to zero, so
+the mean of $\sin^{2}$ is exactly $\frac{1}{2}$ — not approximately, and not because of
+any symmetry argument about halves.
+
+The engineering consequence follows in one line. The root mean square of $V\sin\omega t$
+is $\sqrt{V^{2}\cdot\frac{1}{2}} = \frac{V}{\sqrt2}$, so a supply quoted at
+$230\,\mathrm{V}$ RMS has a peak of $230\sqrt2 = 325.3\,\mathrm{V}$, and insulation is
+specified against the peak while heating is computed from the RMS. Module 10 returns to
+why squaring first is the right average for power.
+
+## The three orthogonality integrals
+
+Take $m$ and $n$ positive integers and integrate over $[0, 2\pi]$. Every one of these
+comes from a product-to-sum identity followed by the observation that
+$\int_0^{2\pi}\cos(kx)\,\mathrm{d}x = 0$ for every non-zero integer $k$, since $\cos(kx)$
+completes $|k|$ whole cycles.
+
+$$\sin(mx)\sin(nx) = \frac{\cos\left((m-n)x\right) - \cos\left((m+n)x\right)}{2}$$
+
+For $m \neq n$ both cosines have non-zero frequency and both integrate to zero, so the
+whole thing is $0$. For $m = n$ the first term becomes $\cos 0 = 1$, whose integral over
+$[0,2\pi]$ is $2\pi$, and half of that is $\pi$. The cosine pair behaves identically:
+$\int_0^{2\pi}\cos(mx)\cos(nx)\,\mathrm{d}x$ is $0$ when $m \neq n$ and $\pi$ when
+$m = n$.
+
+Now the mixed pair, which is the one worth doing carefully:
+
+$$\sin(mx)\cos(nx) = \frac{\sin\left((m+n)x\right) + \sin\left((m-n)x\right)}{2}$$
+
+For $m \neq n$ both sines integrate to zero over the period. And when $m = n$ the second
+term is $\sin 0 = 0$ identically while the first is $\sin(2nx)$, which also integrates
+to zero — so
+
+$$\int_0^{2\pi}\sin(mx)\cos(nx)\,\mathrm{d}x = 0
+\qquad\text{for every } m \text{ and } n \text{, including } m = n$$
+
+This is not the same shape of result as the other two, and the difference is
+load-bearing. A sine and a cosine at the *same* frequency are orthogonal. Nothing about
+matching frequencies rescues them, because $\sin(nx)\cos(nx) = \frac{1}{2}\sin(2nx)$ is a
+pure sinusoid at double the frequency and has mean zero like any other.
+
+## Why that third integral is the one that matters
+
+Suppose the mixed integral were $\pi$ at $m = n$, as the other two are. Then extracting
+the sine coefficient at frequency $3$ would also pick up whatever cosine content sat at
+frequency $3$, the two coefficients could not be separated, and the decomposition would
+not be a decomposition. Watch it work on a signal where the answer is known:
+
+$$f(x) = 2\sin 3x + 5\cos 3x - \sin 5x$$
+
+```
+b_3 = (1/pi) * integral of f(x) sin(3x) dx over [0, 2pi]
+
+  from 2 sin3x  :  (1/pi) * 2 * pi        =  2     (m = n, sine-sine)
+  from 5 cos3x  :  (1/pi) * 5 * 0         =  0     (m = n, sine-cosine)
+  from -sin5x   :  (1/pi) * (-1) * 0      =  0     (m /= n, sine-sine)
+                                          ------
+                                             2
+```
+
+The $5\cos 3x$ term is at *exactly* the frequency being extracted, carries more than
+twice the amplitude of the term being looked for, and contributes nothing. That is the
+mixed integral doing its job.
+
+## Odd powers, even powers, and which one is cheap
+
+A single odd power is a substitution in disguise. In $\int\sin^{3}x\cos^{2}x\,\mathrm{d}x$
+peel one sine off to be $\mathrm{d}u$ for $u = \cos x$, and convert what is left with the
+Pythagorean identity, which is possible precisely because the remaining power is even:
+
+```
+sin^3 x cos^2 x dx = (1 - cos^2 x) cos^2 x * sin x dx
+                   = -(1 - u^2) u^2 du            u = cos x, du = -sin x dx
+
+integral = -(u^3/3 - u^5/5) + C
+         = cos^5(x)/5 - cos^3(x)/3 + C
+```
+
+Differentiating that returns $-\cos^{4}x\sin x + \cos^{2}x\sin x = \cos^{2}x\sin x\left(1-\cos^{2}x\right) = \sin^{3}x\cos^{2}x$. When *both* powers are even no factor
+can be peeled off, the substitution is unavailable, and the double-angle identities from
+the first section have to reduce the powers instead — at roughly one identity per two
+degrees, which is why an even-even integrand costs several times what an odd one does.
+
+## Clearing a root, and the modulus that decides the sign
+
+Three substitutions, one per shape, each turning a sum or difference of squares into a
+single square by a Pythagorean identity:
+
+```
+sqrt(a^2 - x^2)     x = a sin(t)     gives a|cos t|
+sqrt(a^2 + x^2)     x = a tan(t)     gives a|sec t|
+sqrt(x^2 - a^2)     x = a sec(t)     gives a|tan t|
+```
+
+Every one produces a modulus, and every one is made harmless by restricting $t$ to the
+range on which the inner function is non-negative — which is also the range on which the
+substitution is one-to-one, the condition module 6 established for a reverse
+substitution. The two requirements are the same requirement.
+
+Worked, end to end:
+
+$$\int_0^{3}\frac{\mathrm{d}x}{\sqrt{9+x^{2}}}$$
+
+```
+x = 3 tan t         dx = 3 sec^2 t dt
+9 + x^2 = 9 sec^2 t     sqrt(...) = 3 sec t     for t in [0, pi/4]
+
+limits  x = 0 -> t = 0        x = 3 -> t = pi/4
+
+integral = integral of sec t dt from 0 to pi/4
+         = [ln|sec t + tan t|] from 0 to pi/4
+         = ln(sqrt2 + 1) - ln(1)
+         = 0.8814
+```
+
+Sanity-check the magnitude without integrating: the integrand runs from $\frac{1}{3}$ at
+$x=0$ down to $\frac{1}{3\sqrt2} = 0.2357$ at $x=3$, so the answer lies between
+$3 \times 0.2357 = 0.707$ and $3 \times 0.333 = 1.0$. It does.
+
+## The mistake, and why it is tempting
+
+After $x = 3\tan t$ the answer has to come back to $x$, and the tempting route is to
+invert the substitution literally: $t = \arctan\frac{x}{3}$, then write
+$\sec\left(\arctan\frac{x}{3}\right)$ and stop. It is correct and it is unusable — no
+further algebra will simplify it, and a second substitution downstream will not survive
+it.
+
+The right-triangle route is faster and produces something a later step can work with.
+Draw the triangle in which $\tan t = \frac{x}{3}$: opposite $x$, adjacent $3$,
+hypotenuse $\sqrt{9+x^{2}}$. Then $\sec t = \frac{\sqrt{9+x^{2}}}{3}$ and $\sin t = \frac{x}{\sqrt{9+x^{2}}}$, read straight off. The temptation exists because inverting a
+function is the obvious thing to do to undo it; the triangle wins because it converts
+the inverse into algebra rather than leaving it as a composition.
+
+## Where this stops holding
+
+The three substitutions match three shapes and nothing else, so the first move on a
+general quadratic under a root is to complete the square and *make* one of the shapes
+appear. $\sqrt{x^{2}-6x+13}$ has discriminant $36 - 52 = -16$, so it never factors over
+the reals and no algebraic route is available — but completing the square gives
+$\sqrt{(x-3)^{2}+4}$, the middle shape with $u = x - 3$ and $a = 2$.
+
+Orthogonality itself is stated above over $[0,2\pi]$ with integer frequencies, and
+neither condition is negotiable. Over a partial period the integrals are not zero, which
+is why a finite record of a signal must be windowed before its spectrum means anything;
+and for non-integer frequency ratios the components are not orthogonal at all, which is
+the leakage that appears in every real spectrum. Module 4's convergence tests decide
+whether the resulting Fourier series converges; these integrals only produce its
+coefficients.
+"""
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Three orthogonality integrals, and the one that is zero even at equal frequencies",
+                    "minutes": 12,
+                    "vars": ["m", "n", "x"],
+                    "brief": r"""
+Everything below is over $[0, 2\pi]$ with $m$ and $n$ positive integers, and everything
+rests on one fact: $\int_0^{2\pi}\cos(kx)\,\mathrm{d}x = 0$ for every non-zero integer
+$k$, because $\cos(kx)$ completes $|k|$ whole cycles.
+
+Write the trigonometric functions as `sin(...)` and `cos(...)`. The last two steps
+settle the mixed sine-cosine case, which does not behave like the other two.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Use the product-to-sum identity to rewrite $\\sin(mx)\\sin(nx)$ as a combination of two cosines.",
+                            "answer": "\\frac{cos((m-n)x)-cos((m+n)x)}{2}",
+                            "placeholder": "(cos(...) - cos(...))/2",
+                            "hint": "Subtract $\\cos(A+B) = \\cos A\\cos B - \\sin A\\sin B$ from $\\cos(A-B) = \\cos A\\cos B + \\sin A\\sin B$, then halve.",
+                            "deconstruct": [
+                                "$\\cos(A-B) - \\cos(A+B) = 2\\sin A\\sin B$.",
+                                "Put $A = mx$ and $B = nx$, then divide by $2$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Write the value of $\\int_0^{2\\pi}\\cos(kx)\\,\\mathrm{d}x$ for a non-zero integer $k$.",
+                            "answer": "0",
+                            "placeholder": "?",
+                            "hint": "The antiderivative is $\\frac{\\sin(kx)}{k}$, and $\\sin$ takes the same value at $0$ and at $2k\\pi$.",
+                        },
+                        {
+                            "prompt": "For $m \\neq n$, both frequencies $m-n$ and $m+n$ in step one are non-zero. Write $\\int_0^{2\\pi}\\sin(mx)\\sin(nx)\\,\\mathrm{d}x$.",
+                            "answer": "0",
+                            "placeholder": "?",
+                            "hint": "Both terms are covered by step two.",
+                        },
+                        {
+                            "prompt": "For $m = n$ the first cosine becomes $\\cos 0 = 1$ while the second still integrates to zero, so the integrand averages $\\frac{1}{2}$ over $[0, 2\\pi]$. Write the value of the integral.",
+                            "answer": "\\pi",
+                            "placeholder": "?",
+                            "hint": "$\\int_0^{2\\pi}\\frac{1}{2}\\,\\mathrm{d}x$, and the second term contributes nothing.",
+                        },
+                        {
+                            "prompt": "Now the mixed pair at equal frequencies. Write $\\sin(nx)\\cos(nx)$ as a single sinusoid.",
+                            "answer": "\\frac{sin(2nx)}{2}",
+                            "placeholder": "sin(...)/2",
+                            "hint": "The double-angle formula $\\sin 2A = 2\\sin A\\cos A$, rearranged.",
+                        },
+                        {
+                            "prompt": "Write $\\int_0^{2\\pi}\\sin(nx)\\cos(nx)\\,\\mathrm{d}x$.",
+                            "answer": "0",
+                            "placeholder": "?",
+                            "hint": "It is a pure sinusoid at frequency $2n$, which is a non-zero integer, so step two applies to it unchanged.",
+                        },
+                    ],
+                    "closing": r"""
+Two of the three integrals are $\pi$ when the frequencies agree and $0$ otherwise. The
+third — the mixed sine-cosine pair — is **zero for every $m$ and $n$, the equal case
+included**, and steps five and six are the computation rather than an assertion. It does
+not fit the pattern of the other two, and that is exactly what makes the Fourier
+decomposition possible: the sine coefficient at frequency $n$ cannot be contaminated by
+the cosine content at that same frequency, so the two families are extracted
+independently.
+
+Try it on $f(x) = 2\sin 3x + 5\cos 3x - \sin 5x$. Multiplying by $\sin 3x$ and
+integrating over $[0,2\pi]$ picks up $2\pi$ from the first term, $0$ from the second by
+step six, and $0$ from the third by step three. Dividing by $\pi$ returns $2$, the
+coefficient that was there. The $5\cos 3x$ term is more than twice the size of the one
+being measured, sits at precisely the frequency being measured, and contributes nothing
+at all.
+"""
+                },
+            ],
             "quiz": {
                 "title": "Squares, products and square roots",
                 "minutes": 8,
@@ -2622,7 +3630,11 @@ except ValueError:
                             r"Sines and cosines at integer multiples of one frequency are orthogonal in exactly this sense, "
                             r"which is what lets a Fourier coefficient be extracted by multiplying the signal by one harmonic "
                             r"and integrating: every other harmonic contributes zero. The value $\pi$ is what appears when the "
-                            r"frequencies do match and the two factors are the same kind of function."
+                            r"frequencies do match and the two factors are the same kind of function — sine against sine, or "
+                            r"cosine against cosine. The mixed pair never produces it: $\int_0^{2\pi}\sin(mx)\cos(nx)\,dx$ is "
+                            r"zero for every $m$ and $n$ including $m = n$, since $\sin(nx)\cos(nx) = \frac{1}{2}\sin(2nx)$. "
+                            r"That is the case the extraction actually depends on, because it is what stops the cosine content "
+                            r"at the very frequency being measured from contaminating the sine coefficient."
                         ),
                     },
                     {
@@ -2683,6 +3695,262 @@ except ValueError:
                 r"A repeated factor $(x - r)^m$ needs one term for every power from $1$ to $m$, not only the highest",
                 r"An irreducible quadratic contributes $(Ax + B)/(x^2 + bx + c)$, which after completing the square splits into a logarithm plus an arctangent",
                 r"This is the same algebra that splits a transfer function into its poles before an inverse transform, so the decompositions written here reappear unchanged in later courses",
+                r"The decomposition exists and is unique by a counting argument: over the reals every denominator factors into linear and irreducible quadratic pieces, those contribute exactly $\deg Q$ unknown coefficients, and clearing denominators gives exactly $\deg Q$ equations",
+                r"Cover-up reads off only the *highest* power of a repeated factor, because the lower terms vanish at the root as well — so a repeated factor needs one comparison of coefficients after the two easy evaluations",
+                r"Check the finished decomposition at a value of $x$ that was not used to build it. One substitution, and it catches every sign error, which is where the failures actually are",
+                r"Near-equal roots make the coefficients enormous while the function stays smooth: $\frac{1}{(x-1)(x-1.001)}$ decomposes with $\pm 1000$, so every evaluation subtracts nearly equal numbers. That is module 3's catastrophic cancellation arriving by another route, and it is a defect of the parametrisation rather than of the integrand",
+            ],
+            "read": [
+                {
+                    "title": "Why the decomposition exists, and what its coefficients cost",
+                    "minutes": 12,
+                    "body": r"""
+Partial fractions is the one technique in this half of the course that is not an
+integration technique. It integrates nothing. It is an algebraic identity applied
+*before* integrating, chosen because it converts a quotient that no rule handles into a
+sum of pieces that two rules handle completely — every proper rational function
+integrates to logarithms, arctangents and rational terms, and to nothing else. That is a
+strong claim, and it deserves a reason.
+
+## Why every proper rational function splits
+
+Start from where the pieces come from. A real polynomial $Q$ of degree $d$ has $d$ roots
+in the complex numbers, counted with multiplicity — the fundamental theorem of algebra —
+and because $Q$ has real coefficients its non-real roots arrive in conjugate pairs. Each
+pair $r, \bar r$ multiplies back into $(x-r)(x-\bar r) = x^{2} - 2\,\mathrm{Re}(r)\,x + |r|^{2}$, a real quadratic with negative discriminant. So over the reals every $Q$
+factors into linear factors and irreducible quadratics, and the list of possible
+denominators in the decomposition is fixed by that factorisation and by nothing else.
+
+Now count. A factor $(x-r)^{m}$ contributes $m$ unknown numerators $A_1,\ldots,A_m$, one
+per power; an irreducible $(x^{2}+bx+c)^{m}$ contributes $2m$, since each numerator is
+linear. Adding over the whole factorisation gives exactly $\deg Q$ unknowns. Clearing
+denominators turns the identity into an equality of two polynomials of degree less than
+$\deg Q$, which is $\deg Q$ coefficient equations. A square system — and it is
+non-singular, so the decomposition exists and is unique. That is the derivation behind
+the rule "one term for every power from $1$ to $m$": leave out the lower powers and the
+system has fewer unknowns than equations and generically no solution at all.
+
+The properness condition enters before any of this. If $\deg P \ge \deg Q$ no sum of
+terms with smaller numerators can produce the leading behaviour, so divide first:
+$\frac{x^{3}}{x^{2}-1} = x + \frac{x}{x^{2}-1}$, and only the remainder is decomposed.
+
+## Cover-up, derived, and the case it cannot reach
+
+For a *simple* linear factor the coefficient is one evaluation. Write
+$\frac{P(x)}{Q(x)} = \frac{A}{x-r} + \left(\text{the rest}\right)$ and multiply through
+by $(x-r)$:
+
+$$\frac{P(x)}{Q(x)}\,(x-r) = A + (x-r)\left(\text{the rest}\right)$$
+
+Every other term still carries a factor $(x-r)$, so letting $x \to r$ annihilates all of
+them and leaves $A$ alone. That is the whole justification, and it explains the
+restriction as well: for a repeated factor $(x-r)^{m}$, multiplying by $(x-r)^{m}$ and
+setting $x = r$ delivers only $A_m$, the top coefficient, because the lower terms
+$A_{m-1}(x-r), A_{m-2}(x-r)^2,\ldots$ also vanish there. The lower coefficients need
+either derivatives at $r$ or one round of matching.
+
+Worked, all three coefficients, on $\frac{1}{x(x-2)^{2}}$:
+
+```
+A/x + B/(x-2) + C/(x-2)^2
+
+A   cover x        : 1/(0-2)^2 = 1/4
+C   cover (x-2)^2  : 1/2       = 1/2
+B   match x^2      : A + B = 0  =>  B = -1/4
+```
+
+The $x^{2}$ coefficient is the cheapest of the remaining equations: clearing
+denominators gives $1 = A(x-2)^{2} + Bx(x-2) + Cx$, and only $A$ and $B$ produce an
+$x^{2}$ term, so $A + B = 0$ immediately. Check the whole decomposition at a value that
+was never used to build it — $x = 1$:
+
+```
+left   1/(1 * (1-2)^2)                 = 1
+right  (1/4)/1 + (-1/4)/(-1) + (1/2)/1 = 0.25 + 0.25 + 0.5 = 1
+```
+
+The check costs one substitution and catches every sign error, which is the most common
+failure here by a distance.
+
+## The shape of the answer, which the decomposition has already decided
+
+Integrate the three pieces and notice that the *kind* of function each produces was
+fixed the moment the denominator was factored:
+
+```
+A/x          -> A ln|x|                    simple linear   -> logarithm
+B/(x-2)      -> B ln|x-2|                  simple linear   -> logarithm
+C/(x-2)^2    -> -C/(x-2)                   repeated linear -> rational term
+```
+
+A repeated factor never produces a logarithm from its highest power; it produces a
+rational function. So
+
+$$\int_3^4\frac{\mathrm{d}x}{x(x-2)^{2}}
+ = \left[\frac{1}{4}\ln|x| - \frac{1}{4}\ln|x-2| - \frac{1}{2(x-2)}\right]_3^4
+ = \frac{1}{4}\ln\frac{2}{3} + \frac{1}{4} = 0.14863$$
+
+The interval $[3,4]$ was chosen to avoid the poles at $0$ and $2$; over $[1,3]$ the same
+bracket would produce a number and mean nothing, for module 1's reason.
+
+The irreducible quadratic splits into one of each kind. In
+$\int\frac{3x+5}{x^{2}+4x+13}\,\mathrm{d}x$, write the numerator as a multiple of the
+denominator's derivative plus a remainder — $3x + 5 = \frac{3}{2}(2x+4) - 1$ — so the
+first part is the $\frac{f'}{f}$ pattern of module 6 and the second is an arctangent
+after completing the square, $x^{2}+4x+13 = (x+2)^{2}+9$:
+
+$$\frac{3}{2}\ln\left(x^{2}+4x+13\right) - \frac{1}{3}\arctan\frac{x+2}{3} + C$$
+
+Differentiating that returns $\frac{3x+5}{x^{2}+4x+13}$, which is the check that should
+follow every one of these.
+
+## Worked: the division that has to come first
+
+$$\int_2^3\frac{x^{3}}{x^{2}-1}\,\mathrm{d}x$$
+
+Degree three over degree two, so no decomposition of any shape can produce it — a sum of
+terms $\frac{A}{x-1} + \frac{B}{x+1}$ tends to zero at infinity while $\frac{x^{3}}{x^{2}-1}$
+grows without bound, so they cannot be equal for large $x$ and therefore cannot be equal
+anywhere. That argument is worth having, because it says *why* properness is required
+rather than treating it as a step in a procedure.
+
+Divide, then decompose only what is left:
+
+```
+x^3 / (x^2 - 1)  =  x  +  x/(x^2 - 1)          quotient x, remainder x
+
+x/(x^2-1) = x/((x-1)(x+1))
+          = A/(x-1) + B/(x+1)
+
+  A   cover (x-1) : 1/(1+1)  = 1/2
+  B   cover (x+1) : -1/(-1-1) = 1/2
+
+integral = x^2/2 + (1/2) ln|x-1| + (1/2) ln|x+1|
+         = x^2/2 + (1/2) ln|x^2 - 1|
+
+  at x = 3 :  4.5 + (1/2) ln 8  =  4.5 + 1.03972  =  5.53972
+  at x = 2 :  2.0 + (1/2) ln 3  =  2.0 + 0.54931  =  2.54931
+                                                     -------
+                                                     2.99042
+```
+
+Both cover-up evaluations returned $\frac{1}{2}$, which looks like an error and is not:
+the numerator $x$ takes the values $1$ and $-1$ at the two roots, and so does the
+surviving factor, so the two quotients agree. Substituting $x = 0$ into the decomposition
+checks it — $\frac{1/2}{-1} + \frac{1/2}{1} = 0$, and $\frac{0}{-1} = 0$.
+
+The polynomial part carried most of the answer: $\frac{x^{2}}{2}$ contributes $2.5$ of
+the $2.99$, and the two logarithms $0.49$ between them. Skipping the division does not
+merely make the algebra harder; it discards the term that dominates.
+
+## The mistake, and why it is tempting
+
+Reaching for partial fractions on sight of a quotient. It is a general method, so it
+always applies, and that is exactly what makes it the wrong first move:
+$\int\frac{2x}{x^{2}+1}\,\mathrm{d}x$ is a one-line logarithm because the numerator is
+the derivative of the denominator, and decomposing it instead means factoring $x^{2}+1$
+over the complex numbers and recombining two complex logarithms into an answer that was
+available immediately. The order that saves work is to check for $\frac{f'}{f}$ first, a
+substitution second, and the decomposition only when both fail.
+
+## Where this stops holding
+
+The method needs the denominator **factored**, and the theory that guarantees a
+factorisation exists does not supply one. Abel and Ruffini proved that the roots of a
+general quintic cannot be written in radicals, so there are perfectly ordinary rational
+integrands whose decomposition is not obtainable in closed form at all. The technique is
+complete in principle and blocked in practice, and where it blocks, module 2's quadrature
+answers the definite integral anyway.
+
+It also degrades quietly when two roots are close. For $\frac{1}{(x-1)(x-1.001)}$ the
+cover-up method gives $A = \frac{1}{1-1.001} = -1000$ and $B = +1000$: two huge
+coefficients whose sum has to reproduce a small function, so every evaluation subtracts
+nearly equal numbers and loses digits — module 3's catastrophic cancellation, arriving
+by a different route. As the roots merge the coefficients diverge while the function
+itself tends smoothly to $\frac{1}{(x-1)^{2}}$, which has a perfectly well-behaved
+decomposition of its own. The instability is in the parametrisation, not in the
+integrand, and that is worth recognising before trusting a decomposition computed in
+floating point.
+"""
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Three coefficients, one check, and the piece that is not a logarithm",
+                    "minutes": 12,
+                    "vars": ["A", "B", "C", "x"],
+                    "brief": r"""
+Decompose
+
+$$\frac{1}{x(x-2)^{2}} = \frac{A}{x} + \frac{B}{x-2} + \frac{C}{(x-2)^{2}}$$
+
+and then integrate it over $[3,4]$, which keeps clear of both poles.
+
+The repeated factor needs a term at each power, so there are three unknowns for a
+denominator of degree three. Two of them come from the cover-up rule and the third from
+one coefficient comparison.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Multiply both sides by $x$ and let $x \\to 0$, which annihilates the other two terms. Write $A$.",
+                            "answer": "\\frac{1}{4}",
+                            "placeholder": "?",
+                            "hint": "What is left on the left-hand side is $\\frac{1}{(x-2)^{2}}$ evaluated at $x = 0$.",
+                        },
+                        {
+                            "prompt": "Multiply both sides by $(x-2)^{2}$ and let $x \\to 2$. Write $C$.",
+                            "answer": "\\frac{1}{2}",
+                            "placeholder": "?",
+                            "hint": "What is left is $\\frac{1}{x}$ at $x = 2$. The $B$ term keeps one factor of $(x-2)$ and dies.",
+                        },
+                        {
+                            "prompt": "Clearing denominators gives $1 = A(x-2)^{2} + Bx(x-2) + Cx$. Only $A$ and $B$ contribute an $x^{2}$ term, and the left-hand side has none. Write $B$.",
+                            "answer": "-\\frac{1}{4}",
+                            "placeholder": "?",
+                            "hint": "The $x^{2}$ coefficients give $A + B = 0$.",
+                            "deconstruct": [
+                                "$A(x-2)^2$ contributes $A x^2$ and $Bx(x-2)$ contributes $Bx^2$.",
+                                "The left-hand side is the constant $1$, so the $x^2$ coefficient there is $0$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Check the result at a value that was not used to build it. Evaluate $\\frac{A}{x} + \\frac{B}{x-2} + \\frac{C}{(x-2)^{2}}$ at $x = 1$ with the three numbers you have.",
+                            "answer": "1",
+                            "placeholder": "?",
+                            "hint": "$\\frac{1/4}{1} + \\frac{-1/4}{-1} + \\frac{1/2}{1}$, and the original is $\\frac{1}{1 \\cdot 1} = 1$.",
+                        },
+                        {
+                            "prompt": "Antidifferentiate the repeated-factor term $\\frac{C}{(x-2)^{2}}$ with $C = \\frac{1}{2}$. Write the result, without the constant.",
+                            "answer": "-\\frac{1}{2(x-2)}",
+                            "placeholder": "?",
+                            "hint": "$(x-2)^{-2}$ antidifferentiates to $-(x-2)^{-1}$ by the power rule; there is no logarithm here.",
+                        },
+                        {
+                            "prompt": "Assemble all three antiderivatives and evaluate between $3$ and $4$. Write the exact value, using `ln` for the natural logarithm.",
+                            "answer": "\\frac{1}{4}ln(\\frac{2}{3})+\\frac{1}{4}",
+                            "placeholder": "?",
+                            "hint": "The two logarithms combine: $\\frac{1}{4}\\ln\\frac{x}{x-2}$ evaluated between $3$ and $4$ gives $\\frac{1}{4}\\ln\\frac{2}{3}$. The rational term contributes $-\\frac{1}{4} + \\frac{1}{2}$.",
+                            "deconstruct": [
+                                "$\\frac{1}{4}\\ln|x| - \\frac{1}{4}\\ln|x-2| = \\frac{1}{4}\\ln\\frac{x}{x-2}$ on $[3,4]$, where both are positive.",
+                                "At $x = 4$ that is $\\frac{1}{4}\\ln 2$; at $x = 3$ it is $\\frac{1}{4}\\ln 3$.",
+                                "The rational term is $-\\frac{1}{2(x-2)}$: $-\\frac{1}{4}$ at $x=4$ and $-\\frac{1}{2}$ at $x=3$.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+$\frac{1}{4}\ln\frac{2}{3} + \frac{1}{4} = 0.14863$. The integrand runs from
+$\frac{1}{3}$ at $x = 3$ down to $\frac{1}{16}$ at $x = 4$, so any answer outside
+$[0.0625, 0.333]$ would have been wrong on inspection, and $0.149$ sits where it should.
+
+Two structural facts came out of the working rather than being quoted. The repeated
+factor contributed a **rational** term and not a logarithm, because $(x-2)^{-2}$
+antidifferentiates by the power rule — so the shape of the answer was decided when the
+denominator was factored, before any integration happened. And step four is the check
+that earns its keep: it uses a value of $x$ that appears in none of the three
+derivations, so a sign error in any one of them fails it. Getting $A$, $B$ and $C$ is
+routine; getting the sign of $B$ right is where the errors are.
+"""
+                },
             ],
             "quiz": {
                 "title": "Splitting a quotient",
@@ -2779,6 +4047,242 @@ except ValueError:
                 r"Arc length $\int\sqrt{1 + f'(x)^2}\,dx$ and the surface of revolution $\int 2\pi f(x)\sqrt{1 + f'(x)^2}\,dx$ come from the same slice, measured two different ways",
                 r"Average value $\bar f = \frac{1}{b-a}\int_a^b f$, attained somewhere by the mean value theorem for integrals; the root mean square $\sqrt{\frac{1}{T}\int_0^T f^2}$ is the average engineering quotes instead",
                 r"Work is $\int F\,dx$ and stored energy is $\int v\,i\,dt$: whenever a product of two quantities is only valid for an instant, the total is an integral and not a multiplication",
+                r"One template throughout — slice, approximate one slice, let the width go to zero — and the approximation is admissible only when its per-slice error carries one more power of $\Delta x$ than the slice contributes, so that the accumulated error still vanishes",
+                r"That condition is not automatic. Slicing a cone into cylinders gets the volume right and the lateral area wrong by a factor of $\sqrt{2}$ — $29.3$ per cent short, at every panel count — because a cylinder's side misses the slant that arc length measures",
+            ],
+            "read": [
+                {
+                    "title": "One template, five formulas, and the slice that is not good enough",
+                    "minutes": 13,
+                    "body": r"""
+This module looks like a list of formulas to memorise — area between curves, disks,
+shells, arc length, work — and it is one procedure applied five times. The procedure has
+three steps and the third one is the only place it can go wrong.
+
+1. Cut the quantity into slices indexed by a variable, so the total is a sum of slice
+   contributions.
+2. Approximate one slice by something already measurable, keeping the error small
+   compared with the slice.
+3. Let the slice width go to zero, at which point the sum becomes an integral.
+
+Step two is where the judgement lives, because a slice can be approximated in more than
+one way and not every way survives step three. The rest of this reading is that
+statement made precise, and then a case where the obvious approximation fails.
+
+## Why a first-order approximation is enough — and what "enough" means
+
+Suppose each slice of width $\Delta x$ is approximated with an error of order
+$(\Delta x)^{2}$. There are about $\frac{b-a}{\Delta x}$ slices, so the total error is
+about $\frac{b-a}{\Delta x}\cdot(\Delta x)^{2} = (b-a)\Delta x$, which goes to zero.
+That is the licence to replace a curved slice by a straight one: the *per-slice* error
+must be smaller than the slice width by at least one power, and then the accumulated
+error still vanishes.
+
+Now read the condition backwards. If the per-slice error is only of order $\Delta x$
+itself, the total is of order $(b-a)$ — a fixed amount that never goes away, no matter
+how fine the slicing. An approximation can be visibly, arbitrarily close to
+the truth on each slice and still produce a wrong answer, and the next section is that
+happening.
+
+## Worked: the cone, where the obvious slice is wrong by 41 per cent
+
+Rotate $y = x$ on $[0,1]$ about the $x$-axis. The result is a cone of radius $1$ and
+height $1$.
+
+Its **volume** comes out right with the obvious slice. A thin disc at $x$ has radius
+$f(x)$ and thickness $\mathrm{d}x$:
+
+$$V = \int_0^1 \pi f(x)^{2}\,\mathrm{d}x = \int_0^1 \pi x^{2}\,\mathrm{d}x =
+\frac{\pi}{3}$$
+
+which agrees with $\frac{1}{3}\pi r^{2}h$. Now its **lateral surface area**, by the same
+slice: a thin cylinder at $x$ has circumference $2\pi f(x)$ and width $\mathrm{d}x$, so
+
+$$A = \int_0^1 2\pi f(x)\,\mathrm{d}x = \int_0^1 2\pi x\,\mathrm{d}x
+    = \pi = 3.1416 \qquad\text{(wrong)}$$
+
+The true lateral area of a cone is $\pi r \ell$ with $\ell$ the slant height, here
+$\sqrt{1^{2}+1^{2}} = \sqrt2$, giving $\pi\sqrt2 = 4.4429$. The cylinder slicing is
+short by a factor of $\sqrt2$ — **29.3 per cent of the true area is missing** — and
+refining the slicing does not help at all. Every finer version is short by the same
+$\sqrt2$.
+
+The reason is step two's error condition. A cylinder of width $\Delta x$ has slant
+$\Delta x$; the actual surface element has slant $\sqrt{(\Delta x)^{2} + (\Delta y)^{2}}$.
+The two differ by a *constant relative* amount whenever the surface is not horizontal, so
+the per-slice error is of order $\Delta x$ and not $(\Delta x)^{2}$. It accumulates. The
+correct element measures the slant:
+
+$$A = \int_a^b 2\pi f(x)\sqrt{1 + f'(x)^{2}}\,\mathrm{d}x
+    = \int_0^1 2\pi x\sqrt{2}\,\mathrm{d}x = \pi\sqrt2$$
+
+For $f(x) = mx$ the factor is $\sqrt{1+m^{2}}$ — exactly $1$ when the surface is flat,
+which is why nobody meets this failure on a cylinder, and why it is invisible until the
+first cone.
+
+Volume escapes because a disc and the true frustum differ in volume by order
+$(\Delta x)^{2}$: the frustum's radius varies by $O(\Delta x)$ across the slice, and
+volume depends on radius *squared* over a thickness, so the discrepancy carries the
+extra power. Area depends on radius times slant, and the slant is where the missing
+power went. Two integrals, the same slicing, and only one of them is entitled to it.
+
+## Arc length, from the same triangle, taken to a number
+
+The factor above is arc length in disguise. A short piece of curve is the hypotenuse of
+a triangle with legs $\mathrm{d}x$ and $\mathrm{d}y$, so its length is
+$\sqrt{\mathrm{d}x^{2} + \mathrm{d}y^{2}}$, and factoring $\mathrm{d}x$ out of the root
+leaves
+
+$$L = \int_a^b\sqrt{1 + f'(x)^{2}}\,\mathrm{d}x$$
+
+The $1$ is the horizontal leg, squared. Worked on $y = x^{2}$ over $[0,1]$:
+
+```
+f'(x) = 2x
+
+L = integral of sqrt(1 + 4x^2) dx from 0 to 1
+  = (1/4)[ 2x sqrt(1+4x^2) + ln(2x + sqrt(1+4x^2)) ] from 0 to 1
+  = (1/4)( 2 sqrt5 + ln(2 + sqrt5) )
+  = 1.47894
+```
+
+Check it against the two lengths it must lie between: the straight chord from $(0,0)$ to
+$(1,1)$ has length $\sqrt2 = 1.41421$, and the two-segment path through $(0.5, 0.25)$ has
+length $0.5590 + 0.9014 = 1.46043$. The curve is longer than both and not by much, which
+is right. Notice also that this integrand needed a trigonometric substitution from module
+8 to produce a closed form at all; most arc-length integrands have none, which is where
+module 2's adaptive quadrature stops being an exercise and becomes the only route.
+
+## The averages, and why engineering quotes the second one
+
+The mean value of $f$ over $[a,b]$ is $\bar f = \frac{1}{b-a}\int_a^b f$, and it is
+attained. Apply the mean value theorem to $F(x) = \int_a^x f$, whose derivative is $f$ by
+module 1: $F(b) - F(a) = F'(c)(b-a) = f(c)(b-a)$ for some $c$, so $f(c) = \bar f$. That
+is the mean value theorem for integrals, and it is one line of the ordinary one applied
+to the accumulation function.
+
+For a sinusoid $\bar f = 0$, which says nothing about how much heating it does, because
+power in a resistor goes as $v^{2}$ and not as $v$. The root mean square averages the
+square first:
+
+```
+sinusoid   rms = V / sqrt2  = 0.7071 V      (module 8: mean of sin^2 is 1/2)
+square     rms = V                          (the square of +-V is V^2 always)
+triangle   rms = V / sqrt3  = 0.5774 V
+```
+
+Three waveforms with the same peak and the same zero mean, delivering three different
+amounts of heat. The average that matters is decided by what the quantity is used for,
+and that is a modelling choice rather than a mathematical one.
+
+## The mistake, and why it is tempting
+
+Integrating $\left(\text{upper} - \text{lower}\right)$ across a crossing without
+splitting. Between $y = x$ and $y = x^{3}$ on $[-1,1]$ the curves cross at the origin and
+swap places:
+
+```
+signed  integral of (x - x^3) dx from -1 to 1     = 0
+area    2 * integral of (x - x^3) dx from 0 to 1  = 2(1/2 - 1/4) = 1/2
+```
+
+The signed integral is $0$ because the region left of the origin contributes exactly the
+negative of the region right of it. It is tempting because the formula was applied
+correctly and the answer is a number; the integral answered a different question,
+which is the same failure mode module 6's unmoved limits produce. The habit that closes
+it is to find the crossings before writing the integral, then integrate
+$\left|\text{upper} - \text{lower}\right|$ piecewise.
+
+The same slip in a different costume is choosing the wrong slice direction and then
+fighting the algebra. Rotating the region under $y = f(x)$ about the $y$-axis with discs
+requires inverting $f$; with shells it does not, because a shell at radius $x$ has volume
+$2\pi x f(x)\,\mathrm{d}x$ and keeps the variable you already have a formula in. The two
+give the same number, so the choice is about effort rather than correctness.
+
+## Where this stops holding
+
+The template needs each slice to be describable by a single quantity that varies
+smoothly. Arc length needs $f'$ to exist and be integrable, and $y = |x|$ has a corner —
+the integral must be split there, and $\sqrt{1+f'^{2}}$ has no value at the corner
+itself. Surfaces of revolution need the curve not to cross the axis, or the "radius"
+$f(x)$ goes negative and the area integral silently subtracts.
+
+And the cone above is the small version of a genuine limit failure. Take a cylinder and
+approximate it by a mesh of flat triangles chosen adversarially — the Schwarz lantern —
+and the triangles can be made to converge pointwise to the cylinder while their total
+area diverges to infinity. Slicing a length or an area is not a matter of getting close
+to the shape; it is a matter of getting close *at the right order*, and that is the only
+thing step two is ever asking.
+"""
+                },
+            ],
+            "derive": [
+                {
+                    "title": "One cone, two slicings, and the factor a cylinder leaves out",
+                    "minutes": 11,
+                    "vars": ["x", "m", "V", "A"],
+                    "brief": r"""
+Rotate $f(x) = x$ on $[0,1]$ about the $x$-axis: a cone of radius $1$ and height $1$.
+
+The same slicing that gets the volume right gets the lateral area wrong, and this
+derivation computes both so the discrepancy is a number rather than a warning. Take
+$\pi$ as `\pi`.
+""",
+                    "steps": [
+                        {
+                            "prompt": "A disc at $x$ has radius $f(x) = x$ and thickness $\\mathrm{d}x$. Evaluate $\\int_0^1 \\pi x^{2}\\,\\mathrm{d}x$ and write the volume.",
+                            "answer": "\\frac{\\pi}{3}",
+                            "placeholder": "?",
+                            "hint": "The antiderivative of $x^2$ is $\\frac{x^3}{3}$, and the limits are $0$ and $1$.",
+                        },
+                        {
+                            "prompt": "With $f'(x) = 1$, write the arc-length factor $\\sqrt{1 + f'(x)^{2}}$.",
+                            "answer": "\\sqrt{2}",
+                            "placeholder": "?",
+                            "hint": "It is a constant here, because the generating line has constant slope.",
+                        },
+                        {
+                            "prompt": "The surface element is $2\\pi f(x)\\sqrt{1+f'(x)^{2}}\\,\\mathrm{d}x$. Evaluate $\\int_0^1 2\\pi x\\sqrt{2}\\,\\mathrm{d}x$ and write the lateral area.",
+                            "answer": "\\pi\\sqrt{2}",
+                            "placeholder": "?",
+                            "hint": "$\\int_0^1 2x\\,\\mathrm{d}x = 1$, so the constants are all that survive.",
+                        },
+                        {
+                            "prompt": "Now the same slicing with a plain cylinder of width $\\mathrm{d}x$, whose side area is $2\\pi f(x)\\,\\mathrm{d}x$. Evaluate $\\int_0^1 2\\pi x\\,\\mathrm{d}x$.",
+                            "answer": "\\pi",
+                            "placeholder": "?",
+                            "hint": "The same integral as the previous step without the constant factor from step two.",
+                        },
+                        {
+                            "prompt": "Divide the correct area by the cylinder answer. Write the factor the cylinder slicing loses.",
+                            "answer": "\\sqrt{2}",
+                            "placeholder": "?",
+                            "hint": "It does not depend on the panel count, which is the point: refining the slicing never recovers it.",
+                        },
+                        {
+                            "prompt": "Generalise. For $f(x) = mx$, write the factor by which the correct surface element exceeds the cylinder element.",
+                            "answer": "\\sqrt{1+m^2}",
+                            "placeholder": "?",
+                            "hint": "It is the arc-length factor of step two with $f' = m$ in place of $1$.",
+                        },
+                    ],
+                    "closing": r"""
+The volume $\frac{\pi}{3} = 1.0472$ is right and agrees with $\frac{1}{3}\pi r^{2}h$.
+The lateral area is $\pi\sqrt2 = 4.4429$, and the cylinder slicing returns $\pi = 3.1416$ — short by $29.3$ per cent, and short by the same $29.3$ per cent at every
+panel count.
+
+The discrepancy is a slice-error order, not an arithmetic slip. A disc differs from the
+true frustum in volume by $O\left((\Delta x)^{2}\right)$, which vanishes when summed over
+$\frac{1}{\Delta x}$ slices; a cylinder differs from it in *area* by $O(\Delta x)$, which
+does not. Step six says where the boundary is: the factor is $\sqrt{1+m^{2}}$, equal to
+$1$ exactly when $m = 0$. On a flat surface the cylinder slicing is correct, which is why
+this failure is invisible until the first sloped one.
+
+Whenever a slice is approximated, the question to ask is not whether the approximation
+looks close. It is whether the error per slice carries one more power of $\Delta x$ than
+the slice contributes.
+"""
+                },
             ],
             "quiz": {
                 "title": "Setting up the integral",
@@ -2873,6 +4377,278 @@ except ValueError:
                 r"Inside the radius of convergence a power series may be differentiated and integrated term by term, and the radius survives the operation — which turns geometric series into $\ln(1+x)$ and $\arctan x$",
                 r"The binomial series extends $(1+x)^k$ to every real exponent $k$, and terminates into the ordinary binomial theorem exactly when $k$ is a non-negative integer",
                 r"An integrand with no elementary antiderivative — $e^{-x^2}$, or $\frac{\sin x}{x}$ — is integrated by expanding it and integrating term by term, with the truncation sized by module 3's remainder bound",
+                r"Term-by-term integration is licensed *strictly inside* the radius, so the classical $\frac{\pi}{4} = 1 - \frac{1}{3} + \frac{1}{5} - \cdots$ does not follow from evaluating the integrated series at $x = 1$. It follows from integrating the finite identity with its exact remainder and bounding that by $\frac{1}{2n+3}$ — which also prices it: $500$ terms for three digits",
+                r"Convergent is not the same as convergent to the right function. $e^{-1/x^2}$ is infinitely differentiable with every derivative zero at the origin, so its Maclaurin series converges everywhere and agrees with the function at exactly one point",
+                r"A radius of convergence can have no explanation on the real line at all: $\frac{1}{1+x^2}$ is smooth and bounded everywhere real and its radius is $1$, because the nearest singularities are the poles at $\pm i$",
+            ],
+            "read": [
+                {
+                    "title": "Term-by-term integration, with the remainder carried instead of assumed",
+                    "minutes": 13,
+                    "body": r"""
+A power series inside its radius of convergence behaves like a polynomial: it can be
+substituted into, differentiated and integrated term by term. That is the licence this
+module runs on, and it turns the integrals module 5 declared elementary-antiderivative-free
+into arithmetic. It also has an edge, and this course has already stepped over that edge
+once without saying so.
+
+## The geometric series, from an algebraic identity
+
+Multiply out $(1-x)\left(1 + x + x^{2} + \cdots + x^{n}\right)$ and everything cancels
+except the ends:
+
+$$(1-x)\sum_{k=0}^{n}x^{k} = 1 - x^{n+1}
+\qquad\text{so}\qquad
+\sum_{k=0}^{n}x^{k} = \frac{1 - x^{n+1}}{1-x}$$
+
+That is an identity, true for every $x \neq 1$ and every $n$, with no limit anywhere in
+it. The infinite series is what happens when $x^{n+1}\to0$, which is exactly the
+condition $|x| < 1$; outside it the terms do not even tend to zero and module 4's
+$n$th-term test rules out convergence before anything subtler is required.
+
+Everything else in this module is built from that one series by substitution.
+$\frac{1}{1+x^{2}}$ is the geometric series evaluated at $-x^{2}$:
+
+$$\frac{1}{1-(-x^{2})} = 1 - x^{2} + x^{4} - x^{6} + \cdots$$
+
+in one line, with no derivatives computed. The alternative — Taylor's formula from
+module 3, differentiating $\frac{1}{1+x^{2}}$ repeatedly at the origin — is correct and
+costs an afternoon.
+
+## The endpoint this course has already used
+
+Integrating that series term by term from $0$ to $x$ gives
+
+$$\arctan x = x - \frac{x^{3}}{3} + \frac{x^{5}}{5} - \cdots$$
+
+and putting $x = 1$ produces the celebrated $\frac{\pi}{4} = 1 - \frac{1}{3} + \frac{1}{5} - \cdots$. Except that term-by-term integration was licensed *strictly inside* the radius,
+and $x = 1$ is on the boundary. At $t = 1$ the series being integrated does not converge
+at all: $1 - 1 + 1 - 1 + \cdots$ has no sum. So the standard derivation applies a theorem
+outside its stated hypothesis and gets the right answer, which is worse than getting the
+wrong one.
+
+There is a route that needs no theorem about endpoints. Rearrange the finite identity
+above with $x$ replaced by $-t^{2}$, and keep the remainder rather than discarding it:
+
+$$\frac{1}{1+t^{2}} = \sum_{k=0}^{n}(-1)^{k}t^{2k}
+  + \frac{(-1)^{n+1}t^{2n+2}}{1+t^{2}}$$
+
+This is exact algebra — check it by multiplying through by $1+t^{2}$ — and it holds at
+every real $t$, endpoint included, because it is a finite sum. Integrate all of it from
+$0$ to $1$. The finite sum integrates term by term with no theorem required, giving
+$\sum_{k=0}^{n}\frac{(-1)^{k}}{2k+1}$, and the remainder is a single honest integral:
+
+$$\left|R_n\right| = \int_0^1\frac{t^{2n+2}}{1+t^{2}}\,\mathrm{d}t
+ \le \int_0^1 t^{2n+2}\,\mathrm{d}t = \frac{1}{2n+3}$$
+
+dropping the denominator because $1+t^{2}\ge1$. That bound goes to zero, so the series
+converges to $\frac{\pi}{4}$, and — unlike the appeal to an endpoint theorem — it says
+how fast.
+
+## Worked: how fast, and what that costs
+
+Take $n = 2$. The partial sum is $1 - \frac{1}{3} + \frac{1}{5} = \frac{13}{15} = 0.86667$, the
+guaranteed bound is $\frac{1}{7} = 0.14286$, and the true error is
+$\left|\frac{\pi}{4} - \frac{13}{15}\right| = 0.08127$. The bound holds and is within a
+factor of two of the truth, which is about what a bound obtained by throwing away a
+denominator deserves.
+
+Now ask for three decimal places: $\frac{1}{2n+3}\le10^{-3}$ needs $2n+3\ge1000$, so
+$n = 499$ — **five hundred terms for three digits**. That is the arithmetic behind the
+remark that a series can be correct and useless at the same time. Module 2's adaptive
+Simpson reaches $\int_0^1\frac{4\,\mathrm{d}x}{1+x^{2}} = \pi$ to nine digits from a
+handful of panels, on the identical integrand. Convergence proved is not convergence
+achieved, and the two halves of this course measure different things.
+
+## Worked: an integral with no elementary antiderivative
+
+$$\int_0^1 e^{-x^{2}}\,\mathrm{d}x$$
+
+Module 5 recorded that this has no elementary antiderivative, by a theorem rather than
+for want of trying. Substitute $-x^{2}$ into the exponential series and integrate:
+
+```
+e^(-x^2) = sum over n of (-1)^n x^(2n) / n!
+
+integral from 0 to 1 = sum over n of (-1)^n / (n! (2n+1))
+
+  n=0   +1.000000000
+  n=1   -0.333333333
+  n=2   +0.100000000
+  n=3   -0.023809524
+  n=4   +0.004629630
+  n=5   -0.000757576
+  n=6   +0.000106838
+        -------------
+         0.746836034      next term is 1/(7! * 15) = 1.3228e-5
+```
+
+The series alternates with terms decreasing in size, so the truncation error is smaller
+than the first term omitted — module 4's alternating series bound. The true value is
+$0.746824133$, so the actual error is $1.19\times10^{-5}$, under the promised
+$1.32\times10^{-5}$. The answer arrives with an error bar, exactly as module 2's
+quadrature does, reached from the other side.
+
+## The binomial series, and where it terminates
+
+For any real $k$,
+
+$$(1+x)^{k} = 1 + kx + \frac{k(k-1)}{2!}x^{2} + \frac{k(k-1)(k-2)}{3!}x^{3} + \cdots$$
+
+with radius $1$. When $k$ is a non-negative integer the factor $(k-n)$ eventually hits
+zero and every later coefficient vanishes, so the series *is* the ordinary binomial
+theorem and the radius question does not arise. For any other $k$ it never terminates.
+Worked at $k = \frac{1}{2}$ and $x = 0.2$:
+
+```
+sqrt(1.2) ~ 1 + 0.1 - 0.005 + 0.0005 = 1.09550
+true                                 = 1.09545
+error                                = 5.5e-5
+```
+
+## Differentiating term by term, and a sum with no obvious value
+
+The licence runs both ways, and differentiation is the direction that produces series
+nobody would guess. Start again from the geometric series and differentiate both sides:
+
+$$\frac{1}{1-x} = \sum_{n\ge0}x^{n}
+\qquad\Rightarrow\qquad
+\frac{1}{(1-x)^{2}} = \sum_{n\ge1}n\,x^{n-1}$$
+
+The right-hand side is a series whose sum is not apparent from looking at it, and it has
+now been evaluated in closed form without summing anything. Check it at $x = \frac{1}{2}$:
+
+```
+sum of n (1/2)^(n-1) for n = 1, 2, 3, ...
+
+   1(1) + 2(0.5) + 3(0.25) + 4(0.125) + 5(0.0625) + ...
+ = 1 + 1 + 0.75 + 0.5 + 0.3125 + 0.1875 + 0.109375 + ...
+
+closed form   1/(1 - 1/2)^2  =  1/0.25  =  4
+```
+
+The partial sums above reach $3.86$ after seven terms and continue to $4$. At $x = \frac{1}{3}$ the same formula gives $\frac{1}{(2/3)^{2}} = \frac{9}{4} = 2.25$.
+
+The radius survived the operation, as the module's bullet claims: both series converge
+for $|x| < 1$ and neither at $x = 1$, where $\sum n$ diverges as loudly as $\sum 1$ does.
+That invariance is the useful half of the theorem. It means a series may be
+differentiated, integrated, differentiated again and substituted into, in any order,
+without recomputing where it is valid — which is what makes a power series behave like a
+polynomial rather than merely resemble one.
+
+## The mistake, and why it is tempting
+
+Expecting the radius of convergence to be set by where the function misbehaves on the
+real line. $\frac{1}{1+x^{2}}$ is smooth and bounded on the whole of the real numbers,
+with no singularity anywhere in sight, and its series has radius exactly $1$ — it
+diverges at $x = 1.1$ for no reason visible on the real axis at all. The explanation is
+not on the real axis: the function has poles at $x = \pm i$, at distance $1$ from the
+origin, and a power series converges in a disc reaching the nearest singularity in the
+*complex* plane. The temptation is to look for a real-line reason and conclude there is
+none, and the honest position at this level is that the radius has an explanation and it
+belongs to a later course.
+
+## Where this stops holding
+
+A function can be infinitely differentiable and still not equal its own Taylor series.
+Take $f(x) = e^{-1/x^{2}}$ for $x \neq 0$ and $f(0) = 0$. Every derivative at the origin
+is zero — the exponential decays faster than any power grows, so each derivative is a
+rational function times $e^{-1/x^{2}}$ and each tends to $0$. The Maclaurin series is
+therefore identically $0$, converges everywhere, and equals the function at exactly one
+point.
+
+So the chain module 3 built — compute coefficients, bound the remainder — has a link that
+must be checked rather than assumed: the remainder has to go to zero, and *converging* is
+not the same as *converging to the right function*. For $e^{x}$, $\sin$ and $\cos$ the
+Lagrange remainder does go to zero for every $x$, because a factorial eventually beats
+any fixed power, and module 3 proves it. It is proved there rather than assumed because
+of the example above.
+"""
+                },
+            ],
+            "derive": [
+                {
+                    "title": "The arctangent series at the endpoint, with its remainder carried",
+                    "minutes": 13,
+                    "vars": ["n", "k", "t", "R"],
+                    "brief": r"""
+The usual derivation of $\frac{\pi}{4} = 1 - \frac{1}{3} + \frac{1}{5} - \cdots$
+integrates a power series term by term and then evaluates at $x = 1$ — which is the one
+place the licence to do that does not extend to, since the series being integrated
+diverges there.
+
+This derivation avoids the problem instead of stepping around it. Start from the **finite**
+identity
+
+$$\frac{1}{1+t^{2}} = \sum_{k=0}^{n}(-1)^{k}t^{2k} + R_n(t)$$
+
+which is exact algebra, valid at every real $t$, and integrate all of it — remainder
+included.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Multiplying the finite geometric identity by $1+t^{2}$ and rearranging gives the exact remainder. Write $R_n(t)$.",
+                            "answer": "\\frac{(-1)^{n+1}t^{2n+2}}{1+t^2}",
+                            "placeholder": "?",
+                            "hint": "The finite sum $\\sum_{k=0}^{n}(-1)^k t^{2k}$ is the geometric sum with ratio $-t^2$, so it equals $\\frac{1-(-t^{2})^{n+1}}{1+t^{2}}$.",
+                            "deconstruct": [
+                                "$\\sum_{k=0}^{n}(-1)^k t^{2k} = \\frac{1 - (-t^2)^{n+1}}{1 - (-t^2)}$.",
+                                "Subtract that from $\\frac{1}{1+t^{2}}$; the two denominators are the same.",
+                                "$-(-t^{2})^{n+1} = (-1)^{n}t^{2n+2}$ with a further sign from the subtraction.",
+                            ],
+                        },
+                        {
+                            "prompt": "Integrate the $k$-th term of the finite sum, $(-1)^{k}t^{2k}$, from $0$ to $1$. Write the result in terms of $k$.",
+                            "answer": "\\frac{(-1)^k}{2k+1}",
+                            "placeholder": "?",
+                            "hint": "The power rule: $t^{2k}$ antidifferentiates to $\\frac{t^{2k+1}}{2k+1}$, evaluated at $1$ and $0$.",
+                        },
+                        {
+                            "prompt": "Bound the size of the remainder's integrand by dropping the denominator, using $1 + t^{2} \\ge 1$. Write the bounding expression in $t$ and $n$.",
+                            "answer": "t^{2n+2}",
+                            "placeholder": "?",
+                            "hint": "The numerator has magnitude $t^{2n+2}$, and dividing by something at least $1$ can only make it smaller.",
+                        },
+                        {
+                            "prompt": "Integrate that bound from $0$ to $1$. Write the bound on $\\left|R_n\\right|$ after integration.",
+                            "answer": "\\frac{1}{2n+3}",
+                            "placeholder": "?",
+                            "hint": "$\\int_0^1 t^{p}\\,\\mathrm{d}t = \\frac{1}{p+1}$, with $p = 2n+2$.",
+                        },
+                        {
+                            "prompt": "Take $n = 2$ and write the partial sum $\\sum_{k=0}^{2}\\frac{(-1)^{k}}{2k+1}$ as a single fraction.",
+                            "answer": "\\frac{13}{15}",
+                            "placeholder": "?",
+                            "hint": "$1 - \\frac{1}{3} + \\frac{1}{5}$, over a common denominator of $15$.",
+                        },
+                        {
+                            "prompt": "Now demand three decimal places: find the smallest integer $n$ with $\\frac{1}{2n+3} \\le 10^{-3}$.",
+                            "answer": "499",
+                            "placeholder": "?",
+                            "hint": "The condition is $2n + 3 \\ge 1000$.",
+                            "deconstruct": [
+                                "$2n + 3 \\ge 1000$ gives $n \\ge 498.5$.",
+                                "$n$ counts terms and must be an integer, so round up.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+Nothing above needed a theorem about the endpoint. The identity in the brief is finite
+and exact at every real $t$, the finite sum integrates term by term because it is a
+polynomial, and the remainder was integrated rather than discarded. The bound
+$\frac{1}{2n+3}$ tends to zero, so the series really does converge to $\frac{\pi}{4}$ —
+established, not asserted.
+
+Check step five against the truth. The partial sum is $\frac{13}{15} = 0.86667$, the
+guaranteed bound is $\frac{1}{7} = 0.14286$, and $\left|\frac{\pi}{4} - \frac{13}{15}\right| = 0.08127$. The bound holds, and is loose by less than a factor of two — about what
+dropping a denominator should cost.
+
+Step six is the sting. Five hundred terms for three digits, on an integrand that module
+2's adaptive Simpson takes to nine digits from a handful of panels. A series can be
+correct, provably convergent, equipped with a rigorous error bound, and still the wrong
+way to compute the number.
+"""
+                },
             ],
             "quiz": {
                 "title": "Building series from series",
@@ -2918,8 +4694,12 @@ except ValueError:
                         "why": (
                             r"Term by term the integral is $x - \frac{x^3}{3} + \frac{x^5}{5} - \cdots$, and since the "
                             r"integrand sums to $\frac{1}{1 + t^2}$, the result is $\arctan x$. Putting $x = 1$ turns that into "
-                            r"the classical $\pi/4$ series, which converges so slowly that it is a good reminder that a series "
-                            r"being correct and a series being useful are separate claims. The logarithm comes from "
+                            r"the classical $\pi/4$ series — though not by the theorem just used, since term-by-term "
+                            r"integration is licensed strictly inside the radius and $x = 1$ is the boundary, where the "
+                            r"integrand's series does not converge at all. The endpoint is reached instead by integrating the "
+                            r"finite identity with its remainder, which also shows the series converges so slowly that it is a "
+                            r"good reminder that a series being correct and a series being useful are separate claims. "
+                            r"The logarithm comes from "
                             r"integrating the geometric series in $-t$ rather than in $-t^2$."
                         ),
                     },
