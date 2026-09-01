@@ -1765,3 +1765,322 @@ writers is written for `emit.py --all` and `build.mjs`; it turns out to want say
 `git commit` too.
 
 ---
+
+## Cycle 7 — TRACK 1: Content & Conceptual Depth
+
+**Target: MA101 (Discrete Mathematics), modules 2–6 — the proof core.** One course, one
+contiguous block: predicate logic, methods of proof, sets, functions and pigeonhole,
+induction. Each of the five held **a `quiz` and nothing else**, so a learner met the
+quantifier, the contrapositive, the power set, pigeonhole and the inductive step as
+bulleted claims and was examined on them in the next unit — which tests whether you
+already knew. Cycle 4 built M12 and M13 onto this course and named the density pass as
+its own cycle; this is it.
+
+Chosen on measurement rather than on that pointer. Scoring all 62 courses by modules
+holding neither a `read` nor a `derive` unit, MA101 led the catalogue with **11 of 13**,
+at 1.54 units per module against EE101's 12.64. It is also a declared prerequisite of
+CS201, CS301, CS310 and MA121, so the ratio is not a cosmetic one.
+
+M1, M7, M9, M10 and M11 were excluded deliberately: the first four carry a full lab and
+teach by construction rather than examining cold, which is cycle 1's MA111 reasoning
+applied unchanged.
+
+### Baseline, captured before any edit
+
+```
+80 circuit exercises / 340 checks · 527 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1140 derivation steps across 46 courses (MA101: 12)
+1366 questions in 252 quiz units · 160 per-option explanations
+     (MA101: 38 · longest-is-key 21, budget 21 · margin +20.6)
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+theme: 14 written exemptions · 58 contrast surfaces in both themes
+MA101: 13 modules · 20 units · 2 read · 2 derive · 11 bare modules · 5 labs
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads ·
+       inlined 13776 KB · shell 1139 KB
+catalogue: 62 courses, 368 modules, 1873 units, 234 readings
+```
+
+### The attacks
+
+**1. Senior Educator.** Six findings, all acted on.
+
+- *Announced, never derived, five times over.* Fixed: five readings and five
+  derivations, each deriving what its module states. The empty-domain convention comes
+  out of a count of predicates rather than being adopted; the contrapositive is chosen by
+  which end carries algebra; the power set is one independent decision per element, shown
+  to be the same object as a truth-table row rather than a formula with the same value;
+  pigeonhole is derived as the point where the injection count reaches zero; and the
+  inductive step is shown to be worthless on its own.
+- **Vacuous truth was presented as a convention adopted for tidiness.** M2's bullet said
+  that on an empty domain `forall` is true and `exists` false, with the quiz explanation
+  arguing it from an English sentence about resits. It is not a convention. On a domain
+  of `n` elements a predicate *is* a subset, so there are `2^n` of them; `forall` holds
+  of exactly 1 and `exists` of `2^n - 1`; at `n = 0` that is 1 of 1 and 0 of 1. The count
+  was not arranged to produce the result and produces it anyway. Fixed in the bullet, the
+  reading and the derivation.
+- **The quantifier-order asymmetry had no size.** M2 said order changes the claim and
+  gave the standard "everybody loves somebody". Nothing said *how much* it changes, so
+  nothing ruled out the reading that it is a rare edge case. It is now counted: over a
+  domain of size `n` there are `2^(n^2)` binary relations, `(2^n - 1)^n` satisfy
+  `forall x exists y`, and `2^(n^2) - (2^n - 1)^n` satisfy `exists y forall x`. The gap
+  is `2(2^n - 1)^n - 2^(n^2)` — **0 at `n = 1`**, which is why a single example never
+  exposes the difference, 2 at `n = 2`, and 174 at `n = 3`. The two relations at `n = 2`
+  are exhibited, and they are *everyone is related to themselves* and *everyone is
+  related to the other one*. Recorded as an `n = 2` observation only: both are
+  permutations, and that does **not** generalise — at `n = 3` the gap is 174 against 6
+  permutations, and the reading says so rather than leaving the pattern to be
+  extrapolated.
+- **The course used a distinction in M13 that M3 never taught.** M13 proves an
+  undecidable problem exists by counting and is careful to say it delivers no example.
+  Nothing in *Methods of proof* had ever drawn the line between proving a thing exists
+  and producing one, so the module that owed the distinction did not make it. Added as a
+  bullet and worked in the reading, pointing forward to where the course spends it.
+- **The `sqrt(2)` argument was never bounded.** Presented as the standard proof, with
+  nothing saying what makes it work. It is now run a second time on `sqrt(4)`, which is
+  rational, so it must fail: from `a^2 = 4b^2` the step you would like is *`a^2` divisible
+  by 4 implies `a` divisible by 4*, false at `a = 2`, and putting `a = 2c` gives
+  `b^2 = c^2` with no descent. The argument is about 2 being prime, not about roots.
+- **Inclusion-exclusion's alternation was a pattern extended on faith.** M4's bullet said
+  the correction "continues for three sets and beyond" with no reason attached. Derived:
+  an element in exactly `j` of the sets is counted `C(j,1) - C(j,2) + C(j,3) - ...`
+  times, and the binomial theorem on `(1-1)^j = 0` makes that exactly 1 for every `j` at
+  once. One identity, checked once, rather than a patch reapplied per set.
+- *Left alone:* M6's "induction can confirm a formula but never propose one" was already
+  stated with its reason and its forward reference. The reading spends it rather than
+  restating it, showing where the guess actually comes from — four computed cases and the
+  L-shaped gnomon.
+
+**2. Assessment Inquisitor.** All 20 questions across M2–M6 were checked against the
+mathematics rather than skimmed. **Every key is correct**; every `why` walks the options;
+none uses a positional reference. One repair, and it is a scope defect rather than a
+wrong key:
+
+- **M5/Q2 stated both one-sided inverses unconditionally.** "An injection has a left
+  inverse and a surjection a right inverse" — the first fails for an empty domain, which
+  is the case M2's own first question is entirely about, and the second is the axiom of
+  choice once the codomain is infinite. Both conditions are now stated in the `why` and
+  in the reading. The option text is untouched, so the course's answer-tell budget cannot
+  move; confirmed by the gate, which reports MA101 unchanged at 38 questions,
+  longest-is-key 21, margin +20.6.
+- Recomputed rather than assumed, so the next cycle need not: 30 students with 18 and 15
+  and 7 both leaves 4; `2^5 = 32` subsets against 32 truth-table rows; `ceil(1000/512) =
+  2`; the ages map is a function and neither injective nor surjective; `S = {3,6,9,...}`
+  under the recursive definition. All hold.
+
+**3. Simulation Auditor.** M2–M6 contain no sandbox, tune, build or schematic `numeric`,
+so there is no draw loop or solver in the target. The persona was pointed at the two
+things in scope that no gate covers — **what the renderer actually draws**, and
+**arithmetic in prose** — and the first is where this cycle's largest finding is.
+
+- **`\tfrac12` does not draw as one half. It draws as "12".** `src/studio.js` tokenises
+  `12` as a single number, so `\tfrac`'s first `group()` swallows it whole and the second
+  takes whatever token follows. In MA101's M12 reading that put
+  **`4 \times \tfrac14 = 1` on the page as `4×14=1`**, `4 \times \tfrac18 = \tfrac12` as
+  `4×18=12`, and a derivation hint's `1 - \tfrac12 = \tfrac12` as `1-12=12`. Three false
+  equations, rendering without error, in a module written to explain a bound. This is
+  worse than a fallback, because a fallback at least shows its source: this silently
+  shows a *different number*. **7 fragments in MA101, all repaired by bracing the
+  arguments.** Catalogue-wide there are 161 more, listed below.
+- **16 MA101 fragments rendered as raw LaTeX markup.** `MathML.render` returns
+  `<code class="math-raw">` holding the source the moment it meets a command outside its
+  subset, so it neither throws nor looks broken to any gate. Cycle 4's entry records
+  checking that every equation is `$...$` or `$$...$$` — which is true, and is not the
+  same as checking the renderer can draw it. `\mathbb`, `\lfloor`, `\rfloor`,
+  `\underbrace`, `\Longrightarrow` and `\{` are all outside the subset. All 16 repaired
+  in the supported subset: `\mathbf{N}` for `\mathbb{N}`, `\Rightarrow`, explicit
+  parentheses for the harmonic blocks, code spans for set braces, and — for the floors —
+  the exponentiation bound rewritten around `b`, the number of bits, which removes the
+  floor entirely and is a shorter argument: `b <= log2 e + 1 <= 2 log2 e` for `e >= 2`,
+  so the cost `2b` is at most `4 log2 e`. Verified over `e = 2..100000`.
+- **My own five readings were written against the same check, not merely spell-checked.**
+  The first draft of M2 used `\neg` and `\wedge` in six fragments, all of which would have
+  shipped as raw markup. The module's own quiz already writes logic in code spans, so the
+  reading now matches the module rather than importing a second notation. **MA101 now
+  renders 962 of 962 fragments**, against 456 of 472 before.
+- **Every number written into the five readings was computed before it was written** —
+  the relation counts by brute force over all `2^(n^2)` relations for `n <= 4`, the
+  three-language faculty checked for regional consistency as well as arithmetic (all
+  seven regions non-negative, summing to 90), `5^5 = 3125` against `5! = 120` at 3.84%,
+  the birthday probability at 23 people to four figures (0.5073), the alternating
+  binomial sum for `j = 1..9`, and the handshake theorem by exhaustive search over every
+  graph on up to 6 vertices.
+- **Both code listings were extracted from the shipped JSON and executed**, not from the
+  draft. M2's prints `1 1 1 0 1 1 / 2 9 7 2 9 7 / 3 343 169 174 343 169`, and M5's prints
+  `None` on all five lines. Both match what the prose says they print, string for string.
+
+**4. UX & Accessibility Hardener.** Content-side, as cycles 1 and 4 established. Checked
+rather than assumed: `math[display=block]` carries its own `overflow-x:auto` and
+`.article .tw` wraps tables in a scroller, both verified in `src/index.head.html`; no
+hard-coded colour, no raw HTML and no wide table was introduced. The two fenced listings
+are block markup `renderMd` draws, and each gets a **▶ Run** button from `mdCodeBlock`,
+which for a self-contained listing that the prose makes a claim about is the right
+behaviour — the learner can check the claim. Both were confirmed to run standalone with
+only `itertools` imported, which is what the browser's Pyodide runtime has.
+
+### The defect this cycle found beyond its own course
+
+The two renderer failures are catalogue-wide, and both were measured rather than
+estimated. Each command was probed on its own rather than inferred from a failing
+fragment, because a fragment that fails names every command it contains and not the
+offender.
+
+**1053 fragments in 33 courses still render as raw markup** (down from 1069; MA101's 16
+were this cycle's). **37 commands** are outside the subset, led by:
+
+```
+\top 237 · \mathcal 66 · \Longrightarrow 61 · \big 30 · \bmod 15 · \bigl/\bigr 12
+\displaystyle 11 · \binom 9 · \lceil/\rceil 9 · \lfloor/\rfloor 6 · \underbrace 6
+\boldsymbol 5 · \succeq 5 · \lVert/\rVert 3 · \blacksquare 2 · \boxed 1 · \pmod 1
+```
+
+**161 fragments still draw a fraction as a single wrong number** (down from 168):
+EE211 57, EE111 32, MA112 22, EE102 22, EE141 12, MA111 6, EE231 4, EE121 3, EE131 2,
+EE101 1. `MA112/M1` has `\int_0^1 x^2\,dx = \frac13` drawing as `= 13`.
+
+**Not fixed here, and the reason is scope.** Both are repairable two ways: additively, by
+extending the tables in `src/studio.js` — which is provably safe, since a command that
+currently reaches `default: fail()` can only start succeeding — or by rewriting 1214
+fragments across 33 courses. The first is Track 2/5 machinery touching every rendered
+fragment in the app; the second is a whole-catalogue content sweep. Either is its own
+cycle, and burying either inside a Track 1 content cycle would make this diff
+unreviewable — which is cycle 4's reason for reverting the 41-file `check` drift, applied
+unchanged. What this cycle owed was its own course, and MA101 is now clean on both
+counts. The measurement is written down so the next cycle starts from it. **The
+`\frac13` one should go first**: a fallback shows its source and looks broken, while a
+swallowed fraction shows a plausible wrong number and does not.
+
+### What changed
+
+**Ten new units in five modules** — one `read` and one `derive` each.
+
+| Module | Reading | Words | Derivation | Steps |
+|---|---|---|---|---|
+| M2 | What a quantifier is quantifying over | 1490 | Counting the models, and pricing the order of two quantifiers | 6 |
+| M3 | Choosing the technique by what it hands you to work with | 1310 | The parity of a square, the descent that proves an irrational, and where it stalls | 6 |
+| M4 | Membership is the only primitive, and counting is what it costs | 1315 | From one decision per element to the alternating correction | 6 |
+| M5 | One value out, and what happens when there is not enough room | 1438 | Injections, counted until there are none left | 6 |
+| M6 | The first domino, and the rung nobody checked | 1299 | Two obligations, and what happens when you discharge only one | 6 |
+
+6852 new words, every reading inside the 1200–2500 target and in line with M12 and M13
+(1631, 1516). MA101: 20 units → 30, 2 readings → 7, 11 bare modules → 6.
+
+**Eleven concepts bullets added or repaired** across M2–M6, so the new material is
+reachable from the bullet list a learner skims rather than only from the reading: the
+empty-domain count, the sized quantifier gap, the negation law behind counterexamples,
+contradiction's failure to construct, the `sqrt(4)` boundary, the binomial identity under
+inclusion-exclusion, the finiteness of all the counting in M4, pigeonhole as a count
+reaching zero, certainty against likelihood, the horses' overlap at `k = 1`, the `c` that
+survives every inductive step, and induction's dependence on the naturals' structure.
+
+**Worked examples that end in checked numbers rather than in results:** the two relations
+that separate `forall exists` from `exists forall` at `n = 2`, exhibited as grids; the
+`sqrt(4)` descent stalling at `b^2 = c^2`; Euler's polynomial prime for `n = 0..39` and
+`1681 = 41 x 41` at 40, with `n^2 + n` proved even by cases so the polynomial is always
+odd; a faculty of 100 where `60+45+30-25-15-10+5 = 90` and an element in exactly `j` sets
+is counted `3-3+1 = 1` time; 3125 functions against 120 injections; 512 buckets holding
+at most 512 keys against 1000; and `S(n) = n(n+1)/2 + 5` surviving a flawless inductive
+step while claiming `1 + 2 + 3 = 11`.
+
+### Found in my own work, and fixed
+
+- **A code listing's docstring closed the reading it was inside.** The M5 listing opened
+  with a `"""..."""` docstring, inside a Python `r"""..."""` body — so it terminated the
+  string and `emit.py` failed on a syntax error 200 lines further down. Caught by the
+  emitter, not by reading. The docstring is a `#` comment now.
+- **Six fragments of my own M2 would have shipped as raw markup**, for exactly the reason
+  the persona section above describes. Caught by running the renderer over the draft
+  rather than by trusting that `$...$` is enough.
+- **I reported a hedge-word count from a truncated run.** An early `| head -80` cut the
+  survey off, and I read its last line as the total: 5, when the file had 9. Corrected by
+  diffing the working tree against `HEAD` instead of counting twice — **9 at HEAD, 9 now,
+  0 introduced by this cycle**, all in modules this cycle did not otherwise touch.
+- **I concluded no gauntlet was running by grepping for the wrong filename.** The lock is
+  `.gauntlet.pid`; I searched for "lock", found nothing, and ran `node build.mjs` on that
+  basis. A run *was* live (pid 5975, started 07:31). See below.
+
+### Left alone, deliberately
+
+- **M1, M7, M9, M10 and M11 still have no reading.** M1, M7, M9 and M10 each carry a full
+  lab and teach by construction; M11 holds a lone quiz and is the one genuine remaining
+  instance of the defect this cycle was chasing. Six bare modules remain against eleven.
+  They should get readings, and that is the next Track 1 cycle on this course, not a
+  widening of this one.
+- **The 20 existing questions in M2–M6 were audited and, apart from the M5/Q2 scope
+  repair, not changed.** They are Track 3's ground, and MA101's inherited answer-tell debt
+  (21 of 38, pinned by `quiz_budget.json`) is cycle 3's recorded debt rather than this
+  cycle's to spend.
+- **1053 raw-markup fragments and 161 swallowed fractions outside MA101**, measured above
+  and handed on with the numbers rather than the symptom.
+- **`\mathbf` emits a duplicate attribute.** `<mi mathvariant="normal" mathvariant="bold">`
+  — `studio.js`'s `variant.replace(' mathvariant="normal"', '')` strips from the wrong
+  string, so browsers take the first attribute and bold never applies. Harmless here, since
+  an upright `N` is correct typography for a number set, and it is a one-line fix in a file
+  this cycle should not be editing. Recorded with the line.
+- **`verify_derivations.py` still proves translation rather than truth**, as cycle 1
+  established — its checker computes `simplify(together(expr - expr))`. So all 30 new
+  answers were truth-checked separately, each against an independently derived expression,
+  and the harness is in this session's scratchpad. Nothing about the gate was changed:
+  rewriting the spec from inside a cycle it governs remains the wrong move.
+- **`docs/programs` aged out one MA101 payload and gained one.** The rolling window, as
+  cycles 1–5 all established. Verified rather than assumed: 3 generations of 62 retained,
+  64 files on disk, **0 orphaned and 0 missing**, the current generation covering 62
+  distinct courses.
+
+### Two sessions were writing this repository at once
+
+Recording it because it affects how this entry should be read, and because the memory
+that describes the runner is now wrong.
+
+`marathon-gauntlet.sh` no longer runs its cycles without permissions — it passes
+`--permission-mode acceptEdits` and gates on a write-and-execute preflight. So a headless
+cycle **can** now write the repo and run the gates, and one was live throughout this one
+(pid 5975 from 07:31, with its `claude` child at 07:31:30). Two further consequences,
+both visible in the tree: commit `b6f8c26` landed mid-cycle from another session and
+changed `src/`, and the runner's post-cycle step is `git add -A`, so it commits whatever
+is in the working tree under its own track's label — which is how `edfe4db` came to sweep
+another session's `circuit.js` under "cycle 5 (partial)".
+
+Nothing here was lost or corrupted: the catalogue diff is `catalog/MA101.json` and
+`catalog/authors/MA101.py` and nothing else, and every gate below was run against the
+tree as it stands, after `b6f8c26`. The artifact attribution is clean too — MA101's JSON
+grew 180.0 KB → 240.9 KB, and the inlined artifact grew by exactly the same 60 KB, so the
+2 KB of shell growth is the other session's `src/` change rather than this cycle's.
+
+### Gates, after
+
+Every pre-existing number unmoved. One number moved, by exactly what was added.
+
+```
+verify_derivations   All good: 1170 steps across 46 courses   (1140 + 30 new;
+                     MA101 12 -> 42)
+verify_quiz          All good: 1366 questions in 252 quiz units · 160 per-option
+                     explanations · every course within its answer-tell budget
+                     (MA101 38 · longest-is-key 21, budget 21 · margin +20.6 — unmoved)
+verify_labs MA101    All good: 5 labs   (M1 7/7, M7 7/7, M9 7/7, M10 8/8, CAP 12/12)
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_circuits      All good: 80 circuit exercises, 340 checks · 527 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_theme         All good: 14 exemptions · 58 contrast surfaces in both themes ·
+                     the 375px topbar · the mobile drawer
+emit.py MA101        ok — 13 modules, 4 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads ·
+                     inlined 13776 -> 13836 KB · shell 1139 -> 1141 KB
+catalogue            62 courses, 368 modules, 1883 units, 239 readings
+```
+
+Beyond the gates: every MA101 math fragment rendered through the real `MathML.render`
+from `src/studio.js` — **962 of 962**, against 456 of 472 at baseline — and every
+fraction checked for a swallowed argument, 0 remaining against 7; all 30 derivation
+answers truth-checked against independently computed expressions rather than against
+themselves; every number in 6852 new words recomputed before it was written; both code
+listings extracted from the shipped JSON and executed against every output they claim;
+all 15 `Module N` references in the new prose resolved against the real module titles;
+0 hedge words introduced, confirmed by diff against `HEAD` rather than by counting; and
+the payload window verified at 0 orphaned, 0 missing.
+
+---

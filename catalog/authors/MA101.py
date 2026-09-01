@@ -398,11 +398,246 @@ assert equivalent("P", "P | (Q & ~Q)") is True, "the union of variables must be 
             "summary": "Statements about *every* and *some*, the domains they range over, and negation pushed all the way in.",
             "concepts": [
                 "A predicate is a statement with a hole in it: `P(x)` has no truth value until both the hole and a domain are fixed",
-                "`forall x P(x)` is a conjunction over the domain and `exists x P(x)` a disjunction over it — so on an empty domain the first is true and the second false",
+                "`forall x P(x)` is a conjunction over the domain and `exists x P(x)` a disjunction over it — so on an empty domain the first is true and the second false, which is not a convention but what the count of predicates returns at `n = 0`",
                 "Quantifier order changes the claim: `forall x exists y` lets `y` depend on `x`, while `exists y forall x` promises one `y` that works for every `x`",
+                "The second implies the first and not the reverse, and the gap has a size: over a domain of `n` elements it is `2(2^n - 1)^n - 2^(n^2)` relations, which is 0 at `n = 1` — so a single example can never expose the difference — and 174 at `n = 3`",
                 "Negation moves inward and flips: `~forall x P(x)` is `exists x ~P(x)`, and `~exists x P(x)` is `forall x ~P(x)`",
                 "A variable is bound by the quantifier that captures it and free otherwise; a formula with a free variable is a predicate, not a proposition",
             ],
+            "read": {
+                "title": "What a quantifier is quantifying over",
+                "minutes": 14,
+                "body": r"""
+A checkout system enforces one rule: *every item in the basket is in stock*. Somebody
+reports a bug. There are exactly two shapes the bug can have, and telling them apart is
+the whole of this module.
+
+Either the rule is being applied when it should not be — the basket is empty and the
+system still refuses — or the rule is being read as a different rule. A colleague
+rewrites the check as *there is a stock level that covers every item*, which sounds like
+the same sentence read aloud and is not the same claim at all. Module 1 gave you
+connectives that combine whole statements. Neither of these bugs is expressible with
+them, because both are about a statement with a hole in it, applied across a collection.
+
+## A predicate is a subset, and that settles the empty case
+
+Fix a domain $D$ with $n$ elements. A predicate $P$ on that domain is a rule that is
+true of some elements and false of the others, so it is fixed by naming the elements it
+holds of: $P$ *is* a subset of $D$. Module 4 will make that identification official; here
+it is a counting device, and it earns its place immediately.
+
+How many predicates are there on a domain of size $n$? One in-or-out decision per
+element, so $2^n$. Of those, how many make $\forall x\, P(x)$ true? Exactly one — the
+predicate that holds of everything. How many make $\exists x\, P(x)$ true? All of them
+except the predicate that holds of nothing, so $2^n - 1$.
+
+Now put $n = 0$. There is $2^0 = 1$ predicate on the empty domain. The count says
+$\forall$ is true for $1$ of them, which is all of them, and $\exists$ is true for
+$2^0 - 1 = 0$ of them, which is none. So on an empty domain every universal statement
+is true and every existential one is false.
+
+That result is usually presented as a convention adopted for tidiness, and it is not one.
+It is what the count returns, and the count was not arranged to produce it. The
+practical version: "every student who failed will resit" is true in a year when nobody
+failed, and a program that loops over an empty list and reports success has not
+malfunctioned. Statements true for this reason are called *vacuously* true, and the
+first bug above is somebody arguing with one.
+
+## Negation, derived once
+
+Read `forall x P(x)` as a conjunction with one conjunct per element of the domain and
+`exists x P(x)` as a disjunction. Then De Morgan from Module 1 does all the work:
+negating a conjunction gives the disjunction of the negations, so `~forall x P(x)` is
+`exists x ~P(x)`, and `~exists x P(x)` is `forall x ~P(x)`. Negation moves inward one
+quantifier at a time and flips each as it passes. Nothing here is new; it is Module 1's
+law applied to a conjunction that happens to be long.
+
+Work one all the way through. Negate *every prime is odd*, which is
+`forall x (prime(x) -> odd(x))`. The quantifier flips, giving
+`exists x ~(prime(x) -> odd(x))`. Then `P -> Q` is `~P | Q`, whose negation is `P & ~Q`,
+so the whole thing is `exists x (prime(x) & ~odd(x))` — some number is prime and not odd.
+Refuting the claim therefore means handing over one number, and the number is 2. The slip
+to avoid is negating the body but leaving it an implication: `exists x (prime(x) ->
+~odd(x))` is a strictly weaker statement, satisfied by any `x` that merely fails to be
+prime, and 9 satisfies it while refuting nothing.
+
+## The order of two quantifiers, counted
+
+Now the second bug, which is the one that survives code review. Over a domain of size
+$n$, a binary relation $R$ is a choice of true or false for each of the $n^2$ ordered
+pairs, so there are $2^{n^2}$ of them. Draw one as an $n \times n$ grid of noughts and
+crosses, row $x$, column $y$.
+
+$\forall x\,\exists y\,R(x,y)$ says every row contains at least one cross. A row is any
+of the $2^n$ patterns except the all-noughts one, and the rows are chosen independently,
+so the count is
+
+$$(2^n - 1)^n$$
+
+$\exists y\,\forall x\,R(x,y)$ says some column is entirely crosses. Count the complement
+instead: each column may be any pattern except all-crosses, independently, which is
+$(2^n - 1)^n$ again, so the count is
+
+$$2^{n^2} - (2^n - 1)^n$$
+
+Take $n = 2$. There are 16 relations. The first count is $3^2 = 9$, the second
+$16 - 9 = 7$. Seven is smaller than nine, which it must be: a column of crosses gives
+every row a cross, so every relation of the second kind is one of the first kind. The
+two relations that separate them are the difference, $9 - 7 = 2$, and they are worth
+looking at:
+
+$$\begin{matrix} \cdot & \times \\ \times & \cdot \end{matrix}
+\qquad\text{and}\qquad
+\begin{matrix} \times & \cdot \\ \cdot & \times \end{matrix}$$
+
+The second is *everyone is related to themselves*. Every $x$ has a $y$ — its own self —
+and no single $y$ serves both. The first is *everyone is related to the other one*, with
+the same property. In both, the $y$ exists but depends on the $x$, which is precisely
+what the outer $\forall$ permits and the outer $\exists$ forbids.
+
+Two more values are worth having. At $n = 1$ the gap is $2 \cdot 1 - 2 = 0$: over a
+one-element domain the two orders agree, which is why a single example never exposes the
+difference. At $n = 3$ the gap is $2 \cdot 7^3 - 2^9 = 174$, so it is not a rare edge
+case that a large domain smooths over; it grows.
+
+One trap in that arithmetic. The two counts add to $9 + 7 = 16$, the total, which invites
+the reading that the two kinds of relation are opposites. They are not — one is contained
+in the other. The sum is exact because *every row has a cross* and *no column is all
+crosses* are counted by the same expression, and they are counted by the same expression
+because swapping rows for columns and crosses for noughts is a bijection between them.
+Equal counts, not complementary sets.
+
+## The mistake, and why it is tempting
+
+English puts the quantifiers in whichever order sounds better and leaves the dependence
+to context. *Everybody loves somebody* and *somebody is loved by everybody* differ by one
+word of word order and by an enormous amount of content. The same pair in a specification:
+*every request has a handler* is what you want, and *there is a handler for every request*
+is what gets built, and the second is a claim about one handler. The rule that fixes it is
+short: an inner variable may depend on an outer one, never the reverse. Two quantifiers of
+the same kind commute freely; mixed ones almost never do.
+
+The other half of the discipline is the domain. A quantified formula has no truth value
+until the domain is named, and $\forall x\,(x > 3)$ is true over the integers above 5 and
+false over the integers. A formula whose variables are all bound, with a domain fixed, is
+a proposition. Leave one free and it is a predicate — a question waiting for an argument.
+
+## Where the counting stops
+
+Every number above needed the domain to be finite. Over the integers there is no count of
+relations to take, and yet $\forall x\,\exists y\,(y > x)$ is plainly true and
+$\exists y\,\forall x\,(y > x)$ plainly false — the second asks for an integer exceeding
+every integer, itself included. Those are settled by the successor function and by the
+absence of a largest integer, not by any tally. So the grids above are a device for seeing
+what the quantifiers claim, and not a method for deciding whether a claim holds. What
+"how many" can still mean once the domain is infinite is Module 13's subject, and the
+answer is not obtained by counting either.
+
+```python
+from itertools import product
+
+def counts(n):
+    fa_ex = ex_fa = 0
+    for bits in product([0, 1], repeat=n * n):
+        M = [bits[i * n:(i + 1) * n] for i in range(n)]
+        fa_ex += all(any(row) for row in M)
+        ex_fa += any(all(M[x][y] for x in range(n)) for y in range(n))
+    return fa_ex, ex_fa
+
+for n in (1, 2, 3):
+    a, b = counts(n)
+    print(n, a, b, a - b, (2 ** n - 1) ** n, 2 ** (n * n) - (2 ** n - 1) ** n)
+```
+
+It prints `1 1 1 0 1 1`, then `2 9 7 2 9 7`, then `3 343 169 174 343 169`: the brute-force
+tally and the two formulas agree, and the fourth column is the gap.
+""",
+            },
+            "derive": {
+                "title": "Counting the models, and pricing the order of two quantifiers",
+                "minutes": 12,
+                "brief": r"""
+The quantifiers are usually distinguished by example. Here they are distinguished by
+counting, over a domain of $n$ elements, exactly how many predicates and how many
+relations make each statement true — which turns the vacuous-truth convention and the
+$\forall\exists$ / $\exists\forall$ asymmetry into arithmetic.
+
+A predicate on the domain is a subset of it; a binary relation is an $n \times n$ grid of
+truth values, row $x$ and column $y$.
+""",
+                "vars": ["n"],
+                "steps": [
+                    {
+                        "prompt": r"A predicate is fixed by which elements it holds of, so it is one in-or-out decision per element of the domain. How many predicates are there on a domain of size $n$?",
+                        "answer": r"2^{n}",
+                        "placeholder": "2^{?}",
+                        "hint": r"The same product rule that gave the power set its size: two choices, made $n$ times, independently.",
+                        "deconstruct": [
+                            "Each element is either one the predicate holds of, or one it does not.",
+                            "The decisions do not constrain one another.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Exactly one of those predicates makes $\forall x\, P(x)$ true. How many make $\exists x\, P(x)$ true?",
+                        "answer": r"2^{n} - 1",
+                        "placeholder": "?",
+                        "hint": r"Every predicate witnesses $\exists$ except one. Which one fails?",
+                        "deconstruct": [
+                            r"$\exists x\, P(x)$ fails only when $P$ holds of nothing.",
+                            "There is exactly one such predicate on any domain.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Put $n = 0$ into that expression. How many predicates on the empty domain make $\exists x\, P(x)$ true? The answer is a number, and it is the whole justification for vacuous truth.",
+                        "answer": r"0",
+                        "placeholder": "?",
+                        "hint": r"$2^0 = 1$, and the formula subtracts one from it.",
+                        "deconstruct": [
+                            "There is exactly one predicate on the empty domain, and it holds of nothing.",
+                            r"So $\forall$ is true for all $1$ of them and $\exists$ for none.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Now relations. Read $R$ as an $n \times n$ grid. $\forall x\,\exists y\,R(x,y)$ says every row has at least one true entry. Each row is any of the $2^{n}$ patterns except the empty one, and the rows are independent. How many such relations are there?",
+                        "answer": r"(2^{n} - 1)^{n}",
+                        "placeholder": "(?)^{n}",
+                        "hint": "Count the legal patterns for one row, then raise that to the number of rows.",
+                        "deconstruct": [
+                            r"A row is a subset of the domain: $2^{n}$ possibilities.",
+                            "Exactly one of them — the all-false row — is forbidden.",
+                            "There are $n$ rows and no constraint between them.",
+                        ],
+                    },
+                    {
+                        "prompt": r"$\exists y\,\forall x\,R(x,y)$ says some column is true throughout. Count the complement — no column is full — the same way, and subtract it from the $2^{n^{2}}$ relations. Write the count.",
+                        "answer": r"2^{n^{2}} - (2^{n} - 1)^{n}",
+                        "placeholder": "? - ?",
+                        "hint": r"A column may be any pattern except the all-true one, independently of the others, which is $(2^{n}-1)^{n}$ again.",
+                        "deconstruct": [
+                            r"The grid has $n^{2}$ cells, so there are $2^{n^{2}}$ relations in all.",
+                            "Columns are independent of one another, exactly as rows were.",
+                            "Subtract the ones with no full column from the total.",
+                        ],
+                    },
+                    {
+                        "prompt": r"A full column gives every row a true entry, so the second set sits inside the first. Subtract the second count from the first to price the difference between the two orders.",
+                        "answer": r"2(2^{n} - 1)^{n} - 2^{n^{2}}",
+                        "placeholder": "?",
+                        "hint": r"Subtracting $2^{n^{2}} - (2^{n}-1)^{n}$ from $(2^{n}-1)^{n}$ leaves two copies of the second term.",
+                        "deconstruct": [
+                            r"$(2^{n}-1)^{n} - \left(2^{n^{2}} - (2^{n}-1)^{n}\right)$.",
+                            "Collect the two like terms.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+At $n = 1$ that difference is $2 \cdot 1 - 2 = 0$: over a one-element domain the two
+orders agree, which is why one example never shows the asymmetry. At $n = 2$ it is
+$2 \cdot 9 - 16 = 2$, and the two relations it counts are *everyone is related to
+themselves* and *everyone is related to the other one* — in each, the $y$ exists but
+depends on the $x$. At $n = 3$ it is $2 \cdot 343 - 512 = 174$. The gap does not close.
+""",
+            },
             "quiz": {
                 "title": "Domains, order and negation",
                 "minutes": 7,
@@ -497,8 +732,224 @@ formula over all the integers is false.
                 "Contraposition proves `~Q -> ~P` in place of `P -> Q`; Module 1 showed the two are the same formula, so nothing is lost in the swap",
                 "Contradiction assumes `P & ~Q` and derives an absurdity — the strongest hypothesis available, and the easiest technique to reach for when a direct proof was there all along",
                 "Proof by cases must cover the whole domain; overlapping cases are harmless, a missing case is fatal",
-                "One counterexample refutes a universal claim outright, while any number of confirming examples proves none — though one witness does settle an existential",
+                "One counterexample refutes a universal claim outright, while any number of confirming examples proves none — though one witness does settle an existential; this is Module 2's negation law cashed in, since `~forall x P(x)` *is* `exists x ~P(x)`",
+                "A proof by contradiction of an existence claim establishes that an object exists and produces none — the guarantee and the object are different things, and Module 13 proves an undecidable problem exists without exhibiting one",
+                "The `sqrt(2)` argument works because 2 is prime, not because of anything about roots: run it on `sqrt(4)` and the step *`a^2` divisible by 4 implies `a` divisible by 4* is false at `a = 2`, so the descent stalls and no contradiction arrives",
             ],
+            "read": {
+                "title": "Choosing the technique by what it hands you to work with",
+                "minutes": 14,
+                "body": r"""
+Here is a claim almost everybody believes and almost nobody can defend on the spot: *if
+$n^2$ is even then $n$ is even*. Try it directly. You are handed "$n^2$ is even", which
+means $n^2 = 2m$ for some integer $m$, and you want a statement about $n$. The only route
+from $n^2$ to $n$ is a square root, and $n = \sqrt{2m}$ is not an integer fact you can
+compute with. The proof is not hard. The *direct* proof is hard, and that is a different
+thing.
+
+This module is about picking the technique by what it gives you to hold on to. Each one
+starts you somewhere different, and the whole skill is noticing which starting point has
+algebra attached.
+
+## Contraposition: swap the ends
+
+Module 1 established that `P -> Q` and `~Q -> ~P` are the same formula — identical
+columns in the truth table, not merely similar. So proving one *is* proving the other,
+and you are free to start from whichever end is more generous.
+
+Start from "$n$ is odd". That hands you $n = 2k + 1$ for some integer $k$, which is
+algebra. Square it:
+
+$$n^2 = (2k+1)^2 = 4k^2 + 4k + 1 = 2(2k^2 + 2k) + 1$$
+
+The right-hand side is two times an integer, plus one, so $n^2$ is odd. That establishes
+`~Q -> ~P`, and the original claim comes with it. Three lines, and the only thing that
+made it work was choosing the end that came with a formula.
+
+The mistake waiting here is proving the *converse* instead. "If $n$ is even then $n^2$ is
+even" is also true, also easy, and says nothing whatever about the claim you were asked
+about. It is tempting precisely because it starts from the same place the contrapositive
+does. The difference is where it ends: the contrapositive concludes `~P`, the converse
+concludes `Q`. Check which one you finished at.
+
+## Contradiction: assume the one thing the claim forbids
+
+To contradict `P -> Q` you assume `P & ~Q` — the hypothesis holding while the conclusion
+fails, which is the single situation the implication rules out — and drive at any
+absurdity at all. Since that assumption was the only unjustified thing in the room, it is
+what must go.
+
+There is a test worth applying to your own proof afterwards. If the argument never
+actually used `P`, you did not write a proof by contradiction; you wrote a
+contraposition and wrapped it in one. That is not a mistake, but it is longer than it
+needs to be, and a great many textbook "contradictions" are this.
+
+## $\sqrt{2}$, all the way through, and then the same argument on $\sqrt{4}$
+
+Suppose $\sqrt{2} = a/b$ with $a$ and $b$ integers sharing no common factor. Then
+$a^2 = 2b^2$, so $a^2$ is even, so by the result above $a$ is even. Write $a = 2c$:
+
+$$4c^2 = 2b^2 \qquad \text{hence} \qquad b^2 = 2c^2$$
+
+By the same result $b$ is even too. But $a$ and $b$ shared no common factor and both are
+divisible by 2, which is the absurdity. So no such $a$ and $b$ exist.
+
+Now run the identical argument on $\sqrt{4}$, which is 2 and is certainly rational. It
+must fail somewhere, and finding where is worth more than the original proof. Suppose
+$\sqrt{4} = a/b$ in lowest terms. Then $a^2 = 4b^2$, so $a^2$ is divisible by 4, so —
+here it is — you would like to conclude that $a$ is divisible by 4, and that is false.
+Take $a = 2$: $a^2 = 4$ is divisible by 4 and $a$ is not. The most you get is that $a$ is
+even, and putting $a = 2c$ gives $4c^2 = 4b^2$, so $b^2 = c^2$ and $b = c$. No new
+divisor, no descent, no contradiction — and correctly so.
+
+The step that carried the $\sqrt{2}$ proof was "$a^2$ even implies $a$ even", and what
+makes it true is that 2 is *prime*. The argument is not about square roots. It is about
+primality, which is why the same three lines settle $\sqrt{3}$ and $\sqrt{5}$ and stall
+on every perfect square. A proof you cannot break on purpose is a proof you have not
+finished reading.
+
+## Cases: cover the domain, and check you did
+
+Proof by cases splits the domain and argues each piece. Overlapping cases are harmless; a
+missing case is fatal. Take *$n^2 + n$ is even for every integer $n$*. Two cases:
+
+- $n = 2k$: then $n^2 + n = 4k^2 + 2k = 2(2k^2 + k)$, even.
+- $n = 2k + 1$: then $n^2 + n = 4k^2 + 6k + 2 = 2(2k^2 + 3k + 1)$, even.
+
+Every integer is one or the other, so the claim holds. That small fact has a use. Euler's
+polynomial $n^2 + n + 41$ is *always odd*, because $n^2 + n$ is always even — which is
+part of why it manages to be prime so persistently.
+
+## One object, and what it can settle
+
+A universal claim is refuted by one counterexample and proved by none. An existential
+claim is proved by one witness and refuted by none. That asymmetry is the whole of it,
+and Euler's polynomial is where it bites hardest.
+
+It is also not a separate rule to memorise — it is Module 2's negation law, cashed in. A
+universal claim is `forall x P(x)`, and its negation is `exists x ~P(x)`, which is an
+existential. Refuting a universal therefore *means* proving an existential, and an
+existential is proved by producing a witness. Read the other way, the same law says
+refuting an existential means proving a universal, which is why no single object can do
+it: `~exists x P(x)` is `forall x ~P(x)`, and one object is not every object. The two
+sentences at the top of this section are one law seen from each end, and if you ever
+forget which way round they go, negating the quantifier recovers both in a line.
+
+Check $n = 0$ through $n = 39$ and every value is prime — 41, 43, 47, 53, and on up to
+1601. Forty consecutive confirmations. At $n = 40$:
+
+$$40^2 + 40 + 41 = 1681 = 41 \times 41$$
+
+which anyone could have predicted without arithmetic, since every term carries a factor
+of 41 when $n = 41$ — and in fact it fails one step earlier than that, at 40. Forty
+confirmations were forty genuine proofs of forty instances and contributed nothing to the
+universal claim, because a universal claim over the integers has infinitely many
+instances left after any finite number of checks. "Probably true" is not a status a
+theorem can have.
+
+## Where these techniques stop
+
+Contradiction has a cost that is invisible until you need the thing you proved. A
+contradiction proof of *there exists an $x$ with $P(x)$* assumes no such $x$ exists,
+derives an absurdity, and concludes that one does — **without ever producing one**. You
+finish holding a guarantee and nothing to point at. Module 13 does exactly this: it
+proves that undecidable problems exist by counting programs against problems, and hands
+over no example of one. That is a real proof and a real limitation at the same time, and
+the two are worth keeping apart in your head, because a constructive proof of the same
+statement would have given you an object to compute with.
+
+The other boundary is cases. Splitting is only sound when the pieces cover the domain,
+and the failure is silent: nothing in the argument complains when a case is missing,
+because each case you *did* write is correct. The habit that catches it is to name the
+domain out loud, then name the union of the cases, and check the two are the same
+sentence.
+""",
+            },
+            "derive": {
+                "title": "The parity of a square, the descent that proves an irrational, and where it stalls",
+                "minutes": 12,
+                "brief": r"""
+Three proofs from this module, run as algebra rather than described. The first supplies
+the lemma; the second spends it on $\sqrt{2}$; the third runs the same argument on
+$\sqrt{4}$ and finds the step that quietly fails, which is the step that tells you what
+the proof was really about.
+
+Take $k$ to be an arbitrary integer throughout, and write $n = 2k + 1$ for an odd number.
+""",
+                "vars": ["n", "k", "m", "a", "b", "c"],
+                "steps": [
+                    {
+                        "prompt": r"Square the odd number $n = 2k + 1$ and expand. Write the result as a polynomial in $k$.",
+                        "answer": r"4k^{2} + 4k + 1",
+                        "placeholder": "?",
+                        "hint": r"$(2k+1)^2 = (2k)^2 + 2 \cdot 2k \cdot 1 + 1$.",
+                        "deconstruct": [
+                            "Multiply the bracket by itself term by term.",
+                            "The two cross terms are equal, so they add rather than cancel.",
+                        ],
+                    },
+                    {
+                        "prompt": r"An odd number is one of the form $2m + 1$. Read your expansion in that form: what is $m$, in terms of $k$?",
+                        "answer": r"2k^{2} + 2k",
+                        "placeholder": "?",
+                        "hint": r"Take the constant $1$ aside and halve everything that is left.",
+                        "deconstruct": [
+                            r"$4k^{2} + 4k + 1 = (4k^{2} + 4k) + 1$.",
+                            "Both remaining terms are divisible by 2.",
+                            r"This proves the contrapositive: $n$ odd forces $n^2$ odd, so $n^2$ even forces $n$ even.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Now $\sqrt{2}$. Suppose $\sqrt{2} = a/b$ in lowest terms, so $a^{2} = 2b^{2}$. Then $a^{2}$ is even, so $a$ is even; put $a = 2c$ and solve for $b^{2}$.",
+                        "answer": r"2c^{2}",
+                        "placeholder": "?",
+                        "hint": r"Substituting gives $4c^{2} = 2b^{2}$. Divide by 2.",
+                        "deconstruct": [
+                            r"$(2c)^{2} = 4c^{2}$.",
+                            r"Set that equal to $2b^{2}$ and divide both sides by 2.",
+                            r"The result makes $b^{2}$ even, so $b$ is even — and $a$ and $b$ were in lowest terms.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Run the identical argument on $\sqrt{4}$, which is rational, so it must fail somewhere. From $a^{2} = 4b^{2}$ the number $a$ is again even; put $a = 2c$ and solve for $b^{2}$.",
+                        "answer": r"c^{2}",
+                        "placeholder": "?",
+                        "hint": r"Now the substitution gives $4c^{2} = 4b^{2}$, and the 4 cancels rather than halving.",
+                        "deconstruct": [
+                            r"Substitute $a = 2c$ into $a^{2} = 4b^{2}$.",
+                            "Both sides carry a factor of 4.",
+                            r"So $b = c$: no new factor of 2 appears and the descent has nothing to descend on.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Proof by cases, for *$n^{2} + n$ is even*. First case: put $n = 2k$ and expand $n^{2} + n$.",
+                        "answer": r"4k^{2} + 2k",
+                        "placeholder": "?",
+                        "hint": r"$(2k)^{2} = 4k^{2}$, and then add the $n$ itself.",
+                        "deconstruct": [
+                            "Square the even number, then add it.",
+                            r"Both terms are divisible by 2, giving $2(2k^{2} + k)$.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Second case: put $n = 2k + 1$ and expand $n^{2} + n$. Every integer is covered by these two cases, which is what makes the split a proof.",
+                        "answer": r"4k^{2} + 6k + 2",
+                        "placeholder": "?",
+                        "hint": r"You already have $n^{2} = 4k^{2} + 4k + 1$ from the first step. Add $2k + 1$ to it.",
+                        "deconstruct": [
+                            r"$n^{2} = 4k^{2} + 4k + 1$ and $n = 2k + 1$.",
+                            "Add them and collect the like terms.",
+                            r"The result is $2(2k^{2} + 3k + 1)$, so this case is even too.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+The last two steps prove that $n^{2} + n$ is even for every integer, so Euler's
+polynomial $n^{2} + n + 41$ is always odd — part of why it stays prime for $n = 0$
+through $n = 39$. It is not prime at $n = 40$, where it is $1681 = 41 \times 41$, and
+those forty confirmations proved forty instances and nothing about the claim.
+""",
+            },
             "quiz": {
                 "title": "What each proof owes you",
                 "minutes": 7,
@@ -592,7 +1043,220 @@ and the parity claim falls to a one-line contradiction.
                 "The power set of an n-element set has `2^n` members, one per subset — row for row the truth table of n variables",
                 "Union, intersection, difference and complement obey De Morgan, distributivity and absorption, because they are the connectives of Module 1 acting on membership",
                 "Inclusion-exclusion: `|A u B| = |A| + |B| - |A n B|`, with the alternating correction continuing for three sets and beyond",
+                "The alternation is not a pattern taken on faith: an element in exactly `j` of the sets is counted `C(j,1) - C(j,2) + C(j,3) - ...` times, and the binomial theorem applied to `(1-1)^j = 0` makes that exactly 1 for every `j` at once",
+                "All of the counting here is about *finite* sets. The membership algebra survives for any sets, since De Morgan and distributivity were only ever propositional laws about one element, but `|A| + |B| - |A n B|` has no content when the sets are infinite — Module 13 supplies the replacement",
             ],
+            "read": {
+                "title": "Membership is the only primitive, and counting is what it costs",
+                "minutes": 15,
+                "body": r"""
+Two course registers arrive as lists of student ids. One has 18 names, the other 15, and
+the class has 30 students. How many are taking at least one of the two courses? Adding
+gives 33, which is more students than exist. The overcount is the subject of the second
+half of this module, and the reason the overcount has an exact size is the subject of the
+first.
+
+## One relation, and everything built from it
+
+A set is fixed by its members and by nothing else. Order carries no information and
+repetition carries none, so `{a, b}`, `{b, a}` and `{a, b, b}` are the same set written
+three ways. The only primitive question is *is `x` in `A`*, and every other notion in the
+module is that question asked about several sets at once.
+
+Two relations get confused constantly, so pin them down on an example. Let
+`A = {1, {2}}`. This set has exactly two members: the number 1, and the *set* `{2}`.
+Then `{2}` is an element of `A`, and `{{2}}` — the one-element collection whose member is
+`{2}` — is a subset of `A`. But 2 is **not** an element of `A`: it is an element of an
+element, and membership does not chain. And `{2}` is not a subset of `A`, because that
+would require 2 itself to be in `A`. The empty set is the sharpest case of the same
+distinction: it is a subset of every set and an element of almost none.
+
+## The power set, counted rather than quoted
+
+How many subsets does an $n$-element set have? Building a subset means making one
+decision per element — in or out — and the decisions constrain each other not at all, so
+the product rule gives $2^n$. Both extremes are genuine subsets: take nothing and you
+have the empty set, take everything and you have the whole set.
+
+That count is not merely a formula with the same value as something in Module 1. It is
+the same object. A subset of an $n$-element set is a choice of in-or-out per element; a
+row of a truth table over $n$ variables is a choice of true-or-false per variable. Write
+either as a string of $n$ bits and they are literally the same string. The 32 subsets of
+`{1,2,3,4,5}` and the 32 rows of a five-variable truth table are one list under two names.
+
+A second count, which is worth doing because it is so often guessed: of those $2^n$
+subsets, how many contain a particular fixed element? Fix the decision for that one
+element to "in" and let the other $n - 1$ decisions run free, giving $2^{n-1}$ — exactly
+half. For `{1,2,3,4,5}` that is 16 of the 32.
+
+## The algebra is Module 1, under a change of notation
+
+An element lies in `A n B` exactly when *`x` is in `A`* and *`x` is in `B`* are both
+true. So intersection **is** conjunction, union **is** disjunction, and complement **is**
+negation, applied to membership statements. That is not an analogy between two subjects.
+It is one subject with two notations.
+
+Take the set identity `~(A n B) = ~A u ~B`. Read it one element at a time: `x` lies on
+the left exactly when `~(P & Q)` holds, where `P` is "`x` is in `A`" and `Q` is "`x` is in
+`B`", and `x` lies on the right exactly when `~P | ~Q` holds. Those two propositional
+formulas have identical truth tables, which you checked in Module 1. Since the two sides
+agree on every element, they are the same set. Every remaining law arrives the same way
+and needs no new proof: distributivity, absorption, double complement, all of them.
+
+## Inclusion-exclusion, derived
+
+Back to the registers. Adding 18 and 15 counts every student who takes both courses
+twice — once in each list — so subtracting the overlap once puts each of them back to a
+single count:
+
+$$|A \cup B| = |A| + |B| - |A \cap B| = 18 + 15 - 7 = 26$$
+
+and $30 - 26 = 4$ students take neither. Note the sanity check that is available for
+free: the uncorrected 33 exceeds the class size, so something was wrong before any
+formula was consulted.
+
+Three sets is where the pattern has to be earned rather than extended by analogy. A
+faculty of 100: 60 use Python, 45 use C, 30 use Rust; 25 use Python and C, 15 use Python
+and Rust, 10 use C and Rust, and 5 use all three. Then
+
+$$60 + 45 + 30 - 25 - 15 - 10 + 5 = 90$$
+
+so 10 people use none of the three. Why does the correction alternate, and why does the
+triple term come back with a plus?
+
+Follow a single person who uses exactly $j$ of the three languages, and count how many
+times the expression counts them. The singleton terms count them once for each language
+they use: $C(j,1)$ times. The pairwise terms subtract them once for each pair of
+languages they use: $C(j,2)$ times. The triple term adds them back $C(j,3)$ times. So the
+total number of times this person is counted is
+
+$$C(j,1) - C(j,2) + C(j,3) - \cdots$$
+
+and the claim of the theorem is that this equals exactly 1, whatever $j$ is. It does, and
+the reason is the binomial theorem. Expanding $(1 - 1)^j$ gives
+$C(j,0) - C(j,1) + C(j,2) - \cdots$, and $(1-1)^j = 0$ for every $j \ge 1$. So that whole
+alternating sum is zero, and moving the leading $C(j,0) = 1$ across gives
+
+$$C(j,1) - C(j,2) + C(j,3) - \cdots = 1$$
+
+Every element in at least one set is counted exactly once, and the alternation is not a
+patch applied repeatedly — it is one identity, checked once, covering every $j$ at the
+same time. Someone in all three of our languages, $j = 3$, is counted $3 - 3 + 1 = 1$
+time. Someone in exactly two is counted $2 - 1 = 1$. Someone in one is counted 1.
+
+## The mistake, and why it is tempting
+
+The one that costs marks is dropping the correction and not noticing, because the result
+of an overcount looks exactly like the result of a count. 18 plus 15 is 33 and 33 is a
+perfectly ordinary number; only comparing it against the class of 30 exposes it. When the
+sets are large enough that no such comparison is available, nothing at all announces the
+error. The habit worth building is to name the overlap before adding, even when you
+believe it is empty — "the overlap is zero" is a claim, and writing it down is what makes
+it one.
+
+The second is subtler and it is about the shape of the correction rather than its
+presence: with three sets, subtracting the three pairwise overlaps subtracts the people
+in all three *three times*, having added them three times, which leaves them at zero. The
+plus on the triple term is not symmetry or aesthetics. It is those people being restored
+from zero to one.
+
+## Where all of this stops holding
+
+Every count above assumed finite sets. `|A u B| = |A| + |B| - |A n B|` has no content
+when the sets are infinite: the even numbers and the odd numbers are both infinite, their
+intersection is empty and their union is the integers, and "infinity plus infinity minus
+zero" is not an arithmetic anyone has defined. The membership algebra survives intact —
+De Morgan and distributivity hold for arbitrary sets, because they were only ever
+propositional laws about a single element — but the counting does not. What size can
+still mean once the sets are infinite is Module 13's subject, and the answer there comes
+from Module 5's bijections rather than from any tally.
+""",
+            },
+            "derive": {
+                "title": "From one decision per element to the alternating correction",
+                "minutes": 12,
+                "brief": r"""
+Both counts in this module come from the same move — asking what independent decision
+builds the object — and the alternating signs of inclusion-exclusion come from a single
+binomial identity rather than from a pattern extended on faith.
+
+Write $a = |A|$, $b = |B|$ and $i = |A \cap B|$ for two sets. For three, write $s$ for the
+sum of the three individual sizes, $p$ for the sum of the three pairwise intersections and
+$t$ for the size of the triple intersection.
+""",
+                "vars": ["n", "k", "j", "a", "b", "i", "s", "p", "t"],
+                "steps": [
+                    {
+                        "prompt": r"Building a subset of an $n$-element set means one independent in-or-out decision per element. How many subsets are there?",
+                        "answer": r"2^{n}",
+                        "placeholder": "?",
+                        "hint": "Two choices, made once per element, with nothing linking the choices.",
+                        "deconstruct": [
+                            "The product rule multiplies the number of options at each independent choice.",
+                            r"Both extremes count: all-out is the empty set, all-in is the whole set.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Of those subsets, how many contain one particular fixed element? Force that element's decision and let the rest run free.",
+                        "answer": r"2^{n-1}",
+                        "placeholder": "2^{?}",
+                        "hint": "One decision is now made for you. How many are left?",
+                        "deconstruct": [
+                            r"There are $n - 1$ elements still to decide.",
+                            r"So exactly half of all subsets contain any given element.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Two sets. Adding $a$ and $b$ counts each element of the intersection twice. Write the size of the union in terms of $a$, $b$ and $i$.",
+                        "answer": r"a + b - i",
+                        "placeholder": "?",
+                        "hint": "Each doubly-counted element needs removing exactly once, and there are $i$ of them.",
+                        "deconstruct": [
+                            "An element in exactly one set is already counted once by the sum.",
+                            "An element in both is counted twice and should be counted once.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Three sets, in the same style. Write the size of the union in terms of $s$, $p$ and $t$.",
+                        "answer": r"s - p + t",
+                        "placeholder": "?",
+                        "hint": r"Subtract every pairwise overlap, then repair what that did to the elements lying in all three.",
+                        "deconstruct": [
+                            r"An element of all three sets is counted 3 times by $s$.",
+                            r"It is then subtracted 3 times by $p$, leaving it at zero.",
+                            "So it has to be added back once.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Justify that alternation once and for all. The binomial theorem gives $(1-1)^{j} = C(j,0) - C(j,1) + C(j,2) - \cdots$, and $(1-1)^{j} = 0$ for every $j \ge 1$. Moving $C(j,0) = 1$ across, what does $C(j,1) - C(j,2) + C(j,3) - \cdots$ equal?",
+                        "answer": r"1",
+                        "placeholder": "?",
+                        "hint": r"The full alternating sum starting at $C(j,0)$ is zero, and $C(j,0)$ is 1.",
+                        "deconstruct": [
+                            r"$0 = 1 - \left(C(j,1) - C(j,2) + \cdots\right)$.",
+                            "Rearrange for the bracket.",
+                            r"So an element lying in exactly $j$ of the sets is counted exactly once, for every $j \ge 1$ at the same time.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Spend it. In a class of 30, 18 take Python, 15 take C and 7 take both. How many take neither?",
+                        "answer": r"4",
+                        "placeholder": "?",
+                        "hint": r"The union is $18 + 15 - 7$. Subtract that from the class.",
+                        "deconstruct": [
+                            r"$18 + 15 - 7 = 26$ take at least one.",
+                            r"$30 - 26$ take neither.",
+                            r"Note that the uncorrected $18 + 15 = 33$ already exceeds the class, which is the check that catches a dropped correction.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+Both halves of this module are the same move twice: name the independent decision, then
+multiply. The alternating signs are the one place where that is not enough on its own,
+and the binomial identity in step 5 is what turns a pattern into a proof — it covers
+every $j$ at once, so nothing is left to check case by case.
+""",
+            },
             "quiz": {
                 "title": "Members, subsets and the size of a union",
                 "minutes": 7,
@@ -685,9 +1349,256 @@ consequence of this correspondence rather than the reason for it.
                 "Injective means no two inputs collide, surjective means nothing in the codomain is missed, bijective means both — and only a bijection has a two-sided inverse",
                 "Composition is associative but rarely commutative, and a composition of bijections is again a bijection",
                 "The pigeonhole principle: no injection runs from a larger finite set into a smaller one, so some value must be hit twice",
+                "It is not an extra axiom beside the counting, it *is* the counting: the injections from a `k`-set into an `n`-set number `n!/(n-k)!`, and at `k = n+1` that falling product reaches the factor 0 — which is why the principle can rule out every hash function at once without being shown any of them",
+                "Pigeonhole reports certainty, never likelihood: 367 people force a shared birthday, and the familiar 23 is a probability of 0.5073 established by an entirely different argument that belongs to the probability course",
                 "Generalised pigeonhole: `n` items in `k` boxes force some box to hold at least `ceil(n/k)` of them",
                 "Pigeonhole is a theorem about *finite* sets, and the word is load-bearing: `n -> 2n` is an injection from the naturals into a proper subset of themselves, which Module 13 takes as the definition of being infinite",
             ],
+            "read": {
+                "title": "One value out, and what happens when there is not enough room",
+                "minutes": 15,
+                "body": r"""
+A hash table sends keys to buckets. Somebody asks whether a good enough hash function
+could avoid collisions entirely, given 1000 keys and 512 buckets. The answer is no, and
+the interesting part is that answering does not require knowing anything about the hash
+function — not its code, not its quality, not the keys. It is a fact about counting, and
+this module is about where such facts come from.
+
+## What a function is obliged to do
+
+A function from $D$ to $C$ assigns to **every** element of $D$ **exactly one** element of
+$C$. Two failures are possible and both disqualify the rule entirely: a gap, where some
+input gets no output, and a fork, where some input gets two. Note what is *not* a
+failure — two different inputs sharing an output. That is permitted, and most functions
+do it.
+
+Take the rule sending each living person to their age in whole years, into the integers
+0 to 200. Every person has exactly one age, so it is a function. Two people of the same
+age share a value, so it is not injective, and resoundingly so. Nobody is 200, so that
+codomain value goes unused and it is not surjective. Injectivity is a condition on the
+input side — no collisions — and surjectivity on the output side — nothing missed. They
+are independent, and a rule that is not a function at all fails for a third reason.
+
+## Counting functions, and watching one kind run out
+
+Fix a domain of $k$ elements and a codomain of $n$. How many functions are there? Each of
+the $k$ inputs is assigned independently, with $n$ options each, so
+
+$$n^k$$
+
+How many of them are injective? Now the choices are not independent: assign the first
+input any of the $n$ values, the second any of the remaining $n - 1$, the third $n - 2$,
+and so on for $k$ inputs. That is the falling product
+
+$$n(n-1)(n-2)\cdots(n-k+1) \;=\; \frac{n!}{(n-k)!}$$
+
+Put $k = n = 5$. There are $5^5 = 3125$ functions from a five-element set to itself and
+$5! = 120$ injections, so under 4 per cent of them are injective — and when the domain
+and codomain have the same finite size, injective, surjective and bijective all coincide,
+so those 120 are exactly the bijections.
+
+Now push $k$ one past $n$. The falling product runs
+$n, n-1, \ldots$ down to $n - (n+1) + 1 = 0$, so **it contains the factor zero** and the
+whole product is zero. There are no injections from an $(n+1)$-element set into an
+$n$-element one.
+
+That is the pigeonhole principle. It is not an extra axiom bolted on beside the counting;
+it is the counting, read at the point where it returns zero. And it explains why the
+principle can say something so strong while knowing so little: it never needed to know
+which function you had, only how many there were of the kind you wanted.
+
+For the hash table: 1000 keys into 512 buckets admits zero injections, so some bucket
+receives two keys, whatever the hash function is. That is why a hash table ships with a
+collision strategy rather than a hope.
+
+## The generalised form, and the inequality it actually rests on
+
+"Some bucket gets two" is weak when the table is badly overloaded. The sharper statement:
+$t$ items in $k$ boxes force some box to hold at least `ceil(t/k)` of them.
+
+Prove it by contradiction, and watch which step does the work. Suppose every box holds at
+most $m$ items. Then the total across all boxes is at most
+
+$$k \cdot m$$
+
+Now take $m$ to be `ceil(t/k) - 1`. The defining property of the ceiling is that
+`ceil(t/k)` is the smallest integer at or above $t/k$, so `ceil(t/k) - 1` is strictly
+*below* $t/k$, and multiplying by the positive $k$ keeps it strictly below $t$. So the
+total is at most something strictly less than $t$ — but the total is $t$. The supposition
+fails, and some box holds more than `ceil(t/k) - 1`, which for integers means at least
+`ceil(t/k)`.
+
+With $t = 1000$ and $k = 512$: `ceil(1000/512) = 2`, and if all 512 buckets held at most
+1 key they would hold at most 512 keys between them, against 1000. Note what the
+conclusion is and is not. It is a lower bound on the *worst* box. It is not a description
+of the distribution — the counts may be wildly uneven, no particular box is forced to be
+occupied, and in principle all 1000 keys land in one.
+
+## A pigeonhole that needs an idea
+
+Counting alone is not always enough, and the standard example is worth doing because the
+first attempt fails. Claim: in any group of $n \ge 2$ people, two of them know the same
+number of the others.
+
+The obvious move is to take people as items and acquaintance-counts as boxes. A person
+can know anywhere from 0 to $n - 1$ others, which is $n$ possible values for $n$ people —
+and $n$ items in $n$ boxes force nothing at all. The counting argument, applied directly,
+does not work.
+
+The idea it needs is one observation: 0 and $n-1$ cannot both occur. Somebody who knows
+nobody and somebody who knows everybody cannot be in the same group, since the second
+would have to know the first. So whichever end is unused, the values actually available
+number at most
+
+$$n - 1$$
+
+and now $n$ people into $n - 1$ boxes forces a repeat. Try it at $n = 4$: the degrees must
+come from `{0,1,2}` or from `{1,2,3}`, three values for four people either way.
+
+```python
+from itertools import combinations
+
+# Search every graph on n people for one where all the degrees differ.
+def find_all_distinct(n):
+    pairs = list(combinations(range(n), 2))
+    for mask in range(1 << len(pairs)):
+        deg = [0] * n
+        for i, (u, v) in enumerate(pairs):
+            if mask >> i & 1:
+                deg[u] += 1
+                deg[v] += 1
+        if len(set(deg)) == n:
+            return deg
+    return None
+
+for n in range(2, 7):
+    print(n, find_all_distinct(n))
+```
+
+That is an exhaustive search — every one of the $2^{C(n,2)}$ graphs on $n$ people, which
+is 32768 of them at $n = 6$ — and it prints `None` on every line. There is no
+counterexample to find.
+
+The lesson generalises past this example. Pigeonhole arguments are rarely hard because
+the principle is hard; they are hard because choosing the boxes is a design decision, and
+the obvious boxes are often one too many.
+
+## The mistake, and why it is tempting
+
+Pigeonhole reports *certainty*, and the sentence next to it in most people's memory
+reports *likelihood*. With 367 people some two share a birthday, guaranteed, because 367
+items into 366 boxes admits no injection. With 23 people the probability that some two
+share a birthday is 0.5073 — better than even. These are entirely different claims,
+established by entirely different means, and the second one is not pigeonhole doing
+anything at all. Pigeonhole says nothing whatever about 23 people; it is silent on every
+group smaller than 367.
+
+The confusion is tempting because both sentences begin "with enough people, two of them
+share a birthday" and both feel like results about crowding. Only one of them is a
+counting fact. The other is a probability calculation, and it belongs to the probability
+course rather than here.
+
+## Where it stops holding
+
+Everything above needed the sets to be finite, and the word is load-bearing rather than
+decorative. The map $n \mapsto 2n$ sends the naturals injectively into the even naturals,
+which are a proper subset of them — an injection from a set into something strictly
+smaller than itself, which is exactly what pigeonhole forbids. Nothing is broken. The
+theorem was about finite sets, and Module 13 takes precisely this behaviour as the
+*definition* of being infinite.
+
+Two smaller boundaries in the same neighbourhood, since they are usually stated without
+conditions. An injection is often said to have a left inverse, and that needs the domain
+to be non-empty: with an empty domain and a non-empty codomain there is nowhere for the
+reverse map to send anything, and the empty map is injective. A surjection is often said
+to have a right inverse, which for a finite codomain is a matter of picking one preimage
+per value, but for infinite sets is the axiom of choice — a genuine assumption rather
+than a construction. Neither caveat changes anything you will do in this course. Both are
+worth knowing about before you meet a proof that leans on one.
+""",
+            },
+            "derive": {
+                "title": "Injections, counted until there are none left",
+                "minutes": 12,
+                "brief": r"""
+The pigeonhole principle is usually presented as a separate fact about boxes. Here it is
+derived as the moment a count reaches zero, which is also the explanation for why it can
+say so much while assuming so little.
+
+Throughout, the domain has $k$ elements and the codomain $n$. In the last two steps, $t$
+items go into $k$ boxes and $m$ is a capacity per box.
+""",
+                "vars": ["n", "k", "m", "t"],
+                "steps": [
+                    {
+                        "prompt": r"Each of the $k$ inputs is assigned a value independently, and there are $n$ values available. How many functions are there from a $k$-element set to an $n$-element set?",
+                        "answer": r"n^{k}",
+                        "placeholder": "?",
+                        "hint": r"$n$ options, chosen $k$ times, with nothing linking the choices.",
+                        "deconstruct": [
+                            "One choice per element of the domain.",
+                            "Reusing a value is allowed, so the choices really are independent.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Now demand that no two inputs collide. The first input has $n$ values available, the second $n-1$, and so on for $k$ inputs. Write that falling product as a ratio of factorials.",
+                        "answer": r"\frac{n!}{(n-k)!}",
+                        "placeholder": r"\frac{?}{?}",
+                        "hint": r"$n(n-1)\cdots(n-k+1)$ is $n!$ with the last $n-k$ factors divided away.",
+                        "deconstruct": [
+                            r"The product has exactly $k$ factors, running down from $n$.",
+                            r"$n!$ continues past where the product stops, at $n-k$.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Set $k = n$, so the domain and codomain are the same size. What does that count become?",
+                        "answer": r"n!",
+                        "placeholder": "?",
+                        "hint": r"$(n-n)! = 0! = 1$.",
+                        "deconstruct": [
+                            "Substitute and simplify the denominator.",
+                            "At equal finite sizes, the injections are exactly the bijections.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Now set $k = n + 1$. The falling product runs from $n$ down to $n - (n+1) + 1$. Evaluate that last factor — the number it reaches — and you have the pigeonhole principle.",
+                        "answer": r"0",
+                        "placeholder": "?",
+                        "hint": r"$n - (n+1) + 1$ simplifies without needing a value for $n$.",
+                        "deconstruct": [
+                            r"The $j$-th factor is $n - j + 1$, and here $j$ runs to $k = n+1$.",
+                            "A product with a zero factor is zero.",
+                            "So there are no injections at all from a larger finite set into a smaller one.",
+                        ],
+                    },
+                    {
+                        "prompt": r"The generalised form, by contradiction. Suppose each of the $k$ boxes holds at most $m$ items. What is the largest the total across all boxes can be?",
+                        "answer": r"km",
+                        "placeholder": "?",
+                        "hint": "The worst case is every box simultaneously full.",
+                        "deconstruct": [
+                            r"There are $k$ boxes and each contributes at most $m$.",
+                            r"If that maximum is below the number of items actually placed, the supposition is false.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Spend it on the hash table: $t = 1000$ keys, $k = 512$ buckets. If every bucket held at most one key, what is the largest number of keys the table could hold? Comparing it against 1000 is the whole argument.",
+                        "answer": r"512",
+                        "placeholder": "?",
+                        "hint": r"Put $m = 1$ into the previous step.",
+                        "deconstruct": [
+                            r"$k \cdot m$ with $k = 512$ and $m = 1$.",
+                            r"512 is short of 1000, so some bucket holds at least `ceil(1000/512) = 2`.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+Step 4 is the point of the whole exercise: pigeonhole is not an extra principle sitting
+beside the counting, it is the counting evaluated where it returns zero. That is why it
+can rule out every hash function at once without being shown any of them — it never
+needed to know which function you had, only how many of the wanted kind exist.
+""",
+            },
             "quiz": {
                 "title": "Injections, inverses and pigeons",
                 "minutes": 7,
@@ -725,8 +1636,11 @@ Reverse the arrows and ask whether what you get is still a function. It needs an
 for every element of the original codomain, which is surjectivity, and it needs exactly
 one, which fails the moment two inputs shared a value — that is injectivity. Both
 conditions are just the definition of a function applied in the opposite direction.
-One-sided inverses exist without both: an injection has a left inverse and a surjection
-a right inverse, neither of which undoes the map in both directions. Computability is a
+One-sided inverses exist without both, though each carries a condition worth stating: an
+injection has a left inverse provided its domain is non-empty, and a surjection has a
+right inverse — which for a finite codomain means picking one preimage per value, and for
+an infinite one is the axiom of choice rather than a construction. Neither undoes the map
+in both directions. Computability is a
 separate matter — plenty of bijections have inverses nobody can compute quickly, which
 is the entire premise of public-key cryptography.
 """,
@@ -783,9 +1697,228 @@ pair off one-for-one with all the integers.
                 "The inductive hypothesis is an assumption about one particular `k`, not the statement being proved; a step that never uses it is a sign something has gone wrong",
                 "Strong induction assumes `P(0)` through `P(k)` at once, which is what a recursion reaching further back than one step needs",
                 "A recursive definition names base objects and rules for building more; structural induction then proves a property of exactly the objects those rules generate",
-                "Nearly every failed induction is a missing base case or a step valid only above some threshold — the all-horses-one-colour argument fails on exactly this",
+                "Nearly every failed induction is a missing base case or a step valid only above some threshold — the all-horses-one-colour argument fails on exactly this, and the two groups of `k` horses inside `k+1` overlap in `k-1` of them, which is 0 at `k = 1`",
+                "A valid inductive step on its own determines nothing: `S(n) = n(n+1)/2 + c` survives the step for *every* `c`, so with `c = 5` it claims `1 + 2 + 3 = 11`. Only the base case picks `c` out, which is why it is half the proof rather than a formality",
+                "Induction is a fact about the naturals — equivalent to every non-empty set of them having a least element — and needs every element reachable from the base in finitely many `+1` steps. There is no next rational, so there is no induction over the rationals to run",
                 "A closed form for a sum is the standard thing induction is asked to prove: it can confirm a formula but never propose one, which is why Module 12 derives the geometric sum by cancellation first and only then checks it",
             ],
+            "read": {
+                "title": "The first domino, and the rung nobody checked",
+                "minutes": 15,
+                "body": r"""
+Add up the odd numbers and watch what happens.
+
+$$1 = 1, \qquad 1 + 3 = 4, \qquad 1 + 3 + 5 = 9, \qquad 1 + 3 + 5 + 7 = 16$$
+
+Those are $1^2, 2^2, 3^2, 4^2$. The guess writes itself: the first $n$ odd numbers sum to
+$n^2$.
+
+Before proving it, notice where the guess came from, because it did not come from
+induction and induction could not have produced it. It came from computing four cases and
+recognising the pattern. There is also a picture that produces it: a square of side $n$
+grows into a square of side $n+1$ by adding an L-shaped strip of $n$ cells along the top,
+$n$ down the side and one in the corner — $2n + 1$ cells, which is the $(n+1)$-th odd
+number. Induction confirms a closed form; it never proposes one. Module 12 makes the same
+point about the geometric series, which is derived by cancellation first and checked
+afterwards.
+
+## The proof, and the answer to the objection
+
+Two obligations. The base case: with $n = 0$ the sum is empty and equals $0 = 0^2$. The
+inductive step: assume the claim at some arbitrary $n$ and derive it at $n+1$. The sum of
+the first $n+1$ odd numbers is the sum of the first $n$, which the assumption values at
+$n^2$, plus the next odd number $2n + 1$:
+
+$$n^2 + 2n + 1 = (n+1)^2$$
+
+Done. Now the objection everybody has and few people get answered: *you assumed the thing
+you were proving*. You did not. What the step establishes is the implication `P(n) ->
+P(n+1)`, and an implication can be proved without its antecedent ever being true — that
+is what Module 1's truth table for `->` says. Nothing in the step claims $P(n)$ holds. The
+base case supplies the one unconditional fact, and the chain of implications carries it
+upward forever. This is also why $n$ must be arbitrary: a single specific link would
+prove a single specific instance and stop.
+
+## The step alone proves nothing, and here is a formula to prove it with
+
+That last claim is usually asserted. It can be demonstrated, and the demonstration is one
+line long.
+
+Take the sum $S(n) = 1 + 2 + \cdots + n$ and consider the candidate formula
+
+$$S(n) = \frac{n(n+1)}{2} + c$$
+
+for a constant $c$ you may choose freely. Run the inductive step. Assume
+$S(k) = k(k+1)/2 + c$ and add the next term $k+1$:
+
+$$\frac{k(k+1)}{2} + c + (k+1) = \frac{k(k+1) + 2(k+1)}{2} + c = \frac{(k+1)(k+2)}{2} + c$$
+
+which is the formula at $k+1$. The step is valid. It is valid **for every value of $c$**,
+because $c$ sits outside everything the step touches. So with $c = 5$ the formula claims
+$1 + 2 + 3 = 3 \cdot 4/2 + 5 = 11$, when the sum is 6.
+
+A flawless inductive step, a formula that is wrong by 5 at every single $n$. The only
+thing that rules $c$ out is the base case: $S(0) = 0$ and the formula gives $c$, so
+$c = 0$. The base case is not a formality to be discharged before the real work. It is
+half the proof, and it is the half that decides which of infinitely many formulas the
+step is telling you about.
+
+## The step that only works from the second rung
+
+The other failure mode is a step that is valid above some threshold with no base case at
+that threshold, and the classic instance is the argument that all horses are one colour.
+
+It goes: one horse is one colour, so $P(1)$ holds. For the step, take $k+1$ horses and
+look at the first $k$ and the last $k$. Each group is one colour by the hypothesis, and
+the two groups overlap, so a horse in the overlap ties the two colours together and all
+$k+1$ horses match.
+
+The overlap is where it dies, and the size of it is computable rather than a matter of
+opinion. Two subsets of size $k$ inside a set of size $k+1$ must share
+
+$$k + k - (k+1) = k - 1$$
+
+elements. For $k \ge 2$ that is at least one horse and the step is sound. At $k = 1$ it is
+**zero**: the first horse and the last horse, with nothing in between to connect them. So
+the argument proves $P(1)$, and proves $P(k) \rightarrow P(k+1)$ for every $k \ge 2$, and
+never proves $P(1) \rightarrow P(2)$. The chain has a first link missing and everything
+above it is unsupported.
+
+The general habit that catches this: whenever a step splits, overlaps, or removes
+elements, evaluate the size of the split at the smallest case by hand. Not the argument —
+the arithmetic.
+
+## Strong induction, and when the previous rung is not enough
+
+Weak induction hands you $P(k)$ and asks for $P(k+1)$. Some arguments need more. *Every
+integer above 1 has a prime factorisation*: if $n$ is composite, write $n = a \cdot b$
+with $1 < a, b < n$, and now you need the claim at $a$ and at $b$, which can sit anywhere
+below $n$ and are almost never $n - 1$. Strong induction assumes the claim for everything
+from the base up to $k$ and proves it at $k+1$, which is exactly what that recursion
+needs.
+
+The two forms are equally powerful — apply weak induction to the statement
+`Q(n) = "P(0) and P(1) and ... and P(n)"` and you recover strong induction — so the
+choice is about which makes the argument short, never about which is permitted.
+
+## Recursive definitions, and what structural induction gives you
+
+Define a set $S$ by: 3 is in $S$, and if $x$ and $y$ are in $S$ then so is $x + y$.
+Structural induction checks the property on the base objects and shows each construction
+rule preserves it. Divisibility by 3: the base object 3 qualifies, and if $x$ and $y$ are
+both multiples of 3 then so is $x + y$. So every member of $S$ is a multiple of 3.
+
+Notice what that argument does **not** give you: the reverse inclusion. It says every
+member of $S$ is a multiple of 3, not that every multiple of 3 is in $S$ — and the
+reverse is false here, since 3 is the smallest member and 0 and the negatives never
+appear. Pinning $S$ down exactly needs a second, separate argument showing each intended
+element is reachable, which is an ordinary induction on the naturals and yields
+`S = {3, 6, 9, ...}` informally, or `{3n : n >= 1}` written carefully. Two
+inclusions, two proofs. Producing one and claiming both is the standard slip with
+recursively defined sets.
+
+## Where induction stops
+
+Induction is not a general technique for proving universal statements. It is a specific
+fact about the natural numbers — equivalent, in fact, to the statement that every
+non-empty set of naturals has a least element, which is where the "first counterexample"
+form of the argument comes from.
+
+What it needs is that every element is reached from the base by finitely many steps of
+$+1$. The rationals do not have that structure: there is no next rational after $1/2$, so
+there is no step to take and no induction to run. Neither do the reals. A proof that
+proceeds "by induction on a real number" is not a proof with a gap in it; it is a
+sentence with no meaning attached. Module 13 shows that the rationals *can* be listed one
+after another, which is a genuinely surprising fact — but that listing is not their
+order, and induction along it proves nothing about the ordering it scrambled.
+""",
+            },
+            "derive": {
+                "title": "Two obligations, and what happens when you discharge only one",
+                "minutes": 12,
+                "brief": r"""
+The first three steps prove a closed form the ordinary way. The next two build a formula
+whose inductive step is flawless and whose conclusion is false, which is the sharpest
+demonstration available that the base case is doing real work. The last pins down where
+the all-horses argument dies, by computing the size of an overlap rather than describing
+it.
+
+Write $S(n)$ for the sum $1 + 2 + \cdots + n$, and let $c$ be an arbitrary constant.
+""",
+                "vars": ["n", "k", "c", "S"],
+                "steps": [
+                    {
+                        "prompt": r"The first $n$ odd numbers sum to $1, 4, 9, 16$ for $n = 1, 2, 3, 4$. Write the closed form these four values suggest.",
+                        "answer": r"n^{2}",
+                        "placeholder": "?",
+                        "hint": "Each of the four values is a perfect square, and the pattern in which one is direct.",
+                        "deconstruct": [
+                            r"$1 = 1^2$, $4 = 2^2$, $9 = 3^2$.",
+                            "This is a guess, not yet a proof — which is the point of the next step.",
+                        ],
+                    },
+                    {
+                        "prompt": r"The inductive step. Assume the first $n$ odd numbers sum to $n^{2}$ and add the next odd number, $2n + 1$. Simplify the total to a single square.",
+                        "answer": r"(n+1)^{2}",
+                        "placeholder": "(?)^{2}",
+                        "hint": r"$n^{2} + 2n + 1$ is a perfect square trinomial.",
+                        "deconstruct": [
+                            r"The $(n+1)$-th odd number is $2n+1$.",
+                            r"$n^{2} + 2n + 1$ factors.",
+                            r"With the base case $0 = 0^{2}$, the claim now holds for every $n$.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Now the cautionary formula. Suppose $S(k) = \frac{k(k+1)}{2} + c$ and add the next term $k + 1$. Simplify to the same shape one step further on.",
+                        "answer": r"\frac{(k+1)(k+2)}{2} + c",
+                        "placeholder": r"\frac{?}{2} + c",
+                        "hint": r"Put $k+1$ over the same denominator: $\frac{k(k+1) + 2(k+1)}{2}$, then take out the common factor.",
+                        "deconstruct": [
+                            r"$\frac{k(k+1)}{2} + (k+1) = \frac{k(k+1) + 2(k+1)}{2}$.",
+                            r"Both terms of the numerator share the factor $(k+1)$.",
+                            r"The constant $c$ was never touched, so the step holds whatever $c$ is.",
+                        ],
+                    },
+                    {
+                        "prompt": r"So that step is valid for every $c$. Take $c = 5$ and ask the formula for $S(3)$. What does it predict? The true value of $1 + 2 + 3$ is 6.",
+                        "answer": r"11",
+                        "placeholder": "?",
+                        "hint": r"$\frac{3 \cdot 4}{2} + 5$.",
+                        "deconstruct": [
+                            r"$\frac{3 \cdot 4}{2} = 6$.",
+                            "Then add the constant.",
+                            r"The step was flawless and the formula is wrong at every $n$: only the base case, $S(0) = 0$, forces $c = 0$.",
+                        ],
+                    },
+                    {
+                        "prompt": r"The all-horses argument takes $k+1$ horses and two overlapping groups of $k$. Two subsets of size $k$ inside a set of size $k+1$ share how many elements? Use inclusion-exclusion from Module 4.",
+                        "answer": r"k - 1",
+                        "placeholder": "?",
+                        "hint": r"The union is everything, so $k + k - |\text{overlap}| = k + 1$.",
+                        "deconstruct": [
+                            r"$|A \cup B| = |A| + |B| - |A \cap B|$, and here the union is all $k+1$ horses.",
+                            r"Rearrange for the intersection.",
+                        ],
+                    },
+                    {
+                        "prompt": r"Evaluate that overlap at $k = 1$ — the first rung the argument needs, going from one horse to two.",
+                        "answer": r"0",
+                        "placeholder": "?",
+                        "hint": "Substitute directly into the previous answer.",
+                        "deconstruct": [
+                            "The two groups of one horse are the first horse and the last horse.",
+                            "With nothing shared, there is no horse to carry a colour between them.",
+                            r"So $P(1) \rightarrow P(2)$ is never established, and the whole chain above it is unsupported.",
+                        ],
+                    },
+                ],
+                "closing": r"""
+Steps 3 and 4 and step 6 are the same defect twice, in the two costumes it wears: a step
+valid for every $c$ with no base case to choose one, and a step valid for every $k \ge 2$
+with no base case at 2. Whenever a step splits, overlaps or removes elements, compute the
+size of the split at the smallest case rather than describing it.
+""",
+            },
             "quiz": {
                 "title": "Base cases, hypotheses and what induction proves",
                 "minutes": 7,
@@ -1992,7 +3125,7 @@ $$rS = r + r^2 + \cdots + r^n + r^{n+1}$$
 Subtract. Every term in the middle appears in both lines and cancels, and what survives
 is the head of one and the tail of the other:
 
-$$S - rS = 1 - r^{n+1} \qquad\Longrightarrow\qquad S = \frac{1 - r^{n+1}}{1 - r}$$
+$$S - rS = 1 - r^{n+1} \qquad \Rightarrow \qquad S = \frac{1 - r^{n+1}}{1 - r}$$
 
 valid whenever $r \neq 1$, which is exactly the case the division would forbid. At
 $r = 2$ this reads $2^{n+1} - 1$, so five doublings cost 31 copies and twenty cost
@@ -2017,11 +3150,13 @@ has no expression in elementary functions, and looking for one is the mistake to
 rather than the exercise. It can still be pinned down, by a trick worth keeping: group
 the terms into blocks whose lengths are powers of two.
 
-$$1 \;+\; \underbrace{\tfrac12}_{\text{1 term}} \;+\; \underbrace{\tfrac13 + \tfrac14}_{\text{2 terms}} \;+\; \underbrace{\tfrac15 + \cdots + \tfrac18}_{\text{4 terms}} \;+\; \cdots$$
+$$1 \;+\; \tfrac{1}{2} \;+\; \left(\tfrac{1}{3} + \tfrac{1}{4}\right) \;+\; \left(\tfrac{1}{5} + \tfrac{1}{6} + \tfrac{1}{7} + \tfrac{1}{8}\right) \;+\; \cdots$$
 
-Every term in a block is at most the block's first and greater than its last. The block
-of 4 terms starting at $1/5$ therefore sums to at most $4 \times \tfrac14 = 1$ and more
-than $4 \times \tfrac18 = \tfrac12$. Each block contributes between $\tfrac12$ and $1$,
+The blocks after the leading 1 hold 1, 2, 4, 8, ... terms, each block ending at a power
+of two. Every term in a block is at most the block's first and greater than its last. The
+block
+of 4 terms starting at $1/5$ therefore sums to at most $4 \times \tfrac{1}{4} = 1$ and more
+than $4 \times \tfrac{1}{8} = \tfrac{1}{2}$. Each block contributes between $\tfrac{1}{2}$ and $1$,
 and $H_{2^k}$ has $k$ of them after the leading 1:
 
 $$1 + \tfrac{k}{2} \;\le\; H_{2^k} \;\le\; 1 + k$$
@@ -2108,10 +3243,11 @@ most, exactly — so the count is $\Theta(n^3)$ with $c = 1$ and $n_0 = 1$, and 
 $n = 100$ that is a million updates.
 
 Fast modular exponentiation squares once per bit of the exponent and multiplies once
-more for each bit that is set. An exponent $e \ge 2$ has $\lfloor \log_2 e\rfloor + 1$
-bits, so the count is at most $2(\lfloor \log_2 e\rfloor + 1)$, and since
-$\lfloor \log_2 e \rfloor + 1 \le 2\log_2 e$ for $e \ge 2$, the bound is $4\log_2 e$:
-witnesses $c = 4$, $n_0 = 2$. For $e = 1000$ that is at most 20 multiplications where
+more for each bit that is set. Write $b$ for the number of bits in $e$, so the whole cost
+is at most $2b$. A number needs one more bit than the largest power of two below it, so
+$b \le \log_2 e + 1$, and $\log_2 e + 1 \le 2\log_2 e$ exactly when $\log_2 e \ge 1$ —
+that is, when $e \ge 2$. Chaining those gives $2b \le 4\log_2 e$: witnesses $c = 4$,
+$n_0 = 2$. For $e = 1000$ the exponent has 10 bits, so that is at most 20 multiplications where
 the naive loop does 999. The notation was never doing the work in those two sentences.
 The count was, and now the count is written down.
 """,
@@ -2183,7 +3319,7 @@ Write $S = 1 + r + r^{2} + \cdots + r^{n}$ throughout.
                         "prompt": r"Halving forever is $r = \tfrac{1}{2}$. Evaluate the limit there, and read off how much a store that shrinks by half at every step costs in total relative to its first step.",
                         "answer": r"2",
                         "placeholder": "a single number",
-                        "hint": r"$1 - \tfrac12 = \tfrac12$, and $1$ divided by $\tfrac12$ is not $\tfrac12$.",
+                        "hint": r"$1 - \tfrac{1}{2} = \tfrac{1}{2}$, and $1$ divided by $\tfrac{1}{2}$ is not $\tfrac{1}{2}$.",
                         "deconstruct": [
                             r"Substitute $r = 1/2$ into $1/(1-r)$.",
                             "Dividing by a half doubles.",
@@ -2599,16 +3735,16 @@ $$\pi(x, y) = \frac{(x+y)(x+y+1)}{2} + y$$
 
 which is the Cantor pairing function. It sends $(0,0) \mapsto 0$, $(1,0) \mapsto 1$,
 $(0,1) \mapsto 2$, $(2,0) \mapsto 3$, $(1,1) \mapsto 4$, $(0,2) \mapsto 5$, and it is a
-bijection from $\mathbb{N} \times \mathbb{N}$ onto $\mathbb{N}$ — two coordinates encoded
+bijection from $\mathbf{N} \times \mathbf{N}$ onto $\mathbf{N}$ — two coordinates encoded
 in one number with nothing lost and nothing repeated.
 
 From there the results come quickly. A countable union of countable sets is countable:
 index the sets by $i$ and their members by $j$, and $\pi(i, j)$ lists the union. The
 positive rationals are countable, because $p/q$ is a pair, so they inject into the pairs;
 duplicates like $2/4$ are dropped by keeping only lowest terms, and a subset of a
-countable set is countable. Add the negatives by interleaving and $\mathbb{Q}$ is
+countable set is countable. Add the negatives by interleaving and $\mathbf{Q}$ is
 countable — a set that is dense, so that between any two rationals lie infinitely many
-more, is nevertheless no bigger than $\mathbb{N}$. That is the first sign that "same
+more, is nevertheless no bigger than $\mathbf{N}$. That is the first sign that "same
 size" carries less information than intuition expects it to.
 
 And the finite strings over a finite alphabet are countable: list them by length, and
@@ -2618,7 +3754,7 @@ over a finite alphabet. **There are only countably many programs.**
 
 ## The argument that cannot be beaten
 
-Now consider the infinite bit strings: functions from $\mathbb{N}$ to $\{0, 1\}$. Are
+Now consider the infinite bit strings: functions from $\mathbf{N}$ to `{0, 1}`. Are
 there countably many?
 
 Suppose there were. Then some list $s_0, s_1, s_2, \ldots$ contains all of them. Write
@@ -2658,7 +3794,7 @@ so that position $k$ of row $k$ exists. Applied to finite strings it fails immed
 and it should: the finite strings are countable, and a diagonal over a list of strings of
 growing length has nothing to read once it passes the end of a row.
 
-The other limit is a limit on what countability tells you. $\mathbb{N}$ and $\mathbb{Q}$
+The other limit is a limit on what countability tells you. $\mathbf{N}$ and $\mathbf{Q}$
 are the same size while being utterly unalike in order and density; "same size" was
 defined by bijection alone, and a bijection is free to shatter every other structure the
 sets carry. It is a coarse notion deliberately, and reading more into it than it says is
@@ -2666,7 +3802,7 @@ its own error.
 
 ## What this is for
 
-A language over $\{0,1\}$ is a set of strings, that is, a subset of a countably infinite
+A language over `{0,1}` is a set of strings, that is, a subset of a countably infinite
 set. Naming a subset is the same as naming, for each string in turn, whether it is in —
 which is an infinite bit string. So there are exactly as many languages as infinite bit
 strings: uncountably many. And there are only countably many programs.
@@ -2685,7 +3821,7 @@ and it says that such a problem has to exist before anyone goes looking for one.
                 "title": "Numbering the diagonals: the pairing function, built",
                 "minutes": 12,
                 "brief": r"""
-The sweep that lists $\mathbb{N} \times \mathbb{N}$ takes the diagonals $x + y = 0$,
+The sweep that lists $\mathbf{N} \times \mathbf{N}$ takes the diagonals $x + y = 0$,
 then $x + y = 1$, then $x + y = 2$, and so on. It reaches every pair, because each
 diagonal is finite and a given pair's diagonal is fixed by its coordinates. What is less
 apparent is that the position of a pair can be written down in closed form, with no
@@ -2984,7 +4120,7 @@ sweep, and duplicates are removed by keeping lowest terms — so the rationals i
 a countable set and are countable. That they are dense, with infinitely many between any
 two, plays no part: "same size" was defined by bijection and is blind to order and
 spacing. The uncountability of the bit strings likewise has nothing to do with any
-individual string's length; the finite-position sequences $\mathbb{N} \to \mathbb{N}$
+individual string's length; the finite-position sequences $\mathbf{N} \to \mathbf{N}$
 listed by the pairing function are infinite objects too. It is the diagonal construction
 that does the work, and no restatement of the conclusion replaces it.
 """,
