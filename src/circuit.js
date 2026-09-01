@@ -2252,7 +2252,9 @@ function createCircuit(root, opts) {
   let path = [];
   let cur = model;
 
-  let tool = 'R';
+  /* Select, not resistor. Opening a drawing tool in a placing mode means the first
+     click anywhere drops a part nobody asked for. */
+  let tool = 'select';
   /* The viewport. `s` is the zoom, `px`/`py` are the world-pixel coordinates of the
      top-left corner of what you can see. Every screen<->grid conversion goes through
      it, so there is one place that knows where things are. */
@@ -2262,6 +2264,9 @@ function createCircuit(root, opts) {
   let marquee = null;          /* a rubber-band selection in progress */
   let panFrom = null;          /* a pan in progress */
   let wireFrom = null;         /* grid point a wire is being drawn from */
+  let wireDown = null;         /* the press that started it, for drag-vs-click */
+  let hoverConn = null;        /* the terminal under the pointer, if any */
+  const selWires = new Set();  /* selected wires, by endpoint key */
   let hover = null;
   let hoverSp = null;          /* the pointer in screen pixels, for the hover card */
   /* Where the keyboard is on the grid, and whether the canvas holds focus. Declared up
@@ -2704,8 +2709,44 @@ function createCircuit(root, opts) {
      to in the current environment, not the parameter in its value box: the whole
      point of a sensor is that the number moves, and watching it move as the slider
      moves is the fastest way to see which way round the model goes. */
+  /* R1, R2, C1 — numbered per KIND and per CANVAS, the way a schematic is.
+
+     The label used to be the part's creation index across every kind, so a canvas
+     where you had already placed a ground, a source and a couple of others gave you
+     "R8" for your first resistor. The number a learner reads has to be the one they
+     would write on paper.
+
+     Assigned once, when the part is placed, and kept: deleting R1 does not renumber
+     R2 to R1 underneath a drawing someone is halfway through annotating. */
+  const REF_PREFIX = { R: 'R', C: 'C', L: 'L', V: 'V', I: 'I', D: 'D', LED: 'LED',
+    SW: 'SW', LDR: 'LDR', NTC: 'NTC', POT: 'POT', LAMP: 'LA', METER: 'ME', BAR: 'BA',
+    NPN: 'Q', PNP: 'Q', NMOS: 'M', PMOS: 'M', OPAMP: 'U', IC: 'U', MCU: 'MCU',
+    GND: 'GND', OUT: 'TP', BB: 'BB' };
+
+  function refPrefix(kind) { return REF_PREFIX[kind] || kind; }
+
+  function nextRef(kind, within) {
+    const pre = refPrefix(kind);
+    const used = {};
+    (within || model.parts).forEach(function (p) {
+      if (refPrefix(p.kind) !== pre) return;
+      const n = typeof p.ref === 'number' ? p.ref : null;
+      if (n) used[n] = 1;
+    });
+    let n = 1;
+    while (used[n]) n++;
+    return n;
+  }
+
+  function refOf(p) {
+    /* Models saved before designators existed have no `ref`; their old id-derived
+       number is kept rather than renumbered, so a stored circuit does not relabel
+       itself the first time it is opened. */
+    return refPrefix(p.kind) + (typeof p.ref === 'number' ? p.ref : p.id.replace('p', ''));
+  }
+
   function labelOf(p, k) {
-    const n = p.id.replace('p', '');
+    const n = (typeof p.ref === 'number' ? p.ref : p.id.replace('p', ''));
     if (p.kind === 'SW') return 'SW' + n + '  ' + (p.closed ? 'closed' : 'open');
     if (p.kind === 'LDR' || p.kind === 'NTC') return p.kind + n + '  ' + fmtEng(ohmsOf(p, env), 'Ω');
     if (p.kind === 'POT') {
@@ -3340,15 +3381,19 @@ function createCircuit(root, opts) {
       if (p.kind === 'BB') drawBoard(p, selIds.has(p.id) ? pal.accent : null, pal);
     });
 
-    /* wires */
-    ctx.strokeStyle = pal.dim;
+    /* wires — a selected one in the same accent a selected part takes, and thicker,
+       since a two-pixel line changing colour is not enough to see on a busy drawing */
     ctx.lineWidth = 2;
     cur.wires.forEach(function (wr) {
+      const on = selWires.has(wireKey(wr));
+      ctx.strokeStyle = on ? pal.accent : pal.dim;
+      ctx.lineWidth = on ? 4 : 2;
       ctx.beginPath();
       ctx.moveTo(gx(wr.a[0]), gy(wr.a[1]));
       ctx.lineTo(gx(wr.b[0]), gy(wr.b[1]));
       ctx.stroke();
     });
+    ctx.lineWidth = 2;
 
     /* junction dots where three or more things meet */
     const count = {};
@@ -3379,11 +3424,44 @@ function createCircuit(root, opts) {
       ctx.save();
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = pal.accent;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(gx(wireFrom[0]), gy(wireFrom[1]));
-      const straight = Math.abs(lead[0] - wireFrom[0]) > Math.abs(lead[1] - wireFrom[1])
-        ? [lead[0], wireFrom[1]] : [wireFrom[0], lead[1]];
-      ctx.lineTo(gx(straight[0]), gy(straight[1]));
+      /* The preview is the wire that would be made, corner and all, rather than the
+         single straight segment it used to show — which meant a diagonal drag drew
+         one line and committed another. */
+      elbow(wireFrom, lead).forEach(function (seg) {
+        ctx.lineTo(gx(seg[1][0]), gy(seg[1][1]));
+      });
+      ctx.stroke();
+      ctx.restore();
+      /* where it would land */
+      const tgt = connAt(lead);
+      if (tgt) {
+        ctx.save();
+        ctx.strokeStyle = pal.accent;
+        ctx.lineWidth = 2 / view.s;
+        ctx.beginPath();
+        ctx.arc(gx(lead[0]), gy(lead[1]), GRID * 0.3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    /* The ring that says a wire can start here. It is the whole of the discoverability
+       for wiring: without it the only way to learn that terminals are special is to be
+       told, and nothing on the canvas was doing the telling. Drawn at a constant size
+       on screen rather than in world units, so it stays a target you can hit at any
+       zoom. A hollow ring on a pin, a filled dot on a wire — the second is a branch
+       off something already drawn, and it makes a junction. */
+    if (hoverConn && !wireFrom) {
+      ctx.save();
+      ctx.strokeStyle = pal.accent;
+      ctx.fillStyle = pal.accent;
+      ctx.lineWidth = 2 / view.s;
+      ctx.beginPath();
+      ctx.arc(gx(hoverConn.pt[0]), gy(hoverConn.pt[1]), GRID * 0.3, 0, Math.PI * 2);
+      if (hoverConn.kind === 'wire') { ctx.globalAlpha = 0.25; ctx.fill(); ctx.globalAlpha = 1; }
       ctx.stroke();
       ctx.restore();
     }
@@ -3591,7 +3669,7 @@ function createCircuit(root, opts) {
       return;
     }
     const k = PART_KINDS[p.kind];
-    partPanel.innerHTML = '<h4>' + k.name + ' ' + esc2(p.id.replace('p', '')) + '</h4>' +
+    partPanel.innerHTML = '<h4>' + k.name + ' ' + esc2(refOf(p)) + '</h4>' +
       (p.kind === 'SW'
         ? '<button class="ckt-t" data-sw style="width:100%;margin-bottom:8px">' +
           (p.closed ? 'Closed — click to open' : 'Open — click to close') + '</button>'
@@ -3731,7 +3809,7 @@ function createCircuit(root, opts) {
   function paintBlock(p) {
     const pins = (p.ports || []).length;
     const held = ((p.inner && p.inner.parts) || []).length;
-    partPanel.innerHTML = '<h4>Block ' + esc2(p.id.replace('p', '')) + '</h4>' +
+    partPanel.innerHTML = '<h4>' + esc2(refOf(p)) + '</h4>' +
       '<label class="ckt-f"><span>Title</span>' +
       '<input data-title value="' + esc2(p.title || '') + '"></label>' +
       '<div class="ckt-f" style="grid-template-columns:1fr;align-items:stretch">' +
@@ -3816,7 +3894,7 @@ function createCircuit(root, opts) {
        aria-describedby point at whichever the document happens to hold first. */
     const uid = 'mcu' + (++MCU_PANEL_SEQ);
 
-    partPanel.innerHTML = '<h4>Microcontroller ' + esc2(p.id.replace('p', '')) + '</h4>' +
+    partPanel.innerHTML = '<h4>Microcontroller ' + esc2(refOf(p)) + '</h4>' +
       (gone
         ? '<div class="ckt-err">The interpreter (src/mcu.js) is not in this build, so ' +
           'this part can be drawn and wired but not run. Its pins stamp at reset — every ' +
@@ -4303,6 +4381,7 @@ function createCircuit(root, opts) {
 
     const blk = {
       id: 'p' + (seq++), kind: 'IC', x: ox, y: oy, rot: 0, value: 0,
+      ref: nextRef('IC', cur.parts),
       title: 'Block ' + (countBlocks(model) + 1), desc: '',
       w: Math.max(1, x1 - ox), h: Math.max(1, y1 - oy),
       /* A pin carried out to ground is named for what it is rather than numbered: it
@@ -4327,7 +4406,7 @@ function createCircuit(root, opts) {
     cur.wires = cur.wires.filter(function (w) { return !swallowed(netOf(w.a)); });
     cur.parts = cur.parts.filter(function (p) { return !selIds.has(p.id); });
     cur.parts.push(blk);
-    selIds.clear();
+    selIds.clear(); selWires.clear();
     selIds.add(blk.id);
     changed();
     paintPart();
@@ -4369,7 +4448,7 @@ function createCircuit(root, opts) {
       }));
     });
     cur.parts = cur.parts.filter(function (p) { return !gone[p.id]; }).concat(back);
-    selIds.clear();
+    selIds.clear(); selWires.clear();
     back.forEach(function (p) { selIds.add(p.id); });
     changed();
     paintPart();
@@ -4402,8 +4481,8 @@ function createCircuit(root, opts) {
     afterMove();
   }
   function afterMove() {
-    selIds.clear();
-    wireFrom = null; marquee = null; drag = null;
+    selIds.clear(); selWires.clear();
+    wireFrom = null; wireDown = null; hoverConn = null; marquee = null; drag = null;
     paintCrumbs();
     paintPart();
     /* Fit rather than keep the viewport: the inside of a block is drawn around its own
@@ -4923,6 +5002,16 @@ function createCircuit(root, opts) {
       return;
     }
 
+    /* Past the slop, the gesture is a drag, and a drag off a terminal is a wire.
+       Below the slop it is still undecided, because a press that has not moved is on
+       its way to being a click — and a click has three other meanings. */
+    if (wireDown && !wireDown.started &&
+        Math.hypot(sp[0] - wireDown.sx, sp[1] - wireDown.sy) > DRAG_SLOP) {
+      wireDown.started = true;
+      announce(startWire(wireDown.pt));
+    }
+    if (wireDown) { paintSoon(); return; }
+
     if (down && !drag && !marquee && down.mode === 'maybe-move' &&
         Math.hypot(sp[0] - down.sx, sp[1] - down.sy) > DRAG_SLOP) {
       drag = { from: down.grid, moved: false };
@@ -4944,6 +5033,16 @@ function createCircuit(root, opts) {
     }
 
     if (marquee) { marquee.b = toWorld(sp[0], sp[1]); paintSoon(); return; }
+
+    /* The terminal under the pointer, which is what the ring is drawn around. Only
+       while nothing else is in hand: a ring offering to start a wire in the middle of
+       a drag would be offering something the release is not going to do. */
+    const wasConn = hoverConn;
+    const con = (down || wireFrom || wireDown) ? null : connAt(hover);
+    hoverConn = (con && con.part && Netlist.pinsOf(con.part).length <= 1) ? null : con;
+    const conKey = hoverConn ? hoverConn.kind + wireKey({ a: hoverConn.pt, b: hoverConn.pt }) : '';
+    const wasKey = wasConn ? wasConn.kind + wireKey({ a: wasConn.pt, b: wasConn.pt }) : '';
+    if (conKey !== wasKey) { cv.style.cursor = hoverConn ? 'crosshair' : ''; paintSoon(); return; }
     /* The hover card is drawn by paint(), so it only appears if something asks for a
        repaint — and pointer movement over a block otherwise asks for nothing. Repaint
        when the card would change and not on every pixel of travel: the card follows
@@ -4955,9 +5054,19 @@ function createCircuit(root, opts) {
   });
 
   cv.addEventListener('pointerleave', function () {
-    const had = tipBlock();
-    hover = null; hoverSp = null;
+    const had = tipBlock() || hoverConn;
+    hover = null; hoverSp = null; hoverConn = null;
+    cv.style.cursor = '';
     if (wireFrom || had) paint();
+  });
+
+  /* The other half of Escape. A right click is what a drawing tool has meant by
+     "stop doing that" for thirty years, and it is already in the hand that is
+     drawing. The menu is only suppressed when there is something to cancel. */
+  cv.addEventListener('contextmenu', function (e) {
+    if (!wireFrom) return;
+    e.preventDefault();
+    announce(cancelWire());
   });
 
   /* Wheel zooms about the cursor. Ctrl+wheel is the browser's own page zoom on some
@@ -4993,6 +5102,123 @@ function createCircuit(root, opts) {
   }
 
   /* The selection change a click at a cell makes, with no drag in it. */
+  /* ---- where a wire may start or end ----
+   *
+   * A terminal is a part's pin or any point along an existing wire. Both are offered
+   * because both are things a wire can legally join, and refusing the second would
+   * mean a learner who wants to branch off a supply rail has to guess which cell the
+   * rail happens to end at.
+   *
+   * Identity for a wire is its two endpoints rather than an id, because wires are
+   * created by three different paths (here, the catalog loader, and ungrouping) and
+   * only one of them could have been taught to stamp an id. Two wires with the same
+   * endpoints are the same connection drawn twice, so treating them as one thing is
+   * right rather than merely convenient.
+   */
+  function wireKey(w) { return w.a[0] + ',' + w.a[1] + ':' + w.b[0] + ',' + w.b[1]; }
+
+  function onWire(w, g) {
+    const dx = w.b[0] - w.a[0], dy = w.b[1] - w.a[1];
+    /* A diagonal run is not something this editor can draw, and guessing which cells
+       one passes through would be inventing connections. */
+    if (dx && dy) return false;
+    if (dx) {
+      return g[1] === w.a[1] &&
+        g[0] >= Math.min(w.a[0], w.b[0]) && g[0] <= Math.max(w.a[0], w.b[0]);
+    }
+    if (dy) {
+      return g[0] === w.a[0] &&
+        g[1] >= Math.min(w.a[1], w.b[1]) && g[1] <= Math.max(w.a[1], w.b[1]);
+    }
+    return g[0] === w.a[0] && g[1] === w.a[1];
+  }
+
+  function wireAtPt(g) {
+    for (let i = cur.wires.length - 1; i >= 0; i--) {
+      if (onWire(cur.wires[i], g)) return cur.wires[i];
+    }
+    return null;
+  }
+
+  /* Pins beat wires: where a wire already ends on a pin, the thing the learner is
+     pointing at is the component. Later parts beat earlier ones, matching the paint
+     order — what is drawn on top is what gets picked. */
+  function connAt(g) {
+    if (!g) return null;
+    for (let i = cur.parts.length - 1; i >= 0; i--) {
+      const p = cur.parts[i];
+      const ps = Netlist.pinsOf(p);
+      for (let j = 0; j < ps.length; j++) {
+        if (ps[j][0] === g[0] && ps[j][1] === g[1]) {
+          return { pt: [ps[j][0], ps[j][1]], part: p, pin: j, kind: 'pin' };
+        }
+      }
+    }
+    const w = wireAtPt(g);
+    if (w) return { pt: [g[0], g[1]], wire: w, kind: 'wire' };
+    return null;
+  }
+
+  /* Two cells that do not share a row or a column need a corner. It goes along
+     whichever axis the drag covered more of first, so the wire follows the hand
+     rather than turning somewhere the learner did not aim. */
+  function elbow(a, b) {
+    if (a[0] === b[0] && a[1] === b[1]) return [];
+    if (a[0] === b[0] || a[1] === b[1]) return [[a, b]];
+    const c = Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1])
+      ? [b[0], a[1]] : [a[0], b[1]];
+    return [[a, c], [c, b]];
+  }
+
+  /* A wire ending part-way along another wire splits it, so that what is stored is
+     what the drawing shows: runs between junctions. The solver did not need this —
+     every cell along a run is already the same node — but selecting and deleting do.
+     Without it, clicking the branch of a T and pressing Delete takes away the whole
+     rail it branched off. */
+  function splitWiresAt(pt) {
+    for (let i = cur.wires.length - 1; i >= 0; i--) {
+      const w = cur.wires[i];
+      if (!onWire(w, pt)) continue;
+      if ((pt[0] === w.a[0] && pt[1] === w.a[1]) ||
+          (pt[0] === w.b[0] && pt[1] === w.b[1])) continue;
+      selWires.delete(wireKey(w));
+      cur.wires.splice(i, 1,
+        { a: w.a, b: [pt[0], pt[1]] },
+        { a: [pt[0], pt[1]], b: w.b });
+    }
+  }
+
+  function startWire(pt) {
+    wireFrom = [pt[0], pt[1]];
+    paint();
+    return 'Wire started at ' + cellName(wireFrom) + '. Click to finish, Escape to cancel.';
+  }
+
+  function cancelWire() {
+    if (!wireFrom) return null;
+    wireFrom = null; wireDown = null;
+    paint();
+    return 'Wire cancelled.';
+  }
+
+  function commitWire(pt) {
+    const from = wireFrom;
+    wireFrom = null; wireDown = null;
+    if (!from) return null;
+    const segs = elbow(from, pt);
+    if (!segs.length) { paint(); return 'Wire cancelled — it would end where it began.'; }
+    segs.forEach(function (seg) {
+      splitWiresAt(seg[0]);
+      splitWiresAt(seg[1]);
+      cur.wires.push({ a: seg[0], b: seg[1] });
+    });
+    changed();
+    paint();
+    const end = connAt(pt);
+    return 'Wire from ' + cellName(from) + ' to ' +
+      (end && end.part ? partName(end.part) : cellName(pt)) + '.';
+  }
+
   function selectAt(pt, shift) {
     const hit = partAt(pt);
     if (hit) {
@@ -5000,11 +5226,26 @@ function createCircuit(root, opts) {
         if (selIds.has(hit.id)) selIds.delete(hit.id); else selIds.add(hit.id);
       } else if (!selIds.has(hit.id)) {
         selIds.clear();
+        selWires.clear();
         selIds.add(hit.id);
       }
-    } else if (!shift) {
-      selIds.clear();
+      if (!shift) selWires.clear();
+      return hit;
     }
+    /* No part here: a wire under the pointer is what was meant. Wires and parts share
+       one selection so that Delete, and the panel that reports what is selected, have
+       one answer rather than two. */
+    const w = wireAtPt(pt);
+    if (w) {
+      const k = wireKey(w);
+      if (shift) {
+        if (selWires.has(k)) selWires.delete(k); else selWires.add(k);
+      } else if (!selWires.has(k)) {
+        selIds.clear(); selWires.clear(); selWires.add(k);
+      }
+      return null;
+    }
+    if (!shift) { selIds.clear(); selWires.clear(); }
     return hit;
   }
 
@@ -5016,18 +5257,21 @@ function createCircuit(root, opts) {
        drawing nobody can read and a hole nobody can say the owner of. */
     const existing = cellPartAt(pt) || (bodyOf({ kind: tool }) ? bodyAt(pt) : undefined);
     if (existing) {
-      selIds.clear(); selIds.add(existing.id); paintPart(); paint();
+      selIds.clear(); selWires.clear(); selIds.add(existing.id); paintPart(); paint();
       return partName(existing) + ' is already at ' + cellName(pt) + '; selected it instead.';
     }
     const kind = tool;
     const p = { id: 'p' + (seq++), kind: kind, x: pt[0], y: pt[1], rot: 0,
+                /* numbered among its own kind on THIS canvas, not across every part
+                   ever placed — a block's insides are their own namespace */
+                ref: nextRef(kind, cur.parts),
                 value: PART_KINDS[kind].def };
     /* kinds that carry state beyond a value start with the registry's defaults, so a
        part is never placed half-defined and then behaves oddly */
     const st = PART_KINDS[kind].state;
     if (st) Object.keys(st).forEach(function (key2) { p[key2] = st[key2]; });
     cur.parts.push(p);
-    selIds.clear();
+    selIds.clear(); selWires.clear();
     selIds.add(p.id);
     changed();
     paintPart();
@@ -5041,7 +5285,7 @@ function createCircuit(root, opts) {
   function cellName(pt) { return 'column ' + (pt[0] - originX + 1) + ', row ' + (pt[1] - originY + 1); }
   function partName(p) {
     const k = PART_KINDS[p.kind];
-    return (k ? k.name : p.kind) + ' ' + String(p.id).replace('p', '');
+    return (k ? k.name : p.kind) + ' ' + refOf(p);
   }
 
   cv.addEventListener('pointerdown', function (e) {
@@ -5062,6 +5306,24 @@ function createCircuit(root, opts) {
       return;
     }
     if (e.button !== 0) return;
+
+    /* A wire in flight: this click finishes it. Checked before everything else,
+       because while a wire is being drawn no other gesture is on offer. */
+    if (wireFrom) { announce(commitWire(pt)); return; }
+
+    /* Pressing on a terminal starts a wire, whatever tool is selected. This is the
+       gesture the ring was advertising, and it replaces having to find a wire mode
+       first: the connection points are where wires can go, so pointing at one and
+       pressing is unambiguous. Release without moving leaves the wire in flight for
+       a second click; release after moving finishes it there. */
+    if (hoverConn && (tool === 'select' || tool === 'wire')) {
+      cv.setPointerCapture(e.pointerId);
+      wireDown = { sx: sp[0], sy: sp[1], pt: hoverConn.pt, kind: hoverConn.kind,
+                   part: hoverConn.part || null, started: false, shift: e.shiftKey };
+      hoverConn = null;
+      paint();
+      return;
+    }
 
     if (tool === 'wire') { announce(wireAt(pt)); return; }
 
@@ -5085,6 +5347,41 @@ function createCircuit(root, opts) {
 
   function endPointer(e) {
     if (panFrom) { panFrom = null; return; }
+    /* Drag-and-release finishes the wire where the pointer let go; press-and-release
+       on the spot leaves it in flight, so both habits work and neither has to be
+       taught. A cancelled pointer is the browser taking over, not the learner
+       finishing, so it drops the wire rather than committing one nobody drew. */
+    if (wireDown) {
+      const w = wireDown;
+      wireDown = null;
+      if (e && e.type === 'pointercancel') { announce(cancelWire()); return; }
+      if (w.started) {
+        const sp2 = e && e.clientX !== undefined ? evPt(e) : null;
+        announce(commitWire(sp2 ? toGrid(sp2[0], sp2[1]) : w.pt));
+        return;
+      }
+      /* A click, then, and a click on this canvas already meant something. A part
+         under the pointer is selected, as it always was — which is the only thing
+         keeping a ground, whose single pin IS the part, pickup-able at all. A wire
+         under the pointer is selected, which is how it reaches Delete. Only a bare
+         terminal with nothing else to mean is left over, and that starts a wire for
+         people who would rather click twice than drag. */
+      if (partAt(w.pt)) {
+        const hit = selectAt(w.pt, w.shift);
+        if (hit && hit.kind === 'SW' && !w.shift) toggleSwitch(hit);
+        paintPart(); paint();
+        announce(hit ? 'Selected ' + partName(hit) + '.' : selectedSaid());
+        return;
+      }
+      if (w.kind === 'wire') {
+        selectAt(w.pt, w.shift);
+        paintPart(); paint();
+        announce(selectedSaid());
+        return;
+      }
+      announce(startWire(w.pt));
+      return;
+    }
     if (marquee) {
       const x0 = Math.min(marquee.a[0], marquee.b[0]), x1 = Math.max(marquee.a[0], marquee.b[0]);
       const y0 = Math.min(marquee.a[1], marquee.b[1]), y1 = Math.max(marquee.a[1], marquee.b[1]);
@@ -5263,10 +5560,10 @@ function createCircuit(root, opts) {
     }
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      const n = selIds.size;
+      const nP = selIds.size, nW = selWires.size;
       doDelete();
       e.preventDefault();
-      announce(n ? 'Deleted ' + n + (n === 1 ? ' part.' : ' parts.') : 'Nothing is selected.');
+      announce(deleteSaid(nP, nW));
     }
     else if (e.key === 'r' || e.key === 'R') { doRotate(); announce(rotationSaid()); }
     else if (e.key === 'g' || e.key === 'G') { doGroup(); announce(blockSaid('Grouped')); }
@@ -5275,16 +5572,19 @@ function createCircuit(root, opts) {
       /* Escape drops whatever is in hand first, and only then backs out of a block:
          inside one, the gesture that cancels a half-drawn wire must not also throw
          away where you are. */
-      if (wireFrom || marquee || selIds.size) {
-        wireFrom = null; marquee = null; selIds.clear(); paintPart(); paint();
+      if (wireFrom || marquee || selIds.size || selWires.size) {
+        wireFrom = null; wireDown = null; marquee = null;
+        selIds.clear(); selWires.clear();
+        paintPart(); paint();
         announce('Let go.');
       } else if (path.length) { closeTo(path.length - 1); announce('Closed the block.'); }
     }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
-      selIds.clear();
+      selIds.clear(); selWires.clear();
       cur.parts.forEach(function (p) { selIds.add(p.id); });
+      cur.wires.forEach(function (w) { selWires.add(wireKey(w)); });
       paintPart(); paint(); e.preventDefault();
-      announce('Selected all ' + selIds.size + (selIds.size === 1 ? ' part.' : ' parts.'));
+      announce(selectedSaid());
     }
     else if (e.key === '+' || e.key === '=') { zoomTo(view.s * 1.2); announce(zoomSaid()); }
     else if (e.key === '-' || e.key === '_') { zoomTo(view.s / 1.2); announce(zoomSaid()); }
@@ -5357,14 +5657,32 @@ function createCircuit(root, opts) {
     paintPart();
   }
   function doDelete() {
-    if (!selIds.size) return;
+    if (!selIds.size && !selWires.size) return;
     /* A wire with nothing left at either end is a wire the learner cannot see the
        purpose of, but it may still be carrying a connection between two other
-       things, so deleting parts leaves wires alone. */
+       things, so deleting parts leaves wires alone. Deleting a WIRE is different:
+       it was asked for by name. */
     cur.parts = cur.parts.filter(function (p) { return !selIds.has(p.id); });
+    cur.wires = cur.wires.filter(function (w) { return !selWires.has(wireKey(w)); });
     selIds.clear();
+    selWires.clear();
     changed();
     paintPart();
+  }
+
+  function selectedSaid() {
+    const bits = [];
+    if (selIds.size) bits.push(selIds.size + (selIds.size === 1 ? ' part' : ' parts'));
+    if (selWires.size) bits.push(selWires.size + (selWires.size === 1 ? ' wire' : ' wires'));
+    return bits.length ? 'Selected ' + bits.join(' and ') + '.' : 'Nothing to select.';
+  }
+
+  function deleteSaid(nP, nW) {
+    if (!nP && !nW) return 'Nothing is selected.';
+    const bits = [];
+    if (nP) bits.push(nP + (nP === 1 ? ' part' : ' parts'));
+    if (nW) bits.push(nW + (nW === 1 ? ' wire' : ' wires'));
+    return 'Deleted ' + bits.join(' and ') + '.';
   }
 
   /* A diagram has no tools, no analysis panel and nothing to click, so there is
@@ -5395,7 +5713,8 @@ function createCircuit(root, opts) {
   root.querySelector('[data-act="rotate"]').addEventListener('click', doRotate);
   root.querySelector('[data-act="delete"]').addEventListener('click', doDelete);
   root.querySelector('[data-act="clear"]').addEventListener('click', function () {
-    cur.parts = []; cur.wires = []; selIds.clear();
+    cur.parts = []; cur.wires = []; selIds.clear(); selWires.clear();
+    wireFrom = null; wireDown = null; hoverConn = null;
     view = { s: 1, px: 0, py: 0 };
     changed(); paintPart();
     announce('Cleared the drawing.');
