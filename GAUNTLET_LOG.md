@@ -7430,3 +7430,415 @@ diff is `catalog/authors/CS310.py`, `catalog/CS310.json`, `tools/verify_quiz.mjs
 other course's content, no renderer, and no unit kind other than `quiz` was touched.
 
 ---
+
+## Cycle 23 — TRACK 4: Subject Breadth & Progression
+
+*(The runner labels this commit "cycle 4" — run D's counter, while this log keeps
+counting. Run D's cycle 1 was this file's cycle 20, and its cycle 3 was cycle 22.)*
+
+**Target: EE221 (Measurement and Instrumentation).** One course, and the missing *topic*
+cycle 17 named as the largest this track had found: *"not one module in the catalogue is
+titled for an op-amp … That is a missing topic rather than missing practice, it is the
+largest single one this track has found, and the device to teach it with is already
+modelled."* Nothing had picked it up.
+
+Re-measured before starting rather than taking the handed-over number. At HEAD the
+catalogue mentioned an operational amplifier **19 times across 7 courses**, **no module
+anywhere was titled for one**, and `OPAMP` was drawn in **0 of 386 published schematics**
+— while `src/circuit.js` has carried a finite-gain op-amp with `tanh` rails and a 75 Ω
+output resistance since cycle 0, and `emit.py`'s `MATCH_SYMBOLS` has carried `OPAMP` long
+enough for EE221's own symbol drill to draw one.
+
+EE221 is where that costs most, and the reason is that **every one of those 19 mentions
+is the op-amp being offered as the answer to a problem the course has just posed.**
+
+```
+  EE101 M4   "or buffer the tap, with a unity-gain op-amp whose input draws nanoamps"
+  EE101 M9   "an op-amp output behaves like a few milliohms because feedback holds it"
+  EE102 M5   "put a buffer between the stages — an op-amp wired as a follower"
+  EE102 M8   "or with an op-amp made to imitate an inductor. Both are outside this course"
+  EE121 M1   "follow the network with an amplifier that draws no input current, which is
+              one of the things an operational amplifier is for"
+  EE211 M1   "a real integrator built from an op-amp does not run off to infinity"
+  EE211 M3   "a filter anyone can build out of one op-amp and six passives"
+  EE231 M2   "which is why op-amp buffers appear between passive stages"
+  EE221 M4   "here it is the buffer between the divider chain and the converter"
+  EE221 M7   "a one-op-amp difference amplifier rejects common mode only as well as its
+              two resistor ratios match — 0.1% resistors cap it near 66 dB"
+```
+
+Ten sites, nine courses' worth of problems, one device, and no derivation of it anywhere.
+EE221 is the course where the debt compounds rather than merely appears: its **only
+declared prerequisite is EE102**, which mentions the op-amp twice and says of it *"both
+are outside this course"*; its module 4 **draws the symbol in a `match` unit** and
+describes the buffer's job in the `why`; its module 4 derivation **ends by pointing at
+the missing topic by name** (*"why the rule of 99 was out of reach until an amplifier was
+put in front of the divider instead of a coil of wire"*); its module 5 derivation opens on
+*"the summing node"*, a term defined by nothing in the catalogue; and its module 7 is
+titled *"…and the in-amp"* while telling the learner *"no amplifier analysis is needed to
+use this"*.
+
+EE221 is also one of the two courses cycle 0 flagged as *"full syllabi, still need
+density"* that no cycle had reached — EE201 went in cycle 10, EE202 in cycle 17 — and it
+had **0 `read` units across 10 modules**, so the progression half of this track's brief
+lands in the same course as the breadth half.
+
+### Baseline, captured before any edit
+
+```
+85 circuit exercises / 360 checks · 564 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1290 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3360 per-option explanations · 6572 draws · answer in the top slot 24.5%
+     quiz view 1260 mounts, 5464 options pressed, top slot 24.0%
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui: 78 driven keys and gestures · 10 things said · 15 floored kinds
+circuit_model: 1475 analyses · 84 refusals · 15 plots · 15 floors, 17 ceilings
+               386 published schematics, 365 with a DC operating point
+circuit_view: 26 hostile coordinates · 420 mounts at 7 widths · 150 gestures
+theme 135 contrast surfaces · desk 61 expressions · tune_ui 423 hostile openings
+progress 29 hostile documents
+EE221: 10 modules · 32 units · 3.20 u/m · 0 read · 5 derive · 4 build ·
+       5 labs and a capstone · 19 derivation steps · 54 questions · 5 blanks holes
+       8 published schematics, 0 containing an op-amp
+catalogue: 62 courses, 368 modules, 1929 units · 1991 lesson ids
+           386 schematics drawing 9 part kinds; OPAMP among the 12 never drawn
+build: 3 parts / 111 keys · 32/32 + 30/30 · 13 visualisers · 3 tune models · 15 symbols ·
+       62 payloads, 13086 KB · inlined 14334 KB · shell 1220 KB
+```
+
+### The attacks
+
+**1. Senior Educator** — taken first, and this track's half of the brief turned out to be
+the whole finding: **the course's central technique is the one thing it never explains.**
+
+- **EE221's subject is loading, and its answer to loading is a device it does not teach.**
+  Module 2 derives the rule of 99 ($R_{in} \ge 99R_{th}$ for 1%) and module 4's derivation
+  closes by admitting the rule was unreachable until an amplifier replaced the coil of
+  wire — and then the course moves on. Between those two units sits the `match` drill that
+  draws the op-amp and says it "takes almost no current from the tap", which is an
+  announcement of exactly the fact a learner has no way to have acquired.
+- **Module 7 marks an error it never derives.** Its concepts say *"0.1% resistors cap it
+  near 66 dB"*. That number is correct — it is measured below — and nothing in the
+  catalogue could produce it, because the formula behind it needs the difference
+  amplifier, which needs the virtual short, which needs negative feedback.
+- **Module 5's "summing node" is used and never defined.** Its dual-slope derivation opens
+  *"a resistor $R$ into the summing node of an amplifier with a capacitor $C$ in
+  feedback"*, and the whole ramp rate $-V/RC$ depends on two facts about that node — it
+  sits at zero and it takes no current — neither of which is stated anywhere.
+- **A claim that is defensible as written and misleading as read.** Module 7 says putting
+  the gain in the buffer pair is *"why an in-amp keeps its CMRR at high gain and a bare
+  difference stage … does not"*. The derivation this cycle adds says the bare stage's
+  rejection is $(1+k)/t$, which **rises** with gain; measured, a gain-100 stage with one
+  resistor 0.1% out gives 100.10 dB where a unity one gives 66.03. The real cost is that
+  changing the gain means re-scaling two of the four resistors and re-earning the match,
+  and the real second reason for the buffers is input impedance. Rewritten to say both,
+  with the "note what this is *not*" spelled out rather than left to be inferred.
+
+**3. Simulation Auditor** — every number below was computed by loading `src/circuit.js` as
+shipped and solving, before anything was written.
+
+- **The op-amp's whole linear input window is 300 µV wide.** $(v_{pos}-v_{neg})/2$ divided
+  by the gain is $15/10^5 = 150$ µV either side of balance. The device as sold is a
+  comparator; everything else it does, it does inside a loop.
+- **The follower's error is $-1/(1+A)$, and the solver reproduces it to three figures at
+  every gain from 10 to $10^6$** — 0.908989532, 0.990084736, 0.998999519, 0.999899862,
+  0.999989985, 0.999998999 for 1.000000 V in. That table is in the reading, because a
+  device gain moving five orders of magnitude while the circuit gain moves in the sixth
+  decimal is the entire argument for feedback and it is better shown than asserted.
+- **The meter's own numbers, solved.** The chain is 9 MΩ over 1 MΩ, $R_{th}$ at the tap
+  900 kΩ. A 100 kΩ converter hung straight on it drags the tap from 1.000000 V to
+  **0.100000 V — a factor of ten, not a per cent.** The rule of 99 says 89.1 MΩ would be
+  needed to reach 1%; solved at 100 MΩ the tap reads 0.991080 V, 0.89% low, so the rule is
+  right. A follower feeding the same 100 kΩ converter reads **0.999989 V, 11 ppm low** —
+  and module 1's own bullet says a 6½-digit instrument resolves 1 ppm and is specified to
+  35, so the buffer's error is a real line in the budget and not what limits the
+  instrument. Both halves of that are true and neither could be said before.
+- **The closed-loop output resistance is 0.75 mΩ, measured** — 0.752 µV of droop per
+  milliamp drawn — being the device's own 75 Ω divided by $1+A$. EE102's cascading module
+  has claimed for a long time that a follower's output impedance is "milliohms". It is,
+  and this is where they come from.
+- **The model has no bandwidth at all, checked rather than assumed.** `MNA.acAt` on the
+  follower returns 0.999989955 at 1 Hz and 0.999989955 at $10^{12}$ Hz. There is no
+  gain-bandwidth product in the device, so every error in the reading is a DC error. Said
+  so in the reading rather than left for a learner to trip over.
+- **The inputs draw exactly zero.** Not a small number — the device's current vector is
+  `[0, …, 0]` at both input pins by construction. A real one draws femtoamps to hundreds
+  of nanoamps, and 1 nA on a 10 MΩ chain is 10 mV, which would swamp everything on the
+  page. Recorded in the reading as a place the simulator stops being the world.
+- **The 66 dB claim, measured three ways.** Difference amplifier, one resistor off by $t$:
+
+```
+   gain k    resistor off by t    CMRR formula (1+k+kt)/t     solved in the editor
+      1            0.1%                   66.03 dB                  66.03 dB
+      1            0.01%                  86.02 dB                  86.01 dB
+      1            0.4%                   54.01 dB                  53.98 dB
+    100            0.1%                  100.10 dB                 100.10 dB
+```
+
+  So module 7's sentence is right, and right for a reason it never gave: 66 dB is the
+  **unity-gain** figure, and unity gain is what the difference stage inside an in-amp runs
+  at. Two things the slogan hides and the derivation now says: the cap rises with gain, and
+  four resistors each within 0.1% can be out in opposing directions, which is $t = 0.004$
+  and **54 dB guaranteed against 66 dB typical**. The worst case was confirmed separately
+  by perturbing all four ($R_1 -t$, $R_2 +t$, $R_3 +t$, $R_4 -t$): 73.98, 53.98, 40.00 and
+  33.98 dB at $t$ = 0.01%, 0.1%, 0.5% and 1%, against $(1+k)/4t$ exactly.
+- **With the ratios perfect, what is left is the model rather than physics.** A matched
+  unity-gain stage measures 102.50, 122.50, 142.50 and 162.50 dB at $A = 10^3 \ldots 10^6$
+  — exactly 20 dB per decade, and the residual is $A R_2/R_{out}$, i.e. the shipped 75 Ω
+  output resistance leaking through the feedback network. A real op-amp's residual is its
+  own CMRR specification, which this device does not have. **Not written into any lesson**,
+  because a number that is an artefact of `OP_ROUT` should not be taught as a property of
+  amplifiers; recorded here so the next cycle does not mistake it for one.
+- **Checked and found correct, recorded so the next cycle does not re-derive it:** the
+  bridge arms 350/350/350/350.7 at 10 V give 5.004995 V and 5.000000 V, so 4995.005 µV of
+  differential on 5.0 V of common mode; the diode, MOSFET and bipolar counts from cycle 10
+  and cycle 17 are unmoved; and EE221's existing four build exercises still score exactly
+  as they did (M2 5/5·1/5, M3 5/5·2/5, M7 4/4·3/4, M8 4/4·1/4).
+
+**2. Assessment Inquisitor.** EE221's 54 existing questions and 5 blanks holes are Track
+3's ground and were not rewritten — `verify_quiz` is unmoved at 1366/252/1103/217/3360 and
+EE221's budget entry is untouched. Audited for the one thing this cycle could falsify:
+whether any key depends on the op-amp being absent, or on the 66 dB figure being taken on
+trust. **None does.** M7/Q5's key — *"because the difference stage's rejection depends on a
+matched resistor ratio, and changing the gain there would unbalance it"* — is precisely
+what the new derivation proves, so the derivation strengthens the question rather than
+contradicting it. The two new graded units add no question deliberately: both are graded by
+the solver against the real device, and each was additionally run against wrong-but-plausible
+designs to show it discriminates rather than merely passing its own answer.
+
+**4. UX & Accessibility Hardener.** Content-side, as cycles 1, 4, 7, 10 and 17 established.
+Every math fragment in the units this cycle wrote or touched was pushed through the shipped
+`MathML.render` — **263 fragments, 263 rendered, 0 raw, 0 swallowed** — with cycle 10's
+escaped space and cycle 17's `\bigl`/`\bigr` avoided from the start rather than repaired
+after. No hard-coded colour and no raw HTML was introduced; both data tables are fenced
+`text` blocks inside `overflow-x:auto` rather than markdown tables, which is cycle 4's rule
+for staying safe at 375px. The two new schematics went through `verify_circuit_view`'s
+recording canvas at seven widths as part of the catalogue sweep: 424 mounts, all 390
+drawings inside their own box.
+
+### What changed
+
+**Four new units, appended to the two modules they belong to**, and no module added. Every
+existing unit kept its unsuffixed id, so nothing anyone has completed is orphaned — checked
+rather than asserted, by building every lesson id in the catalogue exactly as
+`src/app.js` does, at HEAD and now: **1991 → 1995 ids, 4 new, 0 orphaned, 0 duplicated.**
+
+| | M4 `read` | M4 `build` | M7 `derive` | M7 `build2` |
+|---|---|---|---|---|
+| title | The amplifier the rule of 99 was waiting for | The buffer between the chain and the converter | Where the rejection of a difference amplifier actually lives | A gain of 100 on the bridge, without losing the rejection |
+| size | 2243 words | 1 × `OPAMP`, 5 checks | 4 steps | 1 × `OPAMP`, 4 checks |
+| the measurement | 11 ppm against the rule of 99's 1% | 0.100000 V → 0.999989 V | $A_{cm} = kt/(1+k+kt)$ | 0.4903 V, and −15 V when one resistor moves |
+| reference / start | — | 5/5 · 2/5 | — | 4/4 · 3/4 |
+
+**The reading is EE221's first**, and the prerequisite bridge. It uses only what EE102 and
+this course's own earlier modules contain: it starts from module 2's divider and module 4's
+ohms-per-volt, states the device as one equation and one gain, notices that a $10^5$ gain
+into a 15 V rail leaves a 300 µV input window, closes the loop and solves
+$v_{out} = A(v_{in} - v_{out})$ **rather than announcing a virtual short** — the short then
+falls out as $v_+ - v_- = v_{out}/A$, with both cases where it fails named and measured. It
+derives the follower, the non-inverting and the inverting stages, notes that the inverting
+one's input resistance is $R_1$ and nothing else (which is the bill module 7 pays), prices
+the buffer against the rule of 99 on this course's own chain, and closes on four places it
+stops holding — rails, $1/(1+A\beta)$ once the gain is not 1, zero input current, and no
+bandwidth — of which the middle two are exactly the errors module 7's exercise is measured
+showing, so they arrive as expected rather than as defects.
+
+**M4's build is the novice rung**: three wires and a part, and the whole lesson is in one of
+the wires. **M7's is the flagship**: the same specification as the difference stage the
+module already describes, on the bridge module 6 built, where **raising the obvious resistor
+puts the output on a rail**. Its third check measures the gain from the difference *actually
+present at the learner's own input resistors* — so the 1.7% the 10 kΩ inputs take off a
+350 Ω bridge is reported by the fourth check as loading rather than blamed on the amplifier,
+and the 0.101% the finite loop gain takes is inside the tolerance and named in the message.
+
+**Each new build was run against wrong-but-plausible designs, using the checks as emitted**,
+because a check that has only ever seen its own reference has not been shown to discriminate:
+
+```
+  M4    reference 5/5 · start 2/5 · no feedback wire 2/5 (output at 14.99 V) ·
+        inputs swapped 4/5 · old tap wire never deleted 2/5 (tap collapses to 83 µV) ·
+        output never joined to the converter 2/5 · converter swapped for a 1 GΩ one 4/5
+  M7.2  reference 4/4 · start 3/4 · only R2 raised 1/4 (−14.999 V, on the rail) ·
+        only R4 raised 3/4 (4.910 V, almost all of it common mode) ·
+        gain 100 at 1k/100k 3/4 (bridge loaded 15%) · gain 100 at 100k/10M 4/4 ·
+        ratios 0.1% apart 3/4 · ratios 1% apart 3/4 · gain 10 by mistake 3/4 ·
+        stretched gauge in the other leg 3/4 (−0.4903 V)
+```
+
+**Six pre-existing items changed**, verified structurally rather than by reading the diff —
+**4 units added, 0 removed, exactly 6 pre-existing items changed**: M4's and M7's concept
+lists (each gaining a bullet that carries the measured number), M4's derive closing and M5's
+derive brief (the two forward pointers, one of which defines "summing node" where it is
+used), the course outcomes, which gain two, and the course assessment, which said "four
+circuits … five guided derivations" and would otherwise have become false.
+
+EE221: 32 units → **36** · 3.20 units per module → **3.60** · 0 read → **1** · 4 build →
+**6** · 5 derive → **6** · 19 derivation steps → **23** · 8 published schematics → **12**,
+of which **3 contain an op-amp**, against 0 in the whole catalogue before this cycle.
+Questions and blanks holes unmoved at 54 and 5.
+
+### Found in my own work, and fixed
+
+- **Two hostile variants that were not the circuits I said they were.** The first drafts of
+  the "inputs swapped" and "buffer in front of the chain" designs each routed a wire through
+  a cell another run already occupied — one shorting the op-amp's own inputs together at
+  (12,5), the other shorting the 9 MΩ arm — so both reported failures that had nothing to do
+  with the fault being tested. Caught by printing the netlist each variant actually builds
+  and reading the node assignments, rather than by trusting that a drawing does what it looks
+  like. Every variant in the table above was re-checked that way before its number was
+  written down. The second was replaced with a better one anyway: leaving the old tap wire in
+  is a mistake learners actually make, and putting a buffer in front of the chain is not.
+- **A check that passed a latching circuit.** With the tap on the inverting input and the
+  feedback on the non-inverting one, **every voltage in the M4 circuit comes out the same to
+  five figures** — the reference reads 0.9999891 and the positive-feedback version 1.000009,
+  which is $A/(A+1)$ against $A/(A-1)$ and differs only in the *sign* of an 11 ppm error. A
+  DC operating point is a solution of the circuit's equations and is never asked whether the
+  circuit would stay there, so no measurement on the page could tell them apart. The fifth
+  check therefore reads the wiring — the only one in either exercise that does — and its
+  message says why, because that is a fact about simulators worth knowing. Rejected the
+  alternative of a one-sided ppm test: it would pass and fail on a 20 ppm difference that any
+  change of load or gain moves.
+- **A common-mode gain I stated from memory and had wrong by a factor of sixteen.** The M7
+  brief said raising $R_2$ alone leaves "a common-mode gain of about −3". The derivation on
+  the same page gives $(R_1R_4 - R_2R_3)/(R_1(R_3+R_4))$, which for 10k/1M/10k/10k is
+  **−49.5**. Recomputed and rewritten, with the consequence stated — 50 V per volt against
+  5 V of common mode is −250 V asked of a 15 V rail, which is why it rails rather than merely
+  reads high.
+- **A bridge voltage written to one more digit than it has.** "5.005000 V" for a node that
+  solves to 5.0049950. Corrected to 5.004995.
+- **A "hundred times worse" that is nearer a thousand.** The M4 concepts bullet compared the
+  rule of 99's 1% against the follower's 11 ppm and called it a hundred. It is 10 000 ppm
+  against 11, so roughly nine hundred. Rewritten to "nearly a thousand times larger", which
+  is true at either end of the arithmetic.
+- **One hedge word introduced and removed.** A "just as readily as" in a check message.
+  Counted by diff against HEAD rather than by counting twice: EE221 carries **15 at HEAD and
+  15 now**, so 0 introduced.
+
+### Left alone, deliberately
+
+- **The three-op-amp instrumentation amplifier itself is still not built**, and this is the
+  clearest next instalment. The module now derives why its difference stage runs at unity,
+  measures what a bare stage costs on a bridge, and says what the two buffers buy — but the
+  in-amp is still described rather than drawn. It is buildable: three `OPAMP` parts, two
+  feedback resistors and a gain resistor, all inside the solver's reach. What stopped this
+  cycle is routing, not physics — the front pair's two inverting nodes have to cross the
+  output rails of both buffers on a grid where a wire joins every cell it passes through, and
+  three failed layouts (each verified by printing the netlist, above) is where the budget for
+  it went. Recorded with the reason so the next cycle starts from the layout problem rather
+  than rediscovering the topology.
+- **`PNP`, `PMOS`, `SW`, `LDR`, `NTC`, `POT`, `LAMP`, `METER` and `BAR` are still drawn by
+  nothing.** Nine kinds, down from ten: the census across all **390 published schematics** is
+  now `GND 854 · R 748 · V 406 · OUT 342 · C 171 · L 91 · I 53 · D 4 · LED 4 · NMOS 4 ·
+  OPAMP 3 · NPN 2`. `METER` and `LAMP` are the interesting pair for this course specifically:
+  EE221 module 4 is *about* a meter's shunts and multipliers and could draw one.
+- **`emit.py`'s `DIAGRAM_KINDS` is still `{R, C, L, V, I, GND, OUT}`**, so a `numeric` unit
+  still cannot draw an op-amp even though `MATCH_SYMBOLS` next to it can and `drawPart`
+  renders one. Cycle 10 recorded this with both list contents and did not spend it; this
+  cycle did not need it either, because a `build` unit carries a real schematic and is graded
+  by the same solver. Unchanged, and the reason is unchanged: widening a gate to serve
+  content nobody has written is how a gate ends up enforcing a comment.
+- **The op-amp is still invoked and not taught in six other courses.** The ten sites above
+  minus EE221's two: EE101 ×3, EE102 ×2, EE121, EE211 ×3, EE231. All of them are now
+  *reachable* — EE221's reading derives what each one assumes — but none of them says so, and
+  EE221 is not on any of their prerequisite chains, so a learner arriving at EE102's
+  cascading module still meets the follower as an assertion. The honest fix is a reading in
+  EE101 or EE102, which is a second course and the brief says one. Recorded with the sites.
+- **EE221 still has one reading in ten modules**, and modules 1, 2, 3, 5, 6, 8, 9 and 10 have
+  none. This cycle wrote the one that closes the prerequisite gap and did not write nine
+  more; that is Track 1's density pass and cycle 1 established it is its own cycle. **Fifteen
+  courses remain thinner**, all at exactly 1.00 units per module — CAP501, CE101, CE201,
+  DL501, ELEC410, ELEC420, ELEC430, ETH501, FM501, GFX401, HPC401, ML401, QC510, ROB520,
+  SEC301 — unchanged from cycle 17's list, so this is a shared debt rather than a worst case.
+- **CE101 was weighed a third time and passed over a third time.** Cycles 10 and 17 both
+  recorded it as a root of the CS degree's hardware chain (no prerequisites, prerequisite of
+  CE201 → CS210 and HPC401) and both chose a course where gates could prove the fix instead.
+  The graph is unchanged and was not re-derived. It is still the strongest remaining
+  *build-a-course* target and it will still have only `verify_quiz`, `verify_labs` and the
+  emitter to hold it up; that is an argument about what kind of cycle it needs, not about
+  whether it needs one.
+- **EE202's M5 clipping-and-distortion build still has its current source**, cycle 17's
+  recorded next instalment, untouched. So is the AC-excitation finding cycle 17 recorded at
+  `src/circuit.js:1165` — `p.ac` is still copied into the netlist and read by nothing, and it
+  is still a migration rather than a line. Neither was needed here: both new exercises are
+  DC-graded.
+- **EE221's `credits` and `hours` unchanged at 10 and 120**, and `catalog/_spine.ee.json`
+  untouched. The spine carries course metadata only, and 36 units against a nominal 120 hours
+  remains light rather than heavy.
+- **The two 6½-digit numbers in module 1 were left as they are.** The reading leans on them —
+  1 ppm of resolution, 35 ppm of specification — and they are module 1's wording, correct,
+  and not this cycle's to restate.
+- **`docs/programs` aged out one MA121 payload and one CS310 payload and gained two for
+  EE221.** Two because this cycle built three times, and both are inside a retained
+  generation. The rolling window, as every cycle since 1 has established. Verified rather than
+  assumed: **3 generations naming 64 files, 64 on disk, covering 62 distinct courses,
+  0 orphaned and 0 missing.**
+
+### Gates, after
+
+Every pre-existing number unmoved. Seven numbers moved, each by exactly what was added.
+
+```
+verify_circuits      All good: 87 circuit exercises, 369 checks · 593 labels
+                     (85 + 2 · 360 + 9 · 564 + 29)
+                     EE221/M4   reference 5/5 · start 2/5
+                     EE221/M7.2 reference 4/4 · start 3/4
+                     and the four that were already there, unmoved:
+                     M2 5/5·1/5 · M3 5/5·2/5 · M7 4/4·3/4 · M8 4/4·1/4
+verify_derivations   All good: 1294 steps across 46 courses   (1290 + 4; EE221 19 -> 23)
+verify_circuit_model All good: 1487 analyses vouch for every number they return and 84
+                     refuse rather than guess · 15 plots · 15 floors, 17 ceilings ·
+                     390 published schematics, 369 with a DC point   (1475 + 12 · 386 + 4)
+verify_circuit_view  All good: 26 hostile coordinates · 390 published drawings unchanged
+                     by the guard · 424 mounts at 7 widths · 150 gestures   (420 + 4)
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_quiz          All good: 1366 questions in 252 quiz units and 1103 holes in 217
+                     blanks units · 3360 per-option explanations · 6572 draws · 24.5% ·
+                     quiz view 1260 mounts, 5464 options pressed, 24.0% · every bank
+                     within its answer-tell budget and above its whys floor
+verify_labs EE221    All good: 6 labs
+verify_circuit_ui    All good: 78 driven keys and gestures, says 10 things while doing it
+verify_theme         All good: theme tokens, 135 contrast surfaces in both themes,
+                     the 375px topbar and the mobile drawer
+verify_desk          All good: 61 expressions at the extremes
+verify_tune_ui       All good: 21 tune units, 423 hostile opening values, 462 targets,
+                     105 paints, 270 drags, 493 mounts
+verify_progress      All good: 6 unload writes · 29 hostile documents · 7 merges
+emit.py EE221        ok — 10 modules, 5 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 13086 -> 13129 KB ·
+                     inlined 14334 -> 14378 KB · shell 1220 KB unchanged
+catalogue            62 courses, 368 modules, 1933 units (1929 + 4) · 1995 lesson ids
+```
+
+The pre-existing gates were compared on the figures they report, which are reproduced above
+against the baseline block at the top of this entry and match it line for line; a byte-level
+diff of their output was not run, and that is stated rather than implied.
+
+Beyond the gates: every number written into the four new units computed by loading
+`src/circuit.js` as shipped and solving, before it was written — the follower's
+$-1/(1+A)$ at six gains, the 0.100000 V collapse and the 11 ppm that replaces it, the
+0.75 mΩ closed-loop output resistance, the flat gain from 1 Hz to a terahertz, and the
+66.03 / 86.01 / 53.98 / 100.10 dB that the new derivation predicts to two decimal places;
+all four derivation steps checked symbolically in SymPy **and** through the shipped
+`MathCheck.latexToPy` before authoring, so neither the algebra nor the LaTeX was discovered
+to be wrong by the gate; both new builds run against **seven and ten** wrong-but-plausible
+designs using the checks as emitted, with each hostile variant's netlist printed and read
+before its score was believed; all 263 math fragments rendered through the shipped
+`MathML.render` (263 of 263, 0 raw, 0 swallowed); hedge words counted by diff against HEAD
+(15 and 15, 0 introduced); the EE221 diff compared structurally against HEAD rather than as
+lines (4 added, 0 removed, 6 changed); every lesson id in the catalogue rebuilt exactly as
+`src/app.js` builds them at HEAD and now (1991 → 1995, 0 orphaned, 0 duplicated); and the
+payload window checked for orphans.
+
+**A note on the working tree.** The runner's lock (`.gauntlet.pid`, pid 11729) was live
+throughout and this cycle is the process it launched, so `emit.py` and `build.mjs` were safe
+to run. The diff is `catalog/authors/EE221.py`, `catalog/EE221.json` and the `docs/` build
+output, and nothing else. No other course, no renderer, no gate and no tool was touched.
+
+---

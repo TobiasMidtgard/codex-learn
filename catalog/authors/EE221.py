@@ -54,13 +54,15 @@ COURSE = {
         "Explain how a dual-slope converter's result becomes independent of its own resistor, capacitor and clock, why integrating over a whole number of line cycles rejects mains interference, and what is left when the line frequency is not what the aperture assumed.",
         "Separate common-mode from differential-mode interference, size the error that a stated CMRR and a stated source imbalance leave behind, and wire a measurement so that a shared ground conductor is not part of the signal path.",
         "Compensate a thermocouple's cold junction, invert a thermistor's \u03b2 model, judge a calibration fit by its residuals, and say how long an instrument of known time constant must be left alone before its reading may be believed.",
+        "Derive what negative feedback does to an operational amplifier's gain, input current and output impedance, and use a follower to read a divider chain that no achievable input resistance could have read.",
+        "Show that a difference amplifier's common-mode rejection is set by the match between two resistor ratios rather than by the amplifier, size the rejection a stated tolerance leaves at a stated gain, and say what an instrumentation amplifier's two input buffers buy that a bare difference stage cannot.",
     ],
     "assessment": (
-        "Nine quizzes, four circuits drawn and measured in the schematic editor, five "
+        "Nine quizzes, six circuits drawn and measured in the schematic editor, six "
         "guided derivations and five Python labs checked by execution, together with "
-        "shorter work \u2014 two slider designs, two numerical problems, a symbol drill and a "
-        "fill-in \u2014 ending in a capstone that takes one bench measurement from raw "
-        "readings to a reported temperature with a full uncertainty budget."
+        "shorter work \u2014 a reading, two slider designs, two numerical problems, a symbol "
+        "drill and a fill-in \u2014 ending in a capstone that takes one bench measurement "
+        "from raw readings to a reported temperature with a full uncertainty budget."
     ),
     "reading": [
         "*The Art of Electronics*, Horowitz & Hill — appendix on oscilloscopes, and section 8.1 on noise.",
@@ -979,7 +981,241 @@ assert tight > bw, "a tighter error allowance must demand more bandwidth, not le
                 "The price of a current range is the burden voltage $I_mR_m$ across that parallel pair, and it is the same on every current range because the shunt is chosen to make it so. A meter with 100 mV of burden at full scale is a 100 mV battery inserted into your loop — 3% of a 3.3 V rail, taken out of the circuit you are trying to characterise.",
                 "The current jack is a separate socket behind a fuse because on that setting the meter is a few tens of milliohms. Probes left in the current jack and then laid across a supply make the meter a short circuit; it is the commonest way a bench meter dies, and the reason the fuse is a consumable.",
                 "A meter's AC function is a separate signal path with its own limits: it is AC-coupled, so a DC offset is subtracted rather than measured; it has a specified bandwidth, typically tens of kilohertz on a bench meter; and its converter has a crest-factor limit. Outside any of the three the display is not noisy — it is confidently wrong.",
+                "The buffer between the chain and the converter is an operational amplifier with its output wired back to its own inverting input, and the reading below derives what that wire does. Two numbers from this module's chain say why it is there: hang an ordinary 100 kΩ converter straight on the 10:1 tap and the tap collapses from 1.000000 V to 0.100000 V, a factor of ten; put the follower in between and the converter reads 0.999989 V, eleven parts per million low. The rule of 99 would have demanded an 89 MΩ converter to reach 1%, which is an error nearly a thousand times larger than the one the follower leaves.",
             ],
+            "read": {
+                "title": "The amplifier the rule of 99 was waiting for",
+                "minutes": 15,
+                "body": r'''
+## The problem this course has been carrying since module 2
+
+Module 2 said the only honest thing there is to say about a voltmeter: connecting one
+makes a divider out of the node you wanted to measure, the reading comes out low by
+$R_{th}/(R_{th}+R_{in})$, and the only defence is to make $R_{in}$ large. The rule of 99
+came out of that — 1% of error needs $R_{in} \ge 99R_{th}$ — and this module's own
+derivation ended by showing why the analogue instrument could not obey it. Its input
+resistance is the movement's own, $1/I_m$ ohms per volt of range, which for a 50 µA
+movement is 20 000 Ω/V and therefore 200 kΩ on the 10 V range. On a 100 kΩ node that
+reads a third low. Buying a better movement does not rescue it either: a more sensitive
+movement is a finer suspension and a weaker hairspring, and the mechanism gives out long
+before the ohms arrive.
+
+So the instrument needs something that will read a voltage and take no current for doing
+it. No component does that. What does it is a **loop**, and the device the loop is built
+around is the triangle in this module's symbol drill — the one sitting between the
+divider chain and the converter, which is the only part of a meter's front end this
+course has named without opening.
+
+## The device, from the outside
+
+Three terminals matter: two inputs, marked $+$ and $-$, and one output. One equation
+describes it,
+
+$$v_{out} = A\,(v_{+} - v_{-})$$
+
+and one number: $A$, the open-loop gain, which for the device in this course's editor is
+$10^{5}$. The output cannot leave its supply rails, here $\pm 15$ V.
+
+Put those two facts together before reading on, because their consequence is the whole
+subject. If the output stops at 15 V and the gain is $10^{5}$, the largest input
+difference the device can respond to *at all* is
+
+$$\frac{15\,\text{V}}{10^{5}} = 150\,\mu\text{V}$$
+
+so the window over which it behaves as an amplifier is 300 µV wide, rail to rail. An
+amplifier whose entire useful input range is three hundred microvolts is not an
+amplifier. It is a comparator: feed it anything larger and the output sits at one rail or
+the other, and which one tells you the sign of the difference and nothing else.
+
+That is the device as sold. Everything useful it does, it does with a wire from its
+output back to its inverting input.
+
+## The loop, with the algebra rather than the slogan
+
+Join the output straight back to the $-$ input and drive the $+$ input with $v_{in}$.
+Now $v_{-} = v_{out}$, so the one equation reads
+
+$$v_{out} = A\,(v_{in} - v_{out})$$
+
+which rearranges with no approximation anywhere to
+
+$$\frac{v_{out}}{v_{in}} = \frac{A}{1 + A}$$
+
+The gain is 1, near enough. *How* near is the interesting part: the shortfall is
+$-1/(1+A)$, which at $A = 10^{5}$ is ten parts per million. Run it on the editor's own
+device and that is what comes back.
+
+```text
+  open-loop gain A     v_out for 1.000000 V in     shortfall      -1/(1+A)
+            10           0.908989532               -9.101 %       -9.091 %
+           100           0.990084736               -0.9915 %      -0.9901 %
+         1 000           0.998999519               -0.1000 %      -0.09990 %
+        10 000           0.999899862               -0.01001 %     -0.009999 %
+       100 000           0.999989985               -0.001001 %    -0.001000 %
+     1 000 000           0.999998999               -0.0001001 %   -0.0001000 %
+```
+
+Read the first column and the third together. The device's own gain changes by five
+orders of magnitude down that table and the *circuit's* gain changes in the sixth decimal
+place. That is the trade the loop makes, and it is why the operational amplifier is worth
+having: you give up almost all of a very large and very badly controlled gain, and what
+you get back is a small one controlled by nothing but the feedback path.
+
+## The virtual short is a consequence, not an axiom
+
+Rearranged the other way, the same equation says
+
+$$v_{+} - v_{-} = \frac{v_{out}}{A}$$
+
+The difference between the two inputs is the output divided by the open-loop gain, and
+the output cannot exceed a rail, so that difference cannot exceed $15/10^{5} = 150$ µV.
+Textbooks compress this to "the two inputs are at the same voltage", and it is worth
+knowing exactly what kind of sentence that is. It is not a property of the device. It is
+what a large $A$ and a *closed* loop force between them, and it fails at once in either
+case where those conditions do not hold.
+
+- **The loop is open.** With no feedback path nothing is holding $v_{out}$ small, and the
+  output goes to a rail. Build this module's exercise and leave out the feedback wire:
+  the amplifier's output sits at 14.99 V with its $+$ input at 1.00 V, and the two inputs
+  are a volt apart.
+- **The output is against a rail.** The loop is closed and still cannot act, because the
+  output has nowhere left to go. Ask the follower above for 16 V and it delivers
+  15.000000 and stops. The input difference is then a volt rather than a microvolt, and
+  every conclusion drawn from the virtual short is false for that circuit.
+
+"The inputs are at the same voltage" is the last line of the argument, not the first.
+Starting from it is how people end up asserting it about a comparator, which is the same
+silicon with the wire left off.
+
+## The mistake this produces, every time
+
+Asked what a follower's output does, the answer that arrives is "the amplifier multiplies
+the difference between its inputs by $10^{5}$". That is true, and using it to predict the
+circuit gets you nowhere, because you cannot know the difference until you know the
+output. The equation is not a recipe to be evaluated left to right; it is a constraint
+the circuit must satisfy, and it is the *circuit* — device plus feedback path — that has
+a solution. That is why the algebra above writes both relationships and solves them
+together, and it is why the editor's solver has to iterate on this circuit rather than
+evaluate it.
+
+The other half of the same mistake is reading feedback as a loss: the device had a gain
+of $10^{5}$ and you have thrown all but one of them away. What was thrown away was never
+spendable — 300 microvolts of input range, and a gain that varies by a factor of two or
+three between two devices out of the same tube, and with temperature besides. What came
+back is a gain set by two resistors you chose, holding to a tenth of a per cent, with an
+output that keeps its voltage under load. The bargain looks bad only if you count what
+was given up and not what it was worth.
+
+## Three circuits, and all of them are one argument
+
+**The follower**, above. Gain 1, and its whole value is in what it does not do: the $+$
+input takes no current from whatever it is connected to, and the output holds its voltage
+against a load. That is a buffer, and it is the part this module's symbol drill described
+as taking "almost no current from the tap".
+
+**The non-inverting amplifier.** Instead of joining the output straight back, feed back a
+*fraction* of it through a divider — $R_1$ from the $-$ input to ground and $R_2$ from
+the output down to the same node — so that $v_{-} = v_{out}R_1/(R_1+R_2)$. Setting that
+equal to $v_{+} = v_{in}$ gives
+
+$$v_{out} = v_{in}\left(1 + \frac{R_2}{R_1}\right)$$
+
+**The inverting amplifier.** Ground the $+$ input instead, and drive the $-$ input
+through $R_1$ with $R_2$ from the output back to that node. The loop holds $v_{-}$ at
+almost exactly zero — a *virtual earth*, and this node is what module 5's dual-slope
+derivation calls the summing node. The input current is therefore $v_{in}/R_1$; none of
+it enters the amplifier; so all of it continues through $R_2$, and
+
+$$v_{out} = -v_{in}\frac{R_2}{R_1}$$
+
+Notice what the third circuit costs, because module 7 is where the bill arrives. Its
+input resistance is $R_1$ and nothing else: the source is looking into a node pinned at
+zero, so what it sees is one resistor. The follower's input resistance is the amplifier's
+own, which is to say none worth writing down. Two circuits out of one device, one of
+which loads its source and one of which does not.
+
+And the output impedance is part of the same bargain. The editor's device has 75 Ω of its
+own output resistance. Measured closed-loop, the follower's output sags 0.75 µV per
+milliamp drawn from it — **0.75 mΩ**, which is that 75 Ω divided by the same $1+A$.
+EE102's cascading module says a follower's output impedance is "milliohms". It is, and
+this is where the milliohms come from.
+
+## What it buys the meter, in this course's own numbers
+
+Take this module's chain: 10 MΩ from the input to ground, tapped 9 MΩ above and 1 MΩ
+below, so 10 V in puts exactly 1.000000 V on the tap.
+
+The tap's Thévenin resistance is $9\,\text{M}\parallel 1\,\text{M} = 900$ kΩ, so module
+2's rule of 99 says a converter that is to read it to 1% must present
+$99 \times 900\,\text{k} = 89.1$ MΩ. Solved: at 100 MΩ the tap reads 0.991080 V, which is
+0.89% low. The rule is right.
+
+Now put a real converter on it. A dual-slope front end is a resistor into a summing node,
+and 100 kΩ is an ordinary value for that resistor.
+
+```text
+  converter input        tap            error
+       100 kΩ         0.100000 V       -90.0 %
+         1 MΩ         0.526316 V       -47.4 %
+        10 MΩ         0.917431 V        -8.3 %
+       100 MΩ         0.991080 V        -0.89 %
+         1 GΩ         0.999101 V        -0.090 %
+```
+
+A factor of ten wrong on the first line. Put a follower between the tap and that same
+100 kΩ converter and the converter reads **0.999989 V** — eleven parts per million low,
+and those eleven parts are the $1/(1+A)$ of the earlier table and nothing else.
+
+That number is worth sitting with. Module 1 said a 6½-digit instrument resolves about one
+part in $10^{6}$ and is specified to perhaps 35 parts in $10^{6}$. The buffer's own error
+is 11 ppm: larger than the resolution, so it is a real line in the uncertainty budget
+rather than a rounding, and smaller than the specification, so it is not what limits the
+instrument. Both halves of that sentence matter, and neither can be said about the 90%
+error of the unbuffered chain.
+
+## Where this stops holding
+
+Four places, and the first two live in the model you are about to use.
+
+**The rails.** Everything above assumes the output is free to move. The editor's device
+runs on ±15 V and saturates smoothly rather than clipping square, which is a numerical
+convenience rather than a claim about silicon: asked for 14 V it gives 13.999748, for
+15 V it gives 14.999210, and past that, exactly 15.000000.
+
+**Finite gain, once the closed-loop gain is not 1.** The shortfall is not $1/(1+A)$ in
+general. It is $1/(1+A\beta)$, where $\beta$ is the fraction of the output fed back. A
+follower has $\beta = 1$. A gain-of-100 stage feeds back a hundredth of its output, so
+$A\beta = 10^{5}/101 = 990$ and the shortfall is 0.101% — a thousand times the follower's,
+out of the same device. That is exactly the shortfall module 7's difference amplifier is
+measured showing, and it is not a defect in the drawing when it appears.
+
+**Input current, which this model does not have.** The editor's amplifier draws *exactly*
+zero at both inputs — not a small number; a zero. A real one draws anywhere between a few
+femtoamps and a few hundred nanoamps depending on what its input stage is made of, and on
+a 10 MΩ chain even 1 nA is 10 mV, which would swamp everything on this page. The
+simulator cannot show you that error and a laboratory will. The same goes for input
+offset voltage: a real device's two inputs are not identical, and the tens of microvolts
+between them add straight to the reading — the same size as the 11 ppm above.
+
+**Bandwidth, which this model also does not have.** Run the follower's gain against
+frequency in the editor and it is 0.999989955 at 1 Hz and 0.999989955 at a terahertz. A
+real op-amp's open-loop gain falls at 20 dB per decade above a few hertz, so $A\beta$
+shrinks as the frequency rises and every error on this page grows with it. That is why a
+data sheet quotes a gain-bandwidth product, and why module 3's rise-time arithmetic
+exists. Nothing in this solver knows it, so a number it gives you at 1 MHz should be read
+as a number about DC.
+
+## What module 7 does with this
+
+One more circuit, and it is the one instrumentation is actually built out of. Drive
+*both* inputs — $V_1$ through $R_1$ into the summing node, $V_2$ through $R_3$ into a
+divider on the $+$ input — and the output becomes a scaled difference of the two. That is
+the difference amplifier, the block module 7 asks you to take "as a block subtracting its
+two inputs", and the interesting thing about it is a defect: it subtracts correctly only
+if two resistor ratios match. How closely they must match, and what it costs when they do
+not, is derived and then measured there.
+''',
+            },
             "quiz": {
                 "title": "Chains, shunts and the socket that blows fuses",
                 "minutes": 9,
@@ -1132,6 +1368,226 @@ Name them.
                      "accidentally joined."},
                 ],
             },
+            "build": {
+                "title": "The buffer between the chain and the converter",
+                "minutes": 26,
+                "brief": r'''
+The canvas holds the front end this module has been describing, wired the naive way.
+
+On the left, the input under measurement — **10 V** — across the meter's divider chain:
+**9 MΩ** above the tap and **1 MΩ** below, 10 MΩ in total, which is the number module 2
+kept insisting on. Ten volts across a 10:1 chain puts **1.000000 V** on the tap, and that
+is the voltage the converter is supposed to read.
+
+On the right, the converter, drawn as its input resistance: **100 kΩ** to ground with the
+probe on it. A dual-slope front end is a resistor into a summing node, and 100 kΩ is an
+ordinary value for that resistor — module 5 derives what happens after it.
+
+Between them, at the moment, a wire. **Solve the circuit as it stands and the probe reads
+0.100000 V.** Not 1% low. A factor of ten.
+
+## Why it is that bad
+
+The tap is not a voltage; it is a source of Thévenin resistance
+$9\,\text{M}\parallel 1\,\text{M} = 900$ kΩ. Hanging 100 kΩ on 900 kΩ leaves a ninth of
+the signal. Module 2's rule of 99 says that to read this tap to 1% by brute force the
+converter would have to present $99 \times 900\,\text{k} = 89.1$ MΩ, and no converter
+does.
+
+## What to build
+
+Put a **follower** between the tap and the converter, exactly as the symbol drill on this
+page described it: an op-amp with its output wired back to its own inverting input.
+
+Place an **Op-amp** from the parts list. Its three pins are not where a beginner expects,
+so read them off the symbol rather than guessing: the **non-inverting input is in line
+with the body on one side**, the **output is in line on the other**, and the **inverting
+input leaves at right angles**, one cell out. The editor draws the $+$ and the $-$ inside
+the triangle and turns them with it, so which pin is which is never a guess — zoom in if
+you have to.
+
+Then three connections:
+
+- the tap to the $+$ input,
+- the output to the converter,
+- the output back to the $-$ input. This is the wire that does all the work, and leaving
+  it out is not a partial answer: with no feedback the output goes to a supply rail and
+  stays there.
+
+**Delete the wire that runs straight from the tap to the converter.** Leaving it in
+short-circuits the amplifier's input to its output, which is a shorter way of saying you
+have wired the converter to the tap again.
+
+## What has to be true when you are finished
+
+- the tap sits at **1.000 V** — the ratio the resistors were trimmed to, not one bent by
+  what came after,
+- the converter node reads the same voltage to better than **50 parts per million** (the
+  follower's own error on this device is about 11),
+- the chain draws **1.000 µA** from the circuit under test — 10 V across 10 MΩ, and not
+  the 1.100 µA it was drawing with the converter hung on the tap.
+
+Nothing is graded on layout, and the values you were given are not design variables. Any
+drawing that behaves this way passes.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 8, "rot": 1, "value": 10},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 12},
+                        {"id": "p2", "kind": "R", "x": 7, "y": 6, "rot": 1, "value": 9000000},
+                        {"id": "p3", "kind": "R", "x": 7, "y": 10, "rot": 1, "value": 1000000},
+                        {"id": "p4", "kind": "GND", "x": 7, "y": 13},
+                        {"id": "p5", "kind": "R", "x": 17, "y": 9, "rot": 1, "value": 100000},
+                        {"id": "p6", "kind": "GND", "x": 17, "y": 12},
+                        {"id": "p7", "kind": "OUT", "x": 19, "y": 8},
+                    ],
+                    "wires": [
+                        {"a": [3, 7], "b": [3, 4]},
+                        {"a": [3, 4], "b": [7, 4]},
+                        {"a": [7, 4], "b": [7, 5]},
+                        {"a": [3, 9], "b": [3, 12]},
+                        {"a": [7, 7], "b": [7, 9]},
+                        {"a": [7, 11], "b": [7, 13]},
+                        {"a": [17, 8], "b": [19, 8]},
+                        {"a": [17, 10], "b": [17, 12]},
+                        {"a": [7, 8], "b": [17, 8]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 3, "y": 8, "rot": 1, "value": 10},
+                        {"id": "p1", "kind": "GND", "x": 3, "y": 12},
+                        {"id": "p2", "kind": "R", "x": 7, "y": 6, "rot": 1, "value": 9000000},
+                        {"id": "p3", "kind": "R", "x": 7, "y": 10, "rot": 1, "value": 1000000},
+                        {"id": "p4", "kind": "GND", "x": 7, "y": 13},
+                        {"id": "p5", "kind": "R", "x": 17, "y": 9, "rot": 1, "value": 100000},
+                        {"id": "p6", "kind": "GND", "x": 17, "y": 12},
+                        {"id": "p7", "kind": "OUT", "x": 19, "y": 8},
+                        {"id": "p8", "kind": "OPAMP", "x": 12, "y": 8, "rot": 0, "value": 100000},
+                    ],
+                    "wires": [
+                        {"a": [3, 7], "b": [3, 4]},
+                        {"a": [3, 4], "b": [7, 4]},
+                        {"a": [7, 4], "b": [7, 5]},
+                        {"a": [3, 9], "b": [3, 12]},
+                        {"a": [7, 7], "b": [7, 9]},
+                        {"a": [7, 11], "b": [7, 13]},
+                        {"a": [17, 8], "b": [19, 8]},
+                        {"a": [17, 10], "b": [17, 12]},
+                        {"a": [7, 8], "b": [11, 8]},
+                        {"a": [13, 8], "b": [17, 8]},
+                        {"a": [15, 8], "b": [15, 11]},
+                        {"a": [15, 11], "b": [12, 11]},
+                        {"a": [12, 11], "b": [12, 7]},
+                    ],
+                },
+                "checks": [
+                    {"name": "the chain and the converter are the ones you were given", "code": r'''
+c.assert(c.count('V') === 1,
+  'One source: the 10 V being measured. Found ' + c.count('V') + '.');
+c.close(c.values('V')[0], 10, 0.001, 'the input under measurement');
+const src = c.net.parts.filter(function (p) { return p.kind === 'V'; })[0];
+const top = c.net.parts.filter(function (p) {
+  return p.kind === 'R' && Math.abs(p.value - 9e6) <= 9e4 &&
+    (p.n1 === src.n1 || p.n2 === src.n1);
+});
+c.assert(top.length === 1,
+  'The 9 MOhm upper arm of the meter chain has to stay connected to the input. It is ' +
+  'the instrument, not the thing under test.');
+const bot = c.net.parts.filter(function (p) {
+  return p.kind === 'R' && Math.abs(p.value - 1e6) <= 1e4 && (p.n1 === 0 || p.n2 === 0);
+});
+c.assert(bot.length === 1,
+  'The 1 MOhm lower arm has to stay, one end on ground. Found ' + bot.length + '.');
+const conv = c.net.parts.filter(function (p) {
+  return p.kind === 'R' && Math.abs(p.value - 1e5) <= 1e3;
+});
+c.assert(conv.length === 1,
+  'The converter is the 100 kOhm resistor with the probe on it, and its input ' +
+  'resistance is a fact about the converter rather than a number you may change. ' +
+  'Found ' + conv.length + ' of them.');
+'''},
+                    {"name": "the tap is back at the ratio the resistors were trimmed to", "code": r'''
+const src = c.net.parts.filter(function (p) { return p.kind === 'V'; })[0];
+const top = c.net.parts.filter(function (p) {
+  return p.kind === 'R' && Math.abs(p.value - 9e6) <= 9e4 &&
+    (p.n1 === src.n1 || p.n2 === src.n1);
+})[0];
+c.assert(top, 'The 9 MOhm arm is no longer connected to the input.');
+const tap = top.n1 === src.n1 ? top.n2 : top.n1;
+c.close(c.dc().v[tap], 1.0, 0.002,
+  'the tap between the 9 MOhm and the 1 MOhm. Ten volts across a 10:1 chain puts ' +
+  '1.000 V here, and it did so before anything was hung on it');
+'''},
+                    {"name": "the converter reads that tap and not a loaded copy of it", "code": r'''
+const src = c.net.parts.filter(function (p) { return p.kind === 'V'; })[0];
+const top = c.net.parts.filter(function (p) {
+  return p.kind === 'R' && Math.abs(p.value - 9e6) <= 9e4 &&
+    (p.n1 === src.n1 || p.n2 === src.n1);
+})[0];
+c.assert(top, 'The 9 MOhm arm is no longer connected to the input.');
+const tap = top.n1 === src.n1 ? top.n2 : top.n1;
+const vt = c.dc().v[tap];
+c.assert(Math.abs(vt) > 1e-6, 'The tap is at zero volts, so there is nothing to follow.');
+const ppm = (c.vout() - vt) / vt * 1e6;
+c.assert(Math.abs(ppm) <= 50,
+  'The converter is reading ' + c.fmt(c.vout(), 'V') + ' where the tap sits at ' +
+  c.fmt(vt, 'V') + ' — a difference of ' + ppm.toFixed(0) + ' parts per million. A ' +
+  'follower tracks its input to about ten parts in a million on a device of this gain, ' +
+  'so a gap this size means the two nodes are not joined by one.');
+'''},
+                    {"name": "the chain has stopped paying for the converter", "code": r'''
+const cur = c.dc().currents;
+const ids = Object.keys(cur);
+c.assert(ids.length === 1,
+  'The supply current has to mean one thing, so this exercise wants exactly one part ' +
+  'carrying a solved-for current — the 10 V input. Found ' + ids.length + '.');
+c.close(Math.abs(cur[ids[0]]), 1e-6, 0.01,
+  'the current the meter draws from the circuit under test. Ten volts across a 10 MOhm ' +
+  'chain is 1.000 uA and nothing may be added to it; with the converter hung straight ' +
+  'on the tap it was 1.100 uA, and that extra tenth of a microamp is the entire fault');
+const u = c.net.placed.filter(function (p) { return p.kind === 'OPAMP'; });
+c.assert(u.length === 1,
+  'This exercise wants exactly one amplifier. Found ' + u.length + '.');
+const d = c.device(u[0].id);
+c.assert(Math.abs(d.v[1]) < 14,
+  'The amplifier output is at ' + c.fmt(d.v[1], 'V') + ', hard against a supply rail. ' +
+  'An op-amp with no path from its output back to its inverting input has nothing ' +
+  'holding it anywhere else.');
+c.assert(Math.abs(d.v[0] - d.v[2]) < 1e-3,
+  'The two inputs are ' + c.fmt(d.v[0] - d.v[2], 'V') + ' apart, so the loop is not ' +
+  'closed. Negative feedback drives that difference to almost nothing; nothing else does.');
+'''},
+                    {"name": "the loop closes onto the inverting input", "code": r'''
+/* The one check on this page that reads the wiring rather than a voltage, and it says so
+   because the reason is worth knowing. Wire the same three parts with the feedback on the
+   + input instead and every voltage in the circuit comes out the same to five figures: an
+   operating point is a solution of the circuit equations, and nothing in it asks whether
+   that solution is one the circuit would stay at. The positive-feedback version solves.
+   A real one latches against a rail the moment anything nudges it. */
+const u = c.net.readouts.filter(function (x) { return x.kind === 'OPAMP'; });
+c.assert(u.length === 1,
+  'This exercise wants exactly one amplifier. Found ' + u.length + '.');
+const n = u[0].nodes;
+c.assert(n[2] === n[1],
+  'The output has to come back to the INVERTING input — the pin that leaves the body at ' +
+  'right angles, marked with a minus inside the triangle. Feedback onto the + input is ' +
+  'positive feedback, and the solver will still hand you an answer for it, because an ' +
+  'operating point is a solution of the equations rather than a promise that the circuit ' +
+  'stays there.');
+c.assert(n[0] !== n[1],
+  'The non-inverting input is on the output node too, so both inputs are tied together ' +
+  'and there is nothing left for the amplifier to follow.');
+'''},
+                ],
+                "hints": [
+                    "Nothing needs a value changed and nothing needs deleting except one wire — the one running straight from the tap across to the converter's node. Delete it first; the rest of the exercise is easier to see once the two halves are apart.",
+                    "Place the Op-amp between them. At its default rotation the non-inverting input is the pin on the left, in line with the body; the output is the pin on the right; the inverting input is the pin sticking up above it. The $+$ and $-$ drawn inside the triangle turn with the part, so they always name the right pins.",
+                    "Wire the tap to the left-hand pin and the right-hand pin across to the converter. Run the circuit now: the output is at about 15 V, because you have built a comparator. Nothing is holding the output anywhere until the loop is closed.",
+                    "Now the wire that matters: from the output node back up to the pin above the body. Take it out sideways and then up, so it does not touch the run between the tap and the $+$ input. Solve again and the probe should read 0.999989 V.",
+                    "Check yourself before running: the tap is at 1.000000 V, the converter node is 11 ppm below it, the source is delivering 1.000 µA rather than 1.100 µA, and the two amplifier inputs are about 10 µV apart rather than a volt.",
+                ],
+            },
             "derive": {
                 "title": "The shunt, the multiplier, and the burden they share",
                 "minutes": 12,
@@ -1206,6 +1662,14 @@ current, and nothing else.
 Which is a compact statement of why a sensitive movement was worth paying for, and why
 the rule of 99 was out of reach until an amplifier was put in front of
 the divider instead of a coil of wire.
+
+That amplifier is this module's reading, and its arithmetic is the mirror image of the
+four lines above. Where the movement's input resistance is fixed at $1/I_m$ per volt by
+what the mechanism can be made of, a follower's is set by nothing at all: it draws no
+current from the tap, so the chain's ratio stays the ratio its resistors were trimmed to.
+On the 10 MΩ chain of this module that is the difference between a converter reading
+0.100000 V and one reading 0.999989 V, and the build exercise on this page is that
+difference in one wire.
 ''',
             },
         },
@@ -1359,6 +1823,13 @@ in front of the converter, or an aperture long enough to average the hum away.
                 "brief": r'''
 An integrator: a resistor $R$ into the summing node of an amplifier with a capacitor $C$
 in feedback, whose output ramps at $-V/RC$ volts per second for an input $V$.
+
+The *summing node* is the inverting input of an operational amplifier with its feedback
+closed round it, and module 4's reading derives why it sits at almost exactly zero volts
+and takes no current for itself. Those are the two facts the ramp rate above depends on:
+the whole of $V/R$ arrives at that node and has nowhere to go but into $C$. It is also
+the reason $R$ is a real load on whatever is being measured — 100 kΩ of it, which is why
+that module puts a follower in front.
 
 The conversion has two phases. In the **run-up** the input is applied for a fixed time
 $T_1$. In the **run-down** the input is disconnected and a reference $V_{ref}$ of the
@@ -2017,9 +2488,116 @@ assert abs(arm_power - 1e-3) < 1e-15, \
                 "Any input has a differential part — the difference between its two terminals — and a common-mode part, which is what they share. A single-ended input has no common-mode terminal at all: it measures its live lead against *its own* ground, so whatever the two grounds differ by has already been added to the signal before the instrument sees it.",
                 "A ground is a conductor. A metre of wire is a few milliohms and a few hundred nanohenries, and a return shared with somebody else's amps develops millivolts along it. The cure is topological rather than electrical: give the signal its own return to a single point, so the noisy current has no conductor in common with it to develop a voltage in.",
                 "Common-mode rejection ratio is the differential gain divided by the common-mode gain, quoted in dB, and it converts a common-mode volt into an input-referred error. 100 dB turns 1.8 V of 50 Hz into 18 µV at the input — which is 0.7% of a 2.5 mV bridge output, from interference that is not even in the signal path.",
-                "An instrumentation amplifier is two buffers feeding a difference stage, with a single resistor setting the gain of the buffer pair. No amplifier analysis is needed to use this: take the difference stage as a block subtracting its two inputs, and the one fact that matters is that its rejection is set by how closely the two ratios of its four surrounding resistors match — a property of the resistors, not of the amplifier between them, and 0.1% parts cap it near 66 dB. Putting the gain in the buffer pair keeps the input impedance high and equal on both sides and leaves that matched network untouched, which is why an in-amp keeps its CMRR at high gain and a bare difference stage, whose gain can only be changed by re-scaling two of those four resistors, does not.",
+                "An instrumentation amplifier is two buffers feeding a difference stage, with a single resistor setting the gain of the buffer pair. The difference stage is a block that subtracts its two inputs, and the one fact that matters about it is that its rejection is set by how closely the two ratios of its four surrounding resistors match — a property of the resistors, not of the amplifier between them, and 0.1% parts cap it near 66 dB. Module 4's reading has the amplifier itself and the derivation on this page has that cap; neither is assumed here.",
+                "Putting the gain in the buffer pair rather than in the difference stage buys two separate things, and it is worth keeping them apart. First, the four matched resistors are trimmed once and never touched again: a bare difference stage's gain can only be changed by re-scaling two of the four, and every change is a fresh chance to unmatch them. Note what this is *not* — the rejection of a bare stage does not fall as its gain rises, it climbs as $(1+k)/t$, and the exercise on this page measures a gain-100 stage at 100 dB where a unity one manages 66. The cost is that you have to re-earn the match at every gain. Second, and this is the one you can feel on a bridge, the buffers make the input impedance high and equal on both sides where a bare stage's inverting leg presents $R_1$ and nothing more — 10 kΩ on a 350 Ω bridge takes 1.7% straight off the reading.",
                 "The rejection you get is the *system's*, not the amplifier's. A source imbalance $\\Delta R$ working against whatever impedance $Z_{cm}$ the two inputs see to common turns common mode straight into differential in the ratio $\\Delta R/Z_{cm}$ — and at mains frequency $Z_{cm}$ is usually not the amplifier at all but the cable's own capacitance to its screen, about 1 MΩ of reactance for thirty metres at 50 Hz. 100 Ω against that is 80 dB, and it caps a 100 dB amplifier at 80 dB whatever the amplifier cost.",
+                "The “66 dB from 0.1% parts” above is a real number with a formula behind it, and the derivation on this page produces it: the common-mode gain of a difference stage of gain $k$ with one resistor off by a fraction $t$ is $kt/(1+k+kt)$, so the rejection is $(1+k)/t$ to a very good approximation. At unity gain and $t = 0.001$ that is 2001, which is 66.0 dB — and unity gain is exactly what the difference stage inside an in-amp runs at, which is why 66 dB is the figure quoted for it. Two consequences follow that the slogan hides. The cap rises with gain, so the same 0.1% resistors give 100 dB at $k = 100$; and 66 dB is the *typical* case, because four resistors each within 0.1% can be wrong in opposite directions, which is $t = 0.004$ and 54 dB. Solving the circuit confirms all three: 66.03 dB, 100.10 dB and 53.98 dB.",
             ],
+            "derive": {
+                "title": "Where the rejection of a difference amplifier actually lives",
+                "minutes": 14,
+                "vars": ["V_1", "V_2", "V_o", "V_n", "V_p", "V_cm",
+                         "R_1", "R_2", "R_3", "R_4", "A_cm", "k", "t"],
+                "brief": r'''
+One op-amp and four resistors. $V_1$ drives the inverting input through $R_1$, with $R_2$
+from that node back to the output; $V_2$ drives the non-inverting input through $R_3$,
+with $R_4$ from that node to ground. Module 4's reading has the two facts this needs: the
+loop holds the two inputs together, and neither input takes any current.
+
+The concepts above assert that this circuit rejects common mode only as well as two
+resistor ratios match. Derive it, and get the number.
+''',
+                "steps": [
+                    {
+                        "prompt": "The non-inverting input is a plain divider hanging on $V_2$, loaded by nothing, because the amplifier's input takes no current. Write $V_p$.",
+                        "given": "$R_3$ from $V_2$ down to the node, $R_4$ from the node down to ground.",
+                        "answer": "\\frac{R_4 V_2}{R_3 + R_4}",
+                        "placeholder": "e.g. \\frac{a b}{c + d}",
+                        "hint": "The ordinary divider result. The resistor you are measuring *across* goes on top.",
+                        "deconstruct": [
+                            "The current down the pair is $V_2/(R_3+R_4)$.",
+                            "The voltage at the tap is that current times $R_4$.",
+                        ],
+                    },
+                    {
+                        "prompt": "Now the inverting side. The node sits at $V_n$, and the current arriving through $R_1$ leaves through $R_2$ because none of it enters the amplifier. Write $V_o$ in terms of $V_n$, $V_1$, $R_1$ and $R_2$.",
+                        "given": "$(V_1 - V_n)/R_1 = (V_n - V_o)/R_2$.",
+                        "answer": "V_n\\left(1 + \\frac{R_2}{R_1}\\right) - \\frac{R_2 V_1}{R_1}",
+                        "placeholder": "e.g. a\\left(1 + \\frac{b}{c}\\right) - d",
+                        "hint": "Multiply out, then collect the two $V_n$ terms on one side and leave the $V_1$ term where it is.",
+                        "deconstruct": [
+                            "$R_2(V_1 - V_n) = R_1(V_n - V_o)$.",
+                            "So $R_1V_o = R_1V_n + R_2V_n - R_2V_1$.",
+                            "Divide through by $R_1$.",
+                        ],
+                    },
+                    {
+                        "prompt": "The loop makes $V_n = V_p$. Substitute, then set $V_1 = V_2 = V_{cm}$ — the same voltage on both inputs, which is what common mode *is* — and write the common-mode gain $A_{cm} = V_o/V_{cm}$.",
+                        "given": "$V_{cm}$ must cancel completely; if it does not, something has gone wrong above.",
+                        "answer": "\\frac{R_1 R_4 - R_2 R_3}{R_1 (R_3 + R_4)}",
+                        "placeholder": "e.g. \\frac{a b - c d}{a (b + d)}",
+                        "hint": "You have $V_o = V_{cm}\\left[\\frac{R_4}{R_3+R_4}\\left(1+\\frac{R_2}{R_1}\\right) - \\frac{R_2}{R_1}\\right]$. Put the bracket over the common denominator $R_1(R_3+R_4)$ and expand the numerator; four terms appear and two of them cancel.",
+                        "deconstruct": [
+                            "The first term is $R_4(R_1+R_2)$ over $R_1(R_3+R_4)$.",
+                            "The second is $R_2(R_3+R_4)$ over the same denominator.",
+                            "Subtracting: $R_1R_4 + R_2R_4 - R_2R_3 - R_2R_4$.",
+                            "The $R_2R_4$ terms cancel.",
+                        ],
+                    },
+                    {
+                        "prompt": "Build the stage for a gain of $k$ — $R_1 = R_3 = R$ and $R_2 = R_4 = kR$ — but let one resistor be wrong: $R_4 = kR(1+t)$. Write $A_{cm}$ in terms of $k$ and $t$ alone.",
+                        "given": "Substitute all four into the previous line. Every $R$ cancels.",
+                        "answer": "\\frac{k t}{1 + k + k t}",
+                        "placeholder": "e.g. \\frac{a b}{1 + a + a b}",
+                        "hint": "The numerator is $R \\cdot kR(1+t) - kR \\cdot R = kR^2t$. The denominator is $R(R + kR(1+t))$.",
+                        "deconstruct": [
+                            "Numerator: $R_1R_4 - R_2R_3 = kR^2(1+t) - kR^2 = kR^2t$.",
+                            "Denominator: $R_1(R_3+R_4) = R(R + kR + kRt) = R^2(1 + k + kt)$.",
+                            "The $R^2$ cancels top and bottom.",
+                        ],
+                    },
+                ],
+                "closing": r'''
+Read the third line before the fourth, because it is the general statement and the one
+worth carrying: $A_{cm}$ has $R_1R_4 - R_2R_3$ on top, so it is **exactly zero when
+$R_2/R_1 = R_4/R_3$ and at no other time**. Not small. Zero. The rejection of this
+circuit is not a property of the amplifier at all; it is a property of whether two ratios
+of resistors are equal, and the amplifier's own contribution only appears once they are.
+
+The fourth line prices the failure. With the differential gain sitting at $k$ to within
+the same small $t$, the rejection ratio is
+
+$$\text{CMRR} = \frac{A_d}{A_{cm}} = \frac{1 + k + kt}{t} \approx \frac{1+k}{t}$$
+
+Put the numbers in.
+
+```text
+  gain k    one resistor off by t      CMRR      in dB     solved in the editor
+     1            0.1%                  2001      66.0            66.03
+     1            0.01%                20001      86.0            86.01
+     1            0.4%                   501      54.0            53.98
+   100            0.1%                101100     100.1           100.10
+```
+
+The first row is the *"0.1% parts cap it near 66 dB"* of this module's concepts, and now
+it has a reason: 66 dB is the unity-gain figure, and unity gain is what the difference
+stage inside an instrumentation amplifier runs at. The third row is the same 0.1% parts
+in their worst arrangement — four resistors each allowed to be 0.1% out can be out in
+opposing directions, which is $t = 0.004$ between the two ratios, so 0.1% parts
+*guarantee* 54 dB and merely *tend* to give 66. The fourth row is the part the slogan
+hides: raise the gain and the same resistors do better, because $A_d$ grows while
+$A_{cm}$ hardly moves.
+
+Which is where the instrumentation amplifier comes from. Nothing above can be improved by
+buying a better op-amp, so the trimming has to happen in four resistors, and every time
+you change the gain you have to do it again. Put the gain somewhere else — in a pair of
+buffers ahead of a difference stage left permanently at $k = 1$ — and the four resistors
+are trimmed once and never touched, while the gain lives in a single resistor that is not
+part of any ratio. The buffers are worth having twice over: the build exercise on this
+page measures the second reason, which is that the bare difference stage's input
+resistance is $R_1$, and a bridge notices.
+''',
+            },
             "quiz": {
                 "title": "Loops, screens and the rejection you actually get",
                 "minutes": 10,
@@ -2129,7 +2707,7 @@ worth having against capacitively coupled spikes, and nothing here is about temp
                     },
                 ],
             },
-            "build": {
+            "build": [{
                 "title": "The motor in your signal path",
                 "minutes": 25,
                 "brief": r'''
@@ -2274,7 +2852,274 @@ c.assert(Math.abs(ret) <= 5e-4,
                     "Now give the sensor a return of its own: place a ground symbol just below the sensor and wire the sensor's lower pin straight down to it. Both ground symbols are the same node, so the sensor still has a return — it just no longer travels along the motor's copper to get there.",
                     "Check yourself before running: the left end of the 0.2 Ω is still at 2 A × 0.2 Ω = 0.400 V, exactly as before, and the probed node is now at 5.00 mV. The interference was never removed; it was moved out of the signal's path, which is the only thing that ever works.",
                 ],
-            },
+            }, {
+                "title": "A gain of 100 on the bridge, without losing the rejection",
+                "minutes": 30,
+                "brief": r'''
+A quarter bridge and the difference amplifier that reads it, both already drawn.
+
+**The bridge**, on the left: 10 V of excitation across four 350 Ω arms, of which the
+lower left one is the gauge and is stretched to **350.7 Ω**. Solve it on its own and its
+two outputs sit at 5.004995 V and 5.000000 V — **4995.0 µV of signal riding on 5.0 V of
+common mode**, which is the situation module 6 built and this module exists to survive.
+
+**The amplifier**, on the right: one op-amp and four resistors, wired as the difference
+stage the concepts describe. $V_1$ — the right-hand bridge output — enters the inverting
+input through $R_1$, with $R_2$ from that node back to the output. $V_2$ — the gauge side
+— enters the non-inverting input through $R_3$, with $R_4$ from that node to ground.
+Module 4's reading has the two facts you need about the amplifier itself, and this
+module's derivation has the one fact you need about the four resistors.
+
+All four are **10 kΩ** as it stands, so the stage has a gain of one and the probe reads
+about 4.87 mV.
+
+## What to change
+
+**Make the differential gain 100**, so the output is around half a volt, and do it
+without losing the rejection.
+
+That is two resistor values and nothing else. No part is added, no part is deleted, and
+no wire moves.
+
+## The trap, stated in advance because it catches nearly everybody
+
+The gain of an inverting stage is $R_2/R_1$, so the obvious move is to raise $R_2$ to
+1 MΩ and stop. Do that and **the output slams to −15 V**, hard against the negative rail,
+and the reading is gone entirely.
+
+Nothing has broken. The stage now has a differential gain of about 100 and a *common-mode*
+gain of about **−50**, and there is 5 V of common mode on this bridge against 5 mV of
+signal. Fifty volts per volt of common mode is asking the output for −250 V before the
+signal has contributed anything at all, so it goes to the rail and stays there. The
+derivation on this page says exactly this: $A_{cm}$ carries $R_1R_4 - R_2R_3$ on top, and
+raising $R_2$ alone is precisely the move that makes that numerator large.
+
+Raising $R_4$ alone is the mirror image and is quieter, which makes it worse: the output
+lands at **4.91 V**, on scale, believable, and almost entirely the common mode. A reading
+that is wrong by a factor of ten and looks fine is the failure this module is about.
+
+## What has to be true when you are finished
+
+- the gain from the difference **actually present at your two input resistors** to the
+  output is **100**, to within half a per cent. About a tenth of a per cent of shortfall
+  is the amplifier's own finite gain, as module 4's reading derives, and it is expected;
+  anything beyond that is the two ratios failing to match.
+- the amplifier is inside its rails, with the loop closed on the inverting input,
+- the bridge is not dragged more than **3%** off the 4995.0 µV it produces unloaded.
+
+That last one is not decoration. The inverting leg's input resistance is $R_1$ and
+nothing else — the source is looking into a node pinned by the loop — and 350 Ω of bridge
+notices a 10 kΩ load. Expect the differential input to come out near 4908 µV rather than
+4995, and the output near **0.4903 V** rather than 0.5000. Both of those errors are real
+and neither is a mistake in your drawing: 1.7 points of the 1.8% shortfall is the bridge
+being loaded, and 0.1 is the amplifier's finite gain.
+
+## The point of the constraint you are about to feel
+
+Try to fix the loading by making $R_1$ and $R_3$ smaller and the loading gets worse. Fix
+it by making them larger and you need a feedback resistor a hundred times larger still,
+which is where noise and bias current start to cost more than the loading did. There is
+no arrangement of four resistors that is both a high impedance to the bridge and a
+matched ratio pair, and that is the whole reason the instrumentation amplifier has two
+buffers in front of a difference stage rather than being a difference stage.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 1, "y": 4, "rot": 1, "value": 10},
+                        {"id": "p1", "kind": "GND", "x": 1, "y": 7},
+                        {"id": "p2", "kind": "R", "x": 6, "y": 4, "rot": 1, "value": 350},
+                        {"id": "p3", "kind": "R", "x": 6, "y": 8, "rot": 1, "value": 350.7},
+                        {"id": "p4", "kind": "GND", "x": 6, "y": 11},
+                        {"id": "p5", "kind": "R", "x": 12, "y": 4, "rot": 1, "value": 350},
+                        {"id": "p6", "kind": "R", "x": 12, "y": 8, "rot": 1, "value": 350},
+                        {"id": "p7", "kind": "GND", "x": 12, "y": 11},
+                        {"id": "p8", "kind": "R", "x": 18, "y": 9, "rot": 0, "value": 10000},
+                        {"id": "p9", "kind": "R", "x": 18, "y": 12, "rot": 0, "value": 10000},
+                        {"id": "p10", "kind": "OPAMP", "x": 22, "y": 12, "rot": 0, "value": 100000},
+                        {"id": "p11", "kind": "R", "x": 25, "y": 6, "rot": 0, "value": 10000},
+                        {"id": "p12", "kind": "R", "x": 20, "y": 15, "rot": 1, "value": 10000},
+                        {"id": "p13", "kind": "GND", "x": 20, "y": 18},
+                        {"id": "p14", "kind": "OUT", "x": 28, "y": 12},
+                    ],
+                    "wires": [
+                        {"a": [1, 3], "b": [1, 2]},
+                        {"a": [1, 2], "b": [12, 2]},
+                        {"a": [6, 2], "b": [6, 3]},
+                        {"a": [12, 2], "b": [12, 3]},
+                        {"a": [1, 5], "b": [1, 7]},
+                        {"a": [6, 5], "b": [6, 7]},
+                        {"a": [6, 9], "b": [6, 11]},
+                        {"a": [12, 5], "b": [12, 7]},
+                        {"a": [12, 9], "b": [12, 11]},
+                        {"a": [6, 6], "b": [3, 6]},
+                        {"a": [3, 6], "b": [3, 16]},
+                        {"a": [3, 16], "b": [15, 16]},
+                        {"a": [15, 16], "b": [15, 12]},
+                        {"a": [15, 12], "b": [17, 12]},
+                        {"a": [12, 6], "b": [14, 6]},
+                        {"a": [14, 6], "b": [14, 9]},
+                        {"a": [14, 9], "b": [17, 9]},
+                        {"a": [19, 9], "b": [22, 9]},
+                        {"a": [22, 9], "b": [22, 11]},
+                        {"a": [19, 12], "b": [21, 12]},
+                        {"a": [20, 12], "b": [20, 14]},
+                        {"a": [20, 16], "b": [20, 18]},
+                        {"a": [22, 9], "b": [22, 6]},
+                        {"a": [22, 6], "b": [24, 6]},
+                        {"a": [26, 6], "b": [27, 6]},
+                        {"a": [27, 6], "b": [27, 12]},
+                        {"a": [27, 12], "b": [23, 12]},
+                        {"a": [27, 12], "b": [28, 12]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "p0", "kind": "V", "x": 1, "y": 4, "rot": 1, "value": 10},
+                        {"id": "p1", "kind": "GND", "x": 1, "y": 7},
+                        {"id": "p2", "kind": "R", "x": 6, "y": 4, "rot": 1, "value": 350},
+                        {"id": "p3", "kind": "R", "x": 6, "y": 8, "rot": 1, "value": 350.7},
+                        {"id": "p4", "kind": "GND", "x": 6, "y": 11},
+                        {"id": "p5", "kind": "R", "x": 12, "y": 4, "rot": 1, "value": 350},
+                        {"id": "p6", "kind": "R", "x": 12, "y": 8, "rot": 1, "value": 350},
+                        {"id": "p7", "kind": "GND", "x": 12, "y": 11},
+                        {"id": "p8", "kind": "R", "x": 18, "y": 9, "rot": 0, "value": 10000},
+                        {"id": "p9", "kind": "R", "x": 18, "y": 12, "rot": 0, "value": 10000},
+                        {"id": "p10", "kind": "OPAMP", "x": 22, "y": 12, "rot": 0, "value": 100000},
+                        {"id": "p11", "kind": "R", "x": 25, "y": 6, "rot": 0, "value": 1000000},
+                        {"id": "p12", "kind": "R", "x": 20, "y": 15, "rot": 1, "value": 1000000},
+                        {"id": "p13", "kind": "GND", "x": 20, "y": 18},
+                        {"id": "p14", "kind": "OUT", "x": 28, "y": 12},
+                    ],
+                    "wires": [
+                        {"a": [1, 3], "b": [1, 2]},
+                        {"a": [1, 2], "b": [12, 2]},
+                        {"a": [6, 2], "b": [6, 3]},
+                        {"a": [12, 2], "b": [12, 3]},
+                        {"a": [1, 5], "b": [1, 7]},
+                        {"a": [6, 5], "b": [6, 7]},
+                        {"a": [6, 9], "b": [6, 11]},
+                        {"a": [12, 5], "b": [12, 7]},
+                        {"a": [12, 9], "b": [12, 11]},
+                        {"a": [6, 6], "b": [3, 6]},
+                        {"a": [3, 6], "b": [3, 16]},
+                        {"a": [3, 16], "b": [15, 16]},
+                        {"a": [15, 16], "b": [15, 12]},
+                        {"a": [15, 12], "b": [17, 12]},
+                        {"a": [12, 6], "b": [14, 6]},
+                        {"a": [14, 6], "b": [14, 9]},
+                        {"a": [14, 9], "b": [17, 9]},
+                        {"a": [19, 9], "b": [22, 9]},
+                        {"a": [22, 9], "b": [22, 11]},
+                        {"a": [19, 12], "b": [21, 12]},
+                        {"a": [20, 12], "b": [20, 14]},
+                        {"a": [20, 16], "b": [20, 18]},
+                        {"a": [22, 9], "b": [22, 6]},
+                        {"a": [22, 6], "b": [24, 6]},
+                        {"a": [26, 6], "b": [27, 6]},
+                        {"a": [27, 6], "b": [27, 12]},
+                        {"a": [27, 12], "b": [23, 12]},
+                        {"a": [27, 12], "b": [28, 12]},
+                    ],
+                },
+                "checks": [
+                    {"name": "the bridge is the one you were given, still on its 10 V", "code": r'''
+c.assert(c.count('V') === 1,
+  'One source: the 10 V bridge excitation. Found ' + c.count('V') + '.');
+c.close(c.values('V')[0], 10, 0.001, 'the bridge excitation');
+const arms = c.net.parts.filter(function (p) {
+  return p.kind === 'R' && p.value > 300 && p.value < 400;
+});
+c.assert(arms.length === 4,
+  'A bridge has four arms, and this one is three gauges at 350 Ohm and a stretched one ' +
+  'at 350.7. Found ' + arms.length + ' resistors in that range. The bridge is the thing ' +
+  'being measured, not part of the amplifier you are designing.');
+const u = c.net.readouts.filter(function (x) { return x.kind === 'OPAMP'; });
+c.assert(u.length === 1,
+  'This exercise wants exactly one amplifier. Found ' + u.length + '.');
+'''},
+                    {"name": "the amplifier is inside its rails, with the loop on the inverting input", "code": r'''
+const u = c.net.readouts.filter(function (x) { return x.kind === 'OPAMP'; })[0];
+c.assert(u, 'There is no amplifier in this circuit.');
+const d = c.device(u.id);
+c.assert(Math.abs(d.v[1]) < 14,
+  'The output is at ' + c.fmt(d.v[1], 'V') + ', hard against a supply rail. On this ' +
+  'bridge that almost always means the two resistor ratios no longer match, so the five ' +
+  'volts of common mode is being amplified alongside the five millivolts of signal.');
+c.assert(Math.abs(d.v[0] - d.v[2]) < 1e-3,
+  'The two inputs are ' + c.fmt(d.v[0] - d.v[2], 'V') + ' apart, so the loop is not ' +
+  'closed. Negative feedback holds them together and nothing else does.');
+c.assert(u.nodes[2] !== u.nodes[0],
+  'Both amplifier inputs are on the same node, so there is no difference left to take.');
+'''},
+                    {"name": "the differential gain is 100, which is what proves the ratios match", "code": r'''
+const u = c.net.readouts.filter(function (x) { return x.kind === 'OPAMP'; })[0];
+const inp = u.nodes[0], out = u.nodes[1], inm = u.nodes[2];
+const legOf = function (node, avoid, what) {
+  const r = c.net.parts.filter(function (p) {
+    return p.kind === 'R' && ((p.n1 === node && p.n2 !== avoid && p.n2 !== 0) ||
+      (p.n2 === node && p.n1 !== avoid && p.n1 !== 0));
+  });
+  c.assert(r.length === 1,
+    'Exactly one resistor should run from the ' + what + ' input back towards the ' +
+    'bridge. Found ' + r.length + '.');
+  return r[0].n1 === node ? r[0].n2 : r[0].n1;
+};
+const A = legOf(inp, 0, 'non-inverting');
+const B = legOf(inm, out, 'inverting');
+const v = c.dc().v;
+const vd = v[A] - v[B], vcm = (v[A] + v[B]) / 2;
+c.assert(Math.abs(vd) > 1e-4,
+  'The two bridge outputs differ by ' + c.fmt(vd, 'V') + '. There is no signal to amplify.');
+c.assert(vcm > 4 && vcm < 6,
+  'The two amplifier inputs sit at ' + c.fmt(vcm, 'V') + ' between them. A bridge at half ' +
+  'its excitation should put them near 5 V, so this amplifier is not reading across the ' +
+  'bridge at all.');
+const g = c.vout() / vd;
+c.assert(g > 0,
+  'The gain came out at ' + g.toPrecision(4) + ', which is negative, so the two bridge ' +
+  'outputs are on the wrong legs. The arm whose node rises when the gauge is stretched ' +
+  'is the one that belongs on the non-inverting side.');
+c.close(g, 100, 0.005,
+  'the gain from the difference actually present at your two input resistors to the ' +
+  'output. A tenth of a per cent of shortfall is the finite gain of the amplifier ' +
+  'itself; anything past that is the two ratios failing to match, and a mismatch turns ' +
+  'the 5 V of common mode into output as readily as it turns the 5 mV of signal');
+'''},
+                    {"name": "the bridge is not dragged more than 3% off its own answer", "code": r'''
+const u = c.net.readouts.filter(function (x) { return x.kind === 'OPAMP'; })[0];
+const inp = u.nodes[0], out = u.nodes[1], inm = u.nodes[2];
+const legOf = function (node, avoid) {
+  const r = c.net.parts.filter(function (p) {
+    return p.kind === 'R' && ((p.n1 === node && p.n2 !== avoid && p.n2 !== 0) ||
+      (p.n2 === node && p.n1 !== avoid && p.n1 !== 0));
+  })[0];
+  c.assert(r, 'One of the two input resistors is missing.');
+  return r.n1 === node ? r.n2 : r.n1;
+};
+const v = c.dc().v;
+const vd = v[legOf(inp, 0)] - v[legOf(inm, out)];
+const open = 4.995005e-3;
+const d = c.device(u.id);
+c.assert(!(vd < 0 && Math.abs(d.v[1]) > 14),
+  'The bridge is reading backwards at ' + (vd * 1e6).toFixed(1) + ' uV while the output ' +
+  'sits at ' + c.fmt(d.v[1], 'V') + ', against a rail. Nothing can be said about loading ' +
+  'until the amplifier is back inside its supplies: what is bending the bridge is an ' +
+  'amplifier input dragged up with the output, not the resistors.');
+c.assert(vd >= open * 0.97,
+  'The bridge is delivering ' + (vd * 1e6).toFixed(1) + ' uV where on its own it ' +
+  'produces 4995.0 uV — it is loaded by ' + ((1 - vd / open) * 100).toFixed(2) + '%, and ' +
+  'every bit of that comes straight off the reading. The inverting legs input resistance ' +
+  'is R1 and nothing else, and 350 Ohm of bridge notices resistors this small.');
+'''},
+                ],
+                "hints": [
+                    "The gain of this stage is the ratio $R_2/R_1$ on the inverting side and $R_4/R_3$ on the non-inverting side, and the derivation on this page says the common-mode gain is zero only when those two ratios are *equal*. So there are two resistors to change, not one.",
+                    "$R_1$ and $R_3$ are the two 10 kΩ resistors the bridge feeds into. $R_2$ is the one running from the amplifier's inverting input up and over to its output; $R_4$ is the one running from the non-inverting input down to ground. Raise $R_2$ and $R_4$ together to 1 MΩ — type `1M` into the value box.",
+                    "If you changed only one of them, solve it and look at the output before changing anything back. Raising $R_2$ alone puts it on the negative rail; raising $R_4$ alone puts it at 4.91 V. Both are the common mode arriving, and the second one is the dangerous one because it looks like an answer.",
+                    "Check yourself before running: the two bridge nodes should be about 5.0041 V and 4.9992 V — 4908 µV apart rather than the 4995 µV the bridge produces unloaded, because your 10 kΩ resistors are loading it — and the output should be 0.4903 V.",
+                    "1 MΩ is not the only right answer. 100 kΩ and 10 MΩ is the same ratio, loads the bridge ten times less, and passes every check here; the reason nobody builds it that way is noise and bias current, neither of which this solver models.",
+                ],
+            }],
             "blanks": {
                 "title": "Two ways for the common mode to get in",
                 "minutes": 9,
