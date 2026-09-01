@@ -407,25 +407,60 @@ function applyCourse(c, full) {
   }
   delete c.skeleton;
 }
-/* What the learner sees while a course's payload is on its way, or when it did not
-   come. Both name the course, because a spinner that says nothing reads as a hang. */
-function paintWaiting(c, r, err) {
+/* The circuit editor and the sketch interpreter ship as a separate script in the
+   published build, fetched the first time a screen needs them; the inlined build
+   already has them, and the check at the top says so. One promise, dropped on
+   failure so the next attempt is a real retry. */
+let circuitLoading = null;
+function ensureCircuit() {
+  if (typeof createCircuit === 'function') return Promise.resolve();
+  const url = CATALOG_URLS && CATALOG_URLS.circuit;
+  if (!url) return Promise.reject(new Error('this build has no circuit editor'));
+  if (circuitLoading) return circuitLoading;
+  circuitLoading = new Promise(function (resolve, reject) {
+    const el = document.createElement('script');
+    el.src = url;
+    el.onload = function () {
+      if (typeof createCircuit !== 'function') {
+        reject(new Error('the circuit editor loaded but did not define itself'));
+        return;
+      }
+      /* the symbol convention was chosen before the painter existed to be told */
+      applySymbols();
+      resolve();
+    };
+    el.onerror = function () { reject(new Error('the circuit editor could not be fetched')); };
+    document.head.appendChild(el);
+  });
+  circuitLoading.catch(function () { circuitLoading = null; });
+  return circuitLoading;
+}
+/* Which lessons draw a schematic. A numeric unit knows before its content arrives,
+   from the skeleton's flag; after hydration the diagram itself is the flag. */
+function lessonNeedsCircuit(l) {
+  return l.type === 'build' || l.type === 'match' ||
+    (l.type === 'numeric' && !!(l.diagram || nOf(l, 'diagram')));
+}
+/* What the learner sees while a course's payload or the circuit editor is on its
+   way, or when it did not come. Both name what is loading, because a spinner that
+   says nothing reads as a hang. */
+function paintWaiting(what, r, err, back) {
   const main = $('#main');
   paintRunner(null);
-  $('#screen-title').textContent = c.title;
-  $('#screen-crumb').textContent = c.id;
+  $('#screen-title').textContent = what.title;
+  $('#screen-crumb').textContent = what.id;
   if (!main) return;
   main.innerHTML = '<div class="boot-wait" role="status">' +
     (err
-      ? '<div><b>' + esc(c.id) + '</b> could not be loaded — ' + esc(String((err && err.message) || err)) +
+      ? '<div><b>' + esc(what.id) + '</b> could not be loaded — ' + esc(String((err && err.message) || err)) +
         '.</div><div class="bw-acts"><button class="btn primary sm" id="bw-retry">Try again</button>' +
-        '<button class="btn dark sm" id="bw-back">Back to the course</button></div>'
-      : '<div>Loading <b>' + esc(c.id) + ' · ' + esc(c.title) + '</b>…</div><div class="bw-bar"><i></i></div>') +
+        (back ? '<button class="btn dark sm" id="bw-back">' + esc(back.label) + '</button>' : '') + '</div>'
+      : '<div>Loading <b>' + esc(what.id) + ' · ' + esc(what.title) + '</b>…</div><div class="bw-bar"><i></i></div>') +
     '</div>';
   const retry = $('#bw-retry', main);
   if (retry) retry.addEventListener('click', function () { go(r); });
-  const back = $('#bw-back', main);
-  if (back) back.addEventListener('click', function () { go({ view: 'course', id: c.id }); });
+  const bk = $('#bw-back', main);
+  if (bk) bk.addEventListener('click', function () { go(back.route); });
 }
 
 function coursesInBand(programId, n) {
@@ -1171,14 +1206,26 @@ function go(r) {
   rememberScroll();
   route = r;
   /* A lesson's content lives in its course's payload, fetched the first time a lesson
-     in that course opens. Paint a waiting panel and re-enter once it is here. */
+     in that course opens; a screen that draws a schematic needs the circuit editor,
+     fetched the first time one does. Paint a waiting panel and re-enter once
+     everything the screen needs is here. */
   const needInfo = r.view === 'lesson' ? LESSON_INDEX[r.id] : null;
-  if (needInfo && needInfo.track.skeleton) {
-    const seq = goSeq, course = needInfo.track;
-    paintWaiting(course, r);
-    hydrateCourse(course.id).then(
+  const waits = [];
+  if (needInfo && needInfo.track.skeleton) waits.push(hydrateCourse(needInfo.track.id));
+  if (typeof createCircuit !== 'function' &&
+      ((needInfo && lessonNeedsCircuit(needInfo.lesson)) ||
+       (r.view === 'play' && playState().mode === 'circuit'))) waits.push(ensureCircuit());
+  if (waits.length) {
+    const seq = goSeq;
+    const what = needInfo ? needInfo.track : { id: 'Playground', title: 'the circuit editor' };
+    const back = needInfo
+      ? { label: 'Back to the course', route: needInfo.track.kind === 'course'
+          ? { view: 'course', id: needInfo.track.id } : { view: 'track', track: needInfo.track.id } }
+      : { label: 'Back to the study plan', route: frontRoute() };
+    paintWaiting(what, r);
+    Promise.all(waits).then(
       function () { if (seq === goSeq) go(r); },
-      function (e) { if (seq === goSeq) paintWaiting(course, r, e); });
+      function (e) { if (seq === goSeq) paintWaiting(what, r, e, back); });
     return;
   }
   if (r.top) delete SCROLL_MEM[routeKey(r)];   /* re-entry that must start at the top */
@@ -2067,6 +2114,12 @@ function renderProfile(main) {
      reader's own setting put back before anything else can read it. */
   const symBtns = $all('[data-sym-style]', main);
   const paintSymEg = function () {
+    /* the painter lives in the on-demand circuit library; fetch it and paint when
+       it lands, unless the reader has left the screen by then */
+    if (typeof Symbols === 'undefined') {
+      ensureCircuit().then(function () { if (route.view === 'profile') paintSymEg(); }, function () {});
+      return;
+    }
     if (typeof symbolStyle !== 'function') return;
     const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
     const was = symbolStyle();

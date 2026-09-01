@@ -397,7 +397,15 @@ const inlineLiteral = (v) => JSON.stringify(v).replace(/</g, '\u005cu003c');
 /* Assemble one shape. Called twice, sequentially: the two scripts are not in a subset
    relation (the shell carries a chunk list the inlined build does not), so the
    tokenizer guard and the syntax check have to run against each of them. */
-function assemble(label, degreeLiteral, chunkLiteral) {
+/* The circuit editor and the sketch interpreter are needed on the build, schematic,
+   symbol and playground screens and nowhere else, and together they are a third of
+   the shipped script. The split shell leaves them out and fetches lib/circuit.<hash>.js
+   the first time one of those screens opens (ensureCircuit in app.js); the inlined
+   file keeps them, because it must fetch nothing. */
+const circuitLib = [shipped.mcuJs, shipped.circuitJs].join('\n');
+const circuitLibName = `circuit.${createHash('sha256').update(circuitLib).digest('hex').slice(0, 8)}.js`;
+
+function assemble(label, degreeLiteral, chunkLiteral, withCircuit) {
   const appScript = [
     shipped.langJs,
     shipped.tracksJs,
@@ -409,8 +417,7 @@ function assemble(label, degreeLiteral, chunkLiteral) {
     shipped.engineJs,
     shipped.studioJs,
     shipped.mathInputJs,
-    shipped.mcuJs,
-    shipped.circuitJs,
+    withCircuit ? circuitLib : '',
     shipped.deskJs,
     shipped.appJs,
   ].join('\n');
@@ -468,7 +475,24 @@ function assemble(label, degreeLiteral, chunkLiteral) {
 /* Shape one: everything inlined, and therefore no chunk list at all — a build that
    lists nothing is a build that fetches nothing, which is what keeps file:// working
    rather than a promise made in a comment. */
-const inlineHtml = assemble('inlined', inlineLiteral(degree), 'null');
+const inlineHtml = assemble('inlined', inlineLiteral(degree), 'null', true);
+
+/* The on-demand library is a script file of its own, so it needs only the syntax
+   check and none of the HTML-tokenizer guards. */
+{
+  const tmp = join(OUT_DIR, '.syntax-check.circuit-lib.js');
+  mkdirSync(OUT_DIR, { recursive: true });
+  writeFileSync(tmp, circuitLib, 'utf8');
+  try {
+    execFileSync(process.execPath, ['--check', tmp], { stdio: 'pipe' });
+    notes.push(`syntax: the circuit library parses cleanly (${Math.round(Buffer.byteLength(circuitLib) / 1024)} KB, fetched on demand)`);
+  } catch (e) {
+    problems.push('JavaScript syntax error in the circuit library:\n' +
+      String(e.stderr || e.stdout || e.message).split('\n').slice(0, 12).join('\n'));
+  } finally {
+    try { rmSync(tmp, { force: true }); } catch {}
+  }
+}
 
 /* Shape two: the shell, plus one payload per programme.
 
@@ -534,7 +558,8 @@ const shellHtml = assemble('split shell',
   JSON.stringify({
     index: indexChunk.url,
     courses: Object.fromEntries(courseChunks.map((c) => [c.course, c.url])),
-  }));
+    circuit: `lib/${circuitLibName}`,
+  }), false);
 
 /* The inlined shape must list nothing. Asserted rather than assumed: both shapes come
    out of one run, and it is the null that keeps the double-clickable file from
@@ -653,7 +678,8 @@ if (checkOnly) {
 const PREV_FILE = '_generations.json';
 const KEEP_GENERATIONS = 3;
 
-function pruneChunks(dir, currentNames) {
+function pruneChunks(dir, currentNames, ext) {
+  ext = ext || '.json';
   const prevPath = join(dir, PREV_FILE);
   let history = [];
   if (existsSync(prevPath)) {
@@ -673,7 +699,7 @@ function pruneChunks(dir, currentNames) {
   const removed = [];
   if (existsSync(dir)) {
     for (const f of readdirSync(dir)) {
-      if (f === PREV_FILE || !/\.json$/.test(f) || keep.has(f)) continue;
+      if (f === PREV_FILE || !f.endsWith(ext) || keep.has(f)) continue;
       unlinkSync(join(dir, f));
       removed.push(f);
     }
@@ -691,7 +717,12 @@ function writeShape(dir, { inline }) {
   writeFileSync(join(dir, 'version.json'), JSON.stringify({ build: BUILD_ID }) + '\n', 'utf8');
   for (const c of chunks) writeFileSync(join(chunkDir, c.name), c.json, 'utf8');
   if (inline) writeFileSync(join(dir, 'codewright.html'), stamp(inlineHtml), 'utf8');
-  return pruneChunks(chunkDir, chunks.map((c) => c.name));
+  /* the on-demand circuit library, hashed and kept by generation like a payload */
+  const libDir = join(dir, 'lib');
+  mkdirSync(libDir, { recursive: true });
+  writeFileSync(join(libDir, circuitLibName), circuitLib, 'utf8');
+  return pruneChunks(chunkDir, chunks.map((c) => c.name))
+    .concat(pruneChunks(libDir, [circuitLibName], '.js'));
 }
 
 const droppedBuild = writeShape(OUT_DIR, { inline: true });
