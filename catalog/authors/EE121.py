@@ -6129,11 +6129,13 @@ figures above can be trusted; it gets transition times right to within roughly a
 of one and a half, which is why an RC estimate of a gate delay is an estimate and not a
 number to design a clock around.
 
-**This is also why the schematic editor in this course has no transistors.** Its solver
-is linear — the same modified nodal analysis a SPICE engine uses, without the Newton
-iteration that non-linear devices need. So the circuit questions in this module draw the
-on and off devices as the resistors they approximate, which is honest about what the tool
-can do and happens to be exactly the model you want here anyway.
+**This is also why the circuit questions in this module draw no transistors.** They draw
+the on and off devices as the resistors they approximate, and that is a choice about the
+model rather than a limit of the tool: the schematic editor does carry MOSFETs, and
+solves them with the same Newton-Raphson iteration it uses on a diode. But a logic gate's
+levels and its RC delay are exactly what the resistance model gives you, and asking a
+square law for a number you are going to quote to one significant figure buys nothing.
+EE202 uses the device itself, because there the shape of the curve is the subject.
 
 **Stacking has a limit.** Every extra device in series with a pull-down adds its
 on-resistance, so $V_{OL}$ climbs and the falling edge slows down. An 8-input NAND would

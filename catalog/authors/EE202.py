@@ -20,10 +20,27 @@ against every other:
     k = 2 mA/V^2      V_th = 1.0 V      V_A = 45 V
 
 biased at I_D = 1 mA, which gives V_ov = 1.0 V, g_m = 2 mA/V and r_o = 45 kΩ.
-The schematic solver has no transistors — it is linear only — so the transistor
-appears in every build exercise the way it appears in an engineer's notebook:
-as a current source at DC, and as a current source in parallel with r_o for small
-signals. That is not a workaround, it is the model.
+The transistor appears in this course two ways, and the difference is deliberate.
+
+In the linear build exercises it appears the way it appears in an engineer's
+notebook: as a current source at DC, and as a current source in parallel with r_o
+for small signals. That is not a workaround, it is the model, and it is what every
+hand calculation in this subject actually does.
+
+The schematic solver is NOT linear-only, and four places in this file said it was.
+src/circuit.js carries a SPICE level-1 MOSFET — cut-off, triode, saturation, a
+source/drain swap and (1 + lambda*V_DS) — and an Ebers-Moll bipolar, both solved by
+the Newton-Raphson loop the diode already used. The exercises whose titles say
+"with the device left in" therefore put the real thing on the canvas, and their
+checks read it through c.device() rather than inferring it from node voltages.
+Those devices carry the course numbers exactly:
+
+    NMOS   value = k = 2e-3    vth = 1.0    lambda = 1/45   (V_A = 45 V)
+    NPN    value = I_S = 1e-14 bf = 100     br = 1
+
+Where the notebook model and the device disagree, the disagreement is the lesson
+and both numbers are stated. The hand bias design says 1.000 mA and the device
+settles at 1.0202 mA; the gap is the lambda that every hand calculation drops.
 
 Module 9 introduces one bipolar device, and it is kept at the same operating point
 for the same reason:
@@ -64,6 +81,8 @@ COURSE = {
         "Place a MOSFET in cut-off, triode or saturation from its terminal voltages, and compute its drain current in each.",
         "Compute transconductance and output resistance at an operating point, in all three equivalent forms, and say which form to reach for when.",
         "Design a four-resistor bias network for a stated drain current, source voltage and drain voltage, and check it leaves the device in saturation with headroom.",
+        "Say why the source resistor is there at all: quantify a bias network's immunity to device spread as the loop gain 1 + g_m R_S, and reject a design that reaches the target current with none of it.",
+        "Check the notebook model against the device — derive the square law from the channel charge, know that k is mu*C_ox*W/L, and say which of the model's assumptions the number in front of you is relying on.",
         "Draw the small-signal equivalent of a common-source stage and compute its gain, input resistance and output resistance, loaded and unloaded.",
         "Predict the -3 dB bandwidth of a stage from its output resistance and load capacitance, and explain why raising the gain lowers the bandwidth by the same factor.",
         "Place the quiescent drain voltage for maximum symmetric swing, and decide whether clipping or square-law distortion is the limit a given specification runs into first.",
@@ -101,7 +120,190 @@ COURSE = {
                 "**Transconductance** is the slope of that dependence: $g_m = \\partial I_D/\\partial V_{GS} = kV_{ov} = 2I_D/V_{ov} = \\sqrt{2kI_D}$. Three ways of writing one number, in amps per volt — siemens. At $I_D = 1$ mA this device gives $g_m = 2$ mA/V.",
                 "The weak residual dependence on $V_{DS}$ is **channel-length modulation**: $I_D = \\tfrac{1}{2}kV_{ov}^2(1 + \\lambda V_{DS})$. Its consequence is a finite output resistance $r_o = 1/(\\lambda I_D) = V_A/I_D$. With $V_A = 45$ V and $I_D = 1$ mA, $r_o = 45$ kΩ.",
                 "$g_m r_o$ is the **intrinsic gain**: the most this device can deliver in a common-source stage, whatever you hang on the drain. Here it is 90.",
+                "The square law is not a postulate. It comes out of one integral along the channel, and the factor of $\\tfrac{1}{2}$ in it is the average of a channel charge that ramps from full at the source to nothing at the drain. The reading in this module does that integral, and gives $k = \\mu C_{ox}(W/L)$ three named parts instead of one measured number.",
             ],
+            "read": {
+                "title": "Where the square law comes from, and where it stops",
+                "minutes": 14,
+                "body": r'''
+EE201 spends ten modules on one device and never mentions this one. It gives you a
+junction, a depletion region, a built-in potential, and drift and diffusion as the two
+ways a carrier moves — and then this course opens by announcing
+$I_D = \tfrac{1}{2}kV_{ov}^{2}$ as though it had been established somewhere. It has
+not been, here or anywhere before here. This reading is the missing rung. Everything it
+uses is EE201's: the electrostatics of module 1, the parallel-plate capacitor of module
+7, and the drift equation of module 5.
+
+## A capacitor with silicon for a bottom plate
+
+Take a slab of p-type silicon. Grow a thin insulating oxide on it — call it $t_{ox}$
+thick — and put a conducting gate on top. That is a capacitor, and its lower plate
+happens to be a semiconductor. Everything the MOSFET does follows from what a
+semiconductor does when you charge it.
+
+Put the gate slightly positive. The mobile charge in p-type silicon is holes, so they
+are pushed down away from the surface, leaving behind the fixed negative acceptor ions
+they had been neutralising. A layer with no mobile carriers in it: that is the same
+depletion region EE201 built at the pn junction, made here by a voltage on a plate
+instead of by two dopings meeting.
+
+Push harder. Once the surface has run out of holes to repel, the only charge left to
+attract is electrons, and the field pulls them out of the bulk to the underside of the
+oxide. At some gate voltage the surface stops being p-type and becomes n-type — an
+**inversion layer**, a skin of electrons on top of p-type silicon. The gate voltage at
+which that happens is the **threshold**, $V_{th}$. Two heavily doped n-type wells sunk
+into the slab either side of the gate — the source and the drain — now have a conducting
+n-channel between them that did not exist a moment ago.
+
+That is the whole device. A gate that cannot pass current because there is an insulator
+under it, and a channel whose existence and thickness the gate controls electrostatically.
+
+## The channel charge, in coulombs
+
+Above threshold the oxide is an ordinary parallel-plate capacitor, so use the ordinary
+formula. Per unit area of gate,
+
+$$C_{ox} = \frac{\varepsilon_{ox}}{t_{ox}}$$
+
+and every volt of gate drive above the threshold puts $C_{ox}$ coulombs per square metre
+into the channel:
+
+$$|Q_n| = C_{ox}\,(V_{GS} - V_{th}) = C_{ox}V_{ov}$$
+
+The overdrive appears here, in its first honest role: not "the excess above threshold"
+as a definition, but **the part of the gate voltage that is actually buying channel
+charge**. Everything up to $V_{th}$ went on emptying the surface of holes and is spent.
+
+Numbers, so this is a quantity and not a symbol. Silicon dioxide has
+$\varepsilon_{ox} = 3.9\varepsilon_0 = 3.45\times10^{-11}$ F/m. A 10 nm oxide therefore
+gives
+
+$$C_{ox} = \frac{3.45\times10^{-11}}{10\times10^{-9}} = 3.45\times10^{-3}\,\mathrm{F/m^2}
+= 3.45\,\mathrm{fF/\mu m^2}$$
+
+and at one volt of overdrive the channel holds 3.45 femtocoulombs under every square
+micron of gate — about 21 500 electrons. Not many. That is why the gate has to be close.
+
+## One integral, and the triode equation falls out
+
+Now put a voltage $V_{DS}$ between drain and source and ask what current flows.
+
+Here is the one subtlety in the whole derivation, and it is worth slowing down for.
+Walk along the channel from the source to the drain, at position $y$. The channel is
+resistive, so it drops voltage as it carries current: the local channel potential $V(y)$
+runs from $0$ at the source to $V_{DS}$ at the drain. But the gate is one piece of metal
+at one potential. So the voltage *across the oxide* is not $V_{GS}$ everywhere — it is
+$V_{GS} - V(y)$, and it is smallest at the drain end. **The channel is thickest at the
+source and thinnest at the drain**, and the local charge is
+
+$$|Q_n(y)| = C_{ox}\left(V_{ov} - V(y)\right)$$
+
+Now EE201's drift equation, which for a sheet of charge $Q_n$ in a channel of width $W$
+moving at $v = \mu E$ reads $I_D = W|Q_n|\mu E$, with the field along the channel being
+$E = dV/dy$:
+
+$$I_D = W\mu C_{ox}\left(V_{ov} - V(y)\right)\frac{dV}{dy}$$
+
+$I_D$ is the same at every point — nothing leaks out of the channel, because the gate
+insulator sees to that. So separate and integrate over the length $L$:
+
+$$I_D\int_0^{L}dy = W\mu C_{ox}\int_0^{V_{DS}}\left(V_{ov} - V\right)\,dV$$
+
+$$I_D = \mu C_{ox}\frac{W}{L}\left(V_{ov}V_{DS} - \frac{V_{DS}^{2}}{2}\right)$$
+
+That is the triode expression from this module's concept list, and it arrived rather
+than being announced. Comparing it with the form used throughout the course identifies
+the constant that has so far been a single measured number:
+
+$$k = \mu C_{ox}\frac{W}{L} \qquad\text{and}\qquad k' = \mu C_{ox}$$
+
+Put this course's device in: with $\mu = 400\,\mathrm{cm^2/V\,s} = 0.04\,\mathrm{m^2/V\,s}$
+and the 10 nm oxide above, $k' = 0.04 \times 3.45\times10^{-3} = 138\,\mathrm{\mu A/V^2}$,
+and $k = 2$ mA/V² needs
+
+$$\frac{W}{L} = \frac{2\times10^{-3}}{138\times10^{-6}} = 14.5$$
+
+The course device is a channel about fourteen and a half times wider than it is long.
+$W/L$ is the one thing in $k$ a designer chooses; $\mu$ and $C_{ox}$ arrive from the
+foundry. When module 1's quiz says device B is "ten times wider", that is $W/L$ going
+from 14.5 to 145, and nothing else changing.
+
+## Pinch-off, and where the one-half comes from
+
+Look again at the local charge, $C_{ox}(V_{ov} - V(y))$, at the drain end where
+$V(y) = V_{DS}$. As $V_{DS}$ rises, the drain end of the channel gets thinner. At
+$V_{DS} = V_{ov}$ it reaches **zero**: the gate no longer has any drive left over at
+that end, and the channel closes at the drain. This is **pinch-off**, and it is the
+boundary the region test in this module is testing for.
+
+Past that point the integral above cannot be continued — it would ask for a negative
+channel charge, which is not a thing. What actually happens is that the channel ends
+slightly short of the drain, and the extra $V_{DS} - V_{ov}$ drops across the small
+depleted gap, which carriers cross at whatever speed the field gives them. The current
+stops growing. Its value is the value the triode expression had reached at the corner,
+so put $V_{DS} = V_{ov}$ into it:
+
+$$I_D = \mu C_{ox}\frac{W}{L}\left(V_{ov}^{2} - \frac{V_{ov}^{2}}{2}\right)
+      = \frac{1}{2}k V_{ov}^{2}$$
+
+**There is the factor of one half**, and it is not a fudge. It is the average of a
+channel charge that falls linearly from $C_{ox}V_{ov}$ at the source to zero at the
+drain: the mean of a ramp is half its peak. Anyone who writes $I_D = kV_{ov}^2$ has
+priced the channel as though it were as thick at the drain as at the source. The quiz
+in this module marks that error; this is the reason it is an error.
+
+## Channel-length modulation, in one sentence
+
+Raise $V_{DS}$ further and the pinched-off gap at the drain grows, by some $\Delta L$.
+The part of the channel still carrying by drift is now $L - \Delta L$ long, and
+$I_D \propto 1/(L-\Delta L)$, so the current creeps up. Expanding to first order gives
+the $(1 + \lambda V_{DS})$ factor, with $\lambda \approx (\Delta L/L)/V_{DS}$.
+
+Two consequences worth carrying. First, $\lambda$ is inversely proportional to $L$ — the
+same $\Delta L$ is a smaller fraction of a longer channel — so $V_A = 1/\lambda$ is a
+property of the *length* rather than of the process alone, and analogue designers reach
+for long devices when they want output resistance. Second, this is a small correction and
+every hand bias calculation drops it. The build exercise in module 2 that leaves the
+device in shows exactly what dropping it costs: a design worked out for 1.000 mA settles
+at 1.0202 mA, 2.02% high, and every voltage in the stage moves with it.
+
+## Where this stops being true
+
+Three places, and the first is not a footnote.
+
+**Velocity saturation.** The integral assumed $v = \mu E$ — carriers going faster in
+proportion to the field. Silicon stops obeying that above roughly $4\times10^{6}$ V/m,
+where drift velocity flattens off near $10^{5}$ m/s. This course's device is long: with
+$L \approx 10\,\mu$m and 5 V across the channel the field is $5\times10^{5}$ V/m, safely
+under. A modern 0.1 µm channel with 1 V on it sits at $10^{7}$ V/m, well over — and there
+$I_D$ becomes *linear* in $V_{ov}$, not square, and $g_m \approx WC_{ox}v_{sat}$ stops
+depending on the overdrive at all. Every gain expression in this course still works;
+the substitution $g_m = kV_{ov}$ that feeds them does not. The square law is the physics
+of a long device, and it is taught first because it is the one you can derive.
+
+**Sub-threshold conduction.** Below $V_{th}$ the current is not zero. It is exponential
+in $V_{GS}$ — the same Boltzmann factor that gave EE201 its diode — falling by a decade
+for every 60 to 90 mV. The floor is $V_T\ln 10 = 59.5$ mV at 300 K, which is the same
+59.5 mV per decade the diode obeys, because it is the same statistics. "Cut-off means no
+current" is a modelling convenience, and it is the wrong one for anything that has to
+hold a charge for a second or run off a battery for a year.
+
+**The body effect.** $V_{th}$ was treated as a constant. It is not: it rises when the
+source is held above the substrate, because a larger surface depletion charge has to be
+paid for before inversion starts. Module 2's four-resistor bias puts the source at 2 V
+above ground and therefore does exactly this. The shift is a fraction of a volt, this
+course ignores it, and you should know it is being ignored rather than absent.
+
+## What to carry out of here
+
+$k$ is $\mu C_{ox}W/L$, and only the last factor is yours. The overdrive is the gate
+voltage that bought channel charge. The one-half is an average over a tapering channel.
+Pinch-off is the drain end of that channel closing, which is why saturation begins
+exactly at $V_{DS} = V_{ov}$ and not at some other number. And the square law is a
+long-channel result — true of the device this course uses, false of the device in the
+processor running it.
+''',
+            },
             "quiz": {
                 "title": "Regions, the square law and the slope",
                 "minutes": 9,
@@ -269,6 +471,178 @@ the overdrive — that is, by making the device wider. The last one says that fo
 device, transconductance only grows as the square root of the current you spend. Both
 statements are about to become design constraints rather than algebra.
 ''',
+            },
+            "build": {
+                "title": "The device itself, and the line that finds its operating point",
+                "minutes": 24,
+                "brief": r'''
+Every other build exercise in this course replaces the transistor with a current source,
+because that is what a bias calculation does. This one does not. The canvas carries a
+real n-channel MOSFET — $k = 2$ mA/V², $V_{th} = 1.0$ V, $\lambda = 1/45$ — and the
+solver runs the square law on it, region test and all, the same way it runs the diode
+equation in EE201.
+
+There is one circuit worth building before any amplifier, and it is the one that answers
+*how do you get a chosen current through a device whose current you do not control
+directly*. You control $V_{GS}$. The current follows from it, squared. So the question
+is really: what value of $V_{GS}$ will this device settle at?
+
+## What to build
+
+A **diode-connected** MOSFET: the gate wired to the drain, so $V_{GS} = V_{DS}$ always,
+and one resistor from the 12 V rail down to that node. The source goes to ground and the
+probe is already on the drain.
+
+Make the device carry **1.00 mA**.
+
+## The two equations, and why neither is enough on its own
+
+The device says
+$$I_D = \tfrac{1}{2}kV_{ov}^{2}\,(1+\lambda V_{DS}),\qquad V_{ov}=V_{GS}-V_{th}$$
+and the resistor says
+$$I_D = \frac{V_{DD}-V_D}{R}$$
+The second is EE201's **load line**, moved from a diode to a transistor without changing
+a symbol in it. Two curves, one unknown node voltage, and the operating point is where
+they cross. That is the whole method, and it is the reason this exercise comes before
+biasing rather than after: module 2 designs a network to *put* the crossing somewhere,
+and you cannot place a crossing you have not seen.
+
+Work it the way you would on paper. Aim for 1 mA. The square law at 1 mA wants
+$V_{ov}=\sqrt{2I_D/k}=1.00$ V, so $V_{GS}=2.00$ V, so the drain node sits at 2.00 V —
+and the resistor is left holding $12-2=10$ V at 1 mA.
+
+**The tempting wrong answer is 12 kΩ**, from dividing the whole supply by the target
+current. That treats the transistor as a wire. Notice what it does *not* give you: build
+it and the device carries **842 µA**, not the 1000 the arithmetic predicted and not the
+1200 that 12 V across 10 kΩ would be. Both of those numbers come from assuming the answer
+in order to compute it. The load line does not assume; it finds where two curves cross,
+and the crossing moved when the resistor did.
+
+## Why a diode connection guarantees saturation
+
+Tying the gate to the drain makes $V_{DS}=V_{GS}$, and
+$V_{DS}-V_{ov}=V_{GS}-(V_{GS}-V_{th})=V_{th}$. So a diode-connected MOSFET sits exactly
+one threshold inside the saturation boundary, always, at every current — you cannot bias
+it into triode by accident. One of the checks measures that 1.000 V and it is the same
+1.000 V as the device's $V_{th}$, which is not a coincidence but the algebra above.
+
+Nothing is graded on layout. Any drawing that puts the device at this operating point
+passes.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "q", "kind": "NMOS", "x": 9, "y": 6, "rot": 1,
+                         "value": 2e-3, "vth": 1.0, "lambda": 0.022222222222222223},
+                        {"id": "g1", "kind": "GND", "x": 9, "y": 8},
+                        {"id": "out", "kind": "OUT", "x": 7, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [9, 2]},
+                        {"a": [9, 7], "b": [9, 8]},
+                        {"a": [9, 5], "b": [7, 5]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "r", "kind": "R", "x": 9, "y": 3, "rot": 1, "value": 10000},
+                        {"id": "q", "kind": "NMOS", "x": 9, "y": 6, "rot": 1,
+                         "value": 2e-3, "vth": 1.0, "lambda": 0.022222222222222223},
+                        {"id": "g1", "kind": "GND", "x": 9, "y": 8},
+                        {"id": "out", "kind": "OUT", "x": 7, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [9, 2]},
+                        {"a": [9, 4], "b": [9, 5]},
+                        {"a": [9, 7], "b": [9, 8]},
+                        {"a": [9, 5], "b": [7, 5]},
+                        {"a": [10, 6], "b": [10, 5]},
+                        {"a": [10, 5], "b": [9, 5]},
+                    ],
+                },
+                "checks": [
+                    {"name": "one resistor, one supply, and the gate tied to the drain", "code": r'''
+c.assert(c.count('NMOS') === 1,
+  'This exercise wants exactly one MOSFET — the one on the canvas. Found ' + c.count('NMOS') + '.');
+c.assert(c.count('V') === 1,
+  'One supply, the 12 V rail. Found ' + c.count('V') + '.');
+c.close(c.values('V')[0], 12, 0.001, 'the supply voltage');
+c.assert(c.count('R') === 1,
+  'One resistor sets the current. Found ' + c.count('R') + ' — if there are none yet, that ' +
+  'is the part of the circuit this exercise is about.');
+const d = c.device('q');
+const vd = d.v[0], vs = d.v[1], vg = d.v[2];
+c.assert(Math.abs(vs) < 1e-4,
+  'The source belongs at ground, so that V_GS and V_DS are both read against the same ' +
+  'point. It is sitting at ' + vs.toFixed(3) + ' V.');
+c.assert(Math.abs(vg - vd) < 1e-3,
+  'Diode-connected means the gate wired to the drain. The gate is at ' + vg.toFixed(3) +
+  ' V and the drain at ' + vd.toFixed(3) + ' V. A gate left floating reads near zero and ' +
+  'the device stays in cut-off, which is what a drain sitting at the full 12 V is telling you.');
+'''},
+                    {"name": "the device carries 1.00 mA", "code": r'''
+const d = c.device('q');
+const id = d.i[0];
+c.assert(id > 1e-9,
+  'No drain current at all. Below threshold the channel does not exist, so check the gate ' +
+  'is really tied to the drain and that the resistor reaches the supply rail.');
+/* The hint follows the reading, and it says what the resistor DOES rather than what a
+   wrong calculation predicts. Sizing R as 12 V / 1 mA = 12 kOhm is the tempting error,
+   and it does not give 1200 uA — it gives 842, because the current the transistor
+   settles at is not the current the mistaken arithmetic assumed. */
+const hint = id < 0.96e-3
+  ? ' Too low. 842 uA is the reading from a 12 kOhm resistor, which is 12 V divided by ' +
+    'the target current — the transistor treated as a wire. It is not a wire: it keeps ' +
+    'about 2 V for itself, so the resistor only ever gets the remaining 10 V and needs ' +
+    'to be 10 kOhm, not 12.'
+  : ' Too high: the resistor is smaller than the 10 kOhm the load line asks for, so it ' +
+    'drops less and the device is pushed to a larger overdrive. 8 kOhm gives 1239 uA.';
+c.assert(Math.abs(id - 1.0e-3) <= 0.035e-3,
+  'The device should carry 1.00 mA; it is carrying ' + (id * 1e6).toFixed(1) + ' uA.' + hint);
+'''},
+                    {"name": "the square law reproduces the current from the overdrive", "code": r'''
+/* The device parameters are the ones the canvas hands out and the ones the brief quotes.
+   Evaluating the model at the overdrive the LEARNER'S circuit produced, and comparing it
+   with the current that circuit actually carries, is the check that this is a transistor
+   being solved rather than a resistor being divided. */
+const K = 2e-3, VTH = 1.0, LAM = 1 / 45;
+const d = c.device('q');
+const vd = d.v[0], vs = d.v[1], vg = d.v[2], id = d.i[0];
+const vov = vg - vs - VTH, vds = vd - vs;
+c.assert(vov > 0,
+  'The overdrive is ' + vov.toFixed(3) + ' V, so V_GS has not reached the 1.0 V threshold ' +
+  'and there is no channel to carry anything.');
+const predicted = 0.5 * K * vov * vov * (1 + LAM * vds);
+c.close(id, predicted, 0.01,
+  'the saturation square law evaluated at the overdrive this circuit settled on (' +
+  vov.toFixed(4) + ' V), against the current the circuit actually carries');
+'''},
+                    {"name": "a diode connection sits exactly one threshold inside saturation", "code": r'''
+const VTH = 1.0;
+const d = c.device('q');
+const vd = d.v[0], vs = d.v[1], vg = d.v[2];
+const vov = vg - vs - VTH, vds = vd - vs;
+c.assert(vds >= vov,
+  'V_DS is ' + vds.toFixed(3) + ' V against an overdrive of ' + vov.toFixed(3) + ' V, so the ' +
+  'device is in triode, not saturation — which a diode-connected device cannot be.');
+c.close(vds - vov, VTH, 0.02,
+  'V_DS minus the overdrive. Tying the gate to the drain makes V_DS = V_GS, and ' +
+  'V_GS - V_ov is the threshold itself, so this margin should come out at the device V_th ' +
+  'of 1.000 V whatever current you chose');
+'''},
+                ],
+                "hints": [
+                    "Start from the current, not the resistor. At $I_D = 1$ mA the square law needs $V_{ov} = \\sqrt{2I_D/k} = \\sqrt{2\\times10^{-3}/2\\times10^{-3}} = 1.00$ V.",
+                    "So $V_{GS} = V_{th} + V_{ov} = 2.00$ V — and because the gate is tied to the drain, that is also the drain voltage.",
+                    "The resistor is left with $12 - 2 = 10$ V at 1 mA, so it is 10 kΩ. Draw it from the rail at the top down to the drain.",
+                    "The gate connection is the second thing to draw and the one people forget: run a wire from the gate pin round to the drain node. Until it is there the gate floats, $V_{GS}$ reads about zero, and the drain sits at the full 12 V with no current flowing.",
+                    "The solver will show 1.002 mA rather than 1.000 mA. That 0.2% is $\\lambda$: the channel-length modulation term the hand calculation dropped. The check allows 3.5%, so it is not what is failing if something is.",
+                ],
             },
             "lab": {
                 "title": "The device, as four functions",
@@ -457,6 +831,8 @@ assert abs(intrinsic - 90.0) < 1e-9, f"the intrinsic gain here is 90, got {intri
                 "The standard arrangement is **four-resistor bias**: $R_1$ and $R_2$ divide the supply down to the gate, $R_S$ sits between source and ground, $R_D$ between drain and supply.",
                 "Because the gate takes no DC current, $V_G = V_{DD}R_2/(R_1+R_2)$ exactly, however large $R_1$ and $R_2$ are. Their size is limited by noise and by leakage, not by loading.",
                 "$R_S$ provides **negative feedback at DC**: if $I_D$ drifts up, $V_S = I_DR_S$ rises, $V_{GS} = V_G - V_S$ falls, and the current is pulled back down. This is what makes a bias point survive a device whose $k$ and $V_{th}$ vary from part to part.",
+                "That immunity has a number, and it is the only figure of merit a bias network has. Differentiating the operating point with respect to $k$ gives $\\frac{k}{I_D}\\frac{\\partial I_D}{\\partial k} = \\frac{1}{1+g_mR_S}$: a fractional error in the device arrives at the current divided by the degeneration's loop gain. This design has $g_mR_S \\approx 4.25$, so a 50% spread in $k$ shows up as 7% in $I_D$. Ground the source instead and the divisor is 1 — the same 1 mA, and 43%.",
+                "The second build in this module puts a real MOSFET in place of the current source and measures both. Worth knowing before you get there: a bias worked out by hand for 1.000 mA settles at **1.0202 mA**, because the hand calculation drops $(1+\\lambda V_{DS})$ and the device does not.",
                 "Finding the operating point means solving two equations at once: $V_{GS} = V_G - I_DR_S$ and $I_D = \\tfrac{1}{2}k(V_{GS}-V_{th})^2$. Substituting gives a quadratic in $I_D$; the root with $V_{GS} > V_{th}$ is the physical one and the other is an artefact of squaring.",
                 "**Headroom**: $V_{DS}$ must remain above $V_{ov}$ at the *bottom* of the output swing, not merely at the quiescent point, or the device slides into triode and the waveform flattens on one side.",
                 "$R_D$ sets both the DC drop $I_DR_D$ and, in the next module, the gain. A larger $R_D$ buys gain and spends headroom, and that is the first of the course's several irreducible compromises.",
@@ -549,18 +925,26 @@ the assumption you made to get it.
                     },
                 ],
             },
-            "build": {
+            "build": [{
                 "title": "A four-resistor bias for 1 mA",
                 "minutes": 28,
                 "brief": r'''
 Bias the course device — $k = 2$ mA/V², $V_{th} = 1.0$ V — at **1.00 mA** from a 12 V
 supply.
 
-The schematic solver is linear and has no transistors in it. That is not an obstacle
-here, because at the operating point the transistor's drain-source path *is* a current
-source: 1 mA flows in at the drain and out at the source, and no equation in a bias
-calculation asks it for anything else. The canvas therefore opens with a 1 mA current
-source already placed, standing in for the device, with its **+ pin as the drain**.
+This exercise works in the notebook model: at the operating point the transistor's
+drain-source path *is* a current source — 1 mA flows in at the drain and out at the
+source, and no equation in a bias calculation asks it for anything else. The canvas
+therefore opens with a 1 mA current source already placed, standing in for the device,
+with its **+ pin as the drain**.
+
+Build it that way first, because it is how the design is done on paper and the algebra
+is clearer with the device's own feedback taken out of it. Then do the next exercise,
+which is the same specification with a real MOSFET in the socket. The solver carries
+one — module 1's build already used it — and the difference between the two is worth
+having: with a current source the drain current is *stipulated*, so no mistake you can
+make in the divider will move it, and the one quantity a bias network exists to control
+is the one thing this drawing cannot get wrong.
 
 Your job is to surround it with the four resistors.
 
@@ -685,7 +1069,235 @@ c.assert(idiv <= 50e-6 * 1.02,
                     "Pick the divider total from the budget: 12 V across 750 kΩ draws 16 µA, comfortably inside 10–50 µA. Splitting 750 kΩ in the ratio 2:1 gives 500 kΩ on top and 250 kΩ below.",
                     "Put the probe on the node between the two divider resistors, not on the supply rail — the checks read $V_{GS}$ as the probe voltage minus the source voltage.",
                 ],
-            },
+            }, {
+                "title": "The same bias, with the device left in",
+                "minutes": 30,
+                "brief": r'''
+Same supply, same specification, same four resistors. The current source is gone and
+there is a real MOSFET in its place — $k = 2$ mA/V², $V_{th} = 1.0$ V, $\lambda = 1/45$,
+the course device — with the drain at the top pin, the source at the bottom and the gate
+sticking out to the right. Nothing tells it to carry 1 mA. It carries whatever the
+network and the square law agree on, and your job is to make them agree on 1 mA.
+
+## Why this is a different exercise and not the same one drawn again
+
+In the previous build the drain current was **stipulated**. You could have put the gate
+divider anywhere — 1 V, 8 V, upside down — and 1.00 mA would still have flowed, because
+an ideal current source passes its value whatever is asked of it. The one quantity the
+entire bias network exists to control was the one quantity that drawing could not get
+wrong.
+
+Here it can. $V_G$ sets $V_{GS}$, $V_{GS}$ sets $I_D$ through the square law, and $I_D$
+sets $V_S$ through $R_S$ — which changes $V_{GS}$ again. The circuit finds its own fixed
+point and the solver has to iterate to it, exactly as it does for a diode.
+
+## The specification
+
+Unchanged from the previous exercise, so the arithmetic carries straight over:
+
+- the source terminal sits at **2.00 V** above ground,
+- $V_{GS}$ is **2.00 V**, which is what the hand model says this device needs for 1.00 mA,
+- the drain sits at **7.00 V**, leaving 5 V across the device,
+- the divider draws between **10 µA and 50 µA** from the supply.
+
+Put the probe on the **drain**, which is the output of the stage you are about to build
+in module 3.
+
+## What the solver will actually show you, and why
+
+Your hand design will say 1.000 mA. The device settles at **1.0202 mA**, 2.02% high, and
+every voltage moves with it: the source lands at 2.0404 V rather than 2.000, the drain at
+6.8990 rather than 7.000, and $V_{GS}$ comes out at 1.9596 V rather than 2.000.
+
+That is $\lambda$. The hand model uses $I_D = \tfrac{1}{2}kV_{ov}^2$; the device adds
+$(1+\lambda V_{DS})$, and with $V_{DS}$ near 4.86 V and $\lambda = 1/45$ that factor is
+1.108 — an 11% push on the current, of which the negative feedback through $R_S$ absorbs
+all but 2%. **That absorption is the entire point of the exercise**, and the checks below
+allow for the 2% rather than pretending it is not there.
+
+## The requirement the previous exercise could not state
+
+A bias network is not judged on hitting 1 mA. Any network hits 1 mA if you tune it. It is
+judged on **still** being near 1 mA when the device is not the one on the data sheet —
+and $k$ and $V_{th}$ vary by tens of percent across a wafer, a reel and a temperature
+range.
+
+Differentiate the fixed point $I_D = \tfrac{k}{2}(V_G - I_DR_S - V_{th})^2$ with respect
+to $k$ and the algebra collapses to one number:
+
+$$\frac{k}{I_D}\,\frac{\partial I_D}{\partial k} = \frac{1}{1+g_mR_S}$$
+
+A fractional error in $k$ arrives at the current divided by $1+g_mR_S$. That factor is
+the **loop gain of the degeneration**, and it is the only thing standing between a device
+tolerance and a bias error. With $g_m \approx 2.13$ mA/V and $R_S = 2$ kΩ it is 5.25, so
+this design divides device spread by more than five, and a check below measures it on
+your circuit and requires it to be at least four.
+
+Here is what that buys. Both designs below were worked out by hand for exactly 1.000 mA;
+both were then solved with the real device, and then solved again with the device
+changed underneath them:
+
+```text
+                            hand    device    k +50%    V_th -0.2 V
+  four-resistor, R_S = 2k  1.000   1.020 mA   +7.1 %      +7.7 %
+  gate bias, no R_S        1.000   1.140 mA  +42.9 %     +37.9 %
+```
+
+The second row is a divider straight to the gate with the source grounded — one resistor
+fewer, and a design that hits its target on paper. Look at what it does with an error.
+The $\lambda$ the hand calculation dropped arrives as 14% rather than 2%; a 50% spread
+in $k$ arrives as 43% rather than 7%. The degeneration did not remove those errors, it
+divided them, and $1+g_mR_S$ is the divisor.
+
+A check below measures that divisor. The gate-biased design fails it — and, because the
+source sits at ground rather than 2 V, it fails the voltage check too. What it does
+**not** fail is the first check: it is a properly saturated MOSFET carrying about a
+milliamp. That is the trap worth seeing. A bias network can be right about the operating
+point and wrong about everything that matters, and the previous exercise, with a current
+source stipulating the current, has no way of telling you so.
+
+Nothing is graded on layout.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "q", "kind": "NMOS", "x": 8, "y": 6, "rot": 1,
+                         "value": 2e-3, "vth": 1.0, "lambda": 0.022222222222222223},
+                        {"id": "g1", "kind": "GND", "x": 8, "y": 11},
+                        {"id": "out", "kind": "OUT", "x": 6, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [12, 2]},
+                        {"a": [8, 5], "b": [6, 5]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "rd", "kind": "R", "x": 8, "y": 3, "rot": 1, "value": 5000},
+                        {"id": "q", "kind": "NMOS", "x": 8, "y": 6, "rot": 1,
+                         "value": 2e-3, "vth": 1.0, "lambda": 0.022222222222222223},
+                        {"id": "rs", "kind": "R", "x": 8, "y": 9, "rot": 1, "value": 2000},
+                        {"id": "g1", "kind": "GND", "x": 8, "y": 11},
+                        {"id": "r1", "kind": "R", "x": 12, "y": 3, "rot": 1, "value": 500000},
+                        {"id": "r2", "kind": "R", "x": 12, "y": 6, "rot": 1, "value": 250000},
+                        {"id": "g2", "kind": "GND", "x": 12, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 6, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [12, 2]},
+                        {"a": [8, 4], "b": [8, 5]},
+                        {"a": [8, 7], "b": [8, 8]},
+                        {"a": [8, 10], "b": [8, 11]},
+                        {"a": [12, 4], "b": [12, 5]},
+                        {"a": [12, 7], "b": [12, 9]},
+                        {"a": [9, 6], "b": [9, 5]},
+                        {"a": [9, 5], "b": [12, 5]},
+                        {"a": [8, 5], "b": [6, 5]},
+                    ],
+                },
+                "checks": [
+                    {"name": "the device is powered, the right way up, and in saturation", "code": r'''
+c.assert(c.count('NMOS') === 1,
+  'One MOSFET, the one on the canvas. Found ' + c.count('NMOS') + '.');
+c.assert(c.count('V') === 1, 'One supply — the 12 V rail. Found ' + c.count('V') + '.');
+c.close(c.values('V')[0], 12, 0.001, 'the supply voltage');
+const d = c.device('q');
+const vd = d.v[0], vs = d.v[1], vg = d.v[2];
+const vov = vg - vs - 1.0, vds = vd - vs;
+/* Orientation first, and phrased so it cannot fire on a circuit that is merely
+   unfinished: an untouched canvas leaves every terminal at the same potential, and
+   telling someone their device is upside down when they have not wired it yet sends
+   them to fix the one thing that is right. */
+c.assert(!(vs - vd > 0.1),
+  'The source is sitting ' + (vs - vd).toFixed(2) + ' V above the drain, so the device is ' +
+  'in upside down. Its drain is the TOP pin and belongs towards the supply; turning it ' +
+  'also moves the gate pin to the other side of the body.');
+c.assert(vov > 0,
+  'The overdrive is ' + vov.toFixed(3) + ' V, so the gate has not reached the 1.0 V ' +
+  'threshold and no channel exists. Check the divider actually reaches the gate pin — ' +
+  'on a device drawn upright that is the pin sticking out to the right of the body.');
+c.assert(vds >= vov,
+  'V_DS is ' + vds.toFixed(3) + ' V against an overdrive of ' + vov.toFixed(3) + ' V, so the ' +
+  'device has dropped into triode. There it is a resistor, not a current source, and no ' +
+  'small-signal number in module 3 will apply to it.');
+'''},
+                    {"name": "the drain current came out at 1 mA, and nothing told it to", "code": r'''
+const d = c.device('q');
+const id = d.i[0];
+c.assert(id > 1e-9, 'No drain current at all — the device is in cut-off.');
+c.assert(id >= 0.98e-3 && id <= 1.06e-3,
+  'The drain current is ' + (id * 1e6).toFixed(1) + ' uA. It should land between 980 and ' +
+  '1060 uA: the hand design targets 1000, and the lambda term the hand design drops ' +
+  'carries it to about 1020. Nothing in this circuit sets the current directly — it is ' +
+  'the square law and the network agreeing, so a current far from target means V_G or ' +
+  'R_S is wrong, not that a source value needs changing.');
+'''},
+                    {"name": "the source is at 2.0 V, the drain near 7.0 V, and the divider is in budget", "code": r'''
+const d = c.device('q');
+const vd = d.v[0], vs = d.v[1], id = d.i[0];
+c.assert(vs >= 1.95 && vs <= 2.10,
+  'The source should sit at 2.00 V (the device settles nearer 2.04). Measured ' +
+  vs.toFixed(3) + ' V — that is I_D through R_S, so it pins R_S at about 2 kOhm.');
+c.assert(vd >= 6.80 && vd <= 7.05,
+  'The drain should sit at 7.00 V (the device settles nearer 6.90). Measured ' +
+  vd.toFixed(3) + ' V — that is 12 V minus I_D through R_D, so it pins R_D at about 5 kOhm.');
+const cur = c.dc().currents;
+const ids = Object.keys(cur);
+c.assert(ids.length === 1,
+  'The supply current has to mean one thing, so this exercise wants exactly one part ' +
+  'carrying a solved-for current — the 12 V source. Found ' + ids.length + '.');
+/* the supply feeds the drain branch and the divider; the gate itself draws nothing at
+   all, so whatever the supply delivers beyond the drain current is the divider's */
+const idiv = Math.abs(cur[ids[0]]) - id;
+c.assert(idiv >= 10e-6 * 0.98,
+  'The divider must carry at least 10 uA; it carries ' + (idiv * 1e6).toFixed(1) +
+  ' uA, which leaves the gate at the mercy of leakage.');
+c.assert(idiv <= 50e-6 * 1.02,
+  'The divider may draw at most 50 uA; it draws ' + (idiv * 1e6).toFixed(1) + ' uA.');
+'''},
+                    {"name": "the bias is at least four times stiffer than the device it holds", "code": r'''
+/* Everything here is measured on the learner's own circuit. The only imported number is
+   the data-sheet threshold, which is what a data sheet is for.
+     g_m  = 2 I_D / V_ov   — exact for the square law, and it already carries the lambda
+                             correction because I_D is the current actually flowing
+     R_S  = V_S / I_D      — the gate draws nothing, so every electron in the source
+                             terminal came through R_S and no measurement of R_S is needed
+   A gate-biased stage with the source grounded gives V_S = 0, hence R_S = 0, hence a
+   stiffness of exactly 1: it hits the target current and fails here, which is the whole
+   distinction this exercise exists to draw. */
+const VTH = 1.0;
+const d = c.device('q');
+const vs = d.v[1], vg = d.v[2], id = d.i[0];
+const vov = vg - vs - VTH;
+c.assert(vov > 0, 'No overdrive, so there is no operating point to be stiff about.');
+const gm = 2 * id / vov;
+const rs = vs / id;
+const loop = 1 + gm * rs;
+c.assert(rs > 1,
+  'The source sits at ' + (vs * 1e3).toFixed(1) + ' mV, so there is essentially no source ' +
+  'resistor. A divider straight to the gate does reach 1 mA, and a 50% spread in k then ' +
+  'arrives at the drain current as a 43% error. The four-resistor network exists to stop ' +
+  'that, and it needs R_S to do it.');
+c.assert(loop >= 4,
+  'The degeneration loop gain 1 + g_m*R_S is ' + loop.toFixed(2) + ', so a fractional ' +
+  'error in k reaches I_D divided by only that much. This design needs at least 4; the ' +
+  'specification\'s 2 V at the source with g_m near 2.1 mA/V gives about 5.25. Measured ' +
+  'g_m = ' + (gm * 1e3).toFixed(3) + ' mA/V and R_S = ' + (rs / 1e3).toFixed(3) + ' kOhm.');
+'''},
+                ],
+                "hints": [
+                    "The arithmetic is the previous exercise's, unchanged: $R_S = 2$ kΩ, $R_D = 5$ kΩ, and a 750 kΩ divider split 500 kΩ over 250 kΩ to put the gate at 4.00 V.",
+                    "The gate is the pin on the **right** of the device, one cell out from the body. Run the divider's midpoint across to it — the drain pin is directly above the body, so a wire straight across at the drain's height will short the gate to the drain and make a diode-connected device instead.",
+                    "The drain is the **top** pin and the source the bottom one. Upside down, the solver still answers — the square law is written to swap drain and source when the drain goes below the source — but $V_{DS}$ comes out negative and the saturation check fails.",
+                    "The probe goes on the **drain** this time, not the gate: this node is the output of the amplifier module 3 builds out of exactly this bias.",
+                    "If the current is right but the stiffness check fails, the source resistor is missing or too small. Grounding the source and moving the divider to suit gives the same 1 mA and none of the immunity; that is the design this check is written to reject.",
+                ],
+            }],
             "lab": {
                 "title": "Designing a bias point, and checking it holds",
                 "runtime": "python",
@@ -1551,9 +2163,12 @@ Module 2 asked for a drain at 7 V because 7 V is a tidy number. This time the dr
 voltage is not given to you: it is whatever makes the output swing the same distance
 in both directions.
 
-As before, the schematic solver has no transistors, so the device appears as the 1 mA
-current source it is at its operating point, with its **+ pin as the drain**. The probe
-is already on the drain node, because that is the output.
+As in module 2's first build, the device appears here as the 1 mA current source it is
+at its operating point, with its **+ pin as the drain**. That is the right model for
+this question: placing the quiescent drain voltage is a statement about how far the
+output can move before it meets a ceiling, and both ceilings are set by the network
+around the device rather than by the device's own curve. The probe is already on the
+drain node, because that is the output.
 
 ## The specification
 
@@ -2735,7 +3350,7 @@ DC volts the load takes to do its job        =  ___
             "concepts": [
                 "Two junctions, three terminals: emitter, base, collector. In the **forward-active** region the base-emitter junction is forward biased and the base-collector junction reverse biased, and the collector current is $I_C = I_Se^{V_{BE}/V_T}$ — the diode equation of EE201, now controlling a current that leaves by a third terminal.",
                 "$V_T = kT/q$, the thermal voltage: 25.9 mV at 300 K, and 25 mV in every hand calculation including this course's. A decade of collector current costs $V_T\\ln 10$ of $V_{BE}$ — 58 mV at 25 mV, which is where the familiar '60 mV per decade' comes from. $V_{BE}$ is around 0.7 V and is never the number to design against.",
-                "The base takes current: $I_B = I_C/\\beta$, with $\\beta$ around 100 and specified as a range rather than a value. This is the single largest practical difference from the MOSFET, whose gate takes none, and it is why a bipolar bias divider has to be much stiffer than module 2's.",
+                "The base takes current: $I_B = I_C/\\beta$, with $\\beta$ around 100 and specified as a range rather than a value. This is the single largest practical difference from the MOSFET, whose gate takes none, and it is why a bipolar bias divider has to be much stiffer than module 2's. The build exercise in this module measures that: module 2's 500 kΩ over 250 kΩ, perfectly good with a gate on the end of it, loses **1.51 V** at its midpoint the moment a base is connected instead, and the collector current lands at 0.91 mA instead of 1.02.",
                 "$g_m = I_C/V_T$. Notice what is missing: no $k$, no $W/L$, no geometry at all. At 1 mA a bipolar device gives 40 mA/V against this course's MOSFET at 2 mA/V — twenty times, from the same current, because an exponential is a much steeper function than a parabola.",
                 "The input is no longer infinite. $r_\\pi = \\beta/g_m = \\beta V_T/I_C$, which at 1 mA and $\\beta = 100$ is 2.5 kΩ. Put that in parallel with module 2's 167 kΩ divider and the stage's input resistance is 2.46 kΩ: the divider has become irrelevant and the device decides.",
                 "$r_o = V_A/I_C$, exactly as before — 45 kΩ at 1 mA. The Early effect is the bipolar original; channel-length modulation was named after it.",
@@ -2946,6 +3561,230 @@ by nothing the designer does, which makes it the cleanest single figure of merit
 transistor technology there is — 1800 here, against 90 for the MOSFET of module 1 at
 1 mA.
 ''',
+            },
+            "build": {
+                "title": "Biasing a bipolar stage, with the base drawing what it draws",
+                "minutes": 30,
+                "brief": r'''
+The concept list above claims that a bipolar bias divider "has to be much stiffer than
+module 2's". This exercise is where that claim is cashed, because it is not a claim you
+can test with a current source standing in for the device — an ideal current source has
+no base and asks the divider for nothing.
+
+The canvas carries a real **NPN**: $I_S = 10^{-14}$ A, $\beta_F = 100$, solved by the
+same Ebers-Moll equations the diode of EE201 obeys. Collector at the top pin, emitter at
+the bottom, base sticking out to the right. Give it a 12 V rail and four resistors.
+
+## The specification
+
+The same operating point as the MOSFET, deliberately, so the two can be read against
+each other:
+
+- $I_C = $ **1.00 mA**,
+- the emitter sits at **2.00 V**,
+- the collector at **7.00 V**,
+- and the divider carries **at least ten times the base current**.
+
+Probe the collector.
+
+## Two things are different, and only one of them is obvious
+
+$V_{BE}$ is not a design variable. It is roughly 0.65 V at a milliamp and it moves by
+60 mV per decade of current, so you compute $V_B = V_E + V_{BE}$ using 0.65 and accept
+that the answer is approximate. That is the obvious difference and it is the small one.
+
+The large one is the fourth bullet. **The base draws $I_C/\beta \approx 10$ µA**, and it
+draws it out of the divider's midpoint, where it behaves as a load on a Thévenin source
+of resistance $R_1\parallel R_2$. Module 2's divider was 500 kΩ over 250 kΩ, giving
+$R_{th} = 167$ kΩ, and it was perfectly good — because a gate on the end of it drew
+nothing at all. Wire a base to that same divider instead and the midpoint falls from
+4.00 V to **2.49 V**: a 1.51 V collapse, and the stage is nowhere near where it was
+designed to be.
+
+So size the divider from the base current, not from a power budget. Ten times $I_B$ is
+100 µA, so $R_1 + R_2 \approx 12\,\mathrm{V}/100\,\mathrm{\mu A} \approx 120$ kΩ — and
+120 kΩ, not the 750 kΩ that served module 2, is what "stiff" means once a terminal
+starts drawing current.
+
+## What the solver will show
+
+With $R_C = 5$ kΩ, $R_E = 2$ kΩ and a 75 kΩ / 24 kΩ divider:
+
+```text
+  I_C   1.0236 mA      V_B   2.7230 V      V_BE   0.6554 V
+  I_B     10.24 uA     V_E   2.0676 V      V_CE   4.8146 V
+  I_E   1.0338 mA      V_C   6.8822 V      beta     100.0
+  divider current 123.7 uA, which is 12.1 times the base current
+```
+
+The divider still sags — from an unloaded 2.9091 V to 2.7230 V, **186 mV** across its
+18.2 kΩ Thévenin resistance — and that sag is why the collector current lands at 1.02 mA
+rather than at the 1.00 the arithmetic asked for. It is a sag you can absorb. The same
+divider ratio at ten times the resistance (750 kΩ / 240 kΩ) sags 1074 mV instead, and
+the collector current falls to **0.59 mA** — 42% low, from a network that is correct in
+every ratio and wrong only in its impedance.
+
+## And the reason it matters is not the sag
+
+$\beta$ is not 100. It is "50 to 300" on the data sheet, it varies with current and
+temperature, and no two devices from the same reel agree. Watch what the two dividers do
+about that:
+
+```text
+                          beta = 50    beta = 100    beta = 300
+  75k / 24k    (stiff)     -8.3 %       1.024 mA      +6.4 %
+  750k / 240k  (weak)     -32.1 %       0.591 mA     +46.3 %
+```
+
+A stiff divider holds $V_B$ nearly fixed whatever the base takes, and then the emitter
+resistor does the rest of the work — exactly as it did for the MOSFET in module 2, and
+for exactly the same reason. A weak one lets $\beta$ set the bias, and $\beta$ is the
+one device parameter you are least entitled to rely on.
+
+Nothing is graded on layout.
+''',
+                "start": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "q", "kind": "NPN", "x": 8, "y": 6, "rot": 1,
+                         "value": 1e-14, "bf": 100, "br": 1},
+                        {"id": "g1", "kind": "GND", "x": 8, "y": 11},
+                        {"id": "out", "kind": "OUT", "x": 6, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [12, 2]},
+                        {"a": [8, 5], "b": [6, 5]},
+                    ],
+                },
+                "solution": {
+                    "parts": [
+                        {"id": "v", "kind": "V", "x": 3, "y": 3, "rot": 1, "value": 12},
+                        {"id": "g0", "kind": "GND", "x": 3, "y": 6},
+                        {"id": "rc", "kind": "R", "x": 8, "y": 3, "rot": 1, "value": 5000},
+                        {"id": "q", "kind": "NPN", "x": 8, "y": 6, "rot": 1,
+                         "value": 1e-14, "bf": 100, "br": 1},
+                        {"id": "re", "kind": "R", "x": 8, "y": 9, "rot": 1, "value": 2000},
+                        {"id": "g1", "kind": "GND", "x": 8, "y": 11},
+                        {"id": "r1", "kind": "R", "x": 12, "y": 3, "rot": 1, "value": 75000},
+                        {"id": "r2", "kind": "R", "x": 12, "y": 6, "rot": 1, "value": 24000},
+                        {"id": "g2", "kind": "GND", "x": 12, "y": 9},
+                        {"id": "out", "kind": "OUT", "x": 6, "y": 5},
+                    ],
+                    "wires": [
+                        {"a": [3, 4], "b": [3, 6]},
+                        {"a": [3, 2], "b": [12, 2]},
+                        {"a": [8, 4], "b": [8, 5]},
+                        {"a": [8, 7], "b": [8, 8]},
+                        {"a": [8, 10], "b": [8, 11]},
+                        {"a": [12, 4], "b": [12, 5]},
+                        {"a": [12, 7], "b": [12, 9]},
+                        {"a": [9, 6], "b": [9, 5]},
+                        {"a": [9, 5], "b": [12, 5]},
+                        {"a": [8, 5], "b": [6, 5]},
+                    ],
+                },
+                "checks": [
+                    {"name": "one NPN, the right way up, and in forward-active", "code": r'''
+c.assert(c.count('NPN') === 1,
+  'One bipolar transistor, the one on the canvas. Found ' + c.count('NPN') + '.');
+c.assert(c.count('V') === 1, 'One supply — the 12 V rail. Found ' + c.count('V') + '.');
+c.close(c.values('V')[0], 12, 0.001, 'the supply voltage');
+const d = c.device('q');
+const vc = d.v[0], ve = d.v[1], vb = d.v[2];
+c.assert(!(ve - vc > 0.1),
+  'The emitter is sitting ' + (ve - vc).toFixed(2) + ' V above the collector, so the device ' +
+  'is in upside down. Its collector is the TOP pin and belongs towards the supply.');
+const vbe = vb - ve, vce = vc - ve;
+c.assert(vbe > 0.45,
+  'V_BE is ' + vbe.toFixed(3) + ' V, so the base-emitter junction is barely on and almost ' +
+  'nothing is flowing. A base left unconnected reads near zero here — the divider has to ' +
+  'reach the base pin, which is the pin sticking out to the right of the body.');
+c.assert(vbe < 0.80,
+  'V_BE is ' + vbe.toFixed(3) + ' V. An exponential does not go much past 0.75 V without ' +
+  'the current being enormous, so this is a base being driven far too hard — usually a ' +
+  'missing emitter resistor.');
+c.assert(vce >= 1.0,
+  'V_CE is ' + vce.toFixed(3) + ' V, so the collector junction has come forward-biased and ' +
+  'the device is in saturation — the bipolar name for the region where it stops being a ' +
+  'current source. It needs a volt of headroom at the very least, and this design leaves it ' +
+  'nearly five.');
+'''},
+                    {"name": "the collector carries 1.00 mA", "code": r'''
+const d = c.device('q');
+const ic = d.i[0];
+c.assert(ic > 1e-9, 'No collector current at all — the base-emitter junction is not conducting.');
+/* The diagnosis is attached to the measurement rather than recited whatever it is: a
+   hint about a weak divider printed underneath a reading of 2.4 mA sends the reader to
+   look at the one part of the circuit that is not the problem. */
+const diagnosis = ic < 0.8e-3
+  ? ' Well under target is the signature of a divider built at module 2 impedances: the ' +
+    'ratio is right, the resistance is several times too high, and the base current pulls ' +
+    'the midpoint down. The same ratio at 750k/240k lands at 591 uA.'
+  : (ic > 1.5e-3
+    ? ' Far over target usually means there is no emitter resistor, or it is far too small. ' +
+      'Without one the base voltage sets V_BE directly, and V_BE is an exponential — a ' +
+      'tenth of a volt of error is a factor of about fifty in current.'
+    : ' A little out means V_B is slightly off: the divider ratio, or the 0.65 V assumed ' +
+      'for V_BE against the 0.655 the device actually settles at.');
+c.assert(ic >= 0.95e-3 && ic <= 1.09e-3,
+  'The collector current is ' + (ic * 1e6).toFixed(1) + ' uA and should land between 950 and ' +
+  '1090 — the design targets 1000 and the real V_BE carries it to about 1024.' + diagnosis);
+'''},
+                    {"name": "the emitter is at 2.0 V and the collector near 7.0 V", "code": r'''
+const d = c.device('q');
+const vc = d.v[0], ve = d.v[1], ie = -d.i[1];
+c.assert(ve >= 1.95 && ve <= 2.15,
+  'The emitter should sit at 2.00 V; measured ' + ve.toFixed(3) + ' V. It is I_E through ' +
+  'R_E, and note that I_E is the collector current PLUS the base current, so R_E = ' +
+  'V_E/I_E is very slightly under 2 kOhm rather than exactly it.');
+c.assert(vc >= 6.75 && vc <= 7.10,
+  'The collector should sit at 7.00 V; measured ' + vc.toFixed(3) + ' V. That is 12 V minus ' +
+  'I_C through R_C, which pins R_C near 5 kOhm.');
+c.close(ve / ie, 2000, 0.06,
+  'R_E as the circuit reveals it — the emitter voltage divided by the emitter current');
+'''},
+                    {"name": "the divider carries at least ten times the base current", "code": r'''
+/* The whole reason this exercise exists. Everything is measured: the base current comes
+   off the device's third terminal, and the divider current is whatever the supply is
+   delivering beyond the collector branch. A gate would make the first of these zero and
+   the check vacuous, which is exactly why module 2 has no check like it. */
+const d = c.device('q');
+const ic = d.i[0], ib = d.i[2];
+c.assert(ib > 1e-9,
+  'The base is drawing no current, so either it is not connected or the device is off. ' +
+  'A bipolar base always draws current; that is the premise of this module.');
+const beta = ic / ib;
+c.assert(beta > 80 && beta < 130,
+  'The measured current gain I_C/I_B is ' + beta.toFixed(1) + ', and the device on the canvas ' +
+  'has beta_F = 100. A value well below that means the device has been driven into ' +
+  'saturation, where the collector junction starts taking base current of its own.');
+const cur = c.dc().currents;
+const ids = Object.keys(cur);
+c.assert(ids.length === 1,
+  'The supply current has to mean one thing, so this exercise wants exactly one part ' +
+  'carrying a solved-for current — the 12 V source. Found ' + ids.length + '.');
+const idiv = Math.abs(cur[ids[0]]) - ic;
+c.assert(idiv >= 10 * ib,
+  'The divider carries ' + (idiv * 1e6).toFixed(1) + ' uA against a base current of ' +
+  (ib * 1e6).toFixed(2) + ' uA — a ratio of ' + (idiv / ib).toFixed(2) + ', and this design ' +
+  'needs at least 10. Below that the base is no longer a small load on the divider, the ' +
+  'midpoint moves with beta, and beta is the one parameter on the data sheet quoted as a ' +
+  'range rather than a number.');
+c.assert(idiv <= 400e-6,
+  'The divider draws ' + (idiv * 1e6).toFixed(1) + ' uA, which is more current than the ' +
+  'stage it is biasing. Stiff is not the same as free: ten times the base current is the ' +
+  'rule, not as much as possible.');
+'''},
+                ],
+                "hints": [
+                    "$I_E = I_C + I_B = 1.00 + 0.01 = 1.01$ mA, so $R_E = 2.00/1.01\\text{ mA} \\approx 2$ kΩ. Using $I_C$ instead of $I_E$ here is a 1% error and does not matter; using $\\beta$ where you meant $\\beta+1$ never does.",
+                    "$R_C$ drops $12 - 7 = 5$ V at 1 mA, so it is 5 kΩ — the same value as the MOSFET stage's $R_D$, for the same reason.",
+                    "$V_B = V_E + V_{BE} \\approx 2.00 + 0.65 = 2.65$ V. This is the one number in the design you cannot compute exactly, because $V_{BE}$ depends on the current you are still solving for.",
+                    "Now the divider. $I_B = I_C/\\beta = 10$ µA, so aim the divider at 100 µA and above: $R_1 + R_2 \\approx 120$ kΩ. Split it for 2.65 V out of 12 V and allow a little extra, because the base current will pull the midpoint down by a couple of hundred millivolts — 75 kΩ over 24 kΩ works and lands 1.02 mA.",
+                    "If the current comes out near 0.59 mA, the divider ratio is right and its resistance is ten times too high. That is module 2's divider, and it worked there because a gate draws nothing.",
+                ],
             },
         },
 

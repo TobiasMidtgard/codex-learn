@@ -1240,10 +1240,12 @@ part-way on at 3.3 V, and part-way on is the expensive state.
                 "title": "What the base resistor asks of the pin",
                 "minutes": 8,
                 "brief": r'''
-The schematic editor has no transistor symbol, so the base-emitter junction is drawn the
-way the LED was: as the fixed voltage it holds while it conducts. In hard saturation
-that is about **0.8 V** — a little above the 0.7 V quoted for a junction on the edge of
-conduction, because the base is being driven well past it.
+The base-emitter junction is drawn here the way the LED was: as the fixed voltage it
+holds while it conducts. In hard saturation that is about **0.8 V** — a little above the
+0.7 V quoted for a junction on the edge of conduction, because the base is being driven
+well past it. (The editor does have an NPN symbol and will solve one; a `numeric` unit's
+diagram is restricted to the seven linear kinds, and in any case the question below is
+about one loop, for which the fixed drop is the right model.)
 
 So what is on the canvas is the pin, the base resistor, and the junction. The collector
 side of the transistor is not drawn at all, and does not need to be: the base current is
