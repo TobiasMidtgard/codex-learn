@@ -6878,11 +6878,13 @@
      "a11": 0,
      "a12": 1,
      "a21": -1,
-     "a22": 0
+     "a22": 0,
+     "solver": 0
     },
     "notice": [
      "It opens on $\\dot{x}_1 = x_2$ and $\\dot{x}_2 = -x_1$, which is the oscillator with the timescale chosen so that one radian per second falls out. The read-out says trace 0, determinant 1, a centre: closed loops that neither grow nor shrink. Those loops are the two states of an LC circuit taking turns to hold the energy.",
-     "Follow one curve all the way round. It does not quite close — each turn ends a little further out than the one before. Nothing in these equations adds energy, so that creep is not the system: it is the picture's own forward Euler, stepping along the tangent and landing just outside the circle every single time. Measuring that error is what the lab does.",
+     "Follow one curve all the way round. It does not quite close — each turn ends a little further out than the one before. Nothing in these equations adds energy, so that creep is not the system: it is the picture's own forward Euler, stepping along the tangent and landing just outside the circle every single time. The readout says so too, and puts a number on it. Measuring that error is what the lab does.",
+     "This unit opens with the integrator slider on **forward Euler** deliberately, and it is the only one in the catalogue that does. Move it to RK4 and the same four coefficients produce rings that close: the spiral was never in the matrix. Then move it back, because the rest of this module is about the method that produces the spiral and about predicting exactly how large it will be.",
      "Set $a_{22}$ to −0.6. The trace goes negative, the read-out changes to a stable spiral, and every path now winds into the origin instead of circling it. That coefficient is the loss — a resistor in the circuit, friction in the mechanism — and it is the difference between a system that rings for ever and one that settles.",
      "Put $a_{22}$ back to 0 and take $a_{21}$ from −1 to −0.25. The determinant falls to 0.25, the oscillation halves in frequency, and the loops flatten into wide ellipses: the same displacement now comes with half the rate. The outward creep nearly vanishes at the same time, because the error of a step depends on how far the state moves during it."
     ]

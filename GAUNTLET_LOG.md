@@ -237,3 +237,239 @@ build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualise
 ```
 
 ---
+
+## Cycle 2 — TRACK 2: Interactive Models & Visualisers
+
+**Target: the Sandbox subsystem in `src/studio.js` — the mount framework, its 13
+visualisers and 3 tune models, plus every catalog `notice` a code fix falsified.** One
+subsystem, chosen over the circuit editor because the persona brief for this track is
+almost entirely a description of what a sandbox does: extremes, resize, rapid input, and
+"does a sandbox's `notice` describe behaviour the visualiser **actually draws**". 113
+sandbox units across 13 visualisers depend on this file, and nothing anywhere checked it —
+a sandbox is the one unit kind with no answer to grade, which is exactly why it had no
+gate.
+
+### Baseline, captured before any edit
+
+```
+80 circuit exercises / 340 checks · 527 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 217 figure-only
+1128 derivation steps across 45 courses
+build: 3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+       3 tune models · 15 symbols · 62 payloads · inlined 13618 KB
+```
+
+### The attacks
+
+**3. Simulation Auditor** — taken first, because this is its track.
+
+- **A "centre" was drawn as an outward spiral, and the readout underneath called it a
+  centre.** `phase-portrait` integrated with forward Euler at `dt = 0.012`. The Euler map
+  is `I + A·dt`, whose determinant at trace zero is `1 + det·dt²`, so the enclosed area is
+  multiplied by that once per step and by `(1 + det·dt²)^1400` over the run. Measured: the
+  unit centre grows **22.3%**, and at the top of the sliders (`a12 = 3, a21 = -6`) it grows
+  by a factor of **37** — the rings leave the frame entirely. RK4 over the identical run
+  holds the same quantity to `3e-5 %`. The catalog had already noticed and could not agree
+  with itself: four notices apologise for the creep ("about a tenth of their radius … the
+  forward-Euler step in the drawing code"), while eight others assert the orbits close
+  ("closed orbits — energy never leaves", "every trajectory closes on itself at a fixed
+  distance", "rings that circle forever"). Both sets described the same drawing.
+- **A caption told the learner they were at the floor while the marker beside it read
+  100%.** `cache`'s `explain()` re-derived its claims from the slider positions instead of
+  from the simulation `draw()` had just run. At 4 KB with a 512-byte stride it printed "the
+  compulsory miss on first touch — the floor no cache can go below" over a measured miss
+  rate of 100%: 64 addresses land on 8 sets of a 64-set direct-mapped cache, so every
+  access in passes 2 and 3 evicts the line it will want next. Its other branch claimed a
+  conflict was unfixable "no matter how big it gets", which is false the moment `sets`
+  exceeds the stride in lines.
+- **"Below the Nyquist limit … nothing is lost", drawn over samples that are all zero.**
+  `spectrum` tested `|fa − fsig| < 0.5`, which is satisfied *at* `f = fs/2` as well as
+  below it. At `fsig = 100, fs = 200` — reachable, and the sliders reach several such
+  pairs — every sample is `sin(πn)`, largest magnitude `5.4e-15`. The picture draws the
+  entire sampled sequence lying on the axis under a sentence saying the samples determine
+  the wave uniquely. The strict inequality is the whole theorem.
+- **Four axes silently truncated what they were drawing.** `pole-step`'s s-plane was fixed
+  at ±14 while the poles reach −34.2 at `ζ = 1.6, ωₙ = 12`, so the overdamped case — whose
+  entire point is where the second pole went — showed one pole. `bode`'s magnitude axis
+  stopped at 40 dB against a 46 dB peak at `K = 20, ζ = 0.05`. The `rlc` tune plot capped
+  at 6 against a peak of 1414 at `R = 1 Ω, L = 200 mH, C = 0.1 µF`, so a Q of 1400 was
+  indistinguishable from a flat response. The `rc-lowpass` plot ran 10 Hz–1 MHz while its
+  corner ranges 1.59 Hz–1.59 MHz, putting the marker off *both* ends.
+- **The stride slider froze the tab.** `cache`'s memo keyed on `(associativity, stride)`,
+  so dragging the *stride* — step 1 across 1..512 — missed every time and re-simulated four
+  full 64-point sweeps per frame: **627 ms at stride 1**, 317 ms at 2, 164 ms at 4. The
+  slider redrew about once a second, and EE241/M2's brief asks the learner to step the
+  stride through 8, 16, 32 and 64.
+- **`explain()` printed the word "Infinity" at the setting a lesson sends learners to.**
+  Found by the new gate, not by hand. `pole-step` computes settling time as `4/(ζωₙ)`, and
+  CTRL510/M2's first notice bullet is "Take ζ to zero." Reachable: `ζ` has `min: 0`.
+- **A broken LCG, currently harmless.** `kalman`'s `seed * 1103515245` reaches `2.4e18`,
+  past `2^53`, so 299 of 300 products lost their low bits: period **10466** rather than
+  `2^31`, and bit 0 came up set **422 times in 100000** draws. The visible output is fine
+  today — the 240 values it draws are distinct and pass as Gaussian, mean 0.024, sd 0.98 —
+  so this is recorded as luck rather than design, and fixed with `Math.imul`.
+- **Checked and found correct, recorded so the next cycle does not re-derive them:**
+  `kalman`'s steady-state gain `(√(ρ²+4ρ) − ρ)/2` really does equal `P/(P+R)` for
+  `P = (Q + √(Q²+4QR))/2` — verified symbolically and numerically. `smith`'s reflection
+  coefficient and its `−4πℓ/λ` rotation are both right. `pipeline`'s `N + 4 + stalls` agrees
+  with the schedule its draw loop builds. `spectrum`'s alias folding is right everywhere
+  except the boundary above. EE131/M6's and EE241/M2's cache notices — nine numeric claims
+  between them — were recomputed against the model and all nine hold.
+
+**4. UX & Accessibility Hardener.**
+
+- **Every accent colour on every canvas in the app failed or nearly failed contrast in the
+  light theme.** `--editor` is deliberately dark in both themes, and `palette()` says so —
+  it takes ink from `--on-editor*` "rather than the page's ink". It then took `accent`,
+  `blue`, `purple` and `amber` from `--lime`/`--blue`/`--purple`/`--amber`, which the light
+  theme re-tints *dark for a light ground*. Measured against `#12151A`: lime 15.79 → **4.47**,
+  amber 12.70 → **3.09**, blue 7.31 → **3.06**, purple 7.23 → **2.96**, the last under WCAG
+  1.4.11's 3:1 floor for a meaningful graphical object — and purple is the Nyquist line, the
+  1/f corner, the constant-VSWR circle and the sliding surface. The discipline existed and
+  had been applied to four of the nine colours.
+- **The readout changed in silence.** `.sbx-read` carries the entire pedagogical payload of
+  a sandbox — the sentence saying what the picture now means — with no live region.
+- **The sliders announced numbers the page does not show.** A range input reports its own
+  raw value: "1" where the label reads *direct*, "0" where it reads *no*.
+- **An opening state the slider could not reach.** `noise-corner.fc` ran 1 Hz–100 kHz with
+  `step: 100` from `min: 1`, so the reachable set was 1, 101, 201 … — the whole of 1–100 Hz,
+  which is the region a chopper amplifier exists for, was a single notch, and 999 of 1000
+  positions sat above 101 Hz. RFIC520 M1 and M2 open at 100 Hz and 20 kHz, neither of which
+  is on that grid: the thumb snapped to a different value than the draw and the readout
+  used, and the opening state could not be returned to. EE221/M10's `1001` is the same
+  defect wearing a workaround — the author picked 1001 because 1000 was unreachable.
+- **`initial` was never sanitised.** `build.mjs` checks that an `initial` *key* names a real
+  parameter and nothing checked the *value*. An out-of-range one leaves the input clamped to
+  its own limit while draw, readout and explain all use the authored figure.
+- **Checked and found sound, recorded rather than changed:** the `ResizeObserver` cannot
+  loop, because `.sbx-canvas` has a fixed height and grid-determined width, so setting
+  `cv.style.*` cannot resize the observed parent — verified in `index.head.html`, not
+  assumed. The `Math.max(240, …)` floor in `paint()` never bites at 375px, where the stacked
+  column is ~343px. Nothing in this subsystem animates on a timer, so `prefers-reduced-motion`
+  has nothing to honour; the single `requestAnimationFrame` is a one-shot coalescer.
+
+**1. Senior Educator** and **2. Assessment Inquisitor** had little ground here — a sandbox
+has no prose beyond its brief and no graded question. Both were pointed at the thing in
+scope they *can* judge: whether the readout explains or merely announces. Three now explain
+where they announced. `cache` performs an actual three-C decomposition by running the trace
+against an unbounded cache and a fully associative one and reporting all three terms, rather
+than naming one from the slider positions. `noise-corner` said "the noise rises as 1/f" over
+a plot in nV/√Hz whose drawn slope is 10 dB/decade — while EE221/M10's notice, on the same
+screen, spells out that distinction and contradicted it. `phase-portrait` now names the
+integrator artefact and puts the number on it instead of leaving the learner to decide
+whether the creep is the physics.
+
+### What changed
+
+**Code — `src/studio.js`.**
+
+| Fix | Before | After |
+|---|---|---|
+| `phase-portrait` integrator | Euler; centre area +22% to ×37 | RK4 default, Euler switchable; `3e-5 %` |
+| `cache` model | address-by-address, 627 ms/repaint at stride 1 | run-collapsed, **13 ms**, bit-identical |
+| `cache` caption | guessed from sliders; said "the floor" at 100% | measured 3-C split from the drawn trace |
+| `spectrum` at `f = fs/2` | "nothing is lost" over all-zero samples | names the excluded boundary |
+| `pole-step` s-plane | fixed ±14, poles to −34.2 | scales to the poles, ±14 floor |
+| `pole-step` at `ζ = 0` | "settling in about Infinity s" | no settling time, and why |
+| `bode` magnitude axis | fixed −80..40 dB, peak 46 | opens to hold the curve |
+| `rlc` / `rc-lowpass` plots | marker and peak off-frame | axes hold both |
+| `noise-corner` slider | linear, step 100 from 1 | logarithmic, 200 ticks per decade |
+| `z-plane` at `θ = 0, r = 1` | "it oscillates forever" | `h[n] = 1`; a pure integrator |
+| `switching` ZVS current | rose during the voltage swing | rises after the tank finishes it |
+| `kalman` PRNG | period 10466, bit 0 dead | `Math.imul`, exact 32-bit |
+| `kalman` RMS error | computed, hung on `ctx._err`, never read | drawn |
+| `pipeline` bubbles | stalls shifted the row, drew nothing | bubbles drawn and counted |
+| `pipeline` tint | baked `rgba(199,247,81,.22)` | `P.accent` at alpha |
+
+**Framework — `mount()`.** `initial` clamped and type-checked; a `log` parameter kind
+(slider carries a tick index, value exponentiated back at three significant figures);
+`aria-live` on the readout with a change guard so a drag does not flood it; `role="img"`
+and a label on the canvas; `aria-valuetext` carrying the formatted value; per-parameter DOM
+lookups resolved once instead of twice per parameter per frame.
+
+**Theme — `src/index.head.html`.** Four `--on-editor-{lime,blue,purple,amber}` tokens,
+defined once so no theme overrides them, read by `palette()`. Light-theme contrast on the
+canvas goes 4.47 → 14.68, 3.09 → 11.80, 3.06 → 6.79 and 2.96 → 6.72. Because
+`circuit.js`'s `P()` delegates to `Sandbox.palette()`, this reaches every canvas in the
+app — schematics, build exercises, the breadboard and the MCU views — not only sandboxes.
+
+**A new gate — `tools/verify_sandbox.mjs`.** Loads the models as shipped, exactly as
+`verify_tune.mjs` does, and paints them onto a recording canvas that objects to any
+non-finite coordinate. It drives every visualiser over an extremes grid — each parameter at
+min, max, default, zero, one notch in from each end, plus all-min, all-max and all-mid — at
+three viewport sizes including the 820px breakpoint and the 240px floor, and rejects a
+readout that throws, says nothing, or contains `NaN`/`undefined`/`Infinity`. It checks every
+tune plot's marker lies inside its own axes and that the curve's peak does. And it checks
+every catalog opening value is reachable: on the step grid for a linear parameter, and
+surviving the round trip to a tick and back for a log one. **747 draws, 249 readouts, 364
+opening values.** It found the `pole-step` Infinity, both `rc-lowpass` off-frame markers,
+and — after I tightened its own log-parameter rule, which I had first written too leniently —
+EE221/M10's unreachable 1001.
+
+**Content — five courses re-emitted.** The three notices apologising for the Euler artefact
+(EE141 M1 and M6, PWR520 M1) now describe rings that close and point at the switch. EE131's
+module 9 sandbox, which *teaches* the artefact and measures it in its lab, opens with
+`"solver": 0` and keeps its exhibit — it is the only unit in the catalogue that does, and it
+now says so and invites the comparison. Four VLSI520 cache notices were already false, having
+been written before the working set was changed from cache-proportional to a fixed 32 KB and
+never revisited: "the curve does not move: a horizontal line at 100 per cent" (33.33% at
+64 KB), "pins to 100 per cent at every size" (33.33%), "12.5 per cent, flat across the whole
+size axis" (4.17%), "nothing on this plot goes below it, at any size" (2.08%). One even
+stated the retired premise as its reason — "the working set is defined as four times the
+cache". All four rewritten against computed values, and the cliff at 24–32 KB where the walk
+finally fits is now the thing they are about. Two of them gained the genuinely surprising
+fact that at 24 KB direct-mapped beats 4-way and 16-way, 66.7% against 100%.
+
+### Verification beyond the gates
+
+The fast cache model is not an approximation and was not taken on trust: it was compared
+against the address-by-address original over **12096 (size, associativity, stride)
+combinations with zero mismatches and a largest difference of exactly 0**, and its
+compulsory floor was checked against a simulated 1 GB cache at eight strides — agreeing to
+the last digit at every one. The RK4 switch was checked not to disturb the pictures it was
+not aimed at: saddles, nodes and spirals land within a few thousandths of where Euler put
+them, all of it past the frame edge. The log slider was checked for monotonicity, for 1001
+distinct in-range values, for exactness at every decade and at both authored openings, and
+for leaving linear parameters untouched. Contrast ratios were computed from the WCAG 2.1
+formula rather than eyeballed.
+
+### Left alone, deliberately
+
+- **`sliding-mode` keeps forward Euler.** Its subject is chatter — a switching law with no
+  continuous solution — and Euler's stepping *is* the chatter there rather than an artefact
+  of drawing it. RK4 would smooth away the thing the sandbox exists to show.
+- **`P.dim` (2.93:1) and `P.faint` (1.86:1) fail contrast in both themes.** They are the
+  axis grid, the tick labels and the de-emphasised legends. `faint` in particular is used
+  for *text*. Raising them changes the visual weight of all 13 visualisers and the circuit
+  canvas with them, which is a decision about the design language and belongs to Track 5,
+  not to a Track 2 cycle acting unilaterally. Recorded with the measured numbers so the next
+  cycle does not have to find it again.
+- **`switching`'s hard-switched trace keeps its `exp(-(td-dead)·6e6)` damping fudge.** It is
+  a shape, not a model, and the caption does not claim otherwise.
+- **The `cache` memo still wipes itself entirely past 60 entries.** Crude, but now that a
+  sweep costs 13 ms rather than 627 the eviction policy stopped mattering.
+- **The circuit editor was not touched.** It is the other half of this track and its own
+  cycle; the only thing that reached it here is the palette fix, and that was unavoidable
+  because it shares `Sandbox.palette()`.
+- **`docs/programs` lost two MA111 payloads.** The rolling generation window, as cycle 1
+  established — not a regression.
+
+### Gates, after
+
+Every pre-existing number unmoved. The only new number is the new gate's.
+
+```
+verify_sandbox       All good: 13 visualisers, 3 tune models survive their extremes
+                     (747 draws, 249 readouts) · 364 opening values reachable   [NEW]
+verify_circuits      All good: 80 circuit exercises, 340 checks · 527 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 217 figure-only
+verify_derivations   All good: 1128 steps across 45 courses
+verify_labs          EE131 10 · EE141 8 · EE221 5 · PWR520 5 · VLSI520 5, all good
+emit.py              EE131, EE141, EE221, PWR520, VLSI520 — all ok
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads · inlined 13638 KB
+```
+
+---

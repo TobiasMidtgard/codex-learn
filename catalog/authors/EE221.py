@@ -3174,7 +3174,7 @@ long you are willing to wait, and the exchange rate between them is $\tau$.
                 "title": "Where the floor stops falling",
                 "visualiser": "noise-corner",
                 "minutes": 9,
-                "initial": {"fc": 1001, "nth": 10},
+                "initial": {"fc": 1000, "nth": 10},
                 "brief": r'''
 This is the noise density of an amplifier input, in decibels relative to 1 nV/√Hz,
 against frequency from 1 Hz to 10 MHz on a logarithmic axis. The curve is
@@ -3189,7 +3189,7 @@ The vertical axis rescales itself as you move the sliders, so read the *numbers*
 rather than the height of the trace.
 ''',
                 "notice": [
-                    "At the opening values — a floor of 10 nV/√Hz and a corner just above 1 kHz — the dashed floor sits at 20 dB, because 20 dB re 1 nV/√Hz is 10 nV/√Hz. Where the purple line crosses the trace, the trace is 23 dB: exactly 3 dB above the floor, since at $f = f_c$ the formula gives $e_{th}\\sqrt{2}$.",
+                    "At the opening values — a floor of 10 nV/√Hz and a corner at 1 kHz — the dashed floor sits at 20 dB, because 20 dB re 1 nV/√Hz is 10 nV/√Hz. Where the purple line crosses the trace, the trace is 23 dB: exactly 3 dB above the floor, since at $f = f_c$ the formula gives $e_{th}\\sqrt{2}$.",
                     "Below the corner the trace falls at **10 dB per decade**, not 20: read 50 dB at 1 Hz, 40 dB at 10 Hz, 30.4 dB at 100 Hz. The noise *power* goes as $1/f$, so the density, which is a voltage, goes as $1/\\sqrt{f}$.",
                     "Push the thermal floor slider up to 40 nV/√Hz and the drawn curve does not change shape at all — only the axis labels move, by $20\\log_{10}4 = 12$ dB. The floor and the corner are independent: one is set by resistance and temperature, the other by the device's flicker mechanism.",
                     "Drag the corner slider all the way left, to 1 Hz. The purple line lands on the left-hand axis and the trace is within half a decibel of flat from 10 Hz upwards; that is what a chopper-stabilised amplifier looks like, and it is why one is worth having for a bridge measurement that takes seconds.",

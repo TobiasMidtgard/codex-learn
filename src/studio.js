@@ -685,17 +685,20 @@ const Sandbox = (function () {
   function palette() {
     const cs = getComputedStyle(document.documentElement);
     const v = function (n, fallback) { return (cs.getPropertyValue(n) || '').trim() || fallback; };
-    /* These colours land on --editor, which is dark in both themes, so they come from
-       the on-editor tokens rather than the page's ink. */
+    /* These colours land on --editor, which is dark in both themes, so every one of them
+       comes from an on-editor token rather than the page's. The accents used to be the
+       exception — --lime/--blue/--purple/--amber are re-tinted dark for a light ground
+       by the light theme, and were then painted on a surface that had stayed dark, which
+       put purple at 2.96:1 and under the 3:1 floor. */
     return {
       ink: v('--on-editor', '#EDEFF3'),
       dim: v('--on-editor-3', '#565C68'),
       faint: v('--on-editor-4', '#3A3F49'),
       line: v('--on-editor-line', 'rgba(255,255,255,.1)'),
-      accent: v('--lime', '#C7F751'),
-      blue: v('--blue', '#6E9BFF'),
-      purple: v('--purple', '#A78BFA'),
-      amber: v('--amber', '#FFC66D'),
+      accent: v('--on-editor-lime', '#C7F751'),
+      blue: v('--on-editor-blue', '#6E9BFF'),
+      purple: v('--on-editor-purple', '#A78BFA'),
+      amber: v('--on-editor-amber', '#FFC66D'),
       surface: v('--editor', '#0A0B0E'),
     };
   }
@@ -801,37 +804,94 @@ const Sandbox = (function () {
     return v.toFixed(2);
   }
 
+  function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+  function esc1(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* A parameter is linear by default: the range input carries the value itself. A
+     parameter marked `log` carries a tick index instead and the value is exponentiated
+     back from it, because a linear slider cannot express a quantity that spans decades.
+     The 1/f corner ran 1 Hz to 100 kHz in steps of 100, so every corner below 101 Hz —
+     the entire region a chopper amplifier exists for — was a single notch, and two
+     lessons opened on values (100 Hz, 20 kHz) the slider could not return to. */
+  const LOG_TICKS = 1000;
+  function toTick(p, v) {
+    if (!p.log) return v;
+    const a = Math.log(p.min), b = Math.log(p.max);
+    return Math.round((Math.log(clamp(v, p.min, p.max)) - a) / (b - a) * LOG_TICKS);
+  }
+  function fromTick(p, t) {
+    if (!p.log) return t;
+    const a = Math.log(p.min), b = Math.log(p.max);
+    const v = Math.exp(a + clamp(t, 0, LOG_TICKS) / LOG_TICKS * (b - a));
+    /* three significant figures: a corner reading 9973 Hz is noise pretending to be
+       precision, and it makes the readouts beside it impossible to compare */
+    const mag = Math.pow(10, Math.floor(Math.log10(v)) - 2);
+    return clamp(Math.round(v / mag) * mag, p.min, p.max);
+  }
+
   /* ---- mount ----
      Returns a handle with dispose(); the caller must put that in `teardown`,
      because go() clears exactly one slot and nothing drains teardownFns. */
   function mount(host, spec, initial, onChange) {
     const values = Object.assign({}, initial || {});
     spec.params.forEach(function (p) {
-      if (values[p.k] === undefined) values[p.k] = p.def;
+      /* A catalog `initial` is author-written, and build.mjs checks only that the key
+         names a real parameter. An out-of-range or non-numeric one left the input
+         clamped to its own limit while the draw, the readout and the explain all still
+         used the original: the thumb, the number beside the label and the picture
+         disagreed with each other, and nothing anywhere said so. */
+      const given = values[p.k];
+      values[p.k] = (typeof given === 'number' && isFinite(given))
+        ? clamp(given, p.min, p.max)
+        : p.def;
     });
 
     host.innerHTML =
       '<div class="sbx">' +
-        '<div class="sbx-canvas"><canvas></canvas></div>' +
+        '<div class="sbx-canvas">' +
+          '<canvas role="img" aria-label="' + esc1(spec.title || 'visualiser') +
+            '. The reading below the sliders describes what it shows."></canvas>' +
+        '</div>' +
         '<div class="sbx-side">' +
           '<div class="sbx-params">' +
             spec.params.map(function (p) {
               return '<label class="sbx-p" data-k="' + p.k + '">' +
                 '<span class="sbx-l">' + (p.label || p.k) + '</span>' +
-                '<span class="sbx-v" data-v="' + p.k + '"></span>' +
-                '<input type="range" min="' + p.min + '" max="' + p.max + '" ' +
-                  'step="' + (p.step || (p.max - p.min) / 100) + '" value="' + values[p.k] + '">' +
+                /* hidden from the accessibility tree because the <label> wraps the input:
+                   left visible it lands in the input's accessible *name*, so the name
+                   changed on every drag and aria-valuetext below could never be heard */
+                '<span class="sbx-v" data-v="' + p.k + '" aria-hidden="true"></span>' +
+                '<input type="range" min="' + (p.log ? 0 : p.min) + '" ' +
+                  'max="' + (p.log ? LOG_TICKS : p.max) + '" ' +
+                  'step="' + (p.log ? 1 : (p.step || (p.max - p.min) / 100)) + '" ' +
+                  'value="' + toTick(p, values[p.k]) + '">' +
               '</label>';
             }).join('') +
           '</div>' +
-          '<div class="sbx-read" data-read></div>' +
+          /* the explain line is the whole point of a sandbox — the sentence that says
+             what the picture now means. Without a live region it changed in silence for
+             anyone not looking at it. */
+          '<div class="sbx-read" data-read aria-live="polite"></div>' +
         '</div>' +
       '</div>';
 
     const cv = host.querySelector('canvas');
     const ctx = cv.getContext('2d');
     const readout = host.querySelector('[data-read]');
-    let raf = 0, ro = null, disposed = false;
+    let raf = 0, ro = null, disposed = false, lastExplain = null;
+
+    /* Resolved once. paint() runs on every frame of a drag, and looking these up by
+       selector each time put two DOM queries per parameter on the hot path. */
+    const els = {};
+    spec.params.forEach(function (p) {
+      els[p.k] = {
+        v: host.querySelector('[data-v="' + p.k + '"]'),
+        input: host.querySelector('.sbx-p[data-k="' + p.k + '"] input'),
+      };
+    });
 
     function paint() {
       if (disposed) return;
@@ -852,11 +912,21 @@ const Sandbox = (function () {
         ctx.fillText('This visualiser failed: ' + String(e && e.message || e).slice(0, 60), 14, 24);
       }
       spec.params.forEach(function (p) {
-        const el = host.querySelector('[data-v="' + p.k + '"]');
-        if (el) el.textContent = (p.fmt ? p.fmt(values[p.k]) : fmt(values[p.k])) + (p.unit ? ' ' + p.unit : '');
+        const shown = (p.fmt ? p.fmt(values[p.k]) : fmt(values[p.k])) + (p.unit ? ' ' + p.unit : '');
+        const el = els[p.k];
+        if (el.v) el.v.textContent = shown;
+        /* A range input reports its own raw number, which for half of these parameters
+           is not what the page shows: "1" where the label reads "direct", "0" where it
+           reads "no", a tick index where it reads 20 kHz. */
+        if (el.input) el.input.setAttribute('aria-valuetext', (p.label || p.k) + ' ' + shown);
       });
       if (readout && spec.explain) {
-        try { readout.innerHTML = spec.explain(values, MathML); } catch (e) { readout.textContent = ''; }
+        /* Only touch the DOM when the sentence actually changed. It is a polite live
+           region and a drag fires this on every frame; rewriting identical HTML sixty
+           times a second gives the screen reader sixty things to consider saying. */
+        let html = '';
+        try { html = spec.explain(values, MathML); } catch (e) { html = ''; }
+        if (html !== lastExplain) { readout.innerHTML = html; lastExplain = html; }
       }
       if (onChange) onChange(values);
     }
@@ -866,9 +936,15 @@ const Sandbox = (function () {
       raf = requestAnimationFrame(function () { raf = 0; paint(); });
     }
 
+    const byKey = {};
+    spec.params.forEach(function (p) { byKey[p.k] = p; });
     host.querySelectorAll('input[type=range]').forEach(function (inp) {
       const k = inp.closest('.sbx-p').dataset.k;
-      inp.addEventListener('input', function () { values[k] = parseFloat(inp.value); schedule(); });
+      inp.addEventListener('input', function () {
+        const raw = parseFloat(inp.value);
+        values[k] = isFinite(raw) ? fromTick(byKey[k], raw) : byKey[k].def;
+        schedule();
+      });
     });
 
     if (typeof ResizeObserver !== 'undefined') {
@@ -892,7 +968,8 @@ const Sandbox = (function () {
     };
   }
 
-  return { define: define, get: get, mount: mount, frame: frame, palette: palette, fmt: fmt, all: REG };
+  return { define: define, get: get, mount: mount, frame: frame, palette: palette, fmt: fmt,
+           all: REG, toTick: toTick, fromTick: fromTick };
 })();
 
 /* ---------------------------------------------------------------- visualisers
@@ -982,9 +1059,15 @@ Tune.define({
   plot: function (v) {
     const c = v.c * 1e-9;
     const fc = 1 / (2 * Math.PI * v.r * c);
+    /* The corner runs from 1.59 Hz (100 kΩ, 1 µF) to 1.59 MHz (100 Ω, 1 nF) and the axis
+       was pinned at 10 Hz..1 MHz, so at either end of the sliders the marker for the one
+       quantity this model is about was drawn outside its own frame. Open both ends far
+       enough to hold whatever the sliders reach. */
+    const lo = Math.min(10, Math.pow(10, Math.floor(Math.log10(fc / 4))));
+    const hi = Math.max(1e6, Math.pow(10, Math.ceil(Math.log10(fc * 4))));
     const pts = [];
-    for (let f = 10; f <= 1e6; f *= 1.06) pts.push([f, 1 / Math.sqrt(1 + Math.pow(f / fc, 2))]);
-    return { x: 'f', y: '|H|', logX: true, yRange: [0, 1.05], xRange: [10, 1e6],
+    for (let f = lo; f <= hi; f *= 1.06) pts.push([f, 1 / Math.sqrt(1 + Math.pow(f / fc, 2))]);
+    return { x: 'f', y: '|H|', logX: true, yRange: [0, 1.05], xRange: [lo, hi],
              points: pts, at: [fc, 1 / Math.SQRT2],
              caption: '|H| vs frequency · corner at ' + fmtHz(fc) };
   },
@@ -1021,9 +1104,14 @@ Tune.define({
       const x = 2 * Math.PI * f / wn;
       pts.push([f, 1 / Math.sqrt(Math.pow(1 - x * x, 2) + Math.pow(2 * zeta * x, 2))]);
     }
-    return { x: 'f', y: '|H|', logX: true, yRange: [0, Math.max(2, Math.min(6, 1 / (2 * zeta) + 0.5))],
+    /* The axis was capped at 6 while the peak reaches 1414 at R = 1 Ω, L = 200 mH,
+       C = 0.1 µF — the resonance and its marker were both drawn far above the frame, so
+       the picture of a very high-Q circuit was indistinguishable from a flat one. The
+       peak of |H| is 1/(2ζ√(1−ζ²)), not 1/(2ζ), and above ζ = 1/√2 there is no peak. */
+    const peak = zeta < Math.SQRT1_2 ? 1 / (2 * zeta * Math.sqrt(1 - zeta * zeta)) : 1;
+    return { x: 'f', y: '|H|', logX: true, yRange: [0, Math.max(2, peak * 1.15)],
              xRange: [wn / (2 * Math.PI) / 60, wn / (2 * Math.PI) * 60], points: pts,
-             at: [wn / (2 * Math.PI), zeta > 0 ? 1 / (2 * zeta) : 1],
+             at: [wn / (2 * Math.PI), 1 / (2 * zeta)],
              caption: '|H| vs frequency · ζ = ' + zeta.toFixed(3) };
   },
 });
@@ -1048,11 +1136,22 @@ Sandbox.define({
     const zeta = v.zeta, wn = v.wn;
     const half = Math.floor(w / 2) - 8;
 
-    /* left: the s-plane */
+    /* left: the s-plane.
+       The axes were fixed at -14..4 while the poles reach -34.2 at the top of both
+       sliders (ζ = 1.6, ωₙ = 12): the far pole was drawn outside the plot, over the tick
+       labels or past the clip entirely, so the picture showed one pole for a system that
+       has two — and the overdamped case is the one whose whole point is where the second
+       pole went. Scale to hold whatever the sliders produce, with the old extent as a
+       floor so the frame stops breathing at small values. */
+    const reach = zeta < 1
+      ? Math.max(zeta * wn, wn * Math.sqrt(1 - zeta * zeta))
+      : zeta * wn + wn * Math.sqrt(zeta * zeta - 1);
+    const R = Math.max(14, reach * 1.2);
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, half, h); ctx.clip();
     const sp = kit.frame(ctx, half, h, {
-      xRange: [-14, 4], yRange: [-14, 14], xTicks: 4, yTicks: 4, margin: { l: 40, r: 10, t: 14, b: 28 },
+      xRange: [-R, R * (4 / 14)], yRange: [-R, R], xTicks: 4, yTicks: 4,
+      margin: { l: 40, r: 10, t: 14, b: 28 },
     });
     sp.hline(0, sp.P.line);
     ctx.save();
@@ -1110,6 +1209,16 @@ Sandbox.define({
   },
   explain: function (v) {
     const zeta = v.zeta, wn = v.wn;
+    /* "Take ζ to zero" is the first thing CTRL510 module 2's brief tells the learner to
+       do, and 4/(ζωₙ) is a division by zero there: the readout printed the word
+       "Infinity" at the exact setting the lesson sends them to. There is no settling
+       time at ζ = 0 — that is the point of the setting — so say so instead. */
+    if (zeta <= 0) {
+      return '<b>Undamped.</b> The poles sit on the imaginary axis at ±' + wn.toFixed(2) +
+        ' rad/s, overshoot is a full 100%, and there is <em>no</em> settling time: the ' +
+        'response rings at the same amplitude for ever. This is the boundary of stability, ' +
+        'not a slow approach to it.';
+    }
     if (zeta < 1) {
       const os = Math.exp(-Math.PI * zeta / Math.sqrt(1 - zeta * zeta)) * 100;
       return '<b>' + os.toFixed(1) + '%</b> overshoot, settling in about <b>' +
@@ -1144,10 +1253,16 @@ Sandbox.define({
     }
     const topH = Math.round(h * 0.56);
 
+    /* K = 20 at ζ = 0.05 peaks at 46 dB against an axis that stopped at 40, so the top of
+       the resonance — the only part of the plot those two sliders are about — was drawn
+       outside the frame with nothing to say it had been. */
+    let dbTop = 40;
+    for (let i = 0; i < mag.length; i++) if (mag[i][1] + 8 > dbTop) dbTop = Math.ceil((mag[i][1] + 8) / 10) * 10;
+
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, w, topH); ctx.clip();
     const g = kit.frame(ctx, w, topH, {
-      xRange: [lo, hi], yRange: [-80, 40], logX: true, xTicks: 4, yTicks: 3,
+      xRange: [lo, hi], yRange: [-80, dbTop], logX: true, xTicks: 4, yTicks: 3,
       margin: { l: 46, r: 14, t: 12, b: 22 },
       xLabel: function (x) { return x >= 1 ? String(Math.round(x)) : x.toFixed(1); },
     });
@@ -1247,7 +1362,16 @@ Sandbox.define({
         Math.ceil(Math.log(0.01) / Math.log(v.r)) + ' samples</b>. Stability in discrete time is ' +
         'a radius, not a half-plane.';
     }
-    if (v.r < 1.001) return 'Exactly on the circle: it oscillates forever and never settles. Marginally stable.';
+    /* "it oscillates forever" is only true off the real axis. At \u03b8 = 0 with r = 1 the
+       response the picture draws is h[n] = 1 for every n \u2014 a flat line of identical
+       samples, which is the one thing that is not an oscillation. */
+    if (v.r < 1.001) {
+      if (v.th < 0.005) return 'On the circle at zero angle: h[n] = 1 for every sample. It does not ' +
+        'oscillate and it does not decay \u2014 a pure integrator, and marginally stable.';
+      if (v.th > Math.PI - 0.005) return 'On the circle at \u03b8 = \u03c0: the samples alternate \u00b11 forever. ' +
+        'Marginally stable, at the fastest rate a sampled sequence can carry.';
+      return 'Exactly on the circle: it oscillates forever and never settles. Marginally stable.';
+    }
     return 'Outside the circle. Every sample is larger than the last \u2014 this filter diverges.';
   },
 });
@@ -1263,6 +1387,16 @@ Sandbox.define({
     { k: 'a12', label: 'a\u2081\u2082', min: -3, max: 3, step: 0.05, def: 1 },
     { k: 'a21', label: 'a\u2082\u2081', min: -6, max: 3, step: 0.05, def: -2 },
     { k: 'a22', label: 'a\u2082\u2082', min: -4, max: 2, step: 0.05, def: -0.6 },
+    /* Forward Euler steps along the tangent and lands outside the curve every time, so
+       a centre \u2014 trace 0, the one case whose exact orbits are closed \u2014 was drawn as an
+       outward spiral while the line underneath said "it orbits forever". At the unit
+       centre the enclosed area grew 22% over the interval drawn; at the top of the
+       sliders (a12 = 3, a21 = -6) it grew by a factor of 37 and the rings left the
+       frame. RK4 holds the same area to 3e-5 % over the identical run. Euler stays,
+       and is now labelled and switchable, because EE131 module 9 is about precisely
+       this error and needs to be able to show it happening. */
+    { k: 'solver', label: 'integrator', min: 0, max: 1, step: 1, def: 1,
+      fmt: function (x) { return x ? 'RK4' : 'forward Euler'; } },
   ],
   draw: function (ctx, w, h, v, kit) {
     const L = 3.2;
@@ -1291,14 +1425,26 @@ Sandbox.define({
 
     /* trajectories from a ring of starts */
     const cols = [f.P.accent, f.P.blue, f.P.purple, f.P.amber];
+    const rk = v.solver >= 0.5;
+    const fx1 = function (x, y) { return A[0][0] * x + A[0][1] * y; };
+    const fx2 = function (x, y) { return A[1][0] * x + A[1][1] * y; };
     for (let k = 0; k < 8; k++) {
       const th = k / 8 * Math.PI * 2;
       let x = 2.7 * Math.cos(th), y = 2.7 * Math.sin(th);
       const pts = [[x, y]];
       const dt = 0.012;
       for (let n = 0; n < 1400; n++) {
-        const dx = A[0][0] * x + A[0][1] * y, dy = A[1][0] * x + A[1][1] * y;
-        x += dx * dt; y += dy * dt;
+        if (rk) {
+          const k1x = fx1(x, y), k1y = fx2(x, y);
+          const k2x = fx1(x + k1x * dt / 2, y + k1y * dt / 2), k2y = fx2(x + k1x * dt / 2, y + k1y * dt / 2);
+          const k3x = fx1(x + k2x * dt / 2, y + k2y * dt / 2), k3y = fx2(x + k2x * dt / 2, y + k2y * dt / 2);
+          const k4x = fx1(x + k3x * dt, y + k3y * dt), k4y = fx2(x + k3x * dt, y + k3y * dt);
+          x += dt / 6 * (k1x + 2 * k2x + 2 * k3x + k4x);
+          y += dt / 6 * (k1y + 2 * k2y + 2 * k3y + k4y);
+        } else {
+          const dx = fx1(x, y), dy = fx2(x, y);
+          x += dx * dt; y += dy * dt;
+        }
         if (Math.abs(x) > L * 1.6 || Math.abs(y) > L * 1.6) break;
         if (n % 4 === 0) pts.push([x, y]);
       }
@@ -1316,8 +1462,20 @@ Sandbox.define({
     if (det < 0) kind = 'a <b>saddle</b> \u2014 unstable whatever you do to the gains';
     else if (disc < 0) kind = tr < 0 ? 'a <b>stable spiral</b>' : (tr > 0 ? 'an <b>unstable spiral</b>' : 'a <b>centre</b> \u2014 it orbits forever');
     else kind = tr < 0 ? 'a <b>stable node</b>' : 'an <b>unstable node</b>';
-    return 'trace = ' + tr.toFixed(2) + ', det = ' + det.toFixed(2) + ' \u2014 ' + kind +
+    let out = 'trace = ' + tr.toFixed(2) + ', det = ' + det.toFixed(2) + ' \u2014 ' + kind +
       '. Stability is decided entirely by those two numbers, never by the individual entries.';
+    /* A centre is the one classification the drawing can contradict, so say so rather
+       than leaving the learner to decide whether the creep is the physics. The Euler
+       map is I + A\u00b7dt, whose determinant is 1 + tr\u00b7dt + det\u00b7dt\u00b2 \u2014 at trace zero that is
+       exactly the factor the enclosed area is multiplied by, once per step. */
+    if (v.solver < 0.5 && det > 0 && Math.abs(tr) < 1e-9) {
+      const grow = Math.pow(1 + det * 0.012 * 0.012, 1400);
+      const by = grow >= 2 ? grow.toFixed(0) + ' times' : 'a further ' + ((grow - 1) * 100).toFixed(0) + '%';
+      out += ' <em>The curves drawn will not close.</em> Forward Euler grows the area they enclose ' +
+        'by ' + by + ' over this run, so the orbits spiral out. Nothing in the matrix does that \u2014 ' +
+        'switch the integrator to RK4 and they close.';
+    }
+    return out;
   },
 });
 
@@ -1386,10 +1544,17 @@ Sandbox.define({
     { k: 'r', label: 'measurement noise R', min: 0.005, max: 2, step: 0.005, def: 0.35 },
   ],
   draw: function (ctx, w, h, v, kit) {
-    /* a fixed pseudo-random stream so the picture is stable while a slider moves */
+    /* A fixed pseudo-random stream, so the picture is stable while a slider moves.
+       This was the C-library LCG written straight into JavaScript: seed * 1103515245
+       reaches 2.4e18, past the 2^53 where a double stops counting integers, so the low
+       bits of every product were rounding noise. The period collapsed from 2^31 to
+       10466 and bit 0 came up set 422 times in 100000 draws. It happens to be harmless
+       today — the 240 values this draws are still distinct and still pass as Gaussian
+       (mean 0.024, sd 0.98) — but it was luck, not design. Math.imul does the multiply
+       in exact 32-bit arithmetic, which is what the constant was chosen for. */
     let seed = 12345;
     const rnd = function () {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
       return seed / 0x7fffffff;
     };
     const gauss = function () {
@@ -1426,9 +1591,16 @@ Sandbox.define({
     f.text('truth', f.x0 + 6, f.y0 + 12, f.P.blue);
     f.text('estimate', f.x0 + 52, f.y0 + 12, f.P.accent);
     f.text('measurements', f.x0 + 128, f.y0 + 12, f.P.dim);
-    ctx._err = [Math.sqrt(sumErrM / N), Math.sqrt(sumErrE / N)];
+    /* The two RMS errors were computed on every frame and hung on the canvas context,
+       where nothing has ever read them. They are the number the whole picture is an
+       argument for — whether the estimate beat the raw sensor — so draw them. */
+    const rmsM = Math.sqrt(sumErrM / N), rmsE = Math.sqrt(sumErrE / N);
+    f.text('RMS error — sensor ' + rmsM.toFixed(3) + ', estimate ' + rmsE.toFixed(3) +
+      ' (' + (rmsM / rmsE).toFixed(1) + '× better)', f.x0 + 6, f.y1 - 8, f.P.dim);
   },
   explain: function (v) {
+    /* P = (Q + sqrt(Q^2 + 4QR))/2 solves P = PR/(P+R) + Q; K = P/(P+R) reduces to the
+       line below. Checked against the loop above, which converges to it. */
     const ratio = v.q / v.r;
     const K = Math.sqrt(ratio * ratio / 4 + ratio) - ratio / 2;
     return 'The steady-state gain settles near <b>K = ' + K.toFixed(3) + '</b>. It depends only on ' +
@@ -1571,10 +1743,21 @@ Sandbox.define({
     ctx.restore();
   },
   explain: function (v) {
+    const nyq = v.fs / 2;
     let fa = Math.abs(v.fsig % v.fs);
-    if (fa > v.fs / 2) fa = v.fs - fa;
+    if (fa > nyq) fa = v.fs - fa;
+    /* The strict inequality is the whole theorem, and this is the one setting where the
+       caption used to contradict the dots directly above it. At f = fs/2 exactly, every
+       sample is sin(pi*n) = 0: the picture draws the entire sampled sequence lying on
+       the axis while the sentence read "the samples determine the wave uniquely". */
+    if (Math.abs(v.fsig - nyq) < 1e-9) {
+      return 'Exactly at the limit, which the sampling theorem excludes rather than ' +
+        'includes. Every sample lands on a zero crossing — look at the dots, they are all ' +
+        'on the axis — so the amplitude is gone and a wave of any size would have given the ' +
+        'same record. Nyquist needs f <b>strictly below</b> fₛ/2.';
+    }
     if (Math.abs(fa - v.fsig) < 0.5) {
-      return 'Below the Nyquist limit of <b>' + (v.fs / 2).toFixed(0) + ' Hz</b>, so the samples ' +
+      return 'Below the Nyquist limit of <b>' + nyq.toFixed(0) + ' Hz</b>, so the samples ' +
         'determine the wave uniquely. Nothing is lost.';
     }
     return 'Above Nyquist: the samples are indistinguishable from a <b>' + fa.toFixed(1) +
@@ -1588,7 +1771,10 @@ Sandbox.define({
   id: 'noise-corner',
   title: 'Flicker noise, thermal noise and the corner between them',
   params: [
-    { k: 'fc', label: '1/f corner', min: 1, max: 100000, step: 100, def: 10000, unit: 'Hz' },
+    /* Linear with step 100 made the whole of 1..100 Hz a single notch — the region a
+       chopper amplifier exists for — and put 999 of the 1000 positions above 101 Hz.
+       Two lessons opened at corners (100 Hz, 20 kHz) the slider could not return to. */
+    { k: 'fc', label: '1/f corner', min: 1, max: 100000, step: 1, log: true, def: 10000, unit: 'Hz' },
     { k: 'nth', label: 'thermal floor', min: 1, max: 40, step: 0.5, def: 8, unit: 'nV/\u221aHz' },
   ],
   draw: function (ctx, w, h, v, kit) {
@@ -1618,16 +1804,27 @@ Sandbox.define({
     ctx.moveTo(f.fx(v.fc), f.y0); ctx.lineTo(f.fx(v.fc), f.y1);
     ctx.strokeStyle = f.P.purple; ctx.lineWidth = 1.4; ctx.stroke();
     ctx.restore();
-    f.text('corner', f.fx(v.fc) + 5, f.y0 + 13, f.P.purple);
+    /* at fc = 1 the corner label started at the left edge, on the same baseline as the
+       axis caption, and the two printed on top of each other */
+    const cornerX = f.fx(v.fc);
+    const nearLeft = cornerX < f.x0 + 96;
+    f.text('corner', cornerX + (nearLeft ? 5 : -5), f.y0 + (nearLeft ? 27 : 13),
+      f.P.purple, nearLeft ? 'left' : 'right');
     f.text('thermal floor', f.x0 + 6, f.fy(20 * Math.log10(v.nth)) - 6, f.P.faint);
     f.text('dB re 1 nV/\u221aHz', f.x0 + 6, f.y0 + 13, f.P.faint);
     f.text('Hz', f.x1 - 6, f.y1 + 20, f.P.faint, 'right');
   },
   explain: function (v) {
-    return 'Below the corner the noise rises as 1/f and integrating for longer stops helping \u2014 ' +
-      'this is the region chopping and correlated double sampling exist for. Above it the floor ' +
-      'is flat at <b>' + v.nth.toFixed(1) + ' nV/\u221aHz</b>, set by resistance and temperature, ' +
-      'and the only lever left is a wider device or more current.';
+    /* The plot is an amplitude density in nV/\u221aHz, so the slope drawn below the corner is
+       10 dB per decade, not 20. Saying "rises as 1/f" beside it named the power law over
+       a picture of the voltage one \u2014 and EE221 module 10's own notice, on the same
+       screen, spells the distinction out and contradicted this sentence. */
+    return 'Below the corner the density rises as 1/\u221af \u2014 <b>10 dB per decade</b> on this axis, ' +
+      'because it is the noise <em>power</em> that goes as 1/f and the plot plots a voltage. ' +
+      'Integrating for longer stops helping there, which is the region chopping and correlated ' +
+      'double sampling exist for. Above it the floor is flat at <b>' + v.nth.toFixed(1) +
+      ' nV/\u221aHz</b>, set by resistance and temperature, and the only lever left is a wider ' +
+      'device or more current.';
   },
 });
 
@@ -1643,7 +1840,6 @@ Sandbox.define({
   draw: function (ctx, w, h, v, kit) {
     const L = v.ls * 1e-9, C = v.coss * 1e-12;
     const wr = 1 / Math.sqrt(L * C);
-    const fr = wr / (2 * Math.PI);
     const Tspan = 600e-9;
     const zeta = 0.06;
     /* resonant time to swing Vds fully: a quarter period */
@@ -1669,7 +1865,18 @@ Sandbox.define({
         }
       }
       vds.push([t * 1e9, y]);
-      const cur = t < 100e-9 ? 0 : (soft ? Math.min(1, (t - 100e-9) / 60e-9) : 1);
+      /* The soft-switched current used to start rising the instant the drain began to
+         fall, so the picture drew current and voltage overlapping — which is the
+         definition of hard switching — under a caption reading "turns on at zero volts".
+         The device conducts after the tank has finished the swing; that is what the dead
+         time is for, and now it is what the trace shows. */
+      let cur;
+      if (t < 100e-9) cur = 0;
+      else if (!soft) cur = 1;
+      else {
+        const since = t - 100e-9 - tSwing;
+        cur = since <= 0 ? 0 : Math.min(1, since / 60e-9);
+      }
       isw.push([t * 1e9, cur]);
     }
 
@@ -1824,12 +2031,36 @@ Sandbox.define({
       ctx.fillStyle = P.faint;
       ctx.textAlign = 'right';
       ctx.fillText('i' + i, x0 - 8, y + cellH / 2);
+
+      /* The bubbles themselves. The schedule shifted each stalled instruction to the
+         right and drew nothing in the gap, so the cost the caption talks about was
+         only ever visible as a wider staircase \u2014 the one thing a pipeline diagram
+         exists to show was the one thing missing from it. */
+      const held = start[i] - (i > 0 ? start[i - 1] + 1 : 1);
+      for (let b = 0; b < held; b++) {
+        const x = x0 + (start[i] - held + b) * cellW;
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = P.amber;
+        ctx.setLineDash([2, 2]);
+        ctx.strokeRect(x + 0.5, y + 0.5, cellW - 3, cellH - 1);
+        ctx.restore();
+        if (cellW > 18) {
+          ctx.fillStyle = P.amber;
+          ctx.textAlign = 'center';
+          ctx.fillText('\u2013', x + (cellW - 2) / 2, y + cellH / 2);
+        }
+      }
+
       for (let sIdx = 0; sIdx < STAGES.length; sIdx++) {
-        const c = start[i] + sIdx;
-        const x = x0 + c * cellW;
-        const stalled = i > 0 && i <= v.dep && !v.fwd && sIdx === 0;
-        ctx.fillStyle = sIdx === 2 ? 'rgba(199,247,81,.22)' : 'rgba(255,255,255,.06)';
+        const x = x0 + (start[i] + sIdx) * cellW;
+        /* the tint was a baked copy of --lime, which is a light-theme bug waiting for
+           the day the token moves and this does not */
+        ctx.save();
+        ctx.globalAlpha = sIdx === 2 ? 0.22 : 0.06;
+        ctx.fillStyle = sIdx === 2 ? P.accent : P.ink;
         ctx.fillRect(x, y, cellW - 2, cellH);
+        ctx.restore();
         ctx.fillStyle = sIdx === 2 ? P.accent : P.dim;
         ctx.textAlign = 'center';
         if (cellW > 18) ctx.fillText(STAGES[sIdx], x + (cellW - 2) / 2, y + cellH / 2);
@@ -1838,6 +2069,10 @@ Sandbox.define({
     ctx.textAlign = 'left';
     ctx.fillStyle = P.faint;
     ctx.fillText('cycles \u2192', x0, 14);
+    if (stalls) {
+      ctx.fillStyle = P.amber;
+      ctx.fillText(stalls + ' bubble' + (stalls === 1 ? '' : 's'), x0 + 62, 14);
+    }
   },
   explain: function (v) {
     const N = 9;
@@ -1858,6 +2093,70 @@ const CACHE_MEMO = {};
    miss rate falls. Scaling the set with the cache kept the ratio constant, the curve
    dead flat, and every caption about capacity misses "starting to fit" false. */
 const WORKING_SET = 32 * 1024;
+const CACHE_LINE = 64;
+
+/* The model lives out here, above both draw() and explain(), because it used to live
+   inside draw() and explain() then re-derived its claims from the slider positions
+   instead. The two disagreed: at 4 KB with a 512-byte stride the marker read 100% while
+   the sentence under it said "only the compulsory miss on first touch — the floor no
+   cache can go below". Everything the caption now asserts is measured on the same walk
+   the curve is drawn from. */
+
+/* Consecutive addresses inside one 64-byte line are guaranteed hits after the first:
+   the line was just installed, so it is present and most-recently-used in its set.
+   Simulating one access per run of them and counting the rest gives an identical answer
+   for a sixty-fourth of the work — checked exhaustively against the address-by-address
+   version over every (size, associativity, stride) the sliders reach. It matters because
+   a stride-1 repaint took 627 ms, and the stride slider steps by 1 across 1..512: the
+   whole left-hand end of it redrew about once a second. */
+function cacheRun(setCount, assoc, stride) {
+  const tags = [];
+  for (let i = 0; i < setCount; i++) tags.push([]);
+  let hits = 0, total = 0;
+  for (let pass = 0; pass < 3; pass++) {
+    let addr = 0;
+    while (addr < WORKING_SET) {
+      const line = Math.floor(addr / CACHE_LINE);
+      const lineEnd = Math.min(WORKING_SET, (line + 1) * CACHE_LINE);
+      const runLen = Math.ceil((lineEnd - addr) / stride);
+      const arr = tags[line % setCount];
+      const tag = Math.floor(line / setCount);
+      const at = arr.indexOf(tag);
+      total += runLen;
+      if (at !== -1) { hits += runLen; arr.splice(at, 1); arr.push(tag); }
+      else { hits += runLen - 1; arr.push(tag); if (arr.length > assoc) arr.shift(); }
+      addr += runLen * stride;
+    }
+  }
+  return total ? hits / total : 0;
+}
+
+/* the miss rate the marker sits at, from the slider positions the picture uses */
+function cacheMiss(kb, ways, stride) {
+  const assoc = Math.max(1, Math.round(ways));
+  const lines = Math.max(assoc, Math.floor(kb * 1024 / CACHE_LINE));
+  return (1 - cacheRun(Math.max(1, Math.floor(lines / assoc)), assoc, stride)) * 100;
+}
+
+/* the same capacity with no placement restriction at all — the textbook definition of
+   the line between a conflict miss and the rest */
+function cacheIdeal(kb, stride) {
+  const lines = Math.max(1, Math.floor(kb * 1024 / CACHE_LINE));
+  return (1 - cacheRun(1, lines, stride)) * 100;
+}
+
+/* one miss per distinct line on first touch, over the accesses actually made: what a
+   cache of unbounded size would still pay */
+function cacheFloor(stride) {
+  let lines = 0, accesses = 0, addr = 0, last = -1;
+  while (addr < WORKING_SET) {
+    const line = Math.floor(addr / CACHE_LINE);
+    if (line !== last) { lines++; last = line; }
+    accesses++;
+    addr += stride;
+  }
+  return accesses ? lines / (accesses * 3) * 100 : 0;
+}
 /* a cache you can starve: capacity against associativity, on a real trace */
 Sandbox.define({
   id: 'cache',
@@ -1869,31 +2168,7 @@ Sandbox.define({
     { k: 'stride', label: 'access stride', min: 1, max: 512, step: 1, def: 64, unit: 'B' },
   ],
   draw: function (ctx, w, h, v, kit) {
-    const LINE = 64;
     const ways = Math.max(1, Math.round(v.ways));
-    const lines = Math.max(ways, Math.floor(v.kb * 1024 / LINE));
-    const sets = Math.max(1, Math.floor(lines / ways));
-
-    /* LRU over a strided walk through a working set four times the cache */
-    function run(setCount, assoc, stride) {
-      const tags = [];
-      for (let i = 0; i < setCount; i++) tags.push([]);
-      const span = WORKING_SET;
-      let hits = 0, total = 0;
-      for (let pass = 0; pass < 3; pass++) {
-        for (let addr = 0; addr < span; addr += stride) {
-          const line = Math.floor(addr / LINE);
-          const set = line % setCount;
-          const tag = Math.floor(line / setCount);
-          const arr = tags[set];
-          const at = arr.indexOf(tag);
-          total++;
-          if (at !== -1) { hits++; arr.splice(at, 1); arr.push(tag); }
-          else { arr.push(tag); if (arr.length > assoc) arr.shift(); }
-        }
-      }
-      return total ? hits / total : 0;
-    }
 
     /* A curve depends only on (associativity, stride) — dragging the size slider
        moves the marker along one that is already computed. Without the memo every
@@ -1902,17 +2177,13 @@ Sandbox.define({
       const key = assoc + ':' + v.stride;
       if (CACHE_MEMO[key]) return CACHE_MEMO[key];
       const out = [];
-      for (let k = 1; k <= 64; k++) {
-        const ln = Math.max(assoc, Math.floor(k * 1024 / LINE));
-        const st = Math.max(1, Math.floor(ln / assoc));
-        out.push([k, (1 - run(st, assoc, v.stride)) * 100]);
-      }
+      for (let k = 1; k <= 64; k++) out.push([k, cacheMiss(k, assoc, v.stride)]);
       if (Object.keys(CACHE_MEMO).length > 60) for (const k in CACHE_MEMO) delete CACHE_MEMO[k];
       CACHE_MEMO[key] = out;
       return out;
     }
     const pts = sweep(ways);
-    const here = (1 - run(sets, ways, v.stride)) * 100;
+    const here = cacheMiss(v.kb, ways, v.stride);
 
     const f = kit.frame(ctx, w, h, {
       xRange: [1, 64], yRange: [0, 105], xTicks: 4, yTicks: 4,
@@ -1931,28 +2202,32 @@ Sandbox.define({
     f.text('miss rate %', f.x0 + 6, f.y0 + 13, f.P.faint);
     f.text('cache size KB', f.x1 - 6, f.y1 + 20, f.P.faint, 'right');
   },
+  /* The three C's, decomposed by running the same trace three ways rather than deduced
+     from where the sliders happen to be. The version that deduced them managed to tell
+     a learner they were sitting on "the floor no cache can go below" while the marker
+     six inches above read 100%. */
   explain: function (v) {
-    const LINE = 64;
     const ways = Math.max(1, Math.round(v.ways));
-    const sets = Math.max(1, Math.floor(v.kb * 1024 / LINE / ways));
-    const touched = Math.ceil(WORKING_SET / Math.max(v.stride, 1));
-    const distinctLines = Math.min(touched, Math.ceil(WORKING_SET / LINE));
-    const fits = distinctLines * LINE <= v.kb * 1024;
-    /* a stride that is a multiple of the way size hits one set over and over */
-    const setStride = Math.round(v.stride / LINE) || 0;
-    const conflict = setStride > 0 && sets > 1 && setStride % sets === 0;
+    const here = cacheMiss(v.kb, ways, v.stride);
+    const ideal = cacheIdeal(v.kb, v.stride);
+    const floor = cacheFloor(v.stride);
+    const capacity = Math.max(0, ideal - floor);
+    const conflict = Math.max(0, here - ideal);
+    const pc = function (x) { return x.toFixed(x < 9.995 ? 2 : 1) + '%'; };
+    const head = 'Miss rate <b>' + pc(here) + '</b> \u2014 ' + pc(floor) + ' compulsory, ' +
+      pc(capacity) + ' capacity, ' + pc(conflict) + ' conflict, split by running this same walk ' +
+      'against an unbounded cache and against a fully associative one of this size. ';
 
-    if (conflict) {
-      return 'This stride lands every access on the <b>same set</b>, so only ' + ways +
-        ' line' + (ways === 1 ? '' : 's') + ' of the cache is reachable no matter how big it gets. ' +
-        'That is why the curve is flat here, and why associativity rather than capacity is the fix.';
+    if (conflict > 0.05 && conflict >= capacity) {
+      return head + 'Most of it is <b>conflict</b>: the same capacity with no placement ' +
+        'restriction reads ' + pc(ideal) + '. Associativity is the lever here, not size.';
     }
-    if (fits) {
-      return 'The ' + Math.round(distinctLines * LINE / 1024) + ' KB the walk touches now fits, so ' +
-        'what is left is the compulsory miss on first touch \u2014 the floor no cache can go below.';
+    if (capacity > 0.05) {
+      return head + 'Most of it is <b>capacity</b> \u2014 the walk touches more lines than fit, ' +
+        'so each one is evicted before it comes round again. Only a bigger cache moves this.';
     }
-    return 'The walk touches about <b>' + Math.round(distinctLines * LINE / 1024) + ' KB</b> and the ' +
-      'cache holds ' + v.kb + ' KB, so lines are evicted before they are reused. This part of the ' +
-      'curve is capacity, and only a bigger cache moves it.';
+    return head + 'There is nothing left to remove: every miss is a line being read for the ' +
+      'first time. The stride uses ' + Math.min(v.stride, CACHE_LINE) + ' of every ' + CACHE_LINE +
+      ' bytes fetched, and no cache buys back bytes the walk never asks for.';
   },
 });

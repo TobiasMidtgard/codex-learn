@@ -49,9 +49,9 @@
      "stride": 64
     },
     "notice": [
-     "With the stride at 64 B, drag the cache size from 1 KB to 64 KB. The curve does not move: it is a horizontal line at 100 per cent. The working set is defined as four times the cache, so capacity can never catch up with it.",
-     "Still at 64 B, raise associativity from direct to 16-way. The accented curve stays at 100 and the faint comparison curves sit exactly underneath it. A cyclic sweep is the worst case for LRU at *every* associativity: the line LRU chooses to evict is precisely the one wanted next.",
-     "Drop the stride to 32 B. The whole family falls to exactly 50 per cent; at 16 B it is 25, at 8 B it is 12.5. Every hit in this trace is a spatial hit inside one 64-byte line, so the miss rate is exactly stride divided by block size."
+     "With the stride at 64 B, drag the cache size from 1 KB up. The curve is a flat line at 100 per cent all the way to 16 KB, and then it falls off a cliff: 66.7 per cent at 24 KB, 33.3 at 32 KB, and dead flat from there to 64 KB. The walk is a fixed 32 KB, and the cliff is the moment it fits. Everything left after the cliff is the first touch of each line.",
+     "Still at 64 B, raise associativity from direct to 16-way. Below 16 KB the accented curve stays at 100 and the faint comparison curves sit exactly underneath it: a cyclic sweep is the worst case for LRU at *every* associativity, because the line LRU chooses to evict is precisely the one wanted next. Watch 24 KB, though — direct-mapped reads 66.7 per cent there and 4-way and 16-way both read 100. More associativity is *worse*, because 384 sets let some of the sweep miss each other and 96 sets do not.",
+     "Drop the stride to 32 B. Below the cliff the whole family falls to exactly 50 per cent; at 16 B it is 25, at 8 B it is 12.5. Every hit there is a spatial hit inside one 64-byte line, so the miss rate is exactly stride divided by block size — and past the cliff each of those numbers divides by three, because a third of the passes still pay for a first touch and the other two are free."
     ]
    },
    "quiz": {
@@ -262,8 +262,9 @@
     },
     "notice": [
      "Read the height at a stride of 16 B: exactly 25 per cent, which is 16/64. Halve the stride to 8 B and it halves to 12.5. These are compulsory-and-capacity misses in a fixed ratio — the block size, not the cache, sets them.",
-     "Now sweep associativity from 1 to 16 at that stride. The curve does not move by a pixel, and the faint comparison curves lie on top of the accented one. Zero conflict misses: a fully associative cache of the same size does no better than a direct-mapped one here, which is the definition.",
-     "Set the stride to 64 B or 128 B. The curve pins to 100 per cent at every size and every associativity — one access per block, no spatial reuse left, and a working set that grows with the cache so temporal reuse never arrives either."
+     "Now sweep associativity from 1 to 16 at that stride. The marker does not move by a pixel, and the readout underneath splits it for you: 8.33 per cent compulsory, the rest capacity, **zero conflict**. That is the definition — a fully associative cache of this size does no better than a direct-mapped one here, so there is nothing for associativity to buy.",
+     "The one place the faint curves separate is 24 KB, where direct-mapped reads 16.7 per cent and the associative ones read 25. Zero conflict misses does not mean associativity is harmless at every capacity; it means it is not the lever at *this* one.",
+     "Set the stride to 64 B or 128 B. The curve pins to 100 per cent from 1 KB to 16 KB — one access per block, so no spatial reuse is left to collect — and then drops to 33.3 per cent at 32 KB, where the 32 KB walk finally fits and temporal reuse arrives all at once. Below the cliff no associativity helps; above it none is needed."
     ]
    },
    "quiz": null,
@@ -502,9 +503,10 @@
      "stride": 8
     },
     "notice": [
-     "At a stride of 8 B the curve sits at 12.5 per cent, flat across the whole size axis. That is $1 + 0.125 \\times 100 = 13.5$ cycles per access: thirteen and a half times what the same access would cost if it hit.",
+     "At a stride of 8 B the curve sits at 12.5 per cent, and it opens at 16 KB. That is $1 + 0.125 \\times 100 = 13.5$ cycles per access: thirteen and a half times what the same access would cost if it hit.",
      "Halve the stride to 4 B and the curve halves to 6.25, giving $1 + 0.0625 \\times 100 = 7.25$ cycles. Halving the miss rate nearly halved the access time, because at these numbers the penalty term is almost the whole of it.",
-     "Now drag the size slider anywhere you like at either stride. The curve does not move, so neither does the AMAT. On this trace no amount of capacity buys a single cycle — a reminder that AMAT is only as honest as the miss rate you feed it."
+     "Now drag the size slider from 1 KB to 16 KB at either stride. The curve does not move, so neither does the AMAT: on that stretch no amount of capacity buys a single cycle. Then keep going. At 32 KB the 8 B curve drops to 4.17 per cent — $1 + 0.0417 \\times 100 = 5.17$ cycles, saving 8.3 cycles per access — and the 4 B curve drops to 2.08, giving 3.08. The 32 KB walk has just fitted, and every capacity beyond that is wasted silicon.",
+     "Both of those cliffs land on the same figure the compulsory floor predicts: one miss per 64-byte line, spread over three passes. At a 4 B stride that is $512 / (8192 \\times 3) = 2.08$ per cent. AMAT is only ever as honest as the miss rate you feed it, and the miss rate is only as honest as the size you measured it at — quoting either without the other is how a cache that helps enormously and one that helps not at all come to look identical on a slide."
     ]
    },
    "quiz": {
@@ -726,8 +728,9 @@
      "stride": 4
     },
     "notice": [
-     "At a stride of 4 B the curve sits at 6.25 per cent — one miss per sixteen accesses, which is the stride over the 64-byte block. Nothing on this plot goes below it, at any size or associativity, and by module 2's reckoning a third of those misses are compulsory and the rest capacity.",
-     "Push the stride to 64 B and the curve jumps to 100 per cent, then drag associativity through its whole range. Neither the accented curve nor the faint ones move. Every miss you can create here is a placement or a volume miss.",
+     "At a stride of 4 B the curve sits at 6.25 per cent — one miss per sixteen accesses, which is the stride over the 64-byte block. The readout splits it: 2.08 compulsory, 4.17 capacity, zero conflict, so exactly a third of these misses are the unavoidable first touch. That is module 2's reckoning, measured rather than asserted.",
+     "Nothing on this plot goes below 6.25 per cent *at this size* — but drag the size up and at 32 KB it drops to 2.08, which is the compulsory third on its own. The floor is the compulsory term, not the number the curve happens to be sitting on, and the difference between the two is the entire capacity component.",
+     "Push the stride to 64 B and the curve jumps to 100 per cent, then drag associativity through its whole range. The marker does not move: at 2 KB every miss you can create here is a placement or a volume miss, and neither is what associativity fixes. The faint curves do separate at 24 KB, where direct-mapped reads 66.7 and the associative ones read 100 — worth a look, because it is the one place on this plot where more associativity costs you.",
      "Now imagine the missing axis. A second cache writing one of these lines would invalidate this one, and the very next access to an address that has not moved, in a cache that has not evicted it, would miss anyway. That is the coherence miss, and it is the fourth C this plot has no room for."
     ]
    },

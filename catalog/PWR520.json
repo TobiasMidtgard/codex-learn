@@ -52,7 +52,7 @@
      "a22": -0.25
     },
     "notice": [
-     "Set $a_{11}$ and $a_{22}$ to zero. The readout says **centre** and the curves close into rings: constant magnitude, constant rate, which is exactly a balanced three-phase set seen in $\\alpha\\beta$. They creep outward by about a tenth of their radius over the drawn interval — that is the forward-Euler integrator in the sketching code, not the physics.",
+     "Set $a_{11}$ and $a_{22}$ to zero. The readout says **centre** and the curves close into rings: constant magnitude, constant rate, which is exactly a balanced three-phase set seen in $\\alpha\\beta$. Drop the integrator slider to forward Euler and the rings open into spirals — a reminder that a fixed-step solver watching a lightly damped machine will report a magnitude drift that is entirely its own.",
      "Swap the signs of the off-diagonal pair ($a_{12} = 1$, $a_{21} = -1$). Trace and determinant do not move, so the classification is unchanged, but the arrows now turn the other way. That is a negative-sequence set — the phase order reversed, which is what a drive sees when two motor leads are crossed.",
      "With the diagonals still at zero, make the off-diagonals unequal: $a_{12} = -1$, $a_{21} = 2$. The rings become ellipses. In $\\alpha\\beta$ that is an unbalanced set, and after the Park rotation what should have been a dc quantity in $dq$ is instead a component pulsating at twice the electrical frequency."
     ]

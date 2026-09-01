@@ -31,6 +31,19 @@
   --on-editor-3:#565C68;
   --on-editor-4:#3A3F49;
   --on-editor-line:rgba(255,255,255,.10);
+  /* The same argument, for the accent colours. The rule above was applied to the ink
+     and stopped there, so every curve, marker and reference line on a canvas still
+     came from --lime/--blue/--purple/--amber — which the light theme re-tints DARK,
+     for use on a light ground, while the ground underneath them stays #12151A. Against
+     that surface the light values measure lime 4.47:1, amber 3.09, blue 3.06 and purple
+     2.96, the last of those under WCAG 1.4.11's 3:1 floor for a graphical object that
+     carries meaning; the purple is the Nyquist line, the 1/f corner, the constant-VSWR
+     circle and the sliding surface. Defined only here, so both themes get 14.7, 11.8,
+     6.8 and 6.7 instead. */
+  --on-editor-lime:#C7F751;
+  --on-editor-blue:#6E9BFF;
+  --on-editor-purple:#A78BFA;
+  --on-editor-amber:#FFC66D;
   --sunk:rgba(8,9,11,0.60);
 
   --ink:#EDEFF3;
