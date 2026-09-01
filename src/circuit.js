@@ -2305,7 +2305,7 @@ function createCircuit(root, opts) {
     return copy;
   }
 
-  function P() { return typeof Sandbox !== 'undefined' ? Sandbox.palette() : { ink: '#eee', dim: '#888', faint: '#555', line: '#333', accent: '#C7F751', blue: '#6E9BFF', amber: '#FFC66D', purple: '#A78BFA', surface: '#0A0B0E' }; }
+  function P() { return typeof Sandbox !== 'undefined' ? Sandbox.palette() : { ink: '#EDEFF3', dim: '#868E9C', faint: '#78808E', rule: '#6A7280', line: 'rgba(255,255,255,.10)', accent: '#C7F751', blue: '#6E9BFF', amber: '#FFC66D', purple: '#A78BFA', surface: '#0A0B0E' }; }
 
   /* The key prefix for the drawing on screen — see the flattener. Empty at the top
      level, so every question the canvas asks of a netlist it did not open a block in
@@ -2622,11 +2622,15 @@ function createCircuit(root, opts) {
        board that is a fact about the netlist — it is why the two halves of a column
        are two nodes — and an empty row would read as holes somebody forgot to draw. */
     const cy0 = gy(p.y + BB_CHAN - 0.5), cy1 = gy(p.y + BB_CHAN + 0.5);
+    /* The wash is decoration and stays where it was: `faint` went from 1.73:1 to 4.60,
+       so holding this at 1.14 means dropping the alpha from 0.30 to 0.12. The two edges
+       are not decoration — they are the boundary the comment above is about — so they
+       take `rule`, which is the tier for a mark that means something without being read. */
     ctx.fillStyle = pal.faint;
-    ctx.globalAlpha = 0.3;
+    ctx.globalAlpha = 0.12;
     ctx.fillRect(x0 + 1.5, cy0, x1 - x0 - 3, cy1 - cy0);
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = pal.faint;
+    ctx.strokeStyle = pal.rule;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x0 + 1.5, cy0); ctx.lineTo(x1 - 1.5, cy0);
@@ -3124,8 +3128,11 @@ function createCircuit(root, opts) {
        circuit slides underneath. */
     const vx0 = ro_ ? 0 : view.px, vy0 = ro_ ? 0 : view.py;
     const vx1 = vx0 + (ro_ ? w : w / view.s), vy1 = vy0 + (ro_ ? h : h / view.s);
+    /* Held at 1.28:1, where it was: the snapping grid is the one thing on this canvas
+       that is genuinely decoration, and `faint` rising to 4.60 would have made it the
+       loudest background in the app. 0.50 -> 0.20 keeps it exactly as quiet. */
     ctx.fillStyle = pal.faint;
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.20;
     for (let X = Math.floor(vx0 / GRID) * GRID; X < vx1 + GRID; X += GRID) {
       if (X < GRID) continue;
       for (let Y = Math.floor(vy0 / GRID) * GRID; Y < vy1 + GRID; Y += GRID) {

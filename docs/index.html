@@ -28,8 +28,26 @@
      Defined only here, so both themes get the same values. */
   --on-editor:#EDEFF3;
   --on-editor-2:#9BA3B0;
-  --on-editor-3:#565C68;
-  --on-editor-4:#3A3F49;
+  /* The bottom of this ramp was a hierarchy of illegibility. --on-editor-3 was #565C68
+     (2.93:1 dark, 2.72 light) and --on-editor-4 was #3A3F49 (1.86 / 1.73), and between
+     them they are Sandbox.palette()'s `dim` and `faint` — the ink of 62 paint sites
+     across 13 visualisers, 3 tune models, the analysis plot, the schematic canvas and
+     the breadboard. 47 of those sites draw TEXT: tick labels, axis captions, MCU pin
+     names, the bar-graph range, the H/L pin tags. `dim` is also the stroke of every
+     WIRE the learner draws (circuit.js, the `cur.wires` pass) and of every plot axis.
+     Both tiers now clear WCAG AA for small text in BOTH themes, because both are used
+     for small text in both themes. The old hierarchy is re-expressed below the text
+     floor by --on-editor-rule, for marks that carry meaning without being read. */
+  --on-editor-3:#868E9C;
+  --on-editor-4:#78808E;
+  --on-editor-rule:#6A7280;
+  /* The one job on this surface that wants to sit BELOW AA on purpose: a placeholder
+     that reaches 4.5:1 stops being distinguishable from a filled field, which is the
+     decision cycle 5 recorded when it declined to darken --ink-5 and cycle 11 wrote a
+     floor of 2.5 into the budget for. It used to share --on-editor-3 with the canvas,
+     which is why raising the canvas could not be done without a name for this. The
+     value is the old --on-editor-3, unchanged. */
+  --on-editor-hint:#565C68;
   --on-editor-line:rgba(255,255,255,.10);
   /* The same argument, for the accent colours. The rule above was applied to the ink
      and stopped there, so every curve, marker and reference line on a canvas still
@@ -907,7 +925,7 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 /* 2.93 / 2.72:1 deliberately, and quieter than the 13.68:1 value it stands in for: a
    placeholder that reaches AA stops being distinguishable from a filled one, which is
    the decision cycle 5 recorded when it left --ink-5 alone rather than darkening it. */
-.nq-in input::placeholder{color:var(--on-editor-3)}
+.nq-in input::placeholder{color:var(--on-editor-hint)}
 .nq-in:focus-within{border-color:var(--lime-30)}
 .nq-u{display:grid;place-items:center;padding:0 14px;border-left:1px solid var(--on-editor-line);
   font-family:var(--mono);font-size:13px;color:var(--on-editor-2);background:var(--on-editor-sunk)}
@@ -10454,11 +10472,21 @@ const Sandbox = (function () {
        comes from an on-editor token rather than the page's. The accents used to be the
        exception — --lime/--blue/--purple/--amber are re-tinted dark for a light ground
        by the light theme, and were then painted on a surface that had stayed dark, which
-       put purple at 2.96:1 and under the 3:1 floor. */
+       put purple at 2.96:1 and under the 3:1 floor.
+
+       `dim` and `faint` were the second exception, and they lasted longer. They are the
+       ink of 62 paint sites in this file and in circuit.js, 47 of which draw TEXT — tick
+       labels, axis captions, legends, pin names, the H/L tags on an MCU — and they sat at
+       2.93:1 and 1.86:1. A tier used for small text has to clear 4.5:1 whatever it is
+       called, so both do now. What the two names used to buy — a quiet mark that is not
+       shouting for attention — is `rule`: a reference line, a channel edge, anything the
+       eye finds without reading it, at the 3:1 that WCAG 1.4.11 asks of a meaningful
+       graphic and no more. Grid and decoration stay on `line`, which is neither. */
     return {
       ink: v('--on-editor', '#EDEFF3'),
-      dim: v('--on-editor-3', '#565C68'),
-      faint: v('--on-editor-4', '#3A3F49'),
+      dim: v('--on-editor-3', '#868E9C'),
+      faint: v('--on-editor-4', '#78808E'),
+      rule: v('--on-editor-rule', '#6A7280'),
       line: v('--on-editor-line', 'rgba(255,255,255,.1)'),
       accent: v('--on-editor-lime', '#C7F751'),
       blue: v('--on-editor-blue', '#6E9BFF'),
@@ -11093,7 +11121,7 @@ Sandbox.define({
       xRange: [0, T], yRange: [0, Math.max(1.7, peak * 1.12)], xTicks: 4, yTicks: 4,
       margin: { l: 40, r: 12, t: 14, b: 28 },
     });
-    st.hline(1, st.P.faint, [3, 4]);
+    st.hline(1, st.P.rule, [3, 4]);
     st.line(pts, st.P.accent, 2);
     st.text('step response', st.x1 - 6, st.y0 + 14, st.P.faint, 'right');
     ctx.restore();
@@ -11157,7 +11185,7 @@ Sandbox.define({
       margin: { l: 46, r: 14, t: 12, b: 22 },
       xLabel: function (x) { return x >= 1 ? String(Math.round(x)) : x.toFixed(1); },
     });
-    g.hline(0, g.P.faint, [3, 4]);
+    g.hline(0, g.P.rule, [3, 4]);
     g.line(mag, g.P.accent, 2);
     g.dot(v.wn, 20 * Math.log10(v.K / (2 * v.zeta)), g.P.amber, 4);
     g.text('dB', g.x0 + 4, g.y0 + 12, g.P.faint);
@@ -11170,7 +11198,7 @@ Sandbox.define({
       margin: { l: 46, r: 14, t: 10, b: 28 },
       xLabel: function (x) { return x >= 1 ? String(Math.round(x)) : x.toFixed(1); },
     });
-    ph.hline(-90, ph.P.faint, [3, 4]);
+    ph.hline(-90, ph.P.rule, [3, 4]);
     ph.line(pha, ph.P.blue, 2);
     ph.text('degrees', ph.x0 + 4, ph.y0 + 12, ph.P.faint);
     ph.text('ω rad/s', ph.x1 - 6, ph.y1 + 20, ph.P.faint, 'right');
@@ -11400,7 +11428,7 @@ Sandbox.define({
     const a = kit.frame(ctx, w, topH, {
       xRange: [0, T], yRange: [-0.45, 1.15], xTicks: 4, yTicks: 3, margin: { l: 44, r: 14, t: 12, b: 20 },
     });
-    a.hline(0, a.P.faint, [3, 4]);
+    a.hline(0, a.P.rule, [3, 4]);
     a.line(xs, a.P.accent, 2);
     a.text('position', a.x0 + 4, a.y0 + 12, a.P.faint);
     ctx.restore();
@@ -11687,7 +11715,7 @@ Sandbox.define({
         return String(Math.round(x));
       },
     });
-    f.hline(20 * Math.log10(v.nth), f.P.faint, [4, 4]);
+    f.hline(20 * Math.log10(v.nth), f.P.rule, [4, 4]);
     f.line(pts, f.P.accent, 2);
     ctx.save();
     ctx.setLineDash([3, 4]);
@@ -15805,7 +15833,7 @@ function createCircuit(root, opts) {
     return copy;
   }
 
-  function P() { return typeof Sandbox !== 'undefined' ? Sandbox.palette() : { ink: '#eee', dim: '#888', faint: '#555', line: '#333', accent: '#C7F751', blue: '#6E9BFF', amber: '#FFC66D', purple: '#A78BFA', surface: '#0A0B0E' }; }
+  function P() { return typeof Sandbox !== 'undefined' ? Sandbox.palette() : { ink: '#EDEFF3', dim: '#868E9C', faint: '#78808E', rule: '#6A7280', line: 'rgba(255,255,255,.10)', accent: '#C7F751', blue: '#6E9BFF', amber: '#FFC66D', purple: '#A78BFA', surface: '#0A0B0E' }; }
 
   /* The key prefix for the drawing on screen — see the flattener. Empty at the top
      level, so every question the canvas asks of a netlist it did not open a block in
@@ -16122,11 +16150,15 @@ function createCircuit(root, opts) {
        board that is a fact about the netlist — it is why the two halves of a column
        are two nodes — and an empty row would read as holes somebody forgot to draw. */
     const cy0 = gy(p.y + BB_CHAN - 0.5), cy1 = gy(p.y + BB_CHAN + 0.5);
+    /* The wash is decoration and stays where it was: `faint` went from 1.73:1 to 4.60,
+       so holding this at 1.14 means dropping the alpha from 0.30 to 0.12. The two edges
+       are not decoration — they are the boundary the comment above is about — so they
+       take `rule`, which is the tier for a mark that means something without being read. */
     ctx.fillStyle = pal.faint;
-    ctx.globalAlpha = 0.3;
+    ctx.globalAlpha = 0.12;
     ctx.fillRect(x0 + 1.5, cy0, x1 - x0 - 3, cy1 - cy0);
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = pal.faint;
+    ctx.strokeStyle = pal.rule;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(x0 + 1.5, cy0); ctx.lineTo(x1 - 1.5, cy0);
@@ -16624,8 +16656,11 @@ function createCircuit(root, opts) {
        circuit slides underneath. */
     const vx0 = ro_ ? 0 : view.px, vy0 = ro_ ? 0 : view.py;
     const vx1 = vx0 + (ro_ ? w : w / view.s), vy1 = vy0 + (ro_ ? h : h / view.s);
+    /* Held at 1.28:1, where it was: the snapping grid is the one thing on this canvas
+       that is genuinely decoration, and `faint` rising to 4.60 would have made it the
+       loudest background in the app. 0.50 -> 0.20 keeps it exactly as quiet. */
     ctx.fillStyle = pal.faint;
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.20;
     for (let X = Math.floor(vx0 / GRID) * GRID; X < vx1 + GRID; X += GRID) {
       if (X < GRID) continue;
       for (let Y = Math.floor(vy0 / GRID) * GRID; Y < vy1 + GRID; Y += GRID) {
@@ -19601,7 +19636,7 @@ const Desk = (function () {
       '.dsk-in .car{font-family:var(--mono);font-size:14px;color:var(--on-editor-lime);flex:none}',
       '.dsk-in input{flex:1;min-width:0;height:42px;border:0;background:none;outline:none;',
       '  color:var(--on-editor);font-family:var(--mono);font-size:15px}',
-      '.dsk-in input::placeholder{color:var(--on-editor-3)}',
+      '.dsk-in input::placeholder{color:var(--on-editor-hint)}',
       '.dsk-mini{flex:none;height:26px;padding:0 9px;border-radius:7px;font-family:var(--mono);',
       '  font-size:10.5px;letter-spacing:.06em;color:var(--on-editor-2);border:1px solid var(--on-editor-line)}',
       '.dsk-mini:hover{color:var(--on-editor);border-color:var(--ink-4)}',
@@ -19625,7 +19660,7 @@ const Desk = (function () {
       '.dsk-ta{flex:1;min-height:0;width:100%;resize:none;border:0;outline:none;padding:14px 16px;',
       '  background:var(--editor);color:var(--on-editor);font-family:var(--mono);font-size:13px;',
       '  line-height:1.75;tab-size:2}',
-      '.dsk-ta::placeholder{color:var(--on-editor-3)}',
+      '.dsk-ta::placeholder{color:var(--on-editor-hint)}',
       '.dsk-notefoot{flex:none;display:flex;align-items:center;gap:8px;padding:8px 12px;',
       '  border-top:1px solid var(--line);background:var(--sunk);',
       '  font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}',
@@ -20992,7 +21027,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = 'ac184cca3c91';
+const BUILD_ID = '1d65c367bd61';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */

@@ -121,7 +121,7 @@
     {"name":"STATE .opt — hover against idle","kind":"state","from":".opt:hover:not(:disabled)","vs":["var(--surface-2)","var(--surface)","var(--ground)"]},
     {"name":".nq-lbl — the label above the answer box","kind":"text","fg":"var(--ink-4)","bg":["var(--surface)","var(--ground)"],"sel":".nq-lbl"},
     {"name":".nq-in input — the answer being typed","kind":"text","fg":"var(--on-editor)","bg":["var(--editor)"],"sel":".nq-in input"},
-    {"name":".nq-in input::placeholder — quieter than the value, on purpose","kind":"text","fg":"var(--on-editor-3)","bg":["var(--editor)"],"floor":2.5,"sel":".nq-in input::placeholder"},
+    {"name":".nq-in input::placeholder — quieter than the value, on purpose","kind":"text","fg":"var(--on-editor-hint)","bg":["var(--editor)"],"floor":2.5,"ceiling":3.2,"sel":".nq-in input::placeholder"},
     {"name":".nq-u — the unit beside the box","kind":"text","fg":"var(--on-editor-2)","bg":["var(--on-editor-sunk)","var(--editor)"],"sel":".nq-u"},
     {"name":".numq-nofig — a numeric unit with prose instead of a figure","kind":"text","fg":"var(--on-editor-2)","bg":["var(--editor)"],"sel":".numq-nofig"},
     {"name":".nq-given td — a given value","kind":"text","fg":"var(--ink-3)","bg":["var(--surface)","var(--ground)"],"sel":".nq-given td"},
@@ -152,7 +152,7 @@
     {"name":".dsk-send — send this result to the note","kind":"graphic","fg":"var(--ink-3)","bg":["var(--surface-solid)"],"sel":".dsk-send"},
     {"name":".dsk-prev — the live preview under the box","kind":"text","fg":"var(--ink-3)","bg":["var(--sunk)","var(--surface-solid)"],"sel":".dsk-prev"},
     {"name":".dsk-in input — the expression being typed","kind":"text","fg":"var(--on-editor)","bg":["var(--editor)"],"sel":".dsk-in input"},
-    {"name":".dsk-in input::placeholder — quieter than the value, on purpose","kind":"text","fg":"var(--on-editor-3)","bg":["var(--editor)"],"sel":".dsk-in input::placeholder","floor":2.5},
+    {"name":".dsk-in input::placeholder — quieter than the value, on purpose","kind":"text","fg":"var(--on-editor-hint)","bg":["var(--editor)"],"sel":".dsk-in input::placeholder","floor":2.5,"ceiling":3.2},
     {"name":".dsk-in .car — the prompt caret","kind":"graphic","fg":"var(--lime)","bg":["var(--editor)"],"sel":".dsk-in .car"},
     {"name":".dsk-mini — DEG/RAD, note and help","kind":"text","fg":"var(--on-editor-2)","bg":["var(--editor)"],"sel":".dsk-mini"},
     {"name":".dsk-mini.on — the one that is lit","kind":"text","fg":"var(--lime)","bg":["var(--lime-12)","var(--editor)"],"sel":".dsk-mini.on"},
@@ -164,7 +164,44 @@
     {"name":".dsk-saved — when the note was last saved","kind":"text","fg":"var(--ink-3)","bg":["var(--surface-solid)"],"sel":".dsk-saved"},
     {"name":".dsk-saved.warn — COULD NOT SAVE, the one message that must be read","kind":"text","fg":"var(--amber)","bg":["var(--surface-solid)"],"sel":".dsk-saved.warn"},
     {"name":".dsk-ta — the note itself","kind":"text","fg":"var(--on-editor)","bg":["var(--editor)"],"sel":".dsk-ta"},
-    {"name":".dsk-ta::placeholder — quieter than the note, on purpose","kind":"text","fg":"var(--on-editor-3)","bg":["var(--editor)"],"sel":".dsk-ta::placeholder","floor":2.5},
+    {"name":".dsk-ta::placeholder — quieter than the note, on purpose","kind":"text","fg":"var(--on-editor-hint)","bg":["var(--editor)"],"sel":".dsk-ta::placeholder","floor":2.5,"ceiling":3.2},
     {"name":".dsk-notefoot — the character and line count","kind":"text","fg":"var(--ink-3)","bg":["var(--sunk)","var(--surface-solid)"],"sel":".dsk-notefoot"}
+  ],
+ "canvas": {
+  "_": [
+   "Sandbox.palette() in src/studio.js: the ink of every pixel this application draws that is",
+   "not a DOM node — 13 visualisers, 3 tune models, the analysis plot, the schematic canvas and",
+   "the breadboard. It is JavaScript, so none of the CSS checks above ever reached it. `dim` sat",
+   "at 2.93:1 and `faint` at 1.86:1 while cycles 2, 5, 6, 8, 11 and 15 each measured them by",
+   "hand and handed them to the next cycle.",
+   "",
+   "`kind` is the loudest thing the tier is used FOR, and `sites` is how many lines paint with",
+   "it. The gate recounts `sites` out of src/studio.js and src/circuit.js: a tier's floor is a",
+   "claim about how that tier is used, so a count that has moved is a claim nobody re-checked.",
+   "",
+   "  text       -> 4.5:1  tick labels, axis captions, pin names, the H/L tags",
+   "  graphic    -> 3.0:1  a mark that carries meaning without being read",
+   "  decoration -> a CEILING instead of a floor: a snapping grid louder than the circuit drawn",
+   "                on it is a worse defect than one that is too quiet.",
+   "",
+   "`decorations` are painted through a globalAlpha, and the gate reads that alpha out of the",
+   "source rather than from here — the same rule as `sel` above. Raising a token without",
+   "turning the alpha down is exactly how a background becomes foreground."
+  ],
+  "tiers": [
+  {"tier":"ink","kind":"text","sites":6,"why":"values, readouts and the title on a schematic card"},
+  {"tier":"dim","kind":"text","sites":24,"why":"the working ink of every canvas: plot axes, legends, the truth trace, MCU pin names, the H/L pin tags, the bar-graph range, junction dots, and the stroke of every wire the learner draws"},
+  {"tier":"faint","kind":"text","sites":32,"why":"tick labels and axis captions on 13 visualisers and both analysis plots, at 10px — WCAG 1.4.3 small text, whatever the tier is called"},
+  {"tier":"rule","kind":"graphic","sites":6,"why":"a reference mark found by position rather than by reading it: 0 dB, -90 degrees, the thermal floor, the settling band, the breadboard channel edge"},
+  {"tier":"accent","kind":"graphic","sites":33,"why":"the selected part, a driving pin, the focus ring"},
+  {"tier":"amber","kind":"graphic","sites":24,"why":"a value outside its own range"},
+  {"tier":"blue","kind":"graphic","sites":10,"why":"a second trace"},
+  {"tier":"purple","kind":"graphic","sites":9,"why":"the Nyquist line, the 1/f corner, the constant-VSWR circle, the sliding surface"},
+  {"tier":"line","kind":"decoration","sites":10,"floor":1.0,"ceiling":1.6,"why":"the plot grid, which is behind everything and reads as texture"}
+  ],
+  "decorations": [
+  {"name":"the schematic canvas's snapping grid","file":"circuit.js","tier":"faint","anchor":"Grid dots, drawn across whatever part of the world","ceiling":1.45,"why":"decoration, and the only thing on that canvas that is. faint rose from 1.73:1 to 4.60, so holding the grid where it was meant dropping the alpha with it"},
+  {"name":"the breadboard channel wash","file":"circuit.js","tier":"faint","anchor":"The wash is decoration and stays where it was","ceiling":1.45,"why":"the sunk row is texture; its two EDGES are the fact about the netlist and they take rule"}
   ]
+ }
 }

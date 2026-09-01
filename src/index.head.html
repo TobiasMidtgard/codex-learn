@@ -28,8 +28,26 @@
      Defined only here, so both themes get the same values. */
   --on-editor:#EDEFF3;
   --on-editor-2:#9BA3B0;
-  --on-editor-3:#565C68;
-  --on-editor-4:#3A3F49;
+  /* The bottom of this ramp was a hierarchy of illegibility. --on-editor-3 was #565C68
+     (2.93:1 dark, 2.72 light) and --on-editor-4 was #3A3F49 (1.86 / 1.73), and between
+     them they are Sandbox.palette()'s `dim` and `faint` — the ink of 62 paint sites
+     across 13 visualisers, 3 tune models, the analysis plot, the schematic canvas and
+     the breadboard. 47 of those sites draw TEXT: tick labels, axis captions, MCU pin
+     names, the bar-graph range, the H/L pin tags. `dim` is also the stroke of every
+     WIRE the learner draws (circuit.js, the `cur.wires` pass) and of every plot axis.
+     Both tiers now clear WCAG AA for small text in BOTH themes, because both are used
+     for small text in both themes. The old hierarchy is re-expressed below the text
+     floor by --on-editor-rule, for marks that carry meaning without being read. */
+  --on-editor-3:#868E9C;
+  --on-editor-4:#78808E;
+  --on-editor-rule:#6A7280;
+  /* The one job on this surface that wants to sit BELOW AA on purpose: a placeholder
+     that reaches 4.5:1 stops being distinguishable from a filled field, which is the
+     decision cycle 5 recorded when it declined to darken --ink-5 and cycle 11 wrote a
+     floor of 2.5 into the budget for. It used to share --on-editor-3 with the canvas,
+     which is why raising the canvas could not be done without a name for this. The
+     value is the old --on-editor-3, unchanged. */
+  --on-editor-hint:#565C68;
   --on-editor-line:rgba(255,255,255,.10);
   /* The same argument, for the accent colours. The rule above was applied to the ink
      and stopped there, so every curve, marker and reference line on a canvas still
@@ -907,7 +925,7 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 /* 2.93 / 2.72:1 deliberately, and quieter than the 13.68:1 value it stands in for: a
    placeholder that reaches AA stops being distinguishable from a filled one, which is
    the decision cycle 5 recorded when it left --ink-5 alone rather than darkening it. */
-.nq-in input::placeholder{color:var(--on-editor-3)}
+.nq-in input::placeholder{color:var(--on-editor-hint)}
 .nq-in:focus-within{border-color:var(--lime-30)}
 .nq-u{display:grid;place-items:center;padding:0 14px;border-left:1px solid var(--on-editor-line);
   font-family:var(--mono);font-size:13px;color:var(--on-editor-2);background:var(--on-editor-sunk)}

@@ -689,11 +689,21 @@ const Sandbox = (function () {
        comes from an on-editor token rather than the page's. The accents used to be the
        exception — --lime/--blue/--purple/--amber are re-tinted dark for a light ground
        by the light theme, and were then painted on a surface that had stayed dark, which
-       put purple at 2.96:1 and under the 3:1 floor. */
+       put purple at 2.96:1 and under the 3:1 floor.
+
+       `dim` and `faint` were the second exception, and they lasted longer. They are the
+       ink of 62 paint sites in this file and in circuit.js, 47 of which draw TEXT — tick
+       labels, axis captions, legends, pin names, the H/L tags on an MCU — and they sat at
+       2.93:1 and 1.86:1. A tier used for small text has to clear 4.5:1 whatever it is
+       called, so both do now. What the two names used to buy — a quiet mark that is not
+       shouting for attention — is `rule`: a reference line, a channel edge, anything the
+       eye finds without reading it, at the 3:1 that WCAG 1.4.11 asks of a meaningful
+       graphic and no more. Grid and decoration stay on `line`, which is neither. */
     return {
       ink: v('--on-editor', '#EDEFF3'),
-      dim: v('--on-editor-3', '#565C68'),
-      faint: v('--on-editor-4', '#3A3F49'),
+      dim: v('--on-editor-3', '#868E9C'),
+      faint: v('--on-editor-4', '#78808E'),
+      rule: v('--on-editor-rule', '#6A7280'),
       line: v('--on-editor-line', 'rgba(255,255,255,.1)'),
       accent: v('--on-editor-lime', '#C7F751'),
       blue: v('--on-editor-blue', '#6E9BFF'),
@@ -1328,7 +1338,7 @@ Sandbox.define({
       xRange: [0, T], yRange: [0, Math.max(1.7, peak * 1.12)], xTicks: 4, yTicks: 4,
       margin: { l: 40, r: 12, t: 14, b: 28 },
     });
-    st.hline(1, st.P.faint, [3, 4]);
+    st.hline(1, st.P.rule, [3, 4]);
     st.line(pts, st.P.accent, 2);
     st.text('step response', st.x1 - 6, st.y0 + 14, st.P.faint, 'right');
     ctx.restore();
@@ -1392,7 +1402,7 @@ Sandbox.define({
       margin: { l: 46, r: 14, t: 12, b: 22 },
       xLabel: function (x) { return x >= 1 ? String(Math.round(x)) : x.toFixed(1); },
     });
-    g.hline(0, g.P.faint, [3, 4]);
+    g.hline(0, g.P.rule, [3, 4]);
     g.line(mag, g.P.accent, 2);
     g.dot(v.wn, 20 * Math.log10(v.K / (2 * v.zeta)), g.P.amber, 4);
     g.text('dB', g.x0 + 4, g.y0 + 12, g.P.faint);
@@ -1405,7 +1415,7 @@ Sandbox.define({
       margin: { l: 46, r: 14, t: 10, b: 28 },
       xLabel: function (x) { return x >= 1 ? String(Math.round(x)) : x.toFixed(1); },
     });
-    ph.hline(-90, ph.P.faint, [3, 4]);
+    ph.hline(-90, ph.P.rule, [3, 4]);
     ph.line(pha, ph.P.blue, 2);
     ph.text('degrees', ph.x0 + 4, ph.y0 + 12, ph.P.faint);
     ph.text('ω rad/s', ph.x1 - 6, ph.y1 + 20, ph.P.faint, 'right');
@@ -1635,7 +1645,7 @@ Sandbox.define({
     const a = kit.frame(ctx, w, topH, {
       xRange: [0, T], yRange: [-0.45, 1.15], xTicks: 4, yTicks: 3, margin: { l: 44, r: 14, t: 12, b: 20 },
     });
-    a.hline(0, a.P.faint, [3, 4]);
+    a.hline(0, a.P.rule, [3, 4]);
     a.line(xs, a.P.accent, 2);
     a.text('position', a.x0 + 4, a.y0 + 12, a.P.faint);
     ctx.restore();
@@ -1922,7 +1932,7 @@ Sandbox.define({
         return String(Math.round(x));
       },
     });
-    f.hline(20 * Math.log10(v.nth), f.P.faint, [4, 4]);
+    f.hline(20 * Math.log10(v.nth), f.P.rule, [4, 4]);
     f.line(pts, f.P.accent, 2);
     ctx.save();
     ctx.setLineDash([3, 4]);

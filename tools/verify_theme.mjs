@@ -11,7 +11,10 @@
  *   2. Contrast, in BOTH themes, recomputed from the live token tables. Budgeted per
  *      entry in tools/theme_budget.json, so a token edit that quietly drops a surface
  *      under the floor fails here rather than shipping.
- *   3. The topbar fits a 375px phone. Its furniture is fixed-width and its knobs are
+ *   3. The canvas palette. Sandbox.palette() is JavaScript rather than CSS, so none
+ *      of the above reached it, and its two quiet tiers were the oldest unfixed
+ *      defect this track had: five cycles measured them by hand and handed them on.
+ *   4. The topbar fits a 375px phone. Its furniture is fixed-width and its knobs are
  *      tokens, so the sum is computable — and it did not fit, which is why the screen
  *      title was being shrunk to nothing.
  *
@@ -263,6 +266,16 @@ const FLOOR = { text: 4.5, large: 3.0, graphic: 3.0, state: 1.1 };
       if (r + 1e-9 < floor) {
         bad('contrast', e.name + ' [' + theme + '] ' + r.toFixed(2) + ':1 is under the ' + floor + ':1 floor for ' + e.kind);
       }
+      /* A surface held below the standard floor on purpose is one whose defect is being
+         too LOUD, and a floor cannot say that. The three placeholders are the case: a
+         placeholder that reaches 4.5:1 stops being distinguishable from a filled field,
+         which is the decision cycle 5 recorded and cycle 11 wrote the 2.5 for. Until this
+         cycle they shared --on-editor-3 with the canvas, so raising the canvas would have
+         raised them too and nothing would have objected. */
+      if (e.ceiling !== undefined && r > e.ceiling + 1e-9) {
+        bad('contrast', e.name + ' [' + theme + '] ' + r.toFixed(2) + ':1 is over the ' + e.ceiling +
+          ':1 ceiling it is deliberately held under');
+      }
     }
   }
   if (clean('contrast')) ok('contrast', budget.surfaces.length + ' surfaces x 2 themes clear their floor · tightest text ' +
@@ -365,7 +378,169 @@ const FLOOR = { text: 4.5, large: 3.0, graphic: 3.0, state: 1.1 };
   else bad('drawer', 'the closed drawer is only translated off-screen, which leaves every control in it tabbable');
 }
 
+/* ---------- 6. the canvas palette, which is JavaScript and so had no gate ----------
+ *
+ * Sandbox.palette() is the ink of every pixel this application draws that is not a DOM
+ * node: 13 visualisers, 3 tune models, the analysis plot, the schematic canvas and the
+ * breadboard. It reads --on-editor-* out of the live token table, so the values ARE in
+ * the stylesheet this gate already parses — but nothing connected them, and the two
+ * quiet tiers sat at 2.93:1 and 1.86:1 while five cycles measured them by hand and
+ * handed them on. What follows is the connection.
+ *
+ *   a. Every tier's fallback literal — in studio.js's own v(name, fallback) and in the
+ *      standalone copy circuit.js keeps for when Sandbox is absent — equals the token.
+ *      They did not: circuit.js's read dim '#888' and faint '#555' against tokens of
+ *      #565C68 and #3A3F49, so the fallback path drew a DIFFERENT and, as it happens,
+ *      more legible picture than the real one.
+ *   b. Every tier clears the floor its use demands, in both themes, against --editor.
+ *   c. The paint sites are recounted from source. A tier's floor is a claim about how
+ *      it is used; if the count moves, the claim has not been re-checked. This is what
+ *      stops the next `f.text(..., P.rule)` from quietly putting text on a 3:1 tier.
+ */
+{
+  const studio = fs.readFileSync(path.join(ROOT, 'src', 'studio.js'), 'utf8');
+  const circuitSrc = fs.readFileSync(path.join(ROOT, 'src', 'circuit.js'), 'utf8');
+  const budget = JSON.parse(fs.readFileSync(BUDGET, 'utf8'));
+  const cv = budget.canvas;
+  if (!cv) bad('canvas', 'tools/theme_budget.json has no `canvas` block');
+  else {
+    /* --- a. the palette, and the two fallback tables that shadow it --- */
+    const palBody = (studio.match(/function palette\(\)\s*\{([\s\S]*?)\n  \}/) || [])[1] || '';
+    const tiers = {};
+    for (const m of palBody.matchAll(/(\w+)\s*:\s*v\('(--[\w-]+)'\s*,\s*'([^']+)'\)/g)) {
+      tiers[m[1]] = { token: m[2], fallback: m[3] };
+    }
+    if (!Object.keys(tiers).length) bad('canvas', 'could not read Sandbox.palette() out of src/studio.js');
+
+    const shadowBody = (circuitSrc.match(/Sandbox\.palette\(\)\s*:\s*\{([^}]*)\}/) || [])[1] || '';
+    const shadow = {};
+    for (const m of shadowBody.matchAll(/(\w+)\s*:\s*'([^']+)'/g)) shadow[m[1]] = m[2];
+    if (!Object.keys(shadow).length) bad('canvas', 'could not read circuit.js’s standalone fallback palette');
+
+    const same = (a, b) => {
+      const x = parseColor(a, dark), y = parseColor(b, dark);
+      return x && y && x.every((v, i) => Math.abs(v - y[i]) < 0.5);
+    };
+    let drift = 0;
+    for (const [name, t] of Object.entries(tiers)) {
+      const declared = dark[t.token];
+      if (declared === undefined) { bad('canvas', 'palette tier `' + name + '` reads ' + t.token + ', which :root does not define'); continue; }
+      if (!same(t.fallback, declared)) {
+        bad('canvas', 'palette tier `' + name + '`: the fallback ' + t.fallback + ' is not ' + t.token + ' = ' + declared +
+          ' — the no-stylesheet path would draw a different picture'); drift++;
+      }
+      if (shadow[name] === undefined) {
+        bad('canvas', 'circuit.js’s fallback palette has no `' + name + '`, so a canvas drawn without Sandbox paints it undefined'); drift++;
+      } else if (!same(shadow[name], declared)) {
+        bad('canvas', 'circuit.js’s fallback `' + name + '` is ' + shadow[name] + ', not ' + t.token + ' = ' + declared); drift++;
+      }
+    }
+    for (const name of Object.keys(shadow)) {
+      if (tiers[name] === undefined && name !== 'surface') {
+        bad('canvas', 'circuit.js’s fallback palette carries `' + name + '`, which Sandbox.palette() does not return');
+      }
+    }
+    if (!drift && clean('canvas')) {
+      ok('canvas', Object.keys(tiers).length + ' palette tiers, and both fallback tables agree with the tokens they stand in for');
+    }
+
+    /* --- b + c. the floor each tier's own use demands, and the count that claim rests on --- */
+    const HAY = studio + '\n' + circuitSrc;
+    const lines = HAY.split('\n');
+    let worst = Infinity, worstName = '';
+    for (const e of cv.tiers) {
+      const t = tiers[e.tier];
+      if (!t) { bad('canvas', 'the budget names a tier `' + e.tier + '` that Sandbox.palette() does not return'); continue; }
+      const floor = e.floor !== undefined ? e.floor : FLOOR[e.kind];
+      if (floor === undefined) { bad('canvas', e.tier + ': unknown kind "' + e.kind + '"'); continue; }
+      const shown = [];
+      for (const [theme, tbl] of [['dark', dark], ['light', light]]) {
+        const bg = flatten(e.bg || ['var(--editor)'], tbl);
+        const fg = parseColor('var(' + t.token + ')', tbl);
+        if (!bg || !fg) { bad('canvas', e.tier + ' [' + theme + ']: a colour did not resolve'); continue; }
+        let r = contrast(overlay(fg, bg), bg);
+        if (e.alpha !== undefined) r = contrast(overlay(fg.slice(0, 3).concat([e.alpha]), bg), bg);
+        shown.push(r);
+        if (e.kind !== 'decoration' && r < worst) { worst = r; worstName = e.tier + ' [' + theme + ']'; }
+        if (r + 1e-9 < floor) {
+          bad('canvas', 'P.' + e.tier + ' [' + theme + '] ' + r.toFixed(2) + ':1 is under the ' + floor +
+            ':1 floor for ' + e.kind + ' — ' + e.why);
+        }
+        if (e.ceiling !== undefined && r > e.ceiling + 1e-9) {
+          bad('canvas', 'P.' + e.tier + ' [' + theme + '] ' + r.toFixed(2) + ':1 is over the ' + e.ceiling +
+            ':1 ceiling this surface is held to — ' + e.why);
+        }
+      }
+      /* the count the floor's claim rests on */
+      const re = new RegExp('\\b(?:P|pal)\\.' + e.tier + '\\b');
+      const n = lines.filter(l => re.test(l)).length;
+      if (n !== e.sites) {
+        bad('canvas', 'P.' + e.tier + ' is painted at ' + n + ' sites, and the budget records ' + e.sites +
+          '. A tier’s floor is a claim about how it is used; re-audit the new site, then move the number.');
+      }
+      if (shown.length === 2) cv._measured = (cv._measured || []).concat([[e.tier, shown[0], shown[1], n]]);
+    }
+
+    /* --- d. the decorations, whose alpha is read out of the source --- */
+    /* A tier can be raised and a decoration painted through it raised with it, silently:
+       the grid on the schematic canvas was `faint` at globalAlpha 0.5, and `faint` going
+       from 1.73:1 to 4.60 would have taken the snapping grid from 1.27 to 2.07 — quietly
+       making the background the loudest thing behind a circuit. So the alpha comes from
+       the source, not from the budget: writing it here would describe the code instead of
+       holding it, which is the failure cycle 11 found in this gate's first version. */
+    const SRC = { 'studio.js': studio, 'circuit.js': circuitSrc };
+    const claimed = new Set();
+    for (const d of (cv.decorations || [])) {
+      const text = SRC[d.file];
+      if (!text) { bad('canvas', d.name + ': no such file "' + d.file + '"'); continue; }
+      /* Each entry names the line it is about. The first version of this loop matched from
+         the top of the file, so both decorations resolved to whichever paints first: one
+         was measured twice and the other never, and putting the grid's alpha back to 0.5
+         was ACCEPTED. `anchor` has to occur exactly once, because an anchor that matches
+         two places is the same bug wearing a different hat. */
+      const at = text.indexOf(d.anchor);
+      if (at < 0) { bad('canvas', d.name + ': the anchor ' + JSON.stringify(d.anchor) + ' is not in ' + d.file + ' — the decoration this entry holds down has been moved or rewritten'); continue; }
+      if (text.indexOf(d.anchor, at + 1) >= 0) { bad('canvas', d.name + ': the anchor ' + JSON.stringify(d.anchor) + ' occurs more than once in ' + d.file + ', so it does not identify a site'); continue; }
+      const re = new RegExp('(?:P|pal)\\.' + d.tier + '\\s*;[\\s\\S]{0,200}?globalAlpha\\s*=\\s*([\\d.]+)');
+      const m = text.slice(at).match(re);
+      if (!m) { bad('canvas', d.name + ': no `' + d.tier + '` painted through a globalAlpha after its anchor in ' + d.file); continue; }
+      /* Two entries resolving to one site is the same defect as one anchor matching two
+         places, and the check above cannot see it: each anchor is unique in the file and
+         they both still land on whichever paints first. Ask where each one LANDED. */
+      const site = d.file + ':' + (at + m.index);
+      if (claimed.has(site)) {
+        bad('canvas', d.name + ': resolves to the same paint site as an earlier entry (' + site +
+          '), so one decoration is measured twice and another is measured never');
+        continue;
+      }
+      claimed.add(site);
+      const alpha = parseFloat(m[1]);
+      const t = tiers[d.tier];
+      if (!t) { bad('canvas', d.name + ': unknown tier `' + d.tier + '`'); continue; }
+      for (const [theme, tbl] of [['dark', dark], ['light', light]]) {
+        const bg = flatten(['var(--editor)'], tbl);
+        const fg = parseColor('var(' + t.token + ')', tbl);
+        if (!bg || !fg) { bad('canvas', d.name + ' [' + theme + ']: a colour did not resolve'); continue; }
+        const r = contrast(overlay(fg.slice(0, 3).concat([alpha]), bg), bg);
+        if (r > d.ceiling + 1e-9) {
+          bad('canvas', d.name + ' [' + theme + '] is ' + r.toFixed(2) + ':1 at globalAlpha ' + alpha +
+            ', over the ' + d.ceiling + ':1 this surface is held under — ' + d.why);
+        }
+      }
+      cv._decor = (cv._decor || []).concat([[d.tier, alpha]]);
+    }
+
+    if (clean('canvas')) {
+      const total = (cv._measured || []).reduce((a, r) => a + r[3], 0);
+      ok('canvas', total + ' paint sites across ' + (cv._measured || []).length + ' tiers clear their floor in both themes · quietest ' +
+        (worst === Infinity ? 'n/a' : worst.toFixed(2) + ':1 (' + worstName + ')') + ' · ' +
+        (cv._decor || []).length + ' decorations held under their ceiling at the alpha the source declares');
+    }
+  }
+}
+
 console.log('');
 if (fails) { console.log('FAILED: ' + fails + ' problem(s).'); process.exit(1); }
 console.log('All good: theme tokens, ' + JSON.parse(fs.readFileSync(BUDGET, 'utf8')).surfaces.length +
-  ' contrast surfaces in both themes, the 375px topbar and the mobile drawer.');
+  ' contrast surfaces in both themes, the canvas palette every drawing shares, ' +
+  'the 375px topbar and the mobile drawer.');

@@ -5598,3 +5598,318 @@ as `src/app.js` builds them at HEAD and now (1911 → 1915, 0 orphaned); and the
 window checked for orphans.
 
 ---
+## Cycle 18 — TRACK 5: UI, Layout & Visual Aesthetics
+
+*(the runner labels this commit "cycle 5"; its counter restarts per run and this log's
+does not. Cycles 1–4 of the current run are entries 14–17 above.)*
+
+**Target: the canvas palette — `Sandbox.palette()` in `src/studio.js`, and the two quiet
+tiers it hands to every drawing surface in the application.** One subsystem, defined by
+what it paints rather than by where it sits: 13 visualisers, 3 tune models, the analysis
+plot, the schematic canvas and the breadboard, **62 paint sites** across `src/studio.js`
+and `src/circuit.js`. It is the only ink in the app that is not a DOM node.
+
+Chosen because it is the debt this track has named six times and taken none. Cycle 2
+measured `P.dim` at 2.93:1 and `P.faint` at 1.86:1 and handed them to Track 5 by name;
+cycle 5 re-measured them, published three candidate values and did not take them; cycles
+6, 8, 11 and 15 each re-recorded them. Cycle 11's entry closes: *"it is now the only
+Track 5 debt that four separate cycles have named without anyone taking it. It should be
+the target, not the leftovers."* This cycle is that.
+
+### Baseline, captured before any edit
+
+```
+85 circuit exercises / 360 checks · 564 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1248 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3260 per-option explanations · 6572 draws · answer in the top slot 24.5%
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui   78 driven keys, 10 things said, 15 kinds above their stamp floor
+circuit_model 1475 analyses · 84 refusals · 15 plots · 15 floors, 17 ceilings
+              386 published schematics, 365 with a DC operating point
+tune_ui      423 clamped openings · 462 targets · 105 paints · 270 drags · 493 mounts
+desk         61 expressions · Desk.css() hands the theme gate 102 lines
+theme        14 exemptions · 135 contrast surfaces x 2 themes · tightest text 4.61:1
+             (.q-hint [light]) · faintest state 1.11:1 · 3 held below the floor on
+             purpose · 74 read their ink out of the stylesheet
+build: 3 parts / 111 keys · 32/32 + 30/30 · 13 visualisers · 3 tune models · 15 symbols ·
+       62 payloads, 12967 KB · inlined 14183 KB · shell 1188 KB
+```
+
+### The attacks
+
+**4. UX & Accessibility Hardener** — taken first, as this track's brief is mostly its
+brief. Every ratio computed from the WCAG 2.1 sRGB formula against the composited stack,
+in **both** themes, before the fix and again after.
+
+- **The handed-over description was too kind, and the number was single-theme.** Five
+  cycles recorded these two tiers as *"the axis grid, tick labels and legends of 13
+  visualisers plus two canvases"*. Classified all 62 sites instead of trusting that:
+  **47 of them draw text, and `P.dim` is the stroke of every wire the learner draws.**
+  `src/circuit.js:3149` sets `strokeStyle = pal.dim` and then strokes `cur.wires` — the
+  whole netlist. It is also the MCU pin names, the H/L and `pu` pin-state tags, the
+  bar-graph range caption, the breadboard holes, the junction dots and the empty-block
+  placeholder. The primary object on the schematic canvas was painted at **2.93:1 dark
+  and 2.72:1 light**, under 1.4.11's 3:1 floor in both themes.
+- **`P.faint` is a text colour 32 times out of 38.** Tick labels and axis captions —
+  "dB", "Hz", "ω rad/s", "seconds", "thermal floor", "dB re 1 nV/√Hz", "cache size KB",
+  "miss rate %" — at 10px, so WCAG 1.4.3 small text, at **1.86 / 1.73:1.**
+- **Cycle 5's three candidate values were measured in the dark theme only, and the light
+  theme is the binding one.** `--editor` is `#0A0B0E` dark and `#12151A` light, so every
+  ratio on this surface is *lower* in the light theme. The handed-over candidates
+  re-measured in both: `#6B7280` → 4.07 **/ 3.78**, `#767D8A` → 4.75 **/ 4.42**,
+  `#7E8694` → 5.36 **/ 4.99**. **Two of the three do not clear 4.5 where it counts**, and
+  a cycle that had taken the middle one on the strength of the recorded 4.75 would have
+  shipped a light-theme failure. Corrected here rather than inherited.
+- **The reason it could not simply be raised, which is why five cycles walked past it.**
+  `--on-editor-3` was *also* the placeholder colour of `.nq-in input`, `.dsk-in input` and
+  `.dsk-ta` — three rules cycle 11 wrote a deliberate `floor: 2.5` into the budget for,
+  on the argument that a placeholder reaching AA stops being distinguishable from a filled
+  field. So the canvas and the placeholder shared one token with opposite requirements,
+  and moving it broke whichever one you were not looking at. `--on-editor-4`, by contrast,
+  had **no consumer but the canvas** — checked, not assumed: it appears exactly twice in
+  the repository, its definition and `palette()`.
+
+**The machinery finding, which is the largest thing in this cycle**
+
+**No gate had ever painted with the real palette, and that is why the defect survived six
+cycles of gates.** `tools/verify_sandbox.mjs:35` says so in its own comment: *"palette()
+reads CSS custom properties off the document, so hand it a stub that returns nothing and
+let every colour fall through to its declared fallback."* `verify_circuit_model.mjs` does
+the same. So all 747 draws, and every schematic analysis, painted with the **fallback
+literals** — and the fallbacks were not the tokens:
+
+```
+                          dark   light        the token it stood in for
+  circuit.js  dim  #888   5.55   5.16    vs   --on-editor-3  2.93 / 2.72
+  circuit.js  faint #555  2.64   2.45    vs   --on-editor-4  1.86 / 1.73
+```
+
+`circuit.js` kept its own standalone palette for when `Sandbox` is absent, and it had
+drifted since cycle 0. Every gate that exercises the drawing code was therefore looking at
+a **different and, for `dim`, twice-as-legible picture** than a browser draws. A gate that
+paints with a stand-in for the thing under test cannot see a defect in the thing under
+test. This is the same shape as cycle 11's finding — the budget describing the stylesheet
+rather than enforcing it — one layer further down.
+
+**1. Senior Educator** — no prose in a palette, so pointed at the type scale, which is the
+visual equivalent of whether a thing explains itself.
+
+- **The canvas's own type scale bottoms out below the stylesheet's.** Counted: the
+  stylesheet's smallest rule is 9.5px and there are 55 under 11px, exactly as cycle 11
+  left it. The canvas draws at **8.5px** in two places (`circuit.js:2676`, the breadboard
+  column numbers, and `:2805`, the MCU supply caption) — smaller than anything in the DOM,
+  on a surface where a browser's text zoom does nothing at all, because canvas text is not
+  text. Recorded, not fixed; see below.
+- *Checked and left:* the 10px tick labels are the plotting convention and are now legible
+  rather than merely small, which was the actual defect.
+
+**3. Simulation Auditor** — no solver in a palette, so pointed at the composite, computed
+from the source's own numbers rather than eyeballed.
+
+- **Three sites paint a quiet tier through a `globalAlpha`, and raising the token raises
+  them with it.** This is where a contrast fix turns into a visual regression, so each was
+  computed before and after rather than assumed:
+
+```
+                                    before        after, alpha unchanged     shipped
+  schematic snapping grid (faint)  1.28 / 1.27      2.06 / 2.07          0.50 -> 0.20
+  breadboard channel wash (faint)  1.14 / 1.14      1.45 / 1.49          0.30 -> 0.12
+  breadboard holes        (dim)    2.00 / 1.95      3.44 / 3.34          0.70 kept
+```
+
+  The first two are decoration and were held where they were. The third is not decoration
+  — a hole is where a lead may go — so its alpha was kept and it clears 3:1 for the first
+  time. Making the snapping grid the loudest thing behind a circuit would have been a
+  worse defect than the one being repaired.
+- *Checked and found sound:* `verify_sandbox`'s 747 draws at the extremes, `verify_tune_ui`'s
+  423 hostile openings, 105 paints at 5 widths and 270 drags, and `verify_circuit_ui`'s 78
+  driven keys all pass unmoved — a palette change cannot move them, and confirming that is
+  the point of running them.
+
+**2. Assessment Inquisitor.** No graded question in a palette, so — as in cycles 2, 5, 6
+and 11 — pointed at the one thing in scope it can judge: whether a state announces itself
+or merely exists.
+
+- *Checked and found sound, recorded so it is not re-derived:* the bar-graph's out-of-range
+  state is **not** colour alone. Over range draws a caret past the bar's end as well as
+  turning amber (`circuit.js:2731`); under range draws no bar at all; and the numeric
+  readout prints the value either way. Amber is confirmation, not the message.
+- **The two decorations were the state defect here**, and they are above: a background that
+  rises with the foreground is a state that stops announcing itself by becoming the thing
+  it sits behind.
+
+### What changed
+
+**Tokens — `src/index.head.html`, `:root` only, so no theme can override them.**
+
+| token | before | after | dark → light |
+|---|---|---|---|
+| `--on-editor-3` (`P.dim`) | `#565C68` | `#868E9C` | **2.93 → 5.96 · 2.72 → 5.54** |
+| `--on-editor-4` (`P.faint`) | `#3A3F49` | `#78808E` | **1.86 → 4.94 · 1.73 → 4.60** |
+| `--on-editor-rule` (`P.rule`) | — | `#6A7280` | 4.06 · 3.77 |
+| `--on-editor-hint` | — | `#565C68` | 2.93 · 2.72 |
+
+`--on-editor-hint` is the old `--on-editor-3`, unchanged in value and moved out of the
+ramp under a name that says what it is for. The three placeholders now read it, which is
+what let the canvas tiers move at all. **The ramp descends monotonically and every step
+below the top is now legible in both themes:** 15.89 / 7.20 / 5.54 / 4.60 / 3.77, then
+2.72 for the one job that is deliberately below AA.
+
+**A fourth tier, `P.rule`, because both old names encoded loudness and neither encoded
+kind.** `dim` and `faint` are both used for small text, so both have to clear 4.5:1
+whatever they are called — which collapses the hierarchy the two names existed to express.
+`rule` is where that hierarchy went: a mark found by position rather than by reading it,
+held to 1.4.11's 3:1 and no more. Five dashed reference lines moved onto it — 0 dB, −90°,
+the thermal floor, the settling band, and the unity line — plus the breadboard channel's
+two edges, which the code's own comment calls *"the one feature of the board that is a
+fact about the netlist"* and which were painted at 1.73:1.
+
+**Both fallback tables now agree with the tokens.** `circuit.js`'s standalone palette went
+from `{dim:'#888', faint:'#555', ink:'#eee', line:'#333'}` to the token values, and gained
+`rule`. The gates have been painting the browser's picture since.
+
+**The gate — a `canvas` section in `tools/verify_theme.mjs`, and a `canvas` block in
+`tools/theme_budget.json`.** This track's gate read CSS, and the palette is JavaScript, so
+nothing connected them. Four checks:
+
+- **Every tier's fallback equals its token**, in `studio.js`'s own `v(name, fallback)` and
+  in `circuit.js`'s standalone copy — the drift above, now held.
+- **Every tier clears the floor its own use demands**, in both themes, against `--editor`.
+- **The paint sites are recounted from source.** A tier's `kind` is a claim about how it is
+  used; if the count moves, the claim has not been re-checked. This is what stops the next
+  `f.text(…, P.rule)` from quietly putting small text on a 3:1 tier.
+- **The two decorations are held under a ceiling, at the alpha read out of the source** —
+  not out of the budget, because writing it in the budget would describe the code instead
+  of holding it, which is precisely the failure cycle 11 found in this gate's first
+  version.
+
+**And a ceiling on the contrast section**, which had only ever had floors. The three
+placeholders are surfaces whose defect is being *too loud*; a floor cannot say that, and
+until this cycle they shared a token with the canvas, so raising the canvas would have
+raised them and nothing would have objected. They now carry `"ceiling": 3.2`.
+
+**The gate was not trusted until it was seen to fail. 13 mutations, 12 it had to reject
+and one it had to pass**, each applied to the real files, run, and restored with the
+restore verified by SHA-256:
+
+```
+   1  the faint tier reverted — token AND both fallbacks, so only the floor can bite
+   2  the dim tier reverted the same way — the wires, the axes, the pin names
+   3  the rule tier dropped under 3:1 in all three files
+   4  the placeholders folded back onto the canvas tier (they get LOUDER — the ceiling)
+   5  circuit.js's fallback back to '#888', where it had been since cycle 0
+   6  studio.js's own fallback left behind when the token moved
+   7  the snapping grid's alpha back to 0.5
+   8  the breadboard channel wash back to 0.3
+   9  a new tick label painted on the 3:1 rule tier — the site count moves
+  10  the rule tier deleted from the palette while the budget still names it
+  11  --on-editor-rule removed from :root
+  12  both decorations pointed at one anchor
+  13  a comment reflowed and nothing else — the control, which passes
+```
+
+Mutations 1–3 move the token **and** both fallbacks together, deliberately: with all three
+in step the agreement check cannot be what objects, so only the contrast floor can. Without
+that pair the entry would be claiming the gate enforces a number when it only enforced
+consistency.
+
+### Found in my own work, and fixed
+
+Both were found by the mutation suite, not by re-reading the gate.
+
+- **My first decoration check measured one site twice and the other never.** It matched
+  `pal.<tier>` followed by a `globalAlpha` from the top of the file, so both entries
+  resolved to whichever paints first. **Putting the snapping grid's alpha back to 0.5 was
+  ACCEPTED**, and mutation 8 was rejected with a message naming the wrong surface — which
+  is how it was caught, because the message was wrong rather than the verdict. This is the
+  curriculum's own invariant: *a gate that skips what it did not expect is worse than no
+  gate.* Each entry now names an `anchor` and the search starts there.
+- **The fix for that was itself incomplete.** I added a check that an anchor occurs only
+  once in the file — which does not catch two *entries* sharing one anchor, since that
+  anchor is still unique. Mutation 12 was written for the repaired gate and was still
+  accepted. The gate now records where each entry **landed** and rejects a second entry
+  resolving to the same paint site.
+
+### Left alone, deliberately
+
+- **55 stylesheet rules are still under 11px, and `src/desk.js` has 6 more that cycle 11
+  never counted** — it was not wired into this gate until cycle 12. Same argument as cycle
+  11: a type-scale pass touches every screen and would have meant verifying none of them.
+  The count is unchanged at 55, measured rather than assumed.
+- **The canvas draws at 8.5px in two places**, above. Fixing it means re-laying-out the
+  breadboard's column numbering inside a fixed grid pitch, which is a layout change to the
+  board rather than a colour one, and this cycle's diff is already in three source files.
+  Recorded with the line numbers, which is more than it had.
+- **`--lime` is still used as ink in 35 places and the light theme puts most at 3.4–4.1:1.**
+  Cycle 11 counted them and declined for the reason that still holds: it is the accent
+  weight of every screen in the application, a decision about the design language rather
+  than a repair. Unchanged and unattempted here.
+- **The 61 shell surfaces that describe rather than enforce.** 135 budgeted, 74 read their
+  ink from the stylesheet. Cycle 11 built the mechanism and called back-filling the rest
+  *"the first thing the next Track 5 cycle should do"*. This cycle did not do it, and the
+  reason is that it is a strictly larger job than it looks — annotating 61 entries with a
+  `sel` each means reading 61 rules — and it competes with a defect five cycles had
+  already proved nobody would take if it stayed in the leftovers pile. The debt is
+  restated with its current number so the next cycle inherits 61 rather than 58.
+- **`palette()` runs a `getComputedStyle` per `frame()` call and there are 7 call sites.**
+  A visualiser that calls both `frame()` and `kit.palette()` reads the token table twice a
+  draw. It is bounded — `verify_tune_ui` confirms one repaint a frame — and caching it
+  means an invalidation hook on the theme toggle, which is a Track 2 change with a
+  lifecycle in it rather than a line. Recorded with the count.
+- **No author file, no `catalog/*.json`, no lesson id and no schema was touched**, so
+  `emit.py` was not run and the staleness guard is not armed. The mechanical confirmation
+  is that the payload total is **12967 KB before and after** and `git status` reports
+  nothing under `docs/programs` — no course's JSON moved, so no payload could.
+- **`docs/programs` is untouched for the same reason**, so the rolling-generation check
+  every cycle since 1 has run has nothing to check this time.
+
+### Gates, after
+
+Every pre-existing number unmoved. Three moved: the theme gate's two new `canvas` lines,
+and the two artifact sizes, by the CSS, the palette tier and the gate's own new code.
+
+```
+verify_theme         All good: 14 exemptions · 135 contrast surfaces x 2 themes —
+                     unmoved — tightest text 4.61:1 (.q-hint [light]), faintest state
+                     1.11:1, 3 held below the floor on purpose, 74 read from source
+                     canvas  10 palette tiers, both fallback tables agree with the
+                             tokens they stand in for                            [NEW]
+                     canvas  154 paint sites across 9 tiers clear their floor in both
+                             themes · quietest 3.77:1 (rule [light]) · 2 decorations
+                             held under their ceiling at the alpha the source
+                             declares                                            [NEW]
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_circuit_ui    All good: 78 driven keys and gestures, says 10 things while doing
+                     it, holds 15 kinds above their stamp floor
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_tune_ui       All good: 423 hostile openings clamped, 462 targets inside their
+                     axes, 105 paints at 5 widths, 270 drags, 493 mounts
+verify_circuits      All good: 85 circuit exercises, 360 checks · 564 labels
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_circuit_model All good: 1475 analyses, 84 refusals · 15 plots · 386 published
+                     schematics, 365 with a DC point · 15 floors, 17 ceilings
+verify_desk          All good: 61 expressions · Desk.css() hands the gate 102 lines
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3260 per-option explanations · 6572 draws · 24.5%
+verify_derivations   All good: 1248 steps across 46 courses
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12967 KB — unchanged ·
+                     inlined 14183 -> 14186 KB · shell 1188 -> 1191 KB, of 1536
+```
+
+Beyond the gates: all 62 paint sites classified by what they actually paint rather than by
+the name of the tier, which is what turned "the axis grid and some legends" into "every
+wire on the schematic canvas"; every ratio computed from the WCAG 2.1 sRGB formula against
+the composited stack in **both** themes, before and after; cycle 5's three handed-over
+candidates re-measured and **two of them falsified** for the light theme; the three
+alpha-composited surfaces computed before, after, and after retuning, so a contrast repair
+did not ship a decoration regression; the fallback tables measured to show the gates had
+been painting a different picture from the browser; and the new gate run against **13
+mutations — 12 it had to reject and one it had to pass** — which is the run that found it
+was accepting two of them.
+
+---
