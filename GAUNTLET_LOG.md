@@ -6742,3 +6742,304 @@ throughout, and this cycle is the process it launched — the claude process is 
 a child of 11729 — so the lock is this cycle's own and `emit.py` and `build.mjs` were safe
 to run. The diff is `catalog/MA121.json`, `catalog/authors/MA121.py` and the `docs/` build
 output, and nothing else.
+
+## Cycle 21 — TRACK 2: Interactive Models & Visualisers
+
+*(The runner labels this commit "cycle 2" — run D's counter, while this log keeps
+counting. Run D's "cycle 1" is this file's cycle 20.)*
+
+**Target: the schematic canvas's geometry and viewport — `paint()`, `contentBounds()`,
+`zoomFit`, the grid, and the model coordinates all four of them read, in
+`src/circuit.js`.** One subsystem, and the last piece of this track with no gate on it.
+Cycle 2 took the sandbox half of the canvas work. Cycle 8 took the circuit editor's
+**numerical** core and the analysis **plot**. Cycle 15 took the third slider surface,
+`renderTune`. Cycle 6 took the editor's input, focus and lifetime, and says in its own
+gate's header that "nothing here judges the drawing" — which was true of all four. So
+the largest drawing surface in the app, carrying 386 published schematics and 85 graded
+build exercises, had never been fed a hostile coordinate, resized mid-gesture, or driven
+faster than it repaints. That is this track's brief almost word for word, and it was the
+one surface nobody had pointed it at.
+
+### Baseline, captured before any edit
+
+```
+85 circuit exercises / 360 checks · 564 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1290 derivation steps across 46 courses
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys · circuit_model 1475 analyses, 84 refusals,
+     15 plots · 386 published schematics, 365 with a DC point
+tune_ui 21 units · 423 hostile openings · 462 targets · 270 drags · 493 mounts
+desk 61 expressions · theme 135 contrast surfaces · progress 29 hostile documents
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads, 13053 KB ·
+       inlined 14288 KB · shell 1207 KB
+```
+
+### The attacks
+
+**3. Simulation Auditor** — taken first, because this is its track and its brief. Every
+number below was measured through the shipped editor before anything was changed.
+
+- **One coordinate in a saved circuit freezes the tab, permanently, on the first press
+  of Fit.** `paint()`'s grid ran `for (X = start; X < end; X += GRID)`, and a step is
+  only a step while the numbers are small: above **2^58 = 2.882e17** adding 26 to a
+  double does not change it, so X stops advancing and the condition stays true. That is
+  world pixels; in cells it is **1.109e16**. `zoomFit` puts `view.px` at about 13 times
+  the largest coordinate in the drawing, so the reachable threshold is a coordinate near
+  2.2e16. Measured through the real editor: a wire ending at **x = 1e16 fits in 1 ms**,
+  and **x = 1e17 had not returned when the run was killed at 25 seconds**. It is not a
+  slow frame — the loop never takes a second step, there is no error, nothing to
+  interrupt, and no way out but closing the page.
+  **Reachable through a supported gesture, not through dev tools.** `sanitiseProgress`
+  lists `build` among its slots and does `out[k] = plainObject(src[k])`, which
+  shape-checks the *map* and passes every drawing inside it through **verbatim**;
+  `importProgress` fills that map from a file the learner picks off disk. `renderBuild`
+  reads `P.build[l.id]` straight into `createCircuit`'s `model`, and `createCircuit`
+  deep-copied it with `JSON.parse(JSON.stringify(...))` and drew it. Import a progress
+  file, open the exercise, press `0`.
+- **A coordinate that came back from a save as a string splits the part in two, and the
+  solver answers about the half that is not drawn.** `x - 1` coerces and `x + 1`
+  concatenates. Measured: `Netlist.pinsOf` on a resistor saved with `x: "6"` returns
+  **`[[5,4],["61",4]]`** — the left pin at cell 5, where it is drawn, and the right one
+  at cell **61** where the drawing has one at 7. The resistor is painted where it was
+  put and the netlist joins a node fifty-four cells away, so the circuit that is solved
+  and graded is not the circuit on the screen, with nothing anywhere saying so. It
+  cannot be picked up and put right either: driven through the real editor, an identical
+  part with a numeric x **drags from 5 to 8** and the string one **does not move at
+  all**, because the drawing coerces and the hit test does not.
+- **The drawing repainted once per input event, not once per frame.** Measured: **60 pan
+  moves inside one frame cost 61 full repaints**, **40 wheel notches cost 40**, and the
+  `ResizeObserver` called `paint()` directly, so a window drag repainted per layout pass.
+  One repaint at the 0.3 zoom floor on a 1200x800 canvas is **13478 `fillRect` calls**
+  against 1236 at zoom 1. This file has had a `perFrame` coalescer since it was written
+  and cycle 8 verified it for the solver; the drawing never went through it. Cycle 15
+  found and fixed the same shape in `renderTune`.
+- **`paint()` carried a second copy of `contentBounds()`.** The read-only branch — the
+  one every question diagram is drawn by — recomputed the same bounds inline, differing
+  only in its padding, so a fix applied to one of them reached half the canvases in the
+  app and not the other half. Its scale also had a ceiling (1.6) and **no floor**, so a
+  diagram whose span is large enough draws at a scale near zero: every part inside one
+  pixel, an empty box, no error.
+- **Checked and found sound, recorded so the next cycle does not re-derive them:**
+  `zoomFit`'s centring is **correct at both ends of its clamp** — a first reading called
+  it a bug because at spread 200 neither pin is on screen, and the algebra says
+  otherwise: the drawing's centre is put on the viewport's centre whether the 0.3 floor
+  bit or not, and both ends being off is what a drawing wider than the window looks like.
+  It was checked symbolically and then at five spreads through the real transform, and
+  **not** "fixed". Canvas sizing is sound at seven widths from 1600 down to 320, floored
+  at 320x260 as intended, with the backing store and the CSS size agreeing. A resize in
+  the middle of a drag moves the part by what the pointer did (5 → 7 across a narrowing
+  from 900 to 375) and the canvas follows the new box. The `ResizeObserver` observes
+  `.ckt-canvas`, whose height is settled by the flex chain rather than by its canvas
+  child, so writing the backing store cannot feed back into it — read in
+  `index.head.html`, the way cycles 2, 8 and 15 each checked their own canvas.
+  The catalogue was swept rather than assumed: **386 drawings, 0 non-numeric or
+  non-finite coordinates**, widest **EE121 at 27 x 8 cells**, tallest **EE121 at 14 x
+  19**, **0** that the 0.3 zoom floor cannot fit and **0** that would draw below quarter
+  scale — so none of the geometry defects above is reachable from published content, and
+  all of them are reachable from a learner's own saved work.
+
+**4. UX & Accessibility Hardener.**
+
+- **The canvas's accessible name never changed.** Measured: `"Schematic canvas. Press
+  Enter for the key map."` on an empty canvas and after parts were placed, identically.
+  It is `role="application"`, which means a screen reader hands every key to this file
+  and announces the name as the whole description of what the learner is working on. The
+  status line announces each action as it happens, which serves somebody performing the
+  actions and nobody who *arrives* — a learner returning to saved work, or tabbing back
+  from the value box, had no way to ask what is on the drawing. Cycle 8 called the
+  analysis plot "the only canvas left in the app with no accessible name" and gave it one
+  built from what it drew; cycle 15 did the same for the tune plot. This is the one after
+  those two, and the biggest.
+- **"Fitted the drawing to the window" was said whether it had been or not** — by the
+  key. The toolbar button said **nothing at all**, so the same action announced itself
+  through one door and was silent through the other.
+
+**1. Senior Educator** and **2. Assessment Inquisitor** have no prose and no graded
+question in a viewport, so both were pointed at the thing in scope they can judge —
+whether what the editor says **explains** or merely **announces**, the standard cycle 8
+set with the solver's failure messages and cycle 15 carried into the tune refusal. The
+fit announcement now reports the zoom it reached, which is the one thing the learner
+cannot see, and when the floor bites it says *why* the canvas looks the way it does
+rather than claiming a success: *"Fitted as far as the zoom goes, 30 per cent. The
+drawing is wider than the window can show at that zoom, so this is the middle of it."*
+
+### What changed
+
+**`src/circuit.js` only.** No author file, no `catalog/*.json`, no lesson id, no schema.
+
+| Fix | Before | After |
+|---|---|---|
+| a handed model | deep-copied and drawn, unvalidated | `sanitiseDrawing` — every cell a bounded number, or the part is not there |
+| a coordinate of 1e17 | Fit froze the tab, no way out | dropped on load; Fit returns in 1 ms |
+| `x: "6"` | pins at 5 and `"61"`, undraggable | pins at 5 and 7, drags |
+| the grid | `X += GRID`, unbounded | counted, capped, and skipped below 5px spacing |
+| a pan / wheel / band / resize | 61, 40, 50, 30 repaints a frame | **1** each |
+| the read-only branch | its own copy of `contentBounds`, no scale floor | one bounds function, floor 0.08 |
+| the canvas name | fixed, on `role="application"` | parts, wires, selection and zoom, rewritten only when they move |
+| Fit | key lied, button silent | one sentence, reporting the zoom and saying when it could not fit |
+
+**`sanitiseDrawing`, and where the bound came from.** `CELL_LIMIT` is **1e6 cells** — the
+widest published drawing is 27 cells, counted, so it is four orders above anything real
+and, at the viewport `zoomFit` can build from it, **1.11e10 times below** where the
+arithmetic goes (worst reachable `|view.px|` + viewport width is 2.600e7 against
+2.882e17). The rule `VALUE_CEIL` is set by, applied to geometry: reject the impossible,
+do not police the unusual. A part whose cell cannot be recovered is **dropped, never
+moved to the origin** — `Number(null)`, `Number(false)` and `Number('')` are all 0, so
+the lazy version of this guard puts the part on top of whatever is already at the origin
+and the netlist joins them: a wrong circuit that looks like a right one, which is the
+defect the string case had already produced. A part that is gone is visible. Block ports
+and nested `inner` drawings go through the same rule, bounded by `DRAW_DEPTH = 8` —
+the number `Netlist.flatten` already stops at, rather than a second opinion about
+nesting. `value` goes through the existing `clampValue`, so a saved capacitance of 1e308
+lands on `VALUE_CEIL.C` instead of reaching the stamp.
+
+**Order matters, and it is written down.** The sanitiser runs **before** the JSON deep
+copy and on the raw object, because `JSON.stringify` turns `NaN` into `null` and `null`
+is a value `Number()` reads as **zero** — copying first would convert "this part has no
+position" into "this part is at the origin" before anything could reject it.
+
+**A new gate — `tools/verify_circuit_view.mjs`.** Eight sections, driving the shipped
+`createCircuit` rather than a copy of it: 26 hostile coordinate shapes recovered or
+dropped and never moved to the origin, with ports, nesting and non-geometry fields held;
+the whole catalogue required to pass through the guard **unchanged**; the arithmetic
+threshold asserted against `CELL_LIMIT` and seven drawings at and past it required to
+return on a clock; 14 mounts at seven widths in both modes plus a drag across a resize;
+150 gestures inside one frame required to be one repaint each, and a repaint queued
+before `dispose()` required not to run; the canvas required to name what it drew, to
+follow the zoom, and **not** to rewrite the name when nothing moved; Fit required to
+report the empty, the fitting and the too-wide case differently and to centre at five
+spreads; and all 386 published schematics painted and required to land inside their own
+canvas **at the transform `paint()` actually set**, spied off the context rather than
+recomputed — a gate that rebuilds the arithmetic it is checking passes exactly when its
+copy and the original are wrong the same way.
+
+It brings a **ResizeObserver the gate can fire**. The two older editor gates pass
+`undefined` for it, so the resize path — the one this track's brief names outright — had
+never been driven by anything. A browser does not repaint a canvas because its box moved;
+it calls this.
+
+### Verification beyond the gates
+
+**The gate was not trusted until it had been seen to fail: 16 mutations, and the
+unmodified tree as a control. 15 rejected.** The sanitiser bypassed; `cellOf` trusting
+bare `Number()`; the size bound dropped; `CELL_LIMIT` raised past the arithmetic; a
+part with no position placed at the origin; wires no longer checked; the pan repainting
+per event; the coalescer made a pass-through; the resize observer repainting per
+callback; the canvas name suppressed; the name written on every frame; Fit claiming a fit
+it did not have; Fit no longer centring; the read-only branch no longer fitting; and the
+`rot` normalisation restored on content that is already right.
+
+**The sixteenth passed, it was labelled in the mutation table as expected to pass before
+the run, and the reason is a measured number rather than a shrug.** Putting the grid loop
+back to `X += GRID` while leaving `CELL_LIMIT` in place is caught by nothing, because
+with the coordinates bounded the walked loop **cannot** hang: the worst viewport
+`zoomFit` can construct is 2.600e7 against a threshold of 2.882e17, a margin of 1.11e10.
+The two guards are independent, and removing *either* one on its own is caught — the
+raised limit by the arithmetic assertion, the removed limit by the trust section. What
+the gate cannot distinguish is redundancy, and that is the honest description of it.
+
+**Two weaknesses were found in the gate by running it, and repaired before the mutation
+pass.** Its resize section proved nothing, because the stub had no `ResizeObserver` and
+the canvas simply kept the size from its first paint — the "at 1600x900 the canvas is
+900" failures were the gate's, not the editor's. And its catalogue section recomputed
+paint()'s transform instead of reading it, which is a gate marking its own homework.
+
+**One defect was found in my own work by the gate, on its first run.** The sanitiser
+added `rot: 0` to every part that did not carry one — **1081 parts across the 386
+published drawings**, classified by diff rather than eyeballed. `turnsOf` already reads a
+missing `rot` as zero, so it bought no behaviour at all, and it would have been written
+back into the learner's save on the next edit. A guard is measured by what it does to
+what is already right, and the right answer there is nothing. Now: **386 of 386
+byte-identical through the guard.**
+
+Every defect above was measured before it was fixed and re-measured after: the 25-second
+non-return, the `[[5,4],["61",4]]`, the part that would not drag, the 61 / 40 / 50 / 30
+repaints against 1 each, and the static canvas name. The 13478 `fillRect` at the zoom
+floor was re-measured too and is **unchanged** — the density cut-off does not bite at 0.3,
+where the dots are 7.8px apart, and the comment saying so was corrected when the numbers
+came back, because the first draft claimed a saving that does not happen. What made that
+number stop mattering is the coalescer.
+
+### Left alone, deliberately
+
+- **`sanitiseProgress` still passes every saved drawing through verbatim**, and that is
+  the door all of this came through. It was closed in `createCircuit` instead, on
+  purpose: the editor sanitising its own input closes **all three** doors at once — the
+  build exercise, the Playground's `circuit.json`, and a question's authored diagram —
+  where a fix in the store closes one. It is also the architecture the other two
+  renderers already have, cycle 2's clamped `initial` and cycle 15's clamped saved
+  slider. The store is Track 6's ground and has its own gate; recorded with the exact
+  line (`out[k] = plainObject(src[k])`) so the next cycle there starts from it.
+- **The zoom floor was not lowered so that Fit could always fit.** `zoomTo` clamps to
+  [0.3, 4] and a second, lower range only for Fit would make `+` and `-` jump afterwards.
+  No published drawing reaches the floor — 0 of 386, measured — so the honest
+  announcement is the whole of what was owed here.
+- **`P.dim` at 2.93:1 and `P.faint` at 1.86:1 on every canvas.** Cycle 2 measured them
+  and handed them to Track 5; cycles 5, 6, 8 and 15 each re-recorded them without taking
+  them. This cycle adds nothing new to the list and takes it no further, for the reason
+  that has held every time: changing them changes the visual weight of 13 visualisers and
+  three more canvases, which is a decision about the design language.
+- **The MCU sketch panel is still unaudited**, as cycles 6, 8 and 15 each left it.
+  Nothing here reaches it: `paintMcu` draws a part body through the same transform, and
+  the sanitiser bounds the cell that body is drawn at, which is a fix it receives rather
+  than a change made to it.
+- **`plotKey` is still vestigial on EE111 M7 and M10** — cycle 15's note, unchanged,
+  because removing the field still means re-emitting the course for no behaviour.
+- **`sliding-mode` still keeps forward Euler.** Cycle 2's finding, still deliberate.
+- **No `emit.py` run, and no author file, `catalog/*.json`, lesson id or schema touched.**
+  The staleness guard is not armed, and the payload total is **unchanged at 13053 KB**,
+  which is the mechanical confirmation that no content moved. `git status` reports **0
+  changes under `catalog/` and 0 under `docs/programs`**, checked rather than assumed.
+
+### Gates, after
+
+Every pre-existing number unmoved. The only new numbers are the new gate's; the only two
+that moved are the artifact sizes, by exactly the source that was added.
+
+```
+verify_circuit_view  All good: 26 hostile coordinates held off the drawing · 386 published
+                     drawings unchanged by the guard · 7 drawings at and past the
+                     arithmetic return, the grid step asserted against 2.882e+17 · 420
+                     mounts at 7 widths in both modes · 150 gestures, one repaint a
+                     frame · the canvas names what it drew · 386 schematics inside
+                     their own box                                              [NEW]
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_circuit_model All good: 1475 analyses, 84 refusals · 15 plots · 386 published
+                     schematics, 365 with a DC point, all three analyses
+verify_circuits      All good: 85 circuit exercises, 360 checks · 564 labels
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_tune_ui       All good: 21 tune units · 423 hostile opening values · 462 targets
+                     · 105 paints · 270 drags · 493 mounts
+verify_derivations   All good: 1290 steps across 46 courses
+verify_desk          All good: 61 expressions at the extremes
+verify_theme         All good: 135 contrast surfaces x 2 themes
+verify_progress      All good: 6 unload writes · 29 hostile documents · 7 merges
+                     · 12 accessibility contracts
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 13053 KB — unchanged ·
+                     inlined 14288 -> 14301 KB · shell 1207 -> 1220 KB, of 1536
+```
+
+The pre-existing gates were compared on the figures they report, which are reproduced
+above against the baseline block at the top of this entry and match it line for line; a
+byte-level diff of their output was not run, and that is stated rather than implied.
+
+Beyond the gates: **16 mutations the new gate was run against and one clean control**,
+15 rejected and the 16th predicted, labelled and explained with the margin that makes it
+redundant; two weaknesses found in the gate by running it and repaired before that pass;
+the `rot: 0` regression found by the gate in my own work and classified by diff across
+1081 parts; the catalogue swept for coordinate shapes, drawing spans and fit scales
+before any bound was chosen; and the payload window checked at 66 files on disk with 0
+changes under `docs/programs`.
+
+**A note on the working tree.** The runner's lock (`.gauntlet.pid`, pid 11729) was live
+throughout and this cycle is the process it launched, so `build.mjs` was safe to run. The
+diff is `src/circuit.js`, the new `tools/verify_circuit_view.mjs`, and the `docs/` build
+output, and nothing else.
+
+---

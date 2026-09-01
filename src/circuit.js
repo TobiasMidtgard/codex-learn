@@ -750,6 +750,115 @@ function clampValue(kind, v, fallback) {
    about which way round a part is, and one function is how they are made to. */
 function turnsOf(p) { return ((((p.rot || 0) | 0) % 4) + 4) % 4; }
 
+/* ---- a drawing the editor was handed is not a drawing it can trust ----
+ *
+ * A model reaches createCircuit from four doors and only one of them is authored: a
+ * lesson's `start`, a question's figure, the Playground's saved circuit, and
+ * `P.build[id]` — the learner's own saved work. That last one comes back through
+ * `sanitiseProgress`, which shape-checks the map and passes every drawing inside it
+ * through **verbatim**, and `importProgress` fills that map from a file on disk. So
+ * arbitrary JSON reaches this editor through a supported gesture, and until now the
+ * editor deep-copied it and drew it. Both of the following were measured through the
+ * shipped editor before this was written.
+ *
+ *   * A COORDINATE LARGE ENOUGH TO STOP ARITHMETIC. paint()'s grid ran
+ *     `for (X = ...; X < ...; X += GRID)`, and above 2^58 — 2.882e17 — adding 26 to a
+ *     double does not change it. zoomFit puts the viewport at about 13 times the
+ *     largest coordinate, so a wire ending at x = 1e17 froze the tab on the first press
+ *     of Fit. Not slowly: the loop never takes a second step, and there is no way out
+ *     of it but closing the page. x = 1e16 returned in 1 ms; 1e17 had not returned when
+ *     the run was killed at 25 seconds.
+ *
+ *   * A COORDINATE THAT IS A STRING. `x - 1` coerces and `x + 1` concatenates, so a
+ *     part saved with x: "6" reports its pins at cells 5 and **"61"**. The resistor is
+ *     drawn where it was put and the netlist joins a node 55 cells away — the solver
+ *     answering about a circuit that is not the one on the screen, which is the worst
+ *     shape a defect can take here. It cannot be picked up and moved either: measured,
+ *     an identical part with a numeric x drags from 5 to 8 and the string one does not
+ *     move at all.
+ *
+ * The bound is on the SIZE and it is enormous on purpose. The widest drawing in the
+ * whole catalogue is 27 cells across and the tallest 19 — counted, not estimated — so a
+ * million is four orders above anything real and ten orders below where the arithmetic
+ * goes. The job is to reject the impossible, not to police the unusual: the rule
+ * VALUE_CEIL is set by, applied to geometry.
+ */
+const CELL_LIMIT = 1e6;
+const DRAW_DEPTH = 8;        /* blocks nest, and Netlist.flatten stops at the same number */
+
+function cellOf(v) {
+  /* Only a number, or a string that is one. Number() alone would be worse than no check
+     at all here: Number(null), Number(false) and Number('') are all 0, so a coordinate
+     that is missing would become the coordinate ZERO — a part silently moved to the
+     origin, on top of whatever is already there, and joined to it by the netlist. A
+     dropped part is visible; a moved one is a different circuit that looks fine. */
+  if (typeof v !== 'number' && typeof v !== 'string') return null;
+  if (typeof v === 'string' && !v.trim()) return null;
+  const n = Math.round(Number(v));
+  return isFinite(n) && Math.abs(n) <= CELL_LIMIT ? n : null;
+}
+function pointOf(pt) {
+  if (!Array.isArray(pt)) return null;
+  const x = cellOf(pt[0]), y = cellOf(pt[1]);
+  return x === null || y === null ? null : [x, y];
+}
+function sanitiseDrawing(m, depth) {
+  const out = { parts: [], wires: [] };
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return out;
+  /* everything that is not geometry is carried across untouched — `env`, a block's
+     title and description, whatever a later kind adds — because this function's job is
+     the coordinates and a sanitiser that silently drops fields is its own defect */
+  Object.keys(m).forEach(function (k) {
+    if (k !== 'parts' && k !== 'wires' && k !== '__proto__') out[k] = m[k];
+  });
+  const d = (depth || 0) + 1;
+  (Array.isArray(m.parts) ? m.parts : []).forEach(function (p) {
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return;
+    const x = cellOf(p.x), y = cellOf(p.y);
+    /* A part whose cell cannot be recovered is dropped, not moved to the origin. Moved,
+       it would land on top of whatever is already there and the netlist would join it —
+       a wrong circuit that looks like a right one, which is exactly what the string case
+       above already produced. Dropped, the drawing is short one part and the learner can
+       see that it is. */
+    if (x === null || y === null) return;
+    const q = {};
+    Object.keys(p).forEach(function (k) { if (k !== '__proto__') q[k] = p[k]; });
+    q.x = x; q.y = y;
+    /* Normalised only where it is written. `rot` absent already means zero everywhere —
+       turnsOf((p.rot || 0)) — so adding it would change 1081 parts across the 386
+       published drawings for no behaviour at all, and would write the difference back
+       into the learner's save on the next edit. A guard is measured by what it does to
+       what is already right, and the right answer there is nothing. */
+    if (p.rot !== undefined) q.rot = turnsOf(p);
+    if (q.value !== undefined) {
+      const k = PART_KINDS[q.kind];
+      q.value = clampValue(q.kind, Number(q.value), k ? k.def : 0);
+    }
+    /* A block's ports are cells as well, measured from the block's own origin, and a
+       port off at 1e17 reaches paint() through pinsOf exactly as a part does. */
+    if (Array.isArray(p.ports)) {
+      q.ports = p.ports.map(function (port) {
+        if (!port || !Array.isArray(port.cells)) return port;
+        return Object.assign({}, port, { cells: port.cells.map(pointOf).filter(Boolean) });
+      });
+    }
+    if (p.inner) {
+      /* Deeper than the netlist will flatten is a drawing nothing can solve, so it is
+         emptied rather than carried — and the recursion is bounded by the same number
+         the solver bounds itself by rather than by a second opinion about nesting. */
+      q.inner = d < DRAW_DEPTH ? sanitiseDrawing(p.inner, d) : { parts: [], wires: [] };
+    }
+    out.parts.push(q);
+  });
+  (Array.isArray(m.wires) ? m.wires : []).forEach(function (wr) {
+    if (!wr || typeof wr !== 'object') return;
+    const a = pointOf(wr.a), b = pointOf(wr.b);
+    if (a === null || b === null) return;
+    out.wires.push({ a: a, b: b });
+  });
+  return out;
+}
+
 /* The two ends of a body and its control pin, in the words the drawing puts them in. */
 function pinWords(p) {
   return [['left', 'right', 'above'], ['top', 'bottom', 'to the right'],
@@ -2084,9 +2193,13 @@ let cktUid = 0;
 function createCircuit(root, opts) {
   opts = opts || {};
   const GRID = 26;
-  const model = opts.model && opts.model.parts
-    ? JSON.parse(JSON.stringify(opts.model))
-    : { parts: [], wires: [] };
+  /* Two separate jobs, in this order. The sanitiser makes the drawing one this file can
+     survive; the deep copy makes editing it stop short of a lesson's own `start`. The
+     sanitiser has to run FIRST and on the raw object: JSON.stringify turns NaN into
+     null, and null is a value Number() reads as ZERO, so copying first would convert
+     "this part has no position" into "this part is at the origin" before anything got
+     the chance to reject it. */
+  const model = JSON.parse(JSON.stringify(sanitiseDrawing(opts.model, 0)));
   /* One counter for the whole tree, not one per drawing. Ids inside a block are
      prefixed before they reach the solver and need only be unique among their own
      siblings, but ungrouping tips a block's contents out among the parent's — and two
@@ -2370,8 +2483,8 @@ function createCircuit(root, opts) {
   }
 
   function zoomTo(scale, anchorSx, anchorSy) {
-    const ns = Math.max(0.3, Math.min(4, scale));
-    if (anchorSx === undefined) { view.s = ns; paint(); return; }
+    const ns = Math.max(0.3, Math.min(4, isFinite(scale) ? scale : 1));
+    if (anchorSx === undefined) { view.s = ns; paintSoon(); return; }
     /* keep the point under the cursor still: it is the difference between zooming
        and being thrown across the drawing */
     const before = toWorld(anchorSx, anchorSy);
@@ -2379,19 +2492,35 @@ function createCircuit(root, opts) {
     const after = toWorld(anchorSx, anchorSy);
     view.px += before[0] - after[0];
     view.py += before[1] - after[1];
-    paint();
+    /* A wheel is a continuous gesture — a trackpad sends notches faster than a frame,
+       and 40 inside one frame were 40 full repaints. */
+    paintSoon();
   }
 
+  /* Whether the last fit had to stop at the zoom floor with the drawing still overflowing
+     the window. Read by the announcement, so what the learner is told matches what the
+     canvas did. */
+  let fitShort = false;
   function zoomFit() {
     const b = contentBounds();
     const box = cv.parentElement.getBoundingClientRect();
     const w = Math.max(320, box.width), h = Math.max(260, box.height);
-    if (!b) { view = { s: 1, px: 0, py: 0 }; paint(); return; }
+    if (!b) { view = { s: 1, px: 0, py: 0 }; fitShort = false; paint(); return; }
     const pad = 1.5;
     const needW = (b.x1 - b.x0 + pad * 2) * GRID, needH = (b.y1 - b.y0 + pad * 2) * GRID;
-    view.s = Math.max(0.3, Math.min(4, Math.min(w / needW, h / needH)));
+    const want = Math.min(w / needW, h / needH);
+    view.s = Math.max(0.3, Math.min(4, want));
     view.px = gx(b.x0 - pad) - (w / view.s - needW) / 2;
     view.py = gy(b.y0 - pad) - (h / view.s - needH) / 2;
+    /* The centring is correct even when the zoom floor bites — the drawing's centre is
+       put on the viewport's centre either way, which was checked algebraically rather
+       than assumed after a first reading called it a bug. What is NOT correct is calling
+       that "fitted": below 0.3 the drawing is wider than the window can hold, so the
+       middle is shown and both ends are off, and for a sparse drawing the middle is
+       empty. The caller says so rather than reporting a success it did not have.
+       No published drawing reaches this: the widest of the 386 in the catalogue is 27
+       cells, and the floor does not bite until about 112. */
+    fitShort = want < 0.3;
     paint();
   }
 
@@ -3094,25 +3223,27 @@ function createCircuit(root, opts) {
     /* A diagram is a question's illustration, so cropping it is not a cosmetic
        failure — the probe the question asks about was falling off the right-hand edge
        at ordinary laptop widths. The editor can scroll and pan; a diagram cannot, so
-       it scales itself to fit and centres what is left. */
-    if (ro_ && cur.parts.length) {
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      const see = function (px, py) {
-        if (px < x0) x0 = px; if (px > x1) x1 = px;
-        if (py < y0) y0 = py; if (py > y1) y1 = py;
-      };
-      cur.parts.forEach(function (p2) {
-        Netlist.pinsOf(p2).forEach(function (pt) { see(pt[0], pt[1]); });
-        see(p2.x, p2.y);
-        if (bodyOf(p2)) see(p2.x + bodyW(p2), p2.y + bodyH(p2));
-      });
-      cur.wires.forEach(function (wr) { see(wr.a[0], wr.a[1]); see(wr.b[0], wr.b[1]); });
+       it scales itself to fit and centres what is left.
+       The bounds come from contentBounds() rather than from a second copy of it. There
+       were two, differing only in their padding, and a fix applied to one of them was a
+       fix that reached half the canvases in the app. */
+    let roScale = 1, roX0 = 0, roY0 = 0;
+    const rob = ro_ && cur.parts.length ? contentBounds() : null;
+    if (rob) {
       const pad = 1.2;
-      const needW = (x1 - x0 + pad * 2) * GRID, needH = (y1 - y0 + pad * 2) * GRID;
-      const s2 = Math.min(w / needW, h / needH, 1.6);
-      ctx.setTransform(dpr * s2, 0, 0, dpr * s2,
-        dpr * ((w - needW * s2) / 2 - (x0 - pad - originX) * GRID * s2 - GRID * s2),
-        dpr * ((h - needH * s2) / 2 - (y0 - pad - originY) * GRID * s2 - GRID * s2));
+      const needW = (rob.x1 - rob.x0 + pad * 2) * GRID, needH = (rob.y1 - rob.y0 + pad * 2) * GRID;
+      /* A floor as well as a ceiling. The ceiling was here because a two-part diagram
+         blown up to fill a laptop is a cartoon; the floor is here because the other end
+         had nothing at all, and a diagram whose span is large enough draws at a scale
+         near zero — every part of it inside one pixel, an empty box with no error. No
+         published diagram reaches it (the widest of the 386 is 27 cells and the deepest
+         it goes is 1.18), so this bounds a case content cannot currently produce, which
+         is the only time to add a bound cheaply. */
+      roScale = Math.max(0.08, Math.min(w / needW, h / needH, 1.6));
+      roX0 = (rob.x0 - pad - originX) * GRID + GRID - (w / roScale - needW) / 2;
+      roY0 = (rob.y0 - pad - originY) * GRID + GRID - (h / roScale - needH) / 2;
+      ctx.setTransform(dpr * roScale, 0, 0, dpr * roScale,
+        -roX0 * roScale * dpr, -roY0 * roScale * dpr);
     }
 
     /* The editor's viewport. The read-only branch above has already set its own
@@ -3125,22 +3256,50 @@ function createCircuit(root, opts) {
     /* Grid dots, drawn across whatever part of the world is currently visible rather
        than across the canvas: at any zoom other than 1 those are different regions,
        and drawing the canvas one leaves the dots pinned to the screen while the
-       circuit slides underneath. */
-    const vx0 = ro_ ? 0 : view.px, vy0 = ro_ ? 0 : view.py;
-    const vx1 = vx0 + (ro_ ? w : w / view.s), vy1 = vy0 + (ro_ ? h : h / view.s);
-    /* Held at 1.28:1, where it was: the snapping grid is the one thing on this canvas
-       that is genuinely decoration, and `faint` rising to 4.60 would have made it the
-       loudest background in the app. 0.50 -> 0.20 keeps it exactly as quiet. */
-    ctx.fillStyle = pal.faint;
-    ctx.globalAlpha = 0.20;
-    for (let X = Math.floor(vx0 / GRID) * GRID; X < vx1 + GRID; X += GRID) {
-      if (X < GRID) continue;
-      for (let Y = Math.floor(vy0 / GRID) * GRID; Y < vy1 + GRID; Y += GRID) {
-        if (Y < GRID) continue;
-        ctx.fillRect(X - 0.5, Y - 0.5, 1, 1);
+       circuit slides underneath.
+       The scale is the drawn one — the read-only branch fits to the box and has its
+       own — so the region asked for is the region the transform will actually map,
+       rather than the editor's viewport borrowed for a picture that is not using it. */
+    const dscale = ro_ ? roScale : view.s;
+    const vx0 = ro_ ? roX0 : view.px, vy0 = ro_ ? roY0 : view.py;
+    const vx1 = vx0 + w / dscale, vy1 = vy0 + h / dscale;
+    /* Counted, not walked. `for (X = start; X < end; X += GRID)` is a loop whose step
+       is only a step while the numbers are small: above 2^58 a double does not change
+       when 26 is added to it, so X stops advancing, the condition stays true and the
+       tab is gone — no error, no slow frame, nothing to interrupt. That is not a
+       hypothetical. zoomFit puts view.px at about 13 times the largest coordinate in
+       the drawing, so one wire ending at x = 1e17 in a saved circuit froze the page on
+       the first press of Fit, measured. The coordinates are bounded now (see
+       sanitiseDrawing), and this loop is bounded too, because "the caller is careful"
+       is not a property a loop can rely on and this caller was not.
+       The density cut-off below is NOT a saving at the zoom the editor reaches: at the
+       0.3 floor the dots are 7.8px apart, and the grid there costs 13478 fillRect calls
+       a repaint against 1236 at zoom 1 — measured before and after, unchanged, because
+       0.3 is above the cut-off. What made that number stop mattering is the coalescer,
+       which holds it to one repaint a frame instead of one an event. The cut-off is here
+       for the read-only branch, whose scale now has a floor of 0.08 and whose dots would
+       be a fifth of a pixel apart — a tint, not a snapping guide — and as the backstop
+       that keeps this loop bounded whatever a later caller does to the viewport. */
+    const GRID_MIN_PX = 5;      /* dots closer than this are mush, not a snapping guide */
+    const GRID_MAX = 20000;     /* a backstop, an order above the densest honest grid */
+    if (GRID * dscale >= GRID_MIN_PX) {
+      const c0 = Math.max(1, Math.floor(vx0 / GRID)), c1 = Math.floor(vx1 / GRID) + 1;
+      const r0 = Math.max(1, Math.floor(vy0 / GRID)), r1 = Math.floor(vy1 / GRID) + 1;
+      const cols = Math.min(Math.max(0, c1 - c0 + 1), GRID_MAX);
+      const rows = Math.min(Math.max(0, r1 - r0 + 1), GRID_MAX);
+      /* Held at 1.28:1, where it was: the snapping grid is the one thing on this canvas
+         that is genuinely decoration, and `faint` rising to 4.60 would have made it the
+         loudest background in the app. 0.50 -> 0.20 keeps it exactly as quiet. */
+      ctx.fillStyle = pal.faint;
+      ctx.globalAlpha = 0.20;
+      for (let i = 0; i < cols; i++) {
+        const X = (c0 + i) * GRID;
+        for (let j = 0; j < rows; j++) {
+          ctx.fillRect(X - 0.5, (r0 + j) * GRID - 0.5, 1, 1);
+        }
       }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
 
     /* Boards go down before the wires and before the parts, because that is the order
        they go down on a desk: the board is the ground everything else is built on. A
@@ -3241,6 +3400,50 @@ function createCircuit(root, opts) {
     /* The hover card goes on last and outside the viewport transform, so it is the
        same size at every zoom and nothing is drawn over it. */
     paintTip(pal, w, h);
+    describeCanvas();
+  }
+
+  /* One repaint a frame, however fast the input arrives.
+   *
+   * Every continuous gesture on this canvas — a pan, a wheel, a drag, a rubber band,
+   * a resize — repainted synchronously per event, and a pointer can outrun a frame.
+   * Measured through the shipped editor: 60 pan moves inside one frame cost 61 full
+   * repaints and 40 wheel notches cost 40, while one repaint at the 0.3 zoom floor on a
+   * 1200x800 canvas was 13478 fillRect calls. The solver has been coalesced through
+   * perFrame since it was written, for exactly this reason; the drawing never was.
+   *
+   * Discrete actions keep calling paint() directly. Placing a part, pressing Escape or
+   * tabbing away happen once, and there is nothing to collapse — deferring them only
+   * makes them later. */
+  const paintSoon = perFrame(function () { paint(); });
+
+  /* What the canvas calls itself, rebuilt from what was just drawn.
+   *
+   * role="application" with a fixed name is what this was: "Schematic canvas. Press
+   * Enter for the key map." on an empty canvas and on a finished twelve-part filter
+   * alike — measured, unchanged across placing parts. The status line announces each
+   * action as it happens, which serves somebody who is doing the actions and nobody who
+   * arrives at the canvas afterwards: a learner returning to saved work, or tabbing back
+   * from the value box, had no way to ask what is on the drawing. Cycle 8 gave the
+   * analysis plot a name built out of the arrays its curve was drawn from; this is the
+   * same rule on the other canvas.
+   *
+   * Not a live region, deliberately, and for the reason the plot's is not: a name that
+   * re-announced itself on every frame of a drag would make the editor unusable. It is
+   * there to be asked. */
+  let lastName = null;
+  function describeCanvas() {
+    if (ro_) return;                    /* a diagram carries the label its author wrote */
+    const np = cur.parts.length, nw = cur.wires.length;
+    let s = 'Schematic canvas. ';
+    s += np ? np + (np === 1 ? ' part' : ' parts') : 'No parts';
+    s += nw ? ' and ' + nw + (nw === 1 ? ' wire. ' : ' wires. ') : '. ';
+    if (path.length) s += 'Inside a block, ' + path.length + ' deep. ';
+    if (selIds.size) s += selIds.size + ' selected. ';
+    s += 'Zoom ' + Math.round(view.s * 100) + ' per cent. Press Enter for the key map.';
+    /* Written only when it moves. Setting an attribute to the value it already holds is
+       a mutation a screen reader can react to, and this runs on every frame of a drag. */
+    if (s !== lastName) { cv.setAttribute('aria-label', s); lastName = s; }
   }
 
   /* What a block says about itself when you point at it. Drawn here rather than left
@@ -4524,7 +4727,7 @@ function createCircuit(root, opts) {
   if (ro_) {
     let dro = null;
     if (typeof ResizeObserver !== 'undefined') {
-      dro = new ResizeObserver(function () { paint(); });
+      dro = new ResizeObserver(function () { paintSoon(); });
       dro.observe(cv.parentElement);
     }
     paint();
@@ -4556,7 +4759,7 @@ function createCircuit(root, opts) {
     if (panFrom) {
       view.px = panFrom.px + (panFrom.sx - sp[0]) / view.s;
       view.py = panFrom.py + (panFrom.sy - sp[1]) / view.s;
-      paint();
+      paintSoon();
       return;
     }
 
@@ -4575,20 +4778,20 @@ function createCircuit(root, opts) {
         moveBy(dx, dy);
         drag.from = hover;
         drag.moved = true;
-        paint();
+        paintSoon();
       }
       return;
     }
 
-    if (marquee) { marquee.b = toWorld(sp[0], sp[1]); paint(); return; }
+    if (marquee) { marquee.b = toWorld(sp[0], sp[1]); paintSoon(); return; }
     /* The hover card is drawn by paint(), so it only appears if something asks for a
        repaint — and pointer movement over a block otherwise asks for nothing. Repaint
        when the card would change and not on every pixel of travel: the card follows
        the pointer, so a moving pointer over one block is a repaint per event, which is
        what the whole canvas costs. */
     const isTip = tipBlock();
-    if (isTip || wasTip) { paint(); return; }
-    if (wireFrom) paint();
+    if (isTip || wasTip) { paintSoon(); return; }
+    if (wireFrom) paintSoon();
   });
 
   cv.addEventListener('pointerleave', function () {
@@ -4925,10 +5128,22 @@ function createCircuit(root, opts) {
     }
     else if (e.key === '+' || e.key === '=') { zoomTo(view.s * 1.2); announce(zoomSaid()); }
     else if (e.key === '-' || e.key === '_') { zoomTo(view.s / 1.2); announce(zoomSaid()); }
-    else if (e.key === '0') { zoomFit(); announce('Fitted the drawing to the window.'); }
+    else if (e.key === '0') { zoomFit(); announce(fitSaid()); }
   }
 
   function zoomSaid() { return 'Zoom ' + Math.round(view.s * 100) + ' per cent.'; }
+  /* The button said nothing at all and the key said 'Fitted the drawing to the window.'
+     whether it had or not. One sentence for both, and it reports the zoom it reached —
+     which is the thing the learner cannot see and the only part worth saying. */
+  function fitSaid() {
+    if (!cur.parts.length && !cur.wires.length) return 'Nothing to fit. Zoom back to 100 per cent.';
+    if (fitShort) {
+      return 'Fitted as far as the zoom goes, ' + Math.round(view.s * 100) +
+        ' per cent. The drawing is wider than the window can show at that zoom, so this ' +
+        'is the middle of it.';
+    }
+    return 'Fitted the drawing to the window. Zoom ' + Math.round(view.s * 100) + ' per cent.';
+  }
   function rotationSaid() {
     const ps = selParts().filter(function (p) { const k = PART_KINDS[p.kind]; return !k || k.pins > 1; });
     if (!ps.length) return 'Nothing here can be turned.';
@@ -5007,7 +5222,9 @@ function createCircuit(root, opts) {
   });
   root.querySelector('[data-act="zoomin"]').addEventListener('click', function () { zoomTo(view.s * 1.2); });
   root.querySelector('[data-act="zoomout"]').addEventListener('click', function () { zoomTo(view.s / 1.2); });
-  root.querySelector('[data-act="fit"]').addEventListener('click', zoomFit);
+  root.querySelector('[data-act="fit"]').addEventListener('click', function () {
+    zoomFit(); announce(fitSaid());
+  });
   root.querySelector('[data-act="group"]').addEventListener('click', doGroup);
   root.querySelector('[data-act="ungroup"]').addEventListener('click', doUngroup);
   root.querySelector('[data-act="rotate"]').addEventListener('click', doRotate);
@@ -5039,7 +5256,7 @@ function createCircuit(root, opts) {
 
   let ro = null;
   if (typeof ResizeObserver !== 'undefined') {
-    ro = new ResizeObserver(function () { paint(); if (result && !plotWrap.hidden) paintPlot(); });
+    ro = new ResizeObserver(function () { paintSoon(); if (result && !plotWrap.hidden) paintPlot(); });
     ro.observe(cv.parentElement);
   }
 
