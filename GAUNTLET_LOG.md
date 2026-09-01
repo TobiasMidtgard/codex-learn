@@ -7043,3 +7043,390 @@ diff is `src/circuit.js`, the new `tools/verify_circuit_view.mjs`, and the `docs
 output, and nothing else.
 
 ---
+
+## Cycle 22 — TRACK 3: Question Bank & Quizzes
+
+*(The runner labels this commit "cycle 3" — run D's counter, while this log keeps
+counting. Run D's cycle 1 was this file's cycle 20 and its cycle 2 was cycle 21.)*
+
+**Target: CS310 (Theory of Computation & Automata) — its 25 quiz questions — and the
+`whys` field itself, across all 47 courses that carry a bank.** One course and one
+mechanism. This is cycle 16's shape and it pays cycle 16's own recorded debt: it named
+CS310 at 84% as the largest remaining block of the answer tell after CS301 left the list,
+and it is the course cycle 3 and cycle 9 both left standing.
+
+Chosen on measurement, and the measurement is in the survey below rather than in taste.
+
+*The largest remaining block of the answer tell.* CS310 scores **21 of 25 on "read
+nothing, pick the longest option"** — 84%, against 25% for guessing — with a mean length
+margin of **+26.4 characters**. RFIC510 is nominally worse at 9 of 10, but that is ten
+questions; CS310 is 25 questions and 100 options, and it is the biggest single bank still
+answerable without reading it.
+
+*Nothing explained the wrong answer.* **0 per-option explanations across 25 questions and
+100 options.** The rest of the course does not have this problem — all 21 of its blanks
+holes carry `whys` — so the quiz was the one graded surface in CS310 that answered the
+same paragraph whichever option was pressed.
+
+*And the field that fixes it was pinned by nothing.* 3260 per-option explanations existed
+across the catalogue and **not one gate would have noticed a course losing every one of
+them.** `whys` is optional; the structure rules only fire when it is present. That is the
+machinery half, and it is why this cycle is not simply cycle 16 run again on a second
+course.
+
+### Baseline, captured before any edit
+
+```
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3260 per-option explanations (260 quiz, 3000 blanks) · 6572 live draws
+     quiz view: 1260 mounts, 5464 options pressed · top slot 24.0% vs 38.8% authored
+     blanks: 4384 options picked · top slot 24.5% vs 66.6% before the shuffle
+CS310: 25 questions in 5 quiz units · 21 blanks holes · 2 numeric · 6 labs
+       longest-is-key 21/25 (84%) · shortest 2 · margin +26.4 · quiz whys 0/100
+       blanks whys 84 · 3670 words of question text and feedback
+85 circuit exercises / 360 checks · 21 tune units · 216 numeric answers, 0 unchecked
+1290 derivation steps across 46 courses
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys · circuit_model 1475 analyses, 84 refusals · 386 schematics
+tune_ui 423 hostile openings · desk 61 expressions · theme 135 contrast surfaces
+progress 29 hostile documents
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads, 13053 KB ·
+       inlined 14301 KB · shell 1220 KB
+```
+
+### The attacks
+
+**2. Assessment Inquisitor** — taken first, because this is its track. Beyond the three
+numbers above, four failure modes in the options themselves, all of the kind cycle 16
+catalogued in CS301 and all of which had survived here untouched:
+
+- **Options an informed learner eliminates without knowing the subject.** `M1/Q1` offered
+  *"Exactly one state is accepting"* against a stem about `delta`; `M4/Q1` offered
+  *"Because no regular expression is allowed to use exponents"* and *"Because a DFA is
+  allowed only one accepting state"*, neither of which anybody believes. Each silently
+  turned a four-way question into a two- or three-way one.
+- **A distractor that is plainly false rather than tempting.** `M2/Q5` offered *"no
+  machine has ever been found needing more than `n`"* — an appeal to absence that no
+  learner holds. The belief people actually hold is that the blow-up is theoretical and
+  the reachable part is polynomial in practice, and that is now the option.
+- **A near-miss nobody had written down.** `M1/Q1` had no option for **at most one** arrow
+  per state and symbol — the partial DFA — which is *the* thing the totality requirement
+  is about and the source of the empty subset two modules later. The question tested
+  whether you could spot the word `delta` rather than whether you knew what totality buys.
+- **The key doing the teaching.** In 21 of 25 the key was the only option carrying its own
+  justification, which is what produces both the length margin and the silence about the
+  other three. The repair is the same one in both directions: move the justification out
+  of the key and into feedback addressed to whoever pressed each option.
+
+**1. Senior Educator.** CS310's shared `why` paragraphs already derive rather than assert
+and already walk all four options — the standard cycle 3 set, and this course met it. What
+this persona found is the asymmetry: a learner who pressed the fourth option reads a
+paragraph written for whoever pressed the second and has to find the clause that is about
+them. And the prose named *that* an option was wrong far more often than it named **why
+anyone believes it**, which is the half that produces teaching rather than marking. All
+100 new explanations are written to that second standard; the ones that took the most work
+are listed under *What changed*.
+
+**3. Simulation Auditor.** No sandbox, tune or schematic in this course, so it was pointed
+at the only thing here it can still falsify: every code and behaviour claim in the bank,
+against the labs shipped beside them. **Every claim was re-derived by running the course's
+own reference solutions, not by re-reading the sentence that states it** —
+`minimise()` on the three-state machine (`reachable()` returns `{s, t}`, two states out,
+and refinement without pruning leaves **3 blocks**); `ABB.epsilon_closure({0, 3}) ==
+{0, 3}`; the subset construction on `ABB` giving **exactly four subsets — `{0}`, `{0,1}`,
+`{0,2}`, `{0,3}` — none of them empty**, with `abb` landing in `{0,3}` and accepted while
+`0` is not accepting; the `k`-th-symbol-from-the-end family determinising to **4, 8 and 16
+reachable subsets at k = 2, 3, 4**; `parse("ab|c*")` returning `("alt", ("cat", …),
+("star", …))` and **all four readings in `M3/Q1` enumerated to four letters and confirmed
+to be four different languages**; `parse("a|") == ("alt", ("char","a"), ("eps",))` matching
+`a` and the empty word and **not `aa`**, where `a*` does — which is what makes the
+inserted-`*` distractor refutable by one word; `thompson` costing **4 states for `ab`, 6
+for `a|b`, 4 for `a*`**, so concatenation demonstrably allocates none; `detect_loop` on the
+right-then-left machine returning **2** and on `RIGHTWARD` returning **`None`**; and
+`run(RIGHTWARD, "", 50)` reporting `halted` False with `steps` 50 against a rule-less
+machine halting at **step 0, not accepted**.
+
+It also **refuted one option I had drafted before it was written down**, which is recorded
+below because the near-miss was the good part.
+
+**4. UX & Accessibility Hardener.** This surface was hardened by cycle 3 and put under a
+gate by cycle 16 — focus onto the explanation when the pressed button is disabled,
+`role="status"` on the result region, `role="group"` and `aria-labelledby` on the options,
+`data-ai` carrying the authored index. All of it still holds and all of it is still driven:
+**1260 mounts and 5464 options pressed**, unchanged. What this persona found instead is
+that the *content* of what a screen reader announces was empty for 100 of those presses,
+because CS310 authored no `whys` and the renderer therefore drew no `.ex-picked` block at
+all. That is a content defect wearing an accessibility cost, and it is fixed by the same
+100 strings.
+
+### The near-miss the recompute killed before it shipped
+
+`M1/Q5` asks why walking two DFAs in lock-step is correct *and* terminating. The distractor
+I drafted was *"it tries every word up to `|Q1| + |Q2|` letters, and a difference always
+shows up by then"*, on the assumption that the real bound is the **product** `|Q1| * |Q2|`
+and that the sum is the misconception.
+
+The sum is right. Two inequivalent DFAs are separated by a word shorter than
+`|Q1| + |Q2|` — Moore's theorem applied to their disjoint union, where two distinguishable
+states of a `k`-state machine are distinguishable by a word of length at most `k - 2`. A
+distractor whose stated fact is true and whose feedback calls it false would have taught
+the opposite of the truth, and it would have passed every gate in this repository, because
+no gate can mark a quiz.
+
+It is kept, reworded, and it is now the better question: the bound is real, and it is still
+not why *this* procedure works — the walk never counts letters and has no depth limit in
+it. A true fact attached to the wrong mechanism, with the fact affirmed in its feedback
+rather than denied. **This is the second cycle running in which the interesting finding was
+a claim that survived drafting because it sounded like a misconception.**
+
+### The field that 3260 explanations were resting on
+
+`verify_quiz.mjs` has enforced four structure rules on `whys` since cycle 3 — one entry per
+option, none empty, no positional reference, no undrawable markup — and **every one of them
+only fires when `whys` is present**. Delete the field and the gate says `All good`. So the
+3000 blanks explanations cycle 9 wrote and the 260 quiz explanations cycles 3 and 16 wrote
+were held in place by nothing but the fact that nobody had removed them.
+
+**Two additions, and they ratchet in opposite directions.**
+
+**A coverage floor.** `quiz_budget.json` now carries `whys` beside `longest` and
+`shortest`, per course and per bank, and the gate fails when the count **falls**. The
+length tell is a debt that must not grow, so it is a ceiling; per-option feedback is work
+done, so it is a floor. A course with no floor recorded fails and is told the number to
+write, exactly as the missing `blanks` entry already does — because a bank with no recorded
+coverage is a bank that can shed it unwatched. **47 courses, floors set from what is on
+disk today: 360 quiz and 3000 blanks.**
+
+**A duplicate rule.** Counting entries is satisfied by pasting one paragraph four times,
+which is precisely the undifferentiated feedback the field exists to replace — a `why` with
+no `whys` beside it already does that, for free. So two per-option explanations in the same
+question or hole that read the same are now a hard failure, no budget. **Measured before it
+was written: 0 of 1366 questions and 0 of 1103 holes offend**, so it refuses a new defect
+rather than condemning existing content, which is the rule four previous cycles have each
+had to learn. It uses the existing `norm` and is deliberately **not** case-folded, for the
+MA201 reason recorded above that function.
+
+One thing it deliberately does not flag: **677 blanks holes whose `whys` entry for the key
+repeats the shared `why` verbatim.** Every one of the 677 is at the key and none at a wrong
+option, checked rather than assumed — that is the authoring convention, not a defect, and a
+rule that condemned it would have failed ten courses on its first run.
+
+### What changed
+
+**Content — all 25 questions rewritten, 100 per-option explanations written.**
+
+| | before | after |
+|---|---|---|
+| questions | 25 | 25 |
+| "pick the longest option" | 21 / 25 — **84%** | 0 / 25 — **0%** |
+| "pick the shortest option" | 2 | **0** |
+| mean length margin | +26.4 chars | **−4.3 chars** |
+| per-option explanations | 0 | **100** |
+| words of question text and feedback | 3670 | **9383** |
+
+The length tell was removed by moving the justification into the feedback, not by trimming
+the key until it was shortest — the ratchet refuses that inversion just as hard, and the
+pre-flight caught it happening three times: `M1/Q3`, `M2/Q1` and `M4/Q3` each passed
+through a draft where the key had become the shortest option, and were rebalanced by giving
+a distractor the weight it deserved rather than by cutting further.
+
+Every distractor is now a misconception with a name. The ones worth recording, because they
+took the most work to find: ***at most one* arrow per state and symbol** — the partial DFA,
+which does remove all choice and leaves runs with no verdict, and whose usual repair is the
+dead state the next module builds on purpose; *"`u` and `v` are both in the language, or
+both outside it"* — Myhill-Nerode with `z` fixed at the empty word, refuted in four
+characters by `0` and `1` under *ends in `01`*; *"one of `u` and `v` is a suffix of the
+other"*, which is the right instinct for that language generalised one step too far and is
+not even an equivalence relation — `1` is a suffix of both `01` and `11`, and neither of
+those is a suffix of the other; *"when two states in it disagree about acceptance, checked
+again each round"*, the seed of the partition offered as its rule, a check that can never
+fire; *"it is purely a speed optimisation — the state count comes out the same either
+way"*, which is the reading the algorithm's correctness depends on being false and which
+the three-state machine refutes by returning 3 instead of 2; *"the run the simulation
+actually follows"*, which imagines a machine that guesses once where the implementation
+never guesses at all; *"at most `n^2`, since a subset is fixed by its smallest and largest
+member"* — a bound for a different data structure, and one that is real and nearby, since
+`n^2` **is** the bound for the product construction of the previous module; *"because this
+notation has no backreferences, and backreferences are what make matching slow"*, true
+about a different problem, refuted by `(a?){20}a{20}` which uses none; *"regular expressions
+and finite automata describe exactly the same languages"* and *"every regular expression
+denotes a language some **deterministic** finite automaton accepts"* — both **true**, and
+neither the direction one construction proves; *"because it has no regular expression, and
+Kleene's theorem then rules out an automaton"*, which offers the conclusion as its own
+premise; *"a parser that also returns the trees, since the count is built out of them"* —
+sums keep no record of what was added, which is exactly why `count_parses` stays polynomial
+while counting exponentially many trees; *"each cell holds one count per nonterminal, and
+there are `n` nonterminals"*, conflating `|G|` with `n`; *"because a run that used up its
+whole budget has halted — it did stop, after all"*, the conflation the two fields exist to
+prevent; *"it answers only for machines that halt"*, sound and complete with the classes
+the wrong way round; and *"because deciding would mean simulating, and a simulation cannot
+outrun the machine it simulates"* — the commonest wrong answer to the halting problem,
+correct about one method and silent about all the others, which is exactly the gap the
+diagonal argument closes without examining any method at all.
+
+**Machinery — `tools/verify_quiz.mjs`.** The coverage floor and the duplicate rule above,
+plus both reported per bank on every course line so the numbers are visible rather than
+merely enforced. The header now documents coverage as a third kind of check alongside
+structure and exploitability.
+
+**Machinery — `tools/quiz_budget.json`.** `whys` floors for all 47 courses, and CS310's
+length entries lowered from 21 / 2 to **0 / 0** so the improvement cannot be given back.
+
+### Verification beyond the gates
+
+**The gate was not trusted until it had been seen to fail. 16 mutations, 16 intended
+verdicts, two of them required passes, and all 16 produced the verdict they had to:** two
+per-option explanations in a question made identical; the same in a blanks hole; identical
+but for whitespace, to prove `norm` is folding; the `whys` list dropped from one question,
+and from one hole, so coverage falls below the floor; the floor removed from the budget,
+and the blanks floor removed separately; one explanation emptied to whitespace; a list one
+entry short; a positional reference planted in an explanation; the length tell reintroduced
+by lengthening every key; the tell **inverted** by lengthening every distractor, which the
+`shortest` ceiling is what catches; a duplicated option so the key has an unmarkable twin;
+a bullet list in an explanation the renderer cannot draw; **"the final answer" planted in an
+explanation, which must pass** — cycle 9's narrowing, re-checked; and the unmodified tree as
+a control.
+
+**Every number in the new prose was recomputed against the labs' own reference solutions**,
+listed under the Simulation Auditor above — the refinement block count, the four subsets,
+the 4/8/16 blow-up, the four `M3/Q1` readings enumerated to four letters, the `a|` language
+including its refutation by `aa`, the three Thompson state counts, and the four Turing
+machine runs. One drafted distractor was refuted by that pass before it shipped.
+
+**CS310's quiz was swept for the three failure modes this repository has already shipped:**
+0 strings with an unpaired `$`, 0 with a backslash before a quote (cycle 3's raw-string
+leak), 0 carrying block markup the renderer cannot draw (cycle 7's raw markup) — measured
+after the rewrite, all three at zero. All 125 new strings were swept for references that
+point the wrong way down the page, which is cycle 16's finding; **three hits, all read, all
+ordinary prose** — "one level below `parse_cat`", "a count above one", "can still halt later
+on".
+
+**The artifact was proved to be what the source says.** Everything outside `quiz` is
+identical to HEAD except the two `"check": ""` fields discussed below, **all 20 lesson units
+unchanged**, and the JSON is byte-identical before and after a re-emit — which also proves
+the mutation pass restored the tree it borrowed. The payload window was checked rather than
+assumed: **3 generations naming 64 files, 64 on disk, 0 orphaned, 0 missing.**
+
+### Found in my own work, and fixed
+
+- **A distractor whose "misconception" was a theorem.** The `|Q1| + |Q2|` bound in `M1/Q5`,
+  above. Found by checking a fact I was about to call false, which is the only way this
+  class of error is ever found — the drafted feedback would have read as confidently as the
+  rest.
+- **Three keys trimmed into being the shortest option.** `M1/Q3`, `M2/Q1` and `M4/Q3`. The
+  first draft removed the length tell by cutting the key, which inverts the defect rather
+  than removing it; the pre-flight measured `shortest-is-key` alongside `longest` and caught
+  all three. Rebalanced by lengthening a distractor, never by padding the key.
+- **`RIGHTWARD` described as "three symbols long".** Inherited prose, ambiguous between the
+  machine's description and its single transition. It is **one rule**, and it now says so —
+  checked against the definition in the lab rather than against the sentence.
+- **A `run()` claim I could not have made from the sentence I wrote it in.** The feedback
+  for the tape-cells distractor asserts that `steps` and `head` agree for `RIGHTWARD` only
+  because that machine happens to move right every step; both were read off an actual run
+  (`steps` 50, `head` 50) rather than asserted.
+
+### Left alone, deliberately
+
+- **23 courses are still over 50% on the quiz length tell**, down from 24 — CS310 is the one
+  that left the list. The catalogue moves from **624/1366 (46%) to 603/1366 (44%)**, CS310's
+  21 and nothing else. RFIC510 9/10; DSP520, DSP530, EMAG530 and VLSI530 8/10; CS330
+  20/26; CS102 and CS210 17/24; CTRL520 and CTRL530 7/10. Cycle 3's main recorded debt,
+  one course smaller, and every course still pinned in `quiz_budget.json` so it cannot
+  grow while it waits.
+- **21 courses still author every key at index 0**, covering 264 questions. Unchanged, and
+  not a defect while the shuffle runs — which cycle 16's quiz-view section presses every
+  option of every question to prove, on every run.
+- **CS310 authors no key at index 0 at all** — the spread is 0 / 9 / 8 / 8, and it was left
+  exactly as it was. It is the mirror of the debt above and equally invisible to a learner:
+  the gate measures the **drawn** slot and reports CS310's key on top 20% of the time. Moving
+  `opts` and `whys` together for no learner-visible effect is churn, and the shuffle is the
+  thing under gate.
+- **347 blanks holes in ten courses still have no per-option feedback** — EE102 102, EE121
+  93, EE101 87, MA111 20, MA121 17, EE241 11, EE221 / MA112 / MA201 5 each, EE202 2. Cycle
+  9's debt, unmoved. It is now **pinned at its current value in 47 courses' floors**, which
+  is the part of it this cycle could pay without becoming a cycle that touches everything.
+- **Two candidate answer tells were measured and deliberately not made into gates.** The
+  *stem-overlap* strategy — pick the option sharing the most distinctive words with the stem
+  — scores **113/1366 (8%)** against 39 for its mirror, which is no exploit worth a rule. The
+  *absolute-qualifier* strategy — eliminate options carrying always/never/only/every — is
+  live at **347/1366 (25%)**, and it was still rejected: **CS301, the bank cycle 16 rebuilt
+  question by question, scores 40% on it, exactly as CS310 does.** A measure that condemns
+  the catalogue's most carefully written bank is measuring good writing, since a wrong claim
+  about computation usually *is* an overgeneralisation. Recorded with the numbers so the next
+  cycle does not re-derive them and does not ship the gate.
+- **The six MathML-ambiguous option pairs** in EE111, EE141, EE201, EMAG530, MA112 and
+  PWR510 — cycle 16's note, unchanged. Correct in a browser, correct to a screen reader that
+  parses MathML, and a flattening artefact of the gate rather than a content defect.
+- **`.quiz-q .qt code` still takes its colour from `--lime` rather than `--code-ink`, and
+  `P.dim` (2.93:1) and `P.faint` (1.86:1) still fail contrast on every canvas.** Cycles 2,
+  3, 5, 6, 8, 9, 15, 16 and 21 have each recorded these. Track 5.
+- **The emitter adds `"check": ""` to CS310's two numeric units, and it was kept.** Cycle 16
+  met and documented exactly this on CS301: 194 units across the catalogue already carry an
+  empty `check` on disk, so re-emitting brings the artifact into line rather than away from
+  it. It is not the `emit.py --all` drift cycles 4 and 9 reverted. `verify_numeric` is
+  unmoved at 216 answers, 0 schematics with no check, 218 figure-only.
+- **The retained window holds two CS310 payloads.** Capturing the baseline means running
+  `build.mjs` before editing, so the baseline build's payload is one generation back. Both
+  are named by a generation and both are present — 3 generations, 64 named, 64 on disk, 0
+  orphaned, 0 missing — and two older EE121 and EE241 payloads aged out normally in the same
+  run, which is the window working rather than anything this cycle did.
+
+### Gates, after
+
+Every pre-existing number unmoved. The numbers that moved are the per-option explanation
+count — by exactly the 100 written — CS310's budget entry, and the two artifact sizes.
+
+```
+verify_quiz          All good: 1366 questions in 252 quiz units and 1103 holes in 217
+                     blanks units · 3360 per-option explanations (3260 -> 3360, +100)
+                     · quiz view: 1260 mounts, 5464 options pressed and the explanation
+                     read back, the answer drawn in the top slot 24.0% against 38.8%
+                     as authored · blanks: 6572 draws, 4384 options, 24.5% — unmoved
+                     · every bank within its answer-tell budget and above its whys
+                     floor                                     [COVERAGE FLOOR NEW]
+                     CS310: 25 questions · longest-is-key 0 (budget 0) · shortest 0
+                     (budget 0) · whys 100 (floor 100) · mean length margin -4.3
+verify_labs CS310    All good: 6 labs
+emit.py CS310        ok — 5 modules, 5 labs, capstone +tests
+verify_derivations   All good: 1290 steps across 46 courses
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_circuits      All good: 85 circuit exercises, 360 checks · 564 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_theme         All good: 135 contrast surfaces x 2 themes
+verify_desk          All good: 61 expressions at the extremes
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_circuit_model All good: 1475 analyses, 84 refusals · 15 plots
+verify_tune_ui       All good: 21 tune units, 423 hostile opening values, 462 targets,
+                     105 paints, 270 drags, 493 mounts
+verify_circuit_view  All good: 26 hostile coordinates · 386 published drawings
+                     unchanged by the guard · 420 mounts at 7 widths · 150 gestures
+verify_progress      All good: 6 unload writes · 29 hostile documents · 7 merges
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 13053 -> 13086 KB ·
+                     inlined 14301 -> 14334 KB · shell 1220 KB — unchanged, of 1536
+```
+
+The pre-existing gates were compared on the figures they report, which are reproduced above
+against the baseline block at the top of this entry and match it line for line; a byte-level
+diff of their output was not run, and that is stated rather than implied.
+
+Beyond the gates: **16 mutations, every one producing the verdict it had to, including two
+the gate was required to pass**; every number in the new prose recomputed by running the
+course's own reference solutions, which is how one drafted distractor was found to be a
+theorem; three keys caught mid-draft having become the shortest option; CS310's quiz swept
+for unpaired `$`, escaped quotes and undrawable markup at 0, 0 and 0; all 125 new strings
+swept for references that point the wrong way down the page, three hits, all read, all
+ordinary prose; the artifact proved byte-identical across a re-emit and identical to HEAD
+outside `quiz` but for the two known `check` fields, with all 20 lesson units unchanged; and
+the payload window checked at 3 generations, 64 files, 0 orphaned, 0 missing.
+
+**A note on the working tree.** The runner's lock (`.gauntlet.pid`, pid 11729) was live
+throughout and this cycle is the process it launched, so `build.mjs` was safe to run. The
+diff is `catalog/authors/CS310.py`, `catalog/CS310.json`, `tools/verify_quiz.mjs`,
+`tools/quiz_budget.json` and the `docs/` build output, and nothing else. No lesson id, no
+other course's content, no renderer, and no unit kind other than `quiz` was touched.
+
+---

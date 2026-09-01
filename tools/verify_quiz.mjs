@@ -18,6 +18,9 @@
  *   * an option that is empty, or a `why` that is.
  *   * `whys` present but not one entry per option — a silently missing explanation
  *     is worse than none, because the ones around it make it look complete.
+ *   * two per-option explanations in the same question that read the same. Counting
+ *     entries is satisfied by pasting one paragraph four times, and that is exactly the
+ *     undifferentiated feedback the field was added to replace.
  *   * "option B", "the third choice" and friends anywhere in the feedback. The
  *     options are shuffled per learner, so a positional reference names nothing.
  *     emit.py rejects these at the source; this re-checks the artifact the app
@@ -47,6 +50,16 @@
  *   is its own kind of defect. So the budget file records what each course scores
  *   today and this gate fails when a course gets WORSE. New content therefore cannot
  *   add to the debt, and a cycle that improves a course is told to lower its entry.
+ *
+ * COVERAGE — the same file, ratcheted the other way.
+ *
+ *   The per-option explanation is the only thing on the screen that speaks to a learner
+ *   who got the question WRONG about the option they actually pressed; without it the
+ *   same paragraph is answered to all four. Authoring one is optional, and every check
+ *   above passes a bank with none — so the 3360 that exist were held in place by
+ *   nothing, and a course could quietly shed all of them. `whys` in the budget is a
+ *   FLOOR rather than a ceiling: a debt must not grow, and work done must not be
+ *   given back.
  *
  * THE BLANKS BANK — 1103 graded holes that this gate did not look at.
  *
@@ -140,6 +153,19 @@ const asList = (v) => (!v ? [] : Array.isArray(v) ? v : [v]);
    defect it was written to find. */
 const norm = (s) => String(s).replace(/\s+/g, ' ').trim();
 
+/* Two per-option explanations that read the same. The coverage ratchet below counts
+   entries, and counting alone is satisfied by pasting one paragraph four times — which
+   is precisely the state this whole field exists to replace, since it is what a `why`
+   with no `whys` beside it already does. Returns the repeated text, or null.
+   Measured before it was written: 0 of 1366 questions and 0 of 1103 holes offend, so
+   this refuses a new defect rather than condemning existing content. NOT case-folded,
+   for the reason recorded above `norm`. */
+function twinned(list) {
+  const seen = list.map(norm);
+  const dupe = seen.find((s, i) => seen.indexOf(s) !== i);
+  return dupe === undefined ? null : dupe;
+}
+
 /* What a learner who reads nothing scores. `longest` is the strategy that works;
    `shortest` is its mirror, and a course that fails it hard is exploitable in the
    other direction. Both are reported so a fix cannot just invert the problem. */
@@ -183,6 +209,7 @@ for (const file of files) {
   const holes = [];        /* every graded hole in the course, for the tells */
   const bbad = [];
   let markup = 0;          /* options carrying markup the monospace slot draws literally */
+  let courseWhys = 0, courseBlankWhys = 0;   /* per-option explanations, for the ratchet */
 
   /* ------------------------------------------------------------ the blanks bank */
   (course.modules || []).forEach((m, mi) => {
@@ -217,12 +244,17 @@ for (const file of files) {
               `explanations for ${opts.length} options — one each, the key included`);
           } else {
             blankWhys += h.whys.length;
+            courseBlankWhys += h.whys.length;
             h.whys.forEach((w, wi) => {
               if (!String(w || '').trim()) bbad.push(`${at}: per-option explanation ${wi + 1} is empty`);
               const p = POSITIONAL.exec(w || '');
               if (p) bbad.push(`${at}: a per-option explanation says ${JSON.stringify(p[0])}, ` +
                 'and the options are shuffled per learner now');
             });
+            const twin = twinned(h.whys);
+            if (twin !== null) bbad.push(`${at}: two per-option explanations read the same ` +
+              `(${JSON.stringify(twin.slice(0, 46))}) — the whole point of the per-option feedback ` +
+              'is that it addresses the option that was pressed, and one shared paragraph does not');
           }
         }
         const p = POSITIONAL.exec(h.why || '');
@@ -276,12 +308,17 @@ for (const file of files) {
               `explanations for ${opts.length} options — one each, the key included`);
           } else {
             whysGiven += q.whys.length;
+            courseWhys += q.whys.length;
             q.whys.forEach((w, wi) => {
               if (!String(w || '').trim()) bad.push(`${at}: per-option explanation ${wi + 1} is empty`);
               const hit = POSITIONAL.exec(w || '');
               if (hit) bad.push(`${at}: a per-option explanation says ${JSON.stringify(hit[0])}, ` +
                 'and the options are shuffled per learner');
             });
+            const twin = twinned(q.whys);
+            if (twin !== null) bad.push(`${at}: two per-option explanations read the same ` +
+              `(${JSON.stringify(twin.slice(0, 46))}) — the whole point of the per-option feedback ` +
+              'is that it addresses the option that was pressed, and one shared paragraph does not');
           }
         }
         const hit = POSITIONAL.exec(q.why || '');
@@ -329,9 +366,9 @@ for (const file of files) {
 
   /* the same ratchet, run over the quiz bank and then over the blanks bank */
   const banks = [
-    { tag: 'question', kind: 'quiz', items: found, budget: b, extra: null },
+    { tag: 'question', kind: 'quiz', items: found, budget: b, extra: null, whys: courseWhys },
     { tag: 'hole', kind: 'blanks', items: holes, budget: b && b.blanks,
-      extra: { name: 'markup', got: markup } },
+      extra: { name: 'markup', got: markup }, whys: courseBlankWhys },
   ];
   for (const bank of banks) {
     if (!bank.items.length) continue;
@@ -362,15 +399,38 @@ for (const file of files) {
         `draws literally, over the budget of ${bb[bank.extra.name] || 0}. An option is a ` +
         'fragment of the listing, so write it the way the listing is written');
     }
+    /* The coverage ratchet. `whys` is optional and the three checks above are entirely
+       happy with a bank that has none, so 3360 per-option explanations — the ones that
+       say why the WRONG answer is wrong, which is the half of the feedback a learner who
+       got it wrong is reading — were held in place by nothing at all. A course could lose
+       every one of them and this gate would still print "All good".
+
+       It ratchets the other way from the tells: those are debts that must not GROW, this
+       is work that must not be GIVEN BACK. Hence a floor rather than a ceiling. */
+    if (bb.whys === undefined || bb.whys === null) {
+      failed = true;
+      lines.push(`            ! no "whys" floor in ${basename(BUDGET)} for ${id}'s ${bank.kind} ` +
+        `bank. Add "whys": ${bank.whys} to it — per-option feedback is optional to author ` +
+        'and must not be optional to keep, and nothing else here would notice it going');
+    } else if (bank.whys < bb.whys) {
+      failed = true;
+      lines.push(`            ! ${label}per-option explanations have fallen to ${bank.whys} ` +
+        `from a floor of ${bb.whys}. Feedback that explains only the right answer answers ` +
+        'the same paragraph to whichever option was pressed, which is the state this floor was set to end');
+    }
     const better = t.longest < bb.longest || t.shortest < bb.shortest ||
-      (bank.extra && bank.extra.got < (bb[bank.extra.name] || 0));
+      (bank.extra && bank.extra.got < (bb[bank.extra.name] || 0)) ||
+      (bb.whys !== undefined && bb.whys !== null && bank.whys > bb.whys);
     if (better) {
       loose.push(`${id}${bank.kind === 'quiz' ? '' : ' blanks'}: longest ${bb.longest} -> ${t.longest}` +
         `, shortest ${bb.shortest} -> ${t.shortest}` +
-        (bank.extra ? `, markup ${bb[bank.extra.name] || 0} -> ${bank.extra.got}` : ''));
+        (bank.extra ? `, markup ${bb[bank.extra.name] || 0} -> ${bank.extra.got}` : '') +
+        (bb.whys !== undefined && bb.whys !== null && bank.whys !== bb.whys
+          ? `, whys ${bb.whys} -> ${bank.whys} (raise this one)` : ''));
     }
     lines.push(`            ${t.n} ${bank.tag}(s) · longest-is-key ${t.longest}` +
       ` (budget ${bb.longest}) · shortest-is-key ${t.shortest} (budget ${bb.shortest})` +
+      ` · whys ${bank.whys} (floor ${bb.whys === undefined ? '-' : bb.whys})` +
       (bank.extra ? ` · markup ${bank.extra.got} (budget ${bb[bank.extra.name] || 0})` : '') +
       ` · mean length margin ${t.margin >= 0 ? '+' : ''}${t.margin.toFixed(1)}`);
   }
@@ -510,8 +570,9 @@ if (qBad.length) {
 }
 
 if (loose.length) {
-  console.log(`\n${loose.length} bank(s) now score BETTER than their budget. Lower the ` +
-    `entries in ${basename(BUDGET)} so the improvement cannot be given back:`);
+  console.log(`\n${loose.length} bank(s) now score BETTER than their budget. Move the ` +
+    `entries in ${basename(BUDGET)} so the improvement cannot be given back — the tells ` +
+    'down, the whys floor up:');
   loose.forEach((l) => console.log(`  ${l}`));
 }
 

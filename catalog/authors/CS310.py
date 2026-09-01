@@ -53,98 +53,228 @@ COURSE = {
                     {
                         "q": "What makes a finite automaton *deterministic*?",
                         "opts": [
-                            "No state is visited twice during a run",
-                            "Every state is reachable from the start state",
-                            "`delta` is a total function: exactly one arrow leaves every state on every symbol",
-                            "Exactly one state is accepting",
+                            "No state is visited twice during a run, so nothing is recomputed",
+                            "Every state is reachable from the start state, so no arrow is wasted",
+                            "Exactly one arrow leaves every state on every symbol, never two and never none",
+                            "At most one arrow leaves every state on every symbol, so a run never has a choice",
                         ],
                         "a": 2,
+                        "whys": [
+                            """
+This is determinism as a programmer usually meets it — same input, same work, nothing
+repeated — and a DFA breaks it constantly. Revisiting a state is not a flaw, it is the
+mechanism: `EVEN_ZEROS` has two states and reads a thousand zeros by bouncing between
+them, and any machine that counts modulo something must return to where it was. What is
+determined is the *next state*, not the *set of states visited*.
+""",
+                            """
+Reachability is a real property and a different one. A state the start cannot reach
+changes no word's fate, which is why `reachable()` exists and why `minimise()` prunes
+before it refines — the language is identical either way. `REDUNDANT` in the lab is a
+perfectly deterministic machine with a state nobody can get to. Determinism is about
+whether `delta` answers, not about whether every answer is used.
+""",
+                            """
+One arrow out of every state for every letter: that is the whole of it. `_validate`
+walks the entire cross product of states and alphabet for exactly this reason, and a
+machine missing a single entry has a word it cannot even finish reading. Nothing else in
+the five-tuple is constrained — the accepting set may be any size including empty, states
+may repeat, and unreachable states may sit there unused.
+""",
+                            """
+The near-miss, and the one worth getting right. *At most one* is what a **partial** DFA
+offers, and it does remove all choice — but it leaves runs that stop in the middle of a
+word with no verdict, and acceptance is defined at the *end* of the word. `_validate`
+rejects such a machine rather than tolerating it. The usual repair is to add a dead state
+absorbing every missing entry, which is a change to the machine and not a reinterpretation
+of it: the subset construction in the next module builds that dead state on purpose.
+""",
+                        ],
                         "why": """
-Determinism is a property of `delta` and nothing else: one arrow out of every state
-for every letter, never two and never none. That is why `_validate` walks the whole
-cross product of states and alphabet — a machine missing a single entry has a word it
-cannot even finish reading. Revisiting a state is entirely ordinary, and in fact
-unavoidable: a loop is how a DFA counts modulo something. Reachability is a tidiness
-property that minimisation cleans up and that never changes the language. And the
-accepting set may be any size at all, including empty, which is the machine for the
-language containing no word.
+Determinism is a property of `delta` and nothing else. The gap between *at most one* and
+*exactly one* is the only subtle part, and it is where the empty subset comes from later:
+totality is a promise that every word gets read to the end, and a machine that cannot keep
+it is repaired by adding somewhere for the failed runs to go.
 """,
                     },
                     {
                         "q": "Myhill-Nerode: two words `u` and `v` reach the same state of the minimal DFA exactly when...",
                         "opts": [
-                            "`u` and `v` are the same length",
+                            "`u` and `v` are the same length, so the machine has read equally far",
                             "for every word `z`, `uz` is in the language exactly when `vz` is",
                             "`u` and `v` are both in the language, or both outside it",
-                            "one of `u` and `v` is a suffix of the other",
+                            "one of `u` and `v` is a suffix of the other, so the recent history agrees",
                         ],
                         "a": 1,
+                        "whys": [
+                            """
+Length is what a machine would track if it had somewhere to put a counter, and a DFA does
+not. Counting to `n` costs `n` states, so a finite machine can only count modulo something
+or up to a fixed ceiling. For the language of words ending in `01`, the two-letter words
+`01` and `11` are the same length and could not be more different: one is in the language
+and one is out.
+""",
+                            """
+The state a word reaches is a summary of everything about that word that still matters,
+and what still matters is exactly which continuations lead to acceptance. That is why the
+criterion quantifies over *all* `z`: two words are the same state precisely when no future
+can tell them apart. Everything else the words differ in — length, spelling, how they got
+there — is information the machine is free to throw away.
+""",
+                            """
+This is the criterion with `z` fixed at the empty word, and it is genuinely half of the
+answer: two words in different membership classes certainly reach different states. It is
+not enough, and the language of words ending in `01` shows why in four characters. Neither
+`0` nor `1` is in it, so this test calls them equivalent — but append `1` and `01` is in
+the language while `11` is not. Agreeing about the present says nothing about agreeing
+about every future.
+""",
+                            """
+This is the right instinct generalised one step too far. For *this* language the state
+really is a function of the last two letters, so it is easy to conclude that the suffix
+relation is the criterion. It cannot be: it is not even an equivalence relation. `1` is a
+suffix of `01` and `1` is a suffix of `11`, yet neither `01` nor `11` is a suffix of the
+other, so transitivity fails and the relation has no classes to be the states of anything.
+""",
+                        ],
                         "why": """
-The state a word reaches is a summary of everything about that word that still
-matters, and what still matters is exactly which continuations lead to acceptance.
-Agreeing on membership alone is the special case `z = ""`, and it is not enough: take
-the language of words ending in `01`. Neither `0` nor `1` is in it, yet appending `1`
-puts `01` in the language and leaves `11` outside, so they belong to different
-classes. Length is irrelevant — a DFA cannot count without spending a state per count
-— and the suffix relation is not even an equivalence.
+The classes of the right-congruence are the states of the minimal DFA, which is what makes
+the minimal machine unique rather than merely small: it is not a machine somebody found,
+it is the language's own quotient. Two of the wrong readings here are the same mistake at
+different strengths — deciding equivalence on less than the whole future — and both merge
+states that some continuation separates.
 """,
                     },
                     {
                         "q": "Moore's refinement starts from the partition `{accepting, non-accepting}`. When does a block split?",
                         "opts": [
-                            "When it holds more than one state",
-                            "When it holds the start state and something else",
+                            "When it holds more than one state, since refinement runs to singletons",
+                            "When two states in it disagree about acceptance, checked again each round",
                             "When two states in it have different numbers of incoming arrows",
-                            "When two states in it send some symbol into different blocks",
+                            "When two states in it send the same symbol into two different blocks",
                         ],
                         "a": 3,
+                        "whys": [
+                            """
+If this were the rule the algorithm could never minimise anything, since it would end with
+one state per state and hand back the machine it was given. Refinement stops when a round
+changes nothing, and a block holding several states at that point is the algorithm's whole
+output: those states are indistinguishable, and `EVEN_ZEROS` minimises to two states
+precisely because two of its blocks never split.
+""",
+                            """
+This is the *seed*, not the rule. Acceptance is what the initial partition is built from,
+so by the time any round runs, no block contains an accepting and a non-accepting state
+together — re-checking it every round is work that can never fire. What the rounds add is
+the ability to separate two states that agree about acceptance now and disagree about it
+after one more letter.
+""",
+                            """
+Incoming arrows are the past, and a DFA's behaviour depends only on the future. Two states
+with wildly different in-degrees can be perfectly interchangeable, and merging them changes
+nothing about the language. The signature the algorithm computes is `(current block, blocks
+this state moves to)` — outgoing only, which is why refinement never needs the transposed
+transition relation at all.
+""",
+                            """
+A block is a claim that its members are indistinguishable so far, and the claim breaks the
+moment two members disagree about where they *go*. If `p` and `q` both read `a` and land in
+blocks already known to be different, then some word separates those blocks, and one more
+letter on the front of it separates `p` from `q`. Blocks are only ever cut, never merged,
+which is why the process stops: there are at most `|Q|` blocks to reach.
+""",
+                        ],
                         "why": """
-A block is a claim that its members are indistinguishable so far. The claim breaks the
-moment two members disagree about where they *go*: if `p` and `q` both read `a` and
-land in blocks already known to be different, then some word separates them, and one
-more letter separates `p` from `q`. That is the whole algorithm — compute each state's
-signature `(current block, blocks it moves to)` and regroup. Blocks are never merged,
-only cut, which is why the process stops: there are at most `|Q|` blocks to reach.
-Incoming arrows never enter into it; the future is what distinguishes states, not the
-past.
+Compute each state's signature, regroup by signature, repeat until a round changes nothing.
+The two tempting wrong rules fail in opposite directions — one splits everything, one
+splits nothing new — and the third looks at the wrong half of the transition relation.
 """,
                     },
                     {
                         "q": "Why must unreachable states be dropped *before* refinement rather than after?",
                         "opts": [
                             "Refinement fails to terminate while unreachable states are present",
-                            "An unreachable state can be distinguishable from every reachable one, so refinement keeps it as its own block and the result is not minimal",
-                            "An unreachable state makes `delta` partial, so the machine is not a DFA",
+                            "An unreachable state survives as a block of its own, so the result is not minimal",
+                            "An unreachable state makes `delta` partial, so the machine is not a DFA at all",
                             "It is purely a speed optimisation — the state count comes out the same either way",
                         ],
                         "a": 1,
+                        "whys": [
+                            """
+Termination is never at risk here, and it is worth knowing why: every round only ever cuts
+blocks, so the number of blocks rises monotonically and is capped at `|Q|`. Refinement over
+a machine with unreachable states still halts — it just halts holding a partition with too
+many blocks in it. The defect is in the answer, not in the loop.
+""",
+                            """
+Refinement asks whether two states *behave* the same, and an unreachable state behaves
+perfectly well; it simply never happens. Run the lab's own machine to see it: `s` and `t`
+swapping over `a` with an accepting self-loop `u` that nothing points at. `reachable()`
+returns `{s, t}` and `minimise()` gives two states, but refine without pruning first and
+`t` and `u` split apart, leaving three blocks for a language that needs two.
+""",
+                            """
+Totality and reachability are independent, and this conflates them. `delta` is defined on
+every state and symbol whether or not any word gets you to that state — the lab's
+`REDUNDANT` has both properties at once, a total transition function and a state nobody can
+arrive at. `_validate` accepts it, and rightly: it is a DFA, just not a minimal one.
+""",
+                            """
+This is the answer that makes pruning optional, and it is the one the algorithm's
+correctness depends on being false. The counterexample is three states long and the count
+really does differ: two after pruning, three without. That is why `minimise()` prunes as a
+*step* rather than as a tidy-up, and why a minimiser that skips it returns something that is
+not the minimal machine even though every one of its refinement rounds was correct.
+""",
+                        ],
                         "why": """
-Refinement asks whether two states behave the same, and an unreachable state behaves
-perfectly well; it simply never happens. The machine in the checks makes this concrete:
-`s <-> t` over `a` with `u` an accepting self-loop nobody can reach. Refine without
-pruning and `t` and `u` split apart on the first round, leaving three states for a
-language that needs two. Termination is never at risk — each round only cuts — and
-`delta` stays total whether or not a state is reachable. The count really does differ,
-which is why the pruning is a step of the algorithm and not an optimisation.
+Prune, then refine. Refinement is a correct answer to the question it is asked — which
+states behave alike — and an unreachable state is not badly behaved, it is absent. Only
+reachability can tell you that, and the two tests have to be run in that order.
 """,
                     },
                     {
                         "q": "`equivalent` walks two DFAs in lock-step and stops at the first pair whose acceptance disagrees. Why is that decision procedure correct *and* terminating?",
                         "opts": [
-                            "It examines every word up to the length of the larger machine, which is enough",
-                            "It relies on both machines having been minimised first",
-                            "A pair of states is reached exactly by the words that drive both machines there, and there are only finitely many pairs to reach",
-                            "It works only when the two machines have the same number of states",
+                            "Because a difference always shows up within `|Q1| + |Q2|` letters, and the walk goes that deep",
+                            "Because both machines are minimised first, so equal languages means identical machines",
+                            "Only finitely many state pairs exist, and each is reached by the words that drive both there",
+                            "Because it stops at the first disagreement, and a disagreement is reached in finitely many steps",
                         ],
                         "a": 2,
+                        "whys": [
+                            """
+The bound is real — if two DFAs differ at all, some word shorter than `|Q1| + |Q2|` letters
+proves it, which is Moore's theorem applied to their disjoint union. It is still not why
+this procedure works. The walk never counts letters and has no depth limit in it; it
+enumerates *pairs*, and there are at most `|Q1| * |Q2|` of those regardless of how long the
+words reaching them are. A true fact about the problem, attached to the wrong mechanism.
+""",
+                            """
+Comparing canonical minimal machines is a genuine second method, and `minimise()` plus the
+canonical renaming is exactly what you would need for it. It is not this method, and this
+method deliberately avoids it: the product walk works on the machines as given, of any two
+sizes, minimised or not, and returns a distinguishing word rather than a yes-or-no.
+""",
+                            """
+The product machine has at most `|Q1| * |Q2|` states, so the search runs out of new pairs
+and halts — that is termination, and it is a counting argument with nothing else in it.
+Correctness is the other half: reaching a pair where one machine accepts and the other does
+not hands you a word accepted by exactly one of them, and if no such pair is reachable then
+no word distinguishes them at all.
+""",
+                            """
+This assumes the case it has to prove. When the two machines differ, yes, a disagreement is
+found and the walk stops — but the hard case is when they *agree*, where there is no
+disagreement to find and something else has to end the search. That something is the finite
+supply of state pairs. An argument that only covers the answer *no* is not a termination
+argument for a decision procedure.
+""",
+                        ],
                         "why": """
-The product machine has at most `|Q1| * |Q2|` states, so the search runs out of new
-pairs and halts. Correctness is the other half: reaching a pair where one machine
-accepts and the other does not means there is a word accepted by exactly one of them,
-which is a counterexample; and if no such pair is reachable, no word distinguishes
-them. Nothing needs minimising first — comparing canonical minimal forms is a
-different, equally valid method — and the two machines may be any sizes, since the
-walk is over pairs rather than over some correspondence between states.
+Two independent halves: finitely many pairs gives termination, and *a pair is reached by
+exactly the words that drive both machines there* gives correctness. Neither half is about
+word length, and neither needs the machines to be minimal or the same size.
 """,
                     },
                 ],
@@ -698,89 +828,221 @@ for _trial in range(40):
                         "q": "An NFA accepts a word when...",
                         "opts": [
                             "every run over that word ends in an accepting state",
-                            "the shortest run over that word ends in an accepting state",
+                            "the run the simulation actually follows ends in an accepting state",
                             "the machine has no choices left to make when the word runs out",
-                            "some run over that word ends in an accepting state",
+                            "some run over that word ends in one of the accepting states",
                         ],
                         "a": 3,
+                        "whys": [
+                            """
+Requiring every run to accept defines a real machine and a different one — the co-NFA — and
+it accepts a different language. On the lab's `ABB`, reading `abb` leaves the set `{0, 3}`:
+one run sits in `0`, the other has reached the accepting `3`. Under this reading the word
+would be rejected, and `ABB.accepts("abb")` returns True. Existential and universal
+acceptance agree only when the machine is deterministic anyway.
+""",
+                            """
+The simulation follows no single run — that is the point of it. `step` maps a whole set of
+states to a whole set of states, so all runs proceed at once and none is privileged. This
+reading imagines a machine that guesses, gets one shot, and might guess wrong; the actual
+implementation never guesses, which is why it can decide acceptance in one pass instead of
+searching.
+""",
+                            """
+Running out of choices is neither necessary nor sufficient. Not necessary: `ABB` still has
+`(0, "a") -> {0, 1}` available after `abb`, and the word is accepted anyway. Not sufficient:
+a run can dead-end in a non-accepting state with no moves left, which is failure, not
+success. What is inspected at the end of the word is the *set* the machine could be in, and
+only whether it meets the accepting set.
+""",
+                            """
+Acceptance is existential — one successful run is enough, and every other run may dead-end,
+reject or wander. That single word *some* is what the subset simulation encodes: carry the
+whole set of states any run could be in, and at the end ask whether the set intersects the
+accepting set, which is `s & nfa.accepting` rather than any test on an individual run.
+""",
+                        ],
                         "why": """
-Acceptance is existential — one successful run is enough, and the other runs may dead-end,
-reject, or wander. That single word, *some*, is what the subset simulation encodes: carry
-the whole set of states any run could be in, and ask at the end whether the set meets the
-accepting set. Requiring *every* run to accept defines a different and genuinely different
-machine (a co-NFA), and the shortest run is not even well defined when epsilon moves let
-runs have different lengths on the same word.
+Nondeterminism is existential quantification over runs, and the set simulation is how you
+evaluate that quantifier without searching. Two of the wrong readings replace *some* with
+*every* or with *the one we followed*, and both turn a machine that accepts `abb` into one
+that does not.
 """,
                     },
                     {
                         "q": "Why is the epsilon closure of a set always a superset of that set?",
                         "opts": [
-                            "Because every state has an epsilon self-loop",
-                            "Because epsilon moves always come in pairs, one each way",
-                            "It is defined as the least set that both contains those states and is closed under epsilon moves",
-                            "It is not — closing drops any state with no epsilon moves",
+                            "Because reading nothing is always allowed, so every state has an epsilon self-loop",
+                            "Because epsilon edges are symmetric — anything you can leave you can return to",
+                            "It is the least set containing those states and closed under epsilon moves",
+                            "It is not — closing drops any state that has no epsilon moves out of it",
                         ],
                         "a": 2,
+                        "whys": [
+                            """
+The conclusion is right and the mechanism is invented. No self-loops are added anywhere:
+`ABB` has no epsilon transitions at all, and `ABB.epsilon_closure({0, 3})` still returns
+`{0, 3}`. If closure depended on self-loops existing, a machine without them would have
+empty closures. It contains the input because the definition starts from the input, not
+because of an edge.
+""",
+                            """
+Epsilon edges are directed like every other edge, and nothing makes them symmetric.
+Thompson's construction in the next module is the clearest evidence: a star fragment links
+the body's exit back to its entry to go round again, and that edge is one-way on purpose —
+make it two-way and the fragment starts accepting words it should not. Symmetry would also
+prove far more than is being asked, namely that closure is an equivalence.
+""",
+                            """
+Being a superset is half the definition, not a theorem to prove. The closure is the least
+fixed point of *add every epsilon successor*, seeded with the states you started from — and
+the worklist implementation makes that literal, with `seen` beginning as the input set and
+only ever growing. A state with no epsilon moves is simply its own closure.
+""",
+                            """
+This inverts the definition: closure only ever adds. A state with no epsilon moves
+contributes nothing new and stays exactly where it is, which is why
+`ABB.epsilon_closure({0, 3}) == {0, 3}` is an assertion in the lab rather than an
+approximation. Dropping such states would break the subset construction immediately, since
+the very first subset is the closure of `{start}` and the start usually has no epsilon
+moves at all.
+""",
+                        ],
                         "why": """
-Being a superset is half the definition, not a theorem: the closure is the least fixed
-point of *add every epsilon successor*, seeded with the states you started from. The
-worklist implementation makes that literal — `seen` begins as the input set and only ever
-grows. A state with no epsilon moves is its own closure, which is why the checks assert
-`ABB.epsilon_closure({0, 3}) == {0, 3}`. Epsilon edges are directed like any other, so no
-symmetry is on offer, and no machine is required to carry self-loops on them.
+The closure is defined as a least fixed point containing its seed, so containment is
+built in and needs no argument about the machine's edges. The two wrong mechanisms here are
+both structural claims about epsilon transitions that no machine is required to satisfy, and
+`ABB` — which has none — is the counterexample to each of them.
 """,
                     },
                     {
                         "q": "In the subset construction, when is a subset an accepting state of the DFA?",
                         "opts": [
-                            "When every state in it is accepting",
+                            "When every one of the states in it is an accepting state",
                             "When it shares at least one state with the NFA's accepting set",
                             "When it is the epsilon closure of some accepting state",
-                            "When it contains both the start state and an accepting state",
+                            "When it contains both the start state and at least one accepting state",
                         ],
                         "a": 1,
+                        "whys": [
+                            """
+This is the containment test `s <= accepting` where the construction uses intersection, and
+it is the universal reading of acceptance arriving one question later in a new disguise. It
+rejects words the NFA plainly accepts: determinising `ABB` puts `abb` in the subset
+`{0, 3}`, which must be accepting even though `0` is not, because the run that reached `3`
+is the run that accepts.
+""",
+                            """
+The subset is the set of states some run could be in. If any one of them accepts then some
+run accepts and the word is in the language, so the test is intersection, written
+`s & nfa.accepting` and true as soon as it is non-empty. It is the same *some* as the
+acceptance rule itself, transported from runs to the set that stands in for them.
+""",
+                            """
+The closure is how a subset is *built*, not what makes it accepting, and this test asks
+about the wrong end of the arrow. It also fails on machines with no epsilon moves, where
+every set is its own closure and the test degenerates to *contains an accepting state* by
+accident rather than by construction. Determinising `ABB` reaches `{0, 3}` by reading `abb`,
+which no closure of a single accepting state would ever produce.
+""",
+                            """
+The start state has no special role once the construction is running; it turns up inside
+many subsets simply because `ABB`'s state `0` has a self-loop on both letters. Requiring it
+would make acceptance depend on an accident of the machine's shape, and on a machine whose
+start has no self-loop it would reject every word.
+""",
+                        ],
                         "why": """
-The subset is the set of states some run could be in. If any one of them accepts, then
-some run accepts, and the word is in the language — so the test is intersection, written
-`s & nfa.accepting`. Demanding that all of them accept is the containment test `s <=
-accepting`, and it rejects words the NFA plainly accepts: for the `(a|b)*abb` machine the
-subset after `abb` is `{0, 3}`, which is accepting even though `0` is not. The start state
-has no special role here; it turns up in many subsets simply because it has a self-loop.
+Intersection, not containment, not closure, and nothing about the start. The subset stands
+for *the states some run could be in*, so every question about it is answered by translating
+the corresponding question about runs — and acceptance for runs is existential.
 """,
                     },
                     {
                         "q": "The empty subset shows up as a state of the constructed DFA. What is it doing there?",
                         "opts": [
-                            "It marks the end of the input word",
-                            "It is the closure of the start state when the start has no epsilon moves",
-                            "It is accepting, because there is nothing left to reject",
-                            "It is the dead state — `delta` must be total, so a subset with nowhere to go still needs a destination",
+                            "It is the DFA's start state, standing for the machine before any symbol has been read",
+                            "It marks the point at which the input word has run out",
+                            "It is accepting, since there is no state left inside it that could reject",
+                            "The dead state: `delta` is total, so a subset with nowhere to go still needs one",
                         ],
                         "a": 3,
+                        "whys": [
+                            """
+Reading nothing is not the same as being nowhere. Before any symbol the machine is in the
+closure of `{start}`, which always contains the start state and is therefore never empty —
+for `ABB` the first subset is `{0}`. The empty set is what you get when every run has died,
+which is the opposite situation: no possibilities left rather than all of them still open.
+""",
+                            """
+Nothing in a DFA marks the end of the word. The machine is fed one symbol at a time and the
+verdict is read off wherever it happens to be when the symbols run out, which is why
+acceptance is a property of the final state rather than an event. A state meaning *the input
+ended* would have to be entered without reading a symbol, and `delta` has no such move.
+""",
+                            """
+This is vacuous truth misapplied. The accepting test is *does this subset meet the accepting
+set*, and the empty set meets nothing at all — the intersection is empty, so the test is
+false, not vacuously true. Reading it the other way would make the machine accept every word
+whose runs have all died, which is exactly the set of words it must reject.
+""",
+                            """
+A DFA has to have an answer for every state and symbol, and *the run died* is an answer: it
+is the empty set of possible states, and it loops to itself forever because nothing can
+revive a dead run. Machines that can never get stuck simply never reach it, which is why
+determinising `ABB` gives exactly four subsets — `{0}`, `{0,1}`, `{0,2}`, `{0,3}` — and not
+one of them is empty.
+""",
+                        ],
                         "why": """
-A DFA has to have an answer for every state and symbol, and *the run died* is an answer:
-it is the empty set of possible states, and it loops to itself forever because nothing can
-revive a dead run. It is never accepting — the empty set meets nothing, least of all the
-accepting set. Machines that can never get stuck simply never reach it, which is why
-determinising `(a|b)*abb` gives four subsets and none of them empty.
+The empty subset is the totality requirement from the first module coming back to be paid
+for. It is a perfectly ordinary state: never accepting, absorbing, and reachable only from a
+subset with nowhere to go. Whether it appears at all depends on the machine, not on the
+construction.
 """,
                     },
                     {
                         "q": "An NFA has `n` states. What is true of the DFA the subset construction produces?",
                         "opts": [
-                            "Exactly `2^n` states, always",
-                            "At most `2^n` states, and for some machines the count really does grow exponentially in `n`",
-                            "At most `n^2` states",
-                            "At most `2^n` in theory, but no machine has ever been found needing more than `n`",
+                            "Exactly `2^n` states, since there are that many subsets to build",
+                            "At most `2^n`, and for some machines the count really is exponential in `n`",
+                            "At most `n^2`, since a subset is fixed by its smallest and largest member",
+                            "At most `2^n` in theory, but the reachable part is always polynomial in practice",
                         ],
                         "a": 1,
+                        "whys": [
+                            """
+`2^n` counts the subsets that *exist*; the construction builds only the ones it can reach,
+and for most machines that is a handful. `ABB` has four states, so sixteen subsets exist and
+the determinised machine has four. Confusing the size of the search space with the size of
+the result is what makes the subset construction sound unusable when it is the standard tool.
+""",
+                            """
+Both halves matter and they pull in opposite directions. At most `2^n` because there are
+that many subsets; genuinely exponential for some machines because the `(k+1)`-state NFA for
+*the k-th symbol from the end is an a* determinises to exactly `2^k` reachable subsets —
+verified in the lab at `k = 2, 3, 4` giving 4, 8 and 16 — and minimisation removes none of
+them, because each is its own Myhill-Nerode class.
+""",
+                            """
+Subsets are not intervals, and this bound would be a theorem about a different data
+structure. Four states already admit sixteen subsets rather than sixteen intervals, and the
+counting is what the whole construction rests on. It is worth noticing that `n^2` is the
+bound for something real and nearby — the product construction of the previous module, where
+the state is a *pair* rather than a set.
+""",
+                            """
+The blow-up is a property of the language, not of a clumsy construction, so no amount of
+practical experience makes it go away and no cleverer algorithm avoids it. The `k`-th-symbol
+family is the standard witness and it is nothing exotic: every one of its `2^k` subsets is
+reachable and every one is needed, because two distinct subsets always differ on some
+continuation.
+""",
+                        ],
                         "why": """
-`2^n` is an upper bound because there are that many subsets, and the construction builds
-only the ones it can reach — for most machines a handful. But the bound is not idle. The
-`(k+1)`-state NFA for *the k-th symbol from the end is an a* determinises to `2^k` subsets,
-every one reachable, and minimisation removes none of them because every one is its own
-Myhill-Nerode class. So the blow-up is a property of the language, not of a clumsy
-construction, and no cleverer algorithm avoids it.
+An upper bound that is met by real machines. The bound comes from counting subsets, and its
+tightness comes from a language where every subset is a distinct Myhill-Nerode class — which
+is the theorem of the first module doing the work of proving a lower bound in the second.
 """,
                     },
                 ],
@@ -1323,91 +1585,218 @@ assert _nfa.accepts("abaa") is True and _nfa.accepts("bbaab") is False
                     {
                         "q": "In this notation, how does `ab|c*` parse?",
                         "opts": [
-                            "`a (b|c)*`",
-                            "`(ab|c)*`",
+                            "`a ((b|c)*)`",
+                            "`((ab)|c)*`",
                             "`(ab) | (c*)`",
-                            "`a (b | c*)`",
+                            "`a (b | (c*))`",
                         ],
                         "a": 2,
+                        "whys": [
+                            """
+This reads `|` as binding tighter than the `*` and tighter than the concatenation to its
+left, which reverses the precedence order completely. It is a different language, not a
+different spelling of the same one: it matches `abcb` and the pattern as written does not.
+Anyone who wants this has to type the parentheses.
+""",
+                            """
+This gives `*` the whole pattern as its body, which would need the star to bind *loosest* of
+the three. It is the postfix operators that bind tightest — `parse_repeat` is one level below
+`parse_cat`, which is one level below `parse_alt` — so a `*` takes only the atom immediately
+to its left. This reading matches the empty word and `abab`, and the real pattern matches
+neither.
+""",
+                            """
+Three levels of precedence, tightest first: the postfix operators, then concatenation, then
+union. So `c*` is formed before anything is concatenated to it, `ab` is formed before
+anything is unioned with it, and `|` splits the pattern at the top. `parse("ab|c*")` returns
+`("alt", ("cat", ("char", "a"), ("char", "b")), ("star", ("char", "c")))`, which is this
+shape written out.
+""",
+                            """
+This is the one real trap: it keeps the right precedence for `*` and loses it for
+concatenation, letting `|` bind tighter than the juxtaposition of `a` and `b`. Concatenation
+is invisible in the source, so it is easy to treat as weaker than an operator you can see.
+The parser disagrees by construction — `parse_alt` calls `parse_cat`, so the union is split
+first and each branch is a whole concatenation.
+""",
+                        ],
                         "why": """
-Three levels of precedence, tightest first: the postfix operators, then concatenation,
-then union. So `c*` is formed before anything is concatenated to it, `ab` is formed
-before anything is unioned with it, and `|` splits the pattern at the top. That is
-exactly the shape of the grammar the parser walks — `alt` calls `concat` calls `repeat`
-calls `atom` — and the descent order *is* the precedence. Anyone who wants the other
-readings has to write the parentheses.
+The descent order of a recursive-descent parser *is* the precedence table: `alt` calls
+`concat` calls `repeat` calls `atom`, loosest first, so the operator parsed at the outermost
+level binds least tightly. All four readings here denote genuinely different languages,
+checked by enumerating every word up to four letters over `a`, `b` and `c`.
 """,
                     },
                     {
                         "q": "Thompson's construction glues fragments together with epsilon moves. Why does concatenation allocate no new states?",
                         "opts": [
-                            "Because concatenation is not one of the three regular operations",
+                            "Because concatenation is not an operator in the syntax — it is only juxtaposition",
                             "Because the two fragments are guaranteed to share a state already",
-                            "Because the right fragment is copied into the left one instead of being linked",
-                            "The left fragment's exit is joined to the right fragment's entry by an epsilon edge, and the pair already has one entry and one exit",
+                            "Because the right fragment's states are renumbered into the left one, not linked",
+                            "An epsilon edge from the left's exit to the right's entry is all a fragment needs",
                         ],
                         "a": 3,
+                        "whys": [
+                            """
+Invisible in the source is not the same as absent from the tree. `parse("ab")` returns a
+`("cat", ...)` node and `build` has a branch for it, exactly as it has one for `alt`. If
+having no written symbol were the reason, the same argument would apply to nothing else in
+the grammar — and it would not explain why `alt`, which is also a binary node, does need two
+new states.
+""",
+                            """
+Fragments never share states: `fresh()` hands out a new number every time it is called, so
+the left and right sub-fragments are disjoint by construction. If they did overlap, the
+contract would already be broken — an edge into the middle of a fragment is precisely what
+the one-entry-one-exit discipline forbids, and the star's back edge would start behaving like
+a shortcut into someone else's machine.
+""",
+                            """
+Nothing is copied or renumbered; `build` returns the numbers it already allocated and the
+`trans` dictionary is written into once. Counting settles it: `thompson(parse("a"))` has two
+states, so does the fragment for `b`, and `thompson(parse("ab"))` has four — the sum, with
+nothing merged away and nothing added.
+""",
+                            """
+Every fragment is built to one contract: a single entry, a single exit, and no edges into the
+entry or out of the exit from elsewhere. The pair `(entry of the left, exit of the right)`
+already satisfies it once `link(t1, "", s2)` joins the two, so there is nothing left to
+allocate. Union and the postfix operators are the ones that need a new entry to branch from
+and a new exit to merge into — `a|b` costs six states where `ab` costs four.
+""",
+                        ],
                         "why": """
-Every fragment is built to the same contract: one entry, one exit, and no edges into the
-entry or out of the exit from elsewhere. Concatenation needs a fragment with the same
-contract, and `(entry of the left, exit of the right)` already satisfies it once you add
-the epsilon edge from the left's exit to the right's entry. Union and the postfix
-operators are different: they need a new entry to branch from and a new exit to merge
-into, which is where the two states per operator come from.
+The one-entry-one-exit contract is what makes the construction compositional, and
+concatenation is the case where the contract is satisfied by the existing endpoints. The
+epsilon edge is doing real work — it keeps the left fragment's exit free of outgoing symbol
+edges — and it costs nothing because an edge is not a state.
 """,
                     },
                     {
                         "q": "Why does simulating the NFA never suffer catastrophic backtracking?",
                         "opts": [
-                            "Because the patterns this notation supports are too simple to be slow",
-                            "It carries the whole set of currently possible states forward, so each input symbol is processed exactly once",
-                            "Because it determinises the machine before matching",
+                            "Because this notation has no backreferences, and backreferences are what make matching slow",
+                            "It carries the whole set of possible states forward, so each symbol is processed once",
+                            "Because it determinises the machine before matching starts",
                             "Because the epsilon moves are eliminated before matching starts",
                         ],
                         "a": 1,
-                        "why": """
+                        "whys": [
+                            """
+Backreferences are a real problem — they take matching out of the regular languages
+altogether and make it NP-hard — but they are not this problem. `(a?){20}a{20}` uses nothing
+but union, star and concatenation, and it is the standard denial-of-service pattern for a
+backtracking engine. Removing backreferences does not make backtracking fast; refusing to
+backtrack does.
+""",
+                            """
 A backtracking matcher explores one run at a time and may try exponentially many before
-finding the accepting one, which is why `(a?){20}a{20}` is a denial-of-service in some
-engines. The set simulation explores all runs at once: one pass over the word, and at
-each symbol a set of at most `|Q|` states is mapped to another. Nothing is determinised
-in advance — the subsets are computed on the fly and thrown away — and the epsilon moves
-are still there, taken by the closure at every step.
+finding the accepting one. The set simulation explores all runs at once: one pass over the
+word, and at each symbol a set of at most `|Q|` states is mapped to another set. The work is
+bounded by the word length times the machine size no matter what the pattern looks like.
+""",
+                            """
+Nothing is determinised in advance. `fullmatch` computes each subset on the fly and throws it
+away when the next symbol arrives — which is what keeps the memory linear in `|Q|` instead of
+exponential in it. Determinising first would also be the wrong trade for a pattern matched
+once: the subset construction can cost `2^n` states to build before a single character is
+read.
+""",
+                            """
+The epsilon moves are still there and are taken at every step: `closure` runs on the state
+set after each symbol, which is why the machine Thompson builds — nothing but epsilon edges
+and single-symbol edges — can be simulated directly. Eliminating them is a real and different
+transformation, and this implementation does not perform it.
+""",
+                        ],
+                        "why": """
+One pass, one set, no choice points to remember. The two wrong mechanisms both propose a
+transformation that would happen *before* matching, and the actual reason is a property of
+how matching itself proceeds — which is why it holds for every pattern rather than for the
+easy ones.
 """,
                     },
                     {
                         "q": "Thompson's construction proves one direction of Kleene's theorem. Which one?",
                         "opts": [
                             "Every language a finite automaton accepts has a regular expression",
-                            "Every context-free language has a regular expression",
+                            "Regular expressions and finite automata describe exactly the same languages",
                             "Every regular expression denotes a language that some finite automaton accepts",
-                            "Regular expressions and Turing machines recognise the same languages",
+                            "Every regular expression denotes a language that some *deterministic* finite automaton accepts",
                         ],
                         "a": 2,
+                        "whys": [
+                            """
+This is the converse, and it is true — but it is a separate construction, by state
+elimination or by Kleene's own recursion on paths, and Thompson's algorithm never runs
+backwards. Note which way the code points: `thompson` takes a tree and returns an `NFA`. An
+algorithm proves the direction its output faces.
+""",
+                            """
+True, and it is the theorem rather than the half of it this construction supplies. Kleene's
+theorem is a biconditional and takes two algorithms to establish; naming the whole when asked
+for the direction is the commonest way to get this question wrong while knowing the material.
+Thompson gives expressions-to-automata and nothing else.
+""",
+                            """
+The construction takes a pattern and hands back a machine, so it establishes that expressions
+are no more powerful than automata. That is the direction the code runs in, and `Regex` makes
+it concrete: `parse` builds the tree, `thompson` builds the NFA, `fullmatch` runs it.
+""",
+                            """
+Also true, and one construction short. Thompson stops at an NFA — a machine full of epsilon
+edges and branching — and getting from there to a deterministic machine takes the subset
+construction of the previous module, at a cost that can be exponential. Two theorems chained
+together is not the theorem this one algorithm proves.
+""",
+                        ],
                         "why": """
-The construction takes a pattern and hands back a machine, so it establishes
-*expressions are no more powerful than automata*. The converse — turning any automaton
-back into an expression — is a separate construction (state elimination, or Kleene's own
-recursion on paths), and together the two halves say the notations are interchangeable.
-The other two claims are false, and interestingly so: `a^n b^n` is context-free with no
-regular expression at all, and no finite automaton comes close to a Turing machine.
+Expressions to automata, via a machine that is nondeterministic on purpose. Two of the wrong
+answers here are perfectly true statements, which is what makes the question about
+understanding rather than recall: the question is what *this construction* establishes, and
+an algorithm establishes the direction it computes in.
 """,
                     },
                     {
                         "q": "In this notation `a|` is a legal pattern and it matches both `a` and the empty word. Why?",
                         "opts": [
-                            "Because a trailing `|` is ignored by the parser",
-                            "Because `|` is treated as optional when it ends a pattern",
-                            "Because the parser inserts a `*` wherever a branch is missing",
-                            "The right branch of the union is an empty concatenation, and an empty concatenation is the empty word",
+                            "Because the parser rewrites a missing branch as `a?`, which matches both",
+                            "Because a union with a missing branch is defined to include the empty word as well",
+                            "Because the parser inserts a `*` on the last atom, and `a*` matches both",
+                            "The right branch of the union is an empty concatenation, which is the empty word",
                         ],
                         "a": 3,
+                        "whys": [
+                            """
+This gets the language right and the mechanism wrong, and the difference shows the moment the
+pattern grows. `a?` is a postfix operator applied to one atom, so the analogous reading of
+`ab|` would be `ab?`, matching `a` and `ab` — where the pattern actually denotes `ab` and the
+empty word. `parse("a|")` returns `("alt", ("char", "a"), ("eps",))`, an `alt` node with two
+branches, not an `opt` node with one.
+""",
+                            """
+No special case exists, and that is the point worth taking away: nothing in `parse_alt` looks
+for a missing branch, and nothing needs to. A rule of this kind would also have to say what
+happens for `|a`, for `a||b` and for `(|)`, and the empty-concatenation reading answers all of
+them at once without another line of code.
+""",
+                            """
+This one is refutable by a single word. `a*` matches `aa`, and the pattern does not:
+`Regex("a|").fullmatch("aa")` is False while `Regex("a*").fullmatch("aa")` is True. The two
+languages agree on `a` and on the empty word and part company at the third word, which is
+why checking one extra example is worth more than checking that the answer looks right.
+""",
+                            """
+`parse_cat` stops at `|`, at `)` and at the end of the pattern, and when it stops having
+consumed nothing it returns `("eps",)` — a real node with a real two-state fragment, not an
+absence. So `a|` is `("alt", ("char", "a"), ("eps",))` and denotes exactly `{"a", ""}`.
+Python's `re` agrees, which is what makes the comparison against `re.fullmatch` a fair test.
+""",
+                        ],
                         "why": """
-`parse_cat` stops at `|`, at `)` and at the end of the pattern. When it stops having
-consumed nothing it returns `("eps",)`, and that is a real node with a real
-two-state fragment, not an absence. So `a|` is `("alt", ("char", "a"), ("eps",))` and
-denotes `{"a", ""}`. Python's `re` agrees, which is what makes the comparison against
-`re.fullmatch` a fair test. It looks like a typo and it is a well-defined pattern —
-worth knowing before you write a parser that rejects it.
+The empty concatenation is the identity of concatenation, exactly as the empty sum is zero,
+and a parser that represents it explicitly gets the edge cases for free. It looks like a typo
+and it is a well-defined pattern — worth knowing before you write a parser that rejects it.
 """,
                     },
                 ],
@@ -1981,19 +2370,46 @@ assert _nfa.fullmatch("aa") is False, "there is nowhere to go after the first a"
                     {
                         "q": "Why is `{ a^n b^n : n >= 1 }` not regular?",
                         "opts": [
-                            "Because no regular expression is allowed to use exponents",
-                            "A finite automaton has nowhere to keep an unbounded count, and the pumping lemma turns that intuition into a proof",
-                            "Because the language is infinite",
-                            "Because a DFA is allowed only one accepting state",
+                            "Because matching the `a`s against the `b`s needs a stack, and a finite automaton does not have one",
+                            "A finite automaton cannot hold an unbounded count, and the pumping lemma turns that into a proof",
+                            "Because the language is infinite, and a finite automaton accepts only finitely many words",
+                            "Because it has no regular expression, and Kleene's theorem then rules out an automaton",
                         ],
                         "a": 1,
+                        "whys": [
+                            """
+True, and it restates the conclusion rather than establishing it. *Needs a stack* is what has
+to be shown — a machine having no stack proves nothing until you show no stack-free method
+works either, and plenty of languages that look as though they need one do not. The pumping
+argument is what closes that gap, and it never mentions stacks.
+""",
+                            """
+Suppose some DFA with `p` states accepted it. Reading `a^p b^p` it must revisit a state within
+the first `p` letters, so there is a loop over a block of `a`s; go round that loop once more
+and the machine still accepts, but the word now has more `a`s than `b`s and is not in the
+language. The contradiction is the proof, and the intuition about counting is what tells you
+where to look for it.
+""",
+                            """
+Infinite is no obstacle at all: `a*` is infinite and regular, and so is every language with a
+star in its expression. A DFA reads an unbounded word with bounded memory by revisiting
+states, which is the same fact that made *no state is visited twice* the wrong reading of
+determinism. What a finite automaton cannot hold is an unbounded *distinction*, not an
+unbounded number of words.
+""",
+                            """
+Kleene's theorem is sound and the argument is circular. *It has no regular expression* is
+exactly as strong a claim as *it is not regular* — the theorem says the two are the same
+thing — so this offers the conclusion as its own premise. Something outside the equivalence
+has to break the tie, and the pumping lemma is that something.
+""",
+                        ],
                         "why": """
-Suppose some DFA with `p` states accepted it. Reading `a^p b^p`, the machine must revisit
-a state within the first `p` letters, so there is a loop over a block of `a`s. Go round
-that loop one extra time and the machine still accepts, but the word now has more `a`s
-than `b`s and is not in the language. The contradiction is the proof. Being infinite is
-no obstacle at all — `a*` is regular and infinite — and a DFA may have as many accepting
-states as it likes.
+The pumping lemma is what turns *I cannot see how a finite machine would do this* into a
+proof, and its shape is worth keeping: assume a machine, pick a word long enough to force a
+repeated state, and use the repetition to build a word the machine gets wrong. Two of the
+wrong answers are true statements offered as arguments, which is the commonest way a correct
+intuition fails to become a proof.
 """,
                     },
                     {
@@ -2005,50 +2421,125 @@ states as it likes.
                             "`A -> B C`",
                         ],
                         "a": 3,
+                        "whys": [
+                            """
+A unit rule, and it is banned for a reason CYK depends on: it rewrites a span as *the same
+span*, so the table could no longer be filled by increasing length — the cell would need its
+own value before it was computed. Unit rules are removable by taking the transitive closure
+of the unit relation, which is one of the steps of putting a grammar into normal form.
+""",
+                            """
+Legal in a general grammar and legal in Greibach normal form, which is the likely source of
+the confusion: Greibach demands a terminal *first*, Chomsky demands terminals *alone*. Mixing
+a terminal with a nonterminal breaks CYK's binary split, since the cell would have to be
+divided into a one-symbol part and a rest by a rule that names both.
+""",
+                            """
+An epsilon rule, and banned for the same reason as the unit rule: it lets a nonterminal cover
+a span of length zero, and a split into a zero-length part and the whole span makes no
+progress. Removing epsilon rules is a standard step and costs only the empty word itself,
+which is why the guarantee is that every context-free language *without the empty word* has a
+CNF grammar.
+""",
+                            """
+One nonterminal going to exactly two nonterminals — one of the two shapes CNF permits, the
+other being one nonterminal going to a single terminal. Together they force every rule
+application to split a span into two strictly shorter ones, which is precisely the invariant
+that lets CYK fill the table by increasing length and never look at a cell it has not
+finished.
+""",
+                        ],
                         "why": """
-CNF permits exactly two shapes: one nonterminal going to two nonterminals, or one
-nonterminal going to one terminal. `A -> B` is a unit rule and `A -> ε` an epsilon rule,
-and both are banned because they break CYK's central invariant — that a rule application
-always splits a span into two strictly shorter ones, so the table can be filled by
-increasing length. `A -> a B` mixes a terminal with a nonterminal, which is legal in a
-general grammar and in Greibach normal form, but not here. Every context-free language
-without the empty word has a CNF grammar, so nothing is lost.
+Two shapes, `A -> B C` and `A -> a`, and every restriction earns its place: each of the three
+banned forms would let a rule apply to a span without shortening it, and the table is filled
+shortest-first. Nothing is lost by the restriction, since every context-free language without
+the empty word has a grammar in this form.
 """,
                     },
                     {
                         "q": "The CYK table cell for a span holds what?",
                         "opts": [
-                            "The one nonterminal that derives it, or nothing",
-                            "The terminals appearing in that span",
-                            "Every nonterminal that derives exactly that span",
-                            "The rules used anywhere inside that span",
+                            "The one nonterminal that derives it, or nothing at all if none does",
+                            "Every nonterminal that derives some prefix of that span",
+                            "Every nonterminal that derives exactly that span, start to end",
+                            "Every rule whose right-hand side fits inside that span",
                         ],
                         "a": 2,
+                        "whys": [
+                            """
+One per cell would be wrong even for an unambiguous grammar. Different nonterminals can
+legitimately derive the same span and go on to play different roles in the larger parse — a
+noun phrase and a sentence fragment covering the same three words — and discarding all but
+one loses whichever the enclosing rule needed. Keeping all of them is also what makes the
+algorithm polynomial: the span is analysed once and the answer serves every larger span that
+contains it.
+""",
+                            """
+Prefixes would make the cells overlap and the recurrence circular: the cell for a span would
+depend on nonterminals that also derive shorter spans starting at the same place, which are
+themselves cells of the table. The whole method rests on *exactly* — a cell is a closed
+question about one contiguous stretch of the word, answerable from strictly shorter stretches.
+""",
+                            """
+All of them, and *exactly* that span rather than part of it. That is what makes the recurrence
+work: to fill a cell you pick a split point, look up the two shorter spans it creates, and
+ask which rules join a nonterminal from the left cell to one from the right. Every entry is a
+complete answer to a smaller instance of the same question.
+""",
+                            """
+Rules are what you apply to the cells, not what you store in them. A rule mentioning
+nonterminals that happen to derive pieces of the span says nothing about whether the span as a
+whole is derivable, which is the only question the table answers. Storing rules would also
+lose the composition step entirely: the recurrence needs to know which *symbols* cover the
+left and right halves.
+""",
+                        ],
                         "why": """
-All of them, which is the reason the algorithm is polynomial rather than exponential:
-a span is analysed once and the answer serves every larger span that contains it.
-Insisting on one nonterminal per cell would be wrong even for unambiguous grammars,
-since different nonterminals can legitimately derive the same span in different
-contexts. The terminals are already visible in the word, and the rules are what you
-apply to the cells, not what you store in them.
+A cell is the set of nonterminals deriving exactly that span, which is the smallest thing that
+is both computable from shorter spans and sufficient for longer ones. Two of the wrong answers
+store too little to compose and one stores something the recurrence cannot use.
 """,
                     },
                     {
                         "q": "Counting parse trees instead of merely recording which nonterminals fit turns the parser into...",
                         "opts": [
-                            "a faster parser, since counts are cheaper than sets",
-                            "an ambiguity detector: more than one tree for some word means the grammar is ambiguous",
+                            "a faster parser, since integer counts are cheaper than sets",
+                            "an ambiguity detector: two trees for one word make the grammar ambiguous",
                             "a proof that the language itself is inherently ambiguous",
-                            "a test for whether a language is context-free at all",
+                            "a parser that also returns the trees, since the count is built out of them",
                         ],
                         "a": 1,
+                        "whys": [
+                            """
+The cost is the same, which is the quiet point of the change: the unions become additions and
+the membership tests become multiplications, cell for cell and split for split. Nothing about
+the shape of the algorithm moves, which is why swapping the semiring is a rewrite of a few
+lines rather than a new parser.
+""",
+                            """
+A count above one is a witness, and `shortest_ambiguous` goes looking for the smallest word
+that provides one — `shortest_ambiguous(DOUBLE, 5)` returns `"aaa"`, and for `ANBN` the search
+comes back empty. Note exactly what is witnessed: ambiguity of the *grammar*, demonstrated by
+a single word, with no search over all words needed to establish it.
+""",
+                            """
+Inherent ambiguity is a property of the language — no unambiguous grammar exists for it at
+all — and it is undecidable, so no search of this kind could ever establish it. The same
+language usually has an unambiguous grammar as well, and finding one ambiguous grammar says
+nothing about whether such a rewrite exists. The witness is real; the conclusion drawn from it
+is far too strong.
+""",
+                            """
+The counts are sums, and a sum keeps no record of what was added. `count_parses` returns an
+integer per cell and the trees are never built, which is exactly why it stays polynomial while
+the number of trees it counts can be exponential in the word length. Recovering an actual tree
+needs back-pointers stored during the fill and a walk afterwards.
+""",
+                        ],
                         "why": """
-A count above one is a witness, and `shortest_ambiguous` goes looking for the smallest.
-But note what it witnesses: ambiguity is a property of the *grammar*. The same language
-usually has an unambiguous grammar too, and finding a witness says nothing about whether
-one exists. Inherent ambiguity — no unambiguous grammar exists at all — is a property of
-the language, and it is undecidable, so no search of this kind could ever establish it.
-The counting costs the same as the set version; the multiplications replace the unions.
+Same table, same loops, different semiring — booleans for membership, integers for counting —
+and the ambiguity test falls out of the arithmetic. The two overreaching answers both promise
+something the counts cannot carry: the language's inherent ambiguity, and the trees themselves.
 """,
                     },
                     {
@@ -2056,18 +2547,41 @@ The counting costs the same as the set version; the multiplications replace the 
                         "opts": [
                             "The grammar is scanned once for every cell of the table",
                             "The table has `n^3` cells",
-                            "Each cell stores `n` separate counts",
+                            "Each cell holds one count per nonterminal, and there are `n` nonterminals",
                             "A span of length `L` can be cut in `L - 1` places, and `L` grows with `n`",
                         ],
                         "a": 3,
+                        "whys": [
+                            """
+One scan per cell would leave you at `n^2 |G|` with no third factor at all — which is the
+useful way to see where the third factor really is. The grammar is scanned once per *split*,
+and a cell of span length `L` has `L - 1` splits, so the scanning is where the extra `n`
+enters rather than where it is absent.
+""",
+                            """
+The table has about `n^2 / 2` cells, not `n^3`: a span is fixed by a start and a length, and
+the two are not independent because a span cannot run off the end of the word. Getting the
+cell count right is what forces the third factor to be explained by something else, and the
+something else is inside the cell.
+""",
+                            """
+The number of nonterminals is `|G|`, a property of the grammar, and it has nothing to do with
+the length of the word — the same grammar parses words of every length. It does appear in the
+true running time, as the constant factor `|G|` multiplying `n^3`, which is why a grammar
+blow-up during CNF conversion is worth watching even though it changes no exponent.
+""",
+                            """
+The table accounts for two factors and the split loop supplies the third: a cell of length `L`
+tries every way of cutting its span into a non-empty left part and a non-empty right part, and
+there are `L - 1` of those. Summing `L - 1` over every cell is where the cube appears, and it
+is the only loop in the algorithm whose trip count grows with the span.
+""",
+                        ],
                         "why": """
-The table has about `n^2 / 2` cells, which accounts for two factors. The third is the
-split loop: a cell of length `L` tries every way of cutting its span into a non-empty
-left part and a non-empty right part, and there are `L - 1` of those. Summing `L - 1`
-over all the cells is where the cube appears. A cell holds at most one count per
-nonterminal, and the grammar is scanned once per split rather than once per cell — a
-cell of span length `L` scans it `L - 1` times, so one scan per cell would leave you at
-`n^2 |G|` and no third factor at all.
+Two factors from the cells, one from the splits inside each cell. The wrong answers put the
+third factor in three plausible places — the cell count, the cell contents, and the grammar
+scan — and the way to tell them apart is to write down what each loop is actually iterating
+over.
 """,
                     },
                 ],
@@ -2578,92 +3092,212 @@ assert count_parses(_amb, "ab") == 2
                     {
                         "q": "The transition function is partial. What does a missing entry mean?",
                         "opts": [
-                            "The machine rejects and rewinds the tape",
-                            "The machine halts where it stands",
-                            "The machine loops on that cell forever",
-                            "The machine is malformed and should have been rejected by validation",
+                            "The machine rejects, since rejection is what happens when no rule applies",
+                            "The machine halts where it stands, in whatever state it happens to be",
+                            "The machine loops on that cell forever, having no way to move",
+                            "The machine is malformed — `delta` has to be total, as it is for a DFA",
                         ],
                         "a": 1,
+                        "whys": [
+                            """
+There is no rejecting move, and no notion of rejection beyond *stopped somewhere that is not
+the accept state*. Run a machine with no rules at all on the empty tape and the report is
+`halted` True with `accepted` False at step 0 — one event, read two ways. Treating rejection
+as an action rather than as a verdict is what makes the missing entry look like an error.
+""",
+                            """
+Nothing applies, so nothing happens: `step` returns `None` and the run is over. That is one of
+the two ways to stop, the other being arrival in the accept state, which also has no successor.
+Both are *halting*; only one of them is *accepting*, which is why `run` reports the two
+separately.
+""",
+                            """
+Looping and halting are the two outcomes the whole module exists to distinguish, and this
+merges them. A machine with nothing to do does not spin — it stops, at step 0, with the report
+saying so. Compare `RIGHTWARD`, which genuinely never halts: it always has a rule to apply and
+walks right forever, which is what running forever actually looks like.
+""",
+                            """
+Totality is a DFA requirement and it is imported here by habit. A DFA must be total because
+acceptance is decided at the end of the word, so every word has to be readable to its end; a
+Turing machine has no end of input to reach, so stopping is a legitimate outcome rather than an
+unfinished read. The two models differ on exactly this point, and neither is malformed.
+""",
+                        ],
                         "why": """
-Nothing applies, so nothing happens: `step` returns `None` and the run is over. That is
-one of the two ways to stop — the other is arriving in the accept state, which also has
-no successor. Both are *halting*; only one of them is *accepting*, which is why `run`
-reports the two separately. Nothing rewinds, because there is no notion of rejection
-beyond stopping somewhere that is not the accept state, and a partial transition
-function is entirely well formed. It is the DFA that must be total, not this.
+A missing entry is the machine's way of stopping, and stopping is not the same as accepting.
+The determinism module needed `delta` total precisely because a DFA's verdict is read at the
+end of the word; here the verdict is read wherever the machine stops, so partiality costs
+nothing and buys the halting outcome.
 """,
                     },
                     {
                         "q": "Why does `run` report `halted` separately from `steps`?",
                         "opts": [
-                            "Because `steps` counts tape cells rather than transitions",
-                            "Because a machine that has halted always has `steps` equal to zero",
-                            "Because `halted` refers only to reaching the accept state",
-                            "Running out of budget is not halting: the simulation stopped, but the machine had not",
+                            "Because `steps` counts tape cells visited rather than transitions taken",
+                            "Because `halted` is true only when the machine reaches the accept state",
+                            "Because a run that used up its whole budget has halted — it did stop, after all",
+                            "Running out of budget is not halting: the simulation stopped, not the machine",
                         ],
                         "a": 3,
+                        "whys": [
+                            """
+`steps` counts transitions, and the two counts are not even close for a machine that revisits
+cells or stands still. It is easy to check: `RIGHTWARD` on the empty tape with a budget of 50
+reports `steps` 50 and `head` 50, which agree only because that machine happens to move right
+every single step and never returns.
+""",
+                            """
+That is `accepted`, the narrower flag, true only when the machine halted *and* did so in the
+accept state. `halted` is the wider one: a machine that stops with no rule to apply has halted
+and not accepted, which is the ordinary way to reject. Collapsing the two would leave no way to
+say *it finished and the answer was no*.
+""",
+                            """
+This is the conflation the two fields exist to prevent, and it is tempting because the
+simulation really did come to a stop. But the stopping was ours, not the machine's: it still
+had a rule to apply. `halted` False with `steps` equal to `max_steps` is the honest report of an
+unfinished experiment, and nothing at all follows from it — the machine might halt on the very
+next step, or never.
+""",
+                            """
+Exhausting a budget says something about the observer and nothing about the machine. That is
+why the budget is checked *before* the step is taken rather than after: it keeps `steps` from
+ever exceeding `max_steps`, and keeps `halted` from ever claiming more than was actually seen.
+`RIGHTWARD` with a budget of 50 reports `halted` False and `steps` 50, which is exactly as much
+as was observed.
+""",
+                        ],
                         "why": """
-`halted` False with `steps` equal to `max_steps` is the honest report of an unfinished
-experiment: the machine had somewhere to go and we stopped watching. Nothing follows from
-it — the machine might halt on the very next step or never. That is why the budget is
-checked before the step is taken rather than after: it keeps `steps` from ever exceeding
-`max_steps` and keeps `halted` from ever claiming more than was observed. `accepted` is
-the narrower flag, true only when the machine halted *and* did so in the accept state.
+Three states of knowledge, not two: halted and accepted, halted and not accepted, and not
+halted at all. The last is a statement about the experiment rather than about the machine, and
+keeping it separate is what stops a budget from being quietly read as a decision.
 """,
                     },
                     {
                         "q": "`detect_loop` reports the step at which a configuration repeats. What does that prove?",
                         "opts": [
-                            "The machine halts, but only after a long time",
-                            "The machine's language is undecidable",
-                            "The machine never halts on that input, because a deterministic machine in a configuration it has been in before must repeat everything it did after it",
-                            "Nothing — a configuration can repeat and the machine still halt later",
+                            "That the machine halts eventually, but only after more steps than the budget allows",
+                            "That this machine's halting cannot be decided, which is why the simulation had to stop",
+                            "That it never halts on that input — a repeated configuration repeats all that follows",
+                            "Nothing on its own: a configuration can repeat and the machine can still halt later on",
                         ],
                         "a": 2,
+                        "whys": [
+                            """
+A repeat is evidence of the opposite. Once a configuration recurs the machine is in a cycle
+with no exit, so no budget however large would see it finish — the two-state machine that steps
+right and then left repeats at step 2 and would still be running after a trillion. Confusing
+*slow* with *never* is the whole reason the test is worth having.
+""",
+                            """
+Undecidability is a property of the halting *problem* — the general question, over all machines
+and inputs — and not of any individual machine. Every particular machine either halts on a
+given input or does not, and for this one the answer has just been established. What is
+undecidable is having a single program that answers for all of them.
+""",
+                            """
+A configuration is the entire state of the computation: control state, head position and tape.
+The successor is a function of that alone, so returning to one you have already been in means
+entering a cycle that runs forever. `detect_loop` on the two-state right-then-left machine
+returns 2, and that 2 is a proof rather than a suspicion.
+""",
+                            """
+This would be right for a machine that remembered something outside the configuration — a step
+counter, a random seed, an unread input stream — and a Turing machine has nothing of the kind.
+Determinism plus a complete snapshot is what upgrades *seen before* into *will do it again*,
+and both halves are needed: drop determinism and the same configuration could continue in two
+different ways.
+""",
+                        ],
                         "why": """
-A configuration is the entire state of the computation: control state, head position and
-tape. The successor is a function of it alone, so returning to one you have seen means
-entering a cycle that will run forever. That makes the test *sound* — when it says the
-machine diverges, it is right. Note what it does not give you: nothing about the
-language, and no upper bound on runtime for the machines it says nothing about.
+Soundness, and it comes from configurations being complete and the successor being a function.
+Note what it does not give you: nothing about the machine's language, and no bound on the
+runtime of the machines it stays silent about.
 """,
                     },
                     {
                         "q": "`detect_loop` is sound but not complete. What does incompleteness mean here?",
                         "opts": [
-                            "It sometimes reports a loop where there is none",
-                            "Some machines run forever without ever repeating a configuration, and the test returns `None` for them",
-                            "It only works for machines with a single tape",
-                            "It needs a budget at least as large as the number of states",
+                            "It sometimes reports a loop where there is none, so a positive answer needs checking",
+                            "Some machines run forever without ever repeating a configuration, and it returns `None`",
+                            "It answers only for machines that halt, and says nothing about the ones that do not",
+                            "It needs a budget at least as large as the number of states, which is not always enough",
                         ],
                         "a": 1,
+                        "whys": [
+                            """
+That would be *unsoundness*, and determinism rules it out: a repeated configuration always is a
+loop, with no false positives available. The two properties are worth keeping straight — sound
+means every answer given is right, complete means an answer is given whenever one exists — and
+this test has the first and lacks the second.
+""",
+                            """
+`RIGHTWARD` is the counterexample and it is a single rule: it walks right forever over blank
+tape. The head position is part of the configuration, so every configuration it visits is new
+and no repeat ever occurs — yet it plainly never halts. `detect_loop(RIGHTWARD, "")` returns
+`None`, which is the test declining to answer rather than answering *it halts*.
+""",
+                            """
+This has the two classes the wrong way round. The test says nothing about machines that halt —
+they simply run out and finish, with no repeat to report — and it is the non-halting ones it
+tries to catch, succeeding for those that cycle and failing for those that diverge without
+repeating. `None` means *no verdict*, and it is returned in both of those cases.
+""",
+                            """
+The budget bounds how long the search runs and has nothing to do with the number of states. A
+machine can have three states and a configuration space that is infinite, because the tape is
+part of the configuration — which is precisely why `RIGHTWARD` escapes with two states and one
+rule. No budget expressed in terms of `|Q|` could be enough.
+""",
+                        ],
                         "why": """
-`RIGHTWARD` is the counterexample and it is three symbols long: it walks right forever
-over blank tape. The head position is part of the configuration, so every configuration
-it visits is new and no repeat ever occurs — yet it plainly never halts. Reporting a loop
-that is not there would be *unsoundness*, and determinism rules that out. The gap between
-the two is the whole subject: sound and complete together is exactly what the halting
-problem says you cannot have.
+Sound and not complete: every loop it reports is real, and some real non-termination is invisible
+to it. The gap between the two is the whole subject of the module, because sound *and* complete
+together is exactly what the halting problem says no program can be.
 """,
                     },
                     {
                         "q": "Why is there no program that decides, for every machine and input, whether the machine halts?",
                         "opts": [
-                            "Because the tape is infinite and no program can inspect an infinite object",
-                            "Because the busy beaver function grows too fast to compute",
-                            "Assume one exists, then build a machine that asks it about itself and does the opposite of the answer; its own behaviour contradicts whatever the decider said",
+                            "Because the tape is infinite, and no program can inspect an infinite object",
+                            "Because deciding would mean simulating, and a simulation cannot outrun the machine it simulates",
+                            "Assume one exists, build a machine that asks it about itself and does the opposite",
                             "Because no program is able to read its own description",
                         ],
                         "a": 2,
+                        "whys": [
+                            """
+The infinite tape is a red herring: what the decider is handed is a *description*, and a
+description is finite. `detect_loop` is a working program that reasons about unbounded tapes and
+returns real answers for some machines. Finiteness of the description is not the obstacle — it
+is what makes the self-application in the proof legal.
+""",
+                            """
+The most natural wrong answer, because it is a correct observation about one method. Simulation
+does fail, and it fails for the reason given. But *one method fails* is not *no method exists* —
+`detect_loop` already decides some cases without simulating to the end, and a cleverer analysis
+deciding all of them is exactly what has to be ruled out. The diagonal argument rules it out
+without examining any method at all.
+""",
+                            """
+The diagonal argument, and it needs nothing beyond the assumption it destroys. Feed the contrary
+machine its own description: if the decider says it halts, it loops; if it says it loops, it
+halts. Both branches are contradictions, so the decider cannot exist — and the argument never
+looks at how the decider works, which is what makes it cover every possible one.
+""",
+                            """
+A program certainly can read its own description, and the recursion theorem is what guarantees
+the construction in the proof is allowed. Every compiler that compiles itself is the everyday
+version. If self-reference were impossible the diagonal argument would be the thing blocked, and
+the halting problem would be open rather than settled.
+""",
+                        ],
                         "why": """
-The diagonal argument, and it needs nothing more than the assumption it destroys. Feed
-the contrary machine its own description: if the decider says it halts, it loops; if it
-says it loops, it halts. Both branches are contradictions, so the decider cannot exist.
-The infinite tape is a red herring — the *description* being reasoned about is finite,
-and finiteness is what makes the self-application legal. Busy beaver's uncomputability is
-a consequence of this result rather than a cause of it. And a program certainly can read
-its own description; the recursion theorem is what guarantees the construction above is
-allowed.
+A contradiction from the assumption alone, which is why it settles the question for every
+program rather than for the ones anybody has thought of. Two of the wrong answers point at real
+difficulties — the infinite tape, the cost of simulation — and neither is an impossibility
+proof; the third denies a self-reference the proof depends on.
 """,
                     },
                 ],
