@@ -46,6 +46,312 @@ COURSE = {
                 "Uncorrelated subqueries, `NOT IN` versus `NOT EXISTS`, and NULL's effect on both",
                 "Bound parameters are not a style preference: string-built SQL is an injection hole",
             ],
+            "read": [
+                {
+                    "title": "Tables that keep promises",
+                    "minutes": 12,
+                    "body": r'''
+Picture a library that runs on one spreadsheet. Every time someone borrows a book, a row
+goes in: the member's name, the book's title, the author, the author's country, the day.
+After a month it looks like this:
+
+```text
+member   title                   author              country        day
+Ada      A Wizard of Earthsea    Ursula K. Le Guin   United States  2026-03-01
+Grace    A Wizard of Earthsea    Ursula K. Le Guin   United States  2026-03-02
+Ada      The Dispossessed        Ursula K. Le Guin   United States  2026-03-03
+Linus    Invisible Cities        Italo Calvino       Italy          2026-03-04
+```
+
+It works until it does not. Le Guin's country is typed out on three rows, and one of them
+will eventually be typed differently. Barbara joined last week and has borrowed nothing,
+so there is no row for her and nowhere to write her name down. *Cosmicomics* has never
+left the shelf, so the sheet has no idea it exists. And if someone deletes Linus's row
+because the book came back, the library forgets that Calvino is Italian.
+
+The relational model is a response to that sheet. It says: separate the things being
+talked about — authors, books, members, loans — and give each its own table, so that
+every fact is written down once. Then, and this is the part the sheet could never do,
+tell the engine what must be true of those tables, so that a row that would break a rule
+is refused rather than stored.
+
+## A relation is a set
+
+A table in this model is a *relation*: a set of tuples, every one shaped by the same
+schema. Two words in that sentence carry weight. *Set* means there is no order. The rows
+are not first, second and third; they are members of a collection, and a query that reads
+them out without `ORDER BY` is allowed to hand them back in any order the engine finds
+convenient, and in a different order tomorrow. It also means a row carries no position
+you could select on: there is no "row 3", only rows with values. *Schema* means the
+columns and their names are fixed and the same for every row, which is what makes it
+possible to write a query about the column rather than about one row.
+
+SQL departs from the model in one place: a SQL table is a *bag*, not a set, and will
+store two identical rows unless you tell it otherwise. That is part of what `UNIQUE` and
+`PRIMARY KEY` are for.
+
+## Keys: how to point at a row
+
+Take the book table. Two books can have the same title, so the title is not a way of
+naming a book. Give every book a number instead:
+
+```sql
+CREATE TABLE book (
+    id        INTEGER PRIMARY KEY,
+    title     TEXT NOT NULL,
+    author_id INTEGER NOT NULL REFERENCES author(id),
+    year      INTEGER NOT NULL,
+    copies    INTEGER NOT NULL CHECK (copies > 0)
+);
+```
+
+`id` is the *primary key*: a column, or a set of columns, whose value identifies one row
+and one only, and which the engine promises never to let repeat. In SQLite an
+`INTEGER PRIMARY KEY` is the table's own row number, which makes it the cheapest possible
+thing to look a row up by; that will matter in module three.
+
+Now `author_id`. A book is by an author, and the way the book table says so is by holding
+the author's key. That column is a *foreign key*: its value must be the primary key of
+some row in `author`. `REFERENCES author(id)` is the promise, and it means two things at
+once — a book cannot name an author who does not exist, and an author cannot be deleted
+while a book still names them. With that promise kept, the spreadsheet's last problem goes
+away: there is nothing to forget, because the author's country lives in one row of
+`author` and the book points at it.
+
+One trap is specific to SQLite. It parses `REFERENCES` and then, by default, ignores it. Foreign keys are enforced only on a
+connection that has run `PRAGMA foreign_keys = ON`, and every new connection starts with
+it off. A schema full of `REFERENCES` clauses that has never been switched on will accept
+a book by author 99 without a murmur. The lab's `connect()` exists to make that pragma
+impossible to forget.
+
+## Constraints: validation that cannot be bypassed
+
+The other clauses in that `CREATE TABLE` are the same idea applied to single columns.
+`NOT NULL` says a book must have a title. `UNIQUE`, on `author.name`, says two authors
+cannot share one. `CHECK (copies > 0)` says a book with no copies is not a book the
+library holds.
+
+You could check all of that in Python before the `INSERT`. The reason to put it in the
+schema is that Python is not the only thing that will ever write to the database — there
+will be a second script, a migration, a colleague at the `sqlite3` prompt — and a rule in
+the schema holds for all of them. Here is the engine keeping three of them:
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.execute("PRAGMA foreign_keys = ON")
+conn.executescript("""
+CREATE TABLE author (
+    id      INTEGER PRIMARY KEY,
+    name    TEXT NOT NULL UNIQUE,
+    country TEXT NOT NULL
+);
+CREATE TABLE book (
+    id        INTEGER PRIMARY KEY,
+    title     TEXT NOT NULL,
+    author_id INTEGER NOT NULL REFERENCES author(id),
+    year      INTEGER NOT NULL,
+    copies    INTEGER NOT NULL CHECK (copies > 0)
+);
+""")
+conn.execute("INSERT INTO author VALUES (?, ?, ?)", (3, "Chinua Achebe", "Nigeria"))
+
+attempts = [
+    ("a book by author 99, who does not exist", (6, "Things Fall Apart", 99, 1958, 4)),
+    ("a book with no title",                    (6, None, 3, 1958, 4)),
+    ("a book with zero copies",                 (6, "Things Fall Apart", 3, 1958, 0)),
+]
+for what, row in attempts:
+    try:
+        conn.execute("INSERT INTO book VALUES (?, ?, ?, ?, ?)", row)
+        print("accepted:", what)
+    except sqlite3.IntegrityError as error:
+        print("refused: ", what, "->", error)
+print("books stored:", conn.execute("SELECT COUNT(*) FROM book").fetchone()[0])
+```
+
+Each attempt is refused with an `IntegrityError` that names the constraint, and the table
+holds nothing afterwards. That is the property to want from validation: nothing
+half-written, nothing to clean up.
+
+## Joins: one row per matching pair
+
+A query that needs facts from two tables has to put them back together, and the
+operation that does it is the join. Start with what a join *produces*, on the smallest
+real case: four members and eight loans, and one member — Barbara — who has never
+borrowed anything.
+
+`FROM member JOIN loan ON loan.member_id = member.id` considers every pair of a member
+row and a loan row and keeps the pairs where the condition holds. Each loan names exactly
+one member, so each loan survives in exactly one pair: eight rows out, one per loan.
+Barbara is in no pair, so she is not in the result. That is an *inner* join, and losing
+Barbara is not a bug in it; it is what "the pairs where the condition holds" means.
+
+`LEFT JOIN` adds one rule: every row of the left table appears at least once. A left row
+that matched nothing is emitted once anyway, with every column of the right table set to
+NULL. Eight matched pairs plus one manufactured row for Barbara is nine. Run it:
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.executescript("""
+CREATE TABLE member (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+CREATE TABLE loan (id INTEGER PRIMARY KEY, member_id INTEGER NOT NULL, day TEXT NOT NULL);
+""")
+conn.executemany("INSERT INTO member VALUES (?, ?)",
+                 [(1, "Ada"), (2, "Grace"), (3, "Linus"), (4, "Barbara")])
+conn.executemany("INSERT INTO loan VALUES (?, ?, ?)", [
+    (1, 1, "03-01"), (2, 2, "03-02"), (3, 1, "03-03"), (4, 3, "03-04"),
+    (5, 1, "03-05"), (6, 2, "03-06"), (7, 2, "03-07"), (8, 1, "03-08"),
+])
+
+inner = conn.execute("""
+    SELECT member.name, loan.id FROM member
+    JOIN loan ON loan.member_id = member.id
+    ORDER BY loan.id""").fetchall()
+left = conn.execute("""
+    SELECT member.name, loan.id FROM member
+    LEFT JOIN loan ON loan.member_id = member.id
+    ORDER BY member.id, loan.id""").fetchall()
+print("inner join:", len(inner), "rows")
+print("left join: ", len(left), "rows, the last of them", left[-1])
+
+count_rows = conn.execute("""
+    SELECT member.name, COUNT(*) FROM member
+    LEFT JOIN loan ON loan.member_id = member.id
+    GROUP BY member.id ORDER BY member.id""").fetchall()
+count_loans = conn.execute("""
+    SELECT member.name, COUNT(loan.id) FROM member
+    LEFT JOIN loan ON loan.member_id = member.id
+    GROUP BY member.id ORDER BY member.id""").fetchall()
+print("COUNT(*):      ", count_rows)
+print("COUNT(loan.id):", count_loans)
+```
+
+The second half of that output is the mistake this module is most concerned with.
+`COUNT(*)` counts rows, and Barbara's padded row is a row, so she scores 1.
+`COUNT(loan.id)` counts the non-NULL values in that column, and her padded row has a NULL
+there, so she scores 0. Both queries run, both produce a tidy table, and one of them is
+wrong by exactly one on exactly the rows nobody checks. It is tempting because `COUNT(*)`
+is what everyone types first, and on an inner join it is correct. Only the outer join
+manufactures a row with nothing in it — and the outer join is the one you reached for
+precisely so that Barbara would appear.
+
+## WHERE filters rows; HAVING filters groups
+
+`GROUP BY` collapses rows that share a value into one row per value, and an aggregate —
+`COUNT`, `SUM`, `MAX` — describes each group. The question of where a condition goes is
+answered by *when it can be evaluated*. The engine works through the clauses in this
+order: `FROM` and the joins first, then `WHERE` against each row, then `GROUP BY`, then
+`HAVING` against each group, then `SELECT` to shape the output, and `ORDER BY` last of
+all.
+
+So a test on a column of a row — `year > 1960` — belongs in `WHERE`, because a single row
+has a year. A test on an aggregate — `COUNT(*) > 2` — cannot be asked until the groups
+exist, so it goes in `HAVING`. Putting `COUNT(*) > 2` in `WHERE` is an error in every
+engine; the count does not exist yet. And because `WHERE` runs first, filtering there
+means the groups are built from fewer rows, which is free.
+
+`ORDER BY` runs last, which is why it can sort by an alias the `SELECT` made up —
+`ORDER BY books DESC` in the lab's `books_per_country` — and why the count is worth
+naming.
+
+## NULL, and the subquery that returns nothing
+
+Which books have never been borrowed? The natural first attempt is
+`WHERE id NOT IN (SELECT book_id FROM loan)`, and on the lab's data it works. Then one
+loan row acquires a NULL `book_id`, and the query returns nothing at all, with no error.
+
+The reason is three-valued logic. A comparison with NULL is neither true nor false but
+UNKNOWN, and `x NOT IN (2, NULL)` expands to `x <> 2 AND x <> NULL`. The second half is
+UNKNOWN for every `x`, TRUE AND UNKNOWN is UNKNOWN, so no row's condition is ever TRUE —
+and `WHERE` keeps only TRUE.
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.executescript("""
+CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT NOT NULL);
+CREATE TABLE loan (id INTEGER PRIMARY KEY, book_id INTEGER);
+INSERT INTO book VALUES (1, 'Cosmicomics'), (2, 'Invisible Cities'), (3, 'Zombie');
+INSERT INTO loan VALUES (1, 2), (2, NULL);
+""")
+not_in = conn.execute("""
+    SELECT title FROM book
+     WHERE id NOT IN (SELECT book_id FROM loan)""").fetchall()
+not_exists = conn.execute("""
+    SELECT title FROM book
+     WHERE NOT EXISTS (SELECT 1 FROM loan WHERE loan.book_id = book.id)""").fetchall()
+print("NOT IN:    ", not_in)
+print("NOT EXISTS:", not_exists)
+print("1 <> NULL evaluates to", conn.execute("SELECT 1 <> NULL").fetchone()[0])
+```
+
+`NOT EXISTS` asks a different question — is there a loan row matching *this* book? — and
+a loan row with a NULL `book_id` matches no book, so it is ignored, which is what you
+meant. The last line shows the value at the root of it: `1 <> NULL` is not false, it is
+nothing, and Python receives it as `None`. The lab's `never_borrowed` uses `NOT EXISTS`
+for this reason, and it is worth making a habit.
+
+## Bound parameters are not a style choice
+
+Every query in the lab takes a value from outside — an author's name, a limit — and the
+way it goes in matters more than anything else in this module. Compare:
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.executescript("""
+CREATE TABLE book (id INTEGER PRIMARY KEY, title TEXT NOT NULL);
+INSERT INTO book VALUES (1, 'Cosmicomics'), (2, 'Invisible Cities');
+""")
+title = "' OR '1'='1"
+
+pasted = "SELECT title FROM book WHERE title = '" + title + "'"
+print(pasted)
+print("pasted in:", conn.execute(pasted).fetchall())
+
+bound = "SELECT title FROM book WHERE title = ?"
+print("bound:    ", conn.execute(bound, (title,)).fetchall())
+```
+
+The first query was built by pasting the value into the SQL text, and the value contained
+a quote. The quote ended the string the query was comparing against, and what followed it
+was read as SQL: `WHERE title = '' OR '1'='1'` is true for every row, so the whole table
+came back. Replace the tail with something more purposeful and you have SQL injection.
+
+The bound version hands the engine a statement with a hole in it and the value
+separately. The value is never parsed as SQL; it is compared as a string, no title
+matches it, and the result is empty. Python's `sqlite3` refuses a second statement in
+`execute()`, which happens to blunt the classic `'; DROP TABLE book; --`, but
+`executescript()` does not refuse it and other drivers do not either. The rule does not
+depend on any of that: a value goes in through `?`, always, and the lab's last test —
+"Quotes in an argument are data, not SQL" — checks that you did.
+
+## Where the model stops
+
+Two things about SQLite are worth knowing before they surprise you. It does not enforce
+column types: a string in an `INTEGER` column is stored as text, and a `CHECK` constrains
+values rather than types. Inserting `'three'` into `copies` passes `CHECK (copies > 0)`,
+because SQLite orders every text value above every number, and the row is stored with a
+word where a count should be. If a column must hold an integer, the check has to say so:
+`CHECK (typeof(copies) = 'integer' AND copies > 0)`. And the set-versus-bag point returns
+in a form that bites: `ORDER BY books DESC` alone leaves two countries with the same
+count in whatever order the engine likes, and a test that expects Italy before the United
+States will pass on your machine and fail on another. Every `ORDER BY` in the lab ends
+with a column that breaks ties, and so should yours.
+
+This module's lab, **A library schema, and questions asked of it**, is the spreadsheet
+above done properly: four tables, the constraints the engine enforces, and four
+questions — a join, a grouping, a `NOT EXISTS`, and a ranked count with a bound limit —
+each of which has a plausible wrong answer that runs.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Relations, keys, and what a join keeps",
                 "minutes": 7,
@@ -622,6 +928,271 @@ assert _conn.execute("SELECT COUNT(*) FROM book").fetchone()[0] == 7, \
                 "3NF weakens BCNF to keep dependency preservation, which BCNF cannot always give you",
                 "Projecting a dependency set onto a sub-relation is a closure computation over its subsets",
             ],
+            "read": [
+                {
+                    "title": "The dependency decides the table",
+                    "minutes": 12,
+                    "body": r'''
+Return to the spreadsheet from the first module, keeping only the columns that concern
+the borrowing itself:
+
+```text
+member   phone      title                 author            country
+Ada      555-0101   Invisible Cities      Italo Calvino     Italy
+Grace    555-0102   Cosmicomics           Italo Calvino     Italy
+Ada      555-0101   Things Fall Apart     Chinua Achebe     Nigeria
+Linus    555-0103   Things Fall Apart     Chinua Achebe     Nigeria
+```
+
+Three things go wrong with it, and it pays to name each. Ada changes her phone number,
+and two rows have to change; miss one and the table disagrees with itself. That is an
+*update anomaly*. Barbara joins and has a phone number, but she has borrowed nothing, so
+there is no row to keep it in. That is an *insertion anomaly*. Grace returns
+*Cosmicomics* and her row is deleted — and with it the only record that Calvino wrote it.
+That is a *deletion anomaly*.
+
+All three have one cause. The table is about loans, but some of its columns are facts
+about something else. A member's phone is a fact about the member; an author's country is
+a fact about the author. Those facts are repeated once per loan because the table has
+nowhere else to put them. Normalisation is the discipline of finding those facts and
+giving each its own table, and its whole apparatus follows from writing the facts down
+precisely.
+
+## A functional dependency is a promise about every instance
+
+"A member has one phone number" can be stated as a rule about the table: any two rows
+that agree on `member` agree on `phone`. Written $\text{member} \to \text{phone}$ and
+read "member determines phone", it is a *functional dependency*. The sheet has three:
+
+```text
+member -> phone
+title  -> author
+author -> country
+```
+
+with the understanding that a loan is identified by who borrowed what and when, so the
+key is $\{\text{member}, \text{title}, \text{day}\}$.
+
+Two things about a dependency are easy to get backwards. First, it is a constraint on
+the *schema* — a promise about every instance the table will ever hold — not an
+observation about the rows in it now. You cannot read one off the data: a table with one
+row satisfies every dependency you could write, and a table that happens to obey
+$\text{title} \to \text{author}$ today says nothing about tomorrow. Dependencies come from
+knowing the domain (one title, one author) and are declared, not discovered. Second, a
+dependency says that the right side is *determined*, never how. There is no formula from
+a member to a phone number; there is only the promise that the number is a function of
+the member.
+
+## Closure: what a set of dependencies implies
+
+If $\text{title} \to \text{author}$ and $\text{author} \to \text{country}$, then two rows
+agreeing on title agree on author, and therefore agree on country:
+$\text{title} \to \text{country}$ holds too, though nobody wrote it down. A set of
+dependencies implies others, and to reason about keys you need all of them. Enumerating
+every implied dependency is hopeless. What is tractable is a narrower question: given a
+set of attributes $X$, which attributes does $X$ determine? That set is the *closure*
+$X^+$, and it is computed by a loop that needs no cleverness at all.
+
+Start with $X$ itself, because a set trivially determines its own attributes. Then look
+through the dependencies. If a dependency's *whole* left side is already in the set you
+have reached, its right side is determined too, so add it. Keep sweeping until a full
+pass adds nothing. Because the set only ever grows and there are finitely many
+attributes, the loop terminates; because nothing is added without a dependency to justify
+it, everything in the result is genuinely determined.
+
+Here it is with the sheet's dependencies as single letters — $M$ember, $P$hone, $T$itle,
+$A$uthor, $C$ountry, $D$ay — and each firing printed as it happens:
+
+```python
+def closure(attributes, fds):
+    """X+ under fds, printing each dependency as it fires."""
+    reached = set(attributes)
+    grew = True
+    while grew:
+        grew = False
+        for lhs, rhs in fds:
+            if lhs <= reached and not rhs <= reached:
+                left, right = " ".join(sorted(lhs)), " ".join(sorted(rhs))
+                print(f"  {left} -> {right} fires, adding {' '.join(sorted(rhs - reached))}")
+                reached |= rhs
+                grew = True
+    return frozenset(reached)
+
+
+FDS = [
+    ({"M"}, {"P"}),          # a member has one phone number
+    ({"T"}, {"A"}),          # a title has one author
+    ({"A"}, {"C"}),          # an author has one country
+]
+print("{T}+")
+print("  =", sorted(closure({"T"}, FDS)))
+print("{M, T, D}+")
+print("  =", sorted(closure({"M", "T", "D"}, FDS)))
+```
+
+$\{T\}^+$ is $\{T, A, C\}$: a title fixes its author, and through the author its
+country, and nothing else. $\{M, T, D\}^+$ is everything. That second fact is the
+definition of a key.
+
+## Superkeys and candidate keys
+
+A set of attributes $X$ is a *superkey* of a relation $R$ when $X^+ \supseteq R$: fix the
+values of $X$ and every other column is fixed. A *candidate key* is a superkey with no
+proper subset that is also one — a superkey with nothing spare. The lab asks you to
+enumerate them, and the enumeration has a shape worth knowing. Try subsets smallest
+first, singles then pairs then triples; a set that contains a key already found is a
+superkey and cannot be minimal, so skip it. And before trying anything, look at which
+attributes appear on no right-hand side at all: nothing can ever produce them, so every
+key must contain them. In the sheet those are $M$, $T$ and $D$, and $\{M, T, D\}^+$
+covers everything, so $\{M, T, D\}$ is the one candidate key and no smaller set need be
+tested.
+
+## The test: is the left side a superkey?
+
+Now look at the anomalies again with the dependencies in hand. Ada's phone was repeated
+because $M \to P$ holds and $M$ recurs: Ada appears in two rows, and each carries her
+phone. Calvino's country was repeated because $A \to C$ holds and $A$ recurs. The
+dependencies that cause trouble are exactly the ones whose left side can appear in more
+than one row — and a left side can appear in more than one row exactly when it is *not a
+superkey*, because a superkey's values identify one row.
+
+That is Boyce-Codd normal form, derived rather than announced: a relation is in BCNF when
+for every non-trivial dependency $X \to Y$ that holds on it, $X$ is a superkey.
+*Non-trivial* excludes dependencies like $M\,T \to M$, whose right side is already inside
+the left; those hold in every relation and say nothing about its design. The test itself
+is one closure per dependency: compute $X^+$ and ask whether it covers $R$.
+
+On the sheet, $M \to P$ fails ($\{M\}^+ = \{M, P\}$), $T \to A$ fails, $A \to C$ fails.
+Three violations, three facts that belong in tables of their own. On the lab's classic
+relation the same test reads:
+
+```python
+def closure(attributes, fds):
+    reached = set(attributes)
+    grew = True
+    while grew:
+        grew = False
+        for lhs, rhs in fds:
+            if lhs <= reached and not rhs <= reached:
+                reached |= rhs
+                grew = True
+    return frozenset(reached)
+
+
+R = {"A", "B", "C"}
+FDS = [({"A", "B"}, {"C"}), ({"C"}, {"B"})]
+for lhs, rhs in FDS:
+    plus = closure(lhs, FDS)
+    verdict = "superkey, fine" if R <= plus else "not a superkey: violation"
+    print(f"{' '.join(sorted(lhs))} -> {' '.join(sorted(rhs))}:  closure {sorted(plus)}  {verdict}")
+```
+
+## Decomposition, and why it must split on the dependency
+
+Fix a violation $X \to Y$ by splitting the relation in two: one piece holding $X \cup Y$,
+the fact itself in its own table, and one holding everything else plus $X$, so that the
+second piece can still point at the first. Splitting the sheet on $T \to A$ gives
+$\{T, A\}$ and $\{M, P, T, C, D\}$; then recurse on both pieces, because the second one
+still has $M \to P$ in it and, less visibly, $T \to C$.
+
+The rule is not arbitrary. The pieces are only useful if joining them back yields the
+original rows and nothing more, and that is guaranteed when the attributes the pieces
+share form a key of one of them. In the split above the shared attribute is $T$, and $T$
+is a key of $\{T, A\}$: each title matches one row on that side, so joining back cannot
+multiply anything. Split so that the shared column is *not* a key and the join invents
+rows:
+
+```python
+rows = [
+    ("Ada",   "Invisible Cities", "Calvino"),
+    ("Grace", "Cosmicomics",      "Calvino"),
+]
+M, T, A = 0, 1, 2
+
+
+def project(rows, columns):
+    """The distinct rows over those columns, in that order."""
+    return sorted({tuple(row[c] for c in columns) for row in rows})
+
+
+def join_on(left, right, at):
+    """Join two projections on the column at position at[0] in left and at[1] in right."""
+    out = []
+    for l in left:
+        for r in right:
+            if l[at[0]] == r[at[1]]:
+                out.append(l + tuple(v for i, v in enumerate(r) if i != at[1]))
+    return sorted(out)
+
+
+good = join_on(project(rows, (M, T)), project(rows, (T, A)), (1, 0))
+bad = join_on(project(rows, (M, A)), project(rows, (T, A)), (1, 1))
+print("shared column T, a key of {T, A}:", len(good), "rows come back")
+print("shared column A, a key of neither:", len(bad), "rows come back")
+for row in bad:
+    print("  ", row)
+```
+
+Sharing $A$ instead of $T$ pairs every member who borrowed a Calvino with every Calvino
+title, and Ada is now recorded as having borrowed *Cosmicomics*, which she never did.
+Every one of the four rows is plausible. That is what makes a lossy decomposition
+dangerous: it does not fail, it lies.
+
+## Projecting dependencies onto a piece
+
+The recursion has a subtlety that the lab's `project_fds` exists for. After a split,
+which dependencies hold on a piece? Not only those in the original list whose attributes
+all lie inside it. $T \to C$ holds on $\{M, P, T, C, D\}$, but it is in nobody's list —
+it is implied through $A$, and $A$ is not in the piece. The only reliable way to find the
+dependencies of a piece is to compute, for every subset $X$ of it, what $X$ determines
+*within* the piece: $X \to (X^+ \cap \text{piece}) - X$, dropping the ones whose right
+side comes out empty. That is a closure per subset, against the original dependency set,
+every time. Projecting a projection loses dependencies, which is why `decompose` recurses
+with the original set and re-projects inside each call.
+
+## Where BCNF costs something: 3NF
+
+Take the classic relation from the block above, $R(A, B, C)$ with $A\,B \to C$ and
+$C \to B$. The candidate keys are $\{A, B\}$ and $\{A, C\}$. $C \to B$ has a left side
+that is no superkey, so BCNF says split: $\{B, C\}$ and $\{A, C\}$. Both pieces are fine.
+But $A\,B \to C$ now has $A$ in one table and $B$ in another, and no single table can
+check it. The engine can no longer enforce a rule that was true of the data; the only way
+to check it is a join on every insert.
+
+Third normal form is BCNF with one exemption: a dependency $X \to Y$ is tolerated when
+every attribute of $Y$ belongs to some candidate key. $B$ is in $\{A, B\}$, so $C \to B$
+is forgiven and $R$ stays whole. 3NF trades a little redundancy for the guarantee that a
+lossless *and* dependency-preserving decomposition always exists; BCNF removes every
+redundancy a functional dependency can cause, and can lose enforceability doing it. Which
+to choose is a design decision, and it is worth knowing that the choice is there.
+
+## The mistake, and where the theory ends
+
+The most common wrong closure fires a dependency when *some* of its left side is known
+rather than all of it — `A B -> C` firing on `A` alone. It is tempting because the loop
+reads as "for each dependency, if it applies, add", and `lhs & reached` looks like a
+test for "applies". It is not: the subset test `lhs <= reached` is the whole of what
+applying means. A closure computed the other way is too large, non-keys are declared
+keys, and violations vanish. The lab's test "A alone does not fire A B -> C" is there for
+that reason.
+
+The theory itself stops in two places. It handles *functional* dependencies only. A
+table listing each member's phone numbers alongside each member's email addresses — two
+independent multi-valued facts — is in BCNF and still repeats every phone once per email;
+that is a multivalued dependency and fourth normal form, which this course leaves aside.
+And it says nothing about speed. A fully normalised schema answers every report with
+joins, and a real system sometimes keeps a deliberately redundant column for a query that
+runs a million times a day. That is a defensible choice when it is a choice: the
+redundancy is known, the dependency that makes it redundant is written down, and
+something keeps the copies in step.
+
+This module's lab, **Closures, candidate keys and a BCNF decomposer**, builds the whole
+chain — `parse_fds`, `closure`, `candidate_keys`, `project_fds`, `bcnf_violations` and
+`decompose` — and checks it on the transitive chain $A \to B \to C \to D$ and on the
+classic relation above.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Dependencies, keys and the BCNF test",
                 "minutes": 7,
@@ -1175,6 +1746,204 @@ for _p in _parts:
                 "Selectivity, and why a matching index can still lose to a sequential scan",
                 "An index lookup on an unclustered index costs about one page per matching row",
                 "Covering indexes remove the heap fetch entirely, which changes the crossover point",
+            ],
+            "read": [
+                {
+                    "title": "What a lookup costs, counted in pages",
+                    "minutes": 12,
+                    "body": r'''
+A thousand books, in a table on disk. Disk — spinning or solid state, it does not matter
+for this — hands data over in fixed blocks of four or eight kilobytes, and the database's
+buffer pool is built from blocks of the same size. Call one of them a *page*. If a book
+row is around eighty bytes, fifty rows fit on a page, and the thousand rows occupy twenty
+pages.
+
+Now ask for one row: the book with `id = 42`. The engine cannot read eighty bytes; it
+reads the page the row sits on, all fifty rows of it, and hands you the one you wanted.
+The other forty-nine came along for free, and that is the fact the whole module rests on.
+The cost of a query is the number of pages it touches, not the number of rows it returns,
+and every model here counts pages.
+
+## The scan
+
+`SELECT * FROM book WHERE year = 1950` with no index has one strategy available: read
+every page, test every row. Twenty pages at fifty rows each. Notice what the predicate
+did to that cost — nothing. A scan that matches ten rows and a scan that matches none
+read the same twenty pages. The cost is a property of the table, $\lceil N / p \rceil$
+for $N$ rows at $p$ per page, and the query does not enter into it.
+
+That sounds like a weakness and is also a strength. A scan reads pages in order, its cost
+is known before it starts, and it never does worse than its estimate. Everything an index
+buys has to be measured against that flat line.
+
+## The tree
+
+An index on `year` is a second structure holding, for every row, the pair
+`(year, rowid)`, kept sorted by `year`. The pairs are small — a handful of bytes — so a
+hundred of them fit on a page, and a thousand pairs occupy ten *leaf* pages. To find the
+leaf holding 1950 without reading all ten, put a page above them holding ten pairs of
+`(first year on that leaf, which leaf)`. One page, ten entries, and it directs you to the
+right leaf. That page is the root, and the structure is a B+-tree of height 2: one
+internal level, one leaf level, and all the data in the leaves.
+
+Now scale it. A million entries at a hundred per leaf is ten thousand leaves; the level
+above holds a hundred entries per page, so a hundred pages; the level above that, one.
+Height 3. The number of entries a page can point at is the *fan-out* $f$, and each level
+multiplies reach by $f$, so height grows like $\log_f N$ — and with $f$ in the hundreds
+it barely grows at all. A hundred million rows is height 4. That is why "an index lookup
+costs a few page reads" is true regardless of the table's size, and why three levels is
+usually enough.
+
+## The cost of a lookup, one term at a time
+
+Find every book with `year = 1950` using the index. First, descend: from the root to the
+correct leaf is $h - 1$ page reads, one per internal level. Second, walk the leaf entries
+for 1950. They are contiguous, because the leaves are sorted, and there are $m$ of them
+at $f$ per page, so $\lceil m / f \rceil$ leaf pages. Third — and this is the term that
+decides everything — fetch the rows. Each leaf entry holds a rowid, and the row itself
+lives in the table, on whatever page the table happened to put it.
+
+If the table's rows are in no particular order with respect to `year`, the ten books from
+1950 are on ten different pages, and fetching them costs ten reads. In general, $m$
+reads: one page per matching row. That is an *unclustered* index, and its cost is
+
+$$h - 1 + \left\lceil \frac{m}{f} \right\rceil + m.$$
+
+If instead the table is stored in `year` order — *clustered* on the index — the ten rows
+from 1950 sit next to each other, on one page or two, and the fetch costs
+$\lceil m / p \rceil$:
+
+$$h - 1 + \left\lceil \frac{m}{f} \right\rceil + \left\lceil \frac{m}{p} \right\rceil.$$
+
+Same tree, same descent, same leaves. The only thing clustering changes is whether the
+matching rows arrive one per page or fifty per page, and that is the difference between
+a term that grows with $m$ and one that grows with $m / 50$.
+
+## Where the scan catches up
+
+Put the numbers in. $N = 1000$, $p = 50$, $f = 100$, so the scan is 20 pages and the tree
+has height 2.
+
+```python
+def pages(rows, per_page):
+    """Ceiling division: the pages that hold this many rows."""
+    return -(-rows // per_page)
+
+
+N, P, F = 1000, 50, 100          # rows, rows per page, index entries per leaf page
+leaves = pages(N, F)
+height, nodes = 1, leaves
+while nodes > 1:
+    nodes = pages(nodes, F)
+    height += 1
+scan = pages(N, P)
+print(f"{leaves} leaf pages, height {height}, scan costs {scan} pages")
+print(f"{'m':>4} {'unclustered':>12} {'clustered':>10}")
+for m in (1, 10, 17, 18, 100, 600, 601):
+    unclustered = height - 1 + pages(m, F) + m
+    clustered = height - 1 + pages(m, F) + pages(m, P)
+    print(f"{m:>4} {unclustered:>12} {clustered:>10}")
+```
+
+Read the unclustered column downwards. Ten matches cost 12 pages and beat the scan's 20.
+Seventeen cost 19 and still win. Eighteen cost 20 — a tie, and a tie goes to the scan,
+because the scan's estimate is exact and the index's is a hope about where the rows
+landed. So the unclustered index wins only while fewer than eighteen rows match: under
+two percent of the table. That number surprises everyone the first time, and it is the
+most useful number in the module. An unclustered index is a tool for finding a few rows,
+and "a few" is smaller than intuition says.
+
+The clustered column tells the other story. Six hundred matches cost 19 and still beat
+the scan; the index loses only at 601, sixty percent of the table. Clustering moved the
+crossover by a factor of about $p$, because the term that grows with the result stopped
+being per-row and became per-page. The derivation unit *Where the index stops paying*
+reaches the same two numbers from algebra with the ceilings dropped; the lab reaches
+them by search.
+
+The fraction of the table a predicate matches is its *selectivity*, and it is the
+quantity an optimiser most needs and least reliably has. An index on `year` with ten rows
+per year is worth using; an index on a column with two values is a scan in disguise, and
+the engine will read the table anyway unless the index can cover the query.
+
+## Covering: deleting the expensive term
+
+The $m$ term is one page per matching row, spent fetching columns the index does not
+hold. If the index held every column the query needs, there would be nothing to fetch.
+`SELECT book_id, COUNT(*) FROM loan WHERE day = ? GROUP BY book_id` touches two columns;
+an index on `(day, book_id)` holds both, and the table is never opened. The cost falls to
+$h - 1 + \lceil m / f \rceil$, which loses to the scan only when the index is nearly as
+big as the table. SQLite says so in the plan:
+
+```python
+import sqlite3
+
+conn = sqlite3.connect(":memory:")
+conn.execute("CREATE TABLE loan (id INTEGER PRIMARY KEY, book_id INTEGER NOT NULL, day TEXT NOT NULL)")
+conn.executemany("INSERT INTO loan VALUES (?, ?, ?)",
+                 [(i, i % 7, f"2026-03-{i % 28 + 1:02d}") for i in range(1, 2001)])
+conn.commit()
+
+
+def plan(sql, params=()):
+    rows = conn.execute("EXPLAIN QUERY PLAN " + sql, params).fetchall()
+    return [row[-1] for row in rows]
+
+
+query = "SELECT book_id, COUNT(*) FROM loan WHERE day = ? GROUP BY book_id"
+print("no index:      ", plan(query, ("2026-03-04",)))
+conn.execute("CREATE INDEX loan_day ON loan (day)")
+print("index on day:  ", plan(query, ("2026-03-04",)))
+conn.execute("CREATE INDEX loan_day_book ON loan (day, book_id)")
+print("covering index:", plan(query, ("2026-03-04",)))
+print("by book alone: ", plan("SELECT * FROM loan WHERE book_id = ?", (3,)))
+```
+
+`SCAN` means the whole table was read; `SEARCH ... USING INDEX` means the index narrowed
+the rows first; `COVERING` means the table was never touched. Two other things moved in
+that output. The `USE TEMP B-TREE FOR GROUP BY` line vanished with the covering index,
+because within one day the entries are already in `book_id` order and the grouping can
+read them as they come. And the last line is the composite-index rule. An index on
+`(day, book_id)` is one sorted sequence, ordered by `day` and, within a single day, by
+`book_id` — the way a phone book is ordered by surname and then first name. Every entry
+for one day is contiguous, so `day = ?` is a search. The entries for one `book_id` are
+scattered, one run per day, so nothing can be skipped, and a query on `book_id` alone
+gets a scan. An index serves any *prefix* of its columns and nothing else, and the order
+you declare them in is a design decision.
+
+## The mistake
+
+The one people make is believing an index is free speed, and adding one to every column
+that appears in a `WHERE`. It is tempting because the index that helped last time helped
+enormously, and because nothing visible goes wrong: the planner ignores an index that
+does not pay, so the query is no slower. What goes wrong is elsewhere. Every `INSERT`,
+`UPDATE` and `DELETE` on the table now maintains one more tree, which is one more page
+write per row per index, and the index occupies pages of its own in the buffer pool,
+evicting table pages that were doing work. An index earns its place by narrowing a query
+to a few rows or by covering it entirely, and a column with low selectivity, or one that
+is never a prefix of the query's predicate, does neither.
+
+## Where the model stops holding
+
+The model counts page reads and charges each one the same. Three things a real engine
+knows are missing from it. A page already in the buffer pool costs nothing to read, so
+the second run of a query, and every query on a table that fits in memory, is far cheaper
+than the count says; the model describes a cold cache. On solid-state storage a random
+read is closer in cost to a sequential one than it was on a spinning disk, which shrinks
+the unclustered penalty without removing it. And the planner in front of you does not use
+these formulas: SQLite estimates selectivity from statistics that `ANALYZE` gathers,
+applies cost constants of its own, and will sometimes read an index end to end because it
+is narrower than the table — a scan of the index rather than a search, which the plan
+reports as `SCAN ... USING COVERING INDEX`. The model's job is not to predict SQLite's
+choice to the page. It is to make the shape of the decision visible: a flat line for the
+scan, a rising one for the index, and a crossover whose position depends on clustering
+and selectivity and almost nothing else.
+
+This module's lab, **Index versus scan: a cost model that decides**, builds exactly that:
+`page_count`, a `BPlusIndex` whose height follows from the fan-out and whose searches use
+`bisect` rather than a walk, the cost function above, and `crossover`, which should
+report 18 and 601 for the demo table.
+''',
+                },
             ],
             "quiz": {
                 "title": "Pages, trees, and the cost of a lookup",
@@ -1763,6 +2532,214 @@ assert "crossover" in _out, "the demo should print both crossover points"
                 "A topological order of that graph is an equivalent serial schedule",
                 "Two-phase locking: a growing phase then a shrinking phase, which guarantees serialisability",
                 "Strict 2PL holds every lock to commit, so cascading aborts cannot happen — at the price of deadlock",
+            ],
+            "read": [
+                {
+                    "title": "Interleavings, and which ones are safe",
+                    "minutes": 13,
+                    "body": r'''
+Two librarians, two terminals, one book. *Things Fall Apart* has four copies on the
+shelf. At the first terminal a copy is being returned, so the transaction there reads
+`copies`, adds one and writes it back. At the second a copy is being lent, so that
+transaction reads `copies`, subtracts one and writes it back. Run one after the other, in
+either order, and the shelf ends at four, which is correct. Now let the engine interleave
+them — which it will, because a transaction waiting on the disk is a transaction whose
+turn can be given to someone else:
+
+```python
+def run(schedule, copies=4):
+    """Two transactions on one shared value: T1 records a return, T2 a loan."""
+    seen = {}
+    delta = {1: +1, 2: -1}
+    for op in schedule.split():
+        kind, txn = op[0], int(op[1])
+        if kind == "r":
+            seen[txn] = copies
+        else:
+            copies = seen[txn] + delta[txn]
+        print(f"  {op}: shelf holds {copies}; T1 saw {seen.get(1)}, T2 saw {seen.get(2)}")
+    return copies
+
+
+print("serial, T1 then T2:")
+print("  final", run("r1 w1 r2 w2"))
+print("interleaved:")
+print("  final", run("r1 r2 w1 w2"))
+```
+
+Both transactions read four. The first wrote five; the second, still holding the four it
+read, wrote three, and the return has vanished. Nothing raised, nothing logged, and one
+copy of the book is now missing from the catalogue. This is the *lost update*, and it is
+the reason the module exists: interleaving is what makes a database fast, and without a
+rule for which interleavings are allowed, it is also what makes it wrong.
+
+## What a transaction is promised
+
+A transaction is a group of operations the application wants treated as one. The promise
+the engine makes about it has four parts, and two of them belong to a different module.
+*Atomicity* — all of it or none of it — and *durability* — once committed, it survives a
+crash — are delivered by the log, which records what a transaction did so that it can be
+undone or redone. *Consistency* is the application's constraints holding at every commit.
+*Isolation* is the one here: each transaction should see the database as though it were
+running alone. The lost update is an isolation failure, and concurrency control is the
+machinery that prevents it.
+
+## Which operations can be swapped
+
+The serial runs were correct, so "correct" can be defined as "has the same effect as
+some serial run". The question becomes which interleavings have that property, and the
+way in is to ask when two operations can be swapped without anyone noticing.
+
+Two reads of the same item can be swapped: neither changes anything, so each sees the
+same value either way. Two operations on different items can be swapped whatever they
+are, because neither can see the other's effect. Two operations of the same transaction
+cannot be swapped, but they do not need to be — they are already in the order their
+transaction gave them. What is left is a pair from *different* transactions, on the
+*same* item, where at least *one writes*. Swap a read past a write and the read sees a
+different value; swap two writes and a different one lands last. Those pairs *conflict*,
+and they are the only pairs that carry information about which transaction came first.
+
+So a schedule's meaning, for this purpose, is the set of orderings its conflicts impose.
+For every conflicting pair, the transaction whose operation came earlier must come
+earlier in any equivalent serial schedule. Draw one node per transaction and an arrow for
+each such constraint, and you have the *precedence graph*.
+
+## The graph, and the cycle
+
+```python
+import re
+
+OPERATION = re.compile(r"([rw])(\d+)\((\w+)\)")
+
+
+def edges(schedule):
+    """One arrow per ordered pair of transactions forced by a conflict."""
+    ops = [(kind, int(txn), item) for kind, txn, item in OPERATION.findall(schedule)]
+    found = set()
+    for i, (kind1, txn1, item1) in enumerate(ops):
+        for kind2, txn2, item2 in ops[i + 1:]:
+            if txn1 != txn2 and item1 == item2 and "w" in (kind1, kind2):
+                found.add((txn1, txn2))
+    return sorted(found)
+
+
+for name, schedule in [("serialisable", "r1(A) w2(A) w1(B) r2(B)"),
+                       ("cyclic",       "r1(A) w2(A) w2(B) r1(B)")]:
+    print(f"{name:<13} {schedule}  ->  edges {edges(schedule)}")
+```
+
+The first schedule imposes $T_1 \to T_2$ twice — once on $A$, once on $B$ — and one arrow
+is drawn for it. Every constraint says the same thing, so the serial schedule $T_1, T_2$
+satisfies all of them: run $T_1$ entirely, then $T_2$, and every conflicting pair is in
+the order it was in. The schedule is *conflict-serialisable*.
+
+The second imposes $T_1 \to T_2$ on $A$ and $T_2 \to T_1$ on $B$. No serial order can put
+$T_1$ first and also put $T_2$ first. There is no serial schedule with the same conflicts,
+and the interleaving may have left the database somewhere no serial run could reach. The
+rule that falls out of this is the whole of the theory: a schedule is
+conflict-serialisable exactly when its precedence graph has no cycle. The lab's
+`has_cycle` is a depth-first search that colours a node grey on entry and black on exit
+and reports a cycle when it walks into a grey one. When there is no cycle, any
+topological order of the graph — the lab takes the smallest available id first, so the
+answer is reproducible — is an equivalent serial schedule.
+
+Two things that order is not. It is not the order the transactions committed in: a
+transaction can commit last and still belong first, if everything it read was read before
+anyone overwrote it. And it is not the only order the schedule *could* have run in; there
+are usually several, and every one of them is equally correct.
+
+## Locks, and why one phase is not enough
+
+The graph tells you afterwards whether a schedule was safe. A scheduler needs to refuse
+an unsafe one as it happens, without knowing the future, and the tool is the lock. Before
+reading an item a transaction takes a *shared* lock on it; before writing, an *exclusive*
+one. Shared locks coexist, since reads do not conflict. An exclusive lock excludes
+everyone else. A request that cannot be granted waits.
+
+Locks alone are not enough, and the cyclic schedule shows why. Let $T_1$ lock $A$, read
+it, and release the lock, since it is finished with $A$. $T_2$ now locks $A$, writes it,
+locks $B$, writes it, and releases both. $T_1$ locks $B$ and reads it. Every operation
+held the right lock at the right moment, and the schedule that ran is
+`r1(A) w2(A) w2(B) r1(B)` — the cyclic one. The hole is that $T_1$ let go of $A$ and
+*then* reached for $B$, which gave $T_2$ room to get between the two.
+
+Close the hole with one rule: once a transaction has released any lock, it may not
+acquire another. Every transaction then has a *growing phase* and a *shrinking phase*,
+and a moment between them — its *lock point* — at which it holds everything it will ever
+hold. That is two-phase locking, and it guarantees serialisability by an argument short
+enough to carry around. Suppose the graph has an edge $T_1 \to T_2$: some item was
+touched by $T_1$ and then, conflictingly, by $T_2$. $T_2$ needed a lock on that item which
+$T_1$ held, so $T_1$ released it before $T_2$ acquired it — and $T_1$ releases nothing
+before its lock point, while $T_2$ acquires nothing after its own. So $T_1$'s lock point
+came first. Follow that along a cycle $T_1 \to T_2 \to \dots \to T_1$ and $T_1$'s lock
+point precedes itself, which cannot be. Every schedule a two-phase scheduler emits is
+acyclic. Notice what the rule does not forbid: holding many locks at once is the normal
+case and the entire point, and upgrading a shared lock to an exclusive one is allowed,
+provided no release has happened yet.
+
+## Strict 2PL, cascades and deadlock
+
+Plain 2PL lets a transaction release locks after its lock point and before it commits.
+Suppose $T_1$ writes $A$, passes its lock point, releases $A$, and $T_2$ reads $A$. Then
+$T_1$ aborts. The value $T_2$ read never existed, so $T_2$ must abort too, and so must
+anything that read from $T_2$ in the meantime. That is a *cascading abort*, and *strict*
+2PL rules it out by holding every exclusive lock until commit: nobody can read a value
+until the transaction that wrote it is permanent. It is the discipline the lab's
+scheduler implements, and the one real engines use.
+
+Its price is the schedule the lab calls `DEADLOCK`:
+
+```text
+ step  operation   lock wanted     verdict
+  1    r1(A)       S(A) for T1     granted
+  2    r2(B)       S(B) for T2     granted
+  3    w1(B)       X(B) for T1     refused: T2 holds S(B) until it commits
+  4    w2(A)       X(A) for T2     refused: T1 holds S(A) until it commits
+```
+
+Both transactions are waiting, each for a lock the other will release only after
+committing, and each can commit only after getting the lock. Neither did anything wrong;
+the two-phase rule forbids the release that would unblock things. Waiting longer changes
+nothing. The scheduler has to notice — every live transaction blocked is the condition
+the lab detects, and a cycle in a waits-for graph is the general one — and break the
+cycle by aborting a victim. One victim suffices, because removing one edge breaks a
+cycle; the lab picks the highest-numbered blocked transaction so the answer is
+reproducible. Its locks go, its remaining operations are dropped, and the survivor takes
+the lock it was waiting for and runs to commit.
+
+## The mistake, and where the theory stops
+
+The mistake is to test for this by running the program. A non-serialisable interleaving
+produces a wrong result only on the data and timing that happen to expose it; on the
+lab's data the cyclic schedule may leave every value as a serial run would have. The bug
+is in the schedule, not in the outcome, which is why the analysis works on the sequence
+of operations and never looks at a value. It is a tempting mistake because every other
+bug you have met showed up when you ran the code. A second, smaller one is to believe
+that 2PL prevents deadlock. It prevents non-serialisable schedules and creates deadlocks
+in the process; deadlock is handled afterwards, by detection and a victim, or by a
+timeout.
+
+Where it stops: conflict serialisability is sufficient for correctness and not necessary.
+Two transactions that both write $A$ without reading it can be interleaved in a way that
+cycles the graph and still ends exactly as a serial run would; that is *view*
+serialisability, and it is too expensive to test for in practice, so engines settle for
+the conflict version. Locks on rows cannot lock rows that do not exist yet, so a
+transaction that counts the books from 1950 twice can see two different counts if someone
+inserts one in between — the *phantom*, which needs locks on predicates or index ranges.
+And most engines you will meet do not use 2PL for readers at all: PostgreSQL and its
+relatives keep old versions of rows and let readers see a snapshot while writers proceed,
+which removes most blocking and admits an anomaly of its own, write skew, that 2PL never
+had. SQLite, the engine under this course, allows one writer at a time for the whole
+file, so the row-level locking here is happening at a granularity SQLite never sees. The
+theory is what those systems are approximating, and its vocabulary — conflict, cycle,
+lock point, cascade — is how their documentation explains what they do instead.
+
+This module's lab, **Precedence graphs and a two-phase-locking scheduler**, builds the
+analysis and then the scheduler: `conflicts`, `precedence_graph`, `has_cycle` and
+`serial_order` for the first half, and `two_phase_lock`, a strict scheduler that blocks,
+resumes on commit, and detects and breaks the deadlock above, for the second.
+''',
+                },
             ],
             "quiz": {
                 "title": "Conflicts, graphs and locks",

@@ -46,6 +46,227 @@ COURSE = {
                 "Maintaining a y-sorted order across the recursion instead of re-sorting at every level",
                 "Why an O(n log^2 n) implementation is a defect and not a variant",
             ],
+            "read": [
+                {
+                    "title": "Split, recurse, and pay for the merge",
+                    "minutes": 12,
+                    "body": r'''
+Two friends rank the same five films. Write the first friend's ranking as the order 1 to
+5, and the second friend's list becomes a permutation of those numbers — say
+`[2, 4, 1, 3, 5]`. How far apart are their tastes? One honest measure is the number of
+pairs of films the two of them put in opposite orders. Film 2 sits before film 1 in the
+second list but after it in the first, so that pair counts; so do `(4, 1)` and `(4, 3)`;
+nothing else does. Three disagreements out of ten possible pairs. That count is the number
+of *inversions* of the list: index pairs $i < j$ with `xs[i] > xs[j]`.
+
+The one-line version compares every pair, and for five films it is fine. For the twelve
+thousand values the lab feeds `count_inversions`, it is $12000 \times 11999 / 2 \approx 72$
+million comparisons, and the checks time it. Every algorithm in this module comes from the
+same move: refuse to look at all the pairs, and find a way to split the problem so that
+most of the pairs settle themselves.
+
+## The merge already knows
+
+Cut the list in half. An inversion either has both ends in the left half, both in the
+right, or one in each. The first two kinds are the same problem on a smaller list, and
+recursion will count them. The third kind is where the idea lives: a pair `(x, y)` with
+`x` on the left and `y` on the right is an inversion exactly when `x > y`, and their
+positions inside their halves no longer matter, because everything on the left already
+precedes everything on the right.
+
+So sort the halves as you go, the way merge sort does, and watch the merge. It walks two
+sorted lists and emits the smaller head. Whenever the *right* head is emitted, it is
+smaller than the left head — and therefore smaller than every element still waiting in
+the left half, since that half is sorted. All of those elements stood to its left in the
+original list, so every one of them is inverted with it. One comparison settles a whole
+batch of pairs, and the batch is `len(left) - i` long, where `i` is how far into the left
+half the merge has got.
+
+```python
+def sort_and_count(xs):
+    if len(xs) <= 1:
+        return xs, 0
+    mid = len(xs) // 2
+    left, li = sort_and_count(xs[:mid])
+    right, ri = sort_and_count(xs[mid:])
+    merged, total = [], li + ri
+    i = j = 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            merged.append(left[i])
+            i += 1
+        else:
+            jumped = len(left) - i
+            print(f"merging {left} and {right}: {right[j]} jumps {left[i:]}, +{jumped}")
+            merged.append(right[j])
+            j += 1
+            total += jumped
+    merged.extend(left[i:])
+    merged.extend(right[j:])
+    return merged, total
+
+print(sort_and_count([2, 4, 1, 3, 5]))
+```
+
+Reading the trace: when `1` is emitted, `2` and `4` are both still waiting on the left,
+so it jumps two of them and the total climbs by 2. When `3` is emitted, only `4` is left
+to jump. The recursive calls contributed nothing here because `[2, 4]` and `[1, 3, 5]`
+each happen to be sorted already, and the answer is 3, the number of disagreements the
+two friends had.
+
+Two details carry the whole correctness of this. The comparison is `left[i] <= right[j]`,
+with the equals sign: a tie goes to the left, so an equal pair never reaches the counting
+branch. The lab is explicit that equal values are not an inversion, and `[1, 1, 1]` must
+come back as 0. And the increment is `len(left) - i`, not 1: adding one per emission
+counts merge steps, which caps the total near $n$ per merge, when a reversed list of five
+holds ten inversions.
+
+## Pricing one call, then the whole tree
+
+Write down what a single call does with its own hands: two slices, two recursive calls it
+does not pay for itself, and one merge that touches every element once. That gives
+
+$$T(n) = 2\,T(n/2) + c\,n$$
+
+and this is the point at which people write down the wrong thing, because the temptation
+is to price the whole algorithm rather than one node. The additive term is *this call's*
+work, not the level's and not the total. The recurrence then does the adding up for you.
+
+Unroll it. The root costs $cn$. Its two children each have $n/2$ elements and cost
+$c \cdot n/2$ apiece, so that level costs $cn$ too. Level $k$ holds $2^k$ calls of size
+$n/2^k$, and $2^k \cdot c\,n/2^k = cn$ again. The tree is $\log_2 n$ levels deep below
+the root, so there are $\log_2 n + 1$ levels at $cn$ each, and the total is
+$\Theta(n \log n)$. Nothing was looked up; the tree was added.
+
+The same unrolling works for any recurrence of the form $T(n) = a\,T(n/b) + c\,n^d$: $a$
+children per call, each $b$ times smaller, and a combine that is polynomial in the size.
+Level $k$ has $a^k$ calls of size $n/b^k$, so it costs
+
+$$c\,a^k \left(\frac{n}{b^k}\right)^{d} = c\,n^d \left(\frac{a}{b^d}\right)^{k}$$
+
+which is a geometric series in $k$ with ratio $a/b^d$. A geometric series does one of
+three things, and those are the three cases of the master theorem. Ratio 1: every level
+costs the same and there are $\log_b n$ of them, hence $n^d \log n$. Ratio above 1: the
+series grows, its last term dominates, and the last term is the leaves —
+$a^{\log_b n} = n^{\log_b a}$ of them. Ratio below 1: the series shrinks, the root
+dominates, and the answer is the root's own $n^d$. Since $a/b^d > 1$ is the same
+statement as $\log_b a > d$, the whole theorem is one comparison between the two
+exponents $d$ and $\log_b a$, which is exactly what `master_case` returns.
+
+```python
+def level_costs(a, b, d, n):
+    """The cost of every level of the tree for T(n) = a T(n/b) + n^d."""
+    costs, calls, size = [], 1, n
+    while size >= 1:
+        costs.append(calls * size ** d)
+        calls *= a
+        size //= b
+    return costs
+
+n = 1024
+for name, (a, b, d) in [("merge sort", (2, 2, 1)),
+                        ("Karatsuba", (3, 2, 1)),
+                        ("quadratic combine", (2, 2, 2))]:
+    costs = level_costs(a, b, d, n)
+    print(f"{name:18} ratio {a / b ** d:<5} root {costs[0]:>8} leaves {costs[-1]:>8} total {sum(costs):>8}")
+```
+
+Merge sort's eleven levels at 1024 each add to 11264. Karatsuba, with three half-size
+multiplications and a linear combine, has ratio $3/2$: the root still costs 1024 but the
+leaves cost $3^{10} = 59049$, and the total is within a factor of three of the leaves
+alone. That is $n^{\log_2 3} \approx n^{1.585}$, and the exponent is the entire reason
+Karatsuba beats schoolbook multiplication. A quadratic combine on two half-size calls has
+ratio $1/2$, the root's $1048576$ is nearly the whole total, and the bound is $n^2$.
+
+The mistake the master theorem invites is getting $a$ and $b$ the wrong way round.
+$\log_3 2 \approx 0.63$ looks like a perfectly respectable exponent until you notice it
+claims Karatsuba runs in sublinear time on an input it has to read in full. $b$ is the
+shrink factor and it is the base; $a$ is the branching factor and it is the argument. If
+case 1 ever hands you an exponent below $d$, the two have been swapped.
+
+## Closest pair, and a box that holds eight points
+
+Now a different problem with the same shape. Weather stations are scattered across a map
+and you want the two that are nearest each other. Comparing every pair is $n^2/2$
+distances; the lab's `closest_pair` is timed on six thousand points, and eighteen million
+square roots is the wrong side of the budget.
+
+Sort the points by $x$ and split at the median with a vertical line. Recurse on each side
+and let $d$ be the better of the two answers. Any pair that beats $d$ must straddle the
+line, and both of its points must be within $d$ of the line horizontally — otherwise they
+are more than $d$ apart on that axis alone. So only a strip of half-width $d$ matters.
+The strip can still hold every point in the input, which is why the argument has to go
+one step further.
+
+Take a point $p$ in the strip and ask which other strip points could be within $d$ of it.
+They must be within $d$ of $p$ vertically, so they live in a rectangle $2d$ wide and $d$
+tall with $p$ on its bottom edge. Split that rectangle down the dividing line into two
+$d \times d$ squares. Every point in the left square came from the left half, and the
+recursion has already proved that no two left points are closer than $d$ — so the square
+can hold at most four of them, one in each corner and no more, because a fifth would be
+within $d$ of one of the corners. The same goes for the right square. Eight points in the
+rectangle, and $p$ is one of them, so at most seven others. Sort the strip by $y$ and each
+point needs comparing only against the next seven in that order; the loop can stop even
+earlier the moment the $y$-gap reaches $d$, because every later point is further away in
+$y$ alone.
+
+The seven is not a tuning constant. It is loose — six is the true bound once coincident
+points are excluded — and nobody tightens it, because any constant makes the strip scan
+linear and that is all that was needed.
+
+## The bound that only the clock can see
+
+There is one place left to lose the logarithm. Sorting the strip by $y$ inside every
+recursive call makes the combine step $n \log n$ instead of $n$, and the recurrence
+becomes $T(n) = 2T(n/2) + c\,n \log n$. Add up the levels:
+
+```python
+import math
+
+def total_work(n, combine):
+    """Add up every level of T(n) = 2 T(n/2) + combine(n) for n a power of two."""
+    total, calls, size = 0, 1, n
+    while size >= 1:
+        total += calls * combine(size)
+        calls *= 2
+        size //= 2
+    return total
+
+n = 2 ** 20
+linear = total_work(n, lambda m: m)
+resorting = total_work(n, lambda m: m * math.log2(m) if m > 1 else 1)
+print(linear // n, int(resorting // n), round(resorting / linear, 1))
+```
+
+With $n = 2^{20}$ the linear combine costs 21 levels of $n$; re-sorting costs levels of
+$20n, 19n, \ldots, n$, which add to $210n$ before the leaves are counted, ten times as
+much — and the factor is $\log n / 2$, so it keeps growing. This is the defect the module
+refuses to call a variant: the program returns the right pair on every input, every
+correctness test passes, and only a stopwatch can tell the two apart. The fix is to sort
+by $y$ once at the top and hand each recursive call its share of that order, which is
+fiddlier than re-sorting and is why the slow version gets written. Tag each point with its
+original index before sorting, or a list containing duplicate coordinates cannot be split
+cleanly into the two halves.
+
+## Where the tree stops adding up
+
+The master theorem prices trees whose children are all the same size and whose combine is
+a polynomial. Quicksort on an unlucky pivot gives $T(n) = T(n-1) + cn$, which is not that
+shape and solves to $n^2$; the recursion tree is a path, not a tree. A combine of
+$n \log n$ falls into the gap between cases 2 and 3 — the ratio is neither above nor
+below 1 — and needs the extended version of the theorem, which is what the level sum
+above computed by hand. And the seven-neighbour bound depends on the recursion having
+established $d$-separation in each half first; scan the strip before the recursive calls
+return and it can be arbitrarily crowded.
+
+The lab *Inversions and the closest pair* asks for all three pieces: `count_inversions`
+riding on a merge, `closest_pair` with one sort per axis and a seven-neighbour strip
+scan, and `master_case`, which takes $a$, $b$ and $d$ and says which of the three
+geometric series you are looking at. Two of them are timed. That is the module in one
+sentence: a recurrence is a prediction, and the clock is how you check it.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Reading a recurrence off an algorithm",
                 "minutes": 7,
@@ -798,6 +1019,223 @@ for _bad in [(0, 2, 1), (2, 1, 1), (2, 0, 1), (2, 2, -1)]:
                 "Canonical versus non-canonical coin systems, and why greedy change-making is system-specific",
                 "Searching for the smallest counterexample is a legitimate way to refute a proposed greedy rule",
             ],
+            "read": [
+                {
+                    "title": "The rule, the proof, and the counterexample",
+                    "minutes": 12,
+                    "body": r'''
+A lecture theatre is free for one day and there are eleven booking requests, each a start
+and an end time. Only non-overlapping bookings can be honoured, and the goal is to honour
+as many as possible. Nobody is asking which requests are more important; every request
+counts one.
+
+Three rules suggest themselves within a minute. Take the request that starts earliest,
+because the room should not sit idle. Take the shortest, because it uses the least of the
+day. Take the one that finishes earliest, because it leaves the most of the day behind.
+Each is a *greedy* rule: a single local choice, committed to, never revisited. Each is
+plausible. Two of them are wrong.
+
+```python
+def pick_by(intervals, key):
+    chosen, last_end = [], None
+    for start, end in sorted(intervals, key=key):
+        if last_end is None or start >= last_end:
+            chosen.append((start, end))
+            last_end = end
+    return chosen
+
+rules = [("earliest finish", lambda iv: iv[1]),
+         ("earliest start", lambda iv: iv[0]),
+         ("shortest", lambda iv: iv[1] - iv[0])]
+for name, key in rules:
+    first = pick_by([(0, 10), (1, 2), (3, 4)], key)
+    second = pick_by([(0, 3), (2, 4), (3, 6)], key)
+    print(f"{name:16} {first!s:18} {second}")
+```
+
+Earliest-start takes `(0, 10)` on the first instance and blocks the entire day for one
+booking, where `(1, 2)` and `(3, 4)` would have given two. Shortest takes `(2, 4)` on the
+second instance, the two-unit request in the middle, and it overlaps both its neighbours,
+so the day ends with one booking where `(0, 3)` and `(3, 6)` give two. Notice that each
+wrong rule got the *other* instance right. That is the whole trouble with greedy rules: a
+run of examples is not evidence, because the failure is always on an instance you did not
+try.
+
+## The exchange argument
+
+Earliest finish survives both instances, and you should not believe it yet either. What
+settles it is a proof, and the proof has a shape you will use again.
+
+Let greedy pick $g_1, g_2, \ldots, g_k$ in order, and let $o_1, o_2, \ldots, o_m$ be any
+optimal schedule, sorted by finishing time. The claim is that greedy stays ahead: for
+every $i$, $g_i$ finishes no later than $o_i$. For $i = 1$ that is the definition of the
+rule, since $g_1$ is the earliest-finishing request there is. Suppose it holds for
+$i - 1$. Then $o_i$ starts at or after the finish of $o_{i-1}$, which is at or after the
+finish of $g_{i-1}$, so $o_i$ was still available when greedy chose $g_i$; and greedy
+chose the earliest-finishing available request, so $g_i$ finishes no later than $o_i$.
+
+Now suppose the optimum had more requests than greedy, $m > k$. Then $o_{k+1}$ starts
+after $o_k$ finishes, which is after $g_k$ finishes — so it was compatible with
+everything greedy had chosen, and greedy would have taken it rather than stopping.
+Contradiction. So $k = m$, and greedy is optimal.
+
+Read what the argument used. It used that finishing earlier leaves more room, and nothing
+else about a request: not its start, not its length, not what it overlapped. That is why
+the other two rules have no such proof — starting early says nothing about when you are
+next free, and being short says nothing about *where* in the day you are short. The
+argument is called an exchange argument because its engine is swapping an optimal choice
+for the greedy one without loss. When a greedy rule is correct, this is what the payment
+looks like.
+
+The half-open convention matters to the implementation: `(0, 2)` and `(2, 3)` are
+compatible, so the test is `start >= last_end`, not `>`. The lab's `schedule` sorts by
+`(end, start)` and keeps a single `last_end`.
+
+## Huffman: the two rarest go deepest
+
+A text over five symbols is to be sent down a link where every bit costs. A fixed-length
+code spends three bits on each of the five symbols, so a hundred symbols cost 300 bits.
+But if `A` appears forty times and `E` eight, giving `A` a shorter codeword than `E` is a
+real saving — provided the receiver can still tell where one codeword ends and the next
+begins. The condition that makes that possible is that no codeword be a prefix of
+another, and a prefix-free binary code is the same thing as a binary tree with the
+symbols at its leaves: read the path from the root as bits. The cost of the code is
+$\sum_s f_s \cdot \text{depth}(s)$.
+
+Which tree is cheapest? Consider the deepest leaves. Whatever hangs there, an exchange
+argument says the two *least frequent* symbols may as well: if a rare symbol sits higher
+than a frequent one, swapping them moves the frequent symbol up and the rare one down,
+and the cost cannot rise. So in some optimal tree the two rarest symbols are siblings at
+maximum depth — and once they are siblings, they behave as a single symbol of combined
+weight from every higher node's point of view. Merge them, and the problem is the same
+problem with one fewer symbol. That is Huffman's rule: repeatedly merge the two lightest
+subtrees.
+
+```python
+import heapq
+import itertools
+
+def huffman_depths(freqs):
+    """Depth of every symbol's leaf, and the weight of every node the merging created."""
+    tick = itertools.count()
+    heap = [(w, next(tick), (s,)) for s, w in sorted(freqs.items())]
+    heapq.heapify(heap)
+    depth = {s: 0 for s in freqs}
+    created = []
+    while len(heap) > 1:
+        w1, _, group1 = heapq.heappop(heap)
+        w2, _, group2 = heapq.heappop(heap)
+        for s in group1 + group2:
+            depth[s] += 1        # everything under the new parent sinks one level
+        created.append(w1 + w2)
+        heapq.heappush(heap, (w1 + w2, next(tick), group1 + group2))
+    return depth, created
+
+freqs = {"A": 40, "B": 25, "C": 15, "D": 12, "E": 8}
+depth, created = huffman_depths(freqs)
+print(depth)
+print(created, sum(created))
+print(sum(freqs[s] * depth[s] for s in freqs))
+print(sum(huffman_depths({"a": 45, "b": 13, "c": 12, "d": 16, "e": 9, "f": 5})[1]))
+```
+
+Merging `E` and `D` creates a node of weight 20; merging `C` with it, 35; then `B`, 60;
+then `A`, 100. Every merge sinks everything under the new parent by one level, so `A`
+ends at depth 1 and `D` and `E` at depth 4, and the cost is
+$40 \cdot 1 + 25 \cdot 2 + 15 \cdot 3 + 12 \cdot 4 + 8 \cdot 4 = 215$ bits against the
+fixed code's 300. The second line shows a shortcut: each merge adds one bit to every
+symbol beneath it, so the cost is also the sum of the merged weights,
+$20 + 35 + 60 + 100 = 215$. On the CLRS frequencies the same code prints 224, which is the
+number the checks expect from `huffman_cost`.
+
+Two structural facts follow, and the checks assert both. A symbol never gets a longer
+codeword than a rarer one — that was the exchange. And the Kraft sum
+$\sum_s 2^{-\text{depth}(s)}$ is exactly 1, because a codeword of length $l$ claims a
+$2^{-l}$ share of the unit interval below the root, prefix-freeness keeps the shares
+disjoint, and a Huffman tree has no node with an only child, so nothing is left
+unclaimed. A sum below 1 certifies that some codeword could have been shorter. The lab's
+`huffman_codes` labels the lighter branch `0` and the heavier `1`, gives a lone symbol the
+codeword `"0"`, and is checked against exactly this sum.
+
+The mistake that breaks implementations is not conceptual. When two subtrees have equal
+weight, a heap of `(weight, subtree)` pairs falls through to comparing the subtrees,
+which are tuples of mixed shape, and Python raises `TypeError`. Push
+`(weight, counter, subtree)` with a running counter and the tie is broken before the
+subtree is ever looked at — which is what the block above does with `tick`.
+
+## Coins, and the search for the smallest counterexample
+
+Making change is the greedy rule everyone learns first: hand over the largest coin that
+fits, repeat. With coins of 1, 5, 10 and 25 it is optimal at every amount. With coins of
+1, 3 and 4 it is not.
+
+```python
+def greedy_count(coins, amount):
+    used = 0
+    for coin in sorted(coins, reverse=True):
+        used += amount // coin
+        amount %= coin
+    return used if amount == 0 else None
+
+def optimal_count(coins, amount):
+    best = [0] + [None] * amount
+    for value in range(1, amount + 1):
+        for coin in coins:
+            if coin <= value and best[value - coin] is not None:
+                candidate = best[value - coin] + 1
+                if best[value] is None or candidate < best[value]:
+                    best[value] = candidate
+    return best[amount]
+
+for amount in range(1, 10):
+    g, o = greedy_count([1, 3, 4], amount), optimal_count([1, 3, 4], amount)
+    print(f"{amount:2}: greedy {g}  optimal {o}{'  <- greedy loses' if g != o else ''}")
+```
+
+At 6 greedy commits to the 4, is left holding a 2 that only ones can pay, and finishes on
+three coins where two 3s finish on two. The table beside it is the dynamic program from
+the lab's `optimal_coin_count`: $\text{best}[v] = 1 + \min_c \text{best}[v - c]$ over
+coins $c \le v$, with $\text{best}[0] = 0$ and `None` marking an amount nothing reaches.
+It considers every coin at every amount and is never trapped by an early commitment.
+
+The pattern is the same as the scheduling one, run in the other direction. Refuting a
+greedy rule is existential: one instance where it is strictly worse than something known
+to be optimal, and the rule is dead. Justifying it is universal, a statement about every
+instance, and it costs a proof. `greedy_failure` is the refutation made mechanical: walk
+upward from 1, compare greedy with the table, and return the first amount where they
+disagree — the smallest counterexample, which is by construction the one you can inspect
+by hand. For `[1, 3, 4]` it returns 6. For `[1, 7, 10]` it returns 14, where greedy pays
+$10 + 1 + 1 + 1 + 1$ and $7 + 7$ is two coins. For the US and euro systems it returns
+`None` up to any limit you care to set, and there is a theorem behind that silence: a
+coin system either is greedy-optimal at every amount or has its smallest counterexample
+below the sum of its two largest coins, so a bounded search is a complete test.
+
+One case needs care. With coins `[2, 5]` the amount 3 cannot be made at all, by anyone;
+greedy stranding a remainder there is not a failure, because there was nothing to succeed
+at. `greedy_failure` skips an amount whose optimum is `None` and only counts a stranded
+remainder against greedy when the table shows the amount was makeable — which is what
+happens at 6, where greedy takes the 5 and strands a 1 while $2 + 2 + 2$ works.
+
+## Where greedy stops
+
+Add a weight to each booking — a fee for the room — and ask for the most valuable
+compatible set, and earliest-finish fails at once: a single long, valuable booking should
+beat two short cheap ones, and the exchange argument breaks because swapping in the
+earlier finisher can now lose value. That problem needs a table, and it is the next
+module. Huffman is optimal among codes that assign each symbol its own whole codeword; a
+code that spreads symbols across fractional bits, as arithmetic coding does, beats it
+whenever the frequencies are lopsided, and both assume the frequencies are known in
+advance. Fractional knapsack is greedy-optimal and 0/1 knapsack is not, for the same
+indivisibility reason that made the 4 coin a trap.
+
+The lab *Scheduling, Huffman, and where greedy breaks* has you build all three:
+`schedule` with its finishing-time sort, `huffman_codes` and `huffman_cost` with the
+heap, and the pair `greedy_coin_count` and `optimal_coin_count` that `greedy_failure`
+plays against each other. Two of those functions are greedy rules with a proof. The third
+is the tool for finding out that a rule has none.
+''',
+                },
+            ],
             "quiz": {
                 "title": "The bill a greedy rule runs up",
                 "minutes": 7,
@@ -1472,6 +1910,234 @@ assert greedy_failure([1, 3, 4], 5) is None, "no counterexample below 6"
                 "Reconstruction by back-pointer walk versus recomputation from the table",
                 "The value of an optimum is unique; the witness rarely is, so verify the witness rather than compare it",
                 "Space-for-time: rolling rows give the value but destroy the reconstruction",
+            ],
+            "read": [
+                {
+                    "title": "Name the subproblem, then walk the table backwards",
+                    "minutes": 12,
+                    "body": r'''
+A spell-checker sees `flaw` and wonders whether the writer meant `lawn`. Its measure of
+close is the fewest single-character edits — insert, delete, or substitute one character
+— that turn one word into the other. You can find a two-edit route by eye: drop the `f`,
+append an `n`. What you cannot find by eye is a reason there is no one-edit route, and
+for `intention` against `execution` you cannot find the best route by eye either. Both
+need the same thing: a way to be sure.
+
+The first move of every dynamic program is to name a subproblem that is the same question
+on a smaller input. Here it is: let $D[i][j]$ be the distance between the first $i$
+characters of `a` and the first $j$ characters of `b`. Not the cost of some operation,
+not the distance between two single characters — the full answer to the smaller instance
+`a[:i]` against `b[:j]`. Everything else follows from that choice.
+
+## Three ways to finish
+
+Any edit script turning `a[:i]` into `b[:j]` does something last. Either it deals with
+`a[i-1]` and `b[j-1]` together — leaving them alone if they are equal, substituting
+otherwise — and the rest is a script for `a[:i-1]` against `b[:j-1]`; or it deletes
+`a[i-1]`, and the rest is a script for `a[:i-1]` against `b[:j]`; or it inserts
+`b[j-1]`, and the rest is a script for `a[:i]` against `b[:j-1]`. Those are the only
+three shapes, so the cheapest script is the cheapest of the three:
+
+$$D[i][j] = \begin{cases} D[i-1][j-1] & a_{i-1} = b_{j-1} \\ 1 + \min\big(D[i-1][j-1],\; D[i-1][j],\; D[i][j-1]\big) & \text{otherwise} \end{cases}$$
+
+with the borders $D[i][0] = i$, deleting everything, and $D[0][j] = j$, inserting
+everything. Every cell reads only cells above it or to its left, so filling the table row
+by row means every value read is already final. That is the second precondition of
+dynamic programming: the subproblems overlap, so a plain recursion revisits the same
+$(i, j)$ over and over, and a table turns exponential recomputation into $(n+1)(m+1)$
+cells written once.
+
+```python
+def edit_distance(a, b):
+    n, m = len(a), len(b)
+    table = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        table[i][0] = i
+    for j in range(1, m + 1):
+        table[0][j] = j
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            if a[i - 1] == b[j - 1]:
+                table[i][j] = table[i - 1][j - 1]
+            else:
+                table[i][j] = 1 + min(table[i - 1][j - 1], table[i - 1][j], table[i][j - 1])
+    script, i, j = [], n, m
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and a[i - 1] == b[j - 1] and table[i][j] == table[i - 1][j - 1]:
+            script.append(("match", a[i - 1]))
+            i, j = i - 1, j - 1
+        elif i > 0 and j > 0 and table[i][j] == table[i - 1][j - 1] + 1:
+            script.append(("sub", a[i - 1], b[j - 1]))
+            i, j = i - 1, j - 1
+        elif i > 0 and table[i][j] == table[i - 1][j] + 1:
+            script.append(("del", a[i - 1]))
+            i -= 1
+        else:
+            script.append(("ins", b[j - 1]))
+            j -= 1
+    script.reverse()
+    return table, script
+
+table, script = edit_distance("flaw", "lawn")
+print("     " + "  ".join("-lawn"))
+for label, row in zip("-flaw", table):
+    print(label, "  ", "  ".join(str(v) for v in row))
+print(table[4][4], script)
+```
+
+The corner says 2. Read the walk back from the corner, because it is the part that goes
+wrong. At $(4, 4)$, `w` against `n`, the cell holds 2; the diagonal neighbour holds 2, so
+a substitution would have cost 3 and is not how this cell was made; the cell above holds
+3, so neither was a deletion; the cell to the left holds 1, so the last move was an
+insertion of `n`. From $(4, 3)$ the characters match three times running, and at
+$(1, 0)$ the only move left is deleting `f`. Reverse the list and the script reads left
+to right.
+
+## The witness is not unique, so it is replayed
+
+The value 2 is unique: it is the minimum, and a minimum has one value. The script is not.
+`form` to `from` costs 2 by deleting the `o` and re-inserting it after the `r`, or by
+substituting both middle letters in place, and both are correct answers. A grader that
+stored one script would fail the other for no reason. So the lab's checks never compare
+your script against a stored one: they consume `a` operation by operation, confirm that
+`b` comes out, and confirm that the number of operations that are not matches equals the
+cost claimed. That is a check of the property the script is supposed to have, and it is
+how you should check your own back-walk too.
+
+The usual bugs in the walk are two. The loop condition is `while i > 0 or j > 0`; write
+`and` and the walk stops at the first border, leaving the pure insertions or deletions
+along that border unrecorded, so the script fails to reach `b`. And the indices are
+prefix *lengths*: cell $(i, j)$ is about `a[:i]`, so the characters it compares are
+`a[i-1]` and `b[j-1]`. Off by one there and the table still fills without complaint, with
+wrong numbers in it.
+
+## The same table, maximised
+
+Change the question: the longest string that is a subsequence of both `AGGTAB` and
+`GXTXAYB`. The subproblem is the same pair of prefixes, and the recurrence is the same
+three neighbours with `max` in place of `min` and $+1$ on a match instead of $0$:
+
+```python
+def lcs(a, b):
+    n, m = len(a), len(b)
+    table = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            if a[i - 1] == b[j - 1]:
+                table[i][j] = table[i - 1][j - 1] + 1
+            else:
+                table[i][j] = max(table[i - 1][j], table[i][j - 1])
+    out, i, j = [], n, m
+    while i > 0 and j > 0:
+        if a[i - 1] == b[j - 1]:
+            out.append(a[i - 1])
+            i, j = i - 1, j - 1
+        elif table[i - 1][j] >= table[i][j - 1]:
+            i -= 1
+        else:
+            j -= 1
+    return "".join(reversed(out))
+
+a, b = "AGGTAB", "GXTXAYB"
+common = lcs(a, b)
+print(common, len(a) + len(b) - 2 * len(common))
+```
+
+`GTAB` has length 4, and the second number is $6 + 7 - 2 \cdot 4 = 5$. That is not a
+coincidence. Ban substitution, so that a mismatch must be paid for with a deletion and an
+insertion, and a script has to remove from `a` and add to `b` everything the two strings
+do not share — and what they can leave alone is a common subsequence. The cheapest such
+script therefore costs $|a| + |b| - 2 \cdot \text{lcs}$, and the two tables are the same
+table wearing different arithmetic. The identity fails the moment substitution is
+allowed, because a substitution buys a delete and an insert for the price of one.
+
+## Knapsack: a table over weight
+
+Ten kilograms of allowance and three items: `(6, 9)`, `(5, 7)`, `(5, 7)` as weight and
+value. The greedy instinct is value per kilogram: the first item is 1.5, the others 1.4,
+so take the first. Four kilograms remain and nothing fits.
+
+```python
+def knapsack(items, capacity):
+    n = len(items)
+    table = [[0] * (capacity + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        weight, value = items[i - 1]
+        for c in range(capacity + 1):
+            table[i][c] = table[i - 1][c]
+            if weight <= c and table[i - 1][c - weight] + value > table[i][c]:
+                table[i][c] = table[i - 1][c - weight] + value
+    chosen, c = [], capacity
+    for i in range(n, 0, -1):
+        if table[i][c] != table[i - 1][c]:
+            chosen.append(i - 1)
+            c -= items[i - 1][0]
+    return table[n][capacity], sorted(chosen)
+
+def density_greedy(items, capacity):
+    order = sorted(range(len(items)), key=lambda i: -items[i][1] / items[i][0])
+    taken, room = [], capacity
+    for i in order:
+        if items[i][0] <= room:
+            taken.append(i)
+            room -= items[i][0]
+    return sum(items[i][1] for i in taken), sorted(taken)
+
+items = [(6, 9), (5, 7), (5, 7)]
+print("greedy", density_greedy(items, 10))
+print("table ", knapsack(items, 10))
+```
+
+The table gets 14 by taking both fives. Greedy was not wrong about density; it was
+defeated by the remainder, four units of capacity that no item can use, and that stranded
+capacity is worth more than the 0.1 of density the choice bought. On the *fractional*
+problem, where you could take four-fifths of an item, density greedy is optimal and gets
+$9 + 5.6 = 14.6$; indivisibility is the entire difficulty, and it is why there is a table
+here and a one-line sort in the fractional version.
+
+The subproblem is `table[i][c]`: the best value using only the first $i$ items under
+capacity $c$. Item $i$ is either left out, in which case the answer is `table[i-1][c]`,
+or taken, in which case it is `table[i-1][c - w] + v` provided $w \le c$. The back-walk
+asks, from the bottom row upward, whether `table[i][c]` differs from `table[i-1][c]`; if
+it does, item $i$ was taken and $c$ drops by its weight. One boundary is worth a
+deliberate test: an item of weight 0 and positive value is always worth taking, and a
+comparison written `weight < c` rather than `weight <= c` refuses it at capacity 0 and
+also refuses any item that exactly fills the space remaining.
+
+The table is $(n+1)(W+1)$ cells, which looks polynomial and is not: $W$ arrives as a
+binary number of $b$ bits and can be as large as $2^b - 1$, so ten more bits of capacity
+make the table a thousand times wider. The derivation unit in this module walks through
+that, and it is the reason knapsack is NP-hard in spite of a table this simple.
+
+## What the space saving costs
+
+Each row of the knapsack table reads only the row above, so two rolling rows give the
+optimal value in $O(W)$ space. What they do not give is the witness, because the
+back-walk reads `table[i-1][c]` for every $i$ from the bottom up, and those rows have
+been overwritten. The value needs one row of history; the witness needs all of them. That
+is a general property rather than a knapsack quirk — a recurrence looks back a bounded
+distance, so the fill may forget, while the reconstruction walks the whole chain of
+decisions and cannot. Hirschberg's trick recovers an alignment in linear space by running
+the fill twice from both ends, which is a fair price and not a free one.
+
+## Where the table stops
+
+Two conditions were used and both can fail. Optimal substructure — that the best answer
+is built from best answers to subproblems — fails for the longest *simple* path in a
+graph, where the best path to an intermediate vertex may use up vertices the rest of the
+route needed. Overlapping subproblems bounded in number fails for knapsack in the sense
+above, where the number of subproblems is polynomial in $W$ but exponential in the size
+of $W$. And the witness-by-back-walk pattern needs the table intact; compress it, and you
+have bought space with the answer.
+
+The lab *Three tables, three witnesses* asks for `edit_distance` returning the cost and
+its script, `lcs` returning the string, and `knapsack` returning the value and the sorted
+indices that achieve it. Each is checked by replaying the witness — the script is applied
+to `a`, the subsequence is tested against both strings, the indices are weighed and
+summed — and each is checked against an independent brute force on small random
+instances. Getting the value right is half the module. The walk back is the other half.
+''',
+                },
             ],
             "quiz": {
                 "title": "Subproblems, tables and witnesses",
@@ -2219,6 +2885,261 @@ assert sorted(_idx) == [1, 2], f"got indices {_idx!r}, expected [1, 2]"
                 "The cut property, and Kruskal as its repeated application in weight order",
                 "Union-find with path compression and union by size: near-constant amortised cost",
                 "Parent arrays as a compressed representation of a whole shortest-path tree",
+            ],
+            "read": [
+                {
+                    "title": "A flood from the source, and the cut a tree must cross",
+                    "minutes": 13,
+                    "body": r'''
+Six towns, `a` to `f`, joined by roads whose lengths are the numbers on the map: `a` to
+`b` is 7, `a` to `c` is 9, `c` to `f` is 2, and so on. You are in `a` and want the
+shortest distance to every other town. Imagine water released at `a` spreading along
+every road at one unit of distance per second. The first town it reaches is `b`, at time
+7, and there is something you can say about `b` at that moment that you cannot say about
+anywhere else: its distance is final. Any other route to `b` would have to travel along
+some road the water has not finished with yet, and it would arrive later.
+
+That sentence is Dijkstra's algorithm, and the reason it needs non-negative roads is
+inside it. The water reaches `b` first because every other path is at least as long *up
+to the point where it leaves the flooded region* and then can only get longer. A road of
+negative length is a road that takes you backwards in time, and with one of those on the
+map the town reached first is not necessarily the nearest one.
+
+## The frontier as a heap
+
+Turn the flood into code. Keep `dist[v]`, the best distance found so far, starting at 0
+for the source and $\infty$ elsewhere. Keep a heap of `(distance, vertex)` pairs for the
+frontier. Pop the smallest: that vertex is settled, its distance is final. Then relax
+each of its edges — if `d + w` beats `dist[v]`, record it, record `u` as the parent of
+`v`, and push `(d + w, v)`.
+
+One question every implementation has to answer is what to do when a vertex's distance
+improves while an older, larger entry for it is still sitting in the heap. A heap cannot
+reach in and rewrite an entry cheaply. The answer is not to try: leave the stale entry
+where it is, and when it surfaces, notice that its recorded distance is larger than
+`dist[u]` and discard it. That guard, `if d > dist[u]: continue`, is called lazy
+deletion, and it is what makes duplicate pushes safe rather than what prevents them.
+
+```python
+import heapq
+import math
+
+GRAPH = {
+    "a": [("b", 7), ("c", 9), ("f", 14)],
+    "b": [("a", 7), ("c", 10), ("d", 15)],
+    "c": [("a", 9), ("b", 10), ("d", 11), ("f", 2)],
+    "d": [("b", 15), ("c", 11), ("e", 6)],
+    "e": [("d", 6), ("f", 9)],
+    "f": [("a", 14), ("c", 2), ("e", 9)],
+}
+
+def dijkstra(graph, source):
+    dist = {n: math.inf for n in graph}
+    parent = {n: None for n in graph}
+    dist[source] = 0
+    heap = [(0, source)]
+    settled = set()
+    while heap:
+        d, u = heapq.heappop(heap)
+        if u in settled or d > dist[u]:
+            print(f"    pop ({d}, {u}): stale, skipped")
+            continue
+        settled.add(u)
+        print(f"pop ({d}, {u}): settled")
+        for v, w in graph[u]:
+            if d + w < dist[v]:
+                dist[v] = d + w
+                parent[v] = u
+                heapq.heappush(heap, (d + w, v))
+    return dist, parent
+
+dist, parent = dijkstra(GRAPH, "a")
+print(dist)
+print(parent)
+```
+
+Follow the trace against the map. `a` settles at 0 and pushes `b` at 7, `c` at 9, `f` at
+14. `b` settles at 7 and offers `d` at 22. `c` settles at 9 and offers `d` at 20 —
+better, so `d` is pushed again and the 22 is now stale — and `f` at 11, so the 14 is
+stale too. `f` settles at 11 and reaches `e` at 20. Then `(14, f)` surfaces and is thrown
+away, `d` and `e` settle at 20 and 20, and `(22, d)` is thrown away at the end. The parent
+map is the whole shortest-path tree compressed into one entry per vertex: `f` was reached
+from `c`, `e` from `f`, so the path to `e` reads `a, c, f, e`, which the lab's
+`shortest_path` reconstructs by walking parents backwards and reversing.
+
+The cost falls out of the trace. Each vertex settles once and relaxes its edges once, so
+there are at most $E$ pushes and the heap never holds more than $E + 1$ entries; each pop
+and push is $O(\log E)$, and $\log E \le 2 \log V$ on a simple graph. So the whole thing
+is $O((V + E)\log V)$, which is what lets the lab's `dijkstra` clear a $100 \times 100$
+grid inside the time limit, and what a linear scan for the minimum, at $O(V^2)$, does
+not.
+
+The counterexample for a negative edge needs no cycle. Take `s->a` at 2, `s->b` at 3,
+`b->a` at $-2$, `a->t` at 1. `a` settles at 2 and relaxes `t` to 3. Only afterwards does
+`b` reveal that `a` is really 1 away, and by then `a` has left the queue and its edge to
+`t` is never looked at again: `t` reports 3 where the truth is 2. That is why the lab's
+`dijkstra` raises `ValueError` on a negative weight rather than running and returning
+something plausible. Two smaller traps: the node set has to be gathered from the
+neighbour lists as well as the keys, or a vertex that only ever appears as a destination
+is missing from `dist`; and the guard's polarity is `d > dist[u]` — reverse it and every
+live entry is skipped.
+
+## Bellman-Ford: no frontier, no commitment
+
+If the roads can be negative — think of a toll network where some segments pay a rebate
+— the extraction invariant is gone, and an algorithm that never commits is needed.
+Bellman-Ford relaxes *every* edge, in any order, and repeats. After one full pass, every
+vertex whose shortest path has one edge is correct, because the pass relaxed that edge.
+After two passes, every vertex whose shortest path has two edges is correct, because the
+second pass relaxed the second edge from a first vertex that was already right. A
+shortest path that repeats no vertex has at most $V - 1$ edges, so $V - 1$ passes settle
+everything — and a shortest path never has a reason to repeat a vertex unless the loop it
+made was negative.
+
+That last clause is the detector. If a $V$-th pass still improves something, some path is
+using $V$ or more edges, which means it repeats a vertex, which means it went round a
+cycle and profited, so the cycle is negative and reachable. Raise then.
+
+```python
+import math
+
+def bellman_ford(graph, source):
+    nodes = set(graph)
+    for out in graph.values():
+        nodes |= {v for v, _ in out}
+    edges = [(u, v, w) for u, out in graph.items() for v, w in out]
+    dist = {n: math.inf for n in nodes}
+    dist[source] = 0
+    for rnd in range(1, len(nodes)):
+        changed = False
+        for u, v, w in edges:
+            if dist[u] != math.inf and dist[u] + w < dist[v]:
+                dist[v] = dist[u] + w
+                changed = True
+        print(f"round {rnd}: {dict(sorted(dist.items()))}{'' if changed else '  no change, stop'}")
+        if not changed:
+            break
+    for u, v, w in edges:
+        if dist[u] != math.inf and dist[u] + w < dist[v]:
+            raise ValueError("negative cycle reachable from the source")
+    return dist
+
+bellman_ford({"s": [("a", 4), ("b", 5)], "a": [("c", -3)], "b": [("c", 2)], "c": []}, "s")
+far = bellman_ford({"s": [("t", 1)], "t": [], "x": [("y", 1)], "y": [("x", -3)]}, "s")
+print("no error:", dict(sorted(far.items())))
+```
+
+The first graph settles in one round, with `c` at 1 via the rebate, and the second round
+confirms it by changing nothing, so the loop stops early; the lab's `bellman_ford` does
+the same. The second graph is the case the lab is strict about: a negative cycle between
+`x` and `y` in a component the source cannot reach. The guard `dist[u] != inf` refuses to
+relax out of a vertex at infinite distance, so the cycle is inspected every round and does
+nothing, `x` and `y` stay at $\infty$, and no error is raised. Without that guard,
+$\infty + (-3)$ would count as an improvement on $\infty$ and the unreachable cycle would
+manufacture finite distances out of nothing. The function answers one question — how far
+is everything from the source — and that cycle changes none of the answers.
+
+The price of never committing is $V$ passes over $E$ edges, $O(VE)$, against Dijkstra's
+$O((V+E)\log V)$; the derivation unit in this module works out that on a dense graph the
+gap is a factor of $V - 1$ in relaxation attempts. The early exit on a round with no
+change helps enormously on real graphs and not at all on the worst case.
+
+## Kruskal and the cut property
+
+Now a different question about the same kind of map: cable has to be laid so that every
+town is connected to every other, directly or not, at least total cost. That is a minimum
+spanning tree, and the rule that finds it is greedy — consider the edges cheapest first,
+take each one unless it would close a cycle — with an exchange argument as its payment.
+
+Split the vertices into two sets any way you like; call it a cut. Let $e$ be the cheapest
+edge with one end in each set. Claim: some minimum spanning tree contains $e$. Take any
+minimum spanning tree $T$ that does not. Add $e$ to it, and a cycle appears, and that
+cycle must cross the cut somewhere else — going out and not coming back is not a cycle —
+along some edge $e'$. Remove $e'$. The result is still a spanning tree, and it weighs at
+most what $T$ weighed, because $e$ was the cheapest crossing edge. So it is also minimum,
+and it contains $e$.
+
+Kruskal is that argument applied over and over. When it examines an edge between two
+components, the cut is this component against everything else, and the edge is the
+cheapest crossing edge because all cheaper edges have already been examined and either
+taken or found to be internal. The only thing left to make fast is the question *are
+these two ends already connected*, which is what a disjoint-set structure is for.
+
+```python
+class DisjointSet:
+    def __init__(self, n):
+        self.parent = list(range(n))
+        self.size = [1] * n
+        self.components = n
+
+    def find(self, x):
+        root = x
+        while self.parent[root] != root:
+            root = self.parent[root]
+        while self.parent[x] != root:          # second walk: flatten the path
+            self.parent[x], x = root, self.parent[x]
+        return root
+
+    def union(self, a, b):
+        ra, rb = self.find(a), self.find(b)
+        if ra == rb:
+            return False
+        if self.size[ra] < self.size[rb]:
+            ra, rb = rb, ra
+        self.parent[rb] = ra
+        self.size[ra] += self.size[rb]
+        self.components -= 1
+        return True
+
+def kruskal(n, edges):
+    dsu, tree, total = DisjointSet(n), [], 0
+    for u, v, w in sorted(edges, key=lambda e: e[2]):
+        if dsu.union(u, v):
+            tree.append((u, v, w))
+            total += w
+            print(f"take   {(u, v, w)}   components now {dsu.components}")
+        else:
+            print(f"reject {(u, v, w)}   both ends already connected")
+    return total, tree
+
+print(kruskal(4, [(0, 1, 1), (1, 2, 2), (0, 2, 3), (2, 3, 4)]))
+```
+
+`(0, 2, 3)` is rejected because 0 and 2 are already joined through 1, and taking it would
+have closed a cycle whose most expensive edge could be removed again for a saving. The
+tree weighs 7. On a disconnected graph the same loop yields a spanning *forest* with
+`n - components` edges, and the lab's checks count that rather than assuming $n - 1$.
+
+The disjoint-set structure is two arrays and two ideas. `find` walks up parents to a root,
+then walks the same path again pointing everything straight at the root — path
+compression, so the next caller finds the root in one hop. `union` hangs the smaller tree
+under the larger — union by size, so no tree gets deep. Together they bring the amortised
+cost per operation to the inverse Ackermann function, which is under 5 for any input that
+will ever exist, and that is why Kruskal's bound is the sort: $O(E \log E)$ to order the
+edges, and near-linear after. Hand it a pre-sorted list and the logarithm leaves with the
+sort. The lab normalises each tree edge to `(min(u, v), max(u, v), w)` and sorts the
+output by `(w, u, v)` so that the answer is deterministic under ties.
+
+## Where each one stops
+
+Dijkstra stops at the first negative edge, and no data structure rescues it, because the
+failure is in the claim that the minimum key is final rather than in how the minimum is
+found. Bellman-Ford stops at a *reachable* negative cycle, where no shortest path exists
+to report; asking it about cycles elsewhere in the graph is a different query, answered
+by adding a virtual source with a zero edge to everything. The cut property holds for
+undirected graphs; for directed graphs the analogous problem — a minimum spanning
+arborescence — needs a different algorithm entirely, because the exchange step can no
+longer swap one crossing edge for another. And with tied weights there may be several
+minimum spanning trees, all of the same total, which is why the checks compare weights
+rather than edge lists.
+
+The lab *Dijkstra, Bellman-Ford, Kruskal* asks for all three, with the data structure
+each bound assumes: a heap with lazy deletion, a flat edge list with the `inf` guard and
+a $V$-th test round, and a `DisjointSet` with both optimisations. The grid test and the
+exhaustive-minimum test are there to catch the version that is correct and slow, and the
+unreachable-cycle test is there to catch the version that is fast and wrong.
+''',
+                },
             ],
             "quiz": {
                 "title": "Which algorithm, and what it assumes",
@@ -3032,6 +3953,209 @@ for _trial in range(15):
                 "Approximation ratio as a worst-case guarantee, measured against a certificate rather than against OPT",
                 "Exhaustive search as a testing oracle for small instances only, and the 2^n wall behind it",
                 "Why the greedy highest-degree heuristic has no constant ratio at all",
+            ],
+            "read": [
+                {
+                    "title": "A bound you can check without the optimum",
+                    "minutes": 12,
+                    "body": r'''
+A building has corridors and junctions, and a camera placed at a junction watches every
+corridor that meets it. The job is to place the fewest cameras so that no corridor goes
+unwatched. Draw the corridors as edges and the junctions as vertices and this is *vertex
+cover*: a set of vertices touching every edge, as small as possible.
+
+Small ones are easy by eye. A star — one junction with three corridors radiating from it
+— needs one camera, at the centre. A triangle needs two; one camera watches two of the
+three corridors and leaves the third. A path of four junctions, `0-1-2-3`, needs two, at
+1 and 2 for instance. Now the building has forty junctions. Trying every subset of them
+is $2^{40}$ subsets, about $1.1 \times 10^{12}$, and at five million subsets a second
+that is two and a half days; three more junctions and it is three weeks. The lab's
+`min_vertex_cover` enumerates subsets smallest-first and refuses more than 18 nodes,
+because $2^{18}$ is a quarter of a million and instant while $2^{40}$ is not, and the
+whole range from instant to impossible sits inside a factor of three in $n$.
+
+## What NP-complete means, and what it does not
+
+Nobody has found a polynomial-time algorithm for vertex cover, and there is a stronger
+statement than that. The decision version — *is there a cover of at most $k$ vertices?*
+— is in NP, meaning a proposed answer can be checked fast: hand over a set of $k$
+vertices and one walk along the edge list confirms it. And every problem in NP can be
+translated into it in polynomial time, so an efficient algorithm for vertex cover would
+be an efficient algorithm for all of them. That pair of facts is NP-completeness. It is a
+statement about reductions between problems, not about any particular instance being
+hard: trees have a linear-time exact algorithm, bipartite graphs fall to matching by
+König's theorem, and the 18-node graphs in the lab are cleared by brute force without
+complaint. The optimisation version — *find the smallest* — cannot be in NP at all,
+since no certificate settles the claim that nothing smaller exists, so it is called
+NP-hard rather than NP-complete.
+
+The mistake here is reading NP as a synonym for exponential. Membership in NP is a
+statement about checking, not finding, and almost everything anyone works on lives
+inside it. The hardness is the second half, and it is conditional: it says a fast
+algorithm here would collapse P and NP, which nobody expects, and nothing more.
+
+## Two endpoints, and a matching for free
+
+If exact is out of reach, ask for a cover that is provably not much bigger than the best.
+Here is the algorithm: take any edge that is not yet covered, put *both* of its endpoints
+into the cover, and repeat until every edge is covered.
+
+Both endpoints looks wasteful, since one would cover the edge. The trouble is that you
+cannot tell which one is useful, and guessing wrong is not merely suboptimal but
+unbounded: on a star, picking the leaf every time costs one camera per corridor where the
+centre alone would have done. Taking both costs a factor of exactly 2 and buys something
+in return — the picked edges share no vertex, because an edge is only picked while both
+its ends are still uncovered. A set of edges sharing no vertex is a matching, and a
+matching is a lower bound on every cover: each matched edge needs at least one of its two
+endpoints in the cover, and no single vertex can serve two matched edges. So if the
+algorithm picked $m$ edges, $\text{OPT} \ge m$; and the cover it built has exactly $2m$
+vertices. Therefore
+
+$$|C| = 2m \le 2\,\text{OPT}.$$
+
+The value of that argument is that it never computed $\text{OPT}$. It bounded
+$\text{OPT}$ from below with an object the algorithm produced anyway, and that object is
+checkable by anyone in linear time: verify the edges are pairwise disjoint and the bound
+stands whether or not you trust the run that produced them. That is what the lab means by
+a cover you can vouch for, and it is why `vertex_cover_2approx` returns the matching
+alongside the cover instead of discarding it.
+
+```python
+import itertools
+
+def is_cover(edges, cover):
+    return all(u in cover or v in cover for u, v in edges)
+
+def approx(edges):
+    cover, matching = set(), []
+    for u, v in edges:
+        if u in cover or v in cover:
+            continue
+        matching.append((u, v))
+        cover |= {u, v}
+    return cover, matching
+
+def optimum(edges):
+    nodes = sorted({x for e in edges for x in e})
+    for size in range(len(nodes) + 1):
+        for combo in itertools.combinations(nodes, size):
+            if is_cover(edges, set(combo)):
+                return set(combo)
+
+for name, edges in [("path", [(0, 1), (1, 2), (2, 3)]),
+                    ("path, middle first", [(1, 2), (0, 1), (2, 3)]),
+                    ("triangle", [(0, 1), (1, 2), (0, 2)]),
+                    ("star", [(0, 1), (0, 2), (0, 3)])]:
+    cover, matching = approx(edges)
+    opt = optimum(edges)
+    print(f"{name:19} cover {sorted(cover)!s:13} matching {matching!s:17} "
+          f"optimum {sorted(opt)!s:7} ratio {len(cover) / len(opt)}")
+```
+
+On the path in the given order the algorithm picks `(0, 1)`, takes both ends, skips
+`(1, 2)` because 1 is now covered, and picks `(2, 3)`: four vertices for a graph that
+`{0, 2}` or `{1, 2}` covers with two. The ratio is exactly 2.0, the bound is *achieved*
+rather than approached, and that single instance is why nobody will ever prove 1.9 for
+this algorithm. Hand the same path in with the middle edge first and it picks `(1, 2)`,
+covers everything, and scores 1.0 — a worst-case guarantee is a ceiling on every
+instance, not a prediction about any one of them, which is why the lab fixes the edge
+order to make the result deterministic. The triangle scores 1.0 with a loose certificate:
+one matched edge against an optimum of 2. The star scores 2.0 with a tight one.
+
+Two things about the exhaustive search are worth building deliberately. Smallest-first
+enumeration means the first cover found is optimal, so the loop returns the moment
+`is_vertex_cover` says yes. And the witness is not unique — the path has two optimal
+covers — so the checks confirm the size and validity of what you return, never its
+identity; collect the node list in first-appearance order rather than through a set, so
+that a rerun gives the same one.
+
+## The cleverer rule with no guarantee
+
+There is a rule that looks better than picking both ends of an arbitrary edge: repeatedly
+take the vertex of highest degree, since it covers the most corridors at once. It beats
+the matching algorithm on most graphs you would draw by hand, and it has no
+constant-factor guarantee at all.
+
+The construction that defeats it is bipartite. Put $n$ vertices on the left. On the
+right, for each $i$ from 2 to $n$, add $\lfloor n/i \rfloor$ vertices, each wired to $i$
+left vertices in consecutive disjoint blocks. Every right vertex of group $i$ has degree
+$i$, and it keeps that degree however many other right vertices are removed, because its
+neighbours are all on the left. A left vertex starts with one neighbour per group and
+loses one each time a group is exhausted, so at the moment the greedy rule is choosing
+among group $i$ and below, every left vertex has degree at most $i - 1$ and the group-$i$
+vertex has degree $i$. The rule takes the entire right side, group by group, from $n$
+down to 2: about $n(H_n - 1)$ vertices, where $H_n$ is the harmonic number, against the
+left side's $n$.
+
+```python
+def harmonic_graph(n):
+    """Left side l0..l(n-1). For each i from 2 to n, n // i right vertices, each wired to i lefts."""
+    edges = []
+    for i in range(2, n + 1):
+        for block in range(n // i):
+            for k in range(block * i, block * i + i):
+                edges.append((f"l{k}", f"r{i}_{block}"))
+    return edges
+
+def degree_greedy(edges):
+    remaining, cover = list(edges), []
+    while remaining:
+        degree = {}
+        for u, v in remaining:
+            degree[u] = degree.get(u, 0) + 1
+            degree[v] = degree.get(v, 0) + 1
+        best = max(sorted(degree), key=degree.get)
+        cover.append(best)
+        remaining = [(u, v) for u, v in remaining if best not in (u, v)]
+    return cover
+
+def matching_approx(edges):
+    cover = set()
+    for u, v in edges:
+        if u not in cover and v not in cover:
+            cover |= {u, v}
+    return cover
+
+for n in (6, 12, 30, 60):
+    edges = harmonic_graph(n)
+    by_degree = degree_greedy(edges)
+    by_matching = matching_approx(edges)
+    print(f"n={n:2}: the left side covers with {n:2}; "
+          f"degree greedy takes {len(by_degree):3} (ratio >= {len(by_degree) / n:.2f}); "
+          f"matching takes {len(by_matching):3} (ratio <= 2 by proof)")
+```
+
+The ratio is about $H_n - 1$ and it climbs without bound — 3.35 at sixty vertices a
+side, about 6.5 at a thousand, 13 at a million — while the matching algorithm on the same
+graphs takes exactly $2n$ and cannot do worse, because the proof says so. Nothing is
+malformed about these instances; they are graphs. That is what makes the missing constant
+a fact about the rule rather than about the input, and it is the lesson to carry out of
+this module: a heuristic that usually wins and an algorithm with a proof are different
+kinds of object, and which one you want depends on whether you need a good answer or a
+bounded one.
+
+## Where the guarantee stops
+
+The factor 2 is tight for this algorithm and close to tight for the problem: no
+polynomial-time algorithm achieves a ratio below about 1.36 unless P equals NP, and none
+below 2 under the unique games conjecture. Those results rule out doing better than 2,
+not doing 2. The guarantee is also worst-case; the lab's random test measures the ratio
+over forty small graphs and expects to see it exceed 1 at least once, which it does, and
+never exceed 2, which it cannot. And the whole argument is specific to vertex cover — the
+matching lower bound is a property of this problem, and for set cover, which looks like a
+generalisation, greedy-by-degree is the *best* known algorithm and its $\ln n$ ratio is
+within a constant of the best possible. The certificate is the transferable idea, not the
+number.
+
+The lab *A vertex cover you can vouch for* asks for `is_vertex_cover`, the
+2-approximation returning its cover and its matching, `min_vertex_cover` by
+smallest-first exhaustive search with the 18-node refusal, and `ratio`, which divides one
+by the other and returns 1.0 for a graph with no edges. The checks verify the matching
+really is a matching, that the cover really is twice its size, that $\text{OPT}$ is never
+smaller than the matching, and that the path of four scores exactly 2.0. Every one of
+those is a line of the proof above, turned into an assertion.
+''',
+                },
             ],
             "quiz": {
                 "title": "Guarantees, certificates and the wall",

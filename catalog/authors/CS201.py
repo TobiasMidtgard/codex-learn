@@ -46,6 +46,319 @@ COURSE = {
                 "A tail pointer is what makes appending to a singly linked list O(1)",
                 "Big-O hides constants: cache locality is why arrays usually still win",
             ],
+            "read": [
+                {
+                    "title": "Lockers, treasure hunts, and where an append's cost goes",
+                    "minutes": 14,
+                    "body": r'''
+A row of parcel lockers runs along the wall of a sorting office, numbered from 0. A
+courier holding a slip that says *locker 4017* does not walk the row reading labels:
+she knows where locker 0 is and how wide each locker is, multiplies, and goes straight
+there. That is an **array**. The slots are contiguous, so an index turns into an
+address by one multiplication and one addition, and slot 4017 costs exactly what slot
+0 costs.
+
+Now picture a treasure hunt instead. Each clue is hidden somewhere in a park, and every
+clue says where the next one is. There is no arithmetic that gets you to the 4017th
+clue: the only route is through the 4016 before it. That is a **linked list**. Each
+cell holds a value and a reference to the next cell, and the cells can be anywhere at
+all — which is the whole of its weakness and, as it turns out, the whole of its
+strength.
+
+Python hands you `list` and asks no questions. This module opens it up, because the two
+questions that decide which container to reach for — what happens when the lockers run
+out, and what it costs to get to the end of the hunt — both have exact answers, and
+both are worth deriving rather than memorising.
+
+## When the lockers run out
+
+An array is a fixed block of slots. That is what makes indexing cheap, and it is also a
+problem the moment a 17th value arrives at a block of 16. The slots after the block
+belong to something else, so the only option is to get a bigger block, copy everything
+across, and let the old one go.
+
+So a growable array is three things: a **backing store** of some fixed capacity, a
+**length** saying how much of it is live, and a rule for what to do when the two meet.
+The copy is the expensive part, and the only decision that matters is *how much bigger*
+the new store should be. Here is the rule everybody uses, with a counter on every slot
+write so the cost is visible rather than assumed:
+
+```python
+class DynamicArray:
+    """A growable array over a fixed backing store, with every write counted."""
+
+    def __init__(self, capacity=1):
+        self.capacity = capacity
+        self._store = [None] * capacity
+        self._size = 0
+        self.writes = 0
+        self.resizes = 0
+
+    def _resize(self, capacity):
+        store = [None] * capacity
+        for i in range(self._size):
+            store[i] = self._store[i]
+            self.writes += 1
+        print(f"resize {self.capacity:>2} -> {capacity:>2}, copied {self._size:>2}")
+        self._store = store
+        self.capacity = capacity
+        self.resizes += 1
+
+    def append(self, value):
+        if self._size == self.capacity:
+            self._resize(self.capacity * 2)
+        self._store[self._size] = value
+        self.writes += 1
+        self._size += 1
+
+
+array = DynamicArray()
+for value in range(16):
+    array.append(value)
+print("capacity", array.capacity, "resizes", array.resizes, "writes", array.writes)
+```
+
+Sixteen appends from capacity 1 cost 4 resizes and 31 writes: the 16 stores, plus
+copies of 1, 2, 4 and 8. Those copies are a geometric series, and that is the entire
+argument in one line.
+
+## Counting the copies
+
+Take $n = 2^{k}$ appends, so the store doubles exactly $k$ times and ends up exactly
+full. Each doubling copies the live prefix, which at that moment is the old capacity, so
+the copies are $1, 2, 4, \dots, 2^{k-1}$. Add them:
+
+$$1 + 2 + 4 + \dots + 2^{k-1} = 2^{k} - 1 = n - 1.$$
+
+The trick that proves it is one you will use again in the heap module: call the sum $S$,
+double it to get $2 + 4 + \dots + 2^{k}$, subtract, and everything cancels except the
+two ends. So the copies alone come to one fewer than the number of appends, and the
+total writes are the $n$ stores plus $n - 1$ copies:
+
+$$W = 2n - 1, \qquad \frac{W}{n} = 2 - \frac{1}{n}.$$
+
+Under two writes per append, and falling. When $n$ is not a power of two the last
+doubling happens before the final append, so the copies stop at the largest power of two
+below $n$ and still total less than $2n$ — sixteen appends copy 15, seventeen copy 31,
+and both stay under $3n$ all told. That is what **$O(1)$ amortised** means: not that any
+particular append is cheap, but that the sum over all of them is proportional to their
+number.
+
+Now replace doubling with the rule that looks thriftier: grow by a fixed 100 slots
+whenever the store fills. The copies are now $c, 2c, 3c, \dots$ up to about $n$, an
+arithmetic series of about $n/c$ terms averaging $n/2$, so they total roughly
+
+$$\frac{n}{c} \cdot \frac{n}{2} = \frac{n^{2}}{2c}.$$
+
+The $n^{2}$ is not a constant factor to tune away later. Run both policies for ten
+thousand appends and the gap is already a factor of nineteen:
+
+```python
+def total_writes(n, grow):
+    """Slot writes for n appends under a growth rule, starting from capacity 1."""
+    capacity, size, writes = 1, 0, 0
+    for _ in range(n):
+        if size == capacity:
+            writes += size            # the copy
+            capacity = grow(capacity)
+        writes += 1                   # the store
+        size += 1
+    return writes
+
+
+n = 10_000
+print("doubling:      ", total_writes(n, lambda c: c * 2))
+print("plus a hundred:", total_writes(n, lambda c: c + 100))
+```
+
+Doubling: 26,383 writes. Growing by a hundred: 505,100. Push $n$ to a million and the
+first is about two million while the second is about five *billion*. The thing people
+get backwards here is which policy wastes memory. Doubling is the wasteful one — a
+freshly doubled store sits half empty, and that idle half is exactly what pays for the
+cheap appends. The fixed increment never holds more than 100 spare slots, and pays for
+the thrift in copying.
+
+## Shrinking, and the trap at a half
+
+If the array can grow it should be able to shrink, or a container that once held a
+million values and now holds ten keeps a million slots forever. The rule that suggests
+itself is the mirror of doubling: when the array falls to half full, halve the capacity.
+It is wrong, and it is wrong in a way that no test about *values* will ever catch.
+
+Picture an array of capacity 16 holding 9 values, and a workload that pushes and pops
+alternately. A pop takes it to 8, which is half full, so it halves to 8 — copying 8
+values — and comes out of the shrink *completely full*. The very next push finds no
+room and doubles straight back to 16, copying 8 again. Then a pop halves it. Every
+single operation copies the whole array, and the amortised bound has gone entirely.
+
+```python
+def alternate(shrink_at, operations=1000):
+    """Push and pop on the boundary; count the slot writes each policy makes."""
+    capacity, size, writes = 16, 9, 0
+    for step in range(operations):
+        if step % 2 == 0:                       # pop
+            size -= 1
+            if capacity > 1 and size * shrink_at <= capacity:
+                writes += size                  # the shrink copies what is live
+                capacity //= 2
+        else:                                   # push
+            if size == capacity:
+                writes += size                  # the growth copies it all again
+                capacity *= 2
+            writes += 1
+            size += 1
+    return writes
+
+
+print("shrink at a half:   ", alternate(2))
+print("shrink at a quarter:", alternate(4))
+```
+
+Waiting until a **quarter** full before halving leaves the array half full after the
+shrink, with room to move in both directions; a linear number of operations is needed
+before either trigger can fire again, and that is what spreads the next copy's cost
+out. A thousand alternating operations cost 8500 writes under the half rule and 500
+under the quarter rule — the 500 stores, and not one copy. The gap between the two
+triggers *is* the amortisation. Close the gap to nothing and you close the amortisation
+with it.
+
+## The treasure hunt
+
+A linked list is a chain of cells, each holding a value and a reference to the next.
+Nothing is contiguous, nothing can be reached by arithmetic, and the honest cost of
+getting to cell $i$ is $i$ steps. That makes `find` a walk that pays one step per cell
+examined — and it makes the end of the list a very long way from the start.
+
+Which is why a singly linked list keeps a **tail pointer**. Without one, appending means
+walking to the last cell first: $O(n)$ per append and $O(n^{2})$ for building a list of
+$n$. With one, an append is three constant-time moves: make the cell, hang it off
+`tail.next`, move `tail` along.
+
+```python
+class ListNode:
+    """One cell: a value and a reference to the next cell."""
+
+    def __init__(self, value, next=None):
+        self.value = value
+        self.next = next
+
+
+class SinglyLinkedList:
+    """Head, tail, and a counter for every node a traversal visits."""
+
+    def __init__(self):
+        self.head = None
+        self.tail = None
+        self.steps = 0
+
+    def push_back(self, value):
+        node = ListNode(value)
+        if self.tail is None:
+            self.head = self.tail = node
+        else:
+            self.tail.next = node
+            self.tail = node
+
+    def find(self, value):
+        node, index = self.head, 0
+        while node is not None:
+            self.steps += 1
+            if node.value == value:
+                return index
+            node = node.next
+            index += 1
+        return -1
+
+
+lst = SinglyLinkedList()
+for value in range(1000):
+    lst.push_back(value)
+print("steps after 1000 push_backs:", lst.steps)
+print("find(999) ->", lst.find(999), "in", lst.steps, "steps")
+```
+
+A thousand appends and not one node visited. The step counter is there so the
+difference shows: `find(999)` has to touch all thousand cells, and it does. Note what
+kind of claim the tail pointer makes. It is not amortised — it is not a statement about a
+total — it is a true constant on every single call, and the two are worth keeping
+apart, because only one of them promises anything about the call you are making right
+now.
+
+## What a reference buys back
+
+Everything so far has gone the array's way. Here is what the list is for. Suppose you
+are standing on a cell — you hold a reference to it, because you are iterating, or
+because a cache handed it to you — and you want the cell after it gone. Two reads and
+one write, and nothing else in the chain is touched:
+
+```python
+class ListNode:
+    """One cell: a value and a reference to the next cell."""
+
+    def __init__(self, value, next=None):
+        self.value = value
+        self.next = next
+
+
+head = ListNode("a", ListNode("b", ListNode("c", ListNode("d"))))
+cursor = head.next                  # standing on "b"
+cursor.next = cursor.next.next      # unhook "c": nothing after it moves
+values = []
+node = head
+while node is not None:
+    values.append(node.value)
+    node = node.next
+print(values)
+```
+
+The chain now reads `['a', 'b', 'd']`, and the cells holding `d` and anything after it
+never heard about the change. In an array, deleting from the middle slides every later
+element down one slot, which is $O(n)$ per deletion and $O(n^{2})$ for a loop that walks
+a sequence deleting as it goes. That loop is precisely the workload a linked list exists
+for.
+
+But read the premise again: *standing on the cell*. The splice is $O(1)$ because the
+node is already in hand. The moment the request is "delete the element at index
+400,000", the list has to walk there first, and the walk costs what the array's shifting
+would have cost. So the rule is not that lists are good at deleting. It is that a list
+is good at deleting from a position you already hold — which is what an iterator, a
+cursor, or the node handle in an LRU chain gives you. It is also why Python's
+`list.remove(x)` is $O(n)$ and always will be: the search, not the removal, is the cost.
+
+## Where the accounting stops being the whole story
+
+Both containers traverse in $O(n)$, and on real hardware the array is several times
+faster. Big-O throws away the constant, and on a modern machine the constant is memory.
+Reading one array element brings a 64-byte cache line into the core — sixteen 32-bit
+integers for the price of one miss, with the next line prefetched before it is asked
+for. Each list cell was allocated at a different moment and can sit anywhere, so
+`node.next` can be a fresh miss of a hundred-odd cycles, and worse, a miss that cannot
+even be *started* until the previous one has returned, because the address is not known
+until then.
+
+This is why `list` in Python and `std::vector` in C++ are the default containers, and
+why linked lists survive mostly where $O(1)$ splicing of a node you already hold is the
+point. The asymptotic argument tells you which container to reach for when the operation
+mix is lopsided; the cache tells you which to reach for when it is not.
+
+## What you are about to build
+
+The lab in this module is *A growable array and a linked list, counted*, and it is the
+two structures above with their counters exposed. `DynamicArray` keeps `writes` and
+`resizes`, counting one write for every value put into a slot of the backing store —
+copies included, cleared slots excluded — and the checks are the numbers derived here:
+sixteen appends from capacity 1 must cost exactly 4 resizes and 31 writes, a thousand
+must cost 2023, and popping back down must halve at a quarter full and land at capacity
+1 when the array empties. `SinglyLinkedList` keeps `steps`, one per node visited by a
+traversal, and the check that matters is that 1000 calls to `push_back` leave it at
+zero. If yours does not, the tail pointer is not being kept — usually because
+`push_front` on an empty list or `pop_front` on a one-element list forgot to update it.
+The fill-in-the-blanks unit walks the growth and shrink rules line by line, and the
+derivation unit does the geometric series with symbols instead of a trace; between them,
+the whole amortised argument fits in four numbers.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Where the cost of a growable array actually goes",
                 "minutes": 7,
@@ -877,6 +1190,316 @@ assert _one.to_list() == [7] and _one.head is _one.tail, "a single node is its o
                 "A monotonic deque holds only the candidates that can still become the answer",
                 "Each index enters and leaves the deque once, so a sliding-window maximum is O(n), not O(nk)",
             ],
+            "read": [
+                {
+                    "title": "Nesting, order, and the window that never looks back",
+                    "minutes": 14,
+                    "body": r'''
+Open a source file in any editor and type an unmatched bracket: the editor notices at
+once, and it notices with almost no memory. It does not remember the whole file. It
+remembers the brackets that are still open, and the rule that the next closing bracket
+must match the *most recently opened* one — `( [ ) ]` is wrong not because the counts
+are off but because the `)` arrived while `[` was still the newest thing waiting.
+
+That memory — the newest thing waiting comes out first — is a **stack**. Push on the way
+in, pop on the way out, and the order reverses itself without anyone arranging it.
+Bracket matching is the smallest program that needs one:
+
+```python
+PAIRS = {")": "(", "]": "[", "}": "{"}
+
+
+def balanced(text):
+    """True when every closing bracket matches the most recently opened one."""
+    stack = []
+    for ch in text:
+        if ch in "([{":
+            stack.append(ch)
+        elif ch in PAIRS:
+            if not stack or stack.pop() != PAIRS[ch]:
+                return False
+    return not stack
+
+
+for text in ["(a + b) * [c]", "([)]", "((", "f(x[1])"]:
+    print(f"{text:<14} {balanced(text)}")
+```
+
+Everything nested is a stack in disguise: brackets, function calls, the parts of an
+arithmetic expression you have to set aside while you deal with something that binds
+tighter. This module builds three things on that idea, then one thing on the opposite
+idea — a queue, where the *oldest* thing waiting comes out first — and ends with a
+structure that is both at once.
+
+## Reverse Polish, and why a calculator wants it
+
+Read `3 + 4 * 2` aloud. You cannot apply the `+` when you meet it, because its right
+operand has not arrived, and when `4` arrives you still cannot, because a `*` is waiting
+behind it that binds tighter. Infix notation forces the reader to hold operators in
+suspense and to consult a table of precedences before releasing them. Hewlett-Packard
+built calculators that refused to do any of that: you typed `3 4 2 * +`, operands first
+and operator afterwards, and the machine needed neither brackets nor a precedence table.
+That is **reverse Polish notation**, and an evaluator for it is a stack and a loop:
+
+```python
+OPERATORS = {"+", "-", "*", "/"}
+
+
+def evaluate_rpn(tokens):
+    """Evaluate postfix tokens, printing the stack after each one."""
+    stack = []
+    for token in tokens:
+        if token in OPERATORS:
+            right = stack.pop()
+            left = stack.pop()
+            if token == "+":
+                stack.append(left + right)
+            elif token == "-":
+                stack.append(left - right)
+            elif token == "*":
+                stack.append(left * right)
+            else:
+                quotient = abs(left) // abs(right)
+                stack.append(-quotient if (left < 0) != (right < 0) else quotient)
+        else:
+            stack.append(int(token))
+        print(f"{token:>3}  {stack}")
+    return stack[0]
+
+
+print(evaluate_rpn("3 4 + 2 *".split()))
+print(evaluate_rpn("-7 2 /".split()))
+```
+
+Every operand is pushed. Every operator pops two values, combines them, and pushes the
+result. An expression is well formed when exactly one value is left at the end, and the
+first trace ends on 14 with the stack holding nothing else.
+
+The trace shows where the one real mistake lives. When `-` arrives on `[3, 4]`, the
+first pop returns `4` and the second returns `3`: the stack hands the operands back in
+the *reverse* of the order they were written, so the value popped first is the **right**
+operand. Get this backwards and `+` and `*` pass every test while `-`, `/` and `^` are
+silently reversed — a test suite made only of commutative operators would sign it off,
+which is why the lab checks `3 4 -` and `-7 2 /` by name.
+
+The second trace shows a smaller trap. C, Java and most calculators truncate integer
+division *towards zero*, so $-7 / 2$ is $-3$. Python's `//` rounds *down*, so `-7 // 2`
+is `-4`. To get the C answer, divide the absolute values and put the sign back
+afterwards: the result is negative exactly when one operand is negative and the other is
+not, which is what the `!=` between the two sign tests computes.
+
+## Spending the parentheses
+
+If RPN is so much easier to evaluate, the work has to have gone somewhere: into the
+conversion from infix. Dijkstra's **shunting-yard** algorithm does it in one pass with
+one stack, and the picture he had in mind was a railway siding. Operands go straight
+through to the output track. Operators are shunted onto a siding, and the only question
+is when an operator on the siding is allowed back out.
+
+Derive the rule from what postfix means. In the output, an operator must come *after*
+both of its operands. When a new operator arrives — say `*` in `3 + 4 * 2` — the `+` on
+the siding already has its left operand out (`3`) and would take `4` as its right operand
+if it came out now. Should it? Only if it binds at least as tightly as the newcomer. It
+does not, so it waits, and the `4` ends up belonging to `*`. When the input is
+exhausted, whatever is on the siding comes out in stack order.
+
+That leaves one case the precedence table cannot settle: two operators of *equal*
+precedence, like the two `-` in `3 - 4 - 5`. Left-associative operators group from the
+left, $(3 - 4) - 5$, so the first `-` must come out before the second goes on. `^` is
+right-associative, $2^{(3^{2})}$, so the first `^` must *stay* on the siding when the
+second arrives. So the pop condition reads: pop while the operator on top binds strictly
+tighter, *or* binds equally tightly and the incoming operator is left-associative.
+
+```python
+PRECEDENCE = {"+": 1, "-": 1, "*": 2, "/": 2, "^": 3}
+RIGHT_ASSOCIATIVE = {"^"}
+
+
+def shunting_yard(tokens):
+    """Infix tokens to postfix tokens, the parentheses spent along the way."""
+    output, operators = [], []
+    for token in tokens:
+        if token in PRECEDENCE:
+            while operators and operators[-1] != "(":
+                top = operators[-1]
+                tighter = PRECEDENCE[top] > PRECEDENCE[token]
+                equal_and_left = (PRECEDENCE[top] == PRECEDENCE[token]
+                                  and token not in RIGHT_ASSOCIATIVE)
+                if tighter or equal_and_left:
+                    output.append(operators.pop())
+                else:
+                    break
+            operators.append(token)
+        elif token == "(":
+            operators.append(token)
+        elif token == ")":
+            while operators[-1] != "(":
+                output.append(operators.pop())
+            operators.pop()
+        else:
+            output.append(token)
+    while operators:
+        output.append(operators.pop())
+    return output
+
+
+for expression in ["3 + 4 * 2", "( 3 + 4 ) * 2", "3 - 4 - 5", "2 ^ 3 ^ 2"]:
+    print(f"{expression:<14} -> {' '.join(shunting_yard(expression.split()))}")
+```
+
+Notice what happened to the parentheses in `( 3 + 4 ) * 2`: they are gone, and the
+meaning survived, because an operator in postfix takes the two values immediately before
+it and there is only one way to read that. The brackets were not discarded; they were
+spent, converting a notation whose meaning depends on a table into one whose meaning
+depends on nothing but order.
+
+## A queue from two stacks
+
+Now the opposite discipline: first in, first out. A queue over a plain Python list is
+easy to write and quietly $O(n)$ per dequeue, because `pop(0)` shifts every remaining
+element down a slot. There is a cleaner way, and it is the amortised argument from the
+sequences module in new clothes.
+
+Keep two stacks, an **inbox** and an **outbox**. Enqueue pushes onto the inbox. Dequeue
+pops from the outbox — and when the outbox is empty, tip the whole inbox into it first,
+one pop and one push at a time. The tip reverses the order exactly once, which is what
+turns two last-in-first-out piles into one first-in-first-out line.
+
+```python
+class CountingQueue:
+    """A FIFO from two stacks, counting every push and pop on either."""
+
+    def __init__(self):
+        self.inbox, self.outbox = [], []
+        self.operations = 0
+
+    def enqueue(self, value):
+        self.inbox.append(value)
+        self.operations += 1
+
+    def dequeue(self):
+        if not self.outbox:                    # only onto an EMPTY outbox
+            while self.inbox:
+                self.outbox.append(self.inbox.pop())
+                self.operations += 2
+        self.operations += 1
+        return self.outbox.pop()
+
+
+queue = CountingQueue()
+for value in range(1000):
+    queue.enqueue(value)
+first = queue.dequeue()
+after_first = queue.operations
+rest = [queue.dequeue() for _ in range(999)]
+print("first out:", first, "| operations by then:", after_first)
+print("the rest in order:", rest == list(range(1, 1000)),
+      "| total operations:", queue.operations)
+```
+
+The first dequeue is spectacular: 3001 operations by the time it returns, because it
+moved a thousand elements in one call. But look at the total. Each value is pushed onto
+the inbox, popped off it during the one tip, pushed onto the outbox, and popped off
+that — four operations in its whole life and never a fifth, because nothing is ever
+tipped back. So $n$ enqueues and $n$ dequeues cost $4n$ operations however they are
+interleaved, which is 2 per call: $O(1)$ amortised, with one call in the run being
+$O(n)$.
+
+The bug people write here is tipping the inbox whenever it has something in it, rather
+than only when the outbox is *empty*. It looks more eager and it breaks the queue: newer
+values land on top of older ones still waiting in the outbox, and come out first. The
+tip is safe precisely because it only ever happens onto an empty outbox.
+
+## The window that never looks back
+
+Here is a problem where the right structure is neither a stack nor a queue but both at
+once. A weather station reports, every day, the highest temperature over the last seven
+days. With $n$ readings and a window of $k$, the loop that recomputes each window from
+scratch is $O(nk)$ — fine for a week, ruinous when someone asks for the last hundred
+thousand samples of a sensor.
+
+Think about what a window's maximum can *be*. Suppose the readings so far include a 3
+followed later by a 5. The 3 can never again be the answer to anything: every future
+window that contains the 3 also contains the 5, which is both larger and younger, and
+the 5 will still be there after the 3 has aged out. So the 3 is dead the moment the 5
+arrives. Apply that to every reading and what survives is a list of candidates that is
+*decreasing* from oldest to youngest — each one larger than everything that came after
+it, or it would have been killed.
+
+That list needs both ends. New candidates enter at the back, after killing every smaller
+candidate ahead of them; the front is the current maximum, and it leaves from the front
+when it ages out of the window. Two ends, so a **deque**, and it holds *indices* rather
+than values because ageing out is a question about position, not size:
+
+```python
+from collections import deque
+
+
+def sliding_window_max(values, k):
+    """The maximum of every width-k window, with the deque shown at each step."""
+    window, out = deque(), []
+    for index, value in enumerate(values):
+        while window and values[window[-1]] <= value:
+            window.pop()                        # beaten by a younger, larger value
+        window.append(index)
+        if window[0] <= index - k:
+            window.popleft()                    # the front has aged out
+        if index >= k - 1:
+            out.append(values[window[0]])
+        held = [values[i] for i in window]
+        print(f"see {value:>2}: deque holds {held}, reported {out[-1] if out else '-'}")
+    return out
+
+
+print(sliding_window_max([1, 3, -1, -3, 5, 3, 6, 7], 3))
+```
+
+Two eviction rules, and it is worth seeing that they do different jobs. The loop at the
+back drops candidates the newcomer has beaten — note the `<=`, so an equal value also
+dies, since the younger twin outlives it and reports the same maximum. The check at the
+front drops an index that has fallen outside the window: the window ending at `index`
+covers `index - k + 1` through `index`, so anything at `index - k` or earlier has left.
+Between them, the front is always the largest value still inside the window, and the
+answer for the example is `[3, 3, 5, 5, 6, 7]`.
+
+And now the cost. A single step can pop many indices — a long falling run followed by
+one big value empties the deque in one go — so no step is $O(1)$ in the worst case. But
+an index has to be appended before it can be popped, and it is appended exactly once. So
+over the whole run there are at most $n$ appends and $n$ pops, whatever $k$ is: the
+total is $O(n)$, and $k$ has vanished from it. That is the aggregate argument for the
+third time in one module.
+
+## Where it stops holding
+
+The deque trick works because the window only moves forward and the question is
+monotone — a maximum, or a minimum by flipping the comparison, but not a median or an
+average, for which nothing is ever safely dead. It also assumes $1 \le k \le n$; a window
+wider than the sequence has no full windows at all, and the lab treats that as an error
+rather than an empty answer. Shunting-yard as written handles binary operators only:
+unary minus, function calls with several arguments and operators of mixed arity all need
+extra token kinds, and the one-pass simplicity gets more expensive with each. The
+two-stack queue's amortised bound holds for any interleaving, but it is a bound on the
+total; a system with a latency budget for a single call cannot use it, and would reach
+for a ring buffer instead.
+
+## What you are about to build
+
+The lab is *An expression evaluator and a sliding-window maximum*, and it is the four
+pieces above in order. `Stack` is the plain list wrapper; `Queue` is the two-stack
+version, and its test enqueues after a dequeue to catch a tip made at the wrong moment.
+`evaluate_rpn` is checked on `3 4 -` and `-7 2 /`, which is where the operand order and
+the truncating division show, and it must raise `ValueError` for an unknown token, too
+few operands, or more than one value left at the end. `shunting_yard` is checked on the
+two pairs that isolate associativity — `2 ^ 3 ^ 2` and `3 - 4 - 5` — and on unbalanced
+parentheses. And `sliding_window_max` is compared against the brute-force loop on sixty
+random cases and then run on 60,000 values with $k = 500$, where an $O(nk)$ solution
+makes thirty million comparisons and the deque makes on the order of a hundred thousand.
+The numeric unit counts the queue's 4000 operations out exactly, and the
+fill-in-the-blanks unit walks the deque's five holes; the trace above is the same code
+with a print in it.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Nesting, order, and why the window is linear",
                 "minutes": 7,
@@ -1629,6 +2252,425 @@ assert _out[0] == max(_big[:500]), "the first window is still wrong"
                 "The two-child case promotes the in-order successor, the leftmost node of the right subtree",
                 "Random insertion gives height ~3 log2 n and average depth ~1.39 log2 n; sorted insertion gives a linked list",
             ],
+            "read": [
+                {
+                    "title": "The invariant, the descent, and what deletion has to put back",
+                    "minutes": 14,
+                    "body": r'''
+Somebody thinks of a number between 1 and 1000, and you find it in ten guesses. Each
+guess is the middle of the range still possible, and each answer — higher or lower —
+throws away half of what is left. Ten halvings of a thousand reach one. That is binary
+search, and a sorted array supports it perfectly, right up to the moment somebody wants
+to *insert* a value: everything after the insertion point has to slide one slot along,
+which is $O(n)$, and a sequence that is searched a million times and updated a million
+times has lost the argument.
+
+A **binary search tree** is the guessing game with its decisions frozen into
+references. Each node holds a key. Everything smaller hangs somewhere off its left
+reference, everything larger somewhere off its right, and a search descends from the
+root making one comparison per level, turning left or right, and stops when it finds
+the key or runs out of tree. Insertion is the same descent, ending by hanging a new node
+in the empty slot the search fell out of. No sliding, no shifting; the cost of both is
+the number of levels walked.
+
+## The invariant, stated the way that catches bugs
+
+Here is the tree the lab uses as its worked example, built by inserting 50, 30, 70, 20,
+40, 60, 80 in that order:
+
+```text
+            50
+        30      70
+      20  40  60  80
+```
+
+The rule that makes it a search tree is easy to state wrongly. It is *not* "each node
+is larger than its left child and smaller than its right child". It is: every key in
+the **whole left subtree** is smaller than the node, and every key in the **whole right
+subtree** is larger. The difference only shows two levels down, which is exactly where
+it hides:
+
+```text
+        20
+       /  \
+     10    30
+       \
+        25
+```
+
+Every parent–child pair here is correctly ordered, and the tree is broken. A search for
+25 compares with 20, goes right, compares with 30, goes left, and falls off the tree:
+the key is in there and unreachable. A checker that compares neighbours signs this tree
+off. The checker that catches it carries an interval down the recursion — everything
+under the left reference of 20 must be below 20, everything under the right reference
+of 10 must be between 10 and the 20 above it — and narrows the interval at every step:
+
+```python
+class TreeNode:
+    """One node: a key and two references."""
+
+    def __init__(self, key, left=None, right=None):
+        self.key = key
+        self.left = left
+        self.right = right
+
+
+def locally_ordered(node):
+    """Every parent against its own two children — the check that is not enough."""
+    if node is None:
+        return True
+    if node.left is not None and not node.left.key < node.key:
+        return False
+    if node.right is not None and not node.right.key > node.key:
+        return False
+    return locally_ordered(node.left) and locally_ordered(node.right)
+
+
+def is_bst(node, low=None, high=None):
+    """Every key against the interval its ancestors confine it to."""
+    if node is None:
+        return True
+    if low is not None and node.key <= low:
+        return False
+    if high is not None and node.key >= high:
+        return False
+    return is_bst(node.left, low, node.key) and is_bst(node.right, node.key, high)
+
+
+def contains(node, key):
+    while node is not None:
+        if key == node.key:
+            return True
+        node = node.left if key < node.key else node.right
+    return False
+
+
+suspect = TreeNode(20, TreeNode(10, right=TreeNode(25)), TreeNode(30))
+print("locally ordered:", locally_ordered(suspect))
+print("really a BST:   ", is_bst(suspect))
+print("contains(25):   ", contains(suspect, 25))
+```
+
+Locally ordered, not a search tree, and 25 is lost. The lab's final test runs that
+interval check after 250 random deletions, because a deletion that leaves the tree
+locally ordered and globally wrong is the failure this structure actually has.
+
+## Insert, and the three traversals
+
+Insertion walks the same path a search would and stops at the first empty reference.
+The lab asks you to write it **iteratively**, and there is a reason that is not taste:
+the deepest trees come from sorted input, and a recursive insert on sorted input uses
+one stack frame per level.
+
+```python
+class TreeNode:
+    """One node: a key and two references."""
+
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+
+
+def insert(root, key):
+    """Descend until the slot the key belongs in is empty; return the root."""
+    if root is None:
+        return TreeNode(key)
+    node = root
+    while True:
+        if key == node.key:
+            return root                       # already present: nothing to do
+        if key < node.key:
+            if node.left is None:
+                node.left = TreeNode(key)
+                return root
+            node = node.left
+        else:
+            if node.right is None:
+                node.right = TreeNode(key)
+                return root
+            node = node.right
+
+
+def walk(node, order, out):
+    """Collect keys in pre-, in- or post-order."""
+    if node is None:
+        return out
+    if order == "pre":
+        out.append(node.key)
+    walk(node.left, order, out)
+    if order == "in":
+        out.append(node.key)
+    walk(node.right, order, out)
+    if order == "post":
+        out.append(node.key)
+    return out
+
+
+root = None
+for key in [50, 30, 70, 20, 40, 60, 80]:
+    root = insert(root, key)
+for order in ("pre", "in", "post"):
+    print(f"{order:>4}-order: {walk(root, order, [])}")
+```
+
+Three traversals, and each is the same three lines in a different order. The middle one
+is the important one: in-order traversal of a binary search tree produces the keys
+*sorted*, `[20, 30, 40, 50, 60, 70, 80]`. That is not something the traversal computes.
+It is the invariant read out loud — left subtree, then this node, then right subtree is
+*smaller keys, this key, larger keys*, applied recursively all the way down — and it is
+the strongest test there is for whether a tree is still a search tree after you have
+been modifying it. Pre-order visits each node before its subtrees, which records the
+*shape*: feed `[50, 30, 20, 40, 70, 60, 80]` back through `insert` and you rebuild the
+identical tree, which is why the lab checks shape with it. Post-order visits a node only
+after both subtrees are finished, which is the one safe order in which to free nodes in
+a language where you free them yourself — every other order reads a pointer out of a
+node it has already released.
+
+## Height is the whole story
+
+Search, insert and delete all cost one comparison per level, so all three are $O(h)$
+where $h$ is the height, the number of edges on the longest root-to-leaf path. That
+looks like a reassurance and is a warning, because $h$ is not a function of $n$. It is a
+function of the order the keys arrived in.
+
+```python
+import random
+
+
+class TreeNode:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+
+
+def insert(root, key):
+    if root is None:
+        return TreeNode(key)
+    node = root
+    while True:
+        if key < node.key:
+            if node.left is None:
+                node.left = TreeNode(key)
+                return root
+            node = node.left
+        else:
+            if node.right is None:
+                node.right = TreeNode(key)
+                return root
+            node = node.right
+
+
+def height(root):
+    """Edges on the longest downward path, measured without recursion."""
+    best, stack = -1, ([(root, 0)] if root is not None else [])
+    while stack:
+        node, depth = stack.pop()
+        best = max(best, depth)
+        for child in (node.left, node.right):
+            if child is not None:
+                stack.append((child, depth + 1))
+    return best
+
+
+def build(keys):
+    root = None
+    for key in keys:
+        root = insert(root, key)
+    return root
+
+
+keys = list(range(1000))
+print("sorted insertion, height:  ", height(build(keys)))
+random.Random(7).shuffle(keys)
+print("shuffled insertion, height:", height(build(keys)))
+```
+
+The same thousand keys. Sorted, each key is larger than everything present, so every
+insert walks the entire right spine and hangs off the bottom: a linked list wearing
+tree-shaped types, height 999, and `contains(999)` costs a thousand comparisons.
+Shuffled, the height is 24. Some forty times shallower, settled by nothing but arrival
+order — and sorted arrival is not exotic. It is what happens when the keys come from a
+file or a database that returned them sorted.
+
+The lower end is pure counting. A perfect tree of height $h$ has $1$ node at depth 0,
+$2$ at depth 1, $4$ at depth 2, and $2^{h}$ at the bottom, so it holds
+
+$$n = 1 + 2 + 4 + \dots + 2^{h} = 2^{h+1} - 1$$
+
+nodes, which rearranges to $h = \log_2(n + 1) - 1$: a million keys need at least 19
+levels, and 999,999 is what sorted insertion gives them. Random insertion sits much
+closer to the good end than the bad — the average node lands at depth about
+$1.39 \log_2 n$ and the height at roughly $3 \log_2 n$ — but nothing in an unbalanced
+tree *enforces* that. Which is the whole reason balanced trees exist, and the reason the
+lab shuffles before building.
+
+The recursion-depth point, made concrete:
+
+```python
+# raises RecursionError
+class TreeNode:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+
+
+def insert_recursively(node, key):
+    """The textbook version: one stack frame per level of the descent."""
+    if node is None:
+        return TreeNode(key)
+    if key < node.key:
+        node.left = insert_recursively(node.left, key)
+    else:
+        node.right = insert_recursively(node.right, key)
+    return node
+
+
+root = None
+for key in range(3000):          # sorted input: a chain 3000 deep
+    root = insert_recursively(root, key)
+```
+
+Three thousand sorted keys, three thousand frames deep, and Python gives up around the
+thousandth. The iterative version walks the same 3000 nodes and uses one frame.
+
+## Deletion, in three cases
+
+Insertion never disturbs an existing node. Deletion has to remove one and leave the
+invariant standing, and how hard that is depends on how many children the node has.
+
+A **leaf** is unhooked: the parent's reference to it becomes `None`. A node with **one
+child** is spliced out: the parent's reference is pointed at the child instead, and
+because everything in that child's subtree was already on the correct side of the
+parent, nothing else needs checking.
+
+Two children is the case that needs a thought. The node cannot be unhooked, because two
+subtrees would be left dangling. What can be done is to replace its *key* with one that
+keeps the invariant — a key larger than everything on the left and smaller than
+everything remaining on the right — and then remove the node that key came from. The
+smallest key in the right subtree is exactly that: larger than the node, because it is
+in the right subtree, and smaller than every other key there. It is the **in-order
+successor**, and it is found by stepping right once and then left until you cannot.
+Because the walk stopped when there was no left child, the successor has at most one
+child — so deleting *it* lands in the leaf case or the one-child case, never back in the
+two-child case, and the recursion bottoms out at once instead of cascading.
+
+The convention that removes most of the difficulty is that `delete` returns *the new
+root of the subtree it was given*, and the caller stores that back. No parent pointers,
+no special case for the root, no case for "the node I want to unhook is a left child":
+
+```python
+class TreeNode:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+
+
+def insert(root, key):
+    if root is None:
+        return TreeNode(key)
+    node = root
+    while True:
+        if key < node.key:
+            if node.left is None:
+                node.left = TreeNode(key)
+                return root
+            node = node.left
+        else:
+            if node.right is None:
+                node.right = TreeNode(key)
+                return root
+            node = node.right
+
+
+def delete(node, key):
+    """Remove key from this subtree and return the subtree's new root."""
+    if node is None:
+        return None
+    if key < node.key:
+        node.left = delete(node.left, key)
+    elif key > node.key:
+        node.right = delete(node.right, key)
+    else:
+        if node.left is None:
+            return node.right          # a leaf, or a right child only
+        if node.right is None:
+            return node.left           # a left child only
+        successor = node.right
+        while successor.left is not None:
+            successor = successor.left
+        node.key = successor.key
+        node.right = delete(node.right, successor.key)
+    return node
+
+
+def pre_order(node, out):
+    if node is not None:
+        out.append(node.key)
+        pre_order(node.left, out)
+        pre_order(node.right, out)
+    return out
+
+
+def build(keys):
+    root = None
+    for key in keys:
+        root = insert(root, key)
+    return root
+
+
+root = build([50, 30, 70, 20, 40, 60, 80])
+root = delete(root, 20)
+print("after deleting the leaf 20:       ", pre_order(root, []))
+root = delete(root, 30)
+print("after deleting one-child 30:      ", pre_order(root, []))
+root = build([50, 30, 70, 20, 40, 60, 80])
+root = delete(root, 50)
+print("after deleting two-child root 50: ", pre_order(root, []))
+```
+
+Deleting 20 leaves `[50, 30, 40, 70, 60, 80]`; deleting 30, which now has only its
+right child, splices 40 into its place. Deleting 50 from the fresh tree promotes 60,
+not 40, giving `[60, 30, 20, 40, 70, 80]`. The predecessor would also keep the
+invariant — it is the mirror choice — but the lab's checks are written for the
+successor, and the pre-order is how they can tell.
+
+The bug that lives here is forgetting the reassignment. Write `delete(node.left, key)`
+without the `node.left =` in front and the recursion finds the node, computes the right
+replacement, returns it — and the parent goes on pointing at the old child. The size
+counter drops, `contains` still finds the key, and the tree and the count disagree from
+then on. Every test about traversal order catches it; nothing about the code looks
+wrong.
+
+## Where it stops holding
+
+Everything above assumes the keys are unique, comparable and *never change*. A repeated
+key has nowhere consistent to go — the lab refuses it — and a key that is mutated after
+insertion silently breaks the invariant, which is why map keys are immutable wherever
+maps exist. The costs assume $h$ is small, and nothing
+here keeps it small: an unbalanced tree fed sorted or nearly sorted keys is a linked
+list with extra steps, and fixing that takes rotations — AVL and red–black trees — which
+belong to a later course. And the in-order-gives-sorted property belongs to binary
+*search* trees specifically; a heap is also a binary tree with an ordering invariant,
+and its in-order traversal is not sorted at all.
+
+## What you are about to build
+
+The lab is *A binary search tree that can also delete*. `BST` takes an iterable of keys,
+inserts them iteratively, exposes `root` so the checks can look at the shape, and offers
+`contains`, the three traversals, `height` (edges, with $-1$ for an empty tree and $0$
+for a single node), `min_key` and `max_key`, and `delete` with all three cases. The
+worked example above is the lab's own: inserting 50, 30, 70, 20, 40, 60, 80 must give
+the pre-order `[50, 30, 20, 40, 70, 60, 80]` and height 2, and deleting 50 must leave
+`[60, 30, 20, 40, 70, 80]`. The last test shuffles 500 keys, deletes 250, and runs the
+interval checker over what is left. The fill-in-the-blanks unit is `_delete` with five holes,
+and the derivation unit does the height bounds with symbols.
+''',
+                },
+            ],
             "quiz": {
                 "title": "The invariant, and what it costs to break it",
                 "minutes": 7,
@@ -2372,6 +3414,341 @@ for _k in _keys:
                 "Growing at a load factor threshold keeps the expected chain short",
                 "Open addressing has no chains, so a deletion must leave a tombstone or break probe chains",
                 "Tombstones are cleared only by rehashing, so they count towards the resize trigger",
+            ],
+            "read": [
+                {
+                    "title": "From key to slot: what a hash buys and what a collision costs",
+                    "minutes": 13,
+                    "body": r'''
+A library shelves its books by the last two digits of the ISBN. A hundred shelves, and
+a request for a book goes straight to one of them: no catalogue, no search, one
+arithmetic step from the number on the request slip to the shelf it lives on. That is a
+**hash table**. The function from key to shelf is the *hash*, the shelves are an array
+of slots, and a lookup costs one evaluation of the function plus whatever it takes to
+find the book on a shelf that may hold more than one.
+
+That last clause is the whole subject. Two books with ISBNs ending in 47 land on the
+same shelf — a **collision** — and every design decision in a hash table is a decision
+about what to do when that happens. The comfortable belief is that collisions are rare
+if the table is big and the function is good. It is false, it is false by a margin that
+surprises everyone the first time, and the number that says so is derived below.
+
+## A hash function you can compute by hand
+
+A hash function has to be deterministic — the same key must go to the same shelf
+tomorrow — fast, and able to *spread* keys so that similar inputs do not pile onto
+neighbouring slots. The one this course uses is FNV-1a, because it is three lines long
+and has published test vectors you can check against. Start from a fixed offset. For
+each byte of the key, XOR the byte into the accumulator and multiply by a fixed prime.
+Keep the accumulator to 32 bits.
+
+```python
+FNV_OFFSET = 2166136261
+FNV_PRIME = 16777619
+MASK32 = 0xFFFFFFFF
+
+
+def fnv1a(text, mask=True):
+    """32-bit FNV-1a: one XOR and one multiply per byte."""
+    value = FNV_OFFSET
+    for byte in text.encode("utf-8"):
+        value ^= byte
+        value *= FNV_PRIME
+        if mask:
+            value &= MASK32
+    return value
+
+
+for text in ["", "a", "foobar"]:
+    print(f"fnv1a({text!r:>8}) = {fnv1a(text)}")
+print("bits in the accumulator without the mask:", fnv1a("foobar", mask=False).bit_length())
+print("slot for 'foobar' in a table of 8:", fnv1a("foobar") % 8)
+```
+
+The empty string hashes to the offset itself, `"a"` to 3826002220, `"foobar"` to
+3214735720, and those are the numbers in the FNV specification; reduced modulo 8,
+`foobar` lands in slot 0. The mask is the line
+worth staring at. In C the accumulator is a `uint32_t` and the multiplication wraps
+around for free — that overflow is not an accident the algorithm tolerates, it is part
+of the mixing. Python integers do not overflow; they grow. Leave the mask out and after
+six bytes the accumulator is 176 bits long, every test vector fails, and what you have
+computed is not FNV-1a at all. `& 0xFFFFFFFF` is how you say *this is a 32-bit
+register* in a language that has none.
+
+To turn a hash into a slot, reduce it modulo the capacity. The lab hashes `repr(key)`
+rather than `str(key)`, and the reason is small but real: under `str`, the integer 1 and
+the string `"1"` are the same text and always share a slot; under `repr` they are `1`
+and `'1'`. The table would still be *correct* either way, because slots compare keys
+with `==` before believing a match — but a hash that manufactures collisions the keys
+did not have is a worse hash.
+
+## Collisions are not a corner case
+
+How many keys can go into $m$ slots before two share one? The instinct says "about
+$m$, when the slots run out", or perhaps "about $m/2$". Count pairs instead. With $k$
+keys there are $\binom{k}{2} \approx k^{2}/2$ pairs, and under a hash that spreads
+evenly, each pair collides with probability $1/m$. The expected number of collisions is
+
+$$\frac{k^{2}}{2m},$$
+
+and that reaches 1 when $k \approx \sqrt{2m}$. Not $m$, not $m/2$: the *square root*.
+For 365 slots — the birthday version of the problem — that is about 27, and the exact
+calculation puts even odds at 23. Here it is measured rather than trusted:
+
+```python
+import random
+
+rng = random.Random(7)
+slots, keys, trials = 365, 23, 10_000
+collided = 0
+for _ in range(trials):
+    seen = set()
+    for _ in range(keys):
+        slot = rng.randrange(slots)
+        if slot in seen:
+            collided += 1
+            break
+        seen.add(slot)
+print(f"{keys} keys into {slots} slots: a collision in {collided / trials:.1%} of trials")
+```
+
+Twenty-three keys, three hundred and sixty-five slots, and a collision in about half of
+all trials. Ten thousand slots reach even odds at about 118 keys. So a table holding a
+few hundred keys in a few hundred buckets is full of collisions long before it is full
+of keys, and an implementation that only handles the empty-slot case passes every small
+test and loses data the first week it is deployed. Collision handling is not an
+optimisation to add later; it is the data structure.
+
+## Separate chaining, and the load factor
+
+The first answer to a collision is the library's: let a shelf hold more than one book.
+Each slot is a list — a **chain** — of `(key, value)` pairs, and a lookup hashes to the
+slot and walks the chain comparing keys.
+
+What does that cost? Call the **load factor** $\alpha = n/m$, keys per slot. With an
+even spread the average chain has $\alpha$ pairs, so a lookup that *misses* pays one
+hash-and-index plus a walk down the whole chain: $1 + \alpha$. A hit stops when it finds
+its key, about half way, so it is cheaper — the miss is the dear case, which is the
+opposite of most people's guess. Either way the cost is a constant as long as $\alpha$
+is, and keeping $\alpha$ bounded is what the resize is for: whenever $n/m$ crosses a
+threshold, double $m$ and rehash every pair into the new slots.
+
+```python
+FNV_OFFSET = 2166136261
+FNV_PRIME = 16777619
+MASK32 = 0xFFFFFFFF
+
+
+def fnv1a(text):
+    value = FNV_OFFSET
+    for byte in text.encode("utf-8"):
+        value = ((value ^ byte) * FNV_PRIME) & MASK32
+    return value
+
+
+class ChainedHashMap:
+    """Buckets are lists of (key, value) pairs; doubles past the load factor."""
+
+    def __init__(self, capacity=8, load_factor=0.75):
+        self.capacity = capacity
+        self.load_factor = load_factor
+        self.size = 0
+        self.buckets = [[] for _ in range(capacity)]
+
+    def _index(self, key):
+        return fnv1a(repr(key)) % self.capacity
+
+    def put(self, key, value):
+        bucket = self.buckets[self._index(key)]
+        for i, (k, _) in enumerate(bucket):
+            if k == key:
+                bucket[i] = (key, value)
+                return
+        bucket.append((key, value))
+        self.size += 1
+        if self.size / self.capacity > self.load_factor:
+            self._resize(self.capacity * 2)
+
+    def _resize(self, capacity):
+        pairs = [pair for bucket in self.buckets for pair in bucket]
+        print(f"key #{self.size:>3} pushed the load past {self.load_factor}: "
+              f"{self.capacity:>3} -> {capacity:>3} slots, {len(pairs):>3} pairs rehashed")
+        self.capacity = capacity
+        self.buckets = [[] for _ in range(capacity)]
+        for key, value in pairs:
+            self.buckets[self._index(key)].append((key, value))
+
+    def get(self, key, default=None):
+        for k, value in self.buckets[self._index(key)]:
+            if k == key:
+                return value
+        return default
+
+
+table = ChainedHashMap()
+for i in range(100):
+    table.put(i, i * i)
+longest = max(len(bucket) for bucket in table.buckets)
+print("capacity", table.capacity, "| longest chain", longest, "| get(7) =", table.get(7))
+```
+
+From 8 slots with a threshold of 0.75, the seventh key takes the load to $7/8$ and
+triggers the first doubling; the thirteenth, twenty-fifth, forty-ninth and
+ninety-seventh trigger the rest, and a hundred keys end at 256 slots after exactly five
+resizes — the number the lab checks. Rehashing is $O(n)$ when it happens, and it happens
+after a number of inserts proportional to $n$, so it amortises the same way the doubling
+array did. Note that the check is `>` and not `>=`: six keys in eight slots is *exactly*
+0.75 and does not resize, and an off-by-one here gives six resizes rather than five.
+
+## Open addressing, and why deletion is the hard part
+
+The second answer keeps no chains at all. One flat array; when a key's home slot is
+taken, try the next slot, and the next, wrapping round — **linear probing**. A lookup
+starts at the home slot and walks forward until it finds the key or meets a slot that
+has *never been used*, at which point it can stop: if the key existed, the insert that
+placed it would have stopped here or earlier.
+
+That stopping rule is what makes deletion dangerous. Suppose three keys hash to slot 3
+and probe into 3, 4 and 5. Delete the first one by writing `None` into slot 3, and a
+lookup for the second key starts at 3, meets the `None`, and stops — reporting a miss on
+a key sitting one slot further on. Nothing is corrupted. The pairs are still there,
+visible by eye, and the algorithm can no longer reach them.
+
+```python
+FNV_OFFSET = 2166136261
+FNV_PRIME = 16777619
+MASK32 = 0xFFFFFFFF
+TOMBSTONE = object()
+
+
+def fnv1a(text):
+    value = FNV_OFFSET
+    for byte in text.encode("utf-8"):
+        value = ((value ^ byte) * FNV_PRIME) & MASK32
+    return value
+
+
+def hash_index(key, capacity):
+    return fnv1a(repr(key)) % capacity
+
+
+class ProbingHashMap:
+    """Linear probing over one flat list; deletion leaves a tombstone."""
+
+    def __init__(self, capacity=8):
+        self.capacity = capacity
+        self.slots = [None] * capacity
+
+    def put(self, key, value):
+        index = hash_index(key, self.capacity)
+        first_tombstone = None
+        while self.slots[index] is not None:
+            slot = self.slots[index]
+            if slot is TOMBSTONE:
+                if first_tombstone is None:
+                    first_tombstone = index
+            elif slot[0] == key:
+                self.slots[index] = (key, value)
+                return
+            index = (index + 1) % self.capacity
+        target = index if first_tombstone is None else first_tombstone
+        self.slots[target] = (key, value)
+
+    def get(self, key, default=None):
+        index = hash_index(key, self.capacity)
+        while self.slots[index] is not None:        # stop only at never-used
+            slot = self.slots[index]
+            if slot is not TOMBSTONE and slot[0] == key:
+                return slot[1]
+            index = (index + 1) % self.capacity
+        return default
+
+    def delete(self, key, marker=TOMBSTONE):
+        index = hash_index(key, self.capacity)
+        while self.slots[index] is not None:
+            slot = self.slots[index]
+            if slot is not TOMBSTONE and slot[0] == key:
+                self.slots[index] = marker
+                return True
+            index = (index + 1) % self.capacity
+        return False
+
+
+colliding = [k for k in range(2000) if hash_index(k, 8) == 3][:3]
+print("three keys that all want slot 3:", colliding)
+for marker, name in ((TOMBSTONE, "tombstone"), (None, "None")):
+    table = ProbingHashMap()
+    for key in colliding:
+        table.put(key, key * 10)
+    table.delete(colliding[0], marker)
+    found = [table.get(key, "lost") for key in colliding[1:]]
+    print(f"delete by writing a {name:<9}: the other two come back as {found}")
+```
+
+The fix is a third kind of slot. `None` means *never used*; a **tombstone** means *used
+once, then emptied*, and a lookup walks straight through it. Insertion remembers the
+first tombstone it passes and, if it reaches a never-used slot without finding the key,
+drops the new pair into that tombstone rather than extending the run. The sentinel is a
+private `object()` compared with `is`, because a real pair could compare `==` to almost
+anything.
+
+Tombstones have a cost of their own, and it is time rather than space. A lookup cannot
+stop at one, so every tombstone in a probe run is a slot the lookup has to step over.
+Insert a million keys and delete all but ten, and a table that counts only live pairs
+looks empty while every lookup still walks a million slots. So the resize trigger counts
+tombstones alongside live keys, and a rehash — the only thing that clears them —
+rebuilds every probe run from scratch.
+
+## Where it stops holding
+
+Chaining degrades gently: at $\alpha = 2$ the chains average two pairs and nothing much
+has changed. Open addressing does not. Occupied slots merge into runs, runs merge into
+longer runs, and a miss has to walk to the end of whichever run it lands in. Knuth's
+estimates for linear probing say an unsuccessful search costs about
+
+$$\frac{1}{2}\left(1 + \frac{1}{(1 - \alpha)^{2}}\right)$$
+
+probes, and the square in the denominator is the part to remember:
+
+```python
+def probes_for_miss(alpha):
+    """Knuth's estimate for linear probing: an unsuccessful search."""
+    return 0.5 * (1 + 1 / (1 - alpha) ** 2)
+
+
+def probes_for_hit(alpha):
+    """And a successful one, which can stop as soon as it finds its key."""
+    return 0.5 * (1 + 1 / (1 - alpha))
+
+
+for alpha in (0.5, 0.75, 0.875, 0.95):
+    print(f"load {alpha:<6} miss {probes_for_miss(alpha):>6.1f}   hit {probes_for_hit(alpha):>5.1f}")
+```
+
+At three-quarters full a miss costs 8.5 probes; at seven-eighths, 32.5. Halving the
+free space nearly quadrupled the cost, and that is why open-addressed tables give up and
+grow at 0.75 while chained ones can run past 1. Two other limits. The hash must be
+deterministic *between runs*, and Python's own `hash()` of a string is salted per
+process on purpose — a table that persisted slot numbers computed with it would not read
+back tomorrow, which is why the lab uses FNV-1a. And a hash table knows nothing about
+order: asking for the smallest key, or every key between two bounds, means visiting all
+of them, which is the trade the capstone measures against the search tree.
+
+## What you are about to build
+
+The lab is *Chaining, probing and the tombstone problem*. `fnv1a` is checked against
+the published vectors, including the 32-bit mask; `hash_index` is
+`fnv1a(repr(key)) % capacity`. `ChainedHashMap` must resize on `len / capacity >
+load_factor` after a *new* key is added — a hundred keys from capacity 8 is five resizes
+ending at 256 — and `ProbingHashMap` must keep one flat `slots` list, leave `TOMBSTONE`
+behind on delete, count tombstones towards the resize trigger, and reuse the first
+tombstone on an insert. The test that matters is the one traced above: three keys that
+collide on slot 3, delete the first, and the other two must still be found. Both maps
+are then driven with 4000 random operations against a plain `dict`, mixing integer and
+string keys so that `repr` earns its keep. The fill-in-the-blanks unit is a transcript of
+that same collision, and the numeric unit is the 8.5 probes.
+''',
+                },
             ],
             "quiz": {
                 "title": "Collisions, tombstones and the load factor",
@@ -3224,6 +4601,362 @@ for _cls in (ChainedHashMap, ProbingHashMap):
                 "Quicksort is in-place and fast in practice; pivot choice is what saves it",
                 "Three-way partitioning makes runs of equal keys cheap instead of quadratic",
                 "Stability is a property of the algorithm, not the data — heap and quick sorts lose it",
+            ],
+            "read": [
+                {
+                    "title": "A tree in an array, and what each sort pays for its speed",
+                    "minutes": 14,
+                    "body": r'''
+An emergency department does not see patients in the order they arrive. Every arrival
+is given a priority, and the next patient seen is the most urgent one waiting, whoever
+came through the door first. The structure behind that desk needs two operations, and
+they pull in opposite directions: *add a patient* with any priority, and *take the most
+urgent*. A sorted list makes the take one step and every arrival an $O(n)$ shuffle; an
+unsorted one makes arrivals one step and every take a full scan. A **binary heap** does both in $O(\log n)$, and it
+manages that by refusing to keep the whole order. It keeps only what is needed to know
+who is next.
+
+The rule is local and it is the whole structure: in a min-heap, every node's key is no
+larger than its children's. Nothing is said about siblings, nothing about cousins, and
+so the array is very far from sorted — but the smallest key has no parent it could be
+larger than, so it must be at the root, and that is the one fact the desk needs.
+
+## A tree that lives in an array
+
+A heap is a **complete** binary tree — every level full except the last, which fills
+from the left — and a complete tree can be stored in a flat array with no references at
+all. Number the nodes level by level, left to right, from 0: the root is 0, its children
+are 1 and 2, their children are 3 to 6. The pattern that falls out is that the children of index
+$i$ are $2i + 1$ and $2i + 2$, and the parent of $i$ is $\lfloor (i - 1) / 2 \rfloor$,
+where the floor is what sends both children back to the same parent. Check it at the
+root before believing it:
+
+```python
+heap = [1, 3, 2, 7, 4, 9, 5, 8]
+for i in range(4):
+    kids = [heap[j] for j in (2 * i + 1, 2 * i + 2) if j < len(heap)]
+    print(f"index {i} holds {heap[i]}, its children hold {kids}")
+print("parent of index 7 is index", (7 - 1) // 2, "holding", heap[(7 - 1) // 2])
+```
+
+That is the entire data structure: a list and arithmetic on indices, in one contiguous
+block of memory — which after the sequences module you know is worth a great deal.
+
+## Sift up, sift down
+
+Adding an item: append it at the end, which keeps the tree complete, and then repair the
+one place the heap rule might now be broken — between the new item and its parent. If
+the new item is smaller, swap them and look at the new parent. This **sift up** climbs
+at most one path from leaf to root, and a complete tree of $n$ nodes has
+$\lfloor \log_2 n \rfloor$ levels below the root, so it is $O(\log n)$.
+
+Taking the smallest: the root is the answer, but removing it leaves a hole at the top.
+Fill the hole with the *last* item of the array — which again keeps the tree complete —
+and repair downward: compare the item with its two children, swap with the smaller if
+that child is smaller, and continue from where it landed. **Sift down** descends one
+path, and it is the same $O(\log n)$.
+
+```python
+class MinHeap:
+    """A binary min-heap in a flat list, root at index 0."""
+
+    def __init__(self, items=None):
+        self.data = list(items or [])
+        for index in reversed(range(len(self.data) // 2)):
+            self._sift_down(index)
+
+    def _sift_up(self, index):
+        while index > 0:
+            parent = (index - 1) // 2
+            if self.data[index] < self.data[parent]:
+                self.data[index], self.data[parent] = self.data[parent], self.data[index]
+                index = parent
+            else:
+                return
+
+    def _sift_down(self, index):
+        size = len(self.data)
+        while True:
+            left, right, smallest = 2 * index + 1, 2 * index + 2, index
+            if left < size and self.data[left] < self.data[smallest]:
+                smallest = left
+            if right < size and self.data[right] < self.data[smallest]:
+                smallest = right
+            if smallest == index:
+                return
+            self.data[index], self.data[smallest] = self.data[smallest], self.data[index]
+            index = smallest
+
+    def push(self, item):
+        self.data.append(item)
+        self._sift_up(len(self.data) - 1)
+
+    def pop(self):
+        smallest = self.data[0]
+        last = self.data.pop()
+        if self.data:
+            self.data[0] = last
+            self._sift_down(0)
+        return smallest
+
+
+heap = MinHeap()
+for value in [5, 9, 3, 7, 1, 8]:
+    heap.push(value)
+    print(f"push {value}: {heap.data}")
+print("pop ->", heap.pop(), "leaving", heap.data)
+```
+
+Follow the trace and notice that the array is never sorted: after six pushes it reads
+`[1, 3, 5, 9, 7, 8]`, with 9 sitting before 7. Every parent is smaller than its children
+and nothing more is true, and nothing more needs to be. The mistake to name here is in
+`pop`: the item moved into the root must be the *last* one, not the smaller child.
+Promoting a child leaves a hole further down that has to be filled in turn, and the
+completeness that the index arithmetic depends on is gone.
+
+## Building a heap in linear time
+
+Given $n$ items at once, pushing them one at a time costs $n$ sift-ups of up to
+$\log_2 n$ each — $O(n \log n)$. There is a better way, and its reason returns in every
+tree argument you will ever make.
+
+Leave the leaves alone; a leaf is already a heap of one. Then take each internal node,
+from the last one backwards to the root, and sift it *down*. When node $i$ is
+processed, both of its subtrees are already heaps, so one sift-down makes the subtree
+rooted at $i$ a heap too. The cost of sifting a node down is at most its **height above
+the leaves**, $h$. And here is the fact: in a complete binary tree, half the nodes are
+leaves ($h = 0$), a quarter are one level up ($h = 1$), an eighth two up, and in general
+about $n / 2^{h+1}$ nodes sit at height $h$. So the total work is
+
+$$\sum_{h \ge 0} \frac{n}{2^{h+1}} \cdot h = \frac{n}{2} \sum_{h \ge 0} \frac{h}{2^{h}}
+= \frac{n}{2} \cdot 2 = n,$$
+
+using $\sum_{h \ge 0} h x^{h} = x/(1-x)^{2}$ at $x = 1/2$. The population is
+concentrated at the bottom, sift-down charges by distance from the bottom, so the cheap
+operation is applied to the many nodes and the dear one to the few. Sift-*up* inverts
+that: it charges by distance from the root, and the half of the nodes that are leaves
+each pay the full height.
+
+```python
+def sift_up(data, index):
+    """Climb towards the root; return the number of swaps made."""
+    swaps = 0
+    while index > 0 and data[index] < data[(index - 1) // 2]:
+        data[index], data[(index - 1) // 2] = data[(index - 1) // 2], data[index]
+        index = (index - 1) // 2
+        swaps += 1
+    return swaps
+
+
+def sift_down(data, index):
+    """Sink towards the leaves; return the number of swaps made."""
+    swaps, size = 0, len(data)
+    while True:
+        left, right, smallest = 2 * index + 1, 2 * index + 2, index
+        if left < size and data[left] < data[smallest]:
+            smallest = left
+        if right < size and data[right] < data[smallest]:
+            smallest = right
+        if smallest == index:
+            return swaps
+        data[index], data[smallest] = data[smallest], data[index]
+        index = smallest
+        swaps += 1
+
+
+n = 2 ** 16 - 1                      # a perfect tree of height 15
+worst = list(range(n, 0, -1))        # descending: every element wants to rise
+pushed, by_pushes = [], 0
+for value in worst:
+    pushed.append(value)
+    by_pushes += sift_up(pushed, len(pushed) - 1)
+heapified = list(worst)
+by_heapify = sum(sift_down(heapified, i) for i in reversed(range(n // 2)))
+print(f"n = {n}, root of each: {pushed[0]} and {heapified[0]}")
+print(f"{n} pushes:      {by_pushes:>7} swaps")
+print(f"bottom-up heapify: {by_heapify:>7} swaps")
+```
+
+Same input, a valid heap either way with 1 at the root, and a factor of fourteen between
+them, purely from which direction the work flows: 917,506 swaps against 65,519, which is
+under $n$. This does *not* make heap sort $O(n)$: the $n$ pops that follow each sift
+down from the root, and those really are $\log n$ apiece.
+
+## Three sorts, and what each gives up
+
+With a heap in hand, sorting is one line: build the heap in $O(n)$, pop it dry in
+$O(n \log n)$. That is **heap sort** — in place, with no bad input to fear, and not
+stable, for a reason that comes at the end.
+
+**Merge sort** halves the list, sorts each half, and merges: walk both sorted halves
+with a finger on each, appending the smaller front element, and when one half runs out,
+append the rest of the other. Every level of the recursion does $O(n)$ merging and there
+are $\log_2 n$ levels: $O(n \log n)$ on any input, because halving does not consult the
+data. The price is $O(n)$ extra memory and a copy of every element at every level. What
+it buys, apart from the guarantee, is
+**stability**: records with equal keys come out in the order they went in, and it costs
+one character. On a tie, take from the *left* half, because the left half holds what
+came first:
+
+```python
+def heap_sort(items, key):
+    """Bottom-up heapify, then take the root n times, refilling it from the end."""
+    data = list(items)
+
+    def sift_down(index, size):
+        while True:
+            left, right, smallest = 2 * index + 1, 2 * index + 2, index
+            if left < size and key(data[left]) < key(data[smallest]):
+                smallest = left
+            if right < size and key(data[right]) < key(data[smallest]):
+                smallest = right
+            if smallest == index:
+                return
+            data[index], data[smallest] = data[smallest], data[index]
+            index = smallest
+
+    for index in reversed(range(len(data) // 2)):
+        sift_down(index, len(data))
+    out = []
+    for size in range(len(data), 0, -1):
+        out.append(data[0])
+        data[0] = data[size - 1]              # the LAST item moves to the root
+        sift_down(0, size - 1)
+    return out
+
+
+def merge_sort(items, key):
+    data = list(items)
+    if len(data) <= 1:
+        return data
+    middle = len(data) // 2
+    left = merge_sort(data[:middle], key)
+    right = merge_sort(data[middle:], key)
+    merged, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        if key(right[j]) < key(left[i]):      # strictly smaller: a tie takes the left
+            merged.append(right[j])
+            j += 1
+        else:
+            merged.append(left[i])
+            i += 1
+    merged.extend(left[i:])
+    merged.extend(right[j:])
+    return merged
+
+
+records = [("b", 1), ("a", 2), ("b", 3), ("a", 4)]
+first = lambda record: record[0]
+print("merge_sort:", merge_sort(records, first))
+print("heap_sort: ", heap_sort(records, first))
+```
+
+Merge sort keeps the tags in arrival order within each key. Heap sort has reversed the two `b` records,
+and it was always going to: each take moves the *last* element of the array into the
+root, from arbitrarily far away, and nothing in the array records which of two equal
+keys came first. Long-range exchange is what makes heap sort and quicksort cheap, and it
+is what costs them stability — the same property seen from two sides. Stability can be
+bought back by sorting on `(key, original_index)`, at the cost that implies.
+
+**Quicksort** picks a pivot, partitions the list in place into what is smaller and what
+is larger, and recurses on both sides. Its constant factor is the best of the three,
+because partitioning is two pointers walking through one array with the working set
+shrinking into cache — but it has a worst case, and it takes three separate defences to
+keep it away. A pivot that is the minimum or maximum splits off one element and leaves
+$n - 1$, which is $O(n^{2})$; on already-sorted input, taking the first element as pivot
+does this every time. **Median-of-three** — the middle of the first, middle and last
+keys — makes that input harmless. A run of *equal* keys defeats median-of-three, because
+with a two-way partition every equal key goes to one side and the sort degenerates
+again:
+
+```python
+def quick_sort_two_way(data):
+    """Lomuto partition: everything not below the pivot goes to the right."""
+    passes = 0
+
+    def sort(low, high):
+        nonlocal passes
+        while low < high:
+            passes += 1
+            middle = (low + high) // 2
+            data[middle], data[high] = data[high], data[middle]
+            pivot = data[high]
+            store = low
+            for i in range(low, high):
+                if data[i] < pivot:
+                    data[store], data[i] = data[i], data[store]
+                    store += 1
+            data[store], data[high] = data[high], data[store]
+            sort(low, store - 1)
+            low = store + 1
+
+    sort(0, len(data) - 1)
+    return passes
+
+
+def quick_sort_three_way(data):
+    """Dutch-flag partition: an equal block that is never recursed into."""
+    passes = 0
+
+    def sort(low, high):
+        nonlocal passes
+        while low < high:
+            passes += 1
+            pivot = data[(low + high) // 2]
+            less, index, greater = low, low, high
+            while index <= greater:
+                if data[index] < pivot:
+                    data[less], data[index] = data[index], data[less]
+                    less += 1
+                    index += 1
+                elif data[index] > pivot:
+                    data[index], data[greater] = data[greater], data[index]
+                    greater -= 1
+                else:
+                    index += 1
+            sort(low, less - 1)
+            low = greater + 1
+
+    sort(0, len(data) - 1)
+    return passes
+
+
+same = [7] * 2000
+print("two-way partition passes on 2000 equal keys:  ", quick_sort_two_way(list(same)))
+print("three-way partition passes on 2000 equal keys:", quick_sort_three_way(list(same)))
+```
+
+**Three-way partitioning** carves the list into less-than, equal-to and greater-than in
+one pass and recurses only on the outer two. Two thousand identical keys are finished in
+a single pass rather than 1999 of them, each one scanning everything that is left. The
+third defence is against the stack rather than the clock: recurse into the *smaller*
+side and loop on the larger, so the depth is bounded by $\log_2 n$ even when the splits
+are bad. Each defence closes exactly one failure and none of the others, which is why all
+three appear in the lab's reference solution.
+
+## Where it stops holding
+
+Every sort here decides by comparing two keys, and no comparison sort can beat
+$n \log n$: there are $n!$ possible orderings of the input, each comparison has two
+outcomes, so telling the orderings apart needs at least $\log_2(n!) \approx n \log_2 n$
+comparisons in the worst case. Counting sort and radix sort escape the bound by looking
+at digits rather than comparing, and are the right tool for small integer keys. The
+heap's $O(n)$ build is a fact about *building*, not about *searching*: a heap answers
+"what is the smallest" in $O(1)$ and "is 42 present" in nothing better than $O(n)$.
+
+## What you are about to build
+
+The lab is *A binary heap and three sorts*, and it forbids `heapq`, `sorted` and
+`list.sort` because they are what you are building. `MinHeap(items, key)` keeps `data`
+with the root at 0, builds by bottom-up heapify, and offers `push`, `pop`, `peek` and
+`__len__`, with `IndexError` on an empty pop or peek. `merge_sort`, `quick_sort` and
+`heap_sort` each take `(items, key=None)`, return a new list, and leave their input
+alone; all three are run on the awkward inputs — empty, one element, all equal, sorted,
+reverse-sorted — and `quick_sort` on 3000 sorted values. Only `merge_sort` is held to the stability check, and it is the tie line above
+that passes it. The fill-in-the-blanks unit is that merge, hole by hole, and the
+derivation unit is the heapify sum with symbols.
+''',
+                },
             ],
             "quiz": {
                 "title": "Array-shaped trees, and what each sort gives up",

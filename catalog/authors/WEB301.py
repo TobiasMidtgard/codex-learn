@@ -46,6 +46,248 @@ COURSE = {
                 "`aria-describedby` attaches supplementary text without repeating the label",
                 "Native elements first: a `<button>` is focusable, activatable and announced for free",
             ],
+            "read": [
+                {
+                    "title": "What a screen reader hears",
+                    "minutes": 12,
+                    "body": r'''
+Someone opens the Riverside Bike Workshop page with a screen reader running. It is the
+page you are handed in this module's lab, and on a monitor it looks finished: a banner, a
+menu, a photograph, two sections, a form with a button. The screen reader user presses the
+key that lists the page's landmarks and hears *no landmarks*. They press H to move to the
+next heading and hear *no headings*. They press Tab until focus lands in the form and hear
+*edit text* — a field, with no word attached to say what it is for. Every one of those
+failures is a `<div>` where a more specific element should have been, and not one of them
+is visible on the monitor, because the stylesheet paints a `<div class="brand">` and an
+`<h1>` identically.
+
+## Two trees from one file
+
+The browser builds the DOM from your markup, and then it builds a second tree from the
+first: the accessibility tree. Every node in it carries a **role** (heading, button, text
+field, landmark), a **name** (the words announced when the node is reached), and sometimes
+a **state** (checked, expanded, disabled). Assistive technology reads that second tree and
+nothing else. It does not see the pixels.
+
+A `<div>` contributes a node with no role worth announcing, so a page built from them is a
+page whose second tree is a flat run of text. An `<h2>` contributes *heading, level 2* plus
+its text. A `<button>` contributes *button* plus its label, and the promise that Enter and
+Space will activate it. Semantic markup is not a courtesy to the reader of the source; it
+is the only way anything gets into the tree the screen reader is reading.
+
+Here is a toy version of what a screen reader does with the two trees. It handles four
+cases — landmarks, headings, and a text field with or without a label — which is enough
+to hear the difference between the lab's starting page and where it needs to go.
+
+```js
+var divSoup =
+  '<div class="banner"><div class="brand">Riverside Bike Workshop</div></div>' +
+  '<div class="content"><div class="section-title">Book a service</div>' +
+  '<p>Email address <input type="text" name="email"></p></div>';
+
+var semantic =
+  '<header><h1>Riverside Bike Workshop</h1></header>' +
+  '<main><h2>Book a service</h2>' +
+  '<p><label for="email">Email address</label>' +
+  '<input id="email" name="email" type="email"></p></main>';
+
+function announce(html) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  var landmarks = { header: 'banner', nav: 'navigation', main: 'main', footer: 'contentinfo' };
+  var lines = [];
+  doc.body.querySelectorAll('*').forEach(function (el) {
+    var tag = el.tagName.toLowerCase();
+    if (landmarks[tag]) {
+      lines.push('landmark, ' + landmarks[tag]);
+    } else if (/^h[1-6]$/.test(tag)) {
+      lines.push('heading level ' + tag.charAt(1) + ', ' + el.textContent.trim());
+    } else if (tag === 'input') {
+      var label = el.id ? doc.querySelector('label[for="' + el.id + '"]') : null;
+      lines.push((label ? label.textContent.trim() : '(no name)') + ', edit text');
+    }
+  });
+  return lines;
+}
+
+console.log('--- the div version');
+announce(divSoup).forEach(function (line) { console.log(line); });
+console.log('--- the semantic version');
+announce(semantic).forEach(function (line) { console.log(line); });
+```
+
+The div version produces one line, `(no name), edit text`, because nothing else in it has
+a role. The semantic version produces five: a banner landmark, a level-1 heading, a main
+landmark, a level-2 heading, and `Email address, edit text`. Same words on screen, same
+stylesheet, and the only difference is which tags were chosen. Two notes on the toy:
+`DOMParser` gives a detached document, so nothing here is drawn, and a real screen
+reader's name computation has a dozen more cases than this — `aria-labelledby`, wrapping
+labels, `title` — but the four handled here are the ones that decide most of what the lab
+checks.
+
+## Landmarks are the map
+
+Press the landmarks key on a well-built page and you hear something like *banner,
+navigation Primary, main, contentinfo*. Those come from `<header>`, `<nav>`, `<main>` and
+`<footer>`, and they let someone jump straight to the content without arrowing through the
+menu every time. Two rules fall out of what that list is for. There is exactly one
+`<main>`, because "jump to the main content" has to have one answer. And when a page has
+several `<nav>` elements — a primary menu, a breadcrumb, a footer nav — each needs an
+`aria-label`, or the list reads *navigation, navigation, navigation* and the map is
+useless. The lab's first check counts `<main>` elements and expects one, and its last
+check reads the `aria-label` off the `<nav>`.
+
+## Headings are the table of contents
+
+A sighted reader skims a page by its headings; a screen reader user does the same with a
+key that jumps from heading to heading, and the level is announced each time. So the
+levels are not sizes. They are nesting: an `h2` is a section of the page, an `h3` is a
+section of the `h2` above it. Jump from an `h1` to an `h3` and the announcement says
+*there is a subsection here, of a section you were never told about*. Nothing breaks and
+nothing fails to render, which is why it survives review; the information is wrong, and
+it stays wrong.
+
+That is the rule the lab enforces: walking the headings in document order, no level may be
+more than one greater than the one before it. One `h1`, then `h2` for `Services` and
+`Book a service`, and `h3` for `Standard tune-up` underneath the first. The temptation to
+skip is always visual — `h2` looked too big — and the fix is a line of CSS on the `h2`,
+not a different element.
+
+## What a field is called
+
+Focus lands in a text field. The screen reader needs a word to say, and it looks for one
+in a fixed order. First, a `<label>` whose `for` attribute holds the field's `id`. Second,
+a `<label>` wrapped around the field. Then `aria-labelledby`, then `aria-label`. If all of
+those are absent, the placeholder is a last-resort fallback that not every browser and
+screen reader pair honours, and what is left is the *edit text* the reader heard at the
+start.
+
+Why does `for` bind to `id` and not to `name`? Because `name` is the key the value is
+submitted under, and it is deliberately not unique — the two service-level radios in the
+lab share `name="level"`, which is what makes them one question. An `id` is unique by
+definition, so it can identify one control, and the browser resolves `for` the way it
+resolves `getElementById`. The visible proof that a binding took is that clicking the
+label focuses the field.
+
+Try it below. Click on the words, not on the boxes.
+
+```html
+<style>
+  body { font-family: system-ui, sans-serif; line-height: 1.6; padding: 1rem; }
+  label { display: block; font-weight: 600; margin-top: 0.75rem; }
+  input[type="text"], input[type="email"] { display: block; width: 18rem; padding: 0.35rem 0.5rem; }
+  fieldset { margin-top: 1rem; width: 18rem; }
+  fieldset label { display: inline; font-weight: 400; }
+  .hint { display: block; color: #555; font-size: 0.85rem; }
+</style>
+
+<form>
+  <label for="name">Full name</label>
+  <input id="name" name="name" type="text">
+
+  <label for="email">Email address</label>
+  <input id="email" name="email" type="email" required aria-describedby="email-hint">
+  <span id="email-hint" class="hint">We only use this to confirm the booking.</span>
+
+  <fieldset>
+    <legend>Service level</legend>
+    <input id="level-basic" name="level" type="radio" value="basic" checked>
+    <label for="level-basic">Basic</label>
+    <input id="level-full" name="level" type="radio" value="full">
+    <label for="level-full">Full strip-down</label>
+  </fieldset>
+</form>
+```
+
+Clicking *Full name* puts the cursor in the field; clicking *Basic* selects the radio.
+Both work because the label knows which control it belongs to, and a screen reader uses
+the same binding to know what to say.
+
+## A group is a question
+
+The two radios above have labels, so each announces as *Basic, radio button* or *Full
+strip-down, radio button*. What is missing from that is the question. Which of the two is
+the right answer depends on knowing they are choices for *Service level*, and that text is
+a paragraph somewhere above — visually adjacent, structurally unrelated. `<fieldset>` with
+a `<legend>` is how the relation is written down: the legend is announced when focus
+enters the group, so the reader hears *Service level, group, Basic, radio button, one of
+two*. Any set of controls that answer one question belongs in a fieldset, and radios
+sharing a `name` always do.
+
+## A description is not a name
+
+The email field has a hint: *We only use this to confirm the booking.* The tempting move
+is to put that sentence in the label, so it is announced. It is announced — every single
+time focus lands there, before the person can type, and a voice-control user now has to
+say the whole sentence to reach the field. A control has one name, which wants to be
+short, and any amount of description, which is announced after the name and can be
+skipped. `aria-describedby="email-hint"` on the input, pointing at the `id` of the span,
+makes the sentence a description. The span stays where it was, visible to everyone; the
+attribute only records how the two are related. The lab's last check follows that `id`
+and insists the element it lands on exists and has text in it.
+
+## What a picture says
+
+When the reader reaches an image, three things can happen. With `alt="A road bicycle
+clamped in a workshop repair stand"`, that sentence is read, in the voice of the page.
+With `alt=""`, the image is skipped, because an empty `alt` is a statement: *this carries
+nothing the text does not*. With no `alt` attribute at all, the screen reader has no
+description and falls back to what it does have, which is the file name — `stand.jpg`,
+spelled out. So every `<img>` gets an `alt`, and the choice is between describing it and
+declaring it decorative. The lab's photo is on a booking page because it shows the
+workshop has proper stands, so it earns a description, and the check asks for at least ten
+characters of one — a clause, not a word.
+
+## Native elements arrive finished
+
+`<div role="button" tabindex="0">Delete</div>` announces as a button and can be tabbed to,
+and people who have got that far often stop. Press Enter on it and nothing happens. A real
+`<button>` fires a click on Enter and on Space, honours `disabled`, submits a form when it
+is the form's submit button, and sits in the tab order without being asked. The `div` has
+to be handed each of those by hand, in JavaScript, and the usual result is a control that
+works with a mouse and not otherwise. This module's tab-stop exercise counts what needs
+nothing written on it — `<a href>`, `<button>`, `<input>`, `<select>`, `<textarea>` — and
+it is most of the list.
+
+The same goes for `type="submit"` on the form's button. It is what makes Enter in the
+email field send the form, and it is what runs constraint validation on the way, so
+`required` and `type="email"` are checked without a line of script.
+
+## The mistake, and why it is tempting
+
+The one that ships most often is the placeholder used as the label:
+`<input placeholder="Email address">` with no `<label>` at all. It is tempting because it
+looks tidy, it saves a line of vertical space, and on the developer's own screen the field
+is plainly an email field. Then someone types into it and the words vanish at exactly the
+moment they want to check what the field was for; the grey text fails contrast before
+that; and it reaches the accessibility tree as a name only as a fallback, so some screen
+readers say *edit text* and nothing more. The label is not decoration that the placeholder
+replaces. It is the name.
+
+## Where this stops holding
+
+Semantic markup gets the structure into the tree; it does not make the words true. The lab
+checks that an `alt` is at least ten characters long, and `alt="aaaaaaaaaaaa"` passes it —
+no automated check can tell whether a description describes. A `<header>` is announced as
+a banner only when it is the page's header, not when it is nested inside an `<article>`
+or `<section>`. `aria-label` on a `<div>` with no role does nothing at all, and
+`aria-label` on a `<button>` *overrides* its visible text, which is how a button that says
+*Send* comes to announce as *Submit form* and stops answering to the word a voice-control
+user can see. And screen readers disagree with each other in the details: the
+announcements in this reading are the common shape, not a transcript of any one product.
+
+## In the lab
+
+*A booking form a screen reader can navigate* hands you the div-only page and a read-only
+stylesheet that already styles `header`, `main`, `h2`, `label` and `fieldset`. You rewrite
+`index.html` so that every failure the reader met in the first paragraph is gone:
+landmarks with one `<main>`, headings that never skip a level, a `<label for>` on every
+control, the radios in a `<fieldset>` with a `<legend>`, an `alt` on the image, and the
+email field wired to its hint with `aria-describedby`. Keep the same words on the page.
+Six checks read the accessibility tree back, and each one corresponds to something the
+reader could not hear.
+''',
+                },
+            ],
             "quiz": {
                 "title": "What the markup promises",
                 "minutes": 7,
@@ -617,6 +859,206 @@ assert(_hint.textContent.trim() !== '', 'The element referenced by aria-describe
                 "`max-width: 100%` on replaced elements is what stops images bursting their column",
                 "Custom properties cascade and can be read from JavaScript with `getPropertyValue`",
                 "Horizontal overflow is a layout bug: `scrollWidth` larger than `clientWidth`",
+            ],
+            "read": [
+                {
+                    "title": "Where the sideways scrollbar comes from",
+                    "minutes": 12,
+                    "body": r'''
+Open this module's gallery on a 360-pixel-wide phone before any of the stylesheet has been
+written and the page scrolls sideways. The header sits where it should, the heading is
+fine, and then the six cards run off the right edge, each one wider than the screen.
+Sideways scrolling is never a feature on a phone; it is a measurement that came out wrong,
+and the useful question is not *how do I hide it* but *which pixels are these*. They can
+be counted, and this reading counts them.
+
+## Every box is four boxes
+
+Every element the browser lays out is a content area wrapped in padding, wrapped in a
+border, wrapped in margin. The question the box model answers is which of those `width`
+refers to, and the default answer is the surprising one. Under `box-sizing: content-box` —
+the initial value — `width: 200px` is the content alone, and padding and border are added
+outside it. Give a card `padding: 16px` and `border: 1px solid` and it renders
+$200 + 2 \times 16 + 2 \times 1 = 234$ pixels wide, while its stylesheet says 200.
+
+Three of those cards in a row inside a 640-pixel container, with two 16-pixel gaps between
+them, need $3 \times 234 + 2 \times 16 = 734$ pixels. The container has 640. The row
+overflows by 94 pixels, and every one of them came from a declaration that looked correct.
+Switch to `box-sizing: border-box` and the declared width becomes the width you can
+measure with a ruler: padding and border eat into the content instead of pushing the edges
+out, so the three cards need $3 \times 200 + 32 = 632$ pixels and fit. That is why
+`* { box-sizing: border-box; }` sits near the top of every stylesheet in this course.
+Margin sits outside the box under both rules; nothing puts it inside.
+
+Two boxes with the same declared width, one rule apart:
+
+```html
+<style>
+  body { font-family: system-ui, sans-serif; padding: 1rem; }
+  .ruler { width: 200px; height: 6px; background: #1b1f27; margin-bottom: 4px; }
+  .box { width: 200px; padding: 16px; border: 1px solid #1b1f27; margin-bottom: 1rem; background: #e8eef7; }
+  .content-box { box-sizing: content-box; }
+  .border-box { box-sizing: border-box; }
+</style>
+
+<div class="ruler"></div>
+<div class="box content-box">content-box: width 200px, renders 234px</div>
+<div class="box border-box">border-box: width 200px, renders 200px</div>
+```
+
+The black bar is 200 pixels. The first box overhangs it by 34; the second lines up with
+it.
+
+## One axis or two
+
+The lab's header holds two children, a brand link and a list of links, and the design
+wants the brand at the left edge and the list at the right. Ask how many axes are being
+arranged along: one. The children follow each other in a row and size themselves to their
+text. That is flexbox's whole model. `display: flex` on `.site-nav` makes the two children
+flex items along a main axis, and `justify-content` says what to do with the space left
+over once they have taken what they need. In a 960-pixel header where the brand measures
+120 and the list 300, there are 540 pixels free. `space-between` puts every one of them
+into the gap between the items and none on the outside, so the two children land on the
+two edges. `center` would split the 540 into 270 on each side; `flex-start` would leave
+all of it on the right.
+
+The gallery is a different question. Six cards, in rows *and* columns that line up in
+both directions: the third card and the sixth sit in the same column and their edges
+agree. Two axes at once is what CSS grid exists for. `display: grid` on `#gallery` and
+`grid-template-columns: repeat(3, 1fr)` declare three tracks, and the six `<li>` items
+flow into them in order — three across, then the next row — with no arithmetic from you
+and no clearing.
+
+What `1fr` means can be derived rather than remembered. Call the container's content width
+$W$, the gap between neighbouring tracks $g$, and the number of tracks $k$. The tracks
+stand side by side with a gap in every join but none on the outside edges, so a full row
+occupies $k\,t + (k-1)\,g$ for tracks of width $t$. A row that fills the container exactly
+has that equal to $W$, so
+
+$$t = \frac{W - (k - 1)\,g}{k}.$$
+
+Take the gaps out first, then share what is left equally: that is `1fr`, one share of the
+leftover space. With $W = 920$ (a 960-pixel viewport less 20 pixels of padding each side),
+$g = 20$ and $k = 3$, each track is $(920 - 40)/3 = 293.3$ pixels. This module's
+derivation exercise carries the same line one step further, to how many tracks
+`auto-fill` can place before one drops below its minimum.
+
+## The image that will not shrink
+
+Now the pixels that were scrolling sideways. Each card holds an image that is 480 pixels
+wide intrinsically, sitting in a track that the arithmetic says is 293 wide. A `1fr`
+track has a floor: it is not allowed to be narrower than the minimum size of its
+contents, and an image's minimum size is its own width. So the image wins, every track
+grows to 480, and the row is $3 \times 480 + 40 = 1480$ pixels inside a 920-pixel
+container. The document's `scrollWidth` is now larger than its `clientWidth`, which is the
+exact test the lab runs last, and the difference is the scrollbar.
+
+`max-width: 100%` on the image caps its rendered width at its container, the grid track.
+That does two things: the image can no longer be wider than the track, and its claim on
+the track's minimum goes away, so the track returns to its `1fr` share and the image
+renders 293 pixels wide. `height: auto` then lets the image's own aspect ratio choose the
+height — 480 by 320 is 3:2, so 293 wide comes out 195.6 tall — instead of squashing it
+into whatever the box happened to be. `display: block` removes the small gap below an
+inline image, which is the descender space the line box reserves for text that is not
+there.
+
+The whole calculation, at two viewport widths:
+
+```js
+function trackShare(W, gap, k) {
+  return (W - (k - 1) * gap) / k;
+}
+
+function layout(viewport, padding, gap, columns, imageWidth, capped) {
+  var W = viewport - 2 * padding;
+  var share = trackShare(W, gap, columns);
+  var image = capped ? Math.min(imageWidth, share) : imageWidth;
+  var track = Math.max(share, image);
+  var row = columns * track + (columns - 1) * gap;
+  var verdict = row > W + 0.5 ? 'OVERFLOWS by ' + (row - W).toFixed(1) + 'px' : 'fits';
+  console.log(viewport + 'px viewport, ' + columns + ' column(s), image ' +
+    (capped ? 'capped' : 'uncapped') + ': track ' + track.toFixed(1) +
+    'px, row ' + row.toFixed(1) + 'px of ' + W + 'px -> ' + verdict);
+}
+
+layout(960, 20, 20, 3, 480, false);
+layout(960, 20, 20, 3, 480, true);
+layout(360, 20, 20, 3, 480, true);
+layout(360, 20, 20, 1, 480, true);
+```
+
+The first line is the starting page: tracks forced to 480, a 1480-pixel row, an overflow
+of 560. The second is the same page with `max-width: 100%`: tracks of 293.3, the row
+fits. The third is what the fix looks like on the phone — it fits, at 93 pixels per
+column, which is a width no card can be read at. The fourth is the answer to that: one
+column, 320 pixels wide, which is what the breakpoint is for.
+
+## Mobile-first, and the direction a stylesheet reads
+
+Ninety-three-pixel columns fit and are useless, so at some width the layout has to
+change: the gallery to one column, the nav list stacked. A media query is the switch —
+`@media (max-width: 640px) { ... }` — and the rules inside it apply only while the
+viewport is at most 640 pixels wide. Where the block goes matters more than it looks. A
+media query contributes nothing to specificity.
+`.gallery { grid-template-columns: repeat(3, 1fr); }` and
+`.gallery { grid-template-columns: 1fr; }` inside a media query select the same element
+with the same weight, so the cascade falls through to document order and the later
+declaration wins. Put the media query above the base rule and the phone gets three
+columns; put it below and the override takes. So a stylesheet reads in one direction: the
+base rules, then the breakpoints that amend them.
+
+The lab adds one more line to the breakpoint, and it is the line that lets script and
+stylesheet agree. On `:root` declare `--layout: wide;`, and inside the media query
+re-declare `--layout: narrow;`. A custom property is an ordinary inherited property that
+happens to hold a token, so every element on the page sees the current value, and
+JavaScript can read it with
+`getComputedStyle(document.documentElement).getPropertyValue('--layout')`. The condition
+`640px` is now written in exactly one place; anything else that needs to know which
+layout is showing asks the token. The lab's first check does precisely that, and compares
+the answer with `matchMedia('(max-width: 640px)')`, so it holds at whatever width the page
+happens to be showing.
+
+## The mistake, and why it is tempting
+
+The fix people reach for first is `body { overflow-x: hidden; }`. It is one line, the
+scrollbar disappears, and it is tempting because the symptom was the scrollbar. But the
+cards are still 1480 pixels wide. The right third of the third card is now clipped
+instead of scrolled to, on a phone it is unreachable, and the layout bug is exactly where
+it was with its only visible evidence removed. The lab's last check reads `scrollWidth`,
+which reports the content's width whether or not it is clipped, so this fix does not pass
+it, and that is deliberate. The close cousin is `width: 100vw`, which reads as *the full
+width* and is the viewport's width including the vertical scrollbar, so on a desktop it is
+reliably a few pixels wider than the space available and produces the overflow it was
+meant to cure.
+
+## Where this stops holding
+
+The track floor that the image hit is not only an image's. Text has a minimum too — its
+longest unbreakable word — and a card with a fifty-character URL in it will force its
+track wider in the same way, with `max-width` powerless because there is no replaced
+element to cap. The fix there is `min-width: 0` on the grid item, or
+`overflow-wrap: anywhere` on the text, and it is the second thing to look for when
+`scrollWidth` disagrees with `clientWidth`. Media queries measure the viewport, not the
+container: a gallery placed in a 300-pixel sidebar on a 1400-pixel screen matches no
+`max-width: 640px` rule and renders three columns of 87 pixels. Container queries answer
+that, at the cost of a wrapper with `container-type` set. And the pixels in every number
+above are CSS pixels, not device pixels — a phone with 1080 physical pixels across and a
+device pixel ratio of 3 reports a 360-pixel viewport to both the media query and
+`matchMedia`, which is why the two agree, and why `width=device-width` in the viewport
+meta tag is not optional.
+
+## In the lab
+
+*A gallery that survives a 360px phone* gives you a read-only `index.html` — the header,
+the nav list, six cards with 480-pixel images — and a `style.css` with six numbered
+comments and nothing else. You write the flex row with `space-between`, the flex list
+without bullets, the three-column grid with a gap, the capped block-level image, the
+breakpoint that stacks the nav and collapses the grid, and the `--layout` token on both
+sides of it. Seven checks read the computed styles back at whatever width the page is
+showing, and the last of them is the one this reading opened with: `scrollWidth` no larger
+than `clientWidth`.
+''',
+                },
             ],
             "quiz": {
                 "title": "Boxes, axes and the cascade",

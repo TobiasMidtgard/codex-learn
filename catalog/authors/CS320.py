@@ -48,6 +48,251 @@ COURSE = {
                 "CRC-32 as polynomial division over GF(2), computed with a reflected 256-entry table",
                 "Error *detection* is not correction — a detected frame is simply discarded",
             ],
+            "read": [
+                {
+                    "title": "Where one frame ends, and whether it arrived whole",
+                    "minutes": 11,
+                    "body": r'''
+A serial cable carries bytes. Not messages, not packets — bytes, one after another,
+with nothing between them. Send the word `hello` and then the word `world` down such a
+cable and what comes out of the far end is `helloworld`, and the receiver has no way to
+know there were two of anything. Every protocol that has ever run over a byte pipe has
+had to solve this before it could do anything else, and the solution is the first thing
+you will build in this module's lab, *Framing, checksums and CRC-32*.
+
+## Reserving a byte
+
+The first move anyone makes is to pick a byte value and declare it a boundary. PPP
+picks `0x7E` and calls it the flag: every frame begins with one and ends with one, so
+the receiver reads bytes until it sees a flag, and everything since the previous flag
+is one frame.
+
+That works right up to the first payload that happens to contain a `0x7E` of its own —
+a binary file, a compressed image, a frame carrying another frame. The receiver would
+cut the frame in half at the data byte, deliver the front half as a frame, and treat
+the back half as the start of the next one. The moment one value carries meaning, data
+holding that value has to be disguised, and the disguise is an escape byte: `0x7D`. A
+`0x7E` inside the payload goes out as `0x7D` followed by `0x5E`, which is `0x7E` with
+bit five cleared (`0x7E ^ 0x20`).
+
+Why bit five, and not some other transformation? Two reasons, and both matter. First,
+the byte that follows the escape must not itself be a flag or an escape, or the
+receiver is back where it started; `0x5E` and `0x5D` are neither. Second, the escape
+byte is now reserved too, so a payload containing `0x7D` must also be disguised — as
+`0x7D 0x5D`. The mask is its own inverse, so the receiver has one rule for everything:
+see `0x7D`, drop it, take the next byte, XOR it with `0x20`.
+
+Take the payload `7e 7d 01` through that by hand. The first byte is a flag, so it
+becomes `7d 5e`. The second is an escape, so it becomes `7d 5d`. The third is ordinary
+and passes through. Wrap the result in flags and the frame on the wire is
+`7e 7d 5e 7d 5d 01 7e`: three bytes of payload became seven bytes of frame.
+
+```python
+FLAG, ESC, MASK = 0x7E, 0x7D, 0x20
+
+
+def stuff(payload):
+    body = bytearray()
+    for byte in payload:
+        if byte in (FLAG, ESC):
+            body += bytes([ESC, byte ^ MASK])
+        else:
+            body.append(byte)
+    return bytes([FLAG]) + bytes(body) + bytes([FLAG])
+
+
+def unstuff(frame):
+    body = frame[1:-1]
+    out = bytearray()
+    i = 0
+    while i < len(body):
+        if body[i] == ESC:
+            out.append(body[i + 1] ^ MASK)
+            i += 2
+        else:
+            out.append(body[i])
+            i += 1
+    return bytes(out)
+
+
+wire = stuff(b"\x7e\x7d\x01")
+print(wire.hex(" "))
+print(unstuff(wire) == b"\x7e\x7d\x01")
+```
+
+That prints `7e 7d 5e 7d 5d 01 7e` and then `True`. The `unstuff` here is the
+optimistic half of the lab's version: it trusts its input. The lab's has to raise
+`FramingError` for a frame with no flags, a bare flag in the middle, or an escape as the
+very last byte of the body — because a receiver on a real wire sees all three, and a
+parser that indexes `body[i + 1]` past the end of a frame is a crash waiting for the
+first line glitch.
+
+## What stuffing costs
+
+Every escaped byte becomes two, so a payload of $n$ bytes goes out as somewhere between
+$n$ and $2n$ bytes of body, plus the two flags. On ordinary data the expansion is small:
+if each byte independently has probability $p$ of being one of the two reserved values,
+the expected body length is $n(1 + p)$, and for random bytes $p = 2/256$ — under one
+percent. The module's derivation unit walks that expression out. The number to remember
+is the other one: $p$ is set by whoever is sending, and a payload of solid `7e` bytes
+drives it to 1. A link budgeted for the average case has been halved by a sender who
+read the specification.
+
+The mistake people make here is to escape the flag and forget the escape. It is
+tempting because `0x7D` does not look reserved — it never marks a boundary, so why
+disguise it? Trace what happens to the payload `7d 5e` under that rule. The sender
+leaves it alone: `7e 7d 5e 7e` goes on the wire. The receiver sees `7d`, treats it as an
+escape, and decodes `7d 5e` as the single byte `7e`. Two bytes of payload became one,
+silently, with no error anywhere. Escaping the escape is what makes the decoding rule a
+function.
+
+## Noticing damage
+
+Framing tells the receiver where a frame is. It says nothing about whether the bytes
+inside it are the ones that were sent, and on a real wire some of them will not be: a
+bit flips in a noisy cable, a clock drifts, a connector corrodes. The receiver needs a
+summary of the data that it can recompute and compare — a check.
+
+The simplest useful check is a sum, and the internet's version of it, from RFC 1071, is
+what every IP, TCP and UDP header still carries. Take the data two bytes at a time as
+16-bit big-endian words and add them up — but add them in one's complement, which
+means that whenever the sum overflows past 16 bits the carry is not thrown away; it is
+added back in at the bottom. Then invert every bit of the result.
+
+Run RFC 1071's own example through that. The bytes are `00 01 f2 03 f4 f5 f6 f7`, so
+the words are `0x0001`, `0xF203`, `0xF4F5` and `0xF6F7`. The first two add to `0xF204`.
+Adding `0xF4F5` gives `0x1E6F9`, which has overflowed; fold the carry back in and it is
+`0xE6FA`. Adding `0xF6F7` gives `0x1DDF1`; fold again and it is `0xDDF2`. Invert every
+bit and the checksum is `0x220D`, which is what the RFC prints and what the lab's first
+checksum test demands.
+
+Why the final inversion? It buys the receiver a shortcut. Add the data to its own
+checksum and the sum is `0xDDF2 + 0x220D = 0xFFFF`, all ones, which inverts to zero. So
+a receiver does not compare anything: it sums the whole frame, check included, and
+looks for zero. That is the property the lab's checksum test exercises on four
+different inputs.
+
+```python
+def internet_checksum(data):
+    data = bytes(data) + (b"\x00" if len(data) % 2 else b"")
+    total = 0
+    for i in range(0, len(data), 2):
+        total += (data[i] << 8) | data[i + 1]
+        total = (total & 0xFFFF) + (total >> 16)
+    return (~total) & 0xFFFF
+
+
+sample = bytes.fromhex("0001f203f4f5f6f7")
+check = internet_checksum(sample)
+print(hex(check))
+print(hex(internet_checksum(sample + check.to_bytes(2, "big"))))
+print(hex(internet_checksum(b"\x12\x34\xab\xcd")), hex(internet_checksum(b"\xab\xcd\x12\x34")))
+```
+
+That prints `0x220d`, then `0x0`, then two identical values. The third line is the
+checksum's weakness in one glance. It is a sum, and addition does not care what order
+it adds things in, so two whole words exchanged with each other leave the check
+untouched. The same blindness covers a subtler case: flip a bit from 0 to 1 in one word
+and the same bit from 1 to 0 in another, and the total is unchanged. Two-bit errors are
+exactly where the lab's `detection_rate` finds the checksum missing a few percent of
+corruptions while the CRC misses none.
+
+## A check that knows where things are
+
+To catch reordering the check has to depend on position, and the way to make position
+matter is to stop adding and start dividing. Treat the whole message as one enormous
+binary number — or, what is the same thing over the two-element field, as a polynomial
+whose coefficients are the bits, with the first bit as the highest power. Divide it by
+a fixed generator polynomial and keep the remainder. Moving a bit changes which power
+of $x$ it belongs to, so it changes the remainder.
+
+Arithmetic in this field is XOR for addition and for subtraction, and there is no
+carry, which makes long division short. Take the message `1101` and the generator
+`1011`, which is $x^3 + x + 1$. The remainder will have three bits, so append three
+zeros to the message to make room for it: `1101000`. Then repeatedly line the generator
+up under the leftmost 1 and XOR.
+
+```python
+def crc_bits(message, generator):
+    bits = [int(b) for b in message] + [0] * (len(generator) - 1)
+    gen = [int(b) for b in generator]
+    for i in range(len(message)):
+        if bits[i] == 1:
+            for j, g in enumerate(gen):
+                bits[i + j] ^= g
+            print("".join(map(str, bits)))
+    return "".join(map(str, bits[-(len(generator) - 1):]))
+
+
+print("remainder", crc_bits("1101", "1011"))
+```
+
+Each printed line is one step of the division; the remainder is `001`, so the sender
+transmits `1101 001` and the receiver divides all seven bits and expects zero. Every
+real CRC is this calculation with a longer generator and a lot of engineering on top.
+CRC-32 uses a generator of degree 32, and the version everything uses — Ethernet, zip,
+PNG, `zlib.crc32` — runs the bits through in reflected order, starts the register at
+all ones, and inverts the result at the end. The all-ones start is not decoration: from
+a zero register a run of leading zero bytes changes nothing, so `00 00 hello` and
+`hello` would share a remainder.
+
+A bit-at-a-time loop does eight shift-and-XOR steps per byte. Those eight steps depend
+only on the low byte of the register XORed with the incoming byte — 256 possibilities —
+so all of them can be computed once, into a table, and the per-byte work becomes one
+lookup.
+
+```python
+CRC_POLY = 0xEDB88320
+
+
+def make_table():
+    table = []
+    for index in range(256):
+        value = index
+        for _ in range(8):
+            value = (value >> 1) ^ (CRC_POLY if value & 1 else 0)
+        table.append(value)
+    return table
+
+
+TABLE = make_table()
+
+
+def crc32(data):
+    crc = 0xFFFFFFFF
+    for byte in data:
+        crc = TABLE[(crc ^ byte) & 0xFF] ^ (crc >> 8)
+    return crc ^ 0xFFFFFFFF
+
+
+print(hex(crc32(b"123456789")))
+print(hex(crc32(b"\x12\x34\xab\xcd")), hex(crc32(b"\xab\xcd\x12\x34")))
+```
+
+The first line is `0xcbf43926`, the published check value that every CRC-32
+implementation on earth must produce for the string `123456789`; if yours prints
+anything else, the lab's CRC test will tell you so. The second line is two different
+numbers: the word swap the checksum could not see, seen.
+
+## Where it stops
+
+A CRC detects. It does not correct, and it cannot: 32 bits of remainder cannot point at
+which of twelve thousand bits went wrong, because there are vastly more possible
+corruptions than there are remainders. A frame whose check fails is discarded, and
+whoever sent it finds out from the silence — which is the problem the next module takes
+up. Nor does a CRC protect against an adversary. It is a linear function, so anyone who
+can change the data can change the check to match; integrity against a person, rather
+than against a cable, needs a keyed hash, and that is a different course.
+
+Even against a cable the guarantee is bounded. A CRC-32 catches every single-bit error,
+every burst of damage up to 32 bits long, and all but one in $2^{32}$ of the random
+patterns beyond that. The internet checksum catches every single-bit error too, and
+then a far smaller share of everything else — which is why the link layer beneath it
+carries a CRC as well, and why the lab has you measure both on the same corruptions
+rather than take either one's reputation on trust.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Delimiters, and what a check can tell you",
                 "minutes": 7,
@@ -618,6 +863,224 @@ assert 0.9 < _chk2 < 1.0, \
                 "Out-of-order frames are discarded by a Go-Back-N receiver, so one loss costs a window",
                 "Goodput = useful frames delivered / total transmissions; the bandwidth-delay product sets the window",
             ],
+            "read": [
+                {
+                    "title": "One bit of sequence number, and then a window",
+                    "minutes": 11,
+                    "body": r'''
+Five frames, `a` to `e`, have to cross a link that sometimes loses what it is given.
+Not maliciously and not often — but the link makes no promises, and the layer above it
+is expected to deliver all five, once each, in order. That gap between what the link
+offers and what the application needs is the whole of this module, and the lab,
+*Stop-and-wait and Go-Back-N on a deterministic channel*, has you close it twice.
+
+## Send, wait, and the problem with silence
+
+The first idea is the one everyone has: send a frame, wait for the receiver to say it
+arrived, and if nothing comes back within some time, send it again. A frame that was
+lost gets retransmitted after the timeout; a frame that arrived gets acknowledged and
+the sender moves on.
+
+Now lose the acknowledgement instead of the frame. The receiver got `a`, delivered it,
+and replied; the reply died on the way back. The sender's timer fires, and from where
+the sender stands this is indistinguishable from the frame having been lost — a timeout
+is the absence of information, and it looks the same whichever direction the loss was
+in. So the sender does the only thing it can and retransmits `a`. The receiver now
+holds a second copy of `a`, and if it delivers it, the application reads `aabcde`.
+
+The receiver needs a way to tell a new frame from a repeat, and the way is a sequence
+number carried in the frame. How many bits does it need? With only one frame ever
+outstanding, the receiver is always in one of two states — waiting for the frame after
+the last one it delivered, or being offered that last one again — so one bit is enough.
+The sender alternates the bit; the receiver keeps the bit it expects next, delivers a
+frame whose bit matches and flips its expectation, and discards a frame whose bit does
+not match. This is the alternating-bit protocol, and it is the smallest reliable
+transport there is.
+
+There is one more rule, and it is the one people get wrong. When the receiver discards
+a duplicate, it must still acknowledge it. The temptation is to stay quiet — the frame
+is old news, why reply to it? — but think about why the duplicate exists at all. It
+exists because the sender never saw an acknowledgement. If the receiver does not send
+another one, the sender's timer fires again, it retransmits again, the receiver
+discards again, and the two of them are stuck for ever, each behaving perfectly by its
+own lights. Acknowledge the duplicate and the deadlock breaks. The matching rule on the
+other side is that the receiver flips its expected bit only for a *new* frame; flip it
+on the duplicate and the same frame is delivered twice after all.
+
+## A trace with real numbers
+
+The lab replaces random loss with a channel that drops exactly the transmissions you
+name, counting data transmissions and acknowledgements separately from zero. That makes
+every run reproducible and every counter checkable. Here is the alternating-bit sender
+against a link that drops data transmissions 1 and 4 and acknowledgements 0 and 3.
+
+```python
+class Link:
+    def __init__(self, data_drops=(), ack_drops=()):
+        self.data_drops, self.ack_drops = set(data_drops), set(ack_drops)
+        self.data_sends = self.ack_sends = 0
+
+    def send_data(self, seq):
+        index = self.data_sends
+        self.data_sends += 1
+        return index not in self.data_drops
+
+    def send_ack(self, seq):
+        index = self.ack_sends
+        self.ack_sends += 1
+        return index not in self.ack_drops
+
+
+def stop_and_wait(frames, link):
+    delivered, expected, timeouts = [], 0, 0
+    for index, frame in enumerate(frames):
+        seq = index % 2
+        while True:
+            if link.send_data(seq):
+                if seq == expected:
+                    delivered.append(frame)
+                    expected ^= 1
+                    print(f"{frame.decode()} delivered on data transmission {link.data_sends - 1}")
+                else:
+                    print(f"duplicate {frame.decode()} discarded but acknowledged")
+                if link.send_ack(seq):
+                    break
+            timeouts += 1
+    return delivered, link.data_sends, link.ack_sends, timeouts
+
+
+frames = [b"a", b"b", b"c", b"d", b"e"]
+print(stop_and_wait(frames, Link(data_drops={1, 4}, ack_drops={0, 3})))
+```
+
+Follow it. Transmission 0 carries `a`; it arrives, is delivered, and acknowledgement 0
+is sent — and dropped. Timeout. Transmission 1 carries `a` again and is dropped.
+Timeout. Transmission 2 carries `a` a third time; the receiver sees sequence bit 0 when
+it expects 1, discards the payload, and sends acknowledgement 1, which arrives. `b`
+goes on transmission 3 and is acknowledged on acknowledgement 2. `c` goes on
+transmission 4 and is dropped; on transmission 5 it arrives and acknowledgement 3 is
+dropped; transmission 6 is the duplicate, acknowledged on acknowledgement 4. `d` and
+`e` are clean. The final line prints all five frames in order, then 9, 7 and 4: nine
+data transmissions, seven acknowledgements, four timeouts. Those are the numbers the
+lab's third test checks, and now you know where each one comes from.
+
+## The cost of waiting
+
+Stop-and-wait is correct and it is slow, and the slowness is not a matter of
+implementation. Take a 100 Mb/s link with a 40 ms round-trip time carrying 10 000-bit
+frames. Pushing one frame onto the link takes $L/R = 10^4 / 10^8 = 100$ microseconds.
+Then the sender waits 40 ms for the acknowledgement. It was busy for a tenth of a
+millisecond out of every forty, which is a utilisation of
+
+$$U = \frac{L/R}{L/R + T} = \frac{L}{L + RT} = \frac{10^4}{10^4 + 4 \times 10^6} \approx 0.0025.$$
+
+A quarter of one percent, on a link that is in no way slow. Notice that $R$ sits in the
+denominator: buying a faster link makes this protocol worse, because the frame goes out
+sooner and the wait is the same. The module's derivation unit works this expression out
+step by step.
+
+The fix is in the picture. During those 40 ms the link could have been carrying
+$RT = 4 \times 10^6$ bits — four hundred frames — and the sender let it carry one. The
+bandwidth-delay product, $RT/L$, is the number of frames the link can hold in flight,
+and a sender that keeps that many outstanding never stops transmitting. That number,
+plus one for the frame being sent at the moment the first acknowledgement returns, is
+the window.
+
+## A window, and one number at the receiver
+
+Go-Back-N is the alternating-bit protocol with a window. The sender may have up to
+`window` frames outstanding, numbered from `base`, the oldest one not yet acknowledged.
+The receiver keeps one number, `expected`, and accepts a frame only when its sequence
+number is that one; anything else is discarded, however intact it was. Acknowledgements
+are cumulative: an acknowledgement naming frame 3 means *I have everything up to and
+including 3*, so one of them can cover a whole burst, and a lost one costs nothing if a
+later one gets through.
+
+The price of that simple receiver is paid whenever a frame in the middle of a burst is
+lost. Every frame after it in the burst arrives, is out of order, and is thrown away;
+the sender goes back to the missing one and resends the lot. Trace it with a window of
+3 and data transmission 1 lost.
+
+```python
+class Link:
+    def __init__(self, data_drops=(), ack_drops=()):
+        self.data_drops, self.ack_drops = set(data_drops), set(ack_drops)
+        self.data_sends = self.ack_sends = 0
+
+    def send_data(self, seq):
+        index = self.data_sends
+        self.data_sends += 1
+        return index not in self.data_drops
+
+    def send_ack(self, seq):
+        index = self.ack_sends
+        self.ack_sends += 1
+        return index not in self.ack_drops
+
+
+def go_back_n(frames, link, window):
+    delivered, base, expected, rounds = [], 0, 0, 0
+    while base < len(frames):
+        rounds += 1
+        burst = list(range(base, min(base + window, len(frames))))
+        for seq in burst:
+            if link.send_data(seq) and seq == expected:
+                delivered.append(frames[seq])
+                expected += 1
+        print(f"round {rounds}: sent {burst}, receiver now expects {expected}")
+        if expected > base and link.send_ack(expected - 1):
+            base = expected
+    return delivered, link.data_sends, link.ack_sends, rounds
+
+
+frames = [b"a", b"b", b"c", b"d", b"e"]
+print(go_back_n(frames, Link(data_drops={1}), 3))
+```
+
+Round 1 sends frames 0, 1 and 2. Frame 0 arrives and is delivered, so `expected`
+becomes 1. Frame 1 is transmission 1 and is dropped. Frame 2 arrives — intact,
+undamaged, perfectly good — and the receiver, expecting 1, discards it. The
+acknowledgement names frame 0 and `base` moves to 1. Round 2 sends 1, 2 and 3, all of
+which arrive and are delivered in order; the acknowledgement names 3 and `base` moves
+to 4. Round 3 sends frame 4 alone. Seven data transmissions for five frames, three
+acknowledgements, three rounds: the counters in the lab's *One loss costs the rest of
+the window* test.
+
+Goodput is the fraction of transmissions that carried something useful: $5/7 \approx
+0.71$ here, and exactly 1 only on a run where nothing was ever sent twice. It is the
+number the lab uses to compare the two protocols on the same channel, and it is worth
+being precise about what it measures. It counts data transmissions only. Folding the
+acknowledgements into the denominator measures the total cost of the exchange, which is
+a real quantity but a different one, and a ratio that comes out above 1 has the
+fraction upside down.
+
+## The mistake, and where the idea stops
+
+The mistake in Go-Back-N is to buffer the out-of-order frame. It is tempting for the
+best of reasons — frame 2 arrived, throwing it away is waste, and a receiver could keep
+it and slot it in once frame 1 turns up. That protocol exists. It is called selective
+repeat, and it is a different protocol: the receiver needs a buffer and per-frame
+acknowledgements, the sender needs a timer per frame rather than one for the window,
+and the counters change. If you build it in this lab, the tests for a Go-Back-N receiver
+will fail, because they count what a Go-Back-N receiver does. Build what is specified;
+the waste is the specification.
+
+The alternating bit stops working the moment more than one frame is outstanding. With a
+window of $W$ the sender needs sequence numbers that do not repeat within a window's
+worth of frames, and with $k$ bits of sequence number Go-Back-N can safely run a window
+of at most $2^k - 1$: use all $2^k$ and a receiver that has seen a whole window cannot
+tell the next new frame from a retransmission of the first old one. The lab sidesteps
+this by numbering frames from 0 without wrapping, which is fine for five frames and
+would not be for five billion. The other thing the lab's channel cannot do is reorder —
+it drops, and only what you name — and a real network reorders freely, which is one of
+the reasons TCP numbers bytes rather than frames and treats a timeout as a reason to
+slow down rather than only a reason to resend. That is a different protocol with a
+different set of problems. For this one, the deterministic channel is the point: every
+counter in every test is a number you can derive by hand, as you did above, before you
+run a line of code.
+''',
+                },
+            ],
             "quiz": {
                 "title": "What the sender knows, and when",
                 "minutes": 7,
@@ -1177,6 +1640,254 @@ assert goodput(stop_and_wait(_frames, Link(data_drops={0})), _frames) < 1.0, \
                 "Split horizon: never advertise a route back to the neighbour you learned it from",
                 "Link state: flood the topology, then run Dijkstra locally — same answer, different failure modes",
             ],
+            "read": [
+                {
+                    "title": "Finding the way with nothing but what your neighbours say",
+                    "minutes": 13,
+                    "body": r'''
+Five routers, lettered A to E, are wired together as in the lab's `MESH`: A sees B at
+cost 2 and C at cost 5, B sees A, C and D, and so on round to E, which sees only C and
+D. Nobody has a map. Each router knows its own links and their costs and nothing beyond,
+and each one has to fill in a forwarding table — for every destination, which neighbour
+to hand a packet to — using only what it can learn by talking to the routers next to
+it. That constraint, *local information only*, is what makes routing a problem rather
+than a lookup, and the lab, *Convergence, and how it fails*, has you solve it two
+different ways and watch one of them go wrong.
+
+## Ask your neighbours what they would charge
+
+Suppose A wants to reach E. It cannot see E. What it can do is ask each neighbour what
+*that* neighbour's cost to E is, add the cost of its own link to that neighbour, and
+take the cheapest total. If B says it can reach E for 7 and the link A–B costs 2, then
+A can reach E for 9 by way of B. If C says 5 and A–C costs 5, that is 10 by way of C,
+and B's offer wins. Written down, the rule is
+
+$$D(x, y) = \min_{v \in N(x)} \big( c(x, v) + D(v, y) \big),$$
+
+where $N(x)$ is the set of $x$'s neighbours, $c$ is a link cost and $D$ is the best
+distance known. That is the Bellman–Ford equation, and the striking thing about it is
+that it is *local*: everything on the right-hand side is either a cost $x$ knows
+first-hand or a number a neighbour can tell it. The neighbour's number is hearsay — B
+got its 7 from somewhere — but if every router applies the rule to whatever it
+currently believes, and keeps telling its neighbours the result, the beliefs converge
+to the truth.
+
+The protocol built on that is distance vector. Each router keeps a table mapping every
+destination to a pair: the cost, and the neighbour to forward to. It starts knowing
+only itself at cost 0 and its direct neighbours at their link costs, with every other
+destination at *infinity*. Then, in rounds, every router sends its whole table to its
+neighbours and recomputes every destination from what it received. A round that changes
+nothing anywhere is the sign that it has converged.
+
+## Watching A learn about E
+
+The block below runs the exchange on the lab's mesh and prints A's table after each
+round, with the cost and next hop for each destination.
+
+```python
+INFINITY = 16
+MESH = {
+    "A": {"B": 2, "C": 5},
+    "B": {"A": 2, "C": 1, "D": 4},
+    "C": {"A": 5, "B": 1, "D": 2, "E": 8},
+    "D": {"B": 4, "C": 2, "E": 3},
+    "E": {"C": 8, "D": 3},
+}
+
+
+def initial_tables(graph):
+    tables = {}
+    for node in graph:
+        table = {other: (INFINITY, None) for other in graph}
+        table[node] = (0, None)
+        for neighbour, weight in graph[node].items():
+            table[neighbour] = (weight, neighbour)
+        tables[node] = table
+    return tables
+
+
+def dv_round(graph, tables, split_horizon=False):
+    updated = {}
+    for node in graph:
+        table = {node: (0, None)}
+        for dest in graph:
+            if dest == node:
+                continue
+            best, hop = INFINITY, None
+            for neighbour, weight in sorted(graph[node].items()):
+                cost, their_hop = tables[neighbour][dest]
+                if split_horizon and their_hop == node:
+                    continue
+                total = min(weight + cost, INFINITY)
+                if total < best:
+                    best, hop = total, neighbour
+            table[dest] = (best, hop) if best < INFINITY else (INFINITY, None)
+        updated[node] = table
+    return updated
+
+
+tables = initial_tables(MESH)
+for round_number in range(1, 5):
+    tables = dv_round(MESH, tables)
+    print(round_number, tables["A"])
+```
+
+Before any exchange A knows B at 2 and C at 5, and D and E are at infinity. After round
+1, A has heard B's initial table, which names D at 4, and C's, which names D at 2 and E
+at 8. So D is now $2 + 4 = 6$ by way of B (C's offer would be $5 + 2 = 7$), and E is
+$5 + 8 = 13$ by way of C, because B has not heard of E yet. Those two pairs, `(6, "B")`
+and `(13, "C")`, are what the lab's *A round is synchronous* test looks for after a
+single round.
+
+After round 2 the picture improves because B and C have themselves improved. In round
+1, B learned E at 7 by way of D and C learned E at 5 by way of D, so A now hears E
+offered at $2 + 7 = 9$ from B and $5 + 5 = 10$ from C, and takes 9. After round 3, B
+has heard C's offer of 5 and revised its own E to $1 + 5 = 6$, so A's E becomes
+$2 + 6 = 8$ by way of B. Round 4 changes nothing, so the fourth printed line matches
+the third, and the exchange has converged in three rounds to costs of 0, 2, 3, 5 and 8
+for A through E, with the best route to E running A–B–C–D–E. Notice that the route to
+C is not the direct link. The direct link costs 5 and B's detour costs 3, and A
+discovered that in the first round, from B's table.
+
+The mistake to name here is updating the tables in place. It is tempting because it is
+less code: loop over nodes, overwrite each table as you go. But then the second node in
+the loop reads the *new* table of the first, not the one everyone else is reading, and
+the round is no longer a round — it is a chain of updates whose result depends on the
+order the nodes were visited. It usually still converges, to the same distances, in a
+different number of rounds, and the lab's tests count rounds. `dv_round` builds every
+new table from the old ones and returns them; that is the whole of what synchronous
+means.
+
+## Bad news travels slowly
+
+Now the failure. Take the three-node line A–B–C with unit costs, let it converge — B
+reaches A directly at 1, C reaches A at 2 by way of B — and then cut the link between A
+and B. The block starts from the converged tables, written out in full, and runs the
+exchange on the broken graph twice.
+
+```python
+INFINITY = 16
+converged = {
+    "A": {"A": (0, None), "B": (1, "B"), "C": (2, "B")},
+    "B": {"A": (1, "A"), "B": (0, None), "C": (1, "C")},
+    "C": {"A": (2, "B"), "B": (1, "B"), "C": (0, None)},
+}
+broken = {"A": {}, "B": {"C": 1}, "C": {"B": 1}}
+
+
+def dv_round(graph, tables, split_horizon=False):
+    updated = {}
+    for node in graph:
+        table = {node: (0, None)}
+        for dest in graph:
+            if dest == node:
+                continue
+            best, hop = INFINITY, None
+            for neighbour, weight in sorted(graph[node].items()):
+                cost, their_hop = tables[neighbour][dest]
+                if split_horizon and their_hop == node:
+                    continue
+                total = min(weight + cost, INFINITY)
+                if total < best:
+                    best, hop = total, neighbour
+            table[dest] = (best, hop) if best < INFINITY else (INFINITY, None)
+        updated[node] = table
+    return updated
+
+
+def run_dv(graph, tables, split_horizon=False):
+    rounds = 0
+    while True:
+        nxt = dv_round(graph, tables, split_horizon)
+        if nxt == tables:
+            return rounds
+        tables = nxt
+        rounds += 1
+        print(f"round {rounds}: B->A {tables['B']['A']}, C->A {tables['C']['A']}")
+
+
+print("without split horizon")
+slow = run_dv(broken, converged)
+print("with split horizon")
+fast = run_dv(broken, converged, split_horizon=True)
+print(slow, fast)
+```
+
+In the first round after the cut, B has lost its link to A, so it recomputes from its
+only remaining neighbour. C is advertising A at cost 2. B has no way to know that C's
+route runs through B itself — a distance vector carries a number, not a path — so B
+adopts $1 + 2 = 3$ by way of C. C, meanwhile, is still reading the table B sent before
+the cut, which said 1, and keeps its 2. In the second round C reads B's new 3 and goes
+to 4, while B reads C's unchanged 2 and stays at 3. In the third B reads the 4 and goes
+to 5. The printout shows the two of them climbing in turn, each one's route to A
+running through the other, each believing the other, and it stops only when the costs
+reach 16 — the value the lab calls `INFINITY` — and both tables record A as
+unreachable. Fifteen rounds to learn that a link is down, on a network of three nodes.
+
+That is why *infinity* is small. Sixteen is not a measurement of any network; it is a
+deadline. The counting proceeds one round per exchange until it hits the ceiling, so
+the ceiling *is* the time to converge on bad news, and RIP's choice of 16 is a bet that
+no network it runs on is wider than that. Making it larger would make every such
+failure take proportionally longer to clear.
+
+## Split horizon
+
+The loop starts when C tells B about a route to A that goes through B. The fix is a
+rule of silence: never advertise a route back to the neighbour you learned it from. In
+the code it is one `continue` — when a neighbour's advertised next hop for a
+destination is *us*, skip that advertisement. With `split_horizon=True` the same cut
+plays out differently: B, hearing nothing usable from C, marks A unreachable in the
+first round; C reads that in the second; the third round changes nothing. The last
+printed line is `15 2` — two rounds instead of fifteen, and the same final answer. That
+is the point the lab's last test makes on the healthy mesh: split horizon must change
+nothing about where a working network converges to, only how fast it recovers.
+
+Where this stops holding is the next shape up. On a triangle, or any loop of three or
+more nodes, a router can learn a route to a dead destination from a neighbour who
+learned it from a third router who learned it from the first — nobody is echoing
+anything straight back, so the silence rule never fires, and the count to infinity
+resumes. Poison reverse, which advertises the route back at infinity instead of staying
+quiet, and hold-down timers, which refuse to believe good news for a while after bad,
+each shorten the damage and neither ends it. The cure is to carry paths rather than
+distances, which is what BGP does, or to give up on hearsay altogether.
+
+## Giving everyone the map
+
+Link state is the other way. Instead of telling neighbours your distances, tell
+*everyone* your links: each router floods its list of neighbours and costs to the whole
+network, and every router assembles the same graph. Once a router has the graph,
+routing is an ordinary single-source shortest-path problem it can solve alone, and the
+algorithm for that is Dijkstra's.
+
+Dijkstra's idea comes from one observation about positive costs. Keep a tentative
+distance to every node, starting at 0 for the source and infinity elsewhere. Pick the
+unsettled node with the smallest tentative distance and declare it settled. Can any
+other route reach it more cheaply? No — every other route leaves the settled set
+through some node whose tentative distance is at least as large, and then adds a
+positive edge. So the node is done, and its edges can be used to lower the tentative
+distances of its neighbours, after which the next smallest is picked.
+
+On the mesh from A: A settles at 0 and offers B at 2 and C at 5. B is smallest, settles
+at 2, and offers C at $2 + 1 = 3$ and D at $2 + 4 = 6$. C settles at 3 and offers D at
+$3 + 2 = 5$ and E at $3 + 8 = 11$. D settles at 5 and offers E at $5 + 3 = 8$. E
+settles at 8. Those are the distances distance vector arrived at three rounds later,
+and the lab checks that the two agree for every pair of nodes. Two algorithms with
+nothing in common in their mechanics compute the same numbers, because both are exact;
+what differs is what each router had to know. A link-state router needs an identical
+copy of the graph to every other router, and when two copies disagree — during a
+flood, after a lost advertisement — packets loop until they agree again. A
+distance-vector router needs nothing but its neighbours, and cannot see the loop it is
+part of.
+
+One last boundary. Dijkstra's argument leaned on every edge being positive; put a
+negative cost anywhere and a settled node could be undercut by a route through it, and
+the greedy choice is wrong. Bellman–Ford has no such assumption and tolerates negative
+edges, as long as no cycle sums below zero. Real link costs are never negative, so in
+practice the difference is academic — but it is the reason the module's numeric unit
+tells you the costs are all positive before asking you to run the algorithm by hand.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Two algorithms, one answer, different things known",
                 "minutes": 7,
@@ -1735,6 +2446,273 @@ assert _rounds <= 4, f"split horizon should not slow convergence down, took {_ro
                 "Robustness: a parser that trusts its input is an attack surface",
                 "DNS as a delegating hierarchy — root, TLD, then authoritative name server",
                 "Caching with a TTL is what makes recursive resolution affordable; CNAME chains need a loop guard",
+            ],
+            "read": [
+                {
+                    "title": "Reading a text protocol exactly, and asking the right server",
+                    "minutes": 12,
+                    "body": r'''
+Here is what a browser sends when you ask it for a page, with every line ending made
+visible:
+
+```text
+GET /index.html HTTP/1.1\r\n
+Host: shop.example.com\r\n
+Accept: text/html\r\n
+\r\n
+```
+
+It is text, and that is the trap. It *looks* like something you could read with
+`split("\n")` and a couple of string methods, and on the request above that would even
+work. But this is a wire format: every one of those `\r\n` pairs is data the parser
+counts, the body that may follow has a length that has to be found before it can be
+read, and the sender is a stranger who may be careless or hostile. The lab, *An
+HTTP/1.1 parser and a recursive resolver*, has you write the parser as if you believed
+that, and then a second protocol whose difficulty is not the grammar but the walk.
+
+## Where the head ends
+
+An HTTP/1.1 message is a start line, then zero or more header lines, then an empty
+line, then a body. Each line ends in CRLF — carriage return, line feed, `\r\n` — so an
+empty line is two CRLFs back to back, and the four bytes `\r\n\r\n` are the only thing
+separating head from body. That is the first thing the parser looks for, before it
+reads a single header: find the boundary, split there, and everything after it is body
+bytes to be dealt with later. No boundary means no message, and the parser refuses
+rather than guesses.
+
+The start line of a request is three tokens separated by single spaces: a method, a
+target and a version. Each header line is a field name, a colon, and a value that may
+have whitespace around it to be stripped. Two rules about field names come straight
+from the specification and both matter to the lab. Names are case-insensitive, so
+`Content-Length`, `content-length` and `CONTENT-LENGTH` are one field, and the parser
+stores every name lowercased so that lookups do not depend on the sender's habits. And
+a field may appear more than once, in which case the message means the same as one
+field whose value is the two values joined by a comma, in the order they arrived —
+`X-Tag: a` then `X-Tag: b` is `x-tag: a, b`. A plain dictionary assignment would let
+the second silently overwrite the first, and a parser that disagrees with the next
+parser down the line about what a message said is how request smuggling starts.
+
+```python
+CRLF = b"\r\n"
+
+
+def split_head(raw):
+    marker = raw.find(CRLF + CRLF)
+    if marker == -1:
+        raise ValueError("no blank line between the headers and the body")
+    return raw[:marker], raw[marker + 4:]
+
+
+def parse_headers(lines):
+    headers = {}
+    for line in lines:
+        name, _, value = line.partition(b":")
+        key = name.decode("latin-1").lower()
+        value = value.decode("latin-1").strip()
+        headers[key] = headers[key] + ", " + value if key in headers else value
+    return headers
+
+
+raw = (b"POST /api/orders HTTP/1.1\r\nHost: shop.example.com\r\n"
+       b"Content-Length: 15\r\nX-Tag: a\r\nX-Tag: b\r\n\r\n"
+       b'{"units": 4711}')
+head, body = split_head(raw)
+lines = head.split(CRLF)
+print(lines[0].split(b" "))
+headers = parse_headers(lines[1:])
+print(headers)
+print(body[:int(headers["content-length"])])
+```
+
+The first line prints the three tokens of the request line as bytes. The second prints
+the header dictionary, with `x-tag` holding `a, b` and `host` holding its value with
+the leading space gone. The third prints the fifteen-byte body, which is exactly the
+lab's first test. Notice `partition(b":")`: it splits at the *first* colon and leaves
+any later ones in the value, which is what keeps `Host: shop.example.com:8080` in one
+piece. The lab's version adds the checks this one leaves out — a line with no colon, an
+empty name, whitespace between the name and the colon — and raises `HttpError` for each,
+because every one of them is a message some other implementation would read
+differently.
+
+## Framing the body
+
+The head is self-delimiting; the body is not. Nothing in the bytes of a body says where
+it stops, so the head has to say it, and there are two ways. `Content-Length: 15` says
+the body is exactly fifteen bytes, and the parser takes fifteen and no more — a longer
+buffer is truncated, a shorter one is an error, because a receiver that waits for bytes
+that never come hangs until something times out.
+
+The problem with `Content-Length` is that it has to be written before the first byte of
+the body goes out, so the sender has to know the whole body's size in advance. A server
+streaming a file it is still generating does not. Chunked transfer encoding solves that
+by replacing one length known ahead of time with many lengths, each known at the moment
+its chunk goes out: the body becomes a sequence of chunks, each announced by its size on
+a line of its own, followed by that many bytes, followed by CRLF; a chunk of size zero
+says *that was all*.
+
+Two details of that format trip people up, and both are visible in the example below.
+The size is written in hexadecimal with no prefix, so twelve bytes are announced as
+`c`, not `12` — and `12` is a valid size line meaning eighteen, so a decoder that reads
+it as decimal runs six bytes past the end of the chunk and fails somewhere further on,
+in a way that does not point back at the cause. And the CRLF after the data is framing,
+not payload: it is not counted in the size and not copied into the output.
+
+```python
+CRLF = b"\r\n"
+
+
+def decode_chunked(body):
+    out, index = bytearray(), 0
+    while True:
+        end = body.find(CRLF, index)
+        if end == -1:
+            raise ValueError("chunk size line is not terminated")
+        size = int(body[index:end].split(b";")[0], 16)
+        index = end + 2
+        if size == 0:
+            return bytes(out)
+        if body[index + size:index + size + 2] != CRLF:
+            raise ValueError("chunk is not terminated by CRLF")
+        out += body[index:index + size]
+        index += size + 2
+
+
+stream = b"7\r\nMozilla\r\n9\r\nDeveloper\r\n7\r\nNetwork\r\n0\r\n\r\n"
+print(decode_chunked(stream))
+print(decode_chunked(b"c;note=ignored\r\nchunked body\r\n0\r\n\r\n"))
+```
+
+The first line prints the three chunks joined: `MozillaDeveloperNetwork`. The second
+shows a chunk extension — anything after a `;` on the size line — being ignored, and a
+size of `c` being read as twelve. What the lab adds is the truncation check: a size that
+promises more bytes than the body holds must raise, not slice past the end and return a
+short result as if it were whole.
+
+Where the grammar stops holding is worth knowing before you go further. This parser
+handles one message that has already arrived complete; a real server reads from a
+stream where the next request may begin in the same buffer, so `Content-Length` decides
+where the next message starts as well as where this one ends. A message carrying both
+`Content-Length` and `Transfer-Encoding: chunked` is ambiguous, and two implementations
+that resolve the ambiguity differently can be made to disagree about where one request
+ends and the next begins — that is request smuggling, and the specification's answer is
+to reject such a message outright. And HTTP/2 abandons the text framing entirely for
+binary frames with explicit lengths, keeping the meaning of the fields and discarding
+every CRLF. What you are parsing here is the wire format of HTTP/1.1, and it is still
+most of what crosses the internet.
+
+## Finding the server to ask
+
+Before any of that can happen the browser needs an address for `shop.example.com`, and
+the store that maps names to addresses is not a single server anywhere. It is a
+hierarchy of delegations. The root servers do not know `shop.example.com`; they know
+who is responsible for `com`. The `com` servers do not know it either; they know who is
+responsible for `example.com`. That server knows. A resolver walks down: ask the root,
+get referred, ask the referral, get referred, ask again, get an answer.
+
+The rule for a referral is a suffix match on a label boundary, longest zone first. A
+server holding delegations for both `com` and `example.com` sends `www.example.com` to
+the more specific one, and it must send `notexample.com` to the `com` servers, not to
+`example.com` — the name ends in the characters `example.com` but not in the label. The
+lab's `referral_for` test checks that boundary exactly, and
+`name == zone or name.endswith("." + zone)` is the whole of it.
+
+Sometimes the answer is not an address but another name: `www.example.com` is an alias,
+a CNAME, for `static.cdn.com`. The resolver resolves the target, from the root, and the
+trace of servers it visited grows to include both walks. An alias can point at an
+alias, and two aliases can point at each other, and a resolver that follows them
+without a limit recurses until it runs out of stack. The lab caps the chain at eight
+and raises `ResolutionError` beyond that.
+
+```python
+class NameServer:
+    def __init__(self, name, records=None, referrals=None):
+        self.name = name
+        self.records = dict(records or {})
+        self.referrals = dict(referrals or {})
+
+    def referral_for(self, name):
+        best = None
+        for zone, server in self.referrals.items():
+            if name == zone or name.endswith("." + zone):
+                if best is None or len(zone) > len(best[0]):
+                    best = (zone, server)
+        return best[1] if best else None
+
+
+class Resolver:
+    def __init__(self, servers, ttl=30):
+        self.servers, self.ttl, self.clock, self.cache = servers, ttl, 0, {}
+
+    def resolve(self, name, depth=0):
+        if depth > 8:
+            raise RuntimeError("alias chain too long")
+        cached = self.cache.get(name)
+        if cached is not None and cached[1] > self.clock:
+            return cached[0], ["cache"]
+        trace, server = [], self.servers["root"]
+        while True:
+            trace.append(server.name)
+            if name in server.records:
+                value = server.records[name]
+                if isinstance(value, tuple):
+                    address, rest = self.resolve(value[1], depth + 1)
+                    trace += rest
+                else:
+                    address = value
+                self.cache[name] = (address, self.clock + self.ttl)
+                return address, trace
+            nxt = server.referral_for(name)
+            if nxt is None:
+                raise LookupError(name)
+            server = self.servers[nxt]
+
+
+servers = {
+    "root": NameServer("root", referrals={"com": "com-gtld"}),
+    "com-gtld": NameServer("com-gtld", referrals={"example.com": "ns.example.com",
+                                                  "cdn.com": "ns.cdn.com"}),
+    "ns.example.com": NameServer("ns.example.com",
+                                 records={"www.example.com": ("CNAME", "static.cdn.com")}),
+    "ns.cdn.com": NameServer("ns.cdn.com", records={"static.cdn.com": "203.0.113.9"}),
+}
+resolver = Resolver(servers)
+print(resolver.resolve("www.example.com"))
+print(resolver.resolve("www.example.com"))
+resolver.clock += 30
+print(resolver.resolve("www.example.com"))
+```
+
+The first line shows the address and a six-server trace: root, `com`, `example.com`'s
+server, which answers with an alias, then root, `com` and `cdn.com`'s server for the
+target. The second line is the same address with a trace of `["cache"]`: nobody was
+asked. The third, thirty seconds later, is the full walk again.
+
+## The cache is the whole economy
+
+Every one of those server visits is a round trip, and the module's numeric unit puts
+numbers on it: 160 ms of the 220 ms before a page's first byte is naming. The cache is
+what makes the second visit fast, and it is what lets a few hundred root servers answer
+for the whole internet, because almost nobody asks them anything twice.
+
+The rule is that an answer is stored with an expiry of *now plus the TTL* and is valid
+while that expiry is still in the future. Both halves of that rule get broken. Expiry
+at `clock + ttl` and validity while `expiry > clock` mean an entry fetched at time 0
+with a 30-second TTL answers at 29 and is stale at 30 — not at 31 — and the lab's cache
+test checks that instant on both sides. The other, worse mistake is to refresh the
+expiry every time the entry is read. It is tempting because it feels like the cache is
+doing its job — popular names stay warm. But the TTL was set by whoever published the
+record, and it is their statement of how long the world is permitted to believe the old
+address; a resolver that renews on every hit would never let a busy name change at all.
+The clock counts down from the fetch, and only a fresh fetch resets it.
+
+The lab's resolver is a model in the ways that matter for building the real thing and
+not in the ways that do not. It has no network, no timeouts and no retries, and its
+clock is a number you advance by hand — which is exactly why its traces are exact and
+every test can name the servers a lookup must visit, in order. What it keeps is the
+shape: delegation by suffix, aliases followed by recursion with a depth guard, and a
+cache whose expiry belongs to the publisher. Those are what you are about to build.
+''',
+                },
             ],
             "quiz": {
                 "title": "Reading a text protocol exactly",

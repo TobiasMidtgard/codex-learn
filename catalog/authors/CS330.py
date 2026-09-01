@@ -48,6 +48,269 @@ COURSE = {
                 "Whitespace and comments are skipped, but they still advance the position counters",
                 "A synthetic EOF token lets every later pass peek without a bounds check",
             ],
+            "read": [
+                {
+                    "title": "Three cursors, and what a token has to remember",
+                    "minutes": 13,
+                    "body": r'''
+A compiler once reported this about a file three hundred lines long:
+
+```text
+error: unexpected character '$' at line 212, column 17
+```
+
+The person reading it went to line 212, moved the cursor to column 17, and found a `$`
+that a careless find-and-replace had left behind. The same defect reported as
+`syntax error`, with no numbers, would have meant reading three hundred lines looking
+for something that did not belong. Every pass after this one — the parser, the type
+checker, the code generator — will end its complaints with a line and a column, and not
+one of them will ever look at the source text again. The lexer is the only pass that
+sees characters, so the lexer is where every position in the whole compiler comes from.
+That is the job: turn a flat string into a list of tokens, each remembering what kind of
+thing it is, what it holds, and where it started.
+
+## Why tokens at all
+
+Look at what the parser is going to ask. It is standing at the start of a statement and
+wants to know whether the next thing is a keyword, and if so which; or a name; or a
+number; or a punctuation mark. It does not want to know that `let` is an `l` followed
+by an `e` followed by a `t`, and it very much does not want to skip spaces and comments
+itself at every one of the two hundred places it looks ahead. So one pass does the
+character-level work once and hands over a list in which every element is already
+classified:
+
+```text
+"let x = 12;"
+
+Token(KW, 'let', 1:1)   Token(IDENT, 'x', 1:5)   Token(OP, '=', 1:7)
+Token(NUM, 12, 1:9)     Token(OP, ';', 1:11)     Token(EOF, '', 1:12)
+```
+
+Each token carries three things, and each is there for a reason. The *kind* is what the
+parser branches on. The *value* is what survives into the tree: `12` is already the
+integer twelve, not the characters `1` and `2`, because turning text into a number is
+character-level work and this is the character-level pass. The *position* is the pair
+every later error message will want, and it has to be recorded now because it cannot be
+reconstructed later: `a<=b` and `a <= b` lex to identical tokens, and once the
+whitespace is gone nothing else in the compiler can say where `b` was.
+
+The last token is not in the source at all. `EOF` is a sentinel. It means every later
+pass can ask for "the next token" without first checking that one exists, and it
+carries a position of its own, so that "unexpected end of input" can say where the input
+ended rather than shrugging.
+
+## Three cursors that have to agree
+
+The scanner is one `while` loop over an index `i` into the string. Alongside `i` run two
+more counters, `line` and `col`, which say where `i` is in the coordinates a human uses.
+Nothing enforces that the three agree. Every branch of the loop keeps them in step by
+hand, and the whole craft of the thing is that every branch does.
+
+The rule falls out of asking what a single character does to each counter. A character
+that is not a newline moves `i` on by one and `col` on by one. A newline moves `i` on by
+one, moves `line` on by one, and puts `col` back to 1 — the first character of every
+line is column 1, which is the number an editor's status bar shows, and agreeing with
+that number is the entire point of counting columns. Scanning a lexeme of $k$
+characters is $k$ applications of the first rule at once: `i += k` and `col += k`. So
+the invariant is short enough to hold in your head: every move of `i` has a matching
+move of `col`, except at a newline, where `col` resets and `line` moves instead.
+
+Here is the loop with the branches for whitespace, newlines, identifiers, numbers and
+single-character operators written out. It is complete and it runs.
+
+```python
+KEYWORDS = {"let", "fn", "if", "else", "while", "return", "print", "true", "false"}
+
+
+def tokenize(src):
+    tokens = []
+    i, line, col = 0, 1, 1
+    n = len(src)
+    while i < n:
+        ch = src[i]
+        if ch == "\n":
+            i += 1
+            line += 1
+            col = 1
+            continue
+        if ch in " \t\r":
+            i += 1
+            col += 1
+            continue
+        start_col = col                  # saved before anything moves
+        if ch.isalpha() or ch == "_":
+            j = i
+            while j < n and (src[j].isalnum() or src[j] == "_"):
+                j += 1
+            word = src[i:j]
+            kind = "KW" if word in KEYWORDS else "IDENT"
+            tokens.append((kind, word, line, start_col))
+            col += j - i
+            i = j
+            continue
+        if ch.isdigit():
+            j = i
+            while j < n and src[j].isdigit():
+                j += 1
+            tokens.append(("NUM", int(src[i:j]), line, start_col))
+            col += j - i
+            i = j
+            continue
+        tokens.append(("OP", ch, line, start_col))   # one character; see below
+        i += 1
+        col += 1
+    tokens.append(("EOF", "", line, col))
+    return tokens
+
+
+for tok in tokenize("let x = 12;\nprint x;"):
+    print(tok)
+```
+
+Walk the first line through it by hand, because the numbers are the point. At index 0
+the character is `l`, a letter, so `start_col` is saved as 1 and the inner `while` runs
+`j` over `l`, `e`, `t` and stops at the space with `j` equal to 3. The word is `let`, it
+is in `KEYWORDS`, and the token `("KW", "let", 1, 1)` is appended. Then `col += 3` makes
+`col` 4 and `i = j` makes `i` 3: both cursors moved by three. The space at index 3 moves
+them to 4 and 5. The `x` at index 4 starts at column 5, which is what the second token
+records, and after it `i` is 5 and `col` is 6. Another space; then `=` at index 6 is
+reported at column 7; a space; then `1` at index 8 starts a digit run, `start_col` is 9,
+`j` runs to 10, and the token holds the integer 12 at column 9, after which `col` is 11
+and `i` is 10. The `;` lands at column 11. Then the newline at index 11 sends `line` to
+2 and `col` back to 1, so `print` on the next line is reported at 2:1, `x` at 2:7, the
+semicolon at 2:8, and `EOF` at 2:9 — the column *after* the last character, because
+that is where the cursor is standing when the string runs out.
+
+That trace is the first two tests of this module's lab, "A lexer with positions and
+honest errors", written out longhand. Notice what it depends on: `start_col` is copied
+out of `col` before the inner loop runs. Record it afterwards and every multi-character
+token reports the column of its last character plus one, which puts the caret on the
+space after the thing being complained about.
+
+## Longest match wins
+
+The operator branch above takes one character, and that is wrong the moment the
+language has `<=`. Consider `a<=b`. If the scanner is at the `<` and asks "is this an
+operator?", the answer is yes, and it has taken `<` and left `=` behind — and then it
+takes `=` as a second token. The parser now sees a comparison followed by an assignment
+and reports an error that mentions neither the lexer nor `<=`, on a line that looked
+fine.
+
+The rule that fixes this is *maximal munch*: at each position, take the longest lexeme
+that fits. The cheap way to implement it is to keep the operator list ordered longest
+first and stop at the first match, because then the first match is the longest one by
+construction:
+
+```python
+SHORTEST_FIRST = ["<", "=", "<=", "=="]
+LONGEST_FIRST = ["<=", "==", "<", "="]
+
+
+def first_match(operators, src, i):
+    for op in operators:
+        if src.startswith(op, i):
+            return op
+    return None
+
+
+print(first_match(SHORTEST_FIRST, "a<=b", 1))   # <   — and '=' is left behind
+print(first_match(LONGEST_FIRST, "a<=b", 1))    # <=
+print(first_match(LONGEST_FIRST, "a<b", 1))     # <   — a lone '<' is still one token
+```
+
+The lab's `OPERATORS` list is already in that order; the scanner's job is to walk it
+with `src.startswith(op, i)`, append the match, and move both cursors by `len(op)`. When
+nothing matches, the character is one the language does not have, and that is the first
+of the lexical errors: `unexpected character '$'`, reported at the character's own
+column.
+
+Keywords follow the same principle from the other side. The source contains the word
+`letter`, and `let` is a keyword. A scanner that tests keywords first finds `let` at the
+front of `letter` and hands the parser a keyword followed by an identifier `ter`. So the
+identifier branch scans the *whole* run of letters, digits and underscores first, and
+only then asks whether the resulting word is in `KEYWORDS`. Keywords are identifiers
+that lose a lookup, and nothing else is needed: no "followed by a space" rule, which
+would break `let(x)`, and no list of exceptions.
+
+## Errors that belong to this pass
+
+Some things are wrong before there is any grammar to be wrong against. A string literal
+that hits the end of the line with no closing quote has no token to become. A run of
+digits glued to a letter, `12ab`, is neither a number nor an identifier. An escape the
+language does not define, `\q`, has no character to decode to. Each of these is noticed
+while a single lexeme is being formed, so each is a `LexError`, and each reports the
+position of the lexeme it was forming — the opening quote of the string, the first digit
+of the run — not the position where the scanner gave up.
+
+```python
+# raises LexError
+class LexError(Exception):
+    def __init__(self, message, line, col):
+        super().__init__(f"{message} at line {line}, column {col}")
+        self.message, self.line, self.col = message, line, col
+
+
+def scan_number(src, i, line, col):
+    """Digits from index i; the value and the index after them."""
+    j = i
+    while j < len(src) and src[j].isdigit():
+        j += 1
+    if j < len(src) and (src[j].isalpha() or src[j] == "_"):
+        raise LexError("malformed number", line, col)
+    return int(src[i:j]), j
+
+
+print(scan_number("12;", 0, 1, 9))      # (12, 2)
+print(scan_number("12ab;", 0, 1, 9))    # malformed number at line 1, column 9
+```
+
+The check for a malformed number happens *after* the digits are consumed, by looking at
+the character that stopped the run. That is why the error is at column 9 for
+`let x = 12ab;` — the run began there — and it is what the lab's error test asks for.
+
+Comments are the mirror image: they produce no token at all, but they still move `col`,
+one per character, until the newline. Dropping a lexeme is not the same as pretending it
+was not there; the `EOF` token after a trailing comment lands at the column after the
+comment's last character, and this module's counting exercise turns on exactly that.
+
+## The mistake, and why it is tempting
+
+The one that ships is a branch that moves `i` without moving `col` by the same amount —
+a `col += 1` where `col += j - i` was needed, or a string branch that forgets `col`
+altogether. It is tempting because it is invisible on the tests you write first.
+Single-character tokens are unaffected. The first token of every line is unaffected,
+because the newline resets `col` and hides the drift. The first test that fails is the
+`x` in `let x = 12;` being reported at column 3 instead of 5, and by then the bug is in
+whichever branch you wrote last and looked at least.
+
+The second one is subtler: reading `start_col` after the inner loop has run, or using
+`i` in its place. `i` is an index into the whole file. On line four it is already in the
+hundreds, and every token is reported in a column that does not exist.
+
+## Where it stops holding
+
+This lexer assumes that a character can be classified without knowing what the parser
+is in the middle of. Most languages keep that promise and a few famous ones break it. In
+JavaScript, `/` starts a regular expression literal in some positions and is division in
+others, and only the parser knows which. In Python, a change of indentation is a token —
+`INDENT` and `DEDENT` — and producing it takes a stack of indentation levels that this
+loop has no room for. C's `a * b;` is a multiplication or a pointer declaration
+depending on whether `a` was declared a type, which is a symbol-table question the lexer
+cannot answer. Interpolated strings, `f"{x + 1}"`, need the lexer to hand a slice of
+itself to the parser and get a tree back. Each of those is a lexer that talks to its
+parser, and the clean one-way pipe this module builds is the case where that
+conversation turns out to be unnecessary.
+
+The column counter has assumptions of its own. It counts one per Python character, so a
+tab is one column here and eight in many editors, and a character outside the Basic
+Multilingual Plane is one column here and two in an editor that counts UTF-16 units.
+And `isalpha` is Unicode-aware: `café` lexes as one identifier, which the lab's brief
+neither promises nor forbids. None of that matters for the tests in "A lexer with
+positions and honest errors", all of which are ASCII and tab-free; all of it matters the
+first time the lexer meets a file that is not.
+''',
+                },
+            ],
             "quiz": {
                 "title": "What the lexer owes every pass after it",
                 "minutes": 7,
@@ -605,6 +868,226 @@ assert 2.5 in [t.value for t in _toks if t.kind == "NUM"], "2.5 should survive a
                 "Prefix operators bind their operand at a fixed level, which is what makes `-2 ^ 2` parse as `-(2 ^ 2)`",
                 "One token of lookahead distinguishes assignment from an expression statement",
                 "A parse error names the token it found and the position it found it at",
+            ],
+            "read": [
+                {
+                    "title": "Binding power, and the tree the brackets leave behind",
+                    "minutes": 14,
+                    "body": r'''
+Two people read `1 + 2 * 3` and get different answers. A pocket calculator from the
+seventies reads it left to right and shows 9. Anyone who sat through a maths lesson gets
+7. The string is the same; what differs is the shape each reader built from it — and
+neither shape is *in* the string. Written as the tuples this course uses for trees:
+
+```text
+("bin", "+", ("num", 1), ("bin", "*", ("num", 2), ("num", 3)))     -> 7
+("bin", "*", ("bin", "+", ("num", 1), ("num", 2)), ("num", 3))     -> 9
+```
+
+A parser is the thing that decides which. It takes the token list the lexer produced
+and returns a tree in which the grouping is no longer a matter of opinion, because it is
+the shape of the data. Everything after this pass — the type checker, the code
+generator, the optimiser — walks that tree and never asks how the source was spelled.
+
+## Concrete syntax is spent
+
+`(1 + 2) * 3` parses to the second tree above, and there is nothing in that tree that
+represents a parenthesis. The brackets were an instruction to the parser about grouping.
+Once the grouping is the shape of the tree, the instruction has been carried out, and
+recording it a second time would be recording the same fact twice. That is the
+difference between concrete syntax — the string, with its spaces and brackets and the
+semicolon — and abstract syntax, the tree with all of that spent. It has a cost, and it
+is worth knowing before you build one: a pretty-printer walking the tree has to work out
+where brackets are needed from precedence, because the original ones are gone. Tools
+that must reproduce the source exactly keep a second, concrete tree for that. A compiler
+does not need one.
+
+## One function per level, and the problem with it
+
+The traditional way to build the tree is *recursive descent*: one function per kind of
+thing in the grammar, each of which consumes the tokens that make up that thing and
+returns its node. For arithmetic with two levels the grammar is
+
+```text
+expr   ->  term  ( ("+" | "-") term )*
+term   ->  factor ( ("*" | "/") factor )*
+factor ->  NUM | "(" expr ")"
+```
+
+and the parser is three functions that mirror it. `parse_expr` calls `parse_term` for
+its first operand, then loops: while the next token is `+` or `-`, consume it, call
+`parse_term` again, and wrap what it has so far and the new operand in a `bin` node.
+`parse_term` does the same with `parse_factor` and `*`. The call stack *is* the
+derivation: while `parse_term` is running inside `parse_expr`, the grammar is in the
+middle of expanding a `term` inside an `expr`.
+
+Two things about the shape of that loop matter later. It is a `while`, not a recursive
+call — `expr -> expr "+" term` written as `parse_expr` calling `parse_expr` first would
+recurse forever without consuming a token. And the wrap-up
+`left = ("bin", op, left, right)` puts the tree built so far on the *left*, which is why
+`1 - 2 - 3` comes out as `(1 - 2) - 3` and evaluates to $-4$ rather than to 2.
+
+Now count the levels in this course's language: `||`, then `&&`, then `==` and `!=`,
+then the four comparisons, then `+` and `-`, then `*`, `/` and `%`, then `^`. Seven
+levels, seven functions, each identical to its neighbour except for the operator set it
+checks and the function it calls for its operands. That is a table pretending to be
+code.
+
+## Make the level a number
+
+Write the table down as data — `PRECEDENCE = {"||": 1, "&&": 2, ..., "^": 7}` — and the
+seven functions collapse into one that takes the level as a parameter. Call it
+`parse_expr(min_prec)`, and read `min_prec` as the caller's demand: *build me an
+expression, but do not take any operator looser than this.*
+
+The body derives itself from that reading. Parse a first operand. Then look at the next
+token. If it is not an operator in the table, the expression is over. If it is an
+operator whose precedence is below `min_prec`, it belongs to whoever called us, so stop
+and hand back what we have. Otherwise it is ours: consume it, parse the right operand by
+calling ourselves, wrap, and go round again.
+
+The one decision left is what to demand of the right operand. Ask what `1 - 2 - 3`
+needs. After consuming the first `-` (level 5), the recursive call must *not* take the
+second `-`, or it would swallow `2 - 3` and hand back a right operand that leans the
+wrong way. So the demand is `prec + 1`: only something tighter than the operator we
+hold. The recursive call returns `2`, the loop comes back round, sees the second `-`,
+and builds `(1 - 2) - 3`. Now ask what `2 ^ 3 ^ 2` needs. Exponentiation nests to the
+right — $2^{3^2}$ is $2^9$, not $(2^3)^2 = 2^6$ — so this time the recursive call
+*should* take the next `^`. The demand is `prec` itself. One integer, one bit of
+behaviour: `prec + 1` for left-associative operators, `prec` for right-associative ones.
+
+```python
+import re
+
+PRECEDENCE = {"+": 5, "-": 5, "*": 6, "/": 6, "^": 7}
+RIGHT_ASSOCIATIVE = {"^"}
+UNARY_BIND = 7
+
+
+class Parser:
+    def __init__(self, src):
+        self.tokens = re.findall(r"\d+|[-+*/^()]", src) + ["EOF"]
+        self.pos = 0
+
+    def peek(self):
+        return self.tokens[self.pos]
+
+    def advance(self):
+        tok = self.tokens[self.pos]
+        if tok != "EOF":
+            self.pos += 1
+        return tok
+
+    def parse_expr(self, min_prec=1):
+        left = self.parse_unary()
+        while self.peek() in PRECEDENCE and PRECEDENCE[self.peek()] >= min_prec:
+            op = self.advance()
+            prec = PRECEDENCE[op]
+            next_min = prec if op in RIGHT_ASSOCIATIVE else prec + 1
+            right = self.parse_expr(next_min)
+            left = ("bin", op, left, right)
+        return left
+
+    def parse_unary(self):
+        if self.peek() == "-":
+            self.advance()
+            return ("unary", "-", self.parse_expr(UNARY_BIND))
+        return self.parse_primary()
+
+    def parse_primary(self):
+        tok = self.advance()
+        if tok == "(":
+            inner = self.parse_expr()
+            assert self.advance() == ")", "expected ')'"
+            return inner
+        assert tok.isdigit(), f"unexpected token {tok!r}"
+        return ("num", int(tok))
+
+
+for src in ["1 + 2 * 3 - 4", "1 - 2 - 3", "2 ^ 3 ^ 2", "-2 ^ 2", "-2 * 3", "(1 + 2) * 3"]:
+    print(f"{src:14} -> {Parser(src).parse_expr()}")
+```
+
+## A trace, call by call
+
+Take `1 + 2 * 3 - 4` and follow the calls. The outer `parse_expr(1)` parses `1`, sees
+`+` at level 5, which is at least 1, consumes it and calls `parse_expr(6)` for the right
+operand. That call parses `2`, sees `*` at level 6, which is at least 6, consumes it and
+calls `parse_expr(7)`. That call parses `3`, sees `-` at level 5, which is below 7, and
+returns `("num", 3)`. Back in `parse_expr(6)`, the multiplication node
+`("bin", "*", 2, 3)` is built; the loop looks again, sees the same `-` at 5, which is
+below 6, and returns the multiplication. Back in the outermost call,
+`("bin", "+", 1, (2 * 3))` is built; the loop looks, sees `-` at 5, which is at least 1,
+consumes it, calls `parse_expr(6)` — which parses `4`, sees `EOF`, and returns — and
+builds `("bin", "-", (1 + (2 * 3)), 4)`. Two operators of the same level ended up
+nested to the left, the tighter one ended up deeper, and no function ever had to know
+how many levels there were.
+
+The `-` refused by the two inner calls is the whole mechanism. Each call declines an
+operator on its caller's behalf, and the caller with the right `min_prec` is the one
+that eventually takes it.
+
+## Prefix operators pick a level too
+
+`-2 ^ 2` is $-(2^2) = -4$ in mathematics and in Python, and $(-2)^2 = 4$ in some
+calculators. The parser has to choose. In the code above, `parse_unary` consumes the `-`
+and parses its operand with `parse_expr(UNARY_BIND)`, where `UNARY_BIND` is 7, the level
+of `^`. That call will accept `^`, because 7 is at least 7, so it swallows `2 ^ 2` whole
+and the negation wraps the power: `("unary", "-", ("bin", "^", 2, 2))`. The same number
+stops `-2 * 3` from doing the same thing: `*` is 6, below 7, so the operand call returns
+`2` alone and the multiplication is built around the negation. The temptation is to have
+`parse_unary` call `parse_primary` for its operand, on the grounds that a prefix operator
+"binds tightest". That parses `-2 ^ 2` as `(-2) ^ 2`, and it is wrong in a way that
+survives every test that does not put a minus sign in front of a power.
+
+## Statements, and one token of lookahead
+
+Above expressions sits a second, ordinary recursive-descent layer: `parse_stmt` looks
+at the first token and dispatches. A `let` keyword means a declaration; `if`, `while`
+and `fn` take a `{ ... }` block; `print` and `return` take an expression. The one case
+that needs more than the first token is an identifier at the start of a statement,
+which begins either an assignment, `x = 1;`, or an expression statement, `x + 1;` or
+`f(x);`. The two forms differ at their *second* token — `=` or not — and nowhere
+earlier, so one peek at `self.tokens[self.pos + 1]` settles it, and the `EOF` sentinel
+from module 1 is what makes that index safe to read. No backtracking, no re-parse.
+
+Every branch that consumes a specific token goes through one method,
+`expect(kind, value)`, which returns the token or raises `ParseError` with that token's
+position. That is where `1 + ;` becomes an error at 1:5, the column of the `;` that
+turned up where an operand was wanted, and where `let x = 1` with no semicolon becomes
+an error at 1:10 — the position of the `EOF` token, one past the last character, which
+the lexer recorded for exactly this moment.
+
+## The mistake, and why it is tempting
+
+Passing `prec` instead of `prec + 1` for every operator. It is tempting because the two
+spellings build identical trees for `+` and `*`, which are the operators every first
+test uses — `1 + 2 + 3` groups either way and sums to 6 either way. The tree leans
+right instead of left, nobody notices, and then `1 - 2 - 3` parses as `1 - (2 - 3)` and
+evaluates to 2 rather than $-4$. The failure is on the operator you did not test, in a
+place the parser never complains about, because the parse succeeded.
+
+## Where it stops holding
+
+The Pratt loop handles operator grammars: anything shaped like *operand, operator,
+operand, operator*. Most of a programming language is not that shape, which is why
+statements still get a hand-written function each. Some constructs defeat one token of
+lookahead, and then the grammar rather than the parser has to change: C's cast `(T) x`
+is indistinguishable from a bracketed expression until `T` is known to be a type, and
+C++'s `a < b > c` may be a template or two comparisons. This parser also stops at the
+first error, because after a mismatch it has no reliable idea where the next statement
+starts; compilers that report several errors add *recovery* — skip to the next
+semicolon or brace and try again — and accept the spurious complaints that sometimes
+follow. And the recursion is real: a thousand nested parentheses will exhaust Python's
+call stack before the grammar objects.
+
+The lab, "A Pratt parser for the whole grammar", checks each decision above by its
+consequences. `1 - 2 - 3` must lean left and `2 ^ 3 ^ 2` right; `-2 ^ 2` must be a
+negation of a power while `-a * b` is a product of a negation; `a < b && c == d || e`
+must nest comparisons inside `&&` inside `||`; `else if` must nest an `if` node in the
+else list; and four malformed sources must each raise at the token that broke them.
+''',
+                },
             ],
             "quiz": {
                 "title": "Precedence, associativity and the tree that results",
@@ -1429,6 +1912,248 @@ except ParseError:
                 "An error message is only useful with a position, so every node carries one",
                 "Fail fast on the first error: cascading errors from a poisoned type are noise",
             ],
+            "read": [
+                {
+                    "title": "A stack of dictionaries, and one rule per operator",
+                    "minutes": 14,
+                    "body": r'''
+This program lexes and parses without complaint:
+
+```text
+let x = 1;
+if x < 2 {
+    let x = "inner";
+    print x + 1;
+}
+print y;
+```
+
+Every token is legal, every statement is well-formed, and the tree comes out exactly as
+the grammar says it should. It is also nonsense twice over. `x + 1` on line 4 adds a
+string to a number, and `y` on line 6 was never declared. A parser cannot see either,
+because neither is a fact about the shape of the program; both are facts about what the
+names *mean*, and meaning is the next pass. Semantic analysis answers two questions for
+every name and every expression: what does this refer to, and what type does it have.
+When either question has no good answer it stops, with a position.
+
+## What a block does to a name
+
+Look at the two `x`s. The one on line 1 is bound at the top level. The one on line 3 is
+bound inside the `if` body, and from line 3 to the closing brace it is the `x` that
+`print x` on line 4 means. After the brace it is gone, and the outer `x` is visible
+again. That is *shadowing*: an inner binding hides an outer one for the length of a
+block, and the language allows it.
+
+Now move line 3 to the top level, directly after line 1. Two bindings of `x` in the
+*same* block is *redeclaration*, and the language forbids it. The difference between the
+two cases is not the name and not the type. It is which block each binding sits in.
+
+So the data structure follows from the picture. A block is a dictionary from names to
+types. Entering a block pushes a fresh dictionary; leaving it pops. The stack of
+dictionaries is the symbol table, and the two operations on it differ in one respect:
+how far they reach.
+
+`declare(name, type)` asks *is this name already bound here*, where "here" is the
+innermost dictionary and nothing else. If it is, that is redeclaration, and the error
+carries the position of the second `let`. If it is not, bind it — even if an outer
+dictionary has the same name, because that is shadowing, and shadowing is allowed.
+
+`lookup(name)` asks *what does this name mean now*, which is a question about every
+enclosing block, nearest first. Walk the stack from the innermost dictionary outwards
+and return the first binding found; return `None` if none has it, so the caller can
+decide whose error an unknown name is.
+
+```python
+class SymbolTable:
+    def __init__(self):
+        self.scopes = [{}]
+
+    def push(self):
+        self.scopes.append({})
+
+    def pop(self):
+        self.scopes.pop()
+
+    def declare(self, name, type_):
+        scope = self.scopes[-1]
+        if name in scope:
+            raise ValueError(f"{name!r} is already declared in this scope")
+        scope[name] = type_
+
+    def lookup(self, name):
+        for scope in reversed(self.scopes):
+            if name in scope:
+                return scope[name]
+        return None
+
+
+table = SymbolTable()
+table.declare("x", "num")               # let x = 1;
+print("top level:   ", table.scopes)
+table.push()                            # if x < 2 {
+table.declare("x", "str")               #     let x = "inner";
+print("inside if:   ", table.scopes, "-> x is", table.lookup("x"))
+table.pop()                             # }
+print("after block: ", table.scopes, "-> x is", table.lookup("x"))
+print("y is", table.lookup("y"))
+```
+
+Run it and the trace is the program above, one line at a time. Inside the block the
+stack is `[{'x': 'num'}, {'x': 'str'}]` and `lookup("x")` returns `str`, because the
+reversed walk meets the inner dictionary first. After the pop the stack is back to one
+dictionary and `x` is `num` again. `y` was never anywhere, so `lookup` returns `None`,
+and whoever asked turns that into `undefined variable 'y'` with line 6's position.
+
+The two reaches are the entire scoping rule. Make `declare` walk outwards and shadowing
+becomes an error. Make `lookup` inspect only the innermost dictionary and every
+reference from inside a block to a variable outside it fails.
+
+## The type of a node is a function of its children
+
+The second question is types. There are three in this language, `num`, `str` and
+`bool`, and the fact that makes checking possible in one pass is that the type of an
+expression depends only on the types of its parts. To type `a + b` you type `a`, you
+type `b`, and you consult one rule. The rule does not care what surrounds the `+`, so no
+node ever has to look upwards, and a single bottom-up walk types the whole tree. That
+property has a name, *compositionality*, and it is worth naming because the languages
+where it fails are exactly the ones that need cleverer checkers.
+
+The rules are short enough to write down in full. The arithmetic operators need two
+`num` and give `num`, with one extension: `+` on two `str` gives `str`. The four order
+comparisons need two `num` and give `bool`. `==` and `!=` need two operands of the
+*same* type, whatever it is, and give `bool`. `&&` and `||` need two `bool` and give
+`bool`. Prefix `-` needs `num`, prefix `!` needs `bool`. A variable has the type its
+binding holds. A call is checked against the function's signature: the argument count
+first, then each argument's type against the matching parameter, and the result is the
+declared return type.
+
+One rule surprises people, and this module's fill-in exercise turns on it: `==` returns
+`bool`, not the type of its operands. `"a" == "b"` is a yes-or-no question, and a
+checker that hands back `str` will then reject `if s == t` for having a non-boolean
+condition.
+
+Work one expression by hand, with `a` and `b` both bound to `num`:
+`(a < b) && !(a == 1)`. The left operand of `&&` is a comparison of two `num`, so it is
+`bool`. The right operand is `!` applied to `a == 1`; the equality compares `num` with
+`num`, same type, so it is `bool`, and `!` of a `bool` is `bool`. Both operands of `&&`
+are `bool`, so the whole expression is `bool`. Six judgements, each about one node, each
+needing only what its children reported.
+
+```python
+def type_of(node, env):
+    kind = node[0]
+    if kind in ("num", "str", "bool"):
+        return kind
+    if kind == "var":
+        if node[1] not in env:
+            raise TypeError(f"undefined variable {node[1]!r}")
+        return env[node[1]]
+    if kind == "unary":
+        op, inner = node[1], type_of(node[2], env)
+        if (op, inner) in (("-", "num"), ("!", "bool")):
+            return inner
+        raise TypeError(f"cannot apply {op!r} to {inner}")
+    op, lt, rt = node[1], type_of(node[2], env), type_of(node[3], env)
+    if op in ("+", "-", "*", "/", "%", "^"):
+        if op == "+" and (lt, rt) == ("str", "str"):
+            return "str"
+        if (lt, rt) == ("num", "num"):
+            return "num"
+    elif op in ("<", "<=", ">", ">="):
+        if (lt, rt) == ("num", "num"):
+            return "bool"
+    elif op in ("==", "!="):
+        if lt == rt:
+            return "bool"
+    elif op in ("&&", "||"):
+        if (lt, rt) == ("bool", "bool"):
+            return "bool"
+    raise TypeError(f"cannot apply {op!r} to {lt} and {rt}")
+
+
+env = {"a": "num", "b": "num"}
+expr = ("bin", "&&", ("bin", "<", ("var", "a"), ("var", "b")),
+        ("unary", "!", ("bin", "==", ("var", "a"), ("num", 1))))
+print(type_of(expr, env))                                       # bool
+print(type_of(("bin", "+", ("str", "x"), ("str", "y")), env))   # str
+try:
+    type_of(("bin", "+", ("var", "a"), ("str", "y")), env)
+except TypeError as e:
+    print("rejected:", e)
+```
+
+The lab's `type_of` is this with two additions: every node carries a position, so every
+`raise` names a line and a column, and the environment is a `SymbolTable` rather than a
+flat dictionary, so `var` goes through `lookup`.
+
+## Statements, blocks and the first error
+
+Statements do not have types; they have obligations. `let` types its expression and
+declares the name. `assign` looks the name up, types the expression, and requires the
+two to agree — a `num` variable stays a `num` variable. `if` and `while` require a
+`bool` condition and check each block in a scope of its own, which is what `push` and
+`pop` around a statement list are for. `return` requires an enclosing function and an
+expression of the declared return type; `return;` with no expression is `void`.
+Function bodies get a scope holding the parameters, and functions may be declared only
+at the top level.
+
+When a rule fails the checker raises, and it does not try to carry on. The reason is
+what `type_of` would have to return. There is no honest type for `a + "s"`, and
+inventing one poisons every enclosing expression: one misspelled name becomes fifteen
+complaints, fourteen of them about lines that are fine. Compilers that report many
+errors add an `error` type that is compatible with everything and absorbs further
+complaints silently, plus parser recovery at statement boundaries. Both are worth
+having; neither is free; reporting the *first* error, accurately, is the honest version
+of not building them, and the lab tests exactly that — a program with undefined names at
+7:3 and 9:1 must report 7:3.
+
+## Functions are declared before any body is read
+
+`even` calls `odd` and `odd` calls `even`. Whichever is checked first, its body calls a
+function that has not been declared yet — unless the signatures were recorded before
+either body was looked at. So `check` runs two loops over the program: the first
+declares every top-level `fn` as a `("fn", [param types], return type)` binding, and
+only the second checks bodies. That is *hoisting*, and it is cheap here because the
+signature is written down by the programmer and can be recorded without reading the
+body. A language that infers return types has to do real work at this point — solve a
+whole group of mutually recursive definitions at once — which is one concrete thing an
+explicit `-> num` buys.
+
+## The mistake, and why it is tempting
+
+`lookup` written as `self.scopes[-1].get(name)`. It is tempting because it mirrors
+`declare`, which correctly looks only at `self.scopes[-1]`, and because it passes every
+test that reads a variable in the block that declared it. It fails the first time a loop
+body reads the counter declared outside it — which is every loop — with
+`undefined variable`, on a name that is visibly declared three lines up. The two methods
+look alike and reach differently, and that asymmetry is the rule, not an inconsistency
+to tidy away.
+
+The companion mistake is a `check_block` that pushes and forgets to pop, or pops only on
+the success path. Names then leak out of their block, an inner `let x` starts colliding
+with a later top-level `let x`, and the error appears on a line that has nothing wrong
+with it.
+
+## Where it stops holding
+
+Compositionality is an assumption, and this language was designed to satisfy it. Give
+the language an unannotated lambda, `fn (a) { return a + 1; }`, and the type of `a`
+cannot be computed from the children; it has to come from the *context* the lambda is
+used in, which is why bidirectional type checking and Hindley–Milner inference exist.
+Allow functions to be declared inside blocks and a body may refer to a local of the
+enclosing function that will have been popped by the time the body runs, which is the
+closure problem, and the reason the lab forbids nested `fn` rather than solving it. Add
+subtyping, or generics, or overloading beyond the single `+` on strings, and "consult
+one rule" becomes "search for the rule that applies", with all the ambiguity that
+brings.
+
+The lab, "A scoped symbol table and a type checker", asks for the table with both
+reaches, `type_of` with every rule above, and `check` with hoisting, block scopes,
+`bool` conditions, arity and argument checks, `return` inside functions only, and the
+first error reported at its own position.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Scopes, hoisting and the first error",
                 "minutes": 7,
@@ -2182,6 +2907,273 @@ except SemanticError as _e:
                 "A call pushes a frame with the arguments already in slots 0..n-1 and records the return address",
                 "Short-circuit `&&` and `||` are control flow, not operators — they compile to jumps",
                 "An interpreter loop needs a step budget: a compiler must not be able to hang the machine forever",
+            ],
+            "read": [
+                {
+                    "title": "Postorder, backpatching, and what a call pushes",
+                    "minutes": 15,
+                    "body": r'''
+Put `2 + 3 * 4` in front of someone with a stack of index cards and one rule: to apply
+an operator, take the top two cards off, compute, and put the answer back. They will
+discover the instruction sequence themselves. Put down 2. Put down 3. Put down 4.
+Multiply: the top two cards are 3 and 4, off they come, 12 goes on. Add: the top two
+are 2 and 12, off they come, 14 goes on. One card is left and it is the answer.
+
+```text
+PUSH 2        stack: [2]
+PUSH 3        stack: [2, 3]
+PUSH 4        stack: [2, 3, 4]
+BIN *         stack: [2, 12]
+BIN +         stack: [14]
+```
+
+Now look at the tree the parser built, `("bin", "+", 2, ("bin", "*", 3, 4))`, and read
+it in *postorder* — left child, right child, then the node itself. The sequence you
+read out is the sequence above. That is the whole of expression compilation for a stack
+machine: emit the left subtree, emit the right subtree, emit the operator. There is no
+decision to make about where an intermediate result lives, because the answer is
+always the same: on top of the stack, where the operator that needs it will find it. A
+register machine has to answer that question differently for every subexpression, out
+of a finite supply of registers, and that is where register allocation comes from. The
+stack machine pays for its simplicity elsewhere — a value cannot be reused without
+being stored — but for a first back end it is the right trade.
+
+```python
+def run(code):
+    stack = []
+    for op, arg in code:
+        if op == "PUSH":
+            stack.append(arg)
+        elif op == "BIN":
+            right = stack.pop()
+            left = stack.pop()
+            stack.append({"+": left + right, "*": left * right}[arg])
+        print(f"{op:5} {str(arg):3}  stack: {stack}")
+    return stack[-1]
+
+
+code = [("PUSH", 2), ("PUSH", 3), ("PUSH", 4), ("BIN", "*"), ("BIN", "+")]
+print("result:", run(code))
+```
+
+Note the order of the two pops. The right operand is on top, so it comes off first; get
+that backwards and `5 - 3` computes $3 - 5$ while every test that uses only `+` and `*`
+keeps passing.
+
+## Names become slots
+
+Module 3's checker settled what every name means. This pass can therefore throw the
+names away. A variable becomes an integer, its *slot* in the current frame's array of
+locals, handed out by `declare` the first time the name is mentioned: the first local is
+slot 0, the second slot 1. `LOAD i` pushes slot `i`; `STORE i` pops into it. The frame
+has to be big enough, and the number of slots is not known until the whole body has
+been compiled, so the first instruction of every body is emitted as `ENTER 0` and
+overwritten with the real count at the end. That is the first *backpatch*, and there
+are more coming.
+
+```text
+let x = 1;    print x;
+
+0  ENTER 1        one slot, for x
+1  PUSH  1
+2  STORE 0        x is slot 0
+3  LOAD  0
+4  PRINT
+5  HALT
+```
+
+That six-instruction listing is the first test in this module's lab, "Compile to
+bytecode and run it", instruction for instruction.
+
+## Jumps to places that do not exist yet
+
+`if c { A } else { B }` has to skip `A` when `c` is false and skip `B` after `A`
+otherwise. The machine's tool for skipping is a jump to an address, and the trouble is
+visible the moment you try to write one down: when the compiler emits the jump that
+skips `A`, it has not compiled `A` yet, so it does not know how long `A` is or where the
+jump should land. The compiler cannot look ahead, but it can look back. So it emits
+`JZ 0` — jump-if-zero to a placeholder — and remembers the address of that instruction.
+It compiles `A`. Now `len(code)` is the address of whatever comes next, which is exactly
+where the jump should land, so it goes back and overwrites the placeholder. That is
+backpatching, and it works because this compiler appends and never inserts: an address,
+once assigned, never moves.
+
+A `while` loop is the same trick plus one backward jump. Record `start = len(code)`
+*before* compiling the condition. Compile the condition, emit `JZ 0` and remember it,
+compile the body, emit `JMP start` — a backward jump needs no patching, because its
+target is already behind it — and then patch the `JZ` to `len(code)`, the first
+instruction after the loop.
+
+```python
+class Compiler:
+    def __init__(self):
+        self.code = []
+        self.slots = {}
+
+    def emit(self, op, arg=None):
+        self.code.append((op, arg))
+        return len(self.code) - 1
+
+    def slot(self, name):
+        if name not in self.slots:
+            self.slots[name] = len(self.slots)
+        return self.slots[name]
+
+    def expr(self, node):
+        if node[0] == "num":
+            self.emit("PUSH", node[1])
+        elif node[0] == "var":
+            self.emit("LOAD", self.slot(node[1]))
+        else:
+            _, op, left, right = node
+            self.expr(left)
+            self.expr(right)
+            self.emit("BIN", op)
+
+    def stmt(self, node):
+        if node[0] in ("let", "assign"):
+            self.expr(node[2])
+            self.emit("STORE", self.slot(node[1]))
+        elif node[0] == "print":
+            self.expr(node[1])
+            self.emit("PRINT")
+        elif node[0] == "while":
+            start = len(self.code)
+            self.expr(node[1])
+            jz = self.emit("JZ", 0)
+            for s in node[2]:
+                self.stmt(s)
+            self.emit("JMP", start)
+            self.code[jz] = ("JZ", len(self.code))
+
+    def compile(self, program):
+        enter = self.emit("ENTER", 0)
+        for s in program:
+            self.stmt(s)
+        self.emit("HALT")
+        self.code[enter] = ("ENTER", len(self.slots))
+        return self.code
+
+
+APPLY = {"+": lambda a, b: a + b, "<=": lambda a, b: a <= b}
+
+
+def run(code):
+    stack, locals_, pc, out = [], [], 0, []
+    while True:
+        op, arg = code[pc]
+        pc += 1
+        if op == "ENTER":
+            locals_ = [0] * arg
+        elif op == "PUSH":
+            stack.append(arg)
+        elif op == "LOAD":
+            stack.append(locals_[arg])
+        elif op == "STORE":
+            locals_[arg] = stack.pop()
+        elif op == "BIN":
+            right, left = stack.pop(), stack.pop()
+            stack.append(APPLY[arg](left, right))
+        elif op == "JZ":
+            if not stack.pop():
+                pc = arg
+        elif op == "JMP":
+            pc = arg
+        elif op == "PRINT":
+            out.append(stack.pop())
+        elif op == "HALT":
+            return out
+
+
+program = [("let", "i", ("num", 1)),
+           ("while", ("bin", "<=", ("var", "i"), ("num", 3)),
+            [("assign", "i", ("bin", "+", ("var", "i"), ("num", 1)))]),
+           ("print", ("var", "i"))]
+code = Compiler().compile(program)
+for addr, (op, arg) in enumerate(code):
+    print(f"{addr:2}  {op:5} {'' if arg is None else arg}")
+print("output:", run(code))
+```
+
+The listing this prints is fifteen instructions long, and it is the one this module's
+bytecode-reading exercise asks you to fill in. Read it against the source. Address 0 is
+`ENTER 1`, patched from 0 once the compiler knew `i` was the only local. Addresses 1
+and 2 are `let i = 1`. Address 3 is where `start` was recorded, so the test `i <= 3`
+occupies 3, 4 and 5, and the `JZ` at 6 was emitted as `JZ 0`. The body is 7 to 10; the
+`JMP 3` at 11 closes the loop; and only then was the `JZ` patched to 12, the `LOAD 0`
+that begins `print i`. Trace the machine through it once: `i` becomes 1, the test
+pushes `True` and `JZ` does not fire, the body stores 2, `JMP` returns to 3; twice
+more; on the fourth test `4 <= 3` pushes `False`, the `JZ` fires, control lands on 12,
+and the machine prints 4.
+
+## Short-circuit is control flow
+
+`n != 0 && 10 / n > 1` is a guard, and it works only if the division does not happen
+when `n` is zero. A `BIN &&` cannot provide that: its operands are on the stack before
+it runs, so both were evaluated, so the guard already failed. Short-circuiting is part
+of what `&&` *means*, not an optimisation, and since it is control flow it compiles to
+jumps. Emit the left operand; `JZ` to a `false` label; emit the right operand; `JMP` to
+the end; at `false`, `PUSH False`; end. Trace the case `n = 0`: the left operand pushes
+`False`, `JZ` pops it and fires, control lands on `PUSH False`, and the right operand —
+the division — was never reached. `||` is the mirror image: `JZ` to the right operand,
+otherwise `PUSH True` and jump to the end.
+
+## What a call pushes
+
+A function needs somewhere for its parameters and locals that is not the caller's, or
+`fact` calling `fact` would overwrite its own `n`. That somewhere is a *frame*: a fresh
+array of locals and a return address. `CALL (addr, nargs)` pops the `nargs` arguments
+off the stack, makes them slots 0 to `nargs - 1` of a new frame — which is why
+parameters are declared first when a function body is compiled, so they land in those
+slots — records the address of the instruction after the `CALL` as the return address,
+and jumps to `addr`. `RET` pops the result, discards the frame, restores the caller's
+program counter from the saved address, and pushes the result onto the caller's stack,
+where a `BIN` or a `STORE` can find it. Each function has its own flat slot space, there
+are no globals, and the frame is the only thing keeping one function's slot 0 apart
+from another's.
+
+Layout follows from a constraint: the main body is compiled first, ends in `HALT`, and
+the function bodies follow it, each with its own `ENTER` patched at the end. A `CALL`
+may appear in `main` before the function it calls has been placed, so it is emitted
+carrying the function's *name*, and a final sweep over the code replaces every
+`("CALL", (name, nargs))` with `("CALL", (address, nargs))` — checking, while it is
+there, that the function exists and that `nargs` matches its arity. Two more errors
+belong to this pass, and they are ones the checker could not have raised because they
+are about the machine: a program counter that leaves the code, and a step budget.
+`while true { }` is a legal program, no compiler can decide in general whether an
+arbitrary program halts, so the runtime counts instructions and raises `VMError` when
+the count passes `max_steps`. A budget is not an analysis: it stops slow programs as
+readily as endless ones and cannot tell you which it hit.
+
+## The mistake, and why it is tempting
+
+Recording `start` *after* the condition has been compiled. It is tempting because the
+body is the thing that repeats, so the mind files the loop's beginning at the body's
+beginning. The result is a `JMP` that re-enters the body without re-testing, so the
+loop never exits and the step budget is what stops it. Its cousin is patching the `JZ`
+before the `JMP` is emitted — off by one, landing the false case on the backward jump,
+which sends the machine straight back to the test it failed. Both bugs produce the same
+symptom, an endless loop, from opposite ends of the loop.
+
+## Where it stops holding
+
+Values on a stack have positions, not names, so a subexpression computed twice is
+executed twice; a register machine can keep it. That is why real bytecode VMs — Lua's,
+Android's — moved to registers, and why a JIT lowers even a stack bytecode to registers
+before emitting machine code. This machine also has no globals and no closures: a
+function sees its parameters and its own locals, full stop, which is what the lab tests
+with a `double` whose inner `x` must not touch the caller's `x`. And the recursion depth
+is bounded by memory rather than by Python, because frames live in a list, not on the
+Python call stack; a deep call chain in the compiled language costs bytes, not a
+`RecursionError`.
+
+The lab checks each of these by running them: the six-instruction listing exactly,
+postorder evaluation of eight expressions, `if`/`else` and the counted loop, both
+short-circuits with a division that must not happen, `fact(5)` and `fib(10)` through
+real frames, a `POP` after every expression statement, and the compile-time and
+run-time errors each of the right class.
+''',
+                },
             ],
             "quiz": {
                 "title": "Instructions, jumps and frames",
@@ -3045,6 +4037,216 @@ except VMError as _e:
                 "Dead code elimination needs a constant condition, which is why folding runs first",
                 "Transformations feed each other, so the pass is iterated to a fixed point",
                 "A corpus with expected outputs is the cheapest available proof of semantics preservation",
+            ],
+            "read": [
+                {
+                    "title": "What an optimiser may change, and how it proves it",
+                    "minutes": 14,
+                    "body": r'''
+A program declares `let day = 60 * 60 * 24;` near the top. Every time it runs, the
+machine pushes 60, pushes 60, multiplies, pushes 24, multiplies, and stores 86400 — the
+same 86400 it stored last time and will store next time. The compiler could have done
+that arithmetic once, when it saw the tree, and emitted `PUSH 86400`. That is an
+*optimisation*: a rewrite of the program that produces a program with the same
+behaviour and, ideally, less work.
+
+Now a second program, one line: `print f() * 0;`, where `f` prints `"hello"` and returns
+3. Anything times zero is zero, so the compiler could replace the whole expression with
+`0`. Do that and the program stops printing `hello`. The arithmetic was true and the
+rewrite was wrong, and the gap between those two is the entire subject of this module.
+An optimiser is a function from trees to trees that carries an obligation: whatever it
+hands back must do what it was given. "Do" means *observably* — the lines printed and
+the errors raised. The tree, the intermediate values, the number of instructions: all of
+that is the budget it is allowed to spend.
+
+## Folding, and the case it must refuse
+
+Constant folding is the first rewrite and the one whose soundness is easiest to see.
+Walk the tree bottom up; wherever both children of an operator are literals, evaluate
+the operator now and replace the node with the result. `2 + 3` becomes `5`, `1 < 2`
+becomes `true`, `"a" + "b"` becomes `"ab"`. Bottom up matters: in `2 * (3 + 4)` the
+addition folds first, and only then are both children of the multiplication literals.
+
+The refusal is what makes the pass trustworthy. What should `fold` do with `1 / 0`?
+Both children are literals. Evaluating it raises. And there is nothing to substitute:
+the expression has no value. Consider where it might sit:
+
+```text
+if false { print 1 / 0; }
+```
+
+That program runs fine — the division is never reached. A compiler that raises while
+folding has turned a working program into one that does not compile. A compiler that
+substitutes some number has made the division silently stop happening in a program
+where it *was* reached. Both change observable behaviour. So the compiler does neither:
+it leaves the node exactly as it was, and lets the machine raise if and when control
+arrives. Refusing to fold is always sound, because the unfolded node still means what
+it meant, and that asymmetry is the safety net every rule below rests on.
+
+```python
+APPLY = {"+": lambda a, b: a + b, "*": lambda a, b: a * b,
+         "/": lambda a, b: a / b, "<": lambda a, b: a < b}
+
+
+def fold(node):
+    if node[0] != "bin":
+        return node
+    _, op, left, right = node
+    left, right = fold(left), fold(right)
+    if left[0] == "num" and right[0] == "num":
+        try:
+            value = APPLY[op](left[1], right[1])
+        except ZeroDivisionError:
+            return ("bin", op, left, right)          # leave it for the machine
+        return ("bool", value) if op == "<" else ("num", value)
+    return ("bin", op, left, right)
+
+
+print(fold(("bin", "*", ("num", 2), ("bin", "+", ("num", 3), ("num", 4)))))
+print(fold(("bin", "/", ("num", 1), ("num", 0))))
+print(fold(("bin", "*", ("var", "x"), ("bin", "+", ("num", 2), ("num", 3)))))
+```
+
+The first prints `('num', 14)`; the second comes back unchanged and nothing was raised;
+the third shows that folding still reaches inside an expression it cannot fold at the
+top, giving `x * 5`. The lab's `fold` is this with the string and boolean cases, the
+equality rule that refuses mismatched kinds, and the position field carried across.
+
+## Identities, and the operand that goes missing
+
+The second rewrite is algebra. `x + 0` is `x`. `x * 1` is `x`. `x * 0` is `0`. `x - x`
+is `0`. `x ^ 0` is `1`. Each is true of numbers, and a folding pass cannot see any of
+them, because `x` is not a literal. So `simplify` matches shapes instead of evaluating.
+
+Look at what each identity does to its operands. `x * 1 -> x` *keeps* `x`: whatever `x`
+did when evaluated, it still does. `x * 0 -> 0` *discards* `x`: if evaluating `x`
+printed something, that printing is gone. Return to the opening example — `f() * 0`,
+where `f` prints. The identity is true about values and false about programs, and the
+rule needs a guard: the discarded operand must be *pure*, meaning that evaluating it
+cannot be observed. In this language only a call can have an effect, so `is_pure` is a
+search for a `call` node, and `x * 0 -> 0` fires only when `is_pure(x)`. The same guard
+protects `x - x`, `x ^ 0`, and `x && false`.
+
+Short-circuit operators need care in one direction only. `false && x -> false` needs no
+guard: `&&` never evaluates its right operand when the left is false, so `x` was never
+going to run, and discarding it discards nothing. `x && false -> false` does need the
+guard, because `x` runs first. The asymmetry is the evaluation order, written into the
+rules.
+
+```python
+def is_pure(node):
+    if node[0] == "call":
+        return False
+    if node[0] == "bin":
+        return is_pure(node[2]) and is_pure(node[3])
+    return True
+
+
+def simplify(node):
+    if node[0] != "bin":
+        return node
+    _, op, left, right = node
+    left, right = simplify(left), simplify(right)
+    if op == "+" and right == ("num", 0):
+        return left
+    if op == "*" and right == ("num", 1):
+        return left                                  # keeps x: no guard needed
+    if op == "*" and right == ("num", 0) and is_pure(left):
+        return ("num", 0)                            # drops x: guarded
+    return ("bin", op, left, right)
+
+
+print(simplify(("bin", "*", ("bin", "+", ("var", "x"), ("num", 0)), ("num", 1))))
+print(simplify(("bin", "*", ("var", "x"), ("num", 0))))
+print(simplify(("bin", "*", ("call", "f", []), ("num", 0))))
+```
+
+`(x + 0) * 1` collapses to `x` in one bottom-up pass — the inner `+ 0` goes first, then
+the `* 1` sees a bare `x` on its left. `x * 0` becomes `0` because a variable is pure.
+`f() * 0` comes back untouched, which is the lab's test "An identity that would delete
+an effect is refused", word for word.
+
+## Dead code, and why folding goes first
+
+The third rewrite works on statement lists. An `if` whose condition is the literal
+`true` is replaced by its then-branch; `false`, by its else-branch. `while false { ... }`
+disappears. An expression statement whose expression is a literal or a bare variable —
+`99;` — cannot be observed and disappears; an expression statement that is a call stays,
+because the call might print. Everything after a `return` in the same block is
+unreachable, so the pass appends the `return` and stops walking.
+
+Notice what `eliminate_dead` looks for: a condition whose node kind is `bool`. It does
+no evaluation of its own. So `if 2 > 3 { ... }` is invisible to it until folding has
+turned `2 > 3` into `false`. Order is not a matter of taste here: folding creates the
+opportunities elimination consumes, so it must run first.
+
+## Passes feed each other, so run to a fixed point
+
+Take `x ^ 0 + y ^ 0`. Folding finds nothing — no literal pairs. Simplification turns
+each side into `1`, leaving `1 + 1`, which is a folding opportunity that arrived *after*
+folding ran. One more round folds it to `2`. Rather than reason about which rule
+enables which, `optimise_expr` runs `simplify(fold(node))` repeatedly until the tree
+stops changing, and `optimise` does the same one level up with dead-code elimination. A
+consequence worth testing is that the result is *idempotent*: optimising an optimised
+program changes nothing, because a fixed point is by definition where nothing changes.
+
+Work the whole pipeline over the fifth corpus program by hand. `let x = 4;` is
+untouched. `print (x + 0) * (2 + 3);` folds `2 + 3` to `5` and simplifies `x + 0` to
+`x`, leaving `print x * 5;` — and no further, because `x` is a variable, and turning it
+into `4` would need a proof that nothing reassigns `x` in between; that is constant
+*propagation*, a separate pass with a separate obligation, and it is not this one.
+`print x - x;` becomes `print 0;`, `x` being pure. `while false { print "never"; }` is
+dead and goes. `print x ^ 1;` becomes `print x;`. Twenty-two nodes in, ten out, and both
+versions print `20`, `0`, `4`.
+
+## Evidence, not proof
+
+The last thing the lab asks is the obligation itself: run every corpus program through
+the reference interpreter before and after optimising and demand identical output. Be
+precise about what a pass over five programs establishes. It shows the transformations
+preserved behaviour *on those five programs*. It cannot reach the case where `x * 0`
+drops a call unless someone put that case in the corpus — which is exactly how a corpus
+is used: as the place every dangerous case you have thought of is written down, so that
+the day a new rule is added and an old program's output changes, the corpus says so.
+Proof is available for rules this small — folding agrees with the evaluator on literal
+operands; each identity holds for pure operands — and a serious compiler wants both,
+because the proof covers all programs and the corpus covers the gap between the proof
+and the code you actually wrote.
+
+## The mistake, and why it is tempting
+
+Applying an identity because it is mathematically true. It is tempting because it *is*
+true — every textbook says $x \cdot 0 = 0$ — and because a purity guard looks like
+paranoia in a language where almost nothing has effects. The corpus does not contain a
+call, so an unguarded `x * 0` passes every corpus check and fails only the one test
+that was written to catch it. The second mistake is mutating the tree in place, because
+it is less code than rebuilding. The lab's idempotence test checks that the original
+program is untouched afterwards, and the reason is not tidiness: the corpus check
+evaluates the original *after* the optimiser has run, and an optimiser that edited its
+input has quietly made the comparison compare a program with itself.
+
+## Where it stops holding
+
+The identities are true of integers and rationals. They are not all true of the
+floating-point numbers this language's `num` includes. In IEEE arithmetic `x * 0` is
+`NaN` when `x` is infinite or `NaN`, and `x - x` is `NaN` for the same inputs, so a C
+compiler without `-ffast-math` refuses both rewrites on floats. The lab's corpus has no
+infinities, so the rules pass, but the honest statement of `x * 0 -> 0` includes "for
+finite `x`", and the pass does not check it. Purity is another assumption sized to this
+language: with assignment inside expressions, or exceptions, or reads from input,
+`is_pure` would have to look for far more than a call. Dead-code elimination sees only
+literal conditions, so `while true` with a `return` inside stays as it is; deciding
+that a loop terminates is undecidable in general and the pass does not try. And nothing
+here propagates a constant into its uses, reorders statements, or reasons about a
+variable across a loop — each of those is a further pass with a further obligation, and
+the module's point is the obligation rather than the count.
+
+The lab, "A fold / simplify / DCE pass with a corpus check", tests the refusal in `fold`
+with `1 / 0` and `1 % 0`, fifteen identities plus the refusal for `f() * 0`, the four
+kinds of dead statement, idempotence and non-mutation, and the corpus's outputs, before
+and after.
+''',
+                },
             ],
             "quiz": {
                 "title": "What an optimiser is allowed to do",

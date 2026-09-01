@@ -46,6 +46,429 @@ COURSE = {
                 "`__repr__` is for the programmer and should round-trip through `eval` where it can",
                 "Immutability by convention (`_name`), by `__slots__`, and by overriding `__setattr__`",
             ],
+            "read": [
+                {
+                    "title": "Two floats and no identity: what makes a value a value",
+                    "minutes": 14,
+                    "body": r'''
+Draw a displacement on a squared map: three squares east, four squares north. Hand the
+map to a friend and ask them to draw the same displacement on a map of their own. There
+are now two drawings, and there is still one displacement. Nobody would call the friend's
+arrow a *different* arrow because it sits on a different sheet: it points the same way
+and runs the same length, and that is everything an arrow is.
+
+A bank account is the other kind of thing. Two accounts holding exactly a hundred euros
+each are two accounts, and a deposit into one leaves the other where it was. They are
+told apart by *which one they are*, not by what they hold.
+
+Python's default is the bank-account kind. Every object is given an identity when it is
+made, and until you say otherwise `==` compares identities and nothing else:
+
+```python
+class Vector2D:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+
+a = Vector2D(3, 4)
+b = Vector2D(3, 4)
+print(a == b)        # False
+print(a is b)        # False
+print(len({a, b}))   # 2
+```
+
+Two arrows drawn identically, and Python holds that they are different. That is right for
+an account and wrong for an arrow, and this module is about telling Python which of the
+two you are building. The lab, *An immutable Vector2D*, builds the arrow: a value with no
+identity of its own, that compares by its components, works as a dictionary key, does
+arithmetic with the ordinary operators, and cannot be changed once it exists.
+
+## What `Vector2D(3, 4)` actually does
+
+Two things happen at construction, and only the second is yours. `Vector2D(3, 4)` first
+calls `Vector2D.__new__`, which allocates a blank object. Then it calls `__init__` with
+that blank object as its first argument, and `__init__` fills the blanks in. The blank
+object is what `self` is: the receiver of the call, passed explicitly because Python
+hides nothing — Java hides the same binding as `this`. `a.dot(b)` and
+`Vector2D.dot(a, b)` are one call written two ways:
+
+```python
+class Vector2D:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+    def dot(self, other):
+        return self.x * other.x + self.y * other.y
+
+
+a = Vector2D(3, 4)
+b = Vector2D(-1, 2)
+print(a.dot(b))              # -3.0 + 8.0 = 5.0
+print(Vector2D.dot(a, b))    # the same call, spelled out
+```
+
+Because `__init__` is an initialiser and not a constructor, it must return `None`. The
+object already exists by the time it runs, and there is nothing for it to hand back.
+Python enforces this rather than trusting you:
+
+```python
+# raises TypeError
+class Broken:
+    def __init__(self, x):
+        self.x = x
+        return self
+
+
+Broken(1)
+```
+
+The message is `__init__() should return None, not 'Broken'`, and it is the language
+stating the division of labour: `__new__` makes, `__init__` fills.
+
+## Equality by value
+
+To make two identical arrows equal, define `__eq__`. The first version anyone writes
+compares the components and stops there, `self.x == other.x and self.y == other.y`, and
+for two vectors it is right. Now ask a question that does not involve another vector.
+`Vector2D(3, 4) == (3, 4)` reaches that body with `other` bound to a tuple, a tuple has
+no `.x`, and the comparison raises `AttributeError`. That looks like an edge case until you notice where `==` gets
+called without your knowledge: `v in [1, 2, 3]` compares `v` with `1`, and `list.index`
+and `list.remove` do the same. An equality that crashes on the wrong type breaks
+containers you never intended to put the vector in.
+
+The fix is not `return False`. It is `return NotImplemented`, and the reason is the
+protocol behind `==`. Python asks the left operand first: `Vector2D.__eq__(v, (3, 4))`.
+If that returns `NotImplemented` — which means *I have no opinion* — Python turns round
+and asks the right operand, `tuple.__eq__((3, 4), v)`. When that declines too, Python
+falls back to comparing identity, which gives `False`, and `!=` is derived from the same
+answer for free. Returning `False` directly gives the same result today and takes away
+the other operand's turn: a class that *does* know how to compare itself with a vector
+never gets asked.
+
+```python
+class Vector2D:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+    def __eq__(self, other):
+        if not isinstance(other, Vector2D):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y
+
+
+v = Vector2D(3, 4)
+print(v == (3, 4))            # False, and no exception
+print(v != "nope")            # True
+print(v in [1, "two", v])     # True: the == against 1 and "two" declined politely
+```
+
+## The hash has to agree, and Python will not let you forget
+
+Put the new class in a set and something unexpected happens:
+
+```python
+# raises TypeError
+class Vector2D:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+    def __eq__(self, other):
+        if not isinstance(other, Vector2D):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y
+
+
+print(Vector2D.__hash__)      # None
+{Vector2D(3, 4)}
+```
+
+Define `__eq__` and leave `__hash__` alone, and Python sets `__hash__` to `None` for you:
+the instances stop being hashable. That looks officious until you see what a set does
+with a hash. A set does not compare a new member against every existing one; that would
+make membership linear. It calls `hash()` on the candidate, uses
+the result to choose a bucket, and only compares with `==` against what is already in
+that bucket. So two objects that `==` calls equal but that hash differently land in
+different buckets, never meet, and the set keeps both. The inherited hash is built from
+identity, so leaving it in place beside a value-based `__eq__` would produce exactly
+that: a set holding two equal vectors. Rather than let it rot quietly, the language
+breaks loudly.
+
+The rule follows from the mechanism: **equal objects must hash equally**. The converse is
+not required — unequal objects may share a hash and merely share a bucket — but the
+forward direction is the whole contract. The way to honour it is to hash the fields
+`__eq__` compares, and a tuple does the work:
+
+```python
+class Vector2D:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+    def __eq__(self, other):
+        if not isinstance(other, Vector2D):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y
+
+    def __hash__(self):
+        return hash((self.x, self.y))
+
+
+bag = {Vector2D(1, 2), Vector2D(1, 2), Vector2D(0, 0)}
+print(len(bag))                                     # 2
+lookup = {Vector2D(1, 2): "here"}
+print(lookup[Vector2D(1, 2)])                       # here
+print(hash(Vector2D(1, 2)) == hash((1.0, 2.0)))     # True
+```
+
+A tuple's hash is computed from its members' hashes, so two tuples with equal members
+hash equally, so two vectors with equal components hash equally. The contract is met by
+construction. The module's numeric exercise is this trap made concrete: a `Card` whose
+`__eq__` and `__hash__` mention `rank` alone, so six cards in three ranks make a set of
+three. The set never looks at your attributes; it calls the two methods you wrote and
+believes them.
+
+## Arithmetic, and how a refusal travels
+
+`a + b` is not a special form. Python evaluates it as `type(a).__add__(a, b)`, and if
+that returns `NotImplemented` it tries the reflected method on the other side,
+`type(b).__radd__(b, a)`. If both decline, Python raises `TypeError: unsupported operand
+type(s) for +: 'Vector2D' and 'int'`, naming both types.
+
+The reflected method is what makes `2 * v` work. Trace it: the left operand is an `int`,
+so Python asks `int.__mul__(2, v)` first. `int` has never heard of a vector and returns
+`NotImplemented`. Only then does Python ask `Vector2D.__rmul__(v, 2)`, and notice the
+argument order: the vector arrives as `self` and the `2` as the argument, swapped
+relative to how the expression was written. Instrument both hooks and watch:
+
+```python
+class Vector2D:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+    def __repr__(self):
+        return f"Vector2D({self.x!r}, {self.y!r})"
+
+    def __mul__(self, scalar):
+        print("  __mul__ asked with", scalar)
+        if isinstance(scalar, bool) or not isinstance(scalar, (int, float)):
+            return NotImplemented
+        return Vector2D(self.x * scalar, self.y * scalar)
+
+    def __rmul__(self, scalar):
+        print("  __rmul__ asked with", scalar)
+        return self.__mul__(scalar)
+
+
+v = Vector2D(3, 4)
+print("v * 2")
+print(v * 2)
+print("2 * v")
+print(2 * v)
+```
+
+`v * 2` calls `__mul__` once. `2 * v` prints `__rmul__` first, because `int` had already
+declined, and then `__mul__`, because `__rmul__` delegates. For a scalar the delegation
+is right: scaling commutes, so the swapped operands make no difference. For matrix
+multiplication the same delegation would be a bug, which is worth remembering the day
+you overload `@`.
+
+The mistake people make here is `raise NotImplementedError`. It is tempting because the
+two names differ by a suffix and both seem to say *not supported*. They do not.
+`NotImplemented` is a value, returned, meaning *ask someone else*; `NotImplementedError`
+is an exception, raised, meaning *a subclass was supposed to fill this in*. Raising it
+aborts the reflected lookup, so `2 * v` never reaches `__rmul__`, and it reports the
+wrong problem. `return False` is worse in a quieter way: `v + 5` then evaluates to
+`False`, and nothing tells you.
+
+One guard in that block deserves a sentence. `isinstance(True, int)` is `True`, because
+`bool` is a subclass of `int`. Without the explicit `bool` check, `True * v` would scale
+the vector by one and `False * v` would collapse it to zero, silently.
+
+## A repr that reads back
+
+Print the vector above and you get `Vector2D(3.0, 4.0)`, because the block defined
+`__repr__`. Leave it out and you get `<__main__.Vector2D object at 0x...>`, which names
+the type and the identity — the two facts a value type is trying not to have. The
+convention for `__repr__` is that it should look like the expression that would rebuild
+the object, so that `eval(repr(v)) == v`:
+
+```python
+class Vector2D:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+    def __repr__(self):
+        return f"Vector2D({self.x!r}, {self.y!r})"
+
+    def __eq__(self, other):
+        if not isinstance(other, Vector2D):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y
+
+    def __hash__(self):
+        return hash((self.x, self.y))
+
+
+v = Vector2D(3, 4)
+print(repr(v))                 # Vector2D(3.0, 4.0)
+print(eval(repr(v)) == v)      # True
+print([v, Vector2D(0, 1)])     # a list shows the reprs of its members
+```
+
+The `!r` inside the f-string asks each component for *its* repr, which is why `3` comes
+back as `3.0`: the stored value is a float, and the repr says so. `__str__` is the
+human-facing form, and with none defined, `print(v)` falls back to `__repr__`. The
+reverse does not hold — define only `__str__` and a list of vectors prints as angle
+brackets, because a container shows the reprs of its members and never their strs.
+Write `__repr__` first; add `__str__` when a genuinely different display is wanted.
+
+## Making it stay put
+
+Everything so far assumed the components do not change. That assumption is
+load-bearing. Hash a mutable object by its fields, put it in a set, and change a field:
+
+```python
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other):
+        return isinstance(other, Point) and (self.x, self.y) == (other.x, other.y)
+
+    def __hash__(self):
+        return hash((self.x, self.y))
+
+
+p = Point(1, 2)
+bag = {p}
+p.x = 5
+print(p in bag)      # False
+print(len(bag))      # 1
+```
+
+The point is in the set — `len` says so — and the set cannot find it, because it was
+filed under the hash of `(1, 2)` and now hashes to something else. Nothing raised. This is
+why every hashable built-in is immutable, and why the lab insists a `Vector2D` never
+changes after construction.
+
+Python offers three strengths of immutability. The weakest is a naming convention: call
+the attribute `_x`, and readers understand they are not to write to it. Nothing enforces
+it. Next, `__slots__ = ("x", "y")` replaces the per-instance dictionary with two fixed
+descriptors, so `v.z = 1` raises `AttributeError` — a typo caught, and memory saved. What
+slots do *not* do is stop `v.x = 9`, which is an ordinary write to a slot that exists.
+Real immutability needs the third step: override `__setattr__` and `__delattr__` to
+refuse.
+
+That creates a problem inside `__init__`. The line `self.x = float(x)` is not a bare
+store; Python evaluates it as `type(self).__setattr__(self, "x", float(x))`, and by the
+time `__init__` runs, your refusing guard is already installed:
+
+```python
+# raises AttributeError
+class Vector2D:
+    __slots__ = ("x", "y")
+
+    def __init__(self, x, y):
+        self.x = float(x)      # goes through the guard below
+        self.y = float(y)
+
+    def __setattr__(self, name, value):
+        raise AttributeError("Vector2D is immutable")
+
+
+Vector2D(3, 4)
+```
+
+The guard refuses its own constructor. The way past is to name the machinery the guard
+stands in front of: `object.__setattr__(self, "x", float(x))` performs the plain store
+without consulting your override. That is the one line in the class entitled to step
+around the rule, and `__init__` is the only place it should appear:
+
+```python
+class Vector2D:
+    __slots__ = ("x", "y")
+
+    def __init__(self, x, y):
+        object.__setattr__(self, "x", float(x))
+        object.__setattr__(self, "y", float(y))
+
+    def __setattr__(self, name, value):
+        raise AttributeError("Vector2D is immutable")
+
+    def __delattr__(self, name):
+        raise AttributeError("Vector2D is immutable")
+
+
+v = Vector2D(3, 4)
+print(v.x, v.y)      # 3.0 4.0
+try:
+    v.x = 9
+except AttributeError as e:
+    print("refused:", e)
+try:
+    del v.y
+except AttributeError as e:
+    print("refused:", e)
+print(v.x, v.y)      # 3.0 4.0, untouched
+```
+
+`AttributeError` is the right exception, because it is what Python itself raises for a
+write it cannot perform — a property with no setter, an attribute on a tuple. Matching it
+means `except AttributeError` around a write behaves the same whether an object defends
+itself by hand or with `@property`.
+
+## Where value semantics stops holding
+
+A value type inherits its components' idea of equality, warts included. The components
+here are floats, and float arithmetic rounds:
+
+```python
+class Vector2D:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+    def __eq__(self, other):
+        if not isinstance(other, Vector2D):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y
+
+    def __add__(self, other):
+        if not isinstance(other, Vector2D):
+            return NotImplemented
+        return Vector2D(self.x + other.x, self.y + other.y)
+
+
+total = Vector2D(0.1, 0) + Vector2D(0.2, 0)
+print(total == Vector2D(0.3, 0))     # False
+print(total.x)                       # 0.30000000000000004
+```
+
+Two vectors a physicist would call equal are not equal to `==`, and no `__eq__` you write
+can fix that without breaking the hash contract, because a tolerance is not transitive:
+if $a$ is within $\varepsilon$ of $b$ and $b$ within $\varepsilon$ of $c$, nothing puts
+$a$ within $\varepsilon$ of $c$, so "equal" objects would no longer be guaranteed the
+same hash. This is why the lab's tests compare `magnitude()` with `abs(got - 5.0) <
+1e-12` and use exact `==` only where the arithmetic is exact. A value type gives you *the
+components' equality*, not a geometric one.
+
+The other boundary is the one this reading opened with. Anything whose history matters —
+an account, a player, a connection — should keep identity equality; give it a value-based
+`__eq__` and two different accounts with the same balance become interchangeable to
+every container in the program. Ask which kind of thing it is before writing a single
+dunder. If you can hand it to a friend and get the same
+thing back on a different sheet of paper, it is a value; build it the way the lab builds
+`Vector2D`.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Value semantics and the data model",
                 "minutes": 8,
@@ -634,6 +1057,357 @@ assert (_v.x, _v.y) == (1.0, 2.0), f"The vector changed anyway: {_v!r}"
                 "Template method — a concrete base method built out of abstract ones",
                 "Liskov substitution: a subtype must be usable wherever the supertype is",
                 "`isinstance` for type questions, `type(self).__name__` for the dynamic class",
+            ],
+            "read": [
+                {
+                    "title": "The call that never asks which: abstract bases and dispatch",
+                    "minutes": 15,
+                    "body": r'''
+A drawing arrives as a list of shapes — a circle here, a rectangle there, a triangle in
+one corner — and the job is to total their areas. The first version anyone writes asks
+each shape what it is before doing anything:
+
+```python
+import math
+
+
+def total_area(shapes):
+    total = 0.0
+    for kind, dims in shapes:
+        if kind == "circle":
+            total += math.pi * dims[0] ** 2
+        elif kind == "rectangle":
+            total += dims[0] * dims[1]
+        elif kind == "triangle":
+            a, b, c = dims
+            s = (a + b + c) / 2
+            total += math.sqrt(s * (s - a) * (s - b) * (s - c))
+    return total
+
+
+drawing = [("circle", (1,)), ("rectangle", (3, 4)), ("triangle", (3, 4, 5))]
+print(round(total_area(drawing), 4))     # 21.1416
+```
+
+It works, and it is already in trouble. A `total_perimeter` needs the same chain of
+`elif`s over again. So does anything that prints a description. Add a square and there
+are three chains to extend; add a hexagon to two of them and forget the third, and the
+failure is not an error but a total that is quietly short, because an unrecognised kind
+falls off the end of the chain and contributes nothing. The chain is a decision being
+made in the wrong place. The *caller* is deciding how a circle's area is computed, when
+the circle is the one that knows.
+
+Move the decision onto the object. Give each kind of shape an `area()` method of its
+own, and the loop stops asking:
+
+```python
+import math
+
+
+class Circle:
+    def __init__(self, radius):
+        self.radius = radius
+
+    def area(self):
+        return math.pi * self.radius ** 2
+
+
+class Rectangle:
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+
+    def area(self):
+        return self.width * self.height
+
+
+def total_area(shapes):
+    return sum(shape.area() for shape in shapes)
+
+
+print(round(total_area([Circle(1), Rectangle(3, 4)]), 4))   # 15.1416
+```
+
+`total_area` no longer mentions a circle. It names the *operation*, and each object
+supplies the *code*: `shape.area()` is looked up on the object in front of it at the
+moment of the call, and whichever class that object belongs to answers. That is what
+polymorphic dispatch means. A hexagon is now a new class with an `area`, and `total_area`
+does not change — it never knew about the other shapes either. This is the lab, *An
+abstract Shape hierarchy*: a geometry kernel whose helpers touch nothing but `.area()`
+and never ask which shape they are holding.
+
+## Writing the promise down
+
+The version above has a hole. Nothing says a shape *must* have an `area`. Write a `Blob`
+with a `perimeter` and no `area`, put it in the list, and the failure arrives inside
+`total_area` as an `AttributeError`, at a point in the program far from the class that
+forgot. The promise *every shape can be asked for its area* exists only in the author's
+head.
+
+`abc` is how the promise gets written down and checked. Inherit from `ABC`, mark the
+methods every subclass must supply with `@abstractmethod`, and the check runs at the one
+moment it can help — when somebody tries to build an object:
+
+```python
+# raises TypeError
+from abc import ABC, abstractmethod
+
+
+class Shape(ABC):
+    @abstractmethod
+    def area(self):
+        """Enclosed area."""
+
+    @abstractmethod
+    def perimeter(self):
+        """Length of the boundary."""
+
+
+class Blob(Shape):
+    def area(self):
+        return 1.0
+
+
+print(sorted(Shape.__abstractmethods__))    # ['area', 'perimeter']
+print(sorted(Blob.__abstractmethods__))     # ['perimeter']
+Blob()
+```
+
+The timing is the point. When the `class` statement runs, `ABCMeta` collects the names
+still marked abstract into `__abstractmethods__`; defining `Blob` is legal, and has to
+be, because that is how one abstract class extends another. Instantiation is what gets
+refused, with a `TypeError` naming the class and the method still missing. The abstract
+body never runs at all — nothing calls it unless a subclass does so deliberately with
+`super()` — which is why leaving it as a docstring and nothing else is the honest way to
+write one. People expect a `pass` body to run and return `None` when a subclass forgets;
+it never gets the chance.
+
+## The template method: written once, dispatched later
+
+Once the base can rely on `area()` and `perimeter()` existing, it can build things out of
+them. `describe()` is one line in `Shape`, and every subclass gets it for free:
+
+```python
+from abc import ABC, abstractmethod
+
+
+class Shape(ABC):
+    def __init__(self):
+        self.name = type(self).__name__
+
+    @abstractmethod
+    def area(self):
+        """Enclosed area."""
+
+    @abstractmethod
+    def perimeter(self):
+        """Length of the boundary."""
+
+    def describe(self):
+        return f"{self.name}: area={self.area():.2f}, perimeter={self.perimeter():.2f}"
+
+
+class Rectangle(Shape):
+    def __init__(self, width, height):
+        super().__init__()
+        self.width = float(width)
+        self.height = float(height)
+
+    def area(self):
+        return self.width * self.height
+
+    def perimeter(self):
+        return 2 * (self.width + self.height)
+
+
+class Square(Rectangle):
+    def __init__(self, side):
+        super().__init__(side, side)
+
+
+print(Square(2).describe())                     # Square: area=4.00, perimeter=8.00
+print([c.__name__ for c in Square.__mro__])     # ['Square', 'Rectangle', 'Shape', 'ABC', 'object']
+```
+
+Trace `Square(2).describe()`. `describe` is found on `Shape`, but the `self` it receives
+is a `Square`, and `self.area` is looked up on *that object*, not in the file where
+`describe` was written. The search walks the method resolution order printed on the last
+line: `Square` has no `area`, `Rectangle` does, and the walk stops there — the abstract
+`Shape.area` is never reached. Nothing is copied onto `Square` when the class is made;
+there is one `Rectangle.area`, found by walking a list. This late binding is the whole
+mechanism of the template method: the base fixes the shape of the algorithm, and each
+subclass supplies the steps.
+
+The same trace explains `self.name`. `Shape.__init__` runs with a `Square` as `self`, so
+`type(self)` is `Square` and `type(self).__name__` is `'Square'`, even though every line
+involved lives in `Shape`. Hard-code `"Shape"` there instead and every subclass claims to
+be a `Shape` — a wrong `repr` that no test thinks to check. `Shape.__name__` is the same
+mistake spelled differently: it is the constant string `'Shape'`, evaluated identically
+for every subclass.
+
+## `super()` is not a synonym for "my parent"
+
+`Square.__init__` above says `super().__init__(side, side)`. It could have said
+`Rectangle.__init__(self, side, side)`, and with one base the two lines call the
+identical function. The difference is what `super()` *means*: not *my parent*, but *the
+class after me in the MRO of the object being built*. With one base those coincide. Give
+a class two bases and they stop coinciding:
+
+```python
+trace = []
+
+
+class Base:
+    def __init__(self):
+        trace.append("Base")
+
+
+class Left(Base):
+    def __init__(self):
+        trace.append("Left")
+        super().__init__()
+
+
+class Right(Base):
+    def __init__(self):
+        trace.append("Right")
+        super().__init__()
+
+
+class Both(Left, Right):
+    def __init__(self):
+        trace.append("Both")
+        super().__init__()
+
+
+Both()
+print([c.__name__ for c in Both.__mro__])    # ['Both', 'Left', 'Right', 'Base', 'object']
+print(trace)                                 # ['Both', 'Left', 'Right', 'Base']
+```
+
+`Left`'s `super()` goes *sideways* to `Right`, because `Right` is what follows `Left` in
+`Both`'s MRO, and `Base` runs exactly once however many arrows point at it in the
+diagram. Change `Left` to call `Base.__init__(self)` by name and `Right` is skipped
+entirely: the trace comes out three entries long, and nothing raises. That is the
+mistake, and it is tempting because naming the parent is explicit and works on the day
+it is written. It stops working the day somebody inherits from your class and one other,
+which is a day you do not get to choose. The module's numeric exercise asks for that
+count; the mechanism above is where the number comes from.
+
+One more thing the lab's `__init__` methods do: validate *before* calling
+`super().__init__()`, so a rejected shape is never half-built. A `Circle(-1)` should
+raise `ValueError` before any state exists.
+
+## Is-a is about promises, not vocabulary
+
+Inheritance makes a promise: anywhere the base is expected, the subclass will do. That is
+Liskov's substitution principle, and it is a statement about behaviour, not about the
+English. The dictionary says a square is a rectangle. Whether the *type* `Square` can be
+a subtype of the *type* `Rectangle` depends on what `Rectangle` promises:
+
+```python
+class Rectangle:
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+
+    def area(self):
+        return self.width * self.height
+
+
+class Square(Rectangle):
+    def __init__(self, side):
+        super().__init__(side, side)
+
+    def __setattr__(self, name, value):
+        # a square stays square: setting either side sets both
+        object.__setattr__(self, "width", value)
+        object.__setattr__(self, "height", value)
+
+
+def widen(rect, extra):
+    """Make it wider. The height must not move."""
+    before = rect.height
+    rect.width += extra
+    return rect.height == before
+
+
+print(widen(Rectangle(3, 4), 2))    # True
+print(widen(Square(3), 2))          # False
+```
+
+`widen` was written against `Rectangle`, never mentions `Square`, and breaks the moment
+it is handed one. This `Rectangle` promises two dimensions that move independently, and
+a `Square` that stays square cannot keep that promise. The lab sidesteps the problem
+rather than solving it: its dimensions are fixed at construction, so the promise is never
+made, and `Square(Rectangle)` is honest — a square answers `area`, `perimeter` and
+`describe` exactly as a rectangle would. The other way out is to drop the inheritance and
+let a `Square` *hold* a `Rectangle`, which is the subject of the next module.
+
+The same test sorts is-a from has-a. A `Car` and its `Engine`: can a function that asked
+for an engine be handed a car and keep working? No — so the car *has* an engine. A
+`Circle` and `Shape`: can `total_area` be handed a circle? Yes, and that is the entire
+content of the relationship. Shared code is not the test; the ability to stand in is.
+
+## Two questions, two tools
+
+`isinstance(s, Shape)` asks a type question and is true for every subclass — the right
+guard for an input. `type(self).__name__` asks for the dynamic class and is the right
+thing for display. Reaching for `type(s) == Circle` excludes subclasses, and reaching for
+`isinstance` inside `total_area` rebuilds the `elif` chain this reading started by
+removing. The lab's helpers are meant to contain neither.
+
+## Heron's formula, and where it stops
+
+The lab's `Triangle` computes its perimeter as $a + b + c$ and its area with Heron's
+formula. With $s = (a + b + c) / 2$,
+
+$$A = \sqrt{s(s-a)(s-b)(s-c)}.$$
+
+Check it on the 3-4-5 triangle before trusting it: $s = 6$, so
+$A = \sqrt{6 \cdot 3 \cdot 2 \cdot 1} = \sqrt{36} = 6$, and the right-angle formula
+$\frac{1}{2} \cdot 3 \cdot 4$ gives 6 as well. Now feed it sides that make no triangle.
+With $1, 2, 3$: $s = 3$ and $s - c = 0$, so the radicand is zero and the area is 0.0 — a
+"triangle" that is a line segment, and no error at all. With $1, 2, 10$: $s = 6.5$,
+$s - c = -3.5$, the radicand is negative, and `math.sqrt` raises `ValueError: math domain
+error` — the right exception with the wrong message, and only when `area()` is called,
+not when the bad triangle was built.
+
+So the check belongs in `__init__`, and it is the triangle inequality: every two sides
+must together exceed the third. That reads as three comparisons. Sort the sides and one
+is enough, because if the two *shortest* sides together exceed the longest, then either
+other pairing includes the longest side, which on its own is at least as long as
+whichever side it is being compared against. The lab's solution does exactly this:
+
+```python
+def check_triangle(a, b, c):
+    sides = sorted([float(a), float(b), float(c)])
+    if sides[0] + sides[1] <= sides[2]:
+        raise ValueError("sides violate the triangle inequality")
+    return sides
+
+
+print(check_triangle(3, 4, 5))       # [3.0, 4.0, 5.0]
+for bad in [(1, 2, 3), (1, 2, 10), (10, 1, 2)]:
+    try:
+        check_triangle(*bad)
+    except ValueError as e:
+        print(bad, "->", e)
+```
+
+The `<=` rather than `<` is what refuses the degenerate `1, 2, 3` as well as the
+impossible `1, 2, 10`, and sorting is what makes `10, 1, 2` fail the same way regardless
+of the order the sides were given in.
+
+Where even this stops holding is the floats underneath it. `0.1 + 0.2 <= 0.3` is `False`
+in Python, because the left side rounds to `0.30000000000000004`, so a triangle with
+sides 0.1, 0.2 and 0.3 passes the check and reports a tiny positive area rather than
+being refused. The check is exact for integers and for floats that happen to be exact;
+for measured data a tolerance belongs in it. Hold that in mind, and then build the
+hierarchy: an abstract `Shape`, four concrete subclasses, and three helpers that never
+ask which one they hold.
+''',
+                },
             ],
             "quiz": {
                 "title": "One interface, several implementations",
@@ -1306,6 +2080,323 @@ assert largest(_one) is _one[0], "largest of a single-element list is that eleme
                 "Assigning to `self.attr` always creates an instance attribute that shadows the class one",
                 "`@classmethod` receives the class (alternative constructors); `@staticmethod` receives nothing",
             ],
+            "read": [
+                {
+                    "title": "The balance nobody can reach: properties, and where an attribute lives",
+                    "minutes": 14,
+                    "body": r'''
+Here is an account written the way a first draft is written, with a plain attribute for
+the balance:
+
+```python
+class Account:
+    def __init__(self, owner, balance):
+        self.owner = owner
+        self.balance = balance
+
+    def withdraw(self, amount):
+        if amount > self.balance:
+            raise ValueError("insufficient funds")
+        self.balance -= amount
+
+
+ada = Account("Ada", 100)
+ada.balance -= 250          # some line, in some other file, months later
+print(ada.balance)          # -150
+```
+
+`withdraw` checks. The line that broke the account did not go through `withdraw`.
+Nothing raised, nothing looked wrong at the moment it happened, and the negative number
+surfaces on a statement weeks later, three files away from the write that caused it. The
+fact *a balance is never negative* is an **invariant** — something that must be true of
+every valid account at every moment — and with a plain attribute an invariant is only as
+safe as every line in the program that assigns to it.
+
+The Java reflex is to hide the attribute and write `get_balance()` and `set_balance()`,
+and then every caller in the program changes from `ada.balance` to `ada.get_balance()`.
+Python's answer keeps the caller's syntax and changes what happens underneath: a
+property. The lab, *A bank account that defends itself*, builds an `Account` whose
+balance can be read by anyone and written by nobody, whose owner is validated on every
+assignment, and whose class-level state stays where it was put.
+
+## What a property is
+
+Start from how `ada.balance` is resolved. Before Python looks in the instance's own
+dictionary, it looks on the *class* for something called `balance` that is a data
+descriptor — an object with `__get__` and `__set__` methods. A `property` is exactly
+that. If one is found, its getter runs and the result is the value of the expression;
+the instance dictionary is never consulted:
+
+```python
+class Account:
+    def __init__(self, owner, balance):
+        self._owner = owner
+        self._balance = float(balance)
+
+    @property
+    def balance(self):
+        return self._balance
+
+
+ada = Account("Ada", 100)
+print(ada.balance)                       # 100.0
+print(type(Account.balance).__name__)    # property
+print(ada.__dict__)                      # {'_owner': 'Ada', '_balance': 100.0}
+```
+
+The caller writes `ada.balance` as before, and a method runs. Look at the dictionary:
+there is `_balance` and there is no `balance`. There is only one thing called `balance`
+anywhere, and it is the property on the class. The leading underscore is not a note to
+the reader; it is what makes the storage a *different name* from the property, and that
+difference is load-bearing.
+
+Get it wrong and the failure is immediate. A getter written `return self.balance` reads
+the property it is the getter for, which calls the getter, which reads the property:
+
+```python
+# raises RecursionError
+class Account:
+    def __init__(self, balance):
+        self._balance = float(balance)
+
+    @property
+    def balance(self):
+        return self.balance      # the property, calling itself
+
+
+Account(100).balance
+```
+
+It is a tempting line to write because `balance` is the name you are thinking about, and
+because in the plain-attribute version it was correct. The setter version of the same
+mistake, `self.owner = value` inside `@owner.setter`, recurses the same way.
+
+## Read-only, for free
+
+Now assign to the property. The descriptor is found on the class on writes as well as
+reads, so the assignment reaches the property, and a property with no setter refuses:
+
+```python
+# raises AttributeError
+class Account:
+    def __init__(self, balance):
+        self._balance = float(balance)
+
+    @property
+    def balance(self):
+        return self._balance
+
+
+ada = Account(100)
+ada.balance = 1_000_000
+```
+
+No code of your own, and the balance is read-only. The same wall is why
+`self.balance = 100` inside `__init__` would fail too: it is the same assignment, hitting
+the same property with no setter. The real number has to live under `_balance`, and
+methods such as `deposit` and `withdraw` write to `_balance` directly, after checking.
+This is what encapsulation buys: the invariant is checked in the two or three methods
+that are allowed to change the number, and nowhere else can.
+
+## A setter that validates every write
+
+`owner` is a property that *can* be written, with a rule: a non-empty string, stored
+stripped. `@property` produced an object holding the getter; `@owner.setter` takes a
+second function and returns a *new* property carrying the same getter plus that function
+as the write path, and rebinding the name `owner` to it is why both functions must share
+the name:
+
+```python
+class Account:
+    def __init__(self, owner, balance=0.0):
+        self.owner = owner            # goes through the setter below
+        if balance < 0:
+            raise ValueError("opening balance cannot be negative")
+        self._balance = float(balance)
+
+    @property
+    def owner(self):
+        return self._owner
+
+    @owner.setter
+    def owner(self, value):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("owner must be a non-empty string")
+        self._owner = value.strip()
+
+
+ada = Account("  Ada  ", 100)
+print(repr(ada.owner))               # 'Ada'
+ada.owner = " Grace "
+print(repr(ada.owner))               # 'Grace'
+for bad in ["", "   ", None, 42]:
+    try:
+        ada.owner = bad
+    except ValueError as e:
+        print(repr(bad), "->", e)
+print(repr(ada.owner))               # still 'Grace'
+try:
+    Account("", 10)
+except ValueError as e:
+    print("Account('', 10) ->", e)
+```
+
+Two things to notice. `self.owner = owner` in `__init__` is an ordinary assignment, so it
+goes through the setter: the validation is written once and runs at construction *and*
+on every later write. And every rejected write left the old value in place, because the
+check comes before the store. A setter that assigns first and validates after has
+already broken the invariant by the time it raises.
+
+## Where an attribute lives
+
+Properties aside, attribute lookup follows one rule, and a great deal of confusion about
+classes comes from not holding it steadily. `obj.attr` looks in the instance's dictionary
+first, then in the class's dictionary, then in each base along the MRO, and raises
+`AttributeError` if nobody has it. Assignment through `obj.attr = value` *always* writes
+the instance's dictionary. Watch both halves:
+
+```python
+class Account:
+    interest_rate = 0.02          # shared default, on the class
+
+    def __init__(self, owner):
+        self.owner = owner
+
+
+ada = Account("Ada")
+bo = Account("Bo")
+print(ada.interest_rate, "interest_rate" in ada.__dict__)    # 0.02 False
+ada.interest_rate = 0.10
+print(ada.__dict__)                                          # {'owner': 'Ada', 'interest_rate': 0.1}
+print(ada.interest_rate, bo.interest_rate)                   # 0.1 0.02
+Account.interest_rate = 0.05
+print(ada.interest_rate, bo.interest_rate)                   # 0.1 0.05
+del ada.interest_rate
+print(ada.interest_rate)                                     # 0.05
+```
+
+The first read finds nothing on `ada` and falls through to the class. The assignment
+creates an `interest_rate` in `ada`'s own dictionary, which from then on *shadows* the
+class value for her alone; `bo` still falls through. Changing the class value changes
+what `bo` sees and not what `ada` sees. Deleting the shadow makes the class value visible
+again — which is the proof that nothing was ever overwritten. There were two attributes
+with one name in two dictionaries, and the lookup rule chose between them. The module's
+numeric exercise turns this into a question about two bonuses; the answer comes from
+running the rule once per account.
+
+## The counter that never moves
+
+Now the trap. A class wants to count how many accounts have been made, so it keeps
+`count = 0` on the class and increments it in `__init__`:
+
+```python
+class Account:
+    count = 0
+
+    def __init__(self, owner):
+        self.owner = owner
+        self.count += 1          # the bug
+
+
+for name in ("Ada", "Bo", "Cy"):
+    acct = Account(name)
+print(Account.count)             # 0
+print(acct.__dict__)             # {'owner': 'Cy', 'count': 1}
+```
+
+`self.count += 1` is `self.count = self.count + 1`, and the two halves go to different
+places. The read finds nothing on the instance and falls through to the class, getting
+`0`. The write, like every write through `self`, lands on the instance. So each account
+ends up with a private `count` of `1`, the class tally never moves, nothing raises, and a
+test that checks `acct.count` passes. It is tempting because it reads as *increment my
+count*, and because for a number that belonged to the instance it would be right. The fix
+names the class: `Account.count += 1`, or `type(self).count += 1`.
+
+The mirror-image trap is a mutable value on the class. Put `history = []` in the class
+body and let `__init__` leave it alone. `self.history.append(...)` is not an assignment
+— no name is rebound — so nothing is shadowed, every instance falls through to the same
+list, and two accounts share one history. Per-instance state has to be *created* per
+instance, which is the whole job of `self.history = []` in `__init__`. The rule that
+sorts the two cases: `+=` on a number is an assignment and writes the instance; `append`
+on a list is a mutation and writes nothing.
+
+## `cls`, and nothing at all
+
+Two more kinds of method live on a class. A `@classmethod` receives the class it was
+called *through* as `cls`, which makes it the right shape for an alternative constructor
+and for writing shared state; a `@staticmethod` receives nothing and is a plain function
+kept in the class because that is where it belongs:
+
+```python
+class Account:
+    interest_rate = 0.02
+
+    def __init__(self, owner, balance=0.0):
+        self.owner = owner
+        self._balance = float(balance)
+
+    @classmethod
+    def from_row(cls, row):
+        owner, balance = row.split(",")
+        return cls(owner.strip(), float(balance))
+
+    @classmethod
+    def set_interest_rate(cls, rate):
+        if rate < 0:
+            raise ValueError("rate cannot be negative")
+        cls.interest_rate = rate
+
+    @staticmethod
+    def is_valid_amount(amount):
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)):
+            return False
+        return amount > 0
+
+
+class Savings(Account):
+    pass
+
+
+s = Savings.from_row("Ada, 250")
+print(type(s).__name__, s.owner, s._balance)          # Savings Ada 250.0
+Account.set_interest_rate(0.05)
+print(Account.interest_rate, s.interest_rate)           # 0.05 0.05
+print(Account.is_valid_amount(5), Account.is_valid_amount(True), Account.is_valid_amount("5"))
+```
+
+`cls` is not pinned to the class where the method was written. Called as
+`Savings.from_row(...)`, `cls` is `Savings`, so `return cls(...)` builds a `Savings` with
+no `if` and no extra code — a subclass inherits a working constructor.
+`set_interest_rate` writes `cls.interest_rate`, which is the class's dictionary, so the
+write is a real change to the shared default rather than a shadow on one instance. Both
+kinds can be called without an instance, so that is not the distinction between them;
+what a `classmethod` has that a `staticmethod` lacks is the class.
+
+The last line prints `True False False`, and the middle one matters: `isinstance(True,
+int)` is `True` because `bool` is a subclass of `int`, so a predicate that forgets to
+rule it out accepts `deposit(True)` as a deposit of one unit. The lab's tests include
+exactly that argument.
+
+## Where encapsulation stops
+
+Python has no private. `ada._balance = -5` works, and the underscore is a request to the
+reader rather than a lock; a double underscore mangles the name to `_Account__balance`,
+which guards against accidental collision in subclasses and against nothing else. A
+property guards writes *to the name*. It does not guard what the caller does with a
+mutable value it returns: `ada.history` in the lab is a plain list, and
+`ada.history.clear()` goes through no setter, because nothing was assigned. If a history
+must be tamper-proof, the getter returns a copy or a tuple, and the class pays for that
+on every read.
+
+That cost is the other boundary. A property runs code on every access, and readers
+assume attribute access is cheap; a property that opens a file or scans a list each time
+it is read is a surprise waiting inside a loop. Keep properties for reads that cost what
+an attribute costs, and for writes that need checking. Then build the account: two
+properties, one of them read-only, a class counter that moves, and a history that
+belongs to one account alone.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Invariants, properties and where state lives",
                 "minutes": 8,
@@ -1905,6 +2996,316 @@ Account.set_interest_rate(0.02)
                 "`__getitem__` should accept both an index and a `slice`",
                 "`__contains__` makes `in` explicit — without it Python falls back to iteration",
                 "Returning a new container from a slice or `__add__` keeps the type closed",
+            ],
+            "read": [
+                {
+                    "title": "It has a list; it is not one: a playlist Python already understands",
+                    "minutes": 14,
+                    "body": r'''
+A playlist ought to work with the words Python already has. `len(jazz)` should count its
+tracks, `for track in jazz` should walk them, `"So What" in jazz` should say whether a
+title is there, `jazz[0:2]` should be the first two, and `jazz + blues` should be both.
+The fastest way to get all of that is to inherit it:
+
+```python
+class Track:
+    def __init__(self, title, seconds):
+        self.title = title
+        self.seconds = seconds
+
+
+class Playlist(list):
+    def add(self, track):
+        if not isinstance(track, Track):
+            raise TypeError("only Track objects can be added")
+        self.append(track)
+        return self
+
+
+jazz = Playlist()
+jazz.add(Track("So What", 545))
+jazz.extend([1, 2, 3])          # nothing stops this
+jazz[0] = "not a track"         # nor this
+print(len(jazz), jazz)          # 4 ['not a track', 1, 2, 3]
+```
+
+Every method a list has, the playlist has, including the ones `add` was written to
+prevent. Inheriting from `list` is a promise that a `Playlist` can be used anywhere a
+list can — `extend`, `insert`, `sort`, slice assignment, `pop` — and a container that
+wants to enforce a rule about its contents cannot keep that promise. Trying to intercept
+the leaks one by one does not work either, because the built-in's own methods do not
+call your overrides:
+
+```python
+class Guarded(list):
+    def append(self, item):
+        raise TypeError("use add()")
+
+
+g = Guarded()
+g.extend([1, 2])
+g += [3]
+print(g)          # [1, 2, 3]: three items, and append was never consulted
+```
+
+So the lab, *A Playlist that behaves like a sequence*, forbids the shortcut: neither
+class may subclass `list`. A `Playlist` *has* a list, kept in a private attribute, and it
+forwards to that list exactly the operations it means to support. That is composition,
+and the forwarding is delegation. The rest of this reading is about how each piece of
+Python's vocabulary reaches a method you wrote, because once you can see that, the
+container writes itself.
+
+## `len(p)`, and what truth falls back to
+
+`len(p)` is not magic. Python evaluates it as `type(p).__len__(p)` and insists on a
+non-negative integer coming back. One line of delegation buys it:
+
+```python
+class Track:
+    def __init__(self, title, seconds):
+        self.title = title
+        self.seconds = seconds
+
+
+class Playlist:
+    def __init__(self, name):
+        self.name = name
+        self._tracks = []
+
+    def add(self, track):
+        if not isinstance(track, Track):
+            raise TypeError("only Track objects can be added")
+        self._tracks.append(track)
+        return self
+
+    def __len__(self):
+        return len(self._tracks)
+
+
+jazz = Playlist("Jazz")
+print(len(jazz), bool(jazz))                 # 0 False
+jazz.add(Track("So What", 545)).add(Track("Take Five", 324))
+print(len(jazz), bool(jazz))                 # 2 True
+```
+
+The second column is something you did not write. `bool(p)` asks for `__bool__` first,
+then for `__len__`, and only when neither exists assumes `True`. So the moment a
+container defines `__len__`, an empty one becomes falsy and `if playlist:` means what a
+reader expects. The corner to know about: a class where zero length is a perfectly
+ordinary state — a queue that happens to be empty right now — goes falsy whether or not
+you meant it to, and that is the moment to write `__bool__` and say so explicitly.
+
+`add` returning `self` is what lets the calls chain on the second-to-last line. It costs
+nothing, and the lab's tests rely on it.
+
+## `for t in p`, and the difference between iterable and iterator
+
+A `for` loop begins by calling `iter(p)`, which calls `type(p).__iter__(p)`, and then it
+calls `next()` on whatever came back until `StopIteration`. That splits the world into
+two jobs. An *iterable* is something you can ask for an iterator; an *iterator* is the
+thing that produces the items, one per `__next__`. A list is iterable — it has
+`__iter__` — and it is not an iterator, because it has no `__next__`. `iter()` checks:
+
+```python
+# raises TypeError
+class Playlist:
+    def __init__(self):
+        self._tracks = ["So What", "Take Five"]
+
+    def __iter__(self):
+        return self._tracks        # a list: iterable, not an iterator
+
+
+for title in Playlist():
+    print(title)
+```
+
+The message is `iter() returned non-iterator of type 'list'`, and this is the mistake
+people make here, because the reasoning behind it is nearly right: a list is iterable, so
+surely handing one back is enough. It is not, because the loop does not want something it
+*could* iterate; it wants the thing that has `__next__`. Ask the list for its iterator
+and return that:
+
+```python
+class Playlist:
+    def __init__(self):
+        self._tracks = ["So What", "Take Five", "Blue Train"]
+
+    def __iter__(self):
+        return iter(self._tracks)
+
+
+p = Playlist()
+it = iter(p)
+print(type(it).__name__)             # list_iterator
+print(next(it), next(it))            # So What Take Five
+for a in p:
+    for b in p:
+        if a < b:
+            print(a, "<", b)
+```
+
+`iter(self._tracks)` produces a fresh `list_iterator` every time it is called, and that
+is why the nested loop at the end works: each `for` asked for its own iterator, and the
+inner one does not disturb the outer one's position. An `__iter__` that handed out one
+shared iterator would let the inner loop exhaust it and the outer loop stop after a
+single pass. A generator — `yield from self._tracks` — is the other correct spelling,
+and it returns a fresh iterator for the same reason.
+
+## `p[key]`, and the one argument it always gets
+
+Subscription passes exactly one object to `__getitem__`, whatever was written between the
+brackets. For `p[1]` that object is `1`. For `p[0:2]` it is not two arguments and not a
+tuple; it is a `slice`:
+
+```python
+class Show:
+    def __getitem__(self, key):
+        return key
+
+
+s = Show()
+print(s[1])            # 1
+print(s[-1])           # -1
+print(s[0:2])          # slice(0, 2, None)
+print(s[::2])          # slice(None, None, 2)
+```
+
+The colon syntax is packaged into a `slice` carrying `start`, `stop` and `step`, with
+`None` for whatever was left out. That is why `__getitem__` branches on
+`isinstance(key, slice)`, and why the branch is short: a list already knows what to do
+with either kind of key, so `self._tracks[key]` handles the integer case — negative
+indices included, and an `IndexError` for an index off the end, both for free.
+
+What the slice branch must *not* do is fall through to the list. `self._tracks[0:2]` is
+a plain list: no `name`, no `by_artist`, no `total_duration`. Nothing raises, and the
+caller has quietly been handed something less capable than what they sliced. Build a new
+`Playlist` instead, and the type stays closed under its own operations —
+`jazz[0:2].total_seconds()` reads naturally, and a function that takes a playlist can be
+handed a slice of one:
+
+```python
+class Track:
+    def __init__(self, title, seconds):
+        self.title = title
+        self.seconds = seconds
+
+    def __repr__(self):
+        return f"Track({self.title!r}, {self.seconds})"
+
+
+class Playlist:
+    def __init__(self, name):
+        self.name = name
+        self._tracks = []
+
+    def add(self, track):
+        self._tracks.append(track)
+        return self
+
+    def __len__(self):
+        return len(self._tracks)
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            sliced = Playlist(self.name)
+            for track in self._tracks[key]:
+                sliced.add(track)
+            return sliced
+        return self._tracks[key]
+
+    def total_seconds(self):
+        return sum(t.seconds for t in self._tracks)
+
+
+jazz = Playlist("Jazz")
+jazz.add(Track("Blue Train", 617)).add(Track("So What", 545)).add(Track("Take Five", 324))
+half = jazz[0:2]
+print(type(half).__name__, half.name, len(half), half.total_seconds())   # Playlist Jazz 2 1162
+print(jazz[-1])                        # Track('Take Five', 324)
+print(half[0] is jazz[0])              # True
+print(len(jazz))                       # 3
+```
+
+The last two lines say something about what a slice costs. `half[0] is jazz[0]` is
+`True`: no `Track` was copied, both playlists refer to the same objects, and the slice is
+a new *container* rather than new *contents*. And `jazz` still has three tracks, because
+building a new container is what leaves the original alone. The module's numeric
+exercise adds a concatenation on top of a slice and asks for the total; the answer
+depends on seeing that the same track counted twice is the same object referenced twice.
+
+## `x in p`, and the fallback that never complains
+
+Python asks `__contains__` if it exists. If it does not, `in` falls back to iterating and
+comparing each item with `==` until one matches or the items run out. The fallback means
+`in` works the moment a class is iterable, and it also means the wrong thing works
+silently:
+
+```python
+class Track:
+    def __init__(self, title):
+        self.title = title
+
+
+class Playlist:
+    def __init__(self):
+        self._tracks = [Track("So What"), Track("Take Five")]
+
+    def __iter__(self):
+        return iter(self._tracks)
+
+
+p = Playlist()
+print("So What" in p)                        # False
+print(any(t.title == "So What" for t in p))  # True
+```
+
+A title string compared against a `Track` with `==` is never equal, so the membership
+test answers `False` and nobody is told. Writing `__contains__` is how a playlist comes
+to accept a `Track` *or* a title, case-insensitively — and how it answers `False`, rather
+than raising, for `42 in playlist`, because the lab asks for a container that is never
+surprised by its operand.
+
+## `p + q` produces a value
+
+`__add__` follows the rule from the first module: it builds a new playlist named
+`"A + B"` from both operands, leaves each operand untouched, and returns `NotImplemented`
+for anything that is not a `Playlist`. The tempting mistake is
+`self._tracks.extend(other._tracks)` followed by `return self`, which makes
+`jazz + blues` an expression that *mutates* `jazz` and evaluates to the same object. An
+expression that rewrites its own operands is the one thing `+` must never be, and the
+lab checks both operands' lengths afterwards.
+
+## Where delegation stops holding
+
+Composition means the surface is exactly what you wrote and nothing more.
+`sorted(playlist)` works, because it iterates; `playlist.sort()` does not exist, and that
+is the point. But two things come through the protocols that you may not have meant.
+
+The first is the old sequence protocol. A class with `__getitem__` and *no* `__iter__` is
+still iterable: Python calls `__getitem__(0)`, `__getitem__(1)`, and so on until an
+`IndexError`, and `in` falls back to the same walk. So forgetting `__iter__` on a
+sequence-like class appears to work — right up to the day the class is given a
+`__getitem__` that takes keys rather than positions, when every loop over it starts
+raising `KeyError` at zero. Write `__iter__` and mean it.
+
+The second is that delegation shares; it does not copy. `by_artist`, a slice, a
+concatenation — every one of them holds references to the same `Track` objects as the
+original, so a change to a track through one playlist is visible through all of them.
+For the lab this is what you want; a track is one recording however many lists it sits
+in. For a container of mutable things it is a decision to make on purpose.
+
+The standard library has a middle path for the day the surface needs to be wider:
+inherit from `collections.abc.Sequence`, supply `__len__` and `__getitem__`, and
+`__iter__`, `__contains__`, `__reversed__`, `index` and `count` arrive as mixins written
+in terms of the two you wrote. That is inheritance from an *interface* rather than from
+a container — no storage comes with it, so the has-a relationship to the list underneath
+is untouched. The lab keeps to the bare protocols so that you write each one once and see
+what it does. `Track` first: a value, with the equality and hash rules from the first
+module and a `duration` property that pads seconds to two digits. Then the container,
+one dunder at a time.
+''',
+                },
             ],
             "quiz": {
                 "title": "Containers that behave like containers",

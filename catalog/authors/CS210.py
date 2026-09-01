@@ -45,6 +45,289 @@ COURSE = {
                 "Starvation under strict priority, and ageing as the usual remedy",
                 "Quantum choice: too large degenerates to FCFS, too small drowns in switch overhead",
             ],
+            "read": [
+                {
+                    "title": "One processor, four claimants, and the timeline that settles it",
+                    "minutes": 15,
+                    "body": r'''
+A supermarket opens one till. First in line is a customer with a full trolley — a
+hundred items, a hundred seconds of scanning — and behind them stand ten people holding
+one item each. The cashier serves in order of arrival, so the ten stand there for the
+whole trolley and then take ten seconds apiece. Add up the waiting: the trolley waited
+nothing, and the ten waited 100, 110, 120 and so on up to 190 seconds, which comes to
+1450 seconds between them. Now let the ten go first. They wait 0, 10, 20, up to 90 —
+450 seconds in total — and the trolley waits 100. The shop's total waiting fell from
+1450 seconds to 550. Nobody scanned faster. The same items went over the same scanner
+at the same speed, and the number everyone cares about fell by almost two thirds
+because the *order* changed.
+
+That is the whole of this module. One processor, several processes that could use it,
+and a rule for choosing which one gets it next. The rule is a scheduling policy, and
+the till is the reason a policy is not a detail: with the same hardware and the same
+work, it moves the waiting time by a large factor, and the policy that feels fairest —
+first come, first served — is the one that produced the 1450.
+
+## What the scheduler is choosing between
+
+A process, as far as the scheduler is concerned, is in one of three states. It is
+*running* if it holds the processor. It is *ready* if it could run and is waiting for
+the processor to come free. It is *blocked* if it is waiting for something else — a
+disk read to land, a key to be pressed — and could not use the processor if it were
+offered. Only the ready processes are candidates, and the kernel keeps them in a ready
+queue. Everything the scheduler knows about a process lives in its process control
+block: the saved registers, the program counter, the base address of its page table,
+its priority, its accounting.
+
+Moving the processor from one process to another is a context switch. The visible part
+is the copying: the running process's registers and page-table base go into its control
+block, the next process's come out of its, and execution resumes wherever that process
+was interrupted. That is a few hundred instructions. The invisible part costs more. The
+cache is full of the outgoing process's data and the TLB was invalidated along with the
+page table, so the incoming process runs its first few thousand instructions at memory
+speed rather than cache speed. None of that is work either process asked for. Every
+policy in this module is a different way of putting useful work in a good order while
+spending as little as possible on switches.
+
+## The timeline is the only artefact
+
+Whatever the policy, running it produces one thing: a record of who held the processor,
+and when. In this module's lab, "Four schedulers over one workload", that record is a
+list of `(pid, start, end)` segments — a Gantt chart written down — and every scheduler
+returns it and nothing else. All the numbers you might want are arithmetic on that list
+afterwards, and it is worth deriving the arithmetic from a picture rather than
+memorising two formulas.
+
+A process appears at its arrival time and vanishes at the end of its last segment. The
+interval between those two instants is the whole time it spent in the system, and that
+is its turnaround:
+
+$$\text{turnaround} = \text{completion} - \text{arrival}$$
+
+During that interval it was doing one of two things at every tick: holding the
+processor, or not. The ticks it held the processor add up to its burst. Whatever is
+left of the turnaround it spent in the ready queue, and that is its waiting time:
+
+$$\text{waiting} = \text{turnaround} - \text{burst}$$
+
+Both fall out of the timeline and the workload, and that matters more under preemption
+than it first appears.
+
+## First come, first served, worked through
+
+The lab's workload is four processes:
+
+```text
+pid   arrival   burst   priority
+ A       0        5        2
+ B       1        3        3
+ C       2        8        1
+ D       3        6        1
+```
+
+FCFS dispatches in arrival order and never takes the processor away. At tick 0 only A
+exists, so A runs from 0 to 5. By tick 5 the other three have all arrived, and they go
+in the order they came: B from 5 to 8, C from 8 to 16, D from 16 to 22. Now the
+arithmetic, taking D: it arrived at 3 and completed at 22, so its turnaround is 19; it
+held the processor for 6 of those ticks, so it waited 13. Doing the same for all four,
+with the timeline written down as the literal it is:
+
+```python
+WORKLOAD = [
+    {"pid": "A", "arrival": 0, "burst": 5},
+    {"pid": "B", "arrival": 1, "burst": 3},
+    {"pid": "C", "arrival": 2, "burst": 8},
+    {"pid": "D", "arrival": 3, "burst": 6},
+]
+FCFS = [("A", 0, 5), ("B", 5, 8), ("C", 8, 16), ("D", 16, 22)]
+
+def waiting_times(procs, timeline):
+    completion = {}
+    for pid, start, end in timeline:
+        completion[pid] = max(completion.get(pid, 0), end)
+    waiting = {}
+    for p in procs:
+        turnaround = completion[p["pid"]] - p["arrival"]
+        waiting[p["pid"]] = turnaround - p["burst"]
+    return waiting
+
+w = waiting_times(WORKLOAD, FCFS)
+print(w, "mean", sum(w.values()) / len(w))
+```
+
+The mean waiting time is 5.75 ticks, and the shape of the trolley is in the numbers: C
+wanted 8 ticks and D wanted 6, and because C turned up one tick earlier, D sat through
+all eight of C's. FCFS has no notion of burst length to notice that with, and no way to
+act on it if it did. The queue is the entire policy.
+
+## Shortest job first, and why it wins
+
+Take two processes that are both ready at the same instant and will run back to back,
+one with burst $x$ and one with burst $y$. Whichever goes first waits nothing; the
+other waits for the whole of the first. Run $x$ first and the pair's total waiting is
+$x$; run $y$ first and it is $y$. So the total is smaller when the shorter burst goes
+first, by exactly the difference between the two. That is the whole argument, because
+any schedule with a longer job immediately before a shorter one can be improved by
+swapping the pair, and a schedule that cannot be improved that way has its jobs in
+ascending order of burst. Shortest job first minimises the total — and so the mean —
+waiting time.
+
+You can watch the exchange argument work on the three processes that are ready
+together at tick 5. Every order of the bursts 3, 6 and 8, with the total waiting each
+one produces:
+
+```python
+from itertools import permutations
+
+def total_waiting(order):
+    clock, total = 0, 0
+    for burst in order:
+        total += clock          # this job waited for everything before it
+        clock += burst
+    return total
+
+for order in sorted(permutations([3, 6, 8]), key=total_waiting):
+    print(order, total_waiting(order))
+```
+
+Ascending order gives 12; the trolley order, 8 then 6 then 3, gives 22; and every swap
+of an adjacent out-of-order pair moves the total the right way.
+
+Now run SJF over the lab's workload and watch where the argument applies and where it
+does not. At tick 0 only A has arrived, so A runs from 0 to 5 — not because it is the
+shortest, but because it is the only candidate. At tick 5, B, C and D are all ready,
+and here the exchange argument has something to say: B with 3 goes first, from 5 to 8;
+then D with 6, from 8 to 14; then C with 8, from 14 to 22. The waiting times are 0, 4,
+12 and 5, and the mean is 5.25 against FCFS's 5.75. The improvement is modest because
+only three of the four were ever ready together; the argument needs every job present
+at the swap, and A was never in a position to be swapped with anything.
+
+That is also where the optimality stops holding. Once arrivals are staggered, a
+non-preemptive scheduler that has committed to an 8-tick job cannot take advantage of a
+1-tick job that turns up a moment later, and a preemptive variant — shortest
+*remaining* time first — beats it. And there is the larger problem: SJF needs the burst
+before the process has run it. The lab hands you the burst in the process dict, which
+is the one thing a real kernel never gets; it has to predict from history, usually with
+an exponential average $\tau_{n+1} = \alpha t_n + (1 - \alpha)\tau_n$ of past bursts,
+and the prediction is wrong whenever a process changes its behaviour.
+
+Priority scheduling is the same engine with a different sort key, and the lab builds it
+that way. Smaller numbers are more urgent. At tick 5 the candidates are B (priority 3),
+C (1) and D (1); C and D tie, and the tie breaks on arrival, so C runs from 5 to 13, D
+from 13 to 19, and B last from 19 to 22, having waited 18 ticks for a 3-tick job. If
+more priority-1 work kept arriving, B would wait forever — starvation — and the usual
+remedy is ageing, which raises a process's priority the longer it waits so that the
+ordering eventually inverts in its favour.
+
+## Round robin, tick by tick
+
+Every policy so far lets a process run until it finishes. Round robin gives it at most
+a *quantum* of ticks, then moves it to the back of the queue and dispatches whoever is
+at the front. Interactive work gets a slice regularly instead of waiting behind a
+trolley; the price is the context switches.
+
+One rule catches almost everyone: a process that arrives at exactly the tick another is
+preempted joins the queue *ahead* of the preempted one. It arrived while the other was
+running, so it has been waiting longer. Trace the lab's workload with a quantum of 3
+and print the queue after each dispatch:
+
+```python
+WORKLOAD = [
+    {"pid": "A", "arrival": 0, "burst": 5},
+    {"pid": "B", "arrival": 1, "burst": 3},
+    {"pid": "C", "arrival": 2, "burst": 8},
+    {"pid": "D", "arrival": 3, "burst": 6},
+]
+
+def round_robin_trace(procs, quantum):
+    arrivals = sorted(procs, key=lambda p: (p["arrival"], p["pid"]))
+    remaining = {p["pid"]: p["burst"] for p in procs}
+    queue, timeline, clock, nxt = [], [], 0, 0
+
+    def admit(now):
+        nonlocal nxt
+        while nxt < len(arrivals) and arrivals[nxt]["arrival"] <= now:
+            queue.append(arrivals[nxt]["pid"])
+            nxt += 1
+
+    while nxt < len(arrivals) or queue:
+        if not queue:
+            clock = max(clock, arrivals[nxt]["arrival"])
+        admit(clock)
+        pid = queue.pop(0)
+        run = min(quantum, remaining[pid])
+        timeline.append((pid, clock, clock + run))
+        clock += run
+        remaining[pid] -= run
+        admit(clock)                    # newcomers first ...
+        if remaining[pid] > 0:
+            queue.append(pid)           # ... then the preempted process
+        print(f"{pid} {clock - run:>2}-{clock:<2}  left {remaining[pid]}  queue {queue}")
+    return timeline
+
+round_robin_trace(WORKLOAD, 3)
+```
+
+Read the first line. A runs from 0 to 3; B, C and D arrived during that slice, so they
+are admitted first and A goes behind them. Every later line follows the same rule, and
+the result — `A 0-3, B 3-6, C 6-9, D 9-12, A 12-14, C 14-17, D 17-20, C 20-22` — is
+the timeline the lab's tests pin down. C ran in three separate segments, and they are
+recorded as three segments, not merged.
+
+Here is why the metrics have to be derived and not measured. C's completion is the end
+of its *last* segment, 22; it arrived at 2, so its turnaround is 20; its burst is 8;
+its waiting is 12. The tempting shortcut is waiting = first start − arrival, which for
+C gives 6 − 2 = 4. It is tempting because for every non-preemptive policy it is exactly
+right — a process that runs once waits only before that one run — so a `metrics`
+written that way passes every FCFS, SJF and priority test and fails only on round
+robin, where C spent 4 ticks waiting before its first slice and another 8 between
+slices. The lab's `metrics` is told to take the maximum `end` over each pid's segments
+for precisely this reason.
+
+## What the quantum costs
+
+Suppose $n$ processes, none finishing, each dispatch costing $s$ ticks of switch and
+then delivering $q$ ticks of work. One turn of the queue is $n(q + s)$ ticks long and
+contains $nq$ ticks of user work, so the fraction of the machine doing what it was
+asked is
+
+$$\frac{nq}{n(q + s)} = \frac{q}{q + s}$$
+
+with no $n$ in it at all. Make $q$ enormous and the fraction goes to 1 — but then no
+process is ever preempted, each runs to completion in arrival order, and round robin
+has become FCFS with a timer that never fires. Make $q$ comparable to $s$ and half the
+machine is spent switching. In between, a process that has used its slice waits
+$(n - 1)q$ ticks for the queue to come round again, and that grows with the load. A
+fixed quantum has to be wrong at one end or the other, which is why modern schedulers
+pick a target latency for the whole round and divide it among the runnable processes,
+with a floor.
+
+## Where this model stops
+
+Everything above assumes one processor, processes that are pure CPU work, and bursts
+that are known. Real processes alternate CPU bursts with I/O — the ten single-item
+customers were the ones keeping the disks and the network busy, and while they queue
+behind the trolley every device they own sits idle, which is the convoy effect's real
+damage. Real machines have several cores and a queue per core. Real priorities interact
+with locks: a low-priority process holding a lock that a high-priority one needs is the
+priority inversion that froze the Mars Pathfinder lander in 1997. And a fair-share
+scheduler does not think in quanta at all; it tracks how much each process has received
+and runs the one furthest behind. None of that invalidates the model. It is the model
+with more terms in it, and the timeline-and-arithmetic discipline is how you check any
+of them.
+
+## What you are about to build
+
+"Four schedulers over one workload" asks for `fcfs`, `sjf`, `priority_schedule` and
+`round_robin`, each returning the timeline and nothing else, and then `metrics` and
+`averages` that do the arithmetic afterwards. The three non-preemptive schedulers can
+share one dispatch loop and differ only in their sort key. Round robin needs the two
+admission points from the trace above — before the dispatch, and again at the end of
+the slice, before the preempted process is requeued. And `metrics` must find completion
+as the end of the last segment, because one of the tests checks C's waiting under
+round robin, and that is the number the shortcut gets wrong.
+''',
+                },
+            ],
             "quiz": {
                 "title": "What the scheduler is actually choosing",
                 "minutes": 8,
@@ -600,6 +883,230 @@ assert _a["waiting"] < _f["waiting"], "SJF is optimal for mean waiting time — 
                 "Belady's anomaly — FIFO is not a stack algorithm, so more frames can mean more faults",
                 "Thrashing, the working-set model, and why fault rate not utilisation is the signal to watch",
             ],
+            "read": [
+                {
+                    "title": "Three frames, twelve references, and the victim that decides everything",
+                    "minutes": 13,
+                    "body": r'''
+Picture a desk with room for three open books and a shelf across the room holding the
+rest of the library. You are working through a reading list — a page from book 1, then
+book 2, then 3, then 4, then 1 again — and every time the list names a book that is on
+the desk you turn to it in a second. When it names one that is not, you walk to the
+shelf, and if the desk is full you must first carry a book back. The walk takes
+minutes; the turn takes a second. Which book you carry back is the only decision you
+make, and it decides how many walks you take.
+
+That is paging with the numbers taken out. The desk is physical memory, divided into
+*frames*; the books are the *pages* of a process's address space; the shelf is the
+disk; and the reading list is the process's reference string — the sequence of pages
+it touches, in order. A reference to a resident page is a hit. A reference to a page
+that is not resident is a page fault, and the replacement policy is the rule for which
+resident page gets carried back to the shelf. This module's lab, "Page replacement and
+Belady's anomaly", builds three such rules and counts their walks.
+
+## How a reference becomes a page number
+
+A process sees a flat range of virtual addresses. Memory is handed out in fixed pages,
+and on most systems a page is 4 KiB, which is $2^{12}$ bytes. Naming a byte within a
+page therefore takes 12 bits, and those 12 bits mean the same thing on the desk as on
+the shelf: byte 2748 of a page is byte 2748 of whichever frame holds it. So the low 12
+bits of a virtual address — the offset — pass through translation untouched, and only
+the bits above them, the page number, are looked up in the page table and replaced by a
+frame number. Page sizes are powers of two for exactly this reason: the split is a
+shift rather than a division, cheap enough for hardware to do on every memory access.
+
+When the page table says the page is not resident, the hardware does not fail the
+instruction. It traps to the kernel — the same mechanism as a system call, raised by
+the memory-management unit instead of by the program — and the kernel finds a frame,
+evicting something if it must, starts the disk read, and blocks the process. When the
+page lands, the kernel *restarts* the faulting instruction from the beginning, and the
+program never learns that anything happened. That restart is what makes the whole
+scheme invisible, and it is why the reference string is the right level to think at:
+as far as the policy is concerned, an instruction that faults is a page number and
+nothing more.
+
+## What one walk costs
+
+Suppose a resident reference costs $t_{mem}$, a fault costs $t_{fault}$, and a fraction
+$p$ of references fault. The average reference costs the hit price weighted by how
+often you hit, plus the fault price weighted by how often you fault:
+
+$$\mathrm{EAT} = (1 - p)\,t_{mem} + p\,t_{fault}$$
+
+The two prices are on different scales, and that is the whole story. Memory is around
+100 ns; a disk read is around 8 ms, which is 8,000,000 ns. Put those in with a few
+fault rates:
+
+```python
+t_mem = 100                # ns
+t_fault = 8_000_000        # ns, which is 8 ms
+for n in (10_000, 100_000, 1_000_000):
+    p = 1 / n
+    eat = (1 - p) * t_mem + p * t_fault
+    print(f"one fault in {n:>9,}: EAT {eat:8.2f} ns, {eat / t_mem:4.1f} times slower")
+```
+
+One fault in ten thousand makes memory nine times slower. To hold the slowdown under
+ten per cent you need $p \times 8{,}000{,}000 < 10$, so $p$ below about one in a
+million. Nothing in the policy changes the 8 ms; all it can do is push $p$ down, which
+is why a policy that saves one fault in a thousand is worth a great deal of
+bookkeeping.
+
+## FIFO, worked through
+
+The lab's reference string is the textbook one: `1 2 3 4 1 2 5 1 2 3 4 5`, twelve
+references over five distinct pages, with three frames. First-in, first-out evicts the
+page that has been resident longest — the one that was *loaded* longest ago, regardless
+of when it was last used. Every policy in the lab fills a free frame before evicting
+anything, lowest index first, so the first three references load pages 1, 2 and 3 into
+frames 0, 1 and 2 and there is no choice to make until the fourth:
+
+```python
+CLASSIC = [1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5]
+
+def fifo_trace(refs, nframes):
+    frames = [None] * nframes
+    loaded_at = [0] * nframes
+    faults = 0
+    for tick, page in enumerate(refs):
+        if page in frames:
+            print(f"t={tick:<2} page {page}  hit    {frames}")
+            continue
+        if None in frames:
+            slot = frames.index(None)
+        else:
+            slot = min(range(nframes), key=lambda i: loaded_at[i])
+        frames[slot] = page
+        loaded_at[slot] = tick
+        faults += 1
+        print(f"t={tick:<2} page {page}  FAULT  {frames}")
+    return faults
+
+print("faults:", fifo_trace(CLASSIC, 3))
+```
+
+Follow the fourth line. Page 4 is not resident and the desk is full; page 1 was loaded
+first, so it goes, and page 4 takes frame 0. Then page 1 is referenced again and is not
+there — a fault — and the oldest resident is now page 2. The pattern rolls on: for the
+first seven references every one is a fault, because the string cycles through four
+pages on a desk that holds three, and FIFO throws out exactly the page that is about to
+be needed. References eight and nine, to pages 1 and 2, hit — those two were loaded at
+ticks 4 and 5 and page 5 was loaded after them. Nine faults in twelve references, and
+the frames end holding pages 5, 3 and 4.
+
+Now give FIFO a fourth frame. Pages 1 to 4 load into the four frames, references five
+and six hit, and then page 5 arrives at reference seven with the desk full. FIFO evicts
+page 1, the oldest. Page 1 is the very next reference. It evicts page 2; page 2 is the
+next reference. From there every remaining reference faults: ten faults with four
+frames against nine with three. More memory, more walks to the shelf. That is Belady's
+anomaly, and it is the reason the lab asks you to compute a `fault_curve` and search it
+for the pairs where an extra frame made things worse.
+
+## Why LRU cannot do that
+
+Least recently used evicts the page whose most recent *reference* is furthest back — a
+hit refreshes the page's standing, where under FIFO it does not. That single difference
+is the whole distinction between the two policies, and it is one line in the code:
+whether a hit updates the per-frame timestamp.
+
+It also gives LRU a property FIFO lacks, and you can derive it from the definition.
+Under LRU, the pages resident in $m$ frames are the $m$ most recently referenced
+distinct pages — nothing else can be there, because anything older would have been the
+victim. The pages resident in $m + 1$ frames are the $m + 1$ most recently referenced.
+The first set is contained in the second by construction. So every reference that hits
+with $m$ frames hits with $m + 1$, and the fault count can only fall or stay put as
+frames are added. Policies with that nesting property are called stack algorithms,
+because the resident set for any memory size can be read off the top of one ordered
+list, and no stack algorithm can show the anomaly.
+
+FIFO's resident set is the last $m$ pages *loaded*, and which pages were loaded depends
+on which were evicted, which depends on $m$. The nesting has no reason to hold, and on
+this string it does not:
+
+```python
+CLASSIC = [1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5]
+
+def resident_sets(refs, nframes, refresh_on_hit):
+    """The resident set after each reference: FIFO, or LRU if hits refresh."""
+    frames, stamp, out = [], {}, []
+    for tick, page in enumerate(refs):
+        if page in frames:
+            if refresh_on_hit:
+                stamp[page] = tick
+        else:
+            if len(frames) == nframes:
+                frames.remove(min(frames, key=lambda p: stamp[p]))
+            frames.append(page)
+            stamp[page] = tick
+        out.append(set(frames))
+    return out
+
+for name, refresh in (("FIFO", False), ("LRU", True)):
+    three = resident_sets(CLASSIC, 3, refresh)
+    four = resident_sets(CLASSIC, 4, refresh)
+    broken = [t for t in range(len(CLASSIC)) if not three[t] <= four[t]]
+    print(name, "nesting fails at ticks", broken)
+    for t in broken[:1]:
+        print("   3 frames hold", sorted(three[t]), " 4 frames hold", sorted(four[t]))
+```
+
+At tick 6 the three-frame memory holds pages 1, 2 and 5 while the four-frame memory
+holds 2, 3, 4 and 5. Page 1 is on the small desk and not on the large one, so at tick 7
+the small memory hits and the large one faults. The anomaly is nothing more mysterious
+than that, seen one reference at a time. LRU's list of failures is empty, at every
+tick, and so is OPT's.
+
+## OPT, the yardstick
+
+The best possible policy evicts the page whose next reference is furthest in the future
+— a page that is never used again goes first. Run it on the same string with three
+frames and it faults seven times: three to load 1, 2 and 3, then one each for pages 4,
+5, 3 and 4, with everything else a hit. No policy can do better on that string with
+three frames, because each of those seven is a first touch or a reload that no choice
+of victim could have avoided.
+
+OPT cannot be implemented, because it needs the rest of the reference string and a
+running kernel has only the past. Its value is as a lower bound: run it offline over a
+recorded trace and the gap between LRU's count and OPT's tells you how much is left to
+win. LRU is the mirror image — the past standing in for the future — and it works as
+well as it does because programs have *locality*: the pages touched recently are a good
+predictor of the pages about to be touched. The lab's `opt` needs a helper that finds a
+page's next reference after the current tick, with infinity for a page never referenced
+again, and ties broken on the lowest frame index.
+
+## The mistake, and where the model stops
+
+The mistake people make in the lab is the one line above: writing FIFO so that a hit
+refreshes the page. It is tempting because it feels like the right thing — the page was
+used, so surely it is fresher now — and the result is a policy that faults ten times on
+the classic string with three frames instead of nine, never shows the anomaly, and is
+LRU wearing FIFO's name. FIFO is defined by ignoring hits. The second mistake is outside
+the code: reading a system's low CPU utilisation as spare capacity. A machine whose
+processes have fewer frames than their working sets — the pages they need over their
+current phase — spends its time faulting, and the CPU is idle because it is waiting on
+the disk. Admitting more processes to soak up the idle time takes frames from everyone,
+drives the fault rate higher, and drops utilisation further. That collapse is
+thrashing, and the fault rate, not the utilisation, is the number to watch.
+
+Where the model stops: exact LRU needs the timestamp updated on *every* reference, hit
+or miss, which no memory-management unit will do; hardware offers a single reference
+bit per page, and real kernels run approximations — clock, second chance — that sweep
+the bits periodically. Frames are shared between processes, so a global policy can take
+a frame from a process that is not the one faulting, and the working-set model exists
+to decide how many frames each process should hold. And on a solid-state disk the 8 ms
+is nearer 80 µs, which makes a fault a hundred times cheaper without making it free.
+
+## What you are about to build
+
+"Page replacement and Belady's anomaly" asks for `fifo`, `lru` and `opt` with one
+signature, each returning the list of fault flags and the final frames, with a free
+frame always taken before any eviction. `fifo` and `lru` are the same loop with one
+line different. `fault_curve` runs a policy across every memory size from one frame up,
+and `belady_pairs` reads the curve for the places it rises — which it will do for FIFO
+between three and four frames, and for the other two never.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Faults, victims, and what a fault costs",
                 "minutes": 8,
@@ -1086,6 +1593,264 @@ assert belady_pairs(opt, CLASSIC, 5) == [], "OPT is also a stack algorithm"
                 "Coffman's four conditions: mutual exclusion, hold-and-wait, no preemption, circular wait",
                 "Acquiring the mutex before the counting semaphore breaks the third and deadlocks the pair",
                 "Deadlock avoidance: the banker's algorithm grants only requests that leave a safe state",
+            ],
+            "read": [
+                {
+                    "title": "Twenty interleavings, three semaphores, and a banker who says no",
+                    "minutes": 13,
+                    "body": r'''
+Two threads share a counter and each runs `count += 1` once. The counter starts at zero
+and the answer should be two. On the processor that one line is three instructions —
+load the value into a register, add one to the register, store the register back — and
+between any two of them the other thread can run. Suppose thread X loads 0, and before
+it stores, thread Y loads 0 as well. Both add one to their own register, both store 1,
+and the counter ends at 1. Two increments, one counted.
+
+Nothing about that run is wrong on its own. Every instruction did what it says. What
+went wrong is the *order* in which the two threads' instructions were interleaved, and
+that order is chosen by the scheduler, not by the program. Count the orders. Six
+instruction slots, three of them X's, so there are $\binom{6}{3} = 20$ interleavings,
+and they are few enough to enumerate:
+
+```python
+from itertools import combinations
+
+STEPS = ["load", "add", "store"]
+
+def run(order):
+    """order names the thread that runs at each of the six slots."""
+    count = 0
+    local = {"X": None, "Y": None}
+    pc = {"X": 0, "Y": 0}
+    for t in order:
+        step = STEPS[pc[t]]
+        if step == "load":
+            local[t] = count
+        elif step == "add":
+            local[t] += 1
+        else:
+            count = local[t]
+        pc[t] += 1
+    return count
+
+results = {}
+for x_slots in combinations(range(6), 3):
+    order = "".join("X" if i in x_slots else "Y" for i in range(6))
+    results[order] = run(order)
+
+print(len(results), "interleavings")
+print(sum(1 for v in results.values() if v == 2), "end at 2:",
+      [o for o, v in results.items() if v == 2])
+print(sum(1 for v in results.values() if v == 1), "end at 1, for example",
+      next(o for o, v in results.items() if v == 1))
+```
+
+Eighteen of the twenty end at 1. The only two that end at 2 are the ones where one
+thread finishes all three instructions before the other begins. A test that runs the
+program and sees 2 has demonstrated that one interleaving out of twenty behaves — and on
+a real machine that interleaving is the overwhelmingly likely one, because three
+consecutive instructions are rarely split by a timer interrupt. That is what makes a
+race condition the bug it is: it is a property of the *set* of interleavings, most of
+which the program will never execute in testing, and it surfaces in production when
+the timer finally fires in the wrong microsecond. This module's lab, "Interleaving
+simulator and the banker's algorithm", makes you choose the interleaving by hand for
+precisely this reason.
+
+## What a lock has to promise
+
+The three instructions form a critical section: a stretch that must not be interleaved
+with another thread's copy of the same stretch. Whatever mechanism protects it has to
+give three things, and each comes from the counter picture. *Mutual exclusion* — at
+most one thread inside at a time — is the fix itself. *Progress* — if nobody is inside
+and somebody wants in, the decision is made among the threads that want in, and cannot
+be postponed forever — rules out a lock so cautious that a thread which does not want
+the counter can block one that does. *Bounded waiting* — once a thread has asked, there
+is a limit on how many times others may overtake it — rules out a lock that is correct
+but starves.
+
+## A counter that blocks
+
+A semaphore is an integer with two operations. `wait` checks the counter: if it is
+above zero, decrement it and carry on; if it is zero, block until it is not. `signal`
+increments the counter and, if anything is blocked on it, wakes one waiter. Think of a
+car park with $N$ spaces and a counter at the gate: `wait` is arriving, `signal` is
+leaving, and when the counter reads zero you queue at the barrier.
+
+Two properties follow from that picture and both matter in the lab. `signal` never
+blocks — leaving a car park is always possible — and a `wait` that blocks must consume
+nothing, because a car queued at the barrier is not inside. The simulator's `try_step`
+returns `False` for a `wait` on zero *without decrementing*. Decrement anyway and the
+counter drifts below the number of spaces that exist; the invariant everything rests on
+is gone, and no later `signal` puts it back. A semaphore initialised to 1 is a mutex:
+one space, one car.
+
+## The bounded buffer, and why the order matters
+
+A producer puts items into a buffer of fixed capacity and a consumer takes them out.
+Three things have to be counted. Free slots, so the producer stops when the buffer is
+full: a semaphore `empty`, initialised to the capacity. Filled slots, so the consumer
+stops when it is empty: a semaphore `full`, initialised to 0. And the list itself,
+which both threads modify: a `mutex` at 1. The producer waits on `empty`, takes the
+mutex, inserts, releases the mutex and signals `full`; the consumer is its mirror
+image, waiting on `full` and signalling `empty`. Between operations, `empty + full` is
+the capacity, always.
+
+Swap the producer's first two lines — take the mutex *then* wait for a slot — and it
+deadlocks. Here is a sketch of the lab's simulator, running both versions with a buffer
+of one and two items each, the threads taken in turn:
+
+```python
+def make(capacity):
+    return {"buf": [], "sem": {"empty": capacity, "full": 0, "mutex": 1}}
+
+def step(state, op):
+    kind, arg = op
+    if kind == "wait":
+        if state["sem"][arg] == 0:
+            return False              # blocked, and the counter is untouched
+        state["sem"][arg] -= 1
+    elif kind == "signal":
+        state["sem"][arg] += 1
+    elif kind == "insert":
+        state["buf"].append(arg)
+    elif kind == "remove":
+        state["buf"].pop(0)
+    return True
+
+GOOD = [("wait", "empty"), ("wait", "mutex"), ("insert", "a"),
+        ("signal", "mutex"), ("signal", "full")]
+BAD = [("wait", "mutex"), ("wait", "empty"), ("insert", "a"),
+       ("signal", "mutex"), ("signal", "full")]
+CONSUME = [("wait", "full"), ("wait", "mutex"), ("remove", None),
+           ("signal", "mutex"), ("signal", "empty")]
+
+def take_turns(producer_ops, items):
+    state = make(1)
+    progs = {"C": CONSUME * items, "P": producer_ops * items}
+    pcs = {"C": 0, "P": 0}
+    for _ in range(100):
+        moved = False
+        for tid in ("C", "P"):
+            pc = pcs[tid]
+            if pc < len(progs[tid]) and step(state, progs[tid][pc]):
+                pcs[tid] += 1
+                moved = True
+        if all(pcs[t] == len(progs[t]) for t in progs):
+            return "done", state["sem"], state["buf"]
+        if not moved:
+            return "deadlock", state["sem"], state["buf"]
+    return "timeout", state["sem"], state["buf"]
+
+print("empty first:", take_turns(GOOD, 2))
+print("mutex first:", take_turns(BAD, 2))
+```
+
+Trace the failure. The consumer goes first each round and is blocked on `full` from the
+start. The bad producer takes the mutex, waits on `empty` — there is a slot — inserts,
+releases the mutex and signals `full`. Next round the consumer passes `wait(full)`, and
+in the same round the producer, starting its second item, takes the mutex again. Now
+the consumer stops dead at `wait(mutex)`, and the producer, holding the mutex, waits on
+`empty` — which is zero, because the one-slot buffer is full and nothing has been
+removed. Every semaphore reads zero, the buffer still holds the first item, and
+nothing will ever move. The correct producer runs the same schedule to completion, with
+the semaphores back where they started.
+
+Coffman's four conditions are all visible in that trace, and every one is needed.
+*Mutual exclusion*: the mutex can be held by one thread. *Hold and wait*: the producer
+holds the mutex while waiting for `empty`. *No preemption*: nobody takes the mutex away
+from a sleeping thread. *Circular wait*: P waits for C and C waits for P. Remove any
+one and the deadlock cannot form. The correct order removes hold-and-wait — a producer
+that sleeps on `empty` sleeps holding nothing — and it is the order the lab tests for,
+because the swapped version is the one everybody writes first. It is tempting because
+the lock feels like the protective thing, so taking it before doing anything at all
+looks like the cautious choice; the trace is what caution costs.
+
+## The banker
+
+A bank has a fixed amount of cash and customers with agreed credit lines. Each customer
+draws in instalments and repays everything only when their project completes. The bank
+can lend freely only while there remains some *order* in which every customer's
+outstanding line can be covered from the cash on hand plus what earlier completions
+return. That is the banker's algorithm, with processes for customers, resource units
+for cash, and a declared maximum for each credit line.
+
+Three matrices describe the state: `maximum` (declared claims), `allocation` (currently
+held), and `available` (free). What a process might still ask for is
+`need = maximum - allocation`. The safety check walks a *work* vector: find a process
+whose need fits in `work`, pretend it runs to completion and returns its allocation,
+add that to `work`, and go back to the start. Here it is on the lab's textbook state,
+printing every step:
+
+```python
+AVAILABLE = [3, 3, 2]
+MAXIMUM = [[7, 5, 3], [3, 2, 2], [9, 0, 2], [2, 2, 2], [4, 3, 3]]
+ALLOCATION = [[0, 1, 0], [2, 0, 0], [3, 0, 2], [2, 1, 1], [0, 0, 2]]
+
+need = [[m - a for m, a in zip(mrow, arow)]
+        for mrow, arow in zip(MAXIMUM, ALLOCATION)]
+work = list(AVAILABLE)
+finished = [False] * len(MAXIMUM)
+order = []
+while True:
+    for i in range(len(MAXIMUM)):
+        fits = all(n <= w for n, w in zip(need[i], work))
+        if not finished[i] and fits:
+            print(f"P{i} needs {need[i]}, fits {work}: runs, returns {ALLOCATION[i]}")
+            work = [w + a for w, a in zip(work, ALLOCATION[i])]
+            finished[i] = True
+            order.append(i)
+            break                       # restart the scan from P0
+    else:
+        break                           # a full scan found nobody
+print("safe" if all(finished) else "unsafe", order, "work ends at", work)
+```
+
+P0's need of `[7, 4, 3]` does not fit the initial `[3, 3, 2]`, but P1's `[1, 2, 2]`
+does; P1 finishes and returns `[2, 0, 0]`, the work vector becomes `[5, 3, 2]`, and the
+scan restarts at P0. That restart is what makes the sequence deterministic and is what
+the lab's `is_safe` is told to do. The order found is `[1, 3, 0, 2, 4]`, and because
+every process finished, the state is safe.
+
+A request is granted by pretending. P1 asks for `[1, 0, 2]`: within its need, within
+what is available, so tentatively hand it over — `available` becomes `[2, 3, 0]`, P1's
+allocation `[3, 0, 2]` — and re-run the check. It passes, so the grant stands. Now P4
+asks for `[3, 3, 0]`. Available becomes `[0, 0, 2]`, and with that on hand nobody's
+need fits: P0 wants 7 of the first resource, P1 wants 1, P2 wants 6, P3 wants 1 of the
+second, and P4 itself still needs `[1, 0, 1]`. The scan finds no process at all, the
+order is empty, and the request is refused — not because P4 has done anything wrong,
+but because granting it removes the guarantee.
+
+## The mistake, and where it stops
+
+The mistake with the banker is to read "unsafe" as "deadlocked". An unsafe state is one
+where the *guarantee* is lost; a run through it will complete if the processes happen
+not to claim their full maximums, and often they do not. Safety is an existence claim —
+one finishing order exists — and its negation says only that no such order can be found
+from the declared worst case. The tempting error runs the other way too: reading "safe"
+as "nobody waits". Processes wait constantly in a safe state; what they never do is
+wait forever.
+
+Where all of this stops holding: the banker needs every process to declare its maximum
+in advance and needs the population of processes to be fixed, and general-purpose
+systems have neither, which is why it is taught more than deployed. The interleaving
+simulator executes one schedule at a time, and the number of schedules grows as a
+binomial in the program length — twenty for six instructions, over a hundred thousand
+for twenty — so exhaustive exploration has a short reach and model checkers spend their
+effort on pruning it. And the simulator treats each operation as atomic and instantly
+visible, which real hardware does not: a store on one core can become visible to
+another core later than a store issued after it, and the memory model that governs
+that is a course of its own.
+
+## What you are about to build
+
+"Interleaving simulator and the banker's algorithm" has two halves. The first is
+`try_step`, the entire synchronisation model, with `run` executing a schedule you
+supply and `round_robin` cycling the threads and detecting the deadlock by noticing
+that a full cycle moved nothing. The second is `need`, `is_safe` with the
+restart-from-zero scan above, and `request`, which refuses bad input with an
+exception, sends an oversize request away to wait, and otherwise grants by pretending.
+''',
+                },
             ],
             "quiz": {
                 "title": "Interleavings, semaphores and safety",
@@ -1724,6 +2489,237 @@ except ValueError:
                 "A file's blocks become non-contiguous when writers interleave — the seek cost of that on rotating media",
                 "Deletion returns blocks to the free list; only that makes reuse possible",
                 "Failing an allocation atomically: check the space first, so a full disk leaves no half-written file",
+            ],
+            "read": [
+                {
+                    "title": "Twenty bytes, three blocks, and the four you cannot use",
+                    "minutes": 12,
+                    "body": r'''
+A self-storage warehouse has sixteen lockers, every one the same size — say eight
+boxes. A customer arrives with twenty boxes. Twenty does not divide by eight, so they
+take three lockers: two full and one holding four boxes and four boxes' worth of air.
+Nobody else can use that air; the locker is let, and the lease is for the whole
+locker. Reception keeps two pieces of paper. A card for each customer, listing the
+lockers they hold and how many boxes are in them, and a clipboard listing the lockers
+that are empty, in numerical order, so the next customer gets the lowest-numbered one.
+
+That warehouse is the file system in this module's lab, "An inode allocator with a free
+list", with the numbers left in: sixteen blocks of eight bytes, a twenty-byte file
+occupying three of them and wasting four, an *inode* per file, and a sorted *free
+list*. Everything a block-structured file system does is a consequence of one decision
+— that space is handed out in fixed-size blocks and nothing smaller — and the picture
+has both the good and the bad of that decision in it.
+
+## The inode and the directory
+
+The card is the inode. It holds what the file system knows about a file — its size,
+its ownership and timestamps on a real system, and above all the list of blocks the
+file's bytes live in — but not the file's name. The name lives in a directory, which is
+itself a file whose content is a table mapping names to inode numbers. Keeping the name
+out of the inode is what lets one file have several names, and it is why "delete" on
+Unix is called `unlink`: it removes a name, and the blocks go back only when the last
+name is gone.
+
+The blocks are the whole question. Where a file's bytes sit on the disk determines how
+fast the file can be read, whether it can grow, and how much space is lost around it,
+and the three classic answers each fix one problem by causing another.
+
+## Three ways to say where the bytes are
+
+Give the customer adjacent lockers: 4, 5 and 6. That is *contiguous* allocation, and it
+is the fastest thing there is for reading a file end to end, because the disk arm moves
+once and then streams. It fails on growth. If locker 7 is taken, a customer who needs
+one more box has to move everything to a bigger run, and after enough customers have
+come and gone the empty lockers are scattered singletons — plenty of space, no run of
+three. That scattered free space is *external* fragmentation, and the only cure is
+compaction, which means moving real data.
+
+Put a note in each locker saying where the next one is. That is *linked* allocation:
+growth is trivial, because the next block can be anywhere, and there is no external
+fragmentation, because every free block is as good as every other. What it destroys is
+random access. To find the block holding byte 100,000 you must read every block before
+it, one disk access per block skipped, because the location of block $k$ is written
+inside block $k - 1$ and nowhere else.
+
+Keep the card at reception. That is *indexed* allocation, and it is what the lab
+builds: the inode holds the list, so block $k$ is `blocks[k]` — one lookup, no walk —
+growth is an append to the list, and free blocks are interchangeable. The cost is the
+list itself, which has to be stored somewhere and can be long. A real inode is a fixed
+size, and this module's numeric exercise works out what that forces: a few direct
+pointers, then pointers to blocks of pointers.
+
+## The arithmetic of an append
+
+Every append has to answer one question before it moves a byte: how many new blocks
+will this need? Derive it from the card. The file holds `len(blocks)` blocks, worth
+`len(blocks) * block_size` bytes, of which `size` are occupied. The difference is the
+slack in the last block — the four boxes of air:
+
+$$\text{slack} = |\text{blocks}| \cdot B - \text{size}$$
+
+New bytes fill the slack first. Whatever does not fit — the overflow, which is
+`len(data) - slack`, or zero if the write fits entirely — needs new blocks, and a
+partial block counts as a whole one, so the count is the overflow divided by $B$ and
+rounded *up*:
+
+$$\text{needed} = \left\lceil \frac{\max(0,\ |\text{data}| - \text{slack})}{B} \right\rceil$$
+
+Python has no ceiling-division operator, but `-(-x // B)` is one: negate, floor toward
+minus infinity, negate back. Watch it on the lab's own cases:
+
+```python
+block_size = 8
+
+def cost(blocks_held, size, write):
+    slack = blocks_held * block_size - size
+    overflow = max(0, write - slack)
+    needed = -(-overflow // block_size)      # ceiling division
+    return slack, overflow, needed
+
+for held, size, write in ((0, 0, 20), (3, 20, 10), (4, 30, 2), (4, 32, 1)):
+    slack, overflow, needed = cost(held, size, write)
+    print(f"{held} blocks, {size:>2} bytes, append {write:>2}: "
+          f"slack {slack}, overflow {overflow}, new blocks {needed}")
+```
+
+Twenty bytes into an empty file: no slack, twenty bytes of overflow, three blocks. Ten
+more: four bytes of slack absorb four of them, six overflow, one new block. Two more
+after that fit in the slack entirely and cost nothing. And a file whose size is an
+exact multiple of the block size has no slack at all, so one byte costs a whole block —
+that last case is the reason a division *by* the slack, which some first drafts reach
+for, fails on the commonest input.
+
+The slack has a name: *internal* fragmentation, waste inside an allocated unit.
+Averaged over many files it is half a block each, and that is the argument against
+large blocks — a disk of small files on 64 KiB blocks loses most of itself to air.
+
+## The free list, and the order it is kept in
+
+The clipboard is a sorted list of free block numbers, and allocation takes the head —
+the lowest number. Freeing a block puts it back *in order*, with `bisect.insort`, not
+at the end, and the difference is the policy. Append to the end, and the freed block
+sits behind every higher number until the disk is nearly full; insert in order, and it
+is reused before anything further out. The tests pin that down: delete a file holding
+block 1 and the next file created gets block 1.
+
+The alternative structure is a bitmap, one bit per block, and it answers different
+questions cheaply. "Is block 4712 free" is reading one bit; "find three adjacent free
+blocks" is scanning for three zero bits, a word at a time. It costs a fixed amount of
+space whether the disk is empty or full, where the free list shrinks as the disk fills.
+The lab's list is the simpler structure and it is enough, because the lab never asks
+for adjacency — which is the thing that goes wrong next.
+
+## Fragmentation nobody decided on
+
+Two customers arrive together and each brings boxes a locker at a time, alternately.
+The first gets locker 0, the second locker 1, the first locker 2, the second locker 3.
+Both are correct, and neither has adjacent lockers. No single allocation was wrong; the
+interleaving did it, and that is why it cannot be fixed by being cleverer about any one
+decision:
+
+```python
+import bisect
+
+BLOCK = 4
+free = list(range(16))            # every block free, kept sorted
+inodes = {}
+
+def append(name, data):
+    inode = inodes.setdefault(name, {"size": 0, "blocks": []})
+    pos = inode["size"]
+    for _ in data:
+        if pos // BLOCK >= len(inode["blocks"]):
+            inode["blocks"].append(free.pop(0))
+        pos += 1
+    inode["size"] = pos
+
+def delete(name):
+    for b in inodes.pop(name)["blocks"]:
+        bisect.insort(free, b)
+
+for _ in range(2):
+    append("a", "aaaa")
+    append("b", "bbbb")
+print("a holds", inodes["a"]["blocks"], " b holds", inodes["b"]["blocks"])
+delete("a")
+print("free after deleting a:", free[:6], "...")
+append("c", "cccccccc")
+print("c holds", inodes["c"]["blocks"])
+```
+
+The last line is the part worth staring at. After `a` is deleted, `c` is created on a
+disk with twelve free blocks in an unbroken run from 4 to 15 — and receives blocks 0
+and 2, because they are the lowest. Lowest-first reuse fills holes, which is good for
+space, and it hands out fragmented files, which is bad for time. A real allocator delays
+the decision until it has a run's worth of bytes to place, precisely to escape that
+trade.
+
+Why it matters is the geometry of a rotating disk. A block that follows the previous
+one on the platter streams past the head; a block anywhere else costs a seek and, on
+average, half a rotation:
+
+```python
+rpm = 7200
+seek_ms = 4.0                              # average seek on a desktop disk
+half_turn_ms = 60_000 / rpm / 2            # average rotational delay
+transfer_ms = 4096 / 150e6 * 1000          # one 4 KiB block at 150 MB/s
+random_ms = seek_ms + half_turn_ms + transfer_ms
+print(f"streaming one 4 KiB block: {transfer_ms:.3f} ms")
+print(f"seeking to one 4 KiB block: {random_ms:.3f} ms, {random_ms / transfer_ms:.0f} times more")
+```
+
+Three hundred times slower per block. A sequential read of a fragmented file is a
+sequence of seeks, which is why defragmenters existed, and why a file system that
+scatters a big file across the disk can be slower than one that wastes a little space
+keeping it together. On flash there is no arm and no platter and the ratio collapses to
+a small number, which is why the concern quietened rather than vanished: an SSD still
+prefers large contiguous writes, for reasons of its own.
+
+## Failing without wreckage
+
+A disk with two four-byte blocks holds an eight-byte file, and someone appends one more
+byte. There is no free block. The lab requires that the append raise `OSError` and
+change nothing — same size, same blocks, same free list, same content.
+
+The natural loop allocates as it goes: for each byte, if the file needs a new block,
+pop one from the free list, and raise when the list is empty. Written that way, the
+exception leaves everything the loop already did still done. Blocks popped before the
+failure are gone from the free list and listed in the inode; the file's content is a
+prefix of a write that officially failed; and `size` may or may not have been updated,
+depending on where that line sits. Nothing unwinds any of it. The loop is tempting
+because it is the shortest code and it works on every input except the one that
+matters. The arithmetic above is the fix: compute `needed`, compare it with
+`len(free)`, and raise before the first mutation. That is the cheapest atomicity there
+is, and it is the same discipline a real file system spends a journal on — reserve,
+record the intent, then write — so that a crash in the middle of an append leaves
+either the old file or the new one and never a third thing.
+
+## Where this model stops
+
+The inode here is a Python dict with a list that grows without limit; an on-disk inode
+is a fixed number of bytes, which is why indirect blocks exist. Content is a string,
+one character per byte, and the platter is a list of strings, which hides the fact that
+a real block is written whole — an 8-byte block with 3 bytes of content still occupies
+8 bytes on the disk, and the slack is written as whatever was there or as zeros. There
+is no crash: the free list and the inodes are updated in memory in whatever order the
+code runs them, and a real file system has to order those writes or journal them,
+because a power cut between "block removed from free list" and "block added to inode"
+leaks the block forever, and the opposite order corrupts a file. And the free list is a
+list of integers in memory; on a real disk it is a bitmap or a chain of free blocks that
+has to be read and written like anything else.
+
+## What you are about to build
+
+"An inode allocator with a free list" asks for a `FileSystem` with `create`, `append`,
+`read`, `delete` and `stats`. `append` does the arithmetic first and the writing
+second, taking from the head of the sorted free list; `delete` returns blocks with
+`bisect.insort` so the head stays the lowest number; and `stats` counts the slack in
+every file's last block as `internal_fragmentation` and the files whose block numbers
+are not consecutive as `fragmented_files`. A twenty-byte file on eight-byte blocks will
+report three blocks and four wasted bytes, and two files appended in turn will both
+count as fragmented.
+''',
+                },
             ],
             "quiz": {
                 "title": "Blocks, inodes, and the space between them",

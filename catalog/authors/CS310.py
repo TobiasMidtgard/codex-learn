@@ -46,6 +46,268 @@ COURSE = {
                 "Canonical renaming by breadth-first order makes the minimal DFA literally unique",
                 "Equivalence by product construction: walk both machines in lock-step and look for disagreement",
             ],
+            "read": [
+                {
+                    "title": "One switch, a stream of bits, and the smallest machine",
+                    "minutes": 13,
+                    "body": r'''
+A sensor is sending you bits, one at a time, and it will never stop. You are asked one
+question about what has gone past: has the number of zeros so far been even? You may not
+write anything down, and you may not remember the bits themselves. What you may have is a
+single switch with a few positions, and the rule that every time a bit arrives you look at
+the bit and the switch, and move the switch.
+
+Two positions are enough. Call them `E` and `O`, for *even so far* and *odd so far*. A `1`
+changes nothing, so on `1` the switch stays put. A `0` flips it. Start at `E`, because
+before anything has arrived the count is zero, and zero is even. When someone asks, the
+answer is the switch position: `E` means yes.
+
+That is a deterministic finite automaton, and everything else in this module is what
+falls out of taking the picture seriously.
+
+## The switch, written down
+
+Write the positions as a set, the possible bits as a set, and the moving rule as a table
+with one row for every position and every bit:
+
+```text
+state  symbol  ->  next
+  E      0     ->   O
+  E      1     ->   E
+  O      0     ->   E
+  O      1     ->   O
+```
+
+Add the starting position and the set of positions that mean *yes*, and you have the five
+things the textbook calls $(Q, \Sigma, \delta, q_0, F)$: states, alphabet, transition
+function, start, accepting set. The lab's `DFA(states, alphabet, delta, start, accepting)`
+is that tuple with `delta` as a dict from `(state, symbol)` to a state, and `EVEN_ZEROS`
+is the switch above.
+
+The word *deterministic* is a claim about the table, and only about the table: for every
+position and every bit there is exactly one row. Not *at most one* — exactly one. The
+difference sounds like pedantry until a row is missing: a bit arrives for which the table
+has no row, the switch has nowhere to go, the question is still going to be asked, and
+there is no answer. A DFA's verdict is read *at the end of the word*, so a table that can strand a run in the
+middle is a machine that cannot keep its one promise. That is why the lab's `_validate`
+walks the entire cross product of states and alphabet and raises `ValueError` on a missing
+entry, rather than treating the gap as a rejection. The missing row is a property of the
+machine, not of the word.
+
+Running the machine is a walk. Here it is on `1010`, printed step by step:
+
+```python
+delta = {("E", "0"): "O", ("E", "1"): "E", ("O", "0"): "E", ("O", "1"): "O"}
+state = "E"
+for ch in "1010":
+    nxt = delta[(state, ch)]
+    print(f"{state} --{ch}--> {nxt}")
+    state = nxt
+print("accepted:", state in {"E"})
+```
+
+Four transitions for four symbols, and the verdict is whatever state the walk ends in:
+`E`, so `accepted: True`, and two is indeed even. The walk touches each symbol once and
+holds one state's worth of memory throughout. A word of a million bits costs a million
+table lookups and no more space than a word of four. That is the sense in which regular
+languages need constant space, and it is also why a DFA cannot count: a switch with $k$
+positions can tell apart at most $k$ situations, and *how many zeros so far*, unbounded,
+is infinitely many.
+
+## Two machines, one language
+
+Here is another machine for the same question. Its four states remember two parities at
+once, the zeros and the ones: state `0` is *even zeros, even ones*, `1` is *even zeros,
+odd ones*, `2` is *odd zeros, even ones*, `3` is *odd, odd*. Reading a `0` flips the
+first parity and reading a `1` flips the second, and the accepting states are the two
+where the zero-count is even: `{0, 1}`. That is `REDUNDANT` in the lab, and it gives the
+same verdict as `EVEN_ZEROS` on every word there is. It has done twice the bookkeeping to
+answer a question that never asked about the ones.
+
+So a language does not determine a machine. It determines a *behaviour*, and many
+machines can have it. The question this module answers is whether, among all machines for
+a language, there is a smallest one, and whether it is the same smallest one no matter who
+builds it. The answer to both is yes, and the reason is worth deriving rather than quoting.
+
+## What a state has to remember
+
+Go back to the switch. After some prefix of the stream has gone past, the switch position
+is the only thing you have kept. Anything about the prefix that the position does not
+record is gone forever, so the position must record *everything that could still matter*.
+And what could still matter is exactly one thing: for each possible continuation, whether
+the whole word ends up accepted.
+
+Turn that around. Take two prefixes $u$ and $v$ and ask whether a machine for $L$ could
+afford to forget the difference between them — to have them land on the same state. It
+can if and only if no continuation tells them apart: for every word $z$, $uz \in L$
+exactly when $vz \in L$. Write that relation as $u \sim_L v$. It is an equivalence
+relation, and its classes are the *least* a machine for $L$ has to distinguish. Any DFA
+for $L$ has at least one state per class, because two prefixes from different classes have
+some $z$ that separates them, and a machine that put them on the same state would give the
+same verdict to $uz$ and $vz$.
+
+The other direction is the surprising half. The classes themselves *are* a machine.
+Reading a symbol $a$ from the class of $u$ takes you to the class of $ua$, and that is
+well defined: if $u \sim_L v$ then $ua \sim_L va$, because any $z$ separating $ua$ from
+$va$ gives $az$ separating $u$ from $v$. The start is the class of the empty word, and a
+class is accepting when its members are in $L$ — they all are or all are not, by taking
+$z$ empty. For `EVEN_ZEROS` there are two classes, even and odd, and no machine can do it
+in one. This is the Myhill-Nerode theorem: the minimal DFA for $L$ has exactly one state
+per class of $\sim_L$, and it is unique because it was never a machine somebody designed;
+it is the language's own quotient.
+
+There is a tempting shortcut that is worth seeing fail. It is much easier to test whether
+$u$ and $v$ are *both in* $L$ than to quantify over every $z$, and it feels like it ought
+to be enough. Take $L$ to be the words ending in `01`. Neither `0` nor `1` is in $L$, so
+the shortcut calls them equivalent. Append a `1`: `01` is in $L$ and `11` is not.
+Agreeing about the present is the special case $z = \varepsilon$ of the real criterion,
+and it is nowhere near the whole of it.
+
+## Finding the classes by refinement
+
+The theorem says what the minimal machine is; it does not say how to compute it from a
+machine you already have. The algorithm is Moore's, and it is the criterion above run
+backwards, from *every state is different* towards *these states are the same*.
+
+Start by grouping the states into two blocks: accepting and not. That is the
+$z = \varepsilon$ distinction, and it is the only one the machine hands you for free.
+Then ask, for each state, where each symbol sends it — not which state, but which
+*block*. Two states in the same block that send some symbol to different blocks are
+distinguishable (some word separates those blocks, and the symbol in front of that word
+separates the two states), so the block splits. Repeat until a round splits nothing.
+Blocks are only ever cut, never merged, and there are at most $|Q|$ of them, so it stops.
+
+Here is the six-state machine from the lab's checks, with the refinement printed one
+round at a time:
+
+```python
+delta = {("a", "0"): "b", ("a", "1"): "c",
+         ("b", "0"): "a", ("b", "1"): "d",
+         ("c", "0"): "e", ("c", "1"): "f",
+         ("d", "0"): "e", ("d", "1"): "f",
+         ("e", "0"): "e", ("e", "1"): "f",
+         ("f", "0"): "f", ("f", "1"): "f"}
+states = sorted({q for q, _ in delta})
+accepting = {"c", "d", "e"}
+alphabet = ("0", "1")
+
+block = {q: (0 if q in accepting else 1) for q in states}
+rnd = 0
+while True:
+    groups = {}
+    for q in states:
+        sig = (block[q], tuple(block[delta[(q, a)]] for a in alphabet))
+        groups.setdefault(sig, []).append(q)
+    print(f"round {rnd}: {[''.join(g) for g in groups.values()]}")
+    if len(groups) == len(set(block.values())):
+        break
+    block = {q: i for i, key in enumerate(sorted(groups)) for q in groups[key]}
+    rnd += 1
+```
+
+Round 0 starts from the blocks `{c, d, e}` and `{a, b, f}`, and the signatures pull `f`
+away from `a` and `b`: on `1`, `a` and `b` go to accepting states while `f` goes to a
+rejecting one. Round 1 recomputes with three blocks and nothing moves, so the program
+prints `['ab', 'cde', 'f']` twice and stops. Six states have become three. Read the
+three blocks back as a description of the language and the machine turns out to have
+been an elaborate way of saying *exactly one `1`*: `{a, b}` has seen none, `{c, d, e}`
+has seen one, `{f}` has seen too many.
+
+The mistake people actually make here is in the signature. `delta` hands you destination
+*states*, and it is natural to compare those. But two equivalent states almost never move
+to the same state — they move to states that are themselves equivalent — so comparing raw
+destinations splits every block on the first round and returns the machine you started
+with, all six states of it. The signature has to be computed at the resolution of blocks,
+which is why `block[delta[(q, a)]]` appears where `delta[(q, a)]` looks as if it should.
+
+## Prune first, then refine
+
+Refinement answers the question *which states behave alike*, and it answers it correctly
+for every state it is given, including states nobody can reach. That is a problem. The
+lab has a three-state machine: `s` and `t` swap on the single letter `a`, `t` accepts,
+and a third state `u` accepts and loops to itself with nothing pointing at it. Refine
+without pruning and `t` and `u` land in different blocks — `t` moves to the rejecting `s`
+while `u` moves to the accepting `u` — and the answer is three states for a language
+whose minimal machine has two. The refinement was right about `u`. It is a different
+state from `t`. It is also not part of the machine's behaviour, because no word arrives
+there, and only a reachability walk can tell you that. `reachable()` is a breadth-first
+search from the start, and `minimise()` runs it before anything else.
+
+## Making *unique* literal
+
+The theorem says the minimal machine is unique up to renaming, which is not quite good
+enough for a check that compares two machines with `==`. So the lab fixes the names: walk
+the blocks breadth-first from the start block, taking the alphabet in sorted order, and
+number them in the order they are first discovered. The start block is `0`; the block
+reached from it on the smallest symbol that leads somewhere new is `1`; and so on. Two
+DFAs for the same language now minimise to the *identical* object — same state set
+`{0, ..., k-1}`, same start `0`, same `delta` dict — and that is what the check comparing
+`EVEN_ZEROS.minimise()` against `REDUNDANT.minimise()` relies on. Minimising a minimal
+machine must change nothing, and that is a check worth running: it catches a renaming
+that depends on anything other than the language.
+
+## Deciding equality without minimising
+
+There is a second way to decide whether two DFAs accept the same language, and it does
+not need either machine to be minimal. Run them in lock-step. From the pair of start
+states, read each symbol into both machines at once and record the pair you arrive at. If
+you ever reach a pair where one machine accepts and the other does not, the word that
+brought you there is accepted by exactly one of them, and the languages differ. If the
+exploration runs out of new pairs without finding such a disagreement, no word can
+produce one, because every reachable pair was reached by the words that drive both
+machines there.
+
+```python
+even = {("E", "0"): "O", ("E", "1"): "E", ("O", "0"): "E", ("O", "1"): "O"}
+redundant = {(0, "0"): 2, (0, "1"): 1, (1, "0"): 3, (1, "1"): 0,
+             (2, "0"): 0, (2, "1"): 3, (3, "0"): 1, (3, "1"): 2}
+acc_even, acc_red = {"E"}, {0, 1}
+
+seen = {("E", 0)}
+stack = [("E", 0)]
+verdict = True
+while stack:
+    p, q = stack.pop()
+    if (p in acc_even) != (q in acc_red):
+        verdict = False
+        break
+    for ch in "01":
+        nxt = (even[(p, ch)], redundant[(q, ch)])
+        if nxt not in seen:
+            seen.add(nxt)
+            stack.append(nxt)
+print(sorted(seen, key=str))
+print("same language:", verdict)
+```
+
+Four pairs are reached out of the eight that exist — `(E, 0)`, `(E, 1)`, `(O, 2)`,
+`(O, 3)` — and in every one of them the two machines agree, so the verdict is `True`.
+Termination is a counting argument and nothing else: there are at most
+$|Q_1| \cdot |Q_2|$ pairs, so the search runs out. Correctness is the observation about
+which words reach a pair. Neither half mentions the length of any word, and neither needs
+the machines to be the same size.
+
+## Where this stops
+
+Everything above depends on the memory being a single state from a finite set. Ask the
+switch a question that needs an unbounded count — *have the zeros and ones so far been
+equal in number?* — and no finite number of positions will do; module four proves that
+properly with the pumping lemma. Within regular languages, uniqueness of the minimal
+machine is a fact about *deterministic* automata specifically: the nondeterministic
+machines of the next module have no unique smallest form, and finding a smallest one at
+all is a hard problem rather than a refinement loop. And the product walk, cheap as it
+is, is quadratic in the state counts: fine for two machines of a few thousand states,
+not for two of a million.
+
+The lab for this module is *Simulate, minimise, compare*. You write `_validate`, the walk
+in `accepts`, the search in `reachable`, then `minimise` as prune, refine, canonically
+rename, and finally `equivalent` as the lock-step walk. The checks include the six-state
+machine above, the three-state pruning trap, the two degenerate languages that minimise
+to one state, and forty random pairs of machines whose `equivalent` verdict is compared
+against exhaustive enumeration of every word up to length eight.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Determinism, classes, and the smallest machine",
                 "minutes": 7,
@@ -820,6 +1082,277 @@ for _trial in range(40):
                 "The 2^|Q| bound is tight in the worst case but almost never reached in practice",
                 "Two machines agree on a language exactly when they agree on every word — which is why a bounded exhaustive check is a real test",
             ],
+            "read": [
+                {
+                    "title": "Guessing, and what it costs to stop",
+                    "minutes": 13,
+                    "body": r'''
+You are watching a stream of `a`s and `b`s and you want to raise a flag the moment the
+last three symbols were `abb`. The trouble is that you do not know, when an `a` arrives,
+whether it is *the* `a` — the one that starts the suffix — or one of the thousand that
+came before it. A DFA has to commit; that is what the single row per state and symbol
+means. But suppose you were allowed not to commit. Suppose on every `a` you could say
+*this might be the start*, and follow both possibilities at once.
+
+Draw that machine. State `0` is *nothing interesting yet*, and it loops on both letters.
+On an `a`, it also moves to state `1`, *maybe the suffix has begun*. State `1` moves to
+`2` on a `b`, state `2` moves to `3` on a `b`, and `3` accepts. From `1` there is no row
+for `a`, and from `2` there is none either: if the guess was wrong, that copy of the
+machine has nowhere to go and dies. That is `ABB` in the lab, four states, and its
+transition table has a row for `(0, "a")` whose answer is a *set*, `{0, 1}`, and no row
+at all for `(1, "a")`.
+
+## What a set of states means
+
+A machine that can be in two states at once is a strange object until you decide what it
+means for it to accept. The definition that makes the picture work is existential: a word
+is accepted when *some* sequence of choices ends in an accepting state. The copies that
+died do not count against it, and the copies that ended somewhere dull do not either. One
+surviving copy in state `3` is enough.
+
+That definition has a direct implementation, and it does not involve guessing at all.
+Instead of following one copy and hoping, carry the whole set of states any copy could be
+in. Reading a symbol maps the set to a new set: for each state in it, look up its
+successors on that symbol, and take the union. At the end, ask whether the set meets the
+accepting set.
+
+```python
+delta = {(0, "a"): {0, 1}, (0, "b"): {0}, (1, "b"): {2}, (2, "b"): {3}}
+accepting = {3}
+
+
+def run(word):
+    current = {0}
+    print(f"{'':6} {sorted(current)}")
+    for ch in word:
+        landed = set()
+        for q in current:
+            landed |= delta.get((q, ch), set())
+        current = landed
+        print(f"{ch:>6} {sorted(current)}")
+    return bool(current & accepting)
+
+
+print("abb  ->", run("abb"))
+print("abba ->", run("abba"))
+```
+
+On `abb` the set goes `{0}`, `{0, 1}`, `{0, 2}`, `{0, 3}`, and the final set contains
+`3`, so the word is accepted — even though one copy of the machine, the one that never
+left `0`, is sitting in a rejecting state. On `abba` the last `a` takes `{0, 3}` to
+`{0, 1}`: the copy in `3` had no row for `a` and vanished, and the word is rejected.
+Notice what the simulation never did. It never picked a run and never backtracked. The
+set is the sum of all runs, and it is computed in one pass.
+
+The cost of that pass is easy to count. There are at most $|Q|$ states in the current
+set, each has at most $|Q|$ successors on a symbol, and there are $|w|$ symbols, so the
+time is $O(|w| \cdot |Q|^2)$ and the space is one set, $O(|Q|)$. For a machine of a dozen
+states that is nothing. Keep the number in mind, though, because the second half of this
+module is about trading it for something else.
+
+## Moves that read nothing
+
+There is one more kind of arrow worth allowing: a move that consumes no input. Write the
+symbol as `""` and call it an epsilon move. It is the arrow you want when gluing two
+machines together — *finish the first, then begin the second, without a symbol in
+between* — and the next module builds entire automata out of almost nothing else.
+
+An epsilon move changes what *being in a state* means. If the machine is in state `0` and
+`0` has an epsilon arrow to `1`, then it is also, for free, in `1`; and if `1` has one to
+`2`, in `2` as well. The set of states you are really in is the set you can reach by
+taking free moves, repeatedly, until nothing new turns up. That is the epsilon closure,
+and the phrase *until nothing new turns up* is the definition: it is the least set that
+contains the states you started from and is closed under following epsilon arrows.
+
+The implementation is a worklist. Seed `seen` with the input states, put them on a stack,
+pop one, push every epsilon successor not already seen. The `seen` set is what makes it
+terminate on an epsilon cycle, and it is also why the closure of a set always contains
+that set — it was seeded with it, and the loop only ever adds. A state with no epsilon
+arrows is its own closure. The lab's `CHAIN` is the smallest interesting case: `0` to `1`
+to `2` by free moves, `2` looping on `a` and accepting, so the closure of `{0}` is
+`{0, 1, 2}` and the machine accepts the empty word without reading anything.
+
+Where the closure is applied matters, and getting it wrong is the mistake this module is
+most likely to leave in your code, because it passes most tests. Reading a symbol is
+*move, then close*: take the symbol arrows from every state in the current set, then
+close the result. The alternative order — close, then move — feels equivalent and is not.
+Here is a machine where the only path to acceptance ends with a free move:
+
+```python
+delta = {(0, "a"): {1}, (1, ""): {2}}
+accepting = {2}
+
+
+def closure(states):
+    seen = set(states)
+    stack = list(seen)
+    while stack:
+        q = stack.pop()
+        for nxt in delta.get((q, ""), set()):
+            if nxt not in seen:
+                seen.add(nxt)
+                stack.append(nxt)
+    return seen
+
+
+def move(states, ch):
+    landed = set()
+    for q in states:
+        landed |= delta.get((q, ch), set())
+    return landed
+
+
+current = closure({0})
+current = closure(move(current, "a"))
+print("move then close:", sorted(current), bool(current & accepting))
+
+current = closure({0})
+current = move(closure(current), "a")
+print("close then move:", sorted(current), bool(current & accepting))
+```
+
+Move-then-close ends in `{1, 2}` and accepts. Close-then-move ends in `{1}`: the free
+move from `1` to `2` was available, but the closing happened before the symbol was read
+and never happened again afterwards. The lab's `step(states, symbol)` is the composite in
+the correct order, and `accepts` starts from `epsilon_closure({start})` so that free
+moves before the first symbol are also taken.
+
+## The set is a state
+
+Look again at what the simulation carries: a set of NFA states, and a rule that maps a
+set and a symbol to another set. That is a transition function. Its inputs are sets, its
+outputs are sets, and it is total, because the union of successors is always *some* set,
+possibly empty. Where a DFA carries one state and moves it, this simulation carries one
+set and moves it — and so the simulation *is* a DFA, whose states happen to be sets.
+
+That observation is the subset construction. Start from the closure of `{start}`. For
+each subset you have reached and each symbol, compute `step(subset, symbol)`, and if it
+is a subset you have not seen, add it to the worklist. A subset is accepting when it meets
+the NFA's accepting set, for the same existential reason as before. Stop when the
+worklist is empty.
+
+```python
+from collections import deque
+
+delta = {(0, "a"): {0, 1}, (0, "b"): {0}, (1, "b"): {2}, (2, "b"): {3}}
+accepting = {3}
+
+
+def step(subset, ch):
+    landed = set()
+    for q in subset:
+        landed |= delta.get((q, ch), set())
+    return frozenset(landed)       # no epsilon moves in this machine
+
+
+start = frozenset({0})
+states, table, queue = {start}, {}, deque([start])
+while queue:
+    s = queue.popleft()
+    for ch in "ab":
+        nxt = step(s, ch)
+        table[(s, ch)] = nxt
+        if nxt not in states:
+            states.add(nxt)
+            queue.append(nxt)
+
+for s in sorted(states, key=sorted):
+    row = "  ".join(f"{ch} -> {sorted(table[(s, ch)])}" for ch in "ab")
+    flag = "accept" if s & accepting else ""
+    print(f"{sorted(s)!s:10} {row}  {flag}")
+print(len(states), "subsets reached out of", 2 ** 4, "that exist")
+```
+
+Four subsets are reached: `{0}`, `{0, 1}`, `{0, 2}` and `{0, 3}`. Each one records how
+much of `abb` the input currently ends with — nothing, an `a`, an `ab`, the whole thing —
+and `{0, 3}` is the accepting one. Sixteen subsets exist and twelve of them are never
+built, because no word leads there. This particular DFA is also minimal: the four subsets
+are four different Myhill-Nerode classes, since each needs a different number of further
+letters to reach acceptance.
+
+One subset deserves a closer look, and it does not appear in that table. If some subset
+has no successor on some symbol — every state in it lacks a row for that letter — then
+`step` returns the empty set. The empty set is a perfectly good subset: it means *every
+copy of the machine has died*, and from it every symbol leads back to it, since nothing
+can revive a dead run. It is never accepting, because it meets no accepting set. It is
+exactly the dead state that the first module said a partial machine needs in order to
+become total, and the construction manufactures it whenever the NFA can get stuck. `ABB`
+never gets stuck — state `0` has a row for both letters and is in every subset — which is
+why the table above has no empty row. The lab's `_dead_nfa` does get stuck, and its
+checks insist that `frozenset()` is present, loops to itself, and rejects.
+
+## The price
+
+The subset construction trades the $O(|w| \cdot |Q|^2)$ simulation for a machine that
+reads each symbol in $O(1)$. What it costs is states, and the worst case is real. Take
+the language *the $k$-th symbol from the end is an `a`*. An NFA does it with $k + 1$
+states: state `0` loops on everything and on an `a` also guesses forward to `1`; states
+`1` to `k - 1` advance on either letter; state `k` accepts. After reading any word, the
+subset holds `0` and, for each $i$ from $1$ to $k$, holds $i$ exactly when the symbol
+$i$ places from the end was an `a`. Different subsets record different patterns of `a`s
+in the last $k$ letters, and any two such patterns are told apart by some continuation:
+find a position where they differ and append enough letters to bring that position to
+the $k$-th place. So all $2^k$ subsets are reachable and all are distinct classes, and no
+minimisation can merge any of them.
+
+```python
+from collections import deque
+
+
+def reachable_subsets(k):
+    delta = {(0, "a"): {0, 1}, (0, "b"): {0}}
+    for i in range(1, k):
+        delta[(i, "a")] = {i + 1}
+        delta[(i, "b")] = {i + 1}
+    start = frozenset({0})
+    seen, queue = {start}, deque([start])
+    while queue:
+        s = queue.popleft()
+        for ch in "ab":
+            nxt = frozenset().union(*(delta.get((q, ch), set()) for q in s))
+            if nxt not in seen:
+                seen.add(nxt)
+                queue.append(nxt)
+    return len(seen)
+
+
+for k in (2, 3, 4, 6):
+    print(f"k={k}: NFA has {k + 1} states, DFA needs {reachable_subsets(k)}")
+```
+
+Four, eight, sixteen, sixty-four: the count doubles with every extra state of the NFA.
+This is the exponential everyone has heard about, and two things are true of it at once.
+It is not an artefact of a clumsy algorithm — the classes are there in the language, and
+any DFA has to pay for them. And it is the worst case, met by a language designed to meet
+it; determinising the automaton for a typical pattern produces a machine a little larger
+than the NFA, as `ABB` does, going from four states to four. Knowing only the first fact
+is what makes people avoid a construction they should be using.
+
+## Where nondeterminism stops being free
+
+Every NFA has an equivalent DFA, so nondeterminism buys finite automata no new languages
+— only smaller descriptions, sometimes exponentially smaller. That is a special property
+of finite memory, not a general truth about guessing. Give the machine a stack, as module
+four does, and the deterministic and nondeterministic versions recognise *different*
+families of languages; the guess can no longer be replaced by a set, because the stacks
+of the different copies diverge and cannot be summarised in a finite state. And even
+within finite automata, NFAs lose the uniqueness of the first module: there is no
+canonical smallest NFA for a language, and finding a smallest one is a hard problem
+rather than a refinement loop.
+
+The lab for this module is *Epsilon closure and determinisation*. You write
+`epsilon_closure` as the worklist above, `step` as move-then-close, `accepts` as the
+fold, and `subset_construction` as the breadth-first exploration, dead subset included.
+The `DFA` class is given, and the checks compare `nfa.accepts(w)` against
+`subset_construction(nfa).accepts(w)` on every word up to length six over `ABB`,
+`CHAIN`, two degenerate machines and a dozen random ones. Every subset of `ABB` is
+reached by a word of at most three letters, so a defect in `step` or in the accepting
+test shows itself one letter later; the exhaustive check is short because the machines
+are small, not because short words are all that matter. The last check builds the
+$k$-th-symbol family at $k = 4$ and asks for sixteen states.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Guessing, closing, and the price of removing the guess",
                 "minutes": 7,
@@ -1577,6 +2110,213 @@ assert _nfa.accepts("abaa") is True and _nfa.accepts("bbaab") is False
                 "Simulating the fragment with epsilon closures gives O(m * n) matching without backtracking",
                 "Catastrophic backtracking is a property of the algorithm, not of the notation",
                 "Kleene's theorem in one direction: every regular expression denotes a language some finite automaton accepts",
+            ],
+            "read": [
+                {
+                    "title": "A pattern is a machine that has not been built yet",
+                    "minutes": 13,
+                    "body": r'''
+In July 2016 Stack Overflow went down for about half an hour, and the cause was a regular
+expression. A pattern meant to trim whitespace from the ends of a post was handed a post
+with twenty thousand consecutive spaces, and the matching engine, trying the pattern from
+each starting position and backing up each time it failed, did on the order of two
+hundred million steps of work on a job that should have taken twenty thousand. Three
+years later Cloudflare's edge proxies did something similar with a pattern containing
+`.*.*=.*`, and a good fraction of the web returned errors for half an hour. Neither
+pattern was wrong. Both were being matched by an algorithm that guesses and backs up,
+and this module is about the other algorithm — the one that turns the pattern into a
+small automaton and runs it in one pass, with a running time you can write down before
+you see the input.
+
+## The notation, and what it denotes
+
+A regular expression is a compact way of writing down a language. There are three ways
+of building a bigger language from smaller ones, and the notation has one symbol for
+each. `ab` is concatenation: a word from the language of `a` followed by a word from the
+language of `b`. `a|b` is union: a word from either. `a*` is Kleene star: zero or more
+words from the language of `a`, one after another. Everything else — `a+` for one or
+more, `a?` for zero or one, parentheses for grouping — is a convenience spelled in terms
+of those three, and the lab's notation has exactly this much plus a backslash to escape
+the metacharacters.
+
+Precedence is the first thing to get right, because the same string of symbols reads
+three ways. `ab|c*` could be `(ab)|(c*)`, or `a(b|c)*`, or `((ab)|c)*`, and these are
+three different languages. The convention is that the postfix operators bind tightest,
+concatenation next, and `|` loosest, so `ab|c*` is `(ab)|(c*)`. Python's `re` uses the
+same convention, and it tells the difference between the readings on a four-letter word:
+
+```python
+import re
+
+for pattern in ["ab|c*", "(ab)|(c*)", "a(b|c)*", "((ab)|c)*"]:
+    verdicts = [re.fullmatch(pattern, w) is not None for w in ["ab", "cc", "abcb", "abab"]]
+    print(f"{pattern:12} {verdicts}")
+```
+
+The first two lines agree on every word, because they are the same pattern with and
+without its implied parentheses. The third accepts `abcb`, which the real pattern
+rejects, and the fourth accepts `abab`. Getting this wrong is not a matter of taste; it
+changes which words match.
+
+The trap here is that concatenation is invisible. There is no character for it, so it is
+tempting to treat it as weaker than the operator you can see, and read `ab|c` as
+`a(b|c)`. The way to keep it straight is to build the parser so that the precedence is
+the *structure* rather than a table you consult. Write one function per level:
+`parse_alt` calls `parse_cat` and joins the results with `|`; `parse_cat` calls
+`parse_repeat` repeatedly and folds the pieces to the left; `parse_repeat` calls
+`parse_atom` and then eats any postfix operators. The operator parsed at the outermost
+level binds least tightly, automatically, because it is the last to be applied.
+`parse_cat` stops on `|`, on `)` and at the end of the pattern; when it stops having
+consumed nothing, it returns the empty word, which is what makes `a|` a legal pattern
+denoting `{"a", ""}` and the empty pattern a legal pattern denoting `{""}`.
+
+## Fragments with one way in and one way out
+
+The construction that turns a syntax tree into an automaton is Thompson's, from 1968, and
+it rests on one discipline: every piece of machine you build has a single entry state and
+a single exit state, no arrow from elsewhere leads into the entry, and no arrow leads out
+of the exit. Call such a piece a fragment. The discipline is what lets you compose
+fragments without ever looking inside them, and it is worth deriving each case from it
+rather than memorising a diagram.
+
+A single character `c` is the base case: two fresh states, one arrow labelled `c` from
+the first to the second. Entry, exit, done.
+
+Concatenation of two fragments has to mean *finish the left, then begin the right*. The
+left's exit is the place where the left is finished, and the right's entry is where the
+right begins, so an arrow from one to the other does the job. It must not consume input,
+so it is an epsilon arrow. The result's entry is the left's entry and its exit is the
+right's exit, and both satisfy the discipline: the left's entry still has nothing leading
+into it, and the right's exit still has nothing leading out. No new states. That is why
+`ab` costs four states and a long literal pattern costs two per character.
+
+Union needs a place to *choose*, and neither sub-fragment has one — an arrow out of the
+left's entry into the right's entry would break the rule that nothing leads into an entry
+from outside. So allocate a fresh entry with epsilon arrows to both sub-entries, and a
+fresh exit with epsilon arrows from both sub-exits. Two new states.
+
+Star is the interesting one. `x*` must allow zero copies of `x`, and it must allow going
+round again after each copy. Allocate a fresh entry and a fresh exit, connect the entry
+to `x`'s entry and `x`'s exit to the exit, then add two more epsilon arrows: entry
+straight to exit, for zero copies, and `x`'s exit back to `x`'s entry, for another copy.
+Notice the loop arrow goes from `x`'s exit to `x`'s entry — inside the fragment — and not
+from the new exit to the new entry, which would break the discipline for whatever
+encloses this fragment. `x+` is the same shape without the skip arrow, since at least
+one copy is required; `x?` is the same shape without the loop arrow, since at most one
+is allowed. Two new states each, and the three operators differ by exactly which of two
+arrows they have.
+
+Every operator therefore adds at most two states, and a pattern of length $m$ has at
+most $m$ operators and literals between them, so the machine has at most $2m$ states —
+plus two for an empty branch, which allocates its own two-state epsilon fragment while
+occupying no characters. The lab checks `nfa.n <= 2 * len(pattern) + 2`. Linear size is
+not a nicety; it is the reason the matcher's running time is what it is.
+
+## Running the machine
+
+The machine Thompson builds is an NFA full of epsilon arrows, and the previous module
+already says how to run one: carry the set of states you could be in, close it under
+epsilon moves, and for each symbol take the labelled arrows from every state in the set
+and close again. Here is `(a|b)*abb` built by hand with the state numbers the lab's
+`thompson` would allocate — the star's own two states first, then the union's, then the
+literals in order — and the set traced through `babb`:
+
+```python
+trans = {
+    (0, ""): {2, 1},              # star: into the body, or skip it
+    (2, ""): {4, 6},              # union: choose a or b
+    (4, "a"): {5}, (6, "b"): {7},
+    (5, ""): {3}, (7, ""): {3},   # union: merge
+    (3, ""): {1, 2},              # star: leave, or go round again
+    (1, ""): {8},                 # then the literal a
+    (8, "a"): {9}, (9, ""): {10},
+    (10, "b"): {11}, (11, ""): {12},
+    (12, "b"): {13},
+}
+start, accept = 0, 13
+
+
+def closure(states):
+    seen = set(states)
+    stack = list(seen)
+    while stack:
+        q = stack.pop()
+        for nxt in trans.get((q, ""), set()):
+            if nxt not in seen:
+                seen.add(nxt)
+                stack.append(nxt)
+    return seen
+
+
+current = closure({start})
+print(f"{'':>4} {sorted(current)}")
+for ch in "babb":
+    landed = set()
+    for q in current:
+        landed |= trans.get((q, ch), set())
+    current = closure(landed)
+    print(f"{ch:>4} {sorted(current)}")
+print("accepted:", accept in current)
+```
+
+Before any symbol the closure of `{0}` is already six states — `0` itself, the skip to
+`1`, the union's entry `2`, both literal entries `4` and `6`, and `8`, because the star
+can be skipped and the literal `a` of `abb` begun immediately. Reading `b` lands only on
+`7`, whose closure goes back through the merge state `3`, round the loop to `2`, and out
+through `1` to `8` again. Reading `a` lands on `5` and on `9`, so the set now holds both
+*another star iteration finished* and *the first letter of `abb` seen*. Two `b`s later,
+`13` is in the set and the word is accepted. At no point did the simulation choose which
+`a` began the suffix; it kept both readings until one of them paid off.
+
+Count the work. Each symbol costs one pass over the current set, at most $2m + 2$
+states, following at most two arrows from each — no Thompson state has more — plus a
+closure of the same size. That is $O(m)$ per symbol and $O(mn)$ for a word of length
+$n$, whatever the pattern looks like. There is no case in which it is worse. The
+backtracking engine that took Stack Overflow down has a best case that is faster and a
+worst case that is exponential, and it is the worst case that arrives in production.
+
+Here is the pattern shape that finds it: twenty copies of `a?` followed by twenty `a`s,
+against a word of twenty `a`s. A backtracker takes the first `a?` greedily, and the
+second, and so on down the line, then finds the trailing twenty `a`s have nothing left to
+match, backs up one optional, tries again, and explores every one of the $2^{20}$ ways of
+assigning the twenty `a`s before concluding that all the optionals must be empty. The
+set simulation reads twenty symbols; the machine has a hundred and twenty states, so no
+set ever holds more than that. The lab's last check runs that pattern with a four-second
+limit, which a set simulation clears in milliseconds.
+
+## The mistake that spins forever
+
+The place your closure will go wrong, if it goes wrong, is on a pattern like `(a*)*`. The
+inner star has a loop arrow from its body's exit to its body's entry; the outer star has
+one from the inner fragment's exit to the inner fragment's entry; and between them and
+the skip arrows there is a cycle made entirely of epsilon moves. A closure written as
+*follow every epsilon arrow and recurse* never returns, and it is tempting to write it
+that way because the recursive version is four lines and reads like the definition. The
+worklist with a `seen` set returns at once, because it pushes a state only the first time
+it is met. The lab's oracle comparison includes `(a*)*b` for exactly this reason, and the
+check that the closure of the empty set is the empty set is there because a closure that
+seeds itself with the start state by mistake gets that wrong.
+
+## Where it stops
+
+Thompson's construction proves one direction of Kleene's theorem: every regular
+expression denotes a language some finite automaton accepts, because here is the
+automaton. The converse — every automaton has an expression — is a separate construction
+that this module does not perform. And the notation itself has a boundary. Add
+backreferences, as Perl and Python do, so that `(a*)\1` means *some `a`s, then the same
+`a`s again*, and the language is no longer regular; matching becomes NP-hard, and no
+automaton of any size does it in one pass. The engines that offer backreferences are
+backtracking engines *because* they offer them, and the outages at the top of this
+reading are the cost of that bargain being paid on patterns that never needed it.
+
+The lab for this module is *From pattern to automaton*. You write `parse` as the
+three-level descent to the tuple trees, `thompson` as the fragment builder with `fresh()`
+and `link()`, `NFA.closure` and `NFA.fullmatch` as the simulation above, and `Regex` as
+the class that compiles once. The checks compare your `fullmatch` against `re.fullmatch`
+over fourteen patterns and every word up to length five over four letters, count the
+states you allocate against $2m + 2$, and time the pathological pattern.
+''',
+                },
             ],
             "quiz": {
                 "title": "Precedence, fragments, and why backtracking is optional",
@@ -2363,6 +3103,221 @@ assert _nfa.fullmatch("aa") is False, "there is nowhere to go after the first a"
                 "Ambiguity is a property of the grammar, not of the language; inherent ambiguity is a property of the language",
                 "Searching words in length order gives the shortest ambiguous witness, if one exists within the bound",
             ],
+            "read": [
+                {
+                    "title": "Counting what a switch cannot, and parsing it in a table",
+                    "minutes": 13,
+                    "body": r'''
+A file of configuration text is full of braces, and you want to know whether they
+balance: every `{` closed by a later `}`, none closed twice. Try to build the switch from
+module one. Reading `{` you would like to remember *one more open*; reading `}` you would
+like to remember *one fewer*. But a switch with $k$ positions can remember at most $k$
+different depths, and the file may nest $k + 1$ deep. The intuition that a finite machine
+cannot count is right, and this module starts by turning it into a proof, because *I
+cannot see how* is not one.
+
+## The pumping argument
+
+Strip the braces problem to its skeleton: the language $\{a^n b^n : n \ge 1\}$, some
+`a`s followed by the same number of `b`s. Suppose a DFA with $p$ states accepts it, and
+feed it $a^p b^p$, which it must accept. Watch the states it passes through while reading
+the first $p$ letters: there are $p + 1$ of them, counting the state before the first
+letter, and only $p$ states exist, so two of those visits are to the same state. Say the
+machine is in state $q$ after reading $i$ of the `a`s and in $q$ again after reading $j$
+of them, with $i < j$. The block of $j - i$ letters between those visits took the machine
+from $q$ back to $q$; it is a loop. Go round it twice. The machine reads $a^{i}$, reaches
+$q$, reads the loop block, is at $q$, reads it again, is at $q$ again, and then reads the
+rest of the word exactly as before, ending in the same accepting state. It has accepted
+$a^{p + (j - i)} b^p$, which has more `a`s than `b`s and is not in the language. The DFA
+does not exist.
+
+With $p = 3$ the numbers are small enough to hold: the word is `aaabbb`, four states are
+visited during `aaa` — before, after one, after two, after three — and only three exist,
+so some block of one or two `a`s is a loop, and pumping it gives `aaaabbb` or `aaaaabbb`,
+both accepted, both wrong. This is the pumping lemma, and its shape is worth keeping
+separate from its conclusion: assume a machine, choose a word long enough to force a
+repeat, and use the repeat to build a word the machine gets wrong.
+
+## Grammars: a description with recursion in it
+
+If a finite machine cannot describe $a^n b^n$, something else has to. A context-free
+grammar does it in two lines: $S \to aSb$ and $S \to ab$. Read the arrow as *may be
+rewritten as*. Start from $S$ and rewrite until no capital letters remain:
+
+```text
+S  ->  aSb  ->  aaSbb  ->  aaabbb
+```
+
+Every rewrite adds one `a` and one `b` at once, so the counts are equal by construction.
+The grammar has memory that the machine did not, and the memory is the recursion: the $S$
+in the middle of $aSb$ is a promise to finish the inside before the outer `b` is reached,
+and a promise inside a promise inside a promise is a stack. The word *context-free* means
+each rule rewrites one nonterminal without looking at what is around it.
+
+A word's parse tree records which rules were applied and where. The word is in the
+language when at least one tree exists with the start symbol at the root and the word
+along the leaves. And a word can have more than one. The grammar $S \to SS$, $S \to a$
+derives every non-empty string of `a`s, and `aaa` has two trees: `(aa)a` and `a(aa)`,
+depending on where the root's $S \to SS$ is taken to split the word. A grammar with a
+word that has two trees is *ambiguous*. For a programming language that is the
+difference between `1 - 2 - 3` meaning $-4$ or $2$, which is why ambiguity matters and
+why a parser that can *count* trees is a useful tool rather than a curiosity.
+
+## The shape that makes a table possible
+
+Deciding whether a word has a tree is a search, and searches need a shape that shrinks.
+Chomsky normal form provides one: every rule is either $A \to BC$, two nonterminals, or
+$A \to a$, one terminal. Nothing else. Look at what each banned shape would do to a search
+over spans of the word. A unit rule $A \to B$ rewrites a span as the same span, so the
+answer for a span would depend on itself. An epsilon rule $A \to \varepsilon$ covers a
+span of length zero, so a split into *zero and the rest* makes no progress. A mixed rule
+$A \to aB$ covers one symbol and then a nonterminal, which the two allowed shapes can
+express with one extra nonterminal, $A \to XB$ and $X \to a$. With only the two shapes,
+every application of a rule to a span of length two or more splits it into two strictly
+shorter, non-empty spans, and every application to a span of length one consumes it.
+Every context-free language without the empty word has a grammar in this form, and the
+lab's `Grammar` refuses anything else at construction time. In this form, $a^n b^n$ is
+
+```text
+S -> A B      S -> A C      C -> S B      A -> a      B -> b
+```
+
+which is `ANBN` in the lab: the `ab` base case is $S \to AB$, and the recursive case
+$aSb$ has been split into $A$ followed by $C$, where $C$ is *an $S$ and then a $B$*.
+
+## Filling the table
+
+Now the search has a shape. A span of the word is derivable from $A$ if either it is one
+symbol and $A \to$ that symbol is a rule, or it is longer and there is a split point and
+a rule $A \to BC$ with $B$ deriving the left part and $C$ deriving the right. Both parts
+are shorter than the span. So compute the answers for all spans of length one, then all
+of length two, and so on: by the time a span is reached, every shorter span is known.
+That is the Cocke-Younger-Kasami algorithm, and it is dynamic programming in its plainest
+form: a table indexed by span, filled shortest-first.
+
+What goes in a cell is the set of *all* nonterminals that derive exactly that span — all,
+because a nonterminal that derives a span may be the one some longer span's rule needs;
+exactly, because the recurrence asks about a contiguous stretch with fixed ends. To make
+the parser count trees rather than merely detect them, store a number per nonterminal
+instead of a bare set: the number of trees rooted at that nonterminal over that span. A
+rule $A \to BC$ at one split point contributes *left trees times right trees*, because
+any left tree pairs with any right tree; the cell's total for $A$ is the sum over split
+points and rules.
+
+```python
+rules = [("S", ("A", "B")), ("S", ("A", "C")), ("C", ("S", "B")),
+         ("A", ("a",)), ("B", ("b",))]
+
+
+def cyk_counts(word):
+    n = len(word)
+    table = {}                           # (i, j) -> {nonterminal: trees} for word[i:j]
+    for i, ch in enumerate(word):
+        cell = {}
+        for lhs, rhs in rules:
+            if rhs == (ch,):
+                cell[lhs] = cell.get(lhs, 0) + 1
+        table[(i, i + 1)] = cell
+    for length in range(2, n + 1):
+        for i in range(0, n - length + 1):
+            j = i + length
+            cell = {}
+            for k in range(i + 1, j):
+                left, right = table[(i, k)], table[(k, j)]
+                for lhs, rhs in rules:
+                    if len(rhs) == 2 and rhs[0] in left and rhs[1] in right:
+                        cell[lhs] = cell.get(lhs, 0) + left[rhs[0]] * right[rhs[1]]
+            table[(i, j)] = cell
+    return table
+
+
+table = cyk_counts("aabb")
+for length in range(1, 5):
+    for i in range(0, 5 - length):
+        print(f"{'aabb'[i:i + length]:>5} {table[(i, i + length)]}")
+```
+
+Read the printout by increasing length. The four single letters get `{'A': 1}` or
+`{'B': 1}`. Of the three spans of length two, only `ab` gets anything: split it as `a`
+and `b`, and the rule $S \to AB$ fires with $1 \times 1 = 1$. Of the two spans of length
+three, `aab` gets nothing — its splits are `a` with `ab`, and no rule has $AS$ on its
+right, or `aa` with `b`, and `aa` derived nothing — while `abb` splits as `ab` with `b`
+and the rule $C \to SB$ fires. The whole word splits as `a` with `abb`, and $S \to AC$
+fires with $1 \times 1$: one tree, the word is accepted, and it has exactly one parse.
+The empty cells are printed here as `{}`; the lab's `cyk` leaves them out of its
+dictionary entirely, and keys its cells by `(i, length)` rather than by the two ends. It
+is the same table.
+
+Run the same function with the rules $S \to SS$ and $S \to a$ and the counts for `a`,
+`aa`, `aaa`, `aaaa`, `aaaaa` come out as $1, 1, 2, 5, 14$ — the Catalan numbers, which
+count the ways of fully bracketing a product of $n$ factors, which is what a tree over
+$n$ `a`s with binary rules is. Three `a`s have two: the root split after the first `a`
+gives $1 \times 1$ and after the second gives $1 \times 1$ again. Four `a`s have five:
+splits after the first, second and third `a` contribute $1 \times 2$, $1 \times 1$ and
+$2 \times 1$.
+
+## The cost, and the assignment that quietly loses trees
+
+Count the loops. There are about $n^2 / 2$ spans, since a span is fixed by a start and a
+length and the length is bounded by what is left of the word. A span of length $L$ has
+$L - 1$ split points, and $L$ grows with $n$, which is the third factor. Each split tries
+every rule. So the work is $O(n^3 |G|)$, with the grammar's size as a multiplier and the
+word length as a cube — this module's derivation unit counts the triples exactly and
+finds $\binom{n+1}{3}$ of them, which is why a ten-letter word costs $165$ split
+evaluations and not a thousand.
+
+The mistake people actually make in the fill is the one the membership version of the
+algorithm invites. When a cell holds a set, a rule that fires adds its nonterminal to the
+set, and firing twice changes nothing. When a cell holds counts, a rule that fires at the
+second split point must *add* its product to what the first split point contributed, and
+it is tempting to write `cell[lhs] = left[b] * right[c]` — an assignment, the way the
+set version was — because it reads as *the count for this rule is this product*. Nothing
+crashes. Every word the grammar accepts is still accepted, since a positive count
+overwritten by another positive count is still positive. What breaks is silent: every
+count collapses to the contribution of whichever split fired last, so $S \to SS$ over
+three `a`s counts $1$ instead of $2$ and over four counts $1$ instead of $5$, and
+`shortest_ambiguous` reports every grammar unambiguous. Only a check that knows the true
+counts sees it, and the lab has one: a top-down memoised counter that shares no code with
+the table.
+
+## Ambiguity is a property of the grammar
+
+A count above one for some word is a witness that the grammar is ambiguous.
+`shortest_ambiguous` searches for the smallest one, taking words in order of length and,
+within a length, in sorted order of their letters, and it stops at the first word whose
+count exceeds one. For $S \to SS \mid a$ the answer is `aaa`; for `ANBN` there is no such
+word up to any bound, because every word in that language has exactly one tree.
+
+Be precise about what the witness proves. It proves that *this grammar* is ambiguous. It
+does not prove that the language has no unambiguous grammar — $S \to SS \mid a$ describes
+the same language as $S \to aS \mid a$, which has one tree per word. Languages for which
+every grammar is ambiguous exist and are called inherently ambiguous, and whether a
+language is one is undecidable, so no search of this kind can settle it. And a search
+that finds nothing up to length six has shown only that; the shortest witness may be
+longer.
+
+## Where it stops
+
+CYK needs Chomsky normal form, and converting a grammar into it can square its size,
+which the $|G|$ factor then charges for. The cube is fine for a sentence and hopeless for
+a source file, which is why the parsers in compilers are linear-time algorithms that
+handle only the grammars they can handle — LL and LR — and why a grammar being
+*unambiguous* is a precondition for those rather than a nicety. Context-free grammars
+have a boundary of their own: $a^n b^n c^n$, three counts kept equal, is beyond them, by
+a pumping argument one level up. And unlike module two, nondeterminism is not free here.
+The machine that recognises exactly the context-free languages is a nondeterministic
+pushdown automaton, and its deterministic cousin recognises strictly fewer; the guess
+cannot be replaced by a set, because the set would have to hold stacks.
+
+The lab for this module is *A CYK parser that counts*. You write the CNF validator in
+`Grammar`, the table in `cyk`, `accepts` and `count_parses` as lookups in its top cell,
+and `shortest_ambiguous` as the ordered search. The checks include the `aabb` table
+above cell by cell, the Catalan numbers up to $132$, the independent counter over three
+grammars and every word up to length five, and a grammar whose ambiguity first shows at
+length two.
+''',
+                },
+            ],
             "quiz": {
                 "title": "What a stack buys, and what a table costs",
                 "minutes": 7,
@@ -3084,6 +4039,270 @@ assert count_parses(_amb, "ab") == 2
                 "Configuration repetition proves divergence — a sound but incomplete halting test",
                 "Why no sound *and* complete test exists: the diagonal argument on a supposed decider for HALT",
                 "The busy beaver function grows faster than any computable function, so no budget is ever enough",
+            ],
+            "read": [
+                {
+                    "title": "A clerk, a tape, and the question with no answer",
+                    "minutes": 13,
+                    "body": r'''
+Picture a clerk at a desk with a roll of squared paper stretching away in both
+directions, a pencil, an eraser, and a small card of rules. The clerk can see one square
+at a time. Each move is the same: read the square, look up the pair *(what mood I am in,
+what the square says)* on the card, and do what the card says — write something in the
+square, step one square left or right or stay, and change mood. If the pair is not on
+the card, the clerk stops. That is a Turing machine, and the clerk's mood is its control
+state. There are only finitely many moods and finitely many symbols, and the card is
+finite. The paper is not.
+
+Here is a card for adding one to a binary number written on the tape, most significant
+digit first. In the mood `right`, walk right over the digits until the first blank. Then,
+in the mood `carry`, walk back left: every `1` becomes `0` and the walk continues,
+because one plus one is zero carry one; the first `0` becomes `1` and the job is done. If
+the walk runs off the left end of the number and meets a blank, write a `1` there: the
+number has grown a digit.
+
+```python
+transitions = {
+    ("right", "0"): ("right", "0", "R"),
+    ("right", "1"): ("right", "1", "R"),
+    ("right", "_"): ("carry", "_", "L"),
+    ("carry", "1"): ("carry", "0", "L"),
+    ("carry", "0"): ("done", "1", "S"),
+    ("carry", "_"): ("done", "1", "S"),
+}
+BLANK, ACCEPT = "_", "done"
+
+
+def step(cfg):
+    state, head, cells = cfg
+    if state == ACCEPT:
+        return None
+    tape = dict(cells)
+    action = transitions.get((state, tape.get(head, BLANK)))
+    if action is None:
+        return None
+    new_state, write, move = action
+    if write == BLANK:
+        tape.pop(head, None)
+    else:
+        tape[head] = write
+    head += {"L": -1, "R": 1, "S": 0}[move]
+    return (new_state, head, tuple(sorted(tape.items())))
+
+
+def show(cfg):
+    state, head, cells = cfg
+    tape = dict(cells)
+    lo, hi = min(min(tape), head), max(max(tape), head)
+    row = "".join(tape.get(i, BLANK) for i in range(lo, hi + 1))
+    return f"{state:>6} head={head:>2}  {row}"
+
+
+cfg = ("right", 0, tuple(enumerate("1011")))
+n = 0
+print(show(cfg))
+while True:
+    nxt = step(cfg)
+    if nxt is None:
+        break
+    cfg = nxt
+    n += 1
+    print(show(cfg))
+print(n, "steps")
+```
+
+Eight steps take `1011` to `1100`. The first four are the walk right, reading a digit
+each; the fifth reads the blank at position 4 and turns to face left; the sixth and
+seventh turn the two trailing `1`s into `0`s; the eighth finds the `0`, writes `1`, and
+enters `done`. That printout is the whole of the module's first idea. A *configuration*
+is `(state, head, cells)` — the mood, where the clerk stands, and everything written on
+the paper — and a computation is a sequence of configurations, each determined by the
+one before. Nothing else exists: no counter, no clock, no memory outside the tape.
+
+Two small decisions in that code are load-bearing. The tape is stored as only the
+non-blank squares, because the paper is infinite and almost all of it is empty; writing a
+blank *deletes* the square rather than storing a blank in it, so that two tapes with the
+same contents are the same tuple. And the cells are a sorted tuple rather than a dict, so
+that a configuration can go into a set. Both decisions exist for one function, and it is
+the last one in the lab.
+
+## Stopping
+
+The card is partial, and that is on purpose. A DFA's table had to be total because its
+verdict was read at the end of the word, and a run that stopped early had no verdict. A
+Turing machine has no end of input to reach; the input is written on the tape and the
+machine reads as much or as little of it as it likes. So *stopping* is one of its
+legitimate outcomes, and it can stop in two ways: it enters the accept state, which has
+no successor by construction, or it reaches a pair the card does not list. Both are
+*halting*. Only the first is *accepting*. The lab's `run` reports `halted` and `accepted`
+as separate flags because *it finished and the answer was no* is a report the machine
+has to be able to make.
+
+This is also where one tape and one head stop being a limitation. Every extra tape,
+every random-access memory, every register set can be encoded on a single tape at a
+polynomial cost in steps; a Python interpreter can be written as a card. The claim that
+everything any physical procedure can compute, this clerk can compute, is the
+Church-Turing thesis, and it is a thesis rather than a theorem because *any physical
+procedure* is not a mathematical object. Nobody has found a counterexample in ninety
+years.
+
+## The third outcome
+
+Run a card that stays in one mood, writes a blank over a blank, and stays put. It never
+enters the accept state and never meets a missing pair. It does not halt. `LOOPER` in
+the lab is exactly that, and a simulation of it never returns.
+
+A simulator that may never return is useless, so give it a budget: `run(tape, max_steps)`
+takes at most that many steps and then stops. The subtlety is in what it reports. Before
+each step, check whether the budget is spent; if it is, stop *without* taking the step.
+Then `steps` never exceeds `max_steps`, and — this is the part that matters — `halted` is
+`False`, because the machine did not halt. The simulation stopped. The machine still had
+a rule to apply. `LOOPER.run("", 50)` reports `halted` `False`, `steps` `50`; and
+`INCREMENT.run("1011", 3)` reports the same shape, three steps and not halted, which is
+the honest description of a machine that would have finished at step eight if allowed to.
+
+So a budgeted run has three outcomes and not two: halted and accepted, halted and not
+accepted, and not halted — which says nothing about the machine and everything about the
+experiment. The mistake people actually make is to read the third outcome as one of the
+first two. It is tempting because the simulation did come to a stop, and because most
+machines that run for a thousand steps without stopping are indeed looping. But
+`INCREMENT` on a thousand-digit number takes two thousand steps, and reading its budget
+exhaustion as *it loops* is wrong, while reading it as *it rejects* is worse: the budget
+answers a different question from the one asked.
+
+## Proving that a machine never halts
+
+Sometimes the third outcome can be upgraded. The successor of a configuration is a
+function of that configuration alone; there is no hidden state. So if the machine is ever
+in a configuration it has been in before, everything that followed the first visit
+follows the second, and it is in a cycle with no exit. It will never halt. That is a
+proof, not a heuristic, and it needs both halves — determinism and the completeness of
+the snapshot. Drop either and *seen before* no longer implies *will happen again*.
+
+```python
+def make_step(transitions, accept, blank="_"):
+    def step(cfg):
+        state, head, cells = cfg
+        if state == accept:
+            return None
+        tape = dict(cells)
+        action = transitions.get((state, tape.get(head, blank)))
+        if action is None:
+            return None
+        new_state, write, move = action
+        if write == blank:
+            tape.pop(head, None)
+        else:
+            tape[head] = write
+        head += {"L": -1, "R": 1, "S": 0}[move]
+        return (new_state, head, tuple(sorted(tape.items())))
+    return step
+
+
+def detect_loop(step, start, max_steps):
+    cfg = (start, 0, ())
+    seen = {cfg}
+    for n in range(1, max_steps + 1):
+        cfg = step(cfg)
+        if cfg is None:
+            return None            # it halted: nothing to report
+        if cfg in seen:
+            return n               # a repeat, and therefore a proof
+        seen.add(cfg)
+    return None                    # budget spent, no verdict
+
+
+looper = make_step({("q", "_"): ("q", "_", "S")}, "halt")
+rightward = make_step({("q", "_"): ("q", "_", "R")}, "halt")
+flip = make_step({("p", "_"): ("q", "1", "R"),
+                  ("q", "_"): ("r", "_", "L"),
+                  ("r", "1"): ("p", "_", "S")}, "halt")
+print("LOOPER   ", detect_loop(looper, "q", 1000))
+print("flip     ", detect_loop(flip, "p", 1000))
+print("RIGHTWARD", detect_loop(rightward, "q", 1000))
+```
+
+`LOOPER` repeats at step one: its first move returns it to the configuration it started
+in. The three-mood machine writes a `1`, steps right, steps back and erases it, and is
+home at step three. Both are proofs of non-termination. `RIGHTWARD` walks right over
+blank tape forever, and the test returns `None`, because the head position is part of
+the configuration and every configuration it visits is new. This is what *sound but
+incomplete* means: every loop it reports is real, and some real non-termination is
+invisible to it. Note that `seen` holds the initial configuration before the first step,
+or `LOOPER`'s one-step return home would be missed.
+
+How large a budget makes the test complete? Confine a machine with $s$ moods and $t$
+tape symbols to a window of $w$ squares, and there are at most $s \cdot w \cdot t^{w}$
+configurations, so a run of one more step than that must repeat. For five moods, three
+symbols and eight squares that is $5 \cdot 8 \cdot 3^8 = 262\,440$, and it grows as
+$3^w$; for twenty squares it is past $10^{11}$. And the window was an assumption.
+`RIGHTWARD` has no window. Every route to a budget that always works runs into the same
+wall, and the wall has a name.
+
+## Why no test can be both sound and complete
+
+Suppose, for contradiction, that somebody hands you a function `halts(machine, tape)`
+that always returns, and returns `True` exactly when the machine would halt on that tape.
+It may work however it likes; you never look inside. Now write this machine:
+
+```text
+def contrary(description):
+    if halts(description, description):
+        loop forever
+    else:
+        halt
+```
+
+It takes the description of a machine, asks the oracle whether that machine halts when
+fed *its own description*, and does the opposite. `contrary` is a machine, so it has a
+description; feed `contrary` its own description and ask what happens. If it halts, then
+`halts(contrary, contrary)` returned `True`, so it took the first branch and looped
+forever. If it loops forever, then the oracle returned `False`, so it took the second
+branch and halted. Both cases contradict themselves, and the only assumption made was
+that `halts` exists. It does not. No program decides, for every machine and every input,
+whether the machine halts — and the argument never examined how `halts` worked, which is
+why it rules out every possible one rather than the ones anybody has tried.
+
+Two things about the proof are worth stating because they are commonly got wrong. It
+uses self-reference, and self-reference is not a cheat: a program can read its own
+source, as every self-hosting compiler does, and the recursion theorem guarantees the
+construction is legitimate. And it says nothing about any particular machine. `LOOPER`
+provably loops; `INCREMENT` provably halts on every input. What has no program is the
+*general* question, and every individual machine still either halts or does not.
+
+The consequence for budgets is exact. Define $BB(n)$ as the largest number of steps any
+halting machine with $n$ moods and two symbols takes on a blank tape. If $BB$ were
+computable, a budget of $BB(n) + 1$ would make the loop detector complete for $n$-mood
+machines — run that long, and a machine that has not halted never will — and the halting
+problem would be decidable. So $BB$ is not computable, and more than that: it grows
+faster than every computable function, since any computable bound would serve as a
+budget. The known values make the point without the theory. $BB(1) = 1$, $BB(2) = 6$,
+$BB(3) = 21$, $BB(4) = 107$, and $BB(5) = 47\,176\,870$, settled in 2024 after decades
+of work. A five-mood machine can run forty-seven million steps and then halt, and no
+budget you would think of choosing would have waited for it.
+
+## Where it stops
+
+Undecidable does not mean unanswerable. The halting problem is *semi-decidable*: run the
+machine, and if it halts you will find out, so every `True` answer is reachable and only
+the `False` answers are not. Loop detection is one way of reaching some of the `False`
+answers, and bounded windows make it complete for machines that stay inside them. What
+is impossible is a single procedure that reaches all of them. The impossibility also
+spreads: by Rice's theorem, every non-trivial question about what a machine *computes* —
+does it ever print a `1`, does it accept the empty word, does it compute the same
+function as this other machine — is undecidable by the same argument dressed
+differently. Questions about a machine's *text* — how many moods, whether a rule writes
+a `1` — are decidable, and the line between the two is the line between syntax and
+behaviour.
+
+The lab for this module is *A Turing machine you can watch*. You write `_validate`,
+`config` and `tape_string`, `step` as the function above, `run` with the budget checked
+before the step so that `halted` is honest, and `detect_loop` with the initial
+configuration seeded into `seen`. The checks trace `INCREMENT` a configuration at a time,
+run the $a^n b^n$ recogniser, confirm that an exhausted budget is neither halting nor
+acceptance, and ask for `1`, `3` and `None` from the three machines above.
+''',
+                },
             ],
             "quiz": {
                 "title": "Halting, budgets, and the question with no program",
