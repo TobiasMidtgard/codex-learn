@@ -44,7 +44,10 @@ export function loadApp(opts) {
   opts = opts || {};
   globalThis.__CW_NO_BOOT = 1;
 
-  const src = LOAD_ORDER.map(SRC).join('\n') + '\nmodule.exports = {' +
+  /* `transform` lets a gate about the build stage what the build ships — the same
+     files after tools/minify.mjs — rather than what the repository holds */
+  const files = LOAD_ORDER.map(SRC).map((s) => (opts.transform ? opts.transform(s) : s));
+  const src = files.join('\n') + '\nmodule.exports = {' +
     Object.entries(opts.exports || {}).map(([k, v]) => ` ${k}: ${v}`).join(',') + ' };';
 
   /* One memoised element per id. Completing a lesson raises a toast and repaints the
@@ -99,7 +102,8 @@ export function loadApp(opts) {
     opts.raf || ((fn) => { fn(); return 1; }),
     opts.ResizeObserver || class { observe() {} disconnect() {} },
     1,
-    () => Promise.reject(new Error('the gate does not serve the network')),
+    /* a gate about fetching hands in its own fetch; every other gate gets none */
+    opts.fetch || (() => Promise.reject(new Error('the gate does not serve the network'))),
     { hash: '', href: '', pathname: '/' },
     { userAgent: 'node', language: 'en' },
     () => ({ matches: false, addEventListener: () => {} }),
