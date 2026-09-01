@@ -68,7 +68,7 @@ new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'dev
   SRC + '\nmodule.exports = { createCircuit, Netlist, MNA, sanitiseDrawing, cellOf, ' +
         'CELL_LIMIT, DRAW_DEPTH, PART_KINDS, VALUE_CEIL };'
 )(mod, windowShim, raf, RO, 1);
-const { createCircuit, Netlist, sanitiseDrawing, cellOf, CELL_LIMIT, DRAW_DEPTH } = mod.exports;
+const { createCircuit, Netlist, sanitiseDrawing, cellOf, CELL_LIMIT, DRAW_DEPTH, PART_KINDS } = mod.exports;
 
 const problems = [];
 const note = (where, line) => {
@@ -190,6 +190,43 @@ section('trust', () => {
   let d = sanitiseDrawing(deep, 0), levels = 0;
   while (d.parts.length && d.parts[0].inner) { d = d.parts[0].inner; levels++; }
   if (levels > DRAW_DEPTH) note('trust', 'nesting survived ' + levels + ' deep, past DRAW_DEPTH');
+  /* A KIND IS TRUSTED THE WAY A COORDINATE IS, and it was not checked at all. Everything
+     downstream reads PART_KINDS[p.kind] and uses the answer without asking — k.pins,
+     k.sym, k.def — so an unknown kind was not a part drawn wrongly, it was a TypeError
+     four frames into paint() and the whole canvas gone. Reachable from `circuit.json`
+     inside a progress document, which is a file the learner was handed.
+       The names below are two different defects: "BANANA" was always a crash, and
+     "toString" was a crash because PART_KINDS inherited from Object.prototype, so it was
+     a kind this build appeared to HAVE. Both are dropped now, by the rule this section
+     already holds coordinates to — a dropped part is visible, a broken canvas is not. */
+  let kinds = 0;
+  for (const kind of ['BANANA', '', null, undefined, 42, 'toString', 'constructor',
+                      'valueOf', '__proto__', 'hasOwnProperty']) {
+    kinds++; hostile++;
+    let out;
+    try {
+      out = sanitiseDrawing({ parts: [{ id: 'p0', kind, x: 3, y: 3, value: 1e3 },
+                                      { id: 'p1', kind: 'R', x: 6, y: 3, value: 1e3 }], wires: [] }, 0);
+    } catch (e) {
+      note('trust', 'a part of kind ' + JSON.stringify(kind) + ' threw out of the guard: ' + e.message);
+      continue;
+    }
+    if (out.parts.some((p) => p.kind === kind && kind !== 'R')) {
+      note('trust', 'a part of kind ' + JSON.stringify(kind) + ' survived the guard — ' +
+        'everything downstream reads PART_KINDS[kind] and uses the answer');
+    }
+    if (out.parts.length !== 1) {
+      note('trust', 'dropping the kind ' + JSON.stringify(kind) + ' took the good part with it: ' +
+        out.parts.length + ' left of 1');
+    }
+  }
+  /* And the containment half, at the table itself: a name off Object.prototype must not
+     look like a kind this build has. */
+  for (const n of ['toString', 'constructor', 'valueOf', 'hasOwnProperty']) {
+    if (PART_KINDS[n] !== undefined) {
+      note('trust', 'PART_KINDS answers for "' + n + '", a kind nobody registered');
+    }
+  }
   /* a port is a cell too, and reaches paint() through pinsOf exactly as a part does */
   const ports = sanitiseDrawing({ parts: [{ id: 'b', kind: 'IC', x: 2, y: 2,
     ports: [{ cells: [[0, 0], [1e17, 3], [NaN, 1]] }] }], wires: [] }, 0);
@@ -197,7 +234,7 @@ section('trust', () => {
     note('trust', 'a block port kept a cell it cannot draw: ' +
       JSON.stringify(ports.parts[0].ports[0].cells));
   }
-  console.log('[ok  ] trust     ' + hostile + ' hostile coordinates recovered or dropped, ' +
+  console.log('[ok  ] trust     ' + hostile + ' hostile coordinates and kinds recovered or dropped, ' +
     'never moved to the origin · ports, nesting and non-geometry fields held');
 });
 
@@ -612,7 +649,7 @@ for (const [where, lines] of problems) {
 }
 console.log(problems.length
   ? '\n' + problems.reduce((n, p) => n + p[1].length, 0) + ' drawing problem(s)'
-  : '\nAll good: the schematic canvas holds ' + hostile + ' hostile coordinates off the ' +
+  : '\nAll good: the schematic canvas holds ' + hostile + ' hostile coordinates and kinds off the ' +
     'drawing, returns from ' + CELL_LIMIT.toExponential(0) + ' cells out, paints ' + mounts +
     ' mounts at 7 widths in both modes, draws one repaint a frame under 150 gestures, ' +
     'names what it drew, and puts all ' + drawn + ' published schematics inside their own box.');

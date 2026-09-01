@@ -73,6 +73,14 @@ const MCU = (function () {
      scrolling smoothly. The cut is reported rather than silent. */
   const CONSOLE_MAX = 400;
 
+  /* AND a cap on the characters, because the line cap alone bounds nothing. print()
+     without a newline appends to the open line for ever, so `void loop() { print("x"); }`
+     holds one console line — under the 400 — that grew to 59,999 characters in sixty
+     time steps and would have gone on growing for the length of the run, with `dropped`
+     reading 0 the whole way. Two limits because there are two ways to be too much
+     output: too many lines to lay out, and too much text to hold. */
+  const CONSOLE_MAX_CHARS = 20000;
+
   /* ---------------------------------------------------------------- values
    *
    * Two kinds, and the split is the reason `3 / 2` is 1 here as it is on the hardware.
@@ -96,6 +104,20 @@ const MCU = (function () {
 
   function isNum(x) { return x && x.s === undefined; }
 
+  /* Infinity and NaN are refused where they are MADE, not where they are noticed. The
+     reason is already written out in full at the "/" case further down — once a number
+     stops being finite, every number worked out from it stops being finite too, and a
+     sketch that keeps running is one printing answers that are all wrong with nothing
+     saying where it began. Division by zero has always said so. `pow(10, 400)` did not:
+     it returned Infinity, `println` showed "Infinity", and `int y = pow(10, 400);`
+     stored **0**, because Infinity|0 is 0. A silent zero is the worst of the three. */
+  function finite(v, line, what) {
+    if (typeof v === 'number' && v - v === 0) return v;
+    fail(line, what + ' is ' + (v !== v ? 'not a number' : v > 0 ? 'infinity' : 'minus infinity') +
+      '. Every number worked out from it afterwards would be as well — and stored into ' +
+      'an int it becomes 0, which looks like an answer. The sketch stops here instead.');
+  }
+
   /* ---------------------------------------------------------------- faults
    *
    * Every fault carries the line it happened on. A learner debugging a sketch inside a
@@ -105,6 +127,32 @@ const MCU = (function () {
     return { mcuFault: true, line: line, message: message };
   }
   function fail(line, message) { throw Fault(line, message); }
+
+  /* ---------------------------------------------------------------- lookup tables
+   *
+   * EVERY TABLE A LEARNER'S IDENTIFIER INDEXES IS BUILT HERE, and the reason is that
+   * `{}` inherits from Object.prototype — so `{}.toString` is a function rather than
+   * undefined, and an identifier is exactly the kind of string a sketch chooses. Five
+   * tables were plain objects (the scope chain's `vars`, `fns`, `defines`, `BUILTIN`
+   * and `CONSTANTS`) and all five answered for names nobody defined:
+   *
+   *     toString();            ->  "Line 1: b.f is not a function"
+   *     println(constructor);  ->  "Line 1: Cannot read properties of undefined"
+   *     void toString() { }    ->  "there is already a function called toString."
+   *     toString = 5;          ->  no error, and Object.prototype.toString.val is now
+   *                                {v:5,f:false} — a sketch reaching off this canvas
+   *                                and writing on a builtin the whole page shares.
+   *
+   * The first two are the engine talking where the header of this file promises a
+   * learner never has to read it. The last is the header's other promise — "a tree
+   * walker can only do what this file gives it a way to do, which is arithmetic and
+   * twelve pins" — being false as written.
+   *
+   * A null prototype is the whole fix, and it is a fix at the place the defect is
+   * rather than a guard at each of the eleven reads. `__proto__` stops being magic on
+   * one of these too, so `int __proto__ = 5;` is now an ordinary variable instead of a
+   * statement that re-prototypes the scope it is declared in. */
+  function bare(o) { return Object.assign(Object.create(null), o || {}); }
 
   /* ---------------------------------------------------------------- lexer */
 
@@ -198,8 +246,17 @@ const MCU = (function () {
 
       /* a character literal is a number, which is what it is in C */
       if (c === "'") {
-        const ch = src[i + 1] === '\\' ? { n: '\n', t: '\t', '0': '\0' }[src[i + 2]] : src[i + 1];
-        const end = src[i + 1] === '\\' ? i + 3 : i + 2;
+        const esc = src[i + 1] === '\\';
+        /* An escape this table does not have used to fall through as `undefined`, and
+           String(undefined).charCodeAt(0) is 117 — the "u" of the word. So '\q' lexed
+           as the number 117 with nothing said, which is the worst kind of wrong: a
+           plausible small integer. Refused by name instead, with the four that exist. */
+        const ch = esc ? bare({ n: '\n', t: '\t', '0': '\0', '\\': '\\', "'": "'" })[src[i + 2]] : src[i + 1];
+        if (esc && ch === undefined) {
+          fail(line, 'there is no escape "\\' + (src[i + 2] === undefined ? '' : src[i + 2]) +
+            '" in a character literal here. The ones there are are \\n, \\t, \\0, \\\\ and \\\'.');
+        }
+        const end = esc ? i + 3 : i + 2;
         if (src[end] !== "'") fail(line, "a character literal holds exactly one character.");
         out.push({ t: 'num', v: num(String(ch).charCodeAt(0), false), line: line });
         i = end + 1;
@@ -208,9 +265,15 @@ const MCU = (function () {
 
       if (c >= '0' && c <= '9') {
         let j = i, isF = false;
+        /* A base prefix with no digits after it — `0x`, `0b` — used to reach parseInt
+           as an empty string, come back NaN, and be turned into 0 by the |0 that makes
+           these int32. A pin number or a bit mask that is quietly zero is a sketch that
+           runs and does the wrong thing, so both prefixes now insist on a digit. */
         if (c === '0' && (src[i + 1] === 'x' || src[i + 1] === 'X')) {
           j = i + 2;
           while (j < n && /[0-9a-fA-F]/.test(src[j])) j++;
+          if (j === i + 2) fail(line, '"' + src.slice(i, j) + '" has no digits after it. ' +
+            'A hexadecimal number needs at least one, as in 0x1F.');
           out.push({ t: 'num', v: num(parseInt(src.slice(i, j), 16) | 0, false), line: line });
           i = j;
           continue;
@@ -218,6 +281,8 @@ const MCU = (function () {
         if (c === '0' && (src[i + 1] === 'b' || src[i + 1] === 'B')) {
           j = i + 2;
           while (j < n && /[01]/.test(src[j])) j++;
+          if (j === i + 2) fail(line, '"' + src.slice(i, j) + '" has no digits after it. ' +
+            'A binary number needs at least one 0 or 1, as in 0b1011.');
           out.push({ t: 'num', v: num(parseInt(src.slice(i + 2, j), 2) | 0, false), line: line });
           i = j;
           continue;
@@ -234,7 +299,10 @@ const MCU = (function () {
         /* the float and long suffixes a datasheet's example code is full of */
         if (/[fF]/.test(src[j] || '')) { isF = true; j++; }
         else if (/[uUlL]/.test(src[j] || '')) { while (/[uUlL]/.test(src[j] || '')) j++; }
-        out.push({ t: 'num', v: num(isF ? parseFloat(text) : (parseInt(text, 10) | 0), isF), line: line });
+        /* `1e400` is a token parseFloat answers Infinity for, so the refusal has to be
+           here as well as at the operators — a literal is a producer like any other. */
+        out.push({ t: 'num', v: num(isF ? finite(parseFloat(text), line, 'the number ' + text)
+          : (parseInt(text, 10) | 0), isF), line: line });
         i = j;
         continue;
       }
@@ -485,7 +553,9 @@ const MCU = (function () {
     }
 
     /* ---- the file ---- */
-    const fns = {};
+    /* null-prototype: see `bare` above. `fns.toString` was truthy before any sketch
+       declared anything, which is why `void toString() { }` was refused as a duplicate. */
+    const fns = bare(null);
     const globals = [];
     while (peek().t !== 'end') {
       const info = typeHere();
@@ -534,13 +604,13 @@ const MCU = (function () {
    * these is a promise that the thing it names behaves the way the board it came from
    * behaves, and a name defined here that the pin model does not honour is worse than
    * a name that is missing, because a missing name is reported on its line. */
-  const CONSTANTS = {
+  const CONSTANTS = bare({
     HIGH: num(1, false), LOW: num(0, false),
     INPUT: num(0, false), OUTPUT: num(1, false), INPUT_PULLUP: num(2, false),
     true: num(1, false), false: num(0, false),
     PI: num(Math.PI, true), TWO_PI: num(2 * Math.PI, true), HALF_PI: num(Math.PI / 2, true),
     A0: num(14, false), A1: num(15, false), A2: num(16, false), A3: num(17, false),
-  };
+  });
 
   /* ---------------------------------------------------------------- machine */
 
@@ -562,7 +632,9 @@ const MCU = (function () {
       line: 0,              /* the line last reached, for a fault or a stall */
       fault: null,
       console: [],
-      dropped: 0,
+      dropped: 0,           /* whole lines the line cap refused */
+      chars: 0,             /* characters held, against CONSOLE_MAX_CHARS */
+      cut: 0,               /* characters the character cap refused */
       wake: 0,              /* delay() sleeps until the clock passes this */
       left: 0,              /* instructions remaining in this time step */
       ops: 0,               /* instructions since the machine started */
@@ -579,7 +651,7 @@ const MCU = (function () {
        assignment converts to the declared type and not to the type of what is being
        assigned — which is the whole of why `int` division truncates and a float
        variable holding an int result still prints two decimals. */
-    function scope(parent) { return { vars: {}, up: parent }; }
+    function scope(parent) { return { vars: bare(null), up: parent }; }
     const globalScope = scope(null);
 
     function lookup(sc, name) {
@@ -601,7 +673,12 @@ const MCU = (function () {
     /* ---- console ---- */
     function emit(text) {
       M.io = true;
+      /* Two caps, and the character one is checked first because it is the one that
+         bounds memory: a sketch that never prints a newline holds ONE console line, so
+         the line cap never fires however long that line gets. */
+      if (M.chars >= CONSOLE_MAX_CHARS) { M.cut += text.length; return; }
       if (M.console.length >= CONSOLE_MAX) { M.dropped++; return; }
+      M.chars += text.length;
       const last = M.console.length - 1;
       /* print() continues the line print() started; println() ends one. Held as a
          partial last entry so the panel can show a half-written line as it is. */
@@ -634,7 +711,7 @@ const MCU = (function () {
       return p;
     }
 
-    const BUILTIN = {
+    const BUILTIN = bare({
       pinMode: { n: 2, f: function (a, line) {
         const p = pin(a[0], line);
         const m = toInt(a[1].v);
@@ -728,13 +805,23 @@ const MCU = (function () {
       floor: { n: 1, f: function (a) { return num(Math.floor(a[0].v), a[0].f); } },
       ceil: { n: 1, f: function (a) { return num(Math.ceil(a[0].v), a[0].f); } },
       round: { n: 1, f: function (a) { return num(Math.round(a[0].v) | 0, false); } },
-    };
+    });
     /* Serial is the same three functions under the names a sketch off a web page uses.
        begin() is accepted and does nothing, because there is no serial port here and
        there is no baud rate to get wrong — the console is the port. */
     BUILTIN['Serial.print'] = BUILTIN.print;
     BUILTIN['Serial.println'] = BUILTIN.println;
     BUILTIN['Serial.begin'] = { n: -1, f: function () { return ZERO; } };
+
+    /* The only builtins a string may reach. A string exists in this subset so print()
+       has something to print — arith() has always said so and refuses one by name on
+       its line. The builtins never asked, so every one of them read `.v` off a string
+       and got undefined: sqrt("x") printed NaN, abs("x") printed 0, min("x",1) returned
+       1, and analogWrite(pin,"x") drove the pin to zero duty without a word. Asked once,
+       here, rather than twenty times inside the functions. */
+    const TAKES_TEXT = bare({
+      print: 1, println: 1, 'Serial.print': 1, 'Serial.println': 1, 'Serial.begin': 1,
+    });
 
     function* sleep(secs) {
       M.io = true;
@@ -848,10 +935,12 @@ const MCU = (function () {
         fail(line, 'a string has no arithmetic; strings here are only for printing.');
       }
       const f = a.f || b.f;
+      /* The float branches go through finite(); the int ones cannot need it, because
+         toInt is | 0 and every int32 is finite by construction. */
       switch (op) {
-        case '+': return f ? num(a.v + b.v, true) : num(toInt(a.v + b.v), false);
-        case '-': return f ? num(a.v - b.v, true) : num(toInt(a.v - b.v), false);
-        case '*': return f ? num(a.v * b.v, true) : num(toInt(Math.trunc(a.v * b.v)), false);
+        case '+': return f ? num(finite(a.v + b.v, line, 'this sum'), true) : num(toInt(a.v + b.v), false);
+        case '-': return f ? num(finite(a.v - b.v, line, 'this difference'), true) : num(toInt(a.v - b.v), false);
+        case '*': return f ? num(finite(a.v * b.v, line, 'this product'), true) : num(toInt(Math.trunc(a.v * b.v)), false);
         case '/':
           if (b.v === 0) {
             fail(line, 'division by zero. ' + (f ? 'A float divided by zero is infinity, ' +
@@ -859,7 +948,7 @@ const MCU = (function () {
               'the sketch stops here instead.'
               : 'Whatever this divisor was counted from came out zero.'));
           }
-          return f ? num(a.v / b.v, true) : num(toInt(Math.trunc(a.v / b.v)), false);
+          return f ? num(finite(a.v / b.v, line, 'this quotient'), true) : num(toInt(Math.trunc(a.v / b.v)), false);
         case '%':
           if (toInt(b.v) === 0) fail(line, 'the remainder after dividing by zero has no value.');
           return num(toInt(a.v) % toInt(b.v), false);
@@ -889,8 +978,21 @@ const MCU = (function () {
           fail(node.line, node.name + ' takes ' + b.n + ' argument' + (b.n === 1 ? '' : 's') +
             ', not ' + args.length + '.');
         }
+        if (!TAKES_TEXT[node.name]) {
+          for (let i = 0; i < args.length; i++) {
+            if (!isNum(args[i])) {
+              fail(node.line, node.name + ' works on numbers, and argument ' +
+                (i + 1) + ' is a piece of text. Strings here are only for printing — ' +
+                'print, println and their Serial spellings are the only things that take one.');
+            }
+          }
+        }
         if (b.block) return yield* b.block(args, node.line);
-        return b.f(args, node.line);
+        /* Checked on the way out as well as on the way in: pow(10, 400) is Infinity and
+           pow(-1, 0.5) is NaN with every argument a perfectly good number. */
+        const r = b.f(args, node.line);
+        if (isNum(r)) finite(r.v, node.line, 'what ' + node.name + ' worked out');
+        return r;
       }
 
       const fn = fns[node.name];
@@ -1059,7 +1161,7 @@ const MCU = (function () {
       state: function () {
         return { fault: M.fault, line: M.line, ops: M.ops, loops: M.loops,
                  inSetup: M.inSetup, done: !!M.done, sleeping: M.t < M.wake,
-                 dropped: M.dropped };
+                 dropped: M.dropped, cut: M.cut };
       },
       console: function () { return M.console.map(function (l) { return l.text; }); },
       hasLoop: !!fns.loop,
@@ -1073,7 +1175,7 @@ const MCU = (function () {
      is separate from running because a sketch with a typo in it should be reported the
      moment it is typed, and not on time step four hundred. */
   function compile(source) {
-    const defines = {};
+    const defines = bare(null);
     try {
       const program = parse(lex(String(source || ''), defines));
       program.defines = defines;

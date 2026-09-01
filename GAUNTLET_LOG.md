@@ -8216,3 +8216,389 @@ and the new gate run against **16 mutations — 15 it had to reject and one it h
 which is the run that found the suite was scoring one of them on the wrong check.
 
 ---
+
+## Cycle 25 — TRACK 6: Edge Cases, Resilience & Accessibility
+
+*(the runner labels this commit "cycle 6"; its counter restarts per run and this log's
+does not. Run E's cycle 1 was this file's cycle 20, and its cycle 5 was cycle 24.)*
+
+**Target: the microcontroller sketch — `src/mcu.js` in full, and the panel that is its
+only door: `paintMcu`, `mcuConsole` and `mcuStatus` in `src/circuit.js`.** One subsystem,
+and the one this track has been leaving for six cycles running.
+
+Cycle 6 named it and left it: *"`paintMcu` is a code editor, a console and a fault report
+inside the side panel — its own subsystem, in `src/mcu.js` as much as here, and the only
+part of the editor with a second language in it."* Cycles 8, 12, 15, 19 and 21 each
+re-recorded it and each declined it. That is **six cycles**, the same position `--lime`
+and the canvas palette were in before the cycles that finally took them.
+
+It is nine hundred lines of lexer, parser and coroutine machine that execute text a
+learner typed, and **nothing had ever driven it**. The reason it stayed invisible is worth
+writing down: **there are 0 MCU parts in the published catalogue** — counted, not assumed.
+Every content gate in this repository, all 87 circuit exercises and all 390 published
+schematics, could pass for ever without compiling a single sketch. The only sketches that
+exist are the ones learners write, and nothing was watching those.
+
+### Baseline, captured before any edit
+
+```
+87 circuit exercises / 369 checks · 593 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1294 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3360 per-option explanations · 6572 draws · top slot 24.5% / quiz view 24.0%
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui    78 driven keys, 10 things said, 15 kinds above their stamp floor
+circuit_view  26 hostile coordinates · 390 published drawings · 424 mounts · 150 gestures
+circuit_model 1487 analyses · 84 refusals · 15 plots · 390 published, 369 with a DC point
+tune_ui       423 clamped openings · 462 targets · 105 paints · 270 drags · 493 mounts
+desk          61 expressions · 6 worst-case shapes · 102 css lines
+theme         14 exemptions · 135 contrast surfaces x 2 · tightest text 4.61:1 ·
+              canvas 154 paint sites / 9 tiers, quietest 3.77:1 · type 6 steps / 285
+progress      29 hostile documents · 12 accessibility contracts
+api           30 passed, 0 failed
+MCU           1 interpreter, 2 panels, 0 gates, 0 driven sketches
+build: 3 parts / 111 keys · 32/32 + 30/30 · 13 visualisers · 3 tune models · 15 symbols ·
+       62 payloads, 13129 KB · inlined 14384 KB · shell 1226 KB
+```
+
+`test_api` was captured against a server started on a throwaway data directory rather than
+left as the connection error it gives with nothing listening. Nothing this cycle touches
+can reach it; it is here so the claim that it did not move is a measurement.
+
+### The two defects that made this cycle worth doing
+
+**1. A sketch could reach off the canvas and write on the page it was running in.**
+
+The header of `src/mcu.js` states the design in full: *"Nothing here evaluates learner text
+as JavaScript. eval and new Function would be a dozen lines instead of nine hundred, and
+they would hand a sketch the whole browser… A tree walker can only do what this file gives
+it a way to do, which is arithmetic and twelve pins."*
+
+Five lookup tables a learner's identifiers index — the scope chain's `vars`, `fns`,
+`defines`, `BUILTIN` and `CONSTANTS` — were `{}`. `{}` inherits from `Object.prototype`, so
+every one of them already answered for `toString`, `valueOf`, `constructor`,
+`hasOwnProperty` and fourteen more before a sketch declared anything. Driven, not reasoned
+about:
+
+```
+toString();            ->  Line 1: b.f is not a function
+valueOf();             ->  Line 1: b.f is not a function
+println(constructor);  ->  Line 1: Cannot read properties of undefined (reading 's')
+void toString() { }    ->  there is already a function called toString.
+toString = 5;          ->  no error at all, and:
+    Object.prototype.toString.val was undefined and is now {"v":5,"f":false}
+```
+
+The first three are the engine talking on a panel whose own file says a learner must never
+have to read it — *"which would surface as a browser error naming a line of THIS file, and
+a learner debugging their own sketch does not need to read mine."* The fourth refuses a
+function nobody wrote. **The fifth is a sketch mutating a JavaScript builtin the entire
+page shares**, which makes the header's central claim false as written.
+
+`int __proto__ = 5;` was its own version: `sc.vars.__proto__ = {…}` re-prototypes the
+scope object rather than declaring a variable in it, so the block's other names inherited
+`type` and `val` from it.
+
+A null prototype is the whole fix, at the place the defect is rather than as a guard at
+each of the eleven reads. It also makes the four names *work*: `int toString = 7;` is now
+an ordinary variable, `int toString(){ return 4; }` an ordinary function, `int __proto__`
+an ordinary name.
+
+**2. A sketch typed and then left behind was thrown away, silently.**
+
+The textarea wrote `p.code` on every keystroke and called `changed()` — the function that
+hands the model to `opts.onChange`, which is what writes a learner's circuit into their
+saved progress — only on `change`. `change` fires on blur. `dispose()` sets
+`root.innerHTML = ''`, and **removing a focused element from the document fires no pending
+change**. So the sequence was: type a program, press the footer's Next (or the icon rail,
+or the back button), `teardown()` → `dispose()` → the textarea is deleted mid-edit, and
+nothing is saved.
+
+Measured through the shipped editor rather than argued:
+
+```
+after typing : onChange fired 0 times
+model holds  : "void setup(){ pinMode(13, OUTPUT); }\nvoi…"
+LAST SAVED   : "// pinMode says which way a pin faces. d…"     <- the DEFAULT sketch
+```
+
+The learner's program was in the live model the whole time. Only the save was missing, and
+the model was discarded with the editor.
+
+### The attacks
+
+**4. UX & Accessibility Hardener** — taken first, because this track's brief is mostly its
+brief, and because the second defect above is its finding.
+
+- **The sketch box was the one control on that panel that was not a `<label>`.** Every
+  other field is `<label class="ckt-f"><span>…</span><input></label>`; the largest and most
+  important input in the editor was a `<span>` beside a `<textarea>` — a caption for the
+  eye and nothing at all in the accessibility tree. Driven: `aria-label` null, `id` null,
+  `aria-describedby` null, `aria-invalid` null. It now carries all four, and the ids are
+  unique per panel painted rather than per editor, because a page can hold two editors and
+  a repeated id makes `aria-describedby` point at whichever the document holds first.
+- **The syntax error was a plain `<div>` that changed as you typed and announced nothing.**
+  Now `role="status" aria-live="polite"`, with `aria-invalid` tracking it on the box
+  itself. **Debounced at 500 ms, and that is the substance of the fix rather than a detail:**
+  most of these messages quote the token they stopped at — `found "ab"` one keystroke after
+  `found "a"` — so an immediate live region reads a fresh sentence into a screen reader for
+  every letter of a half-typed name. The visible box is written on the same timer for the
+  same reason. A stale timer is a no-op by construction: the closure checks that the panel
+  still holds *its* textarea, so a repaint between the keystroke and the timer cannot write
+  the old sketch's diagnosis into the new sketch's box.
+- **The console scrolled and took no focus.** `max-height:150px; overflow:auto` with no
+  `tabindex`, so the output of a learner's own program past the first 150px was reachable
+  by a mouse wheel and by nothing else (WCAG 2.1.1). Now `tabindex="0"` with `role="group"`
+  and a name from its own heading — and deliberately **not** a live region, because a
+  sketch printing every time step would read hundreds of lines aloud.
+- **A sketch that stopped ended the run and the run's own sentence did not say so.** The
+  transient announces "Transient run finished over 11 nodes"; a fault was written in two
+  places a screen reader has to go and find, and it is the reason the trace is flat. The
+  fault now rides in the announcement, in the same words the panel uses.
+- **The panel is rebuilt after every solve, so the textarea is a different node afterwards.**
+  Measured (`textarea is the same node after a solve: false`). Left, with the mechanism —
+  see below.
+
+**3. Simulation Auditor** — zero, negative, enormous, identical, and text where a number
+belongs.
+
+- **The twenty builtins never asked whether they had been given a number.** `arith()`
+  refuses a string by name on its line and says why — *"a string has no arithmetic;
+  strings here are only for printing"* — and the builtins, one function away, did not:
+
+  ```
+  sqrt("x")            printed NaN          abs("x")             printed 0
+  min("x", 1)          returned 1           map("x",0,1,0,2)     returned 0
+  pinMode(2,"OUTPUT")  silently made the pin an INPUT
+  analogWrite(2,"x")   silently drove zero duty
+  ```
+
+  Asked once now, in `call`, against the five names that may legitimately see a string,
+  rather than twenty times inside the functions.
+- **Infinity and NaN propagated, against the policy the file states in a whole paragraph
+  of its own.** Division by zero stops with *"A float divided by zero is infinity, and
+  every number computed from it afterwards would be infinity too — so the sketch stops here
+  instead."* `pow(10,400)` returned Infinity and said nothing. And the worst of the three:
+  **`int y = pow(10,400);` stored 0**, because `Infinity | 0` is 0 — a silent zero that
+  looks like an answer. Refused now where such a value is *made*: the float operators, the
+  builtin return, and the float literal (`1e400` is a token `parseFloat` answers Infinity
+  for, so a literal is a producer like any other). `1e300 / 1e10` still answers, which is
+  checked, because a floor that refuses real arithmetic is a worse defect than the one it
+  replaced.
+- **The console cap capped nothing.** `CONSOLE_MAX` is 400 and it counts **lines**, and a
+  sketch that never prints a newline has one line. `void loop(){ print("x"); }` held a
+  single entry that reached **59,999 characters in sixty time steps with `dropped` reading
+  0**, and would have gone on growing for the length of the run — into `M.console`, and
+  into the DOM through the panel's `<pre>`. A second cap on characters, because there are
+  two ways to be too much output, and the panel now reports both cuts in two sentences
+  rather than saying "0 lines dropped" while throwing away half the output.
+- **Two lexer literals became plausible wrong numbers instead of errors.** `'\q'` — an
+  escape the table does not have — fell through as `undefined`, and
+  `String(undefined).charCodeAt(0)` is **117**, the "u" of the word. And `0x` or `0b` with
+  no digits reached `parseInt` as an empty string, came back NaN, and was turned into
+  **0** by the `| 0` that makes these int32 — a pin number or a bit mask quietly zero.
+  Both refused by name now; the four escapes that do exist still give 10, 9 and 65, which
+  is checked so the refusal cannot be a regression.
+
+**1. Senior Educator** — applied to the machine's messages, since a fault message is the
+only teaching this subsystem does.
+
+- Every new refusal says what was wrong **and why the machine cares**, in the register the
+  rest of the file already uses. The infinity message names what produced the value and
+  then states the consequence a learner cannot see — *"stored into an int it becomes 0,
+  which looks like an answer"* — because that is the whole reason the sketch is stopped
+  rather than allowed to continue.
+- The 47-sketch hostile grid is scored against a rule rather than a list: no message may be
+  the engine talking, and no message may be a fragment. **Before this cycle four of them
+  answered "b.f is not a function".** After it, none.
+
+**2. Assessment Inquisitor** — nothing to attack here. This subsystem asks no questions and
+carries no bank; its row of the curriculum is Track 3's, and no `quiz`, `blanks`, `numeric`
+or `match` unit was read or written. Recorded as considered rather than skipped.
+
+### Swept, because being pointed at one table is not being shown the defect
+
+The curriculum's rule — *"Fixing the line you were pointed at is not fixing the defect…
+Sweep the whole module"* — found the same two shapes one file over, and both were fixed.
+
+- **`PART_KINDS` was `{}` too, and it is indexed by `p.kind` out of a MODEL.** Everything
+  downstream reads `PART_KINDS[p.kind]` and uses the answer without asking — `k.pins`,
+  `k.sym`, `k.def` — so a part whose kind was `"toString"` got past every
+  `if (!PART_KINDS[p.kind])` guard in the file and died four frames into `paint()` on
+  `k.of is not a function`: **the whole schematic canvas, gone**. Sealing the table turned
+  that into `Cannot read properties of undefined`, which exposed the larger defect
+  underneath: **a kind nobody has ever heard of — `"BANANA"` — was always a crash.** Two
+  defects wearing one coat. `sanitiseDrawing` now drops a part of an unknown kind by the
+  same rule it already drops an unrecoverable coordinate by, stated in its own comment: a
+  dropped part is visible and a broken canvas is not. `VALUE_FLOOR`, `VALUE_CEIL`,
+  `VALUE_LABEL` and `PART_FIELDS` were sealed with it; nothing calls a method on any of
+  them, which is what makes a null prototype safe here.
+- **The value box lost a number typed and never blurred, exactly as the sketch box did.**
+  Same measurement, same cause: `"4.7k"` typed into a resistor and then the footer pressed,
+  and progress kept **1000**. So the commit machinery was written once, for the panel
+  rather than for the sketch: one pending-edit slot, taken by whichever field is holding an
+  uncommitted edit, so a fourth field added later joins it instead of growing a fourth
+  timer. `[data-x]` — γ, B, βF, Vth, the rails — went through the same door.
+  Typing only *stages*: committing per keystroke would clamp `"4"` on the way to `"4.7k"`
+  and rewrite the box under the typist, which is why these were on `change` in the first
+  place and why the fix is a flush rather than a move to `input`.
+- **Three exits flush it, not one.** `dispose()` — and *before* `disposed = true`, which is
+  the whole fix, because `changed()` returns early on a disposed editor and a flush one
+  line lower would be a flush that does nothing. Plus `window` blur, which is the alt-tab
+  `dispose` never sees, and `pagehide`, which is the tab being closed. 600 ms sits under
+  `app.js`'s own 900 ms progress debounce on purpose, so the two nest rather than race.
+
+### The gate this subsystem never had
+
+`tools/verify_mcu.mjs` — **new**, and the reason it is half the cycle is the same argument
+cycle 24 made for the type gate: a subsystem with no gate cannot have a verifiable pass.
+Nine sections, driving the shipped interpreter and the shipped panel rather than copies:
+
+`sealed` (19 inherited names × 6 shapes = 114 sketches, plus the containment witness that
+`Object.prototype` carries no field a sketch put there), `engine` (47 hostile sketches),
+`types`, `finite`, `bounded`, `lexer`, `panel` (16 accessibility contracts across two
+passes), `keeps` (6 commit paths), and `mutants`.
+
+**The gate's own defects, found by running it.**
+
+- **My first `ENGINE` pattern failed seven correct messages.** It was copied from
+  `verify_desk.mjs` as a single case-insensitive regex, and the fix for the infinity defect
+  says *"is infinity"* and *"is not a number"* in English **on purpose**, because that is
+  what a learner needs to read — and `/\bInfinity\b/i` matches it. Split in two: the
+  engine's own spellings matched case-**sensitively**, which is how JavaScript writes them
+  and how no sentence in this codebase does, and the phrases that are engine talk however
+  they are capitalised left insensitive. A gate that fails correct code is the same defect
+  as one that passes broken code, and it fails louder.
+- **Three checks were scoring nothing because their setup was wrong, and each looked
+  fine.** The default-sketch check ran 40 steps of 0.1 ms against a sketch built on
+  `delay(200)`, so it never left the first delay and reported the shipped sketch broken.
+  The console check called `solve()` on an ungrounded MCU, so the matrix was singular, no
+  transient ran, no console existed, and "a sketch that printed produced no console" was
+  the gate's own circuit. The alt-tab check fired `blur` at `windowShim`, which only
+  *forwards* `addEventListener` to `WIN` — so it fired at an object holding no handlers and
+  would have passed against any build. All three now do the real thing: a GND part sitting
+  on the MCU's own GND pin cell, the part reselected because `paintPart` paints the
+  selected one, and the event dispatched where the handlers actually live.
+- **Two mutations "survived" that had never been applied.** Renaming `flushCode` to
+  `flushEdit` mid-cycle left two mutation strings matching nothing, and `String.replace`
+  hands back the file unchanged rather than complaining. An unchanged file passing is not a
+  mutation surviving — it is a mutation that never happened, and counting the two together
+  is how a mutation run flatters itself. Separated, and separated again from a third case:
+  a mutated build that fails to **load** is caught by the loader, and a loader is not a
+  check — it would report an untested contract as held.
+
+The run ends at **13 deliberate breakages, 13 caught by a check rather than by the loader**.
+
+### Left alone, deliberately
+
+- **A solve rebuilds the panel, so the sketch textarea is a different node afterwards** —
+  measured, not assumed. Focus and the caret would be lost if focus were in it.
+  **Not fixed, and the reason is a property worth keeping: `src/circuit.js` contains 0
+  occurrences of `document.` — counted — and has since cycle 6 moved the keyboard off the
+  document.** Focus restoration needs `document.activeElement`, and reaching for it to fix
+  a case that is currently unreachable would spend a real invariant on a hypothetical: the
+  only thing that triggers that rebuild is the Solve button, which lives outside the part
+  panel, so focus is on the button at that moment. Handed on with the mechanism named, and
+  with the note that this becomes live the moment anything else can re-run a transient.
+- **`micros()` wraps at 2147 s of simulated time and `millis()` at about 24.8 days**, and
+  both wrap *signed* where a real AVR wraps unsigned at 71 minutes and 49.7 days. Checked
+  rather than found: it is `| 0`, and this machine's int is int32 by design and says so in
+  its own comment. Making them unsigned means a second numeric type the subset does not
+  have, which is a language change and not a repair.
+- **No length cap on a sketch, and the panel compiles on a debounce after typing stops.**
+  Measured rather than guessed: 14 lines compile in **1.0 ms**, 2,000 lines in **10.4 ms**,
+  20,000 lines / 420 KB in **61.6 ms**, and a 2 MB block comment in **8.8 ms**. The
+  debounce is what mattered — it turned one compile per character into one per pause — and
+  a length cap would refuse a long legitimate sketch to defend against a paste nobody
+  makes.
+- **`make(program, board, opts)` never reads `opts`**, and its only caller passes two
+  arguments. Noticed while reading; a dead parameter in the machine's public shape, left
+  rather than churned, and written down so it is not rediscovered.
+- **`emit`'s line cap can still overshoot inside a single call** by the number of newlines
+  in one printed string, because the count is checked on entry. Bounded by the character
+  cap now, which is checked first and is the one that bounds memory, and driven: one print
+  of five lines does not overshoot 410. Recorded because the line cap alone is still not a
+  hard bound and a later reader should know which of the two is load-bearing.
+- **`P.dim` at 2.93:1 and `P.faint` at 1.86:1 on the canvas.** Cycle 2 measured them;
+  cycles 5, 6, 8, 11, 12, 19 and 21 each re-recorded them without taking them. That is now
+  **seven cycles**. They are in `src/studio.js`, they are not this subsystem, and cycle 5's
+  candidate values still stand.
+- **`--lime` as ink in 36 places, at 3.4–4.1:1 in the light theme.** Cycle 24 called it the
+  strongest candidate the next Track 5 cycle has. This is a Track 6 cycle and it did not
+  take it.
+- **61 of the 135 contrast surfaces still describe rather than enforce.** Unchanged;
+  Track 5's, and named by cycles 11, 18 and 24.
+- **No author file, no `catalog/*.json`, no lesson id and no schema was touched**, so
+  `emit.py` was not run and the staleness guard is not armed. The mechanical confirmation
+  is that the payload total is **13129 KB before and after** and `git status` reports
+  nothing under `docs/programs`.
+- **`docs/programs` holds 65 payloads against the 62 the shell names** — verified rather
+  than inherited: 62 named, **0 missing**, 3 retained (`_generations.json` and two older
+  `EE221` payloads). 65 before this cycle as well.
+
+### Gates, after
+
+Every pre-existing number unmoved except three, and each moved by exactly what was added
+to it. The payload total did not move, which is the mechanical proof that no content did.
+
+```
+verify_mcu           All good: the interpreter answers 232 driven sketches and gestures
+                     without once talking like an engine, keeps a learner's program out
+                     of the page it runs in, bounds its own console, holds 13
+                     accessibility contracts on the panel, and loses no sketch on any
+                     of the four ways out of a lesson                            [NEW]
+                     sealed   19 inherited names x 6 shapes = 114 sketches
+                     engine   47 hostile sketches, none answered by the engine
+                     types    20 builtins refuse a string by their own name
+                     finite   8 ways to make an infinity or a NaN, all 8 stopped
+                     bounded  400 lines and 20000 characters, both cuts reported
+                     lexer    7 malformed literals refused by name
+                     panel    16 accessibility contracts across two passes
+                     keeps    6 commit paths hold
+                     mutants  13 breakages, 13 caught by a check, 0 by the loader
+verify_circuit_ui    All good: 81 driven keys and gestures — WAS 78, +3 for the value
+                     typed and never blurred — says 10 things, holds 15 kinds above
+                     their stamp floor
+verify_circuit_view  All good: 36 hostile coordinates AND KINDS — was 26 coordinates,
+                     +10 for the unknown and inherited kinds; the label was corrected
+                     too, because a count that says "coordinates" and counts kinds is
+                     a gate misdescribing itself · 390 published drawings pass through
+                     the guard UNCHANGED · 424 mounts at 7 widths · 150 gestures
+verify_theme         All good: 14 exemptions · 135 contrast surfaces x 2 themes ·
+                     tightest text 4.61:1 · canvas 154 paint sites, quietest 3.77:1 ·
+                     type 6 steps hold 285 declarations · 23 canvas draw sites
+verify_desk          All good: 61 expressions · 6 worst-case shapes · 102 css lines
+verify_progress      All good: 29 hostile documents · 12 accessibility contracts
+verify_circuit_model All good: 1487 analyses · 84 refusals · 15 plots · 390 published
+                     schematics, 369 with a DC point
+verify_tune_ui       All good: 423 clamped openings · 462 targets · 105 paints ·
+                     270 drags · 493 mounts
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3360 per-option explanations · 6572 draws · 24.5%
+verify_circuits      All good: 87 circuit exercises, 369 checks · 593 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_derivations   All good: 1294 steps across 46 courses
+test_api             30 passed, 0 failed — against a server started for the purpose
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 13129 KB — unchanged ·
+                     inlined 14384 -> 14401 KB · shell 1226 -> 1243 KB, of 1536
+```
+
+Beyond the gates: the containment defect demonstrated by reading
+`Object.prototype.toString.val` back out after a sketch assigned to it, rather than by
+reasoning about prototypes; the lost sketch and the lost resistance both measured through
+the shipped editor before either was touched, and the saved model printed rather than the
+live one, because the live one was right the whole time and is what made the defect
+invisible; compile cost measured at four sizes and at a 2 MB comment so that declining a
+length cap is a measurement; `0` MCU parts counted in the published catalogue, which is why
+six cycles of content gates could never have found any of this; all 390 published drawings
+put through the newly stricter guard and required to come out unchanged; and the new gate
+run against 13 mutations, in a run whose first pass reported two survivors that had never
+been applied and seven correct messages as engine errors.
+
+---

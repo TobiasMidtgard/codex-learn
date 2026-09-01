@@ -303,6 +303,34 @@ section('values', () => {
     }
     h.handle.dispose();
   }
+  /* A VALUE TYPED AND NEVER BLURRED. Every field on the component panel committed on
+     `change`, and `change` fires on blur — but dispose() empties root.innerHTML, and
+     removing a focused element from the document fires no pending change. So a learner
+     who typed "4.7k" and then left by the footer, the icon rail or the back button was
+     saved the value they started with, silently. Measured through the shipped editor:
+     the model still read 1000. Found by sweeping for the shape the sketch box had. */
+  {
+    const h = mount({ model: { parts: [], wires: [] } });
+    h.tool('R');
+    h.cv.focus();
+    h.key(h.cv, 'ArrowRight'); h.key(h.cv, 'Enter'); drives += 2;
+    const inp = h.root.querySelector('[data-val]');
+    inp.value = '4.7k';
+    inp.dispatchEvent({ type: 'input', target: inp });
+    drives++;
+    /* Staged, not committed: committing per keystroke would clamp "4" on the way to
+       "4.7k" and rewrite the box under the typist. */
+    if (h.model().parts[0].value !== 1000) {
+      note('values', 'the value box committed on a keystroke — "4" on the way to "4.7k" ' +
+        'would be clamped and written back into the box mid-type');
+    }
+    h.handle.dispose();
+    const saved = h.lastSaved();
+    if (!saved || saved.parts[0].value !== 4700) {
+      note('values', 'a resistance typed and never blurred was lost on the way out: ' +
+        'progress kept ' + (saved ? saved.parts[0].value : 'nothing'));
+    }
+  }
   /* and the clamp itself, directly, including the kinds that are allowed to be negative */
   if (clampValue('V', -5, 1) !== -5) note('values', 'a voltage source was refused a negative value');
   if (clampValue('I', 0, 1) !== 0) note('values', 'a current source was refused zero');

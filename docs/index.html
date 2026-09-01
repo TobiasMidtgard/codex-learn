@@ -12573,6 +12573,14 @@ const MCU = (function () {
      scrolling smoothly. The cut is reported rather than silent. */
   const CONSOLE_MAX = 400;
 
+  /* AND a cap on the characters, because the line cap alone bounds nothing. print()
+     without a newline appends to the open line for ever, so `void loop() { print("x"); }`
+     holds one console line — under the 400 — that grew to 59,999 characters in sixty
+     time steps and would have gone on growing for the length of the run, with `dropped`
+     reading 0 the whole way. Two limits because there are two ways to be too much
+     output: too many lines to lay out, and too much text to hold. */
+  const CONSOLE_MAX_CHARS = 20000;
+
   /* ---------------------------------------------------------------- values
    *
    * Two kinds, and the split is the reason `3 / 2` is 1 here as it is on the hardware.
@@ -12596,6 +12604,20 @@ const MCU = (function () {
 
   function isNum(x) { return x && x.s === undefined; }
 
+  /* Infinity and NaN are refused where they are MADE, not where they are noticed. The
+     reason is already written out in full at the "/" case further down — once a number
+     stops being finite, every number worked out from it stops being finite too, and a
+     sketch that keeps running is one printing answers that are all wrong with nothing
+     saying where it began. Division by zero has always said so. `pow(10, 400)` did not:
+     it returned Infinity, `println` showed "Infinity", and `int y = pow(10, 400);`
+     stored **0**, because Infinity|0 is 0. A silent zero is the worst of the three. */
+  function finite(v, line, what) {
+    if (typeof v === 'number' && v - v === 0) return v;
+    fail(line, what + ' is ' + (v !== v ? 'not a number' : v > 0 ? 'infinity' : 'minus infinity') +
+      '. Every number worked out from it afterwards would be as well — and stored into ' +
+      'an int it becomes 0, which looks like an answer. The sketch stops here instead.');
+  }
+
   /* ---------------------------------------------------------------- faults
    *
    * Every fault carries the line it happened on. A learner debugging a sketch inside a
@@ -12605,6 +12627,32 @@ const MCU = (function () {
     return { mcuFault: true, line: line, message: message };
   }
   function fail(line, message) { throw Fault(line, message); }
+
+  /* ---------------------------------------------------------------- lookup tables
+   *
+   * EVERY TABLE A LEARNER'S IDENTIFIER INDEXES IS BUILT HERE, and the reason is that
+   * `{}` inherits from Object.prototype — so `{}.toString` is a function rather than
+   * undefined, and an identifier is exactly the kind of string a sketch chooses. Five
+   * tables were plain objects (the scope chain's `vars`, `fns`, `defines`, `BUILTIN`
+   * and `CONSTANTS`) and all five answered for names nobody defined:
+   *
+   *     toString();            ->  "Line 1: b.f is not a function"
+   *     println(constructor);  ->  "Line 1: Cannot read properties of undefined"
+   *     void toString() { }    ->  "there is already a function called toString."
+   *     toString = 5;          ->  no error, and Object.prototype.toString.val is now
+   *                                {v:5,f:false} — a sketch reaching off this canvas
+   *                                and writing on a builtin the whole page shares.
+   *
+   * The first two are the engine talking where the header of this file promises a
+   * learner never has to read it. The last is the header's other promise — "a tree
+   * walker can only do what this file gives it a way to do, which is arithmetic and
+   * twelve pins" — being false as written.
+   *
+   * A null prototype is the whole fix, and it is a fix at the place the defect is
+   * rather than a guard at each of the eleven reads. `__proto__` stops being magic on
+   * one of these too, so `int __proto__ = 5;` is now an ordinary variable instead of a
+   * statement that re-prototypes the scope it is declared in. */
+  function bare(o) { return Object.assign(Object.create(null), o || {}); }
 
   /* ---------------------------------------------------------------- lexer */
 
@@ -12698,8 +12746,17 @@ const MCU = (function () {
 
       /* a character literal is a number, which is what it is in C */
       if (c === "'") {
-        const ch = src[i + 1] === '\\' ? { n: '\n', t: '\t', '0': '\0' }[src[i + 2]] : src[i + 1];
-        const end = src[i + 1] === '\\' ? i + 3 : i + 2;
+        const esc = src[i + 1] === '\\';
+        /* An escape this table does not have used to fall through as `undefined`, and
+           String(undefined).charCodeAt(0) is 117 — the "u" of the word. So '\q' lexed
+           as the number 117 with nothing said, which is the worst kind of wrong: a
+           plausible small integer. Refused by name instead, with the four that exist. */
+        const ch = esc ? bare({ n: '\n', t: '\t', '0': '\0', '\\': '\\', "'": "'" })[src[i + 2]] : src[i + 1];
+        if (esc && ch === undefined) {
+          fail(line, 'there is no escape "\\' + (src[i + 2] === undefined ? '' : src[i + 2]) +
+            '" in a character literal here. The ones there are are \\n, \\t, \\0, \\\\ and \\\'.');
+        }
+        const end = esc ? i + 3 : i + 2;
         if (src[end] !== "'") fail(line, "a character literal holds exactly one character.");
         out.push({ t: 'num', v: num(String(ch).charCodeAt(0), false), line: line });
         i = end + 1;
@@ -12708,9 +12765,15 @@ const MCU = (function () {
 
       if (c >= '0' && c <= '9') {
         let j = i, isF = false;
+        /* A base prefix with no digits after it — `0x`, `0b` — used to reach parseInt
+           as an empty string, come back NaN, and be turned into 0 by the |0 that makes
+           these int32. A pin number or a bit mask that is quietly zero is a sketch that
+           runs and does the wrong thing, so both prefixes now insist on a digit. */
         if (c === '0' && (src[i + 1] === 'x' || src[i + 1] === 'X')) {
           j = i + 2;
           while (j < n && /[0-9a-fA-F]/.test(src[j])) j++;
+          if (j === i + 2) fail(line, '"' + src.slice(i, j) + '" has no digits after it. ' +
+            'A hexadecimal number needs at least one, as in 0x1F.');
           out.push({ t: 'num', v: num(parseInt(src.slice(i, j), 16) | 0, false), line: line });
           i = j;
           continue;
@@ -12718,6 +12781,8 @@ const MCU = (function () {
         if (c === '0' && (src[i + 1] === 'b' || src[i + 1] === 'B')) {
           j = i + 2;
           while (j < n && /[01]/.test(src[j])) j++;
+          if (j === i + 2) fail(line, '"' + src.slice(i, j) + '" has no digits after it. ' +
+            'A binary number needs at least one 0 or 1, as in 0b1011.');
           out.push({ t: 'num', v: num(parseInt(src.slice(i + 2, j), 2) | 0, false), line: line });
           i = j;
           continue;
@@ -12734,7 +12799,10 @@ const MCU = (function () {
         /* the float and long suffixes a datasheet's example code is full of */
         if (/[fF]/.test(src[j] || '')) { isF = true; j++; }
         else if (/[uUlL]/.test(src[j] || '')) { while (/[uUlL]/.test(src[j] || '')) j++; }
-        out.push({ t: 'num', v: num(isF ? parseFloat(text) : (parseInt(text, 10) | 0), isF), line: line });
+        /* `1e400` is a token parseFloat answers Infinity for, so the refusal has to be
+           here as well as at the operators — a literal is a producer like any other. */
+        out.push({ t: 'num', v: num(isF ? finite(parseFloat(text), line, 'the number ' + text)
+          : (parseInt(text, 10) | 0), isF), line: line });
         i = j;
         continue;
       }
@@ -12985,7 +13053,9 @@ const MCU = (function () {
     }
 
     /* ---- the file ---- */
-    const fns = {};
+    /* null-prototype: see `bare` above. `fns.toString` was truthy before any sketch
+       declared anything, which is why `void toString() { }` was refused as a duplicate. */
+    const fns = bare(null);
     const globals = [];
     while (peek().t !== 'end') {
       const info = typeHere();
@@ -13034,13 +13104,13 @@ const MCU = (function () {
    * these is a promise that the thing it names behaves the way the board it came from
    * behaves, and a name defined here that the pin model does not honour is worse than
    * a name that is missing, because a missing name is reported on its line. */
-  const CONSTANTS = {
+  const CONSTANTS = bare({
     HIGH: num(1, false), LOW: num(0, false),
     INPUT: num(0, false), OUTPUT: num(1, false), INPUT_PULLUP: num(2, false),
     true: num(1, false), false: num(0, false),
     PI: num(Math.PI, true), TWO_PI: num(2 * Math.PI, true), HALF_PI: num(Math.PI / 2, true),
     A0: num(14, false), A1: num(15, false), A2: num(16, false), A3: num(17, false),
-  };
+  });
 
   /* ---------------------------------------------------------------- machine */
 
@@ -13062,7 +13132,9 @@ const MCU = (function () {
       line: 0,              /* the line last reached, for a fault or a stall */
       fault: null,
       console: [],
-      dropped: 0,
+      dropped: 0,           /* whole lines the line cap refused */
+      chars: 0,             /* characters held, against CONSOLE_MAX_CHARS */
+      cut: 0,               /* characters the character cap refused */
       wake: 0,              /* delay() sleeps until the clock passes this */
       left: 0,              /* instructions remaining in this time step */
       ops: 0,               /* instructions since the machine started */
@@ -13079,7 +13151,7 @@ const MCU = (function () {
        assignment converts to the declared type and not to the type of what is being
        assigned — which is the whole of why `int` division truncates and a float
        variable holding an int result still prints two decimals. */
-    function scope(parent) { return { vars: {}, up: parent }; }
+    function scope(parent) { return { vars: bare(null), up: parent }; }
     const globalScope = scope(null);
 
     function lookup(sc, name) {
@@ -13101,7 +13173,12 @@ const MCU = (function () {
     /* ---- console ---- */
     function emit(text) {
       M.io = true;
+      /* Two caps, and the character one is checked first because it is the one that
+         bounds memory: a sketch that never prints a newline holds ONE console line, so
+         the line cap never fires however long that line gets. */
+      if (M.chars >= CONSOLE_MAX_CHARS) { M.cut += text.length; return; }
       if (M.console.length >= CONSOLE_MAX) { M.dropped++; return; }
+      M.chars += text.length;
       const last = M.console.length - 1;
       /* print() continues the line print() started; println() ends one. Held as a
          partial last entry so the panel can show a half-written line as it is. */
@@ -13134,7 +13211,7 @@ const MCU = (function () {
       return p;
     }
 
-    const BUILTIN = {
+    const BUILTIN = bare({
       pinMode: { n: 2, f: function (a, line) {
         const p = pin(a[0], line);
         const m = toInt(a[1].v);
@@ -13228,13 +13305,23 @@ const MCU = (function () {
       floor: { n: 1, f: function (a) { return num(Math.floor(a[0].v), a[0].f); } },
       ceil: { n: 1, f: function (a) { return num(Math.ceil(a[0].v), a[0].f); } },
       round: { n: 1, f: function (a) { return num(Math.round(a[0].v) | 0, false); } },
-    };
+    });
     /* Serial is the same three functions under the names a sketch off a web page uses.
        begin() is accepted and does nothing, because there is no serial port here and
        there is no baud rate to get wrong — the console is the port. */
     BUILTIN['Serial.print'] = BUILTIN.print;
     BUILTIN['Serial.println'] = BUILTIN.println;
     BUILTIN['Serial.begin'] = { n: -1, f: function () { return ZERO; } };
+
+    /* The only builtins a string may reach. A string exists in this subset so print()
+       has something to print — arith() has always said so and refuses one by name on
+       its line. The builtins never asked, so every one of them read `.v` off a string
+       and got undefined: sqrt("x") printed NaN, abs("x") printed 0, min("x",1) returned
+       1, and analogWrite(pin,"x") drove the pin to zero duty without a word. Asked once,
+       here, rather than twenty times inside the functions. */
+    const TAKES_TEXT = bare({
+      print: 1, println: 1, 'Serial.print': 1, 'Serial.println': 1, 'Serial.begin': 1,
+    });
 
     function* sleep(secs) {
       M.io = true;
@@ -13348,10 +13435,12 @@ const MCU = (function () {
         fail(line, 'a string has no arithmetic; strings here are only for printing.');
       }
       const f = a.f || b.f;
+      /* The float branches go through finite(); the int ones cannot need it, because
+         toInt is | 0 and every int32 is finite by construction. */
       switch (op) {
-        case '+': return f ? num(a.v + b.v, true) : num(toInt(a.v + b.v), false);
-        case '-': return f ? num(a.v - b.v, true) : num(toInt(a.v - b.v), false);
-        case '*': return f ? num(a.v * b.v, true) : num(toInt(Math.trunc(a.v * b.v)), false);
+        case '+': return f ? num(finite(a.v + b.v, line, 'this sum'), true) : num(toInt(a.v + b.v), false);
+        case '-': return f ? num(finite(a.v - b.v, line, 'this difference'), true) : num(toInt(a.v - b.v), false);
+        case '*': return f ? num(finite(a.v * b.v, line, 'this product'), true) : num(toInt(Math.trunc(a.v * b.v)), false);
         case '/':
           if (b.v === 0) {
             fail(line, 'division by zero. ' + (f ? 'A float divided by zero is infinity, ' +
@@ -13359,7 +13448,7 @@ const MCU = (function () {
               'the sketch stops here instead.'
               : 'Whatever this divisor was counted from came out zero.'));
           }
-          return f ? num(a.v / b.v, true) : num(toInt(Math.trunc(a.v / b.v)), false);
+          return f ? num(finite(a.v / b.v, line, 'this quotient'), true) : num(toInt(Math.trunc(a.v / b.v)), false);
         case '%':
           if (toInt(b.v) === 0) fail(line, 'the remainder after dividing by zero has no value.');
           return num(toInt(a.v) % toInt(b.v), false);
@@ -13389,8 +13478,21 @@ const MCU = (function () {
           fail(node.line, node.name + ' takes ' + b.n + ' argument' + (b.n === 1 ? '' : 's') +
             ', not ' + args.length + '.');
         }
+        if (!TAKES_TEXT[node.name]) {
+          for (let i = 0; i < args.length; i++) {
+            if (!isNum(args[i])) {
+              fail(node.line, node.name + ' works on numbers, and argument ' +
+                (i + 1) + ' is a piece of text. Strings here are only for printing — ' +
+                'print, println and their Serial spellings are the only things that take one.');
+            }
+          }
+        }
         if (b.block) return yield* b.block(args, node.line);
-        return b.f(args, node.line);
+        /* Checked on the way out as well as on the way in: pow(10, 400) is Infinity and
+           pow(-1, 0.5) is NaN with every argument a perfectly good number. */
+        const r = b.f(args, node.line);
+        if (isNum(r)) finite(r.v, node.line, 'what ' + node.name + ' worked out');
+        return r;
       }
 
       const fn = fns[node.name];
@@ -13559,7 +13661,7 @@ const MCU = (function () {
       state: function () {
         return { fault: M.fault, line: M.line, ops: M.ops, loops: M.loops,
                  inSetup: M.inSetup, done: !!M.done, sleeping: M.t < M.wake,
-                 dropped: M.dropped };
+                 dropped: M.dropped, cut: M.cut };
       },
       console: function () { return M.console.map(function (l) { return l.text; }); },
       hasLoop: !!fns.loop,
@@ -13573,7 +13675,7 @@ const MCU = (function () {
      is separate from running because a sketch with a typo in it should be reported the
      moment it is typed, and not on time step four hundred. */
   function compile(source) {
-    const defines = {};
+    const defines = bare(null);
     try {
       const program = parse(lex(String(source || ''), defines));
       program.defines = defines;
@@ -13702,8 +13804,26 @@ const MCU_SKETCH = [
   '',
 ].join('\n');
 
+/* Sketch panels ever painted, for the ids the panel's label and its live region are
+   wired together with. Module scope rather than per editor because an id has to be
+   unique in the document and a page can hold more than one editor. */
+let MCU_PANEL_SEQ = 0;
+
+/* Every table below is indexed by `p.kind`, and a kind comes out of a MODEL — which
+   reaches this file from a course's JSON, and also from `circuit.json` inside a progress
+   document a learner imported from a file they were given. `{}` inherits from
+   Object.prototype, so `PART_KINDS.toString` was a function before any part existed, and
+   a part whose kind was "toString" got past every `if (!PART_KINDS[p.kind]) return` guard
+   in the file and died four frames later on `k.of is not a function` — the whole
+   schematic canvas, gone, on a drawing the learner did not write.
+     Found by sweeping for the shape rather than by being pointed at it: it is the same
+   defect as the five lookup tables in src/mcu.js, which is what this cycle came for. A
+   null prototype is the same one-word fix, and nothing calls a method on any of these —
+   they are read with [] and nothing else, which is what makes it safe. */
+function bareTable(o) { return Object.assign(Object.create(null), o); }
+
 /* ---------------------------------------------------------------- parts */
-const PART_KINDS = {
+const PART_KINDS = bareTable({
   R: { name: 'Resistor', unit: 'Ω', def: 1000, pins: 2, sym: 'R' },
   C: { name: 'Capacitor', unit: 'F', def: 1e-6, pins: 2, sym: 'C' },
   L: { name: 'Inductor', unit: 'H', def: 1e-3, pins: 2, sym: 'L' },
@@ -13792,7 +13912,7 @@ const PART_KINDS = {
    * a number. */
   MCU: { name: 'Microcontroller', unit: '', def: 0, pins: 0, sym: 'MCU',
          state: { code: MCU_SKETCH } },
-};
+});
 
 /* The simulated world the sensors sense. Not part of the schematic — a circuit is
    the same circuit in the dark and in the light — so it is passed in beside the
@@ -14313,12 +14433,12 @@ function parseEng(text, fallback) {
    ohm. Each of the five now sits at the number its own resolver will actually honour,
    and verify_circuit_model.mjs resolves every one of them at the floor and requires the
    value back unchanged. */
-const VALUE_FLOOR = {
+const VALUE_FLOOR = bareTable({
   R: 1e-6, LDR: 1, NTC: 1, POT: 1e-2, LAMP: 1e-3, METER: 1e-6,
   C: 1e-15, L: 1e-12,
   D: 1e-30, LED: 1e-30, NPN: 1e-30, PNP: 1e-30,
   NMOS: 1e-12, PMOS: 1e-12, OPAMP: 1,
-};
+});
 /* And the other end of the same field, which the floor above never had.
    The floor exists because a resistance of zero was stamped as a 1 pΩ short while the
    panel read 0 Ω. The ceiling exists for the mirror-image reason: what reaches a stamp
@@ -14333,7 +14453,7 @@ const VALUE_FLOOR = {
    V and I are here and NOT in the floor table, which is not an inconsistency: a source
    carries a sign that means direction and half the superposition material depends on
    being able to write it, while none of it depends on being able to write 1e308 V. */
-const VALUE_CEIL = {
+const VALUE_CEIL = bareTable({
   /* LDR at a gigohm and not a terohm, because Sensors.ldr caps its own result there and
      a ceiling above a resolver's own cap is the floor defect wearing the other hat — the
      box would accept a terohm and the stamp would use a gigohm. Found by the gate at the
@@ -14344,7 +14464,7 @@ const VALUE_CEIL = {
   D: 1e3, LED: 1e3, NPN: 1e3, PNP: 1e3,
   NMOS: 1e6, PMOS: 1e6, OPAMP: 1e12,
   V: 1e9, I: 1e9,
-};
+});
 function clampValue(kind, v, fallback) {
   if (!isFinite(v)) return fallback;
   const floor = VALUE_FLOOR[kind];
@@ -14431,6 +14551,17 @@ function sanitiseDrawing(m, depth) {
        above already produced. Dropped, the drawing is short one part and the learner can
        see that it is. */
     if (x === null || y === null) return;
+    /* And a part of a kind this build does not have, for the same reason and by the
+       same rule. Everything downstream reads PART_KINDS[p.kind] and uses the answer
+       without asking — `k.pins`, `k.sym`, `k.def` — so an unknown kind was not a part
+       drawn wrongly, it was a TypeError four frames into paint() and the whole canvas
+       gone. That is reachable: a model reaches this file from a course's JSON, which is
+       validated, and from `circuit.json` inside a progress document, which is a file the
+       learner was handed. It was two defects wearing one coat — the table inheriting
+       from Object.prototype made "toString" a kind, and a kind nobody has ever heard of
+       crashed just the same. Sealing the tables fixed the first; this is the second, and
+       it is the one that was always there. */
+    if (!PART_KINDS[p.kind]) return;
     const q = {};
     Object.keys(p).forEach(function (k) { if (k !== '__proto__') q[k] = p[k]; });
     q.x = x; q.y = y;
@@ -17200,7 +17331,13 @@ function createCircuit(root, opts) {
       '<p class="ckt-hint" data-note>' + modelNote(p) + '</p>' + boardShortNote(p);
 
     const inp = partPanel.querySelector('[data-val]');
-    if (inp) inp.addEventListener('change', function () {
+    /* Named, because it now runs from two places: the blur that always ran it, and the
+       flush that catches a value typed and never blurred. It reads inp.value when it
+       runs rather than when it was scheduled, so what is committed is what is in the
+       box — including after the panel has been rebuilt around a different part, in
+       which case the repaint and the announcement stand down and only the write to
+       THIS part's model happens. */
+    function commitValue() {
       /* Every OTHER field on this panel is clamped to the range its kind declares, two
          lines below. The value box — the one field every part has — was not, so a
          resistance of 0 or of −5 was accepted, written into the model, and saved. The
@@ -17211,8 +17348,12 @@ function createCircuit(root, opts) {
       const want = parseEng(inp.value, p.value);
       p.value = clampValue(p.kind, want, p.value);
       changed();
-      paintPart();
-      if (p.value !== want) {
+      /* The repaint is what puts the real value back in the box after "nonsense" was
+         typed into it, so it happens whether or not the number moved — but only while
+         this is still the part on the panel. */
+      const mine = selOne() === p;
+      if (mine) paintPart();
+      if (p.value !== want && mine) {
         const who = 'A ' + (PART_KINDS[p.kind].name || p.kind).toLowerCase() + ' ';
         /* Which end it hit, and why that end is there. "Out of range" would be a
            correction the learner cannot learn anything from — the point of saying it
@@ -17226,15 +17367,27 @@ function createCircuit(root, opts) {
             'divides it by a time step, so this is now ' + fmtEng(p.value, k.unit) + '.'
           : who + 'has to be more than zero, so this is now ' + fmtEng(p.value, k.unit) + '.');
       }
-    });
+    }
+    if (inp) {
+      /* Typing only STAGES. Committing per keystroke would clamp "4" on the way to
+         "4.7k" and rewrite the box under the typist — which is why this was on `change`
+         in the first place, and why the fix is a flush rather than a move to `input`. */
+      inp.addEventListener('input', function () { editSoon(commitValue); });
+      inp.addEventListener('change', function () { pendingEdit = commitValue; flushEdit(); });
+    }
     partPanel.querySelectorAll('[data-x]').forEach(function (el) {
-      el.addEventListener('change', function () {
+      function commitField() {
         const f = (PART_FIELDS[p.kind] || []).filter(function (q) { return q[0] === el.dataset.x; })[0];
+        if (!f) return;
         const v = parseEng(el.value, p[el.dataset.x]);
         p[el.dataset.x] = Math.min(Math.max(isFinite(v) ? v : f[2], f[2]), f[3]);
         changed();
-        paintPart();
-      });
+        if (selOne() === p) paintPart();
+      }
+      /* The same staging, for the same reason: a γ or a βF typed and never blurred was
+         lost exactly as a resistance was. */
+      el.addEventListener('input', function () { editSoon(commitField); });
+      el.addEventListener('change', function () { pendingEdit = commitField; flushEdit(); });
     });
     const sw = partPanel.querySelector('[data-sw]');
     if (sw) sw.addEventListener('click', function () { toggleSwitch(p); });
@@ -17370,6 +17523,10 @@ function createCircuit(root, opts) {
     const built = gone ? null : MCU.compile(code);
     const rig = mcuRigFor(p);
     const st = rig && rig.machine ? rig.machine.state() : null;
+    /* Ids have to be unique in the DOCUMENT, not in this editor: a lesson can hold a
+       diagram and a playground at once, and two boxes both called "mcu-code" make
+       aria-describedby point at whichever the document happens to hold first. */
+    const uid = 'mcu' + (++MCU_PANEL_SEQ);
 
     partPanel.innerHTML = '<h4>Microcontroller ' + esc2(p.id.replace('p', '')) + '</h4>' +
       (gone
@@ -17377,14 +17534,26 @@ function createCircuit(root, opts) {
           'this part can be drawn and wired but not run. Its pins stamp at reset — every ' +
           'one an input — which is what a board with power and no program does.</div>'
         : '') +
-      '<div class="ckt-f" style="grid-template-columns:1fr;align-items:stretch">' +
+      /* A <label>, as every other field on this panel already is. The sketch box was
+         the one control here captioned by a bare <span> — a legend for the eye and
+         nothing at all for the accessibility tree, so the largest and most important
+         input in the editor read as an unlabelled textarea. */
+      '<label class="ckt-f" for="' + uid + '" style="grid-template-columns:1fr;align-items:stretch">' +
       '<span>Sketch</span>' +
-      '<textarea data-code rows="14" spellcheck="false" style="width:100%;padding:6px 8px;' +
+      '<textarea id="' + uid + '" data-code rows="14" spellcheck="false" ' +
+      'aria-describedby="' + uid + '-err" aria-invalid="' + (built && built.error ? 'true' : 'false') + '" ' +
+      'style="width:100%;padding:6px 8px;' +
       'border-radius:var(--r);border:1px solid var(--line-2);background:var(--surface-2,transparent);' +
       'color:inherit;font-family:var(--mono,ui-monospace,monospace);font-size:11px;line-height:1.5;' +
       'resize:vertical;white-space:pre;overflow-wrap:normal;overflow-x:auto">' +
-      esc2(code) + '</textarea></div>' +
-      '<div data-built>' + (built && built.error ? faultLine(built.error) : '') + '</div>' +
+      esc2(code) + '</textarea></label>' +
+      /* The syntax error is the one thing on this panel that changes while the learner
+         is typing, and it was written into a plain <div>: on screen the moment a
+         bracket was missed, and silent to a screen reader for ever. A live region, and
+         a polite one — see the debounce on the handler below for why it is not written
+         on every keystroke. */
+      '<div data-built id="' + uid + '-err" role="status" aria-live="polite">' +
+      (built && built.error ? faultLine(built.error) : '') + '</div>' +
       (st && st.fault ? faultLine(st.fault) : '') +
       (st && !st.fault
         ? '<p class="ckt-hint">' +
@@ -17393,50 +17562,87 @@ function createCircuit(root, opts) {
             : st.loops + (st.loops === 1 ? ' iteration' : ' iterations') + ' of loop(). ') +
           st.ops.toLocaleString() + ' instructions, ' + mcuRun.ops() +
           ' per time step.' + (st.dropped ? ' ' + st.dropped + ' console lines dropped.' : '') +
+          /* Two caps, so two sentences: a sketch that never prints a newline is cut by
+             characters and drops no lines at all, and saying "0 lines dropped" while
+             silently throwing away half its output is the defect, not the report. */
+          (st.cut ? ' ' + st.cut.toLocaleString() + ' further characters not kept.' : '') +
           '</p>'
         : '') +
       (rig && rig.error ? faultLine(rig.error) : '') +
-      mcuConsole(rig) +
+      mcuConsole(rig, uid) +
       '<p class="ckt-hint" data-note>' + modelNote(p) + '</p>';
 
     const ta = partPanel.querySelector('[data-code]');
-    /* Checked on every keystroke and saved on commit. Two different events on purpose:
-       a compile is cheap and its answer is what the learner is looking at while typing,
-       whereas rewriting the model on every character would put an undo entry between
-       every two letters. */
-    ta.addEventListener('input', function () {
+    /* Checked as it is typed and committed on an idle debounce. Three events rather
+       than two: `input` keeps the model and schedules the save, the debounce writes
+       the diagnosis and the save, and `change` commits at once because a blur is the
+       learner already having moved on. */
+    let checkTimer = null;
+    function diagnose() {
+      checkTimer = null;
+      /* A repaint between the keystroke and the timer leaves this closure holding a
+         textarea the panel no longer contains, and [data-built] would then find the NEW
+         box and write the OLD sketch's diagnosis into it. Nothing to clear on dispose
+         either: an emptied panel fails this test the same way. */
+      if (partPanel.querySelector('[data-code]') !== ta) return;
       const now = mcuAvailable() ? MCU.compile(ta.value) : null;
       const box = partPanel.querySelector('[data-built]');
       if (box) box.innerHTML = now && now.error ? faultLine(now.error) : '';
+      ta.setAttribute('aria-invalid', now && now.error ? 'true' : 'false');
+    }
+    ta.addEventListener('input', function () {
       p.code = ta.value;
+      editSoon(function () { changed(); });
+      /* Debounced, and the reason is the live region rather than the cost of a compile,
+         which is nothing. Most of these messages quote the token they stopped at —
+         `found "ab"` one keystroke after `found "a"` — so an immediate live region
+         would read a fresh sentence into a screen reader on every letter of a
+         half-typed identifier. 500 ms of quiet is what makes it an answer instead of a
+         stream, and it is why the box is not repainted on the keystroke either. */
+      if (checkTimer) clearTimeout(checkTimer);
+      checkTimer = setTimeout(diagnose, 500);
     });
-    ta.addEventListener('change', function () { p.code = ta.value; changed(); });
+    ta.addEventListener('change', function () {
+      p.code = ta.value;
+      if (checkTimer) { clearTimeout(checkTimer); diagnose(); }
+      /* A blur is the learner having moved on, so this commits at once rather than
+         waiting out a debounce they are no longer typing against. */
+      pendingEdit = function () { changed(); };
+      flushEdit();
+    });
   }
 
-  function mcuConsole(rig) {
+  function mcuConsole(rig, uid) {
     if (!rig || !rig.machine) return '';
     const lines = rig.machine.console();
     if (!lines.length) {
       return '<p class="ckt-hint">The sketch printed nothing. print("..."), println(x) ' +
         'and Serial.println(x) all write here.</p>';
     }
-    return '<h4 style="margin-top:10px">Console</h4><pre style="max-height:150px;overflow:auto;' +
+    /* tabindex, because this box scrolls. A region that overflows and takes no focus
+       can be reached by a mouse wheel and by nothing else — the output of the learner's
+       own program, past the first 150px of it, unreachable from a keyboard (WCAG 2.1.1).
+       role and a name so that arriving in it by Tab says what it is; NOT a live region,
+       because a sketch printing every time step would read hundreds of lines aloud. */
+    return '<h4 style="margin-top:10px" id="' + uid + '-con">Console</h4>' +
+      '<pre tabindex="0" role="group" aria-labelledby="' + uid + '-con" ' +
+      'style="max-height:150px;overflow:auto;' +
       'margin:0 0 8px;padding:6px 8px;border-radius:var(--r);border:1px solid var(--line-2);' +
       'font-family:var(--mono,ui-monospace,monospace);font-size:11px;line-height:1.5;' +
       'white-space:pre-wrap">' + esc2(lines.join('\n')) + '</pre>';
   }
 
   /* What the value box means for a kind whose value is not simply "the value". */
-  const VALUE_LABEL = {
+  const VALUE_LABEL = bareTable({
     LDR: 'R at 10 lx (Ω)', NTC: 'R at 25 °C (Ω)', POT: 'Total (Ω)',
     BB: 'Columns',
     LAMP: 'Resistance (Ω)', METER: 'Burden (Ω)', BAR: 'Full scale (V)',
     D: 'Is (A)', LED: 'Is (A)', NPN: 'Is (A)', PNP: 'Is (A)',
     NMOS: 'k (A/V²)', PMOS: 'k (A/V²)', OPAMP: 'Open-loop gain',
-  };
+  });
   /* The extra numbers a kind carries beyond `value`: key, label, and the range it is
      clamped to, because a γ of zero or a negative B is a model that means nothing. */
-  const PART_FIELDS = {
+  const PART_FIELDS = bareTable({
     LDR: [['gamma', 'γ slope', 0.05, 3]],
     NTC: [['beta', 'B (K)', 1, 20000]],
     LAMP: [['pnom', 'Full at (W)', 1e-9, 1e6]],
@@ -17447,7 +17653,7 @@ function createCircuit(root, opts) {
     NMOS: [['vth', 'Vth (V)', 0.05, 20], ['lambda', 'λ (1/V)', 0, 1]],
     PMOS: [['vth', 'Vth (V)', 0.05, 20], ['lambda', 'λ (1/V)', 0, 1]],
     OPAMP: [['vpos', 'V+ rail (V)', -100, 100], ['vneg', 'V− rail (V)', -100, 100]],
-  };
+  });
 
   /* The model, written where the learner can read it. A sensor whose curve you have
      to take on trust is a magic box, and a magic box teaches nothing — so each of
@@ -18200,7 +18406,11 @@ function createCircuit(root, opts) {
       paintPlot();
       announce((analysis.mode === 'ac' ? 'Frequency sweep' : 'Transient run') + ' finished over ' +
         (net.nodeCount - 1) + (net.nodeCount - 1 === 1 ? ' node' : ' nodes') +
-        '. The plot is under the canvas; the node buttons choose what it shows.');
+        '. The plot is under the canvas; the node buttons choose what it shows.' +
+        /* A sketch that stopped is why the trace is flat, and it was said in two places
+           a screen reader has to go and find — the line under the plot and the part
+           panel. It ends the run, so it belongs in the sentence that reports the run. */
+        mcuSpoken());
     }
     paint();
     /* the numbers the note quotes are the ones that just changed */
@@ -18240,6 +18450,23 @@ function createCircuit(root, opts) {
         ', ' + st.ops.toLocaleString() + ' instructions.</p>';
     }).join('');
   }
+  /* The same three outcomes mcuStatus() paints, as one clause for the live region.
+     Silent when every sketch ran, because "MCU 1 ran" on every solve is noise. */
+  function mcuSpoken() {
+    if (!mcuRun) return '';
+    if (mcuRun.missing) return ' The interpreter is not in this build, so the pins stayed at reset.';
+    return mcuRun.rigs.map(function (r) {
+      const who = 'MCU ' + r.id.split('|').pop().replace('p', '');
+      if (r.error) return ' ' + who + ' did not compile — line ' + r.error.line + ': ' + r.error.message;
+      const st = r.machine.state();
+      if (st.fault) {
+        return ' ' + who + ' stopped at line ' + st.fault.line + ': ' + st.fault.message +
+          ' The trace ends where it stopped.';
+      }
+      return '';
+    }).join('');
+  }
+
   function solveRepaint() { paintPlot(); outEl.querySelectorAll('[data-node]').forEach(function (b) { b.classList.toggle('active', +b.dataset.node === analysis.node); }); }
 
   function paintPlot() {
@@ -18306,6 +18533,41 @@ function createCircuit(root, opts) {
      picture, and a picture that announced itself on every frame of a dragged slider
      would be unusable. Someone reading the plot goes to it and it says what it shows. */
   function describe(text) { if (plotCv) plotCv.setAttribute('aria-label', text); }
+
+  /* ---- the component panel's uncommitted edit ----
+   *
+   * EVERY FIELD ON THAT PANEL COMMITTED ON `change`, WHICH FIRES ON BLUR. dispose()
+   * empties root.innerHTML, and removing a focused element from the document does NOT
+   * fire its pending change — so a learner who typed and then left by the footer, the
+   * icon rail or the back button lost what they had typed, with nothing said. Driven
+   * rather than argued, on both fields:
+   *
+   *     a sketch typed, never blurred, then disposed   onChange fired 0 times and what
+   *                                                    reached progress was the DEFAULT
+   *                                                    sketch the part was placed with
+   *     "4.7k" typed into a resistor, never blurred    the saved value was still 1000
+   *
+   * One slot rather than a timer per field, because a fourth field added later should
+   * join this rather than grow a fourth. Not a commit per keystroke — the note on the
+   * sketch handler is right that that would put a save between every two letters, and
+   * the value box additionally CLAMPS, so committing "4" on the way to "4.7k" would
+   * rewrite the box under the typist. A short idle debounce instead, flushed by each of
+   * the three exits that can come first: the window going away, the page being hidden,
+   * and dispose. The 600 ms sits under app.js's own 900 ms progress debounce on purpose,
+   * so the two nest rather than race.
+   */
+  let pendingEdit = null, editTimer = null;
+  function editSoon(fn) {
+    pendingEdit = fn;
+    if (editTimer) clearTimeout(editTimer);
+    editTimer = setTimeout(flushEdit, 600);
+  }
+  function flushEdit() {
+    if (editTimer) { clearTimeout(editTimer); editTimer = null; }
+    const fn = pendingEdit;
+    pendingEdit = null;
+    if (fn) fn();
+  }
 
   function changed() {
     /* An editor that has been disposed must never reach onChange. Its `cur` is a model
@@ -18773,7 +19035,11 @@ function createCircuit(root, opts) {
      session: the keyup went to another window, and the next plain click on the canvas
      panned instead of placing a part, with the cursor still reading "grab". Two ways
      out of the window, and both of them end the hold. */
-  function onWinBlur() { releaseSpace(); }
+  /* Also where a half-typed sketch is banked. Alt-tabbing away and closing the tab are
+     the two exits dispose() never sees, and the debounce is 600 ms — long enough to
+     still be pending. pagehide rather than unload: unload is not fired at all on a
+     mobile browser that backgrounds the tab and then reclaims it. */
+  function onWinBlur() { releaseSpace(); flushEdit(); }
   function onCanvasFocus() { cvFocused = true; paint(); }
   /* The caret is kept, not cleared: tabbing to a value box to type a resistance and
      tabbing back is one gesture, and coming back to the middle of the canvas instead of
@@ -18786,6 +19052,7 @@ function createCircuit(root, opts) {
   cv.addEventListener('focus', onCanvasFocus);
   cv.addEventListener('blur', onCanvasBlur);
   window.addEventListener('blur', onWinBlur);
+  window.addEventListener('pagehide', flushEdit);
 
   function doRotate() {
     /* one-pin parts sit on their cell and have no direction to turn — which is now a
@@ -18886,11 +19153,17 @@ function createCircuit(root, opts) {
       /* Idempotent, and the first line rather than the last: a second dispose used to
          be harmless only by luck, and everything below is written to be safe to skip. */
       if (disposed) return;
+      /* BEFORE `disposed`, and that ordering is the whole fix: changed() returns early
+         on a disposed editor, so a flush one line lower would be a flush that does
+         nothing. This is the line that keeps a sketch typed and never blurred — the
+         footer, the icon rail, the back button all arrive here. */
+      flushEdit();
       disposed = true;
       /* The keyboard now lives on the canvas, which goes with the DOM below — but the
-         window listener does not, so it is released here or every editor ever opened
-         keeps one for the rest of the session. */
+         window listeners do not, so they are released here or every editor ever opened
+         keeps two for the rest of the session. */
       window.removeEventListener('blur', onWinBlur);
+      window.removeEventListener('pagehide', flushEdit);
       if (ro) ro.disconnect();
       root.innerHTML = '';
     },
@@ -21407,7 +21680,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = 'eeda33f23283';
+const BUILD_ID = '6e34ce9a934a';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */
