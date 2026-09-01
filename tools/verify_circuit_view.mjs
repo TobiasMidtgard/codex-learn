@@ -65,11 +65,12 @@ const resizeTo = (el, w, h) => {
 
 const mod = { exports: {} };
 new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'devicePixelRatio',
-  /* the editor listens for the browser's own way out of fullscreen */
-  'document',
+  /* the editor listens for the browser's own way out of fullscreen, and paints its
+     palette icons in whichever ink the page is using */
+  'document', 'getComputedStyle',
   SRC + '\nmodule.exports = { createCircuit, Netlist, MNA, sanitiseDrawing, cellOf, ' +
         'CELL_LIMIT, DRAW_DEPTH, PART_KINDS, VALUE_CEIL };'
-)(mod, windowShim, raf, RO, 1, DOC);
+)(mod, windowShim, raf, RO, 1, DOC, () => ({ getPropertyValue: () => '' }));
 const { createCircuit, Netlist, sanitiseDrawing, cellOf, CELL_LIMIT, DRAW_DEPTH, PART_KINDS } = mod.exports;
 
 const problems = [];

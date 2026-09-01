@@ -649,7 +649,7 @@ function typeChip(type) {
    app already reads: the editor's canvas, the read-only diagrams in a question, and
    the icons in the parts palette. */
 function applySymbols() {
-  if (typeof symbolStyle === 'function') symbolStyle(P.symbols === 'iec' ? 'iec' : 'ansi');
+  if (typeof symbolStyle === 'function') symbolStyle(P.symbols === 'ansi' ? 'ansi' : 'iec');
 }
 
 /* ---------- theme ---------- */
@@ -1928,8 +1928,8 @@ function renderProfile(main) {
         'with something done to it \u2014 everywhere they appear: the editor, the ' +
         'diagrams in a question, and the parts palette.</p>' +
       '<div class="pcard-acts" role="radiogroup" aria-label="Schematic symbols">' +
-        ['ansi', 'iec'].map(function (k) {
-          const on = (P.symbols === 'iec' ? 'iec' : 'ansi') === k;
+        ['iec', 'ansi'].map(function (k) {
+          const on = (P.symbols === 'ansi' ? 'ansi' : 'iec') === k;
           return '<button class="btn' + (on ? ' success' : ' dark') + '" data-sym-style="' + k +
             '" role="radio" aria-checked="' + (on ? 'true' : 'false') + '">' +
             (k === 'ansi' ? 'ANSI \u2014 zigzag' : 'IEC \u2014 rectangle') +

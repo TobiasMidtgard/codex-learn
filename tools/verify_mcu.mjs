@@ -74,12 +74,13 @@ function section(tag, fn) {
 function load(mcuSrc, cktSrc) {
   const mod = { exports: {} };
   new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'devicePixelRatio',
-  /* the editor listens for the browser's own way out of fullscreen */
-  'document',
+  /* the editor listens for the browser's own way out of fullscreen, and paints its
+     palette icons in whichever ink the page is using */
+  'document', 'getComputedStyle',
     (mcuSrc === undefined ? readFileSync(join(ROOT, 'src', 'mcu.js'), 'utf8') : mcuSrc) + '\n' +
     (cktSrc === undefined ? readFileSync(join(ROOT, 'src', 'circuit.js'), 'utf8') : cktSrc) +
     '\nmodule.exports = { MCU, createCircuit, MCU_SKETCH };'
-  )(mod, windowShim, (fn) => fn(), undefined, 1, DOC);
+  )(mod, windowShim, (fn) => fn(), undefined, 1, DOC, () => ({ getPropertyValue: () => '' }));
   return mod.exports;
 }
 const LIVE = load();

@@ -77,8 +77,9 @@ const fireResize = () => observers.slice().forEach((o) => o.fn([]));
 
 const mod = { exports: {} };
 new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'devicePixelRatio',
-  /* the editor listens for the browser's own way out of fullscreen */
-  'document',
+  /* the editor listens for the browser's own way out of fullscreen, and paints its
+     palette icons in whichever ink the page is using */
+  'document', 'getComputedStyle',
   'Sandbox',
   readFileSync(join(ROOT, 'src', 'circuit.js'), 'utf8') +
   /* typeof, so a build with no ceiling at all is a finding this gate REPORTS rather
@@ -86,7 +87,7 @@ new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'dev
   '\nmodule.exports = { createCircuit, Netlist, MNA, PART_KINDS, VALUE_FLOOR,' +
   ' VALUE_CEIL: (typeof VALUE_CEIL === "undefined" ? null : VALUE_CEIL),' +
   ' clampValue, parseEng, fmtEng, ohmsOf, potSplit, Sensors };'
-)(mod, windowShim, raf, RO, 1, DOC, Sandbox);
+)(mod, windowShim, raf, RO, 1, DOC, () => ({ getPropertyValue: () => '' }), Sandbox);
 const { createCircuit, Netlist, MNA, PART_KINDS, VALUE_FLOOR, VALUE_CEIL, clampValue,
   ohmsOf, potSplit, Sensors } = mod.exports;
 

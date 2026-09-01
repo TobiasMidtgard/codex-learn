@@ -2086,10 +2086,13 @@ function mcuRig(net) {
  * One module-level setting rather than a parameter threaded through forty drawing
  * calls, because there is exactly one answer per reader and it does not vary by
  * canvas. The profile writes it; every drawing in the app reads it.
+ *
+ * IEC is the default because it is what this app is being built for, and a default
+ * nobody has to go and find beats a setting that is technically available.
  */
-let SYM_STYLE = 'ansi';
+let SYM_STYLE = 'iec';
 function symbolStyle(s) {
-  if (s !== undefined) SYM_STYLE = (s === 'iec') ? 'iec' : 'ansi';
+  if (s !== undefined) SYM_STYLE = (s === 'ansi') ? 'ansi' : 'iec';
   return SYM_STYLE;
 }
 
@@ -5973,11 +5976,12 @@ function createCircuit(root, opts) {
      resistor on the button that places an IEC one would be worse than no picture. */
   const icons = Array.prototype.slice.call(root.querySelectorAll('.ckt-ico'));
   function paintIcons() {
-    /* P() rather than a second read of the document: it is the palette every other
-       drawing on this canvas is already made from, it carries its own fallback for a
-       build with no Sandbox, and it is what keeps a palette icon the same colour as
-       the part it places. */
-    icons.forEach(function (c) { Symbols.paint(c, c.dataset.sym, P().ink); });
+    /* The PAGE's ink, not the canvas's. P().ink is for the schematic surface, which is
+       deliberately dark in both themes and so hands back a near-white in both — which
+       on the light theme's white drawer paints every icon in nothing at all. */
+    const ink = getComputedStyle(document.documentElement)
+      .getPropertyValue('--ink').trim() || P().ink;
+    icons.forEach(function (c) { Symbols.paint(c, c.dataset.sym, ink); });
   }
   paintIcons();
   requestAnimationFrame(paintIcons);

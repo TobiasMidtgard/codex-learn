@@ -43,11 +43,12 @@ import { El, stubCtx, DOC, WIN, windowShim, windowListenerCount } from './dom_st
 /* ================================================================== the editor */
 const mod = { exports: {} };
 new Function('module', 'window', 'requestAnimationFrame', 'ResizeObserver', 'devicePixelRatio',
-  /* the editor listens for the browser's own way out of fullscreen */
-  'document',
+  /* the editor listens for the browser's own way out of fullscreen, and paints its
+     palette icons in whichever ink the page is using */
+  'document', 'getComputedStyle',
   readFileSync(join(ROOT, 'src', 'circuit.js'), 'utf8') +
   '\nmodule.exports = { createCircuit, Netlist, MNA, PART_KINDS, VALUE_FLOOR, clampValue, parseEng };'
-)(mod, windowShim, (fn) => fn(), undefined, 1, DOC);
+)(mod, windowShim, (fn) => fn(), undefined, 1, DOC, () => ({ getPropertyValue: () => '' }));
 const { createCircuit, Netlist, MNA, PART_KINDS, VALUE_FLOOR, clampValue } = mod.exports;
 
 const problems = [];
