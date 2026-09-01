@@ -4396,10 +4396,291 @@ for _errs, _hs in [([1.0], [0.1]),
             "summary": "The rules that retire the difference quotient, and the derivation standing behind each one.",
             "concepts": [
                 "The derivative is a function in its own right, so it can be differentiated again: `f'`, `f''`, written `dy/dx` and `d2y/dx2` in the other notation",
-                "Linearity plus the power rule `d/dx x^n = n*x^(n-1)`, which falls straight out of the binomial expansion of `(x + h)^n`",
+                "Linearity plus the power rule `d/dx x^n = n*x^(n-1)`. The binomial expansion of `(x + h)^n` proves it for whole-number `n` and for nothing else; negative exponents come from the quotient rule, rational ones from squaring the relation first, and irrational ones have to wait for `exp` and `ln` in Module 6",
                 "The product rule `(f*g)' = f'*g + f*g'`; the tempting `f'*g'` fails on the first example anyone tries",
                 "The quotient rule `(f/g)' = (f'*g - f*g')/(g*g)`, where the order in the numerator is the entire sign",
                 "Differentiability implies continuity, but not the reverse: `|x|` is continuous at `0` and has a corner there",
+            ],
+            "read": [
+                {
+                    "title": "Three rules, and the two lines behind each one",
+                    "minutes": 12,
+                    "body": r"""
+Module 3 differentiated $x^{2} - 3x$ from the definition. It took half a page, and the
+answer was $2x - 3$. Now try the same thing on
+
+$$f(x) = \frac{x^{2}+1}{x^{3}-x}.$$
+
+Form $f(x+h)$, put it over a common denominator with $f(x)$, expand two cubics and a
+square, cancel whatever cancels, divide by $h$, and take a limit. It can be done. It is
+also the last time anyone would want to do it, and the answer — $-31/36$ at $x = 2$ —
+does not look like it cost that much.
+
+The rules in this module are not a new idea. They are the observation that the same
+cancellations happen every time, so they can be done once, in general, and then quoted.
+What follows is each rule with the derivation standing behind it, because a rule you
+have seen proved is a rule you can repair when you misremember it, and a rule you have
+only seen stated is a formula you either recall or do not.
+
+## Linearity, straight from the limit laws
+
+If $f$ and $g$ are both differentiable at $x$, then
+
+$$\frac{(f+g)(x+h) - (f+g)(x)}{h} = \frac{f(x+h)-f(x)}{h} + \frac{g(x+h)-g(x)}{h},$$
+
+which is ordinary algebra, not analysis. Now take $h \to 0$. Module 2's sum law says
+the limit of a sum is the sum of the limits **provided both limits exist**, and they do
+by hypothesis. So $(f+g)' = f' + g'$. The same two lines with a constant $c$ give
+$(cf)' = cf'$.
+
+That hypothesis is worth noticing rather than skipping. The sum law is what fails when
+one of the two pieces is not differentiable, and it is the reason none of these rules
+can be applied to a function you have not first checked.
+
+## The power rule, from the binomial theorem
+
+Take $n$ a positive whole number and expand:
+
+$$(x+h)^{n} = x^{n} + nx^{n-1}h + \binom{n}{2}x^{n-2}h^{2} + \cdots + h^{n}.$$
+
+Subtract $x^{n}$ and the first term goes. Every remaining term carries at least one
+factor of $h$, so dividing by $h$ is legal on the punctured neighbourhood a limit
+inspects:
+
+$$\frac{(x+h)^{n} - x^{n}}{h} = nx^{n-1} + \binom{n}{2}x^{n-2}h + \cdots + h^{n-1}.$$
+
+Every term after the first still carries an $h$. Letting $h \to 0$ kills all of them at
+once and leaves
+
+$$\frac{d}{dx}x^{n} = nx^{n-1}.$$
+
+**Read the scope of that argument carefully, because the course will use the rule well
+outside it.** The binomial theorem in the form used above expands $(x+h)^{n}$ into
+$n+1$ terms, which requires $n$ to be a positive whole number. The derivation above
+therefore proves the power rule for $n = 1, 2, 3, \ldots$ and for nothing else.
+
+The rule is nevertheless true for every real exponent, and each remaining case is a
+separate argument:
+
+- **Negative integers.** $x^{-m} = 1/x^{m}$, and the quotient rule below turns the
+  positive case into the negative one.
+- **Rational exponents.** $y = x^{1/2}$ satisfies $y^{2} = x$. Differentiating that
+  relation gives the answer without expanding anything — the derivation is at the end of
+  this reading, and Module 7 makes the technique general.
+- **Irrational exponents.** $x^{\pi}$ is *defined* as $\exp(\pi \ln x)$, so its
+  derivative has to wait for Module 6, where the exponential and the logarithm get
+  theirs.
+
+None of that changes how you use the rule. It changes what you are entitled to say
+about why it holds, which is a different thing and the one people skip.
+
+## The product rule, and the rectangle it comes from
+
+Picture $f(x)$ and $g(x)$ as the sides of a rectangle, so $f(x)g(x)$ is its area.
+Increase $x$ by $h$: one side grows by $\Delta f = f(x+h) - f(x)$, the other by
+$\Delta g$. The new area exceeds the old by three pieces — a strip $g\,\Delta f$ along
+one side, a strip $f\,\Delta g$ along the other, and the small corner square
+$\Delta f\,\Delta g$ where they meet.
+
+Algebraically, that decomposition is the add-and-subtract:
+
+$$f(x+h)g(x+h) - f(x)g(x) = \underbrace{[f(x+h)-f(x)]g(x+h)}_{\text{one strip}} +
+\underbrace{f(x)[g(x+h)-g(x)]}_{\text{the other}}.$$
+
+Divide by $h$ and let $h \to 0$. The first bracket over $h$ tends to $f'(x)$. The
+factor $g(x+h)$ tends to $g(x)$ — and it does so because $g$ is differentiable, hence
+continuous, which is the one place that implication is load-bearing. The second term
+tends to $f(x)g'(x)$. So
+
+$$(fg)' = f'g + fg'.$$
+
+The corner square is where the missing term went. It is $\Delta f\,\Delta g$, a product
+of two quantities both heading to zero, so divided by $h$ it still carries a factor
+tending to zero and contributes nothing in the limit. That is the honest reason the
+product rule has two terms rather than three.
+
+## Why $f'g'$ is tempting, and how fast it fails
+
+Every other rule so far has distributed: the derivative of a sum is the sum of the
+derivatives, and constants pull out. It is a reasonable guess that products behave the
+same way. They do not, and the cheapest demonstration takes one line. Let
+$f(x) = x^{3}$ and $g(x) = x^{2}$, so $fg = x^{5}$ and the power rule gives $5x^{4}$.
+The product rule agrees: $3x^{2}\cdot x^{2} + x^{3}\cdot 2x = 3x^{4} + 2x^{4} = 5x^{4}$.
+Multiplying the derivatives gives $3x^{2}\cdot 2x = 6x^{3}$, which is not even the right
+power of $x$.
+
+The rectangle says why. The area does not grow by the product of the two growths; it
+grows by two strips, and each strip is one side's growth times *the other side's whole
+length*.
+
+## The quotient rule, which nobody needs to memorise
+
+Let $q = f/g$ at a point where $g \neq 0$. Then $f = qg$, and the product rule applies
+to the right-hand side:
+
+$$f' = q'g + qg'.$$
+
+Solve for $q'$, then substitute $q = f/g$:
+
+$$q' = \frac{f' - qg'}{g} = \frac{f' - (f/g)g'}{g} = \frac{f'g - fg'}{g^{2}}.$$
+
+The order in the numerator is not a convention to be memorised. It arrives that way
+because $q'g$ was the term isolated and $qg'$ the term moved across, and moving it
+across is what makes it negative. If you write the numerator backwards you get $-q'$,
+and one test at $f = x$, $g = 1$ — where the answer must be $1$ — catches it
+immediately. This is worth doing rather than trusting memory: the reversed numerator is
+the single most common error in the rule.
+
+The derivation also needs one thing the statement hides. It assumed $q$ is
+differentiable in order to apply the product rule to $qg$. That is provable, but it is
+not free, and the argument above is a way of *computing* $q'$ on the assumption it
+exists rather than a proof that it does.
+
+## Worked, end to end
+
+Return to $f(x) = \dfrac{x^{2}+1}{x^{3}-x}$ and evaluate $f'(2)$.
+
+The numerator has derivative $2x$; the denominator has derivative $3x^{2}-1$. At
+$x = 2$: the numerator is $5$ and its derivative is $4$; the denominator is
+$8 - 2 = 6$ and its derivative is $12 - 1 = 11$. So
+
+$$f'(2) = \frac{4\cdot 6 - 5\cdot 11}{6^{2}} = \frac{24 - 55}{36} = -\frac{31}{36}
+\approx -0.8611.$$
+
+Check it the way Module 3 taught. $f(2) = 5/6 = 0.8333\ldots$, and a central difference
+with $h = 10^{-4}$ gives $-0.86111112$, against $-31/36 = -0.86111111$. The agreement
+to seven figures is not a proof, but a disagreement in the second figure would have been
+a sign error, and this is the cheapest way to catch one.
+
+Sanity on the sign: at $x = 2$ the denominator $x^{3}-x$ is growing much faster than the
+numerator $x^{2}+1$, so the ratio should be falling. It is.
+
+## Differentiable implies continuous
+
+One more consequence, used above and worth stating on its own. If $f'(a)$ exists then
+
+$$f(x) - f(a) = \frac{f(x)-f(a)}{x-a}\cdot(x-a) \longrightarrow f'(a)\cdot 0 = 0,$$
+
+so $f(x) \to f(a)$ and $f$ is continuous at $a$. The product law is legal here because
+both factors have limits.
+
+The converse is false, and Module 3's $|x|$ is the standing counterexample: continuous
+everywhere, no derivative at the origin. Continuity is necessary for differentiability
+and buys nothing back.
+
+## Where these rules stop
+
+Every rule above has the same hypothesis: **both derivatives exist at the point in
+question.** When one does not, the rule does not apply — and, importantly, that is not
+the same as the conclusion being false.
+
+Take $f(x) = |x|$ and $g(x) = |x|$ at the origin. Neither is differentiable there, so
+the product rule says nothing. But $f(x)g(x) = x^{2}$, which is differentiable at $0$
+with derivative $0$. A failed hypothesis releases the theorem; it does not reverse it.
+Deciding that a product is non-differentiable *because* a factor is, is the same
+category of error as concluding a limit fails to exist because substitution gave $0/0$.
+""",
+                },
+            ],
+            "derive": [
+                {
+                    "title": "The three rules, proved rather than quoted",
+                    "minutes": 14,
+                    "vars": ["x", "h", "n", "F", "G", "A", "B"],
+                    "brief": r"""
+Each rule below is two or three lines of algebra and one limit. Doing them in order
+also shows how they lean on one another: the quotient rule is the product rule
+rearranged, and the square root is the power rule proved by an argument the binomial
+theorem cannot reach.
+
+For the general rules, fix the point $x$ and write
+
+$$F = f(x), \qquad G = g(x), \qquad A = f'(x), \qquad B = g'(x),$$
+
+which are four constants once $x$ is fixed. Write fractions as `\frac{a}{b}`, and give
+each answer as an expression — no primes, no limit signs, no equals sign.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Start concrete. Expand $(x+h)^{3} - x^{3}$ completely and collect it in powers of $h$. Write the result.",
+                            "answer": "3x^{2}h + 3xh^{2} + h^{3}",
+                            "placeholder": "three terms, each carrying an h",
+                            "hint": "$(x+h)^{3} = x^{3} + 3x^{2}h + 3xh^{2} + h^{3}$, and the $x^{3}$ cancels.",
+                            "deconstruct": [
+                                "The binomial coefficients for the cube are $1, 3, 3, 1$.",
+                                "So $(x+h)^{3} = x^{3} + 3x^{2}h + 3xh^{2} + h^{3}$.",
+                                "Subtracting $x^{3}$ removes the only term without an $h$, which is why the division by $h$ that comes next is going to work.",
+                            ],
+                        },
+                        {
+                            "prompt": "Divide that by $h$ — legal, since a limit never evaluates at $h = 0$ — and then let $h \\to 0$. Write the derivative of $x^{3}$.",
+                            "answer": "3x^{2}",
+                            "hint": "After dividing you have $3x^{2} + 3xh + h^{2}$; every term but the first still carries an $h$.",
+                        },
+                        {
+                            "prompt": "Now the general case for a positive whole number $n$. In $(x+h)^{n} - x^{n}$, every term beyond the second carries $h^{2}$ or higher and dies in the limit, so only the coefficient of $h^{1}$ survives the division. Write the derivative of $x^{n}$.",
+                            "answer": "nx^{n-1}",
+                            "placeholder": "a coefficient times a power of x",
+                            "hint": "The $h^{1}$ term of the binomial expansion is $\\binom{n}{1}x^{n-1}h$, and $\\binom{n}{1} = n$.",
+                            "deconstruct": [
+                                "$(x+h)^{n} = x^{n} + \\binom{n}{1}x^{n-1}h + \\binom{n}{2}x^{n-2}h^{2} + \\cdots$",
+                                "Subtract $x^{n}$, then divide every remaining term by $h$.",
+                                "The $h^{1}$ term becomes $\\binom{n}{1}x^{n-1} = nx^{n-1}$ with no $h$ left in it; everything after it keeps at least one $h$ and vanishes.",
+                            ],
+                        },
+                        {
+                            "prompt": "The product rule. Split $f(x+h)g(x+h) - f(x)g(x)$ as $[f(x+h)-f(x)]\\,g(x+h) + f(x)[g(x+h)-g(x)]$, divide by $h$, and let $h \\to 0$, using the continuity of $g$ to send $g(x+h)$ to $G$. Write $(fg)'$ in the letters above.",
+                            "answer": "AG + FB",
+                            "placeholder": "two terms",
+                            "hint": "Each bracket over $h$ becomes a derivative; each surviving factor becomes a value.",
+                            "deconstruct": [
+                                "$\\dfrac{f(x+h)-f(x)}{h} \\to A$, and the factor $g(x+h) \\to G$.",
+                                "$\\dfrac{g(x+h)-g(x)}{h} \\to B$, and the factor $f(x)$ is already $F$.",
+                                "Adding the two limits gives $AG + FB$ — one term per side of the rectangle, and nothing for the corner.",
+                            ],
+                        },
+                        {
+                            "prompt": "The quotient rule, without memorising it. Let $q = F/G$. Since $f = qg$, the product rule gives $A = q'G + qB$. Solve that for $q'$ and substitute $q = F/G$. Write $q'$ as a single fraction.",
+                            "answer": "\\frac{AG - FB}{G^{2}}",
+                            "placeholder": "one fraction over G squared",
+                            "hint": "$q' = \\dfrac{A - qB}{G}$; now put $q = F/G$ and clear the inner fraction.",
+                            "deconstruct": [
+                                "From $A = q'G + qB$, isolate: $q' = \\dfrac{A - qB}{G}$.",
+                                "Substitute $q = F/G$: $q' = \\dfrac{A - (F/G)B}{G}$.",
+                                "Multiply top and bottom by $G$: $q' = \\dfrac{AG - FB}{G^{2}}$ — and the minus sign is there because $qB$ was moved across, not because of a convention.",
+                            ],
+                        },
+                        {
+                            "prompt": "Finally, an exponent the binomial theorem cannot reach. Let $y = \\sqrt{x}$ for $x > 0$, so $y^{2} = x$. Differentiating both sides with respect to $x$ gives $2y\\,y' = 1$. Solve for $y'$ and write it in terms of $x$.",
+                            "answer": "\\frac{1}{2\\sqrt{x}}",
+                            "placeholder": "a fraction with a root underneath",
+                            "hint": "$y' = 1/(2y)$, and $y$ is $\\sqrt{x}$.",
+                            "deconstruct": [
+                                "$2y\\,y' = 1$ gives $y' = \\dfrac{1}{2y}$.",
+                                "Replace $y$ by $\\sqrt{x}$: $y' = \\dfrac{1}{2\\sqrt{x}}$.",
+                                "Compare with the power rule at $n = 1/2$: $\\tfrac{1}{2}x^{-1/2}$ is the same number, reached by an argument that never expanded a binomial.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+Five rules, and not one of them was asserted. That matters more than it looks: the
+quotient rule is the rule most often misremembered, and the derivation above is short
+enough to redo on the spot when the numerator's order is in doubt.
+
+The last step is the one to keep. The power rule was proved by the binomial theorem for
+$n = 1, 2, 3, \ldots$, and the binomial theorem has nothing to say about $n = 1/2$ —
+there is no expansion of $(x+h)^{1/2}$ into finitely many terms. Squaring the relation
+first, and differentiating what results, is a completely different argument that happens
+to give an answer matching the same formula. Module 7 names that technique and makes it
+general, which is where every rational exponent is finally covered.
+
+Where the working stops: the square-root argument assumed $y' $ exists before solving
+for it, and at $x = 0$ it does not. The graph of $\sqrt{x}$ has a vertical tangent at
+the origin, $1/(2\sqrt{x})$ grows without bound as $x \to 0^{+}$, and the function is
+not differentiable there at all — a reminder that solving for a derivative presumes you
+already know there is one to solve for.
+""",
+                },
             ],
             "quiz": {
                 "title": "The three rules, and what they are not",
@@ -4489,8 +4770,251 @@ why numerical evidence needs a continuity argument standing behind it.
                 "A composition differentiates outside-in: `(f(g(x)))' = f'(g(x)) * g'(x)`, and the inner factor is the part that gets dropped",
                 "Leibniz form `dy/dx = (dy/du)*(du/dx)`: it looks like cancellation, but it is the limit of a product of two quotients",
                 "Nested compositions peel one layer at a time; `d/dx [g(x)]^n = n*[g(x)]^(n-1)*g'(x)` is the case worth memorising",
-                "The inverse rule `(f_inv)'(y) = 1/f'(f_inv(y))`: reflecting a graph in the line `y = x` reciprocates its slope",
+                "The inverse rule `(f_inv)'(y) = 1/f'(f_inv(y))`, which is the chain rule applied to `f(f_inv(y)) = y`: reflecting a graph in the line `y = x` reciprocates its slope, so it needs `f'` non-zero there — a horizontal tangent reflects into a vertical one",
                 "A scale factor inside the function comes back out as a multiplier, which is why every rate a circuit produces carries its frequency with it",
+            ],
+            "read": [
+                {
+                    "title": "One rate feeding another",
+                    "minutes": 11,
+                    "body": r"""
+A tank is filling, and a float rides on the surface. The water level rises at
+$0.4$ cm per second. A pointer attached to the float moves $3$ cm across a dial for
+every centimetre the float rises. How fast does the pointer move?
+
+Nobody needs calculus for this: $3 \times 0.4 = 1.2$ cm per second. The two rates
+multiply, and the units say why they must. Centimetres of pointer *per centimetre of
+water*, times centimetres of water *per second*, leaves centimetres of pointer per
+second. The middle quantity cancels the way a unit cancels, and the chain rule is that
+observation made exact for rates that are not constant.
+
+## The statement, and what each part is evaluated at
+
+If $y = f(u)$ and $u = g(x)$, then $y = f(g(x))$ and
+
+$$\frac{d}{dx}f(g(x)) = f'(g(x)) \cdot g'(x).$$
+
+Read the first factor carefully. It is $f'$ **evaluated at $g(x)$**, not at $x$. The
+float example makes the reason concrete: the dial's gearing might vary with height, in
+which case the gearing that matters is the one at *the height the float is currently
+at*, not at some number that happens to be the clock reading. Evaluating the outer
+derivative at the wrong point is the second most common error in this rule, and it is
+invisible when the inner function happens to be the identity.
+
+The second factor is the one that gets dropped. In Leibniz notation the rule reads
+
+$$\frac{dy}{dx} = \frac{dy}{du}\cdot\frac{du}{dx},$$
+
+which looks like the $du$ cancelling. It is a good mnemonic and a bad proof, because
+$dy/du$ is not a fraction — it is a limit of fractions, and the numerators and
+denominators inside it are all heading to zero.
+
+## Deriving it, and being honest about the gap
+
+The natural argument writes the difference quotient in two pieces:
+
+$$\frac{\Delta y}{\Delta x} = \frac{\Delta y}{\Delta u}\cdot\frac{\Delta u}{\Delta x},$$
+
+then sends $\Delta x \to 0$, notes that $\Delta u \to 0$ because $g$ is continuous, and
+concludes that the two factors tend to $f'(u)$ and $g'(x)$.
+
+There is a hole in it, and it is worth seeing rather than being protected from. The
+first factor divides by $\Delta u$, which requires $\Delta u \neq 0$. For most functions
+that is fine for all small enough $\Delta x$. It is not always fine. Take
+
+$$g(x) = x^{2}\sin(1/x) \quad (x \neq 0), \qquad g(0) = 0.$$
+
+This $g$ is differentiable at $0$ with $g'(0) = 0$, yet $g(x) = 0$ at $x = 1/(k\pi)$
+for every whole $k$ — points arbitrarily close to the origin. So $\Delta u$ is exactly
+zero infinitely often on the way in, and the division is illegal infinitely often.
+
+The conclusion survives. The repair replaces the quotient $\Delta y/\Delta u$ by a
+function that equals it when $\Delta u \neq 0$ and equals $f'(u)$ when $\Delta u = 0$;
+that function is continuous at zero precisely because $f$ is differentiable, and the
+product argument then goes through with no division at all. The rule is true. The
+one-line proof of it is not, and knowing which is which is the difference between using
+a theorem and reciting one.
+
+## Peeling, with numbers at the end
+
+Compositions come in layers, and the rule applies one layer at a time from the outside
+in. Take
+
+$$p(x) = (2x^{3}-5)^{4}.$$
+
+Outer layer: a fourth power, whose derivative is $4(\;\cdot\;)^{3}$ evaluated at the
+inside, giving $4(2x^{3}-5)^{3}$. Inner layer: the derivative of $2x^{3}-5$, which is
+$6x^{2}$. Multiply:
+
+$$p'(x) = 4(2x^{3}-5)^{3}\cdot 6x^{2} = 24x^{2}(2x^{3}-5)^{3}.$$
+
+Now put a number through it. At $x = 1$ the inside is $2 - 5 = -3$, so
+$p'(1) = 24 \cdot 1 \cdot (-27) = -648$, and $p(1) = (-3)^{4} = 81$.
+
+Check it numerically, as Module 3 insisted. $p(1.001) = 80.35329708$, so the forward
+difference is
+
+$$\frac{80.35329708 - 81}{0.001} = -646.70.$$
+
+That is $-648$ to within about $0.2\%$ — and the discrepancy is not sloppiness, it is
+the first-order truncation error of a forward difference, which Module 3 showed is
+proportional to $h$. Halving $h$ would halve it. Had the answer been $-162$ (the inner
+factor dropped) or $-2$ (the outer power forgotten), no step size would have rescued it.
+
+Three layers work the same way. For $q(x) = (1 + \sqrt{x})^{5}$, the outer fifth power
+gives $5(1+\sqrt{x})^{4}$, the middle layer contributes the derivative of $1 + \sqrt{x}$,
+which is $1/(2\sqrt{x})$ from Module 4, and there is no third layer. So
+
+$$q'(x) = \frac{5(1+\sqrt{x})^{4}}{2\sqrt{x}}.$$
+
+## The mistake, and why it is tempting
+
+The inner factor is dropped more often than any other error in differentiation, and the
+reason is that it is invisible in every example used to introduce the rules. For
+$d/dx\,x^{5}$ the inner function is $x$ itself, its derivative is $1$, and the chain
+rule multiplies by $1$. The whole of Module 4 can be worked without ever noticing the
+factor exists. Then the inside becomes $3x+1$, the factor becomes $3$, and the habit
+formed on a hundred correct answers produces a wrong one.
+
+The test that catches it costs nothing: **substitute a number into both the function and
+the claimed derivative, and compare against a difference quotient.** A missing constant
+factor is a factor-of-three error, which no rounding can disguise.
+
+## The inverse rule, in one line
+
+An inverse function undoes $f$: $f(f^{-1}(y)) = y$ for every $y$ in range. That is an
+identity, so both sides can be differentiated with respect to $y$. The left side is a
+composition, so the chain rule applies; the right side has derivative $1$:
+
+$$f'\big(f^{-1}(y)\big)\cdot \big(f^{-1}\big)'(y) = 1,
+\qquad\text{hence}\qquad
+\big(f^{-1}\big)'(y) = \frac{1}{f'\big(f^{-1}(y)\big)}.$$
+
+No new idea was needed — the inverse rule is the chain rule applied to a statement that
+was true by definition. Geometrically it says that reflecting a graph in the line
+$y = x$ swaps rise with run, so slopes turn into their reciprocals.
+
+Worked: $f(x) = x^{3}+x$ has $f'(x) = 3x^{2}+1$, which is positive everywhere, so $f$ is
+strictly increasing and an inverse exists. Since $f(1) = 2$, the point that maps to $2$
+is $x = 1$, and $f'(1) = 4$. Therefore $(f^{-1})'(2) = 1/4$. Notice what was *not* done:
+$f'(2) = 13$ never entered, because the rule evaluates $f'$ at the input of $f$, and the
+input of $f$ here is $1$.
+
+## Where it stops
+
+The inverse rule divides by $f'(f^{-1}(y))$, so it says nothing wherever that derivative
+is zero — and the geometry explains what goes wrong rather than merely forbidding it.
+
+Take $f(x) = x^{3}$, whose inverse is $y^{1/3}$. At the origin $f'(0) = 0$: the graph of
+$x^{3}$ has a horizontal tangent there. Reflect a horizontal line in $y = x$ and you get
+a vertical one, so the inverse has a vertical tangent at $y = 0$ and no finite
+derivative. The formula reports this honestly, since $(y^{1/3})' = 1/(3y^{2/3})$ grows
+without bound as $y \to 0$. The inverse function still exists and is continuous
+everywhere; it is differentiability, not invertibility, that fails.
+
+The chain rule itself has the milder hypothesis you would expect: $g$ differentiable at
+$x$, and $f$ differentiable at $g(x)$ — again *at $g(x)$*, not at $x$. A composition
+whose inner function lands exactly on the outer function's corner is not covered, which
+is why $\big||x| - 1\big|$ needs care at $x = \pm 1$ and at $0$.
+""",
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Peeling layers, and reading a slope backwards",
+                    "minutes": 12,
+                    "vars": ["x", "y", "u"],
+                    "brief": r"""
+The first three steps are the chain rule used forwards, on compositions that get one
+layer deeper each time. The last two turn it round: the inverse rule is not a new
+theorem, it is this one applied to $f(f^{-1}(y)) = y$.
+
+Write fractions as `\frac{a}{b}` and roots as `\sqrt{x}`, and give every answer as an
+expression with no primes and no equals sign.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Differentiate $p(x) = (2x^{3}-5)^{4}$. Take the outer power first, leave the inside alone, then multiply by the derivative of the inside. Write $p'(x)$.",
+                            "answer": "24x^{2}(2x^{3}-5)^{3}",
+                            "placeholder": "a coefficient, a power of x, and the bracket to a power",
+                            "hint": "The outer layer gives $4(2x^{3}-5)^{3}$; the inside differentiates to $6x^{2}$.",
+                            "deconstruct": [
+                                "Outer: $\\dfrac{d}{du}u^{4} = 4u^{3}$, evaluated at $u = 2x^{3}-5$.",
+                                "Inner: $\\dfrac{d}{dx}(2x^{3}-5) = 6x^{2}$.",
+                                "Their product is $4(2x^{3}-5)^{3}\\cdot 6x^{2} = 24x^{2}(2x^{3}-5)^{3}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Put a number through it: at $x = 1$ the inside is $-3$. Write $p'(1)$ as a single number.",
+                            "answer": "-648",
+                            "hint": "$24 \\cdot 1 \\cdot (-3)^{3}$, and an odd power keeps the sign.",
+                        },
+                        {
+                            "prompt": "A negative outer exponent, so the inside cannot be ignored either. Differentiate $r(x) = \\dfrac{1}{(3x+2)^{2}}$, that is $(3x+2)^{-2}$. Write $r'(x)$.",
+                            "answer": "\\frac{-6}{(3x+2)^{3}}",
+                            "placeholder": "a fraction with a cube underneath",
+                            "hint": "The outer rule gives $-2(3x+2)^{-3}$ and the inner derivative is $3$.",
+                            "deconstruct": [
+                                "Write it as a power: $r(x) = (3x+2)^{-2}$.",
+                                "Outer: $-2(3x+2)^{-3}$. Inner: $3$.",
+                                "Multiplying gives $-6(3x+2)^{-3}$, which is $\\dfrac{-6}{(3x+2)^{3}}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Three layers now. Differentiate $q(x) = (1 + \\sqrt{x})^{5}$ for $x > 0$, using $\\dfrac{d}{dx}\\sqrt{x} = \\dfrac{1}{2\\sqrt{x}}$ from Module 4. Write $q'(x)$.",
+                            "answer": "\\frac{5(1+\\sqrt{x})^{4}}{2\\sqrt{x}}",
+                            "placeholder": "a bracket to the fourth over a root",
+                            "hint": "Outer gives $5(1+\\sqrt{x})^{4}$; the inside $1 + \\sqrt{x}$ differentiates to $1/(2\\sqrt{x})$.",
+                            "deconstruct": [
+                                "Outer: $5(1+\\sqrt{x})^{4}$, evaluated at the whole inside.",
+                                "Inner: the $1$ contributes nothing, and $\\sqrt{x}$ contributes $\\dfrac{1}{2\\sqrt{x}}$.",
+                                "The product is $\\dfrac{5(1+\\sqrt{x})^{4}}{2\\sqrt{x}}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Turn it round. $f(x) = x^{3}+x$ has $f'(x) = 3x^{2}+1$, and $f(1) = 2$. Differentiating $f(f^{-1}(y)) = y$ gives $f'(f^{-1}(y))\\cdot (f^{-1})'(y) = 1$. Write $(f^{-1})'(2)$ as a number.",
+                            "answer": "\\frac{1}{4}",
+                            "hint": "The point that maps to $2$ is $x = 1$, so the rule needs $f'(1)$, not $f'(2)$.",
+                            "deconstruct": [
+                                "$f^{-1}(2) = 1$, because $f(1) = 1 + 1 = 2$.",
+                                "$f'(1) = 3 + 1 = 4$.",
+                                "The rule reciprocates it: $(f^{-1})'(2) = \\dfrac{1}{4}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "The same rule where it is about to break. $f(x) = x^{3}$ has inverse $f^{-1}(y) = y^{1/3}$, and $f'(x) = 3x^{2}$. Write $(f^{-1})'(y)$ as an expression in $y$.",
+                            "answer": "\\frac{1}{3y^{2/3}}",
+                            "placeholder": "a fraction with a fractional power of y underneath",
+                            "hint": "Evaluate $f'$ at $f^{-1}(y) = y^{1/3}$, then reciprocate: $3(y^{1/3})^{2} = 3y^{2/3}$.",
+                            "deconstruct": [
+                                "$f^{-1}(y) = y^{1/3}$, so $f'(f^{-1}(y)) = 3(y^{1/3})^{2}$.",
+                                "$(y^{1/3})^{2} = y^{2/3}$, so the denominator is $3y^{2/3}$.",
+                                "Reciprocating gives $\\dfrac{1}{3y^{2/3}}$.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+The last two steps are the same rule and they end very differently, which is the point of
+putting them next to each other.
+
+For $x^{3}+x$ the derivative $3x^{2}+1$ is never zero, the function is strictly
+increasing, and the inverse is differentiable everywhere. For $x^{3}$ the derivative
+vanishes at the origin, and the formula $1/(3y^{2/3})$ grows without bound as
+$y \to 0$ — correctly, because the graph of $y^{1/3}$ has a vertical tangent there. The
+inverse still exists; every real number has exactly one cube root, and the function is
+continuous. What fails is differentiability, and only at that one point.
+
+That is the general picture. A horizontal tangent on $f$ reflects into a vertical tangent
+on $f^{-1}$, and a vertical tangent is not a slope. So the inverse rule carries the
+hypothesis $f'(f^{-1}(y)) \neq 0$, and when the hypothesis fails the right conclusion is
+not "the inverse does not exist" but "the inverse is not differentiable here".
+
+Where the working stops: every step above assumed the composition's inner value lands
+somewhere the outer function is differentiable. Step 4 needs $x > 0$ for that reason —
+at $x = 0$ the inner $\sqrt{x}$ has no derivative, and no amount of care with the outer
+fifth power repairs it.
+""",
+                },
             ],
             "quiz": {
                 "title": "Peeling a composition",
@@ -4580,6 +5104,300 @@ and run, so a steep `f` must have a shallow inverse. The rule is safe here becau
                 "`sin' = cos` and `cos' = -sin`, both built from `lim h->0 sin(h)/h = 1` and `lim h->0 (cos(h) - 1)/h = 0`",
                 "The inverse trigonometric derivatives are algebraic: `d/dx arctan(x) = 1/(1 + x*x)` and `d/dx arcsin(x) = 1/sqrt(1 - x*x)`",
                 "Logarithmic differentiation: take `ln` of both sides first, and a product becomes a sum while a variable exponent becomes a coefficient",
+            ],
+            "read": [
+                {
+                    "title": "Where these derivatives actually come from",
+                    "minutes": 14,
+                    "body": r"""
+Every derivative so far was earned. The power rule came out of a binomial expansion, the
+product rule out of a rectangle, the quotient rule out of the product rule. This module
+is where a course usually stops earning them and starts issuing a table: $\sin$ goes to
+$\cos$, $e^{x}$ goes to itself, $\ln$ goes to $1/x$. Memorise these.
+
+Two of those are worth deriving in full, because the derivations explain things the table
+cannot. One of them is also the place where a course can be caught being circular, and
+this one nearly is: the quiz for this module asks why $\lim_{h\to 0}\sin(h)/h = 1$ must
+be proved geometrically — a limit the course has been using and has never proved. So it
+gets proved here first.
+
+## The limit everything trigonometric rests on
+
+Draw a unit circle and an angle $h$ with $0 < h < \pi/2$, measured **in radians**. Three
+regions sit inside one another:
+
+- the triangle with vertices at the centre, at $(1,0)$, and at the point on the circle,
+  whose area is $\tfrac{1}{2}\sin h$;
+- the circular sector between the two radii, whose area is $\tfrac{1}{2}h$;
+- the triangle with vertices at the centre, at $(1,0)$, and at the point vertically
+  above $(1,0)$ on the tangent line, whose area is $\tfrac{1}{2}\tan h$.
+
+Each contains the one before it, so
+
+$$\tfrac{1}{2}\sin h \;<\; \tfrac{1}{2}h \;<\; \tfrac{1}{2}\tan h.$$
+
+Multiply by $2$ and divide by $\sin h$, which is positive on this range:
+
+$$1 \;<\; \frac{h}{\sin h} \;<\; \frac{1}{\cos h}.$$
+
+Take reciprocals, which reverses the inequalities:
+
+$$\cos h \;<\; \frac{\sin h}{h} \;<\; 1.$$
+
+Both ends tend to $1$ as $h \to 0$, so Module 2's squeeze theorem forces the middle to as
+well. The function $\sin(h)/h$ is even, so the same bound covers negative $h$, and
+
+$$\lim_{h\to 0}\frac{\sin h}{h} = 1.$$
+
+Numerically, at $h = 0.01$ the quotient is $0.99998333$ and $\cos h = 0.99995$, so the
+squeeze is doing visible work rather than being a formality.
+
+**Where the sector area came from is the hypothesis to watch.** A sector of angle $h$ in
+a unit circle has area $h/2$ *only when $h$ is in radians* — that is what the radian is
+defined to make true. In degrees the sector has area $\pi h/360$, the squeeze produces
+$\pi/180$ instead of $1$, and every derivative below changes. This is not pedantry:
+$\frac{d}{dx}\sin(x^{\circ}) = \frac{\pi}{180}\cos(x^{\circ}) \approx
+0.01745\cos(x^{\circ})$, and a program that feeds degrees to a routine expecting radians
+is wrong by that factor of $57.3$ with no error message.
+
+The companion limit follows from the first by an algebraic trick rather than a new
+picture. Multiply by the conjugate:
+
+$$\frac{\cos h - 1}{h} = \frac{\cos^{2}h - 1}{h(\cos h + 1)}
+= \frac{-\sin^{2}h}{h(\cos h + 1)}
+= -\frac{\sin h}{h}\cdot\frac{\sin h}{\cos h + 1}
+\longrightarrow -1 \cdot \frac{0}{2} = 0.$$
+
+At $h = 0.01$ the true value is $-0.005$, small and heading to zero, as promised.
+
+## Sine, in three lines
+
+With both limits in hand, the derivative is the addition formula and nothing else. Using
+$\sin(x+h) = \sin x\cos h + \cos x\sin h$:
+
+$$\frac{\sin(x+h)-\sin x}{h}
+= \sin x\cdot\frac{\cos h - 1}{h} + \cos x\cdot\frac{\sin h}{h}.$$
+
+Both fractions have known limits, and $\sin x$ and $\cos x$ are constants as far as $h$
+is concerned. So the whole thing tends to $\sin x\cdot 0 + \cos x\cdot 1$, giving
+
+$$\frac{d}{dx}\sin x = \cos x.$$
+
+The same three lines with $\cos(x+h) = \cos x\cos h - \sin x\sin h$ give
+$\frac{d}{dx}\cos x = -\sin x$, and the minus sign is the one that came from the
+addition formula, not from a convention.
+
+Everything else trigonometric is now the quotient rule. For $\tan x = \sin x/\cos x$:
+
+$$\frac{d}{dx}\tan x = \frac{\cos x\cos x - \sin x(-\sin x)}{\cos^{2}x}
+= \frac{1}{\cos^{2}x},$$
+
+using $\sin^{2}+\cos^{2} = 1$ at the last step.
+
+## Why $e$ is not an arbitrary number
+
+For any positive base $a$,
+
+$$\frac{a^{x+h}-a^{x}}{h} = a^{x}\cdot\frac{a^{h}-1}{h},$$
+
+because $a^{x+h} = a^{x}a^{h}$ — the variable factors straight out. So
+
+$$\frac{d}{dx}a^{x} = a^{x}\cdot L(a), \qquad L(a) = \lim_{h\to 0}\frac{a^{h}-1}{h},$$
+
+and $L(a)$ is a constant depending only on the base. Note what this already says: **every
+exponential is proportional to its own derivative.** The only question left is the
+constant of proportionality.
+
+$L(a)$ is the slope of $a^{x}$ where it crosses the vertical axis. For $a = 2$ it is
+about $0.693$; for $a = 3$ about $1.099$. Somewhere between $2$ and $3$ is the base where
+that slope is exactly $1$, and **that is the definition of $e$** — not $2.71828\ldots$
+learned as a decimal, but the base singled out by making its own exponential its own
+derivative.
+
+Once $e$ exists, every other base is reached through it. Since $a = e^{\ln a}$, we have
+$a^{x} = e^{x\ln a}$, and the chain rule gives
+
+$$\frac{d}{dx}a^{x} = e^{x\ln a}\cdot\ln a = a^{x}\ln a,$$
+
+which also identifies the mystery constant: $L(a) = \ln a$. Checking the arithmetic,
+$L(2)$ should be $\ln 2 = 0.6931472$, and the difference quotient at $h = 10^{-6}$ gives
+$0.6931474$ — agreeing to six figures, with the discrepancy in the seventh being the
+first-order truncation error Module 3 predicted.
+
+## The logarithm, from the inverse rule
+
+No new limit is required. Let $y = \ln x$ for $x > 0$, so $e^{y} = x$. Differentiate both
+sides with respect to $x$; the left is a composition, so the chain rule applies:
+
+$$e^{y}\frac{dy}{dx} = 1 \quad\Longrightarrow\quad \frac{dy}{dx} = \frac{1}{e^{y}}
+= \frac{1}{x}.$$
+
+That is Module 5's inverse rule doing exactly what it was built for, and it explains a
+fact that looks like a coincidence in the table: the derivative of a transcendental
+function turns out to be algebraic. Reflecting a graph reciprocates its slopes, and the
+reciprocal of $e^{y}$ is $1/x$ once you remember what $e^{y}$ is.
+
+The inverse trigonometric functions go the same way. For $y = \arctan x$ we have
+$\tan y = x$, so $\frac{1}{\cos^{2}y}\cdot y' = 1$ and $y' = \cos^{2}y$. Now use
+$1 + \tan^{2}y = 1/\cos^{2}y$, which with $\tan y = x$ says $1/\cos^{2}y = 1 + x^{2}$.
+Hence
+
+$$\frac{d}{dx}\arctan x = \frac{1}{1+x^{2}},$$
+
+algebraic again, and finite everywhere. At $x = 1$ it equals $1/2$.
+
+For $y = \arcsin x$: $\sin y = x$, so $\cos y\cdot y' = 1$ and $y' = 1/\cos y$. The
+principal branch has $y \in (-\pi/2, \pi/2)$, where $\cos y > 0$, so
+$\cos y = +\sqrt{1-\sin^{2}y} = \sqrt{1-x^{2}}$ and
+
+$$\frac{d}{dx}\arcsin x = \frac{1}{\sqrt{1-x^{2}}}.$$
+
+The choice of the positive root is the branch choice, not an algebraic step, and it is
+where a sign error hides if the branch is left unstated.
+
+## Logarithmic differentiation, worked
+
+When the variable sits in the base *and* the exponent, no single rule applies. Take
+$y = x^{x}$ for $x > 0$. Take logarithms first:
+
+$$\ln y = x\ln x.$$
+
+Differentiate both sides with respect to $x$. The left side is a composition, giving
+$y'/y$; the right side is a product, giving $\ln x + 1$:
+
+$$\frac{y'}{y} = \ln x + 1
+\quad\Longrightarrow\quad
+y' = x^{x}\big(1 + \ln x\big).$$
+
+Put a number through it. At $x = 2$: $y = 4$ and $y' = 4(1 + 0.693147) = 6.7726$. A
+forward difference with $h = 0.001$ gives $(4.00677933 - 4)/0.001 = 6.7793$, about
+$0.1\%$ high — again first-order truncation error, not a mistake in the algebra.
+
+The two wrong answers are instructive because each is *half* right. Freezing the exponent
+and using the power rule gives $x\cdot x^{x-1} = x^{x}$. Freezing the base and using the
+exponential rule gives $x^{x}\ln x$. Their sum is $x^{x}(1+\ln x)$, the true answer —
+which is not a coincidence but the multivariable chain rule showing through: the function
+depends on $x$ through two routes, and the total rate is the sum of the two partial
+contributions.
+
+## Where these stop
+
+$\ln x$ and its derivative $1/x$ require $x > 0$; the function has no values to the left
+of the origin, so it has no rate of change there either. (The identity
+$\frac{d}{dx}\ln|x| = 1/x$ covers negative $x$, and it is a different function.)
+
+$\arcsin$ is defined on $[-1,1]$ but its derivative formula only works on the open
+interval: at $x = \pm 1$ the denominator $\sqrt{1-x^{2}}$ is zero. That is not a defect
+in the algebra — $\sin$ has horizontal tangents at $\pm\pi/2$, and Module 5 showed that a
+horizontal tangent reflects into a vertical one.
+
+And $\sin' = \cos$ is a statement about radians. Every derivative in this reading inherits
+that, which makes the units of an angle a correctness question rather than a preference.
+""",
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Sine from a squeeze, and the rest from inverses",
+                    "minutes": 15,
+                    "vars": ["x", "h", "a", "y"],
+                    "brief": r"""
+Two facts are granted, both proved in the reading by squeezing areas on the unit circle:
+
+$$\lim_{h\to 0}\frac{\sin h}{h} = 1, \qquad \lim_{h\to 0}\frac{\cos h - 1}{h} = 0.$$
+
+Everything below is built from those two and from rules already proved. Write function
+names without backslashes — `sin(x)`, `cos(x)`, `ln(x)` — write fractions as
+`\frac{a}{b}`, and give each answer as an expression.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Expand $\\sin(x+h)$ with the addition formula. Write the result in terms of $\\sin$ and $\\cos$ of $x$ and of $h$.",
+                            "answer": "sin(x)cos(h) + cos(x)sin(h)",
+                            "placeholder": "two products",
+                            "hint": "The formula is sine-cosine plus cosine-sine, in that order.",
+                        },
+                        {
+                            "prompt": "Subtract $\\sin x$ from that and regroup so the two granted limits are visible: collect the terms containing $\\cos(h)$ and $1$ into one bracket. Write $\\sin(x+h) - \\sin(x)$ in that grouped form.",
+                            "answer": "sin(x)(cos(h)-1) + cos(x)sin(h)",
+                            "placeholder": "a bracket times sin(x), plus a second term",
+                            "hint": "$\\sin(x)\\cos(h) - \\sin(x)$ factors as $\\sin(x)(\\cos(h)-1)$.",
+                            "deconstruct": [
+                                "From the previous step, $\\sin(x+h) - \\sin(x) = \\sin(x)\\cos(h) + \\cos(x)\\sin(h) - \\sin(x)$.",
+                                "The first and last terms share a factor of $\\sin(x)$: together they are $\\sin(x)(\\cos(h)-1)$.",
+                                "So the difference is $\\sin(x)(\\cos(h)-1) + \\cos(x)\\sin(h)$, and dividing by $h$ now produces exactly the two granted limits.",
+                            ],
+                        },
+                        {
+                            "prompt": "Divide by $h$ and take $h \\to 0$. The first bracket over $h$ tends to $0$, the second fraction to $1$, and $\\sin(x)$ and $\\cos(x)$ are constants here. Write the derivative of $\\sin(x)$.",
+                            "answer": "cos(x)",
+                            "hint": "One term is killed by the limit that goes to zero; the other survives with its coefficient.",
+                        },
+                        {
+                            "prompt": "Now the quotient rule on $\\tan(x) = \\sin(x)/\\cos(x)$, using $\\sin^{2}+\\cos^{2}=1$ to simplify the numerator. Write the derivative of $\\tan(x)$ as a single fraction over a squared cosine.",
+                            "answer": "\\frac{1}{cos(x)^{2}}",
+                            "placeholder": "one over a squared trig function",
+                            "hint": "The numerator is $\\cos(x)\\cos(x) - \\sin(x)(-\\sin(x))$, which is $\\cos^{2}+\\sin^{2}$.",
+                            "deconstruct": [
+                                "Quotient rule: $\\dfrac{\\cos(x)\\cdot\\cos(x) - \\sin(x)\\cdot(-\\sin(x))}{\\cos(x)^{2}}$.",
+                                "The numerator is $\\cos^{2}(x) + \\sin^{2}(x)$, which is $1$.",
+                                "So the derivative is $\\dfrac{1}{\\cos(x)^{2}}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Read a slope backwards. For $y = \\arctan(x)$ we have $\\tan(y) = x$, so differentiating gives $\\dfrac{1}{\\cos(y)^{2}}\\cdot y' = 1$, and $1/\\cos^{2}(y) = 1 + \\tan^{2}(y) = 1 + x^{2}$. Write the derivative of $\\arctan(x)$ as an expression in $x$.",
+                            "answer": "\\frac{1}{1+x^{2}}",
+                            "placeholder": "one over something in x",
+                            "hint": "$y' = \\cos^{2}(y)$, and $\\cos^{2}(y)$ is the reciprocal of $1+x^{2}$.",
+                            "deconstruct": [
+                                "$\\tan(y) = x$ differentiates to $\\dfrac{y'}{\\cos(y)^{2}} = 1$, so $y' = \\cos(y)^{2}$.",
+                                "The identity $1 + \\tan^{2}(y) = 1/\\cos(y)^{2}$ with $\\tan(y) = x$ gives $1/\\cos(y)^{2} = 1+x^{2}$.",
+                                "Reciprocating, $\\cos(y)^{2} = \\dfrac{1}{1+x^{2}}$, and that is $y'$ — algebraic, with no trigonometry left in it.",
+                            ],
+                        },
+                        {
+                            "prompt": "A general base. Rewrite $a^{x}$ as $e^{x\\,ln(a)}$ and apply the chain rule, remembering that $ln(a)$ is a constant. Write the derivative of $a^{x}$.",
+                            "answer": "a^{x}ln(a)",
+                            "placeholder": "the function itself times a constant",
+                            "hint": "The exponential reproduces itself; the inner derivative of $x\\,\\ln(a)$ is $\\ln(a)$.",
+                            "deconstruct": [
+                                "$a = e^{\\ln(a)}$, so $a^{x} = e^{x\\ln(a)}$.",
+                                "The chain rule gives $e^{x\\ln(a)}\\cdot\\ln(a)$.",
+                                "Rewriting $e^{x\\ln(a)}$ back as $a^{x}$ leaves $a^{x}\\ln(a)$ — and at $a = e$ the factor is $1$, which is the property that defines $e$.",
+                            ],
+                        },
+                        {
+                            "prompt": "The variable in the base and the exponent at once. For $y = x^{x}$ with $x > 0$, take logarithms to get $ln(y) = x\\,ln(x)$, differentiate both sides, then solve. Write the derivative of $x^{x}$.",
+                            "answer": "x^{x}(1+ln(x))",
+                            "placeholder": "the function itself times a bracket",
+                            "hint": "The left side differentiates to $y'/y$; the right side is a product.",
+                            "deconstruct": [
+                                "Left side: $\\dfrac{d}{dx}\\ln(y) = \\dfrac{y'}{y}$ by the chain rule.",
+                                "Right side: $\\dfrac{d}{dx}\\,x\\ln(x) = \\ln(x) + x\\cdot\\dfrac{1}{x} = \\ln(x) + 1$.",
+                                "So $y' = y(1+\\ln(x)) = x^{x}(1+\\ln(x))$.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+Nothing above was quoted from a table. Two limits were established by squeezing areas,
+and every derivative in the module followed from them together with rules already proved:
+the addition formula for sine, the quotient rule for tangent, the inverse rule for
+arctangent, the chain rule for a general base, and logarithms for the case where no
+single rule applies.
+
+Check the last one numerically, because it is the one that looks like a trick. At
+$x = 2$ the formula gives $4(1 + \ln 2) = 6.7726$, and a forward difference with
+$h = 0.001$ gives $6.7793$. The gap is $0.1\%$, first order in $h$, exactly as Module 3
+said a forward difference behaves.
+
+Where the working stops: the whole chain rests on the sector area being $h/2$, which is
+true for radians and for nothing else. In degrees the first limit becomes $\pi/180$, and
+step 3 would read $\frac{\pi}{180}\cos(x)$ — a factor of $57.3$, silently, in any program
+that mixes the two conventions. The last step also assumed $x > 0$, since $\ln(x)$ is
+undefined otherwise; $x^{x}$ does have values at some negative $x$, but not on an
+interval, and a derivative needs an interval to live on.
+""",
+                },
             ],
             "quiz": {
                 "title": "Growth, decay and the two that go round",
@@ -4689,6 +5507,279 @@ which is what logarithmic differentiation quietly encodes.
                 "Substitute the instantaneous values only after differentiating; a number fixed too early has its rate quietly set to zero",
                 "Signs and units carry the physics: `i = C*dv/dt` is a related rate, and so is the falling level in a tank that is emptying",
             ],
+            "read": [
+                {
+                    "title": "Differentiating an equation nobody solved",
+                    "minutes": 12,
+                    "body": r"""
+Every function differentiated so far arrived as $y = \text{something in } x$. Plenty of
+curves do not. The circle
+
+$$x^{2} + y^{2} = 25$$
+
+fails the vertical line test — above $x = 3$ there are two points, $y = 4$ and
+$y = -4$ — so it is not the graph of any function at all. It still has a tangent at
+every point except two, and that tangent still has a slope. Something has to compute it.
+
+You could solve for $y$. The circle splits into $y = \sqrt{25-x^{2}}$ and
+$y = -\sqrt{25-x^{2}}$, and you differentiate whichever branch you are standing on. That
+works, and it is already annoying: two cases, a sign to keep straight, and a chain rule
+either way. Now try it on
+
+$$x^{3} + y^{3} = 3xy,$$
+
+the folium of Descartes. Solving for $y$ means solving a cubic. Nobody does this.
+
+## The method is the chain rule with the outer function left unnamed
+
+Suppose that near the point of interest the curve *is* traced by some differentiable
+function $y(x)$ — we will return to when that is safe. Then every appearance of $y$ in
+the equation is a function of $x$, and can be differentiated as one.
+
+The only fact needed is Module 5's chain rule. For any power,
+
+$$\frac{d}{dx}\big[y(x)\big]^{3} = 3\big[y(x)\big]^{2}\cdot\frac{dy}{dx},$$
+
+because the outer function is the cube and the inner function is $y$. The factor
+$dy/dx$ is the inner derivative — the same factor dropped a hundred times in Module 5,
+except that here it cannot be computed away, so it stays in the expression as an unknown
+and gets solved for at the end.
+
+That is the whole technique. Differentiate both sides with respect to $x$, treat $y$ as
+a function, collect the $dy/dx$ terms, divide.
+
+Compare $\frac{d}{dx}x^{3} = 3x^{2}$. The chain rule applies there too; the inner
+derivative is $dx/dx = 1$, and multiplying by $1$ is invisible. That invisibility is
+exactly why the factor is so easy to forget the moment the letter changes.
+
+## The circle, worked end to end
+
+Differentiate both sides of $x^{2}+y^{2} = 25$ with respect to $x$:
+
+$$2x + 2y\frac{dy}{dx} = 0.$$
+
+The right-hand side really is a constant and really does differentiate to zero. That does
+not make the left-hand side vanish term by term — it makes the two terms cancel each
+other. Solve:
+
+$$\frac{dy}{dx} = -\frac{x}{y}.$$
+
+One formula, both branches, no cases. At $(3,4)$ it gives $-3/4$.
+
+**Check it twice, in ways that could have disagreed.** First, the explicit branch: at
+$(3,4)$ we are on $y = \sqrt{25-x^{2}}$, whose derivative is $-x/\sqrt{25-x^{2}}$, which
+at $x = 3$ is $-3/4$. Second, the geometry: the radius from the origin to $(3,4)$ has
+slope $4/3$, and a tangent to a circle is perpendicular to its radius, so the tangent
+slope must be the negative reciprocal $-3/4$. Three routes, one answer.
+
+Notice also what $-x/y$ says about the lower branch. At $(3,-4)$ it gives $+3/4$, which
+is right: the bottom of the circle rises where the top falls.
+
+## The second derivative, implicitly
+
+The same machinery differentiates again. Starting from $y' = -x/y$ and using the quotient
+rule, remembering that $y$ is a function of $x$:
+
+$$y'' = -\frac{y - x y'}{y^{2}}.$$
+
+Substitute $y' = -x/y$:
+
+$$y'' = -\frac{y + x^{2}/y}{y^{2}} = -\frac{y^{2}+x^{2}}{y^{3}} = -\frac{25}{y^{3}},$$
+
+where the last step used the original equation, which is legal because every point under
+discussion lies on it. At $(3,4)$ this is $-25/64 = -0.3906$, negative — the upper
+branch is concave down, which is what the top of a circle looks like. On the lower branch
+$y^{3}$ is negative and $y''$ is positive, concave up, which is what the bottom looks
+like. The formula got both without being told which branch it was on.
+
+## The folium, where there is no alternative
+
+For $x^{3}+y^{3} = 3xy$, differentiate term by term. The left gives $3x^{2}+3y^{2}y'$;
+the right is a product, so it gives $3y + 3xy'$:
+
+$$3x^{2}+3y^{2}y' = 3y + 3xy'.$$
+
+Collect the $y'$ terms on one side and divide by $3$:
+
+$$y'(y^{2}-x) = y - x^{2}, \qquad \frac{dy}{dx} = \frac{y-x^{2}}{y^{2}-x}.$$
+
+The point $(4/3,\,2/3)$ is on the curve — $\frac{64}{27}+\frac{8}{27} = \frac{72}{27}$
+and $3\cdot\frac{4}{3}\cdot\frac{2}{3} = \frac{8}{3} = \frac{72}{27}$ — and there
+
+$$\frac{dy}{dx} = \frac{2/3 - 16/9}{4/9 - 4/3} = \frac{-10/9}{-8/9} = \frac{5}{4}.$$
+
+At $(3/2,\,3/2)$, which is also on the curve, the slope is $-1$ — as symmetry demands,
+since the equation is unchanged when $x$ and $y$ are swapped, so the curve is symmetric
+about the line $y = x$ and must cross it perpendicularly.
+
+## Related rates: the same rule, with $t$ underneath
+
+Nothing changes if the independent variable is time. Differentiate the relation with
+respect to $t$, and every variable brings its own rate along.
+
+Take two resistors in parallel:
+
+$$\frac{1}{R} = \frac{1}{R_{1}} + \frac{1}{R_{2}}.$$
+
+Suppose $R_{1} = 1.00\ \text{k}\Omega$ with a temperature coefficient of
+$+200$ ppm/$^{\circ}$C, $R_{2} = 2.20\ \text{k}\Omega$ and stable, and the board is
+warming at $2.5\ ^{\circ}$C/s. How fast is the parallel combination drifting?
+
+First the rate of $R_{1}$ itself: $200$ ppm/$^{\circ}$C of $1000\ \Omega$ is
+$0.2\ \Omega/^{\circ}$C, and at $2.5\ ^{\circ}$C/s that is
+$dR_{1}/dt = 0.5\ \Omega/\text{s}$.
+
+Now differentiate the relation with respect to $t$. Each term is a reciprocal, so each
+picks up a $-1/(\;\cdot\;)^{2}$ from the chain rule, and $R_{2}$ is constant so its term
+dies:
+
+$$-\frac{1}{R^{2}}\frac{dR}{dt} = -\frac{1}{R_{1}^{2}}\frac{dR_{1}}{dt}
+\quad\Longrightarrow\quad
+\frac{dR}{dt} = \left(\frac{R}{R_{1}}\right)^{2}\frac{dR_{1}}{dt}.$$
+
+That result is worth keeping: **the parallel combination drifts by the square of the
+divider ratio.** Numerically, $R = (1000)(2200)/3200 = 687.5\ \Omega$, so
+$R/R_{1} = 0.6875$, its square is $0.4727$, and
+
+$$\frac{dR}{dt} = 0.4727 \times 0.5 = 0.236\ \Omega/\text{s}.$$
+
+The sensitivity factor being well under $1$ is the point of the exercise: paralleling a
+drifting resistor with a stable one does not merely dilute the drift, it attenuates it
+quadratically.
+
+## The mistake this technique exists to prevent
+
+Substituting the instantaneous numbers before differentiating. It is tempting because the
+numbers are known and the expression is shorter afterwards, and it is always wrong, in a
+way that is worth seeing rather than being warned about.
+
+In the balloon problem, $V = \frac{4}{3}\pi r^{3}$ with $r = 5$: substitute first and you
+have $V = \frac{500\pi}{3}$, a constant. Its derivative is zero. The volume is not
+changing — except that it obviously is, and what was actually computed was the rate of
+change of a number, which is always zero.
+
+The same trap in the circle: fix $y = 4$ first and the equation becomes $x^{2} = 9$,
+which has no $y$ left in it to differentiate. **A value is a snapshot; a relation is what
+holds while things move.** Differentiate the relation, then take the snapshot.
+
+## Where it stops
+
+Everything above assumed a differentiable $y(x)$ exists near the point. That assumption
+has a name — the implicit function theorem — and it can fail, in two ways that both show
+up as the formula misbehaving rather than as a silent wrong answer.
+
+**Vertical tangents.** On the circle at $(5,0)$, the formula $-x/y$ divides by zero.
+Nothing is broken: the curve genuinely has a vertical tangent there, no interval around
+$x = 5$ contains two branches to choose between, and no function $y(x)$ describes the
+curve near that point. The undefined expression is the honest report.
+
+**Self-intersections.** The folium passes through the origin twice, along two different
+tangent lines. There is no single slope, and the formula returns $\frac{0-0}{0-0}$,
+refusing to name one. Again the arithmetic is telling the truth.
+
+In both cases the rule is the same: when the denominator of an implicit derivative
+vanishes, look at the curve before looking for an algebra mistake.
+""",
+                },
+            ],
+            "derive": [
+                {
+                    "title": "A curve that is not a graph, and a rate that follows",
+                    "minutes": 13,
+                    "vars": ["x", "y", "R", "R_1", "R_2", "k"],
+                    "brief": r"""
+The rule throughout: $y$ is a function of $x$, so every $y$ term contributes a $dy/dx$
+factor by the chain rule, and $dy/dx$ is then solved for like any other unknown.
+
+Answers are expressions in the letters shown — no $dy/dx$, no primes, no equals sign.
+Write fractions as `\frac{a}{b}`.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Differentiate $x^{2}+y^{2} = 25$ with respect to $x$, which gives $2x + 2y\\,y' = 0$, and solve for $y'$. Write it as an expression in $x$ and $y$.",
+                            "answer": "-\\frac{x}{y}",
+                            "placeholder": "a ratio of the two coordinates",
+                            "hint": "Move the $2x$ across and divide by $2y$.",
+                            "deconstruct": [
+                                "$2y\\,y' = -2x$.",
+                                "Divide both sides by $2y$, legal wherever $y \\neq 0$.",
+                                "$y' = -\\dfrac{x}{y}$ — one formula covering both branches of the circle.",
+                            ],
+                        },
+                        {
+                            "prompt": "Evaluate that at the point $(3, 4)$. Write the number.",
+                            "answer": "-\\frac{3}{4}",
+                            "hint": "Substitute $x = 3$ and $y = 4$.",
+                        },
+                        {
+                            "prompt": "Differentiate again. The quotient rule on $y' = -x/y$ gives $y'' = -\\dfrac{y - x y'}{y^{2}}$; substitute $y' = -x/y$ and then use $x^{2}+y^{2} = 25$ to simplify. Write $y''$ as an expression in $y$ alone.",
+                            "answer": "-\\frac{25}{y^{3}}",
+                            "placeholder": "a constant over a power of y",
+                            "hint": "After substituting you have $-\\dfrac{y + x^{2}/y}{y^{2}}$; combine the numerator over $y$.",
+                            "deconstruct": [
+                                "Substituting $y' = -x/y$ turns $y - xy'$ into $y + \\dfrac{x^{2}}{y}$.",
+                                "Over the common denominator $y$, that is $\\dfrac{y^{2}+x^{2}}{y}$, so $y'' = -\\dfrac{y^{2}+x^{2}}{y^{3}}$.",
+                                "Every point on the curve satisfies $x^{2}+y^{2} = 25$, so the numerator is $25$ and $y'' = -\\dfrac{25}{y^{3}}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "A curve with no solved form. Differentiate $x^{3}+y^{3} = 3xy$ with respect to $x$ — the right-hand side needs the product rule — then collect the $y'$ terms and solve. Write $y'$ as a single fraction in $x$ and $y$.",
+                            "answer": "\\frac{y-x^{2}}{y^{2}-x}",
+                            "placeholder": "one fraction, both letters in each part",
+                            "hint": "You get $3x^{2}+3y^{2}y' = 3y + 3xy'$; gather the $y'$ terms on one side.",
+                            "deconstruct": [
+                                "Left: $3x^{2} + 3y^{2}y'$. Right: $3y + 3xy'$ by the product rule on $3xy$.",
+                                "Gather: $3y^{2}y' - 3xy' = 3y - 3x^{2}$, so $y'(y^{2}-x) = y - x^{2}$ after dividing by $3$.",
+                                "Hence $y' = \\dfrac{y-x^{2}}{y^{2}-x}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "The point $(4/3,\\, 2/3)$ lies on that curve. Evaluate the slope there. Write the number.",
+                            "answer": "\\frac{5}{4}",
+                            "placeholder": "a fraction in lowest terms",
+                            "hint": "The numerator is $\\tfrac{2}{3}-\\tfrac{16}{9}$ and the denominator is $\\tfrac{4}{9}-\\tfrac{4}{3}$; both are negative.",
+                            "deconstruct": [
+                                "Numerator: $\\dfrac{2}{3} - \\left(\\dfrac{4}{3}\\right)^{2} = \\dfrac{6}{9} - \\dfrac{16}{9} = -\\dfrac{10}{9}$.",
+                                "Denominator: $\\left(\\dfrac{2}{3}\\right)^{2} - \\dfrac{4}{3} = \\dfrac{4}{9} - \\dfrac{12}{9} = -\\dfrac{8}{9}$.",
+                                "The two minus signs cancel: $\\dfrac{10}{8} = \\dfrac{5}{4}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Now a rate. Two resistors in parallel satisfy $\\dfrac{1}{R} = \\dfrac{1}{R_1} + \\dfrac{1}{R_2}$ with $R_2$ constant. Differentiating with respect to time gives $-\\dfrac{1}{R^{2}}\\dfrac{dR}{dt} = -\\dfrac{1}{R_1^{2}}k$, where $k$ is $dR_1/dt$. Solve for $dR/dt$ and write it in terms of $R$, $R_1$ and $k$.",
+                            "answer": "\\frac{R^{2}}{R_1^{2}}k",
+                            "placeholder": "a squared ratio times k",
+                            "hint": "Multiply both sides by $-R^{2}$; the minus signs cancel.",
+                            "deconstruct": [
+                                "Both sides carry a minus sign, so they cancel: $\\dfrac{1}{R^{2}}\\dfrac{dR}{dt} = \\dfrac{k}{R_1^{2}}$.",
+                                "Multiply through by $R^{2}$.",
+                                "$\\dfrac{dR}{dt} = \\dfrac{R^{2}}{R_1^{2}}k$, which is the square of the ratio $R/R_1$ times the driving rate.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+The last step is worth a number. With $R_1 = 1.00\ \text{k}\Omega$ and
+$R_2 = 2.20\ \text{k}\Omega$, the parallel value is $687.5\ \Omega$, so
+$R/R_1 = 0.6875$ and the sensitivity factor $(R/R_1)^{2}$ is $0.4727$. A drift of
+$0.5\ \Omega/\text{s}$ in $R_1$ therefore shows up as $0.236\ \Omega/\text{s}$ in the
+combination. Paralleling a drifting resistor with a stable one attenuates the drift
+quadratically, not merely proportionally — a conclusion no amount of staring at the
+formula for $R$ would have produced, and three lines of implicit differentiation did.
+
+Two habits are worth carrying out of this. **Differentiate the relation, then substitute
+the instantaneous values**, never the other way round: a number fixed early has its rate
+silently set to zero, and the calculation returns a confident $0$. And **read the
+denominator**. Step 1's answer divides by $y$, step 4's by $y^{2}-x$, step 6's by
+nothing at all — and where those denominators vanish, the method is not failing, it is
+reporting that no differentiable branch $y(x)$ exists there.
+
+Where the working stops: on the circle at $(5,0)$ the tangent is vertical and $-x/y$ is
+undefined, correctly. On the folium at the origin the curve crosses itself, the formula
+gives $\frac{0}{0}$, and there are genuinely two tangent lines to choose between. Both
+are cases of the implicit function theorem's hypothesis failing, and in both the
+arithmetic tells the truth rather than producing a plausible wrong number.
+""",
+                },
+            ],
             "quiz": {
                 "title": "The factor everyone drops",
                 "minutes": 8,
@@ -4778,6 +5869,271 @@ the current comes from.
                 "Its corollaries do the real work: `f' = 0` on an interval means constant, `f' > 0` means increasing, and two functions with the same derivative differ by a constant",
                 "Concavity is the sign of `f''`; an inflection is where that sign changes, not merely where `f''` is zero",
                 "L'Hopital's rule is a two-function mean value theorem in disguise, and it applies only to `0/0` and `inf/inf` — check the form before using it",
+                "It also implies in one direction only: if the derivative quotient has a limit the original has the same one, but a derivative quotient with no limit proves nothing — `(x + sin(x))/x` tends to 1 while `(1 + cos(x))/1` oscillates forever",
+            ],
+            "read": [
+                {
+                    "title": "The theorem that lets a derivative speak about the function",
+                    "minutes": 13,
+                    "body": r"""
+Two gantries stand $12$ km apart on a motorway. A car passes the first at 10:00:00 and
+the second at 10:08:00, so its average speed was $90$ km/h in a $100$ km/h limit. The
+driver was never photographed exceeding anything. Was the car ever doing exactly
+$90$ km/h?
+
+Yes, and the reason is a theorem rather than an intuition. Speed is continuous, the
+journey took a positive amount of time, and a continuous quantity that averages $90$ must
+have equalled $90$ at some instant. That is the mean value theorem, and it is the
+statement this module exists to prove and then spend.
+
+## Why it is needed at all
+
+Every derivative computed so far is **local**: $f'(a)$ describes the function in an
+arbitrarily small neighbourhood of $a$ and, on its own, says nothing about what happens a
+finite distance away. Almost every statement anyone wants is **global**: *this function is
+increasing on the interval*, *these two functions differ by a constant*, *this
+approximation is accurate to within so much across that range*.
+
+Nothing so far connects the two. The mean value theorem is the bridge, and it is the only
+bridge — every result in this module is a corollary of it, including several that look so
+obvious they seem not to need proving.
+
+## Rolle's theorem first
+
+Suppose $f$ is continuous on $[a,b]$, differentiable on $(a,b)$, and $f(a) = f(b)$. Then
+$f'(c) = 0$ for some $c$ strictly between $a$ and $b$.
+
+The proof rests on two theorems. The first is the **extreme value theorem**: a function
+continuous on a closed bounded interval attains a maximum and a minimum somewhere on it.
+That is a companion to Module 2's intermediate value theorem — both are properties
+continuity buys on a closed interval — and it is stated rather than proved here; Module
+11 takes it up again as the reason a search for global extrema only ever has to check
+the critical points and the two endpoints. If both are attained at the endpoints, then
+since
+$f(a) = f(b)$ the maximum equals the minimum and $f$ is constant, so $f' = 0$ everywhere
+inside. Otherwise one of them is attained at an interior point $c$, and Fermat's theorem
+says an interior extremum of a differentiable function has $f'(c) = 0$: the difference
+quotient is $\le 0$ approaching from one side and $\ge 0$ from the other, so the
+two-sided limit must be zero.
+
+Both hypotheses earn their place. Drop differentiability at one interior point and
+$|x|$ on $[-1,1]$ is a counterexample: equal endpoint values, no interior zero
+derivative, and a corner where the tangent should have been. Drop continuity at an
+endpoint and a function that leaps back to its starting value at the last instant is
+another.
+
+## Tilting it into the mean value theorem
+
+Rolle's theorem is the flat case. The general case is the same picture with the axes
+tilted, and the proof is to subtract the tilt.
+
+Given $f$ continuous on $[a,b]$ and differentiable on $(a,b)$, define
+
+$$h(x) = f(x) - f(a) - \frac{f(b)-f(a)}{b-a}\,(x-a),$$
+
+which is $f$ minus the straight chord through its endpoints. Check the ends:
+$h(a) = 0$, and
+
+$$h(b) = f(b) - f(a) - \frac{f(b)-f(a)}{b-a}(b-a) = 0.$$
+
+So $h$ satisfies Rolle's hypotheses, and there is a $c$ in $(a,b)$ with $h'(c) = 0$.
+Since $h'(x) = f'(x) - \frac{f(b)-f(a)}{b-a}$, that says
+
+$$f'(c) = \frac{f(b)-f(a)}{b-a}.$$
+
+Some interior slope equals the average slope. The car was doing exactly $90$.
+
+## What it gives back
+
+Three corollaries, each proved in a line or two, each used constantly.
+
+**If $f' = 0$ throughout an interval, $f$ is constant there.** For any two points $u < v$
+in the interval, $f(v)-f(u) = f'(c)(v-u) = 0$. Not obvious, and not provable from the
+definition of the derivative alone: the derivative is local, "constant" is global.
+
+**If $f' > 0$ throughout an interval, $f$ is increasing there.** Same line, with the sign
+kept: $f(v)-f(u) = f'(c)(v-u) > 0$.
+
+**If $f' = g'$ throughout an interval, then $f - g$ is constant.** Apply the first
+corollary to $h = f-g$. Constant, not necessarily zero — $x^{2}$ and $x^{2}+7$ have the
+same derivative everywhere. This is why an antiderivative carries an arbitrary constant
+and why one initial condition determines it.
+
+Every one of those says *interval*, and the restriction is real. Module 3's $1/x$ has a
+negative derivative on each side of the origin but is not decreasing across the gap:
+$f(-1) = -1$ is less than $f(1) = 1$. The mean value theorem needs $[u,v]$ inside the
+domain, and there is no such interval spanning a hole.
+
+## Worked: finding the $c$, and one inequality
+
+For $f(x) = x^{2}$ on $[0,3]$: the average slope is $(9-0)/(3-0) = 3$, and $f'(c) = 2c$,
+so $c = 3/2$. That is the midpoint, and it is the midpoint for a parabola on *any*
+interval: the average slope on $[a,b]$ is $\frac{b^{2}-a^{2}}{b-a} = a+b$, and
+$2c = a+b$ gives $c = \frac{a+b}{2}$.
+
+The midpoint is a parabola's special property, not the theorem's. For $f(x) = x^{3}$ on
+$[0,3]$ the average slope is $27/3 = 9$, and $3c^{2} = 9$ gives $c = \sqrt{3} \approx
+1.732$, well right of the midpoint $1.5$. For $f(x) = 1/x$ on $[1,2]$ the average slope
+is $(\tfrac{1}{2}-1)/1 = -\tfrac{1}{2}$, and $-1/c^{2} = -\tfrac{1}{2}$ gives
+$c = \sqrt{2} \approx 1.414$.
+
+The theorem is also how inequalities get proved. Claim: $e^{x} > 1+x$ for every $x > 0$.
+Apply the mean value theorem to $e^{x}$ on $[0,x]$: there is a $c$ in $(0,x)$ with
+
+$$e^{x} - 1 = e^{c}\,x.$$
+
+Since $c > 0$ we have $e^{c} > 1$, so $e^{x}-1 > x$. At $x = 0.1$ that predicts
+$e^{0.1} > 1.1$, and indeed $e^{0.1} = 1.10517$. The inequality is the statement that the
+exponential lies above its own tangent line at the origin, which Module 9 will use to
+bound a linearisation error.
+
+## Concavity, and the check people skip
+
+The second derivative describes how the first is changing. Where $f'' > 0$ the slope is
+increasing and the curve is concave up; where $f'' < 0$ it is concave down. An
+**inflection point** is where that concavity changes.
+
+The mistake is to define an inflection as a zero of $f''$. Vanishing is necessary but not
+sufficient — the sign has to actually change. For $f(x) = x^{4}$, $f'' = 12x^{2}$ is zero
+at the origin and positive on both sides, so the curve is concave up throughout and the
+origin is a minimum, not an inflection. Any method that reports roots of $f''$ without
+testing the sign on both sides will report it as one, which is exactly the check the
+capstone is required to perform.
+
+## L'Hôpital's rule, and its one-way street
+
+L'Hôpital's rule is the mean value theorem applied to two functions at once — Cauchy's
+form, which gives a $c$ with $\big(f(b)-f(a)\big)g'(c) = \big(g(b)-g(a)\big)f'(c)$.
+Taking $a$ to the point of interest and applying it to a $0/0$ quotient turns
+$\frac{f(x)}{g(x)}$ into $\frac{f'(c)}{g'(c)}$ with $c$ trapped between, and the trapping
+is what forces the two limits to agree.
+
+Two failure modes are worth naming, because the rule is applied far more often than its
+hypotheses are checked.
+
+**The form must be indeterminate.** Applied to $\cos x/(1+x)$ at $x = 0$, which
+substitutes cleanly to $1$, the rule produces $-\sin x/1 \to 0$. It is not that the
+answer is hard to get; it is that a confident wrong answer is produced by a method that
+was never entitled to run.
+
+**The implication only goes one way.** If the derivative quotient has a limit, the
+original has the same one. If the derivative quotient has *no* limit, nothing follows.
+Consider
+
+$$\lim_{x\to\infty}\frac{x + \sin x}{x}.$$
+
+This is an $\infty/\infty$ form, and the true value is $1$, since $\sin x$ is bounded
+while $x$ is not. But the derivative quotient is $\frac{1+\cos x}{1}$, which oscillates
+between $0$ and $2$ forever and has no limit at all. The rule is silent here, and reading
+its silence as "therefore the original limit does not exist" is the error. That is why a
+failed application is a reason to try something else, never a conclusion.
+
+## Where it stops
+
+The mean value theorem is a theorem about real-valued functions, and it is false for
+functions with more than one output. Take $f(t) = (\cos t,\, \sin t)$ on $[0, 2\pi]$: the
+start and end points are identical, so the average velocity is the zero vector, yet the
+speed is $1$ at every instant and the derivative is never zero. Rolle's conclusion fails
+outright.
+
+Nothing is wrong with the proof; the proof used the extreme value theorem to find a
+largest value, and a pair of numbers has no largest. The theorem holds for exactly the
+functions the argument covers, which is a good reminder that its hypotheses are load
+bearing rather than decorative.
+""",
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Rolle, tilted, and the numbers it produces",
+                    "minutes": 12,
+                    "vars": ["x", "a", "b", "c", "A", "B"],
+                    "brief": r"""
+The mean value theorem promises a point $c$ in $(a,b)$ where the instantaneous slope
+equals the average slope. Steps 2 to 5 find that point for four specific functions,
+which is the fastest way to see that it is a real number and not a formality.
+
+Write $A = f(a)$ and $B = f(b)$. Fractions as `\frac{a}{b}`, roots as `\sqrt{x}`, and
+each answer an expression with no equals sign.
+""",
+                    "steps": [
+                        {
+                            "prompt": "The theorem sets $f'(c)$ equal to the slope of the chord joining the two endpoints. Write that chord slope in terms of $A$, $B$, $a$ and $b$.",
+                            "answer": "\\frac{B-A}{b-a}",
+                            "placeholder": "rise over run",
+                            "hint": "Rise over run, with the endpoint values on top and the endpoint positions underneath.",
+                        },
+                        {
+                            "prompt": "Apply it to $f(x) = x^{2}$ on $[0,3]$. The chord slope is $3$ and $f'(c) = 2c$. Write $c$.",
+                            "answer": "\\frac{3}{2}",
+                            "hint": "$(9-0)/(3-0) = 3$, so solve $2c = 3$.",
+                        },
+                        {
+                            "prompt": "Same function, general interval $[a,b]$. The chord slope is $\\dfrac{b^{2}-a^{2}}{b-a}$, which factors. Write $c$ in terms of $a$ and $b$.",
+                            "answer": "\\frac{a+b}{2}",
+                            "placeholder": "something built from a and b",
+                            "hint": "$b^{2}-a^{2} = (b-a)(b+a)$, so the chord slope is $a+b$; now solve $2c = a+b$.",
+                            "deconstruct": [
+                                "The difference of two squares factors: $\\dfrac{b^{2}-a^{2}}{b-a} = a+b$.",
+                                "Set that equal to $f'(c) = 2c$.",
+                                "$c = \\dfrac{a+b}{2}$ — the midpoint, every time, for a parabola.",
+                            ],
+                        },
+                        {
+                            "prompt": "Now $f(x) = x^{3}$ on $[0,3]$, where the answer is no longer the midpoint. The chord slope is $9$ and $f'(c) = 3c^{2}$. Write the $c$ that lies in the interval.",
+                            "answer": "\\sqrt{3}",
+                            "placeholder": "a root",
+                            "hint": "$3c^{2} = 9$ gives $c^{2} = 3$; the theorem promises a $c$ inside $(0,3)$, so take the positive root.",
+                            "deconstruct": [
+                                "Chord slope: $\\dfrac{27-0}{3-0} = 9$.",
+                                "Solve $3c^{2} = 9$, so $c^{2} = 3$ and $c = \\pm\\sqrt{3}$.",
+                                "Only $+\\sqrt{3} \\approx 1.732$ lies in $(0,3)$ — and it sits right of the midpoint $1.5$, unlike the parabola's.",
+                            ],
+                        },
+                        {
+                            "prompt": "And $f(x) = 1/x$ on $[1,2]$, where $f'(x) = -1/x^{2}$. The chord slope is $-\\tfrac{1}{2}$. Write the $c$ that lies in the interval.",
+                            "answer": "\\sqrt{2}",
+                            "placeholder": "a root",
+                            "hint": "Solve $-1/c^{2} = -\\tfrac{1}{2}$, so $c^{2} = 2$.",
+                            "deconstruct": [
+                                "Chord slope: $\\dfrac{\\tfrac{1}{2}-1}{2-1} = -\\dfrac{1}{2}$.",
+                                "Set $-\\dfrac{1}{c^{2}} = -\\dfrac{1}{2}$, so $c^{2} = 2$.",
+                                "$c = \\sqrt{2} \\approx 1.414$, which is inside $(1,2)$ as promised.",
+                            ],
+                        },
+                        {
+                            "prompt": "The theorem also proves inequalities. To show $exp(x) > 1+x$ for $x > 0$, set $h(x) = exp(x) - 1 - x$ and study its derivative. Write $h'(x)$.",
+                            "answer": "exp(x)-1",
+                            "placeholder": "an exponential and a constant",
+                            "hint": "Differentiate term by term; the exponential reproduces itself and the derivative of $-x$ is $-1$.",
+                            "deconstruct": [
+                                "$\\dfrac{d}{dx}\\exp(x) = \\exp(x)$.",
+                                "$\\dfrac{d}{dx}(-1-x) = -1$.",
+                                "So $h'(x) = \\exp(x)-1$, which is positive for every $x > 0$ — and by the mean value theorem a positive derivative on an interval forces $h$ to increase, so $h(x) > h(0) = 0$.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+The last step is the pattern worth keeping, because it is how most inequalities in
+analysis are actually proved: build the difference, differentiate it, show the derivative
+has one sign, and let the mean value theorem convert that local fact into a global one.
+At $x = 0.1$ the conclusion says $e^{0.1} > 1.1$, and the true value is $1.10517$.
+
+Steps 2 to 5 are there to make one thing concrete. The theorem does not say the point is
+the midpoint — that is a parabola's private habit. For $x^{3}$ on $[0,3]$ the point is
+$\sqrt{3} \approx 1.732$; for $1/x$ on $[1,2]$ it is $\sqrt{2} \approx 1.414$. What the
+theorem promises is existence, and existence is enough for every corollary that matters:
+constant derivative implies constant function, positive derivative implies increasing
+function, equal derivatives imply a constant difference.
+
+Where the working stops: each of those corollaries says **on an interval**, and the word
+is load bearing. The function $1/x$ has $f'(x) = -1/x^{2} < 0$ everywhere it is defined,
+yet $f(-1) = -1$ is smaller than $f(1) = 1$, so it is not a decreasing function. Its
+domain is two disconnected pieces and there is no interval joining them, so there is no
+$c$ to apply the theorem at. A statement about a derivative never crosses a hole in the
+domain.
+""",
+                },
             ],
             "quiz": {
                 "title": "What the mean value theorem licenses",
@@ -4888,6 +6244,253 @@ down.
                 "The error is second order, about `f''(a)*(x - a)^2/2`, so halving the step quarters it",
                 "Relative error travels through a sensitivity factor: `dy/y = (x*f'(x)/f(x)) * (dx/x)`, which is what a tolerance budget is made of",
                 "The approximations worth knowing cold: `(1 + x)^k ~ 1 + k*x`, `sin(x) ~ x`, `exp(x) ~ 1 + x`, `ln(1 + x) ~ x`",
+            ],
+            "read": [
+                {
+                    "title": "The tangent line as a stand-in, and how far it can be trusted",
+                    "minutes": 12,
+                    "body": r"""
+What is $\sqrt{4.02}$, without a calculator? You know $\sqrt{4} = 2$, and $4.02$ is only
+a little further along. The square root is a smooth curve, and over a short enough
+stretch a smooth curve is indistinguishable from its tangent line. So walk along the
+tangent instead: its slope at $x = 4$ is $\frac{1}{2\sqrt{4}} = 0.25$, and $0.02$ of
+horizontal travel buys $0.005$ of height. The answer is about $2.005$.
+
+The true value is $2.0049938$. The estimate is high by $6.2\times 10^{-6}$ — six parts in
+a million, from arithmetic done in your head. This module is about why that works, and
+about how to know in advance how big that error will be.
+
+## The tangent line, and why it is the *best* line
+
+The linearisation of $f$ at $a$ is
+
+$$L(x) = f(a) + f'(a)\,(x-a),$$
+
+the line through $(a, f(a))$ with slope $f'(a)$. Nothing so far says it is a good
+approximation, only that it touches at one point and has the right slope there. Both
+facts come straight out of the definition of the derivative, and so does the third, which
+is the one that matters.
+
+Rearrange the definition. Since $f'(a) = \lim_{x\to a}\frac{f(x)-f(a)}{x-a}$,
+
+$$\frac{f(x) - L(x)}{x-a} = \frac{f(x)-f(a)}{x-a} - f'(a) \longrightarrow 0
+\quad\text{as } x \to a.$$
+
+So the error $f(x)-L(x)$ does not merely go to zero — it goes to zero *faster than
+$x-a$ does*. That is a much stronger statement, and it is what distinguishes the tangent
+from every other line through the same point. Take any other line
+$\tilde{L}(x) = f(a) + m(x-a)$ with $m \neq f'(a)$. Its error over $x-a$ tends to
+$f'(a) - m$, a non-zero constant, so its error is proportional to $x-a$ rather than
+smaller than it. **The tangent line is not one linear approximation among many; it is the
+only one whose error is negligible compared with the step.**
+
+The same statement in the language of small changes: writing $dx$ for a change in the
+input and $dy = f'(x)\,dx$ for the corresponding change along the tangent, the true
+change in $f$ differs from $dy$ by something smaller than $dx$ itself. That is the
+**differential**, and it is the same theorem written for engineers rather than for
+points.
+
+## How big is the error, exactly
+
+"Smaller than $x-a$" is qualitative. The quantitative version is Taylor's theorem with
+remainder, which is Module 8's mean value theorem applied one order up: for some $\xi$
+between $a$ and $x$,
+
+$$f(x) - L(x) = \frac{f''(\xi)}{2}(x-a)^{2}.$$
+
+Two things follow immediately. The error is **second order** in the step, so halving the
+distance quarters the error — the same order arithmetic Module 3 used to distinguish a
+forward difference from a central one. And the constant is controlled by $f''$, so a
+function that is bending hard near $a$ is one whose tangent goes wrong quickly.
+
+Back to the square root. Here $f''(x) = -\frac{1}{4}x^{-3/2}$, so
+$f''(4) = -\frac{1}{4}\cdot\frac{1}{8} = -\frac{1}{32}$, and with $x-a = 0.02$ the
+predicted error is
+
+$$\left|\frac{-1/32}{2}\right|(0.02)^{2} = \frac{0.0004}{64} = 6.25\times 10^{-6}.$$
+
+The measured error was $6.234\times 10^{-6}$. The prediction is not a bound that happened
+to be loose; it is the right number to three figures, because $f''$ barely moves between
+$4$ and $4.02$. The sign is right too — $f''$ is negative, the curve is concave down, and
+the tangent lies above it, which is why the estimate came out high.
+
+## Relative error, and the factor that carries it
+
+Absolute error is rarely what an engineer has. Components come with percentages, so the
+useful question is how a *relative* error travels. Divide the differential by the value:
+
+$$\frac{dy}{y} = \frac{f'(x)\,dx}{f(x)}
+= \underbrace{\frac{x f'(x)}{f(x)}}_{\text{sensitivity}}\cdot\frac{dx}{x}.$$
+
+The bracketed factor is dimensionless, and it is the number that matters. For a power
+$f(x) = x^{k}$ it is exactly $k$:
+
+$$\frac{x\cdot kx^{k-1}}{x^{k}} = k.$$
+
+So a $1\%$ error in $x$ becomes a $k\%$ error in $x^{k}$. Squaring doubles a percentage;
+a square root halves it; a reciprocal flips its sign and keeps its size.
+
+**Worked: a power budget.** $P = V^{2}/R$, with $V$ known to $\pm 2\%$ and $R$ to
+$\pm 1\%$. Sensitivities: $+2$ for $V$, $-1$ for $R$. So
+
+$$\frac{dP}{P} = 2\frac{dV}{V} - \frac{dR}{R}.$$
+
+Worst case is both errors pushing the same way — $V$ high and $R$ low —
+giving $2(2\%) + 1\% = 5\%$. Checking against the exact arithmetic,
+$\frac{1.02^{2}}{0.99} - 1 = 5.09\%$, so the linear estimate is right to within a tenth
+of a percent, and the $0.09$ it missed is the second-order term.
+
+If instead the two tolerances are independent random errors rather than worst cases, they
+combine in quadrature: $\sqrt{(2\times 2)^{2} + 1^{2}} = 4.12\%$. Which of $5\%$ and
+$4.12\%$ to quote is an engineering question about what the tolerances mean, not a
+mathematical one — but both are computed from the same two sensitivities.
+
+## The approximations worth knowing cold
+
+All of them are the tangent line at $x = 0$, and each is one line of work:
+
+$$(1+x)^{k} \approx 1+kx, \qquad \sin x \approx x, \qquad
+e^{x} \approx 1+x, \qquad \ln(1+x) \approx x.$$
+
+The first with $k = -1$ gives $\frac{1}{1+x} \approx 1-x$, the workhorse behind every
+quick estimate of a lightly loaded divider. Check it: $1/1.02 = 0.980392$ against the
+estimate $0.98$, off by $3.9\times 10^{-4}$, which is the $x^{2}$ term doing its work.
+
+The accuracy varies more than the uniform look of the list suggests. At $x = 0.1$,
+$\sin x \approx x$ is off by $1.7\times 10^{-4}$, while $e^{x} \approx 1+x$ is off by
+$5.2\times 10^{-3}$ — thirty times worse. The reason is in the second derivative:
+$\sin''(0) = 0$, so the sine's quadratic term vanishes and its first error is cubic,
+while the exponential's is quadratic. The second-order formula predicts this before any
+of it is measured.
+
+## The mistake, and why it is tempting
+
+The tangent line is exact at one point and good near it, and nothing in the formula says
+how near. So it gets used at a distance.
+
+Linearise $\sqrt{x}$ at $a = 4$ and evaluate at $x = 9$: the estimate is
+$2 + 0.25(5) = 3.25$, against a true value of $3$. That is an $8.3\%$ error, from the
+same formula that was accurate to six parts in a million at $x = 4.02$. Nothing changed
+except the step, and the error grew by the square of it: $(5/0.02)^{2}$ is a factor of
+$62\,500$, which turns six parts per million into most of a tenth.
+
+The habit that prevents it is to state the step alongside the answer. "The tangent at
+$4$ gives $3.25$" is a claim nobody would trust; "$\sqrt{9} \approx 3.25$" reads like a
+result.
+
+The second mistake is quieter: adding relative errors without their sensitivities. In the
+power budget above, $2\%$ and $1\%$ give $5\%$, not $3\%$, and the difference is entirely
+the factor of $2$ carried by the square.
+
+## Where it stops
+
+The error formula needs $f''$ to exist and be bounded on the interval between $a$ and
+$x$. When it is not, the second-order estimate says nothing, even though the tangent line
+still exists.
+
+$\sqrt{x}$ near $a = 0$ is the standing example. The function is defined at $0$ and
+continuous there, but $f'(x) = 1/(2\sqrt{x})$ grows without bound as $x \to 0^{+}$, so
+there is no tangent line to linearise along and no finite $f''$ to bound the error with.
+Any tolerance analysis of a square root near zero is invalid, which matters wherever an
+instrument computes an RMS value of something that may be nearly silent.
+
+More generally, the whole apparatus is local. The sensitivity $xf'(x)/f(x)$ is evaluated
+at the operating point, and a device moved to a different operating point has different
+sensitivities. A budget computed at one bias current is not a budget at another.
+""",
+                },
+            ],
+            "derive": [
+                {
+                    "title": "The tangent line, the error it leaves, and a tolerance budget",
+                    "minutes": 12,
+                    "vars": ["x", "a", "h", "k", "V", "R", "P"],
+                    "brief": r"""
+The linearisation of $f$ at $a$ is $L(x) = f(a) + f'(a)(x-a)$, and the error it leaves is
+$\frac{f''(\xi)}{2}(x-a)^{2}$ for some $\xi$ between the two points — Taylor's remainder,
+which is Module 8's mean value theorem one order up.
+
+Steps 1 to 3 take one function all the way through, prediction and error together. Write
+fractions as `\frac{a}{b}`, and give decimals plainly where a decimal is asked for.
+""",
+                    "steps": [
+                        {
+                            "prompt": "Linearise $f(x) = \\sqrt{x}$ at $a = 4$, where $f(4) = 2$ and $f'(4) = \\dfrac{1}{2\\sqrt{4}} = \\dfrac{1}{4}$. Write $L(x)$.",
+                            "answer": "2+\\frac{x-4}{4}",
+                            "placeholder": "a value plus a slope times a displacement",
+                            "hint": "$L(x) = f(a) + f'(a)(x-a)$ with $a = 4$.",
+                            "deconstruct": [
+                                "$f(4) = 2$ is the constant term.",
+                                "$f'(4) = \\dfrac{1}{4}$ is the slope.",
+                                "The displacement from the base point is $x-4$, so $L(x) = 2 + \\dfrac{x-4}{4}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Evaluate that at $x = 4.02$ to estimate $\\sqrt{4.02}$. Write the number as a decimal.",
+                            "answer": "2.005",
+                            "hint": "The displacement is $0.02$, and a quarter of $0.02$ is $0.005$.",
+                        },
+                        {
+                            "prompt": "Now predict the error before comparing. With $f''(x) = -\\dfrac{1}{4}x^{-3/2}$ we have $f''(4) = -\\dfrac{1}{32}$, and the remainder is $\\dfrac{|f''(4)|}{2}(0.02)^{2}$. Write that size as an exact fraction.",
+                            "answer": "\\frac{1}{160000}",
+                            "placeholder": "one over a large whole number",
+                            "hint": "$\\dfrac{1/32}{2} = \\dfrac{1}{64}$, and $(0.02)^{2} = \\dfrac{1}{2500}$.",
+                            "deconstruct": [
+                                "$\\dfrac{|f''(4)|}{2} = \\dfrac{1}{64}$.",
+                                "$(0.02)^{2} = 0.0004 = \\dfrac{1}{2500}$.",
+                                "Multiplying, $\\dfrac{1}{64}\\cdot\\dfrac{1}{2500} = \\dfrac{1}{160000} = 6.25\\times 10^{-6}$ — and the measured error is $6.23\\times 10^{-6}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "The general small-quantity approximation. Linearise $f(x) = (1+x)^{k}$ at $x = 0$, where $f(0) = 1$ and $f'(x) = k(1+x)^{k-1}$. Write $L(x)$.",
+                            "answer": "1+kx",
+                            "placeholder": "a constant plus a term in x",
+                            "hint": "$f'(0) = k$, so the tangent at the origin has slope $k$.",
+                            "deconstruct": [
+                                "$f(0) = 1^{k} = 1$.",
+                                "$f'(0) = k\\cdot 1^{k-1} = k$.",
+                                "So $L(x) = 1 + kx$ — the one approximation the other three on the list are special cases of.",
+                            ],
+                        },
+                        {
+                            "prompt": "Use that with the exponent that turns it into the divider rule: take $k = -1$ to approximate $\\dfrac{1}{1+x}$ for small $x$. Write the approximation.",
+                            "answer": "1-x",
+                            "hint": "Put $k = -1$ into the previous answer.",
+                        },
+                        {
+                            "prompt": "A tolerance budget. For $P = V^{2}/R$ the sensitivities are $+2$ for $V$ and $-1$ for $R$, so $\\dfrac{dP}{P} = 2\\dfrac{dV}{V} - \\dfrac{dR}{R}$. Take the worst case, $V$ high by $2\\%$ and $R$ low by $1\\%$. Write the resulting relative change in $P$ as a decimal fraction.",
+                            "answer": "0.05",
+                            "placeholder": "a decimal, not a percentage sign",
+                            "hint": "$2(0.02) - (-0.01)$, and both contributions push the same way.",
+                            "deconstruct": [
+                                "$dV/V = +0.02$, so the first term is $2(0.02) = 0.04$.",
+                                "$dR/R = -0.01$, so the second term is $-(-0.01) = +0.01$.",
+                                "The two add rather than cancel: $0.04 + 0.01 = 0.05$, a $5\\%$ swing from tolerances of $2\\%$ and $1\\%$.",
+                            ],
+                        },
+                    ],
+                    "closing": r"""
+Step 3 is the one to keep. The error was predicted at $6.25\times 10^{-6}$ before the
+true value was looked at, and the true error is $6.23\times 10^{-6}$ — so the
+second-order term is not a vague bound but the actual size of what the tangent line
+misses. That is what makes a linearisation usable in engineering rather than merely
+suggestive: you can state in advance how far you are allowed to walk.
+
+Step 6 is worth checking against exact arithmetic, since the whole method is an
+approximation. The linear estimate says $5\%$; the exact value is
+$\frac{1.02^{2}}{0.99} - 1 = 5.09\%$. The missing $0.09$ is second order in the
+tolerances, which is why a linear budget is trustworthy at $1$–$2\%$ and starts to drift
+somewhere above $10\%$.
+
+Where the working stops: every error statement above needs $f''$ to exist and stay bounded
+between the base point and the point of use. At $a = 0$ the square root has neither a
+finite $f'$ nor a finite $f''$ — its tangent is vertical — so no linearisation exists
+there at all, and a tolerance analysis of $\sqrt{x}$ near zero is not merely inaccurate
+but undefined. The second limit is distance: the same tangent that was right to six parts
+in a million at $x = 4.02$ returns $3.25$ for $\sqrt{9}$, an error of $8.3\%$, because the
+remainder grows with the *square* of the step and the step grew by a factor of $250$.
+""",
+                },
             ],
             "quiz": {
                 "title": "How far a tangent line can be trusted",
