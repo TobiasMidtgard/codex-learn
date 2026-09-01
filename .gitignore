@@ -6,3 +6,5 @@ __pycache__/
 # the runner writes its own stdout here; it is a session artifact, not source
 gauntlet.out
 .gauntlet-probe
+gauntlet-supervisor.log
+gauntlet-run1-blocked.out
