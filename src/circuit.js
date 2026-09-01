@@ -690,18 +690,59 @@ function parseEng(text, fallback) {
    Floors are set far below anything a lesson uses — a femtofarad, a picohenry, a
    micro-ohm — because the job here is to reject the impossible, not to police the
    unusual. `SW` is absent: its resistance comes from its state, not from the box, and
-   it has no value field on the panel at all. */
+   it has no value field on the panel at all.
+   FIVE of them are not at that micro-ohm, and the reason is the whole point of the
+   table. A floor is only honest if a value AT it reaches the solver unchanged; below
+   that the box accepts a number the stamp then silently replaces, which is the exact
+   defect — the panel reading one thing and the solver using another — that this table
+   was minted to close. The five kinds whose resistance is resolved rather than typed
+   each carry a guard of their own: ohmsOf holds a lamp at 1 mΩ and a meter at 1 µΩ,
+   potSplit holds a track at 1 mΩ per half, and Sensors holds both R10 and R25 at 1 Ω.
+   At 1e-6 the table was a million times under Sensors' guard, so an LDR set to a
+   micro-ohm was accepted, drawn, saved and reloaded at a micro-ohm and stamped at one
+   ohm. Each of the five now sits at the number its own resolver will actually honour,
+   and verify_circuit_model.mjs resolves every one of them at the floor and requires the
+   value back unchanged. */
 const VALUE_FLOOR = {
-  R: 1e-6, LDR: 1e-6, NTC: 1e-6, POT: 1e-6, LAMP: 1e-6, METER: 1e-9,
+  R: 1e-6, LDR: 1, NTC: 1, POT: 1e-2, LAMP: 1e-3, METER: 1e-6,
   C: 1e-15, L: 1e-12,
   D: 1e-30, LED: 1e-30, NPN: 1e-30, PNP: 1e-30,
   NMOS: 1e-12, PMOS: 1e-12, OPAMP: 1,
 };
+/* And the other end of the same field, which the floor above never had.
+   The floor exists because a resistance of zero was stamped as a 1 pΩ short while the
+   panel read 0 Ω. The ceiling exists for the mirror-image reason: what reaches a stamp
+   is not the value but something BUILT from it, and a capacitor's companion conductance
+   is C divided by the time step — so it leaves double precision at a capacitance the
+   value box was perfectly happy with, and the answer comes back as 900 samples of NaN.
+   Set, like the floors, far above anything a lesson uses: the largest of each kind in
+   the whole catalogue is 9 MΩ, 20 F, 15 H, 230 V and 25 A, so every one of these has
+   five orders of headroom or more. The job is to reject the impossible, not to police
+   the unusual, and verify_circuit_model.mjs checks both directions against the
+   catalogue so a ceiling that condemned working content would fail rather than ship.
+   V and I are here and NOT in the floor table, which is not an inconsistency: a source
+   carries a sign that means direction and half the superposition material depends on
+   being able to write it, while none of it depends on being able to write 1e308 V. */
+const VALUE_CEIL = {
+  /* LDR at a gigohm and not a terohm, because Sensors.ldr caps its own result there and
+     a ceiling above a resolver's own cap is the floor defect wearing the other hat — the
+     box would accept a terohm and the stamp would use a gigohm. Found by the gate at the
+     first run of the check written for the floor, which is the argument for writing the
+     check as a rule rather than as a list of the five kinds already known to be wrong. */
+  R: 1e12, LDR: 1e9, NTC: 1e12, POT: 1e12, LAMP: 1e12, METER: 1e12,
+  C: 1e6, L: 1e6,
+  D: 1e3, LED: 1e3, NPN: 1e3, PNP: 1e3,
+  NMOS: 1e6, PMOS: 1e6, OPAMP: 1e12,
+  V: 1e9, I: 1e9,
+};
 function clampValue(kind, v, fallback) {
   if (!isFinite(v)) return fallback;
   const floor = VALUE_FLOOR[kind];
-  if (floor === undefined) return v;
-  return v < floor ? floor : v;
+  if (floor !== undefined && v < floor) return floor;
+  const ceil = VALUE_CEIL[kind];
+  /* on the SIZE, so a −230 V supply is still a −230 V supply */
+  if (ceil !== undefined && Math.abs(v) > ceil) return v < 0 ? -ceil : ceil;
+  return v;
 }
 
 /* Quarter turns clockwise, normalised. Module level rather than tucked inside the
@@ -1362,6 +1403,19 @@ const MNA = (function () {
       'a diode straight across a voltage source, with no resistance anywhere in the loop, ' +
       'is the usual one.';
   }
+  /* The same failure with no device in the circuit to blame it on. A linear stamp can
+     overflow all by itself: a capacitor's companion conductance is C/h, and h is the
+     time step, so it runs out of double precision at a capacitance the value box was
+     perfectly happy to accept. Infinity in the matrix, Infinity minus Infinity out of
+     the elimination, and every node NaN. */
+  function overflowed(msg) {
+    return 'The arithmetic overflowed at ' + msg.where + ' and the answer came back as ' +
+      'not a number. Some value in this circuit is large enough that the numbers built ' +
+      'from it are past what double precision can hold — a capacitance or an inductance ' +
+      'is the usual one, because the companion model divides it by the time step and so ' +
+      'runs out of range long before the value itself does. Rather than hand you a plot ' +
+      'of nothing, this is the answer: there is none at that value.';
+  }
 
   /* One solve if there is nothing to iterate on, Newton if there is. `stamp` lays down
      whatever is linear about this particular analysis — DC, or one backward-Euler step —
@@ -1375,7 +1429,19 @@ const MNA = (function () {
       const A = Lin.zeros(f.n), b = rhs(f.n);
       stamp(A, b);
       const x = Lin.solve(A, b);
-      return x ? { x: x } : { error: msg.under };
+      if (!x) return { error: msg.under };
+      /* The same check the Newton branch below has always had, on the branch that never
+         did. Lin.solve rejects a pivot too small to divide by; it has nothing to say
+         about one so large that dividing by it produces NaN — `best < 1e-14` is false
+         when best is NaN — so a singular circuit was caught and an overflowing one went
+         straight through the test. Every one of the 376 published schematics is linear
+         and takes this branch; not one of them contains a device to iterate on. So the
+         guarded path was the one nobody is on and the unguarded path was all of them: a
+         capacitance of 1e308 F came back as 900 non-finite samples with no error at all,
+         the panel announced a finished run over 2 nodes, and the node the supply holds
+         up still drew a convincing flat line beside a trace that was not there. */
+      if (!allFinite(x)) return { error: overflowed(msg) };
+      return { x: x };
     }
 
     let prev = guess || null, before = null;
@@ -1454,13 +1520,18 @@ const MNA = (function () {
     return net.__bias;
   }
 
-  /* ---- AC, one frequency ---- */
-  function acAt(net, w) {
+  /* ---- AC, one frequency ----
+   *
+   * Two entry points to one solve. acSolve says WHY it could not answer, because a
+   * sweep of sixty frequencies has to put the reason on the screen; acAt keeps the
+   * shape this file has always exposed — a vector, or null — because catalogue checks
+   * call it directly and a check is not a place to report a cause. */
+  function acSolve(net, w) {
     const devs = devicesOf(net);
     let tangents = null;
     if (devs.length) {
       const op = bias(net);
-      if (op.error) return null;
+      if (op.error) return { error: 'nobias' };
       tangents = op.tangents;
     }
     const f = frame(net, 'ac');
@@ -1493,15 +1564,41 @@ const MNA = (function () {
     });
 
     const x = Lin.solve(A, b);
-    if (!x) return null;
+    /* Two words rather than two sentences: the caller knows the frequency and this does
+       not, and a message with the frequency missing out of it is the one thing worse
+       than no message. */
+    if (!x) return { error: 'singular' };
+    /* An admittance is wC or 1/(wL), so an enormous reactance overflows the stamp
+       rather than the value — and at DC the linear path's own check does not run here,
+       because an AC point is one solve and not an iteration. Same rule, said again in
+       the one place that does not go through iterate(). */
+    if (!allFinite(x)) return { error: 'overflow' };
     const v = [[0, 0]];
     for (let i = 0; i < net.nodeCount - 1; i++) v.push(x[i]);
-    return v;
+    return { v: v };
+  }
+  function acAt(net, w) {
+    const r = acSolve(net, w);
+    return r.error ? null : r.v;
   }
 
   function ac(net, f1, f2, points) {
     const bad = problems(net);
     if (bad) return { error: bad };
+    /* Two boxes clamped one at a time are not a range. From and To are held apart from
+       zero and from each other on the panel, and never against ONE ANOTHER, so a sweep
+       from 1 kHz to 1 kHz ran 220 points at one frequency and handed the plot a
+       zero-width logarithmic axis — on which every gridline, every tick label and the
+       whole curve map to NaN and are silently not drawn, under a status line saying the
+       sweep had finished. A decade is not demanded; an interval is. */
+    const shown = function (v) { return isFinite(v) ? fmtEng(v, 'Hz') : 'not a number'; };
+    if (!(isFinite(f1) && isFinite(f2) && f1 > 0 && f2 > f1)) {
+      return { error: 'That is not a frequency range. A sweep runs from a lower frequency ' +
+        'to a higher one and both ends have to be above zero, because the axis is ' +
+        'logarithmic and there is no room on it between a frequency and itself. From ' +
+        'reads ' + shown(f1) + ' and To reads ' + shown(f2) + '.' };
+    }
+    if (!(points >= 2)) return { error: 'A sweep needs at least two points.' };
     /* A microcontroller counts as a source, because its Vcc pin and any driven output
        are exactly that. Leaving it out would refuse a sweep of the RC hanging off a
        PWM pin, which is the one frequency response anybody asks a board for. */
@@ -1523,9 +1620,16 @@ const MNA = (function () {
     const out = [];
     for (let i = 0; i < points; i++) {
       const fq = Math.pow(10, Math.log10(f1) + i / (points - 1) * (Math.log10(f2) - Math.log10(f1)));
-      const v = acAt(net, 2 * Math.PI * fq);
-      if (!v) return { error: 'The circuit is under-determined at ' + fmtEng(fq, 'Hz') + '.' };
-      out.push({ f: fq, v: v });
+      const r = acSolve(net, 2 * Math.PI * fq);
+      if (r.error === 'overflow') {
+        return { error: 'The arithmetic overflowed at ' + fmtEng(fq, 'Hz') + ' and the ' +
+          'answer came back as not a number. An admittance is wC or 1/(wL), so it is the ' +
+          'frequency and the reactance TOGETHER that run out of double precision — which ' +
+          'is why a sweep can overflow at its top end and be perfectly well behaved at ' +
+          'its bottom one. Rather than draw a plot with a hole in it, this is the answer.' };
+      }
+      if (r.error) return { error: 'The circuit is under-determined at ' + fmtEng(fq, 'Hz') + '.' };
+      out.push({ f: fq, v: r.v });
     }
     return { sweep: out };
   }
@@ -2144,7 +2248,13 @@ function createCircuit(root, opts) {
           '<div class="ckt-out" data-out role="region" aria-label="Analysis result"></div>' +
         '</div>' +
       '</div>' +
-      '<div class="ckt-plot" data-plot hidden><canvas></canvas></div>' +
+      /* Cycle 2 named every sandbox canvas and cycle 6 named the schematic and the
+         read-only diagram. This one — the whole output of a sweep or a transient — was
+         still a bare canvas, which a screen reader announces as nothing at all. The name
+         is rewritten by paintPlot out of the same arrays the curve is drawn from, so it
+         cannot describe a plot other than the one on the screen. */
+      '<div class="ckt-plot" data-plot hidden><canvas role="img" ' +
+        'aria-label="The analysis plot. Press Solve to draw one."></canvas></div>' +
     '</div>';
   }
 
@@ -3283,8 +3393,18 @@ function createCircuit(root, opts) {
       changed();
       paintPart();
       if (p.value !== want) {
-        announce('A ' + (PART_KINDS[p.kind].name || p.kind).toLowerCase() +
-          ' has to be more than zero, so this is now ' + fmtEng(p.value, k.unit) + '.');
+        const who = 'A ' + (PART_KINDS[p.kind].name || p.kind).toLowerCase() + ' ';
+        /* Which end it hit, and why that end is there. "Out of range" would be a
+           correction the learner cannot learn anything from — the point of saying it
+           out loud at all is that the reason is different at each end: nothing is a
+           resistance at zero, and nothing survives being divided by a time step at
+           1e308. Asked of the CEILING and not of the two magnitudes, because −5 Ω is
+           larger than the floor it lands on and would have been told it was too big. */
+        const ceil = VALUE_CEIL[p.kind];
+        announce(ceil !== undefined && Math.abs(want) > ceil
+          ? who + 'that large is past what the arithmetic can hold once the solver ' +
+            'divides it by a time step, so this is now ' + fmtEng(p.value, k.unit) + '.'
+          : who + 'has to be more than zero, so this is now ' + fmtEng(p.value, k.unit) + '.');
       }
     });
     partPanel.querySelectorAll('[data-x]').forEach(function (el) {
@@ -4144,16 +4264,38 @@ function createCircuit(root, opts) {
     paintPart();
   });
 
+  /* The three boxes on the analysis panel were each held above a floor and none of them
+     had a ceiling, which is the value box's defect in the field next door: a sweep to
+     1e308 Hz overflows the admittance stamp, and a run of 1e308 seconds is a step of
+     1e305 seconds. Held at both ends now, and — like the value box, and for cycle 6's
+     reason — a number that was corrected says so instead of quietly becoming a
+     different number in a box the learner is no longer looking at.
+     The three floors are the ones this panel already had — 0.01 Hz, 1 Hz and 1 ns —
+     kept to the number, because a floor that moved would be a behaviour change this
+     cycle was not asked for and the defect was never at that end. */
+  const AN_RANGE = { f1: [0.01, 1e12, 'Hz'], f2: [1, 1e12, 'Hz'], tstop: [1e-9, 1e6, 's'] };
+  function anField(el, key, what) {
+    el.addEventListener('change', function (e) {
+      const lim = AN_RANGE[key];
+      const want = parseEng(e.target.value, analysis[key]);
+      analysis[key] = Math.min(Math.max(isFinite(want) ? want : analysis[key], lim[0]), lim[1]);
+      e.target.value = fmtEng(analysis[key], lim[2]);
+      if (analysis[key] !== want) {
+        announce(what + ' has to be between ' + fmtEng(lim[0], lim[2]) + ' and ' +
+          fmtEng(lim[1], lim[2]) + ', so it is now ' + fmtEng(analysis[key], lim[2]) + '.');
+      }
+    });
+  }
   function paintOpts() {
     if (analysis.mode === 'ac') {
       optsEl.innerHTML =
         '<label class="ckt-f"><span>From</span><input data-f1 value="' + fmtEng(analysis.f1, 'Hz') + '"></label>' +
         '<label class="ckt-f"><span>To</span><input data-f2 value="' + fmtEng(analysis.f2, 'Hz') + '"></label>';
-      optsEl.querySelector('[data-f1]').addEventListener('change', function (e) { analysis.f1 = Math.max(0.01, parseEng(e.target.value, analysis.f1)); });
-      optsEl.querySelector('[data-f2]').addEventListener('change', function (e) { analysis.f2 = Math.max(1, parseEng(e.target.value, analysis.f2)); });
+      anField(optsEl.querySelector('[data-f1]'), 'f1', 'The bottom of the sweep');
+      anField(optsEl.querySelector('[data-f2]'), 'f2', 'The top of the sweep');
     } else if (analysis.mode === 'tran') {
       optsEl.innerHTML = '<label class="ckt-f"><span>Stop after</span><input data-ts value="' + fmtEng(analysis.tstop, 's') + '"></label>';
-      optsEl.querySelector('[data-ts]').addEventListener('change', function (e) { analysis.tstop = Math.max(1e-9, parseEng(e.target.value, analysis.tstop)); });
+      anField(optsEl.querySelector('[data-ts]'), 'tstop', 'The length of the run');
     } else {
       optsEl.innerHTML = '<p class="ckt-hint">Solves the DC operating point and writes each node voltage onto the schematic.</p>';
     }
@@ -4211,6 +4353,13 @@ function createCircuit(root, opts) {
           'node 1 at ' + fmtEng(r.v[1], 'V') + '. The full table is in the analysis result panel.');
     } else {
       plotWrap.hidden = false;
+      /* The node the learner picked may not exist any more — they chose node 5, edited
+         the circuit down to three nodes and solved again. paintPlot has always clamped
+         for its own use, so the plot quietly fell back to the highest node there is
+         while the picker showed NO button pressed at all, because none of them equalled
+         the number still sitting in analysis.node. Clamped where it is stored, so the
+         two agree by construction rather than by both happening to do the same sum. */
+      analysis.node = Math.min(Math.max(analysis.node, 1), Math.max(1, net.nodeCount - 1));
       const picks = [];
       for (let n = 1; n < net.nodeCount; n++) {
         picks.push('<button data-node="' + n + '"' + (n === analysis.node ? ' class="active"' : '') +
@@ -4275,11 +4424,20 @@ function createCircuit(root, opts) {
 
   function paintPlot() {
     if (!result || typeof Sandbox === 'undefined') return;
-    const box = plotCv.parentElement.getBoundingClientRect();
+    /* The canvas's OWN box, not its parent's. .ckt-plot carries 8px of padding, and
+       under box-sizing:border-box a parent's rect includes it — so measuring the parent
+       made the canvas 16px wider than the space it had, at every viewport size, and
+       .ckt's overflow:hidden clipped the difference off the right-hand end of every
+       trace and half the axis label with it. The stylesheet stretches this canvas to
+       its box (width:100%, min-width:320px), so its own rect IS the content box.
+       And nothing sets style.width here for the same reason: CSS owns the layout, this
+       owns the backing store, or the next resize would measure the last one's answer
+       and the canvas could never shrink again. */
+    const box = plotCv.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.max(320, Math.round(box.width)), h = 190;
     plotCv.width = w * dpr; plotCv.height = h * dpr;
-    plotCv.style.width = w + 'px'; plotCv.style.height = h + 'px';
+    plotCv.style.height = h + 'px';
     const c = plotCv.getContext('2d');
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     const n = Math.min(analysis.node, result.net.nodeCount - 1);
@@ -4297,6 +4455,14 @@ function createCircuit(root, opts) {
       f.line(pts, f.P.accent, 2);
       f.text('dB at node ' + n, f.x0 + 6, f.y0 + 13, f.P.faint);
       f.text('Hz', f.x1 - 6, f.y1 + 18, f.P.faint, 'right');
+      /* What the curve does, in the order it does it: where it starts, where it ends,
+         and its largest value — which for a filter is the pass band and for a resonance
+         is the peak, and is the one number a reader cannot get from the ends alone. */
+      const top = ys.indexOf(Math.max.apply(null, ys));
+      describe('Frequency response at node ' + n + ', ' + pts.length + ' points from ' +
+        fmtEng(pts[0][0], 'Hz') + ' to ' + fmtEng(pts[pts.length - 1][0], 'Hz') + '. ' +
+        ys[0].toFixed(1) + ' dB at the bottom, ' + ys[ys.length - 1].toFixed(1) +
+        ' dB at the top, highest ' + ys[top].toFixed(1) + ' dB at ' + fmtEng(pts[top][0], 'Hz') + '.');
     } else {
       const pts = result.t.map(function (t, i) { return [t, result.v[i][n]]; });
       const ys = pts.map(function (p) { return p[1]; });
@@ -4310,8 +4476,16 @@ function createCircuit(root, opts) {
       f.line(pts, f.P.accent, 2);
       f.text('V at node ' + n, f.x0 + 6, f.y0 + 13, f.P.faint);
       f.text('seconds', f.x1 - 6, f.y1 + 18, f.P.faint, 'right');
+      describe('Transient at node ' + n + ', ' + pts.length + ' samples over ' +
+        fmtEng(pts[pts.length - 1][0], 's') + '. Starts at ' + fmtEng(ys[0], 'V') +
+        ', ends at ' + fmtEng(ys[ys.length - 1], 'V') + ', between ' + fmtEng(lo, 'V') +
+        ' and ' + fmtEng(hi, 'V') + '.');
     }
   }
+  /* The plot's accessible name, rewritten on every repaint. Not a live region: it is a
+     picture, and a picture that announced itself on every frame of a dragged slider
+     would be unusable. Someone reading the plot goes to it and it says what it shows. */
+  function describe(text) { if (plotCv) plotCv.setAttribute('aria-label', text); }
 
   function changed() {
     /* An editor that has been disposed must never reach onChange. Its `cur` is a model

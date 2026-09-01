@@ -2084,3 +2084,333 @@ all 15 `Module N` references in the new prose resolved against the real module t
 the payload window verified at 0 orphaned, 0 missing.
 
 ---
+
+## Cycle 8 — TRACK 2: Interactive Models & Visualisers
+
+**Target: the schematic editor's numerical core — `MNA` in `src/circuit.js`, the panel
+that feeds it and the plot that draws its answer.** One subsystem, and the one this
+track was left. Cycle 2 took the sandbox half of the canvas work and wrote down why it
+stopped there. Cycle 6 took the editor's *input, focus and lifetime* layer and said in
+its own gate's header that it "does not judge the drawing". So the solver has two gates
+already and neither of them asks this track's question: `verify_circuits.mjs` asks
+whether each exercise's reference drawing passes its own checks, `verify_numeric.mjs`
+whether a stated answer matches the solver, and both feed it the values an author chose.
+Nobody had ever fed it **zero, negative, enormous and identical values, resized it
+mid-interaction, or clicked faster than it could re-solve** — which is the persona brief
+for this track, almost word for word.
+
+### Baseline, captured before any edit
+
+```
+80 circuit exercises / 340 checks · 527 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1170 derivation steps across 46 courses
+1366 questions in 252 quiz units · 160 per-option explanations
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui: 78 driven keys and gestures · 10 things said · 15 floored kinds
+theme: 14 exemptions · 58 contrast surfaces in both themes
+build: 3 parts / 111 keys · 32/32 + 30/30 · 13 visualisers · 3 tune models · 15 symbols ·
+       62 payloads · inlined 13836 KB · shell 1141 KB
+```
+
+### The attacks
+
+**3. Simulation Auditor** — taken first, because this is its track and its brief.
+
+- **An answer of NaN, reported as a success — and on the branch every published
+  schematic is on.** `src/circuit.js` opens by promising that *"an iteration that does
+  not settle says so and returns no numbers at all"*. The Newton path keeps that promise:
+  `allFinite()` guards every pass, because a device driven far enough produces a
+  non-finite guess routinely. The **linear** path never had the check. The mechanism is
+  one line in `Lin.solve`: the pivot test is `if (best < 1e-14) return null`, and
+  `NaN < 1e-14` is **false**, so a matrix that has overflowed sails straight through the
+  test written to catch a matrix that is degenerate. Measured: a capacitance of 1e308 F
+  gives a transient of **900 non-finite samples out of 901** with no error at all, and an
+  AC sweep of **220 non-finite points out of 220**; an inductance the same; a current
+  source at 1e308 A puts **2 of 4 numbers** non-finite in a *DC operating point*. In every
+  case the panel announced "Transient run finished over 2 nodes" and the plot drew
+  nothing. Worse than nothing: the node the supply holds up still drew a **convincing
+  flat 5 V line**, because its value comes out of the voltage source's own row, so the
+  learner sees a plausible trace, switches to the other node, and finds an empty box with
+  no explanation anywhere.
+  The guarded path turned out to be the one **nobody** is on. Counted rather than
+  assumed: of 80 build exercises and 376 published schematics, **zero** contain a diode,
+  an LED, a bipolar, a MOSFET or an op-amp. Every published schematic in the repository
+  is linear and takes the unguarded branch.
+- **A clamp with one end.** Cycle 6 gave the value box a floor, because a resistance of
+  zero was being stamped as a 1 pΩ short while the panel read 0 Ω. It never gained a
+  ceiling — `clampValue` was `return v < floor ? floor : v` — so the other end of the same
+  field was wide open. `parseEng('1e308')` returns 1e308, `clampValue` passes it through,
+  and it is drawn, written into `P.build[l.id]` and reloaded. The stamp is not the value
+  but something *built* from it: a capacitor's companion conductance is `C/h`, so it
+  leaves double precision at a capacitance the box was perfectly happy with.
+- **A sweep from a frequency to itself.** The From and To boxes are clamped one at a time
+  (`Math.max(0.01, …)`, `Math.max(1, …)`) and **never against each other**. From = To ran
+  220 points at one frequency and handed the plot `xRange: [1000, 1000]`, on which
+  `Sandbox.frame`'s `fx` divides by `log10(x1) − log10(x0)` = 0: every gridline, every
+  tick label and the whole curve map to NaN and are silently not drawn. Measured through
+  the real editor: **18 non-finite coordinates**, first `moveTo(NaN, 12)`, under a status
+  line saying the sweep had finished. Six more degenerate ranges reach the same place —
+  To below From, From at zero, a negative From, To at infinity, and a From that did not
+  parse.
+- **Five floors that are not the floor their own stamp needs.** Cycle 6's table is
+  described as "checked against the floor its own stamp needs", and for `R`, `C` and `L`
+  it is. For the five kinds whose resistance is *resolved* rather than typed it is not:
+  `ohmsOf` holds a lamp at 1 mΩ and a meter at 1 µΩ, `potSplit` holds a track at 1 mΩ per
+  half, and `Sensors` holds both `R10` and `R25` at 1 Ω — while the table let all five
+  down to a micro-ohm. Measured at each declared floor: an **LDR and an NTC are stamped
+  at 10⁶ times** the number on the panel, a **POT at 2×10³**, a **LAMP and a METER at
+  10³**. That is precisely the defect the floor was minted to close — the panel reading
+  one number and the solver using another — surviving in a third of the kinds the table
+  was written for.
+- **Checked and found sound, recorded so the next cycle does not re-derive them:**
+  `perFrame`'s coalescing is real — 60 wiper events fired inside one frame queue exactly
+  **one** re-solve, and a solve queued before `dispose()` does not run afterwards, so it
+  cannot reach `onChange` and write the learner's saved circuit. The cost it is
+  protecting is small anyway: the largest circuit in the catalogue (EMAG510/M1, 18 parts,
+  6 nodes) takes 0.44 ms for a DC point, 2.6 ms for a 220-point sweep and 17.0 ms for a
+  901-step transient, so even the worst case is inside one frame. `MNA.tran`'s
+  `MAX_STEPS` coarsening is unreachable from the editor, which always asks for
+  `tstop/900` and therefore always gets 900 steps. The `ResizeObserver` observes
+  `.ckt-canvas`, not `.ckt-plot`, so the plot's own sizing cannot feed back into it.
+  `modelNote`'s stated models agree with the code exactly — the LDR's `R = R₁₀·(10/E)^γ`,
+  the NTC's `R = R₂₅·exp(B·(1/T − 1/298.15))` with T in kelvin — and both quote the
+  computed resistance rather than the formula's value, so neither can drift. Only one
+  catalogue check calls the solver directly (an `MNA.dc` in EE231) and **nothing** calls
+  `MNA.ac`, so changing `acAt`'s failure path could not reach graded content.
+
+**4. UX & Accessibility Hardener.**
+
+- **The plot is 16px wider than its box, at every viewport size.** `paintPlot` measured
+  `plotCv.parentElement.getBoundingClientRect()`, and under the global
+  `*{box-sizing:border-box}` a parent's rect **includes** `.ckt-plot`'s 8px of padding on
+  each side. So the canvas was set to the padded width and then set to that same width in
+  CSS pixels, and `.ckt{overflow:hidden}` clipped the difference off the right-hand end of
+  every trace and the axis label with it. Measured at five widths: 1200 asked of 1184,
+  900 of 884, 640 of 624, **375 of 359**.
+- **The plot is the only canvas left in the app with no accessible name.** Cycle 2 gave
+  every sandbox canvas `role="img"` and a label; cycle 6 gave the schematic canvas a role
+  and a name and gave a question's read-only diagram both. The plot — the entire output of
+  a frequency sweep or a transient run, and the only place those answers exist — was a
+  bare `<canvas>`, which a screen reader announces as nothing at all.
+- **The picker and the plot disagreed about which node was on screen.** `paintPlot`
+  clamps with `Math.min(analysis.node, nodeCount − 1)` for its own use; the buttons compare
+  `n === analysis.node` un-clamped. Pick node 3, edit the circuit down to two nodes, solve
+  again: the plot silently falls back to node 2 and labels itself "V at node 2", while
+  **none of the two buttons is `aria-pressed="true"`**. Driven through the real editor with
+  the keyboard cycle 6 built, and that is the number the gate reports: 0 of 2.
+- **Two of the three analysis boxes corrected silently.** Typing 0 into From made it 0.01
+  with nothing said, which is exactly the correction-nobody-learns-from that cycle 6
+  minted the value box's announcement for.
+
+**1. Senior Educator** and **2. Assessment Inquisitor** have no prose and no graded
+question in a solver, so both were pointed at the thing in scope they can judge — whether
+what the panel says **explains** or merely **reports**. The existing failure messages set
+the standard (`stalled` names the node still moving and by how much; `blewUp` names the
+diode across a supply). The three new ones are written to it: the overflow message says
+*why* a capacitance overflows before its own value does (the companion model divides it by
+the time step), the AC one says why a sweep can overflow at its top end and be well behaved
+at its bottom (an admittance is `wC`, so it is the frequency and the reactance *together*),
+and the range refusal says why a logarithmic axis has no room between a frequency and
+itself. The value box's correction now says **which end** was hit and why that end is
+there, rather than "out of range".
+
+### What changed
+
+**The solver vouches for every number it hands back.** `iterate`'s linear branch gains the
+`allFinite` check the Newton branch has always had, and `acSolve` — extracted from `acAt`
+so a sweep can report a cause while `acAt` keeps the vector-or-null shape catalogue checks
+call — gains it too. Three exits, one rule: an analysis either refuses, or every number in
+what it returns is one a plot can draw. There is no third answer, and "success, with NaN in
+it" was the third answer for as long as the linear path had no check.
+
+**`VALUE_CEIL`, and five floors moved onto their own resolvers.** Seventeen kinds now have
+a ceiling, set far above anything a lesson uses — the largest of each kind in the whole
+catalogue is 9 MΩ, 20 F, 15 H, 230 V and 25 A, so every ceiling has five orders of headroom
+or more. `V` and `I` are in the ceiling table and deliberately not in the floor one: a
+source's sign is its direction and half the superposition material depends on being able
+to write it, while none of it depends on being able to write 1e308 V — so the ceiling is on
+the **size** and a −230 V supply is still a −230 V supply. The five resolved kinds move to
+the number their own resolver will honour: LDR and NTC to 1 Ω, POT to 10 mΩ, LAMP to 1 mΩ,
+METER to 1 µΩ. None of the five appears anywhere in the catalogue, so no published content
+could move.
+
+**The analysis panel is held at both ends and says when it corrects.** One table for the
+three boxes, with the floors kept to the number they already were — 0.01 Hz, 1 Hz and 1 ns
+— because a floor that moved would be a behaviour change this cycle was not asked for, and
+the defect was never at that end.
+
+**A range that is not a range is refused rather than drawn.** `MNA.ac` requires two finite,
+positive, *different* frequencies in increasing order, and at least two points, and says
+which box is wrong when it refuses.
+
+**The plot.** Measured from its own box rather than its parent's, with the stylesheet
+stretching it (`width:100%; min-width:320px`) and JS setting only the backing store — CSS
+owns the layout or the next resize measures the last one's answer and the canvas can never
+shrink again. `role="img"` and a name rewritten on every repaint out of the same arrays the
+curve is drawn from: *"Frequency response at node 2, 220 points from 10 Hz to 1 MHz. −0.0 dB
+at the bottom, −40.0 dB at the top, highest −0.0 dB at 10 Hz."* And `analysis.node` clamped
+where it is **stored**, so the picker and the plot agree by construction rather than by
+both happening to do the same sum.
+
+**A new gate — `tools/verify_circuit_model.mjs`.** Eight sections, and it drives the real
+editor rather than a copy of it:
+
+- **The extremes grid.** Eleven kinds × eleven values (0, −5, −1e12, 1e-30 … 1e308) × three
+  analyses, plus identical values — two equal supplies across one pair of nodes, a divider
+  of two equal halves — plus the Newton path at the same extremes, plus every span the
+  panel accepts at both ends. Every one must refuse or return only finite numbers.
+- **A range that is not a range**, seven ways, and three legitimate sweeps that must still
+  run, so the check could not have "fixed" the defect by refusing everything.
+- **The clamp at both ends**, over the union of the floor and ceiling tables so `V` and `I`
+  are not skipped, with the sign required to survive the ceiling — and the whole catalogue
+  swept against both, because a ceiling below what published content uses would condemn
+  working content, which is worse than the defect it was written to catch.
+- **The panel and the stamp agree**, asked of each resolver at its own reference point —
+  10 lx is the light an `R10` is quoted at, 25 °C the temperature an `R25` is — where the
+  model is the identity, so anything but the value back is a guard biting. Plus one end to
+  end: a lone resistor across 5 V must pass 5/R at the floor, at 1 kΩ and at the ceiling.
+- **The correction says which end.**
+- **What the plot actually draws**, on a recording canvas that objects to any non-finite
+  coordinate, in both modes, with the name required to describe the plot on the screen.
+- **The picker and the plot**, by building a circuit, choosing its highest node, deleting
+  two resistors **through the keyboard** and solving again.
+- **Resize**, at 1200, 900, 640, 375 and 320px, and the schematic at 343px.
+- **Faster than it can re-solve**: 60 wiper events inside one frame, and a re-solve queued
+  before dispose.
+- **The whole catalogue**, all three analyses: 376 published schematics, 355 of which reach
+  a DC operating point, as the regression net that would show a fix turning working content
+  into a refusal.
+
+The gate reads `.ckt-plot`'s padding and its canvas rule **out of the stylesheet** and
+refuses to run if either has changed shape, rather than modelling a browser's layout from a
+constant it invented. A gate enforcing a rule the source has abandoned is a failure this
+repository has already had once.
+
+**The DOM stub is now one file, `tools/dom_stub.mjs`.** Two gates drive the same editor,
+and two stubs would drift — which would mean two different editors being tested and neither
+of them the one that ships. Extracted from `verify_circuit_ui.mjs` unchanged; that gate's
+report is byte-identical before and after, checked by diff rather than by reading.
+
+### Verification beyond the gates
+
+**The gate was not trusted until it was seen to fail. Fourteen mutations, fourteen intended
+verdicts:** the linear path's check removed; the AC point's check removed; the range guard
+disabled; the value ceiling removed; a ceiling set below what the catalogue already uses;
+`paintPlot` measuring its parent and writing its own width again; the node clamp removed;
+`perFrame` giving every event its own solve; the dispose guard removed from the queued
+callback; the five sensor floors put back under their own resolvers; the plot's name
+suppressed; the correction choosing its end by comparing magnitudes; the stylesheet no
+longer stretching the canvas; and the unmodified tree as a control.
+
+Every defect above was measured before it was fixed and re-measured after: the 900 of 901,
+the 220 of 220, the 2 of 4, the 18 non-finite plot coordinates, the 16px at five widths, the
+10⁶/2×10³/10³ stamp factors, and the 60-events-to-one-solve. The catalogue's own value
+extremes were surveyed before a single ceiling was chosen, and the count of non-linear
+published schematics was taken rather than estimated — which is how the first draft of the
+comment saying "78 of the 80" became "every one of the 376", the defect being larger than
+first written.
+
+### Found in my own work, and fixed
+
+- **A correction that told the truth about the wrong end.** The value box's new sentence
+  chose between "has to be more than zero" and "too large for the arithmetic" by comparing
+  `|want|` with `|clamped|` — so **−5 Ω**, whose magnitude is larger than the floor it lands
+  on, was told it was too big for the solver to hold. The end that was hit is a fact about
+  the ceiling, not about the two numbers. Fixed, and the gate gained a section that types
+  `-5`, `0` and `1e308` into a real value box and reads the announcement back.
+- **A ceiling with the floor's defect wearing the other hat.** I set `VALUE_CEIL.LDR` to a
+  terohm; `Sensors.ldr` caps its own result at a gigohm. So the box would have accepted a
+  terohm and the stamp used a gigohm — the same panel-says-one-thing failure I had just
+  spent the section fixing, introduced at the opposite end. **Found by the gate on the first
+  run of the check written for the floor**, which is the argument for writing a check as a
+  rule rather than as a list of the cases already known to be wrong.
+- **A comment I closed one paragraph early**, leaving three lines of prose loose in the
+  middle of a function. Caught by re-reading the block after the edit rather than by
+  `node --check`, which parsed it happily because the stray lines sat inside the following
+  string concatenation.
+- **A false count in a comment I had just written.** "78 of the 80 published exercises are
+  linear" was an estimate dressed as a number. Counted: 80 of 80, and 376 of 376
+  schematics.
+- **A test circuit that could not ask its own question.** The picker section's chain joined
+  its resistors with wires, so deleting two of them left a wire that was a node with nothing
+  on it — which the solver correctly refuses, and the gate reported that refusal instead of
+  the defect it was built to find. Rebuilt pin-to-pin with no wire between the parts.
+
+### Left alone, deliberately
+
+- **Not one published schematic uses a non-linear device.** All seven — D, LED, NPN, PNP,
+  NMOS, PMOS, OPAMP — and the sensor and instrument kinds beside them (SW, LDR, NTC, POT,
+  LAMP, METER) appear in **zero** of the 376 catalogue schematics. Cycle 0 built the
+  Newton-Raphson loop and 14 placeable kinds; the whole of it is reachable only from the
+  Playground and from a learner's own drawing. That is a large piece of working machinery
+  no lesson spends, and it is a breadth debt rather than a defect — Track 4's ground, and a
+  content cycle, not a widening of this one. Recorded with the count so the next cycle
+  starts from it rather than rediscovering it.
+- **`P.dim` at 2.93:1 and `P.faint` at 1.86:1 on every canvas.** Cycle 2 measured them and
+  handed them to Track 5; cycle 5 re-measured and did not take them; cycle 6 recorded them
+  again. This cycle adds one more instance to the list — the plot's own axis labels, "dB at
+  node 2" and "Hz", are drawn in `P.faint` — and takes them no further, for the same reason:
+  changing them changes the visual weight of 13 visualisers and the schematic canvas as
+  well, which is a decision about the design language.
+- **`Sensors.ldr` clamps its result to 1 GΩ and `modelNote` does not say so.** The note
+  quotes `ohmsOf`'s computed value, so the **number** is always the number the solver uses;
+  it is the formula line beside it that describes the unclamped model. Only reachable at a
+  small `R10` under bright light, and fixing it means putting a caveat on a sentence whose
+  whole value is that it is short. Recorded, not changed.
+- **The MCU sketch panel was not audited**, as cycle 6 also left it. `paintMcu` is a code
+  editor, a console and a fault report, and it is its own subsystem in `src/mcu.js` as much
+  as here. Nothing this cycle changed reaches it: the analysis clamps are on the three boxes
+  the panel owns, and the solver changes it shares are the ones that stop it being handed
+  NaN.
+- **`MNA.tran`'s `MAX_STEPS` coarsening still says nothing when it bites.** It cannot bite
+  from the editor, which always asks for `tstop/900`. Left as a latent issue with the reason
+  written down rather than defended against a caller that does not exist.
+- **The plot's name is not a live region**, deliberately. It is a picture, and a picture
+  that announced itself on every frame of a dragged slider would be unusable. The status
+  line already carries the event; the name is there for someone who goes to the plot.
+- **No `emit.py` run, and no author file, `catalog/*.json`, lesson id or schema touched.**
+  Presentation, behaviour and gates only, so the staleness guard is not armed — and the
+  payload total is unchanged at 12666 KB, which is the mechanical confirmation that no
+  content moved.
+- **`docs/programs` was not touched at all this cycle.** Verified rather than assumed: 3
+  generations retained naming 64 files, 64 payload files on disk, the current generation
+  referencing 62 covering 62 distinct courses, **0 orphaned and 0 missing** — and `git
+  status` reports no change under `docs/programs`, because no course's JSON moved.
+
+### Gates, after
+
+Every pre-existing number unmoved. The only new numbers are the new gate's; the only two
+that moved are the artifact sizes, by exactly the source that was added.
+
+```
+verify_circuit_model All good: 1445 analyses vouch for every number they return and 84
+                     refuse rather than guess · 15 plots and repaints, none unpaintable ·
+                     the clamp holds 15 kinds off a floor and 17 under a ceiling ·
+                     376 published schematics, 355 with a DC point, all three ways  [NEW]
+verify_circuit_ui    All good: 78 driven keys and gestures, says 10 things while doing it,
+                     keeps every shortcut inside its own canvas, holds 15 kinds above the
+                     floor their stamps need, disposes without leaving a listener behind
+verify_circuits      All good: 80 circuit exercises, 340 checks · 527 labels
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_quiz          All good: 1366 questions in 252 quiz units · 160 per-option
+                     explanations · every course within its answer-tell budget
+verify_derivations   All good: 1170 steps across 46 courses
+verify_theme         All good: 14 exemptions · 58 contrast surfaces in both themes ·
+                     the 375px topbar · the mobile drawer
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12666 KB — unchanged ·
+                     inlined 13836 -> 13849 KB · shell 1141 -> 1154 KB, of 1536
+```
+
+Beyond the gates: the new gate run against **14 mutations it had to reject and one it had
+to pass**; `verify_circuit_ui.mjs` reporting byte-identically before and after the stub was
+extracted out from under it, checked by diff; the catalogue swept for every part value
+before a ceiling was chosen and for every non-linear device before the claim about the
+linear branch was written; and the payload window checked for orphans rather than assumed.
+
+---

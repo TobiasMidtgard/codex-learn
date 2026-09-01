@@ -1273,7 +1273,13 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .ckt-nodes button{font-size:10.5px;padding:0 8px}
 .ckt-err{font-size:12px;line-height:1.6;color:var(--amber);text-wrap:pretty}
 .ckt-plot{border-top:1px solid var(--line);background:var(--editor);padding:8px}
-.ckt-plot canvas{display:block}
+/* The plot canvas is laid out by CSS and only its backing store is set in JS. paintPlot
+   used to measure the PARENT and set style.width from it, which under border-box
+   included the 8px of padding above: the canvas came out 16px wider than its box at
+   every viewport size and .ckt's overflow:hidden clipped the right-hand end of the
+   trace. min-width keeps the old JS floor's intent — it does not bite at 375px, where
+   the column leaves about 359px. */
+.ckt-plot canvas{display:block;width:100%;min-width:320px}
 .ckt-note{margin:12px 2px 0;font-size:12px;line-height:1.6;color:var(--ink-4);max-width:70ch;text-wrap:pretty}
 @media (max-width:860px){
   .ckt-main{grid-template-columns:1fr}
