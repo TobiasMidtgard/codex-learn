@@ -167,13 +167,18 @@ class El {
 }
 
 /* The selector grammar this file actually uses: a descendant chain of
-   tag / .class / [attr] / [attr="value"] terms. Anything else is a bug in the gate
-   rather than in the editor, so it throws instead of quietly matching nothing. */
+   tag / #id / .class / [attr] / [attr="value"] terms. Anything else is a bug in the
+   gate rather than in the editor, so it throws instead of quietly matching nothing.
+   `#id` was added when a third gate arrived — verify_quiz.mjs drives renderBlanks,
+   and app.js reaches for its buttons by id where circuit.js reaches by class. Purely
+   additive: a term that used to throw now matches, and nothing that used to match
+   behaves differently, which is why the two older gates report byte-identically. */
 function matchesOne(el, term) {
-  const re = /^([a-zA-Z][\w-]*)?((?:\.[\w-]+|\[[^\]]+\])*)$/.exec(term);
+  const re = /^([a-zA-Z][\w-]*)?((?:#[\w-]+|\.[\w-]+|\[[^\]]+\])*)$/.exec(term);
   if (!re) throw new Error('the gate cannot parse the selector "' + term + '"');
   if (re[1] && el.tagName !== re[1].toUpperCase()) return false;
-  for (const bit of re[2].match(/\.[\w-]+|\[[^\]]+\]/g) || []) {
+  for (const bit of re[2].match(/#[\w-]+|\.[\w-]+|\[[^\]]+\]/g) || []) {
+    if (bit[0] === '#') { if (el.getAttribute('id') !== bit.slice(1)) return false; continue; }
     if (bit[0] === '.') { if (!el.classList.contains(bit.slice(1))) return false; continue; }
     const m = /^\[([\w-]+)(?:=["']?([^"'\]]*)["']?)?\]$/.exec(bit);
     if (!m) throw new Error('the gate cannot parse the selector "' + term + '"');

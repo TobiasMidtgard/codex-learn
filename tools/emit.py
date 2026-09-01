@@ -311,12 +311,27 @@ def norm_blanks(b, ctx):
         a = it.get("a")
         if not isinstance(a, int) or not 0 <= a < len(opts):
             raise ValueError(f"{where}: `a` must index one of the options")
+        # the same three checks `norm_quiz` runs, which this path did not. A blank is
+        # a graded four-way question in everything but name, and the options are
+        # shuffled per learner now, so it is owed the same rules.
+        norm = [re.sub(r"\s+", " ", clean_md(o)).strip() for o in opts]
+        if len(set(norm)) != len(norm):
+            dupe = [x for x in set(norm) if norm.count(x) > 1]
+            raise ValueError(f"{where}: two options read the same ({dupe[0]!r}). Only one "
+                             "index is accepted, so a learner can pick the identical "
+                             "twin of the key and be marked wrong with no way to tell why")
         if not it.get("why"):
             raise ValueError(f"{where}: no `why` \u2014 the explanation is the teaching")
         no_positional_refs(it["why"], where)
         whys = it.get("whys")
-        if whys is not None and len(whys) != len(opts):
-            raise ValueError(f"{where}: `whys` must have one entry per option")
+        if whys is not None:
+            if len(whys) != len(opts):
+                raise ValueError(f"{where}: `whys` must have one entry per option")
+            for j, w in enumerate(whys):
+                if not w:
+                    raise ValueError(f"{where}/whys{j + 1}: empty \u2014 an option nobody "
+                                     "explains is an option nobody learns from")
+                no_positional_refs(w, where)
         out.append({
             "prompt": clean_md(it.get("prompt", "")),
             "hole": it.get("hole", ""),
@@ -519,8 +534,14 @@ def norm_sandbox(sb, ctx):
 
 POSITIONAL = re.compile(
     r"\b(?:[Oo]ption|[Cc]hoice|[Aa]nswer)s?\s+[A-E]\b"
-    r"|\b[Tt]he\s+(?:first|second|third|fourth|fifth|last|final)"
-    r"\s+(?:option|choice|answer)\b",
+    r"|\b[Tt]he\s+(?:first|second|third|fourth|fifth|last|final)\s+(?:option|choice)\b"
+    # "the final answer" and "the last answer" are excluded on purpose. They are the
+    # ordinary way to say *the end of a calculation*, and the rule only started
+    # reaching them when it was extended to `blanks`, where EE231/M1.2 says "if it is
+    # missing here it will be missing from the final answer too" — correct content
+    # that the wider pattern condemned on its first run. An option is never named
+    # "the final answer" anyway; it is named "the last option".
+    r"|\b[Tt]he\s+(?:first|second|third|fourth|fifth)\s+answer\b",
 )  # case-sensitive on purpose: "answers a question" is ordinary prose, not a pointer
 
 

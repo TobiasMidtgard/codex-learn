@@ -48,6 +48,31 @@
  *   today and this gate fails when a course gets WORSE. New content therefore cannot
  *   add to the debt, and a cycle that improves a course is told to lower its entry.
  *
+ * THE BLANKS BANK — 1103 graded holes that this gate did not look at.
+ *
+ *   `blanks` is a four-way graded question in everything but name, and it had no gate
+ *   at all: the loop above reads m.quiz and stops, which is the "a gate that skips
+ *   what it did not expect" failure this repository has already had once. What that
+ *   left unwatched was not hypothetical. The options were drawn in the order they were
+ *   authored and never shuffled, and the answer to 735 of the 1103 was the FIRST
+ *   one — 66.6% against 26% for guessing, with 26 courses at 100%, EE231 answering all
+ *   89 of its blanks to the top option. Pressing the first button was a perfect score
+ *   in a quarter of the catalogue. renderBlanks now shuffles through the same helper
+ *   the quiz uses, and the section at the bottom of this file proves it by driving the
+ *   real renderer rather than by reading the source.
+ *
+ *   The same structure rules apply here, plus two of its own:
+ *
+ *   * an option is drawn with esc(), not through the markdown renderer, and that is
+ *     deliberate — it is a literal fragment dropped into a `white-space:pre` monospace
+ *     listing, `a**2 + b**2` is Python exponentiation in fourteen of them, and a
+ *     MathML fraction would move every column of an ASCII table after it. So `$...$`
+ *     or a code span authored into an OPTION reaches the screen as its own source.
+ *     Measured and ratcheted like the length tell, because 66 of them predate the
+ *     measurement.
+ *   * the PROMPT is prose and does go through mdInline, so it is held to what that can
+ *     draw: inline markup only, no block markup of any kind, not even a fence.
+ *
  *     node tools/verify_quiz.mjs                  # every course
  *     node tools/verify_quiz.mjs catalog/CS201.json
  */
@@ -59,15 +84,22 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BUDGET = join(ROOT, 'tools', 'quiz_budget.json');
 
-/* the same expression emit.py rejects with, kept in step by the test below */
+/* The same expression emit.py rejects with, kept in step by the test below.
+   "the final answer" and "the last answer" are excluded on purpose: they are the
+   ordinary way to say the end of a calculation, and the rule only started reaching
+   them when it was extended to `blanks`, where EE231/M1.2 says "it will be missing
+   from the final answer too" — correct content that the wider pattern condemned on
+   its first run, which is the same trap the case-folding note below records. */
 const POSITIONAL =
-  /\b(?:[Oo]ption|[Cc]hoice|[Aa]nswer)s?\s+[A-E]\b|\b[Tt]he\s+(?:first|second|third|fourth|fifth|last|final)\s+(?:option|choice|answer)\b/;
+  /\b(?:[Oo]ption|[Cc]hoice|[Aa]nswer)s?\s+[A-E]\b|\b[Tt]he\s+(?:first|second|third|fourth|fifth|last|final)\s+(?:option|choice)\b|\b[Tt]he\s+(?:first|second|third|fourth|fifth)\s+answer\b/;
 
 /* emit.py's POSITIONAL is the authority; if the two drift, the artifact is being
    checked against a rule the source no longer applies */
 {
   const py = readFileSync(join(ROOT, 'tools', 'emit.py'), 'utf8');
-  const want = ['[Oo]ption|[Cc]hoice|[Aa]nswer', 'first|second|third|fourth|fifth|last|final'];
+  const want = ['[Oo]ption|[Cc]hoice|[Aa]nswer',
+    'first|second|third|fourth|fifth|last|final)\\s+(?:option|choice)',
+    'first|second|third|fourth|fifth)\\s+answer'];
   if (!want.every((w) => py.includes(w))) {
     console.error('FAIL  emit.py\'s positional-reference rule has changed shape — ' +
       'update POSITIONAL in verify_quiz.mjs to match it');
@@ -83,6 +115,10 @@ const UNDRAWABLE = [
   ['a list bullet', /^[ \t]*[-*+][ \t]+\S/m],
   ['a blockquote', /^[ \t]*>[ \t]/m],
 ];
+
+/* A blank's prompt goes through mdInline(), which draws inline markup and NO block
+   markup whatever — not even the paragraphs quizProse() handles, and not a fence. */
+const UNDRAWABLE_INLINE = UNDRAWABLE.concat([['a fenced block', /```/]]);
 
 /* if the renderer stops handling fences, this gate is checking a rule that no longer
    holds — the EE131 stems would silently break again */
@@ -132,13 +168,87 @@ const files = only ? [only]
       .map((f) => join(ROOT, 'catalog', f));
 
 let problems = 0, units = 0, questions = 0, whysGiven = 0, loose = [];
+let blankUnits = 0, blankHoles = 0, blankWhys = 0, blankMarkup = 0;
 
 for (const file of files) {
   const course = JSON.parse(readFileSync(file, 'utf8'));
   const id = course.id || basename(file, '.json');
   const found = [];
   const bad = [];
+  const holes = [];        /* every graded hole in the course, for the tells */
+  const bbad = [];
+  let markup = 0;          /* options carrying markup the monospace slot draws literally */
 
+  /* ------------------------------------------------------------ the blanks bank */
+  (course.modules || []).forEach((m, mi) => {
+    asList(m.blanks).forEach((u, ui) => {
+      const where = `M${mi + 1}${ui ? '.' + (ui + 1) : ''}`;
+      blankUnits++;
+      /* the listing is authored with ___ where each blank goes and the nth ___ takes
+         the nth entry; a mismatch silently drops a hole off the end or leaves one
+         with nowhere to appear. emit.py refuses it at source — this is the artifact */
+      const gaps = String(u.listing || '').split('___').length - 1;
+      if (gaps !== (u.blanks || []).length) {
+        bbad.push(`${where}: the listing has ${gaps} ___ but ${(u.blanks || []).length} ` +
+          'blank(s) are defined — the nth hole takes the nth blank, so the tail of ' +
+          'one of them never reaches the screen');
+      }
+      (u.blanks || []).forEach((h, hi) => {
+        const at = `${where}/b${hi + 1}`;
+        const opts = h.opts || [];
+        holes.push(h);
+        blankHoles++;
+        if (opts.some((o) => !String(o).trim())) bbad.push(`${at}: an option is empty`);
+        const seen = opts.map(norm);
+        const dupe = seen.find((s, i) => seen.indexOf(s) !== i);
+        if (dupe !== undefined) {
+          bbad.push(`${at}: two options read the same (${JSON.stringify(dupe.slice(0, 46))}) — ` +
+            'only one index is accepted, so the twin of the key is marked wrong with no reason given');
+        }
+        if (!String(h.why || '').trim()) bbad.push(`${at}: no explanation`);
+        if (h.whys !== undefined && h.whys !== null) {
+          if (!Array.isArray(h.whys) || h.whys.length !== opts.length) {
+            bbad.push(`${at}: ${Array.isArray(h.whys) ? h.whys.length : 'non-list'} per-option ` +
+              `explanations for ${opts.length} options — one each, the key included`);
+          } else {
+            blankWhys += h.whys.length;
+            h.whys.forEach((w, wi) => {
+              if (!String(w || '').trim()) bbad.push(`${at}: per-option explanation ${wi + 1} is empty`);
+              const p = POSITIONAL.exec(w || '');
+              if (p) bbad.push(`${at}: a per-option explanation says ${JSON.stringify(p[0])}, ` +
+                'and the options are shuffled per learner now');
+            });
+          }
+        }
+        const p = POSITIONAL.exec(h.why || '');
+        if (p) bbad.push(`${at}: the explanation says ${JSON.stringify(p[0])}, ` +
+          'and the options are shuffled per learner now');
+
+        /* the prompt and the explanations are prose drawn by mdInline, which handles
+           no block markup at all */
+        const prose = [['prompt', h.prompt], ['explanation', h.why]]
+          .concat((Array.isArray(h.whys) ? h.whys : []).map((w, i) => [`per-option explanation ${i + 1}`, w]));
+        for (const [tag, text] of prose) {
+          for (const [name, rx] of UNDRAWABLE_INLINE) {
+            if (rx.test(String(text || ''))) {
+              bbad.push(`${at}: the ${tag} contains ${name}, and a blank's prose is drawn ` +
+                'by mdInline, which draws no block markup at all — it would reach the ' +
+                'screen as literal punctuation');
+            }
+          }
+        }
+        /* an option is a literal fragment of a `white-space:pre` monospace listing and
+           is drawn with esc() on purpose — see the header. Markup in one is therefore
+           its own source on the screen. Counted rather than refused, because 66
+           predate the measurement; the budget stops there being a 67th. */
+        for (const o of opts) {
+          if (/\$[^$]+\$/.test(String(o)) || /`[^`]+`/.test(String(o))) markup++;
+        }
+      });
+    });
+  });
+
+  /* ------------------------------------------------------------- the quiz bank */
   (course.modules || []).forEach((m, mi) => {
     asList(m.quiz).forEach((u, ui) => {
       const where = `M${mi + 1}${ui ? '.' + (ui + 1) : ''}`;
@@ -192,57 +302,158 @@ for (const file of files) {
     });
   });
 
-  if (!found.length) continue;
+  if (!found.length && !holes.length) continue;
   units += (course.modules || []).reduce((n, m) => n + asList(m.quiz).length, 0);
   questions += found.length;
+  blankMarkup += markup;
 
-  const t = tells(found);
   const b = budget[id];
   const lines = [];
-  let failed = bad.length > 0;
+  let failed = bad.length > 0 || bbad.length > 0;
   bad.forEach((l) => lines.push(`            ! ${l}`));
+  bbad.forEach((l) => lines.push(`            ! blanks ${l}`));
 
   if (b === undefined) {
+    const t0 = tells(found);
     failed = true;
     lines.push(`            ! no entry in ${basename(BUDGET)}. Add ` +
-      `"${id}": { "longest": ${t.longest}, "shortest": ${t.shortest} } — a course with ` +
+      `"${id}": { "longest": ${t0.longest}, "shortest": ${t0.shortest} } — a course with ` +
       'no recorded score is a course whose question bank can drift unwatched');
-  } else {
-    if (t.longest > b.longest) {
-      failed = true;
-      lines.push(`            ! "pick the longest option" now scores ${t.longest}/${t.n} ` +
-        `(${Math.round(t.longest / t.n * 100)}%), over the budget of ${b.longest}. ` +
-        'Give the distractors the same weight as the key, or the bank rewards reading nothing');
-    }
-    if (t.shortest > b.shortest) {
-      failed = true;
-      lines.push(`            ! "pick the shortest option" now scores ${t.shortest}/${t.n}, ` +
-        `over the budget of ${b.shortest} — the length tell has been inverted, not removed`);
-    }
-    if (t.longest < b.longest || t.shortest < b.shortest) {
-      loose.push(`${id}: longest ${b.longest} -> ${t.longest}, shortest ${b.shortest} -> ${t.shortest}`);
-    }
   }
 
-  lines.push(`            ${t.n} question(s) · longest-is-key ${t.longest}` +
-    ` (budget ${b ? b.longest : '?'}) · shortest-is-key ${t.shortest}` +
-    ` (budget ${b ? b.shortest : '?'}) · mean length margin ${t.margin >= 0 ? '+' : ''}${t.margin.toFixed(1)}`);
+  /* the same ratchet, run over the quiz bank and then over the blanks bank */
+  const banks = [
+    { tag: 'question', kind: 'quiz', items: found, budget: b, extra: null },
+    { tag: 'hole', kind: 'blanks', items: holes, budget: b && b.blanks,
+      extra: { name: 'markup', got: markup } },
+  ];
+  for (const bank of banks) {
+    if (!bank.items.length) continue;
+    const t = tells(bank.items);
+    const bb = bank.budget;
+    const label = bank.kind === 'quiz' ? '' : 'blanks ';
+    if (bb === undefined || bb === null) {
+      failed = true;
+      lines.push(`            ! no "blanks" entry in ${basename(BUDGET)} for ${id}. Add ` +
+        `"blanks": { "longest": ${t.longest}, "shortest": ${t.shortest}, ` +
+        `"markup": ${markup} } inside it — 1103 graded holes went unwatched once already`);
+      continue;
+    }
+    if (t.longest > bb.longest) {
+      failed = true;
+      lines.push(`            ! ${label}"pick the longest option" now scores ${t.longest}/${t.n} ` +
+        `(${Math.round(t.longest / t.n * 100)}%), over the budget of ${bb.longest}. ` +
+        'Give the distractors the same weight as the key, or the bank rewards reading nothing');
+    }
+    if (t.shortest > bb.shortest) {
+      failed = true;
+      lines.push(`            ! ${label}"pick the shortest option" now scores ${t.shortest}/${t.n}, ` +
+        `over the budget of ${bb.shortest} — the length tell has been inverted, not removed`);
+    }
+    if (bank.extra && bank.extra.got > (bb[bank.extra.name] || 0)) {
+      failed = true;
+      lines.push(`            ! ${bank.extra.got} option(s) carry markup the monospace slot ` +
+        `draws literally, over the budget of ${bb[bank.extra.name] || 0}. An option is a ` +
+        'fragment of the listing, so write it the way the listing is written');
+    }
+    const better = t.longest < bb.longest || t.shortest < bb.shortest ||
+      (bank.extra && bank.extra.got < (bb[bank.extra.name] || 0));
+    if (better) {
+      loose.push(`${id}${bank.kind === 'quiz' ? '' : ' blanks'}: longest ${bb.longest} -> ${t.longest}` +
+        `, shortest ${bb.shortest} -> ${t.shortest}` +
+        (bank.extra ? `, markup ${bb[bank.extra.name] || 0} -> ${bank.extra.got}` : ''));
+    }
+    lines.push(`            ${t.n} ${bank.tag}(s) · longest-is-key ${t.longest}` +
+      ` (budget ${bb.longest}) · shortest-is-key ${t.shortest} (budget ${bb.shortest})` +
+      (bank.extra ? ` · markup ${bank.extra.got} (budget ${bb[bank.extra.name] || 0})` : '') +
+      ` · mean length margin ${t.margin >= 0 ? '+' : ''}${t.margin.toFixed(1)}`);
+  }
 
-  console.log(`[${failed ? 'FAIL' : 'ok  '}] ${id.padEnd(8)} ${found.length} question(s)`);
+  console.log(`[${failed ? 'FAIL' : 'ok  '}] ${id.padEnd(8)} ${found.length} question(s), ` +
+    `${holes.length} hole(s)`);
   lines.forEach((l) => console.log(l));
   if (failed) problems++;
 }
 
-if (!questions) { console.log('no quiz units found'); process.exit(0); }
+if (!questions && !blankHoles) { console.log('no quiz or blanks units found'); process.exit(0); }
+
+/* ------------------------------------------------------------------------------
+   What the renderer actually draws.
+
+   Everything above reads the artifact. This drives the shipped renderBlanks in a
+   stubbed DOM — the same trick verify_circuit_ui.mjs uses on the editor — because
+   the two defects that mattered most here were both invisible in the JSON: the
+   options were never shuffled, and the prompt was escaped rather than rendered. A
+   rule about either one, written as a source-shape check, would have been a gate
+   enforcing a comment. */
+const live = await import('./blanks_stage.mjs').catch((e) => {
+  console.error('FAIL  cannot stage the renderer: ' + e.message);
+  process.exit(1);
+});
+const stage = live.stage();
+let draws = 0, picks = 0, slot0 = 0, shuffledHoles = 0;
+const liveBad = [];
+
+for (const file of files) {
+  const course = JSON.parse(readFileSync(file, 'utf8'));
+  const id = course.id || basename(file, '.json');
+  (course.modules || []).forEach((m, mi) => {
+    asList(m.blanks).forEach((u, ui) => {
+      const lessonId = `${id}-M${mi + 1}-FB${ui ? ui + 1 : ''}`;
+      let r;
+      try { r = stage.drive(lessonId, u); }
+      catch (e) { liveBad.push(`${lessonId}: renderBlanks threw — ${e.message}`); return; }
+      draws += r.draws;
+      picks += r.picks;
+      for (const line of r.problems) liveBad.push(`${lessonId}: ${line}`);
+      for (const h of r.holes) {
+        shuffledHoles++;
+        if (h.keyAt === 0) slot0++;
+      }
+      /* a course whose every drawn key still lands in the top slot is a course whose
+         shuffle is not running — the state this whole section exists to detect */
+      if (r.holes.length >= 4 && r.holes.every((h) => h.keyAt === 0)) {
+        liveBad.push(`${lessonId}: every one of its ${r.holes.length} answers is drawn in ` +
+          'the top slot — the shuffle is not reaching this unit');
+      }
+    });
+  });
+}
+
+/* Aggregate, because any single unit may legitimately shuffle back to the order it
+   was authored in. A shuffle puts the key on top with probability 1/k, and this bank
+   is 1043 four-way holes, 35 three-way and 25 two-way, so the expected rate is 25.8%.
+   The authored order put the key first 66.6% of the time. */
+if (shuffledHoles) {
+  const rate = slot0 / shuffledHoles;
+  if (rate > 0.40 || rate < 0.14) {
+    liveBad.push(`the drawn answer lands in the top slot for ${slot0} of ${shuffledHoles} ` +
+      `holes (${(rate * 100).toFixed(1)}%), which is nowhere near the ` +
+      '25.8% a shuffle produces on this bank — it is either not shuffling or not uniform');
+  }
+}
+
+if (liveBad.length) {
+  console.log('[FAIL] renderer');
+  liveBad.slice(0, 40).forEach((l) => console.log(`            ! ${l}`));
+  if (liveBad.length > 40) console.log(`            ... and ${liveBad.length - 40} more`);
+  problems++;
+} else {
+  console.log(`[ok  ] renderer  ${draws} draw(s), ${picks} option(s) picked and read back · ` +
+    `the answer is drawn in the top slot ${(slot0 / shuffledHoles * 100).toFixed(1)}% ` +
+    'of the time, against 66.6% before the shuffle');
+}
 
 if (loose.length) {
-  console.log(`\n${loose.length} course(s) now score BETTER than their budget. Lower the ` +
+  console.log(`\n${loose.length} bank(s) now score BETTER than their budget. Lower the ` +
     `entries in ${basename(BUDGET)} so the improvement cannot be given back:`);
   loose.forEach((l) => console.log(`  ${l}`));
 }
 
 console.log(problems
   ? `\n${problems} course(s) with a question bank defect or over budget`
-  : `\nAll good: ${questions} question(s) in ${units} quiz unit(s) verified · ` +
-    `${whysGiven} per-option explanation(s) · every course within its answer-tell budget.`);
+  : `\nAll good: ${questions} question(s) in ${units} quiz unit(s) and ${blankHoles} ` +
+    `hole(s) in ${blankUnits} blanks unit(s) verified · ${whysGiven + blankWhys} per-option ` +
+    `explanation(s) · ${draws} live draws, ${picks} options picked and read back · ` +
+    'every bank within its answer-tell budget.');
 process.exit(problems || loose.length ? 1 : 0);

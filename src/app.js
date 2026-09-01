@@ -3124,8 +3124,25 @@ function renderBlanks(main, l) {
   const state = (P.blanks && P.blanks[l.id]) || {};
   const picked = {};
   (l.blanks || []).forEach(function (b, i) { picked[i] = state[i] === undefined ? null : state[i]; });
+  /* The options were drawn in the order they were authored, and the answer to 735 of
+     the catalogue's 1103 blanks is the FIRST one — 26 courses at every single blank,
+     one of them 89 times over. Pressing the top option is a perfect score there, which
+     is precisely the strategy the quiz's shuffle was minted to kill, in the unit kind
+     next door, where nobody had looked. Same helper, so one per-install seed governs
+     both: the order is fixed for a learner across retries and not shared between two.
+
+     `order` maps a shown slot back to the index the author numbered, and what is
+     STORED in P.blanks is still that authored index — so every saved answer in every
+     learner's progress keeps meaning exactly what it meant before the shuffle. */
+  const shown = (l.blanks || []).map(function (b, i) { return shuffledOptions(l.id, i, b); });
   let open = null;          /* which blank's option list is showing */
   let checked = false;
+  /* paint() replaces the whole page on every press — open a blank, pick, check,
+     retry — and a keyboard learner loses the focused element each time, landing back
+     on <body>. Each handler says where the keyboard should be next and paint() puts
+     it there, which is the quiz's answer to the same problem applied to a view that
+     has the problem four times rather than once. */
+  let refocus = null;
 
   function slotHtml(b, i) {
     const val = picked[i];
@@ -3133,7 +3150,13 @@ function renderBlanks(main, l) {
     const cls = !checked ? (val === null ? '' : ' filled')
       : (isRight ? ' right' : ' wrong');
     const label = val === null ? (b.hole || '?') : b.opts[val];
-    return '<button class="blk' + cls + (open === i ? ' open' : '') + '" data-blk="' + i + '">' +
+    /* a screen reader met a row of buttons every one of which was called "?", with
+       nothing to say which blank it was, what was in it, or whether its list was open */
+    const name = 'Blank ' + (i + 1) + ' of ' + l.blanks.length +
+      (val === null ? ', empty' : ', holding ' + b.opts[val]) +
+      (checked ? (isRight ? ', correct' : ', wrong') : '');
+    return '<button class="blk' + cls + (open === i ? ' open' : '') + '" data-blk="' + i + '"' +
+      ' aria-expanded="' + (open === i) + '" aria-label="' + esc(name) + '">' +
       esc(label) + '</button>';
   }
 
@@ -3151,18 +3174,40 @@ function renderBlanks(main, l) {
   function chooser() {
     if (open === null) return '';
     const b = l.blanks[open];
-    return '<div class="blk-pick">' +
-      '<div class="blk-pick-h">' + esc(b.prompt || 'Which one belongs here?') + '</div>' +
-      b.opts.map(function (o, oi) {
-        return '<button class="blk-opt' + (picked[open] === oi ? ' on' : '') +
-          '" data-opt="' + oi + '">' + esc(o) + '</button>';
+    const qid = 'blk-q-' + open;
+    /* The prompt is prose — 165 of the catalogue's carry mathematics and 80 a code
+       span — and it went through esc(), so `$I^2$` and `` `badge` `` reached the
+       screen as their own source. It is styled as prose, not as monospace, so it
+       takes the same inline renderer every other sentence in the app takes.
+
+       The OPTIONS deliberately do not. An option is a literal fragment dropped into a
+       `white-space:pre` monospace listing: `a**2 + b**2` is Python exponentiation in
+       fourteen of them and would come out half in bold, and a MathML fraction cannot
+       sit in an ASCII table without moving every column after it. The gate below
+       measures the ones authored with markup anyway rather than rendering them. */
+    return '<div class="blk-pick" role="group" aria-labelledby="' + qid + '">' +
+      '<div class="blk-pick-h" id="' + qid + '">' +
+        mdInline(b.prompt || 'Which one belongs here?') + '</div>' +
+      shown[open].opts.map(function (o, oi) {
+        const ai = shown[open].order[oi];   /* the index the author numbered */
+        return '<button class="blk-opt' + (picked[open] === ai ? ' on' : '') +
+          '" data-opt="' + ai + '">' + esc(o) + '</button>';
       }).join('') +
     '</div>';
   }
 
   function feedback() {
     if (!checked) return '';
-    return '<div class="blk-fb">' + l.blanks.map(function (b, i) {
+    const right = l.blanks.filter(function (b, i) { return picked[i] === b.a; }).length;
+    /* The score and the explanations appeared in silence. A live region is the wrong
+       instrument here, because paint() rebuilds this node from nothing every time and
+       a region created with its text already in it announces unreliably — the reason
+       the quiz announces by taking the focus. So does this: Check moves the keyboard
+       here, and the first thing under it is the score. */
+    return '<div class="blk-fb" id="blk-fb" tabindex="-1">' +
+      '<div class="blk-fb-h">' + right + ' of ' + l.blanks.length + ' right.' +
+      (right === l.blanks.length ? '' : ' The correct fill is in bold on each row.') + '</div>' +
+      l.blanks.map(function (b, i) {
       const ok = picked[i] === b.a;
       return '<div class="blk-row ' + (ok ? 'right' : 'wrong') + '">' +
         '<span class="gmark ' + (ok ? 'done' : 'fail') + '"></span>' +
@@ -3184,7 +3229,9 @@ function renderBlanks(main, l) {
         '<div class="blk-bar"><span class="blk-file">' + esc(l.caption || 'fill in the blanks') + '</span>' +
           '<span class="blk-count">' + (checked ? right + ' / ' + l.blanks.length + ' right'
             : filled + ' / ' + l.blanks.length + ' filled') + '</span></div>' +
-        '<pre class="blk-listing"><code>' + listing() + '</code></pre>' +
+        /* the listing scrolls sideways and nothing could reach the scrollbar without a
+           mouse; tabindex is what .article .tw already does for a wide table */
+        '<pre class="blk-listing" tabindex="0"><code>' + listing() + '</code></pre>' +
       '</div>' +
       chooser() +
       '<div class="blk-acts">' +
@@ -3203,17 +3250,22 @@ function renderBlanks(main, l) {
       b.addEventListener('click', function () {
         const i = +b.dataset.blk;
         open = (open === i) ? null : i;
+        /* opening puts the keyboard on the list you opened; closing gives it back to
+           the blank, which is where it was */
+        refocus = open === null ? '[data-blk="' + i + '"]' : '.blk-opt';
         paint();
       });
     });
     $all('[data-opt]', main).forEach(function (b) {
       b.addEventListener('click', function () {
-        picked[open] = +b.dataset.opt;
+        const at = open;
+        picked[at] = +b.dataset.opt;
         P.blanks = P.blanks || {};
         P.blanks[l.id] = Object.assign({}, picked);
         saveSoon();
         open = null;
         checked = false;
+        refocus = '[data-blk="' + at + '"]';   /* the blank you just filled */
         paint();
       });
     });
@@ -3221,6 +3273,7 @@ function renderBlanks(main, l) {
     if (chk) chk.addEventListener('click', function () {
       checked = true;
       const got = l.blanks.filter(function (b, i) { return picked[i] === b.a; }).length;
+      refocus = '#blk-fb';                     /* the score, and then the reasons */
       paint();
       if (got === l.blanks.length) {
         if (completeLesson(l.id)) toast('All blanks filled \u00b7 +' + XP.blanks + ' XP', true);
@@ -3233,9 +3286,16 @@ function renderBlanks(main, l) {
       P.blanks = P.blanks || {};
       P.blanks[l.id] = {};
       checked = false;
+      refocus = '[data-blk="0"]';              /* back to the first empty blank */
       saveSoon();
       paint();
     });
+
+    if (refocus) {
+      const target = $(refocus, main);
+      refocus = null;
+      if (target && target.focus) target.focus();
+    }
   }
 
   paint();

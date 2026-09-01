@@ -2414,3 +2414,364 @@ before a ceiling was chosen and for every non-linear device before the claim abo
 linear branch was written; and the payload window checked for orphans rather than assumed.
 
 ---
+
+## Cycle 9 — TRACK 3: Question Bank & Quizzes
+
+**Target: the `blanks` unit kind — the one graded surface in the repository with no
+gate — and EE211 (Signals and Systems), the course that most exposes it.** One
+subsystem and one course, which is cycle 3's shape: that cycle gave `quiz` its
+per-option explanations and its per-learner shuffle, and rebuilt CS201 on top of them.
+This one does the same for the kind next door, and the reason it needed doing is that
+cycle 3 explicitly looked at a blanks bank and concluded it was safe.
+
+Chosen on measurement rather than taste. Three numbers picked it out.
+
+*Nothing was watching it.* `verify_quiz.mjs` iterates `m.quiz` and stops. **1103 graded
+holes in 217 blanks units across 47 courses** — 4327 options, 1103 explanations —
+were checked by nothing at all: not for a duplicate option, not for a positional
+reference, not for markup the renderer cannot draw, not for the answer tell the quiz
+half of that gate exists to measure. This is the "a gate that skips what it did not
+expect is worse than no gate" invariant, in the file that enforces it.
+
+*Press the first button.* The options were drawn in the order they were authored and
+never shuffled, and the answer to **735 of the 1103 (66.6%)** is the first one. Guessing
+is 25.8% on this bank (1043 four-way holes, 35 three-way, 25 two-way). **26 courses are
+at 100%**, covering 350 holes:
+
+| course | first-option | course | first-option |
+|---|---|---|---|
+| **EE231** | **89 / 89** | CS210 | 16 / 16 |
+| **EE131** | **65 / 65** | EE241 | 11 / 11 |
+| CS301 | 20 / 20 | MA101, CTRL530, VLSI530 | 10 / 10 |
+| CS101 | 19 / 19 | …and 18 more | all of them |
+| EE141 | 51 / 61 (84%) | EE102 | 75 / 102 (74%) |
+
+Cycle 3 built `quizSeed()` because the quiz order "was identical for every learner on
+earth and publishable as a list of letters that stays correct forever". The same
+sentence was true of the blanks bank the whole time, and the same cycle audited CS201's
+26 blanks by hand and wrote that they were "not exploitable — a blanks unit is graded as
+six holes together". That is true of CS201, whose key is first 5 times in 26. It is not
+true of EE231, where a learner who presses the top option 89 times finishes the course's
+entire fill-in bank at 89 out of 89. **A hand audit of one course cannot see a tell that
+is a property of the bank**, which is the argument for the gate rather than against the
+audit.
+
+*Half a course explains itself and half does not.* 387 holes carry no per-option
+feedback. EE211 holds 40 of them, and the split is the reason it was picked over the
+larger debts in EE102 (102) and EE101 (87): its M1–M4 have none and its M4.2–M10 all
+have it, so the same course tells a learner why their wrong answer was tempting in its
+second half and says nothing in its first.
+
+### Baseline, captured before any edit
+
+```
+80 circuit exercises / 340 checks · 527 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1170 derivation steps across 46 courses
+1366 questions in 252 quiz units · 160 per-option explanations
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui: 78 driven keys and gestures · 10 things said · 15 floored kinds
+circuit_model: 1445 analyses · 84 refusals · 15 plots · 15 floors, 17 ceilings
+theme: 14 exemptions · 58 contrast surfaces in both themes
+blanks: 217 units · 1103 holes · 4327 options — NO GATE
+        735/1103 (66.6%) answered by pressing the first option; 26 courses at 100%
+        716 holes with per-option feedback, 387 without
+        165 prompts carrying mathematics and 80 a code span, all drawn with esc()
+        66 options carrying markup the monospace slot draws literally
+EE211:  15 blanks units · 81 holes · 41 with per-option feedback · 13 marked-up options
+        60 questions · longest-is-key 27 · shortest 4
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads ·
+       inlined 13849 KB · shell 1154 KB
+```
+
+### The attacks
+
+**2. Assessment Inquisitor** — taken first, because this is its track. The position
+tell above is its finding and the rest of this entry is mostly its consequences. Two
+more:
+
+- **387 holes answer the same paragraph whichever option was pressed.** EE102 102,
+  EE121 93, EE101 87, EE211 40, MA111 20, MA121 17, EE241 11, EE221/MA112/MA201 5 each,
+  EE202 2. The field has existed since `blanks` was written and 716 holes use it; this
+  is cycle 3's recorded debt, and EE211's share of it is what this cycle paid.
+- **The length tell was measured on the blanks bank for the first time and is fine.**
+  162 of 1103 (14.7%) against 25.8% for guessing, mean margin −1.7 characters. Recorded
+  per course in the budget so it cannot drift, and deliberately not "fixed" — it is
+  already below chance, and pushing it further would only invert it. Worth writing down
+  because the quiz bank sits at 48% on the same measure: the difference is that a blanks
+  option is a fragment of a listing and has nowhere to hide a hedged sentence.
+
+**4. UX & Accessibility Hardener.** Five defects, all in the delivery mechanism rather
+than in any course.
+
+- **245 prompts reach the screen as their own source.** `chooser()` builds
+  `esc(b.prompt)`, and `esc` in `src/engine.js` is four `.replace` calls on `& < > "` and
+  nothing else. So **165 prompts carrying mathematics** print their dollar signs —
+  EE101/M2.2 asks for "`$I^2$`, with the current from the line above" — and **80 carrying
+  a code span** print their backticks: "Which function does `` `badge` `` call?" reaches
+  a learner as `` `badge` `` with the punctuation. Ten courses, led by EE102 (56),
+  EE211 (49), EE231 (40) and EE121 (29). Verified against the real renderer, not
+  assumed: `mdInline` draws `$1/n^{2}$` as `<math>…</math>` and `esc` hands back
+  `$1/n^{2}$`, both run out of the shipped files.
+- **Every press throws the keyboard back to the top of the document.** `paint()`
+  reassigns `main.innerHTML`, so the focused element ceases to exist — and it is called
+  four ways: opening a blank, picking an option, Check, and Clear and retry. Cycle 3
+  fixed this class of defect in the quiz, where a learner meets it once per question.
+  Here it is once per interaction, and a six-hole unit takes at least thirteen.
+- **A row of buttons all called "?".** `.blk` carries `b.hole` and nothing else, so a
+  screen reader met six identical buttons with nothing to say which blank each was,
+  what was in it, or whether its list was open.
+- **The chooser was an unlabelled group.** `.blk-pick` is a heading and some buttons
+  with no `role` and no `aria-labelledby` — exactly what cycle 3 repaired on the quiz's
+  `.opts` and did not carry across to the kind next door.
+- **The listing scrolls sideways with no tab stop.** `.blk-listing` is
+  `overflow-x:auto`, and `.article .tw` has had `tabindex="0"` for a wide table since
+  before cycle 1. Checked in the stylesheet rather than assumed.
+
+**1. Senior Educator.** A blanks unit has no prose beyond its brief, so this persona was
+pointed at the thing in scope it can judge: whether the feedback *explains* or merely
+*announces*. In EE211's M1–M4 it announced — one paragraph written for whoever got it
+right, shown to everyone. What 40 holes have now is below.
+
+**3. Simulation Auditor.** No sandbox, no tune and no schematic in a blanks unit, so it
+was pointed at the two things in scope no gate covers: **what the renderer actually
+draws** — which is where the `esc()` finding above came from, and it was found by
+running the shipped `renderBlanks` rather than by reading it — and **arithmetic in
+prose**. Every number written into the 146 new explanations was computed before it was
+written. One was wrong anyway; see below.
+
+### The gate that condemns correct content
+
+Extending `no_positional_refs` to a blank's `whys` — which `emit.py` has always applied
+to a quiz's and never to these — fires immediately on EE231/M1.2, whose fourth
+explanation ends *"if it is missing here it will be missing from the final answer too"*.
+That is the ordinary way to say **the end of a calculation**, and the rule was reading it
+as a pointer at an option. Cycle 3 hit the identical trap with case folding and wrote the
+reason next to the fix; this is the same failure in the other half of the same pattern.
+
+Swept before deciding, rather than patched around the one hit: across every graded text
+in the catalogue there are **4** occurrences of "the final/last answer" — two in
+derivation hints, one in a blanks explanation, one in a numeric aside — and **all four
+are prose about a calculation**. There are **0** of "the first/last option", **0** of
+"option B" and friends, and 2 of "the second/third answer", both in MA121 derivation
+hints meaning *the answer to step 2*. So `last|final` now pairs only with
+`option|choice`; `first|second|third|fourth|fifth` keeps `answer`. An option is never
+called "the final answer" — it is called "the last option", and that is still refused.
+Both directions are in the mutation set: the EE231 sentence must pass, and "the third
+option" planted in the same field must not.
+
+### Why the options are still escaped, and the fix that would have broken them
+
+The obvious repair for the prompt is the obvious repair for the option, and it is wrong.
+
+**14 options contain `**` and every one of them is Python.** `a**2 - b**2`,
+`sqrt(a1**2 + a2**2 + a3**2)`, `n1**2 - n2**2` — EE111, EE141, EMAG530. Through
+`mdInline` those come out as `a<strong>2 - b</strong>2`: a fix that breaks correct
+content, which is what the invariants call the worst kind. And an option is dropped into
+a `white-space:pre` monospace listing — EE211/M1's is an ASCII table with three aligned
+columns — where a MathML fraction moves every column after it.
+
+So the option stays literal, deliberately, with the reason written where the next author
+will read it. The **66 options authored with `$...$` anyway** are then a content defect
+rather than a rendering one: EE211's 13 are rewritten the way the listing beside them is
+written (`1/n^2`, not `$1/n^{2}$`), and the remaining 53 — EE102 45, EE231 8 — are
+pinned in the budget at their current numbers so a 67th cannot appear.
+
+### What changed
+
+**`renderBlanks` shuffles, through the same helper the quiz uses.** One per-install seed
+governs both, so the order is fixed for a learner across retries and not shared between
+two. The remap is the load-bearing part: `order` maps a drawn slot back to the index the
+author numbered, `data-opt` carries the **authored** index, and what is stored in
+`P.blanks` is what was always stored — so **every saved answer in every learner's
+progress means exactly what it meant before the shuffle**. The gate proves it by loading
+a saved set of authored key indices into a fresh mount and pressing Check.
+
+**The prompt goes through `mdInline`.** 245 fragments across ten courses repaired with
+no content edit at all, which is the same shape as cycle 3's `quizProse()` repairing
+five EE131 stems.
+
+**The view keeps the keyboard.** Each handler names where focus should go next and
+`paint()` puts it there: opening a blank moves to its option list, closing gives it back
+to the blank, picking returns to the blank you just filled, Check moves to the score, and
+Clear and retry goes to the first blank. Check's target is a new `.blk-fb-h` line reading
+"4 of 6 right", so the announcement is the score rather than a region that may or may not
+fire — the reason cycle 3 chose focus over `aria-live` for the quiz explanation, applied
+unchanged. Plus `aria-expanded` and a real name on every blank ("Blank 3 of 6, holding
+h[1], correct"), `role="group"` and `aria-labelledby` on the chooser, and `tabindex="0"`
+on the listing.
+
+**`emit.py`'s blanks path gains the three checks its quiz path already had** — duplicate
+options, `whys` entries that are empty, and positional references inside them — and
+`POSITIONAL` is narrowed as above. Confirmed to change no output: EE231, EE102 and CS201
+re-emit byte for byte, and `emit.py --all` produces the same catalogue it did before.
+
+**Content — EE211's M1–M4, 40 holes.** 146 per-option explanations, 4988 words; the
+feedback across all 45 holes in modules 1–4 goes from 2949 words to 7937. Every distractor was audited
+for being a misconception someone actually holds rather than a wrong number. The ones
+worth recording: *"4"* for where a four-sample convolution ends (the length mistaken for
+the last index, and the commonest off-by-one there is); *"5"* for the same (the two
+lengths added without the sample they share); *"1.75"* for the sum of an impulse
+response (magnitudes added, sign discarded — a real quantity, the bound on a bounded
+input, attached to the wrong question); *"6"* for a DC term (`a_0` rather than `a_0/2`)
+against *"1.5"* for the same hole (`a_0/2` halved a second time), which are the two
+opposite ways the same notation is misread; *"8"* for a cosine coefficient and *"−1"* for
+a sine one (both the complex-form habit, where a real amplitude splits into two lines of
+half the size); *"6 kHz"* for an alias (the Nyquist line treated as a floor to subtract
+from rather than as a mirror to reflect in — and 6 kHz is genuinely the distance the tone
+sits above it); *"1 + w^2 L C"* for a second-order denominator, where the missing minus
+sign is the entire difference between resonance and two cascaded first-order sections;
+and *"(R/2) sqrt(L/C)"* for a damping ratio, which rises with the inductor — and a bigger
+inductor stores more energy per cycle and damps *less*.
+
+**A new half to `verify_quiz.mjs`, and a stage for it.** The gate now reads the blanks
+bank for the structural failures it already refuses in the quiz bank, plus two of its
+own — the listing's `___` count against the number of blanks defined, and markup in an
+option — and ratchets the length tell and the markup count against
+`tools/quiz_budget.json`, which gains a `blanks` entry per course.
+
+The part that matters is `tools/blanks_stage.mjs`, because **both of this cycle's largest
+defects were invisible in the JSON and invisible to any rule written about the source**.
+A source-shape check saying "renderBlanks calls shuffledOptions" would have been a gate
+enforcing a comment. So the stage loads `lang.js`, `tracks.js`, `studio.js`, `engine.js`
+and `app.js` in the order `build.mjs` uses, hands them the tiny DOM the two circuit gates
+already share, and calls the real `renderBlanks` — then clicks its buttons. Per unit it
+checks that one button is drawn per `___`; that the blank buttons have names and the
+listing a tab stop; that the chooser is labelled by its prompt; that a prompt whose
+source carries mathematics or a code span reaches the screen with neither delimiter left
+in it; that the drawn options are a permutation of the authored ones carrying one
+authored index each; that pressing the r-th drawn option puts *that* option's text in the
+blank; that Check answers with the explanation for **the option actually pressed**, which
+is what proves the remap; that Check draws a score for the keyboard to land on; and that
+a saved set of authored key indices still grades as right. **6572 draws and 4384 options
+picked and read back**, over the whole catalogue, in about two seconds.
+
+`tools/dom_stub.mjs` gained `#id` selectors, purely additively — a term that used to
+throw now matches and nothing that used to match behaves differently. Checked rather than
+asserted: `verify_circuit_ui.mjs` and `verify_circuit_model.mjs` report identically
+before and after.
+
+### Verification beyond the gates
+
+**The gate was not trusted until it was seen to fail. Seventeen mutations, seventeen
+intended verdicts:** the shuffle removed from `renderBlanks`; the prompt escaped again;
+`data-opt` carrying the shown index; a saved answer stored as the shown index; two
+options in one blank reading the same; a `whys` list one entry short; "the third option"
+planted in a blanks explanation; **"the final answer" added to one, which must pass**;
+markup put back into an option; a course's blanks budget deleted; the listing losing one
+of its `___`; a bullet list in an explanation; the blank buttons losing their names; the
+listing losing its tab stop; Check drawing no score; the chooser losing its label; and
+the unmodified tree as a control.
+
+Every claim in this entry was measured rather than estimated: the 735 of 1103 and the 26
+courses at 100%; the 25.8% a shuffle produces on this particular mix of hole widths,
+against the 24.5% the gate now measures through the real renderer; the 165 and 80
+prompts; the 66 marked-up options and the 14 Python `**` ones that made rendering them
+the wrong fix; the four "final answer" occurrences that made the positional rule too
+wide. And all 226 mathematical fragments in the 159 strings this cycle wrote were pushed
+through the shipped `MathML.render`: **226 of 226 draw**, none is a swallowed fraction,
+none has an unpaired `$`, and none carries a backslash before a quote — cycle 3's
+raw-string leak, cycle 7's `\tfrac12` drawing as "12", and cycle 7's raw-markup fallback,
+all three swept for rather than hoped about.
+
+### Found in my own work, and fixed
+
+- **A number that was wrong for a reason worth keeping.** My new explanation for the
+  "46 kHz" distractor said 46 is `f_s - f`. It is not: `48 - 50 = -2`. 46 is
+  `2f_s - f = 96 - 50`, a reflection about the sample **rate** rather than about half of
+  it, which is a different and more interesting mistake than the one I had written. Found
+  by recomputing every number in the new prose against the model rather than by
+  re-reading the sentence.
+- **My own gate condemned fourteen correct options on its first run.** The tiny DOM keeps
+  a text node as the source that was assigned, so an option holding `&`, `<` or `"` reads
+  back as the entity `esc()` wrote it as: `s & nfa.accepting` came back as
+  `s &amp; nfa.accepting` and the gate reported that the shuffle's index map was wrong.
+  A browser hands back the character. Decoded in the stage, with the reason written
+  beside it — this is the third cycle in a row to meet a gate condemning working content.
+- **I deleted this cycle's own content and had to recover it.** The clean-up that put
+  back the 41 catalogue files `emit.py --all` rewrites filtered on
+  `startswith('catalog/')` and excluded only `catalog/EE211.json` — so it restored
+  `catalog/authors/EE211.py` from HEAD as well, discarding all 146 explanations along
+  with it. Recovered by re-running the three generator scripts, and the recovered file
+  was re-checked to the same figures rather than assumed identical: 159 strings, 226
+  fragments, 226 rendering, 0 swallowed, 0 unpaired, and the course's own pre-existing
+  raw and swallowed counts unmoved at 54 and 58. Recorded because the near-miss is the
+  lesson: a path filter written for one directory swept up its subdirectory, and
+  `git status` was the only thing that showed it.
+
+### Left alone, deliberately
+
+- **347 holes in ten courses still have no per-option feedback**: EE102 102, EE121 93,
+  EE101 87, MA111 20, MA121 17, EE241 11, EE221/MA112/MA201 5 each, EE202 2. EE211's 40
+  are done. This is cycle 3's debt, one course smaller, and it is now watched: the gate
+  reports the count and the budget file pins every course's tells, so the debt cannot
+  grow while it waits.
+- **53 options still carry markup the monospace slot draws literally** — EE102 45,
+  EE231 8 — pinned at exactly those numbers.
+- **EE211/M1's six two-option holes stay two-option.** "Is this system time invariant?"
+  has two answers, and cycle 3's finding stands: inventing a third option for a genuinely
+  binary fact is worse than the coin flip. What they gained is an explanation on **both**
+  answers, so the coin flip at least teaches. The unit is graded as six holes together,
+  so guessing it whole is 1 in 64.
+- **The 24 courses over 50% on the quiz length tell were not touched** — CS301 88%,
+  CS310 84%, DSP520/DSP530/EMAG530/VLSI530 80%, CS330 77%, MA101 75%. Cycle 3's main
+  recorded debt, still pinned, still unpaid. This cycle deliberately went to the *other*
+  bank instead, because the quiz bank had a gate and the blanks bank had none.
+- **EE211's 54 raw-markup fragments and 58 swallowed fractions.** Cycle 7 measured this
+  catalogue-wide (1053 and 161) and handed it on with the numbers; this cycle measured
+  EE211's share before and after and confirms it introduced none and fixed none —
+  unmoved at 54 and 58. It is a `studio.js` table change or a whole-catalogue sweep, and
+  cycle 7's reasoning for not burying it inside a content cycle applies here unchanged.
+- **`emit.py --all`'s 41-file drift was reverted, again.** Running it adds `"check": ""`
+  to units whose author file does not set one and rewrites every file with CRLF. Cycle 4
+  reverted the same 41 files for the same reason. Only `catalog/EE211.json` is in this
+  diff; verified by restoring the other 31 byte-exactly from HEAD and re-checking
+  `git status`, not by trusting `git diff`, which normalises line endings and reported
+  30 of them as unchanged while the bytes on disk differed.
+- **`.quiz-q .qt code` still takes its colour from `--lime` rather than `--code-ink`,
+  and `P.dim` (2.93:1) and `P.faint` (1.86:1) still fail contrast on every canvas.**
+  Cycles 2, 3, 5, 6 and 8 have each recorded these. Track 5.
+- **`docs/programs` aged out one MA101 payload and gained one for EE211.** The rolling
+  generation window, as cycles 1–8 all established. Verified rather than assumed: 3
+  generations naming 64 files, 64 payload files on disk, **0 orphaned and 0 missing**,
+  the current generation listing 62 entries covering 62 distinct courses.
+
+### Gates, after
+
+Every pre-existing number unmoved. The only numbers that moved are the new gate's, the
+per-option explanation count — by exactly the 146 written — and the artifact sizes.
+
+```
+verify_quiz          All good: 1366 questions in 252 quiz units and 1103 holes in 217
+                     blanks units · 3160 per-option explanations (160 quiz, 3000 blanks;
+                     3014 -> 3160, +146) · 6572 live draws, 4384 options picked and read
+                     back · the answer is drawn in the top slot 24.5% of the time,
+                     against 66.6% before the shuffle · every bank within budget   [BLANKS HALF NEW]
+verify_circuits      All good: 80 circuit exercises, 340 checks · 527 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_derivations   All good: 1170 steps across 46 courses
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_theme         All good: 14 exemptions · 58 contrast surfaces in both themes ·
+                     the 375px topbar · the mobile drawer
+verify_circuit_ui    All good: 78 driven keys and gestures, says 10 things while doing it
+verify_circuit_model All good: 1445 analyses vouch for every number, 84 refuse ·
+                     15 plots · 15 floors, 17 ceilings
+verify_labs EE211    All good: 5 labs
+emit.py EE211        ok — 10 modules, 4 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12666 -> 12693 KB ·
+                     inlined 13849 -> 13880 KB · shell 1154 -> 1159 KB, of 1536
+```
+
+Beyond the gates: 17 mutations, each producing the verdict it had to, including one the
+gate was required to **pass**; the shuffle's index remap proved by pressing every option
+of every hole in the catalogue and reading the explanation back; saved progress proved to
+still grade correctly on all 217 units; the two older stub-driven gates confirmed
+byte-identical after the shared DOM was extended; 226 of 226 new math fragments rendered
+through the shipped renderer; and the payload window checked for orphans rather than
+assumed.
+
+---

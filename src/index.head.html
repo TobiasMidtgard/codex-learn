@@ -818,6 +818,10 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .blk-opt.on{border-color:var(--lime);background:var(--lime-12);color:var(--ink)}
 .blk-acts{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .blk-fb{display:flex;flex-direction:column;gap:10px;margin-bottom:8px}
+/* Check moves the keyboard here, so the score is the first thing read out. It is a
+   heading in fact rather than in tag: the rows under it are what it counts. */
+.blk-fb-h{font-size:13px;color:var(--ink-2);font-weight:600}
+.blk-fb:focus-visible{outline:2px solid var(--lime);outline-offset:4px;border-radius:var(--r-lg)}
 .blk-row{display:grid;grid-template-columns:18px 1fr;gap:11px;padding:12px 14px;
   border-radius:var(--r-lg);border:1px solid var(--line);background:var(--surface)}
 .blk-row.right{border-color:color-mix(in srgb,var(--ans-ok) 30%,transparent)}

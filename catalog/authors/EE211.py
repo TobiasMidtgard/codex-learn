@@ -782,6 +782,10 @@ head — scale and add for linearity, delay the input and compare for time invar
                             "opts": ["yes", "no"],
                             "a": 0,
                             "why": "Nothing inside a fixed gain refers to the clock, so a delayed input gives $3x(t - t_0)$, which is exactly the old output delayed. This is the simplest LTI system there is: its impulse response is $3\\delta(t)$.",
+                            "whys": [
+                                "Right: nothing inside a fixed gain refers to the clock, so delaying the input by $t_0$ gives $3x(t - t_0)$, which is the old output delayed by that same $t_0$.",
+                                "The gain is three now and was three a second ago, so a delay has nothing here to act on. What makes a system time varying is a coefficient that depends on $t$ — the ramp two rows below has one, and this row does not.",
+                            ],
                         },
                         {
                             "prompt": "Gain of three with a 1 V offset added. Does superposition survive?",
@@ -789,6 +793,10 @@ head — scale and add for linearity, delay the input and compare for time invar
                             "opts": ["yes", "no"],
                             "a": 1,
                             "why": "It does not. Put in zero and 1 V comes out, and no linear system can produce an output from no input. Add two inputs and the offset appears once instead of twice: $3(x_1 + x_2) + 1$ is one volt short of $(3x_1 + 1) + (3x_2 + 1)$. The graph is a straight line and the system is *affine*, not linear.",
+                            "whys": [
+                                "A straight line on a graph is not the same thing as a linear system. Superposition requires that zero in gives zero out, and 1 V comes out of this one with nothing applied at all; feed it $x_1 + x_2$ and the offset arrives once where two separate runs would have added it twice.",
+                                "Right, and the word for it is *affine*: linear plus a constant. The zero input is the test that catches it in one line.",
+                            ],
                         },
                         {
                             "prompt": "A gain that rises steadily with time. Delay the input by one second — does the output just shift?",
@@ -796,6 +804,10 @@ head — scale and add for linearity, delay the input and compare for time invar
                             "opts": ["yes", "no"],
                             "a": 1,
                             "why": "No. A click at $t = 2$ comes out with height 2; the same click at $t = 3$ comes out with height 3, where a shifted copy of the first output would still have height 2. The gain is tied to the clock rather than to the signal, which is exactly what a mixer does with a cosine in place of the ramp.",
+                            "whys": [
+                                "A delay does move the output along, but not without changing it. A click at $t = 2$ leaves with height 2 and the same click at $t = 3$ with height 3, while a genuinely delayed copy of the first output would still be two units tall.",
+                                "Right: the multiplier is tied to the clock rather than to the signal. This is exactly what a mixer does, with a cosine in place of the ramp.",
+                            ],
                         },
                         {
                             "prompt": "Time compression, $x(2t)$: the signal played at double speed. Does scaling and adding still work?",
@@ -803,6 +815,10 @@ head — scale and add for linearity, delay the input and compare for time invar
                             "opts": ["yes", "no"],
                             "a": 0,
                             "why": "Yes. Compressing the time axis does not touch amplitudes, so doubling the input doubles the output and the response to a sum is the sum of the responses. It is time invariance that this one fails: delaying the input gives $x(2t - t_0)$ while a delayed output would be $x(2t - 2t_0)$, and those are different signals.",
+                            "whys": [
+                                "Right — compressing the time axis never touches an amplitude, so doubling the input doubles the output and the response to a sum is the sum of the responses.",
+                                "What this one breaks is time invariance, and it is in the other column: delaying the input gives $x(2t - t_0)$ where a delayed output would be $x(2t - 2t_0)$. Answering \"not LTI\" to the whole row is the mistake this table exists to catch — the useful skill is saying *which* property went.",
+                            ],
                         },
                         {
                             "prompt": "The current sample multiplied by the previous one. Linear?",
@@ -810,6 +826,10 @@ head — scale and add for linearity, delay the input and compare for time invar
                             "opts": ["yes", "no"],
                             "a": 1,
                             "why": "No — this is squaring in disguise. Double the input and the output goes up by four, because both factors doubled. Multiplying a signal by a *constant* is linear; multiplying it by another signal, including a delayed copy of itself, is not.",
+                            "whys": [
+                                "Multiplying a signal by a *constant* is linear; multiplying it by another signal is not, even when that other signal is a delayed copy of the same input. Double the input and the output goes up by four, because both factors doubled.",
+                                "Right — it is squaring in disguise, and a doubled input gives four times the output rather than twice it.",
+                            ],
                         },
                         {
                             "prompt": "Time reversal, $y[n] = x[-n]$. Delay the input by one sample and compare.",
@@ -817,6 +837,10 @@ head — scale and add for linearity, delay the input and compare for time invar
                             "opts": ["yes", "no"],
                             "a": 1,
                             "why": "No. Delaying the input gives $x[-n-1]$, but the delayed output is $x[-(n-1)] = x[1-n]$ — a delay at the input becomes an *advance* at the output, because the axis has been flipped. Reversal is perfectly linear, and it is the standard example of a linear system that is neither time invariant nor causal.",
+                            "whys": [
+                                "Delay and reversal do not commute. Delaying the input gives $x[-n-1]$ while delaying the output gives $x[1-n]$, so a delay at one end has become an advance at the other and the two signals are different.",
+                                "Right, and it is the standard example of a system that is perfectly linear and neither time invariant nor causal — reading $x[-n]$ at $n = -5$ needs the input at $n = 5$, which has not happened yet.",
+                            ],
                         },
                     ],
                 },
@@ -853,6 +877,12 @@ a sign or an index has gone astray somewhere above it.
                             "opts": ["2", "3", "4", "5"],
                             "a": 1,
                             "why": "The output is $2 + 3 - 1 = 4$ samples long, and a run of four samples starting at $n = 0$ ends at $n = 3$. The off-by-one is worth being careful about: the *length* is 4 and the *last index* is 3.",
+                            "whys": [
+                                "2 is the last index of a *three*-sample run. The output of this convolution is $2 + 3 - 1 = 4$ samples long, so it runs $n = 0, 1, 2, 3$.",
+                                "Right: $2 + 3 - 1 = 4$ samples, and four of them starting at $n = 0$ end at $n = 3$.",
+                                "4 is the length, not the last index. Counting from zero is the whole of the difference, and it is the commonest off-by-one in a convolution — the sheet above has four lines and the last one is numbered 3.",
+                                "5 adds the two lengths outright. They overlap in one sample at each end of the slide, which is where the $-1$ comes from; $2 + 3$ would be the answer if the two sequences never shared an instant.",
+                            ],
                         },
                         {
                             "prompt": "The first output sample: 4.00 times 1.00.",
@@ -860,6 +890,12 @@ a sign or an index has gone astray somewhere above it.
                             "opts": ["1.00", "4.00", "0.25", "6.00"],
                             "a": 1,
                             "why": "$y[0] = 4.00 \\times 1.00 = 4.00$. Only one product can contribute, because there is no earlier input sample and no earlier sample of $h$ — which is why the first output sample is always $x[0]h[0]$ and is the easiest place to catch a scaling error.",
+                            "whys": [
+                                "1.00 is $h[0]$ on its own, with the input's amplitude dropped. The first output sample is a *product* of the two sequences, not a copy of one of them.",
+                                "Right: $y[0] = x[0]h[0] = 4.00 \\times 1.00$, and nothing else can contribute, because there is no earlier sample of either sequence to bring in.",
+                                "0.25 is $h[2]$, the far end of the impulse response. It cannot reach $y[0]$ at all: the indices in every product must add up to the output index, and $0 + 2 = 2$.",
+                                "6.00 is the sum of the input samples. That number does have a use — it is the $6.00$ on the check line — but it belongs to the total, not to the first sample.",
+                            ],
                         },
                         {
                             "prompt": "$4.00 \\times (-0.50) + 2.00 \\times 1.00$.",
@@ -867,6 +903,12 @@ a sign or an index has gone astray somewhere above it.
                             "opts": ["2.00", "0.00", "-2.00", "4.00"],
                             "a": 1,
                             "why": "$-2.00 + 2.00 = 0.00$. The two contributions cancel exactly, which is a real feature of this system rather than an accident of the arithmetic: it is what makes the output settle back towards zero after the input stops.",
+                            "whys": [
+                                "2.00 is the second product with the first left out. Both belong to this line: the input's first sample meeting $h[1]$, and its second meeting $h[0]$.",
+                                "Right: $-2.00 + 2.00 = 0.00$. The cancellation is a real feature of this system rather than an accident of the arithmetic — it is what makes the output settle back towards zero once the input stops.",
+                                "$-2.00$ is the first product alone. It is also what you get by reading both sequences forwards at the same index; the sum runs one of them backwards, which is exactly what the $h[n-k]$ in the formula means.",
+                                "4.00 is $y[0]$ over again. A convolution slides: every output sample is a different overlap, not the previous one rescaled.",
+                            ],
                         },
                         {
                             "prompt": "Which sample of $h$ does $x[1]$ meet in the line for $y[2]$?",
@@ -874,6 +916,12 @@ a sign or an index has gone astray somewhere above it.
                             "opts": ["h[0]", "h[1]", "h[2]", "x[0]"],
                             "a": 1,
                             "why": "The indices in every product have to add up to the output index. For $y[2]$, $x[1]$ must meet $h[1]$, because $1 + 1 = 2$. That rule is the whole content of the reversal in $h[n-k]$, and checking it is faster than re-deriving the sum.",
+                            "whys": [
+                                "$1 + 0 = 1$, so that pairing belongs to $y[1]$ — and it is the pairing the other term of that line already uses.",
+                                "Right: the indices in every product add up to the output index, and $1 + 1 = 2$.",
+                                "$1 + 2 = 3$, which is the tail line, $y[3]$. Reading the two sequences in the same direction instead of sliding one past the other produces exactly this shift.",
+                                "Two samples of the input never multiply each other. A convolution pairs the input with the impulse response; a product of two input samples is the non-linear system from the drill before this one.",
+                            ],
                         },
                         {
                             "prompt": "$4.00 \\times 0.25 + 2.00 \\times (-0.50)$.",
@@ -881,6 +929,12 @@ a sign or an index has gone astray somewhere above it.
                             "opts": ["1.00", "0.00", "-1.00", "0.50"],
                             "a": 1,
                             "why": "$1.00 - 1.00 = 0.00$. Two zeros in a row in the middle of an output is unusual enough to be worth a second look, and here it is genuine — the check on the last line confirms it.",
+                            "whys": [
+                                "1.00 is $4.00 \\times 0.25$ on its own. The other product, $2.00 \\times (-0.50)$, cancels it exactly.",
+                                "Right: $1.00 - 1.00 = 0.00$. Two zeros in a row in the middle of an output is unusual enough to be worth a second look, and the check on the last line confirms this one.",
+                                "$-1.00$ is the second product alone, and its sign is the tell: the term that has been dropped is positive and the same size.",
+                                "0.50 is $y[3]$, one line further on, where only $x[1]$ and $h[2]$ are still overlapping.",
+                            ],
                         },
                         {
                             "prompt": "The tail: $2.00 \\times 0.25$.",
@@ -888,6 +942,12 @@ a sign or an index has gone astray somewhere above it.
                             "opts": ["0.25", "0.50", "2.00", "0.00"],
                             "a": 1,
                             "why": "$y[3] = 0.50$. The last output sample is always $x[N-1]h[M-1]$, the trailing edge of one meeting the trailing edge of the other, and like the first sample it is a single product with nothing else to add to it.",
+                            "whys": [
+                                "0.25 is $h[2]$ with the input's amplitude dropped — the same slip as at the first sample, at the other end of the slide.",
+                                "Right: $y[3] = x[1]h[2] = 0.50$, the trailing edge of one sequence meeting the trailing edge of the other. Like the first sample it is a single product with nothing to add to it.",
+                                "2.00 is $x[1]$ on its own. It would be the answer if the impulse response ended in a sample of unit height; this one ends in a quarter.",
+                                "The output has been zero twice already, but nothing cancels a lone product. A zero here would mean the system had finished responding, and there is still one sample of $h$ left to slide through.",
+                            ],
                         },
                         {
                             "prompt": "The sum of the three samples of $h$.",
@@ -895,6 +955,12 @@ a sign or an index has gone astray somewhere above it.
                             "opts": ["0.75", "1.75", "1.25", "0.25"],
                             "a": 0,
                             "why": "$1.00 - 0.50 + 0.25 = 0.75$, and $6.00 \\times 0.75 = 4.50$, which is $4.00 + 0.00 + 0.00 + 0.50$. That sum is the gain the system applies to a constant input, and using it as a check costs a few seconds and catches most sign slips.",
+                            "whys": [
+                                "Right: $1.00 - 0.50 + 0.25 = 0.75$, and $6.00 \\times 0.75 = 4.50$, which is $4.00 + 0.00 + 0.00 + 0.50$.",
+                                "1.75 adds the magnitudes and throws the minus sign away. That sum is a real quantity — it bounds the output of a bounded input — but it is not the gain, and here it would predict 10.50 against the 4.50 the samples actually come to.",
+                                "1.25 subtracts the last sample instead of adding it. The signs in $h$ alternate once and then stop: only the middle sample is negative.",
+                                "0.25 is $h[2]$ alone. The check needs the whole of $h$, because the gain a system applies to a constant input is the sum of every sample of its impulse response — which is the claim the last line is testing.",
+                            ],
                         },
                     ],
                 },
@@ -1957,6 +2023,12 @@ DC term is not halved, and nothing at all lives at $2f_0$.
                             "opts": ["0.5", "1", "2", "3"],
                             "a": 1,
                             "why": "$f_0 = 1/T = 1/(1\\text{ ms}) = 1$ kHz. Every frequency in this signal is a whole multiple of it, so the terms sit at 1 kHz and 3 kHz and nowhere else.",
+                            "whys": [
+                                "0.5 kHz is $1/(2T)$ — the period counted as half a cycle. The fundamental completes one whole cycle per period, so its frequency is the reciprocal of the period and nothing else.",
+                                "Right: $f_0 = 1/T = 1/(1\\text{ ms}) = 1$ kHz. Every frequency in the signal is a whole multiple of it, so the terms sit at 1 kHz and 3 kHz and nowhere between.",
+                                "2 kHz is the second harmonic, and this signal has nothing at it. The fundamental is the *lowest* frequency whose period fits the waveform exactly once.",
+                                "3 kHz is the third harmonic — the highest frequency present here, rather than the one the whole series is built on.",
+                            ],
                         },
                         {
                             "prompt": "The constant term of the series. What DC level does this signal sit on?",
@@ -1964,6 +2036,12 @@ DC term is not halved, and nothing at all lives at $2f_0$.
                             "opts": ["1.5", "3", "4", "6"],
                             "a": 1,
                             "why": "3 V — the constant written in the signal *is* the mean value, and the mean value is what $a_0/2$ denotes. The 1.5 V answer comes from halving it a second time: $a_0$ itself is 6 V here, and it is $a_0/2$ that enters the series.",
+                            "whys": [
+                                "1.5 V halves the mean a second time. The notation is the trap: $a_0$ is 6 V here, and it is $a_0/2 = 3$ V that appears in the series and equals the average.",
+                                "Right: the constant written into the signal *is* its mean value, and the mean value is what $a_0/2$ denotes.",
+                                "4 V is $a_1$, the amplitude of the cosine at the fundamental. Anything that oscillates averages to zero over a whole period and contributes nothing to the DC level.",
+                                "6 V is $a_0$ itself, which never appears in a series on its own. The constant term is written $a_0/2$ precisely so that the integral defining $a_n$ can be one formula for every $n$, zero included.",
+                            ],
                         },
                         {
                             "prompt": "The cosine coefficient at the fundamental.",
@@ -1971,6 +2049,12 @@ DC term is not halved, and nothing at all lives at $2f_0$.
                             "opts": ["2", "3", "4", "8"],
                             "a": 2,
                             "why": "$a_1 = 4$ V, read directly off the $4\\cos(\\omega_0 t)$ term. With $b_1 = 0$ the component at 1 kHz is a pure cosine of amplitude $\\sqrt{a_1^2 + b_1^2} = 4$ V and phase zero.",
+                            "whys": [
+                                "2 V is the size of the third-harmonic term, which is a sine at $3\\omega_0$ rather than anything at the fundamental.",
+                                "3 V is the DC level. It is a constant, so it belongs to no harmonic at all.",
+                                "Right: $a_1 = 4$ V, read straight off the $4\\cos(\\omega_0 t)$ term. With $b_1 = 0$ the component at 1 kHz is a pure cosine of amplitude $\\sqrt{a_1^2 + b_1^2} = 4$ V and phase zero.",
+                                "8 doubles the amplitude, as though the coefficient were half of it. That halving belongs to the *complex* form, where a real 4 V cosine splits into two lines of 2 V at $\\pm f_0$; in the sine-cosine form written here the coefficient is the amplitude.",
+                            ],
                         },
                         {
                             "prompt": "How big is the component at 2 kHz?",
@@ -1978,6 +2062,12 @@ DC term is not halved, and nothing at all lives at $2f_0$.
                             "opts": ["0", "2", "4", "it cannot be determined from what is given"],
                             "a": 0,
                             "why": "Zero. A harmonic is present only if the series contains a term at that frequency, and this one jumps straight from $f_0$ to $3f_0$. A line spectrum with a gap in it is completely normal — a square wave has a gap at every even harmonic.",
+                            "whys": [
+                                "Right: zero. A harmonic is present only if the series contains a term at that frequency, and this one jumps straight from $f_0$ to $3f_0$.",
+                                "2 V is the third harmonic, at 3 kHz. Nothing leaks between harmonics — a Fourier series has energy at exact multiples of $f_0$ and at no other frequency whatever.",
+                                "4 V is the fundamental, at 1 kHz.",
+                                "It can be determined, and that is the point of a series written out in full: nothing is left to measure. A gap in a line spectrum is a fact about the waveform rather than missing information — a square wave has one at every even harmonic.",
+                            ],
                         },
                         {
                             "prompt": "The sine coefficient at the third harmonic. Mind the sign.",
@@ -1985,6 +2075,12 @@ DC term is not halved, and nothing at all lives at $2f_0$.
                             "opts": ["2", "-2", "-1", "6"],
                             "a": 1,
                             "why": "$b_3 = -2$ V. The minus sign is a phase, not a negative size: $-2\\sin(3\\omega_0 t)$ is a 2 V sinusoid turned upside down. It matters for the waveform and, as the next line shows, not at all for the power.",
+                            "whys": [
+                                "2 V is the size but not the coefficient. The term is $-2\\sin(3\\omega_0 t)$, and dropping the sign loses the phase: the same amplitude inverted is a different waveform, even though it carries identical power.",
+                                "Right: $b_3 = -2$ V. The minus sign is a phase, not a negative size — a 2 V sinusoid turned upside down.",
+                                "$-1$ halves the coefficient, which is the complex-form habit again: $-2\\sin$ splits into two conjugate lines of magnitude 1 at $\\pm 3f_0$. Here the coefficient is the whole amplitude.",
+                                "6 is $a_0$, the doubled DC term, and a constant belongs to no harmonic.",
+                            ],
                         },
                         {
                             "prompt": "The fundamental's contribution to the mean square: $(a_1^2 + b_1^2)/2$ with $a_1 = 4$ and $b_1 = 0$.",
@@ -1992,6 +2088,12 @@ DC term is not halved, and nothing at all lives at $2f_0$.
                             "opts": ["4", "8", "16", "2"],
                             "a": 1,
                             "why": "$(4^2 + 0)/2 = 8$ V². The halving is the average of $\\cos^2$ over a cycle, which is why a 4 V peak sinusoid contributes 8 V² and not 16. The same halving is what the DC term does *not* get.",
+                            "whys": [
+                                "4 is the amplitude, not what it contributes. Power goes as the square of an amplitude, which is the entire reason this line has $a_1^2$ in it.",
+                                "Right: $(4^2 + 0)/2 = 8$ V². The halving is the average of $\\cos^2$ over a cycle, which is why a 4 V peak sinusoid contributes 8 V² and not 16 — and it is the halving the DC term does *not* get.",
+                                "16 V² is the peak square, $4^2$, with no averaging at all. The waveform is only that large for an instant per cycle.",
+                                "2 halves twice over. The $/2$ in $(a_1^2 + b_1^2)/2$ is already the averaging; applying it again is the same slip as halving $a_0/2$ on the line above.",
+                            ],
                         },
                         {
                             "prompt": "The RMS value: the square root of 19.",
@@ -1999,6 +2101,12 @@ DC term is not halved, and nothing at all lives at $2f_0$.
                             "opts": ["3.08", "4.36", "4.50", "9.00"],
                             "a": 1,
                             "why": "$\\sqrt{19} = 4.359$ V. Compare it with the temptation to add: $3 + 4 + 2 = 9$ V, or $9/\\sqrt{2} = 6.36$ V. Neither is anywhere near, because components at different frequencies do not line up, and power rather than amplitude is what adds across a spectrum.",
+                            "whys": [
+                                "3.08 is $\\sqrt{9.5}$ — 19 halved once more before the root is taken. The halving that turns an amplitude into a power has already been done, one line above, for each oscillating term.",
+                                "Right: $\\sqrt{19} = 4.359$ V. Compare it with the temptation to add: $3 + 4 + 2 = 9$ V, or $9/\\sqrt2 = 6.36$ V. Neither is close, because components at different frequencies never line up, and it is power rather than amplitude that adds across a spectrum.",
+                                "4.50 V is 9 divided by 2: the amplitudes added and then halved. Two separate mistakes, and the second does not undo the first.",
+                                "9 V is the sum of the three amplitudes — the peak the waveform would reach if all three crested at the same instant. They do not, and even if they did, a peak is not an RMS.",
+                            ],
                         },
                     ],
                 },
@@ -2042,54 +2150,84 @@ Every waveform below has its mean stated, so the DC term is never in doubt.
                             ],
                             "a": 2,
                             "why": "Odd about $t = 0$ removes every cosine, and half-wave symmetry removes every even harmonic, leaving sines at $f_0, 3f_0, 5f_0, \\dots$ with $b_n = 4A/(n\\pi)$. Two independent symmetries, each killing a different half of the table.",
+                            "whys": [
+                                "Cosines are what oddness removes: a cosine is even about $t = 0$ and this waveform is odd there, so every $a_n$ integrates to zero. Getting the harmonic set right and the family wrong usually means the two symmetries have been swapped.",
+                                "Sines are right; every harmonic is not. Half-wave symmetry — the second half of the period is the first half inverted — kills the even ones, and a square wave has it exactly.",
+                                "Right: odd about $t = 0$ removes every cosine, half-wave symmetry removes every even harmonic, and what is left is sines at $f_0, 3f_0, 5f_0, \\dots$ with $b_n = 4A/(n\\pi)$. Two independent symmetries, each killing a different half of the table.",
+                                "The waveform spends half its period at $+A$ and half at $-A$, so its mean is zero and there is no DC term to have. The even harmonics are absent as well, for the reason above.",
+                            ],
                         },
                         {
                             "prompt": "Now add a constant so the same waveform runs between 0 and $2A$ instead of $-A$ and $+A$. What changes?",
                             "hole": "?",
                             "opts": [
                                 "the same sine terms, unchanged",
-                                "the same sine terms, plus a DC term of $A$",
-                                "cosine terms plus a DC term of $A$",
-                                "sine terms at every harmonic now, plus a DC term of $A$",
+                                "the same sine terms, plus a DC term of A",
+                                "cosine terms plus a DC term of A",
+                                "sine terms at every harmonic now, plus a DC term of A",
                             ],
                             "a": 1,
                             "why": "Adding a constant adds a constant: $a_0/2 = A$ appears and nothing else moves. The AC part of the waveform is untouched, so its harmonics are untouched — which is worth remembering whenever a scope shows a waveform sitting on an offset and you are only interested in the shape.",
+                            "whys": [
+                                "The sine terms really are unchanged, which is half of it. What is missing is the constant you just added: it has to appear somewhere, and the only place in a Fourier series for something that does not oscillate is the DC term.",
+                                "Right: adding a constant adds a constant. $a_0/2 = A$ appears and nothing else moves — which is worth remembering whenever a scope shows a waveform sitting on an offset and only its shape is of interest.",
+                                "Moving a waveform up and down does not move it along in time, and it is position in time that decides between sines and cosines. Apart from the offset this is the same odd waveform it was.",
+                                "The lifted waveform no longer satisfies $x(t + T/2) = -x(t)$, but the symmetry that governs the harmonics is one of the waveform *minus its mean* — and that is the original square wave. Its even harmonics are still absent.",
+                            ],
                         },
                         {
                             "prompt": "A triangle wave, even about the origin, mean zero. Which terms, and how fast do they fall?",
                             "hole": "?",
                             "opts": [
-                                "cosine terms at odd harmonics only, falling as $1/n$",
-                                "sine terms at odd harmonics only, falling as $1/n^{2}$",
-                                "cosine terms at every harmonic, falling as $1/n^{2}$",
-                                "cosine terms at odd harmonics only, falling as $1/n^{2}$",
+                                "cosine terms at odd harmonics only, falling as 1/n",
+                                "sine terms at odd harmonics only, falling as 1/n^2",
+                                "cosine terms at every harmonic, falling as 1/n^2",
+                                "cosine terms at odd harmonics only, falling as 1/n^2",
                             ],
                             "a": 3,
                             "why": "Even kills the sines, half-wave symmetry kills the even harmonics, and the waveform is continuous with a jump only in its *slope*, which buys one extra factor of $1/n$ over the square wave. Same frequencies as the square wave, very different sizes: the third harmonic is a ninth of the fundamental rather than a third.",
+                            "whys": [
+                                "The family and the harmonic set are right and the decay is the square wave's. A $1/n$ tail belongs to a waveform that jumps; a triangle is continuous and only its slope jumps, which buys one extra factor of $1/n$.",
+                                "Even about the origin is exactly what makes these cosines: a sine is odd, so every $b_n$ of an even waveform integrates to zero. The decay is right and the family is not.",
+                                "The decay is right and the harmonic set is not. A triangle has half-wave symmetry just as the square wave does — shift it half a period and it is the same shape inverted — so the even harmonics are absent.",
+                                "Right: even kills the sines, half-wave symmetry kills the even harmonics, and a waveform that is continuous with a break only in its *slope* decays as $1/n^2$. Same frequencies as the square wave, very different sizes: the third harmonic is a ninth of the fundamental rather than a third.",
+                            ],
                         },
                         {
                             "prompt": "A pulse train, 0 V for three quarters of the period and $A$ for the other quarter, centred on $t = 0$.",
                             "hole": "?",
                             "opts": [
-                                "a DC term of $A/2$ and cosine terms at every harmonic",
+                                "a DC term of A/2 and cosine terms at every harmonic",
                                 "cosine terms at odd harmonics only",
-                                "a DC term of $A/4$ and cosine terms at every harmonic except multiples of four",
+                                "a DC term of A/4 and cosine terms at every harmonic except multiples of four",
                                 "sine terms at every harmonic, with no DC term",
                             ],
                             "a": 2,
                             "why": "Even, so cosines only; the mean is $A \\times 0.25 = A/4$; and there is no half-wave symmetry at all, so the even harmonics are present. What *is* missing is every fourth one, because $a_n \\propto \\sin(n\\pi/4)$ vanishes when $n$ is a multiple of 4 — the harmonic that fits a whole number of cycles inside the pulse collects nothing from it.",
+                            "whys": [
+                                "$A/2$ is the mean of a waveform that is high for half its period. This one is high for a quarter, so its mean is $A \\times 0.25$. The harmonic set is not quite right either.",
+                                "Odd harmonics only would need half-wave symmetry, and a pulse high for a quarter of the period and low for three quarters plainly has none — shifted half a period it does not become its own inverse. There is a DC term to account for as well.",
+                                "Right: even, so cosines only; the mean is $A \\times 0.25 = A/4$; and with no half-wave symmetry the even harmonics stay. What *is* missing is every fourth one, because $a_n \\propto \\sin(n\\pi/4)$ vanishes when $n$ is a multiple of 4 — the harmonic that fits a whole number of cycles inside the pulse collects nothing from it.",
+                                "The waveform is even about $t = 0$, so there are no sines at all, and it is never negative, so its mean cannot be zero. Both halves of this describe a waveform positioned differently from the one described.",
+                            ],
                         },
                         {
                             "prompt": "A sawtooth ramping steadily up and dropping vertically back, odd about the origin, mean zero.",
                             "hole": "?",
                             "opts": [
-                                "sine terms at every harmonic, falling as $1/n$",
-                                "sine terms at odd harmonics only, falling as $1/n$",
-                                "sine terms at every harmonic, falling as $1/n^{2}$",
-                                "cosine terms at every harmonic, falling as $1/n$",
+                                "sine terms at every harmonic, falling as 1/n",
+                                "sine terms at odd harmonics only, falling as 1/n",
+                                "sine terms at every harmonic, falling as 1/n^2",
+                                "cosine terms at every harmonic, falling as 1/n",
                             ],
                             "a": 0,
                             "why": "Odd, so sines only. But shift a sawtooth by half a period and you get the same ramp displaced, not the ramp inverted — there is no half-wave symmetry, so the even harmonics stay. And it jumps once per period, so the coefficients fall as $1/n$, which is why a sawtooth is the standard test signal for anything that has to cope with wide bandwidth.",
+                            "whys": [
+                                "Right: odd, so sines. Shift a sawtooth by half a period and you get the same ramp displaced, not the ramp inverted — there is no half-wave symmetry, so the even harmonics stay. And it jumps once per period, so the coefficients fall as $1/n$, which is why a sawtooth is the standard test signal for anything that has to cope with wide bandwidth.",
+                                "This is the square wave's harmonic set on a waveform that does not earn it. Half-wave symmetry is what removes the even harmonics, and half a period later a ramp is at a different height rather than at the negative of its old one.",
+                                "$1/n^2$ is a continuous waveform's decay. A sawtooth drops vertically once per period, and a jump is exactly what holds the tail up at $1/n$.",
+                                "Cosines are even about $t = 0$ and this ramp is odd there, so every $a_n$ is zero.",
+                            ],
                         },
                     ],
                 },
@@ -3425,6 +3563,12 @@ The rate is 48 kSa/s throughout, which puts the Nyquist limit at 24 kHz.
                             "opts": ["6", "18", "24", "30"],
                             "a": 1,
                             "why": "$f_s - f = 48 - 30 = 18$ kHz. The fold reflects about $f_s/2$, and reflecting 30 about 24 means going 6 kHz past it and coming back 6 kHz short: $24 - 6 = 18$. Subtracting $f_s/2$ instead gives 6 kHz, which is the standard slip — it treats the Nyquist line as a floor to subtract rather than as a mirror.",
+                            "whys": [
+                                "6 kHz is $f - f_s/2$: the Nyquist line treated as a floor to subtract from rather than as a mirror to reflect in. It is the standard slip, and 6 kHz is in fact the *distance* the tone sits above the line rather than where it lands.",
+                                "Right: $f_s - f = 48 - 30 = 18$ kHz. Reflecting 30 about 24 means going 6 kHz past the line and coming back 6 kHz short of it.",
+                                "24 kHz is the mirror itself. A tone lands there only if it was already there — a fold moves a frequency across the line, it does not park it on it.",
+                                "30 kHz is where the tone is, not where it appears. Nothing above $f_s/2$ survives sampling at its own frequency; the recorded data cannot tell it from its reflection.",
+                            ],
                         },
                         {
                             "prompt": "50 kHz is above the sample rate. What is left after reducing modulo 48?",
@@ -3432,6 +3576,12 @@ The rate is 48 kSa/s throughout, which puts the Nyquist limit at 24 kHz.
                             "opts": ["2", "26", "46", "50"],
                             "a": 0,
                             "why": "$50 - 48 = 2$ kHz, and 2 is comfortably below 24, so no folding is needed and the tone appears at 2 kHz. A tone just above the sample rate aliases to a very low frequency — which is why interference near $f_s$ or any multiple of it is the worst kind to have on a board.",
+                            "whys": [
+                                "Right: $50 - 48 = 2$ kHz, and 2 is comfortably below 24, so no folding is needed. A tone just above the sample rate aliases to a very low frequency — which is why interference near $f_s$, or any multiple of it, is the worst kind to have on a board.",
+                                "26 kHz is $50 - 24$: reducing by the Nyquist limit rather than by the sample rate. The copies of the spectrum are $f_s$ apart, not $f_s/2$.",
+                                "46 kHz reflects 50 about the sample rate rather than about half of it: $2f_s - f = 96 - 50$. The mirror is at $f_s/2$, and it is reached only after the reduction and only by what is left above it — which is the whole point of the two columns in this table.",
+                                "50 kHz is above the sample rate, and nothing above $f_s/2$ appears at its own frequency.",
+                            ],
                         },
                         {
                             "prompt": "70 kHz reduces to 22 kHz. Is 22 kHz above the Nyquist limit?",
@@ -3439,6 +3589,10 @@ The rate is 48 kSa/s throughout, which puts the Nyquist limit at 24 kHz.
                             "opts": ["yes", "no"],
                             "a": 1,
                             "why": "No: $22 < 24$, so nothing folds and 22 kHz is where it appears. Two tones 48 kHz apart are indistinguishable after sampling, so 70 kHz and 22 kHz produce identical data — and so does 118 kHz, and so on for ever.",
+                            "whys": [
+                                "22 is below 24, so it is under the limit and nothing folds. The comparison is against $f_s/2 = 24$ kHz — the reduction has already been done in the column to the left.",
+                                "Right: $22 < 24$, so 22 kHz is where it appears. Two tones $f_s$ apart are indistinguishable after sampling, so 70 kHz and 22 kHz produce identical data — and so does 118 kHz, and so on for ever.",
+                            ],
                         },
                         {
                             "prompt": "96 kHz is exactly twice the sample rate. Where does it appear?",
@@ -3446,6 +3600,12 @@ The rate is 48 kSa/s throughout, which puts the Nyquist limit at 24 kHz.
                             "opts": ["0", "24", "48", "96"],
                             "a": 0,
                             "why": "At 0 Hz. $96 = 2 \\times 48$, so every sample catches the waveform at the same point in its cycle and the recorded data is a constant — the tone has aliased to DC. It is the wagon wheel standing still, and it is why an interferer locked to the sample clock shows up as a mysterious offset rather than as a tone.",
+                            "whys": [
+                                "Right: at 0 Hz. $96 = 2 \\times 48$, so every sample catches the waveform at the same point in its cycle and the recorded data is a constant. It is the wagon wheel standing still, and it is why an interferer locked to the sample clock shows up as a mysterious offset rather than as a tone.",
+                                "24 kHz would be the answer if a tone folded about $f_s/2$ from wherever it started. It does not: the reduction modulo $f_s$ comes first, and here it leaves nothing to fold.",
+                                "48 kHz is the sample rate itself, which the reduction has already removed — twice over.",
+                                "96 kHz is four times the Nyquist limit. A sampler cannot represent it at all, and what it produces instead is the answer above.",
+                            ],
                         },
                         {
                             "prompt": "24 kHz is exactly $f_s/2$. What frequency does the data show?",
@@ -3453,6 +3613,12 @@ The rate is 48 kSa/s throughout, which puts the Nyquist limit at 24 kHz.
                             "opts": ["0", "12", "24", "48"],
                             "a": 2,
                             "why": "24 kHz — but with an amplitude that depends entirely on the phase, which is the case the strict inequality $f_s > 2B$ exists to exclude. Sampling $\\sin(2\\pi \\cdot 24000\\,t)$ at 48 kSa/s gives all zeros; sampling $\\cos$ of the same frequency gives $+1, -1, +1, \\ldots$ at full amplitude. Same tone, same rate, and the recorded amplitude is anything between the two.",
+                            "whys": [
+                                "0 Hz is where a tone at a whole multiple of the sample rate lands, as the line above shows. Half the rate is a different case, and a much more delicate one.",
+                                "12 kHz is $f_s/4$, and nothing in the two-step rule produces it: 24 is not *above* $f_s/2$, so there is nothing to fold.",
+                                "Right: 24 kHz — but with an amplitude that depends entirely on the phase, which is the case the strict inequality $f_s > 2B$ exists to exclude. Sampling $\\sin(2\\pi \\cdot 24000\\,t)$ at 48 kSa/s gives all zeros; sampling $\\cos$ of the same frequency gives $+1, -1, +1, \\ldots$ at full amplitude. Same tone, same rate, and the recorded amplitude is anything between the two.",
+                                "48 kHz is the sample rate, and that is the one frequency guaranteed to appear at DC rather than at itself.",
+                            ],
                         },
                     ],
                 },
@@ -3492,6 +3658,12 @@ does in one domain, convolution does in the other.
                             "opts": ["fs/2", "fs", "2 fs", "1/fs"],
                             "a": 1,
                             "why": "$f_s = 1/T_s$. Impulses $T_s$ apart in time become impulses $1/T_s$ apart in frequency: dense in one domain is sparse in the other. Sample twice as often and the copies move twice as far apart, which is the whole mechanism by which a higher rate buys you room.",
+                            "whys": [
+                                "$f_s/2$ is where two neighbouring copies *meet* when the bandwidth is at its limit, not where their centres sit. The centres are a whole $f_s$ apart, and the condition three lines below is about the gap between them.",
+                                "Right: $f_s = 1/T_s$. Impulses $T_s$ apart in time become impulses $1/T_s$ apart in frequency — dense in one domain is sparse in the other. Sample twice as often and the copies move twice as far apart, which is the whole mechanism by which a higher rate buys room.",
+                                "Doubling the spacing would mean sampling bought twice the room it does, and the theorem on the last line would come out as $f_s > B$. The impulses are one $1/T_s$ apart, not two.",
+                                "$1/f_s$ is $T_s$ — the spacing in *time*, carried across to the wrong axis. The transform inverts it, which is why the answer is a frequency and not a duration.",
+                            ],
                         },
                         {
                             "prompt": "Multiplication in time corresponds to which operation in frequency?",
@@ -3499,6 +3671,12 @@ does in one domain, convolution does in the other.
                             "opts": ["adding", "convolving", "multiplying", "differentiating"],
                             "a": 1,
                             "why": "Convolving. This is the convolution theorem read in the direction the previous modules did not need: multiply two signals together and their spectra convolve. Everything peculiar about sampling follows from that one line.",
+                            "whys": [
+                                "Adding is what a product becomes under a *logarithm*. Adding two signals in time does add their spectra, and that is linearity — a different property, already used, and not the one this line needs.",
+                                "Right. This is the convolution theorem read in the direction the earlier modules did not need: multiply two signals together and their spectra convolve. Everything peculiar about sampling follows from that one line.",
+                                "Multiplication does not carry over to multiplication in either direction. If it did, the sampled spectrum would be zero wherever the impulse train's is — which is almost everywhere — and sampling would delete the signal rather than replicate it.",
+                                "Differentiating in time is multiplication by $j\\omega$ in frequency. That is a real property and a useful one; it answers what happens to a derivative, not what happens to a product.",
+                            ],
                         },
                         {
                             "prompt": "Convolving $X(f)$ with an impulse at $k f_s$ puts a copy of the spectrum where?",
@@ -3506,6 +3684,12 @@ does in one domain, convolution does in the other.
                             "opts": ["fs/k", "k fs/2", "k fs", "fs"],
                             "a": 2,
                             "why": "At $kf_s$ — convolution with $\\delta(f - kf_s)$ is a shift by $kf_s$ and nothing else. The sum runs over every whole $k$, positive and negative, so the spectrum is replicated at 0, $\\pm f_s$, $\\pm 2f_s$ and so on for ever, all at $1/T_s$ of the original height.",
+                            "whys": [
+                                "This puts $k$ in the denominator. Convolution with $\\delta(f - kf_s)$ shifts by the impulse's own position, and the impulses sit at whole multiples of $f_s$ rather than at fractions of it.",
+                                "Halving the spacing would drop a copy between every pair of copies, and there would be no clear room at any rate whatever. The train on the line above is spaced $f_s$.",
+                                "Right: convolution with $\\delta(f - kf_s)$ is a shift by $kf_s$ and nothing else. The sum runs over every whole $k$, positive and negative, so the spectrum is replicated at 0, $\\pm f_s$, $\\pm 2f_s$ and so on for ever, each copy at $1/T_s$ of the original height.",
+                                "This drops the $k$, leaving one copy where there is an endless train of them. It is the $k = 1$ term of the sum rather than the sum.",
+                            ],
                         },
                         {
                             "prompt": "The copy centred at 0 reaches up to $B$; the copy centred at $f_s$ reaches down to $f_s - B$. What must $B$ stay below?",
@@ -3513,6 +3697,12 @@ does in one domain, convolution does in the other.
                             "opts": ["fs/4", "fs/2", "fs", "2 fs"],
                             "a": 1,
                             "why": "$B < f_s/2$, which rearranges to $f_s > 2B$ — the sampling theorem, derived rather than quoted. The condition is that $f_s - B > B$: the bottom of the upper copy must stay above the top of the lower one. Equality is not good enough, as the tone sampled exactly at $f_s/2$ shows.",
+                            "whys": [
+                                "$f_s/4$ would be the condition if the copies had to clear each other by a whole bandwidth as well as not overlap. They only have to not overlap, and that is $f_s - B > B$.",
+                                "Right: $B < f_s/2$, which rearranges to $f_s > 2B$ — the sampling theorem, derived rather than quoted. The condition is that the bottom of the upper copy stays above the top of the lower one, and equality is not good enough, as the tone sampled at exactly $f_s/2$ in the drill before this one shows.",
+                                "At $B = f_s$ the two copies would be sitting on top of one another. This reads the condition off the *spacing* of the copies rather than off the point half way between them, where their edges meet.",
+                                "This has the theorem upside down — it would allow a signal four times as wide as the rate. Sampling faster is what buys room, so the limit rises with $f_s$ and stays below it.",
+                            ],
                         },
                         {
                             "prompt": "Nothing guarantees the input obeys that limit. What makes it obey?",
@@ -3525,6 +3715,12 @@ does in one domain, convolution does in the other.
                             ],
                             "a": 1,
                             "why": "An analogue low-pass, before the converter. It is the only place the content above $f_s/2$ still exists as something separable: after the sampler it is superimposed on genuine signal at the same frequency and no filter can distinguish them. A notch at $f_s$ misses everything else that folds, and resolution is a different axis entirely — a converter with infinitely many bits aliases just as badly.",
+                            "whys": [
+                                "By the time there are samples it is too late. What was above $f_s/2$ is now superimposed on genuine signal at the same frequency, and no filter — of any length, at any precision — can separate two things that have become one sequence of numbers.",
+                                "Right: an analogue low-pass, ahead of the converter. That is the only place where the content above $f_s/2$ still exists as something separable.",
+                                "A notch at $f_s$ removes one frequency. Everything else above $f_s/2$ folds as well — the table in the drill before this one has five different tones doing it, and only one of them is at the sample rate.",
+                                "Resolution is a different axis entirely. More bits reduce quantisation noise; a converter with infinitely many bits aliases exactly as badly, because aliasing happens in the sampling and not in the rounding.",
+                            ],
                         },
                     ],
                 },
@@ -4473,6 +4669,12 @@ units — one of these is in radians per second and one of them has no units at 
                             "opts": ["w R C", "j w R C", "j w / (R C)", "j w R / C"],
                             "a": 1,
                             "why": "$R \\cdot j\\omega C = j\\omega RC$. The $j$ has to survive, because without it the denominator is real and the filter shifts no phase — and a low-pass that does not lag is not something any capacitor has ever built. At $\\omega RC = 1$ the denominator is $1 + j$, whose magnitude is $\\sqrt2$ and whose angle is $45^\\circ$: the corner, and the $-45^\\circ$ that goes with it.",
+                            "whys": [
+                                "The magnitude is right and the $j$ has gone. Without it the denominator is real, the filter shifts no phase, and no capacitor has ever built one of those. At $\\omega RC = 1$ the denominator is $1 + j$: magnitude $\\sqrt2$, angle $45^\\circ$ — the corner, and the $-45^\\circ$ that goes with it.",
+                                "Right: $R \\cdot j\\omega C = j\\omega RC$, and the $j$ survives because the capacitor's impedance carries it.",
+                                "The $RC$ has been divided rather than multiplied. The check is the units: $\\omega RC$ has to be dimensionless, because it is added to 1.",
+                                "$R/C$ is not a time constant, and $\\omega R/C$ is not dimensionless. Only the product $RC$ has units of seconds, which is why it and not the ratio sets the corner.",
+                            ],
                         },
                         {
                             "prompt": "Same two components, swapped over: the capacitor is now in the series arm and the output is taken across the resistor.",
@@ -4485,6 +4687,12 @@ units — one of these is in radians per second and one of them has no units at 
                             ],
                             "a": 2,
                             "why": "The divider puts the probed element on top, so the numerator is $R$ rather than $1/j\\omega C$; clearing the fraction the same way gives $j\\omega RC/(1 + j\\omega RC)$. The denominator is identical to the low-pass, so the corner is in the same place — the two responses are complements, and they cross at $1/\\sqrt2$ where each is $-3$ dB. A bare $j\\omega RC$ with no denominator is the *differentiator*, which is what this network approximates only well below the corner.",
+                            "whys": [
+                                "That is the low-pass on the line above, unchanged. Swapping the components has to change something: the probed element is now the resistor, so the numerator is $R$ rather than $1/j\\omega C$.",
+                                "A bare $j\\omega RC$ with no denominator is the ideal *differentiator*, which this network approximates only well below the corner. Above the corner the denominator dominates and the response flattens at 1, which is what makes the circuit a high-pass rather than a differentiator.",
+                                "Right: the divider puts the probed element on top, and clearing the fraction the same way gives $j\\omega RC/(1 + j\\omega RC)$. The denominator is identical to the low-pass, so the corner is in the same place — the two responses are complements and cross at $1/\\sqrt2$, where each is $-3$ dB.",
+                                "This adds ohms to farads. A capacitor's impedance is $1/(j\\omega C)$, not $j\\omega C$, and inverting it also loses the sign of the reactance.",
+                            ],
                         },
                         {
                             "prompt": "Add an inductor to the series arm. The extra impedance is $j\\omega L$, and clearing the fraction multiplies it by $j\\omega C$.",
@@ -4492,6 +4700,12 @@ units — one of these is in radians per second and one of them has no units at 
                             "opts": ["1 + w^2 L C", "1 - w^2 L C", "1 - w L C", "1 - w^2 L / C"],
                             "a": 1,
                             "why": "$j\\omega L \\cdot j\\omega C = j^2\\omega^2 LC = -\\omega^2 LC$, and it is the minus sign — nothing else — that makes a second-order response different in kind from two first-order ones. It lets the real part of the denominator reach **zero**, at $\\omega^2 LC = 1$, and everything resonant about this circuit happens there.",
+                            "whys": [
+                                "The sign is the whole of the difference. $j\\omega L \\cdot j\\omega C = j^2\\omega^2 LC$ and $j^2 = -1$; with a plus the denominator could never reach zero and nothing resonant could happen at any frequency.",
+                                "Right: $j\\omega L \\cdot j\\omega C = -\\omega^2 LC$, and it is that minus sign — nothing else — that makes a second-order response different in kind from two first-order ones. It lets the real part of the denominator reach **zero**, at $\\omega^2 LC = 1$.",
+                                "One power of $\\omega$ has gone missing. Each of the two impedances carries one, so their product carries two — which is also why this term grows as the square of frequency and eventually overwhelms the 1.",
+                                "$L/C$ appears in the *impedance* of a resonator, $\\sqrt{L/C}$, and not here. Clearing the fraction multiplies $j\\omega L$ by $j\\omega C$, so the two multiply.",
+                            ],
                         },
                         {
                             "prompt": "Match the $\\omega^2$ terms: $(\\omega/\\omega_n)^2$ against $\\omega^2 LC$.",
@@ -4499,6 +4713,12 @@ units — one of these is in radians per second and one of them has no units at 
                             "opts": ["1 / (L C)", "1 / sqrt(L C)", "sqrt(L C)", "1 / (2 pi sqrt(L C))"],
                             "a": 1,
                             "why": "$1/\\omega_n^2 = LC$, so $\\omega_n = 1/\\sqrt{LC}$ — an *angular* frequency, in radians per second. With $L = 100$ mH and $C = 100$ nF that is $10^4$ rad/s, which is 1591.5 Hz and not 10 000 Hz; $1/(2\\pi\\sqrt{LC})$ is that same corner expressed in hertz, and mixing the two up is the most common way this calculation goes wrong by a factor of $2\\pi$.",
+                            "whys": [
+                                "$1/(LC)$ is $\\omega_n^2$. Matching gives $1/\\omega_n^2 = LC$, and the square root has not been taken.",
+                                "Right: $1/\\omega_n^2 = LC$, so $\\omega_n = 1/\\sqrt{LC}$ — an *angular* frequency, in radians per second.",
+                                "$\\sqrt{LC}$ is the reciprocal of the answer, and it is a *time* rather than a rate: with $L = 100$ mH and $C = 100$ nF it is 100 µs, where $\\omega_n$ is $10^4$ rad/s.",
+                                "That is the same corner expressed in hertz — 1591.5 Hz against $10^4$ rad/s for the same components. Both numbers are right and they differ by $2\\pi$; the standard form on the line below is written in $\\omega$, so mixing the two is how this calculation goes wrong by a factor of 6.28.",
+                            ],
                         },
                         {
                             "prompt": "Now the imaginary terms: $2\\zeta(\\omega/\\omega_n)$ against $\\omega RC$, with $\\omega_n = 1/\\sqrt{LC}$ already known.",
@@ -4511,6 +4731,12 @@ units — one of these is in radians per second and one of them has no units at 
                             ],
                             "a": 0,
                             "why": "The $\\omega$ cancels, leaving $2\\zeta = RC\\omega_n = RC/\\sqrt{LC} = R\\sqrt{C/L}$, so $\\zeta = \\frac{R}{2}\\sqrt{C/L}$. It is dimensionless, and it is the only one of the two numbers the resistor appears in — which is what lets a design fix the corner with $L$ and $C$ and then set the shape with $R$ without disturbing it. Inverting the fraction to $\\sqrt{L/C}$ gives a $\\zeta$ that rises when the inductor grows, and a bigger inductor stores more energy per cycle and damps *less*.",
+                            "whys": [
+                                "Right: the $\\omega$ cancels, leaving $2\\zeta = RC\\omega_n = RC/\\sqrt{LC} = R\\sqrt{C/L}$, so $\\zeta = \\frac{R}{2}\\sqrt{C/L}$. It is dimensionless, and it is the only one of the two numbers the resistor appears in — which is what lets a design fix the corner with $L$ and $C$ and then set the shape with $R$ without disturbing it.",
+                                "The fraction is inverted. This $\\zeta$ would rise as the inductor grows, and a bigger inductor stores more energy per cycle and therefore damps *less* — so the damping ratio has to fall.",
+                                "The factor of two has been dropped. The standard form carries $2\\zeta$, not $\\zeta$, so the match gives $2\\zeta = R\\sqrt{C/L}$ and $\\zeta$ is half of that — the difference between calling a circuit critically damped and calling it badly underdamped.",
+                                "This multiplies by two where the match divides by it. The standard form's imaginary term is $2\\zeta(\\omega/\\omega_n)$, so the quantity being matched is already twice the damping ratio.",
+                            ],
                         },
                     ],
                 },
