@@ -78,6 +78,12 @@ class El {
   set textContent(t) { this.childNodes = []; this._text = String(t); }
 
   get children() { return this.childNodes.filter((c) => typeof c !== 'string'); }
+  /* app.js's el(html) is `createElement('div'); d.innerHTML = html; return
+     d.firstElementChild`, so without this every view built out of el() hands appendChild
+     an undefined and throws. renderQuiz is built entirely out of el(), which is one
+     reason no gate had ever mounted it. Additive: nothing previously returned a value
+     from this name. */
+  get firstElementChild() { return this.children[0] || null; }
 
   get innerHTML() { return this._html || ''; }
   set innerHTML(html) {
@@ -114,6 +120,15 @@ class El {
     return null;
   }
 
+  /* renderQuiz asks `card.contains(document.activeElement)` before moving focus, so a
+     keyboard learner keeps their place and a mouse one is not yanked. Walks parents
+     rather than children because activeElement can be null, which `contains` answers
+     false for. Additive. */
+  contains(node) {
+    for (let n = node; n; n = n.parentElement) if (n === this) return true;
+    return false;
+  }
+
   /* One box unless a gate says otherwise. `resize(w, h)` is how a gate asks what the
      editor does at 375px or at 1200: a real browser lays every element out for itself,
      so an element that has been given a size keeps it and every other one falls back to
@@ -125,6 +140,12 @@ class El {
   getContext() { return (this._ctx = this._ctx || stubCtx()); }
   setPointerCapture() {}
   releasePointerCapture() {}
+  /* A no-op, because there is no viewport to scroll. It exists because renderQuiz's
+     finish() scrolls the result into view, so without it the last question of every
+     quiz in the catalogue throws instead of being scored. Purely additive: nothing
+     that used to work behaves differently, and the two older stub-driven gates were
+     checked byte-identical after it was added. */
+  scrollIntoView() {}
 
   focus() {
     if (DOC.activeElement === this) return;

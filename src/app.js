@@ -2537,7 +2537,15 @@ function renderQuiz(main, l) {
     const card = el('<div class="quiz-q"><div class="qn">QUESTION ' + (qi + 1) + ' / ' + l.questions.length + '</div>' +
       '<div class="qt" id="' + qid + '">' + quizProse(q.q) + '</div>' +
       '<div class="opts" role="group" aria-labelledby="' + qid + '">' + shuffled[qi].opts.map(function (o, oi) {
-        return '<button class="opt" data-oi="' + oi + '"><span class="k">' + 'ABCD'[oi] + '</span><span>' + mdInline(o) + '</span></button>';
+        /* `data-oi` is the slot this option was DRAWN in; `data-ai` is the index the
+           author numbered it. renderBlanks has carried the authored index in `data-opt`
+           since the shuffle was given to it, for the same reason: it is the only place
+           the mapping is visible from outside the closure, and it is what the whys
+           lookup below is indexed by. Without it the option's identity can only be
+           recovered from its text, and six questions in the catalogue have two options
+           whose text is identical once MathML is flattened. */
+        return '<button class="opt" data-oi="' + oi + '" data-ai="' + shuffled[qi].order[oi] +
+          '"><span class="k">' + 'ABCD'[oi] + '</span><span>' + mdInline(o) + '</span></button>';
       }).join('') + '</div><div class="ex-slot"></div></div>');
     box.appendChild(card);
     $all('.opt', card).forEach(function (btn) {

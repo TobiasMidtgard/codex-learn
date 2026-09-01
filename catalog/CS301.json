@@ -51,46 +51,70 @@
      {
       "q": "Merge sort satisfies `T(n) = 2T(n/2) + Theta(n)`. What does the `Theta(n)` term pay for?",
       "opts": [
-       "The merge: one linear pass over the two sorted halves, once the recursive calls have returned",
-       "The two recursive calls, which the additive term prices separately from the rest",
-       "Finding the midpoint, which the divide step has to do before it can recurse",
-       "The base cases, since the recursion bottoms out once per element"
+       "The merge: one linear pass over the two sorted halves, once the recursive calls return",
+       "The two recursive calls, which the additive term prices alongside `2T(n/2)` itself",
+       "The `n` base cases, one per element, which is where a linear term in the total comes from",
+       "The whole level of the recursion tree, since every level of merge sort costs `Theta(n)`"
       ],
       "a": 0,
-      "why": "The additive term is the work one call does itself, outside the recursion: split, then\nmerge. Splitting is a pair of slice indices and costs nothing worth naming; the merge\nwalks both halves once, and that is where the `n` comes from. The recursive calls are\nalready priced by `2T(n/2)`, and adding them again is the commonest way to write a\nrecurrence that says nothing. The base cases really do number `n`, but they are the\nleaves of the tree this recurrence describes — the recursion adds them up for you, and\n`T(1)` is what each of them costs."
+      "why": "A recurrence prices exactly one node of the recursion tree. `2T(n/2)` is the two\nchildren; the additive term is everything that node does with its own hands, which here\nis split and merge. Splitting is a pair of slice indices and costs nothing worth naming,\nso the `n` is the merge: walk both sorted halves once, emitting the smaller head. What\nthe recurrence then does for you is add that cost up over the whole tree — which is why\nthe total, `n log n`, is not the same shape as the term you wrote down.",
+      "whys": [
+       "Right, and the reason it is the merge rather than the split is worth keeping: the divide\nstep of merge sort is two slice indices, `O(1)`, while the combine walks every element of\nboth halves exactly once. Merge sort is the divide-and-conquer algorithm whose work is\nalmost all in the combine, which is what makes `T(n) = 2T(n/2) + Theta(n)` its signature\nrather than quicksort's — quicksort partitions in `Theta(n)` and combines for free, and\nlands on the same recurrence from the opposite end.",
+       "`2T(n/2)` already is the two recursive calls — that is what the notation says. Charging\nthem again in the additive term counts the same work twice, and the arithmetic punishes\nit immediately: `T(n) = 2T(n/2) + 2T(n/2)` is `T(n) = 4T(n/2)`, whose solution is\n`Theta(n^2)`. That is not a slightly pessimistic estimate of merge sort, it is the cost\nof an algorithm with four children per node. The additive term is defined as the work\noutside the recursive calls, and if it were not, the recurrence could not be solved at\nall — every appearance of `T` on the right has to be a strictly smaller instance.",
+       "The base cases really do number `n`, and `n` times `T(1)` really is a `Theta(n)`\ncontribution to the answer. But that contribution is the bottom row of the tree, and the\nrecursion is what puts it there: unroll `2T(n/2)` all the way down and you arrive at `n`\nleaves without ever writing them into the additive term. Writing them in as well would\ncount them twice. The distinction is the one the whole module turns on — the term\ndescribes one call's own work, and the solution describes the sum over every call.",
+       "Every level really does cost `Theta(n)`, and that fact is why merge sort is `n log n`\nrather than something worse. But it is a property of the solved recurrence, not of the\nterm: `T(n) = 2T(n/2) + f(n)` prices one node, the root, and the levels below it are\nwhat `2T(n/2)` unrolls into. Level `k` holds `2^k` calls on inputs of size `n/2^k`, so\nits cost is `2^k * Theta(n/2^k) = Theta(n)` — the levels come out equal because the\nadditive term is linear, which is exactly the equality case of the master theorem. Read\nthe fact back into the term and you have used the answer as its own input."
+      ]
      },
      {
       "q": "`T(n) = 3T(n/2) + Theta(n)` is Karatsuba's shape. Which bound does the master theorem give?",
       "opts": [
-       "`Theta(n^(log_2 3))`, about `n^1.585` — the leaves dominate",
-       "`Theta(n log n)` — the levels each cost the same",
-       "`Theta(n)` — the combine at the root dominates",
-       "`Theta(n^(log_3 2))`, about `n^0.63` — the leaves dominate"
+       "`Theta(n^(log_3 2))`, about `n^0.63` — three subproblems at half the size",
+       "`Theta(n^(log_2 3))`, roughly `n^1.585` — the leaf count dominates",
+       "`Theta(n log n)`, since every level of the tree costs the same",
+       "`Theta(n)`, since the combine at the root dominates the rest"
       ],
-      "a": 0,
-      "why": "Compare `d = 1` against `log_b a = log_2 3`, which is about 1.585. The combine is\ncheaper than the recursion it feeds, so the cost per level grows on the way down and\nthe bottom level swallows the total: that is case 1, and the exponent is `log_b a`.\n`n log n` is what you get when the two are equal, which is merge sort's `2T(n/2)`, not\nthis. `Theta(n)` would need the combine to dominate, which is case 3 and needs `d`\nabove 1.585. And `log_3 2` is the same two numbers the wrong way round: it is below 1,\nwhich would claim that three subproblems of half the size cost less than a single pass\nover the array."
+      "a": 1,
+      "why": "The master theorem is one comparison: `n^d`, the combine, against `n^(log_b a)`, the\nleaves. Here `d = 1` and `log_b a = log_2 3 = 1.585`, so the leaves win and the answer\nis their count. The three cases are the three ways that comparison can come out, and\nnaming which one you are in is the whole of the work — the exponent then reads straight\noff. `a` is the branching factor and `b` is the shrink factor, and `log_b a` keeps them\nin that order.",
+      "whys": [
+       "`log_3 2` is 0.63 — the right two numbers in the wrong positions. The base of the\nlogarithm is `b`, the factor the input shrinks by, and the argument is `a`, the number of\ncalls: `log_b a`, not `log_a b`. The tell that it is inverted is that 0.63 is below 1,\nso the claim is that Karatsuba runs in sublinear time — on an algorithm that has to read\nboth of its inputs before it can do anything, and whose additive term alone is\n`Theta(n)`. A bound below the additive term is impossible for any recurrence of this\nshape, whatever `a` and `b` are.",
+       "Right, and the level-by-level picture is worth carrying: the root costs `n`, its three\nchildren cost `3(n/2) = 1.5n` between them, the nine grandchildren `2.25n`, and the cost\ngrows by a factor of `3/2` every level down. A geometric series that grows is dominated\nby its last term, so the bottom row — the leaves, `3^(log_2 n) = n^(log_2 3)` of them —\nswallows the total. That 1.585 against schoolbook multiplication's 2 is the entire\nsaving Karatsuba buys, and it comes from turning four half-size multiplications into\nthree.",
+       "`n log n` is the equality case, `d = log_b a`, where every level costs the same and there\nare `log n` of them. That is merge sort: `2T(n/2) + Theta(n)`, where two calls at half\nthe size reproduce exactly the work of the one above. Karatsuba makes three calls at half\nthe size, so each level costs `3/2` as much as the one above rather than the same, and a\ngrowing geometric series is not `log n` equal terms. The difference between 2 and 3 in\nthat position is the difference between `n log n` and `n^1.585`.",
+       "`Theta(n)` is case 3, and it needs the combine to dominate the leaves — `d > log_b a`,\nso `d` above 1.585. A linear combine has `d = 1`, well below it. Read the claim back as\na statement about the algorithm and it says that three multiplications of half-length\nnumbers, plus a linear pass of additions, cost no more than the linear pass alone. The\nrecursive calls have to appear in the answer somewhere, and case 3 is the case where they\ndo not, which is why it also carries a regularity condition rather than just the exponent\ncomparison."
+      ]
      },
      {
       "q": "Both recursive calls have returned and `d` is the better of their two distances. Why is it enough to compare each point of the strip against only the next seven in y-order?",
       "opts": [
-       "Two points closer than `d` must share a `2d`-by-`d` box straddling the split line, and each half already has its own points at least `d` apart, so at most eight points fit in that box",
-       "Because the strip itself never holds more than eight points",
-       "Because seven is what keeps the scan linear, so the constant was picked to make the bound come out",
-       "Because the points are sorted by y, so the distance to each later point is larger than to the one before"
+       "Seven is the constant that keeps the scan linear, so it was chosen rather than derived",
+       "The points are y-sorted, so distances grow along the scan and the eighth is already too far",
+       "A pair beating `d` must fit in one `2d`-by-`d` box, and each half is already `d`-separated",
+       "The strip is what the recursion has narrowed the search to, and it holds at most eight points"
       ],
-      "a": 0,
-      "why": "The box argument. A point that beats `d` lies within `d` of the split line in x and\nwithin `d` in y, so both ends of the improving pair sit in a `2d`-by-`d` rectangle. The\nrecursion has already proved that no two points inside one half are closer than `d`, so\nat most four fit in each `d`-by-`d` square and at most eight in the rectangle — seven\nsuccessors is the whole neighbourhood. The strip can hold every point in the input, so\nbounding its size gets you nowhere. The constant falls out of the geometry rather than\nbeing chosen to fit the bound. And it is the y-*difference* that grows monotonically\nalong the scan, not the distance, which is exactly what the early exit\n`strip[j][1] - strip[i][1] >= d` tests."
+      "a": 2,
+      "why": "The bound is geometry, not bookkeeping. A pair that improves on `d` has both ends within\n`d` of the split line in x and within `d` of each other in y, so both sit in a\n`2d`-by-`d` rectangle straddling the line. The recursion has already proved that no two\npoints inside one half are closer than `d`, so each `d`-by-`d` square of that rectangle\nholds at most four points — corners only — and the rectangle at most eight. Fix one of\nthem and there are seven others: that is the seven, and it is a constant because the\nrecursion's own guarantee is what limits the crowd.",
+      "whys": [
+       "It is a fair suspicion in general — constants do sometimes get reverse-engineered to make\na bound come out — but here the derivation runs the other way and lands on eight points\nin the rectangle before anyone asks what it buys. You can even see the constant is not\ntuned by noticing that it is loose: the true maximum in the rectangle is six rather than\neight once you rule out coincident points, and nobody bothers to tighten it, because any\nconstant at all is what makes the scan linear. A constant chosen to fit would have been\nchosen smaller.",
+       "What grows monotonically along the scan is the y-*difference*, not the distance — the two\nare different because x still varies freely inside the strip. Point 8 can sit further\ndown and directly above you, and point 3 can sit further up and a full `d` across. That\nis why the loop's early exit tests `strip[j][1] - strip[i][1] >= d`, a comparison on the\ny-coordinates alone: it is the y-gap that is sorted, and once it reaches `d` no later\npoint can help however its x falls. Sorting by y buys the stopping rule; the box argument\nbuys the seven.",
+       "Right, and the load-bearing clause is the one about the halves: the seven is a constant\nonly because the recursive calls have already established `d`-separation inside each\nside. Before they return there is no such bound and the strip could be arbitrarily\ncrowded. That is why the scan comes after the recursion rather than instead of it, and\nwhy the argument is about a `2d`-by-`d` box rather than the strip as a whole — `2d` wide\nbecause the strip is `d` either side of the line, `d` tall because a taller pair is\nalready worse than `d`.",
+       "The strip can hold every point in the input — put all `n` points on the split line and it\ndoes. Bounding the strip is what you would need if the scan compared every pair inside\nit, and that is exactly the `O(n^2)` the seven-neighbour argument exists to avoid. What\nis bounded is not the strip but any `2d`-by-`d` window of it, and the scan works because\nit only ever looks through such a window: sorted by y, the next seven points are the\nonly ones that can still be within `d` vertically."
+      ]
      },
      {
       "q": "Which of these turns an `O(n log n)` closest pair into `O(n log^2 n)`?",
       "opts": [
-       "Sorting the strip by y inside every recursive call instead of carrying one y-order down from the top",
-       "Using `math.hypot` rather than comparing squared distances",
-       "Recursing into both halves rather than into only the half that looks promising",
-       "Sorting the whole input by x once before the recursion starts"
+       "Sorting the whole input by x and by y once, before the recursion starts, instead of inside it",
+       "Recursing into both halves every time, rather than only into the half the split line favours",
+       "Calling `math.hypot` on every candidate pair instead of comparing squared distances",
+       "Sorting the strip by y inside each recursive call, rather than threading one y-order down"
       ],
-      "a": 0,
-      "why": "A sort inside the call makes the combine step `O(n log n)` instead of `O(n)`, so the\nrecurrence becomes `T(n) = 2T(n/2) + O(n log n)` and each of the `log n` levels costs\n`n log n`. That is the defect the module names: the code still produces the right pair,\nso only the clock catches it. `hypot` versus squared distances is a constant factor and\na readability question. Recursing into one half is not an optimisation but a wrong\nanswer, since the closest pair may lie entirely on either side. And the two sorts before\nthe recursion are the fix, not the fault — they are what the y-order is threaded down\nfrom."
+      "a": 3,
+      "why": "Put the change into the recurrence and read the answer off. A sort inside the call makes\nthe combine `O(n log n)` rather than `O(n)`, so `T(n) = 2T(n/2) + O(n log n)`, and with\n`log n` levels each costing `n log n` the total is `n log^2 n`. The module calls this a\ndefect rather than a variant for a specific reason: the code still returns the correct\npair, every test still passes, and only the clock ever finds out. It is the shape of bug\nthat a correctness suite is structurally unable to catch.",
+      "whys": [
+       "Those two sorts are the fix, not the fault. They happen once, before the recursion, so\nthey contribute a single `O(n log n)` term to the whole run rather than one per level —\nand it is precisely because the y-order exists up front that a call can hand its children\ntheir share of it without sorting anything. The instinct behind the wrong answer is\nright in general, that a sort is the expensive thing here; the question is only whether\nit is paid once or `log n` times.",
+       "Recursing into both halves is not an optimisation anyone gave up: it is required, because\nthe closest pair can lie wholly on either side of the split and a search that commits to\none half can miss it outright. Note that the alternative would be *faster*, not slower —\n`T(n) = T(n/2) + O(n)` solves to `O(n)` — so it fails the question on correctness rather\nthan on cost. Some divide-and-conquer algorithms really can discard a half, binary search\nbeing the obvious one; they can do it because a comparison at the split proves the answer\nis not there, and no such proof exists here.",
+       "`hypot` is a constant factor: one square root per candidate pair, and the number of\ncandidate pairs is unchanged. Constants cannot move an exponent or add a logarithm, so\nwhatever this costs it is still `O(n log n)`. It is a real optimisation for two other\nreasons — squared distances keep the arithmetic exact on integer inputs, and the square\nroot is monotone so comparing squares compares distances — but the module's point is that\na change worth making and a change that alters the bound are different claims, and only\nthe second one shows up in the recurrence.",
+       "Right — and the fix is the one the lab makes you build: sort by x and by y once at the\ntop, then have each call hand its children the sub-orders they need, so the combine\nstays a linear pass. Threading the order down is fiddlier than re-sorting, which is\nexactly why the slow version gets written, and it is why the checks time the\nimplementation instead of only marking its output. A defect that changes no answer needs\na gate that measures something other than the answer."
+      ]
      },
      {
       "q": "Merging the halves `[2, 5]` and `[1, 3]` of `[2, 5, 1, 3]`, the merge emits `1` first. How many inversions does that one step account for?",
@@ -101,7 +125,13 @@
        "3"
       ],
       "a": 0,
-      "why": "`1` is smaller than every element still unconsumed in the left half — both `2` and `5` —\nand in the original array all of them sit to its left, so one comparison settles two\ninverted pairs at once. That is what `total += len(left) - i` is counting. Incrementing\nby one per emission would be tallying merge steps rather than pairs. Zero would say the\nright half never contributes anything, which is the whole point of the merge. Three is\nthe count for the entire array, `(2,1)`, `(5,1)` and `(5,3)` — and the last of those is\nsettled later, when `3` is emitted over the remaining `5`."
+      "why": "An inversion is a pair standing in the wrong order in the original array. When the merge\ntakes an element from the right half, every element still unconsumed in the left half is\nlarger than it and stood to its left — so all of them are inverted with it, and one\ncomparison settles the lot. That is what `total += len(left) - i` says, and it is the\nwhole reason the count rides inside the merge instead of being computed separately: the\nmerge is already discovering these pairs, in batches, for free.",
+      "whys": [
+       "Right. `1` is smaller than both `2` and `5`, which are still unconsumed on the left and\nboth stood to its left in `[2, 5, 1, 3]`, so this single emission settles the pairs\n`(2, 1)` and `(5, 1)`. With `i = 0` and `len(left) = 2`, `total += len(left) - i` adds\nexactly 2. The batching is the point: an `n log n` count is only possible because one\ncomparison can be worth many pairs.",
+       "Adding one per emission counts merge steps rather than inverted pairs, and it undercounts\nwhenever the right half wins over more than one remaining left element — here it would\nreport 1 for a step worth 2. Over the whole array it would return the number of times the\nright half emitted, which is a statistic about the merge and not about the input: run it\non `[3, 4, 1, 2]` and it reports 2, where the true count is 4. The increment has to\ndepend on how much of the left half is still standing, which is what `len(left) - i`\nmeasures.",
+       "Zero is what you would add if `1` had been emitted after the left half was exhausted —\nthen nothing remains to its left and it crosses nobody. Here `2` and `5` are both still\nwaiting, and both are inversions with `1`. A merge that charged nothing for a right-hand\nemission would return 0 on every input, including a fully reversed one, so the count would\nbe reporting that no array is ever out of order.",
+       "3 is the inversion count of the whole array — `(2, 1)`, `(5, 1)` and `(5, 3)` — and it is\ntempting because it is the number the function eventually returns. This step accounts for\nthe first two of them. The third is settled later in the same merge, when `3` is emitted\nwhile `5` is still unconsumed and `len(left) - i` is 1. The question asks what one step\ncontributes; adding the total at every step would count each pair as many times as there\nare emissions."
+      ]
      }
     ]
    },
@@ -356,57 +386,87 @@
      {
       "q": "Which rule schedules the largest number of compatible intervals?",
       "opts": [
+       "Fewest conflicts with the intervals still available",
        "Earliest finishing time",
        "Earliest starting time",
-       "Shortest duration",
-       "Fewest conflicts with the intervals still available"
+       "Shortest duration"
       ],
-      "a": 0,
-      "why": "Finishing earliest leaves the most room behind it, and the exchange argument makes that\nprecise: take any optimal schedule, swap its first interval for the one that finishes\nearliest, and it is still compatible and still the same size. Earliest start dies on\n`[(0, 10), (1, 2), (3, 4)]`, where one long interval swallows the day. Shortest duration\ndies on `[(0, 3), (2, 4), (3, 6)]`, where the short middle interval blocks both of its\nneighbours — the lab checks exactly that instance. Fewest conflicts is the one that\ntakes real effort to refute, and it is refuted: a counterexample is a standard figure in\nKleinberg & Tardos, where the least-conflicted interval still costs you the optimum."
+      "a": 1,
+      "why": "All four rules are plausible, three of them are wrong, and the difference between a rule\nthat works and a rule that looks like it works is a proof rather than a run of examples.\nThe proof here is the exchange argument: take any optimal schedule, and swap its first\ninterval for the one that finishes earliest. The result is still compatible, because the\nnew interval ends no later than the one it replaced, and it is still the same size. Repeat\nand the greedy schedule is reached without ever shrinking. That argument is available for\nfinishing time and for none of the others: two of the three die on an instance of three\nintervals, and the third needs a larger figure but dies all the same.",
+      "whys": [
+       "This is the one that takes real work to refute, and it is here because it deserves to be\ntaken seriously — it is a better rule than the other two, it looks at the structure of\nthe instance rather than at one interval in isolation, and on most inputs you would draw\nby hand it wins. It is still not optimal: Kleinberg and Tardos give a standard figure in\nwhich the least-conflicted interval is precisely the one whose selection costs the\noptimum. Being locally least obstructive is not the same as leaving the most room, and\nonly the finishing time measures the latter directly.",
+       "Right, and the reason is the one the exchange argument turns on: of all the intervals you\ncould commit to, the one that finishes earliest leaves the most of the timeline free\nbehind it. Nothing else about an interval matters to what comes after — not when it\nstarted, not how long it ran, not what it overlapped — because the only constraint the\nfuture sees is the time you are next free.",
+       "Starting early says nothing about finishing early, and it is finishing that decides what\nis still available. `[(0, 10), (1, 2), (3, 4)]` settles it: the earliest start is the\ninterval that runs all day, so the rule returns 1 where `(1, 2)` and `(3, 4)` give 2. The\ninstinct is not silly — starting early feels like wasting no time — but the resource being\nspent is the rest of the timeline, and a long early interval spends all of it.",
+       "This is the most plausible of the three wrong rules, because a short interval genuinely\ndoes consume less of the timeline. What it can also do is consume the wrong part of it.\n`[(0, 3), (2, 4), (3, 6)]` is the instance the lab asserts on: the shortest interval is\n`(2, 4)`, two units long, and it overlaps both of its neighbours, so taking it returns 1\nwhere `(0, 3)` and `(3, 6)` give 2. Duration measures how much room an interval uses;\nfinishing time measures where the room it leaves behind begins."
+      ]
      },
      {
       "q": "Huffman merges the two least frequent subtrees first. What does that guarantee about the two least frequent symbols?",
       "opts": [
-       "They become siblings at the deepest level of the tree, so their codes are the same length and differ only in the last bit",
-       "They get the shortest codes, since they are dealt with first",
-       "Their codes have equal length only when their frequencies are equal",
-       "They never end up in the same subtree"
+       "Their codewords are the same length only if their two frequencies happen to be equal",
+       "Their codewords are the longest in the code, but a later merge can still separate them",
+       "They become siblings, so their codewords are equally long and differ only in the final bit",
+       "They get the shortest codewords, since being handled first puts them nearest the root of the tree"
       ],
-      "a": 0,
-      "why": "Being merged first means being buried deepest: every later merge adds a bit to the front\nof everything already in the subtree. Siblings hang off one parent, so their codewords\nare the parent's prefix plus `0` and plus `1` — the same length whatever the two\nfrequencies are. Merged first therefore means longest, not shortest, which is the whole\neconomy of the code: rare symbols pay the long codewords so frequent ones can have short\nones. And far from being kept apart, they are the one pair the algorithm guarantees to\nput together."
+      "a": 2,
+      "why": "A merge creates a new parent above two existing roots and never reaches inside either of\nthem. So the pair merged first is buried deepest, and it is buried together: every\nsubsequent merge prepends one bit to everything in the subtree, to both members equally.\nBeing siblings is what forces the equal length — the two codewords are their shared\nparent's prefix plus `0` and plus `1` — and being merged first is what makes that length\nthe largest in the code. The economy of the whole scheme is in that sentence: the rare\nsymbols take the long codewords so the frequent ones can have short ones.",
+      "whys": [
+       "Equal frequencies are not needed and were never used. The two codewords are the parent's\nprefix plus one bit each, so they have the same length by construction, whatever the\ncounts. What the frequencies decide is which pair gets merged, not how the pair is\nshaped once it has been. In the lab's instance `E` is 8 and `D` is 12, plainly unequal,\nand both come out at depth 4 with codewords differing in the last bit.",
+       "The first half is right and worth keeping: merged first does mean buried deepest, so\nthese two codewords are the longest in the code. The second half is the thing the\nalgorithm structurally cannot do. A merge only ever creates a new parent above two\nexisting roots; it never reopens a subtree that has already been formed, so nothing later\ncan put a node between two symbols that are already siblings. Every subsequent merge adds\none bit to the front of both of them at once, which is exactly why they stay the same\nlength as each other while both get longer.",
+       "Right, and the equal length is forced by the sibling relation rather than by the\nfrequencies. Whatever the two counts are — 1 and 999 — once they hang off one parent\ntheir codewords are that parent's prefix followed by `0` and by `1`. This is also the\nstep where the correctness proof starts: an optimal tree can always be rearranged so\nthat the two rarest symbols are siblings at maximum depth, and that is what licenses\nmerging them and treating the pair as a single symbol of the combined weight.",
+       "Merged first means buried deepest, which is the opposite of nearest the root. The order\nruns backwards to the intuition because the merges build the tree from the leaves upward:\nthe first merge is the one that ends up furthest from the root, and the last merge is the\nroot itself. If the rarest symbols did get the shortest codewords the code would be worse\nthan a fixed-length one — you would be spending your cheap bits on the symbols that\nhardly ever appear."
+      ]
      },
      {
       "q": "A binary prefix-free code has codeword lengths 1, 2, 3, 3. What does the Kraft sum come to, and what does that tell you?",
       "opts": [
-       "Exactly 1 — the tree is full, so no codeword could be shortened without breaking prefix-freeness",
-       "Exactly 1 — which is the arithmetic signature of a code that is not prefix-free",
-       "0.75 — there is a spare leaf, so one codeword could be made shorter",
-       "1.25 — which is why no such code exists"
+       "Exactly 1 — but every prefix-free code sums to 1, so the value tells you nothing extra",
+       "0.875 — one leaf is going spare at depth 3, so a codeword could have been shorter",
+       "1.25 — the sum runs over 1, which is why no prefix-free code has these lengths",
+       "Exactly 1 — the tree is full, so no codeword could be shortened and stay prefix-free"
       ],
-      "a": 0,
-      "why": "`1/2 + 1/4 + 1/8 + 1/8 = 1`, realised by `0`, `10`, `110`, `111`. Prefix-freeness forces\nthe sum to at most 1, because reserving a codeword of length `l` blocks a `2^-l` share\nof the tree and the shares cannot overlap. Equality says every leaf is spoken for: the\ntree is full, no internal node has an only child, and there is nothing left to shorten\ninto. A sum strictly below 1 is the interesting failure — it means a codeword could have\nbeen shorter, so the code is not optimal, and it is why the lab asserts the Huffman\noutput hits 1 exactly rather than merely staying under it."
+      "a": 3,
+      "why": "`1/2 + 1/4 + 1/8 + 1/8 = 1`, realised by `0`, `10`, `110`, `111`. The inequality behind\nthe sum is the useful part: reserving a codeword of length `l` blocks a `2^-l` share of\nthe tree below it, and prefix-freeness says those shares cannot overlap, so the total is\nat most 1. Equality then means every share is claimed — the tree is full, no internal\nnode has an only child, and there is no unused branch left to shorten a codeword into.\nA sum strictly below 1 is the interesting failure, because it certifies that some\ncodeword could have been shorter and the code is therefore not optimal.",
+      "whys": [
+       "The arithmetic is right and the conclusion drawn from it is the common slip: the Kraft\ninequality is `at most 1`, not `equal to 1`, and the gap between those is where the whole\ndiagnostic power sits. Lengths 1, 2, 3 sum to `1/2 + 1/4 + 1/8 = 0.875` and describe a\nperfectly good prefix-free code with a wasted branch — the depth-3 codeword could have\nbeen depth 2. So the sum does say something extra here: it says nothing has been wasted,\nwhich is the part a Huffman code guarantees and an arbitrary prefix-free code does not.",
+       "0.875 is `1/2 + 1/4 + 1/8`, which is the sum over the three *distinct* lengths — the\nsecond codeword of length 3 has been counted once instead of twice. The sum runs over\ncodewords, not over the set of lengths that appear. Where 0.875 would be the right answer\nis for lengths 1, 2, 3, and the reading attached to it would then be correct too: a spare\nleaf at depth 3, so the depth-3 codeword could be pulled up to depth 2.",
+       "1.25 comes out if the two depth-3 codewords are charged at `2^-2` each, so that the sum\nreads `1/2 + 1/4 + 1/4 + 1/4` — an off-by-one in the depth, not in the method. The\nconclusion drawn from it is in fact the right conclusion\nfor a sum above 1 — such a code really cannot exist, because the reserved shares would\nhave to overlap and one codeword would be a prefix of another — so the reasoning is\nsound and only the arithmetic slipped. Recompute with `l = 3`, worth `1/8` each, and the\ntotal lands on 1.",
+       "Right, and the sharpest way to hold on to it is the geometric one: each codeword claims\nan interval of length `2^-l`, prefix-freeness makes the intervals disjoint, and they all\nlive inside a unit interval. Summing to 1 means they tile it with nothing left over.\nThat is the condition the lab asserts on the Huffman output, and it is a stronger check\nthan merely confirming the code is decodable, because it also rules out a code that is\ndecodable and wasteful."
+      ]
      },
      {
       "q": "With coins 1, 3 and 4, `greedy_failure` returns 6. Why is 6 the smallest counterexample and not something below it?",
       "opts": [
-       "For every amount below 6 the largest coin that fits belongs to some optimal solution; at 6 the greedy 4 leaves 2, costing two more coins, where 3 + 3 costs one",
-       "Because 6 is the first amount larger than the largest coin",
-       "Because 6 is the first amount that is not itself a coin",
-       "Because 6 is a multiple of 3, and greedy never reaches for the 3"
+       "Every amount below 6 comes out optimal; at 6 greedy takes the 4 and needs two 1s, where 3 + 3 needs one fewer",
+       "6 is the first amount past the largest coin, so the first greedy must make from more than one coin",
+       "6 is the first amount that is not itself a coin, so the first where greedy has a decision to make",
+       "6 is the first multiple of 3 that greedy cannot reach with 3s, because it commits to the 4 before it sees them"
       ],
       "a": 0,
-      "why": "Walk it: 1, 3 and 4 are single coins; 2 is `1+1` either way; 5 is `4+1` and no better.\nAt 6 greedy commits to the 4 and is left with a 2 it can only pay in ones, three coins\nagainst the optimum's `3+3`. Being past the largest coin is not the trigger — 5 is\nalready past it and greedy is fine there. Nor is being a non-coin: 2 and 5 are not coins\nand neither breaks the rule. And greedy does use the 3, at 3 itself; its mistake is\ntaking the 4 at 6, which is a different thing from never taking the 3 at all."
+      "why": "Walk it and there is nothing to argue about. 1, 3 and 4 are single coins. 2 is `1 + 1`\neither way. 5 is `4 + 1` for greedy, and two coins is optimal. At 6, greedy commits to\nthe 4, is left with a 2 it can only pay in ones, and finishes on three coins where\n`3 + 3` finishes on two. `greedy_failure` searches upward from 1 for exactly this reason:\nthe first amount at which the two disagree is by construction the smallest counterexample,\nand having the smallest one makes the failure inspectable by hand.",
+      "whys": [
+       "Right, and the clause about everything below 6 is what makes it the *smallest* rather\nthan merely *a* counterexample. Greedy is not lucky below 6, it is correct: at each of\n1 through 5 the largest coin that fits belongs to some optimal solution, so committing to\nit costs nothing. 6 is the first amount where that stops being true, and the reason is\nthat 4 leaves a remainder of 2 which this coin system cannot pay efficiently — 4 and 1\nmesh badly with a 3 sitting between them.",
+       "5 is already past the largest coin and greedy handles it perfectly: `4 + 1`, two coins,\noptimal. So being past the largest coin is not the trigger, and it cannot be — a system\nlike 1, 2, 4 is greedy-optimal at every amount, well past its largest coin. The property\nthat matters is not how many coins are needed but whether the largest coin that fits is\never the wrong first commitment, and that is a fact about how the denominations mesh\nrather than about their size.",
+       "2 and 5 are not coins either, and greedy is right about both. Nor is the number of\ndecisions the issue: greedy makes a decision at 2 and gets it right. What the search is\nlooking for is not the first amount with a choice but the first amount where the choice\ngreedy makes is worse than another — and it takes until 6 for that to happen, because\nbelow it the largest coin that fits always belongs to some optimal solution.",
+       "Greedy does use the 3, at 3 itself, so it is not blind to it. And 6 is the second\nmultiple of 3, not the first — 3 is reachable and optimal. The half of this that is right\nis the mechanism: greedy really does commit to the 4 at 6 and thereby lock itself out of\n`3 + 3`. What it is not is a rule about multiples of 3, and you can see that by checking\n9: greedy takes `4 + 4 + 1` for three coins, and `3 + 3 + 3` is also three, so the rule\nwould predict a failure that does not happen."
+      ]
      },
      {
       "q": "You suspect a proposed greedy rule is not optimal. What is enough to establish that?",
       "opts": [
-       "One instance where it returns a strictly worse answer than the true optimum, exhibited and checked against that optimum",
-       "A proof that no exchange argument can be built for it",
-       "A family of instances on which its ratio grows without bound",
-       "An instance where it disagrees with a different greedy rule"
+       "An instance where it disagrees with some other greedy rule that has been proposed for the problem",
+       "One instance where it returns a strictly worse answer than the true optimum, checked against that optimum",
+       "A proof that no exchange argument can be constructed for the rule, since that is how optimality gets established",
+       "A family of instances on which the ratio between the rule and the optimum grows without bound"
       ],
-      "a": 0,
-      "why": "Refutation is existential, which is why it is so much cheaper than justification: one\ninstance settles it forever, and `greedy_failure` finds it by searching upwards from 1\nso the counterexample is also the smallest. It has to be measured against the true\noptimum — that is why the lab makes you write the dynamic program alongside the greedy\nrule. Showing that no exchange argument exists is far harder than the claim itself, and\nwould still leave open some other proof. An unbounded ratio is a much stronger result\nthan needed. And two heuristics disagreeing tells you at most one of them is wrong,\nwithout saying which."
+      "a": 1,
+      "why": "Refutation is existential and justification is universal, which is why they cost such\ndifferent amounts. To claim a greedy rule is optimal you have to say something about\nevery instance there will ever be; to deny it you need one. That asymmetry is why\n`greedy_failure` is a short search and the exchange argument is a proof, and it is why\nthe lab makes you write the dynamic program alongside the greedy rule — the\ncounterexample only counts once it has been measured against something known to be\noptimal.",
+      "whys": [
+       "Two heuristics disagreeing establishes that at most one of them is right, without saying\nwhich — and it is entirely possible that the rule under suspicion is the one that is\ncorrect. Neither heuristic is a benchmark for the other; the benchmark has to be\nsomething known to compute the optimum, which for coin change is the dynamic program.\nThe instinct is sound, that a disagreement is where to look, and turning it into evidence\nmeans computing the optimum at the amount where they diverge.",
+       "Right, and the clause about checking against the true optimum is doing real work. An\ninstance where greedy looks bad is not a counterexample until something proves a better\nanswer exists, and eyeballing does not prove it. That is why `greedy_failure` calls\n`optimal_coin_count` rather than a second heuristic: the dynamic program is the benchmark,\nand without one the search would be comparing two guesses.",
+       "This would settle it, and it is far harder than the claim it is being used to establish —\nyou would have to quantify over all possible exchange arguments, which is not a\nmathematical object anyone has defined. It also proves the wrong thing even if you\nmanaged it: the absence of one proof technique is not the absence of the property, and a\nrule could be optimal for a reason that no exchange argument captures. One instance and\none dynamic program settle the same question in an afternoon.",
+       "An unbounded ratio is a much stronger result, and it is a good thing to want — it is\nexactly what separates a bad heuristic from a bad-but-bounded one, and it is what the\napproximation module measures. It is not what was asked. Non-optimality only needs the\nrule to be wrong somewhere; a rule that is off by one coin on one instance and perfect\neverywhere else is already not optimal, and no family of instances is needed to say so."
+      ]
      }
     ]
    },
@@ -528,7 +588,8 @@
     "aside": "Every merge buries one more subtree by one more bit, so the running total of the merged weights is the encoded length — which is usually quicker to add up than the codewords are to read off.",
     "hint": "Merge E and D first. Keep merging the two lightest of what is left, and write down the weight of each subtree you create.",
     "wrong": "300 is the fixed-length code: five symbols need three bits each, and 100 symbols at 3 bits is 300. The whole point of the exercise is the gap between that and what Huffman charges.",
-    "why": "The merges are `E+D = 20`, then `C+20 = 35`, then `B+35 = 60`, then `A+60 = 100`. Adding\nthe weights of those four created nodes gives `20 + 35 + 60 + 100 = 215`. Reading it off\nthe codewords instead: `A` sits at depth 1, `B` at 2, `C` at 3, `D` and `E` at 4, so\n`40*1 + 25*2 + 15*3 + 12*4 + 8*4 = 40 + 50 + 45 + 48 + 32 = 215`. Against the 300 bits a\nfixed-length code would spend that is a saving of 28%, bought entirely by giving the\n40-occurrence symbol a single bit. Note also that no symbol more frequent than another\ngot a longer codeword — the invariant the lab asserts, and the reason the code cannot be\nimproved."
+    "why": "The merges are `E+D = 20`, then `C+20 = 35`, then `B+35 = 60`, then `A+60 = 100`. Adding\nthe weights of those four created nodes gives `20 + 35 + 60 + 100 = 215`. Reading it off\nthe codewords instead: `A` sits at depth 1, `B` at 2, `C` at 3, `D` and `E` at 4, so\n`40*1 + 25*2 + 15*3 + 12*4 + 8*4 = 40 + 50 + 45 + 48 + 32 = 215`. Against the 300 bits a\nfixed-length code would spend that is a saving of 28%, bought entirely by giving the\n40-occurrence symbol a single bit. Note also that no symbol more frequent than another\ngot a longer codeword — the invariant the lab asserts, and the reason the code cannot be\nimproved.",
+    "check": ""
    },
    "match": null,
    "tune": null,
@@ -615,57 +676,87 @@
      {
       "q": "In the edit-distance table, what does cell `(i, j)` hold?",
       "opts": [
+       "The cost of the cheapest operation available at `(i, j)`, which the fill then accumulates",
+       "How many operations remain after `i` deletions and `j` insertions",
        "The distance between the first `i` characters of `a` and the first `j` characters of `b`",
-       "The distance between the single characters `a[i]` and `b[j]`",
-       "The cost of the cheapest operation available at position `(i, j)`",
-       "The number of operations still to come after `i` deletions and `j` insertions"
+       "The distance between the single characters `a[i]` and `b[j]`, which the recurrence adds up"
       ],
-      "a": 0,
-      "why": "Naming the subproblem is the whole design step, and here it is *prefixes*: cell\n`(i, j)` is the answer to a smaller instance of the same question. That is what makes\nthe recurrence local — every way of finishing off `a[:i]` and `b[:j]` ends in exactly\none of three moves, each of which lands on a neighbouring cell. It also explains the\nborders: `(i, 0)` is `a[:i]` against nothing, which costs `i` deletions. A cell about\ntwo single characters would carry no history and nothing could be built on it; a cell\nholding a per-position cost would be the recurrence's input rather than its output."
+      "a": 2,
+      "why": "Naming the subproblem is the design step, and everything else follows from it. Here the\nsubproblem is a pair of prefixes: `(i, j)` is the answer to a smaller instance of exactly\nthe same question. That is what makes the recurrence local — any way of finishing off\n`a[:i]` against `b[:j]` ends in one of three moves, and each move lands on a neighbouring\ncell — and it is what makes the borders obvious, since `(i, 0)` is `a[:i]` against nothing\nand costs `i` deletions. A cell that held anything else would have nothing for the next\ncell to build on.",
+      "whys": [
+       "This is the recurrence's input mistaken for its output. `min` of three candidates is\ncomputed while filling `(i, j)`, and the cheapest of them is what gets stored — but what\ngets stored is the whole distance for that prefix pair, not the price of the last step.\nThe difference shows up at the borders: under this reading `(3, 0)` would hold 1, the\ncost of one deletion, where the table needs 3, the cost of deleting all three characters.\nAccumulating afterwards is not possible either, because you would have to know which path\nthrough the table to accumulate along, and finding that path is the problem.",
+       "This reads the table backwards — as work remaining rather than work done — and although a\ncost-to-go formulation can be made to work in general, it is not this one, and the\nindices give it away. `i` and `j` are positions in the two strings, not counts of\noperations already performed: `i` deletions would have consumed `i` characters of `a`\nwhile advancing nowhere in `b`, so the pair `(i, j)` would not describe a state this table\nhas. The border check settles it too — `(0, 0)` holds 0, the cost of matching nothing\nagainst nothing, where a work-remaining table would hold the full distance there.",
+       "Right, and the test for whether a subproblem has been named properly is whether the cell\nis self-contained: `(i, j)` is an answer, complete in itself, that never has to be\nrevisited once written. That is what lets the fill go in one sweep with no back-tracking,\nand it is why the same table serves the reconstruction afterwards — every cell is a\nfinished claim about a real instance, so the back-walk can interrogate it.",
+       "A cell about two single characters carries no history, and nothing can be built on it.\nYou can see the problem by asking what the recurrence would be: to combine\n`distance(a[i], b[j])` values into a total you would need to know which characters got\npaired with which, and that pairing is the alignment — the very thing the table exists to\nfind. The substitution cost `a[i] != b[j]` does appear in the recurrence, but as an\nincrement applied to the diagonal neighbour, not as the value of the cell."
+      ]
      },
      {
       "q": "Why do the checks replay your edit script instead of comparing it against a stored one?",
       "opts": [
-       "Because ties are real: several scripts can achieve the same cost, so the check confirms yours turns `a` into `b` at the cost you claim",
-       "Because the value of the optimum is not unique either",
-       "Because the table can be filled in any order and the script depends on that order",
-       "Because a reconstructed script can come out cheaper than the table's value"
+       "The value of the optimum is not unique either, so no stored answer could be compared against",
+       "The fill order is not fixed, so the script a correct solution produces depends on how the table was swept",
+       "A correctly reconstructed script can come out cheaper than the value in the table, and the replay catches that",
+       "Ties are real — many scripts hit the same cost, so the check replays yours and compares the result"
       ],
-      "a": 0,
-      "why": "The value of an optimum is unique — that is what makes it an optimum — but the witness\nalmost never is. `form` to `from` costs 2 whether you delete the `o` and re-insert it\nafter the `r` or substitute both letters where they stand, and a grader that demanded\none specific script would fail correct work. So the\ncheck replays: consume `a`, apply each operation, and see whether `b` comes out and\nwhether the non-match operations number exactly the cost. The table's fill order is\nfixed by the dependencies, and a script cheaper than the table's value would mean the\ntable was wrong, not that the reconstruction was clever."
+      "a": 3,
+      "why": "The value of an optimum is unique — that is what makes it *the* optimum — but the witness\nthat achieves it almost never is. `form` to `from` costs 2 whether you delete the `o` and\nre-insert it after the `r`, or substitute both letters where they stand, and a grader\nholding one specific script would fail the other. So the check does the only thing that\nis fair: consume `a`, apply the operations in order, and require that `b` comes out and\nthat the operations which are not matches number exactly the cost claimed. That tests the\nproperty the script is supposed to have, rather than testing whether it is the particular\nscript the author happened to write.",
+      "whys": [
+       "The optimum's value is unique, and that uniqueness is exactly what the check leans on:\n`edit_distance` is compared against a stored number without ceremony, because there is\nonly one right answer. If the value were ambiguous the whole table would be ill-defined,\nsince every cell is a `min` over its neighbours. The ambiguity is one level down, in\nwhich sequence of moves achieves that value, and it is the script rather than the number\nthat needs replaying.",
+       "The fill order is not free — it is fixed by the dependencies, since `(i, j)` reads\n`(i-1, j)`, `(i, j-1)` and `(i-1, j-1)`, so those three have to be written first. Row by\nrow and column by column both satisfy that, and both produce the same table, because each\ncell is a `min` over values that are already final. What can vary is the tie-breaking\ninside the back-walk, which is a choice in the reconstruction rather than a consequence\nof the sweep — and it is a real source of differing scripts, which is why the check\nreplays.",
+       "A script cheaper than the table's value would mean the table is wrong, not that the\nreconstruction was clever — the table's value is by definition the cheapest achievable,\nso nothing correct can beat it. The replay is not looking for that. It exists for the\nopposite direction: a reconstruction that is *valid but not minimal*, or one that claims\na cost its operations do not actually incur, and both of those are ordinary bugs in a\nback-walk that reads the wrong neighbour.",
+       "Right, and the general lesson is worth more than the instance: when a problem has many\noptimal witnesses, a grader must check the defining property rather than the artefact.\nReplaying does that in two parts — that the script transforms `a` into `b` at all, and\nthat its cost is the one claimed — and either half alone would be gameable. A script that\nreaches `b` by rewriting every character is valid and expensive; a script that claims cost\n2 and does not reach `b` is cheap and wrong."
+      ]
      },
      {
       "q": "Items `(weight, value)` of `(6, 9)`, `(5, 7)`, `(5, 7)` with capacity 10. What does value-density greedy get, and what is the optimum?",
       "opts": [
-       "9 against 14 — greedy takes the densest item, and then nothing else fits",
-       "14 against 14 — density greedy is optimal whenever every item fits individually",
-       "16 against 14 — greedy overfills the sack and has to be corrected",
-       "9 against 16 — the optimum takes all three items"
+       "9 against 14 — greedy takes the densest item and then nothing else fits",
+       "14 against 14 — density greedy is optimal here, since every item fits on its own",
+       "9 against 23 — the optimum takes all three items, worth 23 between them",
+       "9 against 14.6 — the optimum is what the densities are pointing at"
       ],
       "a": 0,
-      "why": "Densities are `9/6 = 1.5` and `7/5 = 1.4`, so greedy takes the 6-weight item first and\nis left with 4 units of capacity that nothing fits into: 9. The table takes both 5s for\n14. What makes this the honest counterexample rather than a trick is that the greedy\nrule *is* optimal on the fractional problem, where it would take the 6 and then\nfour-fifths of a 5 for `9 + 5.6 = 14.6`. Indivisibility is the entire difficulty, which\nis why there is a table here and a one-line sort in the fractional version. All three\nitems weigh 16 together, so they never fit, and no correct algorithm ever exceeds the\ncapacity."
+      "why": "Densities are `9/6 = 1.5` and `7/5 = 1.4`, so greedy commits to the 6-weight item and is\nleft with 4 units of capacity that nothing fits into: 9. The table takes both 5s for 14.\nWhat makes this an honest counterexample rather than a trick is that the greedy rule *is*\noptimal on the fractional problem, where it would take the 6 and then four-fifths of a 5\nfor `9 + 5.6 = 14.6`. Indivisibility is the entire difficulty, and it is the reason there\nis a table here and a one-line sort in the fractional version.",
+      "whys": [
+       "Right, and the shape of the failure is worth naming: greedy is not defeated by a bad\ndensity estimate, it is defeated by the remainder. Committing to the 6 leaves 4 units of\ncapacity that no item can use, and that stranded capacity is worth more than the 0.1 of\ndensity the choice bought. Every counterexample to density greedy has this form, which is\nalso why the fractional version is immune — there, leftover capacity is always usable.",
+       "Every item does fit on its own, and greedy is still not optimal, which is precisely why\nthis instance was chosen. The condition that would rescue the rule is not that items fit\nindividually but that they can be split, and the whole difference between the two\nproblems lives in that word. Run the density rule here and it takes the 6-weight item\nfirst, at which point 4 units of capacity remain and both 5s are excluded: 9, not 14.",
+       "The three items weigh `6 + 5 + 5 = 16` between them, and the sack holds 10, so they never\nfit together — 23 is the value of a bundle that is not a candidate. This is the commonest\nslip in the whole module, and it is worth noticing where it comes from: the optimum is\nthe best *feasible* set, and it is easy to compute the best set and forget to check the\nconstraint. No correct algorithm ever exceeds the capacity, so no answer above 14 is\navailable on this instance.",
+       "14.6 is a real quantity and it is the answer to the neighbouring question: it is the\n*fractional* optimum, `9` for the 6-weight item plus four-fifths of a 5 for `5.6`. On the\nfractional problem the density rule is provably optimal, and that is exactly why the\nrelaxation is worth knowing — it is an upper bound on the integral optimum, and branch\nand bound is built out of it. What it is not is achievable here, because you cannot take\nfour-fifths of an item. The integral optimum is 14, and the 0.6 between them is the price\nof indivisibility."
+      ]
      },
      {
       "q": "You shrink the knapsack table to two rolling rows to save memory. What does that cost you?",
       "opts": [
-       "The back-walk: you can report the best value but no longer which items achieved it",
-       "Nothing — the reconstruction only ever reads the final row",
-       "The optimal value, which now depends on the order the rows are visited in",
-       "The ability to handle zero-weight items"
+       "The handling of zero-weight items, whose row now overwrites the one they read",
+       "The back-walk — you can report the best value but not which items achieved it",
+       "Nothing, because the reconstruction only ever reads the final row of the table",
+       "The optimal value, which starts depending on the order the rows are visited in"
       ],
-      "a": 0,
-      "why": "The reconstruction asks, for each `i` from the bottom up, whether `table[i][c]` differs\nfrom `table[i-1][c]` — a question about a row that a rolling implementation has already\noverwritten. The value survives intact, because each row only ever reads the one above\nit, and that is exactly why the space reduction works at all. Recovering the witness in\nsmall space is possible but not free: Hirschberg's divide-and-conquer does it for\nsequence alignment at the price of running the fill twice. Zero-weight items are\nunaffected either way, and they are worth testing precisely because `while weight <= c`\nconditions like to get them wrong."
+      "a": 1,
+      "why": "The reconstruction asks, for each item `i` from the bottom upward, whether `table[i][c]`\ndiffers from `table[i-1][c]` — and that is a question about a row a rolling\nimplementation has already overwritten. The value survives untouched, because each row\nonly ever reads the one directly above it, and that is exactly why the space reduction\nworks at all. Recovering the witness in small space is possible but not free:\nHirschberg's divide-and-conquer does it for sequence alignment at the price of running\nthe fill twice.",
+      "whys": [
+       "Zero-weight items are unaffected by the space reduction, because a row still reads only\nthe row above it whatever the weights are. They are worth testing for a different reason,\nwhich is that `while weight <= c` and `for c in range(...)` conditions like to get them\nwrong at the boundary, and a zero-weight item with positive value should always be taken.\nThat is a fencepost bug in the recurrence, and it is there in the full table too.",
+       "Right, and the asymmetry is the thing to carry away: the value needs one row of history\nand the witness needs all of them. That is a general property of dynamic programming\nrather than a quirk of knapsack — the recurrence looks back a bounded distance, so the\nfill can forget, while the reconstruction walks the whole chain of decisions and cannot.\nWhenever you see a space optimisation applied to a table, the first question is whether\nanything downstream still wants to read what was discarded.",
+       "The reconstruction reads far more than the final row — that is the whole of its\ndifficulty. It starts at `table[n][capacity]` and walks upward, and at each step it\ncompares against `table[i-1][c]` to decide whether item `i` was taken. Only the final\nrow is needed to report the *value*, which is what makes the confusion natural: if the\nanswer were just a number, this would be correct and there would be no cost at all.",
+       "The value is exactly what survives, and the reason is worth being precise about: each\nrow depends only on the row above it, so overwriting anything older destroys no\ninformation the fill still needs. The order is not free either — rows have to be visited\ntop to bottom, and within the classic one-array version the capacity loop has to run\nbackwards to stop an item being taken twice — but getting that wrong produces a\ndifferent bug, an item used more than once, rather than an order-dependent answer."
+      ]
      },
      {
       "q": "How does the longest common subsequence relate to edit distance?",
       "opts": [
-       "Forbid substitution and the cheapest script deletes and inserts everything outside a longest common subsequence, for a cost of `len(a) + len(b) - 2 * lcs`",
-       "They are equal whenever the two strings have the same length",
-       "`lcs` is always `max(len(a), len(b))` minus the unit-cost edit distance",
-       "There is no relation — one maximises and the other minimises"
+       "`lcs` is `max(len(a), len(b))` minus the unit-cost edit distance",
+       "There is no relation — one is a maximisation and the other a minimisation",
+       "Ban substitution and the cheapest script costs `len(a) + len(b) - 2 * lcs`",
+       "They are equal whenever the two strings are the same length, since nothing needs inserting"
       ],
-      "a": 0,
-      "why": "The two tables are nearly the same table, which is why the module puts them side by\nside. A deletion-only-and-insertion-only script has to remove from `a` and add to `b`\neverything not held in common, and the characters it can keep are exactly a common\nsubsequence — making the script cheapest means making that subsequence longest. For\n`AGGTAB` and `GXTXAYB` the LCS is `GTAB`, so the deletion-and-insertion distance is\n`6 + 7 - 8 = 5`. Unit-cost edit distance is a different quantity, because a substitution\nbuys a delete and an insert for the price of one, so the equality only holds under that\nrestriction — a same-length coincidence is not enough."
+      "a": 2,
+      "why": "The two tables are nearly the same table, which is why the module puts them side by side.\nIf the only moves are deletion and insertion, a script has to remove from `a` and add to\n`b` everything the two do not hold in common, and the characters it can leave alone are\nexactly a common subsequence — so making the script cheapest is making that subsequence\nlongest. For `AGGTAB` and `GXTXAYB` the LCS is `GTAB`, and the deletion-and-insertion\ndistance is `6 + 7 - 2*4 = 5`. The restriction matters: allow substitution and a\nmismatched pair costs 1 instead of 2, so the identity stops holding.",
+      "whys": [
+       "This is the closest of the wrong answers and it holds on a surprising number of examples,\nwhich is what makes it worth refuting concretely. Take `AB` and `BA`: the LCS is 1, the\nunit-cost distance is 2, and `max(2, 2) - 2 = 0`, not 1. The identity that does hold is\nthe one with substitution banned, and it uses `len(a) + len(b)` rather than\n`max(len(a), len(b))`. Substitution is what breaks it — it buys a delete and an insert\nfor the price of one, so it shortens the distance without lengthening the subsequence.",
+       "The direction of the two problems really is opposite, and it is a good instinct that\nmaximising and minimising are different activities. What makes them the same problem here\nis that the quantities are complementary rather than independent: every character is\neither kept or paid for, so the total length is fixed and maximising what is kept is\nminimising what is paid. That is a common enough pattern to look for — a matching and a\nvertex cover stand in a related arrangement in the last module of this course.",
+       "Right, and the counting argument is short enough to reconstruct rather than remember.\nEvery character of `a` is either kept or deleted, every character of `b` is either kept\nor inserted, and the kept characters are the same subsequence read from both sides. So\nthe cost is `(len(a) - lcs) + (len(b) - lcs)`, which is where the `2 *` comes from. The\n`ban substitution` clause is load-bearing: it is what forces a mismatch to cost two moves\nrather than one.",
+       "Equal lengths change nothing. `AB` and `BA` are both length 2, their LCS is 1, the\ndeletion-and-insertion distance is `2 + 2 - 2 = 2`, and the unit-cost edit distance is\nalso 2 — but `ABC` and `CBA` are both length 3 with LCS 1, giving `3 + 3 - 2 = 4` against\na unit-cost distance of 2, and the two have parted company. What matters is not the\nlengths but whether substitution is available, because that is the move whose price\nchanges between the two problems."
+      ]
      }
     ]
    },
@@ -902,57 +993,87 @@
      {
       "q": "Why does Dijkstra insist on non-negative weights?",
       "opts": [
-       "Its invariant is that a vertex's distance is final the moment it is extracted, and a negative edge elsewhere could lower it afterwards",
-       "Because a binary heap cannot order negative keys correctly",
-       "Because a negative weight only makes sense on a directed graph, and Dijkstra assumes an undirected one",
-       "It does not — Dijkstra is fine with negative edges as long as there is no negative cycle"
+       "A binary heap cannot keep negative keys in the right order once they mix with positive ones",
+       "Negative weights only make sense on a directed graph, and Dijkstra assumes an undirected one",
+       "Only a negative cycle actually breaks it; a single negative edge is caught by the guard after the pop",
+       "Its invariant is that an extracted vertex is final, and a negative edge could lower it afterwards"
       ],
-      "a": 0,
-      "why": "The proof that the extracted vertex is settled runs: any other route to it leaves the\nsettled set at some point, and everything after that point costs at least 0, so the\nroute cannot be shorter. Remove the non-negativity and the argument evaporates. It is\nnot about cycles, either — take `a->b` at 2, `a->c` at 3 and `c->b` at -2. There is no\ncycle at all, and Dijkstra still settles `b` at 2 while the true distance is 1. A heap\norders negative numbers perfectly well; it is the algorithm above the heap that breaks.\nTolerating negative edges without a negative cycle is exactly what Bellman-Ford is for."
+      "a": 3,
+      "why": "The proof that an extracted vertex is settled runs like this: any other route to it must\nleave the settled set at some point, that departure edge already costs at least as much\nas the route we have, and everything after it costs at least 0 — so the alternative cannot\nbe shorter. Delete the non-negativity and the last clause evaporates, and with it the\nwhole argument, and the failure needs no cycle at all. Take `s->a` at 2, `s->b` at 3,\n`b->a` at -2 and `a->t` at 1. `a` is extracted at 2 and its edge to `t` is relaxed to 3;\nonly afterwards does `b` reveal that `a` is really 1 away, and by then `a` is settled and\nits outgoing edge is never looked at again. `t` comes out at 3 where the true distance is\n2. That is why the lab's `dijkstra` raises `ValueError` on a negative weight rather than\nrunning and returning something plausible.",
+      "whys": [
+       "Heaps order negative numbers perfectly well; `-2` compares below `1` the way it should,\nand no comparison-based priority queue cares about the sign of its keys. The thing that\nbreaks is a layer above the heap: the algorithm's claim that the minimum key on the heap\nis a *final* distance. That claim is about the graph, not the data structure, and\nswapping in a Fibonacci heap or a sorted list changes nothing about it.",
+       "Dijkstra is fine on directed graphs and on undirected ones, and it is run on both\nroutinely. Negative weights are the awkward case in the other direction: an undirected\nnegative edge is a negative cycle immediately, since you can traverse it back and forth\nforever, which is why negative weights are usually discussed on directed graphs. That is\na fact about where negative edges can meaningfully live, not about what Dijkstra assumes.",
+       "The counterexample needs no cycle at all — four edges, `s->a`, `s->b`, `b->a`,\n`a->t`, and no way back to anything — and `t` still comes out at 3 against a true distance\nof 2. So a single negative edge is enough. The guard after the pop is lazy deletion of\nsuperseded heap entries and nothing more: it discards a stale entry, and it has no way to\nre-expand a vertex that has already been settled and left the queue. Note where the damage\nlands, too — `a`'s own distance is eventually corrected to 1, and it is `t`, downstream of\nthe edge `a` had already relaxed, that keeps the stale number. Tolerating negative edges\nas long as no negative cycle exists is precisely what Bellman-Ford is for, and it is why\nthe module ships both.",
+       "Right, and the sharpest way to hold it is that Dijkstra never reconsiders. Extraction is\na commitment, the commitment is justified by `everything from here on costs at least 0`,\nand a negative edge is the counterexample to that clause. Bellman-Ford makes no such\ncommitment — it relaxes every edge every round and lets a distance fall as late as it\nlikes — which is exactly the trade it makes for its worse bound."
+      ]
      },
      {
       "q": "What is the guard `if d > dist[u]: continue` doing right after the pop?",
       "opts": [
-       "Discarding a heap entry that a later improvement has superseded, which is what lets you skip decrease-key entirely",
-       "Detecting a negative weight before it can corrupt the distances",
-       "Stopping the search once the goal has been settled",
-       "Preventing the same vertex from being pushed onto the heap twice"
+       "Discarding a heap entry that a later improvement superseded, which is what replaces decrease-key",
+       "Catching a negative weight before it can corrupt distances the algorithm has already settled",
+       "Stopping the search once the goal vertex has been settled, so the loop can exit early",
+       "Stopping the same vertex from being pushed onto the heap twice, which would break the `E log V` bound"
       ],
       "a": 0,
-      "why": "Lazy deletion. When a vertex's distance improves, the old entry is still sitting in the\nheap and there is no cheap way to reach in and rewrite it — a real decrease-key needs\nhandles into the heap and roughly doubles the amount of code. So the entry is left to\nrot, and this line throws it away when it surfaces. Far from preventing duplicate\npushes, the guard is what makes them safe: there is at most one push per successful\nrelaxation, so the heap never holds more than `E + 1` entries and the `log` factor is\n`log E`, which is `O(log V)` on a simple graph."
+      "why": "Lazy deletion. When a vertex's distance improves, the entry already sitting in the heap\nbecomes stale, and there is no cheap way to reach in and rewrite it — a real decrease-key\nneeds handles from each vertex into its heap node and roughly doubles the amount of code.\nSo the stale entry is left to rot and this line throws it away when it surfaces. Far from\npreventing duplicate pushes, the guard is what makes them safe: there is at most one push\nper successful relaxation, so the heap never holds more than `E + 1` entries, and `log E`\nis `O(log V)` on a simple graph.",
+      "whys": [
+       "Right, and the trade is worth stating explicitly because it is the reason almost every\nreal implementation looks like this one. Decrease-key gives a heap of at most `V` entries\nand an `E + V log V` bound with a Fibonacci heap; lazy deletion gives a heap of up to `E`\nentries and `E log V` with a binary heap, in about a third of the lines and with no\nhandles to keep in step. On a sparse graph the two are within a constant factor, and the\nsimpler one wins.",
+       "Nothing here inspects a weight, so nothing here could detect a negative one — the guard\ncompares a popped distance against the current best for the same vertex, and both of\nthose are non-negative sums under the algorithm's assumption. Dijkstra has no negative\nweight detection anywhere, deliberately: it is a precondition, not a runtime check. What\ndoes detect a negative structure is Bellman-Ford's extra round, and that is a separate\nalgorithm in a separate function.",
+       "An early exit on the goal is a real and correct optimisation — once the target is\nextracted its distance is final, so `shortest_path` may stop there — but it is a\ndifferent line in a different place, testing `u == target` rather than comparing\ndistances. This guard fires on stale entries for every vertex, including ones nowhere\nnear the goal, and it fires many times per run. Removing it would not affect termination;\nit would affect how much stale work gets done, and on some graphs the correctness of the\ndistances it would then overwrite.",
+       "Duplicate pushes are not prevented, they are the design. Every successful relaxation\npushes, so a vertex can appear on the heap once per incoming edge that improved it, and\nthe heap holds up to `E + 1` entries. That is exactly what makes the guard necessary\nrather than optional. The bound survives because `log E` is `O(log V)` on a simple graph,\nwhere `E` is at most `V^2` — so `E log E` and `E log V` are the same thing up to a\nconstant, and nothing is lost by letting the duplicates in."
+      ]
      },
      {
       "q": "Bellman-Ford relaxes every edge for `V - 1` rounds. Why that many?",
       "opts": [
-       "A shortest path with no repeated vertex has at most `V - 1` edges, and after round `k` every shortest path of `k` edges or fewer is correct",
-       "Because the `V`-th round is reserved for the negative-cycle test, so one round has to be given up",
-       "Because a spanning tree has `V - 1` edges, and the shortest-path tree is a spanning tree",
-       "Because the distances converge geometrically and `V - 1` is a safe over-estimate"
+       "The distances converge geometrically, and `V - 1` rounds is the safe over-estimate that follows",
+       "A simple shortest path has at most `V - 1` edges, and round `k` settles every path of `k` edges",
+       "The `V`-th round is reserved for the negative-cycle test, so one round has to be surrendered",
+       "A shortest-path tree is a spanning tree, and a spanning tree on `V` vertices has `V - 1` edges"
       ],
-      "a": 0,
-      "why": "Induction on the number of edges in the path. After the first full pass, every vertex\none edge from the source is correct; after the second, every vertex two edges away; and\na simple path cannot use more than `V - 1` edges without revisiting a vertex, which a\nshortest path has no reason to do when there is no negative cycle. The test round is a\nconsequence of that bound rather than its cause: since `V - 1` rounds suffice, any\nfurther improvement proves the assumption of no negative cycle was wrong. The\nshortest-path tree does have `V - 1` edges when everything is reachable, but that is a\ncoincidence of counting, not the argument."
+      "a": 1,
+      "why": "Induction on the number of edges in the path. After one full pass, every vertex one edge\nfrom the source is correct; after two, every vertex two edges away; and so on, because a\npass relaxes every edge and so in particular relaxes the last edge of every such path. A\nsimple path cannot use more than `V - 1` edges without revisiting a vertex, and when there\nis no negative cycle a shortest path never has any reason to revisit one. So `V - 1`\nrounds cover every path that could be shortest, and the bound is on the number of *edges*\nin a path rather than on anything about the weights.",
+      "whys": [
+       "Nothing converges geometrically here, and the word is a clue that the wrong kind of\nalgorithm is in mind — iterative numerical methods converge, and their stopping rules\ndepend on the magnitudes involved. Bellman-Ford is exact and combinatorial: after round\n`k` a specific finite set of distances is exactly right, not approximately right, and\n`V - 1` is a tight bound rather than a safety margin. It is tight because a path graph\nreally does need all `V - 1` rounds when the edges are scanned in the unlucky order.",
+       "Right, and the clause about round `k` is what makes it a proof rather than a plausible\ncount. Each pass extends the guarantee by one edge, regardless of the order the edges are\nscanned in — a lucky order finishes sooner, which is why the early exit on a round with no\nchange is sound, but the worst case needs all `V - 1`. The bound is on path length in\nedges, so it holds however large or small the weights are.",
+       "The test round is a consequence of the bound, not its cause. Because `V - 1` rounds\nalready suffice for every shortest path, any further improvement in round `V` proves that\nsome path used `V` edges or more — which means it repeated a vertex, which means it went\nround a cycle, and it only helped if that cycle was negative. Read the reasoning in this\norder and the test round is free. Read it the other way and you are left explaining why\n`V` rounds were needed in the first place.",
+       "The shortest-path tree does have `V - 1` edges when every vertex is reachable, so the\nnumber is right and the coincidence is genuinely tempting. But it counts the wrong thing:\nthe tree's edge count is a global fact about the output, while what the rounds need is a\nbound on the length of a single root-to-vertex path. Those differ, and you can see it on\na star, where the tree has `V - 1` edges and no path is longer than 1 — one round would\ndo, and the algorithm still runs `V - 1` because it cannot know that in advance."
+      ]
      },
      {
       "q": "A negative cycle sits in a component the source cannot reach. Why must `bellman_ford` stay silent about it?",
       "opts": [
-       "The distances it reports are distances from the source, and nothing that cycle does changes any of them",
-       "Because the `V - 1` rounds would have found it already if it mattered",
-       "Because a negative cycle in a disconnected component cannot exist in a directed graph",
-       "Because Bellman-Ford only ever inspects edges leaving a vertex it has already relaxed"
+       "A negative cycle in a component the source cannot reach cannot exist in a directed graph",
+       "Bellman-Ford only inspects edges leaving a vertex it has already relaxed, so it never sees it",
+       "The distances it reports are distances from the source, and that cycle changes none of them",
+       "The `V - 1` rounds would already have surfaced it if it were going to matter to anyone"
       ],
-      "a": 0,
-      "why": "The function answers one question — how far is everything from the source — and an\nunreachable cycle leaves every one of those answers at `inf`. Raising would be a refusal\nto answer a question that has a perfectly good answer, and the lab pins it down with a\ngraph containing both a reachable component and a separate negative loop. Keeping the\ndistinction alive is what the `dist[u] != inf` guard on each relaxation is for. Note\nthat Bellman-Ford scans the whole edge list every round, settled or not; that is exactly\nwhy the unreachable cycle turns up under its nose and has to be deliberately ignored."
+      "a": 2,
+      "why": "The function answers one question — how far is everything from the source — and an\nunreachable cycle leaves every one of those answers at `inf`, however negative it is.\nRaising would be a refusal to answer a question that has a perfectly good answer, and the\nlab pins it down with a graph holding both a reachable component and a separate negative\nloop. The `dist[u] != inf` guard on each relaxation is what keeps the distinction alive:\nwithout it, `inf + (-5)` would be an improvement on `inf` and the unreachable cycle would\nstart manufacturing finite distances out of nothing.",
+      "whys": [
+       "Nothing forbids it. Take `x->y` at 1, `y->x` at -3 with the source somewhere else\nentirely: two vertices, two edges, a cycle of weight -2, and no path from the source to\neither of them. Directedness has nothing to do with reachability — a directed graph can\nhave any number of components the source cannot enter, and that is precisely the case the\nlab constructs.",
+       "Bellman-Ford does the opposite: it scans the entire edge list every round, settled or\nunsettled, reachable or not, and that indiscriminate sweep is the whole difference between\nit and Dijkstra. It has no frontier and no notion of which vertices it has reached. So the\nunreachable cycle's edges are inspected every round; what stops them mattering is the\n`dist[u] != inf` guard, which refuses to relax out of a vertex that has no finite distance\nyet.",
+       "Right, and the general shape is worth carrying: an error should be raised when the caller\ncannot be given a correct answer, not whenever something unusual is noticed. Here every\nreported distance is correct and no amount of negativity in an unreachable component can\nchange one of them, so there is nothing to warn about. If the caller wants to know about\ncycles anywhere in the graph, that is a different query, and it is answered by running the\ndetection from a virtual source with a zero-weight edge to every vertex.",
+       "The rounds do surface it, and that is exactly the difficulty rather than the resolution.\nBellman-Ford scans the whole edge list on every round, so the unreachable cycle's edges\nare examined `V - 1` times and turn up under the algorithm's nose. The `dist[u] != inf`\nguard is what stops them doing anything: relaxing from a vertex at infinite distance is\nrefused, so the cycle never improves anything and never trips the detection round. It has\nto be deliberately ignored, not accidentally missed."
+      ]
      },
      {
       "q": "Union-find with path compression and union by size costs what per operation, and what does that mean for Kruskal?",
       "opts": [
-       "Near-constant amortised — inverse Ackermann in the number of elements, below 5 for any input that fits in memory — so Kruskal's cost is the sort",
-       "Exactly constant in the worst case, which is why Kruskal is linear once the edges are sorted",
-       "Logarithmic in the worst case per operation, and that is where Kruskal's `E log E` comes from",
-       "Logarithmic amortised, matching the heap operations in Dijkstra"
+       "Constant in the worst case, which is why Kruskal is linear once its edges have been sorted",
+       "Logarithmic in the worst case per operation, which is exactly where Kruskal's `E log E` comes from",
+       "Logarithmic amortised, matching the heap operations that Dijkstra's `E log V` is built from",
+       "Near-constant amortised — inverse Ackermann, under 5 for any real input — so the sort dominates"
       ],
-      "a": 0,
-      "why": "The two optimisations together give an amortised bound of the inverse Ackermann\nfunction, which is at most 4 or 5 for any number of elements that can physically exist.\nSo the union-find is not what Kruskal pays for: sorting `E` edges is `E log E`, and the\n`E` union operations on top of it are near-linear. A single `find` can still walk a long\npath in the worst case — the bound is amortised, not worst-case per operation, and the\ncompression that flattens the path is what pays for the next caller."
+      "a": 3,
+      "why": "The two optimisations together give an amortised bound of the inverse Ackermann function\nin the number of elements, which is at most 4 or 5 for any input that can physically\nexist. So the union-find is not what Kruskal pays for: sorting `E` edges costs\n`E log E`, and the `E` find-and-union operations on top of that are near-linear. The\npractical reading is that Kruskal is a sort with a cheap filter after it, which is also\nwhy it is the algorithm of choice when the edges arrive already sorted.",
+      "whys": [
+       "The bound is not constant in the worst case, and it cannot be — there is a proved lower\nbound showing that no union-find structure achieves constant worst-case time per\noperation in this model. What is true is that inverse Ackermann is so slow-growing that\nthe difference is invisible in practice, and the conclusion drawn here is nearly right for\nthe wrong reason: Kruskal is not linear after the sort, it is `E` times a factor that is\nunder 5, which is a distinction only a proof cares about.",
+       "`E log E` is Kruskal's bound and this is the wrong account of where it comes from. It\ncomes from sorting the edges, which happens once, before any union-find operation is\nperformed. Union by size alone would give a logarithmic bound on `find`; adding path\ncompression takes it to inverse Ackermann, and the two together are why the data structure\ndisappears from the analysis. Hand Kruskal a pre-sorted edge list and the `log` goes with\nthe sort, leaving a near-linear run.",
+       "The two logarithms belong to different structures. Dijkstra's comes from the heap, where\n`log V` really is the cost of an operation and really does appear in the final bound.\nUnion-find is not a heap and has no comparison tree to descend — after path compression\nmost roots are one hop away — and its bound is inverse Ackermann rather than logarithmic.\nMatching the two up is tempting because both algorithms end up with a `log` in their\ntotals, but Kruskal's comes from the sort.",
+       "Right, and the word `amortised` is carrying real weight. A single `find` can still walk a\nlong path — the bound is over a sequence of operations, not over each one — and the\ncompression that flattens the path is what pays for the next caller. That is the same\naccounting the vector's doubling used two courses ago: an expensive operation is allowed\nprovided it buys cheapness for the ones after it."
+      ]
      }
     ]
    },
@@ -1199,57 +1320,87 @@
      {
       "q": "Why does the 2-approximation add **both** endpoints of the edge it picks?",
       "opts": [
-       "It has no way to tell which endpoint an optimal cover would use, and taking both keeps the picked edges vertex-disjoint, which is what the certificate needs",
-       "Because a vertex cover has to contain both endpoints of every edge",
-       "Because taking one endpoint would leave the picked edge uncovered",
-       "Because the cover it builds has to be a maximal matching"
+       "Nothing says which endpoint an optimal cover uses, and taking both keeps the picked edges disjoint",
+       "A vertex cover has to contain both endpoints of every edge it covers, so there is no choice to make",
+       "Taking only one endpoint would leave the edge that was just picked uncovered by the cover",
+       "The higher-degree endpoint is the better pick, but taking both keeps the analysis simple"
       ],
       "a": 0,
-      "why": "One endpoint would cover that edge perfectly well — the difficulty is that you cannot\ntell which one is the useful choice, and choosing badly is unbounded rather than merely\nsuboptimal: on a star, picking the leaf every time costs `n - 1` vertices where the\ncentre alone would have done. Taking both costs a factor of exactly 2 and buys the thing\nthat makes the factor provable, namely that the picked edges share no vertex. A cover is\nnot a matching, and it is definitionally false that a cover needs both endpoints of an\nedge — that would make the only cover the whole vertex set."
+      "why": "One endpoint would cover that edge perfectly well. The difficulty is that you cannot tell\nwhich one is useful, and choosing badly is unbounded rather than merely suboptimal: on a\nstar, picking the leaf every time costs `n - 1` vertices where the centre alone would have\ndone. Taking both costs a factor of exactly 2 and buys the property that makes the factor\nprovable — the picked edges share no vertex, so they form a matching, and that matching is\nthe lower-bound certificate. This is the shape of most approximation arguments: give up a\nlittle to gain something you can prove.",
+      "whys": [
+       "Right, and the second clause is the one doing the work. Covering the edge is easy;\nproducing a *certificate* is not, and taking both endpoints is what forces the picked\nedges to be vertex-disjoint. That disjointness is what lets you say `OPT` is at least the\nnumber of picked edges, and without it the algorithm would still return a cover with no\nway to bound how bad it was.",
+       "This is definitionally false and it is worth seeing why it matters: a vertex cover is a\nset of vertices touching every edge, so one endpoint per edge is enough. If a cover\nreally did need both endpoints of every edge, then the only cover would be the entire\nvertex set of any graph with no isolated vertices, the optimisation problem would be\ntrivial, and there would be nothing for anyone to approximate. The algorithm takes both\nendpoints by choice, not by obligation.",
+       "The picked edge would be covered by either endpoint on its own — that is what covering an\nedge means. The edge is not the problem. The problem is every *other* edge that touches\nthe endpoint you did not take, and the risk that the one you did take was the useless one.\nOn a star with the centre `c` and leaves `l1 ... lk`, picking a leaf covers the edge you\npicked and leaves `k - 1` edges still uncovered, each of which will cost you another leaf.",
+       "The higher-degree endpoint is the more intelligent-looking pick, it wins on most graphs\nyou would draw by hand, and it has no constant-factor guarantee at all — there are\nfamilies where repeatedly taking the highest-degree vertex is dragged to about `log n`\ntimes the optimum. So this is not a simplification of a better rule; it is a different\nrule with a worse worst case. The half that is right is that the choice was made for the\nanalysis, and the reason is that the analysis is the deliverable: a cover with a proof\nbeats a cover without one."
+      ]
      },
      {
       "q": "The algorithm returns a matching alongside the cover. What does that matching certify?",
       "opts": [
-       "`OPT >= len(matching)`, because the matched edges share no vertex, so any cover has to spend a distinct vertex on each of them",
-       "`OPT <= len(matching)`, which is what bounds the cover from above",
-       "`OPT == 2 * len(matching)`, which is why the ratio is exactly 2",
-       "Nothing about `OPT` — it only records how the cover was built"
+       "Nothing about `OPT` — it is a record of how the cover was built, not evidence about the optimum",
+       "`OPT >= len(matching)` — matched edges share no vertex, so each needs its own cover vertex",
+       "`OPT <= len(matching)`, which is the bound that pins the cover from above",
+       "`OPT == 2 * len(matching)`, which is where the ratio of exactly 2 comes from"
       ],
-      "a": 0,
-      "why": "The certificate is a **lower** bound, and that is the hard half: the cover's size is\nright there in front of you, while `OPT` is the thing nobody can compute. The matching\nsupplies it for free. Because no two matched edges share a vertex, no single vertex can\ncover two of them, so every cover — the optimal one included — is at least as large as\nthe matching. Put that beside `len(cover) == 2 * len(matching)` and the ratio of 2\nfollows without ever computing `OPT`. Claiming equality would be far too strong: on a\ntriangle the matching has one edge and `OPT` is 2."
+      "a": 1,
+      "why": "The certificate is a **lower** bound, and that is the hard half. The cover's size is\nsitting in front of you; `OPT` is the thing nobody can compute. The matching supplies a\nbound on it for free: no two matched edges share a vertex, so no single vertex can cover\ntwo of them, and therefore every cover — the optimal one included — is at least as large\nas the matching. Put that beside `len(cover) == 2 * len(matching)` and the ratio of 2\nfollows without `OPT` ever being computed. That is what an approximation guarantee is made\nof, and it is why the lab returns the matching rather than discarding it.",
+      "whys": [
+       "It is a record of how the cover was built, and that record is precisely what makes it\nevidence. The construction guarantees the picked edges are pairwise vertex-disjoint —\neach was picked while still uncovered — and vertex-disjointness is a property of the\ngraph, not of the algorithm. Anyone can check it in linear time without trusting the run\nthat produced it, which is what turns a trace into a certificate. That is the difference\nthe module is drawing: a heuristic's ratio is a fact about the algorithm, while a\ncertificate makes the bound checkable on the instance in front of you.",
+       "Right, and the reason it has to be a lower bound is worth being explicit about. You\nalready know an upper bound on `OPT` — the cover you just built is one — so an upper bound\nadds nothing. What blocks the ratio argument is the other side: `len(cover) / OPT` cannot\nbe bounded until `OPT` is bounded from below, and the matching is what supplies that\nwithout solving the problem.",
+       "`OPT <= len(matching)` is false as well as useless. It is false because a triangle has a\nmatching of size 1 and an optimum of 2, so the optimum can exceed the matching. And it\nwould be useless even if true, because the cover already gives an upper bound on `OPT`\nfor nothing — every cover is at least as large as the smallest one. The bound the\nargument is missing is always the lower one.",
+       "Equality is far too strong, and the triangle refutes it immediately: the matching has one\nedge and `OPT` is 2, so `2 != 2 * 1` fails by a factor. Where the 2 does appear is in\n`len(cover) == 2 * len(matching)`, which is a fact about what the algorithm returned and\nholds exactly, by construction — every picked edge contributes both of its endpoints.\nCombining that identity with the inequality is what produces the ratio; asserting the\nidentity of `OPT` itself would mean having solved the problem."
+      ]
      },
      {
       "q": "`ratio([(0, 1), (1, 2), (2, 3)])` is exactly 2.0. What makes that instance tight?",
       "opts": [
-       "The edges it picks happen to form a perfect matching, so it takes all four vertices, while `{1, 2}` covers everything",
-       "Every path graph gives a ratio of 2, whatever order the edges arrive in",
-       "The optimum is 4 and the approximation found 8",
-       "Every connected graph gives a ratio of 2 — that is what a worst-case guarantee means"
+       "It is not special — the guarantee is 2, so every instance comes out at 2 by definition",
+       "The vertex count is even, so the edges the algorithm picks match up all of them exactly",
+       "The edges it picks form a matching of size 2, so it takes all 4 vertices where 2 would do",
+       "Every path graph comes out at 2.0, whatever order its edges are handed to the algorithm in"
       ],
-      "a": 0,
-      "why": "The algorithm picks `(0, 1)`, which leaves `(1, 2)` already covered, then picks\n`(2, 3)`: two disjoint edges, four vertices, and the middle two would have sufficed. The\nguarantee is achieved rather than approached, which is what stops anyone proving a\nbetter constant for this algorithm. The order matters, though, and that is why the lab\nfixes it: hand the same path in as `[(1, 2), (0, 1), (2, 3)]` and the algorithm picks\nthe middle edge, covers everything with two vertices and scores 1.0. A worst-case\nguarantee is an upper bound on every instance, not a prediction about any of them — the\ntriangle scores 1.0 too."
+      "a": 2,
+      "why": "The algorithm picks `(0, 1)` and takes both endpoints; `(1, 2)` is now covered and is\nskipped; then it picks `(2, 3)` and takes both. Two disjoint edges, four vertices, where\n`{1, 2}` covers all three edges. The guarantee is achieved rather than approached, and\nthat is what stops anyone proving a better constant for this algorithm — a proof of 1.9\nwould have to be false on this four-vertex graph. Note that the order matters and the lab\nfixes it deliberately: hand the same path in as `[(1, 2), (0, 1), (2, 3)]` and the\nalgorithm picks the middle edge, covers everything with two vertices and scores 1.0.",
+      "whys": [
+       "A worst-case guarantee is a ceiling on every instance, not a prediction about any of them,\nand most instances come in well under it. The triangle scores 1.0 — the algorithm picks\none edge, takes two vertices, and two is the optimum. The same path graph scores 1.0\nunder a different edge order. If every instance really did land on the bound the\nalgorithm would be useless in practice as well as in theory, and there would be no point\nmeasuring a ratio at all.",
+       "The matching being perfect is a real observation and it is true here — both picked edges\ntogether use all four vertices. What it is not is the mechanism, and the parity is a\ncoincidence. What makes the ratio 2 is that the optimal cover is exactly the size of the\nmatching, 2, while the algorithm spends `2 * 2 = 4`; tightness needs `OPT` to be *equal*\nto the matching rather than larger. Extend the path to five vertices,\n`[(0, 1), (1, 2), (2, 3), (3, 4)]`, and the count is odd and the matching covers four of\nthe five rather than all of them — and the ratio is still exactly 2.0, four vertices\nagainst the optimal `{1, 3}`.",
+       "Right, and the tightness is what the instance is for. An approximation guarantee is only\ninteresting alongside evidence that it cannot be improved, and a single instance achieving\nthe bound is that evidence. It also shows where the factor of 2 physically goes: both\npicked edges contributed a vertex that the optimal cover did not want, and on this graph\nthat is every vertex the algorithm took.",
+       "The same path graph scores 1.0 under a different edge order — hand it in as\n`[(1, 2), (0, 1), (2, 3)]` and the algorithm picks the middle edge first, covers all\nthree edges with `{1, 2}` and matches the optimum exactly. So order is the whole story on\nthis instance, which is why the lab fixes the order rather than leaving it to the caller.\nA worst-case guarantee describes the worst order, not every order."
+      ]
      },
      {
       "q": "Vertex cover is NP-complete. Which reading of that is right?",
       "opts": [
-       "The decision version — is there a cover of size at most `k`? — is in NP and every problem in NP reduces to it; the optimisation version is NP-hard",
-       "Every instance of it takes exponential time to solve",
-       "No approximation algorithm with a constant ratio can exist for it",
-       "It is a statement that the problem lies outside NP"
+       "Every instance of it needs exponential time, which is what the completeness is asserting",
+       "No approximation algorithm with a constant ratio can exist for it, or the classes would collapse",
+       "The problem sits outside NP, since no polynomial algorithm for it has ever been found",
+       "The decision version is in NP and all of NP reduces to it — the optimisation version is NP-hard"
       ],
-      "a": 0,
-      "why": "NP-completeness is a statement about reductions and about membership, and both halves\nmatter: the decision version is in NP because a cover of size `k` is a certificate\nanyone can check in linear time, and it is hard because every problem in NP reduces to\nit. The optimisation version cannot be in NP at all — \"this is the smallest\" is not\nsomething a witness settles — so it is called NP-hard instead. Nothing about that says\nindividual instances are hard: the lab's exhaustive search handles 18 nodes without\ncomplaint, trees are easy, and bipartite graphs fall to matching. And the algorithm in\nthis very module is a constant-factor approximation, so the third reading is refuted by\nthe code you are about to write."
+      "a": 3,
+      "why": "NP-completeness is two claims joined by an `and`: membership and hardness. Membership is\nabout the decision version — `is there a cover of size at most k` — which is in NP because\na cover of size `k` is a certificate anyone can check in linear time. Hardness is that\nevery problem in NP reduces to it. The optimisation version cannot be in NP at all, since\n`this is the smallest` is not something a witness settles, so it is called NP-hard rather\nthan NP-complete. Keeping the two versions apart is most of what it takes to read the\nstatement correctly.",
+      "whys": [
+       "Completeness says nothing about individual instances, only about the worst case over all\nof them, and plenty of instances are easy. The lab's exhaustive search clears 18 nodes\nwithout complaint; trees fall to a linear-time dynamic program; bipartite graphs fall to\nmatching by König's theorem. A problem can be NP-complete and still have large, useful\nfamilies that are solved in polynomial time, and most real work on hard problems consists\nof finding those families.",
+       "This module contains a constant-factor approximation for it, so the claim is refuted by\nthe code the lab is about to make you write — the ratio is 2, and it is proved rather than\nobserved. NP-hardness bounds what can be computed *exactly* in polynomial time; it says\nnothing on its own about approximation. There are inapproximability results for vertex\ncover, and they are much more delicate than this: no ratio below 1.36 unless P equals NP,\nand none below 2 under the unique games conjecture. Note that they rule out doing better\nthan 2, not doing 2.",
+       "This gets the containment backwards. Being in NP means a proposed answer can be *checked*\nquickly, not that one can be *found* quickly, and vertex cover is in NP for the easy\nreason that a candidate cover is checked by walking the edge list once. Whether a\npolynomial algorithm exists is the P versus NP question, and it is open — nobody has ruled\none out either. NP is a class of problems with short verifiable certificates, and almost\neverything anyone works on lives comfortably inside it.",
+       "Right, and the reason the distinction is drawn so carefully is that both halves are load\nbearing. Membership without hardness would make it an ordinary NP problem; hardness\nwithout membership makes it NP-hard, which is what the optimisation version is. The\ncertificate is what supplies membership, and it is the same object the approximation\nalgorithm hands back — a set of vertices you can check by walking the edge list once."
+      ]
      },
      {
       "q": "Why is 'repeatedly take the highest-degree vertex' not a constant-factor approximation?",
       "opts": [
-       "There are graph families on which its ratio grows like `log n`, so no constant bounds it",
-       "Because it can fail to produce a cover at all",
-       "Because it is slower than the matching algorithm",
-       "Because it produces no certificate, and without a certificate no ratio can exist"
+       "There are graph families where its ratio grows like `log n`, so no constant can bound it",
+       "It can fail to produce a cover at all on graphs where several degrees tie",
+       "It is slower than the matching algorithm, and a ratio is only claimed for linear-time rules",
+       "It hands back no certificate, and a ratio cannot be claimed without evidence about `OPT`"
       ],
       "a": 0,
-      "why": "It is the more intelligent-looking rule, it beats the matching algorithm on most graphs\nyou would draw by hand, and it has no constant guarantee: bipartite families can be\nbuilt where it is dragged into taking about `log n` times the optimum. That is the\nlesson worth carrying out of this module — a heuristic that usually wins and an\nalgorithm with a proof are different kinds of object. It does always produce a cover,\nand it is not meaningfully slower. As for certificates: an algorithm's ratio is a fact\nabout the algorithm whether or not it hands you the evidence, and the matching is\nvaluable because it makes the bound checkable per instance rather than only provable in\ngeneral."
+      "why": "It is the more intelligent-looking rule, it beats the matching algorithm on most graphs\nyou would draw by hand, and it has no constant guarantee: bipartite families can be\nconstructed on which it is dragged into taking about `log n` times the optimum. That is\nthe lesson worth carrying out of the module — a heuristic that usually wins and an\nalgorithm with a proof are different kinds of object, and which one you want depends on\nwhether you need a good answer or a bounded one.",
+      "whys": [
+       "Right, and the construction is worth knowing in outline: a bipartite graph with one side\nof `n` vertices and the other split into groups of sizes `n/2, n/3, ... , n/n`, wired so\nthat the greedy rule is tempted into the large side group by group. The optimum is the\nside of size `n`, and the greedy total is the sizes of those groups added up:\n`n/2 + n/3 + ... + n/n`, which is `n(H_n - 1)` and grows like `n log n`. Divide one by the\nother and the ratio is `H_n - 1` itself — 6.5 at a thousand vertices, 13.4 at a million,\nclimbing without ever settling. Nothing is malformed about the instance; it is a graph, and that is what\nmakes the absence of a constant a fact about the rule rather than about the input.",
+       "It always produces a cover, and ties change nothing: whichever vertex is taken, its edges\nare removed, and the loop runs until no edge is left. That termination condition is what\nguarantees a cover — an edge can only survive by having neither endpoint taken, and the\nloop does not stop while such an edge exists. The rule's failure is one of quality, not of\nvalidity, which is exactly what makes it dangerous. An algorithm that broke visibly would\nnever have been proposed.",
+       "It is not meaningfully slower — both rules are near-linear with the right bookkeeping,\nand the degree-based one is what most people would reach for first. Speed is not the axis\nthis fails on, and no approximation guarantee has ever been conditional on running time:\nthe ratio and the complexity are separate claims about an algorithm, and a slow algorithm\nwith a proved ratio is still an approximation algorithm.",
+       "An algorithm's ratio is a fact about the algorithm, true or false whether or not the\nimplementation hands you the evidence. The matching is valuable for a different reason:\nit makes the bound checkable on the instance in front of you rather than only provable in\ngeneral, so you can look at one run and know it. The greedy degree rule's problem is not\nthat its certificate is missing but that no constant bound exists to certify — supplying\na certificate would require a bound to certify, and there is not one."
+      ]
      }
     ]
    },
@@ -1367,7 +1518,8 @@
     "aside": "Every node added doubles this. The exponent is in the node count, so the graph that takes a week is only three nodes bigger than the one that takes a day.",
     "hint": "Divide the subset count by the rate for a number of seconds, then divide by 86 400.",
     "wrong": "A number near 220 000 is the answer in seconds — it needs dividing by 86 400 once more.",
-    "why": "`2^40` is 1 099 511 627 776 subsets. At five million a second that is 219 902 seconds,\nand `219902 / 86400 = 2.55` days. What matters is not the number but its slope: 42 nodes\nis ten days, 50 nodes is a little over seven years, and 60 nodes outlives everyone\nreading this. Meanwhile the 18-node cap in the lab is 262 144 subsets, which the same\nmachine clears in about a twentieth of a second — the whole exponential range from\ninstant to impossible fits inside a factor of three in `n`. That gap is the entire\nargument for an approximation with a proved ratio, and for `min_vertex_cover` raising\n`ValueError` rather than politely trying."
+    "why": "`2^40` is 1 099 511 627 776 subsets. At five million a second that is 219 902 seconds,\nand `219902 / 86400 = 2.55` days. What matters is not the number but its slope: 42 nodes\nis ten days, 50 nodes is a little over seven years, and 60 nodes outlives everyone\nreading this. Meanwhile the 18-node cap in the lab is 262 144 subsets, which the same\nmachine clears in about a twentieth of a second — the whole exponential range from\ninstant to impossible fits inside a factor of three in `n`. That gap is the entire\nargument for an approximation with a proved ratio, and for `min_vertex_cover` raising\n`ValueError` rather than politely trying.",
+    "check": ""
    },
    "match": null,
    "tune": null,

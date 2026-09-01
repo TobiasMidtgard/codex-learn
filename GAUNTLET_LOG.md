@@ -4829,3 +4829,385 @@ diff is `src/app.js`, `src/studio.js`, `src/index.head.html`, four files under `
 and the `docs/` build output, and nothing else.
 
 ---
+## Cycle 16 — TRACK 3: Question Bank & Quizzes
+
+*(The runner labels this cycle 3 — run C's counter. This log keeps counting, exactly as
+cycle 15 recorded: run C's cycle 1 was this file's cycle 14, its cycle 2 was cycle 15,
+and its cycle 3 is this.)*
+
+**Target: CS301 (Design & Analysis of Algorithms) — its 25 quiz questions — and
+`renderQuiz`, the surface that delivers all 1366 of them.** One course and one subsystem,
+which is cycle 3's shape and cycle 9's: cycle 3 gave `quiz` its per-option explanations
+and rebuilt CS201 on top of them, cycle 9 did the same for `blanks` and rebuilt EE211.
+This one pays the debt both of those cycles named by name, and closes the hole they left
+between them.
+
+Chosen on measurement rather than taste. Three numbers picked it out.
+
+*The largest single block of the answer tell.* CS301 scores **22 of 25** on "read
+nothing, pick the longest option" — 88%, against 25% for guessing — with a mean length
+margin of **+47.7 characters**, the widest of any course in the catalogue. RFIC510 is
+nominally worse at 90%, but that is 9 questions of 10; CS301 is 25 questions and 100
+options, and it is the course cycle 3 named first in its recorded debt and cycle 9
+re-recorded as unpaid.
+
+*Nothing explained the wrong answer.* **0 per-option explanations across 25 questions and
+100 options** — the largest quiz bank in the catalogue with none. The rest of the course
+does not have this problem: all 20 of its blanks holes carry `whys` and both numeric
+units carry `wrong` and `hint`. The quiz was the one graded surface in CS301 that
+answered the same paragraph whichever option was pressed.
+
+*The key was authored at index 0 in all 25.* Catalogue-wide the authored key sits at
+index 0 for **548 of 1366 questions (40.1%)**, spread 548 / 431 / 280 / 107, and **22
+courses author every key there**, covering 289 questions. `shuffledOptions()` is the only
+thing standing between that and a bank answerable by pressing the top button — which is
+precisely the state cycle 9 found the blanks bank in, where no shuffle existed and
+pressing the first option scored 735 of 1103. One mechanism, and no gate had ever
+watched it run.
+
+### Baseline, captured before any edit
+
+```
+82 circuit exercises / 348 checks · 21 tune units
+216 numeric answers verified, 0 unchecked, 218 figure-only
+1248 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     3160 per-option explanations (160 quiz, 3000 blanks) · 6572 live draws
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys · circuit_model 1457 analyses, 84 refusals
+desk 61 expressions · theme 135 contrast surfaces · tune_ui 423 hostile values
+CS301: 25 questions in 5 quiz units · 20 blanks holes · 2 numeric · 6 labs
+       longest-is-key 22/25 (88%) · mean margin +47.7 · whys 0/100 · 4482 words
+quiz view: renderQuiz mounted by NO GATE — 1366 questions in 252 units
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads, 12875 KB ·
+       inlined 14091 KB · shell 1187 KB
+```
+
+### The attacks
+
+**2. Assessment Inquisitor** — taken first, because this is its track. The three numbers
+above are its findings. Two more, both of the kind cycle 3 catalogued in CS201 and which
+had survived here untouched:
+
+- **Options eliminated by grammar rather than by understanding.** `M4/Q1` asks *"Why does
+  Dijkstra insist on non-negative weights?"* and offered *"It does not — Dijkstra is fine
+  with negative edges as long as there is no negative cycle"*, which denies the premise of
+  its own stem. `M2/Q2` says Huffman **merges** the two least frequent subtrees and then
+  offered *"They never end up in the same subtree"*. `M3/Q2` offered *"a reconstructed
+  script can come out cheaper than the value in the table"*, which states its own
+  impossibility — the table's value is by definition the cheapest achievable. Each of
+  these silently turned a four-way question into a three-way one.
+- **Wrong numbers standing in for misconceptions.** `M5/Q3` offered *"The optimum is 4 and
+  the approximation found 8"* about a graph with four vertices in it. `M2/Q3` offered
+  *"0.75"* as a Kraft sum, which no arithmetic slip actually produces — the sums a learner
+  really lands on are 0.875 (the three distinct lengths summed, the repeated depth-3
+  codeword counted once) and 1.25 (both depth-3 codewords charged at `2^-2`, an off-by-one
+  in the depth). Both of those are now the options, each with the slip behind it named.
+
+**1. Senior Educator.** CS301's explanations already derive rather than assert and every
+`why` already walked all four options, which is the standard cycle 3's brief asks for and
+this course met. What this persona found is the asymmetry cycle 3 described and did not
+reach: a learner who picked the third option has to read a paragraph written for whoever
+picked the first, and find the clause that is about them. And the prose named *that* an
+option was wrong far more often than it named *why anyone believes it* — which is the
+half of the brief that produces teaching rather than marking.
+
+**3. Simulation Auditor.** No sandbox, tune or schematic in this course, so it was pointed
+where it can still bite: every number and code claim in the bank, against the labs that
+ship beside them. It found a false claim CS301 has been shipping, and it is recorded in
+full below because the shape of the error is the interesting part.
+
+**4. UX & Accessibility Hardener.** Cycle 3 hardened this surface — focus moved onto the
+explanation when the clicked button is disabled, `role="status"` on the score region,
+`role="group"` and `aria-labelledby` on the options, a `code` style in `.explain`. Every
+one of those repairs was still in the source and **not one of them was under a gate**.
+That is this cycle's machinery half. Two more defects were mine and are in the
+self-audit below.
+
+### The false claim the recompute found, and why the example could not fail
+
+`M4/Q1`'s explanation has been saying:
+
+> take `a->b` at 2, `a->c` at 3 and `c->b` at -2. There is no cycle at all, and Dijkstra
+> still settles `b` at 2 while the true distance is 1.
+
+Run that graph through the course's own reference `dijkstra` and it returns `b = 1`. The
+claim is false, and it is false twice over.
+
+First, the lab's `dijkstra` **raises `ValueError` on any negative weight** before it does
+anything else, so it never runs on that graph at all. Second — and this is the part worth
+keeping — even with that guard removed the implementation gets the right answer here,
+because `b` has no outgoing edge. `dist[b]` is written down as 2, `c` is expanded later
+and lowers it to 1, and since nothing was ever relaxed *out of* `b` the stale 2 never
+propagated anywhere. A settled-set Dijkstra corrupts distances **downstream of** the
+vertex it settled too early, not the vertex itself.
+
+So the counterexample needs the corrected vertex to have somewhere to send its mistake:
+`s->a` at 2, `s->b` at 3, `b->a` at -2, `a->t` at 1. Still acyclic, still four edges. `a`
+is extracted at 2 and relaxes `a->t` to 3; only afterwards does `b` reveal that `a` is
+really 1 away; `a` is settled by then and its outgoing edge is never looked at again, so
+`t` comes out at **3 against a true distance of 2**. Verified by running the lab's own
+reference with the negativity guard removed, against Bellman-Ford on the same graph, and
+by checking the graph is acyclic rather than asserting it.
+
+Everything else in the bank was re-derived rather than skimmed, and all of it holds:
+`log_2 3 = 1.585` against `log_3 2 = 0.63`, and the level costs `n`, `1.5n`, `2.25n`
+growing by `3/2`; the `2d`-by-`d` box holding eight points with the two shared corners
+counted twice and **six** distinct; `[2, 5, 1, 3]` having 3 inversions with `len(left) - i`
+contributing 2 at the first emission, and `[3, 4, 1, 2]` reporting 2 against a true 4
+under the one-per-emission rule; the two interval counterexamples, one of which the lab
+asserts on by name; the three Kraft sums; coins 1, 3, 4 optimal at every amount below 6,
+3 coins against 2 at 6, and **3 against 3 at 9**, which is what refutes the "multiple of
+3" reading; the knapsack instance at 9 against 14, with 23 the infeasible bundle and 14.6
+the fractional relaxation; `lcs(AGGTAB, GXTXAYB) = 4` with `6 + 7 - 8 = 5`, and `AB`/`BA`
+where `max(len) - ed = 0` against an LCS of 1; the triangle's matching of 1 against an
+optimum of 2; the path of four at 2.0 and at 1.0 under a reordering; and `H_n - 1` at 6.5
+for a thousand vertices and 13.4 for a million.
+
+### The gate that had never opened the door
+
+`verify_quiz.mjs` has read the artifact since cycle 3 and driven the real `renderBlanks`
+since cycle 9. Between those two, **`renderQuiz` — 1366 questions in 252 units, every
+graded question in the catalogue that is not a blank — was mounted by nothing.** Three
+things it does are invisible in the JSON and invisible to any rule written about the
+source: the shuffle, the `whys` remap `q.whys[shuffled[qi].order[oi]]`, and the letter a
+wrong answer is pointed at, which is the key's **drawn** slot and differs from its
+authored index on three questions in four.
+
+It also could not have been mounted. `dom_stub.mjs` had no `firstElementChild`, and
+`app.js`'s `el(html)` is `createElement('div'); d.innerHTML = html; return
+d.firstElementChild` — so every view built out of `el()` handed `appendChild` an
+`undefined`, and `renderQuiz` is built entirely out of `el()`. Three additive stub
+methods close it: `firstElementChild`, `contains` (the focus guard asks
+`card.contains(document.activeElement)`) and `scrollIntoView` (`finish()` scrolls the
+result into view, so without it the last question of every quiz in the catalogue throws
+instead of being scored). **The five other gates standing on that stub were proved
+byte-identical before and after rather than assumed** — `verify_circuit_ui`,
+`verify_circuit_model`, `verify_tune_ui`, `verify_sandbox`, `verify_desk`.
+
+**`tools/quiz_stage.mjs`**, on the `app_stage.mjs` cycle 15 extracted. Over the whole
+catalogue: **1260 mounts and 5464 options pressed, each one's explanation read back.** Per
+question it requires that the drawn options are a permutation of the authored ones and
+carry one authored index each, with each index attached to the option it names; that the
+key lands in the top slot at a rate a shuffle produces — **24.0%, against 38.8% in the
+order they were authored** — and that no unit draws all of its keys on top; that the
+per-option explanation shown is the one authored for **the option actually pressed**,
+which is what proves the remap; that a wrong answer is pointed at the key's drawn letter;
+that the explanation can take focus, since the button just pressed was disabled and a
+disabled element cannot hold it; that the options are a group labelled by the question;
+that the result region exists, is empty and is `role="status"`, which is the one order a
+live region announces in; that a second press on an answered question changes nothing;
+that the score matches the options pressed; and that a learner's best score survives a
+worse retry.
+
+**`data-ai` on the option button, and the six questions that made it necessary.** The
+authored index behind a drawn slot had to be recovered from the option's text, and it
+cannot be: MathML lives in structure rather than in characters, so `$I_m/\sqrt{2}$` and
+`$I_m/2$` both flatten to `Im/2`. **Six questions in six courses hold such a pair** —
+EE111/M3, EE141/M8, EE201/M3, EMAG530/M3, MA112/M8 and PWR510/M4. All six draw and are
+announced correctly in a browser, because `<msqrt>` and `<mfrac>` are real elements and
+`MathML.render` emits them; this is the gate's flattening, not those questions' defect,
+and it is recorded so the next author is not the one to rediscover it. The fix is the one
+`renderBlanks` has used since cycle 9: `renderQuiz` now carries the authored index in
+`data-ai` beside the drawn `data-oi`, and the gate reads it instead of guessing. Writing
+the shuffle out a second time inside the gate would have been a gate enforcing a comment.
+
+### What changed
+
+**Content — all 25 questions rewritten, 100 per-option explanations written.**
+
+| | before | after |
+|---|---|---|
+| questions | 25 | 25 |
+| "pick the longest option" | 22 / 25 — **88%** | 0 / 25 — **0%** |
+| mean length margin | +47.7 chars | −5.1 chars |
+| per-option explanations | 0 | **100** |
+| words of question text and feedback | 4482 | **13355** |
+| authored key index | 25 at 0 | 7 / 6 / 6 / 6 |
+
+The length tell was removed by moving the justification out of the key and into the
+feedback, not by trimming the key until it was shortest — the rule refuses that inversion
+just as hard, and the pre-flight check caught two questions where a first draft had done
+exactly that. Every
+distractor is now a misconception with a name. The ones worth recording, because they took
+the most work to find: *"the whole level of the recursion tree, since every level of merge
+sort costs `Theta(n)`"* — a true statement about the solved recurrence offered as the
+meaning of its additive term, which is using the answer as its own input; *"`Theta(n log
+n)`, since every level of the tree costs the same"* for Karatsuba, the equality case
+attached to a recurrence that is not in it; *"the points are y-sorted, so distances grow
+along the scan"* — the y-*difference* is monotone and the distance is not, which is
+exactly what the loop's `strip[j][1] - strip[i][1] >= d` exit tests; *"their codewords are
+the longest in the code, but a later merge can still separate the two"*, half of the
+correct argument attached to a thing the algorithm structurally cannot do; *"exactly 1 —
+but every prefix-free code sums to 1, so the value tells you nothing extra"*, the Kraft
+inequality mistaken for an equality, which is where its whole diagnostic power lives;
+*"9 against 14.6 — the optimum is what the densities are pointing at"*, the fractional
+relaxation's value offered as the integral optimum in the module whose entire subject is
+the gap between them; *"only a negative cycle actually breaks it; a single negative edge is
+caught by the guard after the pop"*, which is what a reader of `M4/Q2` two questions later
+would conclude; *"the `V`-th round is reserved for the negative-cycle test, so one round
+has to be surrendered"*, the consequence of the bound offered as its cause; and *"the
+vertex count is even, so the edges the algorithm picks match up all of them exactly"* — a
+true observation about the instance, and not the mechanism, refuted by extending the path
+to five vertices where the matching covers four of them and the ratio is still exactly 2.
+
+**CS301's own keys are spread across the four indices.** The renderer shuffles, so this is
+invisible to a learner and it is not a defect that was fixed. It is defence in depth: 21
+courses still depend on the shuffle alone, and this one no longer does. The rotation moved
+`opts` and `whys` together and the gate presses every option of every question to confirm
+the pairing survived.
+
+**Machinery — `src/app.js`.** `data-ai` on each option button, as above. Nothing else in
+the renderer changed; the focus move, the live region and the group label are cycle 3's
+and are now held in place by a gate.
+
+**Machinery — `tools/dom_stub.mjs`.** `firstElementChild`, `contains`, `scrollIntoView`,
+all additive, all with the reason written beside them.
+
+**Machinery — `tools/verify_quiz.mjs`.** The quiz-view section above, plus `authoredTop`,
+which reports how often the key sits at index 0 in the file so the shuffle's rate has
+something to be compared against rather than a constant to be trusted.
+
+### Verification beyond the gates
+
+**The gate was not trusted until it had been seen to fail. Twenty mutations, twenty
+intended verdicts, one of them a required pass:** the shuffle removed from `renderQuiz`;
+`data-ai` carrying the drawn index; the `whys` lookup indexed by the drawn slot; a wrong
+answer pointed at the authored index; the explanation losing `tabindex="-1"`; the option
+group losing its role; the result region losing `role="status"`; the result region drawn
+with content already in it; the already-answered guard removed; the score counted against
+the authored key; the best score no longer a high-water mark; `quizProse` losing its fence
+support and five EE131 stems with it; a duplicated option; a `whys` list one entry short;
+"the third option" planted in an explanation; **"the final answer" planted in one, which
+must pass** — cycle 9's narrowing, re-checked; a bullet the renderer cannot draw; an
+improvement left unrecorded in the budget; a course with no budget entry; and the
+unmodified tree as a control. The shuffle mutation was checked twice, because the blanks
+half shares `shuffledOptions` and reports first: the quiz half names it independently, per
+unit, on every course.
+
+**Every number in the new prose was recomputed rather than re-read** — sixty-odd checks,
+run against implementations of the lab's own algorithms, including the Dijkstra
+counterexample against the reference with its guard removed. Two were wrong and are in the
+self-audit below. **CS301's quiz was swept for the three failure modes this repository has
+already shipped**: 0 strings with an unpaired `$`, 0 with a backslash before a quote
+(cycle 3's raw-string leak), and 0 reaching the screen with a delimiter still in them
+(cycle 7's raw markup) — measured before and after, both at zero. And the payload window
+was checked rather than assumed: **3 generations naming 64 files, 64 on disk, 0 orphaned,
+0 missing.**
+
+### Found in my own work, and fixed
+
+- **Two figures written from memory instead of computed.** The `log n` construction's
+  ratio is `H_n - 1`, which is 6.5 at a thousand vertices and 13.4 at a million; I had
+  written 5.5 and 12.4. Found by the recompute, not by re-reading the sentence, which is
+  the only way this class of error is ever found.
+- **A claim the lab's API cannot express.** I wrote that adding a fifth *isolated* vertex
+  to the tight path instance flips the parity with nothing else changing — but `ratio`
+  takes an edge list, and an isolated vertex has no edge to name it, so the instance does
+  not exist. Replaced with the path of five, `[(0,1),(1,2),(2,3),(3,4)]`, which is odd,
+  whose matching covers four of the five, and which still scores exactly 2.0. Computed
+  before it was written down this time.
+- **Two references pointing the wrong way down the page.** A per-option explanation said
+  "the counterexample above" and the shared account said "the counterexamples below" —
+  but `renderQuiz` draws `.ex-picked` **before** `quizProse(q.why)`, so the first points
+  at something below it and the second at something above, and a learner sees exactly one
+  per-option explanation rather than the set. Found by sweeping all 125 new strings for
+  spatial words and reading the twenty-eight hits, of which twenty-six were ordinary prose
+  ("below 1", "the row above it", "a new parent above two roots").
+- **My own gate failed a correct single-course run.** The slot-distribution check fired on
+  CS301 alone at 36% of 25 questions — well inside the spread of a fair shuffle at that
+  sample size. It now needs 200 questions before it measures a distribution, with the
+  reason written next to it. This is the fourth cycle running to meet a gate condemning
+  working content, and the rule holds: a gate that fails correct work is worse than the
+  defect it was written to catch.
+
+### Left alone, deliberately
+
+- **24 courses are still over 50% on the quiz length tell**, down from 25 — CS301 is the
+  one that left the list. The catalogue moves from
+  **646/1366 (47%) to 624/1366 (46%)** — CS301's 22 and nothing else. RFIC510 90%,
+  CS310 84%, VLSI530 / EMAG530 / DSP530 / DSP520 80%, CS330 77%, CS210 / CS102 71%. This
+  is cycle 3's main recorded debt, one course smaller, and every course is still pinned in
+  `quiz_budget.json` so it cannot grow while it waits.
+- **21 courses still author every key at index 0**, covering 264 questions, and the
+  catalogue's authored spread is still 530 / 437 / 286 / 113. Not a defect while the
+  shuffle runs — and the shuffle is now under a gate that presses every option of every
+  question in the catalogue, which is the guard that was actually missing. Rotating 264
+  questions across 21 courses is a mechanical sweep, not a cycle that also claims to have
+  verified anything.
+- **347 blanks holes in ten courses still have no per-option feedback** — EE102 102,
+  EE121 93, EE101 87, MA111 20, MA121 17, EE241 11, EE221 / MA112 / MA201 5 each, EE202 2.
+  Cycle 9's debt, unmoved, and deliberately not taken here: this cycle went to the bank
+  whose *renderer* had no gate rather than to the one whose content debt is larger.
+- **The six MathML-ambiguous option pairs** in EE111, EE141, EE201, EMAG530, MA112 and
+  PWR510. They are correct in a browser and correct to a screen reader that parses
+  MathML, so rewriting six questions in six courses this cycle is not looking at would be
+  churn. Recorded with the courses named, because the next author to flatten an option to
+  text will meet them.
+- **`.quiz-q .qt code` still takes its colour from `--lime` rather than `--code-ink`, and
+  `P.dim` (2.93:1) and `P.faint` (1.86:1) still fail contrast on every canvas.** Cycles 2,
+  3, 5, 6, 8, 9 and 15 have each recorded these. Track 5.
+- **The emitter adds `"check": ""` to CS301's two numeric units, and it was kept.** This
+  is not the `emit.py --all` drift cycles 4 and 9 reverted: **194 units across the
+  catalogue already carry an empty `check` on disk** and CS301's JSON simply predates the
+  emitter behaviour, so re-emitting the course brings its artifact into line rather than
+  away from it. Verified that everything outside `quiz` is otherwise byte-identical and
+  that **every lesson id is unchanged**, which is what progress is keyed on.
+- **The retained window holds two intermediate CS301 payloads.** Capturing the gate
+  baseline means running `build.mjs` before editing, and re-running it after each round of
+  content repair; the window keeps three generations, so the two most recent of those
+  intermediate builds are still on disk beside the final one. Both are named by a
+  generation and both are present — **3 generations naming 64 files, 64 on disk, 0
+  orphaned, 0 missing** — so the invariant holds and HEAD's own payload has aged out
+  normally. Recorded because it is the visible cost of capturing a baseline properly, and
+  because it means CS301's next two edits will age these out rather than growing the set.
+
+### Gates, after
+
+Every pre-existing number unmoved. The numbers that moved are the new gate's, the
+per-option explanation count — by exactly the 100 written — CS301's budget entry, and the
+artifact sizes.
+
+```
+verify_quiz          All good: 1366 questions in 252 quiz units and 1103 holes in 217
+                     blanks units · 3260 per-option explanations (3160 -> 3260, +100)
+                     · quiz view: 1260 mounts, 5464 options pressed and the explanation
+                     read back, the answer drawn in the top slot 24.0% against 38.8%
+                     as authored · blanks: 6572 draws, 4384 options, 24.5% — unmoved
+                     · every bank within its answer-tell budget   [QUIZ VIEW NEW]
+verify_circuits      All good: 82 circuit exercises, 348 checks · 543 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_derivations   All good: 1248 steps across 46 courses
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_desk          All good: 61 expressions at the extremes
+verify_theme         All good: 135 contrast surfaces x 2 themes
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_circuit_model All good: 1457 analyses, 84 refusals · 15 plots · 15 floors, 17 ceilings
+verify_tune_ui       All good: 21 tune units, 423 hostile opening values, 462 targets,
+                     105 paints, 270 drags, 493 mounts
+verify_labs CS301    All good: 6 labs
+emit.py CS301        ok — 5 modules, 5 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12875 -> 12923 KB ·
+                     inlined 14091 -> 14140 KB · shell 1187 -> 1188 KB, of 1536
+```
+
+Beyond the gates: **20 mutations, each producing the verdict it had to, including one the
+gate was required to pass**; the five other stub-driven gates proved byte-identical after
+`dom_stub.mjs` was extended, by diff rather than by reading; every number in the new prose
+recomputed against implementations of the labs' own algorithms, which is how the shipped
+Dijkstra counterexample was found not to be one; CS301's quiz swept for unpaired `$`,
+escaped quotes and raw delimiters at 0, 0 and 0; all 125 new strings swept for references
+that point the wrong way down the page; and the payload window checked at 3 generations,
+64 files, 0 orphaned, 0 missing.
+
+**A note on the working tree.** The runner's lock (`.gauntlet.pid`, pid 9133) was live
+throughout, so `build.mjs` was safe to run. The diff is `catalog/authors/CS301.py`,
+`catalog/CS301.json`, `src/app.js`, three files under `tools/` — one of them new — and the
+`docs/` build output, and nothing else. No lesson id, no other course, and no unit kind
+other than `quiz` was touched.
+
+---

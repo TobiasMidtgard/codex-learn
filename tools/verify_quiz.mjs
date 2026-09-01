@@ -168,6 +168,11 @@ const files = only ? [only]
       .map((f) => join(ROOT, 'catalog', f));
 
 let problems = 0, units = 0, questions = 0, whysGiven = 0, loose = [];
+/* how often the key is index 0 in the file. Not a defect on its own — the view shuffles
+   — but it is the number the shuffle is standing in front of, so the quiz view's report
+   below prints it as the comparison. 548 of 1366 when this was written, with 22 courses
+   authoring every key there. */
+let authoredTop = 0;
 let blankUnits = 0, blankHoles = 0, blankWhys = 0, blankMarkup = 0;
 
 for (const file of files) {
@@ -256,6 +261,7 @@ for (const file of files) {
       (u.questions || []).forEach((q, qi) => {
         const at = `${where}/q${qi + 1}`;
         const opts = q.opts || [];
+        if (q.a === 0) authoredTop++;
         if (opts.some((o) => !String(o).trim())) bad.push(`${at}: an option is empty`);
         const seen = opts.map(norm);
         const dupe = seen.find((s, i) => seen.indexOf(s) !== i);
@@ -390,14 +396,41 @@ const live = await import('./blanks_stage.mjs').catch((e) => {
   console.error('FAIL  cannot stage the renderer: ' + e.message);
   process.exit(1);
 });
+const liveQuiz = await import('./quiz_stage.mjs').catch((e) => {
+  console.error('FAIL  cannot stage the quiz renderer: ' + e.message);
+  process.exit(1);
+});
 const stage = live.stage();
+const qstage = liveQuiz.stage();
 let draws = 0, picks = 0, slot0 = 0, shuffledHoles = 0;
+let qdraws = 0, qpicks = 0, qslot0 = 0, shuffledQs = 0;
 const liveBad = [];
+const qBad = [];
+let hiWater = null;
 
 for (const file of files) {
   const course = JSON.parse(readFileSync(file, 'utf8'));
   const id = course.id || basename(file, '.json');
   (course.modules || []).forEach((m, mi) => {
+    /* the quiz half of this section. renderQuiz was mounted by nothing until it was
+       written: the artifact was read, the blanks view was driven, and the surface that
+       delivers every other graded question in the catalogue was not opened once. */
+    asList(m.quiz).forEach((u, ui) => {
+      const lessonId = `${id}-M${mi + 1}-QZ${ui ? ui + 1 : ''}`;
+      let r;
+      try { r = qstage.drive(lessonId, u); }
+      catch (e) { qBad.push(`${lessonId}: renderQuiz threw — ${e.message}`); return; }
+      qdraws += r.draws;
+      qpicks += r.picks;
+      for (const line of r.problems) qBad.push(`${lessonId}: ${line}`);
+      for (const s of r.slots) { shuffledQs++; if (s.keyAt === 0) qslot0++; }
+      /* the best score is a high-water mark; checked on the first unit that has enough
+         questions for a wrong round to score below a right one */
+      if (hiWater === null && (u.questions || []).length >= 3) {
+        try { hiWater = qstage.bestIsHighWater(`${lessonId}-hw`, u); }
+        catch (e) { qBad.push(`${lessonId}: the score path threw — ${e.message}`); }
+      }
+    });
     asList(m.blanks).forEach((u, ui) => {
       const lessonId = `${id}-M${mi + 1}-FB${ui ? ui + 1 : ''}`;
       let r;
@@ -442,6 +475,38 @@ if (liveBad.length) {
   console.log(`[ok  ] renderer  ${draws} draw(s), ${picks} option(s) picked and read back · ` +
     `the answer is drawn in the top slot ${(slot0 / shuffledHoles * 100).toFixed(1)}% ` +
     'of the time, against 66.6% before the shuffle');
+}
+
+/* The same aggregate on the quiz bank. The authored key is index 0 for 548 of 1366
+   questions and 22 courses put it there every time, so a shuffle that stopped running
+   would show up here as a rate near 40% rather than the 25% four-way options give.
+
+   Only over a big enough sample: one course is 10 to 26 questions, where the spread of a
+   fair shuffle comfortably covers this band, and a gate that fails a correct
+   single-course run is worse than the defect it was written to catch. */
+if (shuffledQs >= 200) {
+  const rate = qslot0 / shuffledQs;
+  if (rate > 0.33 || rate < 0.17) {
+    qBad.push(`the drawn answer lands in the top slot for ${qslot0} of ${shuffledQs} ` +
+      `questions (${(rate * 100).toFixed(1)}%), which is nowhere near the 25% a shuffle ` +
+      'produces on a bank of four-way questions — it is either not shuffling or not uniform');
+  }
+}
+if (hiWater && !(hiWater.high === 100 && hiWater.after === 100)) {
+  qBad.push(`a learner's best score went ${hiWater.high} -> ${hiWater.after} after a worse ` +
+    'retry — the recorded best is meant to be a high-water mark, so a retry can only ever gain');
+}
+
+if (qBad.length) {
+  console.log('[FAIL] quiz view');
+  qBad.slice(0, 40).forEach((l) => console.log(`            ! ${l}`));
+  if (qBad.length > 40) console.log(`            ... and ${qBad.length - 40} more`);
+  problems++;
+} else {
+  console.log(`[ok  ] quiz view  ${qdraws} mount(s), ${qpicks} option(s) pressed and the ` +
+    `explanation read back · the answer is drawn in the top slot ` +
+    `${(qslot0 / shuffledQs * 100).toFixed(1)}% of the time, against ` +
+    `${(authoredTop / shuffledQs * 100).toFixed(1)}% in the order they were authored`);
 }
 
 if (loose.length) {

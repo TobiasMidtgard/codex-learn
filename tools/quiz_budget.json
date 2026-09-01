@@ -4,7 +4,7 @@
   "CS201": { "longest": 0, "shortest": 7, "blanks": { "longest": 4, "shortest": 2, "markup": 0 } },
   "CS210": { "longest": 17, "shortest": 1, "blanks": { "longest": 3, "shortest": 3, "markup": 0 } },
   "CS220": { "longest": 12, "shortest": 1, "blanks": { "longest": 1, "shortest": 3, "markup": 0 } },
-  "CS301": { "longest": 22, "shortest": 0, "blanks": { "longest": 0, "shortest": 0, "markup": 0 } },
+  "CS301": { "longest": 0, "shortest": 0, "blanks": { "longest": 0, "shortest": 0, "markup": 0 } },
   "CS310": { "longest": 21, "shortest": 2, "blanks": { "longest": 5, "shortest": 2, "markup": 0 } },
   "CS320": { "longest": 12, "shortest": 1, "blanks": { "longest": 2, "shortest": 1, "markup": 0 } },
   "CS330": { "longest": 20, "shortest": 1, "blanks": { "longest": 3, "shortest": 2, "markup": 0 } },
