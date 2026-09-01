@@ -1656,6 +1656,342 @@ if (_doc.clientWidth > 0) {
                 "`textContent` over `innerHTML`: the difference is whether user input can execute",
                 "`localStorage` holds strings only, can be unavailable, and can contain junk",
             ],
+            "read": [
+                {
+                    "title": "Two copies of the truth",
+                    "minutes": 14,
+                    "body": r'''
+Here is this module's reading list, built the way most people build their first one.
+Three books are on the page. The reader clicks *Done* on *Eloquent JavaScript*, and the
+handler bound to that button does the natural thing: it adds the class `done` to the row,
+and the title gets its strike-through. Then they click the `css` filter. That handler
+rebuilds the list from the array, because only the array knows which book carries which
+tag, and *Eloquent JavaScript* disappears, as it should. Click *All* and it is back —
+without the strike-through. Nothing threw; the console is empty. The array never heard
+about the first click: that handler changed the page and not the data, and when the page
+was redrawn from the data, the change was gone.
+
+The bug has a shape worth naming before any code. There were two descriptions of which
+books were done — the `done` field of each item in `state.items`, and the class attribute
+of each row — and two different pieces of code were allowed to write to them. Two copies
+of one fact, kept up to date by hand, disagree the first time one path forgets the other,
+and a page like this has a dozen paths: add, remove, toggle, filter, reload. The fix is
+not to be more careful on each path. It is to stop having two copies.
+
+## One array, and everything drawn from it
+
+Say the array is the truth. Then the DOM is not a second copy of it but a picture of it,
+and a picture is redrawn rather than edited. Every change goes into the array, and after
+every change one function, `render()`, throws the old rows away and builds new ones from
+what the array now says. The rows cannot disagree with the array, because nothing writes
+to a row except the one function that reads the array.
+
+The lab's whole architecture can be read off that sentence. There is one `state` object,
+`{ items: [], filter: 'all', nextId: 1 }`, and every function that changes anything
+changes `state` and then calls `render()`; none of them touches a row. Here is that loop
+with the opening's clicks replayed against it, on a list never put on the page because
+the console shows enough:
+
+```js
+var state = { items: [], filter: 'all', nextId: 1 };
+var listEl = document.createElement('ul');
+
+function visibleItems() {
+  if (state.filter === 'all') { return state.items.slice(); }
+  return state.items.filter(function (item) { return item.tag === state.filter; });
+}
+
+function render() {
+  listEl.textContent = '';
+  visibleItems().forEach(function (item) {
+    var li = document.createElement('li');
+    li.className = item.done ? 'item done' : 'item';
+    li.dataset.id = String(item.id);
+    li.textContent = item.title;
+    listEl.appendChild(li);
+  });
+}
+
+function show(label) {
+  var rows = [];
+  listEl.querySelectorAll('li').forEach(function (li) {
+    rows.push(li.textContent + (li.classList.contains('done') ? ' [done]' : ''));
+  });
+  console.log(label + ': ' + rows.join(' | '));
+}
+
+function addItem(title, tag) {
+  state.items.push({ id: state.nextId, title: title, tag: tag, done: false });
+  state.nextId += 1;
+  render();
+}
+
+function toggleDone(id) {
+  state.items.forEach(function (item) { if (item.id === id) { item.done = !item.done; } });
+  render();
+}
+
+function setFilter(tag) { state.filter = tag; render(); }
+
+addItem('Eloquent JavaScript', 'js');
+addItem('CSS Secrets', 'css');
+addItem('Inclusive Components', 'a11y');
+show('three added');
+toggleDone(1);
+show('after Done on id 1');
+setFilter('css');
+show('filter css');
+setFilter('all');
+show('back to all');
+```
+
+The second and fourth lines are the ones the opening got wrong. *Eloquent JavaScript*
+comes back from the `css` filter still marked done, because the mark was never in the
+row. It was in `state.items[0].done`, and the row was drawn from that field both times.
+
+## The listener that outlived its button
+
+Redrawing has a cost, and it shows up the first time a button is clicked twice.
+`render()` throws the rows away, and a listener attached to a button goes with the
+button. Bind a click handler to each *Done* button after the first render and it works
+exactly once: the click toggles `done`, the render replaces the row, and the new *Done*
+has no listener on it. The second click does nothing, with nothing in the console to say
+why. The lab's fourth check clicks *Done* on the same row before and after a re-render
+for precisely this reason.
+
+The way out is in how a click travels. It does not stay at the button: the event starts
+there and then *bubbles*, visiting the `<li>`, the `<ul>`, `<main>`, `<body>`, `<html>`
+and `document`, and a listener on any of those hears it. So bind one listener to the
+`<ul>`, which is in the read-only HTML and is never replaced, and every button that will
+ever exist inside it is covered, including the ones the next render has not built yet.
+
+```js
+var state = { items: [{ id: 1, title: 'Refactoring UI', done: false }] };
+var direct = document.createElement('ul');
+var delegated = document.createElement('ul');
+document.body.appendChild(direct);
+document.body.appendChild(delegated);
+var directClicks = 0;
+var delegatedClicks = 0;
+
+function row(item) {
+  var li = document.createElement('li');
+  li.dataset.id = String(item.id);
+  var button = document.createElement('button');
+  button.className = 'js-done';
+  button.textContent = 'Done';
+  li.appendChild(button);
+  return li;
+}
+
+function renderBoth() {
+  direct.textContent = '';
+  delegated.textContent = '';
+  state.items.forEach(function (item) {
+    direct.appendChild(row(item));
+    delegated.appendChild(row(item));
+  });
+}
+
+renderBoth();
+
+/* Direct: bind to the buttons that exist right now. */
+direct.querySelectorAll('.js-done').forEach(function (button) {
+  button.addEventListener('click', function () { directClicks += 1; });
+});
+
+/* Delegated: bind once, to the list. */
+delegated.addEventListener('click', function (event) {
+  var button = event.target.closest('button');
+  if (!button) { return; }
+  var id = Number(button.closest('li[data-id]').dataset.id);
+  delegatedClicks += 1;
+  console.log('delegated: a click on item ' + id + ' (a ' + typeof id + ')');
+});
+
+direct.querySelector('.js-done').click();
+delegated.querySelector('.js-done').click();
+console.log('one click each: direct ' + directClicks + ', delegated ' + delegatedClicks);
+
+renderBoth();
+direct.querySelector('.js-done').click();
+delegated.querySelector('.js-done').click();
+console.log('re-render, one click each: direct ' + directClicks + ', delegated ' + delegatedClicks);
+```
+
+The last line shows what a re-render does to the direct version: the count stops at one,
+because the button it was bound to is gone and the new one was never bound. The
+delegated listener was bound before any row existed and is still bound after the last;
+the module's counting exercise puts a number on that difference.
+
+Inside the handler, two properties answer two questions.
+`event.currentTarget` is the element whose listener is running: always the `<ul>`.
+`event.target` is where the click landed, the deepest element under the pointer — the
+button, or a `<span>` inside it if the markup had one. `event.target.closest('button')`
+walks up from there to the nearest button, and returns `null` when the click was on the
+list's own padding, which is why the handler opens with a guard. From the button,
+`button.closest('li[data-id]')` walks further up to the row.
+
+That last step needs the row to know which item it is. An element has no memory of the
+array entry it was drawn from, so the render writes it down, as `data-id="3"`, and the
+handler reads it back through `row.dataset.id`. One trap on that line catches nearly
+everyone once: every attribute in the DOM is a string. `dataset.id` is `"3"`,
+`state.items[2].id` is `3`, and `"3" === 3` is false, so `item.id !== id` holds for every
+item and `removeItem` filters nothing out while reporting nothing wrong. The block above
+converts at the boundary with `Number(...)`, and everything past that line deals in
+numbers.
+
+## A view is a function, not a second array
+
+The filter is where a second copy creeps back in under another name. It is tempting to
+keep `visible`, an array of the items matching the current tag, updated whenever the
+filter or the items change. That is a second copy of `state.items`, and it drifts the
+same way. `visibleItems()` in the lab is a function: it reads `state.items` and
+`state.filter` and returns the matches, computed fresh on every call, with nothing to
+keep in step because nothing is stored.
+
+`render()` draws from `visibleItems()`, and so does the empty message:
+`emptyEl.hidden = items.length > 0` asks the derived list, because a filter that matches
+nothing must show *Nothing to show for this filter* while `state.items` is far from
+empty. The lab's fifth check switches to `css` with only a `js` book in the list and
+expects the message; ask `state.items` instead and it stays hidden over a blank panel.
+
+The filter buttons are the one thing the lab has you update in place: they live in the
+read-only HTML outside `#list`, so `render()` never rebuilds them, and `setFilter` writes
+`aria-pressed` on all four from `state.filter` every time the filter changes. The rule
+is the same; only the drawing differs.
+
+## Text goes in as text
+
+The title in every row was typed by a person, and two properties will put a string into
+a `<span>`. They differ in what they do with angle brackets:
+
+```js
+var typed = '<b>Eloquent</b> JavaScript';
+
+var asText = document.createElement('span');
+asText.textContent = typed;
+
+var asMarkup = document.createElement('span');
+asMarkup.innerHTML = typed;
+
+console.log('textContent: ' + asText.childNodes.length + ' child node (' +
+  asText.firstChild.nodeName + '), on screen: ' + asText.textContent);
+console.log('innerHTML: ' + asMarkup.childNodes.length + ' child nodes (' +
+  asMarkup.firstChild.nodeName + ' then ' + asMarkup.lastChild.nodeName +
+  '), on screen: ' + asMarkup.textContent);
+```
+
+`textContent` makes one text node whose characters are the string, angle brackets
+included, and that is what appears on screen. `innerHTML` hands the string to the HTML
+parser and appends whatever it builds — here a `<b>` element and a text node. Swap the
+harmless `<b>` for `<img src=x onerror="...">` and the parser builds an image, the image
+fails to load, and the code in the attribute runs with everything your page can do. A
+`script` element inserted this way does *not* run, which is why `innerHTML` gets a
+reputation for being safe and why `onerror` is the attribute every real payload uses.
+The rule that survives is short: text goes in with `textContent`; the capstone bans
+`innerHTML` outright.
+
+## Storage holds strings
+
+Reload the page and `state` is `{ items: [] }` again, because the array lived in memory.
+`localStorage` persists per origin across reloads — but it holds strings and nothing
+else, and `setItem` does not refuse an object. It converts it with `String(value)` and
+stores the result:
+
+```js
+var KEY = 'reading-list-demo';
+
+localStorage.setItem(KEY, { items: [] });
+console.log('stored an object directly, read back: ' + localStorage.getItem(KEY));
+
+localStorage.setItem(KEY, JSON.stringify({
+  items: [{ id: 1, title: 'CSS Secrets', tag: 'css', done: true }],
+  filter: 'css',
+  nextId: 2
+}));
+console.log('stored JSON, read back: ' + localStorage.getItem(KEY));
+
+function loadState() {
+  var fresh = { items: [], filter: 'all', nextId: 1 };
+  var raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (err) { return fresh; }
+  if (!raw) { return fresh; }
+  try {
+    var parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.items)) { return fresh; }
+    return parsed;
+  } catch (err) {
+    return fresh;
+  }
+}
+
+console.log('loaded: ' + loadState().items.length + ' item(s), filter ' + loadState().filter);
+localStorage.setItem(KEY, 'not json at all {{{');
+console.log('after junk: ' + loadState().items.length + ' item(s), filter ' + loadState().filter);
+localStorage.setItem(KEY, '{"items": "three"}');
+console.log('after the wrong shape: ' + loadState().items.length + ' item(s), filter ' + loadState().filter);
+```
+
+The first line is the trap: `[object Object]` is what every plain object stringifies to,
+so the list was gone before it was stored, and no exception said so. The second is the
+contract — `JSON.stringify` in, `JSON.parse` out. The last three are why the way out
+needs guarding: the string in storage may have been written by an older version of the
+code, by another tab, or by the lab's last check, which stores `not json at all {{{` and
+calls `loadState()`. `JSON.parse` throws on the junk; the wrong shape parses without
+complaint and would crash later, at the first `state.items.filter`. So `loadState` reads
+inside a `try`, because `localStorage` itself throws when storage is disabled or the
+browser is in a private mode; parses inside a `try`; checks for an object with an
+`items` array; and on any failure hands back the fresh state, never a throw.
+
+## The mistake, and why it is tempting
+
+It is the one from the opening: the handler edits the element it is holding. It is
+tempting because `event.target` is right there, `classList.toggle('done')` is one line,
+and the screen changes before your finger is off the mouse, which feels like the job
+being done. It is the half that does not last. The array does not know, the storage does
+not know, and the next render draws the row from an array that still says `done: false`.
+
+The version that hides longest is the double update: toggle the class *and* flip the
+field. It works, and from then on every feature is written twice, until someone writes
+only one half. Delete the picture half and let `render()` do it.
+
+## Where this stops holding
+
+Rebuilding every row is $O(n)$ per change. For twenty rows that is invisible. For five
+thousand, or for rows holding an `<input>` the person is typing into, it is not: the
+input is destroyed and recreated, focus and the caret go with it, and the scroll position
+can jump. That is where a keyed diff — compare the new state against the rows on screen
+and touch only the ones that changed — earns its complexity, and it is what every
+framework's render loop is. State stays the truth; what changes is how the picture is
+brought up to date.
+
+Delegation has an edge too: `focus`, `blur`, `mouseenter` and `mouseleave` do not
+bubble, so a `focus` listener on the `<ul>` never fires for a button inside it, and
+`focusin` and `focusout` are the delegated forms. And `localStorage` is synchronous,
+holds around five megabytes per origin, is shared by every tab of the site, which can
+overwrite it under you, and carries no version, which is why the lab's key is
+`reading-list-v1`: when the shape of the state changes, the name changes, and old data
+stops being read as new.
+
+## In the lab
+
+*A filterable reading list* gives you a read-only `index.html` — the form, the four
+filter buttons with `data-tag` and `aria-pressed` already on them, the empty
+`<ul id="list">` and the hidden `#empty` paragraph — and an `app.js` of stubs. You write
+`saveState` and `loadState`, the four mutators that change `state` and render,
+`visibleItems`, `render`, and exactly three listeners: a delegated `click` on `#list`, a
+delegated `click` on `#filters`, and a `submit` on the form that prevents the default.
+Seven checks read it back: one row with `data-id`, `.js-done` and `.js-remove` after an
+add; `null` for a blank title and a trimmed one for a padded title; `aria-pressed` on the
+buttons after a click on `css`; *Done* still working on a row after another row's
+removal re-rendered the list — the check this reading's second block was written for;
+`#empty` showing for an empty list and for a filter that matches nothing; both items back
+after `state.items` is emptied and `loadState()` called; and the fresh state, not a
+throw, when storage holds junk.
+''',
+                },
+            ],
             "quiz": {
                 "title": "One truth, one render, one listener",
                 "minutes": 7,
@@ -2386,6 +2722,300 @@ setFilter('all');
                 "`try` / `catch` around the await is where a network failure becomes a message",
                 "`role=\"alert\"` makes an error region announce itself when it gains content",
                 "Never leave a spinner running: hide it on every exit path, including the failures",
+            ],
+            "read": [
+                {
+                    "title": "The spinner that never stopped",
+                    "minutes": 14,
+                    "body": r'''
+Type `fail` into this module's book search and press *Search*. The page says
+*Searching...* and keeps saying it. No error appears, the console is empty, the button
+still works, and pressing it again produces the same word. The request finished thirty
+milliseconds after it was sent: the catalogue answered, with status 500 and a body that
+says it is having a bad day, and the code that sent the request did this with the answer:
+
+```text
+if (response.ok) {
+  renderBooks(payload.books);
+  loadingEl.hidden = true;
+}
+```
+
+There is no `else`. On a good answer the spinner comes down; on a bad one nothing runs,
+so it stays up, and a paragraph that was honest a moment ago has become a lie. Nothing is
+broken in the sense a debugger would show. The function did what it was told, and what it
+was told had a gap in it.
+
+Every bug in this module has that shape: a request has more outcomes than the code has
+branches, and the outcomes without branches are the ones the user sees. This reading
+counts the outcomes, follows what the browser does between sending and receiving, and
+derives from that the four states the lab's `showState` has to draw.
+
+## A value that is not there yet
+
+`fetch(url)` cannot return the response, because the response does not exist when `fetch`
+returns. The request has left the machine, the answer is somewhere on the network, and
+the function has to hand its caller something to hold in the meantime. What it hands back
+is a promise: an object standing for a value that will arrive later, or for a failure
+that will arrive instead. A promise starts pending, and then exactly once it *settles* —
+fulfilled with a value, or rejected with a reason — and after that it never changes again.
+
+Code can be attached to the settling: `p.then(onValue, onReason)`. `await` is the same
+thing with the plumbing hidden. Inside an `async` function,
+`var response = await fetch(url)` stops the function at that line, hands control back to
+whoever called it, and resumes when the promise settles — with the value in `response` if
+it was fulfilled, or by *throwing* the reason if it was rejected. That last part is what
+makes `try` / `catch` work with `await`: a rejection becomes an ordinary exception at the
+line of the `await`, and nowhere else. Wrap that line in a `try` and the `catch` runs.
+Leave it out and the rejection escapes the function, becomes an *unhandled promise
+rejection* in the console, and the spinner stays up.
+
+## Where the pause goes
+
+*Stops the function* hides a sequence that decides the lab's second check, so follow it.
+JavaScript runs one thing at a time. A script or a handler runs to its end without
+interruption, and only when it returns does the browser look for the next thing to run.
+There are two queues of next things. *Microtasks* — the continuations of promises that
+have settled — are drained first, all of them, before anything else is considered.
+*Tasks* — a timer firing, a click, data arriving from the network — are taken one at a
+time, after the microtasks are gone. An `async` function that reaches an `await` returns
+to its caller at once, handing back its own promise, and its continuation is queued as a
+microtask when the awaited promise settles.
+
+```js
+async function searchBooks() {
+  console.log('2  showState(loading) runs at once, before the first await');
+  var response = await new Promise(function (resolve) {
+    setTimeout(function () { resolve({ ok: true, status: 200 }); }, 0);
+  });
+  console.log('5  the await resumed with status ' + response.status);
+}
+
+console.log('1  submit handler starts');
+searchBooks();
+console.log('3  searchBooks returned a promise; the handler carries on');
+Promise.resolve().then(function () { console.log('4  a microtask queued after the call'); });
+```
+
+Line 2 prints before line 3: the async function ran as ordinary synchronous code up to
+its first `await`, so a `showState('loading')` placed before the `await` has changed the
+page before the submit handler even finishes. Move it after the `await` and it runs at
+line 5, with the answer already in hand — the spinner appears for one frame at the exact
+moment it is no longer needed. Line 4 prints before line 5 even though the timer was set
+to zero, because the timer is a task and the microtask queue is drained before the
+browser takes the next task; only then does the timer fire, resolve the promise, and
+queue the continuation. The lab's stand-in waits thirty milliseconds instead of zero,
+which changes nothing about the order.
+
+## What a server can and cannot say
+
+The lab's `window.fakeFetch` is a stand-in, so it is worth seeing what it stands in for.
+On the other side of a real request is a function like this one, and what matters is
+what it produces for each of three queries:
+
+```python
+CATALOGUE = ["Eloquent JavaScript", "Refactoring UI", "Inclusive Components"]
+
+
+def handle(query):
+    """The server side of GET /api/books?q=... — returns (status, body)."""
+    try:
+        if query == "fail":
+            raise RuntimeError("the catalogue is having a bad day")
+        hits = [title for title in CATALOGUE if query.lower() in title.lower()]
+        return 200, {"books": hits}
+    except RuntimeError as err:
+        return 500, {"error": str(err)}
+
+
+for q in ["script", "zzz", "fail"]:
+    status, body = handle(q)
+    print(f"q={q!r:<9} -> {status} {body}")
+```
+
+All three lines carry a status and a body. Even `fail` does: the exception was caught by
+the server's framework — the `except` here is the toy version of that — and written out
+as a 500 with a message. In all three cases bytes came back down the wire, so in all
+three cases the promise from `fetch` is *fulfilled*, and what tells them apart is
+`response.ok`, which is true exactly when the status is in the 200s. A 500 is an answer.
+It is bad news, but it arrived.
+
+What rejects is the case where this function never ran, or its answer never arrived: the
+name did not resolve, the connection dropped halfway, the browser blocked the request
+before it left. The lab's stand-in calls that case `boom` and rejects with
+`TypeError('Failed to fetch')`, which is the error Chrome raises for a dropped
+connection, with no status attached because there was no response to take one from. So the promise answers
+one question — did an answer arrive — and `ok` answers a second — was it good — and
+`response.json()` answers a third — what did it say. That last one is a promise as well,
+because the body streams in after the headers and reading it to the end takes its own
+time, which is why it gets its own `await`.
+
+Look at the middle line again. `zzz` matched nothing, and the server said so with a 200
+and an empty list. That is not a fault. It is information, and it is the outcome that is
+easiest to leave without a branch, because fixture data always has something in it.
+
+## Four outcomes, one function
+
+The branches now write themselves from those three questions. The `await` throws: no
+answer, so *error*, with a message about the connection. The answer is not `ok`: *error*
+again, with the status number in the message, because a 404 and a 500 ask the person to
+do different things. The answer is `ok` and holds zero books: *empty*. The answer is `ok`
+and holds books: *success*. And from the moment the request goes out until one of those
+is reached: *loading*. The lab folds the two error branches into one state that differs
+only in its message, which leaves the four the module is named for.
+
+Each state is a different set of elements showing — `#loading`, `#error`, `#empty` and
+the results list. Hiding and showing them at each site in `searchBooks` that reaches a
+state is how the opening bug happens: one site forgot one element. The alternative is one
+function that owns `hidden`:
+
+```text
+function showState(name, message) {
+  uiState = name;
+  loadingEl.hidden = name !== 'loading';
+  emptyEl.hidden = name !== 'empty';
+  errorEl.hidden = name !== 'error';
+  errorEl.textContent = name === 'error' ? String(message || 'Something went wrong.') : '';
+  if (name !== 'success') { resultsEl.textContent = ''; }
+}
+```
+
+Each element's visibility is one comparison against `name`, so there is no path through
+the function that leaves two showing or none. This is the previous module's idea again —
+the picture is drawn from one value rather than patched — with `name` as the state.
+Every exit from `searchBooks` calls it, so the spinner comes down on every path,
+including the two failures, which is the sentence the opening bug violated. Here is the
+whole function against a stand-in with the lab's four behaviours, traced through four
+queries one after another so the transitions can be read:
+
+```js
+var BOOKS = [
+  { id: 1, title: 'Eloquent JavaScript', author: 'Marijn Haverbeke' },
+  { id: 4, title: 'Refactoring UI', author: 'Adam Wathan' }
+];
+
+function fakeFetch(query) {
+  return new Promise(function (resolve, reject) {
+    setTimeout(function () {
+      if (query === 'boom') { reject(new TypeError('Failed to fetch')); return; }
+      if (query === 'fail') {
+        resolve({ ok: false, status: 500, json: function () { return Promise.resolve({ error: 'bad day' }); } });
+        return;
+      }
+      var hits = BOOKS.filter(function (b) { return b.title.toLowerCase().indexOf(query.toLowerCase()) !== -1; });
+      resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ books: hits }); } });
+    }, 0);
+  });
+}
+
+var uiState = 'idle';
+
+function showState(name, message) {
+  uiState = name;
+  console.log('    showState(' + name + (message ? ', "' + message + '"' : '') + ')');
+}
+
+async function searchBooks(query) {
+  showState('loading');
+  var response;
+  try {
+    response = await fakeFetch(query);
+  } catch (err) {
+    showState('error', 'Could not reach the catalogue.');
+    return [];
+  }
+  if (!response.ok) {
+    showState('error', 'The catalogue answered with status ' + response.status + '.');
+    return [];
+  }
+  var payload = await response.json();
+  var books = payload.books || [];
+  if (books.length === 0) {
+    showState('empty');
+    return [];
+  }
+  showState('success');
+  return books;
+}
+
+async function run() {
+  var queries = ['java', 'zzz', 'fail', 'boom'];
+  for (var i = 0; i < queries.length; i++) {
+    console.log('search "' + queries[i] + '"');
+    var books = await searchBooks(queries[i]);
+    console.log('    -> ' + books.length + ' book(s) rendered, uiState ' + uiState);
+  }
+}
+
+run();
+```
+
+Every search opens with `loading` and closes with exactly one of the other three. The
+`fail` search shows the 500 in its message, because `response.status` was there to read;
+the `boom` search cannot, because the `catch` holds an error and no response. The four
+searches run one after another on purpose, so that the log reads in order; a real page
+would not chain them, and the module's timing exercise counts what chaining costs.
+
+## An error that announces itself
+
+`#error` is `<p id="error" role="alert" hidden>` in the read-only HTML, and the role is
+doing work. It marks a live region of the assertive kind: when its contents change, a
+screen reader interrupts what it was saying and reads the new text, without moving focus,
+so the person keeps their place in the search field and can retype. That is why the
+element sits in the markup from the start, empty and hidden, and is filled in by
+`showState` rather than created when needed — a live region created and populated in the
+same moment is announced unreliably across screen readers. It is also why `showState`
+empties it for every state that is not `error`: the sixth check runs a failing search and
+then a successful one and expects the old message gone, because a message lingering under
+a list of results is the spinner's lie again.
+
+## The mistake, and why it is tempting
+
+The first is the opening bug: branches for the happy path and nothing else. It is
+tempting because during development the server is healthy, every manual test succeeds,
+and the `else` is code for a case you never see happen. Write `showState` first and route
+every exit through it, and the case you never see is handled by construction.
+
+The second is subtler and looks like caution. Wrap the whole body of `searchBooks` in one
+`try`, so that anything at all that goes wrong is caught. Then a bug in `renderBooks` —
+`book.tittle`, say — is caught with everything else and reported as *Could not reach the
+catalogue. Check the connection*, which sends the person to restart their router over
+your typo and hides the stack trace from you. Catch narrowly. The `try` holds the one
+line that can reject for a network reason; a genuine bug should reach the console as one.
+
+## Where this stops holding
+
+The stand-in answers in a fixed thirty milliseconds, so two searches always settle in the
+order they were sent. Real networks promise no such thing. Type `a`, then `ab`: if the
+answer to `a` takes longer, it arrives last and overwrites the results for `ab`, leaving
+a screen that shows the wrong list under the right query. `showState` cannot see this; it
+draws whatever it is told last. The fix is to number each request and ignore any answer
+that is not from the latest, or to cancel the earlier one with an `AbortController` — and
+an aborted `fetch` rejects with an `AbortError`, which the `catch` must not report as a
+connection failure. `fetch` has no timeout either: a server that never answers leaves the
+promise pending forever, with the spinner honest but eternal, and a timeout is another
+`AbortController` on a timer.
+
+`response.json()` is its own point of failure. A 200 whose body is an HTML login page — a
+hotel's captive portal — rejects at the parse, outside the lab's `try`. A cross-origin
+request blocked by CORS rejects with the same `TypeError` as a dropped connection, with
+no status to show. And `ok` is exactly 200 to 299: a 304 is not ok, a redirect has
+already been followed before you see anything, and a 204 is ok with no body to parse.
+
+## In the lab
+
+*Book search against a flaky API* gives you a read-only `index.html` — the form, the
+three state paragraphs, the results list, and `window.fakeFetch` with its five-book
+catalogue and two misbehaving queries — and an `app.js` with four stubs: `showState`,
+`renderBooks`, `searchBooks` and the submit handler. Seven checks read it back: two rows
+with titles, authors and `data-id` for `js`; `#loading` visible and the old results
+cleared *before* the search is awaited — the check the event-loop trace was written for;
+the empty state for `zzz`, with the error hidden; an error message mentioning `500` for
+`fail`; a settled promise rather than a throw for `boom`, with the error showing and the
+spinner gone; the previous error cleared after the form is submitted for `meyer`; and
+all five books for a query of nothing at all.
+''',
+                },
             ],
             "quiz": {
                 "title": "What settles, when, and what it means",

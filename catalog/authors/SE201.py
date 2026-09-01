@@ -47,6 +47,272 @@ COURSE = {
                 "Acceptance criteria belong to the requirement, not to the implementation that satisfies it",
                 "Circular tests: an expected value computed by the code under test proves nothing",
             ],
+            "read": [
+                {
+                    "title": "One sentence, four forks, twelve rows",
+                    "minutes": 13,
+                    "body": r'''
+Two developers are handed the same sentence on a Monday morning. A product owner
+has written, in an email, *give customers 10% off big orders, members get a further
+5%, shipping is free on larger orders, and express delivery costs extra*. By
+Wednesday each developer has a working checkout with a green test suite. On Thursday
+the two checkouts are asked to price the same order, a hundred pounds exactly, no
+membership, standard delivery, and one of them answers £100.00 while the other
+answers £90.00.
+
+Neither developer made a mistake. One read *big* as a strict threshold and typed
+`>`; the other read it as inclusive and typed `>=`. Both suites pass, because each
+developer tested the reading they had chosen. The sentence gave neither of them
+anything to be wrong against, and that is the defect: not the code, and not the
+tests, but a requirement that was never pinned to anything a machine could check.
+
+## Where the ambiguity lives
+
+It is worth knowing the places it hides, because they are the same places every
+time. The first is a boundary. *Over £100*, *at least 50*, *larger orders*: every one
+of these is a comparison, and a comparison has to be either strict or inclusive, so
+the code will make that decision whether or not a person made it first. The second
+is ordering. *A further 5%* can mean five more points off the original price or 5%
+off whatever remains after the first discount, and on a £200 order those two
+readings differ by exactly £1.00. The third is rounding. A total of £90.009 has to
+become pennies somehow, and there is more than one rule for doing it. The fourth is
+units: pounds or pence, kilograms or grams, a percentage written as 10 or as 0.10.
+Each of these is a fork, and each fork is a place where two careful people will walk
+different ways and both believe they followed the sentence.
+
+The resolution is not to write a longer sentence. It is to write examples, and to
+put them where they do the most work.
+
+## Why a boundary needs an example on each side
+
+Take the two developers' checkouts and ask a narrower question: for which inputs do
+they disagree? Both multiply by 0.90 above the threshold and by nothing below it, so
+on any subtotal that is comfortably above or comfortably below 100 they return the
+same number. The only place `>` and `>=` behave differently is at the value 100
+itself.
+
+```python
+def discount_strict(subtotal):
+    return subtotal * 0.90 if subtotal > 100 else subtotal
+
+
+def discount_loose(subtotal):
+    return subtotal * 0.90 if subtotal >= 100 else subtotal
+
+
+for subtotal in (50.0, 150.0, 100.0, 100.01):
+    a = discount_strict(subtotal)
+    b = discount_loose(subtotal)
+    verdict = "agree" if a == b else "DISAGREE"
+    print(f"{subtotal:>7}  strict={a:<8.3f} loose={b:<8.3f} {verdict}")
+```
+
+Fifty and 150 agree. So does 100.01. Only 100.0 separates the two functions, which
+means a suite containing a case at £50 and a case at £150, one well inside each
+partition, carries no information at all about which operator was meant: it passes
+either checkout. That is the derivation of the rule this module keeps returning to.
+A boundary is pinned down only once there is an example on each side of it, and the
+two examples have to be adjacent at the resolution the domain works in. For money
+that resolution is a penny, so the pair is 100.00 and 100.01. A pair at 100 and 101
+leaves a gap a penny wide, and a threshold of 100.50 would sit in that gap
+undetected.
+
+The same reasoning names the technique that decides which other values are worth
+testing. Inside a partition the code treats every value the same way, so one
+representative stands for all of them; this is equivalence partitioning, and it is
+why the suite does not need cases at £51, £52 and £53. The boundaries are where the
+code may stop treating values the same way, which is why boundary-value analysis
+puts its cases there. The two techniques are one idea, seen from the inside of a
+partition and from its edge.
+
+## Counting the rows
+
+A rule that turns on several conditions has a natural shape: a table with one column
+per condition, one row per combination, and an expected outcome written against
+each row. The lab's rule has a subtotal that falls into one of three bands (below 50,
+from 50 to 100, above 100), a membership flag and an express flag. The row count is
+the product of the arities, $3 \times 2 \times 2 = 12$, and the product matters even
+when nobody intends to write all twelve rows, because equivalence partitioning is a
+decision to leave rows out, and that is only a defensible decision when you know how
+many there were.
+
+Twelve is small enough to write in full, and writing it in full is where the sentence
+finally becomes a specification. Every expected value below was worked out with a
+pencil: volume discount first, member discount taken from the discounted amount,
+shipping decided on the original subtotal, express added on top, then rounded to
+the penny.
+
+```python
+import itertools
+from decimal import Decimal, ROUND_HALF_UP
+
+
+def round_money(value):
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def order_total(subtotal, member=False, express=False):
+    if subtotal < 0:
+        raise ValueError("subtotal must not be negative")
+    amount = subtotal * 0.90 if subtotal > 100 else float(subtotal)
+    if member:
+        amount = amount * 0.95
+    shipping = 0.0 if subtotal >= 50 else 4.99
+    if express:
+        shipping = shipping + 9.99
+    return round_money(amount + shipping)
+
+
+# (subtotal, member, express) -> the total worked out on paper
+BY_HAND = {
+    (40.0, False, False): 44.99, (40.0, False, True): 54.98,
+    (40.0, True, False): 42.99, (40.0, True, True): 52.98,
+    (80.0, False, False): 80.0, (80.0, False, True): 89.99,
+    (80.0, True, False): 76.0, (80.0, True, True): 85.99,
+    (200.0, False, False): 180.0, (200.0, False, True): 189.99,
+    (200.0, True, False): 171.0, (200.0, True, True): 180.99,
+}
+
+rows = list(itertools.product((40.0, 80.0, 200.0), (False, True), (False, True)))
+disagreements = [row for row in rows if abs(order_total(*row) - BY_HAND[row]) > 1e-9]
+print(len(rows), "rows checked,", len(disagreements), "disagreements")
+```
+
+The block prints `12 rows checked, 0 disagreements`, and the direction of that check
+is the whole point. The numbers in `BY_HAND` came from a person with a pencil; the
+function is being held to them, not the other way round. `itertools.product`
+produced the twelve combinations so that no row could be forgotten, and the
+dictionary made it impossible to write an outcome without naming the row it belongs
+to. Take one row and follow it: a member ordering £200 with express delivery has the
+volume discount first, $200 \times 0.90 = 180$, then the member discount on that,
+$180 \times 0.95 = 171$, then free shipping because the original 200 is at least 50,
+then 9.99 for express, giving 180.99. Read the ordering the other way, five points
+off the original, and the same row comes to 179.99, one pound less; that is the
+difference between two readings of *a further 5%*, and it is why the row is written
+down.
+
+Notice what the table does not yet contain: the boundary pairs. Forty, eighty and
+two hundred are representatives from inside each band. The cases at 49.99 and 50.00,
+and at 100.00 and 100.01, are a separate and deliberate addition, and the lab checks
+for them by name.
+
+## Money is a rounding-policy problem
+
+The row for a member ordering £40 came to 42.99, and reaching it meant multiplying
+by 0.95, a number the machine does not hold exactly, because 0.95 has no finite
+binary expansion. Every money calculation ends in a rounding step, and the step has
+a policy inside it whether or not anyone chose one.
+
+```python
+from decimal import Decimal, ROUND_HALF_UP
+
+print(round(2.675, 2))
+print(Decimal(2.675))
+print(round(0.5), round(1.5), round(2.5))
+print(Decimal(str(2.675)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+```
+
+The first line prints `2.67`, and the second line shows why: the double nearest to
+2.675 is 2.67499999999999982236431605997495353221893310546875, which sits below the
+halfway point, so rounding it down is the correct treatment of the number the machine
+actually holds. The third line prints `0 2 2`, and that is a different effect
+entirely. Those three inputs are exact ties, and Python resolves an exact tie
+towards the even neighbour. This is half-to-even, usually called banker's rounding;
+it exists because always rounding halves upward drags a long column of figures
+upward with them, it is the IEEE 754 default, and it is a perfectly good rule. It is
+not the rule a customer expects on a receipt, where 2.675 becomes 2.68.
+
+The fourth line is how the lab gets there, and every piece of it is doing work.
+`str(2.675)` produces the shortest decimal string that reads back as the same
+float, which is the digits the person typed. `Decimal` parses those digits exactly.
+`quantize` to `"0.01"` with `ROUND_HALF_UP` then applies the stated policy to the
+stated number. The tempting shortcut is `Decimal(2.675)` without the `str`, because
+`Decimal` accepts a float and the call looks more direct; what it receives is the
+binary value from the second line, and the quantise faithfully rounds that to 2.67,
+which is the exact behaviour the function was written to avoid.
+
+## The test that tests nothing
+
+There is a way to write the executable specification that produces a green suite in
+seconds and proves nothing. It reads: for each input, the expected value is whatever
+`order_total` returns for that input.
+
+```python
+import io
+import unittest
+
+
+def order_total(subtotal, member=False, express=False):
+    return 42.0
+
+
+class Circular(unittest.TestCase):
+    def test_boundary(self):
+        self.assertEqual(order_total(100.01), order_total(100.01))
+
+    def test_member(self):
+        expected = order_total(200.0, member=True)
+        self.assertEqual(order_total(200.0, member=True), expected)
+
+
+suite = unittest.defaultTestLoader.loadTestsFromTestCase(Circular)
+result = unittest.TextTestRunner(stream=io.StringIO(), verbosity=0).run(suite)
+print(result.testsRun, "run,", len(result.failures), "failed")
+```
+
+It prints `2 run, 0 failed` against a function that returns 42 for everything. Both
+sides of each assertion come from the same code, so each one reduces to
+$f(x) = f(x)$, which is true of a correct implementation and equally true of a
+broken one. What such a test can detect is a crash and non-determinism, and nothing
+else. It is tempting because it appears to generate the expected values for you, and
+because it stays in step with the code automatically; that automatic agreement is
+precisely what empties it of content. An expectation is evidence only when it was
+reached by a route the code did not take, which for this rule means a person, a
+pencil and the resolved specification.
+
+The lab enforces this mechanically. Its final check reads the source of
+`spec_cases` and refuses the submission if the name `order_total` appears anywhere
+inside it.
+
+## Criteria belong to the requirement
+
+The examples above are phrased in the domain's terms: *a £100.01 order pays 90.01*,
+*a member ordering £200 pays 171.00*. None of them mentions a helper, a private
+attribute or the order in which the multipliers were applied. That is not a matter of
+style. A criterion that names internals has to be edited whenever the internals
+change, and a check that gets edited until it passes has stopped being independent
+evidence. Criteria stated as orders and totals outlive three implementations and
+remain readable by the person who asked for the feature, which is who they were
+written for.
+
+## Where this stops holding
+
+Decision tables grow multiplicatively. Ten independent booleans make 1,024 rows, at
+which point enumerating is no longer a plan and partitioning becomes the plan
+instead. Partitioning is sound only when the code treats a partition uniformly, and
+a lookup table keyed on exact values, or a special case for one customer, breaks
+that assumption without announcing it. Boundary pairs pin down the boundaries you
+know about; the half-up rounding at the third decimal is a boundary too, and so is
+the point where a float stops being able to tell two pennies apart, and neither of
+them appears in the product owner's email. A pair at 100.00 and 100.01 also assumes
+the domain's resolution is a penny; if the system is later asked to price 100.001,
+the pair says nothing about what happens there.
+
+## What you are about to build
+
+The lab, *From an ambiguous rule to an executable specification*, hands you the
+resolved version of the Monday email and asks for three things. `round_money` is the
+fourth line of the rounding block wrapped in a function. `order_total` is the
+decision table's rule written out, with the volume boundary strict and the shipping
+boundary inclusive, and a `ValueError` for a negative subtotal. `spec_cases` is at
+least eight `(subtotal, member, express, expected)` tuples with every expected value
+worked out on paper. The checks read those tuples back and require both sides of the
+50 boundary, both sides of the 100 boundary, and both values of each flag. The
+worked examples in the brief give you six rows; the table above shows where the
+rest come from.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Where the ambiguity actually lives",
                 "minutes": 7,
@@ -511,6 +777,361 @@ assert "order_total" not in _body, \
                 "Guard clauses replace an arrow-shaped nest of ifs with early returns",
                 "Replace nested conditional with a lookup table when the branches are data",
                 "Small steps: run the safety net after every single move, never at the end",
+            ],
+            "read": [
+                {
+                    "title": "A net under the code before anything moves",
+                    "minutes": 14,
+                    "body": r'''
+A parcel comes in: 12 kilograms, fragile, going 800 kilometres, next-day. The quoting
+function says £74.40, band D, and a customer wants to know why. The function is
+`legacy_quote`, forty lines of `if` nested six deep, and the person who wrote it left
+eighteen months ago. To answer the customer you read it, and reading it means running
+it in your head. Twelve kilograms is not under 1 and not under 5 but is under 20, so
+the base is $10 + 7 \times 1.1 = 17.70$. Eight hundred kilometres is over 500, so add
+$12 + 300 \times 0.02 = 18.00$, giving 35.70. The parcel is fragile and at or above
+5 kg, so multiply by 1.25, giving 44.625. It is next-day, so multiply by 1.6 and add
+3.00, giving 74.40. Four lookups, in the order the nest applies them, and a wrong
+turn at any one of them produces a different number that looks every bit as
+plausible.
+
+Now marketing wants the fragile uplift changed, and the question that matters is not
+how to change it. It is how you would know, afterwards, that nothing else had moved.
+
+## What refactoring is, and what it is not
+
+Refactoring is a change to the shape of code that leaves its behaviour exactly as it
+was. The definition is narrow on purpose, because the narrowness is what makes the
+activity safe: if nothing observable moves, nothing observable can break, and a
+change with that property needs no permission, no release note and no conversation
+with the customer. The moment a change also alters what the function returns for
+some input, it has stopped being a refactoring and become a rewrite wearing a
+refactoring's name, and it needs all three of those things.
+
+So the first question is how you would demonstrate that behaviour was preserved. You
+would need a record of the behaviour to compare against. There is no specification to
+take it from; if there were, this would not be legacy code. The only source of truth
+about what `legacy_quote` does is `legacy_quote`, so the record has to come from
+running it: choose inputs, call the function, write down what came back. A suite
+built that way is a characterisation suite, sometimes called a golden master, and it
+is the net everything else in this module hangs from.
+
+That gives the module its definition of legacy code, operational rather than
+chronological. Legacy code is code without tests, whatever its age. A module
+written last week with no suite leaves you in exactly the position `legacy_quote`
+does: unable to change it with confidence, and needing to build the net before
+anything else.
+
+## Recording what it does, not what it should do
+
+`legacy_quote(0.0, 10, False, "standard")` returns `None`. The business would rather
+it raised a validation error, and it is tempting to write the suite with the error in
+it, so that the suite drives the fix. Do that and the suite is red from the moment it
+is written, and a red suite cannot tell you whether your last extraction broke
+something. The net is a detector
+of change, not a statement of intent. Record the `None`. Get to green. Refactor to
+green. Then change the behaviour on purpose, in its own commit, where the suite's
+diff shows exactly one recorded value moving; that diff is the best documentation
+the fix will ever have.
+
+## Choosing the inputs from the code
+
+Since the code is the specification, the code also says where the interesting inputs
+are. Every constant it compares against is a boundary: weights of 1, 5 and 20;
+distances of 100 and 500; 5 kg again inside the fragile branch; the three accepted
+priorities. Take a value on each side of every one of those, add the refusals (a zero
+weight, a negative distance, a priority nobody recognises), and let
+`itertools.product` cross them so that no combination is forgotten. Nine weights,
+eight distances, two fragile flags and four priorities make
+$9 \times 8 \times 2 \times 4 = 576$ pairs.
+
+The block below builds that net, then extracts the concepts out of the nest with one
+deliberate slip, so that you can watch the net catch it. It defines `legacy_quote`
+in full so that it runs on its own.
+
+```python
+import io
+import itertools
+import unittest
+
+
+def legacy_quote(weight, distance, fragile, priority):
+    if weight > 0:
+        if distance > 0:
+            if priority == "standard" or priority == "two-day" or priority == "next-day":
+                if weight < 1:
+                    rate = 4.0
+                else:
+                    if weight < 5:
+                        rate = 4.0 + (weight - 1) * 1.5
+                    else:
+                        if weight < 20:
+                            rate = 10.0 + (weight - 5) * 1.1
+                        else:
+                            rate = 26.5 + (weight - 20) * 0.8
+                if distance > 100:
+                    if distance > 500:
+                        rate = rate + 12.0 + (distance - 500) * 0.02
+                    else:
+                        rate = rate + (distance - 100) * 0.03
+                if fragile:
+                    if weight >= 5:
+                        rate = rate * 1.25
+                    else:
+                        rate = rate * 1.15
+                if priority == "next-day":
+                    rate = rate * 1.6 + 3.0
+                else:
+                    if priority == "two-day":
+                        rate = rate * 1.25
+                if rate < 10.0:
+                    band = "A"
+                else:
+                    if rate < 25.0:
+                        band = "B"
+                    else:
+                        if rate < 60.0:
+                            band = "C"
+                        else:
+                            band = "D"
+                return (round(rate, 2), band)
+            else:
+                return None
+        else:
+            return None
+    else:
+        return None
+
+
+VALID = ("standard", "two-day", "next-day")
+WEIGHTS = (-3.0, 0.0, 0.5, 1.0, 2.5, 5.0, 12.0, 20.0, 35.0)
+DISTANCES = (-5, 0, 1, 100, 101, 500, 501, 1200)
+
+NET = [(args, legacy_quote(*args))
+       for args in itertools.product(WEIGHTS, DISTANCES, (False, True), VALID + ("same-hour",))]
+print(len(NET), "pairs recorded,", sum(1 for _, got in NET if got is None), "of them refusals")
+print("recorded for (0.0, 10, False, 'standard'):", legacy_quote(0.0, 10, False, "standard"))
+
+
+def base_rate(weight):
+    if weight < 1:
+        return 4.0
+    if weight < 5:
+        return 4.0 + (weight - 1) * 1.1      # the slip: this band charges 1.5
+    if weight < 20:
+        return 10.0 + (weight - 5) * 1.1
+    return 26.5 + (weight - 20) * 0.8
+
+
+def distance_surcharge(distance):
+    if distance > 500:
+        return 12.0 + (distance - 500) * 0.02
+    if distance > 100:
+        return (distance - 100) * 0.03
+    return 0.0
+
+
+def fragile_multiplier(weight, fragile):
+    if not fragile:
+        return 1.0
+    return 1.25 if weight >= 5 else 1.15
+
+
+def priority_adjust(rate, priority):
+    if priority == "next-day":
+        return rate * 1.6 + 3.0
+    if priority == "two-day":
+        return rate * 1.25
+    return rate
+
+
+def band_for(rate):
+    if rate < 10.0:
+        return "A"
+    if rate < 25.0:
+        return "B"
+    if rate < 60.0:
+        return "C"
+    return "D"
+
+
+def shipping_quote(weight, distance, fragile, priority):
+    if weight <= 0 or distance <= 0 or priority not in VALID:
+        return None
+    rate = base_rate(weight) + distance_surcharge(distance)
+    rate = rate * fragile_multiplier(weight, fragile)
+    rate = priority_adjust(rate, priority)
+    return (round(rate, 2), band_for(rate))
+
+
+def same(expected, got):
+    if expected is None or got is None:
+        return expected == got
+    return expected[1] == got[1] and abs(expected[0] - got[0]) <= 0.011
+
+
+class Characterisation(unittest.TestCase):
+    def test_every_recorded_pair(self):
+        for args, expected in NET:
+            with self.subTest(args=args):
+                self.assertTrue(same(expected, shipping_quote(*args)),
+                                f"{args}: recorded {expected}, now {shipping_quote(*args)}")
+
+
+def run_net():
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(Characterisation)
+    result = unittest.TextTestRunner(stream=io.StringIO(), verbosity=0).run(suite)
+    return len(result.failures)
+
+
+print("with the slip:", run_net(), "pairs changed")
+first = next(args for args, expected in NET if not same(expected, shipping_quote(*args)))
+print("first of them:", first, "recorded", legacy_quote(*first), "now", shipping_quote(*first))
+
+
+def base_rate(weight):
+    if weight < 1:
+        return 4.0
+    if weight < 5:
+        return 4.0 + (weight - 1) * 1.5
+    if weight < 20:
+        return 10.0 + (weight - 5) * 1.1
+    return 26.5 + (weight - 20) * 0.8
+
+
+print("after the fix:", run_net(), "pairs changed")
+```
+
+The first two lines report 576 pairs, of which 324 are refusals (every zero or
+negative weight, every non-positive distance, every unknown priority, in every
+combination), and confirm that the zero-weight parcel was recorded as `None`. Then
+the slip shows itself: 36 pairs changed, and the first of them is a 2.5 kg parcel
+going one kilometre, recorded at 6.25 and now quoted at 5.65. A 2.5 kg parcel is the
+one grid weight that sits strictly inside the 1 to 5 kg band, where the wrong slope
+bites; a parcel of exactly 1 kg costs $4.0 + 0 \times$ anything under either slope,
+which is why the net needed a weight inside the band and not only at its edges. Thirty-six is six positive distances times two fragile flags
+times three accepted priorities, every combination that reaches the band. After the
+constant is corrected, no pair changes.
+
+## Extract method, and what it must copy
+
+Each helper in that block is one concept lifted out of the nest and given a name:
+`base_rate` is the weight band, `distance_surcharge` is what the distance adds,
+`fragile_multiplier` and `priority_adjust` are the two uplifts, and `band_for` is the
+ladder at the bottom. The nesting collapsed because each name absorbed one level of
+it. What makes the extraction a refactoring rather than a rewrite is that every
+constant and every ordering was copied out of the nest, not rederived from an idea of
+what the tariff ought to be. The slope of 1.5 is not a design decision any more; it
+is a fact about the code, and `legacy.py` is the only place to read it from.
+
+Two details in that block are easy to walk past. The comparison `same` allows the
+rate to differ by up to 0.011 rather than demanding equality, and the tolerance is
+not laziness. The nest computes the far-distance surcharge as
+`(rate + 12.0) + (distance - 500) * 0.02`, left to right, while the helper returns
+`12.0 + (distance - 500) * 0.02` and adds that to the base afterwards. Those are the
+same numbers in a different association, and floating-point addition is not
+associative, so the two can differ in the last bit and, once in a long while, in the
+last penny after rounding. A net that demanded bit-for-bit equality would report a
+behaviour change that no customer could ever observe.
+
+The other is `band_for(rate)` receiving the unrounded rate. `legacy_quote` computes
+`band` from `rate` and only rounds inside the `return`, so a rate of 9.996 bands as A
+and then prints as 10.0, which looks like a B. That is arguably a defect, and the
+refactoring must preserve it: `band_for(round(rate, 2))` would be a change in
+behaviour, and the net exists to catch exactly that kind of accidental improvement.
+
+## Guard clauses
+
+The three outer `if`s of the nest each have an `else` that returns `None`, and the
+body that does the work sits three levels in. Read what the nest says: the work
+happens when the weight is positive *and* the distance is positive *and* the priority
+is known. The negation of that conjunction is a disjunction, since
+$\neg(a \land b \land c)$ is $\neg a \lor \neg b \lor \neg c$, so the same function
+can open by refusing when any one condition fails and then do the work at one level
+of indentation.
+
+```python
+import itertools
+
+VALID = ("standard", "two-day", "next-day")
+
+
+def nested(weight, distance, priority):
+    if weight > 0:
+        if distance > 0:
+            if priority in VALID:
+                return "quoted"
+            else:
+                return None
+        else:
+            return None
+    else:
+        return None
+
+
+def guarded(weight, distance, priority):
+    if weight <= 0 or distance <= 0 or priority not in VALID:
+        return None
+    return "quoted"
+
+
+inputs = list(itertools.product((0, 1), (0, 1), ("standard", "same-hour")))
+print(all(nested(*i) == guarded(*i) for i in inputs), "on", len(inputs), "inputs")
+```
+
+It prints `True on 8 inputs`, one for every combination of each condition holding or
+failing. What the guard buys is for the reader: after the first line, every remaining
+line of the function is the case that succeeds, with no precondition left unstated.
+It buys almost nothing on any complexity metric, because the three checks are still
+three checks, negated and moved to the top; the number that falls across the whole
+refactoring falls because of the extraction, not the early return.
+
+## Small steps, and the two temptations
+
+Run the net after every single move, not once at the end. The reason is the cost of
+diagnosis. One move between green and red names its own cause. Twelve moves between
+green and red is a bisection, and a bisection over a half-finished refactoring is
+worse than it sounds, because the intermediate states may not even import. The
+temptation to batch the moves is real: the extractions feel like one change, and
+running the suite six times for one change feels like ceremony, right up to the
+first time the net goes red and the cause is the one line you touched.
+
+The second temptation is quieter. Halfway through, somebody notices that the
+recorded expectations could be regenerated from `shipping_quote` instead of
+`legacy_quote`, so that the suite stays in step with the new code. That is the
+circular test from module 1 in a new coat. The recorded values are taken from the
+legacy function once, and the moment they are taken from anything else they stop
+being evidence of anything.
+
+## Where the net stops holding
+
+A characterisation suite proves that behaviour is unchanged on the inputs it holds,
+and on no others. The band decided on the unrounded rate differs from a band decided
+on the rounded rate only in the last half-penny below a boundary, at a rate like
+9.996, and no point on the grid above lands there; an extraction that changed that
+behaviour would pass the net. The grid is chosen from the boundaries you found in the
+code, so a boundary you did not notice is a boundary the net does not cross. Code
+that reads the clock, draws random numbers or talks to a network cannot be
+characterised until those sources of variation are controlled, because two runs of
+the unchanged code would disagree. And a net that is green says only
+that the answer is the answer the old code gave. It says nothing about whether that
+answer was ever right, which is why the `None` for a zero-weight parcel is still
+there at the end of the lab.
+
+## What you are about to build
+
+The lab, *Untangling a shipping quote*, gives you `legacy.py` to read and not to
+edit, and asks for `refactored.py` in this order. `characterisation_suite()` returns
+at least a hundred `(args, expected)` pairs recorded from `legacy_quote`, crossing
+every weight band, every distance band, the refusal path and all four bands of
+output. Then the six helpers named above, with their constants read out of the nest,
+and `shipping_quote` opening with guard clauses that return `None` and continuing
+flat: at most two levels of nesting anywhere in the file, and at most eight
+statements in `shipping_quote` itself. The checks compare the two functions across
+the whole net to the penny, as `same` does above, and one confirms that `legacy.py`
+still has all of its `if`s.
+''',
+                },
             ],
             "quiz": {
                 "title": "Changing the shape without changing the behaviour",
@@ -1164,6 +1785,385 @@ assert _src.count("if ") >= 12, "legacy.py has been rewritten; restore it and re
                 "Open-closed in practice: adding a pricing rule must not edit the checkout",
                 "Isolating subscriber failures — one broken listener must not sink the publish",
                 "Patterns are a vocabulary, not a goal; a pattern applied without a force to resolve is debt",
+            ],
+            "read": [
+                {
+                    "title": "Three forces, three shapes",
+                    "minutes": 13,
+                    "body": r'''
+The checkout began as one function that multiplied a unit price by a quantity. Then
+sales sold a tiered plan to one customer and a subscription to another, and the
+function grew an `if kind == "flat"` with two `elif` branches under it. Then finance
+asked for an audit row on every order, the dashboard team asked for a counter to be
+bumped, and invoicing asked for an email, and each of those went in as a line after
+the price was computed.
+
+```text
+def place(order_id, units, kind):
+    if kind == "flat":
+        total = 2.5 * units
+    elif kind == "tiered":
+        ...
+    elif kind == "subscription":
+        ...
+    write_audit_row(order_id, total)
+    dashboard.bump(total)
+    send_invoice(order_id, total)
+    return total
+```
+
+This week three requests arrive. Sales wants a fourth pricing scheme by Friday.
+Finance is moving the audit to a new system and needs the row written somewhere
+else. And the dashboard service has been going down at night; when it does,
+`dashboard.bump` raises, `place` raises with it, and the invoice email on the next
+line is never sent. Three requests, three different kinds of pressure on the code,
+and all three land in one function that has to be edited, re-read and re-tested for
+each of them.
+
+A design pattern is a named response to a pressure of that kind. The people who
+catalogued them called the pressures forces, and the useful way to learn a pattern
+is to find the force first and let the shape follow from it. This function has three
+forces in it. Take them one at a time.
+
+## Force one: an algorithm that varies
+
+Look at what changes between the three branches and what stays the same. What
+changes is how a quantity of units becomes a price. What stays the same is
+everything around it: take the order, price it, announce it, return the total. The
+pressure is that the varying part keeps growing, and every time it grows the stable
+part has to be edited too.
+
+The response is to move the varying part behind an interface so that the stable part
+can hold a pricing object without knowing which one. The interface needs one method,
+`price(units)`, and the checkout's branch collapses to a single call on it. That is
+the strategy pattern, and the interface is the whole of it; the classes behind the
+interface are ordinary classes.
+
+Python would let the interface stay implicit, an agreement that every pricing object
+happens to have a `price` method. Writing the interface down as a base class says the
+contract out loud, and there are two ways to do it that look alike and fail
+differently. A plain base class whose `price` raises `NotImplementedError` can be
+instantiated, and a subclass that forgets to override `price` can be instantiated
+too; the mistake is discovered at the first call, which may be an hour into a batch
+job. `abc.ABC` with `@abc.abstractmethod` moves the failure to the point where the
+mistake was made.
+
+```python
+# raises TypeError
+import abc
+
+
+class PricingStrategy(abc.ABC):
+    @abc.abstractmethod
+    def price(self, units):
+        """The charge for this many units."""
+
+
+PricingStrategy()
+```
+
+`ABCMeta` refuses to construct any class whose set of abstract methods is not empty,
+so the bare base class raises `TypeError` on construction, and so would any subclass
+that left `price` unwritten. A subclass that overrides every abstract method is
+constructible, which is what makes the concrete strategies legal.
+
+Of the lab's three strategies, the tiered one hides the arithmetic worth tracing.
+With tiers of `[(0, 3.0), (100, 2.5), (500, 2.0)]`, the intent is that the first
+hundred units cost 3.0 each, the next four hundred cost 2.5 each, and everything
+beyond five hundred costs 2.0 each. Pricing is marginal: a unit is charged at the
+rate of the band it falls into, and a band charges only the units that fall in it.
+
+```python
+import abc
+
+
+class PricingStrategy(abc.ABC):
+    @abc.abstractmethod
+    def price(self, units):
+        """The charge for this many units."""
+
+
+class TieredPricing(PricingStrategy):
+    def __init__(self, tiers):
+        self.tiers = sorted((int(t), float(p)) for t, p in tiers)
+
+    def price(self, units):
+        if units < 0:
+            raise ValueError("units must not be negative")
+        total = 0.0
+        for index, (threshold, unit_price) in enumerate(self.tiers):
+            if units <= threshold:
+                break
+            ceiling = self.tiers[index + 1][0] if index + 1 < len(self.tiers) else units
+            in_band = min(units, ceiling) - threshold
+            print(f"  band from {threshold:>3} at {unit_price}: {in_band:>3} units -> {in_band * unit_price}")
+            total += in_band * unit_price
+        return total
+
+
+tiered = TieredPricing([(0, 3.0), (100, 2.5), (500, 2.0)])
+for units in (250, 600):
+    print(units, "units")
+    print("  total:", tiered.price(units))
+```
+
+For 250 units the loop charges 100 units at 3.0 for 300.0, then 150 units at 2.5 for
+375.0, and stops because 250 is not above the 500 threshold, giving 675.0. For 600
+units it charges 100 at 3.0, 400 at 2.5 and 100 at 2.0, for 300.0, 1000.0 and 200.0,
+giving 1500.0. Each band's contribution is the number of units between its threshold
+and the next threshold, capped at the order size, times its rate.
+
+The mistake people make here is to charge every unit at the rate of the band the
+total falls in: 250 units sit in the 100-to-500 band, so 250 times 2.5, or 625.0. It
+is tempting because that is what the word *tier* suggests in everyday use, and
+because it is one multiplication instead of a loop. It also produces a tariff nobody
+would sell. At 100 units the flat-per-band price is 300.0, and at 101 units it drops
+to 252.50, so a customer would buy one more unit to pay less. Marginal pricing keeps
+the price continuous across the threshold: 101 units cost 302.50.
+
+## Force two: something still has to choose
+
+Moving the algorithms behind an interface does not make the conditional disappear.
+Somebody, somewhere, has to turn the string `"tiered"` in a customer's contract into
+a `TieredPricing`. The pressure is that if that decision lives in the checkout, the
+checkout still has to be edited for every new scheme, and the strategy has bought
+nothing.
+
+The response is to confine the decision to one place whose only job is choosing, and
+to make that place a table rather than a chain of branches. A dictionary from kind to
+a callable that builds the strategy is a registry, and a function that looks the kind
+up and calls what it finds is a factory.
+
+```python
+import abc
+
+
+class PricingStrategy(abc.ABC):
+    @abc.abstractmethod
+    def price(self, units):
+        """The charge for this many units."""
+
+
+class FlatPricing(PricingStrategy):
+    def __init__(self, unit_price):
+        self.unit_price = float(unit_price)
+
+    def price(self, units):
+        return self.unit_price * units
+
+
+REGISTRY = {
+    "flat": lambda spec: FlatPricing(spec["unit_price"]),
+}
+
+
+def make_strategy(spec):
+    kind = spec.get("kind")
+    if kind not in REGISTRY:
+        raise ValueError("unknown pricing kind: " + repr(kind))
+    return REGISTRY[kind](spec)
+
+
+print(type(make_strategy({"kind": "flat", "unit_price": 2.5})).__name__)
+try:
+    make_strategy({"kind": "free"})
+except ValueError as exc:
+    print("before registering:", exc)
+
+
+class FreePricing(PricingStrategy):
+    def price(self, units):
+        return 0.0
+
+
+REGISTRY["free"] = lambda spec: FreePricing()
+print("after registering:", type(make_strategy({"kind": "free"})).__name__)
+```
+
+The block prints `FlatPricing`, then the refusal for an unknown kind, then
+`FreePricing` after one line registered it. `make_strategy` was not edited between
+the refusal and the success, and that is the property the whole arrangement exists
+to deliver: new behaviour arrived without a change to existing code. The catalogue
+calls it open for extension, closed for modification. The decision about which class
+to build now happens once, when the strategy is constructed, rather than on every
+call to `place`, and `place` never learns which strategy it is holding.
+
+## Force three: who needs to know
+
+The three lines after the price is computed carry a different force. The checkout
+knows about finance, the dashboard and invoicing, three departments whose concerns
+have nothing to do with pricing, and each of them can change independently of the
+others and of the checkout. The night-time outage shows the cost: a failure in the
+dashboard's line prevents invoicing's line from running, and the checkout is the
+thing that decided that, without anyone choosing it.
+
+The response is to invert the direction of knowledge. The checkout announces that an
+order has been priced, with a payload saying which order and for how much, and
+anybody who cares subscribes to that announcement. The publisher knows the event and
+the shape of the payload. It never knows who is listening. That is the observer
+pattern, and an event bus is its usual shape.
+
+Three consequences follow from the publisher's ignorance, and each becomes a line in
+the bus. First, since the publisher cannot know its subscribers, it is in no position
+to decide that one subscriber's failure should cancel the others, so each handler is
+called inside its own `try`, and a failure is recorded rather than raised. Second,
+the record has to go somewhere a person can find it, because an error swallowed by a
+bare `except` is a lost invoice nobody will ever hear about. Third, a handler is
+entitled to unsubscribe itself while it runs, and removing an item from a list you
+are iterating skips the item after it, so the bus delivers to a snapshot of the list.
+
+```python
+class EventBus:
+    def __init__(self):
+        self.errors = []
+        self._handlers = {}
+
+    def subscribe(self, event, handler):
+        self._handlers.setdefault(event, []).append(handler)
+
+    def publish(self, event, payload):
+        delivered = 0
+        for handler in list(self._handlers.get(event, [])):
+            delivered += 1
+            try:
+                handler(payload)
+            except Exception as exc:
+                name = getattr(handler, "__name__", repr(handler))
+                self.errors.append((event, name, str(exc)))
+        return delivered
+
+
+seen = []
+
+
+def audit(payload):
+    seen.append(("audit", payload["total"]))
+
+
+def dashboard(payload):
+    raise RuntimeError("dashboard service is down")
+
+
+def invoice(payload):
+    seen.append(("invoice", payload["total"]))
+
+
+bus = EventBus()
+for handler in (audit, dashboard, invoice):
+    bus.subscribe("order.priced", handler)
+
+count = bus.publish("order.priced", {"order_id": "A-1", "units": 40, "total": 100.0})
+print(count, "handlers invoked")
+print(seen)
+print(bus.errors)
+```
+
+It prints that three handlers were invoked, that the audit and the invoice both ran
+with the total of 100.0, and that the dashboard's failure was recorded as
+`('order.priced', 'dashboard', 'dashboard service is down')`. The invoice went out
+even though the handler before it raised, which is the night-time outage fixed, and
+the failure is on record rather than lost. The net is `except Exception` and not
+`except BaseException`, because the wider one would also catch a keyboard interrupt
+and file the user's request to stop the process as a subscriber error.
+
+## Testing through the seam
+
+An interface is also a place to put a test double. Because `Checkout` holds a
+`PricingStrategy` and a bus without knowing what either really is, it can be tested
+with a strategy that returns a fixed number and a subscriber that records what it
+was sent, without a real tariff anywhere in sight.
+
+```python
+import io
+import unittest
+
+
+class FixedPricing:
+    def price(self, units):
+        return 7.0
+
+
+class RecordingBus:
+    def __init__(self):
+        self.published = []
+
+    def publish(self, event, payload):
+        self.published.append((event, payload))
+        return 1
+
+
+class Checkout:
+    def __init__(self, strategy, bus):
+        self.strategy = strategy
+        self.bus = bus
+
+    def place(self, order_id, units):
+        total = self.strategy.price(units)
+        self.bus.publish("order.priced",
+                         {"order_id": order_id, "units": units, "total": total})
+        return total
+
+
+class CheckoutTests(unittest.TestCase):
+    def test_returns_the_strategy_price(self):
+        self.assertEqual(Checkout(FixedPricing(), RecordingBus()).place("O-1", 3), 7.0)
+
+    def test_announces_the_order(self):
+        bus = RecordingBus()
+        Checkout(FixedPricing(), bus).place("O-1", 3)
+        self.assertEqual(bus.published,
+                         [("order.priced", {"order_id": "O-1", "units": 3, "total": 7.0})])
+
+
+suite = unittest.defaultTestLoader.loadTestsFromTestCase(CheckoutTests)
+result = unittest.TextTestRunner(stream=io.StringIO(), verbosity=0).run(suite)
+print(result.testsRun, "run,", len(result.failures), "failed")
+```
+
+It prints `2 run, 0 failed`. Neither test touches a tier, a registry or a real bus,
+and both of them would still pass after every pricing scheme in the system had been
+rewritten, because they check the one thing `Checkout` is responsible for.
+
+## Where the patterns stop paying
+
+Every one of these shapes costs something on every read: an interface to follow, a
+registry to look up, an event to trace to its subscribers. The cost is worth paying
+exactly when the force is present. A codebase with one pricing rule and no plausible
+second one gets nothing from a strategy hierarchy except the indirection, and a
+reader who follows the interface to its single implementation has learned nothing
+for the trip. The honest version is to write the one rule plainly and introduce the
+interface on the day the second rule arrives, which is a small and well-understood
+refactoring.
+
+The observer has a cost of its own kind. Nobody can read `place` and see that an
+invoice goes out; that fact now lives in whichever module subscribed, and it runs in
+whichever order the subscriptions happened to be made, which may be an accident of
+import order. And `bus.errors` is only better than a crash if somebody reads it. A
+list of recorded failures that nobody looks at is a bare `except: pass` with extra
+steps. The registry, for its part, is a module-level dictionary that any code
+anywhere can write to, with everything that global mutable state implies.
+
+Patterns are a vocabulary. Being able to say *this is a strategy* saves a paragraph
+of explanation in a review, and that is their real value. A pattern applied where
+there is no force to resolve is a paragraph of explanation the code now owes to
+every reader, for ever.
+
+## What you are about to build
+
+The lab, *A pricing engine with a notification bus*, asks for all three shapes in one
+file. `PricingStrategy` is the abstract base above, and the first check confirms
+that constructing it raises `TypeError`. `FlatPricing`, `TieredPricing` and
+`SubscriptionPricing` implement it, with negative units raising `ValueError` in each
+and zero units legal; the tiered check uses the 250 and 600 unit examples traced
+above. `REGISTRY` and `make_strategy` are the factory, an unknown kind raises
+`ValueError`, and one check registers a new kind and expects it to work without an
+edit. `EventBus` gains `unsubscribe` and a return value from `publish`, delivers in
+subscription order, and records `(event, handler_name, message)` in `bus.errors`
+when a handler raises. `Checkout.place` prices, publishes `"order.priced"` with the
+payload shown in the test above, and returns the total, without ever knowing which
+strategy it holds.
+''',
+                },
             ],
             "quiz": {
                 "title": "Patterns, and the forces that justify them",
@@ -1838,6 +2838,520 @@ assert _received[0] == {"order_id": "O-1", "units": 40, "total": 100.0}, f"paylo
                 "The public API surface is a contract; a diff of two surfaces determines the bump",
                 "Widening a contract is compatible; narrowing it is not — required parameters are narrowing",
                 "Gates must be explainable: report which function failed and by how much",
+            ],
+            "read": [
+                {
+                    "title": "Counting the ways through a function",
+                    "minutes": 12,
+                    "body": r'''
+A merge request adds a `dispatch` method to a router. The reviewer writes *this is
+too complex* and asks for it to be split. The author replies that it is twelve
+lines, that it reads fine, and that splitting it would scatter one idea across three
+functions. Both of them are right about something, neither of them has a number,
+and so the thread has nowhere to go.
+
+```text
+def dispatch(self, verb, path):
+    for route in self.routes:
+        if route.verb == verb and route.matches(path):
+            try:
+                return route.handler(path)
+            except KeyError:
+                return 404
+            except ValueError:
+                return 400
+    return 405
+```
+
+Ask a narrower question of the same code: how many different ways can execution go
+through it? The loop body may never run, giving 405. It may run and the `if` may be
+false, going round again. The `if` may be true, in which case the handler either
+returns, raises `KeyError` for 404, or raises `ValueError` for 400. And inside the
+`if`, `route.verb == verb` may be false, in which case `route.matches` is never
+called at all. Each of those is a distinct route through the function, each needs a
+test case of its own if the function is to be tested thoroughly, and each is one
+more thing a reader has to hold in mind while working out what the function does.
+Counting them turns the argument into a measurement.
+
+## Deriving the count from the graph
+
+Draw the function as a graph: one node per statement, one edge for every way control
+can pass from one statement to the next. McCabe's observation was that the number of
+independent paths through such a graph is
+
+$$M = E - N + 2P$$
+
+where $E$ is the number of edges, $N$ the number of nodes and $P$ the number of
+connected pieces, which is 1 for a single function. Rather than take that on trust,
+watch what it does to two small graphs. Three statements in a straight line are
+three nodes joined by two edges, so $M = 2 - 3 + 2 = 1$: one path, which is right.
+Now put an `if` between the first and second statement, with one statement in its
+body. The graph gains a decision node and a body node, and it gains three edges: into
+the decision, from the decision into the body, and from the decision straight past
+the body. The old edge from the first statement to the second is replaced by the one
+out of the body. That is five nodes and five edges, so $M = 5 - 5 + 2 = 2$. The
+decision added one to the count, and it did so by adding one more edge than node.
+Every binary decision does the same thing, which is why the formula collapses to
+something you can apply without drawing anything: start at 1, and add 1 for each
+decision.
+
+That leaves the question of what counts as a decision, and the answer is whatever
+has two ways out. An `if` has two. A `while` and a `for` have two, because at the
+top of each iteration the loop either runs again or exits. An `except` handler has
+two, because the exception either matches it or passes on. An `assert` either passes
+or raises. A conditional expression `a if c else b` evaluates one of its two arms. A
+comprehension has a `for` in it, and each `if` inside it is a filter with two ways
+out. None of these needs an `if` keyword to be a branch; the branch is in the
+control flow, not the spelling.
+
+## Two decisions that hide
+
+Two constructs score in ways that surprise people. The first is a boolean operator.
+In `a and b`, the value `b` is evaluated when `a` is true and skipped when `a` is
+false, and a piece of code that runs on some paths and not on others is a branch
+whether or not anyone wrote `if`. The operator `a and b and c` skips at two points,
+so a boolean operation adds one less than the number of values it joins.
+
+The second is `elif`. Python's grammar has no `elif` node. The parser nests each one
+as an `If` inside the previous `If`'s `orelse`, so a chain of `if`, `elif`, `elif`,
+`else` is three `If` nodes, and a tree walker that counts `If` nodes scores three
+without being told anything about `elif`. The `else` scores nothing, because it is
+not a decision; it is where control goes once every decision has been made. The
+tree itself shows both of these.
+
+```python
+import ast
+
+expr = ast.parse("a and b or c", mode="eval").body
+print(type(expr).__name__, type(expr.op).__name__, "over", len(expr.values), "values")
+inner = expr.values[0]
+print(type(inner).__name__, type(inner.op).__name__, "over", len(inner.values), "values")
+
+chain = ast.parse("if a:\n    x = 1\nelif b:\n    x = 2\nelse:\n    x = 3\n").body[0]
+print(type(chain).__name__, "whose orelse holds one", type(chain.orelse[0]).__name__)
+```
+
+The first two lines show that `a and b or c` is an `Or` over two values, the first of
+which is an `And` over two values: two boolean operations, each adding one, for a
+total of two. The third line shows the `elif` for what it is, an `If` sitting in the
+`orelse` of another `If`.
+
+## Why the tree and not the text
+
+It is tempting to count decisions with a regular expression over the source, because
+`\bif\b` is one line and `ast` is a module to learn. The text does not know which of
+its words are code.
+
+```python
+import ast
+import re
+
+SOURCE = """
+def lookup(routes, path):
+    for route in routes:
+        if route.matches(path):
+            return route.handler
+    return 404    # fall through to 404 if nothing matches
+"""
+
+print("regex:", len(re.findall(r"\bif\b", SOURCE)))
+print("ast:  ", sum(isinstance(node, ast.If) for node in ast.walk(ast.parse(SOURCE))))
+```
+
+The regular expression reports two `if`s and the tree reports one, because the
+second `if` is in a comment. A docstring, a string literal or a variable called
+`verify` would confuse the text in the same way, and none of them confuses the
+parser, which is the tool the interpreter itself uses to decide what the source
+means.
+
+## Scoring dispatch by hand, then by machine
+
+Score `dispatch` under the rules above before running anything. Start at 1. The
+`for` adds one, making 2. The `if` adds one, making 3. The `and` joins two values
+and adds one, making 4. Each `except` handler adds one, making 6. The `try` adds
+nothing, because a `try` is not a decision; the handlers are. The `return`
+statements add nothing. So `dispatch` scores 6.
+
+```python
+import ast
+
+SAMPLE = """
+def simple(a):
+    return a + 1
+
+
+def guarded(a, b):
+    if a is None or b is None:
+        return 0
+    if a > b:
+        return a
+    return b
+
+
+class Router:
+    def dispatch(self, verb, path):
+        for route in self.routes:
+            if route.verb == verb and route.matches(path):
+                try:
+                    return route.handler(path)
+                except KeyError:
+                    return 404
+                except ValueError:
+                    return 400
+        return 405
+
+    def names(self):
+        return [r.name for r in self.routes if r.enabled]
+
+
+def outer(xs):
+    def inner(y):
+        return y if y > 0 else -y
+    return [inner(x) for x in xs]
+"""
+
+DECISIONS = (ast.If, ast.For, ast.While, ast.ExceptHandler, ast.Assert, ast.IfExp)
+SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+
+
+def decision_points(node):
+    total = 0
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, SCOPES):
+            continue
+        if isinstance(child, DECISIONS):
+            total += 1
+        elif isinstance(child, ast.BoolOp):
+            total += len(child.values) - 1
+        elif isinstance(child, ast.comprehension):
+            total += 1 + len(child.ifs)
+        total += decision_points(child)
+    return total
+
+
+def cyclomatic_complexity(source):
+    scores = {}
+
+    def walk(node, prefix):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.ClassDef):
+                walk(child, prefix + child.name + ".")
+            elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                scores[prefix + child.name] = 1 + decision_points(child)
+                walk(child, prefix + child.name + ".")
+            else:
+                walk(child, prefix)
+
+    walk(ast.parse(source), "")
+    return scores
+
+
+def quality_gate(source, limit):
+    scores = cyclomatic_complexity(source)
+    offenders = [(name, score) for name, score in scores.items() if score > limit]
+    return sorted(offenders, key=lambda pair: (-pair[1], pair[0]))
+
+
+for name, score in cyclomatic_complexity(SAMPLE).items():
+    print(f"{name:<16} {score}")
+print(quality_gate(SAMPLE, 3))
+```
+
+The machine agrees: `Router.dispatch` scores 6. Read the rest of its output against
+the rules. `simple` has no decisions and scores 1. `guarded` has two `if`s and one
+`or`, scoring 4. `Router.names` is a comprehension with a filter: one for the `for`
+clause, one for the `if`, scoring 3. `outer` scores 2 for its comprehension, and
+`outer.inner` scores 2 for its conditional expression. The nested function has its
+own entry, and its conditional expression counts towards that entry only; that is
+what the `SCOPES` check does, stopping the walk at the boundary of a nested `def`,
+`lambda` or class so that a parent is never charged for its children.
+
+Two details of the scorer are worth naming. `decision_points` and `walk` are
+separate passes because they answer separate questions, which function is this and
+what is inside it, and the `elif` chain on `BoolOp` and `comprehension` is there
+because those nodes are not in `DECISIONS`; they score by their own rule rather
+than one each.
+
+## A gate is a policy with a threshold
+
+The last line of the block is the gate: with a limit of 3 it reports
+`[('Router.dispatch', 6), ('guarded', 4)]`. Three things about that output are
+deliberate. The comparison is strictly greater, so a function scoring exactly 3
+passes, and that choice has to be written down where a reader will find it, because
+*limit 3* reads equally well as *3 fails* and the difference is a whole band of
+functions. The offenders come worst first, so that the thing most worth attention is
+at the top. And ties are broken by name, so that two runs over the same code produce
+the same report; a gate whose output reorders itself produces a diff on every build
+and is ignored within a fortnight. A gate that reports *failed* and nothing else is
+worse than no gate, because it stops the build without telling anyone what to do
+about it.
+
+## The mistakes, and where the number stops meaning anything
+
+The counting errors people make are all of one kind: scoring the spelling instead
+of the branch. `except (TypeError, ValueError)` is one handler with two ways out,
+not two handlers, and scores one. `try` scores nothing. `else` scores nothing.
+`not` is an operator, not a branch. `continue`, `break` and `raise` are jumps, not
+decisions. And a nested `def` is a separate function whose branches belong to it;
+letting them leak into the parent's score charges one function for another's work.
+
+The larger limitation is that the number measures one thing. A three-hundred-line
+function with no branches scores 1 and is still unreadable. A twelve-line function
+with a loop, a `try`, a conditional expression and a filtered comprehension can
+score 9, fail a gate set at 8, and be perfectly clear; the numeric unit in this
+module scores one such function. The metric knows nothing about data, state, naming
+or what the function is for. It is also easy to game: split a function at an
+arbitrary point and both halves pass, while the reader now has two functions to
+hold instead of one. Other tools draw the lines differently, some counting a
+comprehension's filters and some not, so a score is comparable only with scores
+produced under the same rules. What the number is good for is what the merge
+request needed: a shared, reproducible measurement that turns *too complex* into
+*6 against a limit of 3*, so that the argument can be about the limit rather than
+about the adjective.
+
+## What you are about to build
+
+Part 1 of the lab, *A complexity gate and a compatibility checker*, is the scorer
+above, written by you. `cyclomatic_complexity(source)` returns the dotted name of
+every `def` mapped to its score under exactly the rules in this reading, with methods
+named through their class and closures through their enclosing function, and with
+a nested function's nodes counting only towards its own entry. `quality_gate(source,
+limit)` returns the offenders strictly above the limit, worst first, ties by name.
+The checks run the scorer over the `SAMPLE` module you have already scored by hand,
+over one small function per decision kind, and over a tie that has to come out in
+alphabetical order.
+''',
+                },
+                {
+                    "title": "What a version number promises",
+                    "minutes": 10,
+                    "body": r'''
+On a Friday afternoon a library your service depends on goes from 1.4.2 to 1.5.0.
+You bump the pin, the suite passes, you go home. A month later it goes from 1.5.0 to
+2.0.0, you bump the pin, and every call to `connect` in the codebase raises
+`TypeError`. Both numbers were messages, written by a maintainer who has never seen
+your code, and the second one told you in advance that this would happen. The
+question is what rule lets a maintainer who cannot see the callers say something true
+about all of them.
+
+## What a caller can see
+
+Start from the caller's side. Here is `connect` at 1.4.2, and three calls to it that
+exist somewhere in the world:
+
+```text
+def connect(host, port, timeout=30): ...
+
+connect("db.internal", 5432)
+connect("db.internal", 5432, timeout=3)
+connect(host="db.internal", port=5432)
+```
+
+The callers were written against a surface: the function exists, it has two required
+parameters in this order, and it has one optional parameter that may be named. That
+surface is the contract, and a change to the library is compatible exactly when
+every call that bound before still binds, to the same parameters. Go through the
+ways the maintainer might change it and ask that question each time.
+
+Remove `connect` and every call fails. Add a new function and no call changes at all.
+Add `retries=3` and every call still binds, because the new parameter supplies its
+own value; the caller who never heard of it is unaffected. Add a required `tls` and
+every existing call is short an argument.
+
+```python
+# raises TypeError
+def connect(host, port, tls, timeout=30):
+    return (host, port, tls, timeout)
+
+
+connect("db.internal", 5432)
+```
+
+Make `port` optional and every call still binds, since the calls that passed it are
+still allowed to. Make `timeout` required and every call that relied on the default
+breaks. Remove `timeout` and every call that named it breaks. Each answer has the
+same shape: a change that lets more call shapes through is compatible, and a change
+that lets fewer through is not. Widening the contract is safe; narrowing it breaks
+callers, and a required parameter is the narrowest a parameter can be.
+
+One change does not fit the shape, and it is the worst of them. Swap the order of the
+two required parameters and the keyword callers survive, while the positional caller
+keeps running with the string in `port` and the number in `host`.
+
+```python
+def connect(port, host, timeout=30):
+    return {"host": host, "port": port}
+
+
+print(connect("db.internal", 5432))
+```
+
+It prints `{'host': 5432, 'port': 'db.internal'}`. Nothing raised, and the failure
+will surface somewhere else, later, with no line in the traceback that points here.
+A `TypeError` would have been a kindness. Positional order is part of the contract
+because callers are allowed to bind by it, and so reordering is a break even though
+nothing was added and nothing was removed.
+
+## From the caller's question to three digits
+
+Semantic versioning writes the answer to that question into the number. The three
+digits are `MAJOR.MINOR.PATCH`, and each release moves exactly one of them. The
+major digit moves when a change breaks callers. The minor digit moves when something
+was added and nothing broke. The patch digit moves when the surface did not change
+at all, and the release is a fix behind it. Since one release may carry several
+changes, the digit that moves is decided by the most severe change in the diff:
+any break makes it major, otherwise any addition makes it minor, otherwise it is a
+patch.
+
+The arithmetic of the bump follows from what the lower digits count. The minor
+digit counts compatible additions since the last break, and the patch digit counts
+fixes since the last addition. When the major digit moves, the count of additions
+since the last break starts again at zero, and so does the count of fixes. So 1.4.2
+becomes 2.0.0, and a minor bump takes 1.4.2 to 1.5.0. The mistake people make is
+to bump the one digit and leave the others alone, shipping 2.4.2; it is tempting
+because only the major digit *changed*, and the trailing digits look like history
+worth keeping. But 2.4.2 claims four compatible additions since a break that
+happened in this very release, and the claim is false.
+
+## A diff of two surfaces
+
+Write the surface down as data, one entry per public function, with the required
+parameters in order and the optional ones as a set, and the whole table of
+severities above becomes a function of two such surfaces.
+
+```python
+def api_changes(old, new):
+    changes = set()
+    for name in old:
+        if name not in new:
+            changes.add(("major", name, "removed"))
+    for name in new:
+        if name not in old:
+            changes.add(("minor", name, "added"))
+    for name in set(old) & set(new):
+        old_req, old_opt = list(old[name]["required"]), list(old[name]["optional"])
+        new_req, new_opt = list(new[name]["required"]), list(new[name]["optional"])
+        for param in old_req:
+            if param in new_req:
+                continue
+            if param in new_opt:
+                changes.add(("minor", name, "required-to-optional"))
+            else:
+                changes.add(("major", name, "required-param-removed"))
+        for param in new_req:
+            if param in old_req:
+                continue
+            if param in old_opt:
+                changes.add(("major", name, "optional-to-required"))
+            else:
+                changes.add(("major", name, "required-param-added"))
+        for param in old_opt:
+            if param not in new_req and param not in new_opt:
+                changes.add(("major", name, "optional-param-removed"))
+        for param in new_opt:
+            if param not in old_req and param not in old_opt:
+                changes.add(("minor", name, "optional-param-added"))
+        if [p for p in old_req if p in new_req] != [p for p in new_req if p in old_req]:
+            changes.add(("major", name, "params-reordered"))
+    return sorted(changes, key=lambda c: (c[1], c[2], c[0]))
+
+
+def required_bump(old, new):
+    severities = {severity for severity, _, _ in api_changes(old, new)}
+    if "major" in severities:
+        return "major"
+    if "minor" in severities:
+        return "minor"
+    return "patch"
+
+
+def bump_version(version, level):
+    parts = str(version).split(".")
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+        raise ValueError("not a release version: " + repr(version))
+    major, minor, patch = (int(part) for part in parts)
+    if level == "major":
+        return f"{major + 1}.0.0"
+    if level == "minor":
+        return f"{major}.{minor + 1}.0"
+    if level == "patch":
+        return f"{major}.{minor}.{patch + 1}"
+    raise ValueError("unknown bump level: " + repr(level))
+
+
+V1 = {"connect": {"required": ["host", "port"], "optional": ["timeout"]},
+      "send": {"required": ["payload"], "optional": []},
+      "close": {"required": [], "optional": []}}
+V2 = {"connect": {"required": ["host", "port"], "optional": ["timeout", "retries"]},
+      "send": {"required": ["payload"], "optional": ["flush"]},
+      "close": {"required": [], "optional": []},
+      "ping": {"required": [], "optional": []}}
+V3 = {"connect": {"required": ["host", "port", "tls"], "optional": ["timeout"]},
+      "send": {"required": ["payload"], "optional": []}}
+SWAPPED = {"connect": {"required": ["port", "host"], "optional": ["timeout"]},
+           "send": {"required": ["payload"], "optional": []},
+           "close": {"required": [], "optional": []}}
+
+for label, new in (("V2", V2), ("V3", V3), ("SWAPPED", SWAPPED)):
+    level = required_bump(V1, new)
+    print(label, level, bump_version("1.4.2", level))
+    for change in api_changes(V1, new):
+        print("   ", change)
+print("no change:", required_bump(V1, V1), bump_version("1.4.2", required_bump(V1, V1)))
+```
+
+Read the output against the reasoning above. From V1 to V2, `connect` and `send`
+each gained an optional parameter and `ping` appeared: three additions, nothing
+narrowed, so the bump is minor and 1.4.2 becomes 1.5.0. From V1 to V3, `close` is
+gone and `connect` gained a required `tls`: two breaks, major, 2.0.0. The swapped
+surface has the same names and the same counts as V1 and still comes out major,
+because the surviving required parameters are compared in order and `["host",
+"port"]` is not `["port", "host"]`. And V1 against itself finds nothing, so the
+bump is a patch and the version is 1.4.3.
+
+The classification of one parameter is a question of where it was and where it is
+now: required, optional, or absent, on each side, which is nine combinations, of
+which the three on the diagonal are unchanged and the other six are the six
+parameter rows of the table. The changes are collected in a set so that two
+parameters removed from the same function produce one `required-param-removed`
+rather than two, and the sort by function, then detail, then severity makes the
+report stable, for the same reason the complexity gate sorts its offenders.
+
+## Where the version number stops telling the truth
+
+The diff sees names and arity and nothing else. A function that keeps its signature
+and starts returning a list instead of a tuple, raising `ValueError` where it used
+to return `None`, or returning results in a different order, breaks callers and
+shows up in a surface diff as a patch. Keyword-only parameters, positional-only
+parameters and type changes are invisible to it as written. So the diff's answer is
+a floor on the bump, never the whole judgement; a release note still has to be
+written by somebody who knows what the code does.
+
+The row worth arguing about is the fix. A function whose signature is untouched and
+whose behaviour was wrong ships as a patch, and if callers had come to depend on
+the wrong behaviour, the patch breaks them. Semantic versioning is defined over the
+declared contract, and the declared contract always said the function was correct,
+so the rule is right and the callers are still broken. This tension has a name,
+Hyrum's law: with enough users, every observable behaviour of a system will be
+depended on by somebody, whatever the contract says. Versioning does not resolve
+it; it only makes clear whose promise was broken. And below 1.0.0 the scheme
+suspends itself: a 0.x release is allowed to break anything at any time, which is
+why pinning a 0.x dependency to an exact version is not paranoia.
+
+## What you are about to build
+
+Part 2 of the lab, *A complexity gate and a compatibility checker*, is the block
+above, written by you. `api_changes(old, new)` returns the sorted, unique
+`(severity, function, detail)` triples for the nine details in the brief's table,
+sorted by function, then detail, then severity. `required_bump(old, new)` reduces
+them to `"major"`, `"minor"` or `"patch"`. `bump_version(version, level)` does the
+digit arithmetic, zeroing everything to the right of the digit that moved, and
+raises `ValueError` for anything that is not three dotted integers or any level it
+does not know. The checks use the V1, V2 and V3 surfaces above, the swapped one,
+a surface that relaxes `port` from required to optional, and one that promotes
+`timeout` the other way.
+''',
+                },
             ],
             "quiz": {
                 "title": "Counting branches, and reading a diff",

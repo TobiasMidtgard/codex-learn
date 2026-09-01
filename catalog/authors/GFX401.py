@@ -46,6 +46,404 @@ COURSE = {
                 "Perspective maps the near plane to -1 and the far plane to +1, non-linearly in between",
                 "Depth precision is worst far from the eye, which is why the near plane must not be tiny",
             ],
+            "read": [
+                {
+                    "title": "Four coordinates, the order of the stack, and the divide by w",
+                    "minutes": 14,
+                    "body": r'''
+A cube sits on a table two metres in front of you. To draw it on a screen you need, for
+each of its eight corners, one question answered: which pixel? Everything in this module
+is the machinery for answering it, and the machinery has a shape worth seeing before any
+of the algebra. The corner is first placed in the world (the cube was modelled at the
+origin, so it has to be moved onto the table), then seen from the camera (which is not at
+the origin either), then squashed onto a flat picture. Three steps, three matrices, one
+product — and the order in which they are multiplied is where almost every bug lives.
+
+## Why a point needs four numbers
+
+Start with what a 3x3 matrix can do to a point $(x, y, z)$. Multiply out a row and every
+output is a sum of terms like $a\,x + b\,y + c\,z$: each output coordinate is a weighted
+sum of the input coordinates, with nothing added on. That covers rotation and scaling,
+and it has a fixed point that nothing can move — the origin, because a weighted sum of
+three zeros is zero. Moving the cube from the origin to the table is a translation, and
+no 3x3 matrix can do it.
+
+The trick is to give the point a fourth coordinate that is always 1, and let the matrix
+have a fourth column that multiplies it:
+
+$$\begin{bmatrix} 1 & 0 & 0 & 3 \\ 0 & 1 & 0 & 0 \\ 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \end{bmatrix}
+\begin{bmatrix} x \\ y \\ z \\ 1 \end{bmatrix} =
+\begin{bmatrix} x + 3 \\ y \\ z \\ 1 \end{bmatrix}$$
+
+The 3 in the top-right corner is multiplied by the 1 and lands in the output as an
+addition. Translation has become a matrix product, which is the only thing that matters,
+because a matrix product can be composed with other matrix products.
+
+The fourth coordinate does something else that modules 3 and 4 will lean on. A direction
+— the way a surface faces, the way a ray travels — must not move when the world is
+translated: a normal pointing up still points up after the cube slides along the table.
+Give a direction $w = 0$ and the fourth column multiplies a zero:
+
+```python
+def apply(m, v):
+    """m is four rows of four numbers; v is (x, y, z, w). Returns the four results."""
+    return tuple(sum(m[i][k] * v[k] for k in range(4)) for i in range(4))
+
+T = [[1, 0, 0, 3],
+     [0, 1, 0, 0],
+     [0, 0, 1, 0],
+     [0, 0, 0, 1]]
+
+corner = (1.0, 1.0, -1.0, 1.0)     # a point: w = 1
+along = (1.0, 1.0, -1.0, 0.0)      # a direction: w = 0
+print("point    ", apply(T, corner))
+print("direction", apply(T, along))
+```
+
+The same matrix moved the point three units along $x$ and left the direction alone. That
+is not a special case anybody wrote; it fell out of the fourth column.
+
+## Which matrix runs first
+
+The lab uses the column-vector convention: a transform is written $v' = M v$, with the
+matrix on the left. Apply two of them and the second wraps around the first:
+
+$$v'' = B\,(A\,v) = (B A)\,v$$
+
+So in the product $BA$, the matrix written on the *right* is the one applied to the point
+*first*. This is the single fact in the module that people get wrong, and the reason it
+is tempting is that the code reads left to right: `compose(T, R)` looks like "translate,
+then rotate". It is the opposite. `compose(T, R)` is `T @ R`, and `R` is the one that
+touches the point.
+
+Take the point $(1, 0, 0)$, a translation $T$ by one unit along $x$, and a rotation $R$ of
+a quarter turn about $z$, which sends $(1, 0, 0)$ to $(0, 1, 0)$.
+
+```python
+import math
+
+
+def identity():
+    return [[1.0 if i == j else 0.0 for j in range(4)] for i in range(4)]
+
+
+def translate(tx, ty, tz):
+    m = identity()
+    m[0][3], m[1][3], m[2][3] = tx, ty, tz
+    return m
+
+
+def rotate_z(theta):
+    c, s = math.cos(theta), math.sin(theta)
+    m = identity()
+    m[0][0], m[0][1] = c, -s
+    m[1][0], m[1][1] = s, c
+    return m
+
+
+def matmul(a, b):
+    return [[sum(a[i][k] * b[k][j] for k in range(4)) for j in range(4)] for i in range(4)]
+
+
+def apply(m, p):
+    x, y, z = p
+    out = [m[i][0] * x + m[i][1] * y + m[i][2] * z + m[i][3] for i in range(4)]
+    return tuple(round(v / out[3], 6) for v in out[:3])
+
+
+T = translate(1.0, 0.0, 0.0)
+R = rotate_z(math.pi / 2)
+print("T @ R on (1,0,0):", apply(matmul(T, R), (1.0, 0.0, 0.0)))
+print("R @ T on (1,0,0):", apply(matmul(R, T), (1.0, 0.0, 0.0)))
+```
+
+`T @ R`: rotate first, so $(1, 0, 0)$ becomes $(0, 1, 0)$, then translate, giving
+$(1, 1, 0)$. `R @ T`: translate first, so the point is at $(2, 0, 0)$, and a quarter turn
+swings it to $(0, 2, 0)$. Same two matrices, two different places. Matrix multiplication
+is associative — you may group $(P V) M$ or $P (V M)$ as you like, which is why the lab
+can fold the product left to right — but it is not commutative, and "rotate the cube then
+move it to the table" is a different object from "move it then rotate it about the
+origin".
+
+Rotations deserve one more line. `rotate_z` sends the $x$ axis to $(\cos\theta,
+\sin\theta, 0)$ and the $y$ axis to $(-\sin\theta, \cos\theta, 0)$; those two images are
+the first two columns, which is how the $-\sin$ ends up in row 0, column 1. Reading the
+matrix as "where does each axis go" also explains why its inverse is its transpose: the
+columns are perpendicular unit vectors, so $R^{\mathsf T} R$ is the identity. The lab
+checks exactly that by rotating by $0.7$ and then by $-0.7$ and asking for the original
+point back.
+
+## Perspective from two similar triangles
+
+Put the eye at the origin, looking down $-z$, with the picture plane one unit in front of
+it. A point at $(x, y, z)$ with $z < 0$ sends a line of sight to the eye, and that line
+crosses the picture plane somewhere. Two similar triangles say where: the big one has
+base $-z$ and height $y$, the small one has base $1$ and height $y'$, so
+
+$$y' = \frac{y}{-z}, \qquad x' = \frac{x}{-z}.$$
+
+That is the entire content of perspective: divide by the distance. Far things get small
+because their $x$ and $y$ are divided by a large number.
+
+A division is not something a matrix can do — a matrix product is weighted sums. But the
+fourth coordinate can carry the divisor. Put $-1$ in row 3, column 2 of the matrix, so
+that the output $w$ is $-z$, and let the divide by $w$ happen afterwards as a separate
+step. The matrix does not project. It arranges the numbers so that a division by $w$
+projects.
+
+The field of view enters as a scale. A 90 degree vertical field of view means the top
+edge of the picture is at $y = -z$, and dividing by $-z$ puts that at $y' = 1$: the
+picture plane at distance one is already the right size. Narrow the field of view to 60
+degrees and the top edge is at $y = -z \tan 30^\circ$, so it needs scaling up by
+$f = 1 / \tan(\text{fov}/2)$ to reach $1$. That is the $f$ in the lab's matrix, and the
+aspect ratio divides it in the $x$ row because a wide screen needs a wider view
+horizontally than vertically.
+
+Here is the lab's own steering case worked through. Field of view $90^\circ$, so $f = 1$;
+near $1$, far $100$; the point $(1, 1, -2)$.
+
+```python
+import math
+
+f = 1.0 / math.tan(math.radians(90.0) / 2.0)      # 1.0 for a 90 degree field of view
+near, far = 1.0, 100.0
+P = [[f, 0.0, 0.0, 0.0],
+     [0.0, f, 0.0, 0.0],
+     [0.0, 0.0, (far + near) / (near - far), 2.0 * far * near / (near - far)],
+     [0.0, 0.0, -1.0, 0.0]]
+
+x, y, z, w = 1.0, 1.0, -2.0, 1.0
+clip = [P[i][0] * x + P[i][1] * y + P[i][2] * z + P[i][3] * w for i in range(4)]
+print("clip coordinates:", [round(c, 4) for c in clip])
+ndc = tuple(round(c / clip[3], 4) for c in clip[:3])
+print("after the divide:", ndc)
+```
+
+The first two clip coordinates are $x$ and $y$ times $f$. The fourth is $-z = 2$.
+Dividing by it gives $(0.5, 0.5)$: a point two units away at height one appears half way
+up the picture, which is what the two similar triangles said.
+
+## What happens to depth
+
+The third row is the odd one. With $A = (f + n)/(n - f)$ and $B = 2fn/(n - f)$ the output
+$z$ is $A z + B$, and after the divide by $w = -z$ it is
+
+$$z_{\text{ndc}} = \frac{A z + B}{-z} = -A - \frac{B}{z}.$$
+
+Two constants, two conditions: the near plane $z = -n$ must map to $-1$ and the far plane
+$z = -f$ to $+1$. Solve those two equations and out come the lab's $A$ and $B$; the
+$n - f$ in the denominator is what makes $-1$ and $+1$ come out the right way round. The
+constants are not the point. The shape of the function is: $z_{\text{ndc}}$ is
+$-A - B/z$, a hyperbola in $z$, not a straight line.
+
+```python
+def ndc_depth(z, near, far):
+    """The z that comes out of the perspective matrix, after the divide by w."""
+    a = (far + near) / (near - far)
+    b = 2.0 * far * near / (near - far)
+    z_clip = a * z + b
+    w = -z
+    return z_clip / w
+
+
+for depth in (1.0, 1.5, 1.98, 2.0, 5.0, 10.0, 50.0, 100.0):
+    print(f"eye depth {depth:6.2f}  ->  ndc z {ndc_depth(-depth, 1.0, 100.0):+.4f}")
+
+print()
+for near in (1.0, 0.01):
+    a = ndc_depth(-50.0, near, 100.0)
+    b = ndc_depth(-50.5, near, 100.0)
+    print(f"near {near:5.2f}: half a metre at depth 50 is {abs(b - a):.2e} of ndc z")
+```
+
+Half of the whole $[-1, 1]$ range is spent between depth $1$ and depth $1.98$. Everything
+from depth 2 to depth 100 has to share the other half, and depths 50 and 100 are
+separated by two hundredths of it. That is what "depth precision is worst far from the
+eye" means in numbers, and the second table says what makes it worse: the near plane.
+Move it from $1$ to $0.01$ and the same half-metre gap at depth 50 shrinks a hundredfold
+in NDC. A near plane of $0.001$ "to be safe" is the most common way to get two distant
+surfaces flickering through each other, because after this mapping a 24-bit depth buffer
+has only a handful of steps left to tell them apart, and rounding decides which wins. The
+far plane matters much less; the near plane is where the precision goes.
+
+## Where it stops holding
+
+The divide by $w$ has a hole in it. A point on the plane of the eye, $z = 0$, has
+$w = 0$, and a point behind the eye has $w < 0$, which flips its image through the
+origin. Real pipelines clip against the near plane before dividing, so nothing with
+$w \le 0$ ever reaches the divide; the lab, which has no clipping stage, raises
+`ValueError` instead when $|w|$ is below $10^{-12}$. Either way, the matrix is happy to
+multiply such a point, and the trouble is entirely in the division that follows — one
+more reason to keep "the matrix" and "the divide" separate in your head.
+
+The other place the picture stops is the rotation matrices. Each is exact for the axis it
+is written for; three of them composed in some order is a perfectly good rotation, but
+not one you can read off by adding angles, and $R_x R_y$ is not $R_y R_x$ for the same
+reason $TR$ is not $RT$.
+
+## What you are about to build
+
+In the lab, *4x4 transforms and a projected cube*, you write the four kinds of matrix,
+the product, `compose`, and `apply` with the divide by $w$. The tests hold you to the two
+order cases above, to the near plane landing on $-1$ and the far plane on $+1$, to
+$(1, 1, -2)$ landing at $(0.5, 0.5)$, and to a corner of the cube at world depth 6
+sitting at $x = -f/6$ — which, now that you have the similar triangles, you can work out
+before you run anything.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Four coordinates, the order of the stack, and the divide",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The lab's `compose(A, B, C)` is `A @ B @ C`. With `T = translate(1, 0, 0)` and `R = rotate_z(pi / 2)`, what does `apply(compose(R, T), (1, 0, 0))` return, and why?",
+                        "opts": [
+                            "(1, 1, 0): the rotation acts first, then the translation slides the turned point one unit along x",
+                            "(0, 2, 0): the translation acts first, then the quarter turn swings the moved point onto the y axis",
+                            "(0, -2, 0): the translation acts first, then the quarter turn carries the x axis onto the negative y axis",
+                            "Either (0, 2, 0) or (1, 1, 0): the product is associative, so the two matrices can be applied in either order",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"That is the answer for `compose(T, R)`, where R is written last and therefore acts first. Reading `compose(R, T)` as 'rotate, then translate' is the natural left-to-right reading, and under the column-vector convention it is backwards.",
+                            r"Right to left: the matrix nearest the point runs first. T moves (1, 0, 0) to (2, 0, 0), and R turns that onto (0, 2, 0).",
+                            r"The order is right but the sense of the turn is not. A right-handed quarter turn about z carries +x onto +y, which is why `rotate_z` puts `-sin` in row 0, column 1; a turn onto -y would need theta = -pi/2.",
+                            r"Associativity lets you regroup the product, (RT)v = R(Tv); it does not let you swap R and T. Those are different matrices, and the lab's test that `compose(T, R)` and `compose(R, T)` disagree exists to make that unmissable.",
+                        ],
+                        "why": r"""
+In $v' = M v$ the matrix touches the point from the left, so in a product $R T$ it is
+$T$ — the one written nearest $v$ — that acts first. $(1, 0, 0)$ is translated to
+$(2, 0, 0)$ and a right-handed quarter turn about $z$ takes it to $(0, 2, 0)$. Swap the
+order and you rotate first, to $(0, 1, 0)$, then translate, to $(1, 1, 0)$: the lab's
+non-commutativity test holds you to both. Associativity is a separate property — it says
+the grouping of a fixed sequence does not matter, which is why `compose` can fold left
+to right — and it says nothing about swapping the sequence.
+""",
+                    },
+                    {
+                        "q": "A translation matrix is applied to the surface normal (0, 0, 1) of a triangle that has been moved along x. What should happen to the normal, and what in the representation makes it happen?",
+                        "opts": [
+                            "It must move with the triangle; its fourth coordinate is 1, so the translation carries it along as it does a vertex",
+                            "It must not move; the divide by w that follows every transform cancels whatever the fourth column added to it",
+                            "It must not move; its fourth coordinate is 0, so the matrix's fourth column is multiplied by zero and adds nothing",
+                            "It must be renormalised; the translation stretches it by the distance moved and the fourth coordinate records that",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"A normal is a direction, not a place. Slide the triangle along x and it still faces the same way; a normal that moved with the vertices would no longer be perpendicular to the face it belongs to.",
+                            r"The divide by w cannot rescue this: for a translation w stays 1, so the divide changes nothing, and the fourth column's contribution would survive it intact. The protection has to come before the multiply, from the fourth coordinate itself.",
+                            r"Directions carry w = 0, so the translation column is multiplied by zero and the vector is unchanged.",
+                            r"A translation moves things; it does not stretch them. The fourth coordinate is not a length — it is 1 for a point and 0 for a direction, and that single bit is what decides whether the fourth column applies.",
+                        ],
+                        "why": r"""
+A point carries $w = 1$ and a direction carries $w = 0$. The translation matrix's fourth
+column is multiplied by that coordinate, so it adds $(t_x, t_y, t_z)$ to a point and
+adds nothing to a direction. That is the whole reason the fourth slot exists: it makes
+translation a matrix product for points while leaving the things that must not
+translate alone. No divide is involved — a translation leaves $w$ at 1 — and no
+renormalisation either; the normal comes out exactly as it went in.
+""",
+                    },
+                    {
+                        "q": "The perspective matrix is often described as 'projecting the point onto the screen'. Which description of what it does is accurate?",
+                        "opts": [
+                            "It divides x and y by the depth inside the matrix product, using the -1 in its bottom row as the reciprocal of z",
+                            "It copies -z into w and scales x and y by f; the divide by w that follows is what shrinks distant points",
+                            "It maps the frustum onto the unit cube in one linear step, so no division is needed afterwards",
+                            "It scales x and y by f and leaves depth alone; the divide by w only normalises the vector back to unit length",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"A matrix product is weighted sums; it cannot divide by anything. The -1 in the bottom row does not compute a reciprocal — it copies -z into the w slot so that a later, separate division can use it.",
+                            r"The matrix arranges the numbers; the division does the projecting. Similar triangles say $x' = x / (-z)$, and $w = -z$ is how the divisor is carried to the divide.",
+                            r"Perspective is not linear — far things shrink — so no single matrix product can do it. What the matrix does linearly is move the divisor into w; the non-linear step is the divide, and it is unavoidable.",
+                            r"The divide is by w, not by the vector's length, and it acts on x, y and z alike. Without it x and y would be scaled by f and nothing else, and a far cube would draw the same size as a near one.",
+                        ],
+                        "why": r"""
+Two similar triangles give $x' = x/(-z)$ and $y' = y/(-z)$: perspective is a division by
+depth, and a matrix product cannot divide. So the matrix does the linear part — scale
+$x$ and $y$ by $f$, remap $z$ — and puts $-z$ into $w$ by way of the $-1$ in row 3,
+column 2. The divide by $w$ is a separate step and it is the one that makes far things
+small. Keeping "the matrix" and "the divide" apart in your head is what makes the
+$w = 0$ failure, and depth precision, make sense later.
+""",
+                    },
+                    {
+                        "q": "A renderer's near plane is moved from 1 to 0.001 'so that nothing close to the camera gets clipped'. Two walls at depths 50 and 50.5 begin to flicker through each other. What happened?",
+                        "opts": [
+                            "The depth mapping now spends nearly all its range close to the eye, so the two far walls land on almost the same NDC depth",
+                            "The near plane is now inside the walls' shadow volume, so the depth test compares them against the wrong reference",
+                            "The far plane was left at 100, and moving the near plane without moving the far one breaks the -1 to +1 mapping",
+                            "Nothing about depth changed; the flicker comes from the x and y precision lost when f/aspect is applied to a tiny near value",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$z_{\text{ndc}} = -A - B/z$ is a hyperbola, and a tiny near plane crams almost the whole $[-1, 1]$ range into the first few units of depth.",
+                            r"Shadow volumes are a rendering technique that has nothing to do with the projection matrix, and the depth test has no reference other than what is already in the buffer. The trouble is in the mapping of $z$, not in what it is compared against.",
+                            r"The mapping is solved for whatever near and far you give it; near lands on -1 and far on +1 for any valid pair. The problem is not that the ends are wrong but that the curve between them has become extremely lopsided.",
+                            r"The x and y scales are set by f and the aspect ratio, and near does not appear in them at all. It appears only in the third row, which is where depth is mapped, and that is exactly where the flicker comes from.",
+                        ],
+                        "why": r"""
+After the divide, depth is $-A - B/z$, a hyperbola, and half of its range is used up
+between the near plane and roughly twice the near plane. With near at 1, depths 50 and
+50.5 differ by about $4 \times 10^{-4}$ in NDC; with near at 0.01 that gap shrinks a
+hundredfold, and at 0.001 it is down to a handful of steps of a 24-bit depth buffer, so
+rounding decides the winner and it changes from frame to frame. The near plane is where depth
+precision goes; the far plane matters far less. Nothing in the $x$ and $y$ rows involves
+near at all.
+""",
+                    },
+                    {
+                        "q": "Under `perspective(90, 1, 1, 100)` the point (1, 1, -2) lands at (0.5, 0.5). The aspect ratio is changed to 2 for a screen twice as wide as it is tall. Where does the same point land now?",
+                        "opts": [
+                            "(0.25, 0.25): the aspect scales the whole picture down so that the wider frame fits inside the unit square",
+                            "(0.5, 0.25): the vertical scale is squeezed so that pixels stay square on the wider screen",
+                            "(0.5, 0.5): the aspect ratio is handled by the viewport transform after the divide, so NDC coordinates do not change",
+                            "(0.25, 0.5): the aspect divides the horizontal scale only, so a wider screen shows more of the world sideways",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            r"The aspect appears in one entry of the matrix, $f / \text{aspect}$ in the x row. The y row is $f$ alone, so y is untouched; scaling both would shrink the picture rather than widen the view.",
+                            r"Backwards: the vertical field of view is fixed by fovy and stays put. It is the horizontal extent that has to grow to fill a wider screen, and the way to fit more world into the same $[-1, 1]$ of x is to divide x by the aspect.",
+                            r"The viewport maps NDC to pixels and knows nothing about the field of view. If NDC did not change, the wider screen would show the same slice of the world stretched sideways, and circles would draw as ellipses.",
+                            r"The x row is $f / \text{aspect}$; with aspect 2 it halves, and the y row is unchanged. The lab's test asks for exactly (0.25, 0.5).",
+                        ],
+                        "why": r"""
+The vertical field of view is the one you specify, so the $y$ row of the matrix is $f$
+and nothing else. A screen twice as wide has to show twice as much world horizontally
+inside the same $[-1, 1]$, so the $x$ row is $f / \text{aspect}$ — half of $f$ here — and
+$x$ halves from $0.5$ to $0.25$ while $y$ stays at $0.5$. Scaling both axes would shrink
+the picture rather than widen the view; leaving NDC alone and fixing it in the viewport
+would stretch every circle into an ellipse.
+""",
+                    },
+                    {
+                        "q": "`apply` raises `ValueError` when the transformed point's w has magnitude below 1e-12. In the perspective case, which point is that, and why can it have no image?",
+                        "opts": [
+                            "A point on the near plane, z = -near: the depth mapping sends it to -1, which is the edge of what the buffer can hold",
+                            "A point in the plane of the eye, z = 0: its line of sight runs parallel to the picture plane and never reaches it",
+                            "A point behind the camera, z > 0: nothing behind the eye is visible, so the matrix has nowhere to put it",
+                            "A point at the world origin: the eye is there too, so the two coincide and the direction between them is undefined",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The near plane maps to $z_{\text{ndc}} = -1$ by design; it is the first depth the buffer holds, not a place the buffer cannot hold. A point there has $w = \text{near}$, comfortably non-zero.",
+                            r"$w = -z$, so $w = 0$ is the plane $z = 0$ through the eye. The similar triangles have a base of zero: the line from the eye to the point never crosses the picture plane.",
+                            r"A point behind the camera has $w < 0$, not $w = 0$: the divide goes through and produces an image flipped through the origin, which is wrong but not an error. It is clipping, not this check, that keeps such points off the screen.",
+                            r"The eye is at the origin in eye space, but a point *at* the eye is one case of $z = 0$, not the whole of it. Every point in the plane $z = 0$ — a metre to the left of the eye, say — has $w = 0$ and no image.",
+                        ],
+                        "why": r"""
+The perspective matrix puts $-z$ into $w$, so $w = 0$ is exactly the plane $z = 0$ — the
+plane through the eye, perpendicular to the viewing direction. Geometrically, the line
+from the eye to such a point runs parallel to the picture plane and never meets it, so
+there is no image to compute, and the division would be by zero. Points behind the eye
+have $w < 0$ and divide "successfully" into a flipped image, which is why real pipelines
+clip against the near plane before the divide rather than relying on this check.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "4x4 transforms and a projected cube",
                 "runtime": "python",
@@ -409,6 +807,432 @@ for _bad in [(0.0, 1.0, 1.0, 10.0), (180.0, 1.0, 1.0, 10.0), (60.0, 0.0, 1.0, 10
                 "A fill rule makes shared edges watertight: a boundary sample belongs to exactly one triangle",
                 "The z-buffer resolves visibility per sample, so triangles may be submitted in any order",
             ],
+            "read": [
+                {
+                    "title": "Error terms, edge functions, and the half that makes shared edges watertight",
+                    "minutes": 15,
+                    "body": r'''
+Take a patch of pixels six wide and three high, and draw a line from the centre of the
+bottom-left one to the centre of the one five across and two up. The true line is
+$y = 0.4x$, and it passes through the middle of almost none of the pixels it crosses.
+Rasterisation is the business of deciding which pixels a shape owns when the shape does
+not respect the grid. It has two halves — lines, where the decision is made one column at
+a time, and triangles, where it is made for every pixel in a box at once — and a
+z-buffer that settles which triangle a pixel shows when several want it.
+
+Screen space in this course has $y$ growing *downwards*, as it does in every framebuffer,
+and a pixel is a square: pixel $(x, y)$ covers $[x, x+1) \times [y, y+1)$ and is sampled
+at its centre $(x + 0.5,\ y + 0.5)$. Hold on to that half. Most of the exact counts below
+depend on it.
+
+## A line, one column at a time
+
+Walk $y = 0.4x$ from $x = 0$ to $x = 5$. At each column the ideal $y$ is $0, 0.4, 0.8,
+1.2, 1.6, 2.0$ and the nearest whole row is $0, 0, 1, 1, 2, 2$. You could compute $0.4x$
+and round at every column, and it would be right; but it is a float multiply and a
+rounding per pixel, and Bresenham's observation was that the same answer comes out of
+additions and one comparison.
+
+Carry the *error* rather than the ideal $y$. Step one column and the ideal $y$ rises by
+$\Delta y / \Delta x = 0.4$. Keep a running error that starts at 0, add $0.4$ per column,
+and step down a row whenever the error passes a half, subtracting 1 when you do. To make
+it integer, multiply everything by $2\Delta x$: the increment becomes $2\Delta y$, the
+half becomes $\Delta x$, the subtraction becomes $2\Delta x$. The lab's form is the one
+that works in all eight octants, with $dy$ stored negative so that both tests read the
+same way whichever axis is the long one:
+
+```python
+x0, y0, x1, y1 = 0, 0, 5, 2
+dx = x1 - x0            # 5
+dy = -(y1 - y0)         # -2, negative on purpose
+err = dx + dy           # 3
+x, y = x0, y0
+while True:
+    print(f"plot ({x}, {y})   err = {err:+d}")
+    if x == x1 and y == y1:
+        break
+    e2 = 2 * err
+    if e2 >= dy:        # the x step
+        err += dy
+        x += 1
+    if e2 <= dx:        # the y step
+        err += dx
+        y += 1
+```
+
+Six points, the ones the rounding gave, and never a float. Read the two `if`s carefully:
+they are independent, not `if`/`elif`. On a diagonal line both fire in the same iteration
+and the point moves in $x$ and $y$ at once; turn the second into an `elif` and a 45 degree
+line comes out as a staircase twice as long as it should be. The mistake is tempting
+because the two tests look like alternatives, and on a shallow line they never both fire,
+so the bug hides until the first steep or diagonal segment.
+
+## A triangle, all its pixels at once
+
+Lines are one-dimensional, so a column-by-column walk suits them. A triangle covers area,
+and the tool for area is a function of position. For a directed edge from $a$ to $b$ and
+any point $p$,
+
+$$E_{ab}(p) = (b_x - a_x)(p_y - a_y) - (b_y - a_y)(p_x - a_x).$$
+
+This is the 2-D cross product of the edge vector $b - a$ with $p - a$, which is twice the
+signed area of the triangle $a, b, p$. It is positive on one side of the line through $a$
+and $b$, negative on the other, and exactly zero on the line. A point is inside a triangle
+when it is on the inner side of all three edges — three edge functions, three signs, and
+a pixel centre is in when none of them is negative.
+
+The three edge functions do more than say yes or no. Evaluate each at the vertex it does
+not touch and you get the same number every time: $E_{v_1 v_2}(v_0)$, $E_{v_2 v_0}(v_1)$
+and $E_{v_0 v_1}(v_2)$ are all twice the area of the whole triangle. At any point $p$
+inside, the three values $w_0 = E_{v_1 v_2}(p)$, $w_1 = E_{v_2 v_0}(p)$ and
+$w_2 = E_{v_0 v_1}(p)$ are twice the areas of the three sub-triangles $p$ cuts the big
+one into, so they add up to the whole and $w_i / \text{area}$ are the *barycentric
+coordinates* of $p$: weights that sum to one and say how much of each vertex $p$ is made
+of. Anything stored at the vertices — depth, colour, a texture position — is interpolated
+by those weights.
+
+Note which edge each weight comes from. $w_0$ is the edge *opposite* $v_0$, because a
+point sitting on $v_0$ is as far as it can get from that edge, and its weight there is
+the full area. Pair them the other way round and the depth you interpolate is a shuffled
+version of the right one — a picture that looks almost plausible and is wrong everywhere.
+
+```python
+def edge(a, b, p):
+    return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+
+
+v0, v1, v2 = (0.0, 0.0, 0.0), (4.0, 0.0, 4.0), (0.0, 4.0, 8.0)
+area = edge(v0, v1, v2)
+print("twice the area:", area)
+for px in range(3):
+    p = (px + 0.5, 0.5)
+    w0, w1, w2 = edge(v1, v2, p), edge(v2, v0, p), edge(v0, v1, p)
+    z = (w0 * v0[2] + w1 * v1[2] + w2 * v2[2]) / area
+    print(f"pixel ({px}, 0): weights {w0 / area:.4f} {w1 / area:.4f} {w2 / area:.4f}  ->  z = {z}")
+```
+
+The three weights sum to one at every pixel, and the depth walks from $1.5$ to $2.5$ to
+$3.5$ as the centre moves from $x = 0.5$ to $x = 2.5$ across a face whose depth rises by
+one per unit of $x$. That is the row the lab's depth-interpolation test checks.
+
+## The half that makes the counts come out
+
+Now the triangle $(0,0), (4,0), (0,4)$ — area 8 — on the grid. The hypotenuse is
+$x + y = 4$. Pixel $(0, 0)$ has centre $(0.5, 0.5)$, sum $1$, inside. Pixel $(1, 2)$ has
+centre $(1.5, 2.5)$, sum $4$, exactly on the edge; so do $(2, 1)$, $(3, 0)$ and $(0, 3)$.
+Strictly inside are $(0,0), (1,0), (2,0), (0,1), (1,1), (0,2)$: six pixels for a triangle
+of area 8, and four more centres sitting on the hypotenuse that could go either way.
+
+They cannot be left to go either way, and the lab's split square shows why. Cut the
+square $(0,0)$–$(4,4)$ along its other diagonal, $x = y$, into two triangles. The centres
+$(0.5, 0.5), (1.5, 1.5), (2.5, 2.5), (3.5, 3.5)$ lie exactly on the shared edge, so they
+have $E = 0$ for *both* triangles. Accept zero as inside and both triangles paint them:
+harmless for one opaque colour, a visible seam the moment anything is blended or
+counted. Reject zero and neither paints them: a line of holes down every shared edge of
+every mesh.
+
+```python
+def edge(a, b, p):
+    return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+
+
+def is_top_left(a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    return dy < 0 or (dy == 0 and dx > 0)
+
+
+def covered(tri, size, use_rule):
+    v0, v1, v2 = tri
+    area = edge(v0, v1, v2)
+    if area < 0:
+        v1, v2 = v2, v1
+    hits = set()
+    for py in range(size):
+        for px in range(size):
+            p = (px + 0.5, py + 0.5)
+            ws = [edge(v1, v2, p), edge(v2, v0, p), edge(v0, v1, p)]
+            es = [(v1, v2), (v2, v0), (v0, v1)]
+            if any(w < 0 for w in ws):
+                continue
+            if use_rule and any(w == 0 and not is_top_left(*e) for w, e in zip(ws, es)):
+                continue
+            hits.add((px, py))
+    return hits
+
+
+upper = ((0.0, 0.0), (4.0, 0.0), (4.0, 4.0))
+lower = ((0.0, 0.0), (4.0, 4.0), (0.0, 4.0))
+for use_rule in (False, True):
+    a, b = covered(upper, 4, use_rule), covered(lower, 4, use_rule)
+    print("with the fill rule:" if use_rule else "no fill rule:     ",
+          len(a), "and", len(b), "pixels, drawn twice:", sorted(a & b))
+    for y in range(4):
+        print("   " + "".join("A" if (x, y) in a else "B" if (x, y) in b else "." for x in range(4)))
+```
+
+Without the rule, the four diagonal pixels are painted by both halves and the counts are
+10 and 10. With it, they become 10 and 6, the intersection is empty, and the picture is
+identical — those four pixels are still painted, by exactly one triangle each. That is
+the *top-left rule*: a centre that lands exactly on an edge belongs to the triangle for
+which that edge is a top edge (horizontal, with the interior below it on screen) or a
+left edge (the interior lies to its right). With the winding normalised so that the
+signed area is positive, a left edge has $dy < 0$ and a top edge has $dy = 0$ with
+$dx > 0$. The shared diagonal has the upper-right triangle's interior to its right, so it
+is a left edge of that triangle and a right edge of the other, and the upper-right one
+gets the pixels. Any consistent rule would do. The point is that every boundary sample is
+claimed by exactly one of the two triangles sharing the edge, whatever order they are
+drawn in.
+
+The lab also gives you a horizontal shared edge at $y = 2.5$, where a whole row of
+centres sits on it, and asks for 2 and 6: the edge is the *top* of the lower triangle, so
+the lower triangle gets the row. Sixteen pixels, each drawn once, is the property the
+rule buys, and it is the difference between a mesh that is watertight and one that
+sparkles along every seam.
+
+## The z-buffer settles the rest
+
+With coverage decided, the last question is which of several triangles a pixel shows.
+The z-buffer answers it with one number per pixel: the depth of whatever is currently
+drawn there, starting at infinity. A new sample with a smaller depth replaces both the
+colour and the stored depth; a larger one is thrown away. Because the decision is made
+per sample, against what is already there, the triangles may be submitted in any order
+and the picture is the same.
+
+```python
+import math
+
+WIDTH, HEIGHT = 16, 6
+
+
+def edge(a, b, p):
+    return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
+
+
+def fill(tri, glyph, colour, depth):
+    v0, v1, v2 = tri
+    area = edge(v0, v1, v2)
+    if area < 0:
+        v1, v2 = v2, v1
+        area = -area
+    for py in range(HEIGHT):
+        for px in range(WIDTH):
+            p = (px + 0.5, py + 0.5)
+            w0, w1, w2 = edge(v1, v2, p), edge(v2, v0, p), edge(v0, v1, p)
+            if w0 < 0 or w1 < 0 or w2 < 0:
+                continue
+            z = (w0 * v0[2] + w1 * v1[2] + w2 * v2[2]) / area
+            if z >= depth[py][px]:
+                continue                      # the depth test: farther, or equal, loses
+            depth[py][px] = z
+            colour[py][px] = glyph
+
+
+def render(order):
+    colour = [["."] * WIDTH for _ in range(HEIGHT)]
+    depth = [[math.inf] * WIDTH for _ in range(HEIGHT)]
+    for tri, glyph in order:
+        fill(tri, glyph, colour, depth)
+    return colour
+
+
+flat = (((1.0, 0.5, 5.0), (15.0, 0.5, 5.0), (8.0, 5.5, 5.0)), "f")      # z = 5 everywhere
+slope = (((1.0, 5.5, 1.0), (15.0, 5.5, 9.0), (8.0, 0.5, 5.0)), "s")     # z runs 1 -> 9 left to right
+one_way = render([flat, slope])
+other_way = render([slope, flat])
+print("same picture in either order:", one_way == other_way)
+print("\n".join("".join(row) for row in one_way))
+```
+
+Two triangles that cross in depth, and the crossing is visible: the sloping one wins on
+the left, where its depth is under 5, and loses on the right, where it has sunk behind
+the flat one. Drawn in the other order, every pixel still holds the nearer of the two.
+
+The comparison the lab asks for is that `z >= stored` rejects, which means an *equal*
+depth loses. That is not a tie-break for neatness; it is what makes two coplanar
+triangles produce a deterministic picture. With `>` instead, a second triangle at the
+same depth overwrites the first, and the image depends on submission order — precisely
+the property the buffer exists to remove. It is an easy line to get wrong because `>`
+reads as "nearer wins", which sounds like the whole rule, and the equal case never
+comes up until two faces share a plane.
+
+## Where it stops holding
+
+The edge function tests one point per pixel. A triangle thinner than a pixel can miss
+every centre and vanish; a long sliver flickers as it moves. Anti-aliased rasterisers
+sample several points per pixel, or compute coverage areas, and pay for it. The fill rule
+assumes the two triangles sharing an edge agree on where the edge is — the same two
+floating-point endpoints — which a well-formed mesh guarantees and a mesh with
+T-junctions does not. The z-buffer stores one depth per pixel, so it cannot represent a
+translucent surface with something behind it; "nearest wins" is the wrong answer when
+the nearest thing is glass, and transparency has to be sorted or handled with other
+machinery. And depth arrives here as a plain $z$ interpolated linearly across the
+screen, which after a perspective projection is only right for the $z_{\text{ndc}}$ that
+module 1's divide by $w$ hands you, not for eye-space depth.
+
+## What you are about to build
+
+The lab, *Lines, triangles and the z-buffer*, has you write `put` with the `>=` test,
+`bresenham` in the eight-octant form above, the edge function, the top-left rule, a
+clipped bounding box and `fill_triangle`. The counts to steer by are the ones derived
+here: six pixels for the right triangle in either winding, 10 and 6 for the split square
+with nothing drawn twice, 2 and 6 for the horizontal pair, and depths $1.5, 2.5, 3.5$
+along the first row of the sloping face.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Error terms, edge functions and the rule for a shared edge",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "In `bresenham`, the x step and the y step are two independent `if` statements. A student rewrites the second as `elif`, and every axis-aligned and shallow line still comes out right. What has broken?",
+                        "opts": [
+                            "Vertical lines: the second test can only run once the first has failed, so a line with no x extent never moves",
+                            "The error term: it is now updated only once per pixel, so it drifts and the line bends away from its endpoint",
+                            "Diagonal steps: when both tests fire in the same iteration the point has to move in x and y at once",
+                            "Nothing: the two conditions never both hold for a line already normalised to its octant",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"A vertical line has dx = 0 and dy < 0, so err = dy and e2 = 2dy, which fails the x test; the y test then runs even under an elif. Vertical lines are the one case the change does not touch.",
+                            r"Each test that fires updates err by exactly what it should; an elif skips one update, but it skips the step with it, so the two stay consistent. The line does not bend — it takes twice as many pixels to get there.",
+                            r"On a 45 degree line e2 equals both bounds at once. With an elif the point moves in x only, then in y only, and the diagonal becomes a staircase of twice the length.",
+                            r"Both hold whenever the error is at or past both thresholds, which is every step of a diagonal line and many steps of any line near 45 degrees. The octant normalisation fixes the signs; it does not make the two tests exclusive.",
+                        ],
+                        "why": r"""
+The two tests are independent on purpose. On a diagonal step both are satisfied in the
+same iteration — the error is at or beyond both thresholds — and the point must move in
+$x$ and $y$ together. An `elif` lets only one fire, so a 45 degree line comes out as a
+staircase with twice as many pixels, though every axis-aligned and shallow line, where
+the tests never coincide, looks fine. The lab's octant cases include (0,0) to (3,3),
+which must come out as four pixels; that is the case that catches the `elif`.
+""",
+                    },
+                    {
+                        "q": "The triangle (0,0), (4,0), (0,4) has area 8 in pixel units, yet `fill_triangle` writes exactly 6 pixels. Where did the other two go?",
+                        "opts": [
+                            "Sampling at centres always loses the boundary, so a triangle covers its area minus half its perimeter in pixels",
+                            "Four pixel centres lie exactly on the hypotenuse, and the fill rule hands them to whichever triangle owns that edge",
+                            "The bounding box is clipped to the raster before the edge tests, and two of the eight candidate pixels fall outside it",
+                            "The winding is negative for this vertex order, so two samples are rejected before the vertices are swapped",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"There is no such formula; coverage depends on where the centres fall relative to the edges, and a triangle shifted by half a pixel can gain or lose several. Here the count is 6 because of four specific centres, not a perimeter correction.",
+                            r"(0.5, 3.5), (1.5, 2.5), (2.5, 1.5) and (3.5, 0.5) all satisfy $x + y = 4$: on the edge, weight zero, and the hypotenuse is not a top or left edge of this triangle.",
+                            r"The box runs from (0, 0) to (4, 4) and the raster in the lab's test is 8 by 8; nothing is clipped. Clipping only ever removes pixels the raster could not hold, and every one of these is on screen.",
+                            r"The vertex order (0,0), (4,0), (0,4) gives a positive signed area, so no swap happens; and when a swap does happen it happens before any sample is tested, so it cannot reject anything.",
+                        ],
+                        "why": r"""
+The hypotenuse is $x + y = 4$, and four pixel centres — $(0.5, 3.5)$, $(1.5, 2.5)$,
+$(2.5, 1.5)$, $(3.5, 0.5)$ — sit exactly on it, with an edge function of zero. Six
+centres are strictly inside. The fill rule decides the four: for this triangle the
+hypotenuse runs from $(4, 0)$ to $(0, 4)$, with $dy > 0$, so it is neither a top nor a
+left edge and the samples are rejected. They are not lost; a neighbouring triangle
+sharing that edge, for which it *is* a left edge, would draw them, and the split-square
+test is exactly that situation.
+""",
+                    },
+                    {
+                        "q": "Split the square (0,0)-(4,4) along its diagonal into two triangles. Without a fill rule both halves report 10 pixels; with the top-left rule they report 10 and 6. What does the rule change?",
+                        "opts": [
+                            "The four centres on the shared edge, which were painted twice, are now painted by exactly one of the two triangles",
+                            "The four centres on the shared edge, which were painted by neither triangle, are now painted by the upper-right one",
+                            "The lower-left triangle's bounding box, which previously overlapped the other's, now stops at the diagonal",
+                            "The depth test, which previously let the second triangle overwrite the first along the edge, now rejects equal depths",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"10 + 10 = 20 for a 16-pixel square: the overlap is the diagonal. With the rule the diagonal belongs to the triangle for which it is a left edge, and 10 + 6 = 16 with nothing drawn twice.",
+                            r"If neither had painted them, the counts without the rule would be 6 and 6 — twelve pixels, with a line of holes. They were 10 and 10, which means both triangles painted the diagonal; the rule is there to stop double drawing, not to fill gaps.",
+                            r"Bounding boxes are always the full extent of the triangle and always overlap for two triangles sharing an edge; they are a loop bound, not a coverage test. Coverage is decided sample by sample by the edge functions.",
+                            r"The depth test would indeed stop the second overwrite, but it cannot make the counts 10 and 6: each triangle reports what it wrote, and without the fill rule the first one would still write all ten. The rule acts before any depth is compared.",
+                        ],
+                        "why": r"""
+The centres $(0.5, 0.5)$ to $(3.5, 3.5)$ lie exactly on the diagonal, so their edge
+function is zero for both triangles. Accept zero and both paint them: 10 and 10 for a
+square of 16 pixels, and a seam wherever anything is blended. The top-left rule gives a
+boundary sample to one triangle only — the one for which the edge is top or left — so the
+counts become 10 and 6, the union is still all sixteen pixels, and the intersection is
+empty. The z-buffer cannot do this job, because it acts after coverage and only when
+depths differ.
+""",
+                    },
+                    {
+                        "q": "`Raster.put` rejects a sample when `z >= self.depth[y][x]`. Suppose it used `>` instead, so that an equal depth is accepted. Which picture changes?",
+                        "opts": [
+                            "Every picture: a fresh pixel holds infinity, and no finite depth is strictly greater than that, so nothing is ever drawn",
+                            "Overlapping triangles at different depths: a nearer sample is now rejected, so the first triangle drawn always wins",
+                            "Two coplanar triangles: the one submitted second now overwrites the first, so the result depends on order",
+                            "None: equal depths arise only for degenerate triangles, and those return before writing anything",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"With `>` as the rejection test a finite z is not greater than infinity, so it is accepted, and the first write to a fresh pixel succeeds under either comparison. The change is invisible until two depths are equal.",
+                            r"A nearer sample has a smaller z, and a smaller z is rejected by neither `>` nor `>=`. The comparison only differs at equality; strictly nearer and strictly farther behave the same under both.",
+                            r"Equal depth loses under `>=` and wins under `>`; only the equal case differs, and two faces in one plane are exactly that case.",
+                            r"Coplanar triangles — a floor tiled from several quads, a decal on a wall — produce equal depths at every shared sample, and they are the ordinary case, not a degenerate one. A degenerate triangle has zero area and never reaches the depth test.",
+                        ],
+                        "why": r"""
+The two comparisons agree whenever the depths differ: nearer wins, farther loses. They
+part company only at equality, and equality is what two coplanar triangles produce at
+every pixel they share. With `>=` the first one drawn keeps the pixel and the result is
+the same whatever the order; with `>` the second overwrites the first and the picture
+depends on submission order — the property the buffer exists to remove. The fresh-pixel
+case is unaffected because a finite depth is smaller than infinity under either test.
+""",
+                    },
+                    {
+                        "q": "In `fill_triangle` the weight `w0` used for vertex `v0` is `edge(v1, v2, p)`, the edge that does not touch `v0`. Why that pairing?",
+                        "opts": [
+                            "A vertex's weight is the area of the sub-triangle it starts, so the edge leaving v0 would be the natural choice",
+                            "A vertex's weight is the area of the sub-triangle opposite it, which is largest when p sits on that vertex",
+                            "Any consistent pairing gives the same result once the three weights are divided by the total area",
+                            "The edges are visited in winding order and w0 is the first, so the pairing is a naming convention only",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The sub-triangle formed with the edge that leaves v0 has v0 as one of its corners, so its area is zero when p is at v0 — the opposite of what a weight for v0 should do. That pairing gives each vertex the weight its neighbour should have.",
+                            r"When p is at v0 the triangle (v1, v2, p) is the whole triangle and the other two collapse: weight 1 for v0, 0 for the rest, as an interpolation must.",
+                            r"Normalising makes the three weights sum to one whatever the pairing, but it does not make them the right weights. A shuffled pairing interpolates each vertex's depth towards the wrong corner, and the lab's depth test, 1.5, 2.5, 3.5 along row 0, catches it.",
+                            r"The order the edges are visited in is a loop detail; what makes w0 belong to v0 is geometry. Rename the variables however you like — the weight for a vertex is still the edge function of the edge opposite it.",
+                        ],
+                        "why": r"""
+Barycentric weights are areas: $w_0 / \text{area}$ is the fraction of the triangle taken
+up by the sub-triangle $(v_1, v_2, p)$. When $p$ sits on $v_0$ that sub-triangle is the
+whole triangle, so the weight is 1 and the other two are 0, which is what interpolating
+"the value at $v_0$" must give. The edge opposite a vertex is the one whose sub-triangle
+grows as $p$ approaches that vertex. Pair a vertex with an edge it touches and its weight
+vanishes exactly where it should peak; the result still sums to one and is wrong
+everywhere, which is why the depth-interpolation test exists.
+""",
+                    },
+                    {
+                        "q": "The z-buffer lets triangles be submitted in any order. Which of these still defeats it?",
+                        "opts": [
+                            "A translucent triangle in front of an opaque one: nearest-wins discards the surface that should show through it",
+                            "Two triangles submitted far apart in the frame: the buffer only compares a sample against the previous triangle",
+                            "A mesh with more triangles than the raster has pixels: the buffer holds one depth per pixel and drops the rest",
+                            "A scene drawn back to front: the buffer expects front-to-back submission and rejects the nearer samples",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"One depth and one colour per pixel can hold a single surface. Glass needs the colour behind it too, and the buffer has thrown it away.",
+                            r"The buffer compares against whatever is stored at the pixel, which is the nearest of everything drawn so far, not the last triangle. Time between submissions is irrelevant; that independence is the point.",
+                            r"A pixel only ever needs to show one opaque surface, so one depth per pixel is enough however many triangles compete for it. Losing triangles are not dropped by accident — they are hidden, which is the intended result.",
+                            r"Back to front is fine: each nearer sample has a smaller depth than what is stored and replaces it. Front to back is merely faster, because more of the later samples are rejected early. Neither order is required.",
+                        ],
+                        "why": r"""
+The buffer keeps one depth and one colour per pixel and answers one question: which
+opaque surface is nearest here? For opaque geometry that is complete, and it is why
+order, timing and triangle count do not matter. A translucent surface breaks the
+premise: the correct colour is a blend of it *and* what lies behind, and the buffer has
+discarded the behind. Transparency has to be sorted and drawn after the opaque pass, or
+handled by machinery beyond a single depth per pixel.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Lines, triangles and the z-buffer",
                 "runtime": "python",
@@ -779,6 +1603,401 @@ assert "blue pixels behind red:" in _out, "main.py should report how much of the
                 "Shading is linear-light arithmetic; a display expects roughly sRGB, so encode last",
                 "Clamp before the gamma encode, never after, or you raise a negative number to a fractional power",
             ],
+            "read": [
+                {
+                    "title": "The cosine, the halfway vector, and the byte that is not the light",
+                    "minutes": 14,
+                    "body": r'''
+Hold a sheet of paper under a desk lamp. Face it square to the lamp and it is bright;
+tilt it and it dims, though the lamp has not changed and the paper has not changed. Edge
+on, at ninety degrees, it is dark. Turn it further and the lamp is behind it, and no
+amount of further turning brings the light back. That sheet of paper is the whole of
+diffuse shading, and the numbers come out of asking what changed when it tilted.
+
+## Why the cosine
+
+A lamp sends out a beam. Take the part of the beam that is one unit wide where it meets
+the paper when the paper faces the lamp: it lights a strip of paper one unit wide. Tilt
+the paper by an angle $\theta$ and the same beam, carrying the same light, now lands on
+a strip $1 / \cos\theta$ wide — the strip has stretched, and the light has been spread
+over it. Light per unit area, which is what brightness is, has dropped by a factor of
+$\cos\theta$. That is Lambert's cosine law, and it is a statement about geometry, not
+about any particular material.
+
+The cosine needs an angle, and the angle is between two directions: the surface normal
+$n$ and the direction $l$ *towards* the light. For unit vectors the dot product is the
+cosine of the angle between them, so the diffuse term is $n \cdot l$. Two things follow
+at once. Both vectors must be unit length, or the dot product is the cosine scaled by two
+lengths — which is why `normalise` is the first thing in the lab and why a zero-length
+vector raises rather than returning something. And at ninety degrees the cosine is zero,
+while beyond it the cosine is *negative*.
+
+```python
+import math
+
+n = (0.0, 0.0, 1.0)
+for degrees in (0, 30, 45, 60, 89, 90, 120, 180):
+    theta = math.radians(degrees)
+    l = (math.sin(theta), 0.0, math.cos(theta))          # unit, tilted away from n
+    cosine = n[0] * l[0] + n[1] * l[1] + n[2] * l[2]
+    print(f"light at {degrees:3d} degrees:  n.l = {cosine:+.4f}   lambert = {max(0.0, cosine):.4f}")
+```
+
+A negative $n \cdot l$ is not a small amount of light; it is the light being behind the
+surface. Left in, it subtracts brightness from a face that should be plainly dark, and
+once an ambient term is added it produces faces that are darker than unlit. So the term
+is $\max(0, n \cdot l)$, and the clamp is part of the physics rather than a tidy-up. The
+tempting mistake is to clamp at the end, on the final colour, where it does stop a
+negative reaching the screen — but by then the negative has already cancelled part of
+the ambient and specular terms it was added to, and the face is wrong in a way that
+looks like a shadow nobody cast.
+
+## Where the normal comes from
+
+A triangle's normal is perpendicular to both of its edges, and the cross product is the
+operation that produces a vector perpendicular to two others. With vertices $a, b, c$,
+the two edges $b - a$ and $c - a$ give $n = (b - a) \times (c - a)$, normalised. Swap
+$b$ and $c$ and the cross product reverses, so the normal flips: the *order* of the
+vertices is what decides which side of the triangle is "out". The lab's
+`face_normal((0,0,0), (1,0,0), (0,1,0))` is $(0, 0, 1)$; write the last two the other
+way round and it is $(0, 0, -1)$. A mesh whose triangles are wound inconsistently has
+normals pointing into the object on some faces, and those faces shade as though lit from
+inside. A collinear triangle has two parallel edges, a zero cross product and no normal
+at all, which is the `ValueError` the lab asks for.
+
+## The highlight
+
+A polished surface adds something the paper does not: a bright spot where the lamp's
+reflection would appear if the surface were a mirror. It appears where the *mirror
+direction* of the light lines up with the direction to the viewer, and fades as the two
+diverge. Phong measured that divergence directly, by reflecting $l$ about $n$ and taking
+the dot product with the view direction $v$. Blinn found a cheaper measure. Take the
+*halfway vector*
+
+$$h = \frac{l + v}{\lVert l + v \rVert},$$
+
+the unit vector midway between the light and the eye. A mirror reflects $l$ into $v$
+exactly when its normal is $h$, so the question "how close is this surface to mirroring
+the light into my eye?" becomes "how close is $n$ to $h$?" — and that is $n \cdot h$. It
+is cheaper because $h$ depends on $l$ and $v$ only; with a distant light and a distant
+viewer it is one vector for the whole scene, computed once.
+
+$n \cdot h$ on its own falls off far too gently to look like a highlight, so it is raised
+to a power, the shininess:
+
+```python
+import math
+
+
+def dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def normalise(a):
+    n = math.sqrt(dot(a, a))
+    return (a[0] / n, a[1] / n, a[2] / n)
+
+
+n = (0.0, 0.0, 1.0)
+v = (0.0, 0.0, 1.0)
+for degrees in (0, 15, 30, 45, 60):
+    theta = math.radians(degrees)
+    l = (math.sin(theta), 0.0, math.cos(theta))
+    h = normalise((l[0] + v[0], l[1] + v[1], l[2] + v[2]))
+    nh = dot(n, h)
+    print(f"light {degrees:2d} deg off the normal: n.h = {nh:.4f}   "
+          f"^8 = {nh ** 8:.4f}   ^32 = {nh ** 32:.4f}   ^128 = {nh ** 128:.4f}")
+```
+
+With the light fifteen degrees off the ideal direction, an exponent of 8 still shows 93%
+of full brightness and 128 shows a third; by 45 degrees the exponent-128 highlight is
+gone entirely. The exponent is the tightness of the spot. A larger one gives a smaller,
+sharper highlight — and, because the same reflected light is being concentrated into a
+smaller spot, a physically consistent model would make it brighter too. The lab keeps
+the peak at $1$ and leaves that to the weight $k_s$, which is the usual shortcut.
+
+One more clamp belongs here. When $n \cdot l \le 0$ the light is behind the surface, yet
+$h$ can still lie close to $n$ — the halfway vector is built from $l$ and $v$ without
+asking whether the light can reach the face — so the formula can paint a bright spot on
+a face in darkness. The lab's `blinn_phong` returns $0$ when $n \cdot l \le 0$ before it
+computes anything else, and the reason is the sheet of paper: no light arrives, so none
+can be reflected.
+
+## The whole thing, with numbers
+
+The lab's `main` shades a face with normal $(0, 0, 1)$, lit from $l = (1, 1, 1)/\sqrt 3$,
+viewed from $v = (0, 0, 1)$, with base colour $(0.8, 0.3, 0.3)$, white light, ambient
+$0.1$, shininess $32$ and $k_s = 0.4$. Every step is on the page:
+
+```python
+import math
+
+
+def dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def normalise(a):
+    n = math.sqrt(dot(a, a))
+    return (a[0] / n, a[1] / n, a[2] / n)
+
+
+N = (0.0, 0.0, 1.0)
+L = normalise((1.0, 1.0, 1.0))
+V = (0.0, 0.0, 1.0)
+base, light, ambient, shininess, ks = (0.8, 0.3, 0.3), (1.0, 1.0, 1.0), 0.1, 32, 0.4
+
+diffuse = max(0.0, dot(N, L))
+H = normalise((L[0] + V[0], L[1] + V[1], L[2] + V[2]))
+specular = max(0.0, dot(N, H)) ** shininess
+print(f"n.l = {diffuse:.5f}   n.h = {dot(N, H):.5f}   (n.h)^32 = {specular:.5f}")
+
+linear = tuple(base[i] * (ambient + light[i] * diffuse) + ks * light[i] * specular for i in range(3))
+print("linear colour:", tuple(round(c, 5) for c in linear))
+
+
+def to_byte(c, gamma=2.2):
+    c = min(1.0, max(0.0, c))
+    return int(round(c ** (1.0 / gamma) * 255))
+
+
+print("display bytes:", tuple(to_byte(c) for c in linear))
+print("without gamma:", tuple(to_byte(c, 1.0) for c in linear))
+```
+
+$n \cdot l = 1/\sqrt 3 = 0.577$. The halfway vector is $l + v = (0.577, 0.577, 1.577)$
+normalised, and $n \cdot h$ is its $z$ component, $0.888$; to the 32nd power that is
+$0.0224$, a faint highlight, because the viewer is nowhere near the mirror direction.
+Red channel: $0.8 \times (0.1 + 0.577) + 0.4 \times 0.0224 = 0.551$. Green and blue:
+$0.3 \times 0.677 + 0.009 = 0.212$. Those three numbers are the *linear* colour — in
+proportion to the light that would leave the face — and they are not what goes to the
+screen.
+
+## The byte is not the light
+
+A display does not produce light in proportion to the byte it is given. Send it 128 and
+it produces not half the light of 255 but about a fifth: the response is close to a
+power law, light $\propto \text{byte}^{2.2}$. The reason is historical — cathode-ray
+tubes behaved that way and the encoding was standardised around them — but the
+consequence is present-day. If you want the display to emit a linear value $L$, you must
+send it $L^{1/2.2}$, so that the display's own curve undoes yours.
+
+```python
+for linear in (0.0, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0):
+    byte = int(round(linear ** (1 / 2.2) * 255))
+    print(f"linear {linear:.2f}  ->  byte {byte:3d}   (a linear encode would give {round(linear * 255):3d})")
+```
+
+Linear $0.5$ is byte $186$, not $128$. That is the number to remember, because it is the
+one that tells you something has gone wrong: a mid-grey rendered as $128$ is a scene
+where every gradient is too dark and every shadow is crushed. The lab's steering values
+— $0, 136, 186, 255$ for $0, 0.25, 0.5, 1$ — are this curve, and the last line of the
+worked example above, $(140, 54, 54)$ against $(194, 126, 126)$, is what the same face
+looks like when the encode is forgotten.
+
+The order of operations matters more here than it looks. Shading is arithmetic on light,
+so it is done in linear values: two lights add in linear space, a reflection mixes in
+linear space, a pixel is averaged with its neighbour in linear space. The encode happens
+exactly once, at the end, per channel. Encode early and everything you add afterwards is
+adding curved numbers as if they were straight. A half-and-half mix of white and black
+done on bytes gives $128$, which the display shows as a fifth of full light rather than
+a half; done in linear values it gives $0.5$, which encodes to $186$ and shows as a half.
+
+And the clamp comes before the encode. The shaded value can exceed $1$ — the lab's
+head-on case gives $1.38$ in red — and can, with a badly wound normal, dip below $0$.
+Raising a value above $1$ to the power $1/2.2$ gives a byte above 255. Raising a negative
+one to a fractional power does not give a warning:
+
+```python
+# raises TypeError
+overshoot = -0.05                      # a channel that came out slightly negative
+encoded = overshoot ** (1 / 2.2) * 255  # Python hands back a complex number here
+print(int(round(encoded)))              # and round() refuses it
+```
+
+Python's `**` returns a complex number for a negative base and a fractional exponent,
+and the `round` that follows refuses it. Clamp the linear value to $[0, 1]$ first and
+neither case arises; clamp the byte afterwards and you have already computed with a
+complex number.
+
+## Where it stops holding
+
+Lambert describes a perfectly matt surface, and few things are one: paper, chalk and
+unglazed clay come close, metals and wet surfaces do not. Blinn-Phong is a shape that
+looks like a highlight rather than a measurement of one; its exponent has no physical
+unit, it does not conserve energy unless the weight is tied to the exponent, and it
+reflects the same amount at grazing angles as head-on, which real surfaces do not — look
+along a wet road towards the sun. The single power $2.2$ is an approximation to the sRGB
+curve, which is linear near black and a power of $2.4$ elsewhere; the two agree to
+within a few bytes across most of the range and differ most in the darkest tones. Every
+one of these is a reason the physically based models in the reading list exist, and none
+of them changes the two rules this module is built on: clamp the cosine, and encode last.
+
+## What you are about to build
+
+In the lab, *Lambert, Blinn-Phong and gamma*, you write `normalise`, `face_normal`,
+`lambert`, `blinn_phong` with its two guards, `shade` combining the three terms per
+channel, and then `clamp`, `to_srgb_byte` and `encode`. The numbers to hold it against
+are the ones derived here: $0.7071$ for a light at 45 degrees, $\cos^{32}(\pi/8) =
+0.0794$ for the highlight in the same geometry, $(1.38, 0.72, 0.72)$ for the head-on
+shade, and the bytes $0, 136, 186, 255$.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Cosines, halfway vectors, and why 128 is not half",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A sheet of paper faces a lamp, then tilts by 60 degrees. Lambert says it now receives half the light per unit area. Which reasoning produces the cosine?",
+                        "opts": [
+                            "The same beam now lands on a strip twice as wide, so the light it carries is spread over twice the area of paper",
+                            "The eye sees the tilted sheet foreshortened to half its size, so it reflects half as much light towards the viewer",
+                            "Light leaves at the angle it arrives, so at 60 degrees only half of it is reflected back in the lamp's direction",
+                            "The path from the lamp to the sheet has lengthened, and intensity falls with the square of the distance travelled",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"A strip one unit wide becomes $1 / \cos 60^\circ = 2$ units wide when tilted, and the same light spread over twice the area is half as bright.",
+                            r"Foreshortening is what the *viewer* sees, and Lambert's term does not depend on the viewer at all — a matt surface looks equally bright from every direction. The cosine is about how much light lands, not how much of the surface is visible.",
+                            r"That is mirror reasoning, and it describes the specular term, not the diffuse one. A matt surface scatters light in every direction regardless of the angle it arrived at; what changes with tilt is the amount arriving per unit area.",
+                            r"Tilting the sheet about its centre does not move it away from the lamp, and the inverse-square law is about distance, which the lab's directional light does not even model. The factor is geometric, from the stretching of the lit strip.",
+                        ],
+                        "why": r"""
+Take the slice of the beam that lights a strip one unit wide when the paper faces the
+lamp. Tilt the paper by $\theta$ and that same slice, carrying the same light, now lands
+on a strip $1/\cos\theta$ wide; at $60^\circ$ that is twice as wide, so the light per
+unit area has halved. Nothing about the viewer enters, which is why a matt surface looks
+the same from every angle, and nothing about distance enters either. The viewer-dependent
+reasoning belongs to the specular term, which is a different physical process.
+""",
+                    },
+                    {
+                        "q": "A face has base colour 0.8, ambient 0.1 and a light behind it with n.l = -0.5. A student leaves the clamp out of `lambert` and relies on the final byte clamp. What does the face look like?",
+                        "opts": [
+                            "Exactly like an unlit face: the byte clamp removes the negative, and the ambient term is added after it",
+                            "Darker than an unlit face: the negative cosine eats most of the ambient term before the byte clamp sees it",
+                            "Lit from behind at half strength: a negative cosine is what light arriving on the reverse side looks like",
+                            "Unchanged in the diffuse term but with a dark highlight, since the specular term is the one that goes negative",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The ambient term is added inside `shade`, before any byte is produced: $0.8 \times (0.1 - 0.5)$ is $-0.32$, and by the time the byte clamp runs there is nothing left of the ambient to protect. The clamp at the end is too late.",
+                            r"$0.8 \times (0.1 + (-0.5)) = -0.32$ against $0.08$ for a face with no light: the negative cosine has cancelled the ambient and then some, and the byte clamp turns the result into black.",
+                            r"A negative $n \cdot l$ means the light is behind the surface, and light behind an opaque surface does not reach its front at all. There is no half-strength back-lighting to represent; the correct contribution is zero.",
+                            r"The specular term is guarded separately and returns zero here; it never goes negative. The diffuse term is the one that carries the negative cosine, and it is the diffuse contribution that drags the face below ambient.",
+                        ],
+                        "why": r"""
+Without the clamp the diffuse contribution is $0.8 \times (0.1 + (-0.5)) = -0.32$, where
+an unlit face should be $0.8 \times 0.1 = 0.08$. The byte clamp at the end does stop a
+negative number reaching the screen, but only after the negative has cancelled the
+ambient term it was added to: the face comes out black rather than dimly lit, a shadow
+that no object cast. The clamp belongs on the cosine, because a negative cosine is not a
+small amount of light — it is the light being behind the surface, and the correct
+contribution is zero.
+""",
+                    },
+                    {
+                        "q": "Blinn's specular term is $(n \\cdot h)^s$ with $h$ the normalised sum of $l$ and $v$. What does $n \\cdot h$ measure?",
+                        "opts": [
+                            "The cosine between the normal and the light's mirror direction, since h is the reflection of l about n",
+                            "How close the surface normal is to the one orientation that would mirror the light straight into the eye",
+                            "How directly the surface faces the viewer, since h is the unit vector pointing from the surface to the eye",
+                            "Half the diffuse cosine, since h bisects n and l; the exponent is there to compensate for the halving",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"That is Phong's construction, not Blinn's. The reflection of $l$ about $n$ is $2(n \cdot l)n - l$, and it is compared against $v$; the halfway vector is built from $l$ and $v$ and compared against $n$. They give similar shapes, but $h$ does not depend on $n$ at all.",
+                            r"A mirror sends $l$ into $v$ exactly when its normal bisects them, and that bisector is $h$; $n \cdot h$ is the cosine of the miss.",
+                            r"The vector towards the eye is $v$ on its own. $h$ is midway between $v$ and $l$, so it moves when the light moves; a term that measured only how the surface faces the viewer would not change with the light, and highlights do.",
+                            r"$h$ bisects $l$ and $v$, not $n$ and $l$, and $n \cdot h$ is a full cosine, not half of anything. The exponent is there because a plain cosine falls off far too gently to look like a highlight, not to undo a halving.",
+                        ],
+                        "why": r"""
+A perfect mirror reflects the light into the eye exactly when its normal lies midway
+between the direction to the light and the direction to the eye — and that midway
+direction is $h$. So $n \cdot h$ is the cosine of the angle by which the actual normal
+misses the ideal one: 1 for a perfect reflection, falling as the surface turns away.
+Phong measured the same miss by reflecting $l$ about $n$ and comparing with $v$; Blinn's
+form gives a similar highlight and is cheaper because $h$ does not depend on the surface,
+so with a distant light and viewer it is computed once for the whole scene.
+""",
+                    },
+                    {
+                        "q": "`blinn_phong` returns 0.0 whenever n.l <= 0, before it computes the halfway vector, even though n.h could be large. What is the justification?",
+                        "opts": [
+                            "n.h is always zero when n.l is, so the guard is a shortcut that saves the cost of a normalisation",
+                            "No light reaches a face the lamp is behind, so there is nothing for it to reflect, whatever h says",
+                            "The exponent would be applied to a negative base, which Python refuses to raise to an integer power",
+                            "l + v is the zero vector whenever n.l <= 0, so the halfway vector cannot be normalised there",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"$h$ is built from $l$ and $v$ without reference to $n$, so $n \cdot h$ can be large when $n \cdot l$ is zero or negative — a light on the horizon with the viewer overhead gives $n \cdot h$ near 0.7. The guard is not a shortcut; without it that face would carry a highlight.",
+                            r"The highlight is reflected light, and a face the light cannot reach has none to reflect. The guard is the sheet of paper again.",
+                            r"Python raises a negative float to an integer power without complaint — $(-0.5)^{32}$ is a positive number. And $n \cdot h$ is clamped at zero anyway; the guard is about physics, not about what the arithmetic will tolerate.",
+                            r"$l + v$ is zero only when the light and the viewer are exactly opposite, which is one direction out of all the ones with $n \cdot l \le 0$. For every other light position behind the surface $h$ is perfectly well defined and would produce a highlight.",
+                        ],
+                        "why": r"""
+The halfway vector is built from $l$ and $v$ alone, so it can lie close to $n$ while the
+light is at or below the horizon of the surface — and $(n \cdot h)^s$ would then paint a
+highlight on a face receiving no light at all. The guard returns zero first because a
+specular highlight is reflected light, and there is nothing to reflect. Nothing about
+the arithmetic forces it: $n \cdot h$ is clamped, and Python raises negative floats to
+integer powers happily. The check is there for the same reason the diffuse cosine is
+clamped.
+""",
+                    },
+                    {
+                        "q": "`to_srgb_byte(0.5)` returns 186, not 128. What does the 1/2.2 power do?",
+                        "opts": [
+                            "It brightens the mid-tones to match human vision, which perceives light on a logarithmic rather than linear scale",
+                            "It pre-distorts the value so the display's own 2.2-power response cancels it and emits half the light",
+                            "It spreads the upper half of the byte range so that bright detail survives the rounding to 256 steps",
+                            "It is the CRT's light-to-byte ratio; the encode multiplies by it and clamps whatever lands above 255",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Perception is part of why the standard settled where it did, but the encode is not there to make anything look brighter — it is there to make the display emit the light you computed. Send 128 and you get a fifth of full light, not a half.",
+                            r"The display raises its input to about 2.2; sending $0.5^{1/2.2} = 0.73$, byte 186, makes $0.73^{2.2} = 0.5$ come out of the glass.",
+                            r"The extra resolution the curve gives goes to the *dark* tones, not the bright ones: linear 0.05 lands at byte 65, so the shadows get many more steps than a linear encode would give them. The bright half of the range is compressed, not spread.",
+                            r"2.2 is an exponent, not a multiplier. Multiplying 0.5 by 2.2 and scaling by 255 would give 255 after the clamp, not 186; the encode raises to the power $1/2.2$ and nothing is multiplied but the final 255.",
+                        ],
+                        "why": r"""
+A display's light output is close to $\text{byte}^{2.2}$, so byte 128 produces about a
+fifth of full light. To make it emit a linear $0.5$ you send $0.5^{1/2.2} = 0.73$, which
+is byte 186, and the display's own curve turns that back into $0.5$. The encode is a
+pre-correction for the hardware, done once, on the final linear value; it is not a
+brightening for perception, and the extra steps it buys go to the dark tones, not the
+bright ones.
+""",
+                    },
+                    {
+                        "q": "A reflection mix `colour * (1 - k) + bounce * k` is done on display bytes instead of linear values. A white surface (255) reflecting pure black with k = 0.5 gives 128. What has gone wrong?",
+                        "opts": [
+                            "Nothing: half of 255 is 128, and a half-and-half mix of white and black should display as mid-grey",
+                            "It is too bright: mixing in byte space applies the gamma twice, and the correct byte is nearer 90",
+                            "128 is the display's code for about a fifth of full light, so the mix is far darker than it should be",
+                            "Only the rounding: the exact mix is 127.5, and the half-byte error is what the encode is meant to absorb",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"128 does look like a mid-grey on screen, and that is what makes the mistake persuasive — but it is a perceptual mid-grey, emitting about 22% of full light. Half the light of white is what a half-and-half mix should produce, and that is byte 186.",
+                            r"The error runs the other way. Bytes are already compressed by the $1/2.2$ power, and averaging compressed values lands below the encoding of the true average: too dark, not too bright. 90 would be darker still.",
+                            r"Mixing in linear light gives $0.5$, which encodes to 186; mixing bytes gives 128, which decodes to $0.22$. The gap is the whole difference between a half and a fifth.",
+                            r"The half-byte is real and irrelevant; the mistake is about 58 bytes wide. Rounding error is what the encode's rounding step absorbs; mixing in the wrong space is a different error, and no rounding scheme fixes it.",
+                        ],
+                        "why": r"""
+Shading is arithmetic on light, and bytes are not light — they are light raised to the
+power $1/2.2$. Mix white and black half-and-half in linear values and you get $0.5$,
+which encodes to 186. Mix the bytes and you get 128, which the display turns into
+$0.502^{2.2} \approx 0.22$: a fifth of full light where half was intended. Every blend,
+average, sum and reflection mix has to happen before the encode, and the encode happens
+once, at the end. This is the module 4 bounce mix, which is why `trace` returns linear
+colours and only the capstone's `render` calls `encode`.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Lambert, Blinn-Phong and gamma",
                 "runtime": "python",
@@ -1103,6 +2322,462 @@ assert "normal: (0.0, 0.0, 1.0)" in _out, "main.py should print the computed fac
                 "A shadow ray must be occluded *before* the light, not merely occluded somewhere",
                 "Recursion depth bounds the reflection series; each bounce contributes geometrically less",
             ],
+            "read": [
+                {
+                    "title": "One ray per pixel, the quadratic that answers it, and the shadow that must stop at the light",
+                    "minutes": 15,
+                    "body": r'''
+Put a pinhole in the side of a dark box and a scene outside it. Every point on the back
+wall of the box sees exactly one straight line through the hole, and the colour it
+collects is the colour of the first thing that line meets. A ray tracer builds that box
+in reverse: for each pixel it draws the line out through the pinhole into the scene and
+asks what it hits first. The whole method is that one question asked over and over —
+from the camera, then from the hit point towards the light, then from the hit point
+along the mirror direction — and the geometry of a ray is what makes the question cheap
+to answer.
+
+A ray is a starting point $o$ and a direction $d$, and every point on it is $o + t\,d$
+for some $t > 0$. When $d$ is unit length $t$ is distance along the ray, and even when it
+is not, a smaller $t$ is always nearer the origin. Hitting something means finding the
+$t$ at which $o + td$ satisfies that thing's equation, and "the first thing hit" means
+the smallest such $t$ across every object in the scene.
+
+## A sphere is a quadratic
+
+A sphere with centre $c$ and radius $r$ is every point $p$ with $\lVert p - c \rVert^2 =
+r^2$. Substitute the ray and write $oc = o - c$:
+
+$$\lVert oc + t\,d \rVert^2 = r^2 \quad\Longrightarrow\quad (d \cdot d)\,t^2 + 2\,(oc
+\cdot d)\,t + (oc \cdot oc - r^2) = 0.$$
+
+A quadratic in $t$, with $a = d \cdot d$, $b = 2\,(oc \cdot d)$ and $c = oc \cdot oc -
+r^2$, and the discriminant $b^2 - 4ac$ says how many times the line crosses the surface:
+negative, it misses; zero, it grazes at one point; positive, it pierces through and out
+again, two roots. Here are the four cases the lab checks, with the arithmetic shown:
+
+```python
+import math
+
+
+def sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+centre, radius = (0.0, 0.0, -5.0), 1.0
+cases = {"from the camera": ((0.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+         "from inside":     ((0.0, 0.0, -5.0), (0.0, 0.0, -1.0)),
+         "grazing":         ((1.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+         "pointing away":   ((0.0, 0.0, -10.0), (0.0, 0.0, -1.0))}
+for name, (o, d) in cases.items():
+    oc = sub(o, centre)
+    a, b, c = dot(d, d), 2.0 * dot(oc, d), dot(oc, oc) - radius * radius
+    disc = b * b - 4.0 * a * c
+    roots = "no real roots" if disc < 0 else \
+        f"roots {(-b - math.sqrt(disc)) / (2 * a):+.1f} and {(-b + math.sqrt(disc)) / (2 * a):+.1f}"
+    print(f"{name:16s} b = {b:+5.1f}  c = {c:+5.1f}  disc = {disc:+6.1f}  {roots}")
+```
+
+From the camera at the origin, looking down $-z$ at a unit sphere five units away:
+$oc = (0, 0, 5)$, $b = 2 \times (0,0,5) \cdot (0,0,-1) = -10$, $c = 25 - 1 = 24$,
+discriminant $100 - 96 = 4$, roots $4$ and $6$ — the front wall and the back wall. The
+near one is the answer.
+
+The second case is the one that separates a working tracer from one that mostly works.
+Start *inside* the sphere, at its centre: $oc = 0$, so $b = 0$ and $c = -1$, and the
+roots are $-1$ and $+1$. The smaller root is behind the origin. A ray that starts inside
+a sphere — every ray leaving the inside of a glass sphere, every camera placed inside a
+dome — must hit the far wall, and the rule that does it is not "take the smaller root"
+but "take the smallest root that is *positive*". The mistake is tempting because for a
+ray from outside the smaller root is always the right one, and every test image you make
+first has the camera outside everything.
+
+The fourth case has a positive discriminant and two negative roots: the sphere is behind
+the ray. The *line* through it crosses the sphere twice, but the ray never does. Both
+roots fail the positivity test and the answer is a miss. The grazing case in between has
+a discriminant of exactly zero and one root, $5$, which the same rule returns without
+special treatment.
+
+## A plane is a division
+
+A plane through the point $p_0$ with normal $n$ is every $p$ with $(p - p_0) \cdot n =
+0$. Substitute the ray, and $t$ falls out with one division:
+
+$$(o + t\,d - p_0) \cdot n = 0 \quad\Longrightarrow\quad t = \frac{(p_0 - o) \cdot n}{d
+\cdot n}.$$
+
+The denominator is the catch. When $d \cdot n = 0$ the ray runs parallel to the plane and
+never meets it; when it is merely tiny, the ray is nearly parallel and $t$ comes out
+enormous — a hit at a million units that "exists" but is an artefact of dividing by a
+number that is mostly noise. The lab treats $\lvert d \cdot n \rvert < 10^{-6}$ as
+parallel, and the reason to test against an epsilon rather than zero is that a ray which
+is parallel in geometry is rarely parallel to the last bit in floating point.
+
+## The epsilon, and why a surface shadows itself
+
+Once a ray hits at $t$, the hit point is $o + t\,d$ computed in floating point, and it
+sits not on the surface but a hair above or below it — a few units in the sixteenth
+decimal place usually, and more when the two roots were nearly equal. Now fire a shadow
+ray from that point towards the light and intersect it with the same sphere. If the
+point is a hair *inside*, the quadratic finds a root at a tiny positive $t$: the ray
+"hits" the surface it started on, the point is declared in shadow, and the sphere comes
+out speckled with black dots wherever the rounding happened to fall inside. That is
+shadow acne, and it appears on every renderer whose author has not yet met it.
+
+Two guards, both in the lab. The intersection routines accept only $t > \text{EPS}$
+rather than $t > 0$, which rejects the self-hit when it is small. And the shadow ray is
+launched from `point + 1e-4 * normal`, nudged off the surface along its own normal, so
+that the self-hit does not happen at all. The second is the one that works when the
+first does not: a grazing shadow ray meets the surface it left at an ill-conditioned
+angle, and the spurious root can be far larger than any sensible EPS.
+
+A shadow ray has one more condition that is easy to forget. The question is not "does
+anything lie along this line" but "does anything lie along this line *before the
+light*". An object on the far side of the light casts no shadow on the point.
+
+```python
+import math
+
+
+def sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def sphere_t(o, d, centre, radius, eps):
+    oc = sub(o, centre)
+    a, b, c = dot(d, d), 2.0 * dot(oc, d), dot(oc, oc) - radius * radius
+    disc = b * b - 4.0 * a * c
+    if disc < 0:
+        return None
+    for t in ((-b - math.sqrt(disc)) / (2 * a), (-b + math.sqrt(disc)) / (2 * a)):
+        if t > eps:
+            return t
+    return None
+
+
+light = (5.0, 5.0, 0.0)
+red = ((0.0, 0.0, -5.0), 1.0)
+for point in ((-1.0, -1.0, -6.0), (-3.0, -1.0, -2.0)):
+    to_light = sub(light, point)
+    distance = math.sqrt(dot(to_light, to_light))
+    d = tuple(c / distance for c in to_light)
+    t = sphere_t(point, d, *red, 1e-6)
+    verdict = "lit" if t is None or t >= distance else "in shadow"
+    print(f"floor point {point}: light is {distance:.2f} away, sphere hit at t = {t}  ->  {verdict}")
+```
+
+The floor point $(-1, -1, -6)$ looks up towards the light $10.39$ units away and meets
+the red sphere at $t = 0.73$: in shadow. The point $(-3, -1, -2)$ sees the light
+directly. Had the sphere been on the far side of the light, $t$ would have exceeded the
+distance and the point would be lit despite the hit.
+
+## The scene in characters
+
+Everything so far is enough to render. Here is the lab's scene — two spheres, a floor,
+one light — traced at 40 by 14 with the diffuse cosine as the only shading, the shadow
+as a hole in it, and the sky drawn as `~`:
+
+```python
+import math
+
+
+def sub(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def add(a, b):
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def mul(a, s):
+    return (a[0] * s, a[1] * s, a[2] * s)
+
+
+def dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def normalise(a):
+    n = math.sqrt(dot(a, a))
+    return (a[0] / n, a[1] / n, a[2] / n)
+
+
+EPS = 1e-6
+SPHERES = [((0.0, 0.0, -5.0), 1.0), ((1.6, 0.0, -4.0), 0.5)]
+FLOOR_Y = -1.0
+LIGHT = (5.0, 5.0, 0.0)
+
+
+def nearest(o, d):
+    """(t, normal) of the closest hit along the ray, or None."""
+    best = None
+    for centre, radius in SPHERES:
+        oc = sub(o, centre)
+        b, c = 2.0 * dot(oc, d), dot(oc, oc) - radius * radius
+        disc = b * b - 4.0 * c
+        if disc < 0:
+            continue
+        for t in ((-b - math.sqrt(disc)) / 2.0, (-b + math.sqrt(disc)) / 2.0):
+            if t > EPS:
+                if best is None or t < best[0]:
+                    best = (t, normalise(sub(add(o, mul(d, t)), centre)))
+                break
+    if abs(d[1]) > EPS:
+        t = (FLOOR_Y - o[1]) / d[1]
+        if t > EPS and (best is None or t < best[0]):
+            best = (t, (0.0, 1.0, 0.0))
+    return best
+
+
+def brightness(o, d):
+    hit = nearest(o, d)
+    if hit is None:
+        return None                                   # sky
+    t, n = hit
+    p = add(o, mul(d, t))
+    to_light = sub(LIGHT, p)
+    dist = math.sqrt(dot(to_light, to_light))
+    l = mul(to_light, 1.0 / dist)
+    blocker = nearest(add(p, mul(n, 1e-4)), l)       # the shadow ray, nudged off the surface
+    if blocker is not None and blocker[0] < dist:
+        return 0.0
+    return max(0.0, dot(n, l))
+
+
+RAMP = " .:-=+*#%@"
+for row in range(14):
+    line = ""
+    for col in range(40):
+        px = (2.0 * (col + 0.5) / 40 - 1.0) * 1.2
+        py = (1.0 - 2.0 * (row + 0.5) / 14) * 0.5 - 0.15
+        b = brightness((0.0, 0.0, 0.0), normalise((px, py, -1.0)))
+        line += "~" if b is None else RAMP[min(9, int(b * 9.99))]
+    print(line)
+```
+
+The big sphere is the bright shape in the middle with its lit side towards the upper
+right, where the light is; the small one sits beside it; and the blank patch on the
+floor below and to the left of the big one is its shadow — a region where `nearest`,
+fired from the nudged point, found the sphere before it found the light.
+
+## Mirrors, and the series that ends
+
+A perfect mirror sends a ray off in the direction that keeps the component along the
+surface and reverses the component along the normal. Split $d$ into the part along $n$,
+which is $(d \cdot n)\,n$, and the rest. Reverse the first part and keep the second:
+
+$$r = d - 2\,(d \cdot n)\,n.$$
+
+Check it on a ray coming straight down, $d = (0, -1, 0)$ with $n = (0, 1, 0)$:
+$d \cdot n = -1$, so $r = (0, -1, 0) + 2\,(0, 1, 0) = (0, 1, 0)$, straight back up. A ray
+at 45 degrees, $(1, -1, 0)$, keeps its $x$ and flips its $y$ to give $(1, 1, 0)$, which
+is the lab's second reflection test; reflect twice and you are back where you started.
+
+The colour seen along a mirror ray is whatever `trace` returns for it, and that is where
+recursion enters: the reflected ray may hit another mirror. Each bounce mixes what the
+surface shows on its own with what the reflection shows, $\text{colour}\,(1 - k) +
+\text{bounce}\,k$, where $k$ is the reflectivity. After two bounces off surfaces of
+reflectivity $0.6$ the deepest ray contributes $0.36$ of the pixel; after five, $0.078$.
+The series is geometric, so it converges, and a depth bound cuts it where the remaining
+terms are too small to see. The lab traces one bounce. It also has to stop a matt
+surface from recursing at all — reflectivity $0$ means the bounce would be multiplied by
+zero, so the ray is never fired — which is why a matt object gives the same answer at
+every depth.
+
+One detail in `trace` is worth the line it costs. The normal returned by `normal_at`
+points outward, and a ray that reaches a surface from inside it — the far wall of the
+sphere, in the inside case above — arrives on the wrong side of that normal. The lab
+flips $n$ when $n \cdot d > 0$, so that both the shading and the offset for the shadow
+ray are done on the side the ray actually came from.
+
+## Where it stops holding
+
+A point light casts shadows with hard edges, because a point is either visible or not;
+real lights have area, and the soft edge of a real shadow is many shadow rays to many
+points on the light, averaged. A perfect mirror is the only reflection this tracer
+knows; a glossy surface reflects a blurred image, which is again many rays. Both are the
+door into distribution ray tracing and path tracing. Refraction — glass — needs the
+inside-the-sphere root and Snell's law, and this scene has no glass. And every object is
+tested against every ray: at three objects that is nothing, at three million it is
+everything, and a bounding-volume hierarchy is what turns the linear scan into a
+logarithmic descent. The capstone's four-object scene is small enough that none of this
+matters yet, and the arithmetic you write for it sits inside every one of those bigger
+renderers.
+
+## What you are about to build
+
+In the lab, *Spheres, planes, shadows and one bounce*, you write `intersect_sphere` with
+the smallest-positive-root rule, `intersect_plane` with its parallel test, `reflect`,
+the dispatch pair `hit_distance` and `normal_at`, `nearest_hit`, `in_shadow` with the
+offset and the distance check, and `trace` with the background, the flipped normal, the
+ambient-only shadow colour and the one mixed bounce. The steering values are the ones
+worked above: $4$, $1$, $5$ and `None` for the four sphere cases, $(0.08, 0.08, 0.08)$
+for the shadowed floor, and the background unchanged for a ray into the sky.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Roots, epsilons, and the ray that must stop before the light",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "`intersect_sphere` is specified as 'the smaller root greater than EPS, then the larger, then None'. A student returns the smaller root whenever the discriminant is non-negative. Which ray exposes the difference?",
+                        "opts": [
+                            "A ray that grazes the sphere: its two roots coincide, and the smaller one is a numerical artefact of the square root",
+                            "A ray from the camera to a sphere in front of it: the larger root is the visible wall, since it is the one facing the eye",
+                            "A ray that starts inside the sphere: its smaller root is negative, and the far wall at the larger root is the true hit",
+                            "A ray pointing away from the sphere: its smaller root is the nearer of the two, and it should be returned as a hit",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"When the discriminant is zero the two roots are the same number, so returning the smaller one is returning the right one. There is no artefact to avoid; the lab's grazing case gives t = 5 under either rule.",
+                            r"From outside, the smaller root is the wall nearer the camera, and the near wall is the one you see. This is the case where the student's shortcut works, which is why it survives every first test image.",
+                            r"From the centre the roots are -1 and +1; the smaller is behind the origin, and only the positive one is a place the ray goes.",
+                            r"Both roots are negative for a sphere behind the ray; the smaller is merely more negative. Neither is a hit, and returning the smaller one would report an intersection at a point the ray never visits.",
+                        ],
+                        "why": r"""
+For a ray starting outside the sphere the smaller root is the near wall, and the
+shortcut agrees with the specification — which is why it passes every early test. Start
+the ray inside and the roots straddle the origin: from the centre they are $-1$ and $+1$,
+and the smaller one is behind the ray's start. The rule is not "the smaller root" but
+"the smallest root that is positive", tried in order: it returns the far wall from
+inside, the near wall from outside, the single root when grazing, and `None` when both
+roots are negative because the sphere is behind the ray.
+""",
+                    },
+                    {
+                        "q": "From (1, 0, 0) along (0, 0, -1) at the unit sphere centred on (0, 0, -5), the discriminant comes out exactly 0. What does that say about the ray?",
+                        "opts": [
+                            "The ray starts on the sphere's surface, so its first root is t = 0 and has to be rejected by the EPS test",
+                            "The line touches the sphere at one point only, t = 5, where the two roots of the quadratic are the same",
+                            "The ray runs parallel to the sphere's surface at that point, so it never meets it and the hit is None",
+                            "A real grazing ray always has a small positive discriminant, so an exact zero is a rounding artefact",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"A ray starting on the surface has $c = oc \cdot oc - r^2 = 0$, not a zero discriminant, and one of its roots is 0. Here $c = 25$, not 0: the ray starts well outside the sphere, and both roots are 5.",
+                            r"$b^2 - 4ac = 100 - 100 = 0$ collapses the two crossings into one, at $t = -b/2a = 5$: the ray is tangent to the sphere there.",
+                            r"Parallel is a notion for planes. A ray can only be tangent to a sphere, and tangency is a contact, not a miss: the ray touches the surface at exactly one point, and that point is a hit at $t = 5$.",
+                            r"With these exact inputs the arithmetic is exact — $b = -10$, $a = 1$, $c = 25$ — and the zero is real. In general a discriminant near zero is ill-conditioned and the lab's hint about epsilons applies, but that is a warning about precision, not a statement that tangency cannot occur.",
+                        ],
+                        "why": r"""
+With $oc = (1, 0, 5)$ and $d = (0, 0, -1)$: $a = 1$, $b = 2\,(oc \cdot d) = -10$,
+$c = 26 - 1 = 25$, and $b^2 - 4ac = 100 - 100 = 0$. A zero discriminant means the two
+crossings have merged into one: the line is tangent to the sphere, touching it at
+$t = -b/2a = 5$, which is the value the lab asks for. It is a genuine hit — the ray
+touches the surface — and the smallest-positive-root rule returns it without special
+treatment. The sign of the discriminant is the whole classification: negative misses,
+zero grazes, positive pierces.
+""",
+                    },
+                    {
+                        "q": "A lit sphere renders with a sprinkling of black dots across its bright side. The shadow rays are fired from the hit point with `t > 0` accepted. What is happening, and why does launching from `point + 1e-4 * normal` fix it?",
+                        "opts": [
+                            "The light is too close to the surface, so some shadow rays overshoot it; the nudge shortens them by the offset",
+                            "The computed hit point sits a hair inside the surface, so the shadow ray re-hits it; the nudge moves it outside",
+                            "The normal is flipped on those pixels, so their shadows fall on the wrong side; the nudge corrects the sign of n",
+                            "EPS is too large, so real hits close to the origin are being discarded; the nudge restores the distance they lost",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Shadow rays are not shortened by anything; the offset moves the origin, and the distance to the light is recomputed from there. An overshoot past the light is handled by the distance check, not by the offset, and it does not produce dots.",
+                            r"Rounding puts $o + td$ a hair under the surface on some pixels; the shadow ray finds its own sphere at a tiny $t$ and the pixel goes black. Starting from outside, there is nothing to find.",
+                            r"A flipped normal would darken whole regions consistently, not scatter dots, and the offset cannot change a sign — it adds a small multiple of the normal, whatever direction it points. The dots come from rounding, which varies pixel to pixel.",
+                            r"The symptom is hits that should not exist, not hits that are lost; a larger EPS would hide more of the acne, not less. The spurious self-hit at a tiny t is the problem, and moving the origin off the surface is what removes it.",
+                        ],
+                        "why": r"""
+The hit point $o + t\,d$ is computed in floating point and lands a hair above or below
+the true surface. On the pixels where it lands below, a shadow ray started there
+immediately re-intersects the surface it left, at a tiny positive $t$, and the point is
+declared in shadow: a black dot. The pattern is speckled because the rounding varies from
+pixel to pixel. Offsetting the origin along the normal moves the start of the shadow ray
+outside the surface so the self-hit cannot happen; the `t > EPS` test is a second guard
+that catches the smallest spurious roots but not the larger ones at grazing angles.
+""",
+                    },
+                    {
+                        "q": "`in_shadow` fires a ray from a floor point towards the light 10 units away and `nearest_hit` reports a sphere at t = 12. Is the point in shadow?",
+                        "opts": [
+                            "Yes: any hit along the shadow ray means the straight line to the light is interrupted somewhere",
+                            "No: a blocker has to lie between the point and the light, and this sphere sits beyond the light",
+                            "Yes: the ray reaches the light at t = 10 and is still inside the sphere at t = 12, so the light is enclosed",
+                            "It depends on the object: a plane beyond the light cannot occlude, but a sphere beyond it still can",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The shadow ray is a query about the *segment* from the point to the light, not the infinite line beyond it. Something at t = 12 on a ray whose light is at t = 10 is behind the light and cannot block it.",
+                            r"The ray's direction is unit length, so t is distance: the light is at 10, the sphere begins at 12, and nothing sits in the gap between the point and the light.",
+                            r"A hit at t = 12 is where the ray *enters* the sphere — the first root — so the sphere begins beyond the light, not around it. A light inside a sphere would give a first root smaller than 10, and the point would then be in shadow for the ordinary reason.",
+                            r"The geometry is the same for every kind of object: what matters is whether the hit distance is less than the distance to the light. `in_shadow` compares t against that distance without asking what was hit.",
+                        ],
+                        "why": r"""
+A shadow ray asks whether anything lies on the segment from the point to the light, and
+with a unit direction $t$ is distance along it. The light is at $t = 10$ and the nearest
+hit is at $t = 12$: the sphere is on the far side of the light and casts no shadow on the
+point. `in_shadow` therefore compares the hit distance against the distance to the
+light, and reports shadow only when the hit is nearer. Drop that comparison and every
+object anywhere along the line beyond the light darkens surfaces it cannot possibly
+shade — a common bug, because "the ray hit something" feels like the whole answer.
+""",
+                    },
+                    {
+                        "q": "`reflect(d, n)` is `d - 2 * (d . n) * n`. For d = (1, -1, 0) arriving at a floor with n = (0, 1, 0), what comes back?",
+                        "opts": [
+                            "(-1, 1, 0): both components are reversed, because a reflected ray travels straight back the way it came",
+                            "(1, -1, 0): d . n is negative, so the formula subtracts a negative quantity and hands d back unchanged",
+                            "(1, 1, 0): the component along the normal is reversed while the component along the surface is kept",
+                            "(-1, -1, 0): the component along the surface is reversed and the ray carries on down into the floor",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Straight back is what a ray hitting the surface head-on does; a ray at 45 degrees leaves at 45 degrees on the other side. Reversing both components is $-d$, which is a mirror of the ray itself, not a mirror of the surface.",
+                            r"$d \cdot n = -1$, so the formula is $d - 2(-1)n = d + 2n = (1, -1, 0) + (0, 2, 0) = (1, 1, 0)$. Subtracting a negative multiple of $n$ is adding $n$, and that is exactly what flips the normal component.",
+                            r"$(d \cdot n)\,n$ is the part of $d$ along the normal, $(0, -1, 0)$; subtracting it twice reverses that part and leaves $(1, 0, 0)$ alone.",
+                            r"A mirror reverses the component *perpendicular* to it and keeps the component along it — a ball bouncing off a floor keeps its sideways motion and reverses its downward motion. Keeping the downward part would send the ray through the floor.",
+                        ],
+                        "why": r"""
+Split $d$ into a part along the normal, $(d \cdot n)\,n = (0, -1, 0)$, and the rest,
+$(1, 0, 0)$. A mirror reverses the first and keeps the second. Subtracting the normal
+part twice does the reversing: $d - 2(d \cdot n)\,n = (1, -1, 0) - 2(-1)(0, 1, 0) =
+(1, 1, 0)$. The sign of $d \cdot n$ takes care of itself — it is negative for a ray
+arriving at the surface, which turns the subtraction into an addition. Reflecting twice
+restores $d$, which is the lab's round-trip test.
+""",
+                    },
+                    {
+                        "q": "`trace` gives the same colour at depth 0 and depth 1 for the red sphere, but different colours for the green one. What accounts for the difference?",
+                        "opts": [
+                            "The red sphere is nearer the camera, so its ray uses up the depth first and the green one gets what remains",
+                            "Depth 0 disables shading, and the red sphere happens to be the same colour as the background",
+                            "The red sphere reflects only itself, so its bounce colour equals its direct colour and the mix is invisible",
+                            "The red sphere has reflectivity 0, so no bounce is fired; the green one mixes in a bounce while depth > 0",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            r"Depth is not a shared budget; it is a per-ray counter passed down the recursion, and a primary ray hitting the red sphere never recurses at all. Where the two spheres sit relative to the camera does not enter into it.",
+                            r"Depth bounds the recursion only. At depth 0 the shading — ambient, diffuse, specular, shadow — runs exactly as at any other depth; what is skipped is the reflected ray. And the red sphere is nothing like the background colour.",
+                            r"A sphere cannot reflect only itself; its mirror rays leave its surface and see the rest of the scene. If a bounce were fired for the red sphere its colour would change with depth, as the green sphere's does.",
+                            r"The bounce is fired only when reflectivity is positive and depth is positive, and mixed with weight k. With k = 0 nothing is fired and depth never matters.",
+                        ],
+                        "why": r"""
+The recursion is guarded by two conditions: the object's reflectivity must be above zero
+and the remaining depth must be above zero. The red sphere has reflectivity 0, so no
+reflected ray is ever traced for it and the depth argument is never consulted; its
+colour is the same at every depth. The green sphere has reflectivity 0.6, so at depth 1
+a mirror ray is traced and its colour mixed in with weight 0.6, while at depth 0 the
+guard stops it. Depth is a per-ray bound on how many bounces remain, not a budget shared
+across the picture, and it never switches off shading.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Spheres, planes, shadows and one bounce",
                 "runtime": "python",

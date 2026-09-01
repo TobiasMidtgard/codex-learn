@@ -47,6 +47,262 @@ COURSE = {
                 "Vector clocks cost O(processes) per message — the reason Dynamo prunes them",
                 "Total order by (Lamport, process id) is a tie-break, not a causal fact",
             ],
+            "read": [
+                {
+                    "title": "Ordering without a clock: Lamport stamps and vector time",
+                    "minutes": 14,
+                    "body": r'''
+Two data centres take the same customer's clicks. Frankfurt records an order at what its
+clock calls 14:00:00.020. Nine milliseconds later the customer cancels it from a phone
+that happens to be routed to Dublin, and Dublin stamps the cancellation 14:00:00.017 —
+three milliseconds *before* the order it cancels. Both machines run NTP, both are inside
+the ten milliseconds of error that NTP promises, and nothing is broken. A reconciliation
+job that sorts by timestamp now sees a cancellation of an order that does not exist yet,
+and depending on how it was written it either pages somebody at three in the morning or
+quietly keeps the order and ships it.
+
+The picture to hold is that a timestamp is a measurement with an error bar, and two
+measurements whose error bars overlap do not order anything. Google's Spanner gets round
+this by knowing the error bar and waiting it out before it commits; most systems cannot
+afford the hardware that makes the bar small enough for that to be practical. So the
+question this module asks is what can be said about order without consulting a physical
+clock at all — and the answer turns out to be exactly what a correctness argument needs,
+and no more.
+
+## The order that is available without a clock
+
+Strip the clocks away and three facts about order survive. A single process runs its own
+events one after another, so an event it ran earlier comes before an event it ran later.
+A message cannot be received before it is sent, so a send comes before its receive. And
+if $x$ comes before $y$ and $y$ before $z$, then $x$ comes before $z$. Write $a \to b$,
+read "$a$ happened before $b$", for the relation built from those three rules and nothing
+else. It is a strong claim: $a \to b$ means there is a chain of program steps and messages
+along which $a$ could have influenced $b$.
+
+When neither $a \to b$ nor $b \to a$ holds, the two events are *concurrent*. That word
+does not mean "at the same instant". It means no chain connects them in either direction,
+so neither could have influenced the other, whatever the wall clocks said.
+
+The lab in this module, *Lamport and vector clocks over an event log*, works on one log
+of eight events across three processes, and it is worth tracing the arrows on it by hand
+before writing any code:
+
+```text
+0  A local          A's first step
+1  A send m1        0 -> 1 by program order
+2  B local
+3  B recv m1        1 -> 3 because m1 was sent before it arrived; 2 -> 3 by program order
+4  B send m2        3 -> 4
+5  C local
+6  C recv m2        4 -> 6 and 5 -> 6
+7  A local          1 -> 7 by program order
+```
+
+Follow the chains and event 0 reaches 1, 3, 4, 6 and 7. Event 2 reaches 3, 4 and 6 — but
+never 7, because nothing B does ever arrives at A, and A's events 0, 1 and 7 form a chain
+that receives nothing. So 2 and 7 are concurrent, and so are 5 and 7, and 1 and 5, and
+nine more: twelve pairs in all.
+
+## A counter that respects the arrows
+
+Suppose you want one integer $L$ per event such that $a \to b$ guarantees $L(a) < L(b)$.
+Take the three rules one at a time and see what each forces. Program order: every event
+on a process needs a larger number than the previous one on that process, so keep a
+counter per process and add one per event. Send before receive: the receive needs a
+number larger than the send had, so put the sender's counter inside the message and, on
+receipt, set the counter to $\max(\text{own}, \text{carried}) + 1$. The $\max$ is there
+because the receiver may already be ahead of the sender; the $+1$ is the receive itself,
+which is an event and needs its own number. Transitivity costs nothing, since $<$ is
+transitive already. That is the whole of Lamport's clock, and every line of it was forced.
+
+Trace it on the log. A's first two events are 1 and 2, and m1 carries 2. B's local step
+is 1; the receive is $\max(1, 2) + 1 = 3$; the send is 4, and m2 carries 4. C's local
+step is 1 and its receive is $\max(1, 4) + 1 = 5$. A's last step is 3.
+
+```python
+LOG = [
+    ("A", "local", None),   # 0
+    ("A", "send", "m1"),    # 1
+    ("B", "local", None),   # 2
+    ("B", "recv", "m1"),    # 3
+    ("B", "send", "m2"),    # 4
+    ("C", "local", None),   # 5
+    ("C", "recv", "m2"),    # 6
+    ("A", "local", None),   # 7
+]
+
+counter = {"A": 0, "B": 0, "C": 0}
+carried = {}
+stamps = []
+for proc, op, arg in LOG:
+    if op == "recv":
+        counter[proc] = max(counter[proc], carried[arg]) + 1
+    else:
+        counter[proc] += 1
+    if op == "send":
+        carried[arg] = counter[proc]
+    stamps.append(counter[proc])
+print(stamps)
+```
+
+That prints `[1, 2, 1, 3, 4, 1, 5, 3]`, which is what the lab's `lamport_clocks` must
+return. The order of the two operations on a receive matters: $\max$ first, then $+1$.
+Adding one first and taking the maximum second gives B's receive $\max(2, 2) = 2$, the
+same stamp as the send it received, and the rule the clock was built to keep is broken
+on the very first message.
+
+## The blind spot
+
+Now look at events 2 and 7 again. They are concurrent, and they carry stamps 1 and 3.
+The rule was built to make arrows produce increasing numbers; it never promised that
+increasing numbers came from an arrow. A single number line has to put every event
+somewhere, and two events with no relation between them still land at different places
+on it. Read the stamps forwards and they are true; read them backwards — "1 is less than
+3, so 2 happened before 7" — and they are fiction. The lab's `lamport_blind_spots` finds
+every concurrent pair that a stamp comparison would nonetheless order, and on this log
+there are two: $(2, 7)$ and $(5, 7)$.
+
+## What one number threw away
+
+Ask what information the counter discarded. When B received m1, its counter went from 1
+to 3, which recorded "I now know of something numbered 2" — but not *whose* event that
+was. Whether a chain exists from $a$ to $b$ is a question about which events of each
+process $b$'s process had heard of at the moment of $b$. So keep a counter per process:
+a vector, with entry $q$ holding how many of process $q$'s events have been heard of,
+directly or through other processes.
+
+The three rules now dictate three operations. An event on process $p$ adds one to entry
+$p$. A send ships a copy of the whole vector. A receive takes, entry by entry, the larger
+of its own value and the carried one — knowledge only grows, and the sender may know
+more about some third process than the receiver does — and then adds one to its own
+entry, because the receive is an event too. Merge first, then count: the merge brings in
+everything the sender knew, and the increment records the one new thing that happened
+here.
+
+Comparison falls out of the meaning. $a \to b$ exactly when $b$'s process knew, at $b$,
+of everything $a$'s process knew at $a$: every entry of $V(a)$ is at most the matching
+entry of $V(b)$, and at least one is strictly smaller so that the events are not the same
+one. If $a$ is ahead somewhere and $b$ is ahead somewhere else, no chain runs either way,
+and the pair is concurrent.
+
+Trace event 3: B holds $\{A:0, B:1, C:0\}$ and m1 carries $\{A:2, B:0, C:0\}$. The merge
+gives $\{A:2, B:1, C:0\}$ and the increment $\{A:2, B:2, C:0\}$. Event 6: C holds
+$\{A:0, B:0, C:1\}$, m2 carries $\{A:2, B:3, C:0\}$, the merge gives $\{A:2, B:3, C:1\}$
+and the increment $\{A:2, B:3, C:2\}$. Event 7 is $\{A:3, B:0, C:0\}$, and A's vector
+never learns anything about B or C, because A never receives. Compare 3 with 6:
+$\{2, 2, 0\}$ against $\{2, 3, 2\}$ is at most everywhere and strictly less on B and C,
+so 3 is before 6. Compare 2 with 7: $\{0, 1, 0\}$ against $\{3, 0, 0\}$ — 2 is ahead on
+B, 7 is ahead on A, concurrent.
+
+```python
+LOG = [
+    ("A", "local", None),   # 0
+    ("A", "send", "m1"),    # 1
+    ("B", "local", None),   # 2
+    ("B", "recv", "m1"),    # 3
+    ("B", "send", "m2"),    # 4
+    ("C", "local", None),   # 5
+    ("C", "recv", "m2"),    # 6
+    ("A", "local", None),   # 7
+]
+procs = ["A", "B", "C"]
+lamport = {p: 0 for p in procs}
+clock = {p: {q: 0 for q in procs} for p in procs}
+sent_stamp, sent_vec = {}, {}
+stamps, vectors = [], []
+for proc, op, arg in LOG:
+    vec = clock[proc]
+    if op == "recv":
+        lamport[proc] = max(lamport[proc], sent_stamp[arg]) + 1
+        for q, v in sent_vec[arg].items():
+            vec[q] = max(vec[q], v)
+    else:
+        lamport[proc] += 1
+    vec[proc] += 1
+    if op == "send":
+        sent_stamp[arg] = lamport[proc]
+        sent_vec[arg] = dict(vec)
+    stamps.append(lamport[proc])
+    vectors.append(dict(vec))
+
+
+def concurrent(a, b):
+    return any(a[k] < b[k] for k in a) and any(a[k] > b[k] for k in a)
+
+
+for i, v in enumerate(vectors):
+    print(i, v)
+pairs = [(i, j) for i in range(len(LOG)) for j in range(i + 1, len(LOG))
+         if concurrent(vectors[i], vectors[j])]
+print("concurrent pairs:", len(pairs))
+print("ordered by Lamport anyway:", [(i, j) for (i, j) in pairs if stamps[i] < stamps[j]])
+```
+
+Eight vectors, twelve concurrent pairs, and the two that a Lamport stamp would have
+ordered anyway: `[(2, 7), (5, 7)]`.
+
+## The mistake people make
+
+The first is reading Lamport backwards, and it is tempting for a good reason: on a single
+process the counter *is* a total order, and in a busy system most pairs of events are in
+fact connected by some chain, so the wrong reading is right most of the time and fails
+only on the pairs that matter — the concurrent ones, which are precisely the pairs where
+two replicas may have taken different actions.
+
+The second is subtler and only shows up under delay. A send has to hand over a *copy* of
+the vector. Hand over the live dictionary instead and every later local event on the
+sender mutates a message that is still in flight:
+
+```python
+LOG = [("A", "send", "m1"), ("A", "local", None), ("B", "recv", "m1")]
+for copy in (True, False):
+    clock = {"A": {"A": 0, "B": 0}, "B": {"A": 0, "B": 0}}
+    carried = {}
+    for proc, op, arg in LOG:
+        vec = clock[proc]
+        if op == "recv":
+            for q, v in carried[arg].items():
+                vec[q] = max(vec[q], v)
+        vec[proc] += 1
+        if op == "send":
+            carried[arg] = dict(vec) if copy else vec
+    print("copy" if copy else "alias", "-> B after the receive:", clock["B"])
+```
+
+With the copy, B learns of one event on A, which is what had happened when m1 was sent.
+With the alias, B's vector claims to know of A's second event as well — one that happened
+after the send, and that no message ever described. B's receive now compares as *after*
+an event it could not have seen. Nothing crashes, and the numbers look plausible, which
+is the worst kind of bug a clock can have.
+
+## Where it stops holding
+
+The vector costs one entry per process on every message, whether or not that process has
+ever done anything; the numeric unit in this module puts 200 processes at 4,800 bytes of
+clock on a 120-byte payload. Dynamo keeps a vector per *object* rather than per cluster
+and truncates it at ten entries, accepting that a pruned clock will sometimes report two
+versions as concurrent when one did precede the other. The entries are also keyed by
+process, so the set of processes has to be known and stable; a system where nodes come
+and go has to decide what an entry means for a node that has left.
+
+Both clocks see only the causality that their own messages carry. A user who reads a
+balance on one screen and types it into a form on another has created a causal link that
+no vector will ever record. And neither clock says a word about wall time: $a \to b$ says
+$a$ could have influenced $b$; concurrent says it could not; nothing says which was
+earlier on the calendar. When a replicated log needs every replica to apply operations
+in one sequence, the pair (Lamport stamp, process id) gives a total order every replica
+computes identically with no further messages — but it is a tie-break, chosen by
+construction, and any reader who takes it for history is wrong about every concurrent
+pair in it.
+
+In the lab you will write both clocks over this log, `compare_vectors` with its four
+outcomes, `concurrent_pairs` returning the twelve, and `lamport_blind_spots` returning
+$(2, 7)$ and $(5, 7)$. Both clock functions must also refuse a receive with no matching
+send and a message id sent twice — the guards are there because on a malformed log both
+clocks keep producing numbers that look right.
+''',
+                },
+            ],
             "quiz": {
                 "title": "What a clock can and cannot tell you",
                 "minutes": 7,
@@ -573,6 +829,249 @@ for _fn in (lamport_clocks, vector_clocks):
                 "nextIndex backtracking is how a new leader repairs a divergent follower",
                 "A leader may only commit an entry from its *own* term; earlier entries commit indirectly",
                 "A split vote wastes a term; randomised timeouts, not cleverness, break the tie",
+            ],
+            "read": [
+                {
+                    "title": "One leader per term: how Raft keeps every log identical",
+                    "minutes": 15,
+                    "body": r'''
+Three servers replicate a ledger. One of them, the primary, takes every write and copies
+it to the other two. At 09:14 somebody unplugs the wrong cable in the rack, and for eight
+seconds the two secondaries cannot reach the primary. They do the helpful thing and
+promote one of themselves. The old primary, which can still see its clients, does not
+know anything has happened and keeps accepting deposits. When the cable goes back in
+there are two ledgers, each holding acknowledged writes the other does not have, and no
+rule for choosing between them that does not lose money for somebody.
+
+That is split brain, and Raft is a set of rules whose purpose is to make it impossible.
+Two of them do most of the work: no two servers may believe they lead the same *term*,
+and the server that ends up leading must already hold every write a client was told
+about. Everything else in the protocol is bookkeeping in service of those two.
+
+## Why a majority
+
+A decision is made when a majority of servers agree to it. The reason is arithmetic. Two
+majorities of five servers hold three each, and $3 + 3 = 6 > 5$, so they cannot be
+disjoint — some server is in both. Enumerate every pair to see that there are no
+exceptions:
+
+```python
+from itertools import combinations
+
+servers = ["n1", "n2", "n3", "n4", "n5"]
+majorities = [set(c) for c in combinations(servers, 3)]
+disjoint = [(a, b) for a in majorities for b in majorities if not (a & b)]
+print(len(majorities), "majorities of five, disjoint pairs:", len(disjoint))
+print("smallest overlap:", min(len(a & b) for a in majorities for b in majorities))
+```
+
+Ten majorities, no disjoint pair, and the smallest overlap is one server. That one
+shared server is the load-bearing member of every argument below. It voted once, so two
+elections in a term cannot both have used it. It stored the committed entry, so a later
+leader elected with its vote will be measured against a log that contains that entry. A
+cluster of $2f + 1$ servers can therefore lose $f$ of them and still have a majority
+left to decide things, and it can lose no more than that.
+
+## Terms, and one vote each
+
+Time is cut into terms, numbered from 1. Each term opens with an election and has at
+most one leader, or none if the election failed. The term number is a Lamport clock in
+the sense of the previous module: every message carries the sender's term, a server that
+sees a larger term adopts it and becomes a follower at once, and a message carrying a
+smaller term is rejected with the receiver's own term in the reply, so the stale sender
+finds out and steps down. In the lab that check sits at the top of `handle`, before the
+message type is even looked at, because it applies to all four kinds.
+
+A server grants at most one vote per term, and it remembers who it voted for. Now two
+candidates in the same term each need a majority, the majorities share a server, and
+that server voted once — so at most one of them can win. This is the first of the two
+guarantees, and it needed nothing but the counting above.
+
+## One election and one entry, by hand
+
+Three servers n1, n2, n3, all at term 0 with empty logs. An empty log has
+`last_log_index() == -1` and `last_log_term() == 0`, and `commit_index` starts at $-1$.
+The majority of three is two, and the leader counts itself.
+
+```text
+n1         start_election()      -> term 1, voted_for = n1, votes = {n1}
+n1 -> n2   RequestVote           term=1  last_log_index=-1  last_log_term=0
+n2 -> n1   RequestVoteReply      term=1  granted=True        (n2 adopts term 1)
+n1         votes = {n1, n2}      -> 2 of 3: leader; next_index = 0 and match_index = -1 per peer
+
+n1         client_append("set x 1")   -> index 0, entry (1, "set x 1")
+n1 -> n2   AppendEntries         term=1  prev_log_index=-1  prev_log_term=0
+                                 entries=[(1, "set x 1")]  leader_commit=-1
+n2 -> n1   AppendEntriesReply    term=1  success=True  match_index=0
+n1         match_index[n2] = 0   -> 1 + 1 = 2 hold index 0, own term: commit_index = 0
+n2         commit_index = -1     -> nobody has told it yet
+
+n1 -> n2   AppendEntries         term=1  prev_log_index=0  prev_log_term=1  entries=[]  leader_commit=0
+n2         commit_index = min(0, 0) = 0
+```
+
+Read the lag at the end. The leader learns the entry is committed the moment the second
+acknowledgement arrives; the follower learns it one full round later, from the
+`leader_commit` field on the next `AppendEntries`, which was still $-1$ on the message
+that carried the entry itself. The lab's replication test asserts exactly this: after one
+round the leader's `commit_index` is 1 and n2's is $-1$.
+
+## The election restriction
+
+A leader repairs a follower by overwriting the follower's log with its own. That is what
+makes the logs converge, and it is also what makes the second guarantee necessary: if a
+server missing a committed entry could become leader, it would erase that entry from
+every server it repaired. So a voter refuses any candidate whose log is behind its own.
+The comparison is the last entry's *term* first, and only on a tie the last entry's
+*index*:
+
+```python
+def at_least_as_up_to_date(cand_term, cand_index, my_term, my_index):
+    return (cand_term > my_term or
+            (cand_term == my_term and cand_index >= my_index))
+
+
+# the voter holds [(1, "a"), (1, "b"), (3, "c")]: last term 3, last index 2
+print(at_least_as_up_to_date(2, 5, 3, 2))
+print(at_least_as_up_to_date(3, 2, 3, 2))
+print(at_least_as_up_to_date(3, 1, 3, 2))
+```
+
+`False`, `True`, `False`. The first case is the one people get backwards. A six-entry
+log whose last term is 2 loses to a three-entry log whose last term is 3, because a
+term-3 leader existed, which means a majority voted for it, which means a majority's logs
+were at least as good as that leader's — and the six-entry log never heard from term 3,
+so its extra entries were never committed by anybody. Put the restriction next to the
+majority argument and you get the second guarantee: a committed entry sits on a majority;
+a candidate needs a majority; the server in both holds the entry and refuses a candidate
+whose log is behind it; therefore every leader holds every committed entry.
+
+## Log matching, and walking back
+
+Every `AppendEntries` names the entry before the ones it carries, as `prev_log_index`
+and `prev_log_term`, and the follower accepts only if it holds an entry with that index
+and that term. By induction, two logs that agree on an (index, term) pair agree on
+everything before it: the leader of that term created the entry once, in one position,
+and never rewrote the prefix. A new leader that meets a rejection therefore lowers
+`next_index` for that follower by one and tries again, until the check passes, and then
+overwrites from there.
+
+The lab's partition test produces exactly this. Server a led term 1 and was cut off with
+b; it accepted three commands it could never commit, since two of five is not a majority.
+Server c won term 2 on the other side and committed one entry. After the heal, c's log is
+`[(1, w1), (1, w2), (2, z1)]` and a's is
+`[(1, w1), (1, w2), (1, orphan0), (1, orphan1), (1, orphan2)]`:
+
+```python
+leader = [(1, "w1"), (1, "w2"), (2, "z1")]
+follower = [(1, "w1"), (1, "w2"), (1, "orphan0"), (1, "orphan1"), (1, "orphan2")]
+next_index = len(leader)
+rounds = 0
+while True:
+    rounds += 1
+    prev = next_index - 1
+    prev_term = leader[prev][0] if prev >= 0 else 0
+    entries = leader[next_index:]
+    ok = prev < 0 or (prev < len(follower) and follower[prev][0] == prev_term)
+    print("round %d: prev_log_index=%d prev_log_term=%d -> %s"
+          % (rounds, prev, prev_term, "accepted" if ok else "rejected"))
+    if not ok:
+        next_index -= 1
+        continue
+    for offset, entry in enumerate(entries):
+        i = prev + 1 + offset
+        if i < len(follower) and follower[i][0] != entry[0]:
+            del follower[i:]
+        if i >= len(follower):
+            follower.append(entry)
+    break
+print("follower now:", follower)
+```
+
+Round one asks a to confirm term 2 at index 2; a has term 1 there and refuses. Round two
+asks about index 1, which matches, and the entry for index 2 conflicts on term, so
+everything from index 2 is deleted and `z1` goes in its place. The three orphans are
+gone, and no client was ever told they were committed, because a could count only itself
+and b.
+
+## The rule that looks wrong
+
+There is one rule in Raft that reads like a mistake: a leader may not commit an entry
+from an earlier term merely because a majority now stores it. It commits only entries of
+its *own* term by counting, and earlier entries commit indirectly when a current-term
+entry above them does.
+
+Here is the case it guards against, with five servers. The leader of term 2 wrote an
+entry at index 1, replicated it to one follower, and crashed. A server that never saw
+index 1 won term 3 — three of the five were in the same state, so the election
+restriction did not stop it — wrote its own index 1 with term 3 to itself alone, and
+crashed too. The term-2 leader came back, won term 4 with the same three votes, and went
+on replicating its old index 1, until three of five held the term-2 entry. If it now
+declared index 1 committed, and then crashed, the term-3 server could win term 5 (its
+last term, 3, beats their 2) and overwrite index 1 everywhere. An acknowledged entry
+would vanish.
+
+```python
+def advance_commit(log, term, match_index, commit_index):
+    majority = (len(match_index) + 1) // 2 + 1
+    for n in range(len(log) - 1, commit_index, -1):
+        if log[n][0] != term:
+            continue
+        count = 1 + sum(1 for m in match_index.values() if m >= n)
+        if count >= majority:
+            return n
+    return commit_index
+
+
+log = [(1, "w1"), (2, "w2")]
+match = {"n2": 1, "n3": 1, "n4": -1, "n5": -1}
+print("term-4 leader, three of five hold the term-2 entry:",
+      advance_commit(log, 4, match, 0))
+log.append((4, "w3"))
+match = {"n2": 2, "n3": 2, "n4": -1, "n5": -1}
+print("after a term-4 entry reaches the same three:",
+      advance_commit(log, 4, match, 0))
+```
+
+The first call returns 0, the commit index it was given: three servers hold index 1, but
+the entry's term is 2 and the leader's is 4, so it is skipped. The second call, once a
+term-4 entry at index 2 has reached the same three servers, returns 2 — and index 1
+commits with it, because a server holding index 2 with term 4 holds index 1 too, by log
+matching, and no server whose last term is 3 can now win an election against a last term
+of 4.
+
+## The mistake people make
+
+Forgetting that the leader counts itself. `advance_commit` needs `majority()` servers
+*including* the leader, so it is `1 + sum(...)`; leave the `1 +` off and a three-server
+cluster needs both followers for every commit, and one slow follower stalls the whole
+service. It is tempting because "replicas" sounds like "the other machines", and because
+a leader's own copy never arrives as a message. The second mistake is the client's:
+reading a leader's *log* as if it were the committed state. The cut-off leader in the
+partition test accepts three commands and replicates them to b, and its `commit_index`
+never moves off 1. A client that reads the log sees writes that the cluster is about to
+erase.
+
+## Where it stops holding
+
+Raft tolerates crashes and partitions, not lies: a server that sends a fabricated term
+or a forged vote breaks every argument above, and a Byzantine setting needs a different
+protocol and $3f + 1$ servers. It needs a majority alive; with five servers, three down
+means no leader and no progress, which is the consistency side of CAP chosen
+deliberately. It needs time to be roughly sane: elections are triggered by timeouts, and
+randomised timeouts only break split votes if a message crosses the cluster much faster
+than a timeout fires. And a leader that has not heard from a majority recently cannot
+know it is still leader, so a read served from the leader alone can be stale unless it
+first confirms its term with a heartbeat round.
+
+The lab, *Raft election and log replication*, removes time from the picture on purpose.
+Its `Cluster` moves nothing until `deliver()` is called, elections start when the test
+calls `start_election()`, and the split vote is produced by dropping every `RequestVote`
+but two rather than by racing timers — which is what makes that failure reproducible, and
+what lets the partition test assert, message by message, that the minority side cannot
+commit and that the heal converges every log to `[(1, w1), (1, w2), (2, z1)]`.
+''',
+                },
             ],
             "quiz": {
                 "title": "Terms, votes, and what a leader may commit",
@@ -1394,6 +1893,236 @@ assert _n.replicate() == [], "a follower has nothing to replicate"
                 "Read repair is opportunistic anti-entropy carried on the read path",
                 "Availability versus staleness is a dial, not a binary — this is PACELC's ELC half",
             ],
+            "read": [
+                {
+                    "title": "Quorums: what R + W > N buys, and what it does not",
+                    "minutes": 14,
+                    "body": r'''
+A shopping cart lives on three replicas, a, b and c. A customer adds an item; the
+coordinator that took the request writes to a and b, gets two acknowledgements, and
+returns success — the write quorum was two, and c was slow, so nobody waited for it. A
+second later the customer's page refreshes through a different coordinator, which reads
+one replica because the read quorum is one, and the replica it happens to reach is c.
+The cart comes back empty. No machine failed and no message was lost; the two operations
+touched sets of replicas that did not overlap, and there is nothing in the arithmetic of
+"two out of three" and "one out of three" that says they must.
+
+## Reads and writes with no leader
+
+In a leaderless store there is no primary to route through. Any node can coordinate a
+request: it sends the write to the $N$ replicas of the key, waits for $W$
+acknowledgements and returns; it sends a read to the replicas, waits for $R$ answers, and
+returns the best of them. $N$, $R$ and $W$ are settings, and the lab in this module, *A
+tunable quorum store*, is built so that you can set them and then aim a request at
+particular replicas to see what the settings do and do not promise.
+
+Here is the opening picture in twenty lines. The replicas are dictionaries, the
+coordinator is two functions, and `order` is the sequence in which the coordinator tries
+replicas — the lab calls it `contact_order` and lets a `prefer` argument put chosen
+nodes at the front:
+
+```python
+replicas = {"a": {}, "b": {}, "c": {}}
+
+
+def write(key, value, version, order, w):
+    acks = []
+    for node in order:
+        replicas[node][key] = (version, value)
+        acks.append(node)
+        if len(acks) == w:
+            break
+    return acks
+
+
+def read(key, order, r):
+    answers = [(node, replicas[node].get(key)) for node in order[:r]]
+    held = [got for _, got in answers if got is not None]
+    return answers, (max(held) if held else None)
+
+
+print("wrote to:", write("cart:7", "one item", 1, ["a", "b", "c"], w=2))
+print("R=1 from c:", read("cart:7", ["c", "a", "b"], r=1))
+print("R=2 from c:", read("cart:7", ["c", "a", "b"], r=2))
+```
+
+The write stopped after a and b. The read with $R = 1$ aimed at c saw `None`. The same
+read with $R = 2$ picked up a as its second answer and returned `(1, "one item")` — and
+notice that it returned the *versioned* value, because among `None` and
+`(1, "one item")` the coordinator needs a rule for which to believe.
+
+## Where the condition comes from
+
+The read set has $R$ replicas and the write set has $W$, both drawn from the same $N$.
+They can avoid each other only if there is room: $R + W \le N$. Demand $R + W > N$ and
+they cannot fit side by side, so at least one replica is in both, and that replica holds
+the write when the read arrives. The derivation unit in this module does the counting
+symbolically; it can also be done by exhaustion, which makes the strictness of the
+inequality hard to miss:
+
+```python
+from itertools import combinations
+
+
+def disjoint_pairs(n, r, w):
+    nodes = range(n)
+    return sum(1 for rs in combinations(nodes, r) for ws in combinations(nodes, w)
+               if not set(rs) & set(ws))
+
+
+for n, r, w in [(3, 1, 2), (3, 2, 2), (5, 2, 3), (5, 3, 3), (5, 1, 5)]:
+    print("N=%d R=%d W=%d  R+W>N: %-5s  disjoint read/write pairs: %d"
+          % (n, r, w, r + w > n, disjoint_pairs(n, r, w)))
+```
+
+$N = 5$ with $R = 2$ and $W = 3$ is the row to stare at. Five is not greater than five,
+and there are ten ways to pick a read pair and a write triple that share nothing.
+Equality is not "nearly safe"; it is exactly the boundary at which disjoint sets become
+possible. The lab's `read_your_writes(n, r, w)` is one comparison, and the tests hold it
+to `(3, 1, 2)` being false and `(3, 2, 2)` being true.
+
+## Versions, because overlap alone returns nothing
+
+Intersection promises that one of the $R$ answers is fresh. It does not say which. So
+every stored value carries a version, the coordinator hands out a fresh one for each
+write from a counter that only goes up, a replica's `put` refuses anything whose version
+is not strictly newer than what it holds, and a read returns the answer with the highest
+version. Each of those three is load-bearing. Without the counter, two writes cannot be
+told apart. Without the refusal, a slow write from the past could land on a replica after
+a newer one and roll it backwards. Without the merge rule, the coordinator would return
+whichever reply arrived first, which is the nearest replica and not the best informed
+one.
+
+The lab's tests probe the merge directly: write `old` to a and b, write `new` to b and
+c, read from a and c, and the answer must be `new` — the highest version in the set, not
+the first answer.
+
+## What highest-version-wins throws away
+
+The version counter is a total order, and the writes that produced it were not. Two
+clients both read the cart at version 1, one adds eggs and one adds bread, and both write
+back what they think the cart should now be:
+
+```python
+version = 0
+replica = {}
+
+
+def put(key, value):
+    global version
+    version += 1
+    replica[key] = (version, value)
+    return version
+
+
+put("cart:7", ["milk"])
+seen_by_x = replica["cart:7"]
+seen_by_y = replica["cart:7"]
+put("cart:7", seen_by_x[1] + ["eggs"])
+put("cart:7", seen_by_y[1] + ["bread"])
+print(replica["cart:7"])
+```
+
+`(3, ['milk', 'bread'])`. The eggs are gone, and nobody was told. This is last-writer-
+wins, and it is a real design rather than a bug: it is cheap, every replica converges to
+the same answer with no coordination, and for a sensor's latest temperature it is
+exactly right. For a cart it is wrong, which is why Dynamo keeps both values as
+*siblings* and hands the merge to the application — and why Amazon's cart is famous for
+occasionally bringing back a deleted item, since a union merge never removes. Telling a
+genuinely concurrent pair of writes apart from an ordered pair is the job of the vector
+clocks from the first module; a counter cannot do it, because it collapses the two cases
+into one number.
+
+There is a second, separate condition hiding here. $R + W > N$ makes a read meet a
+write. It says nothing about two *writes* meeting each other. With $W = 1$ on three
+replicas, two writes can land on disjoint replicas and each replica holds one of them
+believing it to be current; only $W > N/2$ forces the two write sets to share a replica,
+so that at least one node saw both and can rank them. $N = 5$, $W = 3$, $R = 1$
+satisfies the second condition and fails the first, so the two really are independent.
+
+## Read repair
+
+A read that assembled $R$ answers has, in its hands, evidence of which of those replicas
+is behind. Throwing that away is wasteful, so the coordinator pushes the winner back to
+every responder that returned an older version or nothing:
+
+```python
+replicas = {"a": {"k": (3, "new")}, "b": {"k": (3, "new")}, "c": {"k": (1, "old")}}
+order = ["c", "a", "b"]
+answers = [(node, replicas[node]["k"]) for node in order[:2]]
+best = max(got for _, got in answers)
+repaired = []
+for node, got in answers:
+    if got[0] < best[0]:
+        replicas[node]["k"] = best
+        repaired.append(node)
+print("returned:", best, "repaired:", repaired)
+print("c now holds:", replicas["c"]["k"])
+```
+
+This is anti-entropy done opportunistically on the read path, and it only ever touches
+the replicas that actually answered — a replica that was down, or was not in the read
+set, learns nothing from it. A background sweep over the whole preference list is a
+different mechanism, and the capstone builds it as `repair(key)`.
+
+## The mistake people make
+
+The first is setting $R + W = N$ and calling it safe, usually because three plus two
+"covers all five". The exhaustive count above shows ten ways it does not. The second is
+subtler, and it comes from a lifetime of single-node databases: reading a failed write as
+a write that did not happen.
+
+```python
+replicas = {"a": {}, "b": {}, "c": {}}
+up = {"a": True, "b": False, "c": False}
+acks = []
+for node in ["a", "b", "c"]:
+    if not up[node]:
+        continue
+    replicas[node]["k"] = (1, "v")
+    acks.append(node)
+print("acks:", acks, "-> quorum of 2 failed, but a holds:", replicas["a"])
+```
+
+The coordinator wanted two acknowledgements and got one, so it raises `QuorumError`.
+Nothing takes the value back off a, because there is no undo log, no two-phase commit,
+nothing anywhere that can roll a replica backwards. The next read that includes a will
+see version 1 and repair everyone else to it. A failed write is a write with an *unknown*
+outcome, and the lab's tests assert precisely this: after a `QuorumError`, the replica
+that did acknowledge still holds the value. A client that needs "no" to mean "not stored"
+has to be given a different store.
+
+## Where it stops holding
+
+Every argument above assumed both sets were drawn from the same $N$ home replicas. The
+capstone deliberately breaks that with hinted handoff: when a home replica is down, a
+node outside the preference list holds the write on its behalf and counts towards $W$.
+That keeps writes available through a failure, and it means a read of the home replicas
+can miss a write that was acknowledged, until the hint is delivered — a *sloppy* quorum
+trades the intersection guarantee for uptime, and it is the right trade for a cart and
+the wrong one for a bank balance.
+
+The version counter lives on one coordinator. With many coordinators each running its
+own counter, version 7 from one and version 7 from another are not comparable, and real
+stores fall back on either wall-clock timestamps, which reintroduces every problem the
+first module opened with, or on vector clocks. Nor does $R + W > N$ give
+linearizability: a read that arrives while a write is halfway to its quorum can see the
+new value on one replica, and a later read through a different set can see the old one,
+because the write had not yet reached $W$ copies. What the condition buys is that a read
+never misses a write that was *acknowledged* — and the same dials also set how many
+nodes must be up for anything to work at all, since $W = N$ makes any single reboot a
+write outage. Availability against staleness is a dial, and $R$ and $W$ are its two
+knobs; that is the E-L-C half of PACELC, the trade a store makes even when nothing has
+failed.
+
+In the lab you will write `Replica.get` and `Replica.put`, the `QuorumStore` whose
+`write` stops at $W$ acknowledgements and whose `read` stops at $R$, `contact_order` so
+that a test can aim a read at c, `read_your_writes`, and the `repair=True` path that
+records which responders were healed. The tests that matter most are the two that look
+alike: the same write, read once with $R = 1$ and once with $R = 2$.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Turning the dials",
                 "minutes": 8,
@@ -2029,6 +2758,266 @@ assert _s.read("k", prefer=["a", "c"]) is not None, "two live replicas are enoug
                 "A preference list is the first N distinct nodes clockwise — the basis of replica placement",
                 "`hash()` on a str is salted per process; partitioning needs a stable digest such as MD5",
                 "Hot keys are not solved by hashing — they need a separate splitting or caching strategy",
+            ],
+            "read": [
+                {
+                    "title": "Placing keys: why a ring beats a modulo",
+                    "minutes": 14,
+                    "body": r'''
+A cache sits in front of a database, on three servers, and every client picks a server
+the natural way: hash the key, take the remainder modulo three. The hit rate is 95%.
+Load grows, a fourth server is added, and for the next hour the hit rate is 25% while
+the database underneath takes four times its usual traffic and falls over. Nothing was
+misconfigured. The remainder modulo four is a different number from the remainder modulo
+three for most keys, so three quarters of the keys were now being looked for on a server
+that had never seen them.
+
+## Why a modulo moves almost everything
+
+Take a key whose hash is $h$. Under three servers it lives at $h \bmod 3$, under four at
+$h \bmod 4$, and it stays put exactly when the two remainders agree. Write them out for
+$h$ from 0 to 11:
+
+```text
+h        0 1 2 3 4 5 6 7 8 9 10 11
+h mod 3  0 1 2 0 1 2 0 1 2 0  1  2
+h mod 4  0 1 2 3 0 1 2 3 0 1  2  3
+```
+
+They agree at 0, 1 and 2 and nowhere else: three of twelve, a quarter. The pattern
+repeats every $3 \times 4 = 12$ values, so a quarter of all keys stay and three quarters
+move, and the derivation unit in this module shows that in general $k/(k+1)$ of the keys
+move when a $(k+1)$th server joins $k$. Measured over five thousand MD5-hashed keys:
+
+```python
+import hashlib
+
+
+def ring_hash(text):
+    return int.from_bytes(hashlib.md5(str(text).encode("utf-8")).digest()[:8], "big")
+
+
+keys = ["key-%d" % i for i in range(5000)]
+before = {k: ring_hash(k) % 3 for k in keys}
+after = {k: ring_hash(k) % 4 for k in keys}
+moved = sum(1 for k in keys if before[k] != after[k])
+print("moved %d of %d = %.3f" % (moved, len(keys), moved / len(keys)))
+```
+
+It moved 3706 keys, 0.741 of them, which is the three quarters with sampling noise.
+Worse than the fraction is *where* they went: the moved keys are scattered across all
+four servers, so every server both lost keys and gained keys, and the whole fleet is cold
+at once.
+
+## Put the servers on the same circle as the keys
+
+The fix is to stop asking "which of $k$ slots" and ask "which server is next". Picture
+the hash range bent into a circle. Each server is placed on the circle at the hash of its
+name, and a key belongs to the first server clockwise from the key's own hash. Adding a
+server puts one more point on the circle, and the only keys that change hands are those
+on the arc between the new point and the point behind it — keys that used to walk past
+that spot to reach the next server, and now stop early.
+
+Here is a ring drawn on the numbers 0 to 99, with three servers at 10, 45 and 80. The
+points are kept in a sorted list and the lookup is a binary search for the first point
+strictly greater than the key's position; when there is none, the key has walked past
+the top of the range and wraps to the first point:
+
+```python
+import bisect
+
+points = [10, 45, 80]
+owner = {10: "n1", 45: "n2", 80: "n3"}
+
+
+def get_node(position):
+    i = bisect.bisect_right(points, position)
+    if i == len(points):
+        i = 0
+    return owner[points[i]]
+
+
+for pos in (12, 50, 90, 3, 45):
+    print("key at %2d -> %s" % (pos, get_node(pos)))
+
+bisect.insort(points, 60)
+owner[60] = "n4"
+print("after n4 joins at 60:")
+for pos in (12, 50, 90, 3, 45):
+    print("key at %2d -> %s" % (pos, get_node(pos)))
+```
+
+Key 12 goes clockwise to 45 and belongs to n2; key 50 to 80 and n3; key 90 finds nothing
+above it and wraps to 10, and so does key 3. Key 45 sits exactly on a point and is given
+to the *next* one, 80, because `bisect_right` returns the first position strictly
+greater — a convention, and the lab's tests are written against this one. Then n4 joins
+at 60, and the keys at 50 and 45 move to it, both from n3, and nobody else moves: n1's
+and n2's keys are untouched because their arcs are untouched.
+
+The fraction is the arc the newcomer claims. With $k + 1$ servers on the circle at
+effectively random positions, none is special, so each owns $1/(k+1)$ of the circle on
+average, and the newcomer's share is exactly the set of keys that move: $1/(k+1)$ of
+them, all onto one server, and all taken from the servers clockwise of its points.
+Removing a server is the mirror image — its arcs go to the next server clockwise, and
+nothing else changes.
+
+## The lumps, and what virtual nodes do about them
+
+One point per server is a bad idea, and the toy ring hints at why: 10, 45 and 80 give
+n1 an arc of 30 and the other two arcs of 35, and those positions were chosen kindly.
+Real positions are hash values, and the gaps between $k$ random points on a circle are
+wildly uneven — the largest is typically around $\ln k / k$ of the circle and the
+smallest around $1/k^2$. So give each server many points instead: 128 of them, at the
+hashes of `"n1#0"`, `"n1#1"` and so on. A server's share is now the sum of 128 small
+arcs, and averaging 128 roughly independent gaps shrinks the relative spread by about
+$\sqrt{128} \approx 11$ times. The same trick means that when a server leaves, its 128
+arcs go to 128 different successors, so the load it was carrying is spread over the
+fleet rather than dumped on one neighbour.
+
+```python
+import bisect
+import hashlib
+
+
+def ring_hash(text):
+    return int.from_bytes(hashlib.md5(str(text).encode("utf-8")).digest()[:8], "big")
+
+
+def build(nodes, vnodes):
+    points, owner = [], {}
+    for node in nodes:
+        for v in range(vnodes):
+            p = ring_hash("%s#%d" % (node, v))
+            bisect.insort(points, p)
+            owner[p] = node
+    return points, owner
+
+
+def get_node(points, owner, key):
+    i = bisect.bisect_right(points, ring_hash(key))
+    return owner[points[0 if i == len(points) else i]]
+
+
+keys = ["key-%d" % i for i in range(5000)]
+p3, o3 = build(["n1", "n2", "n3"], 128)
+p4, o4 = build(["n1", "n2", "n3", "n4"], 128)
+before = {k: get_node(p3, o3, k) for k in keys}
+after = {k: get_node(p4, o4, k) for k in keys}
+moved = [k for k in keys if before[k] != after[k]]
+print("ring moved %.3f of the keys" % (len(moved) / len(keys)))
+print("every moved key went to n4:", all(after[k] == "n4" for k in moved))
+for vnodes in (1, 128):
+    pts, own = build(["n1", "n2", "n3", "n4"], vnodes)
+    load = {}
+    for k in keys:
+        n = get_node(pts, own, k)
+        load[n] = load.get(n, 0) + 1
+    print("vnodes=%3d load=%s max/min=%.2f" % (vnodes, dict(sorted(load.items())),
+                                              max(load.values()) / min(load.values())))
+```
+
+The join moved 0.261 of the keys, close to the $1/4$ the arc argument predicts, and
+every one of them landed on n4. With one point per server, four servers carry 871, 1670,
+430 and 2029 keys — the busiest has 4.72 times the load of the quietest. With 128 points
+each, the ratio is 1.23. The lab's tests hold `movement` between 0.15 and 0.35 for the
+ring and above 0.6 for the modulo, and the one-point ratio above 2 against the 128-point
+ratio below 1.5.
+
+## Why MD5, and not `hash()`
+
+The ring only works if every client computes the same position for the same key.
+Python's `hash()` on a string is salted with a random value per interpreter process
+unless `PYTHONHASHSEED` is pinned, so two coordinators would build two different rings
+and disagree about who owns every key from their first request — and the disagreement
+would change on every restart, which is the least debuggable failure available. MD5 is
+not chosen for its cryptographic properties, which are broken anyway; it is chosen
+because it is the same number everywhere, forever:
+
+```python
+import hashlib
+
+print(hashlib.md5(b"key-0").hexdigest())
+print(int.from_bytes(hashlib.md5(b"key-0").digest()[:8], "big"))
+```
+
+That digest, `b4428b7e85e1fa85481af6307d7f3cf7`, is the same on every machine that will
+ever run the line. `hash()` is faster, and speed is exactly what is being given up to get
+determinism.
+
+## Replicas: the preference list
+
+A key's replicas are the first $N$ *distinct* servers clockwise from it. The word
+distinct is doing work. With 128 points per server scattered over the circle, the next
+point clockwise belongs to the same server as the last one about one time in $k$, and a
+list built from points rather than servers would put two or three copies of a key on one
+machine — which is one copy, the moment that machine fails:
+
+```python
+import bisect
+import hashlib
+
+
+def ring_hash(text):
+    return int.from_bytes(hashlib.md5(str(text).encode("utf-8")).digest()[:8], "big")
+
+
+points, owner = [], {}
+for node in ["n1", "n2", "n3", "n4"]:
+    for v in range(32):
+        p = ring_hash("%s#%d" % (node, v))
+        bisect.insort(points, p)
+        owner[p] = node
+
+start = bisect.bisect_right(points, ring_hash("cart:7"))
+walk = [owner[points[(start + step) % len(points)]] for step in range(8)]
+print("first eight points clockwise:", walk)
+prefs = []
+for node in walk:
+    if node not in prefs:
+        prefs.append(node)
+print("distinct nodes, in order met:", prefs[:3])
+```
+
+The first eight points clockwise of `cart:7` belong to n3, n3, n1, n4, n4, n2, n3, n2.
+Collapsing repeats gives n3, n1, n4 as the three replicas. The walk is bounded by the
+number of points, so it always ends, and the lab's `preference_list` raises `ValueError`
+if asked for more servers than the ring has.
+
+## The mistake people make
+
+The wrap is where the off-by-one lives. When `bisect_right` returns `len(points)`, the
+answer is index 0, the smallest point; index $-1$ is the *largest* point, the one the
+key has already walked past, and using it hands every key above the top point to the
+server behind it instead of the one in front. It is tempting because `points[-1]` reads
+as "the last one on the circle", and it is wrong by exactly one arc. Two more, both
+cheap to make: forgetting the `#v` suffix, so that all 128 of a server's points hash to
+the same position and the server has one point after all; and reaching for
+`bisect_left`, which changes who owns a key that lands exactly on a point, quietly
+disagreeing with the position the preference list starts its walk from.
+
+## Where it stops holding
+
+Hashing balances *keys*, and it has nothing to say about *requests*. One key that takes
+40% of all reads hashes to one position and lands on one server, whatever that server's
+point count. Hot keys are handled elsewhere — split the key with a suffix, cache it in
+front of the store, or serve reads from all $N$ replicas rather than the first. Machines
+of unequal size need unequal point counts, which the ring handles by giving a big machine
+more points; the lab's ring gives every node the same number. Every client has to agree
+on the ring's membership, so real systems gossip it, and a client with a stale view
+sends requests to the wrong node until it catches up. And the keys that move still have
+to be *moved*: 26% of the data streaming to a new node is far better than 74%, but it is
+not free, and it is why a join is scheduled rather than casual. Finally, a hash ring
+destroys order — keys that are neighbours in the application are strangers on the circle
+— so a store that needs range scans partitions by key range instead, and pays for that
+with hot ranges.
+
+In the lab, *A consistent-hashing ring*, you will build `ConsistentHashRing` with sorted
+points and `bisect`, `get_node` with the wrap, `preference_list` with the distinct walk,
+and the three measurement helpers — `modulo_node`, `movement` and `load` — that turn the
+two numbers at the top of this reading, 0.74 and 0.26, into something you have measured
+yourself.
+''',
+                },
             ],
             "quiz": {
                 "title": "Where a key lives",
