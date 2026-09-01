@@ -2025,6 +2025,10 @@ function createCircuit(root, opts) {
      and every schematic in the catalogue would throw on first draw. */
   let caret = null;
   let cvFocused = false;
+  /* Drawn only once a key has been pressed. A click leaves the caret where it landed so
+     the keyboard picks up from there, but it does not put a ring on the drawing: a mouse
+     user who has never touched an arrow key should see the canvas they saw before. */
+  let caretByKey = false;
   let analysis = { mode: 'dc', node: 1, f1: 10, f2: 1e6, tstop: 5e-3 };
   let result = null;
   /* The machines the last transient ran, kept only so the panel can show what they
@@ -2116,8 +2120,10 @@ function createCircuit(root, opts) {
           '<p class="ckt-vh" id="' + uid + '-keys">Arrow keys move the caret one cell; ' +
             'hold Shift to move the selection instead. Enter places the part the toolbar ' +
             'has chosen, draws a wire between two presses, or picks up what is under the ' +
-            'caret. R rotates, G groups, U ungroups, Delete removes, and Escape lets go. ' +
-            'Plus and minus zoom, 0 fits the drawing. Tab leaves the canvas.</p>' +
+            'caret; Enter again on a block that is already selected opens it, and on a ' +
+            'switch throws it. R rotates, G groups, U ungroups, Delete removes, and ' +
+            'Escape lets go and then closes a block. Plus and minus zoom, 0 fits the ' +
+            'drawing. Tab leaves the canvas.</p>' +
           /* Every action on this canvas changes a picture and nothing else. This is
              where it is said in words. */
           '<p class="ckt-vh" data-say role="status" aria-live="polite"></p>' +
@@ -3063,7 +3069,7 @@ function createCircuit(root, opts) {
 
     /* The wire being drawn, from whichever of the two pointers is live. The caret is
        second so a mouse still wins while it is on the canvas. */
-    const lead = hover || (cvFocused ? caret : null);
+    const lead = hover || (cvFocused && caretByKey ? caret : null);
     if (wireFrom && lead) {
       ctx.save();
       ctx.setLineDash([4, 4]);
@@ -3080,7 +3086,7 @@ function createCircuit(root, opts) {
     /* The caret. A ring rather than a filled cell, because what matters is the cell it
        is around and not the mark itself, and drawn from `accent` so it carries the same
        contrast on this ground as everything else the learner is meant to see. */
-    if (cvFocused && caret) {
+    if (cvFocused && caret && caretByKey) {
       ctx.save();
       ctx.strokeStyle = pal.accent;
       ctx.lineWidth = 2 / view.s;
@@ -3258,7 +3264,7 @@ function createCircuit(root, opts) {
           (p.wiper === undefined ? 0.5 : p.wiper).toFixed(2) + '" value="' +
           Math.round((p.wiper === undefined ? 0.5 : p.wiper) * 1000) +
           '" style="height:18px;padding:0;border:0;background:none;accent-color:var(--lime);width:100%">' +
-          '<span data-wiperval style="color:var(--lime)">' +
+          '<span data-wiperval style="color:var(--accent-ink)">' +
           (p.wiper === undefined ? 0.5 : p.wiper).toFixed(2) + '</span></div>'
         : '') +
       '<p class="ckt-hint" data-note>' + modelNote(p) + '</p>' + boardShortNote(p);
@@ -4501,6 +4507,7 @@ function createCircuit(root, opts) {
        order runs straight past the one control on the page that has any work in it. */
     focusCanvas();
     caret = pt;
+    caretByKey = false;
 
     /* Middle button, or space held: pan. Both are what a drawing tool does, and the
        second is the one people already have in their fingers. */
@@ -4645,6 +4652,7 @@ function createCircuit(root, opts) {
     const step = ARROWS[e.key];
     if (step) {
       e.preventDefault();
+      caretByKey = true;
       if (!caret) { caret = caretHome(); revealCaret(); paint(); announce('Caret at ' + cellName(caret) + '.'); return; }
       if (e.shiftKey) {
         /* Shift+arrow moves the selection, which is the drag gesture without a pointer.
@@ -4678,9 +4686,15 @@ function createCircuit(root, opts) {
         if (!spaceDown) { spaceDown = true; cv.style.cursor = 'grab'; }
         return;
       }
+      caretByKey = true;
       if (!caret) { caret = caretHome(); revealCaret(); paint(); announce('Caret at ' + cellName(caret) + '.'); return; }
       if (tool === 'wire') { announce(wireAt(caret)); return; }
       if (tool === 'select') {
+        /* A block is opened by double-clicking it, so the key is pressing Enter on one
+           that is already selected — the second press, which is what a double click is.
+           Read before the selection changes, because selecting it is what the first
+           press did. */
+        const already = selIds.size === 1 && partAt(caret) && selIds.has(partAt(caret).id);
         const hit = selectAt(caret, e.shiftKey);
         paintPart(); paint();
         /* A switch is used by clicking it, and Enter is the click. Not on shift, which
@@ -4688,9 +4702,9 @@ function createCircuit(root, opts) {
         if (hit && hit.kind === 'SW' && !e.shiftKey) {
           toggleSwitch(hit); paintPart();
           announce(partName(hit) + ' is now ' + (hit.closed ? 'closed' : 'open') + '.');
-        } else if (hit && hit.kind === 'IC' && !e.shiftKey && e.key === 'Enter' && e.altKey) {
+        } else if (hit && hit.kind === 'IC' && !e.shiftKey && already) {
           openBlock(hit);
-          announce('Opened ' + partName(hit) + '.');
+          announce('Opened ' + partName(hit) + '. Escape closes it again.');
         } else {
           announce(hit ? 'Selected ' + partName(hit) + '.' : 'Selection cleared.');
         }

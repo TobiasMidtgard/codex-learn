@@ -443,6 +443,29 @@ section('keyboard', () => {
     note('keyboard', 'the caret is tracked but never drawn: a focused frame is ' + lit +
       ' draw calls against ' + dark + ' for the same drawing unfocused');
   }
+
+  /* And the other way: a learner who goes back to the mouse must get the canvas they
+     had before this cycle. Clicking focuses the canvas — it has to, or the tab order
+     runs past the editor — so the ring is gated on a key having been pressed, and the
+     click has to put that gate back down. Testing it on a fresh editor proves nothing,
+     because nothing has raised the gate yet: the sequence that matters is arrow, then
+     click. */
+  {
+    const m = mount({ model: { parts: [], wires: [] } });
+    m.tool('select');
+    m.cv.focus();
+    m.key(m.cv, 'ArrowRight'); m.key(m.cv, 'ArrowDown'); drives += 2;
+    m.cv.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 200, clientY: 150, pointerId: 1, target: m.cv });
+    drives++;
+    const f = m.cv._ctx.frames;
+    m.cv.blur(); m.cv.focus(); m.cv.blur();
+    const mouseLit = f[f.length - 1], mouseDark = f[f.length - 2];
+    if (mouseLit !== mouseDark) {
+      note('keyboard', 'the caret survives a click back onto the canvas: ' + mouseLit +
+        ' draw calls focused against ' + mouseDark + ' unfocused, for the same model');
+    }
+    m.handle.dispose();
+  }
   h.cv.focus();
 
   if (placedAt) {

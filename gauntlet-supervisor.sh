@@ -18,10 +18,10 @@ DEADLINE=$(( $(date +%s) + TOTAL_HOURS * 3600 ))
 LOG=gauntlet-supervisor.log
 
 running() {
-  # The runner is a bash process whose command line names the script. On Git Bash,
-  # `ps` does not show it reliably, so ask Windows.
-  wmic process where "name='bash.exe'" get CommandLine 2>/dev/null |
-    grep -qi "marathon-gauntlet"
+  # The runner writes its pid and clears it on exit. Reading that beats searching
+  # command lines, which matched anything merely MENTIONING the script — including
+  # the git commit that added it, so the supervisor once waited on a commit message.
+  [ -f .gauntlet.pid ] && kill -0 "$(cat .gauntlet.pid 2>/dev/null)" 2>/dev/null
 }
 
 say() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG"; }

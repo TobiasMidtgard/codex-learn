@@ -75,8 +75,9 @@
     { "name": "STATE .mod-head — hover against the card", "kind": "state", "from": ".mod>.mod-head:hover", "vs": ["var(--surface)", "var(--ground)"] },
 
     { "name": ".ckt-tab td:first-child — which node the answer is for", "kind": "text", "fg": "var(--ink-3)", "bg": ["var(--surface)", "var(--ground)"] },
-    { "name": ".ckt-tab td:last-child — the answer itself", "kind": "text", "fg": "var(--lime)", "bg": ["var(--surface)", "var(--ground)"] },
-    { "name": ".ckt-panel h4 — a panel heading", "kind": "text", "fg": "var(--lime)", "bg": ["var(--surface)", "var(--ground)"] },
+    { "name": ".ckt-tab td:last-child — the answer itself", "kind": "text", "fg": "var(--accent-ink)", "bg": ["var(--surface)", "var(--ground)"] },
+    { "name": ".ckt-panel h4 — a panel heading", "kind": "text", "fg": "var(--accent-ink)", "bg": ["var(--surface)", "var(--ground)"] },
+    { "name": "[data-wiperval] — the wiper reading beside its slider", "kind": "text", "fg": "var(--accent-ink)", "bg": ["var(--surface)", "var(--ground)"] },
     { "name": ".ckt-hint — the panel's own prose", "kind": "text", "fg": "var(--ink-4)", "bg": ["var(--surface)", "var(--ground)"] },
     { "name": ".ckt-err — the solver could not solve it", "kind": "text", "fg": "var(--amber)", "bg": ["var(--surface)", "var(--ground)"] },
     { "name": ".ckt-t — an idle tool button", "kind": "text", "fg": "var(--ink-3)", "bg": ["var(--sunk)", "var(--ground)"] },

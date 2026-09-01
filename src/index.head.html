@@ -1240,8 +1240,11 @@ math[display=block]{display:block;display:block math;margin:14px 0;
   clip-path:inset(50%);white-space:nowrap;border:0}
 .ckt-side{border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
 .ckt-panel{padding:12px 14px;border-bottom:1px solid var(--line)}
+/* --accent-ink, not --lime: this is the accent used as ink, and cycle 5 minted the
+   token for exactly this trap. --lime on --surface measures 4.06:1 in the light theme,
+   under the 4.5 a 10px uppercase heading needs. */
 .ckt-panel h4{margin:0 0 9px;font-family:var(--mono);font-size:10px;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--lime)}
+  text-transform:uppercase;color:var(--accent-ink)}
 .ckt-hint{margin:0;font-size:11.5px;line-height:1.55;color:var(--ink-4);text-wrap:pretty}
 .ckt-f{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:8px;margin-bottom:8px}
 .ckt-f span{font-family:var(--mono);font-size:10.5px;color:var(--ink-4);white-space:nowrap}
@@ -1260,7 +1263,9 @@ math[display=block]{display:block;display:block math;margin:14px 0;
    placeholder, it is the half of the answer that says WHICH node the volts beside it
    belong to — the row is unreadable without it. */
 .ckt-tab td:first-child{color:var(--ink-3)}
-.ckt-tab td:last-child{text-align:right;color:var(--lime)}
+/* The number the whole editor exists to produce, at 4.06:1 in the light theme on the
+   same token trap as the heading above. */
+.ckt-tab td:last-child{text-align:right;color:var(--accent-ink)}
 .ckt-nodes{flex-wrap:wrap}
 .ckt-nodes button{font-size:10.5px;padding:0 8px}
 .ckt-err{font-size:12px;line-height:1.6;color:var(--amber);text-wrap:pretty}

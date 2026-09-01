@@ -8,3 +8,4 @@ gauntlet.out
 .gauntlet-probe
 gauntlet-supervisor.log
 gauntlet-run1-blocked.out
+.gauntlet.pid

@@ -11,6 +11,18 @@
 # blip or one bad patch should cost that cycle and nothing else. Failures are caught
 # and reported per cycle instead.
 
+# One gauntlet at a time. Two of them would edit the same files from different
+# cycles and the gates would blame whichever finished last. A lock file rather than a
+# search of running command lines: the search matched anything that merely MENTIONED
+# the script, including the git commit that added it.
+LOCK=.gauntlet.pid
+if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
+  echo "a gauntlet is already running (pid $(cat "$LOCK")). Nothing started."
+  exit 3
+fi
+echo $$ > "$LOCK"
+trap 'rm -f "$LOCK"' EXIT INT TERM
+
 DURATION_HOURS="${1:-3}"
 END_TIME=$(( $(date +%s) + DURATION_HOURS * 3600 ))
 LOG=GAUNTLET_LOG.md
