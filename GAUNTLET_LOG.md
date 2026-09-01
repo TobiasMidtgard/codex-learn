@@ -6313,3 +6313,432 @@ the second function existing at all; `test_api` captured before the edit and re-
 a server restarted on the new merge, because a sync test run against a stale process
 verifies the code it replaced; and the payload window checked for orphans and for missing
 files rather than assumed.
+
+---
+
+## Cycle 20 — TRACK 1: Content & Conceptual Depth
+
+*(The runner labels this commit "cycle 1" — a fourth run began and its counter restarted,
+while this log kept counting. Run C's "cycle 1" is this file's cycle 14, exactly as
+`ee95ded` was its cycle 7 and `f1a161b` its cycle 13.)*
+
+**Target: MA121 (Linear Algebra), the seven modules holding a quiz and nothing else —
+M4, M5, M6, M8, M9, M10 and M11.** Vector spaces and the complete solution, independence
+and the four subspaces, change of basis, least squares, eigenvalues, the spectral
+theorem, and the SVD. A learner met each as five concepts bullets and was examined on it
+in the next unit.
+
+Chosen on measurement. Scoring all 62 courses by **modules that examine without teaching**
+— neither a `read` nor a `derive`, and no lab either — MA121 leads the catalogue with
+**7 of 11**, ahead of EE241 at 4 and EE221 at 3. It is also a prerequisite of five
+courses (DL501, GFX401, ML401, QC510, ROB520), the widest fan-out of any course in the
+list, and its own prerequisite MA101 was repaired by cycle 7 — so the two compound in the
+direction cycles 13 and 14 established.
+
+M1, M2 and M3 were excluded because they are already the model the rest was never built
+up to: three readings, three derivations, four numerics, a quiz, a blanks unit and a lab
+each. **M7 was excluded because it carries a full lab** whose reference solution the gate
+runs — cycle 1's MA111 reasoning applied unchanged — though its concepts list is repaired
+below, because it states the same false claim M9 does. That leaves exactly the seven
+modules that examine cold.
+
+### Baseline, captured before any edit
+
+```
+85 circuit exercises / 360 checks · 21 tune units
+216 numeric answers verified, 0 unchecked, 218 figure-only
+1248 derivation steps across 46 courses (MA121: 55)
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     · 3260 per-option explanations · 6572 live draws
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys, 10 things said
+circuit_model 1475 analyses, 84 refusals · 15 plots
+desk 61 expressions · theme 135 contrast surfaces x 2 themes
+tune_ui 423 hostile opening values · 462 targets · 270 drags · 493 mounts
+progress 6 unload writes · 29 hostile documents · 7 merges · 12 a11y contracts
+MA121: 11 modules · 47 units · 9 read · 9 derive · 8 bare modules · 5 labs
+       49 questions · longest-is-key 22 (budget 22) · margin +7.2
+       2550 math fragments: 2550 render, 0 raw, 0 swallowed, 2 unpaired
+build: 3 parts / 111 keys · 32/32 + 30/30 · 62 payloads, 12967 KB ·
+       inlined 14202 KB · shell 1207 KB
+catalogue: 62 courses, 368 modules, 1915 units, 253 readings
+```
+
+`test_api.mjs` was captured too and **fails at baseline with `ECONNREFUSED` on port
+4180** — it needs a live server, which is not running. It reads no catalogue file and
+this cycle touches no server code, so it is out of scope rather than broken by this
+cycle. Recorded because a gate that was failing *before* the edit must be said to have
+been failing before the edit.
+
+### The attacks
+
+**1. Senior Educator.** Seven findings acted on, plus three claims that are false or
+imprecise as stated in prose the cycle was not pointed at.
+
+- *Announced, never derived, seven times over.* Fixed: seven readings and seven
+  derivations, each deriving what its module asserts. The column space is obtained as
+  "what $Ax$ can be" rather than defined; the complete solution is proved as a set
+  equality by two inclusions; **every basis is shown to have the same size** rather than
+  told to; the change-of-basis matrix is assembled from three steps instead of quoted;
+  the normal equations come out of one perturbation argument; power iteration's rate is
+  derived with both its hypotheses; the spectral theorem's two halves come out of one
+  identity; and the SVD is built from module 10 applied to $A^{\mathsf{T}}A$.
+
+- **The module states that power iteration converges, and its own quiz four questions
+  later is the counterexample.** M9's bullet said long-run behaviour is decided by the
+  largest $|\lambda|$, *"which is why power iteration converges to it"* — with no
+  hypothesis attached. M7 says the same with a rate. The derivation needs
+  $|\lambda_2| < |\lambda_1|$ **strictly**, and M9/Q4 asks for the real eigenvectors of
+  the quarter-turn $\begin{bmatrix} 0 & -1 \\ 1 & 0 \end{bmatrix}$, whose eigenvalues are
+  $\pm i$ — both of modulus $1$. The course asks you to know that no real eigenvector
+  exists and, through module 7's lab, hands you one. Fixed in both bullets and derived in
+  the reading, with the failure worked on $\operatorname{diag}(5, -5)$ and the rate
+  confirmed against measurement on $\begin{bmatrix} 4 & 1 \\ 2 & 3 \end{bmatrix}$
+  (predicted $0.4$; observed consecutive error ratios $0.388$, $0.392$, $0.396$, $0.399$,
+  $0.399$, $0.400$).
+
+- **The projection matrix is stated with no hypothesis, and the course states the missing
+  one three modules later.** M8's bullet gives
+  $P = A(A^{\mathsf{T}}A)^{-1}A^{\mathsf{T}}$ unconditionally; the inverse exists only
+  when $A$'s columns are independent, which **M10's own concepts list says** about
+  $A^{\mathsf{T}}A$ and which M8 never connects. Worked: for $A$ with two proportional
+  columns, $\det(A^{\mathsf{T}}A) = 64 - 64 = 0$ and the formula does not exist, while
+  the projection onto the line through $(1,1,1,1)$ is $(3,3,3,3)$ — the mean, unique, and
+  perfectly ordinary. **The projection always exists; the formula does not**, and what
+  fails is the uniqueness of $\hat{x}$, not of $p$. Two bullets added.
+
+- **Change of basis gives $B = S^{-1}AS$ and never says what $S$ holds** — the one thing
+  people actually get wrong. Derived: $S$'s columns are the new basis vectors in the old
+  coordinates, forced by $S(1,0) = b_1$. And the swap is priced: for
+  $A = \begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}$ with the shear
+  $S = \begin{bmatrix} 1 & 1 \\ 0 & 1 \end{bmatrix}$, the right answer is
+  $\begin{bmatrix} 1 & 0 \\ 1 & 3 \end{bmatrix}$ and the swap gives
+  $\begin{bmatrix} 3 & 0 \\ 1 & 1 \end{bmatrix}$ — **with the same determinant $3$, the
+  same trace $4$ and the same characteristic polynomial $(\lambda-3)(\lambda-1)$.** Every
+  invariant M6/Q3 lists as a test of similarity is passed by the wrong answer, because
+  $SAS^{-1}$ is also a conjugation. Only pushing a known vector through separates them.
+  Recorded because the obvious self-check cannot catch the commonest error.
+
+- **"Never exactly two" is true and its hypothesis is invisible.** The argument needs
+  infinitely many scalars, not anything about matrices. Over the field with two elements
+  $x_1 + x_2 = 1$ has a genuinely non-trivial null space $\{(0,0),(1,1)\}$ and **exactly
+  two** solutions, because the line $x_{\text{p}} + tz$ has only $t = 0$ and $t = 1$ to
+  offer. That is the field a parity check lives over, so it is not an exotic footnote.
+
+- **"The curvature along each eigenvector is that eigenvalue" is out by a factor of two.**
+  The form along the unit eigenvector $q_1$ of $\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}$
+  is $3t^{2}$, whose second derivative is $6$; the Hessian of $x^{\mathsf{T}}Ax$ is $2A$.
+  What *is* exactly the eigenvalue is the **value** of the form on the unit eigenvector,
+  and the useful general statement is the Rayleigh bound
+  $\lambda_{\min} \le x^{\mathsf{T}}Ax/x^{\mathsf{T}}x \le \lambda_{\max}$. The bullet was
+  replaced by one that says both.
+
+- **The quadratic form sees only the symmetric part, and nothing said so.**
+  $\begin{bmatrix} 1 & 4 \\ 0 & 1 \end{bmatrix}$ and
+  $\begin{bmatrix} 1 & 2 \\ 2 & 1 \end{bmatrix}$ have the identical form
+  $x_1^{2} + 4x_1x_2 + x_2^{2}$, verified symbolically, while the first has the single
+  repeated eigenvalue $1$ and is defective and the second has $3$ and $-1$. The form
+  cannot see either of the first matrix's eigenvalues. Bullet added.
+
+- **The condition number is presented as a prediction.** M11/Q3's "about 4 digits" is a
+  worst case attained only when the perturbation lines up with $u_{\min}$ while $b$ lines
+  up with $u_{\max}$. The `why` was not touched — it is Track 3's ground and it is not
+  wrong — but a bullet now says what the bound is and is not, and the reading derives it
+  from $\sigma_{\min} \le ||Ax|| \le \sigma_{\max}$, confirmed by driving all unit
+  directions: $||A^{-1}d||$ ranges over exactly $[0.14907, 0.44721]$, which is
+  $[1/\sigma_{\max}, 1/\sigma_{\min}]$.
+
+- *Left alone:* M5's four-subspaces bullet, M9's defective-matrix bullet and M10's
+  Hermitian/unitary bullet are all correct as stated. The readings spend their space
+  deriving them rather than restating them.
+
+**2. Assessment Inquisitor.** All 49 questions in the course were checked against the
+mathematics rather than skimmed. **Every key is correct, and no stem, option or `why` was
+changed anywhere** — confirmed mechanically rather than asserted: the 49 stems, option
+sets and keys are byte-identical to `HEAD`, the 49 explanations are byte-identical too,
+and the gate reports MA121 unmoved at longest-is-key 22 against a budget of 22 with
+margin +7.2. Everything this cycle added went into `read`, `derive` and `concepts`, so
+the answer-tell budget could not move.
+
+Recomputed rather than assumed, so the next cycle need not: $7 - 3 = 4$ for the nullity
+of a $4\times7$ of rank $3$; five vectors in $\mathbf{R}^{4}$ dependent; $\det M = -3$
+giving area $3$ with orientation reversed; $x = Q^{\mathsf{T}}b$ for orthonormal columns;
+QR at roughly twice the flops of the normal equations; $\begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}$
+with eigenvalues $3$ and $1$; trace $7$ and determinant $12$ giving $3$ and $4$;
+$\begin{bmatrix} 1 & 1 \\ 0 & 1 \end{bmatrix}$ defective; the quarter-turn's $\pm i$;
+$\begin{bmatrix} 1 & 2 \\ 2 & 1 \end{bmatrix}$ at eigenvalues $3$ and $-1$ with the form
+at $(1,-1)$ equal to $-2$; $\begin{bmatrix} 2 & -1 \\ -1 & 2 \end{bmatrix}$ with pivots
+$2$ and $\tfrac{3}{2}$; $\begin{bmatrix} 0 & 5 \\ 0 & 0 \end{bmatrix}$ with both
+eigenvalues $0$ and singular values $5$ and $0$; and $\kappa = 10^{6}$ against $10$
+digits leaving about $4$. All hold.
+
+**3. Simulation Auditor.** Six of the seven target modules contain no sandbox, tune,
+build or schematic `numeric`. The persona was therefore pointed at the one executable
+thing the modules make claims *about* — module 7's `power_method`, which M9's bullet
+invokes by name — and at arithmetic in prose. The first is where the largest finding is.
+
+- **`power_method` returns `0` as an eigenvalue, silently, in two iterations, for every
+  matrix whose dominant eigenvalues are $\pm\lambda$.** Driven against the lab's own
+  reference solution, extracted from the emitted catalogue and executed:
+
+```
+diag(5,-5)      -> value 0.0   vec [0.707107, 0.707107]   iters 2   ||Av - 0v|| = 5
+diag(1,-1)      -> value 0.0   vec [0.707107, 0.707107]   iters 2   ||Av - 0v|| = 1
+quarter-turn    -> value 0.0   vec [0.707107, 0.707107]   iters 2   ||Av - 0v|| = 1
+```
+
+  Zero is not an eigenvalue of any of the three. The cause is exact: the routine's
+  stopping rule compares two consecutive Rayleigh quotients, and a vector that **swings**
+  symmetrically has a *stationary* quotient — $v \cdot Av = \tfrac12(5) + \tfrac12(-5) = 0$
+  at every step — so the test cannot tell "converged" from "oscillating". It fires on the
+  earliest iteration it possibly can, which makes the wrong answer the most
+  confident-looking output the function produces. The quarter-turn is **M9/Q4's own
+  matrix**, whose correct answer is that it has no real eigenvector.
+
+- **The capstone escapes this, and the reason is worth recording rather than assuming.**
+  It runs power iteration on $A^{\mathsf{T}}A$, which is symmetric positive semidefinite,
+  so every eigenvalue is $\ge 0$ and a $\pm\lambda$ pair is impossible. Verified by
+  driving it. That is a property of $A^{\mathsf{T}}A$, not of `power_method`, and it stops
+  protecting anything the moment the routine meets a general matrix.
+
+- **One diagnostic names the opposite of its cause.** `power_method([[1e300,0],[0,1]])`
+  raises `"iteration collapsed to the zero vector"`. It did not collapse — it
+  **overflowed**: $\|w\|$ is $\sqrt{10^{600}} = \infty$, then every $x/\infty$ is $0.0$,
+  and the *next* norm is genuinely zero. The message describes the symptom one step
+  downstream of the fault.
+
+- **Every number written into the seven readings was computed before it was written**, in
+  SymPy and NumPy: the $3\times5$ system's rref, its three special solutions and the check
+  that $(-4,3,0,-2,5)$ returns $(3,8,11)$; the inconsistent $b$ raising the augmented rank
+  from $2$ to $3$; the GF(2) solution count; the exchange matrix
+  $\begin{bmatrix} 1 & 1 & 2 \\ 1 & -1 & 1 \end{bmatrix}$ and its null vector
+  $(-\tfrac32, -\tfrac12, 1)$ applied back to the original vectors to give $(0,0)$; the
+  four-subspace dimensions of $B$ with its left null vector $(-1,-1,1)$; the change of
+  basis and its swap with all three invariants; the least-squares fit
+  $\hat{x} = (\tfrac32, 1)$ with residuals $(-0.5, 0.5, 0.5, -0.5)$, $A^{\mathsf{T}}r = 0$,
+  $\|r\|^{2} = 1$, and $P$'s entries, trace $2$ and eigenvalues $\{1,1,0,0\}$; the
+  rank-deficient Gram determinant $0$ against the projection $(3,3,3,3)$; seven steps of
+  power iteration with their error ratios; $2.51$ and $113.97$ steps per digit at ratios
+  $0.4$ and $0.98$, a factor of $45$; the symmetric discriminant $(a-d)^{2} + 4b^{2}$;
+  the ellipse semi-axes $0.5774$ and $1$; the Hessian $2A$; the non-symmetric form
+  identity; $A^{\mathsf{T}}A = \begin{bmatrix} 25 & 20 \\ 20 & 25 \end{bmatrix}$ with
+  eigenvalues $45$ and $5$, singular values $3\sqrt5$ and $\sqrt5$, product $15 = |\det A|$
+  and squared sum $50$ matching the sum of squared entries; and the ill-conditioned
+  $M$ at $\kappa = 2.4495\times10^{4}$ with $\kappa(M^{\mathsf{T}}M) = 6.0000\times10^{8}$
+  — the ratio to $\kappa^{2}$ being $1.0000000114$ — and its best rank-1 error equal to
+  $\sigma_2$ to nine figures.
+
+- **All 42 new derivation answers were truth-checked separately from the gate**, each
+  against an expression written independently of the one in the catalogue — **42 of 42
+  agree**.
+
+**4. UX & Accessibility Hardener.** Content-side, as cycles 1, 4, 7, 10, 13 and 14
+established. Checked rather than assumed over the whole draft: **no markdown table, no
+raw HTML and no hard-coded colour was introduced**, all three verified mechanically. Every
+figure is a fenced `text` block inside `overflow-x:auto`, which is cycle 4's rule for
+staying safe at 375px. The fenced listings are prose figures rather than runnable
+programs, so none makes a claim about its own output that a **▶ Run** button would be
+needed to check.
+
+### Found in my own work, and fixed
+
+Every one of these was found by a mechanical sweep run *before* applying, and most are
+defects this cycle was in the middle of repairing in somebody else's text.
+
+- **Twenty of my own fragments would have shipped as raw markup**, in five classes, none
+  of which the renderer supports: `\|` norm bars (thirteen), escaped set braces `\{ \}`
+  (four), `\textbf`, `\Longleftrightarrow` and `\underbrace`. Every one falls back to
+  `<code class="math-raw">` and puts LaTeX source on the page. Repaired to `||`,
+  `\left\{`/`\right\}`, `\text`, `\Leftrightarrow` and a plain `\text{where}`, each
+  candidate verified against the shipped renderer before use rather than assumed.
+  **`\|` is the catalogue's own established habit** — 16 instances of `\|b`, 14 of `\|a`
+  and more — and copying it would have added to the 1052 raw fragments rather than
+  avoiding them.
+- **My own harness reported 3 of 6 on its first self-test.** It checked whether
+  `render()` returned `null`, and the shipped `render()` never returns null — on a parse
+  failure it returns the *source* wrapped in `<code class="math-raw">`. So `\ `,
+  `\overset` and `\begin{cases}` all scored "ok". Checking for the fallback class instead
+  took it to 6 of 6 flagged with 0 false positives on 8 correct fragments. This is the
+  third cycle running in which the harness had to be self-tested before it could be
+  believed, and the first in which it was wrong in the *lenient* direction.
+- **Four of my own inline fragments crossed a source line** — cycle 13's third defect
+  class, discovered because I was auditing for it. Two in M6's derivation closing, two in
+  M10's reading. Reflowed; one of the two was rewritten as display maths instead, because
+  the fragment was too long to fit a line at all.
+- **Two hedge words in prose I had just written against a brief that names them** —
+  a `simply` in M4 and an `Of course` in M6. Found by diffing the draft against the hedge
+  list rather than by reading.
+- **My baseline said 269 readings; the true figure is 253.** `read` holds a bare **dict**
+  rather than a list in 8 modules (7 in MA101, 1 in EE202), and `len()` on a dict counts
+  its keys. This is cycle 14's `lab` finding recurring for a different key, in my own
+  survey, and it would have made this entry claim the catalogue *lost* nine readings while
+  seven were added. Checked whether it reaches anything shipped: **it does not** —
+  `verify_derivations.py`, `verify_labs.py`, `spec.mjs`, `tune_stage.mjs` and
+  `verify_circuit_model.mjs` all define an `as_list`/`asList` and none reads a unit key
+  directly. The trap is laid for new measurement code, not for the app.
+- **Two numbers in the M9 draft were written from memory and were wrong.** "$\approx 2.6$
+  steps per digit" is $2.51$, and "a factor of forty" is $45.35$. Both caught by a second
+  computation pass over the numbers that appear in the prose but had not been in the first
+  run — which is the pass that exists because the first draft is where remembered numbers
+  get in.
+- **My own truth-check harness crashed on `lambda`**, which is a Python keyword — the
+  exact failure `verify_derivations.py`'s docstring names as a reason answers fail. The
+  shipped translator renames it to `lambda_`; the harness had to match.
+- **My first payload-window check read the manifest's shape wrong** and threw. The
+  generations file is a list of plain filename lists, not a list of objects with a `files`
+  key. Corrected, the window is 3 generations, 65 files, **0 orphaned and 0 missing**.
+- **I named a scratchpad script `numbers.py`**, which shadowed the standard library
+  module `mpmath` imports, so SymPy failed to load with a circular-import error that
+  pointed at SymPy rather than at me. Renamed.
+
+### What changed
+
+**Fourteen new units in seven modules** — one `read` and one `derive` each.
+
+| Module | Reading | Words | Derivation | Steps |
+|---|---|---|---|---|
+| M4 | Which right-hand sides are reachable, and the count that is never two | 1473 | From one solution to the whole family, on a matrix small enough to check | 6 |
+| M5 | Why every basis is the same size, and what the count is measuring | 1381 | Rank plus nullity, by turning one free variable on at a time | 6 |
+| M6 | What the change-of-basis matrix actually holds, and the swap that survives every check | 1371 | Building the change-of-basis matrix instead of remembering it | 6 |
+| M8 | The closest answer, and the hypothesis the projection formula needs | 1396 | The normal equations, one dot product at a time | 6 |
+| M9 | Why the largest eigenvalue wins, and the case where nothing wins | 1288 | The ratio that decides how fast the largest eigenvalue takes over | 6 |
+| M10 | Why symmetry forces real eigenvalues and right angles, and what the form can see | 1317 | Real roots from a sum of two squares | 6 |
+| M11 | Every matrix diagonalised, and the number that says how many digits you keep | 1230 | Singular values out of A-transpose-A, and the ratio that prices the digits | 6 |
+
+**9,456 new words**, every reading inside the 1200–2500 target and in line with M1–M3's
+existing nine. MA121: 47 units → 61, 9 readings → 16, 9 derivations → 16, 55 derivation
+steps → 97, **8 bare modules → 1**, and **4.27 units per module → 5.55**. Every reading
+carries a worked example through to a checked number, names the mistake people make and
+says why it is tempting, and closes on where the idea stops holding.
+
+The derivations are deliberately **scalar** throughout — entries and coefficients, never
+matrix identities. That is not a stylistic choice: `MathCheck` hands answers to SymPy with
+commutative symbols, so `A(A^{\mathsf{T}}A)^{-1}A^{\mathsf{T}}` collapses to $1$ and a
+step built on it would accept anything. Established by probing the shipped translator
+before drafting, and it is the same failure mode as cycle 14's CTRL510 finding.
+
+**Sixteen concepts bullets added or replaced** across the seven target modules and M7, so
+the new material is reachable from the list a learner skims: the scalar-supply hypothesis
+behind "never exactly two"; the dependence argument that makes dimension well defined, and
+that rank plus nullity counts columns; what $S$ holds and that no similarity invariant
+catches the swap; the independence hypothesis $P$ needs, that the projection survives
+without it, and that residuals summing to zero comes from the intercept; the eigenbasis
+reading of $A^{k}$, both power-iteration hypotheses with the $\pm5$ counterexample, and
+the residual as the only real check; the Rayleigh statement of the quadratic form with the
+factor of two corrected, and the symmetric-part blindness; the condition number as a worst
+case; the Eckart–Young error as an exact equality; and the stability of singular values
+against the instability of singular vectors. **The M7 power-iteration bullet, M9's
+convergence bullet, M8's projection bullet, M6's conjugation bullet and M10's curvature
+bullet were replaced** because each was false or incomplete as written; **every other
+pre-existing bullet in these modules is untouched.**
+
+**One pre-existing render defect repaired.** `$100 \times 100$` was broken across two
+source lines in M3, so `MathML.inText`'s inline rule — `/(^|[^\\])\$([^$\n]+?)\$/`, whose
+character class excludes a newline — never matched it and the page showed literal dollar
+signs and LaTeX. Reflowed. MA121 is now **0 unpaired**, and the catalogue figure moves
+$273 \to 271$ by exactly this.
+
+### Left alone, deliberately
+
+- **`power_method` was not fixed.** The defect above is real and it is in module 7's lab —
+  code, with a reference solution the gate runs, which is not this track's ground. The
+  repair is a residual check at the end of the routine plus a brief that says so, and it
+  touches the lab's tests; that is a Track 3 or Track 6 cycle. Handed on with the three
+  reproductions, the residuals, the cause (a swinging vector has a stationary Rayleigh
+  quotient), the reason the capstone is safe, and the mislabelled overflow diagnostic, so
+  the next cycle starts from the diff rather than the symptom. **The prose defect that
+  pointed at it — the two bullets claiming unconditional convergence — is fixed here**, so
+  a learner meeting the lab is now warned even though the lab is unchanged.
+- **The 49 questions were audited and not changed at all** — no stem, no option, no key,
+  and no `why`. They are Track 3's ground, and MA121's inherited answer-tell figure (22 of
+  49) is cycle 3's recorded debt pinned by `quiz_budget.json`, not this cycle's to spend.
+- **M1, M2, M3 and M7 were not given new units.** The first three are the densest modules
+  in the course and are the model the rest has now been brought toward; M7 carries a lab.
+  One bare module remains against eight, and it is M7.
+- **`\hat`, `\bar` and `\varepsilon` are still dropped by `MathCheck.latexToPy`**, and
+  `CTRL510/M4` step 1 still grades any answer that collapses to zero as correct. Re-swept
+  the whole catalogue for the general case: **still exactly one casualty in 1290 steps**,
+  and it is that one, unmoved since cycle 14 measured it. Not fixed here for cycle 14's
+  reason — the repair is in `src/studio.js` and is a Track 2 machinery cycle.
+- **A new member of that family was found and avoided rather than fixed:
+  `\sigma_{\max}` translates to `s * i * g * m * a`.** The subscript pass strips `\max`,
+  leaving `\sigma` with a dangling underscore, and the name then splits into single
+  letters. A ratio $\sigma_{\max}/\sigma_{\min}$ therefore translates to the same soup
+  over itself and self-checks as trivially true. **No existing answer in the catalogue is
+  affected** — the sweep found none — so this is a hazard for future authors rather than a
+  live defect, and M11's derivation writes `\sigma_1` and `\sigma_n` instead. Recorded
+  with the reproduction so the Track 2 cycle that fixes `\hat` fixes this too.
+- **1052 raw fragments, 127 swallowed and 271 unpaired remain catalogue-wide**, led by
+  EE231 (376 raw), EE141, EE211 and EE111. MA121 is at zero in all three. These come from
+  this cycle's independently written harness and agree closely with cycle 13's
+  1053/139/273 and cycle 14's 1041/138/312, which is the strongest evidence yet that the
+  three measurements are measuring the same thing.
+- **`verify_derivations.py` still proves translation rather than truth**, as cycles 1, 7,
+  13 and 14 established. All 42 new answers were therefore truth-checked separately, and
+  the harness is in this session's scratchpad. Nothing about the gate was changed:
+  rewriting the spec from inside a cycle it governs remains the wrong move.
+- **`test_api.mjs` was failing before this cycle and is failing after it**, identically,
+  with `ECONNREFUSED` on port 4180 — it needs a server this session did not start. It
+  reads no catalogue file. Not repaired, because starting a server to make a gate pass is
+  not the same as the gate passing.
+- **EE241 (4 bare-and-lab-free modules of 10, and 0 readings against 18 derivations) and
+  EE221 (3, and 0 readings against 30) are the next Track 1 targets**, and were not
+  touched. Both are courses that derive heavily and explain nothing, which is a different
+  shape from MA121's and probably wants a different remedy.
+
+### Gates, after
+
+Every pre-existing number unmoved. Three moved by exactly what was added — the
+derivation-step count by the 42 new steps, and the two artifact sizes by the content.
+
+```
+verify_derivations   All good: 1290 steps across 46 courses   (1248 + 42 new;
+                     MA121 55 -> 97)
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3260 per-option explanations · 6572 live draws —
+                     unmoved.  MA121: 49 questions · longest-is-key 22 (budget 22) ·
+                     margin +7.2 — unmoved, and no stem, option, key or why changed
+verify_labs MA121    All good: 5 labs  (M1 8/8, M2 7/7, M3 7/7, M7 7/7, CAP 12/12)
+verify_circuits      All good: 85 circuit exercises, 360 checks
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_circuit_model All good: 1475 analyses, 84 refusals · 15 plots
+verify_desk          All good: 61 expressions at the extremes
+verify_theme         All good: 135 contrast surfaces x 2 themes
+verify_tune_ui       All good: 21 tune units · 423 hostile opening values · 462 targets
+                     · 270 drags · 493 mounts
+verify_progress      All good: 6 unload writes · 29 hostile documents · 7 merges
+                     · 12 accessibility contracts
+test_api             ECONNREFUSED :4180 — needs a live server, and failed identically
+                     at baseline. Out of scope: reads no catalogue file.
+emit.py MA121        ok — 11 modules, 4 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12967 -> 13053 KB ·
+                     inlined 14202 -> 14288 KB · shell 1207 KB — unchanged
+catalogue            62 courses, 368 modules, 1915 -> 1929 units, 253 -> 260 readings
+```
+
+Beyond the gates: every MA121 math fragment pushed through the shipped `MathML.render` —
+**3623 of 3623 draw, 0 raw, 0 swallowed, 0 unpaired**, against 2550 of 2550 with 2
+unpaired at baseline, so 1073 fragments were added, none of them a defect, and the two
+pre-existing ones were repaired; the catalogue-wide totals confirmed to have moved only by
+MA121's share (raw 1052 unmoved, swallowed 127 unmoved, unpaired 273 → 271); all 42 new
+derivation answers truth-checked against independently written expressions, 42 of 42;
+every number in 9,456 new words computed in SymPy or NumPy before it was written, and a
+second pass run over the numbers that reached the prose without being in the first; the 49
+question stems, option sets, keys **and explanations** diffed against `HEAD` at **0
+changes**; **14 lesson ids added and 0 lost**, so no completed work is orphaned; 0 hedge
+words in the new prose, counted by sweep rather than by eye; no markdown table, hard-coded
+colour or raw HTML introduced; the whole catalogue re-swept for answers containing a
+silently-dropped command, finding the same single CTRL510 casualty and no new one; and the
+payload window checked at 3 generations, 65 files, 0 orphaned, 0 missing.
+
+**A note on the working tree.** The runner's lock (`.gauntlet.pid`, pid 11729) was live
+throughout, and this cycle is the process it launched — the claude process is pid 11799,
+a child of 11729 — so the lock is this cycle's own and `emit.py` and `build.mjs` were safe
+to run. The diff is `catalog/MA121.json`, `catalog/authors/MA121.py` and the `docs/` build
+output, and nothing else.

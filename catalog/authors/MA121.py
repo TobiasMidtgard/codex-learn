@@ -3684,8 +3684,9 @@ cancel exactly, so the count can be thrown away as soon as it has been reduced t
 $\pm 1$.
 
 Where this stops being useful: as a test for singularity, almost immediately. The
-determinant scales like the $n$th power of the matrix. Multiply a healthy $100 \times
-100$ matrix by $0.5$ and its determinant is divided by $2^{100} \approx 1.3\times10^{30}$
+determinant scales like the $n$th power of the matrix. Multiply a healthy
+$100 \times 100$ matrix by $0.5$ and its determinant is divided by
+$2^{100} \approx 1.3\times10^{30}$
 while the matrix is exactly as invertible as it was. A computed determinant of
 $10^{-300}$ tells you nothing, and one of $0$ may only mean that the product underflowed.
 The pivots are the thing to look at, and even they only answer the yes-or-no question —
@@ -4363,6 +4364,235 @@ except ValueError:
                 "The null space collects every x with Ax = 0; it is a subspace of the input space, and it is trivial exactly when the columns are independent",
                 "Reduced row echelon form sorts the columns into pivot columns and free columns, and each free column contributes one special solution",
                 "The complete solution is one particular solution plus the entire null space, so a linear system has none, exactly one, or infinitely many solutions — never exactly two",
+                "The count is never two because one non-zero null vector z drags every multiple tz along with it. That is a fact about having infinitely many scalars available, not about matrices: over the field with two elements, x1 + x2 = 1 has exactly two solutions",
+            ],
+            "read": [
+                {
+                    "title": "Which right-hand sides are reachable, and the count that is never two",
+                    "minutes": 14,
+                    "body": r'''
+Elimination has been a procedure so far: push the matrix into echelon form, read the
+answer off the bottom. It also answers a question the procedure never states. Given
+$A$, *which* right-hand sides $b$ can be hit at all — and once one can be hit, how
+many different $x$ hit it?
+
+The second question has a startling answer. A linear system has no solutions, or
+exactly one, or infinitely many. It never has exactly two, or exactly seventeen. That
+is not an observation about the systems people happen to write down; it is forced, and
+the argument is three lines. This reading gives both answers and then finds the
+hypothesis they are resting on, which is not the one most people would guess.
+
+## What $Ax$ can be
+
+Write $A$ by its columns, $A = \begin{bmatrix} a_1 & a_2 & \cdots & a_n \end{bmatrix}$,
+and multiply by $x$:
+
+$$Ax = x_1 a_1 + x_2 a_2 + \cdots + x_n a_n$$
+
+That is the whole definition, rearranged. $Ax$ is a **combination of the columns**,
+with the entries of $x$ as the weights. So as $x$ ranges over everything, $Ax$ ranges
+over every combination of the columns and nothing else. Call that set the **column
+space** $C(A)$.
+
+The question "is $Ax = b$ solvable" is therefore not a question about solving. It is
+the question "is $b$ a combination of the columns of $A$", asked before any arithmetic
+happens. If $b$ is in $C(A)$ there is at least one $x$; if it is not, there is no $x$,
+and no amount of elimination will produce one.
+
+$C(A)$ is a subspace: a combination of combinations of the columns is again a
+combination of the columns. This matters because it constrains the answer's *shape*.
+The reachable set cannot be a sphere, or a square, or a plane sitting off the origin.
+It is a flat through the origin, and its dimension is the rank.
+
+## The freedom that is left over
+
+Now suppose $b$ is reachable and $Ax = b$. Ask what else solves it. If $Ax' = b$ too,
+subtract:
+
+$$A(x' - x) = b - b = 0$$
+
+so the difference lies in the **null space** $N(A)$, the set of $z$ with $Az = 0$.
+Running it the other way, if $z \in N(A)$ then $A(x + z) = b + 0 = b$, so $x + z$
+solves it as well. The two directions together say something exact:
+
+$$\left\{\text{solutions of } Ax = b\right\} = x_{\text{p}} + N(A)$$
+
+**one** particular solution plus the **entire** null space. Not "roughly", not "up to
+special cases" — that is a set equality, proved by the two inclusions above.
+
+This is where the count comes from. $N(A)$ is a subspace, so it either contains only
+the zero vector or it contains some $z \neq 0$ — and in the second case it contains
+$tz$ for every real $t$, because a subspace is closed under scaling. So the solution
+set is a single point, or a point translated by a set containing a whole line. Empty,
+one, or infinite. There is no room for two.
+
+## Worked, all the way through
+
+$$A = \begin{bmatrix} 1 & 2 & 2 & 2 & 1 \\ 2 & 4 & 6 & 8 & 4 \\ 3 & 6 & 8 & 10 & 5 \end{bmatrix}$$
+
+Three rows, five columns. Eliminate: row $2$ minus twice row $1$, row $3$ minus three
+times row $1$, then clear upward. The reduced row echelon form is
+
+$$R = \begin{bmatrix} 1 & 2 & 0 & -2 & -1 \\ 0 & 0 & 1 & 2 & 1 \\ 0 & 0 & 0 & 0 & 0 \end{bmatrix}$$
+
+Pivots in columns $1$ and $3$; columns $2$, $4$ and $5$ are free. The rank is $2$, so
+the nullity is $5 - 2 = 3$.
+
+Take $b = (3, 8, 11)$, which is $A$ applied to $(1, 0, 1, 0, 0)$ and therefore
+reachable by construction. Row-reducing $\begin{bmatrix} A & b \end{bmatrix}$ gives the
+same $R$ with the extra column $(1, 1, 0)$, and the last row reads $0 = 0$ rather than
+$0 = 1$ — consistent. Setting the three free variables to zero reads the particular
+solution straight off: $x_1 = 1$, $x_3 = 1$, so
+
+$$x_{\text{p}} = (1,\, 0,\, 1,\, 0,\, 0)$$
+
+For the null space, set $b = 0$ and turn each free variable on alone. The two non-zero
+rows of $R$ say $x_1 = -2x_2 + 2x_4 + x_5$ and $x_3 = -2x_4 - x_5$, so
+
+$$s_1 = (-2,\, 1,\, 0,\, 0,\, 0) \qquad s_2 = (2,\, 0,\, -2,\, 1,\, 0) \qquad s_3 = (1,\, 0,\, -1,\, 0,\, 1)$$
+
+The complete solution is $x_{\text{p}} + c_1 s_1 + c_2 s_2 + c_3 s_3$. Check one member
+that is nothing like the particular solution — take $c = (3, -2, 5)$:
+
+$$x = (1,0,1,0,0) + 3s_1 - 2s_2 + 5s_3 = (-4,\, 3,\, 0,\, -2,\, 5)$$
+
+and $Ax$: the first row gives $-4 + 6 + 0 - 4 + 5 = 3$, the second
+$-8 + 12 + 0 - 16 + 20 = 8$, the third $-12 + 18 + 0 - 20 + 25 = 11$. That is $b$. Three
+free parameters, and every one of the infinitely many choices lands on the same
+right-hand side.
+
+Now take $b = (1, 0, 0)$ instead. The rank of $A$ is $2$ and the rank of
+$\begin{bmatrix} A & b \end{bmatrix}$ is $3$ — the extra column has pushed the rank up,
+which is precisely the statement that $b$ is not a combination of the columns. There is
+no solution. Same $A$, same null space, same three free columns; the freedom is still
+there and there is nothing for it to be free *about*.
+
+## The mistake, and why it is tempting
+
+The mistake is to read "three free variables" as "three solutions", or to treat the
+free columns as a menu. It is tempting because the special solutions arrive as a
+finite list — here, three vectors — and a finite list looks like a finite set of
+answers. It is not a menu. It is a **basis**, and the solution set is every combination
+of it, which is a three-dimensional flat inside $\mathbf{R}^{5}$.
+
+The second mistake is subtler and costs more: reading the number of free columns off
+the wrong count. Five columns and two pivots leave three free columns, so the nullity
+is $3$. The tempting answer is $2$, because $2$ is the number that was just computed
+and is sitting on the page. The rule is that every column is either a pivot column or a
+free one, with no third possibility, so the nullity is $n - r$ — the count of
+*columns*, not of rows and not of pivots. With a $3\times5$ matrix the row count $3$
+happens to be near both, which is exactly why this matrix is a good one to practise on.
+
+## Where it stops
+
+The proof that the count is never two used one property that was never named: that
+between $x$ and $x + z$ there are infinitely many $x + tz$, because there are
+infinitely many scalars $t$ to choose. That is a fact about the real numbers, not about
+matrices, and where it fails the theorem fails with it.
+
+Work over the field with two elements, where the only scalars are $0$ and $1$ and
+$1 + 1 = 0$. The system $x_1 + x_2 = 1$ has coefficient matrix
+$\begin{bmatrix} 1 & 1 \end{bmatrix}$, whose null space is $\left\{(0,0), (1,1)\right\}$ — one
+non-zero vector in it, so genuinely non-trivial. Its solutions are $(1, 0)$ and
+$(0, 1)$: two solutions, exactly two, no more. The set $x_{\text{p}} + N(A)$ is still
+the right answer; it has two elements rather than infinitely many, because the line $x_{\text{p}} + tz$ has
+only $t = 0$ and $t = 1$ to offer.
+
+This is not an exotic footnote. Linear algebra over that field is what a parity check
+in an error-correcting code is doing, and "how many solutions" is there a count of how
+many messages a received block could have been. The theorem you have been taught holds
+over $\mathbf{R}$ and $\mathbf{C}$, and the reason it holds is the supply of scalars —
+worth knowing before meeting a course where the supply runs out.
+
+One further boundary, closer to home. Everything above is exact arithmetic. A computed
+rank is a different object: the decision "is this pivot zero" is made against a
+tolerance, and a matrix with a genuinely non-trivial null space and one with a very
+small pivot are the same matrix to a floating-point solver. Module 11 gives the honest
+version of the rank, and it is a real number rather than an integer.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": "From one solution to the whole family, on a matrix small enough to check",
+                    "minutes": 12,
+                    "vars": ["x_1", "x_2", "t", "b_1", "b_2"],
+                    "brief": r'''
+$$A = \begin{bmatrix} 1 & 2 \\ 2 & 4 \end{bmatrix}$$
+
+The second row is twice the first, so this matrix has rank $1$ and there is a great
+deal it cannot reach. Small enough that every claim in the reading can be checked by
+hand, and degenerate enough that all three of the possible solution counts appear.
+
+Work out what $Ax$ can be, which $b$ are reachable, and then — for a reachable one —
+the entire set of solutions.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Write the **first** component of $Ax$ in terms of $x_1$ and $x_2$.",
+                            "answer": "x_1 + 2 x_2",
+                            "hint": "Row $1$ of $A$ is $\\begin{bmatrix} 1 & 2 \\end{bmatrix}$, dotted with $(x_1, x_2)$.",
+                        },
+                        {
+                            "prompt": "And the **second** component of $Ax$?",
+                            "answer": "2 x_1 + 4 x_2",
+                            "hint": "Row $2$ is $\\begin{bmatrix} 2 & 4 \\end{bmatrix}$. Notice it is twice row $1$.",
+                        },
+                        {
+                            "prompt": "Compare the two. For $Ax = b$ to have any solution at all, $b_2$ is forced to a particular multiple of $b_1$. Write $b_2$ in terms of $b_1$.",
+                            "answer": "2 b_1",
+                            "hint": "The second component of $Ax$ is always exactly twice the first, whatever $x$ is. So a reachable $b$ must have that same relation.",
+                            "deconstruct": [
+                                "Every output has the form $(x_1 + 2x_2,\\; 2x_1 + 4x_2)$.",
+                                "The second entry is $2(x_1 + 2x_2)$, which is twice the first — for every $x$, with no exceptions.",
+                                "So $b$ is reachable exactly when $b_2 = 2b_1$. The column space is that one line, which is why the rank is $1$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Take $b = (3, 6)$, which satisfies that condition. The two equations collapse to the single equation $x_1 + 2x_2 = 3$. Solve it for $x_1$ in terms of $x_2$.",
+                            "answer": "3 - 2 x_2",
+                            "hint": "One equation, two unknowns. Make $x_1$ the subject and leave $x_2$ free.",
+                        },
+                        {
+                            "prompt": "Now the null space. Set $b = 0$ and solve $x_1 + 2x_2 = 0$ for $x_1$ in terms of $x_2$.",
+                            "answer": "-2 x_2",
+                            "hint": "The same equation with the right-hand side replaced by zero.",
+                        },
+                        {
+                            "prompt": "Put the two together. Writing $x_2 = t$, give the first coordinate $x_1$ of the complete solution of $Ax = (3,6)$.",
+                            "answer": "3 - 2 t",
+                            "hint": "The complete solution is one particular solution plus the null space: the constant from step 4 plus the free direction from step 5.",
+                            "deconstruct": [
+                                "A particular solution: take $t = 0$, giving $x = (3, 0)$.",
+                                "The null space: every $t$ gives $(-2t,\\; t)$.",
+                                "Adding them, $x = (3 - 2t,\\; t)$, and $x_1 = 3 - 2t$.",
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+All three counts, on one matrix.
+
+$b = (1, 5)$ fails the condition $b_2 = 2b_1$, so it is outside the column space and
+there are **no** solutions. $b = (3, 6)$ satisfies it, and the answer is the whole line
+
+$$x = \begin{bmatrix} 3 \\ 0 \end{bmatrix} + t\begin{bmatrix} -2 \\ 1 \end{bmatrix}$$
+
+which is **infinitely many**. To see a unique solution you have to change the matrix,
+not the right-hand side: replace the second row by $\begin{bmatrix} 2 & 5 \end{bmatrix}$
+and the null space collapses to the zero vector, leaving exactly **one**.
+
+Two things are worth extracting. The first is that the null space did not depend on $b$
+at all — steps 4 and 5 solved the same left-hand side twice, and only the constant
+changed. That is why the solution set is a translate of a fixed subspace rather than a
+different shape for every right-hand side.
+
+The second is the count that did not appear. There is no $b$ and no rank for which this
+system has exactly two solutions, because the moment a second solution exists the
+difference $(-2, 1)$ exists, and then so does every multiple of it. Two solutions
+manufacture infinitely many, immediately, and the manufacturing step is nothing more
+than multiplying by a scalar.
+''',
+                },
             ],
             "quiz": {
                 "title": "Reachable right-hand sides, and how many solutions",
@@ -4453,9 +4683,233 @@ because consistency was given.
             "concepts": [
                 "Vectors are independent when the only combination giving zero is the trivial one — that is, when the matrix holding them has a trivial null space",
                 "A basis is independent and spanning; every basis of a space has the same size, and that size is the dimension",
+                "Every basis has the same size for one reason: n vectors inside a space spanned by m < n vectors are forced to be dependent, because their coefficient matrix has more columns than rows and therefore a free column",
                 "Rank counts the pivots, and it is simultaneously the dimension of the column space and of the row space",
-                "Rank plus nullity equals the number of columns: every column is either a pivot or a free variable, and there is no third option",
+                "Rank plus nullity equals the number of columns: every column is either a pivot or a free variable, and there is no third option. It counts columns, not rows — applying the same theorem to A^T is what gives the left null space its dimension m - r",
                 "The four subspaces pair off at right angles: row space against null space inside R^n, column space against left null space inside R^m",
+            ],
+            "read": [
+                {
+                    "title": "Why every basis is the same size, and what the count is measuring",
+                    "minutes": 14,
+                    "body": r'''
+The module states that every basis of a space has the same number of vectors, and calls
+that number the dimension. Read it again as a claim rather than as a definition. A
+space has enormously many bases — in $\mathbf{R}^{2}$, any two vectors that are not
+parallel — and they are chosen by completely unrelated routes. Why should a basis
+someone found by elimination and a basis someone else found by guessing have the same
+count?
+
+If they did not, "dimension" would not be a property of the space at all, and every
+theorem downstream — rank plus nullity, the four subspaces, the rank of a product —
+would be measuring the accident of a choice. The claim is load-bearing, and it has a
+proof short enough to give here.
+
+## The one fact everything rests on
+
+**More vectors than coordinates means dependent.** Any $n + 1$ vectors in
+$\mathbf{R}^{n}$ satisfy a non-trivial linear relation.
+
+The proof is one you already have. Stack the $n + 1$ vectors as the columns of an
+$n \times (n+1)$ matrix $C$. It has $n$ rows, so it has at most $n$ pivots, so at least
+one of the $n + 1$ columns is free. A free column is a non-trivial null space vector,
+and a non-trivial null space vector is exactly a non-trivial combination of the columns
+giving zero. That is dependence.
+
+Notice what that argument did *not* need: nothing about the vectors, no geometry, no
+angles. It is a counting statement about pivots, and the pivot count cannot exceed the
+row count because each pivot occupies a row of its own.
+
+## From that to "every basis is the same size"
+
+Let $V$ be a space with a basis $v_1, \ldots, v_m$, and let $w_1, \ldots, w_n$ be any
+independent set inside $V$. Claim: $n \le m$.
+
+Each $w_j$ lies in $V$, so it is some combination of the $v$'s. Collect those
+coefficients into an $m \times n$ matrix $C$, one column per $w$. Now suppose $n > m$.
+Then $C$ has more columns than rows, so by the fact above it has a non-trivial null
+space: there is a $k \neq 0$ with $Ck = 0$. Feed that same $k$ to the $w$'s:
+
+$$k_1 w_1 + \cdots + k_n w_n = \sum_j k_j \left( \sum_i C_{ij} v_i \right) = \sum_i \left( \sum_j C_{ij} k_j \right) v_i = \sum_i 0 \cdot v_i = 0$$
+
+so the $w$'s satisfy a non-trivial relation, contradicting independence. Therefore
+$n \le m$.
+
+Now apply it twice. If $\left\{v_i\right\}$ and $\left\{w_j\right\}$ are both bases,
+each is independent and
+each spans, so $n \le m$ and $m \le n$. They are equal. The dimension is well defined,
+and it was the pivot-counting argument that made it so.
+
+### Worked: the exchange, with numbers
+
+In $\mathbf{R}^{2}$ take the basis $v_1 = (1,1)$, $v_2 = (1,-1)$, so $m = 2$, and try
+three vectors $w_1 = (2,0)$, $w_2 = (0,2)$, $w_3 = (3,1)$. Expressing each in the
+$v$ basis gives the coefficient matrix
+
+$$C = \begin{bmatrix} 1 & 1 & 2 \\ 1 & -1 & 1 \end{bmatrix}$$
+
+— check the first column: $1\cdot(1,1) + 1\cdot(1,-1) = (2,0) = w_1$. Two rows, three
+columns, so a free column exists, and the null space is spanned by
+$\left(-\tfrac{3}{2},\, -\tfrac{1}{2},\, 1\right)$. Applying those weights to the $w$'s
+themselves:
+
+$$-\tfrac{3}{2}(2,0) - \tfrac{1}{2}(0,2) + 1\cdot(3,1) = (-3,0) + (0,-1) + (3,1) = (0,0)$$
+
+The relation the matrix predicted is a relation the vectors really satisfy. The
+argument is constructive: it does not merely say a dependence exists, it hands you one.
+
+## Rank plus nullity, and what it is counting
+
+Take the reduced row echelon form of an $m \times n$ matrix. Every column is either a
+pivot column or it is not; there is no third category. Count the pivot columns and call
+it $r$. The remaining $n - r$ columns are free, and turning each free variable on alone
+produces one special solution, so the null space has $n - r$ basis vectors:
+
+$$r + (n - r) = n \qquad \text{rank} + \text{nullity} = \text{number of columns}$$
+
+Written that way it looks like an identity about nothing. It is a genuine theorem in
+one respect: it asserts that the special solutions really are independent and really do
+span the null space. Independence is visible — special solution $j$ has a $1$ in free
+position $j$ and a $0$ in every other free position, so no combination of the others
+can reproduce it. Spanning is the observation that once the free variables are chosen,
+the pivot variables are determined, so nothing outside the list is available.
+
+$$B = \begin{bmatrix} 1 & 3 & 0 & 2 \\ 0 & 0 & 1 & 4 \\ 1 & 3 & 1 & 6 \end{bmatrix}$$
+
+Row $3$ is row $1$ plus row $2$, so it eliminates to zero. The rank is $2$, the nullity
+is $4 - 2 = 2$, and the null space basis is $(-3, 1, 0, 0)$ and $(-2, 0, -4, 1)$. Check
+the second against the original: $1(-2) + 3(0) + 0(-4) + 2(1) = 0$ in row $1$, and
+$0(-2) + 0(0) + 1(-4) + 4(1) = 0$ in row $2$.
+
+The left null space, meanwhile, is spanned by $(-1, -1, 1)$ — the statement that row $3$
+minus row $1$ minus row $2$ is zero, which is the dependence among the rows written as a
+vector. Its dimension is $m - r = 3 - 2 = 1$, and that is rank plus nullity applied to
+$A^{\mathsf{T}}$.
+
+## Row rank equals column rank
+
+This is the fact that deserves the surprise. The row space lives in $\mathbf{R}^{4}$
+here and the column space in $\mathbf{R}^{3}$; they are not the same set and cannot be
+compared as sets. Yet they have the same dimension, $2$.
+
+The argument is that elimination changes the column space but not the row space, and
+changes the row space's *basis* but not its span — each row operation replaces a row by
+a combination of rows, which is reversible, so the span is untouched. In echelon form
+the non-zero rows are visibly independent (each has a leading entry where the others
+have zeros), so the row rank is the number of non-zero rows, which is the number of
+pivots. And the pivot columns of the original matrix are a basis of its column space, so
+the column rank is also the number of pivots. Both counts are the pivot count, so they
+agree.
+
+## The mistake, and why it is tempting
+
+The mistake is to read rank plus nullity as $\text{rank} + \text{nullity} = m$, using
+the number of rows. It is tempting because "rank" feels like a property of the rows —
+it is often introduced as the number of independent rows — and because for a square
+matrix the two counts coincide, which is most of the examples anyone practises on. The
+theorem is about columns because the null space lives in the input space, and the input
+space has one dimension per column. For the $4\times7$ matrix in this module's quiz,
+using the rows would give $4 - 3 = 1$ instead of the correct $7 - 3 = 4$.
+
+## Where it stops
+
+The dimension argument assumed a **finite** spanning set. Without one it breaks, and
+not merely technically: the space of all polynomials has no finite basis, and the space
+of continuous functions on $[0,1]$ has no basis anyone can write down at all. Both are
+vector spaces, and everything in this module about counting stops applying to them. The
+subject that continues from there replaces "basis" with something weaker and works with
+convergence instead of finite sums.
+
+Closer to this course, the count is exact and the computation of it is not. Rank is
+defined by which pivots are non-zero, and in floating point "non-zero" is a decision
+made against a tolerance. A matrix whose true rank is $2$ can compute as rank $3$ with
+a pivot of $10^{-16}$, and one whose true rank is $3$ can compute as rank $2$ if a
+pivot lands under the threshold. The integer is real; the measurement of it is not, and
+module 11 replaces it with a quantity that degrades continuously instead.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Rank plus nullity, by turning one free variable on at a time",
+                    "minutes": 12,
+                    "vars": ["x_1", "x_2", "x_3", "x_4", "n", "r"],
+                    "brief": r'''
+$$B = \begin{bmatrix} 1 & 3 & 0 & 2 \\ 0 & 0 & 1 & 4 \\ 1 & 3 & 1 & 6 \end{bmatrix}$$
+
+Row $3$ is row $1$ plus row $2$, so elimination clears it and the reduced row echelon
+form is
+
+$$R = \begin{bmatrix} 1 & 3 & 0 & 2 \\ 0 & 0 & 1 & 4 \\ 0 & 0 & 0 & 0 \end{bmatrix}$$
+
+Pivots sit in columns $1$ and $3$; columns $2$ and $4$ are free. Build the null space
+from that, one free variable at a time, and then read the general rule off what you
+did.
+''',
+                    "steps": [
+                        {
+                            "prompt": "The first non-zero row of $R$ says $x_1 + 3x_2 + 2x_4 = 0$. Solve it for $x_1$ in terms of $x_2$ and $x_4$.",
+                            "answer": "-3 x_2 - 2 x_4",
+                            "hint": "Move both free terms to the other side.",
+                        },
+                        {
+                            "prompt": "The second row says $x_3 + 4x_4 = 0$. Solve for $x_3$.",
+                            "answer": "-4 x_4",
+                            "hint": "Only $x_4$ appears, so $x_3$ does not depend on $x_2$ at all.",
+                        },
+                        {
+                            "prompt": "First special solution: set $x_2 = 1$ and $x_4 = 0$. What is $x_1$?",
+                            "answer": "-3",
+                            "hint": "Substitute into your answer to step 1.",
+                        },
+                        {
+                            "prompt": "Second special solution: set $x_2 = 0$ and $x_4 = 1$. What is $x_1$?",
+                            "answer": "-2",
+                            "hint": "Substitute the other way round into step 1.",
+                        },
+                        {
+                            "prompt": "And for that same second special solution, what is $x_3$?",
+                            "answer": "-4",
+                            "hint": "Use step 2 with $x_4 = 1$.",
+                        },
+                        {
+                            "prompt": "Generalise. An $m\\times n$ matrix has rank $r$. How many free columns does it have — that is, what is the dimension of its null space?",
+                            "answer": "n - r",
+                            "hint": "Every column is either a pivot column or a free one. There are $n$ columns and $r$ pivots.",
+                            "deconstruct": [
+                                "Each pivot occupies one column, so $r$ columns are pivot columns.",
+                                "Every remaining column is free, and there are $n - r$ of them.",
+                                "Each free column contributes exactly one special solution, and those are independent, so the nullity is $n - r$.",
+                            ],
+                        },
+                    ],
+                    "closing": r'''
+The two special solutions are
+
+$$s_1 = (-3,\, 1,\, 0,\, 0) \qquad s_2 = (-2,\, 0,\, -4,\, 1)$$
+
+Check $s_2$ against the original $B$, not against $R$: row $1$ gives
+$1(-2) + 3(0) + 0(-4) + 2(1) = 0$, row $2$ gives $0 - 0 - 4 + 4 = 0$, and row $3$ gives
+$1(-2) + 3(0) + 1(-4) + 6(1) = 0$. Elimination did not change the null space, which is
+the reason it was legitimate to work with $R$ throughout.
+
+Independence of the two is visible without any computation. Look at the free positions,
+columns $2$ and $4$: $s_1$ reads $(1, 0)$ there and $s_2$ reads $(0, 1)$. Any
+combination $c_1 s_1 + c_2 s_2$ reads $(c_1, c_2)$ in those slots, so the combination is
+zero only when both coefficients are. The free positions are carrying an identity matrix,
+and that is what makes the construction produce a basis rather than merely a spanning
+set.
+
+So the count is $2 + 2 = 4$: rank plus nullity equals the number of **columns**. Step 6
+is the whole theorem, and the only input it needed was that a column cannot be both a
+pivot column and a free one, and cannot be neither.
+
+One warning the arithmetic here hides. $s_1$ and $s_2$ are a perfectly good basis of the
+null space and they are not the only one — $s_1 + s_2$ and $s_1 - s_2$ do just as well.
+What is forced is the number $2$, not the vectors. The dimension is the invariant; the
+basis is a choice, and elimination merely picks the one that is convenient to compute.
+''',
+                },
             ],
             "quiz": {
                 "title": "Counting dimensions",
@@ -4539,8 +4993,247 @@ the symmetry of `A^T A` is a different fact about a different matrix.
                 "A map is linear when it respects addition and scaling; its matrix is what it does to the basis vectors, recorded as columns",
                 "Rotation, reflection, scaling, shear and projection are all read straight off their action on a basis",
                 "Translation is not linear because it moves the origin, which is why graphics carries an extra coordinate and works with 4-by-4 matrices",
-                "Changing basis conjugates the matrix: B = S^-1 A S, and similar matrices are one map seen from two seats",
+                "Changing basis conjugates the matrix: B = S^-1 A S, where S holds the new basis vectors as its columns written in the old coordinates. So S converts new coordinates to old, and the formula reads right to left: translate in, act, translate back",
+                "Similar matrices are one map seen from two seats — and writing S^-1 where S belongs produces a matrix with the same determinant, trace and characteristic polynomial as the right answer. Every similarity invariant passes, so only pushing a known vector through both routes catches the swap",
                 "|det A| is the factor by which areas and volumes are scaled, and the sign of det A records whether orientation survived",
+            ],
+            "read": [
+                {
+                    "title": "What the change-of-basis matrix actually holds, and the swap that survives every check",
+                    "minutes": 14,
+                    "body": r'''
+The module gives the formula $B = S^{-1} A S$ and says that similar matrices are one map
+seen from two seats. Both true. Neither tells you what to put in $S$.
+
+That gap is where the errors live. Nobody misremembers the shape of the formula; people
+misremember which way round $S$ goes, and the failure is quiet — the wrong choice
+produces a matrix of the right size, with the right determinant, the right trace and the
+right eigenvalues. Every invariant this module lists as a test of similarity is passed
+by the wrong answer. This reading derives $S$ instead of quoting it, so there is nothing
+left to misremember, and then shows precisely what the swap costs and why no invariant
+catches it.
+
+## Coordinates are not vectors
+
+Fix that first, because the whole derivation turns on it. A vector in the plane is an
+arrow. Its **coordinates** are the weights you need on your chosen basis to build it,
+and they change when you change the basis while the arrow does not move.
+
+Take the new basis $b_1 = (1, 0)$ and $b_2 = (1, 1)$, both written in the standard basis
+as usual. A vector with new coordinates $y = (y_1, y_2)$ is by definition
+
+$$y_1 b_1 + y_2 b_2 = y_1 \begin{bmatrix} 1 \\ 0 \end{bmatrix} + y_2 \begin{bmatrix} 1 \\ 1 \end{bmatrix} = \begin{bmatrix} y_1 + y_2 \\ y_2 \end{bmatrix}$$
+
+and that column is the vector's *old* coordinates. Written as a matrix,
+
+$$x = Sy \qquad S = \begin{bmatrix} 1 & 1 \\ 0 & 1 \end{bmatrix}$$
+
+So **$S$ holds the new basis vectors as its columns, expressed in the old
+coordinates**, and $S$ converts new coordinates into old ones. That is a derivation, not
+a convention: $S$'s first column is where the new first basis vector sits, because
+feeding $y = (1,0)$ must return $b_1$.
+
+The direction catches people out because it reads backwards. $S$ is built out of the
+*new* basis, and it maps *new to old*. Both halves of that sentence are forced by the
+line above.
+
+## The formula, assembled
+
+You want the matrix $B$ that takes new coordinates in and gives new coordinates out,
+doing whatever $A$ does. Follow a vector round:
+
+1. Start with new coordinates $y$. Convert to old: $x = Sy$.
+2. Apply the map, which is written in old coordinates: $Ax = ASy$.
+3. Convert the answer back to new coordinates: $S^{-1}ASy$.
+
+So $B = S^{-1}AS$, and the order is now readable rather than memorable — right to left,
+because that is the order the three steps happen in. The $S$ on the right is the one
+that runs first, and it is the one that translates the input.
+
+$S$ has to be invertible for step 3 to exist. That is not a technicality bolted on: $S$
+is invertible exactly when its columns are independent, which is exactly the condition
+for the new basis to be a basis at all. If the "new basis" is not one, there is nothing
+to convert back to.
+
+### Worked, and checked against a vector
+
+$$A = \begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix} \qquad S = \begin{bmatrix} 1 & 1 \\ 0 & 1 \end{bmatrix} \qquad S^{-1} = \begin{bmatrix} 1 & -1 \\ 0 & 1 \end{bmatrix}$$
+
+$$AS = \begin{bmatrix} 2 & 3 \\ 1 & 3 \end{bmatrix} \qquad B = S^{-1}AS = \begin{bmatrix} 1 & 0 \\ 1 & 3 \end{bmatrix}$$
+
+Test it on the new basis vector $b_1$ itself, whose new coordinates are $y = (1, 0)$.
+
+Old route: $x = Sy = (1, 0)$, then $Ax = (2, 1)$, then back to new coordinates,
+$S^{-1}(2,1) = (2 - 1,\, 1) = (1, 1)$.
+
+New route: $By = \begin{bmatrix} 1 & 0 \\ 1 & 3 \end{bmatrix}(1,0) = (1, 1)$.
+
+They agree, and they agree because the second is the first with the brackets moved.
+
+## The swap, and why every invariant misses it
+
+Now do it wrong. Write $S^{-1}$ where $S$ belongs:
+
+$$S A S^{-1} = \begin{bmatrix} 3 & 0 \\ 1 & 1 \end{bmatrix}$$
+
+against the correct $\begin{bmatrix} 1 & 0 \\ 1 & 3 \end{bmatrix}$. Different matrices —
+the diagonal has swapped.
+
+Now run the module's own tests for similarity on the wrong answer. Determinant: $3$,
+and $\det A = 3$. Trace: $4$, and $\operatorname{tr} A = 4$. Characteristic polynomial:
+$(\lambda - 3)(\lambda - 1)$, and $A$'s is $(\lambda - 3)(\lambda - 1)$. **Every one of
+them passes.**
+
+That is not bad luck, and the reason is worth stating plainly. $SAS^{-1}$ is also a conjugation — by $S^{-1}$ instead of by $S$ — so it is also
+similar to $A$, and similar matrices share exactly those invariants. The wrong answer is
+not an invalid matrix. It is the matrix of the same map in a *different* basis from the
+one you asked for: the basis whose change matrix is $S^{-1}$, which is
+$(1, 0)$ and $(-1, 1)$.
+
+So checking your work with a determinant cannot help here, and neither can a trace or an
+eigenvalue. The only test that separates them is the one performed above: take a vector
+whose new coordinates you know, push it through both routes, and see which matrix
+reproduces the answer. $By$ gave $(1,1)$; the swap gives
+$\begin{bmatrix} 3 & 0 \\ 1 & 1 \end{bmatrix}(1,0) = (3, 1)$, and $(3,1)$ is not the new
+coordinate vector of $A b_1 = (2,1)$.
+
+## A basis worth changing to
+
+The point of all this is that some bases make $A$ readable. Take the same $A$ and the
+basis $(1,1)$, $(1,-1)$:
+
+$$S = \begin{bmatrix} 1 & 1 \\ 1 & -1 \end{bmatrix} \qquad S^{-1}AS = \begin{bmatrix} 3 & 0 \\ 0 & 1 \end{bmatrix}$$
+
+The map was always "stretch by $3$ along $(1,1)$ and leave $(1,-1)$ alone"; the standard
+basis was hiding it in an off-diagonal $1$. Module 9 is about finding such a basis when
+one exists, and module 10 about the case where it always does.
+
+A caution about this particular $S$, because it is the example everyone meets first:
+$S^{2} = 2I$, so $S^{-1} = \tfrac{1}{2}S$, and therefore $SAS^{-1}$ and $S^{-1}AS$ come
+out **equal** for every $A$. The swap is invisible here. Testing your understanding of
+the order on a symmetric, self-inverse-up-to-scale $S$ will tell you nothing, which is
+why the worked example above used the shear instead.
+
+## The mistake, and why it is tempting
+
+The commonest error is building $S$ from the new basis vectors as **rows**. It is
+tempting because a list of vectors is normally written down the page, one per line, and
+because the phrase "change of basis matrix" gives no hint about orientation. The cost is
+a transpose, and for the shear above
+$S^{\mathsf{T}} = \begin{bmatrix} 1 & 0 \\ 1 & 1 \end{bmatrix}$ is a perfectly
+invertible matrix, so nothing fails loudly — you get the matrix of $A$ in yet another
+basis you did not ask for.
+
+The cure is to re-derive rather than recall: ask what $S$ must do to $y = (1, 0)$. It
+must return $b_1$. A matrix times $(1,0)$ is its first column. Therefore $b_1$ is the
+first column, and the question is closed.
+
+## Where it stops
+
+Similarity preserves everything intrinsic to the map and nothing about coordinates, and
+the second half is easy to forget. Lengths and angles are **not** preserved: $S$ is any
+invertible matrix, and an invertible matrix can stretch, shear and skew. Two similar
+matrices can have wildly different entries, different norms, and eigenvectors that are
+nowhere near each other as columns of numbers. If you need the geometry preserved as
+well, $S$ has to be orthogonal, and that is the restriction module 10 imposes to get the
+spectral theorem.
+
+Similarity also says nothing about a map between *different* spaces. $B = S^{-1}AS$
+needs $A$ square, because the input and output basis are being changed by the same
+matrix. A map from $\mathbf{R}^{5}$ to $\mathbf{R}^{3}$ has two independent bases to
+choose, and its change of basis is $B = T^{-1}AS$ with two different matrices — at which
+point you can choose $S$ and $T$ to make $B$ almost entirely zeros, which is the
+singular value decomposition of module 11.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Building the change-of-basis matrix instead of remembering it",
+                    "minutes": 13,
+                    "vars": ["y_1", "y_2"],
+                    "brief": r'''
+$$A = \begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}$$
+
+and a new basis, written as usual in the standard coordinates:
+
+$$b_1 = \begin{bmatrix} 1 \\ 0 \end{bmatrix} \qquad b_2 = \begin{bmatrix} 1 \\ 1 \end{bmatrix}$$
+
+Rather than quoting $B = S^{-1}AS$, follow one vector all the way round and let the
+matrix assemble itself. A vector has **new** coordinates $(y_1, y_2)$, meaning it is
+$y_1 b_1 + y_2 b_2$. Convert to old coordinates, apply $A$, convert back, and read off
+what happened.
+''',
+                    "steps": [
+                        {
+                            "prompt": "A vector has new coordinates $(y_1, y_2)$, so it is $y_1 b_1 + y_2 b_2$. Write its **first** old coordinate.",
+                            "answer": "y_1 + y_2",
+                            "hint": "$b_1$ contributes $y_1 \\cdot 1$ and $b_2$ contributes $y_2 \\cdot 1$ to the first entry.",
+                        },
+                        {
+                            "prompt": "And its **second** old coordinate?",
+                            "answer": "y_2",
+                            "hint": "$b_1$ has a zero in the second entry, so only $b_2$ contributes.",
+                            "deconstruct": [
+                                "$y_1 b_1 = (y_1, 0)$ and $y_2 b_2 = (y_2, y_2)$.",
+                                "Adding them gives $(y_1 + y_2,\\; y_2)$.",
+                                "So the matrix that converts new coordinates to old is $S = \\begin{bmatrix} 1 & 1 \\\\ 0 & 1 \\end{bmatrix}$ — the new basis vectors as its columns.",
+                            ],
+                        },
+                        {
+                            "prompt": "Now apply $A$ to that old-coordinate vector. Write the **first** component of the result, in terms of $y_1$ and $y_2$.",
+                            "answer": "2 y_1 + 3 y_2",
+                            "hint": "Row $1$ of $A$ is $\\begin{bmatrix} 2 & 1 \\end{bmatrix}$, applied to $(y_1 + y_2,\\; y_2)$: that is $2(y_1 + y_2) + y_2$.",
+                        },
+                        {
+                            "prompt": "And the **second** component of $A x$?",
+                            "answer": "y_1 + 3 y_2",
+                            "hint": "Row $2$ of $A$ is $\\begin{bmatrix} 1 & 2 \\end{bmatrix}$, so $(y_1 + y_2) + 2y_2$.",
+                        },
+                        {
+                            "prompt": "Convert back to new coordinates. Inverting $x = Sy$ gives $y_1 = x_1 - x_2$ and $y_2 = x_2$. Write the **first** new coordinate of the answer, in terms of $y_1$ and $y_2$.",
+                            "answer": "y_1",
+                            "hint": "Subtract your step-4 answer from your step-3 answer.",
+                            "deconstruct": [
+                                "The old coordinates of the output are $(2y_1 + 3y_2,\\; y_1 + 3y_2)$.",
+                                "The first new coordinate is old first minus old second: $(2y_1 + 3y_2) - (y_1 + 3y_2)$.",
+                                "The $3y_2$ terms cancel exactly, leaving $y_1$.",
+                            ],
+                        },
+                        {
+                            "prompt": "And the **second** new coordinate, which is just the second old one?",
+                            "answer": "y_1 + 3 y_2",
+                            "hint": "$y_2 = x_2$, so the second new coordinate equals the second old coordinate — your answer to step 4.",
+                        },
+                    ],
+                    "closing": r'''
+Steps 5 and 6 say that new coordinates $(y_1, y_2)$ go to
+$(y_1,\; y_1 + 3y_2)$, and reading the coefficients off as a matrix,
+
+$$B = \begin{bmatrix} 1 & 0 \\ 1 & 3 \end{bmatrix}$$
+
+which is $S^{-1}AS$ with $S = \begin{bmatrix} 1 & 1 \\ 0 & 1 \end{bmatrix}$. The formula
+was never assumed; it was assembled from three steps whose order was forced by what each
+one does.
+
+Check the invariants: $\det B = 3 = \det A$, and
+$\operatorname{tr} B = 4 = \operatorname{tr} A$. Both survive, as similarity
+promises.
+
+Now the warning this derivation exists to deliver. Compute the swap,
+
+$$SAS^{-1} = \begin{bmatrix} 3 & 0 \\ 1 & 1 \end{bmatrix}$$
+
+Its determinant is $3$. Its trace is $4$. Its characteristic polynomial is
+$(\lambda - 3)(\lambda - 1)$, the same as $A$'s. Every invariant agrees, and the matrix
+is still wrong — it is the map in the basis belonging to $S^{-1}$, not to $S$.
+
+The only thing that separates them is a vector. Take $y = (1, 0)$, the new coordinates
+of $b_1$. This derivation walked it through and got $(1, 1)$. $B(1,0) = (1,1)$ agrees;
+$SAS^{-1}(1,0) = (3,1)$ does not. When you are unsure which way round $S$ goes, do not
+reach for a determinant — push a basis vector through and compare.
+''',
+                },
             ],
             "quiz": {
                 "title": "Same map, different coordinates",
@@ -4633,7 +5326,7 @@ the map has thrown away a dimension and cannot be undone.
                 "A residual that vanishes signals linear dependence, not bad luck",
                 "QR: the orthonormalised columns form Q, and R[i][j] is the projection of column j onto q_i",
                 "Q^T Q = I, so an orthogonal change of basis preserves lengths and cannot amplify error",
-                "Power iteration converges to the dominant eigenvector at rate |lambda_2 / lambda_1|",
+                "Power iteration converges to the dominant eigenvector at rate |lambda_2 / lambda_1|, provided |lambda_1| is strictly larger than every other eigenvalue's modulus and the starting vector has a component along v_1. Both hypotheses are needed: with eigenvalues of equal size the Rayleigh quotient can sit still while the vector swings, which looks exactly like convergence",
                 "The Rayleigh quotient v^T A v is the best eigenvalue estimate for a given v",
             ],
             "lab": {
@@ -4953,10 +5646,262 @@ except ValueError:
             "summary": "When Ax = b has no solution, the honest answer is the closest one — and closest means orthogonal.",
             "concepts": [
                 "The projection of b onto a subspace is the point of that subspace nearest b, and the error b - p is orthogonal to everything in it",
-                "P = A(A^T A)^-1 A^T projects onto the column space; P^2 = P and P^T = P, and its only eigenvalues are 0 and 1",
+                "P = A(A^T A)^-1 A^T projects onto the column space when the columns of A are independent — which is exactly when A^T A is invertible; P^2 = P and P^T = P, and its only eigenvalues are 0 and 1",
+                "The projection itself always exists and is always unique; the formula for it does not. With dependent columns A^T A is singular and xhat stops being unique, yet every choice of xhat still produces the same point p",
                 "The normal equations A^T A x = A^T b say precisely that the residual is orthogonal to every column of A",
+                "Residuals summing to zero is the orthogonality condition applied to the column of ones, so it is a consequence of fitting a constant term rather than a law of least squares — drop the intercept and it stops being true",
                 "With orthonormal columns the normal equations collapse to x = Q^T b, which is what makes QR worth computing",
                 "Forming A^T A squares the condition number, so the numerically sound route to a fit runs through QR, not through the normal equations",
+            ],
+            "read": [
+                {
+                    "title": "The closest answer, and the hypothesis the projection formula needs",
+                    "minutes": 14,
+                    "body": r'''
+Four measurements, two unknowns. There is no line through four scattered points, and
+$Ax = b$ has no solution — the previous modules would stop there and report that $b$ is
+outside the column space. That is a true answer and a useless one, because the
+measurements were taken for a reason.
+
+So change the question. Not "which $x$ solves it", which nothing does, but "which $x$
+comes closest". Once *closest* is pinned to a definition, the answer turns out to be
+forced, computable and unique, and the whole of it follows from one geometric fact.
+
+## Closest means orthogonal
+
+Every candidate $Ax$ lies in the column space $C(A)$, because $Ax$ is a combination of
+the columns and that is what the column space is. So the question is: which point $p$ of
+$C(A)$ is nearest $b$?
+
+Suppose $p$ is that nearest point and the error $e = b - p$ still had some component
+along a direction $c$ lying inside $C(A)$. Then step a little way along $c$: the new
+point $p + tc$ is still in $C(A)$, and
+
+$$||b - p - tc||^{2} = ||e||^{2} - 2t\,(e \cdot c) + t^{2}||c||^{2}$$
+
+For small $t$ with the same sign as $e \cdot c$, the linear term beats the quadratic one
+and the distance strictly decreases. So $p$ was not nearest after all. The only way out
+is $e \cdot c = 0$ for every $c$ in $C(A)$:
+
+$$\text{the error is orthogonal to the column space}$$
+
+That is the entire content of least squares. Everything below is bookkeeping applied to
+that one line.
+
+Being orthogonal to the whole column space is the same as being orthogonal to each
+column, since every $c$ is a combination of them. One dot product per column, stacked,
+is a matrix equation:
+
+$$A^{\mathsf{T}}(b - Ax) = 0 \qquad \Leftrightarrow \qquad A^{\mathsf{T}}Ax = A^{\mathsf{T}}b$$
+
+The **normal equations**. They are not a formula to memorise; they are "the residual is
+perpendicular to every column", written down.
+
+## Worked, end to end
+
+Fit $y = c + dt$ to the four points $(0, 1)$, $(1, 3)$, $(2, 4)$, $(3, 4)$.
+
+$$A = \begin{bmatrix} 1 & 0 \\ 1 & 1 \\ 1 & 2 \\ 1 & 3 \end{bmatrix} \qquad b = \begin{bmatrix} 1 \\ 3 \\ 4 \\ 4 \end{bmatrix} \qquad A^{\mathsf{T}}A = \begin{bmatrix} 4 & 6 \\ 6 & 14 \end{bmatrix} \qquad A^{\mathsf{T}}b = \begin{bmatrix} 12 \\ 23 \end{bmatrix}$$
+
+$\det(A^{\mathsf{T}}A) = 56 - 36 = 20$, so it inverts, and
+
+$$\hat{x} = \frac{1}{20}\begin{bmatrix} 14 & -6 \\ -6 & 4 \end{bmatrix}\begin{bmatrix} 12 \\ 23 \end{bmatrix} = \begin{bmatrix} 3/2 \\ 1 \end{bmatrix}$$
+
+The best line is $y = \tfrac{3}{2} + t$. Its values at $t = 0, 1, 2, 3$ are
+$p = (1.5,\, 2.5,\, 3.5,\, 4.5)$, so the residuals are
+
+$$r = b - p = (-0.5,\; 0.5,\; 0.5,\; -0.5)$$
+
+Now check the claim the whole derivation rests on. Dot $r$ with column $1$, the vector of
+ones: $-0.5 + 0.5 + 0.5 - 0.5 = 0$. Dot it with column $2$, the vector $(0,1,2,3)$:
+$0 + 0.5 + 1.0 - 1.5 = 0$. Both zero, as promised, and $||r||^{2} = 4 \times 0.25 = 1$.
+
+Notice that the first of those is the familiar statement that least-squares residuals
+sum to zero — which is not a separate fact but the orthogonality condition applied to
+the column of ones, and therefore something that holds **only** when the model has a
+constant term. Fit $y = dt$ with no intercept and the residuals will not sum to zero,
+and nothing is wrong.
+
+## The projection matrix, and what it costs to write down
+
+Substituting $\hat{x} = (A^{\mathsf{T}}A)^{-1}A^{\mathsf{T}}b$ back into $p = A\hat{x}$:
+
+$$p = Pb \qquad \text{where} \qquad P = A(A^{\mathsf{T}}A)^{-1}A^{\mathsf{T}}$$
+
+$P$ takes any $b$ and returns its projection. Two properties follow immediately and are
+worth checking on the numbers. $P^{2} = P$, because projecting something already in the
+column space leaves it alone — and squaring the formula, the middle
+$A^{\mathsf{T}}A(A^{\mathsf{T}}A)^{-1}$ collapses to the identity. And
+$P^{\mathsf{T}} = P$, by transposing the product and using that
+$(A^{\mathsf{T}}A)^{-1}$ is symmetric. For the example above,
+
+$$P = \frac{1}{10}\begin{bmatrix} 7 & 4 & 1 & -2 \\ 4 & 3 & 2 & 1 \\ 1 & 2 & 3 & 4 \\ -2 & 1 & 4 & 7 \end{bmatrix}$$
+
+whose trace is $\tfrac{1}{10}(7 + 3 + 3 + 7) = 2$ — the rank, and the dimension of the
+space being projected onto. Its eigenvalues are $1$ and $1$ and $0$ and $0$: a
+projection either keeps a direction or destroys it, and $\lambda^{2} = \lambda$ from
+$P^{2} = P$ leaves nothing else available.
+
+## The hypothesis, and where the formula fails while the answer survives
+
+$P$ contains $(A^{\mathsf{T}}A)^{-1}$, and the module states $P$ with no conditions
+attached. The inverse exists exactly when $A^{\mathsf{T}}A$ is invertible, which is
+exactly when **the columns of $A$ are independent** — module 10 states that condition in
+its own concepts list, three modules away, and it belongs here.
+
+Watch what happens when it fails. Take
+
+$$A = \begin{bmatrix} 1 & 2 \\ 1 & 2 \\ 1 & 2 \\ 1 & 2 \end{bmatrix} \qquad A^{\mathsf{T}}A = \begin{bmatrix} 4 & 8 \\ 8 & 16 \end{bmatrix}$$
+
+whose determinant is $64 - 64 = 0$. The formula for $P$ does not exist. But the
+*projection* certainly does: the column space is the single line through $(1,1,1,1)$, and
+the nearest point of a line to $b$ is a perfectly ordinary, perfectly unique vector. For
+$b = (1,3,4,4)$ it is
+
+$$p = \frac{a \cdot b}{a \cdot a}\,a = \frac{12}{4}(1,1,1,1) = (3, 3, 3, 3)$$
+
+the mean, repeated — which is what fitting a constant to four numbers ought to give.
+
+That distinction is the point. **The projection is always defined and always unique; the
+formula for it is not.** What has failed is the coordinates: $\hat{x}$ is not unique,
+because $(1, 2)$ and $(3, 1)$ and infinitely many other coefficient pairs all produce the
+same point $p$. Uniqueness of $\hat{x}$ needs independent columns; existence and
+uniqueness of $p$ needs nothing at all. Reporting "least squares has no solution here"
+is a misreading — it has infinitely many, all giving the same fitted values.
+
+## The mistake, and why it is tempting
+
+The mistake is to compute $A^{\mathsf{T}}A$ and solve it, because that is what the
+derivation produced and it looks like a finished recipe. It is tempting because the
+normal equations are how the subject is *derived* and it takes a second thought to
+notice that a derivation is not an algorithm.
+
+The cost is measurable. Forming $A^{\mathsf{T}}A$ squares the condition number, so a
+design matrix carrying $\kappa = 2.4\times10^{4}$ hands its Gram matrix
+$\kappa = 6.0\times10^{8}$ — the logarithms are $4.39$ and $8.78$, exactly double, so
+you lose twice as many digits as the problem itself requires you to lose. With
+orthonormal columns the same derivation collapses instead: $Q^{\mathsf{T}}Q = I$ turns
+$Q^{\mathsf{T}}Qx = Q^{\mathsf{T}}b$ into $x = Q^{\mathsf{T}}b$, one matrix-vector
+product and no inverse anywhere. That is what QR buys, and it costs roughly twice the
+arithmetic of the normal equations — so the trade is accuracy for flops, not the other
+way round.
+
+## Where it stops
+
+Least squares minimises the sum of **squared vertical** errors, and each of those three
+words is a choice rather than a law.
+
+*Squared* makes the problem linear and makes one bad point expensive: an outlier at four
+standard deviations contributes sixteen times the pull of one at a single deviation. If
+that is wrong for your data, minimising absolute errors is a perfectly reasonable
+alternative, and it has no normal equations, no projection matrix and no closed form.
+
+*Vertical* assumes the errors are in $y$ alone. If both coordinates are measured with
+error, the honest fit minimises perpendicular distance instead, and the line you get is
+different — that problem is solved by the singular value decomposition in module 11, not
+by this module's machinery at all.
+
+And the whole construction is about the *model's* fit, never its correctness. The
+residuals for a straight line through points that genuinely lie on a parabola will be
+orthogonal to both columns exactly as the theorem promises, and the fit will still be
+wrong. Orthogonality certifies that you found the best member of the family you chose. It
+says nothing about the choice.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": "The normal equations, one dot product at a time",
+                    "minutes": 12,
+                    "vars": ["c", "d"],
+                    "brief": r'''
+Fit the line $y = c + dt$ to four points:
+
+```text
+t     0     1     2     3
+y     1     3     4     4
+```
+
+No line passes through all four, so there is nothing to solve exactly. Instead impose
+the one condition that defines the best fit: **the residual vector must be orthogonal to
+each column of the design matrix**, which here means the vector of ones and the vector
+of $t$ values.
+
+Build the two dot products, set them to zero, and solve.
+''',
+                    "steps": [
+                        {
+                            "prompt": "The residual at a point is $y - (c + dt)$. Write the residual at $t = 0$, where $y = 1$.",
+                            "answer": "1 - c",
+                            "hint": "Substitute $t = 0$, so the $d$ term vanishes.",
+                        },
+                        {
+                            "prompt": "And the residual at $t = 3$, where $y = 4$?",
+                            "answer": "4 - c - 3 d",
+                            "hint": "$4 - (c + 3d)$, with the bracket expanded.",
+                        },
+                        {
+                            "prompt": "The first column of $A$ is $(1,1,1,1)$, so orthogonality to it says the four residuals **sum** to zero. Write that sum in terms of $c$ and $d$.",
+                            "answer": "12 - 4 c - 6 d",
+                            "hint": "The four residuals are $1-c$, $3-c-d$, $4-c-2d$ and $4-c-3d$. Add the constants, the $c$ terms and the $d$ terms separately.",
+                            "deconstruct": [
+                                "Constants: $1 + 3 + 4 + 4 = 12$.",
+                                "The $c$ terms: four of them, giving $-4c$.",
+                                "The $d$ terms: $-(0 + 1 + 2 + 3)d = -6d$.",
+                            ],
+                        },
+                        {
+                            "prompt": "The second column is $(0,1,2,3)$. Write the dot product of the residuals with that column, in terms of $c$ and $d$.",
+                            "answer": "23 - 6 c - 14 d",
+                            "hint": "Multiply residual $i$ by $t_i$ before adding: $0(1-c) + 1(3-c-d) + 2(4-c-2d) + 3(4-c-3d)$.",
+                            "deconstruct": [
+                                "Constants: $0 + 3 + 8 + 12 = 23$.",
+                                "The $c$ terms: $-(0 + 1 + 2 + 3)c = -6c$.",
+                                "The $d$ terms: $-(0 + 1 + 4 + 9)d = -14d$, since each contributes $t_i^{2}$.",
+                            ],
+                        },
+                        {
+                            "prompt": "Set both expressions to zero and solve the pair. What is $d$?",
+                            "answer": "1",
+                            "hint": "From the first, $4c + 6d = 12$, so $c = 3 - \\tfrac{3}{2}d$. Substitute into $6c + 14d = 23$.",
+                            "deconstruct": [
+                                "$6\\left(3 - \\tfrac{3}{2}d\\right) + 14d = 18 - 9d + 14d = 18 + 5d$.",
+                                "Setting that equal to $23$ gives $5d = 5$.",
+                            ],
+                        },
+                        {
+                            "prompt": "And what is $c$?",
+                            "answer": "\\frac{3}{2}",
+                            "hint": "Put $d = 1$ back into $4c + 6d = 12$.",
+                        },
+                    ],
+                    "closing": r'''
+The best line is $y = \tfrac{3}{2} + t$. The two equations you built,
+
+$$4c + 6d = 12 \qquad 6c + 14d = 23$$
+
+are exactly $A^{\mathsf{T}}Ax = A^{\mathsf{T}}b$ written out, with
+
+$$A^{\mathsf{T}}A = \begin{bmatrix} 4 & 6 \\ 6 & 14 \end{bmatrix} \qquad A^{\mathsf{T}}b = \begin{bmatrix} 12 \\ 23 \end{bmatrix}$$
+
+Every entry of $A^{\mathsf{T}}A$ appeared as a coefficient: the $4$ is the number of
+points, the $6$ is $\sum t_i$ and the $14$ is $\sum t_i^{2}$. The normal equations were
+not applied here; they were rebuilt, one dot product at a time, from the requirement that
+the residual be perpendicular to each column.
+
+Check the fit. The predictions are $1.5$, $2.5$, $3.5$, $4.5$, so the residuals are
+$(-0.5,\, 0.5,\, 0.5,\, -0.5)$. They sum to zero — that is step 3 satisfied — and
+weighted by $(0,1,2,3)$ they give $0 + 0.5 + 1.0 - 1.5 = 0$, which is step 4. The squared
+error is $4 \times 0.25 = 1$, and no other choice of $c$ and $d$ gets below it.
+
+Two remarks. The residuals summing to zero is a consequence of fitting a constant term,
+not a law of least squares; drop the intercept and it stops being true. And
+$\det(A^{\mathsf{T}}A) = 56 - 36 = 20$ is non-zero here only because the $t$ values are
+not all identical. Measure all four points at $t = 2$ and the columns become parallel,
+the determinant vanishes, and there is no unique line — which is the arithmetic
+expression of the obvious fact that one $t$ value cannot determine a slope.
+''',
+                },
             ],
             "quiz": {
                 "title": "Closest, not exact",
@@ -5042,8 +5987,257 @@ is exactly when the normal equations do have their unique solution.
                 "Av = lambda v with v non-zero: an eigenvector is a direction the map stretches without turning",
                 "det(A - lambda I) = 0 is the characteristic equation; the trace is the sum of the eigenvalues and the determinant is their product",
                 "Eigenvectors belonging to distinct eigenvalues are independent, so n of them give A = S Lambda S^-1",
-                "Diagonalisation makes powers cheap — A^k = S Lambda^k S^-1 — so long-run behaviour is decided by the largest |lambda|, which is why power iteration converges to it",
+                "Diagonalisation makes powers cheap — A^k = S Lambda^k S^-1 — because in the eigenbasis taking a power of the matrix is taking n independent powers of numbers",
+                "Long-run behaviour is decided by the largest |lambda|, and power iteration converges to it at rate |lambda_2 / lambda_1| — but only when that largest modulus is STRICTLY larger than every other, and the start has some component along v_1. With eigenvalues +5 and -5, or the +i and -i of a rotation, nothing decays at all",
+                "A stopping rule tests whether an iteration stopped changing, not whether it stopped in the right place. The residual ||Av - lambda v||, one matrix-vector product, is what separates the two — and on a matrix with eigenvalues +5 and -5 it is the only thing that does",
                 "A defective matrix has too few independent eigenvectors to diagonalise, and a real matrix may have no real eigenvector at all: a rotation turns everything",
+            ],
+            "read": [
+                {
+                    "title": "Why the largest eigenvalue wins, and the case where nothing wins",
+                    "minutes": 15,
+                    "body": r'''
+The module's concepts list ends on a claim that sounds like a summary and is really a
+theorem with its hypotheses removed: long-run behaviour is decided by the largest
+$|\lambda|$, *which is why power iteration converges to it*. Module 7 states the same
+thing with a rate attached, and module 7's lab implements it.
+
+The claim is true under conditions, false without them, and this course contains its own
+counterexample four questions later in this very module. This reading derives the
+convergence, names both hypotheses, and then shows what the lab's own solver returns
+when one of them fails — which is not an error message.
+
+## Powers, in the right basis
+
+Suppose $A$ is $n \times n$ with $n$ independent eigenvectors $v_1, \ldots, v_n$ and
+eigenvalues $\lambda_1, \ldots, \lambda_n$. Because they are independent they are a
+basis, so any starting vector decomposes:
+
+$$x_0 = c_1 v_1 + c_2 v_2 + \cdots + c_n v_n$$
+
+Apply $A$. It acts on each piece separately, and on an eigenvector it does nothing but
+scale:
+
+$$Ax_0 = c_1 \lambda_1 v_1 + c_2 \lambda_2 v_2 + \cdots + c_n \lambda_n v_n$$
+
+Apply it $k$ times and each coefficient picks up its own eigenvalue $k$ times:
+
+$$A^{k}x_0 = c_1 \lambda_1^{k} v_1 + c_2 \lambda_2^{k} v_2 + \cdots + c_n \lambda_n^{k} v_n$$
+
+This is the content of $A^{k} = S\Lambda^{k}S^{-1}$, without the matrices. In the
+eigenbasis, $A$ is $n$ independent multiplications, and taking a power is taking $n$
+independent powers.
+
+## Where the convergence comes from
+
+Order the eigenvalues so $|\lambda_1| \ge |\lambda_2| \ge \cdots$, and factor out the
+largest:
+
+$$A^{k}x_0 = \lambda_1^{k}\left[ c_1 v_1 + c_2 \left(\frac{\lambda_2}{\lambda_1}\right)^{k} v_2 + \cdots + c_n \left(\frac{\lambda_n}{\lambda_1}\right)^{k} v_n \right]$$
+
+The scalar $\lambda_1^{k}$ out the front changes the length, and normalising each step
+throws it away. What decides the *direction* is the bracket, and every term inside it
+except the first carries a factor $(\lambda_i/\lambda_1)^{k}$.
+
+So: if $|\lambda_2| < |\lambda_1|$, then $|\lambda_2/\lambda_1| < 1$ and every one of
+those factors decays geometrically. The bracket tends to $c_1 v_1$, the direction settles
+on $v_1$, and the slowest-dying term is the one with $i = 2$. That gives the rate the
+module quotes: the error falls by a factor of about $|\lambda_2/\lambda_1|$ per step.
+
+Two things had to be true, and both were used:
+
+- $|\lambda_2| < |\lambda_1|$ **strictly**. The dominant eigenvalue must be strictly
+  larger in modulus than every other. Equality gives a ratio of modulus $1$, which never
+  decays.
+- $c_1 \neq 0$. If the starting vector has no component along $v_1$, there is nothing
+  for the process to converge to — it will find the largest eigenvalue whose coefficient
+  is non-zero instead.
+
+Neither hypothesis appears in the module's bullet, and the first one is not a technical
+nicety.
+
+### The rate, measured
+
+Take $A = \begin{bmatrix} 4 & 1 \\ 2 & 3 \end{bmatrix}$, whose eigenvalues are $5$ and
+$2$, with $v_1 = (1,1)$. Predicted rate: $|\lambda_2/\lambda_1| = 2/5 = 0.4$. Starting
+from $(1,0)$ and normalising each step, the distance from the unit vector
+$(1,1)/\sqrt{2}$ runs
+
+```text
+k      Rayleigh quotient       distance to v_1     ratio to previous
+1        4.0000000000            3.204e-01
+2        5.0000000000            1.243e-01              0.388
+3        5.0769230769            4.874e-02              0.392
+4        5.0415430267            1.932e-02              0.396
+5        5.0181966639            7.700e-03              0.399
+6        5.0075214087            3.075e-03              0.399
+7        5.0030467505            1.229e-03              0.400
+```
+
+The ratio climbs to $0.4$ and stays there. The derivation did not merely predict that it
+converges; it predicted the number, and the number is right to three figures by step
+seven.
+
+## The case where nothing wins
+
+Now break the first hypothesis in the cheapest possible way. Take
+
+$$A = \begin{bmatrix} 5 & 0 \\ 0 & -5 \end{bmatrix}$$
+
+Eigenvalues $5$ and $-5$. Both have modulus $5$, so $|\lambda_2/\lambda_1| = 1$ and
+nothing decays — the second component keeps its full size forever and merely flips sign.
+Starting from $(1,1)/\sqrt{2}$, the iterates alternate between
+$(1,-1)/\sqrt{2}$ and $(1,1)/\sqrt{2}$ and never settle.
+
+That much is predictable. What the lab's implementation does with it is not.
+
+`power_method` estimates the eigenvalue by the Rayleigh quotient $v \cdot Av$ and stops
+when two consecutive estimates agree to within a tolerance. On this matrix, at every
+step,
+
+$$v \cdot Av = \frac{1}{2}(5) + \frac{1}{2}(-5) = 0$$
+
+The estimate is $0$ at step one, $0$ at step two, and the two agree perfectly. The
+convergence test fires on the second iteration — the earliest it possibly can — and the
+function returns
+
+$$\lambda = 0 \qquad v = (0.7071,\, 0.7071) \qquad \text{iterations} = 2$$
+
+with no error raised. Zero is not an eigenvalue of this matrix. Checking the residual
+gives $||Av - 0\cdot v|| = 5$, so the returned pair is not an approximate eigenpair
+either; it is wrong by the full size of the matrix. And it is delivered in two
+iterations, which is the most confident-looking output the routine can produce.
+
+The failure is that a *swinging* vector has a stationary Rayleigh quotient, and a test
+that compares consecutive estimates cannot tell that apart from convergence.
+
+**The counterexample is already in this module.** Question 4 asks for the real
+eigenvectors of the quarter-turn $\begin{bmatrix} 0 & -1 \\ 1 & 0 \end{bmatrix}$, and the
+correct answer is that there are none — its eigenvalues are $i$ and $-i$, both of modulus
+$1$. Hand that matrix to the same routine and it returns eigenvalue $0$ with eigenvector
+$(0.7071, 0.7071)$, for the same reason. The course asks you to know that no real
+eigenvector exists, and its own solver hands you one.
+
+The second hypothesis, $c_1 \neq 0$, is real but far less dangerous. Starting exactly
+orthogonal to $v_1$ is a measure-zero accident, and rounding error usually reintroduces a
+small component that then grows, so the iteration limps to the right answer anyway. It is
+worth knowing about and it is not what bites in practice.
+
+## The mistake, and why it is tempting
+
+The mistake is to treat a converged-looking iteration as a verified one. It is tempting
+because iterative methods advertise their own convergence — the routine *tells* you it
+stopped early, and stopping early normally means the problem was easy.
+
+The cure is a residual. Whatever an iterative eigensolver returns, compute
+$||Av - \lambda v||$ and compare it to $||A||$. That check costs one matrix-vector
+product, it needs no theory, and it separates the correct answer above (residual
+$\sim 10^{-10}$) from the fabricated one (residual $5$) immediately. A stopping rule
+tests whether the iteration stopped changing. Only a residual tests whether it stopped at
+the right place.
+
+## Where it stops, and where it does not
+
+The failure needs eigenvalues tied in modulus, which needs either a genuine $\pm\lambda$
+pair or a complex pair. Both require a matrix that is not symmetric: module 10 proves a
+real symmetric matrix has real eigenvalues, and a real symmetric matrix can still have
+$\lambda$ and $-\lambda$, so symmetry alone is not enough.
+
+This course's capstone escapes it, and for a reason worth naming rather than assuming.
+The capstone runs power iteration on $A^{\mathsf{T}}A$, which is symmetric positive
+semidefinite — every eigenvalue is $\ge 0$, so a $\pm\lambda$ pair is impossible unless
+both are zero, and a complex pair is impossible too. The route the capstone takes is safe
+by construction. That is a property of $A^{\mathsf{T}}A$, not a property of
+`power_method`, and it stops protecting you the moment the routine is pointed at a
+general matrix.
+
+Finally, the whole analysis assumed $n$ independent eigenvectors. A defective matrix —
+the shear $\begin{bmatrix} 1 & 1 \\ 0 & 1 \end{bmatrix}$ of question 3 — has no such
+basis, so $x_0$ cannot be decomposed and $A^{k} = S\Lambda^{k}S^{-1}$ does not exist.
+Power iteration still converges there, but the argument above is not the reason, and the
+rate is no longer geometric.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": "The ratio that decides how fast the largest eigenvalue takes over",
+                    "minutes": 13,
+                    "vars": ["c_1", "c_2", "lambda_1", "lambda_2", "k"],
+                    "brief": r'''
+A $2\times2$ matrix $A$ with independent eigenvectors $v_1$ and $v_2$ and eigenvalues
+$\lambda_1$ and $\lambda_2$, ordered so that $|\lambda_1| > |\lambda_2|$. A starting
+vector, written in that eigenbasis:
+
+$$x_0 = c_1 v_1 + c_2 v_2$$
+
+Track what repeated multiplication by $A$ does to the two coefficients, and read the
+convergence rate off the comparison.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Apply $A$ once. What is the coefficient of $v_1$ in $Ax_0$?",
+                            "answer": "c_1 \\lambda_1",
+                            "hint": "$A v_1 = \\lambda_1 v_1$, so the $c_1 v_1$ term becomes $c_1 \\lambda_1 v_1$.",
+                        },
+                        {
+                            "prompt": "Apply $A$ a total of $k$ times. What is the coefficient of $v_1$ in $A^{k}x_0$?",
+                            "answer": "c_1 \\lambda_1^{k}",
+                            "hint": "Each application multiplies that coefficient by $\\lambda_1$ once more.",
+                        },
+                        {
+                            "prompt": "And the coefficient of $v_2$ in $A^{k}x_0$?",
+                            "answer": "c_2 \\lambda_2^{k}",
+                            "hint": "The second eigenvector is scaled by its own eigenvalue, independently of the first.",
+                        },
+                        {
+                            "prompt": "The direction of $A^{k}x_0$ is decided by how big the second term is **relative to** the first. Write the ratio of the $v_2$ coefficient to the $v_1$ coefficient.",
+                            "answer": "\\frac{c_2 \\lambda_2^{k}}{c_1 \\lambda_1^{k}}",
+                            "hint": "Divide your step-3 answer by your step-2 answer.",
+                            "deconstruct": [
+                                "Normalising the vector removes any overall scale, so only the ratio of the two coefficients matters.",
+                                "That ratio is $\\dfrac{c_2 \\lambda_2^{k}}{c_1 \\lambda_1^{k}}$.",
+                                "It can be written $\\dfrac{c_2}{c_1}\\left(\\dfrac{\\lambda_2}{\\lambda_1}\\right)^{k}$ — a fixed constant times something raised to the power $k$.",
+                            ],
+                        },
+                        {
+                            "prompt": "That ratio is multiplied by the same fixed number every time $k$ increases by one. Write that number.",
+                            "answer": "\\frac{\\lambda_2}{\\lambda_1}",
+                            "hint": "Compare the ratio at $k+1$ with the ratio at $k$: the $c$'s cancel and one factor of each eigenvalue is left.",
+                        },
+                        {
+                            "prompt": "For $A = \\begin{bmatrix} 4 & 1 \\\\ 2 & 3 \\end{bmatrix}$ the eigenvalues are $5$ and $2$. Give the numerical value of that per-step factor.",
+                            "answer": "\\frac{2}{5}",
+                            "hint": "Substitute $\\lambda_1 = 5$ and $\\lambda_2 = 2$ into your step-5 answer.",
+                        },
+                    ],
+                    "closing": r'''
+The contaminating component shrinks by a factor of $\lambda_2/\lambda_1$ every step, so
+after $k$ steps it is down by $(\lambda_2/\lambda_1)^{k}$. For the matrix in step 6 that
+is $0.4$ per step, and driving the iteration confirms it: the distance from the true
+eigenvector falls $3.204\times10^{-1}$, $1.243\times10^{-1}$, $4.874\times10^{-2}$,
+$1.932\times10^{-2}$, $7.700\times10^{-3}$, with consecutive ratios $0.388$, $0.392$,
+$0.396$, $0.399$ — climbing to $0.4$ exactly as step 5 says.
+
+Reading the rate as a design tool: to gain one decimal digit you need
+$(0.4)^{k} = 0.1$, so $k = 1/\log_{10}(2.5) = 2.51$ steps per digit. A matrix with
+$\lambda_1 = 5$ and $\lambda_2 = 4.9$ has a ratio of $0.98$ and needs $113.97$ steps per
+digit instead — a factor of $45$ in cost, from two eigenvalues that differ by two per
+cent. Same algorithm, same code, and nothing about the matrix looks different at a
+glance.
+
+Now read step 5 for what it forbids. The argument required $|\lambda_2/\lambda_1| < 1$
+strictly. At $|\lambda_2| = |\lambda_1|$ the factor has modulus $1$: the second component
+never shrinks, and there is no dominant direction to converge to. That is not a rare
+degeneracy — $\begin{bmatrix} 5 & 0 \\ 0 & -5 \end{bmatrix}$ has it, and so does every
+rotation, including the quarter-turn this module's own quiz asks about.
+
+And step 4 quietly required $c_1 \neq 0$, or the ratio has a zero denominator. A start
+with no component along $v_1$ has nothing to converge to. Both hypotheses come from the
+algebra rather than from experience with the code, which is the reason for deriving the
+rate rather than quoting it.
+''',
+                },
             ],
             "quiz": {
                 "title": "Eigenvalues on paper",
@@ -5117,9 +6311,247 @@ rotations, oscillations and quantum states all live in.
             "concepts": [
                 "The spectral theorem: a real symmetric matrix has real eigenvalues and an orthonormal eigenbasis, so A = Q Lambda Q^T",
                 "The complex analogue swaps transpose for conjugate transpose — Hermitian matrices have real eigenvalues, unitary matrices preserve length",
-                "A quadratic form x^T A x is a landscape whose curvature along each eigenvector is that eigenvalue",
+                "A quadratic form x^T A x takes the value lambda_i on the unit eigenvector q_i, and on the whole unit sphere it runs between lambda_min and lambda_max. Its curvature is twice the eigenvalue, not the eigenvalue — the Hessian of x^T A x is 2A",
+                "The form sees only the symmetric part of a matrix: [[1,4],[0,1]] and [[1,2],[2,1]] have the identical form x1^2 + 4 x1 x2 + x2^2, while the first has the single eigenvalue 1 and the second has 3 and -1",
                 "Positive definite means x^T A x > 0 for every non-zero x, equivalently every eigenvalue positive, equivalently every pivot positive",
                 "A^T A is symmetric and positive semidefinite for any A, and positive definite exactly when the columns of A are independent",
+            ],
+            "read": [
+                {
+                    "title": "Why symmetry forces real eigenvalues and right angles, and what the form can see",
+                    "minutes": 14,
+                    "body": r'''
+The spectral theorem is the strongest structural result in this course: a real symmetric
+matrix has real eigenvalues and an orthonormal basis of eigenvectors, so
+$A = Q\Lambda Q^{\mathsf{T}}$ with $Q$ orthogonal. Module 9 has just finished showing
+that a perfectly ordinary real matrix may have no real eigenvector at all, and that
+another may not be diagonalisable in any basis. Symmetry rules out both failures at once.
+
+Stated like that it sounds like a lucky coincidence. It is not: both halves come out of
+one identity, in about four lines each, and the identity is worth more than the theorem.
+
+## The identity
+
+For a symmetric $A$ and any vectors $u, v$:
+
+$$(Au) \cdot v = u \cdot (Av)$$
+
+Proof, in one line:
+
+$$(Au)\cdot v = (Au)^{\mathsf{T}}v = u^{\mathsf{T}}A^{\mathsf{T}}v = u^{\mathsf{T}}Av = u \cdot (Av)$$
+
+where the only step doing any work is $A^{\mathsf{T}} = A$. A symmetric matrix can be moved from one side of a dot product to
+the other, free of charge.
+
+## Right angles, in three lines
+
+Let $Av_1 = \lambda_1 v_1$ and $Av_2 = \lambda_2 v_2$ with $\lambda_1 \neq \lambda_2$.
+Apply the identity to the pair:
+
+$$\lambda_1 (v_1 \cdot v_2) = (Av_1)\cdot v_2 = v_1 \cdot (Av_2) = \lambda_2 (v_1 \cdot v_2)$$
+
+Subtracting, $(\lambda_1 - \lambda_2)(v_1 \cdot v_2) = 0$. The first bracket is not zero
+by assumption, so the second is: **the eigenvectors are orthogonal**. Nothing was assumed
+about the size of the matrix or the values of the eigenvalues.
+
+For $A = \begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}$ the eigenvalues are $3$ and $1$
+with eigenvectors $(1,1)$ and $(1,-1)$, whose dot product is $1 - 1 = 0$. Normalising and
+stacking them as columns of $Q$ gives $Q^{\mathsf{T}}AQ = \operatorname{diag}(3, 1)$.
+
+Repeated eigenvalues need one extra remark. The argument above says nothing when
+$\lambda_1 = \lambda_2$, and it does not need to: a repeated eigenvalue of a symmetric
+matrix comes with an eigenspace of the full multiplicity, and any orthonormal basis of
+that eigenspace will serve. So the theorem survives repeats — unlike diagonalisability
+in general, where a repeat is exactly where module 9's shear failed.
+
+## Real eigenvalues
+
+Suppose $Av = \lambda v$ with $v \neq 0$, allowing both to be complex for the moment,
+since that is what has to be ruled out. Take the conjugate transpose product
+$\bar{v}^{\mathsf{T}}Av$ and evaluate it two ways. Using $Av = \lambda v$ it is
+$\lambda\,\bar{v}^{\mathsf{T}}v$. Using symmetry and taking conjugates it is
+$\bar{\lambda}\,\bar{v}^{\mathsf{T}}v$. So
+
+$$(\lambda - \bar{\lambda})\,\bar{v}^{\mathsf{T}}v = 0$$
+
+and $\bar{v}^{\mathsf{T}}v = \sum |v_i|^{2}$ is a sum of squared moduli, strictly
+positive because $v \neq 0$. Therefore $\lambda = \bar{\lambda}$, which for a complex
+number means it is real.
+
+The $2\times2$ case can be seen without complex numbers at all. For
+$A = \begin{bmatrix} a & b \\ b & d \end{bmatrix}$ the characteristic polynomial is
+$\lambda^{2} - (a+d)\lambda + (ad - b^{2})$, whose discriminant is
+
+$$(a+d)^{2} - 4(ad - b^{2}) = a^{2} - 2ad + d^{2} + 4b^{2} = (a - d)^{2} + 4b^{2}$$
+
+a sum of two squares, so never negative, so the roots are real. And it is zero only when
+$a = d$ and $b = 0$ — that is, only for a multiple of the identity, which is already
+diagonal. Every other symmetric $2\times2$ has two distinct real eigenvalues.
+
+## The quadratic form, and what it is really measuring
+
+Attach to $A$ the function $f(x) = x^{\mathsf{T}}Ax$. For the matrix above,
+
+$$f(x) = 2x_1^{2} + 2x_1x_2 + 2x_2^{2}$$
+
+Substituting $x = Qy$ — rewriting in the eigenvector coordinates — gives
+
+$$f = y^{\mathsf{T}}Q^{\mathsf{T}}AQ\,y = y^{\mathsf{T}}\Lambda y = 3y_1^{2} + y_2^{2}$$
+
+The cross term is gone. In the eigenbasis a quadratic form is a weighted sum of squares
+with the eigenvalues as the weights, and every question about it becomes arithmetic. The
+level set $f = 1$ is the ellipse $3y_1^{2} + y_2^{2} = 1$, with semi-axes
+$1/\sqrt{3} = 0.5774$ along $v_1$ and $1$ along $v_2$ — short where the eigenvalue is
+large, because a bigger weight reaches the level sooner.
+
+The module's concepts list says the curvature along each eigenvector *is* that
+eigenvalue. Worth being exact, because it is out by a factor that matters if you ever
+differentiate it. Restricting $f$ to the unit eigenvector $q_1$ gives $f(tq_1) = 3t^{2}$,
+whose second derivative is $6$; the Hessian of $f$ is $2A$, not $A$. What is exactly the
+eigenvalue, with no factor of two, is the **value of the form on the unit eigenvector**:
+$q_1^{\mathsf{T}}Aq_1 = 3$ and $q_2^{\mathsf{T}}Aq_2 = 1$. That is the useful statement,
+and it generalises to the sharpest fact in the module:
+
+$$\lambda_{\min} \le \frac{x^{\mathsf{T}}Ax}{x^{\mathsf{T}}x} \le \lambda_{\max}$$
+
+with both bounds attained, at the corresponding eigenvectors. The eigenvalues are the
+extreme values of the form on the unit sphere — which is what makes them meaningful
+rather than merely computable, and it is the definition that survives into infinite
+dimensions where characteristic polynomials do not.
+
+## Definiteness, three ways
+
+Positive definite means $x^{\mathsf{T}}Ax > 0$ for every $x \neq 0$. By the Rayleigh
+bound that is the same as every eigenvalue being positive. It is also the same as every
+pivot of elimination being positive, which is the cheapest of the three to check because
+elimination produces the pivots as a by-product.
+
+For $\begin{bmatrix} 2 & -1 \\ -1 & 2 \end{bmatrix}$: eigenvalues $3$ and $1$, both
+positive; pivots $2$ and $\tfrac{3}{2}$, both positive; and the form is
+$2x_1^{2} - 2x_1x_2 + 2x_2^{2}$, positive definite. Three tests, one answer, and note
+that the matrix has a negative entry — entries are not the test.
+
+The other direction is the one that catches people. $\begin{bmatrix} 1 & 2 \\ 2 & 1 \end{bmatrix}$
+has every entry positive and eigenvalues $3$ and $-1$, so the form goes negative: at
+$x = (1,-1)$ it is $1 - 4 + 1 = -2$.
+
+## The mistake, and why it is tempting
+
+The mistake is to expect the quadratic form to know about the matrix. It does not — it
+knows only about the symmetric part.
+
+For any $A$, $x^{\mathsf{T}}Ax = x^{\mathsf{T}}\left(\tfrac{A + A^{\mathsf{T}}}{2}\right)x$,
+because the antisymmetric part contributes $x^{\mathsf{T}}Nx = -x^{\mathsf{T}}Nx = 0$.
+Take $N = \begin{bmatrix} 1 & 4 \\ 0 & 1 \end{bmatrix}$: its form is
+$x_1^{2} + 4x_1x_2 + x_2^{2}$, identical to the form of the symmetric
+$\begin{bmatrix} 1 & 2 \\ 2 & 1 \end{bmatrix}$. Yet $N$ has the single repeated
+eigenvalue $1$ and is defective, while its symmetrisation has eigenvalues $3$ and $-1$.
+**The form cannot see either of $N$'s eigenvalues.**
+
+It is tempting to read "$x^{\mathsf{T}}Ax > 0$" as a statement about $A$ for arbitrary
+$A$, and some texts do define positive definiteness that way for non-symmetric matrices.
+Under that definition $N$ is not positive definite, despite having only the eigenvalue
+$1$. Whenever a quadratic form appears, the matrix in it is a symmetric matrix or it is
+being silently replaced by one.
+
+## Where it stops
+
+Symmetry of a *real* matrix is what does the work, and dropping the word "real" loses the
+theorem. A complex symmetric matrix — equal to its transpose without conjugation — has
+no guarantee of real eigenvalues; $\begin{bmatrix} 1 & i \\ i & -1 \end{bmatrix}$ is
+symmetric, and both its eigenvalues are $0$ although it is not the zero matrix. The
+correct complex analogue conjugates: Hermitian matrices, satisfying
+$A = \bar{A}^{\mathsf{T}}$, have real eigenvalues and an orthonormal eigenbasis by the
+identical argument, with the identity above becoming
+$(Au)\cdot v = u \cdot (Av)$ under the conjugating inner product. That is why quantum
+mechanics states its observables as Hermitian rather than as symmetric.
+
+And the spectral theorem is exact arithmetic about an exact matrix. A matrix that is
+symmetric to within rounding is not symmetric, and its computed eigenvectors are
+orthogonal only to within the same tolerance. Good software symmetrises explicitly before
+starting rather than trusting the input to be exact.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Real roots from a sum of two squares",
+                    "minutes": 12,
+                    "vars": ["a", "b", "d", "lambda"],
+                    "brief": r'''
+A general symmetric $2\times2$ matrix:
+
+$$A = \begin{bmatrix} a & b \\ b & d \end{bmatrix}$$
+
+The spectral theorem promises its eigenvalues are real. For the $2\times2$ case that
+promise can be cashed with nothing more than the quadratic formula — no complex numbers,
+no conjugates. Build the characteristic polynomial, look at its discriminant, and see
+what symmetry has done to it.
+''',
+                    "steps": [
+                        {
+                            "prompt": "Write $\\det(A - \\lambda I)$ as a product of the diagonal entries minus the product of the off-diagonal ones. Use $a$, $b$, $d$ and $\\lambda$.",
+                            "answer": "(a - \\lambda)(d - \\lambda) - b^{2}",
+                            "hint": "$A - \\lambda I = \\begin{bmatrix} a - \\lambda & b \\\\ b & d - \\lambda \\end{bmatrix}$. Both off-diagonal entries are $b$, because $A$ is symmetric.",
+                        },
+                        {
+                            "prompt": "Expand that into a quadratic in $\\lambda$, written as $\\lambda^{2}$ minus the trace times $\\lambda$ plus the determinant.",
+                            "answer": "\\lambda^{2} - (a + d)\\lambda + (a d - b^{2})",
+                            "hint": "Multiply out $(a-\\lambda)(d-\\lambda) = ad - a\\lambda - d\\lambda + \\lambda^{2}$, then subtract $b^{2}$.",
+                        },
+                        {
+                            "prompt": "For $\\lambda^{2} - p\\lambda + q$ the discriminant is $p^{2} - 4q$. Compute it here and simplify to a sum of two squares.",
+                            "answer": "(a - d)^{2} + 4 b^{2}",
+                            "hint": "$(a+d)^{2} - 4(ad - b^{2}) = a^{2} + 2ad + d^{2} - 4ad + 4b^{2}$. The $ad$ terms combine to $-2ad$.",
+                            "deconstruct": [
+                                "$(a+d)^{2} = a^{2} + 2ad + d^{2}$.",
+                                "Subtracting $4ad$ leaves $a^{2} - 2ad + d^{2}$, which is $(a-d)^{2}$.",
+                                "The $+4b^{2}$ survives untouched, giving $(a-d)^{2} + 4b^{2}$ — two squares, so never negative.",
+                            ],
+                        },
+                        {
+                            "prompt": "Now take $a = 2$, $b = 1$, $d = 2$. Give the **larger** eigenvalue.",
+                            "answer": "3",
+                            "hint": "The discriminant is $(2-2)^{2} + 4 = 4$, so $\\sqrt{\\text{disc}} = 2$, and the roots are $\\tfrac{(a+d) \\pm 2}{2} = \\tfrac{4 \\pm 2}{2}$.",
+                        },
+                        {
+                            "prompt": "And the **smaller** eigenvalue of that same matrix?",
+                            "answer": "1",
+                            "hint": "The other branch: $\\tfrac{4 - 2}{2}$.",
+                        },
+                        {
+                            "prompt": "Its eigenvectors are $(1, 1)$ and $(1, -1)$. Give their dot product.",
+                            "answer": "0",
+                            "hint": "$1 \\times 1 + 1 \\times (-1)$.",
+                        },
+                    ],
+                    "closing": r'''
+Step 3 is the theorem for $2\times2$. The discriminant of a symmetric matrix's
+characteristic polynomial is
+
+$$(a - d)^{2} + 4b^{2}$$
+
+a sum of two real squares, so it is never negative, so the roots are never complex. And
+it is zero only when $a = d$ **and** $b = 0$ — that is, only when $A$ is a multiple of
+the identity, which is diagonal already with an eigenspace covering the whole plane.
+Every other symmetric $2\times2$ has two distinct real eigenvalues and, by step 6, two
+perpendicular eigendirections.
+
+Compare with what happens when the symmetry is dropped. For a general
+$\begin{bmatrix} a & b \\ c & d \end{bmatrix}$ the discriminant is
+$(a-d)^{2} + 4bc$, and the last term is a sum of squares only when $b$ and $c$ have the
+same sign. Put $b = -1$ and $c = 1$ with $a = d = 0$ and it is $-4$: complex roots, no
+real eigenvector — which is module 9's quarter-turn, and precisely the matrix whose
+$\pm i$ eigenvalues break power iteration. Symmetry forces $c = b$, hence $4bc = 4b^{2}$,
+hence real roots. One hypothesis, one sign, the whole difference.
+
+Step 6 confirms orthogonality on this instance, but the instance is not the reason. The
+reason is three lines long and needs no coordinates: if $Av_1 = \lambda_1v_1$ and
+$Av_2 = \lambda_2v_2$, then symmetry lets $A$ move across the dot product, giving
+$\lambda_1(v_1 \cdot v_2) = \lambda_2(v_1 \cdot v_2)$, and distinct eigenvalues leave the
+dot product no choice but to vanish.
+''',
+                },
             ],
             "quiz": {
                 "title": "Symmetry, definiteness and curvature",
@@ -5210,7 +6642,235 @@ mechanics states its observables as Hermitian and its gates as unitary.
                 "The right singular vectors are the eigenvectors of A^T A and the singular values are the square roots of its eigenvalues",
                 "The count of non-zero singular values is the rank, and it is the numerically honest rank: a tiny sigma is a column that nearly does not count",
                 "The condition number sigma_max / sigma_min bounds how far a relative error in b is amplified in x, and squaring A into A^T A squares it",
-                "The pseudoinverse A+ = V Sigma+ U^T inverts what can be inverted and ignores the rest, and truncating after k terms is the best rank-k approximation there is",
+                "That bound is a worst case, attained only when the perturbation lines up with the smallest singular direction while b lines up with the largest. It is not a prediction of what a typical perturbation costs, and quoting it as one overstates the damage",
+                "The pseudoinverse A+ = V Sigma+ U^T inverts what can be inverted and ignores the rest, and truncating after k terms is the best rank-k approximation there is — with the error it leaves behind equal to sigma_{k+1} exactly, not approximately",
+                "Singular values are unique and stable: perturbing A by eps moves no singular value by more than eps. Singular vectors carry no such guarantee — near a tie they can rotate arbitrarily far under an arbitrarily small change — so a conclusion drawn from a singular vector needs the gap checked first",
+            ],
+            "read": [
+                {
+                    "title": "Every matrix diagonalised, and the number that says how many digits you keep",
+                    "minutes": 15,
+                    "body": r'''
+Module 9 diagonalised the matrices that could be diagonalised and left the rest — the
+defective ones, the rectangular ones, the ones whose eigenvalues are complex. Module 10
+rescued the symmetric case completely. The singular value decomposition rescues
+*everything*: every real matrix of every shape and every rank factors as
+
+$$A = U\Sigma V^{\mathsf{T}}$$
+
+with $U$ and $V$ orthogonal and $\Sigma$ diagonal with non-negative entries
+$\sigma_1 \ge \sigma_2 \ge \cdots \ge 0$. No hypotheses. The reason there are none is
+that the decomposition is not built out of $A$ at all.
+
+## Where it comes from
+
+Whatever $A$ is, $A^{\mathsf{T}}A$ is square, and it is symmetric — transposing it gives
+itself back. So module 10 applies to it with no conditions: real eigenvalues, an
+orthonormal eigenbasis, $A^{\mathsf{T}}A = V\Lambda V^{\mathsf{T}}$.
+
+Better, its eigenvalues cannot be negative. If $A^{\mathsf{T}}Av = \lambda v$ with $v$ a
+unit vector, then
+
+$$\lambda = v^{\mathsf{T}}A^{\mathsf{T}}Av = (Av)\cdot(Av) = ||Av||^{2} \ge 0$$
+
+So define $\sigma_i = \sqrt{\lambda_i}$, which is a real non-negative number, and the
+$\sigma_i$ are the **singular values**. The $v_i$ — eigenvectors of $A^{\mathsf{T}}A$ —
+are the right singular vectors. For each $\sigma_i > 0$ set $u_i = Av_i/\sigma_i$; these
+are orthonormal, since
+
+$$u_i \cdot u_j = \frac{(Av_i)\cdot(Av_j)}{\sigma_i\sigma_j} = \frac{v_i^{\mathsf{T}}A^{\mathsf{T}}Av_j}{\sigma_i\sigma_j} = \frac{\lambda_j\,(v_i \cdot v_j)}{\sigma_i\sigma_j}$$
+
+which is $0$ for $i \neq j$ and $1$ for $i = j$. Then $Av_i = \sigma_i u_i$ for every
+$i$, which is $AV = U\Sigma$, which is the decomposition.
+
+The whole construction ran through $A^{\mathsf{T}}A$, and $A^{\mathsf{T}}A$ is symmetric
+positive semidefinite no matter what $A$ was. That is why the SVD needs no hypotheses:
+the hypotheses were discharged by module 10 on a different matrix.
+
+### Worked
+
+$$A = \begin{bmatrix} 3 & 0 \\ 4 & 5 \end{bmatrix} \qquad A^{\mathsf{T}}A = \begin{bmatrix} 9 + 16 & 20 \\ 20 & 25 \end{bmatrix} = \begin{bmatrix} 25 & 20 \\ 20 & 25 \end{bmatrix}$$
+
+That is symmetric with $a = d$, so its eigenvectors are $(1,1)$ and $(1,-1)$ and its
+eigenvalues are $25 \pm 20$, giving $45$ and $5$. Hence
+
+$$\sigma_1 = \sqrt{45} = 3\sqrt{5} = 6.7082 \qquad \sigma_2 = \sqrt{5} = 2.2361$$
+
+Check against something independent: the product of the singular values must be
+$|\det A|$, and $\sigma_1\sigma_2 = \sqrt{45 \times 5} = \sqrt{225} = 15$, while
+$\det A = 3 \times 5 - 0 \times 4 = 15$.
+
+The singular values are **not** the eigenvalues of $A$, which are $3$ and $5$. The two
+lists coincide only for symmetric positive definite matrices. The starkest case is
+$\begin{bmatrix} 0 & 5 \\ 0 & 0 \end{bmatrix}$: both eigenvalues are $0$, and the
+singular values are $5$ and $0$. A matrix can be nilpotent and still stretch a vector by
+a factor of five, and only one of the two decompositions notices.
+
+## The condition number, derived
+
+Since $V$ is orthogonal, any unit $x$ can be written in the $v$ basis, and
+
+$$||Ax||^{2} = \left|\left|\sum_i x_i \sigma_i u_i\right|\right|^{2} = \sum_i \sigma_i^{2}x_i^{2}$$
+
+which is a weighted average of the $\sigma_i^{2}$ with weights summing to $1$. So
+
+$$\sigma_{\min} \le ||Ax|| \le \sigma_{\max} \quad \text{for every unit } x$$
+
+with both attained. $A$ stretches by at most $\sigma_{\max}$ and at least
+$\sigma_{\min}$, and the ratio of those two is what governs error. Solving $Ax = b$, a
+perturbation $\delta b$ produces $\delta x = A^{-1}\delta b$, whose size is at most
+$||\delta b||/\sigma_{\min}$, while $||x||$ itself is at least $||b||/\sigma_{\max}$.
+Dividing,
+
+$$\frac{||\delta x||}{||x||} \le \frac{\sigma_{\max}}{\sigma_{\min}} \cdot \frac{||\delta b||}{||b||}$$
+
+For the worked matrix that ratio is $6.7082/2.2361 = 3$: harmless. Driving the numbers
+confirms both ends — over all unit directions $d$, $||A^{-1}d||$ ranges from
+$0.14907$ to $0.44721$, which are exactly $1/\sigma_{\max}$ and $1/\sigma_{\min}$.
+
+Now a matrix built to be nasty:
+
+$$M = \begin{bmatrix} 1 & 1 \\ 1 & 1.0001 \\ 1 & 0.9999 \end{bmatrix}$$
+
+Its singular values are $2.4495$ and $1.0000\times10^{-4}$, so
+$\kappa = 2.4495\times10^{4}$. Its columns are nearly the same vector, and the second
+singular value measures exactly how nearly. Feed it through the normal equations of
+module 8 and $\kappa(M^{\mathsf{T}}M) = 6.0000\times10^{8}$, which is $\kappa(M)^{2}$ to
+eight figures — the squaring that module 8 warned about, here as a measured quantity
+rather than a claim. In logarithms, $4.39$ digits lost becomes $8.78$.
+
+## Rank, made continuous
+
+The number of non-zero singular values is the rank. That is the exact statement, and it
+is useless in floating point, where "non-zero" is not a decision anyone can make
+reliably. The SVD improves on it: instead of an integer that jumps, you get a list of
+positive numbers that decay, and you can see how close to rank-deficient a matrix is
+rather than being told yes or no.
+
+$M$ above has rank $2$ exactly. Its singular values are $2.4495$ and $10^{-4}$. Rounded
+to four decimal places its columns become identical and the rank drops to $1$. The
+integer changed discontinuously; $\sigma_2$ was small the whole time and said so.
+
+Truncating after $k$ terms gives the **best** rank-$k$ approximation, in both the
+Frobenius and spectral norms — the Eckart–Young theorem — and the error left behind is
+exactly $\sigma_{k+1}$. Driven on $M$: the best rank-$1$ approximation misses by
+$9.99999999\times10^{-5}$ in the Frobenius norm, against $\sigma_2 = 9.99999999\times10^{-5}$.
+Not approximately; the theorem is an equality.
+
+## The mistake, and why it is tempting
+
+The mistake is reading the condition number as a prediction. "$\kappa = 10^{6}$ and my
+data has $10$ digits, so I have $4$ digits" is a *worst case*, not an expectation, and
+the derivation above says so: the bound is attained only when $\delta b$ points along
+$u_{\min}$ and $b$ points along $u_{\max}$ at the same time. A perturbation in a random
+direction typically loses far fewer digits.
+
+It is tempting because the arithmetic is easy and because the number is usually quoted
+without the inequality that produced it. The honest reading is: with $\kappa = 10^{6}$
+you may have as few as $4$ good digits, you cannot be promised more, and if the answer
+matters you should perturb the data and re-solve rather than trusting either the bound
+or your luck.
+
+The second temptation is to treat a small $\sigma$ as noise and discard it. Sometimes
+right — that is what the pseudoinverse does, and it is the reason truncated SVD stabilises
+an ill-posed fit. Sometimes badly wrong: in $M$, the direction belonging to
+$\sigma_2 = 10^{-4}$ is the only direction carrying the difference between the columns,
+which may be the entire signal you were measuring. The decomposition reports the sizes.
+Deciding which small directions are noise needs something the matrix does not contain.
+
+## Where it stops
+
+The factorisation is not unique, and reading meaning into $U$ and $V$ requires care. If
+two singular values are equal, any rotation within their shared subspace gives another
+valid SVD; and each $u_i, v_i$ pair may be negated together. So "the third singular
+vector" is a well-defined direction only when $\sigma_3$ is strictly separated from its
+neighbours — the same tie that broke power iteration in module 9, appearing again for
+the same reason.
+
+The singular values themselves are unique, always, and they are stable: perturbing $A$ by
+$\varepsilon$ moves no singular value by more than $\varepsilon$. The vectors carry no
+such guarantee, and near a tie they can rotate arbitrarily far under an arbitrarily small
+change. Conclusions drawn from singular *values* are safe; conclusions drawn from
+singular *vectors* need the gap checked first.
+''',
+                },
+            ],
+            "derive": [
+                {
+                    "title": "Singular values out of A-transpose-A, and the ratio that prices the digits",
+                    "minutes": 12,
+                    "vars": ["sigma_1", "sigma_2", "lambda_1", "lambda_2"],
+                    "brief": r'''
+$$A = \begin{bmatrix} 3 & 0 \\ 4 & 5 \end{bmatrix}$$
+
+The singular values of $A$ are not its eigenvalues. They are the square roots of the
+eigenvalues of $A^{\mathsf{T}}A$ — which is symmetric whatever $A$ is, so module 10's
+guarantees apply to it with no conditions attached.
+
+Build $A^{\mathsf{T}}A$, find its eigenvalues, take square roots, and form the condition
+number.
+''',
+                    "steps": [
+                        {
+                            "prompt": "The $(1,1)$ entry of $A^{\\mathsf{T}}A$ is the first column of $A$ dotted with itself. Give it.",
+                            "answer": "25",
+                            "hint": "Column $1$ is $(3, 4)$, so the entry is $3^{2} + 4^{2}$.",
+                        },
+                        {
+                            "prompt": "The $(1,2)$ entry is column $1$ dotted with column $2$. Give it.",
+                            "answer": "20",
+                            "hint": "$(3,4) \\cdot (0,5) = 3 \\times 0 + 4 \\times 5$.",
+                        },
+                        {
+                            "prompt": "So $A^{\\mathsf{T}}A = \\begin{bmatrix} 25 & 20 \\\\ 20 & 25 \\end{bmatrix}$. Its two diagonal entries are equal, so its eigenvectors are $(1,1)$ and $(1,-1)$. Give the **larger** eigenvalue.",
+                            "answer": "45",
+                            "hint": "Apply the matrix to $(1,1)$: each row gives $25 + 20$.",
+                        },
+                        {
+                            "prompt": "And the **smaller** eigenvalue?",
+                            "answer": "5",
+                            "hint": "Apply the matrix to $(1,-1)$: row $1$ gives $25 - 20$.",
+                        },
+                        {
+                            "prompt": "The singular values are the square roots of those. Give $\\sigma_1$, simplified.",
+                            "answer": "3\\sqrt{5}",
+                            "hint": "$\\sqrt{45} = \\sqrt{9 \\times 5}$.",
+                        },
+                        {
+                            "prompt": "The condition number is $\\sigma_1/\\sigma_2$. Give it as a number.",
+                            "answer": "3",
+                            "hint": "$\\sigma_2 = \\sqrt{5}$, so the ratio is $\\dfrac{3\\sqrt{5}}{\\sqrt{5}}$.",
+                        },
+                    ],
+                    "closing": r'''
+$$\sigma_1 = 3\sqrt{5} = 6.7082 \qquad \sigma_2 = \sqrt{5} = 2.2361 \qquad \kappa = 3$$
+
+Two independent checks on that, both worth doing every time. The product of the singular
+values must equal $|\det A|$: $\sigma_1\sigma_2 = 3\sqrt{5}\cdot\sqrt{5} = 15$, and
+$\det A = 3 \times 5 - 0 \times 4 = 15$. And the sum of their squares must equal the sum
+of the squares of all the entries of $A$: $45 + 5 = 50$, and
+$9 + 0 + 16 + 25 = 50$.
+
+Now compare with the **eigenvalues** of $A$ itself. $A$ is lower triangular, so they can
+be read off the diagonal: $3$ and $5$. Neither is a singular value, and their ratio is
+$5/3 = 1.67$ rather than $3$. The two decompositions are answering different questions —
+eigenvalues ask which directions are preserved, singular values ask how much the matrix
+stretches — and only for symmetric positive definite matrices do the answers coincide.
+
+The starkest separation is $\begin{bmatrix} 0 & 5 \\ 0 & 0 \end{bmatrix}$: both
+eigenvalues are $0$, both singular values are not, being $5$ and $0$. A matrix whose
+every eigenvalue vanishes can still stretch a vector fivefold, and a conditioning
+argument built on eigenvalues would have missed it entirely.
+
+Finally, what $\kappa = 3$ buys. A relative error in the data is amplified by at most a
+factor of $3$ in the answer, so $\log_{10} 3 = 0.48$ — under half a digit lost. This is
+a thoroughly well-conditioned matrix. Had you instead formed $A^{\mathsf{T}}A$ and
+solved with that, the condition number would have been $\kappa^{2} = 9$, and you would
+have thrown away almost a full digit for no reason. That penalty is invisible at
+$\kappa = 3$ and fatal at $\kappa = 10^{8}$, which is the whole of module 8's argument
+for QR, now with a number attached.
+''',
+                },
             ],
             "quiz": {
                 "title": "Reading a matrix by its singular values",
