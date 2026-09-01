@@ -426,7 +426,14 @@ def norm_quiz(q, ctx):
     A foundational course needs somewhere to check that a definition landed before
     asking anyone to derive with it. The `why` is required on every question because
     a quiz that only says "wrong" teaches nothing; it is shown whichever option was
-    picked."""
+    picked.
+
+    `whys` is optional and holds one entry per option: the sentence addressed to
+    whoever picked *that* option, shown above the shared `why`. `blanks` has had this
+    since it was written and `quiz` did not, so the only feedback a wrong answer got
+    was a paragraph written for the right one \u2014 which the reader has to search for the
+    clause that is about them. The key is not omitted from the list: someone who was
+    right is still owed the crux in one line before the long form."""
     if not q:
         return None
     if not q.get("title"):
@@ -449,12 +456,40 @@ def norm_quiz(q, ctx):
         if not item.get("why"):
             raise ValueError(f"{where}: no `why` \u2014 an explanation is the point of asking")
         no_positional_refs(item["why"], where)
-        out.append({
+        # whitespace only, and deliberately NOT case-folded: MA201/M4 offers
+        # "f(x) = F'(x) and F = int f" against "F(x) = f'(x) and f = int F", which
+        # differ in nothing but case and are opposite claims. Case-folding condemned
+        # that question the first time this ran, and a gate that condemns correct
+        # content is worse than the duplicate it was written to catch.
+        norm = [re.sub(r"\s+", " ", clean_md(o)).strip() for o in opts]
+        if len(set(norm)) != len(norm):
+            dupe = [x for x in set(norm) if norm.count(x) > 1]
+            raise ValueError(f"{where}: two options read the same ({dupe[0]!r}). Only one "
+                             "index is accepted, so a learner can pick the identical "
+                             "twin of the key and be marked wrong with no way to tell why")
+        whys = item.get("whys")
+        if whys is not None:
+            if len(whys) != len(opts):
+                raise ValueError(f"{where}: `whys` has {len(whys)} entries for "
+                                 f"{len(opts)} options \u2014 there must be one each, "
+                                 "including the key")
+            for j, w in enumerate(whys):
+                if not w:
+                    raise ValueError(f"{where}/whys{j + 1}: empty \u2014 an option nobody "
+                                     "explains is an option nobody learns from")
+                no_positional_refs(w, where)
+        entry = {
             "q": clean_md(item["q"]),
             "opts": [clean_md(o) for o in opts],
             "a": a,
             "why": clean_md(item["why"]),
-        })
+        }
+        # emitted only when authored, so every course that has not been given per-option
+        # explanations still round-trips byte for byte and `emit.py --all` stays a
+        # drift detector rather than a diff of every file in the catalogue
+        if whys:
+            entry["whys"] = [clean_md(w) for w in whys]
+        out.append(entry)
     return {"title": q["title"], "minutes": int(q.get("minutes", 6)), "questions": out}
 
 

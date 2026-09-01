@@ -53,106 +53,153 @@ COURSE = {
                     {
                         "q": "Starting from capacity 1, a dynamic array doubles whenever the backing store fills. Over $n$ appends, how many slot writes happen in total?",
                         "opts": [
-                            "Fewer than $3n$ — the $n$ stores, plus copies that form a geometric series adding to less than $2n$",
-                            "About $n\\log_2 n$: there are $\\log_2 n$ resizes and each one copies $n$ slots",
-                            "About $n^2/2$, because every resize copies everything already in the store",
-                            "Exactly $n$ — a resize hands over the same backing store, so it writes nothing",
+                            "About $n\\log_2 n$: there are $\\log_2 n$ resizes and each one copies the whole store",
+                            "Exactly $2n$: each element is written once on arrival and copied once, later on",
+                            "Fewer than $3n$: the $n$ stores, plus copies forming a geometric series under $2n$",
+                            "About $n^2/2$: every resize copies all that is already stored, and resizes are frequent",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"There really are about $\log_2 n$ resizes, but they are nothing like equal — the last one alone copies more than every earlier one put together. Charging all of them the final size overstates the work by a factor of $\log n$.",
+                            r"The closest of the wrong answers, and the reasoning is nearly right. But an element that arrives early is copied *repeatedly*: the very first element is copied at every single resize, all $\log_2 n$ of them. The copies total just under $2n$ on their own, before the $n$ stores are added.",
+                            r"The copies are 1, 2, 4, 8 …, and they stop at the last doubling before the $n$th append.",
+                            r"Quadratic is what growing by a *fixed* number of slots costs. Doubling makes resizes exponentially rarer as the array grows — about $\log_2 n$ of them over $n$ appends, not one every few.",
+                        ],
                         "why": r"""
 The copies are 1, 2, 4, 8 and so on, and the series stops at the last doubling
 before the $n$th append, so it adds to $2^{\lceil\log_2 n\rceil} - 1$ — one less
 than the first power of two at or above $n$, and therefore under $2n$. It comes to
 exactly $n - 1$ only when $n$ is itself a power of two: sixteen appends copy 15, but
 seventeen copy 31. Add the $n$ stores and the total is under $3n$, so the amortised
-cost per append is a small constant. There really are about $\log_2 n$
-resizes, but they are nothing like equal: the last one alone copies more than every
-earlier one put together, so counting resizes and multiplying by $n$ overstates the
-work badly. Quadratic total work is what growing by a *fixed* number of slots costs,
-not doubling. And a resize certainly does write — copying every live element into
-the new store is the only thing it does.
+cost per append is a small constant.
 """,
                     },
                     {
                         "q": "Why double the capacity rather than grow by a fixed 100 slots?",
                         "opts": [
-                            "Doubling makes the copy costs a geometric series, which totals about $n$; a fixed increment makes them an arithmetic series, which is quadratic",
-                            "Doubling holds less memory at every moment than a fixed increment does",
-                            "A fixed increment cannot be implemented without knowing the final length in advance",
-                            "With doubling the old elements never have to be copied at all",
+                            "A fixed increment cannot be implemented unless the final length is known in advance",
+                            "Doubling holds less memory at every moment, because it grows the store far less often",
+                            "Doubling makes the copies a geometric series; a fixed increment makes them arithmetic",
+                            "With doubling an element already in the store is never copied again, so nothing accumulates",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"It is perfectly easy to implement — `capacity + 100` needs to know nothing about the future, and neither does `capacity * 2`. A fixed increment is not impossible, it is merely slow.",
+                            r"Backwards, and instructively so. Doubling is the policy that wastes memory: a doubled store can sit half empty, and that idle half is precisely the price paid for cheap appends. A fixed increment never holds more than 100 spare slots — it just pays for that thrift in copying.",
+                            r"$1+2+4+\dots < 2n$ against $c+2c+3c+\dots \approx n^2/(2c)$: geometric against arithmetic is the whole of it.",
+                            r"Every growth copies every live element, however the new store was obtained — the first element is copied at all $\log_2 n$ resizes. What doubling changes is how *often* that happens, never whether it happens.",
+                        ],
                         "why": r"""
 With a fixed increment $c$ there are $n/c$ growths, copying $c$, then $2c$, then
 $3c$ — an arithmetic series summing to roughly $n^2/(2c)$. Growing by 100 turns a
 million appends into about five billion slot writes; doubling turns them into about
-two million. Doubling is not a memory saving, and claiming otherwise gets it exactly
-backwards: a doubled store can sit half empty, and that wasted half is the price
-paid for the cheap appends. A fixed increment is perfectly easy to implement — it is
-just slow. And every growth copies the live elements, however the new store is
-obtained.
+two million. What is bought with copying is paid for in memory, and the trade runs
+the way most people first guess it does not: the fast policy is the wasteful one.
 """,
                     },
                     {
                         "q": "The array halves its capacity when it falls to a quarter full rather than to a half. What does waiting until a quarter buy?",
                         "opts": [
-                            "A push and a pop repeated at the boundary would resize on every single operation if the trigger were a half",
-                            "Shrinking at a half would drop elements off the end of the store",
-                            "A quarter is the largest fraction for which the geometric series still converges",
-                            "It makes `pop` cost $O(\\log n)$ instead of $O(n)$",
+                            "Shrinking at a half would drop the elements that no longer fit in the smaller store",
+                            "At a half, alternating push and pop at the boundary resizes on every operation",
+                            "A quarter is the largest fraction at which the geometric series still converges",
+                            "It keeps `pop` at $O(1)$ worst case rather than $O(n)$ worst case, on every call",
                         ],
-                        "a": 0,
+                        "a": 1,
+                        "whys": [
+                            r"Nothing is ever dropped. The shrink copies the live prefix, and at the moment it fires that prefix fills a quarter of the old store — so it fits in the halved one twice over. That is what the trigger guarantees.",
+                            r"Come out of a shrink exactly full, and the very next append doubles straight back.",
+                            r"Nothing here is converging or failing to. The copy series converges for any growth factor above one, and the shrink trigger is a different number altogether: the quarter is chosen to leave *slack* after the shrink, not to make a sum finite.",
+                            r"No trigger makes `pop` $O(1)$ in the worst case — a shrink that does fire copies everything it keeps, under either rule. What the quarter buys is the *amortised* bound, and that is exactly what the half rule loses: alternating push and pop defeats it entirely. Worst case unchanged, average case rescued.",
+                        ],
                         "why": r"""
 Shrink at exactly half and the array comes out of the shrink completely full, so the
 very next append doubles it straight back. Alternate a push and a pop on that
-boundary and every single operation copies the whole array — the array is $O(n)$ per
-operation, with no amortisation left. Waiting until a quarter leaves the array half
-full after the shrink, so a linear number of operations is needed to reach either
-trigger again and the cost is spread over them. Nothing is ever dropped: the shrink
-copies the live prefix, which fits in the smaller store by construction. And `pop`
-is $O(1)$ amortised under either rule when it is not being adversarially poked; the
-quarter rule is about closing that adversarial case, not about a logarithm.
+boundary and every single operation copies the whole array — $O(n)$ per operation,
+with no amortisation left at all. Waiting until a quarter leaves the array half full
+after the shrink, so a linear number of operations is needed to reach either trigger
+again, and the cost of the next resize is spread over all of them. The gap between
+the two triggers is the amortisation; closing it to nothing closes the amortisation
+to nothing with it.
 """,
                     },
                     {
                         "q": "`push_back` on the singly linked list is $O(1)$. What makes it so?",
                         "opts": [
-                            "The list keeps a pointer to its last node, so nothing has to be walked to find the end",
-                            "The list caches its length, so the position of the end is known",
-                            "Nodes are stored contiguously, so the end is a fixed offset from the start",
-                            "The value goes in at the head, and the list is reversed on the next read",
+                            "The list caches its length, so the position of the end is known without walking",
+                            "Nodes are allocated from one contiguous block, so the end is a fixed offset away",
+                            "The list keeps a reference to its last node, so nothing has to be walked",
+                            "It is $O(1)$ amortised: the walk to the end happens, but only once in a while",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"A length is a number, not an address. Knowing there are exactly 1000 nodes still leaves you following 1000 `next` links to reach the last one.",
+                            r"Nodes are emphatically not contiguous — each is allocated separately, at whatever moment it was appended. That is the defining difference from the array, and it is why no arithmetic can reach the end.",
+                            r"Allocate a node, hang it off `self.tail.next`, move `self.tail` on. Three constant-time steps, no walk.",
+                            r"Nothing is amortised here: `push_back` costs the same three steps on the first call and on the millionth. The lab's assertion is `steps == 0` after 1000 calls — not a bound on the average, but zero, every time.",
+                        ],
                         "why": r"""
-The tail pointer is the whole trick: allocate a node, hang it off `self.tail.next`,
-move `self.tail` on. Without it, the only route to the end of a singly linked list is
-a walk from the head, which is $O(n)$ — and the lab's step counter exists to catch
-exactly that, since 1000 `push_back` calls must cost 0 steps. Knowing the length does
-not help, because a length is a number and not an address; you still cannot reach the
-last node without following $n$ links. Nodes are emphatically not contiguous — that is
-the defining difference from the array. And pushing at the head with a lazy reverse
-just moves the linear cost onto whoever reads next.
+The tail pointer is the whole trick. Without it, the only route to the end of a
+singly linked list is a walk from the head, which is $O(n)$ — and the lab's step
+counter exists to catch exactly that, since 1000 `push_back` calls must cost 0 steps.
+Note what kind of claim this is: a true constant, not an amortised one. The dynamic
+array's cheap append is a claim about a total; this is a claim about every individual
+call, and the two are worth keeping apart, because only one of them can promise
+anything about the call you are making right now.
 """,
                     },
                     {
                         "q": "Both containers hold a million integers, and traversing either is $O(n)$. On real hardware the array is several times faster. Why?",
                         "opts": [
-                            "Array elements sit next to each other, so one cache line brings in several of them; list nodes are scattered, and each hop is its own trip to memory",
-                            "Traversing a linked list is really $O(n\\log n)$ once the pointer chasing is counted",
-                            "The linked list recomputes its length on every step",
-                            "Big-O is measuring the wrong thing here: array traversal is $O(1)$",
+                            "Following a pointer is really $O(\\log n)$ once the chase through memory is counted",
+                            "The array is walked by index arithmetic, while the list pays a pointer comparison and a branch at every node",
+                            "One cache line brings in several neighbouring array elements; each list hop is its own trip",
+                            "A list node carries a `next` field as well as its value, so the list moves more bytes",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"Following a pointer is one step per node, exactly as advancing an index is. Both traversals are honestly $O(n)$; every bit of the gap lives in the constant that $O$ throws away.",
+                            r"The instruction counts are within a small factor of each other, and a modern core retires several instructions per cycle. What it cannot do is issue a load whose *address* is not known until the previous load has returned — and a `next` chain is exactly that dependency, one link at a time.",
+                            r"A cache line is 64 bytes: sixteen 32-bit integers arrive for the price of one miss.",
+                            r"True, and it does cost — a node is typically three times the size of the value it holds. But bandwidth is not what binds here. A sequential scan of three times the bytes still beats a scattered scan of a third of them, because the sequential one is prefetched before it is asked for and the scattered one cannot be.",
+                        ],
                         "why": r"""
 Big-O throws away constants, and on modern hardware that constant is dominated by
 memory locality. Reading one array element pulls in a whole cache line, which is the
 next several elements for free; the nodes of a linked list were allocated at
 different moments and can sit anywhere, so each `node.next` can be a fresh miss
-costing a hundred-odd cycles. Both traversals genuinely are $O(n)$ — following a
-pointer is one step per node, not a logarithm — and neither implementation
-recomputes anything per step. This gap is why `list` in Python and `std::vector` in
-C++ are the default containers, and why linked lists survive mostly where $O(1)$
-splicing of a node you already hold is the point.
+costing a hundred-odd cycles — and, worse, a miss that cannot be started until the
+previous one finished. This gap is why `list` in Python and `std::vector` in C++ are
+the default containers, and why linked lists survive mostly where $O(1)$ splicing of
+a node you already hold is the point.
+""",
+                    },
+                    {
+                        "q": "A program holds a long sequence, and repeatedly deletes the element it is currently looking at before moving on to the next. Which container does that favour?",
+                        "opts": [
+                            "The array, because removing at a known index is a single write",
+                            "The linked list, because unhooking a node you already hold is $O(1)$",
+                            "The linked list, because it can be indexed as cheaply as the array can",
+                            "The array, because its removals amortise in the same way its appends do",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Removing from the middle of an array is not one write: everything after the hole slides down a slot. That is $O(n)$ per removal and $O(n^2)$ over the sequence, which is the cost this workload is built to expose.",
+                            r"Two reference assignments, and not one element moves.",
+                            r"It cannot be indexed cheaply — reaching index $i$ means following $i$ links. The premise is that you are *already holding* the node, which is what makes the splice free, and it is why an index would have spoiled it.",
+                            r"Amortisation covers the resizing, not the shifting. A removal from the middle moves every later element whatever the growth policy is, and no capacity rule touches that.",
+                        ],
+                        "why": r"""
+This is the workload the linked list exists for, and it is narrower than it first
+looks. The splice is $O(1)$ only because the node is already in hand: `prev.next =
+node.next` and the node is gone, with nothing after it disturbed. The moment the
+question becomes "delete the element at index 400,000" the list loses, because
+reaching that node costs the walk the array would have spent shifting.
+
+So the rule is not "lists are good at deleting". It is that a list is good at
+deleting *from a position you are already standing on* — which is what an iterator,
+a cursor, or an LRU chain's node handle gives you. That is also why `list.remove(x)`
+in Python is $O(n)$ and always will be: the search, not the removal, is the cost.
 """,
                     },
                 ],
@@ -837,102 +884,155 @@ assert _one.to_list() == [7] and _one.head is _one.tail, "a single node is its o
                     {
                         "q": "Why does a monotonic deque bring the sliding-window maximum down to $O(n)$ when the obvious nested loop is $O(nk)$?",
                         "opts": [
-                            "Every index is appended once and removed at most once, so the total deque work is bounded by $2n$ however wide the window is",
-                            "The deque keeps the window sorted, which costs $O(k\\log k)$ but only has to be done once",
-                            "`collections.deque` supports $O(1)$ indexing, so the maximum can be looked up directly",
-                            "$k$ is small in practice, so the $k$ factor does not matter",
+                            "The deque keeps the window sorted, which costs $O(k\\log k)$ but only once at the start",
+                            "Every index is appended once and removed at most once, so deque work is under $2n$",
+                            "`deque` indexes in $O(1)$, so the maximum can be read without scanning the window",
+                            "Each step does $O(1)$ work, because the evictions per step are bounded by a constant",
                         ],
-                        "a": 0,
+                        "a": 1,
+                        "whys": [
+                            r"Nothing is ever sorted. The deque is *kept* decreasing by refusing to admit anything that would break the order, which costs nothing beyond the comparison already being made — and a sort done once at the start would have to be redone as soon as the window moved.",
+                            r"An index has to be appended before it can be popped, and it is appended exactly once.",
+                            r"It does index in $O(1)$ — and so does the brute-force loop, which is still $O(nk)$. The saving is not in *reading* the maximum; it is in never re-examining an element that a later, larger one has already beaten.",
+                            r"No such bound exists. On a strictly decreasing prefix followed by one large value, a single step pops the entire deque — $k-1$ indices at once. That is exactly why the argument has to be aggregate: no individual step is $O(1)$, and the bound survives anyway.",
+                        ],
                         "why": r"""
 This is the aggregate argument again, in a new costume. A single step can pop many
 indices, so no step is $O(1)$ in the worst case — but an index has to be appended
 before it can be popped, and it is appended exactly once, so across the whole run
-there are at most $n$ appends and $n$ removals. Nothing is ever sorted: the deque is
-*kept* in decreasing order by refusing to admit anything that would break it, which
-is cheaper than sorting and is why $k$ never appears in the cost. A deque does index
-in $O(1)$, but that is not where the saving comes from — the brute-force loop
-indexes in $O(1)$ too and is still $O(nk)$. And an algorithm whose cost depends on
-$k$ is exactly what falls over on the day someone passes $k = 100{,}000$.
+there are at most $n$ appends and $n$ removals, whatever $k$ is. That total is what
+$O(n)$ is a statement about. An algorithm whose cost genuinely depends on $k$ is what
+falls over on the day someone passes $k = 100{,}000$; this one does not notice.
 """,
                     },
                     {
                         "q": "An index is dropped from the back of the deque when its value is not greater than the incoming value. Why is that safe?",
                         "opts": [
-                            "The incoming element is both larger and younger, so it outlives the dropped one — which can therefore never be the maximum of any future window",
-                            "Duplicate values cannot appear in a window, so the dropped index was spurious",
-                            "The dropped index has already fallen out of the window",
-                            "It is not strictly safe; it is an approximation that is correct for almost all inputs",
+                            "Duplicate values cannot survive in one window, so the dropped index was redundant",
+                            "The dropped index has already aged out of the window at the front",
+                            "The newcomer is both larger and younger, so it outlives the dropped index",
+                            "The dropped index can still be a maximum, but only of windows already reported",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"Duplicates are perfectly possible, and they are precisely why the comparison is written `<=` rather than `<`. Two equal values inside one window is an ordinary case, not an impossible one.",
+                            r"Ageing out is a separate check, made at the *front* of the deque against `index - k`. This eviction happens at the back, and the index being dropped is still comfortably inside the window.",
+                            r"Two conditions, and both hold: at least as large, and arriving later.",
+                            r"Half right, and it is the half that carries no weight. Windows already reported are indeed settled — but the dropped index is still *inside* the current window, so the claim being made is about the future. What licenses it is the newcomer's youth, not the report's age.",
+                        ],
                         "why": r"""
 Two conditions have to hold together, and both do: the newcomer is at least as large,
 so it beats the older element on value; and it arrived later, so it stays inside the
 window for at least as long. Any future window containing the older index also
-contains the newer one, and the newer one wins — the older index is dead and can be
-discarded without a second thought. Duplicates are perfectly possible and are why the
-comparison is written with `<=` rather than `<`. Ageing out of the window is a
-separate check, done at the front, not the back. And there is nothing approximate
-about it: the lab compares against brute force on sixty random cases.
+contains the newer one, and the newer one wins — so the older index can never be the
+answer to anything again, and is discarded without a second thought. Note that only
+one of the two conditions is about the values. Drop the youth half and the argument
+collapses, which is why the eviction is written at the back, where the newcomer's
+arrival order is what is being used.
 """,
                     },
                     {
                         "q": "A FIFO queue built from two stacks. What does a single `dequeue` cost?",
                         "opts": [
-                            "$O(1)$ amortised: one dequeue can move many elements, but each element is moved between the stacks at most once ever",
-                            "$O(1)$ worst case, because a dequeue moves exactly one element",
-                            "$O(n)$ always, because the inbox has to be tipped on every dequeue",
-                            "$O(\\log n)$, the same as a heap",
+                            "$O(1)$ worst case: a dequeue moves at most one element between the stacks",
+                            "$O(n)$ always: the inbox has to be tipped across on every single dequeue",
+                            "$O(1)$ amortised: many can move at once, but each element crosses once",
+                            "$O(\\log n)$: the tip-over halves the work left for the dequeues that follow",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"A dequeue that arrives with 1000 elements in the inbox genuinely moves all 1000, so no worst-case constant exists. That is what makes this an amortised claim rather than a worst-case one — and the distinction matters to anyone with a latency budget for a single call.",
+                            r"The tip fires only when the outbox is *empty*. After one tip of 1000 elements, the next 999 dequeues pop one element each and never touch the inbox at all.",
+                            r"Pushed to the inbox, popped from it, pushed to the outbox, popped from it: four operations in an element's whole life.",
+                            r"Nothing here is halved, and nothing is ordered by comparison, so there is no logarithm available. The tip moves the *whole* inbox, not half of it — and having moved it, moves nothing again.",
+                        ],
                         "why": r"""
 The tip-over is the expensive event and it is genuinely $O(n)$ when it happens: a
 dequeue that arrives with 1000 elements in the inbox moves all 1000. What rescues the
 bound is that those elements are now in the outbox and never go back — each element
 crosses from inbox to outbox exactly once in its whole life, so $n$ dequeues cost
 $O(n)$ in total. That is the identical argument to the doubling array, on completely
-different machinery. The tip only happens when the outbox is empty, so most dequeues
-touch one element; and nothing here is ordered by comparison, so no logarithm can
-appear.
+different machinery, and the numeric unit in this module counts it out exactly rather
+than bounding it.
 """,
                     },
                     {
                         "q": "Shunting-yard turns `2 ^ 3 ^ 2` into `2 3 2 ^ ^`, but `3 - 4 - 5` into `3 4 - 5 -`. What accounts for the difference?",
                         "opts": [
-                            "`^` is right associative, so an incoming `^` leaves an equal-precedence `^` on the stack; `-` is left associative, so an incoming `-` pops one first",
-                            "`^` has higher precedence than `-`, so equal-precedence operators never meet on the stack",
-                            "Exponentiation is not really a binary operator, so it is handled by a separate rule",
-                            "The two expressions differ in the number of operands, not in any property of the operators",
+                            "`^` outranks `-`, so two equal-precedence operators never meet on the stack",
+                            "`^` is right associative, so an equal `^` is left on the stack; `-` is left associative",
+                            "Unary minus is folded in first, which reorders the subtractions but not the powers",
+                            "The stack pops only on strictly greater precedence, and `^` is the only operator above `-`",
                         ],
-                        "a": 0,
+                        "a": 1,
+                        "whys": [
+                            r"Precedence is real and `^` does outrank `-`. But in both of these expressions the two operators being compared are *equal* to each other, so precedence cannot separate the cases — something else has to.",
+                            r"Pop while the top binds strictly tighter, *or* binds equally tightly and the incoming operator is left associative.",
+                            r"There is no unary minus in `3 - 4 - 5`: all three operands are positive and both signs are binary. Unary minus is a genuine complication in shunting-yard, but it is not the one on this page.",
+                            r"This is the pop rule with its second clause missing — and that clause is the whole answer. Drop it and `3 - 4 - 5` converts to `3 4 5 - -`, which evaluates to $3-(4-5) = 4$ instead of $-6$.",
+                        ],
                         "why": r"""
 The pop condition is the only place associativity shows up: pop while the operator on
 top binds *strictly tighter*, or binds equally tightly *and the incoming operator is
 left associative*. Two `^` tokens are equally tight and `^` is right associative, so
 nothing is popped, both sit on the stack, and they come off in reverse — giving
-$2^{(3^2)} = 512$. Two `-` tokens are equally tight and `-` is left associative, so
-the first is popped before the second is pushed, giving $(3-4)-5$. Precedence is real
-and `^` does outrank `-`, but precedence alone cannot distinguish these two cases,
-because in both of them the operators being compared are equal. Both expressions have
-three operands, and exponentiation is as binary as subtraction.
+$2^{(3^2)} = 512$ rather than $(2^3)^2 = 64$. Two `-` tokens are equally tight and
+`-` is left associative, so the first is popped before the second is pushed, giving
+$(3-4)-5 = -6$. The two expressions are structurally identical and differ in one
+property of one operator, which is what makes the pair worth staring at.
 """,
                     },
                     {
                         "q": "`evaluate_rpn(\"3 4 -\".split())` must give $-1$. Which popped value is the left operand?",
                         "opts": [
-                            "The one popped second, since a stack returns operands in the reverse of the order they were pushed",
                             "The one popped first, since it is nearest the operator in the token stream",
-                            "Either — the stack holds them in a canonical order regardless",
-                            "Neither: subtraction needs a separate operand stack to preserve the order",
+                            "Either one: `-` is applied to the pair, and the evaluator normalises the order",
+                            "The one popped second, since a stack returns operands in reverse of push order",
+                            "Neither: the evaluator must track the order separately, as a stack does not keep it",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"Nearest the operator in the *stream* is nearest the *top* of the stack — and the top is the right operand. The two orderings are exact opposites, which is why this is the slip that silently reverses every non-commutative operator while leaving `+` and `*` looking perfect.",
+                            r"There is nothing to normalise: `left - right` and `right - left` differ by a sign, and no evaluator can pick between them without already knowing which is which. `+` and `*` would survive this; `-`, `/` and `^` would not.",
+                            r"`3` is pushed, then `4`. The top is `4`, the right operand; underneath it is `3`, the left.",
+                            r"A stack keeps the order perfectly — last in, first out, with no ambiguity anywhere. That single order is exactly the information needed, which is why RPN evaluation wants one stack and nothing else.",
+                        ],
                         "why": r"""
 `3` is pushed, then `4`. The top of the stack is therefore `4`, which is the *right*
 operand, and the value underneath it is `3`, the left. So the pops come out
 right-then-left and the operator has to be applied as `left - right`. Get it the
 wrong way round and `+` and `*` still pass every test while `-`, `/` and `^` are all
-silently reversed — which is why the lab checks `3 4 -` and `-7 2 /` specifically. A
-stack has exactly one order, last-in-first-out, and no canonicalisation; and one
-stack is all RPN evaluation ever needs, which is most of its appeal.
+silently reversed — which is why the lab checks `3 4 -` and `-7 2 /` specifically.
+A test suite made only of commutative operators would have signed this off.
+""",
+                    },
+                    {
+                        "q": "`shunting_yard` emits no parentheses at all, whatever the input contained. How can the RPN still mean the same thing?",
+                        "opts": [
+                            "Parentheses only ever affect readability, so dropping them cannot change a value",
+                            "The order of the operators alone already fixes which operands each one takes",
+                            "They are re-inserted by `evaluate_rpn` when it meets an ambiguous precedence",
+                            "The algorithm rejects any input whose meaning depends on its parentheses",
+                        ],
+                        "whys": [
+                            r"They affect values constantly: `(2 + 3) * 4` is 20 and `2 + 3 * 4` is 14. What is true is that once the grouping has been *resolved*, there is nothing left for a bracket to say.",
+                            r"An operator in RPN takes the two values immediately before it, and there is only one way to read that.",
+                            r"`evaluate_rpn` never looks at precedence at all — a stack and a loop is the whole of it, which is exactly the appeal. All the precedence work happened once, in `shunting_yard`.",
+                            r"It rejects nothing. `(2 + 3) * 4` and `2 + 3 * 4` are both perfectly good input; they convert to `2 3 + 4 *` and `2 3 4 * +`, which is precisely how the difference in meaning survives the loss of the brackets.",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Infix needs parentheses because the same string of tokens can be grouped more than
+one way, and precedence rules are a convention for choosing between the readings.
+RPN has no such ambiguity to resolve: an operator takes the two values immediately
+before it, full stop, so the grouping is carried by position rather than by
+punctuation.
+
+That is what shunting-yard is *for*. It is not discarding the parentheses, it is
+spending them — converting a representation whose meaning depends on a table of
+precedences into one whose meaning depends on nothing but order. Which is why
+`evaluate_rpn` is thirty lines and needs no table at all, and why compilers and
+calculators have been doing this since 1961.
 """,
                     },
                 ],
@@ -1536,90 +1636,114 @@ assert _out[0] == max(_big[:500]), "the first window is still wrong"
                     {
                         "q": "In-order traversal of a BST comes out sorted. Why?",
                         "opts": [
-                            "The invariant puts every key of the left subtree below the node and every key of the right subtree above it, and in-order visits those three groups in exactly that order",
-                            "Because `insert` keeps the keys in sorted order as it places them",
-                            "Because the tree is balanced, so the levels come out in order",
-                            "It does not — the traversal has to be sorted afterwards",
+                            "`insert` places each key in sorted position as it descends, so the order is built in",
+                            "Left subtree, node, right subtree is smaller, this, larger — read out recursively",
+                            "The tree is balanced, so the levels are visited in increasing order of key",
+                            "Each node's key is greater than its parent's, so a depth-first walk is increasing",
                         ],
-                        "a": 0,
+                        "a": 1,
+                        "whys": [
+                            r"`insert` maintains a *local* property at each node — smaller left, larger right — and never compares two keys that are not on the same root-to-node path. No sorted sequence is maintained anywhere. The global ordering is not built; it falls out.",
+                            r"The invariant read out loud, applied recursively all the way down.",
+                            r"Balance has nothing to do with it: a degenerate chain of a thousand nodes traverses in sorted order too, just slowly. And a *level*-order walk of a balanced tree is not sorted at all — the root, the median key, comes out first.",
+                            r"That is a heap's invariant, not a BST's, and it describes a different structure with a different guarantee. In a BST the ordering constraint is left-versus-right, not parent-versus-child — and a heap's in-order traversal is not sorted.",
+                        ],
                         "why": r"""
 Left subtree, node, right subtree — and by the invariant that is exactly *smaller
 keys, this key, larger keys*, applied recursively all the way down. The sortedness is
-not something the traversal computes; it is the invariant read out loud. Nothing in
-`insert` maintains a sorted sequence anywhere: it maintains a *local* property at
-each node, and the global ordering is what falls out. Balance has nothing to do with
-it — a degenerate chain of a thousand nodes traverses in sorted order too, just
-slowly. And a tree whose in-order traversal is not sorted is not a BST; the lab's
-random-work check is precisely that assertion.
+not something the traversal computes; it is the invariant read out loud. That is also
+the strongest test there is for whether a tree really is a BST, and it is what the
+lab's random-work check asserts after 250 deletions: a tree whose in-order traversal
+is not sorted has stopped being a search tree, whatever its shape looks like.
 """,
                     },
                     {
                         "q": "Deleting a node with two children promotes its in-order successor. Why is that successor always easy to remove?",
                         "opts": [
-                            "It is the leftmost node of the right subtree, so it has no left child — at most one child, never two",
-                            "It is always a leaf, so unhooking it is the whole job",
-                            "It is always the root of the right subtree",
-                            "It is not removed at all; the garbage collector reclaims it",
+                            "It is always a leaf, so unhooking it from its parent is the entire job",
+                            "It is the leftmost node of the right subtree, so it has no left child",
+                            "It is the root of the right subtree, reachable in a single step from the node",
+                            "Its key is copied rather than moved, so the node it came from can be left alone",
                         ],
-                        "a": 0,
+                        "a": 1,
+                        "whys": [
+                            r"It may well have a right child. Delete 50 from the lab's tree and the successor 60 happens to be a leaf — but insert 65 first and it is not, and the code still has to work.",
+                            r"Walk right once, then left until you cannot. Stopping means there is no left child.",
+                            r"Only when that root has no left child. In the lab's tree the right subtree of 50 is rooted at 70, and the successor is 60 — one step further left, and the walk is what finds it.",
+                            r"The key is copied, but the node it was copied from is still there, so the key now appears twice and the in-order traversal reports it twice. The recursive `_delete` on the right subtree is what removes the lower copy — and it terminates at once, because that node has at most one child.",
+                        ],
                         "why": r"""
 Walk right once, then left until you cannot. Stopping means there is no left child,
 which is what makes the follow-up deletion land in the leaf case or the one-child
-case — never back in the two-child case, so the recursion terminates immediately
-rather than unwinding down the tree. It may well have a right child, so calling it a
-leaf is wrong: delete 50 from the lab's tree and the successor 60 happens to be a
-leaf, but insert 65 first and it is not. It is the root of the right subtree only
-when that root has no left child. And something does have to unhook it — the node
-holding the promoted key is still in the tree until the recursive call removes it.
+case — never back in the two-child case. So the recursion bottoms out immediately
+instead of unwinding down the tree, and the whole two-child case costs one extra
+descent rather than an unbounded cascade of promotions. That termination is the
+reason the successor is chosen rather than, say, the largest key in the tree.
 """,
                     },
                     {
                         "q": "The keys 1, 2, 3, …, 1000 are inserted in that order into an unbalanced BST. What is the height, counting edges?",
                         "opts": [
-                            "999 — every key is larger than everything already there, so every insert goes right",
-                            "9, because a BST of 1000 keys cannot be deeper than that",
-                            "10, the number of times 1000 halves",
-                            "0, because a sorted insert produces a single chain with no branches",
+                            "10 — a BST of 1000 keys splits the range in half at each level, whatever the order",
+                            "1000 — the root-to-leaf path passes through every one of the thousand nodes",
+                            "999 — every key is larger than everything present, so every insert goes right",
+                            "0 — a chain has no branching, and height measures how much a tree branches",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"Halving the range at each level is what a *balanced* tree does, and nothing here enforces it — the BST invariant constrains where a key may go, not what shape results. About 10 is the height this tree would have had if the keys had arrived shuffled.",
+                            r"One out. The path does pass through all 1000 nodes, but height counts *edges*, and 1000 nodes on a path are joined by 999 of them. The question says edges for exactly this reason.",
+                            r"Sorted input is the worst input: each key walks the whole right spine and hangs off the bottom.",
+                            r"Height is the length of the longest root-to-leaf *path*, not a measure of branching — and a chain is nothing but one long path. A 1000-node chain has the largest height a 1000-node tree can have, not the smallest.",
+                        ],
                         "why": r"""
 Sorted input is the worst input. Each key walks the entire right spine and hangs off
 the bottom, so the tree is a linked list wearing tree-shaped types: 1000 nodes,
-999 edges from root to the deepest leaf, and `contains(1000)` costs 1000 comparisons.
-About 10 is the height a *balanced* thousand-node tree would have, and the gap
-between 10 and 999 is the entire justification for red-black and AVL trees. A chain
-does have height — height counts edges on the longest root-to-leaf path, and a chain
-is nothing but one long path.
+999 edges from the root to the deepest leaf, and `contains(1000)` costing 1000
+comparisons. About 10 is the height a *balanced* thousand-node tree would have, and
+the gap between 10 and 999 — a hundredfold, on identical keys — is the entire
+justification for red-black and AVL trees.
 """,
                     },
                     {
                         "q": "Which traversal is the safe order in which to free every node, in a language where you must free them yourself?",
                         "opts": [
+                            "Pre-order, so each node is released before anything can reach it again",
+                            "In-order, because the keys come out in order and nothing is skipped",
                             "Post-order — both children are released before the node that points at them",
-                            "Pre-order, so each node is gone before anything can reach it again",
-                            "In-order, because it is the natural order of the keys",
-                            "Any of them; freeing is order-independent",
+                            "Any order works, because freeing a node does not disturb the pointers other nodes hold",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"Free the parent first and the very next thing the traversal does is read `node.left` out of memory that has just been handed back. That is a use-after-free, and it usually appears to work, which is what makes it dangerous.",
+                            r"In-order frees the node *between* its two subtrees, so the right subtree is reached through a pointer read out of a node that no longer exists. The key order is beside the point here; this is the one traversal question that is not about keys at all.",
+                            r"A node is visited only once both subtrees are finished, so nothing below it is still needed when it goes.",
+                            r"The pointers that matter are the ones *inside* the node being freed. `node.left` and `node.right` live in that node's own memory, and once it is freed that memory belongs to the allocator, not to you.",
+                        ],
                         "why": r"""
 Post-order visits a node only after both of its subtrees are finished, so when the
-node is freed nothing below it is still needed — and crucially, the pointers you need
-to *reach* the children were read before the parent went away. Pre-order frees the
-parent first and then dereferences `node.left` on memory that has just been handed
-back, which is a use-after-free; in-order does the same thing to the right subtree.
-The order is very much not irrelevant, and this is the one traversal whose reason for
-existing is not about the keys at all.
+node is freed nothing below it is still needed — and crucially, the pointers needed
+to *reach* the children were read before the parent went away. Every other order
+dereferences at least one field of a node it has already released. This is the one
+traversal whose reason for existing has nothing to do with the keys, which is why it
+is easy to forget it exists until a `free` walk corrupts a heap.
 """,
                     },
                     {
                         "q": "Search, insert and delete on a BST are all $O(h)$. Why is that a warning rather than a reassurance?",
                         "opts": [
-                            "$h$ ranges from about $\\log_2 n$ to $n - 1$, and it is the insertion order — not the keys themselves — that decides which end you get",
-                            "$h$ is always close to $n$ in practice, so the bound is meaningless",
-                            "$h$ cannot be computed without traversing the whole tree, so the bound cannot be checked",
-                            "Because $O(h)$ conceals a hidden factor of $n$ in the comparisons",
+                            "$h$ is close to $n$ in practice, so the bound is far too optimistic to rely on",
+                            "$h$ cannot be measured without walking the tree, so the bound cannot be checked",
+                            "$h$ runs from $\\log_2 n$ to $n-1$, and the insertion order alone decides which",
+                            "$O(h)$ hides a comparison at every node on the path, so it is really $O(h\\log n)$",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"Too pessimistic rather than too optimistic — and it depends entirely on the input. Random insertion keeps $h$ near $3\log_2 n$; it is *sorted* insertion that drives it to $n-1$, and knowing which one you have is the whole question.",
+                            r"Height is cheap to measure — one post-order walk — and the lab measures it. But a measured $h$ is a fact about the tree you have, not a promise about the tree the next thousand inserts will leave you with.",
+                            r"Two orders of magnitude for the same thousand keys, settled by nothing but arrival order.",
+                            r"One comparison per level, and a level is one node — which is exactly what $O(h)$ counts. Nothing is hidden: the point of the invariant is that a single comparison decides which way to go.",
+                        ],
                         "why": r"""
 $O(h)$ is an honest bound that says nothing at all until you know $h$, and $h$ spans
 two orders of magnitude for the same thousand keys depending on nothing but the order
@@ -1628,9 +1752,44 @@ table from a database that helpfully returned it ordered — and every operation
 degrades from ten steps to a thousand with no error and no warning. Random insertion
 keeps $h$ down to about $3\log_2 n$ — the *average* node sits at depth
 $1.39\log_2 n$, but the height is the deepest path, not the typical one — which is
-why the lab shuffles before building. Height is cheap to measure and the lab does
-measure it. And $O(h)$ hides nothing: it is one key
-comparison per level, which is exactly what the invariant buys.
+why the lab shuffles before building.
+""",
+                    },
+                    {
+                        "q": "A tree holds 20 at the root, 10 on its left, 30 on its right, and 25 as the right child of 10. Every parent is larger than its left child and smaller than its right child. Is it a BST?",
+                        "opts": [
+                            "Yes — every parent and child pair satisfies the invariant, which is all it asks",
+                            "No — 25 lies in the left subtree of 20 and is larger than it",
+                            "Yes, but only until some key between 20 and 25 is inserted somewhere",
+                            "No — 10 has a right child and no left child, which the invariant forbids",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Parent-and-child pairs are what a *local* check tests, and this tree passes every one of them. The invariant is about subtrees: everything in the left subtree of 20 must be below 20, and 25 is not.",
+                            r"`contains(25)` goes right at 20 and never looks left, so the key is in the tree and unreachable.",
+                            r"It is already broken, and inserting nothing at all will not fix it — `contains(25)` fails today, on this tree. This is exactly why a checker has to carry a low and a high bound down the recursion instead of comparing neighbours.",
+                            r"A node with one child is perfectly ordinary — it is the one-child deletion case, and several nodes in the lab's tree look like it. The invariant says nothing whatever about how many children a node has.",
+                        ],
+                        "why": r"""
+The invariant is not "larger than the left child and smaller than the right child".
+It is "larger than **everything** in the left subtree and smaller than **everything**
+in the right subtree", and the difference only shows up two levels down — which is
+precisely where it is easy to miss:
+
+```
+        20
+       /  \
+     10    30
+       \
+        25
+```
+
+Every parent–child pair here is correctly ordered. The tree is still not a BST,
+because a search for 25 turns right at the root and never comes back. That is why the
+lab's checker is `_check(node, lo, hi)` and not a comparison between neighbours: it
+carries the interval each subtree is confined to down the recursion, narrowing it at
+every step, so a key that escapes its ancestor's bound is caught however deep it sits.
+A local check would have signed this tree off.
 """,
                     },
                 ],
@@ -2221,12 +2380,18 @@ for _k in _keys:
                     {
                         "q": "A linear-probing map deletes a key by writing `None` into its slot instead of a tombstone. What breaks?",
                         "opts": [
-                            "Any key that probed past that slot becomes unreachable, because lookups stop at the first never-used slot",
-                            "Nothing breaks; the table merely wastes a slot until the next resize",
-                            "The table can no longer resize, because the count of live pairs is wrong",
-                            "Inserts begin overwriting live pairs, because the free slot is claimed twice",
+                            "Nothing breaks: the table wastes one slot until the next resize clears it",
+                            "Inserts start overwriting live pairs, because the free slot is claimed twice",
+                            "Keys that probed past that slot become unreachable — lookups stop at a `None`",
+                            "Only keys whose home slot *is* that slot are lost; the rest of the chain is fine",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"It is not a wasted slot, it is silent data loss: pairs that are still physically in the table become unreachable to `get`, which reports a miss for a key sitting three slots away.",
+                            r"Inserts are fine — a `None` slot is genuinely free and writing into it is correct. The damage is done to *lookups*, which stop at the first `None` and never see what lies beyond it.",
+                            r"A `None` means *nothing was ever placed here*, and a lookup is entitled to stop there.",
+                            r"Exactly backwards, which is what makes it worth thinking about. The key whose home slot it was has indeed gone — deliberately. What is lost *as well* are the other keys, the ones that collided and probed past it, and those are the ones that look perfectly healthy in the slot array.",
+                        ],
                         "why": r"""
 A lookup walks forward from the home slot and stops at the first `None`, because a
 `None` means *nothing was ever placed here*, and if the key existed the probe would
@@ -2234,87 +2399,135 @@ have put it here or earlier. Deleting by writing `None` forges that signal. Thre
 land on slot 3 and spill into 4 and 5; delete the one in slot 3 and the other two are
 still sitting there, still findable by eye, and completely unreachable by the
 algorithm — `get` stops at slot 3 and reports a miss. That is why the lab makes
-exactly that arrangement and then asks for the other two. It is not a wasted slot,
-and it is not a counting problem; it is silent data loss.
+exactly that arrangement and then asks for the other two.
 """,
                     },
                     {
                         "q": "Why do tombstones count towards the resize trigger rather than being ignored?",
                         "opts": [
-                            "Every lookup has to probe through them, so a table thick with tombstones is as slow as a full one even while holding very few keys",
-                            "Because they occupy memory the allocator cannot otherwise reclaim",
-                            "Because the load factor is defined as capacity divided by size, and tombstones change the capacity",
-                            "They should not; only live keys can affect the cost of a lookup",
+                            "They occupy memory that the allocator cannot otherwise reclaim",
+                            "The load factor is capacity over size, and a tombstone changes the capacity",
+                            "Every lookup probes through them, so a sparse table can be as slow as a full one",
+                            "Otherwise a resize would never trigger once deletions began to outnumber inserts",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"The slot exists either way — the slot array was allocated at its full capacity and no tombstone adds a byte to it. What a tombstone costs is time, not space.",
+                            r"The load factor is size over capacity, the other way round — and a tombstone changes neither the capacity nor the live count. What it changes is the *probe length*, which is why it has to be counted separately and then added in.",
+                            r"Insert a million keys, delete all but ten: the table looks empty and every lookup still walks a million slots.",
+                            r"A resize would still trigger on inserts, as usual. The failure is the opposite one: a table being steadily emptied never crosses the trigger at all, so it never rehashes — and a rehash is the only thing that removes a tombstone.",
+                        ],
                         "why": r"""
 A tombstone is transparent to correctness and completely opaque to cost: `get` may
 not stop at one, so it has to keep walking. Insert a million keys and delete all but
 ten, and without counting tombstones the table looks 0.00001 full while every lookup
 still walks a million slots. Counting them means the table eventually rehashes, and a
 rehash is the only thing that clears them, since it rebuilds every probe chain from
-scratch. Memory is beside the point — the slot exists either way. And the load factor
-is size over capacity, not the other way round; tombstones move the numerator.
+scratch. So the count is not bookkeeping about *occupancy* — it is bookkeeping about
+*probe length*, which is the quantity the load factor was standing in for all along.
 """,
                     },
                     {
                         "q": "A chained table holds $n$ keys in $m$ buckets, with a hash that spreads keys evenly. What is the average cost of an *unsuccessful* lookup?",
                         "opts": [
-                            "$1 + n/m$ — one bucket lookup, plus a walk down a chain of average length $n/m$",
-                            "$n/m$ — just the chain walk",
-                            "$\\log_2(n/m)$, because the chain is kept ordered",
-                            "$n/2$, since on average half the table is examined",
+                            "$n/m$ — the walk down the chain, which is all the work there is",
+                            "$1 + n/m$ — one bucket index, plus a chain of average length $n/m$",
+                            "$\\log_2(n/m)$ — the chain is kept in key order, so it is binary searched",
+                            "$1 + n/(2m)$ — a failed lookup stops half way down the chain on average",
                         ],
-                        "a": 0,
+                        "a": 1,
+                        "whys": [
+                            r"The $1$ is not decoration. At a load factor of 0.75 the chain walk averages three-quarters of a comparison, so the hash and the array index *are* most of the cost — and dropping the $1$ makes a lookup in an empty table come out free.",
+                            r"One hash and one index, then a walk down a chain of expected length $n/m$.",
+                            r"The chains here are unordered lists, so there is nothing to binary search. At an average length below one, ordering them would buy nothing anyway.",
+                            r"Half way down is the *successful* case: a hit stops at the key it found, which is on average half the chain. A miss has no early exit — it has to reach the end of the chain to be sure the key is absent, which is why the two costs differ by that factor of two.",
+                        ],
                         "why": r"""
 The $1$ is the hash and the index into the bucket array, which happens whether the
 bucket is empty or not; the $n/m$ is the expected chain length, and a failed lookup
 walks all of it. That constant matters more than it looks: when the load factor is
 0.75 the walk averages three quarters of a comparison, so the $1$ *is* the cost, and
-the whole structure is $O(1)$ only because a resize keeps $n/m$ bounded. Chains here
-are unordered lists, so no binary search is possible — and ordering them would not
-help at these lengths anyway. And nothing examines half the table: that is what
-hashing exists to avoid.
+the whole structure is $O(1)$ only because a resize keeps $n/m$ bounded. Note that
+the miss is the more expensive case here, which is the opposite of the intuition most
+people bring — a miss cannot stop early, and a hit usually can.
 """,
                     },
                     {
                         "q": "`fnv1a` masks the accumulator back to 32 bits after every multiply. Why does that matter in Python particularly?",
                         "opts": [
-                            "Python integers grow without bound, so without the mask the accumulator would keep growing instead of wrapping, and the hash would not match the published values",
-                            "Python's multiplication is slower on large integers, so the mask is a speed optimisation",
-                            "Without the mask the accumulator could go negative, and a negative index is legal but wrong",
-                            "The mask is what makes the hash deterministic across runs",
+                            "Python's multiplication slows down on large integers, so the mask is an optimisation",
+                            "Without it the accumulator could go negative, and a negative index is legal but wrong",
+                            "Python integers grow without bound, so nothing wraps and the published vectors fail",
+                            "The mask is what makes the hash deterministic between runs of the interpreter",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"They do slow down, and that is a consequence rather than the reason — a hash that is fast and wrong is no use to anyone. Without the mask the accumulator is thousands of bits long after a few dozen bytes, and what it computes is not FNV-1a at all.",
+                            r"XOR and multiplication of non-negative values never produce a negative, so there is nothing here to guard against. In C the danger runs the other way: a *signed* accumulator would overflow into negative territory, which is why the reference uses `uint32_t`.",
+                            r"`& 0xFFFFFFFF` is how you say *this is a 32-bit register* in a language that has none.",
+                            r"Determinism comes from the algorithm being a pure function of the input bytes; the mask neither adds it nor could. It is Python's own built-in `hash()` that varies between runs, which is exactly why the lab does not use it.",
+                        ],
                         "why": r"""
 In C the accumulator is a `uint32_t` and the wrap-around is free — it is what the
-hardware does. Python has arbitrary-precision integers, so the same code without the
-mask produces a number thousands of bits long after a few dozen bytes, and every
-published test vector fails. `& 0xFFFFFFFF` is how you say "this is a 32-bit
-register" in a language that does not have one. Big integers are indeed slower, but
-that is a consequence rather than the reason. XOR and multiply of non-negative values
-never go negative. And determinism comes from the algorithm being a pure function of
-the bytes; Python's own `hash()` is the one that varies between runs, which is
-exactly why the lab does not use it.
+hardware does, and the algorithm was designed around it. Python has arbitrary-precision
+integers, so the same code without the mask produces a number thousands of bits long
+after a few dozen bytes, and every published test vector fails. The overflow is not an
+accident FNV-1a tolerates; it is part of the mixing, and a language that refuses to
+overflow has to be told to.
 """,
                     },
                     {
                         "q": "`hash_index` hashes `repr(key)` rather than `str(key)`. What does that buy?",
                         "opts": [
-                            "`repr(1)` is `1` and `repr(\"1\")` is `'1'`, so the integer and the string get different slots; under `str` they are the same text and always collide",
-                            "`repr` is faster, because it does not have to format the value for a human reader",
+                            "`repr` is faster, since it does not have to format the value for a human reader",
                             "`str` is not defined for tuples, so `repr` is the only option for compound keys",
-                            "`repr` returns bytes, which is what FNV-1a needs as input",
+                            "`repr(1)` is `1` and `repr(\"1\")` is `'1'`, so the two do not collide by default",
+                            "`repr` is injective, so two different keys can never be given the same slot",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"`repr` usually does slightly more work, not less — it has quoting and escaping to attend to. Neither is on the hot path in any case; the hash then walks every byte of whatever came back.",
+                            r"""`str` is perfectly well defined for tuples: `str((1, 2))` is `'(1, 2)'`. Both calls return `str` objects, which is why `fnv1a` calls `.encode("utf-8")` on the result of either one.""",
+                            r'Under `str` the integer 1 and the string "1" are the same text, so they always land in the same slot.',
+                            r"Distinct text does not mean distinct slot. A 32-bit hash of unbounded input *must* collide — that is what the buckets are for. What `repr` buys is only that it does not manufacture collisions that were not there in the keys.",
+                        ],
                         "why": r"""
 Neither choice is *incorrect* — the buckets compare keys with `==`, so a collision
 between the integer 1 and the string "1" is resolved correctly either way. It is a
 quality-of-hash question: `str` maps genuinely different keys onto identical text and
-manufactures collisions that the table then has to work through, and a mixed-type key
-space degrades measurably for no reason. `repr` is not faster (it usually does
-slightly more work), `str` is perfectly well defined for tuples, and both return
-`str` objects — which is why `fnv1a` calls `.encode("utf-8")` on the result.
+manufactures collisions the table then has to work through, so a mixed-type key space
+degrades measurably for no reason at all. That is the distinction worth carrying:
+correctness comes from the comparison, and performance comes from the hash, and they
+are two separate obligations that it is easy to conflate.
+""",
+                    },
+                    {
+                        "q": "A table of 365 slots is filled with keys hashed uniformly at random. Roughly how many keys go in before a collision is more likely than not?",
+                        "opts": [
+                            "About 183 — half the slots, which is when they begin to run out",
+                            "About 23 — roughly the square root of the number of slots",
+                            "About 365 — a collision is certain only once every slot has been claimed",
+                            "About 100 — collisions become likely at roughly a quarter of the slots",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Half full is where a *particular* slot becomes likely to be occupied. A collision needs only *some pair* of keys to agree, and 23 keys already make 253 pairs — which is why the threshold is quadratically smaller than the intuition.",
+                            r"$\binom{23}{2} = 253$ pairs, each colliding with probability $1/365$.",
+                            r"Certain, yes — but long past likely. By the time 365 keys are in, a uniform hash has produced hundreds of collisions. The pigeonhole bound is the last thing to bite, never the first.",
+                            r"The threshold does not scale with the table at all; it scales with the table's *square root*. Ten thousand slots reach even odds at about 118 keys, not 2500 — the fraction gets smaller as the table gets bigger.",
+                        ],
+                        "why": r"""
+The count of *pairs* is what matters, and it grows quadratically: $k$ keys make
+$\binom{k}{2}$ pairs, each of which collides with probability $1/m$. Even odds arrive
+when that product reaches about 1, which is at $k \approx 1.18\sqrt{m}$ — 23 keys in
+365 slots, 118 keys in ten thousand, 77000 in a 32-bit space.
+
+This is why collision handling is not an optimisation to add later. A chained table
+holding a few hundred keys in a few hundred buckets is already full of collisions
+before it is anywhere near full of keys, and an implementation that only handles the
+empty-bucket case will pass every small test and lose data in production. The load
+factor governs how *long* the chains get; the birthday bound governs the fact that
+there are chains at all.
 """,
                     },
                 ],
@@ -3019,31 +3232,42 @@ for _cls in (ChainedHashMap, ProbingHashMap):
                     {
                         "q": "In a heap stored in a flat array with the root at index 0, the children of index $i$ are at:",
                         "opts": [
-                            "$2i+1$ and $2i+2$",
                             "$2i$ and $2i+1$",
-                            "$i/2$ and $i/2 + 1$",
                             "$i+1$ and $i+2$",
+                            "$2i+1$ and $2i+2$",
+                            "$(i-1)/2$ and $(i+1)/2$",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"The *one-based* layout, where the root sits at index 1 and index 0 is left empty. Still common, and a rich source of off-by-one bugs when it is mixed with the zero-based form — check it at the root and it makes index 0 its own left child.",
+                            r"Consecutive indices are siblings and cousins, not children. Indices 1 and 2 are the two children of the root, so index 2 cannot also be a child of index 1.",
+                            r"Check it at the root: index 0's children must be 1 and 2, which $2i+1$ and $2i+2$ give.",
+                            r"Halving goes upwards. The parent of $i$ is $(i-1)//2$, and the integer division is what makes both children map back to the same parent — but that is the inverse of what was asked for.",
+                        ],
                         "why": r"""
 Check it against index 0: its children must be 1 and 2, which $2i+1$ and $2i+2$ give
 and nothing else does. The parent is the inverse, $(i-1)//2$, and the integer
-division is what makes both children map back to the same parent. $2i$ and $2i+1$ is
-the *one-based* layout, where the root sits at index 1 and index 0 is left empty —
-still common, and the source of a great many off-by-one bugs when it is mixed with
-the zero-based form. Halving goes upwards rather than downwards, and consecutive
-indices are siblings and cousins, not children.
+division is what makes both children map back to the same parent. This one line is
+what lets a complete binary tree live in a flat array with no pointers at all — the
+structure is implied by arithmetic on the indices, which is why a heap costs exactly
+one array and nothing else.
 """,
                     },
                     {
                         "q": "Bottom-up heapify is $O(n)$, while building the same heap with $n$ separate pushes is $O(n\\log n)$. Where does the difference come from?",
                         "opts": [
-                            "Sifting down costs the distance to the leaves, and half the nodes are leaves at distance 0; sifting up costs the distance to the root, which nearly every node pays almost in full",
-                            "Bottom-up heapify skips most of the nodes, so it does less work by doing less",
-                            "`push` is $O(n)$ in the worst case because the array has to grow",
-                            "They are the same cost; the $O(n)$ claim is a loose bound that nobody has tightened",
+                            "Bottom-up heapify skips most nodes, so it does less work simply by doing less",
+                            "`push` is $O(n)$ in the worst case, because the backing array has to be grown",
+                            "Sift-down charges distance to the leaves, and half the nodes are already there",
+                            "Heapify compares each node against its parent once, so it is $n$ comparisons flat",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"It does skip the leaves, but only because a leaf is already a heap of one — and it visits every internal node, which is half of them. Skipping half the nodes saves a factor of two, not a factor of $\log n$.",
+                            r"Amortised growth makes `push` $O(\log n)$, not $O(n)$ — and if a push really were $O(n)$ the loop would be *worse* than $n\log n$, not better. The extra factor comes from the sift, not from the store.",
+                            r"The cheap operation is applied to the many nodes and the dear one to the few.",
+                            r"Heapify does not compare upwards at all, and one pass of parent comparisons would not produce a heap: fixing a node can break the one below it, which is exactly why `sift_down` recurses. The comparisons do total about $2n$, but not one per node.",
+                        ],
                         "why": r"""
 It is a question of where the nodes are. In any binary tree half the nodes are
 leaves, a quarter are one level up, an eighth two levels up: the population is
@@ -3051,10 +3275,8 @@ concentrated at the bottom, and sift-down charges each node by its distance from
 bottom. So the cheap operation is applied to the many nodes and the dear one to the
 few, and the weighted sum converges to $n$. Sifting up inverts that — it charges by
 distance from the *root*, so the half of the nodes that are leaves each pay the full
-height. Heapify does skip the leaves, but only because a leaf is already a heap of
-one; it visits every internal node, which is half of them. Amortised growth makes
-`push` $O(\log n)$, not $O(n)$. And the bound is tight, not loose: the derivation in
-this module lands on exactly $n$.
+height. Same tree, same heap at the end, and a factor of $\log n$ between them purely
+because of which end the work is measured from.
 """,
                     },
                     {
@@ -3062,81 +3284,100 @@ this module lands on exactly $n$.
                         "opts": [
                             "Stability — records with equal keys come out in the order they went in",
                             "The $O(n\\log n)$ bound, which fails if ties are broken the other way",
-                            "A speed-up of roughly a factor of two on input that is already sorted",
-                            "Correctness: taking from the right on a tie produces an unsorted result",
+                            "A speed-up of about a factor of two on input that is already sorted",
+                            "Correctness: taking from the right on a tie leaves the output unsorted",
                         ],
                         "a": 0,
+                        "whys": [
+                            r"The left half holds what came first, so taking it on a tie preserves the original order.",
+                            r"Both branches do one comparison and one append, so the cost is identical whichever side a tie goes to. The bound comes from halving the input, and nothing about a tie changes that.",
+                            r"There is no such short cut in this merge — it compares and appends $n$ elements per level whatever the input looks like. (Timsort does exploit runs that are already sorted, but by detecting them beforehand, not by breaking ties.)",
+                            r"The output is still perfectly sorted: the two candidates are *equal*, so emitting either one keeps the sequence non-decreasing. What is lost is not correctness but the promise — which is precisely the point of the question.",
+                        ],
                         "why": r"""
 Both halves are already sorted and the left half holds the elements that came first,
 so on a tie the left one is the earlier record and taking it preserves the original
 order. Take from the right instead and the sort is still perfectly correct — the
 output is still in non-decreasing order — but equal records come out reversed, which
 is exactly what a stable sort promises not to do. That promise is what lets you sort
-by one field and then by another and keep the first as a tiebreak. The complexity
-does not care which side a tie goes to; both branches do one comparison and one
-append.
+by one field and then by another and keep the first as a tiebreak, which is how every
+multi-column sort in every spreadsheet is actually implemented.
 """,
                     },
                     {
                         "q": "Why is heap sort not stable?",
                         "opts": [
-                            "Building the heap and popping it exchange elements that are far apart, so equal keys are reordered with no record of where they started",
-                            "Because a heap cannot contain duplicate keys",
-                            "Because it is implemented recursively, and recursion loses the ordering",
-                            "It is stable; only quicksort is not",
+                            "A heap cannot hold duplicate keys, so equal records never arise in the first place",
+                            "It sorts in place, and an in-place sort cannot be stable",
+                            "Building and popping exchange elements that started far apart",
+                            "It is implemented recursively, and recursion does not preserve the original order",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"Heaps hold duplicates perfectly happily — the lab sorts `[5, 5, 5]`. The heap property is $\le$ between parent and child, not $<$.",
+                            r"Insertion sort is in place and stable, so no such rule exists. What costs heap sort its stability is the *distance* of its exchanges, not the absence of a scratch array — merge sort would still be stable if you found a way to merge in place.",
+                            r"`pop` moves the *last* element of the array into the root, from arbitrarily far away.",
+                            r"Merge sort is recursive and stable, and the heap here sifts iteratively, so recursion is doing no work in this explanation from either direction.",
+                        ],
                         "why": r"""
 Long-range exchange is exactly what makes heap sort and quicksort cheap, and exactly
 what destroys stability — the two properties are the same property seen from
 different sides. `pop` takes the root and moves the *last* element of the array into
 its place, and that element may have started thousands of positions away from an
 equal key it now sits before. Nothing in the array records which of two equal keys
-came first, so nothing can restore it. Heaps hold duplicates perfectly happily — the
-lab sorts `[5, 5, 5]`. Recursion is irrelevant: merge sort is recursive and stable,
-and the heap here sifts iteratively.
+came first, so nothing can restore it. Stability can always be bought back by
+appending the original index to the key, at the cost of the memory and comparisons
+that implies — which is the honest way to state the trade.
 """,
                     },
                     {
                         "q": "Three-way partitioning splits into less-than, equal-to and greater-than. What does carving out the equal region prevent?",
                         "opts": [
-                            "A run of identical keys degenerating to quadratic time — the equal block is finished in one pass and never recursed into",
-                            "The pivot being chosen badly on input that is already sorted",
-                            "The $O(n)$ of extra space that a two-way partition would need",
-                            "Stack overflow, by removing one of the two recursive calls",
+                            "A badly chosen pivot degrading the sort on input that is already sorted",
+                            "The $O(n)$ of scratch space a two-way partition needs for the equal keys",
+                            "A run of identical keys degenerating to quadratic time",
+                            "Stack overflow, by replacing one of the two recursive calls with a loop",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"That is what median-of-three is for, and it is a separate defence. Three-way partitioning does not help choose a pivot, and a bad pivot still hurts on keys that are all distinct.",
+                            r"A two-way partition is already in place and needs no scratch space at all — and neither does the three-way one. Nothing here is allocated.",
+                            r"The equal block is finished in one pass, and never recursed into.",
+                            r"Recursing into the smaller side and looping on the larger is what bounds the depth to $\log n$ — also present in the reference solution, and also a separate defence.",
+                        ],
                         "why": r"""
 With a two-way partition, a million equal keys put every element on one side of the
 pivot, the recursion shortens the range by one each time, and the sort is $O(n^2)$ on
 input that is arguably already sorted. Three-way partitioning puts them all in the
 middle block, and that block is done: the two recursive calls are on what is strictly
 smaller and strictly larger, so an array of identical keys is finished in a single
-pass. Choosing the pivot well is what median-of-three is for, and it is a separate
-defence. A two-way partition is also in place and needs no extra space. And the
-recursion-depth problem is handled by recursing into the smaller side and looping on
-the larger — also separate, and also in the reference solution.
+pass. Note how narrow each of quicksort's three defences is — pivot choice, the equal
+block, and the tail loop each close exactly one failure and none of the others.
 """,
                     },
                     {
                         "q": "Both merge sort and quicksort are $O(n\\log n)$, yet quicksort usually wins on real data. The usual reason is:",
                         "opts": [
-                            "Quicksort partitions in place, scanning memory sequentially and allocating nothing; merge sort copies into fresh lists on every level",
-                            "Quicksort makes strictly fewer comparisons than merge sort",
-                            "Merge sort's real complexity is $O(n^2)$ once the merging is counted",
-                            "Quicksort is $O(n)$ on average and only $O(n\\log n)$ in the worst case",
+                            "Quicksort makes strictly fewer comparisons, so it does less work per level",
+                            "Merge sort is $O(n\\log n)$ only on average; its worst case is quadratic",
+                            "Quicksort partitions in place and scans sequentially; merge sort copies each level",
+                            "Merge sort recurses more deeply, so a larger share of its time goes into call overhead",
                         ],
-                        "a": 0,
+                        "a": 2,
+                        "whys": [
+                            r"Comparison counts actually favour merge sort slightly, which makes it the better choice whenever a comparison is expensive — long strings, or records reached through a costly key function.",
+                            r"Merge sort is $O(n\log n)$ in the worst case as well as on average: it halves unconditionally, and no input can persuade it otherwise. It is *quicksort* whose worst case is quadratic, which is the risk it accepts in exchange for the constant.",
+                            r"Two pointers walking towards each other through one array, with nothing allocated.",
+                            r"Both recurse to depth $\log_2 n$ — merge sort exactly, quicksort on any decent pivot — and both make about the same number of calls, so call overhead cannot separate them.",
+                        ],
                         "why": r"""
 The constant hidden by $O(n\log n)$ is mostly memory traffic, and quicksort's is
 about as good as it gets: two pointers walking towards each other through one array,
 with the working set staying in cache as the ranges shrink. Merge sort allocates and
 copies $n$ elements per level, so it moves several times the data and asks the
-allocator for it. Comparison counts actually favour merge sort slightly, which makes
-it the better choice when comparisons are expensive — sorting long strings, or
-records through a costly key function. Merging is linear per level and merge sort is
-firmly $O(n\log n)$; quicksort's average is $O(n\log n)$ and its worst case is
-$O(n^2)$, not the other way round.
+allocator for it each time. Which is why the choice between them is not really about
+complexity at all: pick quicksort when moving memory is the cost, and merge sort when
+*comparing* is the cost or when stability is required.
 """,
                     },
                 ],

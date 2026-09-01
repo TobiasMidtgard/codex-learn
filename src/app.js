@@ -1461,8 +1461,10 @@ function importProgress(file) {
   fr.readAsText(file);
 }
 function resetProgress() {
+  /* the seed rides along with name and theme: clearing progress should not silently
+     reshuffle every quiz in the catalogue as well */
   P = { completed: {}, quiz: {}, code: {}, derive: {}, build: {}, blanks: {}, numeric: {}, match: {}, tune: {}, xp: 0, last: null, playground: null,
-        activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme };
+        activity: {}, name: P.name, railHidden: P.railHidden, theme: P.theme, seed: P.seed };
   updateXp();
   renderRail();
   saveNow();
@@ -2366,9 +2368,50 @@ function renderRead(main, l) {
 /* Options were rendered in the order they were authored, and one course shipped with
    all twenty-four answers at index 0 — a perfect score by pressing A every time. The
    order is now derived from the lesson id and the question number, so it is stable for
-   a given learner (their best score keeps its meaning) but not the authoring order. */
+   a given learner (their best score keeps its meaning) but not the authoring order.
+
+   That comment described what was intended; the key was `lessonId + ':' + qi` and
+   nothing else, so the order was stable for EVERY learner — identical worldwide, and
+   publishable as a plain list of letters that stays correct forever. `quizSeed()` is
+   the missing half: one random value per install, folded into the hash, so the order
+   is still fixed for one person across retries and no longer shared between two. */
+function quizSeed() {
+  if (!P.seed) { P.seed = (Math.random() * 4294967296) >>> 0; saveSoon(); }
+  return P.seed;
+}
+
+/* Quiz text went through mdInline(), which knows code spans, bold, italic, links and
+   maths — and no block markup at all. Five EE131 questions are `What does this print?`
+   over a fenced Python block, and every one of them reached the screen as a literal
+   ``` and a single run-on line: `if v > 0: print("positive") elif v > 5: ...`. In a
+   language whose meaning is its indentation, that is the question destroyed.
+
+   renderMd() would draw the block, and would also hang a ▶ Run button off it — so a
+   question asking what a snippet prints would offer to print it. Hence this: the two
+   pieces of block markup a question actually uses, paragraphs and fences, with
+   highlighting and nothing to press. Options keep mdInline; they live in a <button>,
+   where a <pre> has no business. */
+function quizParas(s) {
+  return String(s).split(/\n[ \t]*\n/).map(function (p) { return p.trim(); })
+    .filter(Boolean).map(function (p) { return '<p>' + mdInline(p) + '</p>'; }).join('');
+}
+
+function quizProse(src) {
+  const text = String(src == null ? '' : src);
+  const fence = /```([a-zA-Z0-9+#-]*)[ \t]*\n([\s\S]*?)```/g;
+  let out = '', at = 0, m;
+  while ((m = fence.exec(text)) !== null) {
+    out += quizParas(text.slice(at, m.index));
+    out += '<pre class="qcode"><code>' +
+      Highlight.render(m[2].replace(/\n+$/, ''), Highlight.normLang(m[1] || 'text')) +
+      '</code></pre>';
+    at = fence.lastIndex;
+  }
+  return out + quizParas(text.slice(at));
+}
+
 function shuffledOptions(lessonId, qi, q) {
-  let h = 2166136261;
+  let h = 2166136261 ^ quizSeed();
   const key = lessonId + ':' + qi;
   for (let i = 0; i < key.length; i++) {
     h ^= key.charCodeAt(i);
@@ -2390,15 +2433,20 @@ function renderQuiz(main, l) {
     '<p style="color:var(--ink-2);margin:0 0 18px">Answer every question — explanations appear as you go. ' +
     '<b>' + Math.ceil(l.questions.length * 0.7) + ' of ' + l.questions.length + '</b> needed to pass.' +
     (P.quiz[l.id] ? ' Best so far: <b>' + P.quiz[l.id] + '%</b>.' : '') + '</p>' +
-    '<div id="quiz"></div><div id="quiz-out"></div>' + footNav(l, '') +
+    /* the result region is rendered empty and filled later, which is the one order a
+       live region actually announces in */
+    '<div id="quiz"></div><div id="quiz-out" role="status" aria-live="polite"></div>' + footNav(l, '') +
   '</div>';
   wireCrumb(main, l);
   wireFootNav(main, l);
   const box = $('#quiz', main);
   l.questions.forEach(function (q, qi) {
+    /* the options are a group labelled by the question, or a screen reader meets four
+       unrelated buttons with nothing saying which question they answer */
+    const qid = 'qt-' + l.id + '-' + qi;
     const card = el('<div class="quiz-q"><div class="qn">QUESTION ' + (qi + 1) + ' / ' + l.questions.length + '</div>' +
-      '<div class="qt">' + mdInline(q.q) + '</div>' +
-      '<div class="opts">' + shuffled[qi].opts.map(function (o, oi) {
+      '<div class="qt" id="' + qid + '">' + quizProse(q.q) + '</div>' +
+      '<div class="opts" role="group" aria-labelledby="' + qid + '">' + shuffled[qi].opts.map(function (o, oi) {
         return '<button class="opt" data-oi="' + oi + '"><span class="k">' + 'ABCD'[oi] + '</span><span>' + mdInline(o) + '</span></button>';
       }).join('') + '</div><div class="ex-slot"></div></div>');
     box.appendChild(card);
@@ -2407,6 +2455,11 @@ function renderQuiz(main, l) {
         if (answers[qi] !== null) return;
         const oi = +btn.dataset.oi;
         answers[qi] = oi;
+        /* whoever clicked is about to be disabled, and a disabled element cannot hold
+           focus — the browser drops it on <body>, so a keyboard learner who answers
+           question 1 restarts their next Tab at the top of the document. Take the
+           focus deliberately, onto the explanation they now need to read. */
+        const hadFocus = card.contains(document.activeElement);
         $all('.opt', card).forEach(function (b2) {
           b2.disabled = true;
           const i2 = +b2.dataset.oi;
@@ -2414,8 +2467,21 @@ function renderQuiz(main, l) {
           else if (i2 === oi) b2.classList.add('wrong');
         });
         const good = oi === shuffled[qi].a;
-        $('.ex-slot', card).innerHTML = '<div class="explain ' + (good ? 'good' : 'bad') + '">' +
-          (good ? '✓ Right. ' : '✗ Not quite — the answer is <b>' + 'ABCD'[shuffled[qi].a] + '</b>. ') + mdInline(q.why) + '</div>';
+        /* whys are authored against the ORIGINAL option order; `order` maps a shown
+           index back to the one the author numbered */
+        const picked = q.whys && q.whys[shuffled[qi].order[oi]];
+        /* announced by taking focus, not by aria-live: a live region has to exist
+           before its content changes, and this one is created with the text already
+           in it, so half of them would say nothing and the other half would say it
+           twice over the focus move */
+        $('.ex-slot', card).innerHTML = '<div class="explain ' + (good ? 'good' : 'bad') + '"' +
+          ' tabindex="-1">' +
+          '<div class="ex-head">' +
+          (good ? '✓ Right. ' : '✗ Not quite — the answer is <b>' + 'ABCD'[shuffled[qi].a] + '</b>.') +
+          '</div>' +
+          (picked ? '<div class="ex-picked">' + quizProse(picked) + '</div>' : '') +
+          quizProse(q.why) + '</div>';
+        if (hadFocus) $('.explain', card).focus();
         if (answers.every(function (a) { return a !== null; })) finish();
       });
     });

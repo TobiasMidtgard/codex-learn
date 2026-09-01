@@ -473,3 +473,311 @@ build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualise
 ```
 
 ---
+
+## Cycle 3 — TRACK 3: Question Bank & Quizzes
+
+**Target: CS201 (Data Structures & Algorithms) — its 26 quiz questions, 26 blanks and 2
+numeric units.** One course, chosen on measurement rather than taste. Before editing
+anything I scored every course in the catalogue against the strategy *"read nothing,
+pick the longest option"*, which survives the shuffle, survives every reviewer who
+reads the questions one at a time, and is invisible except in aggregate:
+
+| course | Q | longest option is the key | mean length margin |
+|---|---|---|---|
+| **CS201** | 26 | **92%** (24 of 26) | **+43.5 chars** |
+| CS301 | 25 | 88% | +37.1 |
+| CS310 | 25 | 84% | +26.4 |
+| … | | | |
+| EE101 | 61 | 31% | −1.3 |
+| **whole catalogue** | **1352** | **48%** | — |
+
+Guessing scores 25%. CS201 scored 92% — the worst in the repository, and enough to pass
+every quiz in the course without reading a single question.
+
+### Baseline, captured before any edit
+
+```
+80 circuit exercises / 340 checks · 527 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 217 figure-only
+1128 derivation steps across 45 courses
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+CS201: 7 labs · 26 quiz questions in 5 quiz units · 26 blanks · 2 numeric · 0 match
+build: 3 parts / 111 keys · 32/32 + 30/30 courses · 13 visualisers · 3 tune models ·
+       15 symbols · 62 payloads · inlined 13638 KB
+```
+
+### The attacks
+
+**2. Assessment Inquisitor** — taken first, because this is its track.
+
+- **The length tell, measured above.** The cause is uniform across the course: the key
+  is written as a complete, hedged, correct sentence and the distractors as short
+  dismissals. `M5/Q2` ran 178 characters against 83, 77 and 64; `M3/Q1` 169 against 65,
+  61 and 55; `M4/Q4` 161 against 91, 88 and 57. Nothing about any individual question
+  looks wrong. The bank as a whole is answerable without it.
+- **Distractors that state their own falsity.** "It is not strictly safe; it is an
+  approximation that is correct for almost all inputs." "They are the same cost; the
+  $O(n)$ claim is a loose bound that nobody has tightened." "$k$ is small in practice,
+  so the $k$ factor does not matter." Nobody picks a hedge. These are not misconceptions,
+  they are filler, and each one silently turned a four-way question into a three-way one.
+- **Two options denied the premise of their own stem.** `M3/Q1` asks *"In-order traversal
+  of a BST comes out sorted. Why?"* and offers "It does not — the traversal has to be
+  sorted afterwards". `M5/Q4` asks *"Why is heap sort not stable?"* and offers "It is
+  stable; only quicksort is not". An option that contradicts the question it is answering
+  is eliminated by grammar, not by understanding.
+- **The explanation was one block written for whoever got it right.** Every `why` did
+  walk all four options — which is the standard the brief asks for, and CS201 met it —
+  but a learner who picked the third option has to read a paragraph about the first and
+  find the clause that is about them. `blanks` has had per-option explanations (`whys`)
+  since it was written; `quiz` never had them. That asymmetry is the machinery fix below.
+- **Recall rather than understanding: one instance, `M5/Q1`** (the children of index $i$).
+  Left as a recall question deliberately — a course needs somewhere to check that a
+  definition landed — but it now carries four explanations that each say what the wrong
+  formula would *do*, e.g. that $2i, 2i+1$ makes index 0 its own left child.
+
+**3. Simulation Auditor.** No sandbox, tune or schematic in this course, so the persona
+was pointed at what it can still check: every number and code claim in the bank, against
+the labs that ship beside them.
+
+- Re-derived rather than skimmed, and all hold: the doubling series `$2^{\lceil\log_2
+  n\rceil} - 1$` — 16 appends copy 15, 17 copy 31, agreeing with the blanks unit's stated
+  write count of 31; the fixed-increment comparison, 5×10⁹ against 2.05×10⁶ slot writes at
+  $n = 10^6, c = 100$; the two-stack queue's 4000 operations; `½(1 + 1/(1−α)²) = 8.5`
+  probes at $α = 0.75$ against 2.5 for a hit; random-BST height $≈3\log_2 n$ with average
+  depth $1.39\log_2 n$; $2^{(3^2)} = 512$ against $(2^3)^2 = 64$.
+- Two claims were checked against the lab source rather than assumed. `M1/Q4` says "1000
+  `push_back` calls must cost 0 steps" — the lab asserts exactly `_l.steps == 0`.
+  `M3/Q2` says "delete 50 from the lab's tree and the successor 60 happens to be a leaf,
+  but insert 65 first and it is not" — the lab builds `50, 30, 70, 20, 40, 60, 80`, where
+  60 is a leaf, and 65 descends right-left-right onto 60. Both correct.
+- Every new number was computed before it was written: `$\binom{23}{2} = 253$`, the
+  birthday threshold at $k ≈ 1.18\sqrt{m}$ giving 23 in 365 slots and 118 in ten thousand,
+  and the shunting-yard counter-example `3 4 5 - -` evaluating to $3-(4-5) = 4$ rather
+  than $-6$.
+
+**4. UX & Accessibility Hardener.** Four defects in the quiz surface itself, which is the
+delivery mechanism for everything this track authors.
+
+- **Answering with the keyboard lost your place in the page.** `btn.disabled = true` is
+  applied to the button that was just clicked, and a disabled element cannot hold focus,
+  so the browser drops it on `<body>`. Answer question 1 with the keyboard and the next
+  Tab restarts at the top of the document.
+- **The explanation appeared in silence.** `.ex-slot` is filled with the entire
+  pedagogical payload of the unit — right or wrong, and why — with no announcement of any
+  kind. And `#quiz-out`, which carries the score, had none either.
+- **Four buttons with nothing to say which question they answer.** `.opts` was a bare
+  `div`; the question text was a `div` with no id. A screen reader met four unrelated
+  buttons.
+- **`.explain` had no `code` style at all**, so `` `self.tail.next` `` and
+  `` `& 0xFFFFFFFF` `` — which the explanations are full of — rendered at full size in
+  the browser's default monospace, mid-sentence.
+
+**1. Senior Educator.** The stems are concrete and the explanations already derive rather
+than assert, so this persona found less than the others. What it did find:
+
+- **Four concepts the module lists and nothing tests.** M1's "random access needs
+  contiguous slots; $O(1)$ splicing needs references" — the quiz never asked when a linked
+  list actually *wins*. M2's "RPN removes the need for precedence and parentheses". M3's
+  invariant-versus-local-check distinction. M4's "collisions are certain — the birthday
+  bound bites long before the table is full", which is the concept in the module most
+  likely to be disbelieved. One question added to each, taking every module to six.
+
+### The defect the new gate found, in a course this cycle was not looking at
+
+**Five EE131 question stems are fenced Python blocks, and the quiz renderer had no fence
+support.** `mdInline()` handles code spans, bold, italic, links and maths — and no block
+markup whatever. So `EE131/M2` asks
+
+> With `v = 5.5`, what does this print?
+> ```python
+> if v > 0:
+>     print("positive")
+> elif v > 5:
+>     print("big")
+> else:
+>     print("other")
+> ```
+
+and what reached the screen was a literal ``` followed by
+`if v > 0: print("positive") elif v > 5: print("big") else: print("other")` on one
+unindented line, because HTML collapses newlines. In a language whose meaning *is* its
+indentation, that is the question destroyed — five of them, across M2 and M3.
+
+`renderMd()` would have drawn the block. It would also have hung a **▶ Run** button off
+it, so a question asking what a snippet prints would have offered to print it. So the
+quiz got its own `quizProse()`: the two pieces of block markup a question actually uses —
+paragraphs and fenced code — highlighted, whitespace preserved, scrolling in its own box
+at 375px, with nothing to press. Options keep `mdInline`, because they live inside a
+`<button>` where a `<pre>` has no business.
+
+This repairs all five EE131 stems with no content edit at all, and it makes the paragraph
+breaks that CS201, CS320 and EE131 already authored into their explanations actually
+paragraph. Verified by rendering **all 2832 quiz texts in the catalogue** through
+`quizProse()` as shipped: 6 contain a fence and all 6 now draw, and the other 2826 come
+out byte-identical to what `mdInline()` produced, so nothing that was working changed.
+
+### Found in my own work, and fixed
+
+Three, all caught by mechanical sweeps rather than by re-reading.
+
+- **A correction that inverted itself.** `M1/Q3`'s new explanation for the "keeps `pop` at
+  $O(1)$ worst case" distractor said "`pop` is $O(1)$ amortised under either rule" —
+  directly contradicting the key of the same question, which is that the half-full trigger
+  destroys the amortised bound. The sentence I replaced had carried the hedge "when it is
+  not being adversarially poked" and I dropped it. This is the failure mode the curriculum
+  names: *a correction can invert what it was written to fix.* It now separates the two
+  bounds explicitly — worst case unchanged under both rules, amortised case rescued only
+  by the quarter.
+- **Four raw-string escapes shipped as literal backslashes.** `r"the string \"1\""` keeps
+  its backslashes in Python, so `M4/Q5` would have read `the string \"1\"` on screen.
+  Found by sweeping the whole catalogue for a backslash before a quote — 4 hits, all mine,
+  none pre-existing.
+- **A false positive in my own gate, which condemned correct content.** The duplicate-option
+  check normalised case, and `MA201/M4` offers `$f(x) = F'(x)$ and $F = \int f$` against
+  `$F(x) = f'(x)$ and $f = \int F$` — two opposite claims that differ in nothing but the
+  case of two letters. The gate reported that correct question as a duplicate on its first
+  run. Case folding removed from both the gate and the emitter check, with the reason
+  written next to it: a gate that condemns working content is worse than the defect it was
+  written to catch.
+
+### What changed
+
+**Machinery — `quiz` gains the per-option explanations `blanks` already had.**
+`emit.py` accepts an optional `whys` on a question: one entry per option, the key
+included, each rejected if empty or if it names an option by position. The renderer shows
+the entry for the option that was actually picked, above the shared account of the
+question. The key is emitted **only when authored**, so all 46 untouched courses still
+round-trip byte for byte and `emit.py --all` stays a drift detector — confirmed by the
+diff, in which `catalog/CS201.json` is the only catalogue file that moved.
+
+**Machinery — the shuffle was never per-learner, and its own comment said it was.** The
+comment reads "stable for a given learner (their best score keeps its meaning) but not the
+authoring order"; the hash key was `lessonId + ':' + qi` and nothing else, so the order was
+identical for every learner on earth and publishable as a list of letters that stays
+correct forever. `quizSeed()` mints one random value per install, folded into the hash: the
+order is still fixed for one person across retries, and no longer shared between two. It
+rides along with name and theme through `resetProgress`, so clearing progress does not
+silently reshuffle the catalogue. Measured over 20000 synthetic installs, the key now lands
+at 25.1% / 25.0% / 24.9% / 25.0% across the four slots — the position tell is gone rather
+than tuned.
+
+**Content — all 26 questions rewritten, 4 added.**
+
+| | before | after |
+|---|---|---|
+| questions | 26 | 30 |
+| "pick the longest option" | 24 / 26 — **92%** | 0 / 30 — **0%** |
+| mean length margin | +43.5 chars | −6.7 chars |
+| per-option explanations | 0 | **120** |
+| words of feedback | 3049 | 7079 |
+
+Every distractor is now a misconception with a name. The ones worth recording, because
+they took the most work to find: *"exactly $2n$ — each element written once and copied
+once"* (the nearly-right amortised argument, which misses that the first element is copied
+at every resize); *"doubling holds less memory, because it grows the store less often"*
+(exactly backwards, and the answer explains that doubling is the wasteful policy and the
+half-empty store is what buys the cheap append); *"`push_back` is $O(1)$ amortised — the
+walk happens, but rarely"* (amortised versus true constant, in a module that has just spent
+two units on amortisation); *"$1 + n/(2m)$ — a failed lookup stops half way down the
+chain"* (successful search mistaken for unsuccessful); *"an in-place sort cannot be
+stable"* (a false general rule, refuted by insertion sort); and *"the dropped index can
+still be a maximum, but only of windows already reported"* — half of the correct argument,
+attached to the wrong half of the reason.
+
+The four new questions: when a linked list actually beats an array (a cursor you already
+hold, not deletion in general); how RPN can mean anything without parentheses; a four-node
+tree that passes a parent-versus-child check and is not a BST, which is why the lab's
+checker carries `lo`/`hi` down the recursion; and the birthday bound, where 23 keys in 365
+slots is even odds and ten thousand slots reach it at 118.
+
+**Accessibility — `src/app.js`, `src/index.head.html`.** Focus moves deliberately onto the
+explanation when the clicked option is disabled, so a keyboard learner keeps their place
+and the next Tab is the next question. `#quiz-out` is rendered empty and given
+`role="status"`, which is the one order a live region actually announces in. `.opts`
+becomes a `role="group"` labelled by the question text. `.explain` gains a `code` style,
+taken from `--code-ink` rather than `--lime` — the light-theme trap cycle 2 documented, and
+the one `.quiz-q .qt code` beside it still falls into.
+
+**A new gate — `tools/verify_quiz.mjs`.** This track had no gate at all, because there is
+nothing in a quiz for a solver to disagree with. So it does not try to mark the questions;
+it measures whether they can be answered without reading them. Structural failures are
+hard and unbudgeted: two options that read the same, an empty option or explanation,
+`whys` that is not one entry per option, a positional reference anywhere in the feedback,
+and block markup the renderer cannot draw. The length tell is ratcheted against
+`tools/quiz_budget.json`, which records what each of the 47 courses scores today: the gate
+fails when a course gets **worse**, and also when it gets better without the entry being
+lowered, so the number cannot drift in either direction unnoticed. It re-reads `emit.py`'s
+positional-reference rule and `app.js`'s `quizProse` and refuses to run if either has
+changed shape, so it cannot end up enforcing a rule the source has abandoned.
+
+The gate was not trusted until it was seen to fail. Seven adversarial mutations of CS201
+were fed to it: a duplicated option, a positional reference planted in a `whys` entry, a
+`whys` list one entry short, the length tell restored by padding every key, an improvement
+left unrecorded, a course with no budget entry, and the unmodified file as a control. All
+seven produced the intended verdict.
+
+### Left alone, deliberately
+
+- **CS201's 26 blanks were audited and not changed.** They already carry per-option
+  explanations on all 26, the distractors are real (`self.capacity - 1` for the off-by-one,
+  `0.25` for writing the quarter directly instead of multiplying out, `<=`/`>`/`>=`/`<`
+  for the tie-break that implements stability), and the arithmetic in them agrees with the
+  quiz. Two soft spots recorded rather than fixed: `M1/B1`'s `self.writes` is not a
+  misconception anyone holds, and `M4/B2` is a two-option True/False and so a coin flip.
+  Neither is exploitable — a blanks unit is graded as six holes together — and inventing a
+  third option for a genuinely binary fact would be worse than the coin flip.
+- **Both numeric units were audited and not changed.** Both carry `wrong` and `hint`, both
+  answers were recomputed. Catalogue-wide, all 433 numeric units carry both, so the
+  "explain the wrong answer too" standard is already met by that kind everywhere; recording
+  it so the next cycle does not re-survey it.
+- **CS201 has no `match` unit and cannot have one.** `MATCH_SYMBOLS` in `emit.py` is 15
+  circuit symbols (`R`, `C`, `L`, `D`, `NPN`, `OPAMP`, …) and `norm_match` rejects anything
+  else, so `match` is an electronics-only kind by construction — which is why the whole
+  catalogue has 11 of them. Giving it a non-symbol mode is a machinery cycle of its own,
+  not a widening of this one.
+- **The other 24 courses over 50% on the length tell were not touched**, and this is the
+  main debt this cycle leaves. CS301 (88%), CS310 (84%), DSP520/DSP530/EMAG530/VLSI530
+  (80%), CS330 (77%), MA101 (75%). The catalogue as a whole sits at 48%, against 25% for
+  guessing. Fixing them means rewriting roughly 650 questions across 24 courses, which is
+  several cycles and certainly not one that also claims to have verified anything. The
+  budget file pins every one of those numbers so the debt cannot grow while it waits.
+- **387 blanks in 11 courses have no per-option explanations** — EE102 (102), EE121 (93),
+  EE101 (87), EE211 (40), MA111 (20), MA121 (17), EE241 (11), EE221/MA112/MA201 (5 each),
+  EE202 (2). The field has existed all along and the CS courses use it on 100% of theirs.
+  This is the same defect as the quiz one this cycle fixed, in the kind next door.
+- **`.quiz-q .qt code` still takes its colour from `--lime` rather than `--code-ink`**, so
+  an inline code span in a *question* keeps the light-theme problem that cycle 2 measured
+  on the canvas. It is legible, unlike the canvas case, and changing it is a Track 5
+  decision about the token ramp rather than something a Track 3 cycle should do on its own.
+- **`docs/programs` lost five payload files.** The rolling generation window, as cycles 1
+  and 2 both established. Verified rather than assumed: the current generation lists 62
+  entries covering 62 distinct courses, every one present on disk, and no file on disk sits
+  outside a retained generation.
+
+### Gates, after
+
+Every pre-existing number unmoved. The only new numbers are the new gate's.
+
+```
+verify_quiz          All good: 1356 questions in 250 quiz units · 120 per-option
+                     explanations · every course within its answer-tell budget   [NEW]
+verify_circuits      All good: 80 circuit exercises, 340 checks · 527 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 217 figure-only
+verify_derivations   All good: 1128 steps across 45 courses
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_labs          CS201 6 labs · EE131 10 labs, all good
+emit.py CS201        ok — 5 modules, 5 labs, capstone +tests
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads · inlined 13667 KB
+```
+
+Beyond the gates: 2832 quiz texts rendered through `quizProse()` with 0 fences leaking and
+0 drift from the previous renderer; the option-to-explanation mapping checked on all 30
+CS201 questions through the real `shuffledOptions`; the shuffle checked for stability under
+one seed, for reaching all four slots, and for 25% uniformity over 20000 installs; and the
+new gate checked against seven mutations it had to reject.
+
+---

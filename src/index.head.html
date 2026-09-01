@@ -1411,6 +1411,33 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .explain{margin-top:12px;padding:12px 14px;border-radius:var(--r-md);font-size:13px;line-height:1.6;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2)}
 .explain.good{border-color:var(--lime-30);background:var(--lime-08)}
 .explain.bad{border-color:var(--bad-28);background:var(--bad-08)}
+.explain p{margin:8px 0 0}
+.explain .ex-head + p,.explain .ex-picked + p{margin-top:10px}
+/* the sentence written for the option that was actually picked, above the account of
+   the question as a whole. Weighted so it reads first without shouting. */
+.explain .ex-picked{margin-top:10px;color:var(--ink);font-weight:500;
+  border-left:2px solid var(--line-3);padding-left:10px}
+.explain .ex-picked p{margin:0 0 6px}
+.explain .ex-picked p:last-child{margin-bottom:0}
+.explain.good .ex-picked{border-left-color:var(--lime-30)}
+.explain.bad .ex-picked{border-left-color:var(--bad-28)}
+/* A question stem may be a fenced block — EE131 M2 asks what five Python snippets
+   print. Whitespace is the meaning there, so it is preserved and the box scrolls
+   rather than letting the card do it. No Run button: see quizProse(). */
+.quiz-q .qt p{margin:0 0 10px}
+.quiz-q .qt p:last-child{margin:0}
+/* --editor is dark in both themes, so the ink comes from --on-editor-2 rather than
+   the page's, the same discipline palette() applies on a canvas */
+.qcode{margin:10px 0;padding:12px 14px;border-radius:var(--r-md);background:var(--editor);
+  border:1px solid var(--on-editor-line);overflow-x:auto;font-family:var(--mono);
+  font-size:12.5px;line-height:1.65;color:var(--on-editor-2);white-space:pre;font-weight:400}
+/* the same trap .article pre code already closes: the inline-code chip above would
+   otherwise paint every token in the listing lime on a lime ground, with padding */
+.qcode code{background:none;padding:0;color:inherit;font-size:inherit;border-radius:0}
+/* an explanation is full of `self.tail.next` and `& 0xFFFFFFFF`, and had no code
+   style at all — browser-default monospace at full size, mid-sentence */
+.explain code{font-family:var(--mono);font-size:.88em;color:var(--code-ink);
+  background:var(--lime-08);padding:1px 5px;border-radius:4px}
 .quiz-result{border:1px solid var(--lime-30);background:var(--lime-08);border-radius:var(--r-lg);padding:22px;margin:12px 0 0;animation:popIn .45s var(--pop) both}
 .quiz-result .score{font-size:32px;font-weight:600;letter-spacing:-.03em;line-height:1;color:var(--ink)}
 .quiz-result p{margin:8px 0 14px;color:var(--ink-3);font-size:13px}
