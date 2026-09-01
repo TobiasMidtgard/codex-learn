@@ -66,7 +66,12 @@ const DEGREE = (typeof DEGREE_DATA !== 'undefined' && DEGREE_DATA) ? DEGREE_DATA
    Guarded with typeof for the same reason DEGREE is: an undeclared identifier is a
    ReferenceError thrown before the first paint, and `node --check` in build.mjs is a
    syntax check that cannot see it. */
-const DEGREE_CHUNK_LIST = (typeof DEGREE_CHUNKS !== 'undefined' && DEGREE_CHUNKS) ? DEGREE_CHUNKS : [];
+/* `{ index, courses: { CS101: url, … } }` in the published build; null when every
+   course is inlined. The index is fetched at boot and holds every course as a
+   skeleton — titles, minutes, counts — and a course's content is fetched the first
+   time a lesson in it opens (hydrateCourse). */
+const CATALOG_URLS = (typeof DEGREE_CHUNKS !== 'undefined' && DEGREE_CHUNKS && DEGREE_CHUNKS.index) ? DEGREE_CHUNKS : null;
+function fetchesCatalog() { return !!CATALOG_URLS; }
 const MISSING_PROGRAMS = [];
 function programMissing(id) { return MISSING_PROGRAMS.indexOf(id) >= 0; }
 /* A course is placed by (program, band). `band` is the neutral name for what the CS
@@ -107,6 +112,82 @@ function capstoneMd(c) {
 
 /* A unit key holds either nothing, one authored object, or a list of them. */
 function asList(x) { return !x ? [] : (Array.isArray(x) ? x : [x]); }
+/* How many of something a unit holds. A hydrated lesson carries the array; a
+   skeleton carries only its length, under `n`, so the course page can print "9
+   automated checks" before the checks themselves have arrived. */
+function nOf(l, key) {
+  /* the counts win while they exist: a skeleton's mapped fields default to empty
+     arrays, and hydration deletes `n` the moment the real arrays are in place */
+  if (l && l.n && typeof l.n[key] === 'number') return l.n[key];
+  const v = l && l[key];
+  return (v && typeof v.length === 'number') ? v.length : 0;
+}
+
+/* One row per unit kind: where it sits in the sequence, the id suffix it carries,
+   and how an authored object becomes the fields a renderer reads.
+
+   This was nine near-identical blocks, one per kind, each handling exactly one
+   unit. That shape capped a module at nine units and had no reading kind at all,
+   so a subject went from a list of concept bullets straight to being examined on
+   it. Both are why a module could not be learned from.
+
+   Each key holds a LIST. The FIRST entry keeps the original unsuffixed id (`-QZ`,
+   and the bare `-M3` for a lab), so nothing anyone has already completed is
+   orphaned; later entries are numbered from 2.
+
+   The order is the order a learner meets them: explain it, see it, establish why,
+   recall the form, work it from easy to hard, apply it, check it stuck, then build
+   the thing. Shared by buildDegreeIndex, which creates the lessons, and
+   applyCourse, which fills them in when the course's content arrives. */
+const UNIT_SPEC = [
+  { key: 'read', sfx: 'RD', type: 'read', tag: 'r', min: 10,
+    map: function (u) { return { mdText: u.body }; } },
+  { key: 'sandbox', sfx: 'SB', type: 'sandbox', tag: 'a', min: 8,
+    map: function (u) { return { mdText: u.brief, sandbox: u.visualiser,
+      initial: u.initial || {}, notice: u.notice || [] }; } },
+  { key: 'derive', sfx: 'DV', type: 'derive', tag: 'b', min: 12,
+    map: function (u) { return { mdText: u.brief, vars: u.vars || [],
+      steps: u.steps || [], closing: u.closing }; } },
+  { key: 'blanks', sfx: 'FB', type: 'blanks', tag: 'f', min: 8,
+    map: function (u) { return { mdText: u.brief, caption: u.caption,
+      lang: u.lang || 'text', listing: u.listing, blanks: u.blanks || [] }; } },
+  { key: 'numeric', sfx: 'NV', type: 'numeric', tag: 'v', min: 7,
+    map: function (u) { return { mdText: u.brief, prompt: u.prompt, note: u.note,
+      diagram: u.diagram, figure: u.figure, given: u.given || [], answer: u.answer,
+      tol: u.tol, unit: u.unit, aside: u.aside, hint: u.hint, wrong: u.wrong,
+      why: u.why }; } },
+  { key: 'match', sfx: 'SY', type: 'match', tag: 's', min: 6,
+    map: function (u) { return { mdText: u.brief, prompt: u.prompt,
+      labels: u.labels || [], items: u.items || [] }; } },
+  { key: 'tune', sfx: 'TN', type: 'tune', tag: 't', min: 9,
+    map: function (u) { return { mdText: u.brief, prompt: u.prompt, note: u.note,
+      model: u.model, initial: u.initial || {}, constants: u.constants || {},
+      plotKey: u.plotKey, constraints: u.constraints || [] }; } },
+  { key: 'build', sfx: 'BD', type: 'build', tag: 'c', min: 20,
+    map: function (u) { return { mdText: u.brief,
+      start: u.start || { parts: [], wires: [] }, checks: u.checks || [],
+      hints: u.hints || [] }; } },
+  { key: 'quiz', sfx: 'QZ', type: 'quiz', tag: 'q', min: 6,
+    map: function (u) { return { questions: u.questions || [] }; } },
+];
+function unitLessonId(c, mnum, spec, ui) {
+  return c.id + '-' + mnum + '-' + spec.sfx + (ui ? (ui + 1) : '');
+}
+function labLessonId(c, mnum, li) {
+  /* the first lab keeps the bare `<COURSE>-M<n>` id it has always had */
+  return c.id + '-' + mnum + (li ? '-LB' + (li + 1) : '');
+}
+function labFields(lab) {
+  return {
+    lang: lab.runtime === 'web' ? 'web' : (lab.runtime === 'js' ? 'js' : 'python'),
+    mdText: lab.brief,
+    files: lab.files,
+    main: lab.main,
+    solution: lab.solution,
+    hints: lab.hints || [],
+    tests: lab.tests || [],
+  };
+}
 
 function buildDegreeIndex(courses) {
   for (const c of courses) {
@@ -121,58 +202,11 @@ function buildDegreeIndex(courses) {
       const mnum = 'M' + (mi + 1);
       const modRef = { title: m.title };
 
-      /* One row per unit kind: where it sits in the sequence, the id suffix it
-         carries, and how an authored object becomes the fields a renderer reads.
-
-         This was nine near-identical blocks, one per kind, each handling exactly one
-         unit. That shape capped a module at nine units and had no reading kind at
-         all, so a subject went from a list of concept bullets straight to being
-         examined on it. Both are why a module could not be learned from.
-
-         Each key now holds a LIST. The FIRST entry keeps the original unsuffixed id
-         (`-QZ`, and the bare `-M3` for a lab), so nothing anyone has already
-         completed is orphaned; later entries are numbered from 2.
-
-         The order is the order a learner meets them: explain it, see it, establish
-         why, recall the form, work it from easy to hard, apply it, check it stuck,
-         then build the thing. */
-      const UNIT_SPEC = [
-        { key: 'read', sfx: 'RD', type: 'read', tag: 'r', min: 10,
-          map: function (u) { return { mdText: u.body }; } },
-        { key: 'sandbox', sfx: 'SB', type: 'sandbox', tag: 'a', min: 8,
-          map: function (u) { return { mdText: u.brief, sandbox: u.visualiser,
-            initial: u.initial || {}, notice: u.notice || [] }; } },
-        { key: 'derive', sfx: 'DV', type: 'derive', tag: 'b', min: 12,
-          map: function (u) { return { mdText: u.brief, vars: u.vars || [],
-            steps: u.steps || [], closing: u.closing }; } },
-        { key: 'blanks', sfx: 'FB', type: 'blanks', tag: 'f', min: 8,
-          map: function (u) { return { mdText: u.brief, caption: u.caption,
-            lang: u.lang || 'text', listing: u.listing, blanks: u.blanks || [] }; } },
-        { key: 'numeric', sfx: 'NV', type: 'numeric', tag: 'v', min: 7,
-          map: function (u) { return { mdText: u.brief, prompt: u.prompt, note: u.note,
-            diagram: u.diagram, figure: u.figure, given: u.given || [], answer: u.answer,
-            tol: u.tol, unit: u.unit, aside: u.aside, hint: u.hint, wrong: u.wrong,
-            why: u.why }; } },
-        { key: 'match', sfx: 'SY', type: 'match', tag: 's', min: 6,
-          map: function (u) { return { mdText: u.brief, prompt: u.prompt,
-            labels: u.labels || [], items: u.items || [] }; } },
-        { key: 'tune', sfx: 'TN', type: 'tune', tag: 't', min: 9,
-          map: function (u) { return { mdText: u.brief, prompt: u.prompt, note: u.note,
-            model: u.model, initial: u.initial || {}, constants: u.constants || {},
-            plotKey: u.plotKey, constraints: u.constraints || [] }; } },
-        { key: 'build', sfx: 'BD', type: 'build', tag: 'c', min: 20,
-          map: function (u) { return { mdText: u.brief,
-            start: u.start || { parts: [], wires: [] }, checks: u.checks || [],
-            hints: u.hints || [] }; } },
-        { key: 'quiz', sfx: 'QZ', type: 'quiz', tag: 'q', min: 6,
-          map: function (u) { return { questions: u.questions || [] }; } },
-      ];
-
       UNIT_SPEC.forEach(function (spec) {
         asList(m[spec.key]).forEach(function (u, ui) {
           if (!u) return;
           const lesson = Object.assign({
-            id: c.id + '-' + mnum + '-' + spec.sfx + (ui ? (ui + 1) : ''),
+            id: unitLessonId(c, mnum, spec, ui),
             type: spec.type,
             title: u.title,
             min: u.minutes || spec.min,
@@ -180,6 +214,8 @@ function buildDegreeIndex(courses) {
             courseId: c.id,
             num: mnum + '\u00b7' + spec.tag + (ui ? (ui + 1) : ''),
           }, spec.map(u));
+          /* a skeleton unit carries its counts in place of its content */
+          if (u.n) lesson.n = u.n;
           /* the first of a kind keeps the name the rest of the app already uses */
           if (!ui) m[spec.key + 'LessonId'] = lesson.id;
           LESSON_INDEX[lesson.id] = { lesson: lesson, track: c, module: modRef, mi: mi };
@@ -189,47 +225,34 @@ function buildDegreeIndex(courses) {
 
       asList(m.lab).forEach(function (lab, li) {
         if (!lab) return;
-        const lesson = {
-          /* the first lab keeps the bare `<COURSE>-M<n>` id it has always had */
-          id: c.id + '-' + mnum + (li ? '-LB' + (li + 1) : ''),
+        const lesson = Object.assign({
+          id: labLessonId(c, mnum, li),
           type: 'code',
           title: lab.title,
           min: lab.minutes || 30,
-          lang: lab.runtime === 'web' ? 'web' : (lab.runtime === 'js' ? 'js' : 'python'),
-          mdText: lab.brief,
-          files: lab.files,
-          main: lab.main,
-          solution: lab.solution,
-          hints: lab.hints || [],
-          tests: lab.tests || [],
           trackId: c.id,
           courseId: c.id,
           num: mnum + (li ? '\u00b7L' + (li + 1) : ''),
-        };
+        }, labFields(lab));
+        if (lab.n) lesson.n = lab.n;
         if (!li) m.lessonId = lesson.id;
         LESSON_INDEX[lesson.id] = { lesson: lesson, track: c, module: modRef, mi: mi };
         flat.push(lesson);
       });
     });
 
-    if (c.capstone && c.capstone.tests && c.capstone.tests.length) {
+    if (c.capstone && ((c.capstone.tests && c.capstone.tests.length) || (c.capstone.n && c.capstone.n.tests))) {
       const cap = c.capstone;
-      const lesson = {
+      const lesson = Object.assign({
         id: c.id + '-CAP',
         type: 'project',
         title: cap.title,
         min: cap.minutes || 240,
-        lang: cap.runtime === 'web' ? 'web' : (cap.runtime === 'js' ? 'js' : 'python'),
-        mdText: capstoneMd(c),
-        files: cap.files,
-        main: cap.main,
-        solution: cap.solution,
-        hints: cap.hints || [],
-        tests: cap.tests,
         trackId: c.id,
         courseId: c.id,
         num: 'CAP',
-      };
+      }, labFields(cap), { mdText: c.skeleton ? '' : capstoneMd(c), tests: cap.tests });
+      if (cap.n) lesson.n = cap.n;
       c.capstoneLessonId = lesson.id;
       LESSON_INDEX[lesson.id] = { lesson: lesson, track: c, module: { title: 'Capstone' }, mi: c.modules.length };
       flat.push(lesson);
@@ -264,8 +287,10 @@ async function fetchChunk(url, ms) {
        part way through leaves half a programme indexed, and there is no clean way
        back from that — so nothing malformed is allowed to get that far. A captive
        portal returning a JSON error body, or a half-written file, both land here. */
-    if (!Array.isArray(data)) throw new Error('payload is not a list of courses');
-    for (const c of data) {
+    /* a course payload is a list of courses; the index is `{ courses: [...] }` */
+    const list = Array.isArray(data) ? data : (data && Array.isArray(data.courses) ? data.courses : null);
+    if (!list) throw new Error('payload is not a list of courses');
+    for (const c of list) {
       if (!c || typeof c !== 'object' || typeof c.id !== 'string' || !Array.isArray(c.modules)) {
         throw new Error('payload contains a malformed course');
       }
@@ -274,20 +299,10 @@ async function fetchChunk(url, ms) {
   } finally { clearTimeout(timer); }
 }
 
-function chunkLoaded(ch) {
-  /* The foundation tracks are inlined and already sit in cs-degree band 0, so a bare
-     "does this programme have any courses" test would report it loaded and skip its
-     fetch entirely. Only a fetched course counts as the payload arriving.
-
-     Matched on band as well as programme now that a payload is one year: without the
-     band test the first year to arrive would mark every other year of that degree as
-     already here, and the rest would never be fetched. */
-  /* Matched on the course now that a payload is one course. Matching on programme,
-     or on programme and band, would let the first arrival mark its neighbours as
-     already here and they would never be fetched. */
-  return DEGREE.courses.some(function (c) {
-    return c.id === ch.course && c.kind !== 'track';
-  });
+/* Only a fetched course counts as the catalog having arrived: the foundation tracks
+   are inlined and already sit in cs-degree band 0. */
+function catalogLoaded() {
+  return DEGREE.courses.some(function (c) { return c.kind !== 'track'; });
 }
 function markMissing(id) { if (!programMissing(id)) MISSING_PROGRAMS.push(id); }
 function markArrived(id) {
@@ -300,43 +315,117 @@ function markArrived(id) {
    permanently, because the retry has exactly the same budget and loses the same race. */
 const CHUNK_TIMEOUT_MS = 30000;
 
+/* The retry is sequential inside one promise, so a payload can never land twice. */
+async function fetchTwice(url) {
+  let err = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { return await fetchChunk(url, CHUNK_TIMEOUT_MS); } catch (e) { err = e; }
+  }
+  throw err || new Error('the payload did not arrive');
+}
+
+/* The catalog index: every course as a skeleton, in one fetch. It used to be every
+   course in full, 62 fetches and 13 MB, and nothing painted until all of it had
+   arrived and parsed. */
 async function loadDegreeChunks() {
-  /* Only ever fetch what is not already here. Re-fetching a programme that loaded
-     fine means a retry for a DIFFERENT programme can un-load it: the second fetch
-     fails, the id goes back on the missing list, and a working degree screen is
-     replaced by an error page for courses that are sitting in the rail. */
-  const todo = DEGREE_CHUNK_LIST.filter(function (ch) { return !chunkLoaded(ch); });
-  if (!todo.length) return;
-  const got = await Promise.all(todo.map(async function (ch) {
-    /* the retry is sequential inside one promise, so a payload can never land twice */
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try { return await fetchChunk(ch.url, CHUNK_TIMEOUT_MS); } catch (e) { if (attempt) return null; }
-    }
-    return null;
-  }));
-  /* Apply in declaration order rather than arrival order, so two machines on the same
-     build index identically. MISSING_PROGRAMS is never cleared wholesale: it is the
-     flag recomputeXp reads to decide whether it may write a lower XP figure, and a
-     window where it is empty while the courses are still absent is a window where a
-     deflated total gets persisted and synced. */
-  todo.forEach(function (ch, i) {
-    const courses = got[i];
-    if (!courses) { markMissing(ch.id); return; }
-    try {
-      const fresh = courses.filter(function (c) { return !COURSE_OF[c.id]; });
-      if (!fresh.length) throw new Error('payload added no courses');
-      /* Index BEFORE exposing. Every renderer enumerates DEGREE.courses, and it is
-         buildDegreeIndex that stamps c.kind, the synthesised lesson ids and
-         TRACK_LESSONS — a course visible for even one frame before that is a page
-         that breaks without throwing anything to catch. */
-      buildDegreeIndex(fresh);
-      for (const c of fresh) DEGREE.courses.push(c);
-    } catch (e) {
-      markMissing(ch.id);
-      return;
-    }
-    markArrived(ch.id);
+  if (!CATALOG_URLS || catalogLoaded()) return;
+  let data = null;
+  try {
+    data = await fetchTwice(CATALOG_URLS.index);
+  } catch (e) { data = null; }
+  /* MISSING_PROGRAMS is never cleared wholesale: it is the flag recomputeXp reads to
+     decide whether it may write a lower XP figure, and a window where it is empty
+     while the courses are still absent is a window where a deflated total gets
+     persisted and synced. */
+  const courses = data && Array.isArray(data.courses) ? data.courses : null;
+  if (!courses) { PROGRAMS.forEach(function (pr) { markMissing(pr.id); }); return; }
+  try {
+    const fresh = courses.filter(function (c) { return !COURSE_OF[c.id]; });
+    if (!fresh.length) throw new Error('the index added no courses');
+    /* Index BEFORE exposing. Every renderer enumerates DEGREE.courses, and it is
+       buildDegreeIndex that stamps c.kind, the synthesised lesson ids and
+       TRACK_LESSONS — a course visible for even one frame before that is a page
+       that breaks without throwing anything to catch. */
+    buildDegreeIndex(fresh);
+    for (const c of fresh) DEGREE.courses.push(c);
+  } catch (e) {
+    PROGRAMS.forEach(function (pr) { markMissing(pr.id); });
+    return;
+  }
+  PROGRAMS.forEach(function (pr) { markArrived(pr.id); });
+}
+
+/* ---------- a course's content, when a lesson in it opens ----------
+   The index gave every lesson its id, title and counts; the payload fills the SAME
+   lesson objects in, so nothing that already holds a reference — the rail, the
+   runner, a route — has to be told. One promise per course, dropped on failure so
+   the next attempt is a real retry. */
+const HYDRATING = {};
+function hydrateCourse(id) {
+  const c = COURSE_OF[id];
+  if (!c) return Promise.reject(new Error('unknown course ' + id));
+  if (!c.skeleton) return Promise.resolve(c);
+  if (HYDRATING[id]) return HYDRATING[id];
+  const url = CATALOG_URLS && CATALOG_URLS.courses && CATALOG_URLS.courses[id];
+  if (!url) return Promise.reject(new Error('this build has no payload for ' + id));
+  const p = fetchTwice(url).then(function (data) {
+    const full = data.find(function (x) { return x && x.id === id; });
+    if (!full) throw new Error('the payload does not hold ' + id);
+    applyCourse(c, full);
+    return c;
   });
+  HYDRATING[id] = p;
+  p.catch(function () { delete HYDRATING[id]; });
+  return p;
+}
+function applyCourse(c, full) {
+  (full.modules || []).forEach(function (fm, mi) {
+    const m = c.modules[mi];
+    if (!m) return;
+    const mnum = 'M' + (mi + 1);
+    m.concepts = fm.concepts || [];
+    UNIT_SPEC.forEach(function (spec) {
+      m[spec.key] = fm[spec.key];
+      asList(fm[spec.key]).forEach(function (u, ui) {
+        if (!u) return;
+        const info = LESSON_INDEX[unitLessonId(c, mnum, spec, ui)];
+        if (info) { Object.assign(info.lesson, spec.map(u)); delete info.lesson.n; }
+      });
+    });
+    m.lab = fm.lab;
+    asList(fm.lab).forEach(function (lab, li) {
+      if (!lab) return;
+      const info = LESSON_INDEX[labLessonId(c, mnum, li)];
+      if (info) { Object.assign(info.lesson, labFields(lab)); delete info.lesson.n; }
+    });
+  });
+  c.capstone = full.capstone;
+  const cap = LESSON_INDEX[c.id + '-CAP'];
+  if (cap && full.capstone) {
+    Object.assign(cap.lesson, labFields(full.capstone), { mdText: capstoneMd(c), tests: full.capstone.tests });
+    delete cap.lesson.n;
+  }
+  delete c.skeleton;
+}
+/* What the learner sees while a course's payload is on its way, or when it did not
+   come. Both name the course, because a spinner that says nothing reads as a hang. */
+function paintWaiting(c, r, err) {
+  const main = $('#main');
+  paintRunner(null);
+  $('#screen-title').textContent = c.title;
+  $('#screen-crumb').textContent = c.id;
+  if (!main) return;
+  main.innerHTML = '<div class="boot-wait" role="status">' +
+    (err
+      ? '<div><b>' + esc(c.id) + '</b> could not be loaded — ' + esc(String((err && err.message) || err)) +
+        '.</div><div class="bw-acts"><button class="btn primary sm" id="bw-retry">Try again</button>' +
+        '<button class="btn dark sm" id="bw-back">Back to the course</button></div>'
+      : '<div>Loading <b>' + esc(c.id) + ' · ' + esc(c.title) + '</b>…</div><div class="bw-bar"><i></i></div>') +
+    '</div>';
+  const retry = $('#bw-retry', main);
+  if (retry) retry.addEventListener('click', function () { go(r); });
+  const back = $('#bw-back', main);
+  if (back) back.addEventListener('click', function () { go({ view: 'course', id: c.id }); });
 }
 
 function coursesInBand(programId, n) {
@@ -459,7 +548,7 @@ function checksPassed() {
   let n = 0;
   for (const id in P.completed) {
     const info = LESSON_INDEX[id];
-    if (info && info.lesson.tests) n += info.lesson.tests.length;
+    if (info) n += nOf(info.lesson, 'tests');
   }
   return n;
 }
@@ -1073,10 +1162,25 @@ function rememberScroll() {
   if (host && route) SCROLL_MEM[routeKey(route)] = host.scrollTop;
 }
 
+/* Counts every navigation, so a payload that arrives after the reader has moved on
+   does not paint a lesson over whatever they are looking at now. */
+let goSeq = 0;
 function go(r) {
+  goSeq++;
   if (teardown) { try { teardown(); } catch (e) {} teardown = null; }
   rememberScroll();
   route = r;
+  /* A lesson's content lives in its course's payload, fetched the first time a lesson
+     in that course opens. Paint a waiting panel and re-enter once it is here. */
+  const needInfo = r.view === 'lesson' ? LESSON_INDEX[r.id] : null;
+  if (needInfo && needInfo.track.skeleton) {
+    const seq = goSeq, course = needInfo.track;
+    paintWaiting(course, r);
+    hydrateCourse(course.id).then(
+      function () { if (seq === goSeq) go(r); },
+      function (e) { if (seq === goSeq) paintWaiting(course, r, e); });
+    return;
+  }
   if (r.top) delete SCROLL_MEM[routeKey(r)];   /* re-entry that must start at the top */
   if (r.view === 'lesson') {
     const info = LESSON_INDEX[r.id];
@@ -2257,7 +2361,7 @@ function renderDegree(main, programId) {
     /* Two different failures used to share one message. They need different answers:
        one is a build that shipped without a catalog, the other is a catalog that did
        not arrive over the network. */
-    main.innerHTML = DEGREE_CHUNK_LIST.length
+    main.innerHTML = fetchesCatalog()
       ? '<div class="page"><h1>The catalog did not load</h1><p>This build fetches the ' +
         'course catalog, and none of it arrived. Check the connection and try again \u2014 ' +
         'the foundation tracks in the panel on the left do not need it.</p></div>'
@@ -2543,14 +2647,14 @@ function renderCourse(main, c) {
 
   function unitMeta(l) {
     const bits = [];
-    if (l.tests && l.tests.length) bits.push(l.tests.length + ' automated checks');
-    if (l.checks && l.checks.length) bits.push(l.checks.length + ' measured checks');
-    if (l.questions && l.questions.length) bits.push(l.questions.length + ' questions');
-    if (l.items && l.items.length) bits.push(l.items.length + ' symbols');
-    if (l.blanks && l.blanks.length) bits.push(l.blanks.length + ' blanks');
-    if (l.steps && l.steps.length) bits.push(l.steps.length + ' steps');
-    if (l.constraints && l.constraints.length) bits.push(l.constraints.length + ' constraints');
-    if (l.given && l.given.length) bits.push('one number to find');
+    if (nOf(l, 'tests')) bits.push(nOf(l, 'tests') + ' automated checks');
+    if (nOf(l, 'checks')) bits.push(nOf(l, 'checks') + ' measured checks');
+    if (nOf(l, 'questions')) bits.push(nOf(l, 'questions') + ' questions');
+    if (nOf(l, 'items')) bits.push(nOf(l, 'items') + ' symbols');
+    if (nOf(l, 'blanks')) bits.push(nOf(l, 'blanks') + ' blanks');
+    if (nOf(l, 'steps')) bits.push(nOf(l, 'steps') + ' steps');
+    if (nOf(l, 'constraints')) bits.push(nOf(l, 'constraints') + ' constraints');
+    if (nOf(l, 'given')) bits.push('one number to find');
     return bits.length ? ' \u00b7 ' + bits.join(' \u00b7 ') : '';
   }
 
@@ -2570,8 +2674,10 @@ function renderCourse(main, c) {
         '<span class="caret">\u25b6</span>' +
       '</button>' +
       '<div class="mod-body" hidden>' +
-        '<h4>Key concepts</h4>' +
-        '<ul>' + m.concepts.map(function (x) { return '<li>' + mdInline(x) + '</li>'; }).join('') + '</ul>' +
+        (m.concepts
+          ? '<h4>Key concepts</h4>' +
+            '<ul>' + m.concepts.map(function (x) { return '<li>' + mdInline(x) + '</li>'; }).join('') + '</ul>'
+          : '<p class="mod-wait">Loading the module’s notes…</p>') +
         '<h4>Units</h4>' +
         '<div class="unit-list">' + us.map(function (l) {
           const ud = !!P.completed[l.id];
@@ -2700,6 +2806,24 @@ function renderCourse(main, c) {
       const mod = $all('.mod', main)[idx];
       if (mod) { mod.classList.add('open'); $('.mod-body', mod).hidden = false; }
     }
+  }
+  /* The course page is where a learner decides to open a lesson, so its payload is
+     fetched from here, ahead of the click. The concept lists and the capstone brief
+     travel with it, so the page repaints when it lands — keeping whichever modules
+     were open and where the reader had scrolled to. */
+  if (c.skeleton) {
+    hydrateCourse(c.id).then(function () {
+      if (route.view !== 'course' || route.id !== c.id) return;
+      const open = $all('.mod.open', main).map(function (m) { return m.dataset.mod; });
+      const host = scrollHost();
+      const top = host ? host.scrollTop : 0;
+      renderCourse(main, c);
+      open.forEach(function (i) {
+        const mod = $('.mod[data-mod="' + i + '"]', main);
+        if (mod) { mod.classList.add('open'); $('.mod-body', mod).hidden = false; }
+      });
+      if (host) host.scrollTop = top;
+    }, function () { /* the lesson itself will say so, with a retry */ });
   }
 }
 
@@ -4607,8 +4731,9 @@ function runSnippet(s, box, btn) {
   if (st !== 'ready' && st !== 'running') {
     cbLine(out, 'sys', 'Starting the Python runtime — the first run downloads it (~10 MB).');
   }
+  const tr = pyTranscript(s.code);
   PyRunner.run({
-    files: [{ name: 'main.py', content: s.code }], main: 'main.py', tests: [],
+    files: [{ name: 'main.py', content: tr.code }], main: 'main.py', tests: [], echo: tr.echo,
     onConsole: function (level, text) { cbLine(out, level, text); },
   }).then(function (r) {
     if (!con.querySelector('.ln:not(.sys)')) cbLine(out, 'sys', 'ran — this example prints nothing');
@@ -4623,7 +4748,8 @@ function openInPlayground(code, lang) {
   const st = playState();
   const mode = lang === 'python' ? 'python' : (lang === 'html' ? 'web' : 'js');
   st.mode = mode;
-  if (mode === 'python') st.files.python['main.py'] = code + '\n';
+  /* a transcript's prompts and answers are not code; the editor gets the statements */
+  if (mode === 'python') st.files.python['main.py'] = pyTranscript(code).code + '\n';
   else if (mode === 'js') st.files.js['script.js'] = code + '\n';
   else {
     let doc = code;
@@ -4916,7 +5042,7 @@ async function boot() {
      None of those throw when the catalog is absent. They just quietly say something
      untrue, which is the worst of the available failures. */
   renderDegradeBanner();
-  if (DEGREE_CHUNK_LIST.length && !DEGREE.courses.length) {
+  if (fetchesCatalog() && !catalogLoaded()) {
     /* Something on screen while the payloads are in flight. renderShell has already
        painted the chrome and the foundation rail; this fills the one panel that has
        nothing to show yet. */

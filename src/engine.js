@@ -377,6 +377,28 @@ function mdCodeBlock(code, lang) {
     '<pre class="md-code"><code>' + Highlight.render(code, norm) + '</code></pre>' +
   '</div>';
 }
+/* A reading's example is sometimes a REPL transcript — `>>> 0.1 + 0.2` with the
+   answer on the next line — because that is how the point is made. Run raw, the
+   prompt is a syntax error and the answer line is another one, so the Run button
+   under the very example that explains floating point printed a traceback. Strip
+   the prompts, drop the answers, and ask the runner to echo bare expressions the
+   way the shell would, so the learner sees the same answer the prose shows.
+   tools/verify_reads.py applies the same rule, byte for byte. */
+function pyTranscript(code) {
+  const lines = String(code).split('\n');
+  if (!lines.some(function (l) { const s = l.replace(/^\s+/, ''); return s.indexOf('>>> ') === 0 || s === '>>>'; })) {
+    return { code: code, echo: false };
+  }
+  const out = [];
+  for (const l of lines) {
+    const s = l.replace(/^\s+/, '');
+    if (s.indexOf('>>> ') === 0) out.push(s.slice(4));
+    else if (s === '>>>') out.push('');
+    else if (s.indexOf('... ') === 0) out.push(s.slice(4));
+    else if (s === '...') out.push('');
+  }
+  return { code: out.join('\n'), echo: true };
+}
 function renderMd(src) { return restoreMath(renderMdInner(protectMath(src))); }
 function renderMdInner(src) {
   const lines = String(src).replace(/\r/g, '').split('\n');
@@ -1390,8 +1412,19 @@ const PyRunner = (function () {
       const ns = p.globals.get('dict')();
       ns.set('__name__', '__main__');
       let ok = true;
+      /* `echo` runs the file the way the interactive shell would: each top-level
+         statement is compiled in 'single' mode, so a bare expression prints its
+         value. That is what a transcript promised the reader (see pyTranscript). */
+      const src = opts.echo
+        ? 'import ast as _ast\n' +
+          '_src = ' + JSON.stringify(mainFile.content) + '\n' +
+          '_lines = _src.split("\\n")\n' +
+          'for _node in _ast.parse(_src).body:\n' +
+          '    _first = min([_node.lineno] + [_d.lineno for _d in getattr(_node, "decorator_list", [])])\n' +
+          '    exec(compile("\\n".join(_lines[_first - 1:_node.end_lineno]) + "\\n", "<exec>", "single"))\n'
+        : mainFile.content;
       try {
-        await p.runPythonAsync(mainFile.content, { globals: ns });
+        await p.runPythonAsync(src, { globals: ns });
       } catch (e) {
         ok = false;
         opts.onConsole('error', formatPyError(e, opts.main));

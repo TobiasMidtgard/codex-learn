@@ -2,7 +2,7 @@
   "program": {
     "id": "cs-degree",
     "name": "Computer Science — 5 Year Program",
-    "subtitle": "Integrated BSc + MSc track: a foundation year, then 32 courses, every module ending in code that runs.",
+    "subtitle": "Integrated BSc + MSc track: a foundation year, then 36 courses, every module ending in code that runs.",
     "years": [
       {
         "n": 0,
@@ -264,6 +264,24 @@
       "icon": "⚒"
     },
     {
+      "id": "MA211",
+      "year": 2,
+      "title": "Numerical Methods & Scientific Computing",
+      "level": "Intermediate",
+      "prereqs": [
+        "MA112",
+        "MA121",
+        "CS101"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "≈"
+    },
+    {
       "id": "CS301",
       "year": 3,
       "title": "Design & Analysis of Algorithms",
@@ -368,6 +386,24 @@
       "credits": 15,
       "hours": 160,
       "icon": "⬚"
+    },
+    {
+      "id": "MA301",
+      "year": 3,
+      "title": "Optimisation",
+      "level": "Advanced",
+      "prereqs": [
+        "MA121",
+        "MA112",
+        "CS201"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 130,
+      "icon": "∇"
     },
     {
       "id": "CS401",
@@ -494,6 +530,23 @@
       "icon": "⌸"
     },
     {
+      "id": "CS411",
+      "year": 4,
+      "title": "Information Theory & Coding",
+      "level": "Advanced",
+      "prereqs": [
+        "MA201",
+        "CS301"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 140,
+      "icon": "⊕"
+    },
+    {
       "id": "DL501",
       "year": 5,
       "title": "Deep Learning & Generative AI",
@@ -601,6 +654,24 @@
       "credits": 30,
       "hours": 300,
       "icon": "★"
+    },
+    {
+      "id": "CS451",
+      "year": 5,
+      "title": "Research Methods & Experimental Computer Science",
+      "level": "Advanced",
+      "prereqs": [
+        "MA201",
+        "SE201",
+        "CS301"
+      ],
+      "stack": [
+        "Python"
+      ],
+      "runtime": "python",
+      "credits": 10,
+      "hours": 120,
+      "icon": "⌕"
     }
   ]
 }

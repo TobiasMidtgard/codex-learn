@@ -38,6 +38,7 @@ const asList = (x) => (!x ? [] : (Array.isArray(x) ? x : [x]));
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { skeletonOf } from './tools/skeleton.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, 'src');
@@ -48,6 +49,10 @@ const OUT_DIR = join(ROOT, 'build');
 const DOCS_DIR = join(ROOT, 'docs');
 
 const checkOnly = process.argv.includes('--check');
+/* --preview writes build/ only and lets an un-emitted author file through with a
+   note instead of a refusal: it is for looking at the app while a course is being
+   written, and it never touches docs/, which is what gets published. */
+const previewOnly = process.argv.includes('--preview');
 const problems = [];
 const notes = [];
 
@@ -113,7 +118,7 @@ for (const f of readdirSync(join(CATALOG, 'authors'))) {
   }
 }
 if (staleAuthored.length) {
-  problems.push(`${staleAuthored.length} course(s) edited at source but not re-emitted, so the ` +
+  (previewOnly ? notes : problems).push(`${staleAuthored.length} course(s) edited at source but not re-emitted, so the ` +
     `build would ship the older text: ${staleAuthored.join(', ')}. Run ` +
     `\`python -X utf8 tools/emit.py --all\`.`);
 }
@@ -447,7 +452,7 @@ function assemble(label, degreeLiteral, chunkLiteral) {
 /* Shape one: everything inlined, and therefore no chunk list at all — a build that
    lists nothing is a build that fetches nothing, which is what keeps file:// working
    rather than a promise made in a comment. */
-const inlineHtml = assemble('inlined', inlineLiteral(degree), '[]');
+const inlineHtml = assemble('inlined', inlineLiteral(degree), 'null');
 
 /* Shape two: the shell, plus one payload per programme.
 
@@ -486,6 +491,17 @@ for (const prog of programs) {
                   name: name, json: json, url: `programs/${name}`, courses: 1 });
   }
 }
+/* And the payload the shell fetches FIRST: every course as a skeleton — titles,
+   minutes and counts, no content (tools/skeleton.mjs). The shell indexes the whole
+   catalog from this one file and fetches a course's own payload the first time a
+   lesson in it opens. Before this the shell fetched all 62 payloads, 13 MB, before
+   the study plan could paint. */
+const courseChunks = chunks.slice();
+const indexJson = JSON.stringify({ courses: allCourses.map(skeletonOf) });
+const indexName = `catalog.${createHash('sha256').update(indexJson).digest('hex').slice(0, 8)}.json`;
+const indexChunk = { id: 'catalog', band: -1, course: '_index', name: indexName, json: indexJson,
+                     url: `programs/${indexName}`, courses: allCourses.length };
+chunks.push(indexChunk);
 
 /* Pages publishes this repo as a PROJECT page, at /codex-learn/ — there is no CNAME.
    A leading slash would resolve to the user root and 404 in production while passing
@@ -499,12 +515,15 @@ for (const ch of chunks) {
 
 const shellHtml = assemble('split shell',
   inlineLiteral({ programs, courses: [] }),
-  JSON.stringify(chunks.map((c) => ({ id: c.id, band: c.band, course: c.course, url: c.url }))));
+  JSON.stringify({
+    index: indexChunk.url,
+    courses: Object.fromEntries(courseChunks.map((c) => [c.course, c.url])),
+  }));
 
 /* The inlined shape must list nothing. Asserted rather than assumed: both shapes come
-   out of one run, and it is the empty list that keeps the double-clickable file from
+   out of one run, and it is the null that keeps the double-clickable file from
    attempting a fetch it cannot make. */
-if (/const DEGREE_CHUNKS = \[\s*\{/.test(inlineHtml)) {
+if (!/const DEGREE_CHUNKS = null;/.test(inlineHtml)) {
   problems.push('the inlined build lists chunks — it must fetch nothing');
 }
 
@@ -518,12 +537,14 @@ const inlineKb = kbOf(inlineHtml);
 const shellKb = kbOf(shellHtml);
 const chunkKb = chunks.map((c) => kbOf(c.json));
 const chunksTotalKb = chunkKb.reduce((a, b) => a + b, 0);
+const indexKb = kbOf(indexJson);
 
 notes.push(`inlined artifact: ${Math.round(inlineKb)} KB`);
-notes.push(`split shell: ${Math.round(shellKb)} KB, plus ${chunks.length} payload(s) ` +
-  `totalling ${Math.round(chunksTotalKb)} KB`);
-const bigThree = chunks.map((c, i) => [c.name, chunkKb[i]]).sort((a, b) => b[1] - a[1]).slice(0, 3);
-notes.push(`${chunks.length} payloads, largest: ` +
+notes.push(`split shell: ${Math.round(shellKb)} KB, plus a ${Math.round(indexKb)} KB catalog index ` +
+  `fetched at boot, plus ${courseChunks.length} course payload(s) totalling ` +
+  `${Math.round(chunksTotalKb - indexKb)} KB fetched one course at a time`);
+const bigThree = courseChunks.map((c, i) => [c.name, chunkKb[i]]).sort((a, b) => b[1] - a[1]).slice(0, 3);
+notes.push(`${courseChunks.length} course payloads, largest: ` +
   bigThree.map(([n, k]) => `${n.replace(/\.[0-9a-f]{8}\.json$/, '')} ${Math.round(k)} KB`).join(', '));
 
 console.log('--- build report ---');
@@ -658,8 +679,8 @@ function writeShape(dir, { inline }) {
 }
 
 const droppedBuild = writeShape(OUT_DIR, { inline: true });
-const droppedDocs = writeShape(DOCS_DIR, { inline: false });
-writeFileSync(join(DOCS_DIR, '.nojekyll'), '', 'utf8');
+const droppedDocs = previewOnly ? [] : writeShape(DOCS_DIR, { inline: false });
+if (!previewOnly) writeFileSync(join(DOCS_DIR, '.nojekyll'), '', 'utf8');
 
 console.log(`\nwrote ${join(OUT_DIR, 'codewright.html')}  (${Math.round(inlineKb)} KB, inlined — open this one from disk)`);
 console.log(`wrote ${join(OUT_DIR, 'index.html')}  (${Math.round(shellKb)} KB shell + ${chunks.length} payloads — what a browser gets)`);
@@ -668,6 +689,10 @@ for (const d of [...new Set([...droppedBuild, ...droppedDocs])]) console.log(`  
 /* docs/ is tracked and the payload filenames change whenever a course does, so a
    habitual `git add docs/index.html` would publish a shell whose payloads 404. Print
    the command that stages all of it. */
-console.log('\ndocs/ is what GitHub Pages serves. To publish:');
-console.log('  git add docs/index.html docs/version.json docs/programs docs/.nojekyll');
+if (previewOnly) {
+  console.log('\npreview build: docs/ was not written');
+} else {
+  console.log('\ndocs/ is what GitHub Pages serves. To publish:');
+  console.log('  git add docs/index.html docs/version.json docs/programs docs/.nojekyll');
+}
 
