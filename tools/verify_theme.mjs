@@ -30,6 +30,24 @@ const BUDGET = path.join(ROOT, 'tools', 'theme_budget.json');
 const src = fs.readFileSync(HEAD, 'utf8');
 const css = src.slice(src.indexOf('<style>') + 7, src.indexOf('</style>'));
 
+/* src/desk.js is the only file in the codebase that carries its own CSS — a modal that
+   is inert until summoned pays for none of it until it is opened, and injecting on first
+   open keeps the whole feature in one file. The consequence was that this gate, which
+   reads the stylesheet, had never measured a single desk surface: 107 surfaces budgeted
+   and not one of them from the file that paints the notepad and the calculator. It is
+   read here through the same public entry point the app uses, so what is measured is
+   what ships. See GAUNTLET_LOG cycle 12. */
+function deskCss() {
+  const mod = { exports: {} };
+  new Function('module', fs.readFileSync(path.join(ROOT, 'src', 'desk.js'), 'utf8') +
+    '\nmodule.exports = { Desk };')(mod);
+  if (typeof mod.exports.Desk?.css !== 'function') {
+    bad('tokens', 'src/desk.js no longer exposes its stylesheet — this gate cannot see it');
+    return '';
+  }
+  return mod.exports.Desk.css();
+}
+
 let fails = 0;
 const sectionFails = {};
 function ok(tag, msg) { console.log('[ok  ] ' + tag.padEnd(8) + ' ' + msg); }
@@ -63,7 +81,11 @@ function parseRules(text) {
   }
   return out;
 }
-const rules = parseRules(css);
+/* Both stylesheets, walked as one. The desk's :root block declares two tokens of its
+   own (--dsk-veil, --dsk-shadow), so it has to reach tokensFrom() as well as the
+   contrast pass — concatenating here is what puts it in front of every check below
+   rather than only the one that named it. */
+const rules = parseRules(css).concat(parseRules(deskCss()));
 
 /* ---------- token tables ---------- */
 function tokensFrom(sel) {

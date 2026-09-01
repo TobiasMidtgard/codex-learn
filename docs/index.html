@@ -18699,6 +18699,17 @@ const Desk = (function () {
   const HIST_MAX = 80;
   const SAVE_MS = 700;
 
+  /* Two limits the language did not have, and both of them are storage limits as much
+     as parser ones. A history row keeps the source it was worked out from, and eighty
+     of them are serialised into localStorage on every result — so an expression with
+     no ceiling is a store with no ceiling. And the parser is recursive descent with
+     about eight frames per bracket, so deep enough input reached the engine's own
+     limit and the learner was shown "Maximum call stack size exceeded" as the
+     explanation of their sum. Refusing is the fix; truncating is not, because a
+     silently shortened expression returns a confident wrong answer. */
+  const SRC_MAX = 1000;
+  const DEPTH_MAX = 64;
+
   /* ================================================================ numbers */
 
   /* The suffix table circuit.js parses, plus `K`, because people type it. Both
@@ -18755,7 +18766,11 @@ const Desk = (function () {
       if (s.indexOf('e') < 0 && s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
       return s;
     }
-    return v.toExponential(6).replace(/0+e/, 'e').replace(/\.e/, 'e');
+    /* Ten significant figures here too. This branch carried seven, so the line that
+       exists to show the reading behind the rounding was itself rounded three figures
+       harder the moment the value left 1e-4..1e12 — and outside that range is where a
+       picofarad and a gigahertz live. `2^40` read 1.099512e+12 for 1099511627776. */
+    return v.toExponential(9).replace(/0+e/, 'e').replace(/\.e/, 'e');
   }
 
   /* ================================================================ tokeniser */
@@ -18888,6 +18903,17 @@ const Desk = (function () {
 
   function parse(tokens) {
     let p = 0;
+    /* Nesting depth, counted where the grammar actually recurses: a bracket and a
+       function's argument list are the only two places parsePrimary re-enters
+       parseExpr. Sixty-four is far past any expression anyone writes and far short of
+       the engine's stack. */
+    let depth = 0;
+    function deeper() {
+      if (++depth > DEPTH_MAX) {
+        throw calcErr('that is nested more than ' + DEPTH_MAX + ' brackets deep — ' +
+          'work it out in a few steps, or name the parts');
+      }
+    }
 
     function tok() { return tokens[p]; }
     function isOp(v) { const t = tokens[p]; return t.t === 'op' && t.v === v; }
@@ -18980,6 +19006,7 @@ const Desk = (function () {
         if (isOp('(')) {
           const open = tok().pos;
           p++;
+          deeper();
           const args = [];
           if (!isOp(')')) {
             for (;;) {
@@ -18992,6 +19019,7 @@ const Desk = (function () {
             throw calcErr('unbalanced bracket: the ( after ' + t.v + ' is never closed', open);
           }
           p++;
+          depth--;
           return { k: 'call', name: t.v, args: args, pos: t.pos };
         }
         return { k: 'name', v: t.v, pos: t.pos };
@@ -19000,9 +19028,11 @@ const Desk = (function () {
       if (t.t === 'op' && t.v === '(') {
         const open = t.pos;
         p++;
+        deeper();
         const inner = parseExpr();
         if (!isOp(')')) throw calcErr('unbalanced bracket: the ( is never closed', open);
         p++;
+        depth--;
         return inner;
       }
 
@@ -19218,6 +19248,11 @@ const Desk = (function () {
   function evaluate(src, env) {
     const e = env || { vars: {}, ans: null, deg: true };
     if (!String(src).trim()) return { ok: false, error: 'nothing to work out' };
+    if (String(src).length > SRC_MAX) {
+      return { ok: false, error: 'that is ' + String(src).length + ' characters long — ' +
+        'this box works out expressions up to ' + SRC_MAX + '. Name the parts and ' +
+        'combine them.' };
+    }
     try {
       const node = parse(tokenize(src));
       const v = evalNode(node, e);
@@ -19230,7 +19265,13 @@ const Desk = (function () {
         assigned: e.assigned || null,
       };
     } catch (err) {
-      return { ok: false, error: String((err && err.message) || err), pos: err && err.pos };
+      /* A calc error is a sentence written for a learner. Anything else is the engine
+         talking — a RangeError from a stack the two limits above should already have
+         kept us off — and repeating it verbatim puts "Maximum call stack size
+         exceeded" in the history as though it were an account of their arithmetic. */
+      if (err && err.calc) return { ok: false, error: String(err.message), pos: err.pos };
+      return { ok: false, error: 'that was too much to work out in one go — ' +
+        'try it in a few steps' };
     } finally {
       delete e.assigned;
     }
@@ -19278,12 +19319,35 @@ const Desk = (function () {
     }
   }
 
+  /* Whether the last write landed. Not announced from in here, and that is the point:
+     the first version of this fix said its piece the moment the desk opened, and run()
+     then announced the result 60ms later over the top of it — say() cancels whatever is
+     pending, so a warning issued on its own is a warning nobody hears. The state is
+     recorded here and the places that speak fold it into the sentence they were already
+     going to say. Caught by the gate's own control case failing. */
+  let storageFailed = false;
+
+  /* writeJSON returns false when localStorage refuses — a full quota, a private
+     window, storage switched off. flushSave has always checked that and told the
+     learner. This one did not, and this one carries the history, the variables, `ans`,
+     the angle mode and the panel's geometry: every calculation made in the session and
+     every value named. A learner whose store was full lost all of it on reload and was
+     never told, because the one function that reports lives on the other tab. */
   function saveState() {
     loadAll();
-    writeJSON(K_STATE, {
+    const ok = writeJSON(K_STATE, {
       tab: state.tab, deg: state.deg, vars: state.vars, ans: state.ans,
       history: state.history.slice(-HIST_MAX), geom: state.geom, pick: state.pick,
     });
+    storageFailed = !ok;
+    if (!ok && open_ && elems) {
+      elems.saved.classList.add('warn');
+      elems.saved.textContent = 'could not save — storage is full';
+      /* the notes tab has a place for this and the calculator does not, so put it
+         where the eye already is: directly above the box being typed into */
+      elems.prev.innerHTML = '<b>could not save — storage is full</b>';
+    }
+    return ok;
   }
 
   /* ================================================================ context */
@@ -19311,10 +19375,15 @@ const Desk = (function () {
 
   let styled = false;
 
-  function ensureStyle() {
-    if (styled || typeof document === 'undefined') return;
-    styled = true;
-    const css = [
+  /* The stylesheet, lifted out of ensureStyle into a function of its own so that a
+     gate can read it without a DOM. This is the only file in the codebase that carries
+     its own CSS, and the consequence went unnoticed for as long as both have existed:
+     tools/verify_theme.mjs reads src/index.head.html, so every surface in the app was
+     measured in both themes except these — and the "every colour comes from a token"
+     invariant was never applied here either. Built on demand, so a desk that is never
+     opened still pays for none of it. */
+  function deskCss() {
+    return [
       /* Two colours the tokens do not carry — a veil and a shadow — declared here as
          tokens of their own so nothing below hard-codes a colour, and so the light
          theme gets its own pair rather than a dark one at reduced opacity. */
@@ -19350,8 +19419,15 @@ const Desk = (function () {
       '.dsk-head.drag{cursor:grabbing}',
       '.dsk-grip{display:flex;gap:3px;flex:none;opacity:.7}',
       '.dsk-grip i{width:3px;height:3px;border-radius:50%;background:var(--ink-5)}',
+      /* --accent-ink, not --lime, everywhere the accent is used as INK on a surface the
+         light theme flips. --lime is #5F8A0B there — a fill colour, tuned to carry
+         --on-lime on top of it — and as ink it lands at 3.7-4.1:1. Cycle 5 minted
+         --accent-ink for this and cycle 6 made the same repair on the schematic
+         editor's result table; this file was never measured because it is the one file
+         that carries its own CSS. Code spans take --code-ink, the darker of the two,
+         which is what they take everywhere else in the app. */
       '.dsk-title{font-family:var(--mono);font-size:10px;letter-spacing:.16em;',
-      '  text-transform:uppercase;color:var(--lime);flex:none}',
+      '  text-transform:uppercase;color:var(--accent-ink);flex:none}',
       '.dsk-tabs{display:inline-flex;gap:3px;padding:3px;border-radius:10px;margin-left:6px;',
       '  background:var(--surface-2);border:1px solid var(--line)}',
       '.dsk-tab{padding:4px 12px;border-radius:7px;font-size:12px;font-weight:600;color:var(--ink-3)}',
@@ -19370,7 +19446,7 @@ const Desk = (function () {
       '.dsk-hist{flex:1;min-height:0;overflow:auto;padding:12px 14px;display:flex;',
       '  flex-direction:column;justify-content:flex-end;gap:9px}',
       '.dsk-empty{color:var(--ink-3);font-size:12.5px;line-height:1.75;margin:auto 0}',
-      '.dsk-empty code{font-family:var(--mono);font-size:12px;color:var(--lime);',
+      '.dsk-empty code{font-family:var(--mono);font-size:12px;color:var(--code-ink);',
       '  background:var(--lime-08);padding:1px 5px;border-radius:4px}',
       '.dsk-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;',
       '  padding:7px 9px;border-radius:var(--r);border:1px solid transparent}',
@@ -19379,13 +19455,13 @@ const Desk = (function () {
       '  color:var(--ink-3);white-space:pre-wrap;word-break:break-word;line-height:1.5}',
       '.dsk-row:hover .dsk-ex{color:var(--ink-2)}',
       '.dsk-val{grid-column:1;text-align:left;font-family:var(--mono);font-size:15px;',
-      '  color:var(--lime);word-break:break-word;line-height:1.4}',
+      '  color:var(--accent-ink);word-break:break-word;line-height:1.4}',
       '.dsk-val small{display:block;font-size:10.5px;color:var(--ink-3);margin-top:2px}',
       '.dsk-row.err .dsk-val{color:var(--bad);font-size:12.5px}',
       '.dsk-send{grid-row:1/span 2;grid-column:2;align-self:center;width:26px;height:26px;',
       '  border-radius:7px;color:var(--ink-3);font-size:12px;opacity:0;transition:opacity .14s}',
       '.dsk-row:hover .dsk-send,.dsk-send:focus-visible{opacity:1}',
-      '.dsk-send:hover{background:var(--lime-12);color:var(--lime)}',
+      '.dsk-send:hover{background:var(--lime-12);color:var(--accent-ink)}',
 
       '.dsk-foot{flex:none;border-top:1px solid var(--line);background:var(--sunk);padding:9px 12px}',
       '.dsk-prev{min-height:16px;font-family:var(--mono);font-size:11px;color:var(--ink-3);',
@@ -19394,18 +19470,18 @@ const Desk = (function () {
       '.dsk-in{display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:var(--r);',
       '  border:1px solid var(--line-3);background:var(--editor)}',
       '.dsk-in:focus-within{border-color:var(--lime)}',
-      '.dsk-in .car{font-family:var(--mono);font-size:14px;color:var(--lime);flex:none}',
+      '.dsk-in .car{font-family:var(--mono);font-size:14px;color:var(--on-editor-lime);flex:none}',
       '.dsk-in input{flex:1;min-width:0;height:42px;border:0;background:none;outline:none;',
       '  color:var(--on-editor);font-family:var(--mono);font-size:15px}',
       '.dsk-in input::placeholder{color:var(--on-editor-3)}',
       '.dsk-mini{flex:none;height:26px;padding:0 9px;border-radius:7px;font-family:var(--mono);',
       '  font-size:10.5px;letter-spacing:.06em;color:var(--on-editor-2);border:1px solid var(--on-editor-line)}',
       '.dsk-mini:hover{color:var(--on-editor);border-color:var(--ink-4)}',
-      '.dsk-mini.on{color:var(--lime);border-color:var(--lime-30);background:var(--lime-12)}',
+      '.dsk-mini.on{color:var(--on-editor-lime);border-color:var(--lime-30);background:var(--lime-12)}',
       '.dsk-tips{display:none;padding:10px 2px 0;font-size:12px;line-height:1.7;color:var(--ink-3)}',
       '.dsk-tips.on{display:block}',
       '.dsk-tips b{color:var(--ink-2);font-weight:600}',
-      '.dsk-tips code{font-family:var(--mono);font-size:11.5px;color:var(--lime)}',
+      '.dsk-tips code{font-family:var(--mono);font-size:11.5px;color:var(--code-ink)}',
 
       /* notes */
       '.dsk-notebar{flex:none;display:flex;align-items:center;gap:6px;padding:9px 12px;',
@@ -19414,7 +19490,7 @@ const Desk = (function () {
       '  color:var(--ink-4);border:1px solid var(--line-2);max-width:230px;overflow:hidden;',
       '  white-space:nowrap;text-overflow:ellipsis}',
       '.dsk-pick:hover{color:var(--ink)}',
-      '.dsk-pick[aria-pressed=true]{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}',
+      '.dsk-pick[aria-pressed=true]{color:var(--accent-ink);border-color:var(--lime-30);background:var(--lime-08)}',
       '.dsk-saved{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);',
       '  white-space:nowrap}',
       '.dsk-saved.warn{color:var(--amber)}',
@@ -19442,10 +19518,14 @@ const Desk = (function () {
       '  .dsk-send{transition:none}',
       '}',
     ].join('\n');
+  }
 
+  function ensureStyle() {
+    if (styled || typeof document === 'undefined') return;
+    styled = true;
     const tag = document.createElement('style');
     tag.id = 'desk-style';
-    tag.textContent = css;
+    tag.textContent = deskCss();
     document.head.appendChild(tag);
   }
 
@@ -19795,18 +19875,22 @@ const Desk = (function () {
       ? { src: src, ok: true, value: r.value, display: r.display, raw: r.raw }
       : { src: src, ok: false, error: r.error };
     if (r.ok) state.ans = r.value;
-    /* The result was the one thing in this modal a screen reader never heard:
-       the input clears, the preview clears, and the history is not a live
-       region. The preview used to be one, and read a running total over the
-       user's own typing echo instead. */
-    say(r.ok ? src + ' equals ' + r.display : r.error);
     state.history.push(row);
     if (state.history.length > HIST_MAX) state.history.splice(0, state.history.length - HIST_MAX);
     elems.input.value = '';
     recall = -1; draft = '';
     elems.prev.textContent = '';
     paintHistory();
-    saveState();
+    /* Saved before anything is said, so that what is said can be true about both. A
+       result announced and then contradicted 60ms later by a warning that cancels it
+       is worse than either sentence on its own. */
+    const stored = saveState();
+    /* The result was the one thing in this modal a screen reader never heard:
+       the input clears, the preview clears, and the history is not a live
+       region. The preview used to be one, and read a running total over the
+       user's own typing echo instead. */
+    say((r.ok ? src + ' equals ' + r.display : r.error) +
+      (stored ? '' : ' — but it could not be saved; storage is full, so this will not be here next time.'));
   }
 
   function lastOk() {
@@ -20186,6 +20270,11 @@ const Desk = (function () {
       });
     },
     format: format,
+
+    /* The stylesheet, so tools/verify_theme.mjs can measure this file's surfaces in
+       both themes the way it measures every other file's. Exposed rather than parsed
+       out of the source, so the gate reads what actually ships. */
+    css: deskCss,
   };
 })();
 
@@ -20775,7 +20864,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '6074bddae663';
+const BUILD_ID = '205e3e2698d8';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */

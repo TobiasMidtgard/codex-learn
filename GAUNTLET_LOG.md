@@ -3428,3 +3428,346 @@ it was rejecting only 2 of 14 to begin with, and the reason this entry has a mac
 section at all.
 
 ---
+
+## Cycle 12 — TRACK 6: Edge Cases, Resilience & Accessibility
+
+*(the runner labels this commit "cycle 6"; its counter restarts per run and this log's
+does not. Cycles 1–5 of the current run are entries 7–11 above.)*
+
+**Target: `src/desk.js` — the notepad and calculator that open as a modal over whatever
+the learner is doing.** The whole file: its expression language, its storage, its modal
+and its stylesheet.
+
+One subsystem, and the one this track was left. Track 6's row of the curriculum names
+three files — `src/app.js`, `src/desk.js`, `src/circuit.js`. Cycle 6 took the schematic
+editor's input, focus and lifetime layer and left `app.js` and this. **No cycle has ever
+audited `desk.js`**, and it is where a Track 6 defect is least likely to be found by
+accident: a modal nobody opens on a route nobody is graded on. It is also the one file
+in the codebase that carries its own CSS, which turned out to matter far more than it
+sounds.
+
+### Baseline, captured before any edit
+
+```
+82 circuit exercises / 348 checks · 543 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1170 derivation steps across 46 courses
+1366 questions in 252 quiz units · 1103 holes in 217 blanks units
+     · 3160 per-option explanations · 6572 live draws
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+circuit_ui 78 driven keys · circuit_model 1457 analyses, 84 refusals,
+     380 published schematics / 359 with a DC point
+theme: 14 written exemptions · 107 contrast surfaces x 2 themes ·
+     tightest text 4.61:1 · 46 read their ink out of the stylesheet
+build: 3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers · 3 tune models ·
+       15 symbols · 62 payloads totalling 12706 KB · inlined 13897 KB · shell 1163 KB
+```
+
+### The defect that made this cycle worth doing
+
+**`tools/verify_theme.mjs` reads `src/index.head.html`. The desk's CSS is not in it.**
+
+The file says so itself, in its own header, as a design decision with a reason attached:
+*"This is the one file in the codebase that carries its own CSS … a modal that is inert
+until summoned pays for none of it until it is opened."* The reasoning is sound and the
+consequence was never followed up. `theme_budget.json` held **107 surfaces and not one
+of them from this file** — so for as long as both have existed, the gate that measures
+every colour in the application in both themes has been measuring every colour except
+these, and the curriculum's own invariant, *every colour from a token*, was never applied
+here either.
+
+This is not the same as nobody having looked. It is worse: the *mechanism* that would
+have looked could not reach the file, so five cycles of contrast work passed it by while
+reporting complete coverage.
+
+**Fixed at the seam rather than by copying the CSS somewhere the gate can see it.**
+`ensureStyle`'s inline `const css = [...]` became a `deskCss()` function, exposed as
+`Desk.css()`, and the gate loads `src/desk.js` through the same public entry point the
+app uses and walks both stylesheets as one. So what is measured is what ships, the rules
+stay in the file that owns them, and the modal still builds nothing until it is opened.
+The desk's two own tokens (`--dsk-veil`, `--dsk-shadow`) now reach `tokensFrom()` as
+well, so they are tokens to the gate and not literals.
+
+**107 → 135 surfaces. The 28 new ones are this file, and six of them failed on the first
+run.**
+
+### The attacks
+
+**4. UX & Accessibility Hardener** — taken first, because this track's brief is mostly
+its brief. Every ratio below was computed by the existing gate from the WCAG 2.1 sRGB
+formula against the composited stack, before the fix and again after.
+
+- **The answer is 4.10:1 in the light theme.** `.dsk-val` is `--lime` on
+  `--surface-solid`, and it is the number the calculator exists to produce. This is
+  *exactly* the defect cycle 6 found on `.ckt-tab td:last-child` — the schematic editor's
+  result table, also the answer, at 4.06:1 — and cycle 11 found again on `.opt code` at
+  3.51. The token minted to fix it, `--accent-ink`, has existed since cycle 5. It had
+  never been applied here because nothing here was ever measured.
+- **Five more instances of the same trap in the same file.** `.dsk-title` 3.77,
+  `.dsk-empty code` 3.69, `.dsk-tips code` 3.77, `.dsk-pick[aria-pressed=true]` 3.69 —
+  the pad you are currently on, so the light theme again makes the current state fainter
+  than the states you are not in — and `.dsk-mini.on` 3.89.
+- **`.dsk-mini.on` and `.dsk-in .car` are the *other* half of the trap**, and the file
+  had already got it right three lines away. Both sit on `--editor`, which is dark in
+  both themes; `.dsk-mini` and `.dsk-in input` correctly take `--on-editor-2` and
+  `--on-editor`, the tokens cycle 2 minted for a surface a theme cannot help. The lit
+  state and the prompt caret took `--lime` instead. The caret measures **4.47:1** in the
+  light theme, which is the figure cycle 2 recorded for this exact pair — it cleared the
+  3:1 graphical floor and so was never flagged, and it is a `›` on the box a learner
+  types into.
+- **Checked and found sound, recorded so the next cycle does not re-derive it:** the
+  focus trap is real and complete — `onKey` wraps Tab in both directions, `focusables()`
+  excludes the roving tablist's `tabindex="-1"` and the hidden pane's controls by
+  measurement rather than by selector, Escape and Alt+K both close, `.app` takes
+  `aria-hidden` on open and has it *removed* on close rather than set to false, and
+  `lastFocus` is restored with `preventScroll`. The tablist is one Tab stop with
+  Left/Right/Home/End, which is what `role=tab` promises. `prefers-reduced-motion` is
+  honoured in the desk's own CSS. The history rows are reachable: `.dsk-ex` is a real
+  `<button>`, `.dsk-val` is `role=button` with `tabindex=0` and an Enter/Space handler,
+  and `.dsk-send` reveals itself on `:focus-visible` and not only on `:hover`. None of
+  this needed touching, which is worth writing down.
+
+**3. Simulation Auditor.** Its brief is zero, negative, enormous and identical values, so
+the expression language was driven with all four, plus the two the brief does not name
+and a text box invites: very long, and very deep.
+
+- **"Maximum call stack size exceeded", shown to the learner as the account of their own
+  arithmetic.** The parser is recursive descent at about eight frames per bracket and had
+  no depth limit, and `evaluate()`'s catch repeated `err.message` whatever it was. So a
+  deep enough expression put a JavaScript internal in the history row, saved it, and —
+  since cycle 6's work gave this modal a live region — **read it out to a screen reader**.
+  Reached at 5000 nested brackets and, by a different route, at a 20000-term sum: the
+  `+` parser is a loop, so that one overflows in `evalNode` walking the left-leaning AST
+  rather than in `parse`. Both are a paste, not a typo.
+- **A history row keeps the source it was worked out from, and eighty of them are
+  serialised into `localStorage` on every result.** Nothing capped the expression, so
+  nothing capped the store. This is the mechanism that fills the quota, and the next
+  finding is the mechanism that hides it.
+- **The "unrounded value" is rounded three figures harder outside 1e-4..1e12.**
+  `rawNum` uses `toPrecision(10)` in the middle of its range and `toExponential(6)` —
+  seven figures — outside it. The dim line under every result exists so that *"a learner
+  checking whether 3.20 k really was 3197.28 should not have to take it on faith"*, and
+  outside that range it was asking for exactly that faith: `2^40` read `1.099512e+12` for
+  1099511627776. Outside that range is also where a picofarad and a gigahertz live.
+  Found by the new gate, not by hand — the check that the reading round-trips to the
+  value the history actually holds.
+- **Checked and found sound, recorded rather than changed:** `par2` refuses `x || -x`
+  and returns 0 for a short across anything, which is right. `Math.pow` catches the
+  negative-fractional case explicitly. Division and modulo by zero are named. `asin`
+  and `acos` state their domain. Every overflow returns "larger than this can hold"
+  rather than `Infinity`, and every `NaN` is caught before it can be displayed. The
+  window can be resized mid-drag without stranding the modal: `place()` clamps to the
+  viewport and `onWinResize` re-clamps, so a panel dragged to an edge and then squeezed
+  comes back. `onDragStart` already handles a `pointerdown` with no real pointer.
+  `4k7 || 10k` gives 3.20 k, agreeing with the schematic beside it.
+
+**1. Senior Educator** and **2. Assessment Inquisitor** have no prose and no graded
+question in a calculator, so both were pointed at the thing in scope they can judge:
+whether what it says is written for a learner or merely emitted.
+
+- **The engine's sentence is not a sentence.** "Maximum call stack size exceeded" names
+  no cause the learner controls and suggests no next step. Both new limits refuse **by
+  name**: *"that is 40001 characters long — this box works out expressions up to 1000.
+  Name the parts and combine them"*, and *"that is nested more than 64 brackets deep —
+  work it out in a few steps, or name the parts"*. Both point at `r1 = 4k7`, which is a
+  feature the language already has and this is the moment to mention it.
+- **Refusing beats truncating, and the difference matters here.** A `maxlength` on the
+  input would have bounded the store in one line, and a pasted expression cut at 1000
+  characters returns a confident wrong answer. The limit is enforced where the answer is
+  computed, not where the text is typed.
+
+### The persistence defect
+
+**`saveState()` threw away the one thing that told it the write had failed.**
+
+`writeJSON` returns false when `localStorage` refuses — a full quota, a private window,
+storage switched off. `flushSave`, which saves the *note*, has always checked it and
+said "could not save — storage is full". `saveState` called the same function and
+discarded the boolean.
+
+`saveState` is the one that carries **the history, the variables, `ans`, the angle mode
+and the panel's geometry** — every calculation made in the session and every value the
+learner named. So a learner whose store was full worked for an hour, closed the tab, and
+found an empty calculator, having been told nothing at any point. The function that
+reports lives on the other tab.
+
+Fixed, and the fix was wrong the first time in a way worth recording — see below.
+
+### What changed
+
+**Colour — the six the gate rejected, and two it did not.** Dark was already clear
+throughout and barely moves; this repairs the broken theme without redesigning the
+working one.
+
+| surface | light before → after |
+|---|---|
+| `.dsk-val` — **the answer** | **4.10 → 5.79** |
+| `.dsk-title` — the modal's own name | **3.77 → 5.34** |
+| `.dsk-tips code` — the examples in the help | **3.77 → 6.52** |
+| `.dsk-empty code` — the worked example before anything is typed | **3.69 → 6.37** |
+| `.dsk-pick[aria-pressed=true]` — the pad you are on | **3.69 → 5.21** |
+| `.dsk-mini.on` — the lit DEG/RAD, on the dark editor ground | **3.89 → 12.79** |
+| `.dsk-in .car` — the prompt caret, same ground, never flagged at 3:1 | **4.47 → 14.68** |
+| `.dsk-send:hover` — send this result to the note | to `--accent-ink` |
+
+No new token was minted. `--accent-ink` (cycle 5), `--code-ink` (cycle 11) and
+`--on-editor-lime` (cycle 2) already existed for precisely these three situations; the
+work was recognising which of the three each surface was in. The two code spans take
+`--code-ink` because that is what a code span takes everywhere else in the app.
+
+**The language gained two limits and a backstop.** `SRC_MAX = 1000` characters, checked
+before tokenising; `DEPTH_MAX = 64`, counted in `parsePrimary` where the grammar actually
+re-enters itself. Both far past any expression anyone writes and far short of the
+engine's stack. And `evaluate()`'s catch now distinguishes a `calc` error — a sentence
+written for a learner — from anything else, which becomes "that was too much to work out
+in one go" rather than being repeated verbatim.
+
+**`rawNum` carries ten significant figures in both branches.**
+
+**`saveState` reports.** It records whether the write landed, marks the panel, and writes
+the reason above the input box — because the notes tab has a place for this and the
+calculator does not. The announcement is folded into the sentence `run()` was already
+going to say: *"2+2 equals 4 — but it could not be saved; storage is full, so this will
+not be here next time."*
+
+**A new gate — `tools/verify_desk.mjs`.** This file had no gate at all. It mounts the
+**real modal** — `src/desk.js` loaded with `document`, `window`, `localStorage` and
+`navigator` passed in as parameters, on the `El` stub `dom_stub.mjs` already provides for
+the two circuit gates — and drives it. Five sections:
+
+- **The language, at the extremes.** 55 expressions: zero, negative, enormous, identical,
+  malformed, deep and long. None may throw out of `evaluate()`, and no message may
+  contain engine text. "log of zero is undefined" is struck out first, because that is
+  mathematics using the word and not JavaScript.
+- **The stack.** The six worst shapes the grammar allows, at exactly the longest input
+  the box accepts — nested brackets, nested calls, a long sum, a long product, unary
+  depth, an argument list — none reaching the engine's stack. And both limits must refuse
+  **by name**, which is what makes them load-bearing rather than merely defensive.
+- **What it shows is what it holds.** Ten results whose unrounded reading round-trips to
+  the double the history keeps, so clicking a value and carrying it with `ans` cannot
+  diverge.
+- **Persistence, driven both ways.** A `localStorage` that refuses every write must be
+  reported *in the live region* and *on the panel* — asked separately — and one that
+  works must not be, and the result must be announced either way.
+- **The stylesheet is still reachable**, so the wiring this cycle added to the theme gate
+  cannot be quietly removed.
+
+The gate was not trusted until it was seen to fail. **Eighteen mutations, eighteen
+intended verdicts**, across both gates: each cap removed alone and both together, the
+engine error repeated verbatim with the caps kept and with them gone, `saveState`
+discarding the boolean again, `saveState` returning true whatever the store did, the
+panel warned with the live region silenced, the live region kept with the panel silenced,
+the unrounded reading back to seven figures, `Desk.css()` removed, four colour reverts
+including the answer, and a bare hex planted on a desk rule.
+
+### Found in my own work, and fixed
+
+- **My first fix for the storage warning was a warning nobody hears.** I had `saveState`
+  call `say()` itself, suppressed to once per run of failures. `show()` calls `saveState`
+  during `open()`, so the warning fired the moment the desk opened — and then `run()`
+  announced the result 60 ms later, and `say()` cancels whatever is pending. The live
+  region ended up reading "2+2 equals 4" with the warning gone, and every later failure
+  was suppressed because one had already been issued. **Caught by the gate's own control
+  case failing after the mutation run had passed.** The state is now recorded in
+  `saveState` and folded into the sentence `run()` was already saying, so both facts
+  arrive in one announcement that is true about both.
+- **A condition in my own gate that let four mutations through.** The "is this engine
+  text" test tried to allow the mathematical "is undefined" and reject the JavaScript one
+  in a single expression, and got it wrong: the first mutation run **rejected 9 of 13**,
+  passing the depth cap removed, the length cap removed, and both. Strike the
+  mathematical phrase out first, then test what is left. This is cycle 11's finding
+  happening again one file over — a check that reads plausibly and enforces nothing — and
+  it is the whole argument for the mutation run.
+- **An assertion covering two channels at once.** The storage check asked whether the
+  live region *or* the panel carried the message, so a mutation that silenced only the
+  announcement passed. The learner that mutation strands is the one reading with a
+  screen reader. Asked separately now.
+- **Two mutations whose expected verdict was mine to correct, not the gate's.** With
+  either cap in place the other's inputs are refused, so removing one alone changes
+  nothing a learner sees — and with both gone the new backstop still converts the engine
+  error, so no engine text escapes either. My first expectation was that any of these
+  should fail. What actually earns the caps their place is that they refuse *by name*, so
+  that is what the gate now checks, and all three cases became genuine failures rather
+  than being written down as expected passes.
+
+### Left alone, deliberately
+
+- **`src/app.js`'s own persistence layer was not audited** — `P`, `saveSoon`,
+  `resetProgress`, the progress export and import, `warnNoStorage`. It is the third file
+  in Track 6's row, it is where a storage defect costs a learner their whole record
+  rather than their calculator history, and it is a cycle of its own. This is the main
+  debt this cycle leaves.
+- **`state.vars` has no cap and is never pruned.** A learner can name values without
+  limit and they persist forever. Each is a short name and a double, and the 1000-character
+  input now bounds the name; capping the *count* would silently delete a value someone
+  deliberately named, which is worse than the leak. Recorded with the reason rather than
+  fixed.
+- **`0^-1` reports "the result is larger than this can hold".** It is `Math.pow(0,-1)`,
+  so the message is true of the result and not of the cause. Defensible; the division
+  operator names zero properly, and inventing a special case for a power would be a
+  worse rule than the one already there.
+- **`1e-320/1e10` returns 0.** A silent underflow, and the alternative — refusing every
+  subnormal — would refuse arithmetic that is correct. Left, recorded.
+- **The MCU sketch panel and the workbench were not touched.** Cycle 6 recorded the first
+  as its own subsystem and that has not changed.
+- **`P.dim` at 2.93:1 and `P.faint` at 1.86:1 on the canvas.** Cycle 2 measured them and
+  handed them to Track 5; cycles 5, 6, 8 and 11 have each recorded them again without
+  taking them. That is now **five cycles**, and cycle 11's case for making them a target
+  rather than a leftover stands unchanged. They are in `src/studio.js`, they are not this
+  file, and a Track 6 cycle taking them would change the visual weight of 13 visualisers.
+  Cycle 5's candidate values still stand: `#6B7280` → 4.07, `#767D8A` → 4.75,
+  `#7E8694` → 5.36.
+- **The desk goes full-bleed below 560px**, so cycle 11's correction of the narrowest
+  lesson column to 275px does not reach it. Checked rather than assumed.
+- **No author file, no `catalog/*.json`, no lesson id and no schema was touched**, so
+  `emit.py` was not run and the staleness guard is not armed. The mechanical confirmation
+  is that the payload total is **12706 KB before and after**.
+- **`docs/programs` holds 64 payloads against 62 in the current generation.** The rolling
+  window, as cycles 1–11 all established. Verified rather than assumed: 3 generations
+  retained, 64 files on disk, all 64 named by a retained generation, **0 orphaned and 0
+  missing**.
+
+### Gates, after
+
+Every pre-existing number unmoved. Three moved by exactly what was added — the theme
+gate's surface count, by the 28 desk rows written into its budget, and the two artifact
+sizes.
+
+```
+verify_desk          All good: 61 expressions at the extremes answered without an
+                     engine error · 6 worst-case shapes at the 1000-character limit,
+                     none reaching the engine stack, both limits refusing by name ·
+                     10 readings that round-trip to the value held · a refusing store
+                     reported in the live region and on the panel, a working one not ·
+                     the stylesheet handed to the theme gate                    [NEW]
+verify_theme         All good: 14 exemptions · 107 -> 135 contrast surfaces x 2 themes,
+                     tightest text 4.61:1, faintest state 1.11:1 · 3 held below the
+                     standard floor on purpose · 46 -> 74 read their ink out of the
+                     stylesheet · the 375px topbar · the 50px id column · the closed
+                     drawer is out of the tab order
+verify_circuits      All good: 82 circuit exercises, 348 checks · 543 labels
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_circuit_ui    All good: 78 driven keys and gestures, 10 things said
+verify_circuit_model All good: 1457 analyses, 84 refusals · 15 plots · 380 published
+                     schematics, 359 with a DC point, all three ways
+verify_quiz          All good: 1366 questions in 252 quiz units · 1103 holes in 217
+                     blanks units · 3160 per-option explanations · 6572 live draws
+verify_derivations   All good: 1170 steps across 46 courses
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads, 12706 KB — unchanged ·
+                     inlined 13897 -> 13903 KB · shell 1163 -> 1168 KB, of 1536
+```
+
+Beyond the gates: every ratio in this entry computed by the existing theme gate from the
+stylesheet's own tokens rather than eyeballed, before the fix and again after; the two
+new gates run against **18 mutations, 18 intended verdicts** — a run that began by
+rejecting 9 of 13 and is the reason this entry has two findings about its own gate; the
+parser driven over 61 expressions at the extremes before any limit was chosen, so the
+limits were set against measured behaviour and not guessed; and the payload window
+checked for orphans rather than assumed.
+
+---
