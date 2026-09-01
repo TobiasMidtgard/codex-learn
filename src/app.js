@@ -1130,7 +1130,18 @@ function paintRunner(info) {
         ' title="' + esc(u.title) + '"></i>';
     }).join('') + '</div>' +
     '<span class="rb-who">' + esc(info.track.id) + ' \u00b7 ' + esc(info.module.title) + '</span>' +
-    '<span class="rb-at">' + (at + 1) + '/' + run.length + '</span>';
+    '<span class="rb-at">' + (at + 1) + '/' + run.length + '</span>' +
+    /* The whole point of the desk is to be open while a question is. Focus mode
+       hides the top bar, and the desk button lived there, so the one place it was
+       built for was the one place it could not be reached — Alt+K still worked,
+       but nothing on screen said so. */
+    '<button class="rb-desk" id="rb-desk" aria-label="Notepad and calculator" ' +
+      'title="Notepad and calculator (Alt+K)">\u25a4</button>';
+
+  const rbDesk = $('#rb-desk');
+  if (rbDesk) rbDesk.addEventListener('click', function () {
+    if (typeof Desk !== 'undefined') Desk.open();
+  });
 
   $('#rb-x').addEventListener('click', function () {
     go(info.track.kind === 'course'

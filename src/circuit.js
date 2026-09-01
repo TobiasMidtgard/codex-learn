@@ -4644,8 +4644,12 @@ function createCircuit(root, opts) {
   const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
   function onKey(e) {
-    /* The value boxes and the sketch live inside this editor, and a caret in one of
-       them is typing, not drawing. */
+    /* This cannot fire while the listener is on the canvas — a canvas has no focusable
+       children, so `e.target` is always the canvas itself. It is here because the value
+       boxes and the sketch DO live inside this editor, and the old handler, one level up
+       on the document, needed exactly this test to stay out of the way of typing. If
+       anyone moves the listener back up, the guard should already be where they need it
+       rather than something they have to remember to restore. */
     if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
     if (e.target && e.target.isContentEditable) return;
 

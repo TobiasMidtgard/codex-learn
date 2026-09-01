@@ -191,19 +191,20 @@ const Desk = (function () {
 
     out.push({ t: 'end', v: '', pos: s.length });
 
-    /* There is no implied multiplication, and there cannot be: `4k7` would be
-       unreadable if a number could sit against a name. Saying so beats the parse
-       error the learner would otherwise get three tokens later. */
+    /* Juxtaposition is multiplication — `4x`, `2 pi`, `2(3+4)` — because that is how
+       the notation is written everywhere else, including in the derivation input two
+       panels away, which would otherwise accept `n A L` while this refused `4x`.
+
+       The ambiguity this guard once refused wholesale is settled a stage earlier: the
+       lexer takes an engineering suffix greedily, so by the time these tokens exist
+       `4k7` is ONE number and `4x` is two things. What is left is genuinely a product.
+
+       Two numbers touching stays an error. `4 5` is a typo, never a product, and
+       saying so beats silently returning 20. */
     for (let j = 0; j < out.length - 1; j++) {
-      if (out[j].t !== 'num') continue;
-      const nx = out[j + 1];
-      const bad = nx.t === 'name' ? nx.v
-        : nx.t === 'num' ? nx.text
-          : (nx.t === 'op' && nx.v === '(') ? '(' : null;
-      if (bad !== null) {
-        throw calcErr('nothing multiplies on its own here — write ' +
-          out[j].text + ' * ' + bad, nx.pos);
-      }
+      if (out[j].t !== 'num' || out[j + 1].t !== 'num') continue;
+      throw calcErr('two numbers with nothing between them — did you mean ' +
+        out[j].text + ' * ' + out[j + 1].text + '?', out[j + 1].pos);
     }
     return out;
   }
@@ -267,11 +268,27 @@ const Desk = (function () {
 
     function parseMul() {
       let a = parseUnary();
-      while (isOp('*') || isOp('/') || isOp('%')) {
-        const o = tok(); p++;
-        a = { k: 'bin', op: o.v, a: a, b: parseUnary(), pos: o.pos };
+      for (;;) {
+        if (isOp('*') || isOp('/') || isOp('%')) {
+          const o = tok(); p++;
+          a = { k: 'bin', op: o.v, a: a, b: parseUnary(), pos: o.pos };
+          continue;
+        }
+        /* Juxtaposition binds exactly as `*` does and evaluates left to right, so
+           `2x/3y` is `2*x/3*y` — with x=6, y=2 that is 8, not 2. Textbooks often read
+           `2x/3y` as (2x)/(3y) by giving juxtaposition the tighter grip; a calculator
+           that quietly did that would disagree with the `*` its own history shows.
+           Bracket the denominator when you mean it.
+
+           A name or an opening bracket can start a factor; an operator or the end of
+           input cannot. */
+        const t = tok();
+        if (t && (t.t === 'name' || (t.t === 'op' && t.v === '('))) {
+          a = { k: 'bin', op: '*', a: a, b: parseUnary(), pos: t.pos };
+          continue;
+        }
+        return a;
       }
-      return a;
     }
 
     function parseUnary() {

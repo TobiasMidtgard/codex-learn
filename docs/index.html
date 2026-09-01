@@ -1131,6 +1131,9 @@ math[display=block]{display:block;display:block math;margin:14px 0;
 .rb-who{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
   color:var(--ink-4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rb-at{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:none}
+.rb-desk{width:32px;height:32px;border-radius:9px;flex:none;display:grid;
+  place-items:center;border:1px solid var(--line-2);color:var(--ink-3);font-size:13px}
+.rb-desk:hover{color:var(--lime);border-color:var(--lime-30);background:var(--lime-08)}
 
 /* The answer bar is furniture, not content: every row it grows comes straight out of
    the question above it. Two buttons and a long next-lesson label were wrapping to
@@ -17951,8 +17954,12 @@ function createCircuit(root, opts) {
   const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
   function onKey(e) {
-    /* The value boxes and the sketch live inside this editor, and a caret in one of
-       them is typing, not drawing. */
+    /* This cannot fire while the listener is on the canvas — a canvas has no focusable
+       children, so `e.target` is always the canvas itself. It is here because the value
+       boxes and the sketch DO live inside this editor, and the old handler, one level up
+       on the document, needed exactly this test to stay out of the way of typing. If
+       anyone moves the listener back up, the guard should already be where they need it
+       rather than something they have to remember to restore. */
     if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
     if (e.target && e.target.isContentEditable) return;
 
@@ -18609,19 +18616,20 @@ const Desk = (function () {
 
     out.push({ t: 'end', v: '', pos: s.length });
 
-    /* There is no implied multiplication, and there cannot be: `4k7` would be
-       unreadable if a number could sit against a name. Saying so beats the parse
-       error the learner would otherwise get three tokens later. */
+    /* Juxtaposition is multiplication — `4x`, `2 pi`, `2(3+4)` — because that is how
+       the notation is written everywhere else, including in the derivation input two
+       panels away, which would otherwise accept `n A L` while this refused `4x`.
+
+       The ambiguity this guard once refused wholesale is settled a stage earlier: the
+       lexer takes an engineering suffix greedily, so by the time these tokens exist
+       `4k7` is ONE number and `4x` is two things. What is left is genuinely a product.
+
+       Two numbers touching stays an error. `4 5` is a typo, never a product, and
+       saying so beats silently returning 20. */
     for (let j = 0; j < out.length - 1; j++) {
-      if (out[j].t !== 'num') continue;
-      const nx = out[j + 1];
-      const bad = nx.t === 'name' ? nx.v
-        : nx.t === 'num' ? nx.text
-          : (nx.t === 'op' && nx.v === '(') ? '(' : null;
-      if (bad !== null) {
-        throw calcErr('nothing multiplies on its own here — write ' +
-          out[j].text + ' * ' + bad, nx.pos);
-      }
+      if (out[j].t !== 'num' || out[j + 1].t !== 'num') continue;
+      throw calcErr('two numbers with nothing between them — did you mean ' +
+        out[j].text + ' * ' + out[j + 1].text + '?', out[j + 1].pos);
     }
     return out;
   }
@@ -18685,11 +18693,27 @@ const Desk = (function () {
 
     function parseMul() {
       let a = parseUnary();
-      while (isOp('*') || isOp('/') || isOp('%')) {
-        const o = tok(); p++;
-        a = { k: 'bin', op: o.v, a: a, b: parseUnary(), pos: o.pos };
+      for (;;) {
+        if (isOp('*') || isOp('/') || isOp('%')) {
+          const o = tok(); p++;
+          a = { k: 'bin', op: o.v, a: a, b: parseUnary(), pos: o.pos };
+          continue;
+        }
+        /* Juxtaposition binds exactly as `*` does and evaluates left to right, so
+           `2x/3y` is `2*x/3*y` — with x=6, y=2 that is 8, not 2. Textbooks often read
+           `2x/3y` as (2x)/(3y) by giving juxtaposition the tighter grip; a calculator
+           that quietly did that would disagree with the `*` its own history shows.
+           Bracket the denominator when you mean it.
+
+           A name or an opening bracket can start a factor; an operator or the end of
+           input cannot. */
+        const t = tok();
+        if (t && (t.t === 'name' || (t.t === 'op' && t.v === '('))) {
+          a = { k: 'bin', op: '*', a: a, b: parseUnary(), pos: t.pos };
+          continue;
+        }
+        return a;
       }
-      return a;
     }
 
     function parseUnary() {
@@ -20515,7 +20539,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '19151014a7b1';
+const BUILD_ID = 'bc65d208a5b4';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */
@@ -21061,7 +21085,18 @@ function paintRunner(info) {
         ' title="' + esc(u.title) + '"></i>';
     }).join('') + '</div>' +
     '<span class="rb-who">' + esc(info.track.id) + ' \u00b7 ' + esc(info.module.title) + '</span>' +
-    '<span class="rb-at">' + (at + 1) + '/' + run.length + '</span>';
+    '<span class="rb-at">' + (at + 1) + '/' + run.length + '</span>' +
+    /* The whole point of the desk is to be open while a question is. Focus mode
+       hides the top bar, and the desk button lived there, so the one place it was
+       built for was the one place it could not be reached — Alt+K still worked,
+       but nothing on screen said so. */
+    '<button class="rb-desk" id="rb-desk" aria-label="Notepad and calculator" ' +
+      'title="Notepad and calculator (Alt+K)">\u25a4</button>';
+
+  const rbDesk = $('#rb-desk');
+  if (rbDesk) rbDesk.addEventListener('click', function () {
+    if (typeof Desk !== 'undefined') Desk.open();
+  });
 
   $('#rb-x').addEventListener('click', function () {
     go(info.track.kind === 'course'

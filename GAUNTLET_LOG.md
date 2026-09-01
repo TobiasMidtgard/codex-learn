@@ -1399,3 +1399,369 @@ both themes *before* shipping, which is what stopped it; and the new gate run ag
 ten mutations it had to reject and one it had to pass.
 
 ---
+
+## Cycle 6 — TRACK 6: Edge Cases, Resilience & Accessibility
+
+**Target: the schematic editor's input, focus and lifetime layer.** `createCircuit`'s
+interaction section in `src/circuit.js` — its pointer and key handlers, the toolbar and
+panel DOM it owns, and its `dispose` — plus the three places in `src/app.js` that own
+its lifetime (`renderBuild`, `renderNumeric`'s diagram, `renderCircuitPlayground`).
+
+One subsystem, and the one this track was left. Cycle 2 took the sandbox half of the
+canvas work and wrote down why it stopped: *"The circuit editor was not touched. It is
+the other half of this track and its own cycle."* Nothing had audited it since. It is
+also where a Track 6 defect costs the most: **80 circuit exercises are graded work**, and
+a build unit is the only unit kind whose answer is a drawing.
+
+### Baseline, captured before any edit
+
+```
+80 circuit exercises / 340 checks · 527 part labels round-trip
+21 tune units · 216 numeric answers verified, 0 unchecked, 218 figure-only
+1140 derivation steps across 46 courses
+1366 questions in 252 quiz units · 160 per-option explanations
+13 visualisers / 3 tune models · 747 draws, 249 readouts · 364 opening values
+theme: 14 exemptions · 49 contrast surfaces x 2 themes · tightest text 4.63:1
+build: 3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers · 3 tune models ·
+       15 symbols · 62 payloads · inlined 13740 KB · shell 1103 KB
+```
+
+### The attacks
+
+**4. UX & Accessibility Hardener** — taken first, because this track's brief is mostly
+its brief.
+
+- **The editor's keyboard shortcuts were on `document`, and one of them broke the space
+  bar for the whole page.** `onSpaceDown` called `e.preventDefault()` on any Space
+  keydown whose target was not an input or a textarea. A `<button>` is activated on
+  *keyup*, and only if its keydown left it active — which the browser does in the
+  keydown's default action. Cancel the keydown and the press is cancelled with it. So
+  with a build exercise on screen, Space no longer worked on **"Check the circuit"**, on
+  the footer navigation, on the icon rail, on anything inside the desk modal, and it no
+  longer scrolled the 1200-word reading sitting above the canvas. Every one of the 80
+  build units, and the circuit playground.
+- **`Ctrl+A` was taken from the document, with `preventDefault`.** A lesson carrying an
+  editor was a lesson whose text could not be selected — and the keystroke silently
+  selected every part in a drawing somewhere down the page instead.
+- **`R`, `G`, `U`, `Delete` and `Backspace` fired from anywhere outside an input.** Tab
+  to the footer's "Next lesson" and press R and a part rotates. The desk modal is
+  `aria-modal` and traps Tab, but its own key handler stops propagation for **Escape and
+  Alt+K only**, so R, G, U and Delete all reached the canvas behind it.
+- **The canvas took no keyboard focus at all, and the file said so twice** — *"Tracked
+  on the document because the canvas does not take keyboard focus."* No `tabindex`, no
+  role, no name. Placing a part needs a click at a grid cell and there was no other way
+  to do it: **the 80 circuit exercises could not be sat with a keyboard.** That is the
+  headline of this cycle. Everything else here is smaller than it.
+- **Nothing announced.** `[data-out]` is filled with the entire answer — every node
+  voltage, every branch current — with no live region and no name. `.ckt-err`, the
+  sentence saying the circuit would not solve, was silent too. Cycle 2 gave the sandbox
+  readout `aria-live`; the editor, which has far more to say, got nothing.
+- **Eighteen tool buttons are named after their key caps.** `R`, `C`, `L`, `V`, `I`,
+  `D`, `SW`, `NTC`, `LDR`, `POT`, `BAR`… the whole accessible name of each is its glyph.
+  The full name was already there in the `title`, which a screen reader reads as a
+  description and a keyboard user never sees at all.
+- **`.on` and `.active` were the only record of which tool and which analysis mode were
+  chosen** — a class is a fact about CSS, not a state anything can read.
+- **The wiper slider announces 500 where the page reads 0.50.** `min=0 max=1000` for a
+  0..1 quantity, no `aria-valuetext`. This is precisely the defect cycle 2 measured on
+  the sandbox sliders, in the file next door, unrepaired.
+
+**3. Simulation Auditor.** Pointed at what the persona brief actually asks for — zero,
+negative, enormous and identical values, and whether the panel describes what the solver
+does.
+
+- **The value box was the one field on the panel with no clamp.** Two lines below it,
+  every `[data-x]` field is held inside the range its kind declares:
+  `Math.min(Math.max(isFinite(v) ? v : f[2], f[2]), f[3])`. The `[data-val]` box — the
+  field *every* part has — was `p.value = parseEng(inp.value, p.value)` and nothing else.
+  Type `0` into a resistor and the model takes 0. Type `-5` and it takes −5.
+  And what shipped was worse than a crash, because every stamp already defends itself:
+  `1 / Math.max(p.value, 1e-12)`. So the solver quietly treated the part as a **1 pΩ
+  short** while the panel beside it went on reading −5 Ω, the canvas drew −5 Ω, and
+  `onChange` wrote −5 Ω into `P.build[l.id]` and saved it. The learner's own stored
+  circuit was the thing lying to them, and it survived a reload.
+- **`spaceDown` had no way back if the window went away with the key held.** `onSpaceUp`
+  was on the document; Alt+Tab sends the keyup to another window. The flag stayed true
+  for the rest of the session, the cursor stayed `grab`, and the next plain left-click on
+  the canvas panned instead of placing a part.
+- **Checked and found sound, recorded so the next cycle does not re-derive them:**
+  `zoomFit` cannot divide by zero — a single-point drawing still has `pad = 1.5` either
+  side, so `needW ≥ 3 · GRID`. `parseEng` cannot return NaN; it falls back on both a
+  failed match and a non-finite result, so the value box could reach 0 and negatives but
+  never NaN. `paint()` already guards on `disposed`, and `perFrame` guards its callback —
+  the discipline was there and only the leaked editor escaped it. The read-only path
+  returns *above* the interaction layer, with a comment recording that an earlier version
+  returned below it and clicking a question's schematic inserted a resistor into it; that
+  fix is intact. Nothing in this subsystem animates on a timer, so
+  `prefers-reduced-motion` has nothing to honour beyond the stylesheet's blanket rule,
+  which already covers the one `.ckt-t` transition.
+
+**1. Senior Educator** and **2. Assessment Inquisitor** have no prose and no graded
+question in an editor, so both were pointed at the thing in scope they can judge:
+whether the panel *explains* or merely *displays*.
+
+- **The default panel hint described the mouse and only the mouse** — "Click the grid to
+  place a resistor." — which was an accurate description of the whole interface and is
+  the defect stated as a sentence.
+- **A value silently corrected would be a correction the learner never learns from.** The
+  clamp added below says what it did and why, rather than snapping the number back and
+  leaving them to notice.
+
+**The defect the personas found in the same file but a different subsystem**
+
+- **The answer the editor exists to produce is 4.06:1 in the light theme.**
+  `.ckt-tab td:last-child` — every node voltage and branch current — is `--lime` on
+  `--surface`. So is `.ckt-panel h4` at 10px uppercase, and the wiper's own readout.
+  Under the 4.5:1 floor for text, and exactly the trap cycle 5 minted `--accent-ink` for.
+  Found by writing the editor's surfaces into `theme_budget.json` **as the stylesheet
+  actually declares them** and letting the existing gate measure them — the first draft of
+  those entries said `--accent-ink`, which would have been a budget describing a fix
+  nobody had made.
+- **`.ckt-tab td:first-child` was `--ink-5`**, the placeholder-and-disabled tier that
+  cycle 5 measured at about 2:1 in both themes and moved `.rail-miss` off. This column is
+  not a placeholder: it is the half of each row that says *which* node the volts belong to.
+
+**The lifetime defect, which is a persistence defect**
+
+`teardown` is a single slot, and `renderBuild`'s `paint()` is re-entrant — "Start over"
+calls it. It assigned a second editor into that slot and **dropped the first on the floor
+undisposed**: its `document` keydown listeners, its `ResizeObserver` and its model all
+still live. Press "Start over" and then press `R` or `Delete`, and the abandoned editor
+heard the key too, ran `doDelete` on a drawing nobody was looking at, and called
+`opts.onChange` — which is the function that writes `P.build[l.id]` and calls
+`saveSoon()`. **The stale copy saved itself over the learner's visible circuit.** Five
+presses of "Start over" meant five stale editors and five writes per keystroke.
+
+The discipline exists in the same file and reads, at `renderTune`:
+
+> *paint() is re-entrant — Reset and Check both call it — so the previous observer has to
+> go before a new one is made, or every press leaves one behind redrawing a canvas that is
+> no longer on the page.*
+
+Two renderers needed that line. One had it. `renderNumeric` needed it too — its `paint()`
+runs again on Hint and on Check, leaking a read-only diagram's observer each time.
+
+### What changed
+
+**The keyboard moved onto the canvas, which is now a focus stop.** `tabindex="0"`,
+`role="application"`, a name, and an `aria-describedby` pointing at the key map. Every
+shortcut is bound to `cv` rather than to `document`, so a key with a meaning here has that
+meaning while the caret is here and no other time. `Ctrl+A`, `Space`, `R`, `G`, `U`,
+`Delete` and `Backspace` are all back in the page's hands everywhere else.
+
+**The editor can be driven entirely from a keyboard.** A caret on the grid, moved by the
+arrow keys and drawn as a ring with cross-hairs; `Shift`+arrow moves the selection, which
+is the drag gesture without a pointer; `Enter` does what a click does — places the chosen
+part, draws a wire between two presses, picks up what is under it, throws a switch, and
+opens a block on the second press, which is what a double click is. `Escape` lets go and
+then closes a block. The caret keeps itself on screen, so an arrow key can never walk it
+out of the viewport. It survives tabbing to a value box and back, because typing a
+resistance and coming back is one gesture. And it is drawn **only once a key has been
+pressed**: clicking focuses the canvas, as it must or the tab order runs past the editor,
+but a learner who has only ever used the mouse gets the canvas they had before.
+
+The three gestures the pointer and the keyboard share are now literally the same code —
+`wireAt`, `selectAt`, `placeAt` — rather than a near-miss of each other, so the
+no-stacking rule and the orthogonal-wire rule are enforced once.
+
+**It says what it did.** A `role="status"` region carries every action in a sentence:
+the cell the caret is on and what is under it, what was placed and where, the wire's two
+ends, how many parts were deleted, the angle after a rotation, the zoom, the tool that was
+chosen — and the solve, which is the one message a learner is least likely to be looking
+at because they pressed Solve and are watching the drawing. A repeated sentence is
+re-stamped with U+200A rather than a plain space, since a trailing ordinary space is
+collapsed out of the computed name and would change the DOM without changing the string.
+The result table itself is a named `region` and *not* live: making it live would read every
+node and every current on every solve.
+
+**State that can be read.** `aria-pressed` on all 25 tool buttons, on the three analysis
+modes and on the node picker; `aria-label` on every tool taken from the first clause of
+its own `title`, so a name and a description that could drift apart do not exist;
+`aria-keyshortcuts` on the five toolbar buttons that have a key; `aria-valuetext` on the
+wiper; `role="img"` and a name on a question's read-only schematic, which had neither.
+
+**The value box is clamped, and says so.** A `VALUE_FLOOR` table for the fifteen kinds
+whose value is a quantity with no meaning at zero — resistances, a capacitance, an
+inductance, a saturation current, a transconductance, an open-loop gain. `V`, `I` and
+`BAR` are deliberately absent: a source may sit at zero and may be negative, and
+superposition cannot be written without it. The floors are set far below anything a lesson
+uses (a femtofarad, a picohenry, a micro-ohm) because the job is to reject the impossible,
+not to police the unusual — checked against the catalogue: **975 parts of a floored kind,
+none under its floor.**
+
+**The lifetime.** The teardown flush added to `renderBuild` and to `renderNumeric`'s
+diagram, with the reason written beside it. `dispose()` made idempotent and its window
+listener released. And `changed()` now returns early when `disposed` — nothing can deliver
+a key to a detached editor any more, but that makes it a rule rather than a consequence:
+an editor that has been disposed can never reach `onChange`, which is the function that
+saves.
+
+**Contrast.** `.ckt-tab td:last-child`, `.ckt-panel h4` and the wiper readout to
+`--accent-ink` (4.06 → 4.92:1 light); `.ckt-tab td:first-child` off `--ink-5` to
+`--ink-3`; a `.ckt-vh` class for the key map and the status line — `clip-path`, not
+`display:none`, which would take both out of the accessibility tree; and an inset focus
+ring on the canvas, because `--editor` is dark in both themes and the page's own offset
+ring sits outside the box.
+
+**A new gate — `tools/verify_circuit_ui.mjs`.** This track had no gate at all, which is
+why several of the defects above are years old. It does not judge the drawing: it mounts
+**the real editor** and drives it. circuit.js touches no `document` — the whole editor is
+built by assigning `innerHTML` to the root it is handed — so what the gate needed was one
+element that parses HTML, answers the selector shapes this file uses, and delivers events
+up a parent chain. That is written into the gate, because the repository has no
+dependencies and this was not the place to start having them. Ten sections:
+
+- **Keys stay put.** The ten shortcuts pressed at two kinds of "not the canvas": a
+  detached button, which is every control in the shell and the footer and the desk; and
+  the editor's *own toolbar*, which is the harder case, because a handler on the root, on
+  the document or on the window would still hear it. Neither may move the model and
+  neither may be `preventDefault`ed.
+- **The canvas is reachable** — focus stop, role, name, and a description that resolves
+  and actually names Arrow, Shift, Enter, Escape and Tab.
+- **A circuit built by keyboard alone**, checked against the model at each step: the first
+  arrow places nothing, Enter places one part of the chosen kind, a second Enter on the
+  same cell refuses rather than stacks, R turns it a quarter, two Enters with the wire tool
+  draw one wire, Shift+arrow with an empty selection refuses and moves nothing.
+- **The caret is drawn, and only for the keyboard.** Frames are segmented on `clearRect`,
+  so a focused frame and an unfocused frame of the same drawing can be compared: focused
+  must carry more draw calls, and after a click back onto the canvas the two must be equal.
+- **Space, both meanings** — the primary action when the pointer is away, the pan modifier
+  when it is over the drawing, and claimed from the page in both cases.
+- **Nothing it says contains NaN, undefined or Infinity.**
+- **Every floored kind** fed `0`, `-5`, `-1e12`, `nonsense` and an empty box, with the
+  model checked against the floor its own stamp needs — and the clamp itself checked to
+  leave a negative voltage source and a zero current source alone.
+- **Disposal** — the window listeners balance, a second dispose does not unbalance them,
+  and a disposed editor cannot reach `onChange`.
+- **The read-only diagram** is an `img` with a name, is *not* in the tab order, and draws
+  no non-finite coordinate.
+- **The call sites**, read out of `src/app.js` as source: every `createCircuit` is preceded
+  by the teardown flush, or is `renderCircuitPlayground`, which is reachable only through
+  `go()` and so is flushed by `go()` itself.
+
+The gate was not trusted until it was seen to fail. **Fourteen mutations, fourteen
+intended verdicts:** the keyboard put back on the window; the handler moved up to the
+editor root, which only the toolbar half of section 1 can see; Space no longer yielding to
+the pointer; the canvas out of the tab order; `changed()` free to write after dispose;
+`dispose()` keeping its window listener; the value box unclamped; `aria-pressed` off the
+buttons; the click handler no longer moving it; the tools named after their glyphs; the
+caret never drawn; the caret drawn for a mouse user too; the status line silenced; and
+`renderBuild` abandoning its editor again.
+
+### Found in my own work, and fixed
+
+- **A `let` in the temporal dead zone that would have broken every schematic in the
+  catalogue.** I declared `caret` and `cvFocused` beside the key handlers, where they
+  belong by subject, and read them in `paint()`. The read-only branch paints and returns
+  about 2,300 lines *above* that declaration, so the first draw of every question's
+  diagram would have thrown `Cannot access 'caret' before initialization`. Caught by
+  asking what the read-only early return actually skips rather than by running anything —
+  and then confirmed by the gate's read-only section. Both now sit with the editor's other
+  state, with the reason written next to them.
+- **The first mutation run reported a `TypeError` instead of the four defects it had
+  already found.** With the keyboard back on the window the keyboard-build section threw,
+  and the throw took the whole report with it. Each section now runs inside a wrapper that
+  records falling over as a failure of its own — a gate that dies is not a gate that
+  reports.
+- **Two checks that passed for the wrong reason, both caught by mutation rather than by
+  re-reading.** The Space-with-pointer test pressed Space twice on the *same* cell, which
+  the no-stacking rule refuses anyway, so the part count would not have moved whatever the
+  editor did. And the `aria-pressed` check asked only that exactly one button was `true` —
+  a bar with one button in it — while twenty-four buttons carrying no `aria-pressed` at all
+  say nothing about being off.
+- **A frame counter off by one.** Frames are closed by the *next* `clearRect`, so every
+  reading is taken one paint late. The first version compared a frame with itself and
+  reported 595 against 595 for correct code.
+- **A budget entry that described the fix instead of the stylesheet.** I first wrote the
+  new `theme_budget.json` rows with `--accent-ink`, which is what they *should* say, and
+  the gate duly reported 58 clean surfaces over a stylesheet that still said `--lime`. A
+  gate enforcing a rule the source has abandoned is the failure this repository has already
+  had once. Corrected to what the file declares; it failed at 4.06:1; then the CSS was fixed
+  and the entry followed it.
+- **A comment that had become false.** The key handler's `input|textarea` guard cannot fire
+  now that the listener is on the canvas — a canvas has no focusable children. The comment
+  still claimed the value boxes were what it was for. Rewritten to say plainly that it
+  cannot fire today and why it is still there.
+- **A caret that would have changed the editor for everyone.** The first version drew the
+  ring whenever the canvas held focus, and clicking focuses the canvas — so every mouse
+  click would have left a mark on the drawing. An accessibility cycle that changes what the
+  other 99% see has traded one defect for another. Gated on a key having been pressed, and
+  the gate now measures both directions.
+
+### Left alone, deliberately
+
+- **`renderCircuitPlayground` did not get the teardown flush.** It is reachable only
+  through `go()`, which flushes the slot itself, so the line would be a defence against
+  nothing — and the gate encodes that exemption by name rather than by silence, so if the
+  playground ever gains a re-entrant `paint()` the exemption is the thing to delete.
+- **The MCU sketch panel was not audited.** `paintMcu` is a code editor, a console and a
+  fault report inside the side panel — its own subsystem, in `src/mcu.js` as much as here,
+  and the only part of the editor with a second language in it. Nothing this cycle changed
+  reaches it beyond the key scoping, which strictly helps: a sketch is a `textarea`, and
+  the shortcuts that used to fire from anywhere outside one no longer fire at all.
+- **`P.dim` at 2.93:1 and `P.faint` at 1.86:1 on the canvas.** Cycle 2 measured them and
+  handed them to Track 5; cycle 5 re-measured and did not take them, leaving three
+  candidate values. This is a Track 6 cycle and taking them would change the visual weight
+  of 13 visualisers as well as this canvas. Still open, still recorded.
+- **A negative resistance is now refused; a negative *voltage* is not, and should not be.**
+  Recording the asymmetry because it looks like an inconsistency and is not: `V` and `I`
+  carry a sign that means direction, and half the superposition material in the catalogue
+  depends on being able to write it.
+- **The marquee, the pan and the block breadcrumb have no keyboard equivalent.** `Ctrl+A`
+  selects everything and Shift+click still builds a selection by hand, so the marquee is a
+  convenience rather than the only route to anything; the caret scrolls the viewport itself,
+  so pan is not needed to reach a cell; and the breadcrumb's buttons are ordinary focusable
+  buttons. Worth having, not worth widening this cycle for.
+- **No `emit.py` run and no author file, `catalog/*.json`, lesson id or schema touched.**
+  Presentation and behaviour only, so the staleness guard is not armed.
+- **`docs/programs` holds 64 payloads against 62 in the current generation.** The rolling
+  window, as cycles 1–5 all established, and this cycle built four times. Verified rather
+  than assumed: 3 generations retained at 62 files each, 64 files on disk, **0 orphaned and
+  0 missing**, the newest generation covering 62 distinct course ids.
+
+### Gates, after
+
+Every pre-existing number unmoved. Two numbers moved by exactly what was added — the
+theme gate's surface count, by the 9 editor surfaces written into its budget, and the two
+artifact sizes.
+
+```
+verify_circuit_ui    All good: the editor answers 78 driven keys and gestures, says 10
+                     things while doing it, keeps every shortcut inside its own canvas,
+                     holds 15 kinds above the floor their stamps need, and disposes
+                     without leaving a listener behind                            [NEW]
+verify_circuits      All good: 80 circuit exercises, 340 checks · 527 labels
+verify_numeric       216 answers verified, 0 schematics with no check, 218 figure-only
+verify_tune          All good: 21 tune units reachable and not pre-solved
+verify_sandbox       All good: 13 visualisers, 3 tune models (747 draws, 249 readouts)
+                     · 364 opening values reachable
+verify_quiz          All good: 1366 questions in 252 quiz units · 160 per-option
+                     explanations · every course within its answer-tell budget
+verify_derivations   All good: 1140 steps across 46 courses
+verify_labs EE131    All good: 10 labs
+verify_theme         All good: 14 exemptions · 49 -> 58 contrast surfaces x 2 themes,
+                     tightest text 4.63:1 · the 375px topbar · the 50px id column ·
+                     the closed drawer is out of the tab order
+build.mjs            3 parts / 111 keys · 32/32 + 30/30 bundled · 13 visualisers ·
+                     3 tune models · 15 symbols · emit.py's copies agree ·
+                     both syntax checks clean · 62 payloads ·
+                     inlined 13740 -> 13776 KB · shell 1103 -> 1139 KB, of 1536
+```
+
+Beyond the gates: the new gate run against **14 mutations it had to reject and one it had
+to pass**; the whole catalogue scanned for a value under the new floor — 975 parts of a
+floored kind, 0 under; the payload window checked for orphans rather than assumed; and
+every contrast figure in this entry computed by the existing theme gate from the
+stylesheet's own tokens, not eyeballed.
+
+**A note on this cycle's commits.** While it was running, a second session committed the
+tree twice — `edfe4db` swept this cycle's `src/circuit.js`, `src/app.js` and
+`src/index.head.html` under the label "cycle 5 (partial)", and `fa4d59b` swept
+`tools/verify_circuit_ui.mjs` and `tools/theme_budget.json` in alongside its own
+`src/mathinput.js`. Nothing was lost and every gate above was run on the tree as it stands
+afterwards, but the history does not read the way the log does. Recorded so the next cycle
+does not go looking for a cycle 6 commit that is not there. The curriculum's rule about two
+writers is written for `emit.py --all` and `build.mjs`; it turns out to want saying about
+`git commit` too.
+
+---
