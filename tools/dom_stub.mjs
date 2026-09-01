@@ -295,6 +295,11 @@ const DOC = {
   addEventListener: (t, f) => { liveDocListeners++; DOC_TARGET.addEventListener(t, f); },
   removeEventListener: (t, f) => { liveDocListeners--; DOC_TARGET.removeEventListener(t, f); },
   dispatchEvent: (e) => DOC_TARGET.dispatchEvent(e),
+  /* Nothing a gate mounts is attached to this document, so a document-wide query
+     honestly finds nothing. Present rather than absent because code that asks the
+     document what is on screen should get an answer, not a TypeError. */
+  querySelector: () => null,
+  querySelectorAll: () => [],
 };
 export function documentListenerCount() { return liveDocListeners; }
 const WIN = new El('window');

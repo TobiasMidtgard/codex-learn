@@ -1335,6 +1335,32 @@ math[display=block]{display:block;display:block math;margin:14px 0;
    does not scroll, since nothing on it is reachable. */
 body.ckt-expanded{overflow:hidden}
 body.ckt-expanded .page{animation:none;transform:none}
+/* .frame carries z-index:2, which makes it a stacking context — so the editor's own
+   z-index is scoped INSIDE it and can never beat the icon rail'''s 6, whatever number
+   it is given. Expanded, the editor covered the page and the rail sat on top of it
+   with the Select button underneath. position:relative with z-index:auto is not a
+   stacking context, so dropping the number for the duration is enough; nothing else
+   in the frame needs it while an opaque overlay is over the whole frame. */
+body.ckt-expanded .frame{z-index:auto}
+
+/* ---- the microcontroller sketch ----
+   A program written in a fourteen-row box at eleven pixels, inside a 250px side
+   panel. Expanded it takes the screen, and the diagnosis and console come with it —
+   filling the screen with the sketch and leaving the error it produced behind in a
+   narrow column would be filling the screen with half of the thing.
+   z-index above the editor is a nested one, since the box is inside the editor when
+   both are expanded; it also stands on its own when only the sketch is. */
+.ckt-code{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ckt-code-h{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-family:var(--mono);font-size:var(--t-label);color:var(--ink-3)}
+.ckt-code textarea{width:100%;padding:6px 8px;border-radius:var(--r);
+  border:1px solid var(--line-2);background:var(--surface-2);color:inherit;
+  font-family:var(--mono);font-size:var(--t-label);line-height:1.5;
+  resize:vertical;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+.ckt-code.full{position:fixed;inset:0;z-index:75;background:var(--ground);
+  padding:16px;gap:10px;overflow:auto}
+.ckt-code.full textarea{flex:1;min-height:0;font-size:var(--t-ui);resize:none}
+.ckt-code.full .ckt-code-h{font-size:var(--t-ui)}
 /* The side panel widens by its GRID TRACK, not by its own width: .ckt-main lays the
    two out with template columns, so a width on the child would simply overflow the
    250px track it was placed in. */
@@ -16028,9 +16054,13 @@ const Symbols = (function () {
     c.arc(0, 0, 30, 0, Math.PI * 2);
     c.moveTo(-60, 0); c.lineTo(-30, 0);
     c.moveTo(30, 0); c.lineTo(60, 0);
-    c.moveTo(-15, -9); c.lineTo(-3, -9);
-    c.moveTo(-9, -15); c.lineTo(-9, -3);
-    c.moveTo(3, -9); c.lineTo(15, -9);
+    /* + on the RIGHT. It was on the left here and on the right in the editor, which
+       is two answers to which end is positive with one of them wrong — in the one
+       subject where that is the whole question. Outside the circle and above the
+       lead, so it is beside the terminal it names rather than crowding the rim. */
+    c.moveTo(38, -17); c.lineTo(52, -17);
+    c.moveTo(45, -24); c.lineTo(45, -10);
+    c.moveTo(-52, -17); c.lineTo(-38, -17);
   });
 
   define('BATT', 'Battery', function (c) {
@@ -16046,8 +16076,9 @@ const Symbols = (function () {
     c.arc(0, 0, 30, 0, Math.PI * 2);
     c.moveTo(-60, 0); c.lineTo(-30, 0);
     c.moveTo(30, 0); c.lineTo(60, 0);
-    c.moveTo(0, 16); c.lineTo(0, -16);
-    c.moveTo(-7, -8); c.lineTo(0, -17); c.lineTo(7, -8);
+    /* along the leads, not across them — see the editor's copy */
+    c.moveTo(-21, 0); c.lineTo(21, 0);
+    c.moveTo(10, -9); c.lineTo(21, 0); c.lineTo(10, 9);
   });
 
   define('NPN', 'NPN transistor', function (c) {
@@ -16297,6 +16328,7 @@ function createCircuit(root, opts) {
   let drag = null;             /* a move in progress */
   let marquee = null;          /* a rubber-band selection in progress */
   let panFrom = null;          /* a pan in progress */
+  let codeFull = false;        /* the MCU sketch is filling the screen */
   let wireFrom = null;         /* grid point a wire is being drawn from */
   let wireDown = null;         /* the press that started it, for drag-vs-click */
   let hoverConn = null;        /* the terminal under the pointer, if any */
@@ -17215,38 +17247,55 @@ function createCircuit(root, opts) {
       ctx.moveTo(3, -19); ctx.lineTo(7, -16); ctx.lineTo(3, -13);
       ctx.stroke();
     } else {
-      /* V and I share a circle; the marking inside says which */
+      /* V and I share a circle. What is in it says which: an arrow along the leads
+         for a current source, and nothing at all for a voltage source, whose + and −
+         are drawn after the restore below, upright. */
       ctx.moveTo(-L, 0); ctx.lineTo(-11, 0);
       ctx.moveTo(11, 0); ctx.lineTo(L, 0);
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(0, 0, 11, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.beginPath();
-      if (p.kind === 'V') {
-        /* + on the terminal the solver treats as positive — which is the RIGHT pin
-           flat and the TOP pin rotated (see plusFirst). Rotating the canvas by +90°
-           sends local +x to the BOTTOM of the screen, so drawing the + at a fixed
-           local +x put it on the bottom pin of a vertical source: the drawn polarity
-           was the opposite of the solved one, and a learner reading the sign off the
-           symbol got it backwards. The glyphs swap ends with the symbol instead. The
-           solver's convention is untouched; only the label moves. What decides it is
-           whether the body is standing up, not whether it has been turned at all: turned
-           through half a circle the source is the same way up and the + is simply at the
-           other end, which the canvas rotation has already seen to. */
-        const s = (turnsOf(p) % 2) ? -1 : 1;
-        ctx.moveTo(3 * s, -4); ctx.lineTo(9 * s, -4);
-        ctx.moveTo(6 * s, -7); ctx.lineTo(6 * s, -1);
-        ctx.moveTo(-9 * s, -4); ctx.lineTo(-3 * s, -4);
-      } else {
-        ctx.moveTo(0, 7); ctx.lineTo(0, -7);
-        ctx.moveTo(-3.5, -3.5); ctx.lineTo(0, -7); ctx.lineTo(3.5, -3.5);
+      if (p.kind === 'I') {
+        ctx.beginPath();
+        /* THROUGH the source, along the leads, pointing at the + terminal — which is
+           the way current runs inside a source. It used to point across the device,
+           at right angles to both its pins, which is a direction nothing flows in.
+           An arrow may stay inside the rotation: an arrow turned is still an arrow. */
+        const sgn = (turnsOf(p) % 2) ? -1 : 1;
+        ctx.moveTo(-8 * sgn, 0); ctx.lineTo(8 * sgn, 0);
+        ctx.moveTo(3.5 * sgn, -4); ctx.lineTo(8 * sgn, 0); ctx.lineTo(3.5 * sgn, 4);
+        ctx.stroke();
       }
-      ctx.stroke();
+      /* A voltage source's + and − are drawn after the restore, below — a minus sign
+         turned a quarter is a vertical tick. */
     }
     ctx.restore();
 
-    /* Letters go on outside the rotation, or a vertical meter reads sideways. */
+    /* Letters and signs go on outside the rotation, or a vertical meter reads
+       sideways and a vertical source's minus reads as a lead. Where they SIT still
+       follows the turn, because they name the terminals and the terminals move; only
+       what they look like is held upright.
+
+       Screen direction of the + terminal, by quarter turns: right, up, left, down.
+       That is plusFirst's convention seen from outside — the RIGHT pin flat, the TOP
+       pin rotated — and the two must not be allowed to disagree, because the sign a
+       learner reads off the drawing is the sign they will put in the sum. The marks
+       ride above a lying-down source and to the left of a standing one, so they are
+       never on top of the value label, which centres itself above the body. */
+    if (p.kind === 'V') {
+      const r = turnsOf(p);
+      const d = [[1, 0], [0, -1], [-1, 0], [0, 1]][r];
+      const q = (r % 2) ? [-1, 0] : [0, -1];
+      const px = x + d[0] * 17 + q[0] * 8, py = y + d[1] * 17 + q[1] * 8;
+      const nx = x - d[0] * 17 + q[0] * 8, ny = y - d[1] * 17 + q[1] * 8;
+      ctx.beginPath();
+      ctx.moveTo(px - 3.5, py); ctx.lineTo(px + 3.5, py);
+      ctx.moveTo(px, py - 3.5); ctx.lineTo(px, py + 3.5);
+      ctx.moveTo(nx - 3.5, ny); ctx.lineTo(nx + 3.5, ny);
+      ctx.stroke();
+    }
+
     if (p.kind === 'METER') {
       ctx.font = 'bold 10px ui-monospace, monospace';
       ctx.textAlign = 'center';
@@ -17661,6 +17710,17 @@ function createCircuit(root, opts) {
 
   function paintPart() {
     const p = selOne();
+    /* The sketch box belongs to one part. Selecting anything else takes it off the
+       screen rather than leaving an overlay for a part nobody is looking at.
+       The class comes off the live box BEFORE syncExpanded runs, because syncExpanded
+       reads the DOM and the panel below has not been rebuilt yet. Without that the
+       overlay went away and the page stayed scroll-locked behind nothing. */
+    if (codeFull && !(p && p.kind === 'MCU')) {
+      codeFull = false;
+      const openBox = partPanel.querySelector('.ckt-code');
+      if (openBox) openBox.classList.remove('full');
+      syncExpanded();
+    }
     if (selIds.size > 1) {
       partPanel.innerHTML = '<h4>' + selIds.size + ' parts selected</h4>' +
         '<p class="ckt-hint">Drag to move them together. R rotates, Delete removes. ' +
@@ -17915,19 +17975,24 @@ function createCircuit(root, opts) {
           'this part can be drawn and wired but not run. Its pins stamp at reset — every ' +
           'one an input — which is what a board with power and no program does.</div>'
         : '') +
-      /* A <label>, as every other field on this panel already is. The sketch box was
-         the one control here captioned by a bare <span> — a legend for the eye and
-         nothing at all for the accessibility tree, so the largest and most important
-         input in the editor read as an unlabelled textarea. */
-      '<label class="ckt-f" for="' + uid + '" style="grid-template-columns:1fr;align-items:stretch">' +
-      '<span>Sketch</span>' +
+      /* The sketch, its caption, its diagnosis and its console are one block, because
+         filling the screen with the sketch and leaving the error it produced behind in
+         a 250px column would be filling the screen with half of the thing.
+
+         The caption names the box through aria-labelledby rather than by wrapping it
+         in a <label>. It was a <label> — put there because a bare <span> is a legend
+         for the eye and nothing at all for the accessibility tree — and the name is
+         still a real one; what changed is that the caption row now also holds a
+         button, and a button inside a label is a click the label steals. */
+      '<div class="ckt-code' + (codeFull ? ' full' : '') + '">' +
+      '<div class="ckt-code-h"><span id="' + uid + '-lab">Sketch</span>' +
+      '<button class="ckt-t" data-codefull aria-pressed="' + (codeFull ? 'true' : 'false') +
+      '" title="' + (codeFull ? 'Back into the panel (Escape)' : 'Write it full size') + '">' +
+      (codeFull ? 'Shrink' : 'Expand') + '</button></div>' +
       '<textarea id="' + uid + '" data-code rows="14" spellcheck="false" ' +
-      'aria-describedby="' + uid + '-err" aria-invalid="' + (built && built.error ? 'true' : 'false') + '" ' +
-      'style="width:100%;padding:6px 8px;' +
-      'border-radius:var(--r);border:1px solid var(--line-2);background:var(--surface-2,transparent);' +
-      'color:inherit;font-family:var(--mono,ui-monospace,monospace);font-size:11px;line-height:1.5;' +
-      'resize:vertical;white-space:pre;overflow-wrap:normal;overflow-x:auto">' +
-      esc2(code) + '</textarea></label>' +
+      'aria-labelledby="' + uid + '-lab" ' +
+      'aria-describedby="' + uid + '-err" aria-invalid="' + (built && built.error ? 'true' : 'false') + '">' +
+      esc2(code) + '</textarea>' +
       /* The syntax error is the one thing on this panel that changes while the learner
          is typing, and it was written into a plain <div>: on screen the moment a
          bracket was missed, and silent to a screen reader for ever. A live region, and
@@ -17951,9 +18016,38 @@ function createCircuit(root, opts) {
         : '') +
       (rig && rig.error ? faultLine(rig.error) : '') +
       mcuConsole(rig, uid) +
+      '</div>' +
       '<p class="ckt-hint" data-note>' + modelNote(p) + '</p>';
 
     const ta = partPanel.querySelector('[data-code]');
+
+    /* Filling the screen with the sketch. The flag is module-level and the class is
+       re-read from it on every repaint, because this panel is rebuilt whenever the
+       model changes and a state kept only in the DOM would be thrown away by the
+       first edit. */
+    const codeBox = partPanel.querySelector('.ckt-code');
+    partPanel.querySelector('[data-codefull]').addEventListener('click', function () {
+      codeFull = !codeFull;
+      paintMcu(p);
+      syncExpanded();
+      const nta = partPanel.querySelector('[data-code]');
+      /* Focus follows the box, or expanding it would take the caret out of the thing
+         it just made bigger. */
+      if (nta) { nta.focus(); nta.setSelectionRange(nta.value.length, nta.value.length); }
+      announce(codeFull ? 'The sketch fills the screen. Escape puts it back.'
+        : 'The sketch is back in the panel.');
+    });
+    /* Escape leaves the sketch. It cannot reach the canvas's own Escape from in here —
+       a textarea swallows the key on its way past — so it is handled where it lands. */
+    codeBox.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || !codeFull) return;
+      e.preventDefault();
+      e.stopPropagation();
+      codeFull = false;
+      paintMcu(p);
+      syncExpanded();
+      announce('The sketch is back in the panel.');
+    });
     /* Checked as it is typed and committed on an idle debounce. Three events rather
        than two: `input` keeps the model and schedules the save, the debounce writes
        the diagnosis and the save, and `change` commits at once because a blur is the
@@ -19814,14 +19908,23 @@ function createCircuit(root, opts) {
   const shell = root.querySelector('.ckt');
   const fullBtn = root.querySelector('[data-act="full"]');
   function isFull() { return shell.classList.contains('full'); }
+  /* The page is scroll-locked, and .frame and .page stop being stacking contexts,
+     while ANYTHING is filling the screen — the editor, the sketch box, or one of each
+     in two editors on one page. The DOM is asked rather than a count kept, so a
+     dispose or a repaint cannot leave the body locked with nothing over it. */
+  function syncExpanded() {
+    document.body.classList.toggle('ckt-expanded',
+      !!document.querySelector('.ckt.full, .ckt-code.full'));
+  }
   function setFull(on) {
     shell.classList.toggle('full', !!on);
     /* .page carries an entry animation, and an element with an animation that can
        touch transform is a containing block for position:fixed — so `inset:0` was
        measured against the article rather than the window, and the editor came out
-       887px tall inside a 1320px window. The class below turns that animation off
-       while the editor is expanded, and stops the page behind from scrolling. */
-    document.body.classList.toggle('ckt-expanded', !!on);
+       887px tall inside a 1320px window. The body class turns that animation off
+       while anything is expanded, stops the page behind from scrolling, and drops
+       .frame's z-index so the icon rail is not left sitting on top of the editor. */
+    syncExpanded();
     fullBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
     fullBtn.textContent = on ? 'Shrink' : 'Expand';
     fullBtn.title = on ? 'Back into the page (F, or Escape)' : 'Fill the screen (F)';
@@ -19922,12 +20025,16 @@ function createCircuit(root, opts) {
          further: a lesson navigated away from while the editor filled the screen would
          otherwise leave the browser in fullscreen with nothing in it. */
       document.removeEventListener('fullscreenchange', onFsChange);
-      if (isFull()) document.body.classList.remove('ckt-expanded');
       if (document.fullscreenElement === shell && document.exitFullscreen) {
         document.exitFullscreen().catch(function () {});
       }
       if (ro) ro.disconnect();
+      codeFull = false;
       root.innerHTML = '';
+      /* After the DOM goes, not before: syncExpanded reads it. A lesson navigated away
+         from while something was expanded would otherwise leave the page scroll-locked
+         with nothing on top of it. */
+      syncExpanded();
     },
   };
 }
@@ -22455,7 +22562,7 @@ function applyTheme() {
    otherwise, and this app is that one file. So for ten minutes after a deploy a
    browser can keep serving the previous build, which reads exactly like a fix that
    did not ship. The app therefore asks, once, whether it is current. */
-const BUILD_ID = '14f3314ef472';
+const BUILD_ID = 'd050015ccf22';
 
 function checkForNewBuild() {
   /* Unstamped (running from source) or opened from disk: there is nothing to ask. */

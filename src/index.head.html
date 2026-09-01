@@ -1335,6 +1335,32 @@ math[display=block]{display:block;display:block math;margin:14px 0;
    does not scroll, since nothing on it is reachable. */
 body.ckt-expanded{overflow:hidden}
 body.ckt-expanded .page{animation:none;transform:none}
+/* .frame carries z-index:2, which makes it a stacking context — so the editor's own
+   z-index is scoped INSIDE it and can never beat the icon rail'''s 6, whatever number
+   it is given. Expanded, the editor covered the page and the rail sat on top of it
+   with the Select button underneath. position:relative with z-index:auto is not a
+   stacking context, so dropping the number for the duration is enough; nothing else
+   in the frame needs it while an opaque overlay is over the whole frame. */
+body.ckt-expanded .frame{z-index:auto}
+
+/* ---- the microcontroller sketch ----
+   A program written in a fourteen-row box at eleven pixels, inside a 250px side
+   panel. Expanded it takes the screen, and the diagnosis and console come with it —
+   filling the screen with the sketch and leaving the error it produced behind in a
+   narrow column would be filling the screen with half of the thing.
+   z-index above the editor is a nested one, since the box is inside the editor when
+   both are expanded; it also stands on its own when only the sketch is. */
+.ckt-code{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ckt-code-h{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-family:var(--mono);font-size:var(--t-label);color:var(--ink-3)}
+.ckt-code textarea{width:100%;padding:6px 8px;border-radius:var(--r);
+  border:1px solid var(--line-2);background:var(--surface-2);color:inherit;
+  font-family:var(--mono);font-size:var(--t-label);line-height:1.5;
+  resize:vertical;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+.ckt-code.full{position:fixed;inset:0;z-index:75;background:var(--ground);
+  padding:16px;gap:10px;overflow:auto}
+.ckt-code.full textarea{flex:1;min-height:0;font-size:var(--t-ui);resize:none}
+.ckt-code.full .ckt-code-h{font-size:var(--t-ui)}
 /* The side panel widens by its GRID TRACK, not by its own width: .ckt-main lays the
    two out with template columns, so a width on the child would simply overflow the
    250px track it was placed in. */

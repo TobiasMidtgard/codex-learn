@@ -485,12 +485,30 @@ section('panel', () => {
 
   const id = ta.getAttribute('id');
   if (!id) bad('panel', 'the sketch box has no id, so nothing can be wired to it'); else held++;
-  /* A <label>, as every other field on this panel is. A <span> beside a control is a
-     caption for the eye and nothing in the accessibility tree. */
+  /* A NAME, by either route. A <span> beside a control is a caption for the eye and
+     nothing in the accessibility tree, which is what this is here to catch — but a
+     <label for> and an aria-labelledby are both real names, and the sketch takes the
+     second because its caption row also holds a button now, and a button inside a
+     <label> is a click the label steals.
+     Both halves of the second route are checked, which the label-only version never
+     had to be: that the element pointed at is there, and that it says something. */
   const label = ta.closest('label');
-  if (!label) bad('panel', 'the sketch box is not inside a <label> — it reads as an unlabelled textarea');
-  else if (label.getAttribute('for') !== id) bad('panel', 'the label does not point at the sketch box');
-  else held++;
+  const by = ta.getAttribute('aria-labelledby');
+  if (label) {
+    if (label.getAttribute('for') !== id) bad('panel', 'the label does not point at the sketch box');
+    else held++;
+  } else if (!by) {
+    bad('panel', 'the sketch box has neither a <label> nor an aria-labelledby — ' +
+      'it reads as an unlabelled textarea');
+  } else {
+    const cap = h.root.querySelector('#' + by);
+    if (!cap) {
+      bad('panel', 'aria-labelledby points at "' + by + '", which is not on this panel — ' +
+        'the sketch box is named after nothing');
+    } else if (!String(cap.textContent || '').trim()) {
+      bad('panel', 'the element that names the sketch box is empty');
+    } else held++;
+  }
 
   const errId = ta.getAttribute('aria-describedby');
   const box = h.root.querySelector('[data-built]');
@@ -713,9 +731,11 @@ async function mutations() {
     ['window blur stops flushing', () =>
       [mcu, ckt.replace('function onWinBlur() { releaseSpace(); flushEdit(); }',
         'function onWinBlur() { releaseSpace(); }')]],
-    ['the sketch box loses its label', () =>
-      [mcu, ckt.replace("'<label class=\"ckt-f\" for=\"' + uid + '\" style=\"grid-template-columns:1fr;align-items:stretch\">'",
-        "'<div class=\"ckt-f\" style=\"grid-template-columns:1fr;align-items:stretch\">'")]],
+    ['the sketch box loses its name', () =>
+      [mcu, ckt.replace("'aria-labelledby=\"' + uid + '-lab\" ' +", "'' +")]],
+    ['the sketch box is named after an element that is not there', () =>
+      [mcu, ckt.replace("'aria-labelledby=\"' + uid + '-lab\" ' +",
+        "'aria-labelledby=\"' + uid + '-gone\" ' +")]],
     ['the error box stops being a live region', () =>
       [mcu, ckt.replace('role="status" aria-live="polite">', '>')]],
     ['the console stops taking focus', () => [mcu, ckt.replace("'<pre tabindex=\"0\" role=\"group\"", "'<pre role=\"group\"")]],
