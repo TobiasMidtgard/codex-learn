@@ -54,6 +54,381 @@ COURSE = {
                 "Characteristic impedance $Z_0 = \\sqrt{L/C}$ is a ratio carried by a travelling wave, not a resistance you can measure with an ohmmeter.",
                 "A ladder of discrete LC sections is a low-pass filter with a real cutoff; a line is the limit as the sections become infinitesimal and that cutoff goes to infinity.",
             ],
+            "read": [
+                {
+                    "title": "Thirty metres of coax, and the two numbers hiding in it",
+                    "minutes": 15,
+                    "body": r'''
+A 30.0 m reel of RG-58 is lying on the bench with nothing connected to its far end.
+A pulse generator with a 50 Ω source resistance drives one end with a 1 V step, and
+a scope tees onto that same end and watches. The trace does something a lumped
+circuit has no room for: it rises to 0.50 V, sits flat there for 303 ns, and then
+steps up to 1.00 V and stays.
+
+Three facts are on that screen and the whole module is in them.
+
+**The 0.50 V.** The generator's 50 Ω is in series with whatever it is driving, so a
+half-amplitude step means the load is drawing exactly the current a 50 Ω resistor
+would draw. The far end of the reel is open — it ends in air — and the copper's own
+resistance is under a tenth of an ohm. For 303 ns the open-ended reel is a 50 Ω
+resistor.
+
+**The 303 ns.** Nothing about the generator changed at that instant. What changed is
+that news of the open end came back. The step had to travel 30 m to the end and 30 m
+back before the near end could learn there was an end at all.
+
+**The final 1.00 V.** In the steady state an open circuit carries no current, so no
+voltage is dropped across the source resistance and the whole 1 V appears at the
+input. The line ends up doing what an open circuit is supposed to do — 303 ns later
+than a lumped picture would have it.
+
+## A slice of line, and what KVL says about it
+
+The reel has inductance because current in it makes a magnetic field, and
+capacitance because the inner conductor and the braid are separated conductors at
+different potentials. Neither is a lumped value. Cut the reel in half and each half
+has half as much of both, which is the definition of a quantity that is *per unit
+length*: an inductance $L$ in henries per metre and a capacitance $C$ in farads per
+metre.
+
+Take a slice of length $dz$ at position $z$. Its series inductance is $L\,dz$ and its
+shunt capacitance is $C\,dz$. KVL round the slice says the voltage drop across it is
+the inductive drop:
+
+$$V(z + dz) - V(z) = -L\,dz\,\frac{\partial I}{\partial t}
+\quad\Longrightarrow\quad
+\frac{\partial V}{\partial z} = -L\,\frac{\partial I}{\partial t}$$
+
+KCL at the far node of the slice says the current that fails to come out the other
+side went into charging the shunt capacitance:
+
+$$\frac{\partial I}{\partial z} = -C\,\frac{\partial V}{\partial t}$$
+
+Those are the telegrapher equations, and the derivation *From a slice of line to a
+wave* walks the algebra that follows. Differentiate the first with respect to $z$,
+the second with respect to $t$, and subtract to eliminate $I$:
+
+$$\frac{\partial^2 V}{\partial z^2} = LC\,\frac{\partial^2 V}{\partial t^2}$$
+
+That is the wave equation. Any function of the form $V = f(t - z/v_p)$ satisfies it
+provided $1/v_p^2 = LC$, which fixes
+
+$$v_p = \frac{1}{\sqrt{LC}}$$
+
+Now put such a wave back into the first telegrapher equation. With
+$V = f(t - z/v_p)$ the left-hand side is $\partial V/\partial z = -f'/v_p$, and with
+$I = g(t - z/v_p)$ the right-hand side is $-L\,\partial I/\partial t = -L g'$. Equate
+them: $f' = L v_p\, g'$, and integrating,
+
+$$\frac{V}{I} = L v_p = \frac{L}{\sqrt{LC}} = \sqrt{\frac{L}{C}} \equiv Z_0$$
+
+The ratio of voltage to current in a single travelling wave is a constant fixed by
+the cross-section of the cable. That constant is the 50 Ω the scope saw. Note what
+never entered the derivation: the length of the reel. $Z_0$ and $v_p$ exist before
+anyone decides how much cable to cut.
+
+## Reading the reel backwards
+
+The bench measured $Z_0$ and $v_p$; the model wants $L$ and $C$. Multiply and divide:
+$Z_0 v_p = \sqrt{L/C}\cdot 1/\sqrt{LC} = 1/C$ and $Z_0/v_p = L$. Two lines of algebra
+turn a scope trace into the two per-metre constants of the cable.
+
+```python
+import math
+
+# 30.0 m of RG-58 with the far end left open. The step comes back 303 ns later,
+# and until it does the generator sees nothing but the line.
+length, round_trip, z0 = 30.0, 303e-9, 50.0
+
+v_p = 2 * length / round_trip
+L = z0 / v_p
+C = 1.0 / (z0 * v_p)
+
+print(f"v_p = {v_p:.4e} m/s = {v_p / 2.99792458e8:.3f} c")
+print(f"L   = {L * 1e9:.1f} nH/m")
+print(f"C   = {C * 1e12:.1f} pF/m")
+print(f"and back again: sqrt(L/C) = {math.sqrt(L / C):.1f} ohm, "
+      f"1/sqrt(LC) = {1 / math.sqrt(L * C):.4e} m/s")
+```
+
+It prints a phase velocity of $1.9802\times10^8$ m/s — 0.661 of the speed of light —
+and then 252.5 nH/m and 101.0 pF/m. Open an RG-58 datasheet and it will quote about
+101 pF per metre and a velocity factor of 0.66. The scope trace and the datasheet are
+the same two numbers written in different units, and the last line of the block does
+the round trip to prove no information was lost on the way.
+
+The velocity factor is not a free parameter either. For a coaxial line
+$v_p = c/\sqrt{\varepsilon_r}$, and solid polyethylene has $\varepsilon_r \approx
+2.3$, whose square root is 1.52. That is where 0.66 comes from, and it is why every
+solid-polyethylene cable in the catalogue — 50 Ω, 75 Ω, thin, thick — has the same
+velocity factor while their impedances differ. Geometry sets $Z_0$; the dielectric
+sets $v_p$.
+
+## The mistake: reaching for an ohmmeter
+
+The most common thing done to a 50 Ω cable is to put a meter across it and be
+surprised. With the far end open the meter reads megohms; with the far end shorted it
+reads the 0.1 Ω of the copper. Neither reading is anywhere near 50.
+
+The reason it is tempting is that $Z_0$ is quoted in ohms and it genuinely is a ratio
+of volts to amps — the scope measured it. But it is the ratio carried by *one
+travelling wave*, and an ohmmeter does not launch one. An ohmmeter applies a steady
+voltage and waits, and waiting is exactly what destroys the measurement: the far end
+answers, the answer arrives, and from then on the meter is reading the far end rather
+than the line. On the trace above, the 50 Ω was on the screen for 303 ns and then
+went away. A time-domain reflectometer is an ohmmeter that has learnt to look before
+the answer gets back.
+
+The same idea, run the other way, is the point of the *A line, made of eight
+components* build exercise. Terminate the far end in $\sqrt{L/C}$ and the wave
+arriving there finds a load that draws exactly the current more line would have
+drawn. Nothing comes back, ever, and the near end reads $Z_0$ not for 303 ns but
+permanently. Matching is the art of making a finite line indistinguishable from an
+infinite one.
+
+## Four sections, and a real line
+
+A computer cannot take the limit $dz \to 0$, so a simulation chops the line into
+sections of finite $L_s$ and $C_s$ and leapfrogs them. That is what the lab
+*Simulate a line as a ladder of LC sections* asks for; here is the same scheme in
+twenty lines, with the lab's own default ladder.
+
+```python
+import math
+
+Ls, Cs, N = 1.0, 0.25, 20        # per section, in the lab's own units
+dt, steps = 0.01, 4000
+
+v = [0.0] * (N + 1)              # node voltages
+i = [0.0] * N                    # branch currents, i[k] from node k to node k+1
+far = []
+for _ in range(steps):
+    v[0] = 1.0                   # an ideal 1 V step, held from t = 0
+    far.append(v[N])
+    for k in range(N):
+        i[k] += (dt / Ls) * (v[k] - v[k + 1])
+    for k in range(1, N):
+        v[k] += (dt / Cs) * (i[k - 1] - i[k])
+    v[N] += (dt / Cs) * i[N - 1]
+
+arrival = next(n for n, y in enumerate(far) if y > 0.5) * dt
+print(f"one section: Z0 = {math.sqrt(Ls / Cs):.1f}, delay = {math.sqrt(Ls * Cs):.2f}")
+print(f"{N} sections predict {N * math.sqrt(Ls * Cs):.1f}; the far end crosses "
+      f"0.5 V at t = {arrival:.2f}")
+print(f"peak at the open far end: {max(far):.2f} V")
+```
+
+It reports $Z_0 = 2.0$, a per-section delay of 0.50, a predicted transit of 10.0, a
+measured crossing at 10.01 — and a peak of 2.42 V at the open end. Two of those
+numbers deserve attention.
+
+The doubling is real physics. An open end forces the current to zero, which can only
+happen if a reflected wave of equal amplitude cancels the incident current, and the
+voltages of two such waves add. The far end goes to twice the incident amplitude,
+which is the same $\Gamma = +1$ that put the reel's near end at 1.00 V after 303 ns.
+Module 2 is about what happens when the end is neither open nor matched.
+
+The 0.42 above that is not physics. A ladder of discrete sections is a low-pass
+filter with a cutoff at $2/\sqrt{L_s C_s}$, and a step pushed through a filter with a
+sharp corner rings. That is why the lab's test accepts a peak anywhere between 1.9
+and 2.6 rather than demanding 2.0: the overshoot belongs to the model, not to the
+line. The sandbox *One LC section, and why a line is not one* is the same defect
+isolated to a single section, where a light termination puts a 20 dB peak on the
+response of something that is meant to be flat. Halve $L_s$ and $C_s$ and double $N$
+and the cutoff doubles while the total delay stays put; the ringing shrinks and the
+model creeps toward the line it is impersonating.
+
+## Where the lossless line stops holding
+
+Everything above dropped the series resistance $R$ and the shunt conductance $G$. A
+real line has both, and their effects appear in this order as a cable gets longer or
+a signal gets faster.
+
+Attenuation first. RG-58 loses roughly 0.5 dB per 10 m at 100 MHz, so the 30 m reel
+takes about 1.5 dB out of a signal each way — invisible on a step trace, ruinous on a
+100 m run.
+
+Then dispersion. $R$ is dominated by the skin effect and grows as $\sqrt{f}$, which
+makes the attenuation frequency-dependent and therefore smears edges: the reel that
+returned a clean step at 303 ns returns a rounded one at 300 m.
+
+Then $Z_0$ itself. The full result is $Z_0 = \sqrt{(R + j\omega L)/(G + j\omega C)}$,
+which collapses to $\sqrt{L/C}$ only when $\omega L \gg R$. At 1 kHz on a long
+telephone pair that condition fails badly and $Z_0$ is complex and frequency
+dependent — which is the regime the telegrapher equations were actually invented for,
+and the reason Heaviside's loading coils worked.
+
+Above a few megahertz on a metre or a hundred of coax, none of that matters and
+$Z_0 = \sqrt{L/C}$ with $v_p = 1/\sqrt{LC}$ is accurate to a percent or better. That
+is the model the rest of this course is built on.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "What the scope was measuring for 303 nanoseconds",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A 1 V step from a generator with a 50 Ω source resistance is applied to a long cable whose far end is open. The near end sits at 0.50 V for the whole time before the reflection returns. What did that plateau measure?",
+                        "opts": [
+                            "The characteristic impedance of the cable, which is 50 Ω",
+                            "The series resistance of the copper, which is 50 Ω",
+                            "The open circuit at the far end of the cable",
+                            "Nothing about the cable; a scope always halves the amplitude it is shown",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Half the source behind a 50 Ω resistance means the load is drawing what a 50 Ω resistor draws, and for that whole window the only thing connected is the line.",
+                            r"You have found a real 50 Ω in the wrong component: 30 m of RG-58 has under a tenth of an ohm of series copper, and a resistance that large would make the trace sag along the cable instead of holding flat.",
+                            r"This is the answer the far end will give, and it has not given it yet — the plateau *ends* at the moment the far end's reply arrives, and everything before that is the line speaking for itself.",
+                            r"A scope does load the node, and a 1 MΩ probe across a 50 Ω source shifts the reading by about five parts in a hundred thousand rather than by a factor of two.",
+                        ],
+                        "why": r"""
+A half-amplitude step behind a 50 Ω source means the load is drawing the current a
+50 Ω resistor would draw, and for the whole round-trip time the only thing connected
+is the cable — so the cable is the 50 Ω, and $Z_0 = \sqrt{L/C}$ is what was measured.
+The copper is not the answer: its series resistance is under a tenth of an ohm, and
+if it were 50 Ω the trace would decay along the line rather than stay flat. The far
+end is not the answer either, and that is the whole surprise — the far end's reply
+has not arrived yet, and until it does the near end cannot know an end exists. A
+scope loading the node would be a genuine measurement error, but a 1 MΩ probe across
+a 50 Ω source changes the reading by 0.005%.
+""",
+                    },
+                    {
+                        "q": "A cable is redesigned so that both $L$ and $C$ per metre are doubled. What happens to $Z_0$ and to $v_p$?",
+                        "opts": [
+                            "$Z_0$ is unchanged and $v_p$ halves",
+                            "$Z_0$ doubles and $v_p$ is unchanged",
+                            "Both of them double",
+                            "$Z_0$ halves and $v_p$ doubles",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$Z_0$ is a ratio and survives the doubling untouched; $v_p$ is built on the product, which quadruples, so the speed falls by two.",
+                            r"More inductance does raise $Z_0$ when $C$ is held still, and that reflex is the whole trap here — $C$ doubled as well, and the ratio the two of them sit in did not move.",
+                            r"Nothing here can rise. A line that is heavier in both quantities is a slower line, and the product sits in the denominator of $v_p = 1/\sqrt{LC}$.",
+                            r"Both formulae are inverted at once, which usually comes from misremembering $Z_0$ as $\sqrt{C/L}$ and $v_p$ as $\sqrt{LC}$ rather than its reciprocal.",
+                        ],
+                        "why": r"""
+$Z_0 = \sqrt{L/C}$ depends on the *ratio*, which doubling both leaves alone, while
+$v_p = 1/\sqrt{LC}$ depends on the *product*, which doubling both multiplies by four —
+so the velocity falls by a factor of two. The tempting answer is that a bigger $L$
+means a bigger impedance, and it does when $C$ is held fixed; here it is not.
+Splitting the two formulae by what they depend on is the most useful thing to carry
+away from them: one is a ratio, one is a product, and every cable design trade runs
+along that split. Dielectric loading is exactly this move — filling the line with
+$\varepsilon_r = 2.3$ multiplies $C$ alone, dropping $v_p$ by 1.52 and $Z_0$ with it.
+""",
+                    },
+                    {
+                        "q": "Why does a 100 m reel of RG-58 have the same 50 Ω characteristic impedance as a 2 m patch lead cut from it?",
+                        "opts": [
+                            "Length never enters the derivation; $Z_0$ comes from $L$ and $C$ per metre",
+                            "It does not — a longer line has a proportionally higher $Z_0$",
+                            "Both reels are terminated in 50 Ω instruments at each end",
+                            "Because the total $L$ and the total $C$ both scale with the length and cancel",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The algebra ran on a slice of length $dz$ and never mentioned how much cable there was, so $Z_0$ is a property of the cross-section.",
+                            r"This confuses $Z_0$ with the total series inductance or the total shunt capacitance, both of which genuinely do grow with length — but neither of those is the quantity a travelling wave sees.",
+                            r"Terminations are the one thing that cannot be responsible: an unterminated reel lying in its box has the same $Z_0$, which is exactly what the open-ended trace demonstrated.",
+                            r"Right conclusion by the wrong route, and the route matters — there is no total to cancel in a derivation done on an infinitesimal slice, which is why the argument survives on a line that is 3 m at one end and 300 m at the other.",
+                        ],
+                        "why": r"""
+$Z_0 = \sqrt{L/C}$ is built from two per-metre quantities and the algebra that
+produced it never mentioned how much cable there is, so $Z_0$ is a property of the
+cross-section: the conductor diameters and the dielectric between them. Cancelling
+totals gets the right answer for the wrong reason — the totals do scale together and
+their ratio is unchanged, but the derivation ran on a slice of length $dz$ and had no
+total to cancel, which is why the argument still works for a line that is 3 m at one
+end and 300 m at the other. Terminations have nothing to do with it: $Z_0$ exists
+before either end is connected, and an unterminated line has it too.
+""",
+                    },
+                    {
+                        "q": "The same open-ended 30 m reel is measured again, but the generator now drives a much slower step, with a rise time of 10 µs. What does the near end show?",
+                        "opts": [
+                            "A single rise to 1 V; the 303 ns round trip is buried inside the edge",
+                            "The same 0.5 V plateau, held for 303 ns before it rises",
+                            "A 0.5 V plateau lasting 10 µs, since the plateau follows the rise time",
+                            "Nothing at all, because a slow edge cannot propagate on a line",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The reflection still returns at 303 ns, but the source has moved by well under a percent of its swing by then, so what reaches the screen is one smooth rise.",
+                            r"The round trip really is unchanged, and that is what makes this tempting — the trap is assuming it stays *visible*, when the feature it creates is a thirtieth of a percent of the width of the edge hiding it.",
+                            r"The plateau lasts as long as it takes the wave to go and come back, and neither the length of the cable nor the speed on it knows anything about how fast the generator switches.",
+                            r"Slow signals propagate perfectly well: a mains cable at 50 Hz is a transmission line too, with a round trip that is invisible for precisely the reason above.",
+                        ],
+                        "why": r"""
+The round trip is still 303 ns, but the source takes 10 µs to change, so the
+reflection is back and the line is in its steady state long before the edge has
+finished rising. The plateau is still there in principle and is invisible in
+practice: what the scope draws is one smooth rise to 1 V, the answer a lumped-circuit
+picture would have given. This is the actual criterion for when transmission-line
+behaviour matters — not the length of the line but the length compared with the
+rise time. A 30 m reel is a transmission line to a 1 ns edge and a lumped capacitor
+of about 3 nF to a 10 µs one, and the same cable is both on the same afternoon.
+""",
+                    },
+                    {
+                        "q": "In the ladder simulation the far end is open, and its voltage peaks at 2.42 V for a 1 V step. Which part of that is the model rather than the physics?",
+                        "opts": [
+                            "The 0.42 of overshoot, which is the discrete ladder ringing at its cutoff",
+                            "The whole 2.42 V, since a passive line cannot exceed its input",
+                            "None of it; a lossless open-ended line doubles and then rings",
+                            "The doubling, which appears only because the source resistance here is zero",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"A chain of finite $L_s$ and $C_s$ is a low-pass filter with a corner at $2/\sqrt{L_sC_s}$, and a step pushed through a corner overshoots before it settles.",
+                            r"The instinct that a passive network cannot exceed its input is sound about power and wrong about voltage: the doubled voltage arrives with zero current beside it, so no extra energy appears anywhere.",
+                            r"The doubling is physics and the ringing is not — a real line has no cutoff to ring at, which is precisely what taking $dz \to 0$ removes from the model.",
+                            r"The source resistance decides how much of the step is launched, not what the far end does with it once it arrives; an open end reflects with $\Gamma = +1$ whatever is driving the other end.",
+                        ],
+                        "why": r"""
+The doubling to 2 V is real: an open end forces the current to zero, so the reflected
+wave must cancel the incident current, and cancelling in current means adding in
+voltage. The extra 0.42 is the ladder. A chain of discrete $L_s$ and $C_s$ is a
+low-pass filter with a cutoff at $2/\sqrt{L_sC_s}$, and a step through a filter with
+a corner rings — which is why the lab accepts any peak between 1.9 and 2.6 rather
+than demanding 2.0. Exceeding the input is not the giveaway it looks like: a passive
+network can double a step without generating energy, because the doubled voltage
+comes with zero current and so carries no extra power. Halve the section values,
+double the count, and the overshoot shrinks while the doubling stays exactly where it
+is.
+""",
+                    },
+                    {
+                        "q": "The open far end of the 30 m reel is replaced with a 50 Ω terminator. What does the near-end trace do?",
+                        "opts": [
+                            "It rises to 0.5 V and stays there, with nothing arriving at 303 ns",
+                            "It rises to 0.5 V and then falls to 0 V at 303 ns",
+                            "It rises to 1 V immediately, because a matched line presents no divider",
+                            "It rises to 0.5 V and climbs to 1 V at 303 ns, as before",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"A matched load draws precisely the current that more line would have drawn, so there is nothing to reflect and no event to wait for.",
+                            r"That is what a *short* does: its reflection inverts, and the returning wave cancels the outgoing one at the near end. A resistor equal to $Z_0$ is the one termination that reflects neither way.",
+                            r"The divider is formed by the source resistance and the line's own $Z_0$, and it is there from the first instant whether or not the far end is matched.",
+                            r"This carries the open-circuit trace over unchanged, which is the reflex worth breaking — making the 303 ns event disappear is the entire point of fitting the terminator.",
+                        ],
+                        "why": r"""
+The wave reaching a 50 Ω terminator finds a load drawing exactly the current more
+line would have drawn, so there is nothing to reflect and no event at 303 ns at all —
+the near end holds 0.5 V for as long as the source does. The trace that falls to zero
+is what a *short* gives, where the reflection inverts and cancels; the trace that
+climbs to 1 V is the open circuit that was measured first. An immediate rise to 1 V
+never happens with a 50 Ω source into a 50 Ω line, matched or not, because the source
+resistance and the line form a divider from the first instant. That flat 0.5 V is
+what the build exercise is checking when it asks for a flat response from 1 to 8 MHz.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "One LC section, and why a line is not one",
                 "visualiser": "bode",
@@ -498,6 +873,225 @@ assert _ts > _tf * 1.8, \
                 "Input impedance rotates with distance: $Z_{in} = Z_0(Z_L + jZ_0\\tan\\beta d)/(Z_0 + jZ_L\\tan\\beta d)$, with period $\\lambda/2$.",
                 "A quarter-wave section of impedance $\\sqrt{Z_0 Z_L}$ matches a real load, and only at the one frequency where it is a quarter wave.",
             ],
+            "read": [
+                {
+                    "title": "A probe sliding down a slotted line, and what it finds",
+                    "minutes": 16,
+                    "body": r'''
+On the bench is a 50 Ω air-dielectric slotted line: a rigid coaxial section with a
+narrow slot milled along the outer conductor, and a crystal detector on a carriage
+that slides down the slot with a millimetre scale beside it. A signal generator drives
+one end at 1.5 GHz. The far end is an unknown load — a patch antenna on a short pigtail.
+
+Wind the carriage from one end to the other and the detector does not read a constant
+level. It reads a pattern, fixed in space, that does not move while you watch it. Three numbers
+come off the scale. The envelope rises to **148 mV** at its peaks and falls to
+**51.5 mV** at its troughs; adjacent troughs are **99.9 mm** apart; and the first
+trough is **57.9 mm** back from the plane where the load is connected.
+
+That pattern should be unsettling. A wave that goes one way has a constant amplitude
+everywhere; there is nothing for it to interfere with. A pattern nailed to the metal
+means two waves, going opposite ways.
+
+## Where the second wave comes from
+
+At the load plane the total voltage is the sum of the incident and reflected waves and
+the total current is their difference over $Z_0$ — a difference, because the reflected
+wave carries its current backwards:
+
+$$V = V_i + V_r, \qquad I = \frac{V_i - V_r}{Z_0}$$
+
+The load imposes one condition, $V/I = Z_L$. Substituting and collecting the two
+amplitudes on opposite sides gives $V_i(Z_L - Z_0) = V_r(Z_L + Z_0)$, so
+
+$$\Gamma \equiv \frac{V_r}{V_i} = \frac{Z_L - Z_0}{Z_L + Z_0}$$
+
+One boundary condition, one line of algebra, and everything else in this module
+follows from it. The derivation *The reflection coefficient and the quarter-wave
+transformer* runs the same steps as a sequence you complete yourself. Two special
+cases are worth fixing now: $Z_L = Z_0$ gives $\Gamma = 0$ and there is no second
+wave at all, and $Z_L = \infty$ gives $\Gamma = +1$, the total in-phase reflection
+that put the far end of module 1's open reel at twice the incident voltage.
+
+## Why the pattern stands still
+
+A distance $d$ back from the load, the incident wave has advanced in phase by $\beta d$
+and the reflected wave has retreated by the same amount, so
+
+$$V(d) = V_i\left(e^{j\beta d} + \Gamma e^{-j\beta d}\right),
+\qquad |V(d)| = |V_i|\,\bigl|1 + \Gamma e^{-2j\beta d}\bigr|$$
+
+As $d$ increases, $\Gamma e^{-2j\beta d}$ walks around a circle of radius $|\Gamma|$
+centred on the origin. The magnitude being measured is the distance from the point
+$-1$ to that walking point, so it swings between $1 + |\Gamma|$ and $1 - |\Gamma|$
+times $|V_i|$ and then repeats. Two things fall out at once.
+
+The ratio of the envelope's peak to its trough carries no $|V_i|$ in it:
+
+$$s = \frac{1 + |\Gamma|}{1 - |\Gamma|}$$
+
+and the pattern repeats when $2\beta d$ has advanced by $2\pi$, which is every half
+wavelength. That is the second measurement above: troughs 99.9 mm apart means
+$\lambda = 199.8$ mm, and $c/\lambda$ is 1.5004 GHz. The slotted line measures the
+generator's frequency as a side effect of measuring anything else.
+
+Run the ratio backwards, $|\Gamma| = (s - 1)/(s + 1)$, and the phase from the position
+of the trough — a trough is where $\Gamma e^{-2j\beta d}$ points at $-1$, so
+$\theta - 2\beta d = -\pi$ — and the load itself comes back out.
+
+```python
+import cmath
+import math
+
+z0 = 50.0
+v_max, v_min = 148e-3, 51.5e-3   # probe envelope, in volts
+lam = 0.1998                     # twice the spacing of adjacent minima, in metres
+d_min = 0.0579                   # first minimum, measured back from the load plane
+
+s = v_max / v_min
+mag = (s - 1.0) / (s + 1.0)
+theta = 2.0 * (2.0 * math.pi / lam) * d_min - math.pi
+gamma = cmath.rect(mag, theta)
+z_l = z0 * (1.0 + gamma) / (1.0 - gamma)
+
+print(f"VSWR    = {s:.3f} : 1")
+print(f"|Gamma| = {mag:.4f} at {math.degrees(theta):.1f} degrees")
+print(f"Z_L     = {z_l.real:.1f} + {z_l.imag:.1f}j ohm")
+```
+
+A VSWR of 2.874, a reflection coefficient of 0.4837 at 28.6°, and a load of
+$99.5 + j60.2\ \Omega$. Three readings off a millimetre scale and a diode, and the
+complex impedance of an antenna at 1.5 GHz drops out. Nothing in that chain needed a
+network analyser, and this is how it was done for forty years. Take the load to be
+$100 + j60\ \Omega$ — the last digit of each reading is not worth more than that — and
+carry it through the rest of the module.
+
+## What the mismatch actually costs
+
+```python
+import cmath
+import math
+
+C_LIGHT = 2.99792458e8
+z0, z_l, f0 = 50.0, complex(100.0, 60.0), 1.5e9
+
+
+def z_in(zl, zc, bl):
+    """Impedance seen bl radians of lossless line back from zl on a zc line."""
+    t = cmath.tan(bl)
+    return zc * (zl + 1j * zc * t) / (zc + 1j * zl * t)
+
+
+g = (z_l - z0) / (z_l + z0)
+s = (1 + abs(g)) / (1 - abs(g))
+print(f"|Gamma| = {abs(g):.4f}, VSWR = {s:.4f} : 1, "
+      f"return loss = {-20 * math.log10(abs(g)):.2f} dB")
+print(f"reflected {abs(g) ** 2 * 100:.1f}% of the power, "
+      f"delivered {(1 - abs(g) ** 2) * 100:.1f}%")
+
+lam0 = C_LIGHT / f0
+d = lam0 * (cmath.phase(g) + math.pi) / (4 * math.pi)
+z_min = z_in(z_l, z0, 2 * math.pi * d / lam0)
+z1 = math.sqrt(z0 * z_min.real)
+print(f"voltage minimum {d * 1e3:.2f} mm back: Z = {z_min.real:.2f} "
+      f"{z_min.imag:+.2f}j, against Z0/s = {z0 / s:.2f}")
+print(f"the quarter-wave section there must be {z1:.2f} ohm")
+
+for f in (1.35e9, 1.50e9, 1.65e9):
+    lam = C_LIGHT / f
+    seen = z_in(z_in(z_l, z0, 2 * math.pi * d / lam), z1,
+                2 * math.pi * (lam0 / 4) / lam)
+    gg = (seen - z0) / (seen + z0)
+    print(f"  {f / 1e9:.2f} GHz: |Gamma| = {abs(gg):.4f}, "
+          f"VSWR = {(1 + abs(gg)) / (1 - abs(gg)):.3f} : 1")
+```
+
+The first two lines are the ones to argue with. $|\Gamma| = 0.4834$, a VSWR of
+2.8718:1, a return loss of 6.31 dB — and **23.4% of the power reflected, 76.6%
+delivered**.
+
+## The mistake: reading a VSWR as a power loss
+
+A standing wave ratio of nearly three to one sounds ruinous, and the word *loss* in
+*return loss* does nothing to help. Both readings are wrong, and they are wrong in
+opposite directions.
+
+The VSWR is a ratio of *voltages*, and power goes as voltage squared, so the fraction
+of power turned back is $|\Gamma|^2 = 0.234$ rather than anything like $1/2.87$. The
+antenna still receives 76.6% of what the generator offered it, which is 1.16 dB of
+mismatch loss. Chasing a 2.87:1 VSWR down to 1.5:1 buys back about 1.0 dB — worth
+having, rarely worth a redesign, and routinely mistaken for the difference between a
+working link and a dead one.
+
+Return loss runs the other way from its name. It is $-20\log_{10}|\Gamma|$, a
+*positive* number that gets *larger* as the match gets *better*: 6.31 dB here is
+mediocre, 20 dB means $|\Gamma| = 0.1$ and is good, and a perfect match has infinite
+return loss because nothing at all comes back. The tell that someone has the sense of
+it backwards is a specification asking for "return loss less than 10 dB".
+
+## Where you stand changes what you see
+
+$|\Gamma|$ belongs to the load. Slide the reference plane back along lossless line and
+the reflection coefficient rotates — $\Gamma(d) = \Gamma e^{-2j\beta d}$ — but its
+magnitude does not move, so the VSWR and the return loss are the same wherever you
+measure them. The impedance, on the other hand, changes completely, and repeats every
+half wavelength because the phase term carries a factor of two. That is the whole
+content of the sandbox *A load, and where a length of line puts it*: sweep its length
+control across the full range and the marker makes one revolution of a circle whose
+radius is fixed, while the readout underneath never changes.
+
+The consequence people miss is that adding line cannot improve a match. It moves the
+impedance around a circle of constant radius; only a lossy line shrinks the circle,
+and it does that by throwing the signal away.
+
+## Matching at the voltage minimum
+
+The quarter-wave transformer follows from the input-impedance formula by taking
+$\beta d \to \pi/2$, where $\tan\beta d$ grows without bound; divide top and bottom by
+the tangent and the terms without one vanish, leaving $Z_{in} = Z_0^2/Z_L$. Run that
+backwards and a section of impedance $Z_1$ turns $Z_L$ into $Z_1^2/Z_L$, so setting
+$Z_1 = \sqrt{Z_0Z_L}$ makes the load look like $Z_0$.
+
+It matches a *real* load, and $100 + j60$ is not real. But the standing-wave pattern
+has already handed over a plane where the impedance is real: at a voltage minimum
+$\Gamma e^{-2j\beta d}$ points at $-1$, so
+$Z = Z_0(1 - |\Gamma|)/(1 + |\Gamma|) = Z_0/s$, a pure resistance. The block prints
+17.41 Ω with an imaginary part that rounds to zero, sitting exactly on $50/2.8718$,
+57.85 mm back from the load. A quarter-wave section of $\sqrt{50 \times 17.41} =
+29.50\ \Omega$ inserted at that plane matches the antenna to the line, and the sweep
+at the end confirms $|\Gamma| = 0.0000$ at 1.5 GHz.
+
+That is the design the lab *Reflection, standing waves and a quarter-wave match*
+builds function by function: `reflection`, `vswr`, `return_loss`, `input_impedance`
+and `quarter_wave` are the five pieces used above, and one of its tests performs the
+same check the last loop performs here — push the load through its own quarter-wave
+section and confirm that what comes out reflects nothing.
+
+## Where it stops holding
+
+**Bandwidth.** The sweep is the answer to that, and it is not flattering: 10% away
+from the design frequency, in either direction, $|\Gamma|$ has climbed from zero to
+0.2968 and the VSWR to 1.844:1. A quarter-wave section is a quarter wave at one
+frequency. Broadband matching is the art of buying that back, usually with several
+sections whose impedances step gradually instead of once.
+
+**Losing sight of a bad match.** On lossy line $|\Gamma|$ measured at the input is the
+load's value attenuated by *twice* the one-way loss, because the reflection makes the
+trip in both directions. Ten metres of cable with 3 dB of loss will report a VSWR of
+3:1 for a load that is a dead short — an infinite VSWR reading as a mediocre one. A
+match measured at the shack end of a long feeder is a measurement of the feeder.
+
+**A load that moves.** The sweep above holds $Z_L$ fixed while the frequency changes,
+which no antenna does. A real load drifts as well, and the two effects can either
+cancel or compound; the ±10% figure is an optimistic bound, not a prediction.
+
+**One mode, one plane.** All of this assumes a single TEM wave and a load that is a
+lumped impedance at one identifiable plane. Change the connector and the phase of
+$\Gamma$ moves, though its magnitude does not. Module 3 removes the first assumption
+entirely: in a hollow guide there is no TEM wave to be had.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "A load, and where a length of line puts it",
                 "visualiser": "smith",
@@ -838,6 +1432,385 @@ assert abs(_g.imag) > 0.2, "a reactive load gives a complex Gamma, not a real on
                 "Below cutoff $\\beta$ is imaginary: the mode does not travel, it decays, and no length of guide makes it propagate.",
                 "With $a$ the broad wall, TE$_{10}$ has the lowest cutoff of all, and the usable band runs from it to the next mode up — for a guide with $a > 2b$ that is TE$_{20}$, at exactly twice the frequency.",
             ],
+            "read": [
+                {
+                    "title": "Three hundred millimetres of brass, and the frequency it refuses",
+                    "minutes": 16,
+                    "body": r'''
+A 300 mm length of WR-90 is bolted between a sweeper and a power meter. It is a brass
+tube with a rectangular hole through it, 22.86 mm by 10.16 mm, flanged at both ends,
+and there is nothing inside it but air. No centre conductor, no dielectric, no
+components.
+
+At 10 GHz the meter reads the sweeper's output to within a couple of tenths of a dB.
+Wind the frequency down and it stays there: 9 GHz, 8 GHz, 7 GHz, all the same. At
+6.5 GHz the reading has fallen 47 dB. At 6.0 GHz there is nothing left at all — 144 dB
+down, far below anything the meter can see, and taking the sweeper's power up by 10 dB
+moves the reading by 10 dB and changes nothing else.
+
+Somewhere between 7 GHz and 6 GHz the pipe stopped being a pipe. That edge is at
+6.557 GHz, it is set entirely by the 22.86 mm dimension, and this module is about
+where it comes from.
+
+## The pipe has no answer at low frequency, and that is a theorem
+
+Start with why a hollow guide cannot behave like a coaxial cable. A TEM wave is one
+with no field component along the direction of travel. Put that into the Helmholtz
+equation and the longitudinal wavenumber is the whole of $k$, so the transverse part
+of the Laplacian acting on the transverse field is zero: the field in the
+cross-section satisfies the two-dimensional Laplace equation, exactly as an
+electrostatic field would.
+
+Now apply the boundary. The wall is a perfect conductor, so it is an equipotential,
+and it is the *entire* boundary of the region — one closed curve, one potential value.
+Laplace's equation with the same constant on the whole boundary has one solution: that
+constant everywhere, and therefore zero field. Coax escapes this because it has two
+boundaries, inner and outer, which can sit at different potentials and support a
+gradient between them. A hollow pipe has one, and so there is no TEM wave to be had at
+any frequency.
+
+Whatever propagates in the pipe must therefore have a longitudinal component — $H_z$
+for a TE mode, $E_z$ for a TM mode — and that is what forces the whole of the rest of
+this module. A mode with structure across the guide is a mode with a transverse
+wavenumber, and a transverse wavenumber has to be paid for out of $k$.
+
+## What the walls allow
+
+Separating variables in the cross-section gives transverse dependence built from
+sines and cosines in $x$ and $y$, with
+
+$$k_x^2 + k_y^2 + \beta^2 = k^2 = \frac{\omega^2}{c^2}$$
+
+For the TE$_{10}$ mode the only electric field is $E_y = E_0 \sin(k_x x)$, pointing
+across the short dimension and varying across the long one. The tangential electric
+field must vanish on a perfect conductor, so $E_y$ has to be zero at $x = 0$ and at
+$x = a$. A sine handles the first wall for nothing. The second wall is a condition:
+$\sin k_x a = 0$ demands $k_x a = m\pi$, so
+
+$$k_x = \frac{m\pi}{a}, \qquad k_y = \frac{n\pi}{b}$$
+
+with the same argument run in $y$. This is the whole of the quantisation, and it is
+why the indices pair the way they do — $m$ with $a$, $n$ with $b$. The fill-in
+exercise *Where a guide's cutoff comes from* assembles this chain hole by hole, and
+the pairing is the first hole in it because swapping the two is the mistake that
+predicts TE$_{01}$ where every datasheet says TE$_{10}$.
+
+## Cutoff is where the transverse part uses up everything
+
+The transverse wavenumber is $k_c = \sqrt{k_x^2 + k_y^2}$, fixed by the geometry and
+the mode indices alone — it does not depend on frequency. What is left over goes along
+the axis:
+
+$$\beta = \sqrt{\frac{\omega^2}{c^2} - k_c^2}$$
+
+Lower the frequency and $k$ shrinks while $k_c$ stays where it is. At the frequency
+where $k = k_c$ there is nothing left for $\beta$, and below it the bracket is
+negative. That frequency is the cutoff. Writing $\omega_c = 2\pi f_c$ and
+$k_c^2 = (m\pi/a)^2 + (n\pi/b)^2$, the $\pi$ and the $2\pi$ leave
+
+$$f_c = \frac{c}{2}\sqrt{\left(\frac{m}{a}\right)^2 + \left(\frac{n}{b}\right)^2}$$
+
+and for TE$_{10}$, with $n = 0$, this collapses to $f_c = c/2a$. Put it in words worth
+keeping: **a guide passes nothing whose free-space half-wavelength will not fit across
+its wide dimension.** At 6.557 GHz the free-space wavelength is 45.72 mm, and half of
+that is 22.86 mm, which is the width of WR-90 to the micron.
+
+The derivation *Where the cutoff frequency comes from* is these four steps as an
+exercise. Here is the resulting table for the guide on the bench.
+
+```python
+import math
+
+C_LIGHT = 2.99792458e8
+a, b = 0.02286, 0.01016          # WR-90 inner dimensions, in metres
+
+
+def cutoff(m, n):
+    """(c/2) * sqrt((m/a)^2 + (n/b)^2), in hertz."""
+    return 0.5 * C_LIGHT * math.hypot(m / a, n / b)
+
+
+rows = sorted((cutoff(m, n), m, n)
+              for m in range(4) for n in range(4) if (m, n) != (0, 0))
+for fc, m, n in rows[:6]:
+    print(f"({m},{n}): {fc / 1e9:7.3f} GHz")
+print(f"single-mode band: {rows[0][0] / 1e9:.3f} to {rows[1][0] / 1e9:.3f} GHz")
+```
+
+TE$_{10}$ at 6.557 GHz, TE$_{20}$ at 13.114, TE$_{01}$ at 14.754, TE$_{11}$ at 16.145.
+Between the first two there is exactly one mode the guide will carry, and a guide
+carrying one mode is a guide whose behaviour can be predicted; two modes travel at
+different speeds and interfere at the far end according to how long the run is.
+
+Note which mode closes the band. TE$_{20}$ arrives at twice TE$_{10}$ because it uses
+the same wide wall with two half-cycles across it. TE$_{01}$ is higher still, at
+$c/2b$, because $b$ is the *smaller* dimension. That ordering is the reason a standard
+guide is built with $a$ a little more than $2b$: it puts TE$_{20}$ below TE$_{01}$ and
+makes the single-mode band as close to an octave as the geometry allows. The lab
+*Mode table, cutoff and the single-mode band* builds this table and then searches it
+for the next *distinct* cutoff — distinct, because a square guide has TE$_{10}$ and
+TE$_{01}$ at the same frequency, and a degenerate partner is not a band edge.
+
+## Above cutoff: two plane waves, bouncing
+
+There is a second way to read $\beta = \sqrt{k^2 - k_c^2}$, and it is the one that
+makes module 4 obvious in advance. Pythagoras on $k$, $k_c$ and $\beta$ says the mode
+is a plane wave whose propagation vector makes an angle $\theta$ with the guide axis,
+with $\sin\theta = k_c/k = f_c/f$ and $\beta = k\cos\theta$. The mode is two such plane
+waves, each travelling at exactly $c$, zig-zagging between the broad walls and adding
+up to a field that satisfies the boundary conditions.
+
+```python
+import math
+
+C_LIGHT = 2.99792458e8
+fc = 6.5571403762e9              # TE10 in WR-90
+NP_TO_DB = 20.0 / math.log(10.0)
+
+f = 10e9
+beta = 2 * math.pi * f / C_LIGHT * math.sqrt(1 - (fc / f) ** 2)
+print(f"10 GHz: beta = {beta:.3f} rad/m, lambda_g = {2 * math.pi / beta * 1e3:.2f} mm"
+      f", against lambda_0 = {C_LIGHT / f * 1e3:.2f} mm")
+print(f"        the bounce angle to the axis is {math.degrees(math.asin(fc / f)):.1f} deg")
+
+for f in (6.5e9, 6.0e9, 4.0e9):
+    alpha = 2 * math.pi * fc / C_LIGHT * math.sqrt(1 - (f / fc) ** 2)
+    print(f"{f / 1e9:4.1f} GHz: alpha = {alpha:6.2f} Np/m = {alpha * NP_TO_DB:6.1f} dB/m"
+          f", so 300 mm is {alpha * 0.3 * NP_TO_DB:6.1f} dB down")
+```
+
+At 10 GHz, $\beta = 158.238$ rad/m and the guide wavelength $2\pi/\beta$ is 39.71 mm
+against a free-space wavelength of 29.98 mm. The guide wavelength is *longer*, which
+surprises people who expect a confined wave to be squeezed. It is the zig-zag: the
+plane waves are running at 41.0° to the axis, so one full cycle of their phase covers
+less axial distance than it would going straight — $\beta = k\cos\theta < k$, and
+$2\pi/\beta > 2\pi/k$ follows. Everything a guide does that free space does not comes
+from that angle, which shrinks to zero at high frequency and opens to 90° at cutoff.
+
+## Below cutoff: a mirror, not a sponge
+
+Below $f_c$ the bracket under the root is negative, $\beta$ is imaginary, and
+$e^{-j\beta z}$ becomes a real decaying exponential $e^{-\alpha z}$ with
+
+$$\alpha = \frac{2\pi f_c}{c}\sqrt{1 - \left(\frac{f}{f_c}\right)^2}$$
+
+The block prints 18.10 Np/m at 6.5 GHz, 55.44 at 6.0 and 108.90 at 4.0 — which over
+the 300 mm on the bench is 47.2 dB, 144.5 dB and 283.8 dB. Those are the readings the
+power meter gave, and the cliff between 7 and 6 GHz is now a number rather than a
+mystery.
+
+**Here is the mistake, and it is nearly universal.** Those figures are in dB per
+metre, which is the unit cable loss is quoted in, so they get read as loss — as though
+the guide were absorbing the signal and getting warm. It is not. Read the derivation
+again: the walls were taken to be *perfect* conductors throughout, and a perfect
+conductor dissipates nothing. There is nowhere for the energy to go.
+
+What actually happens is that the guide reflects it. An evanescent field stores energy
+in one half of the cycle and gives it back in the other, which at the input plane
+looks like an almost purely reactive load: the power goes back to the source. The
+sandbox *A reactive load is a mirror, and so is a guide below cutoff* is that
+statement made visible — a load of $2 + j200\ \Omega$ sits on the rim of the chart at
+$|\Gamma| = 0.995$ with a VSWR of 425:1, and no length of lossless line moves it
+inward.
+
+Three consequences follow, and each is a question people get wrong. More power does
+not push through, because the reflection scales with it. The rejection depends
+exponentially on the *length* of the below-cutoff section, so a below-cutoff attenuator
+is calibrated by how far the pickup probe is withdrawn, and it is one of the most
+accurate attenuators ever built precisely because the exponent is set by a dimension
+rather than by a material. And a microwave oven, at 2.45 GHz with a 122 mm wavelength,
+leaks nothing through a door screen of 2 mm holes: every hole is a guide whose cutoff
+is far above the frequency, and the screen is a mirror the whole way across.
+
+## Where it stops holding
+
+**The walls are not perfect.** Copper WR-90 loses about 0.1 dB per metre at 10 GHz,
+which is negligible over a bench link and matters over a tower run. That loss is a
+separate mechanism from the cutoff rejection above, and it exists on both sides of
+$f_c$.
+
+**The mode is not alone.** A bend, an iris, a step or a badly seated flange excites
+higher-order modes. Below their cutoffs they decay away within a few centimetres and
+do no harm; above them they propagate, and the far end sees two modes with different
+delays. That is what makes the *practical* band narrower than the theoretical one:
+WR-90 is sold for 8.2 to 12.4 GHz, which is $1.25 f_c$ at the bottom for dispersion
+margin, and $0.95$ of the TE$_{20}$ cutoff at the top for mode margin.
+
+**The pipe is not always empty.** Fill it with a dielectric of relative permittivity
+$\varepsilon_r$ and every wavenumber scales, so every cutoff drops by
+$\sqrt{\varepsilon_r}$. That is how a guide can be made physically smaller for a given
+band, and it is also why a length of guide that has taken on moisture no longer cuts
+off where its datasheet says.
+
+**Cutoff is an edge, not a wall.** The transition is smooth. At 6.5 GHz, a hair below
+cutoff, 300 mm of guide still passes about one part in fifty thousand of the power,
+and a 30 mm plug of the same guide would pass 58% of the voltage. The cliff on the
+bench is as steep as it is because the guide is long.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Cutoff, and what a pipe does with what it refuses",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Why can a hollow rectangular guide not carry a TEM wave at any frequency?",
+                        "opts": [
+                            "One conductor means one equipotential, and Laplace then forces the field to zero",
+                            "The wave would have to travel at exactly $c$, which a guide never permits at any frequency",
+                            "The perfectly conducting walls short out any field tangential to them, so no mode can exist",
+                            "TEM needs a dielectric to travel in, and the inside of the guide is air",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"A TEM field obeys the two-dimensional Laplace equation across the cross-section, and Laplace with one constant on the whole boundary has exactly one solution: that constant.",
+                            r"The speed is a consequence rather than a cause, and putting it this way begs the question — a TEM wave in a hollow pipe would indeed travel at $c$, but it has been excluded long before its speed is computed.",
+                            r"This condition is true and proves far too much: it applies to TE$_{10}$ as well, and TE$_{10}$ exists in every X-band bench in the world, so it cannot be what rules TEM out.",
+                            r"Air is an excellent TEM medium — open-wire feeder and air-spaced coax both carry it — so what the pipe is missing is the second conductor, not the filling.",
+                        ],
+                        "why": r"""
+A TEM wave has no longitudinal component, which forces the transverse field to satisfy
+the two-dimensional Laplace equation in the cross-section. The boundary is one closed
+perfectly conducting curve at one potential, and Laplace with a constant on the whole
+boundary has exactly one solution: that constant, and therefore zero field. Coax
+escapes because two conductors can sit at two potentials. The tangential-field
+condition is real but proves too much as stated — it is satisfied happily by TE$_{10}$
+and every other guided mode, which is why those exist. Speed is a consequence rather
+than a cause, and air is a perfectly good TEM medium, as any open-wire feeder shows.
+""",
+                    },
+                    {
+                        "q": "WR-90 is 22.86 mm by 10.16 mm, with TE$_{10}$ cutting off at 6.557 GHz. Which mode closes the single-mode band, and where?",
+                        "opts": [
+                            "TE$_{20}$, at 13.114 GHz — twice TE$_{10}$, on the same wide wall",
+                            "TE$_{01}$, at 14.754 GHz — the other index of the dominant pair",
+                            "TE$_{11}$, at 16.145 GHz — the first mode with structure in both axes",
+                            "TM$_{10}$, at 6.557 GHz — the TM twin of the dominant mode",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Two half-cycles across the same 22.86 mm wall doubles the cutoff, and 13.114 GHz is the lowest frequency above TE$_{10}$ at which anything else can travel.",
+                            r"The frequency quoted is right for that mode, but $n$ pairs with the *narrow* wall, so $c/2b$ lands above TE$_{20}$ rather than below it — which is exactly why guide is built with $a$ a little over $2b$.",
+                            r"Also a correct value, and it is the third cutoff up rather than the second, so the single-mode band has already closed by the time this mode appears.",
+                            r"This mode does not exist. A TM mode needs both indices non-zero, because a zero index leaves it with no fields at all, so the lowest TM mode in this guide is TM$_{11}$ at 16.145 GHz.",
+                        ],
+                        "why": r"""
+Ordering the cutoffs gives 6.557, 13.114, 14.754, 16.145 GHz for TE$_{10}$, TE$_{20}$,
+TE$_{01}$ and TE$_{11}$, so the band closes at TE$_{20}$. TE$_{01}$ is the tempting
+answer because $m$ and $n$ look symmetric, but they are not: $n$ pairs with the
+*narrow* dimension, and $c/2b$ is therefore higher than $c/2a$. That is exactly why
+standard guide is built with $a$ a little over $2b$ — it drops TE$_{20}$ below
+TE$_{01}$ and stretches the usable band toward an octave. TM$_{10}$ does not exist at
+all: a TM mode with a zero index has no fields left, so the lowest TM mode in this
+guide is TM$_{11}$, up at 16.145 GHz alongside TE$_{11}$.
+""",
+                    },
+                    {
+                        "q": "A 300 mm length of WR-90 is driven at 4 GHz and attenuates the signal by 284 dB. Where does that energy go?",
+                        "opts": [
+                            "Back to the source; the guide reflects almost all of it",
+                            "Into the walls, which is why a below-cutoff guide runs warm",
+                            "Into the evanescent field, which stores it permanently",
+                            "It radiates out of the far end as an unguided spherical wave",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Nothing was dissipated because nothing could be — the walls were taken as perfect from the first line — so the only place left for the power is back where it came from.",
+                            r"The units invite this: Np/m and dB/m are how cable loss is quoted, and the word attenuation is shared. But the derivation never gave the walls any resistance with which to warm up.",
+                            r"An evanescent field does store energy, and it hands every joule of it back within the same cycle; a store that only ever filled would need the field to grow without limit.",
+                            r"Nothing arrives at the far end to radiate, which is what the 284 dB measurement says. A guide below cutoff is a mirror at its input rather than an aperture at its output.",
+                        ],
+                        "why": r"""
+The derivation assumed perfect conductors from the first line, so there is nowhere for
+energy to be dissipated — and yet nothing comes out the far end. It goes back. An
+evanescent field stores energy in one part of the cycle and returns it in the next, so
+the input plane looks like a nearly pure reactance and the guide is a mirror. Reading
+Np/m or dB/m as heating is the tempting error, because those are the units cable loss
+is quoted in and the word "attenuation" is shared; but the sandbox's below-cutoff load
+sits at $|\Gamma| = 0.995$, which is a reflection, not an absorption. Permanent storage
+would violate energy conservation in the steady state, and nothing reaches the far end
+to radiate.
+""",
+                    },
+                    {
+                        "q": "A guide is redesigned with its height $b$ doubled and its width $a$ left alone. What happens to the TE$_{10}$ cutoff?",
+                        "opts": [
+                            "Nothing at all: the height $b$ does not appear in $f_c = c/2a$",
+                            "It halves, since doubling a dimension halves the frequency it sets",
+                            "It falls by $\\sqrt{2}$, because the cross-sectional area has doubled",
+                            "It rises, because the mode now has more room to spread across",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"With $n = 0$ the $(n/b)^2$ term vanishes, so the dominant mode's cutoff rests on the wide wall alone.",
+                            r"The rule is right and applied to the wrong mode: doubling $b$ does halve TE$_{01}$, from 14.754 to 7.377 GHz, which wrecks the single-mode band without moving its lower edge at all.",
+                            r"Cutoff is not set by area. Two guides of equal area and different aspect ratios cut off at different frequencies, which is why a datasheet quotes both dimensions rather than one number.",
+                            r"Larger dimensions always lower a cutoff and never raise one: more room across means a longer wavelength fits, and a longer wavelength is a lower frequency.",
+                        ],
+                        "why": r"""
+With $n = 0$ the term $(n/b)^2$ vanishes and the cutoff is $c/2a$, in which $b$ does
+not appear — so the dominant mode's band edge is untouched. That is a genuinely useful
+degree of freedom: guide height can be chosen for power handling or for a lower
+attenuation without moving the band. What doubling $b$ does move is TE$_{01}$, which
+halves from 14.754 to 7.377 GHz and lands *below* TE$_{20}$, wrecking the single-mode
+band in the process. The halving answer is right about the mode that $b$ actually
+sets and wrong about which mode was asked for, which is the whole trap.
+""",
+                    },
+                    {
+                        "q": "At 10 GHz the guide wavelength in WR-90 is 39.71 mm while the free-space wavelength is 29.98 mm. Why is the confined wave's wavelength longer?",
+                        "opts": [
+                            "The axial wavenumber is $k\\cos\\theta$, so $\\beta < k$ and $2\\pi/\\beta > 2\\pi/k$",
+                            "The wave is slowed by the walls, and a slower wave has a longer wavelength",
+                            "The guide is dispersive, and dispersion always stretches a wavelength",
+                            "The field is spread over the whole cross-section, and that stretches it lengthways too",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The two plane waves run at 41.0° to the axis, so one cycle of their phase covers more axial distance than it would head-on.",
+                            r"A slower wave at a fixed frequency has a *shorter* wavelength, so this reasoning points the opposite way to its own conclusion — and what moves along the axis here outruns $c$ rather than lagging it.",
+                            r"This names the phenomenon instead of explaining it: dispersion is $\beta$ failing to be proportional to $\omega$, which is why the ratio 39.71/29.98 changes with frequency rather than why it exceeds one.",
+                            r"Transverse and axial structure are carried by separate wavenumbers that add in quadrature, so spreading the field across the guide does not stretch anything lengthways on its own.",
+                        ],
+                        "why": r"""
+The mode is two plane waves zig-zagging at $\theta = 41.0°$ to the axis, each moving at
+exactly $c$. Their phase advances along the axis by $k\cos\theta$ per metre rather than
+$k$, so the axial period is longer. Being slowed is the natural picture and it points
+the wrong way: what travels at 39.71 mm per cycle along the axis is the phase pattern,
+and it is moving *faster* than light, not slower — which is module 4's subject. Calling
+it dispersion names the right phenomenon without explaining it: dispersion is
+$\beta(\omega)$ failing to be proportional to $\omega$, and it is the reason the ratio
+39.71/29.98 changes with frequency rather than the reason it exceeds one.
+""",
+                    },
+                    {
+                        "q": "The same guide is filled with a lossless dielectric of relative permittivity 2.25. What happens to the TE$_{10}$ cutoff frequency?",
+                        "opts": [
+                            "It falls by a factor of 1.5, to 4.371 GHz",
+                            "It is unchanged, since cutoff is set by the geometry alone",
+                            "It falls by a factor of 2.25, to 2.914 GHz",
+                            "It rises by a factor of 1.5, to 9.836 GHz",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The width still has to hold half a wavelength, and the wavelength in the medium has shrunk by $\sqrt{2.25} = 1.5$.",
+                            r"The formula $c/2a$ does look purely geometric, and the trap is the $c$ inside it: that is the speed in whatever fills the guide, not the speed in vacuum.",
+                            r"Permittivity reaches every wave quantity through its square root, because it sits under one in the speed; using 2.25 where 1.5 belongs applies the correction one square root too many times.",
+                            r"Slowing the wave inside lets a *lower* frequency fit half a wavelength across the same width, so the cutoff must fall — filling a guide is done precisely to fit a given band into a smaller pipe.",
+                        ],
+                        "why": r"""
+The cutoff condition is that the guide's *width* holds half a wavelength, and it is
+the wavelength in the medium that matters. Wavelength shrinks by $\sqrt{\varepsilon_r}
+= 1.5$, so the same 22.86 mm now holds half a wavelength at a frequency 1.5 times
+lower: 4.371 GHz. Believing that geometry alone sets it is the tempting error, and it
+comes from the shape of $f_c = c/2a$, in which $c$ looks like a constant — but $c$
+there is the speed in the filling medium, not in vacuum. Using 2.25 instead of its
+square root is the other common slip: permittivity enters every wave quantity through
+its root, because it sits under one in the speed.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "A reactive load is a mirror, and so is a guide below cutoff",
                 "visualiser": "smith",
@@ -1242,6 +2215,237 @@ assert guide_wavelength(5e9, _fc) == float("inf"), \
                 "Group velocity $d\\omega/d\\beta$ is the speed of the envelope and stays below $c$ at every frequency.",
                 "$v_p v_g = c^2$ exactly, for every hollow guide and every mode.",
                 "Different frequencies in one pulse arrive at different times, so a wide-band pulse spreads — and the spreading grows with length and with proximity to cutoff.",
+            ],
+            "read": [
+                {
+                    "title": "Two metres of guide that answers the same question twice",
+                    "minutes": 17,
+                    "body": r'''
+Two metres of WR-90 runs between the ports of a vector network analyser at 10 GHz.
+It is the same guide as the last module: 22.86 by 10.16 mm, cutting off at 6.557 GHz,
+carrying nothing but TE$_{10}$. Ask it how long a signal takes to cross, and it
+answers twice, with two different numbers.
+
+Read the transmission phase and unwrap it: $\phi = -\beta\ell = -316.48$ radians, which
+a readout that keeps only one turn shows as $-133°$. Divide its magnitude by
+$\omega = 2\pi \times 10^{10}$ and the delay is **5.0369 ns**. That corresponds to a speed of $2/5.0369\ \text{ns} =
+3.97\times10^8$ m/s, which is $1.32c$.
+
+Now modulate the carrier with a short envelope and watch the envelope come out the
+far end on a fast detector. It arrives **8.8360 ns** after it went in — a speed of
+$2.26\times10^8$ m/s, or $0.755c$.
+
+Same guide, same frequency, same two metres. One number says the signal crossed at
+1.32 times the speed of light; the other, measured on the same afternoon with a pulse
+you can see, says it took three-quarters of that speed and 75% longer. Both
+measurements are correct. They are answers to different questions, and this module is
+about telling the questions apart.
+
+## One curve, a chord and a tangent
+
+Module 3 left the dispersion relation for any hollow-guide mode:
+
+$$\beta(\omega) = \frac{\sqrt{\omega^2 - \omega_c^2}}{c}$$
+
+Plot $\omega$ against $\beta$ and it is a hyperbola: it starts at $\beta = 0$ when
+$\omega = \omega_c$, rises steeply, and settles asymptotically onto the straight line
+$\omega = c\beta$ at high frequency. That single curve holds both answers, and they
+are two different lines drawn on it.
+
+The **chord** from the origin to the operating point has slope $\omega/\beta$. That is
+the phase velocity: how fast a point of constant phase moves along the axis.
+
+The **tangent** at the operating point has slope $d\omega/d\beta$. That is the group
+velocity: how fast a bump in the envelope moves.
+
+On a line whose $\beta$ *is* proportional to $\omega$ — module 1's coax, where
+$\beta = \omega\sqrt{LC}$ — the curve is a straight line through the origin, chord and
+tangent coincide, and there is one velocity. In a guide the curve bends away from the
+origin, the chord is steeper than the tangent everywhere, and the two numbers part
+company. **That bend is the definition of dispersion**, and everything else in this
+module is a consequence of it.
+
+The algebra is two derivatives, worked step by step in *Two velocities from one
+dispersion relation*. Writing $\omega_c/\omega = f_c/f$ throughout:
+
+$$v_p = \frac{\omega}{\beta} = \frac{c}{\sqrt{1 - (f_c/f)^2}}, \qquad
+v_g = \frac{d\omega}{d\beta} = c\sqrt{1 - (f_c/f)^2}$$
+
+The second comes from differentiating $\beta$ and inverting: $d\beta/d\omega =
+\omega/(c\sqrt{\omega^2 - \omega_c^2})$, and $v_g$ is its reciprocal. Multiply the two
+velocities and the roots cancel:
+
+$$v_pv_g = c^2$$
+
+exactly, at every frequency, for every mode of every hollow guide. One is above $c$ by
+the same factor the other is below it.
+
+```python
+import math
+
+C_LIGHT = 2.99792458e8
+fc, f, length = 6.5571403762e9, 10e9, 2.0      # WR-90 TE10, X band, 2 m of guide
+
+root = math.sqrt(1.0 - (fc / f) ** 2)
+v_p, v_g = C_LIGHT / root, C_LIGHT * root
+beta = 2 * math.pi * f / C_LIGHT * root
+
+print(f"bounce angle to the axis  {math.degrees(math.asin(fc / f)):.2f} deg")
+print(f"v_p = {v_p:.4e} m/s = {v_p / C_LIGHT:.4f} c")
+print(f"v_g = {v_g:.4e} m/s = {v_g / C_LIGHT:.4f} c")
+print(f"v_p * v_g / c^2 = {v_p * v_g / C_LIGHT ** 2:.12f}")
+print(f"beta * length = {beta * length:.2f} rad, or "
+      f"{math.degrees(beta * length) % 360:.1f} deg wrapped into one turn")
+print(f"phase delay over {length:.0f} m = {length / v_p * 1e9:.4f} ns")
+print(f"group delay over {length:.0f} m = {length / v_g * 1e9:.4f} ns")
+```
+
+It reproduces the bench: 1.3245$c$ and 0.7550$c$, a product that is 1.000000000000 in
+units of $c^2$, and the two delays of 5.0369 ns and 8.8360 ns that started the module.
+
+## Nothing is violated, and here is exactly why
+
+A phase velocity of $1.32c$ at 10 GHz is not an artefact and not a near-cutoff
+curiosity. It is above $c$ at *every* frequency the guide propagates, growing without
+bound as $f \to f_c$ and approaching $c$ from above only as $f \to \infty$. Treat that
+as a physical fact to be understood rather than a number to be apologised for.
+
+The clean way to see it is the zig-zag from the last module. The TE$_{10}$ mode is two
+plane waves bouncing between the broad walls, each travelling at exactly $c$, with
+their propagation vectors at $\theta = 40.97°$ to the axis at this frequency. Take one
+wavefront — a plane perpendicular to one of those vectors — and ask where it crosses
+the guide axis. That crossing point slides forward at $c/\cos\theta$, because the
+wavefront advances at $c$ along its own normal and the axis is at an angle to it. At
+$\theta = 40.97°$, $1/\cos\theta = 1.3245$, and there is the phase velocity, geometry
+and nothing else.
+
+Nothing rides that crossing point. It is the same object as the intersection of a
+closing pair of scissors, which can be made to run down the blades faster than either
+blade moves, or the spot of a laser swept across a distant wall. No matter, no energy
+and no message travels along the axis at $1.32c$; two plane waves travel at $c$ in a
+direction that is not the axis, and their intersection with the axis is a geometrical
+consequence.
+
+Turn it around for the group velocity: the energy is carried by those same plane waves
+at $c$, but along the zig-zag, so its *axial* progress is $c\cos\theta = 0.755c$. The
+factor is $\cos\theta$ for the energy and $1/\cos\theta$ for the phase, which is why
+their product is $c^2$ and why the excess of one is precisely the deficit of the other.
+
+There is a second, independent reason the superluminal phase velocity carries nothing.
+A pure sinusoid has no beginning. It extends from $t = -\infty$ and is entirely
+predictable; a receiver watching it learns nothing at 3 pm that it did not know at
+2 pm. To send information you must change something — start it, stop it, modulate it —
+and any change creates an envelope, and the envelope moves at $v_g$. The instant you
+make the wave capable of carrying a message you have made it travel below $c$.
+
+## The mistake: timing a link with the phase
+
+The most expensive error in this module is using the wrong delay, and it is tempting
+for a specific reason. Everywhere before this course, $\omega/\beta$ and $d\omega/d\beta$
+were the same number. On the coax of module 1, both are $1/\sqrt{LC}$. On a string,
+both are $\sqrt{T/\mu}$. Ten years of writing "velocity $= \omega/\beta$" costs nothing
+until the day it meets a curve that is not a straight line through the origin, and then
+it is wrong by a factor of 1.754.
+
+Here that error predicts the pulse arriving at 5.04 ns when it actually arrives at
+8.84 ns: 3.80 ns late, which at the speed of light is 1.14 m of range error. In a
+radar, that is a target misplaced by more than a metre. In a phased array fed through
+guide, path lengths trimmed to be equal in *guide wavelengths* are equal in phase at
+one frequency and unequal in delay at all of them, which is exactly why a
+phase-trimmed array squints as the frequency moves and a true-time-delay array does
+not.
+
+The reciprocal is worth keeping straight too. $d\beta/d\omega$ is the group *delay per
+metre*, in seconds per metre; $d\omega/d\beta$ is the group *velocity*, in metres per
+second. A network analyser's group-delay trace reports the first, as $-d\phi/d\omega$
+over the whole run. The sandbox *Phase slope is group delay* is that idea on the
+plainest system that has a bending phase: a flat gain change moves the magnitude
+curve bodily and does not move the phase at all, because delay lives in the slope of
+the phase and nowhere else.
+
+## What dispersion does to a pulse
+
+If different frequencies travel at different group velocities, a pulse containing many
+frequencies cannot stay the shape it started as. The components that left together
+arrive apart, and the pulse comes out wider than it went in.
+
+```python
+import math
+
+C_LIGHT = 2.99792458e8
+fc = 6.5571403762e9
+
+
+def beta(f):
+    return 2 * math.pi * f / C_LIGHT * math.sqrt(1 - (fc / f) ** 2)
+
+
+def group_delay(f, length):
+    return length / (C_LIGHT * math.sqrt(1 - (fc / f) ** 2))
+
+
+f, df = 10e9, 1e3
+numeric = 2 * math.pi * (2 * df) / (beta(f + df) - beta(f - df))
+closed = C_LIGHT * math.sqrt(1 - (fc / f) ** 2)
+print(f"d(omega)/d(beta) by central difference = {numeric:.6e} m/s")
+print(f"the closed form                        = {closed:.6e} m/s")
+print(f"agreeing to {abs(numeric - closed) / closed:.2e} of themselves")
+
+for lo, hi, ell in ((9.9e9, 10.1e9, 10.0), (8e9, 12e9, 10.0), (8e9, 12e9, 100.0),
+                    (7e9, 7.2e9, 10.0)):
+    spread = abs(group_delay(lo, ell) - group_delay(hi, ell))
+    print(f"{lo / 1e9:4.1f} to {hi / 1e9:4.1f} GHz over {ell:5.1f} m: "
+          f"{spread * 1e9:8.3f} ns of spread")
+```
+
+The first half is the check the lab *Measure the two velocities, and the delay spread
+they cause* asks you to build: `group_velocity_numeric` differences $\beta$ either side
+of the operating point and must reproduce the closed form, which it does to three parts
+in $10^{11}$. It is an algebra check with teeth — differentiate $\beta$ wrongly and the
+two numbers part company in the third digit.
+
+The second half is the engineering. A 2% band at mid-band smears by 0.667 ns over 10 m.
+The full 8–12 GHz band smears by 18.398 ns over the same 10 m, and by 183.980 ns over
+100 m — the spread is exactly proportional to length, since every delay is. And the
+last line is the one to sit with: a 200 MHz band at 7 GHz, a mere 7% above cutoff,
+smears by 14.534 ns over 10 m. A band twenty times narrower, sitting near the edge,
+does nearly as much damage as the whole of X band does in the middle. Dispersion is
+not about how wide your signal is; it is about how far along the bend of the curve you
+are sitting.
+
+The capstone *Push a pulse through a waveguide and measure what it costs* replaces this
+two-point estimate with the honest calculation: every frequency bin of a real burst
+gets its own $e^{-j\beta\ell}$, and the arrival time and the width are measured off the
+waveform that comes out.
+
+## Where it stops holding
+
+**Near cutoff, a two-point spread is an underestimate.** The delay-spread figures above
+difference the group delay at two band edges, which assumes the delay varies roughly
+linearly between them. Near cutoff it does not: $d^2\beta/d\omega^2$ grows without
+bound, the pulse acquires a chirp, and it does not merely widen — it changes shape,
+with the low frequencies trailing far behind. The two-point number is a lower bound on
+the trouble.
+
+**The group velocity is a narrow-band idea.** It is the first term of a Taylor
+expansion of $\beta(\omega)$ about the carrier. Over a band wide enough for the second
+term to matter, "the envelope travels at $v_g$" stops being a complete description of
+what happens, and only the full transfer function tells you the answer.
+
+**Group velocity is not always the signal velocity.** In hollow guide above cutoff,
+$v_g$ is also the energy transport velocity and stays under $c$, so the two agree. In a
+medium with resonant absorption, $v_g$ can exceed $c$ or go negative while nothing
+causal is violated at all, because it has stopped describing anything that moves. What
+never changes, in any medium, is the *front* velocity: the very first disturbance to
+arrive after a signal is switched on travels at exactly $c$. That is the statement
+relativity actually constrains, and it holds here whatever $v_p$ and $v_g$ are doing.
+
+**The walls and the fill are ideal.** Copper losses add a frequency-dependent
+attenuation on top of all of this, and any dielectric inside brings its own dispersion
+to add to the guide's. In a hollow copper guide over a few metres, neither changes the
+numbers above by anything you could measure.
+''',
+                },
             ],
             "sandbox": {
                 "title": "Phase slope is group delay",
