@@ -79,6 +79,181 @@ COURSE = {
                 "Some status bits are **write-1-to-clear**: writing a 1 clears the flag and writing a 0 leaves it alone. For those registers the read-modify-write idiom is actively wrong — it clears every flag that happened to be set.",
                 "Reserved bits are reserved because the vendor may use them later. Read-modify-write preserves them; writing a whole constant word does not.",
             ],
+            "read": [
+                {
+                    "title": "One address, thirty-two switches",
+                    "minutes": 14,
+                    "body": r'''
+Put a debugger on a running board and open a memory window at address `0x40020014`. One
+32-bit word sits there:
+
+```text
+40020014   0x00000085
+```
+
+Type `0x000000A5` over it and press enter. An LED wired to pin 5 of that port lights.
+
+No line of your program ran. Nothing was called, nothing was scheduled, no driver was
+involved. A number in a window changed and a piece of the physical world changed with
+it, and that single observation is what the rest of this course is built on.
+
+## The address is a doorway, not a box
+
+`0x40020014` looks like memory and behaves like memory to the load-store instructions
+that reach it. It is not memory. Behind it sits the output stage of a GPIO port, and the
+32 bits of that word are wired to 32 pins. Writing the word does store it — read it back
+and you get `0xA5` — but storing it is a side effect. Raising a pin is the point.
+
+Everything that follows from that is worth stating once. The width of the access is part
+of the specification, because the hardware decodes a 32-bit bus transaction and not a
+byte one. The value you read back may not be the value you wrote, because some bits are
+driven by the hardware rather than by you. And the *order* of your accesses is
+observable, in a way that the order of writes to two ordinary variables is not.
+
+## What actually changed between 0x85 and 0xA5
+
+Write the two words in binary, one under the other:
+
+```text
+0x85   0000 0000 0000 0000 0000 0000 1000 0101
+0xA5   0000 0000 0000 0000 0000 0000 1010 0101
+                                       ^
+```
+
+One bit moved: number 5, counting from zero at the right-hand end. Pins 0, 2 and 7 were
+already high before the edit and were still high after it. That is the requirement a
+driver has to meet on every write it ever makes — move some switches, leave the other
+thirty-odd exactly where they were — and the four idioms everybody memorises fall out of
+three truth tables rather than needing to be memorised at all.
+
+Take one bit `x` and one mask bit, and ask what each operator leaves behind.
+
+`x | 0` is `x`, and `x | 1` is 1. So OR-ing with a mask forces every masked bit to 1 and
+leaves every unmasked bit untouched. That is **set**, and it is why `reg |= mask` is
+written the way it is.
+
+`x & 1` is `x`, and `x & 0` is 0. AND has the same shape running the other way: it
+preserves where the mask holds a 1 and forces 0 where the mask holds a 0. So to clear the
+bits you have named, the mask has to be inverted first, which is where the second `~`
+in `reg &= ~mask` comes from. It is not decoration and it is not a style choice.
+
+`x ^ 0` is `x`, and `x ^ 1` is the opposite of `x`. XOR inverts exactly the masked bits,
+which is **toggle**.
+
+And `word & mask` keeps the masked bits and zeroes everything else, which is how you
+**test**. Compare the result against `mask` to ask whether all of them are set, and
+against zero to ask whether any of them are. Those are different questions with different
+answers, and confusing them is the defect the `all_set` test in this module's lab exists
+to catch.
+
+## A field is a small number living inside a big one
+
+Bits are the easy case. Most configuration is not one bit per setting but two, three or
+four, and then you have a *field*: a run of adjacent bits holding a small integer.
+
+The GPIO mode register `MODER` holds two bits per pin, so pin 5's mode lives in bits 11
+and 10. Reading it is a shift and a mask — bring the field down to the bottom, then
+discard everything above it:
+
+$$\text{field} = (\text{word} \gg \text{shift}) \;\&\; (2^{\text{width}} - 1)$$
+
+Writing it is where people come unstuck. Suppose `MODER` currently reads `0xA8000800`.
+The field for pin 5 is `(0xA8000800 >> 10) & 0b11`, which is `0b10` — analogue mode on
+this part. You want `0b01`, a plain output.
+
+```python
+MODER = 0xA8000800
+shift, width, value = 10, 2, 0b01
+mask = ((1 << width) - 1) << shift
+
+print("before         ", format(MODER, "#010x"), "field =", (MODER >> shift) & 3)
+wrong = MODER | (value << shift)
+print("OR alone       ", format(wrong, "#010x"), "field =", (wrong >> shift) & 3)
+right = (MODER & ~mask) | ((value << shift) & mask)
+print("clear then OR  ", format(right, "#010x"), "field =", (right >> shift) & 3)
+```
+
+That prints three lines. The first reports `0xa8000800` with a field of 2. The second,
+the tempting one-line update, reports `0xa8000c00` with a field of **3** — OR can only
+ever turn bits on, so `0b10` OR `0b01` is `0b11`, a third mode that is neither the old
+one nor the new one. The third reports `0xa8000400` with a field of 1, which is what was
+wanted.
+
+So a field insert is two halves and always has been:
+
+$$\text{word} \leftarrow (\text{word} \;\&\; \sim\!\text{mask}) \;|\; ((\text{value} \ll \text{shift}) \;\&\; \text{mask})$$
+
+The first half makes room. The second half fills it, and the extra `& mask` on the value
+trims anything too wide to fit so that an over-large value cannot spill sideways into the
+neighbouring pin's field. Both halves earn their place.
+
+## The mistake, and why it is tempting
+
+The single most common defect in beginner embedded code is not any of the above. It is
+this:
+
+```c
+ODR = 1 << 5;      /* pin 5 high */
+```
+
+The comment is honest about the intent and the code does something else. `=` writes
+`0x00000020` over the entire word, so pin 5 goes high and pins 0, 2 and 7 go **low**.
+It is tempting for a reason that has nothing to do with misunderstanding C: during
+bring-up there is usually one LED on one pin and nothing else attached, so the line works
+perfectly and gets copied into the next driver, and the next. The fault surfaces weeks
+later as "the status LED goes out whenever the relay fires", which nobody connects to a
+line of code that has been working since the first afternoon.
+
+The habit that prevents it is to read every register write as a sentence about all
+thirty-two bits, not about the one you were thinking of.
+
+## Where this model stops holding
+
+The read-modify-write picture is right about *what* the bits do and silent about *when*.
+Three cases break it, and all three are real.
+
+**It is not one operation.** `reg |= (1 << 3)` is a load, an OR and a store. An interrupt
+that lands between the load and the store, and that touches the same register, has its
+change overwritten when the store completes. `volatile` does not help here, and believing
+it does produces a fault that appears perhaps once a day. The fixes are elsewhere: a
+critical section, an atomic instruction, or a peripheral that offers separate set and
+clear registers so that no read is needed at all. Module 7 takes that apart properly.
+
+**Some registers are write-1-to-clear.** In a status register, writing a 1 to a flag
+clears it and writing a 0 leaves it alone. On those, `SR &= ~OVERRUN` is actively
+destructive: it reads the whole word, writes 1s back into every *other* flag that
+happened to be set, and clears them too. The correct line is `SR = OVERRUN`, a plain
+assignment — the very thing that was wrong two paragraphs ago. Which idiom is right is
+decided by the register's documented behaviour and by nothing else.
+
+**Some registers change when you read them.** Reading a UART data register clears the
+receive flag; reading certain status registers arms a clear-on-read sequence. A
+read-modify-write on one of those has already had its effect by the time you get to the
+modify, and a debugger watching the address will trigger it too, which is why a bus that
+works under the debugger and fails without it is worth suspecting early.
+
+Finally, `volatile` itself. It says an access must happen, that it must happen where the
+source says, and that it may not be merged with another. Without it, `while (!(*STATUS &
+READY)) { }` compiles into a single read and an infinite loop, because the compiler can
+see that nothing in the loop body changes `*STATUS`. That is a correctness failure rather
+than a slow one, and it appears only once optimisation is switched on. What `volatile`
+does not give you is atomicity, ordering against non-volatile accesses, or any statement
+about caches. It is a smaller promise than its reputation.
+
+## What you are about to build
+
+The lab for this module, **The six operations on a bit field**, asks for those six
+functions in Python: `set_bits`, `clear_bits`, `toggle_bits`, `all_set`, `read_field`
+and `write_field`. Python integers do not overflow, so each one masks its result with
+`0xFFFFFFFF` — work a real 32-bit register does for you by being 32 bits wide.
+
+`write_field` is the one to think about, and the tests are pointed at exactly the two
+failures above: a field that was not cleared before the new value went in, and an
+over-wide value that spilled into its neighbour. Get those six right and every driver in
+the remaining nine modules is the same expressions with semicolons after them.
+''',
+                },
+            ],
             "quiz": {
                 "title": "What a write to a register actually does",
                 "minutes": 10,
@@ -389,6 +564,227 @@ assert got == 0xF0, \
                 "A pointer's type says how wide the object it points at is, and pointer arithmetic counts objects rather than bytes: adding 5 to a `uint32_t *` moves the address on by 20. Casting a pointer changes the arithmetic and the access width; it does not change the address, and it does not change what the hardware has at that address.",
                 "A peripheral is a run of consecutive registers, so a `struct` of `volatile uint32_t` members laid over the base address names them: `GPIOA->ODR` compiles to exactly the same load-store as `*(volatile uint32_t *)(0x40020000 + 0x14)`. The members must appear in the manual's order, with an explicit reserved member wherever the manual leaves a gap, or every register after the gap is off by four.",
                 "The address space is a map, not a memory. Flash holds the code and anything `const`; SRAM holds the writable globals — `.data`, whose initial values are copied out of flash before `main` runs, and `.bss`, which the startup code zeroes — and the stack, which grows down from the top of SRAM towards them. Peripheral registers are a third region that is not memory at all. Nothing in C stops you forming a pointer into a region where writes do nothing, or where they fault.",
+            ],
+            "read": [
+                {
+                    "title": "The rest of that line: what a type knows that an address does not",
+                    "minutes": 15,
+                    "body": r'''
+Put a bus analyser between the core and the peripheral bus, run two lines of C that
+differ by four characters, and capture what comes out. The port's output register starts
+at `0x0000A585`, so pins 0, 2, 7, 8, 10, 13 and 15 are high.
+
+```text
+ #   address       width    data on the bus     ODR afterwards
+ 1   0x40020014   32-bit   0x000000AA           0x000000AA
+ 2   0x40020014    8-bit   0xAA                 0x0000A5AA
+```
+
+Line 1 was `*(volatile uint32_t *)0x40020014 = 0xAA;` and line 2 was
+`*(volatile uint8_t *)0x40020014 = 0xAA;`. Same address, same value, same syntax. One of
+them turned off seven pins on the upper half of the port and the other left them alone.
+
+The address did not decide that. The type did.
+
+## A pointer type carries two facts
+
+Strip a pointer down and it is a number. What the type adds is two pieces of information
+the number cannot hold, and both of them reach the hardware.
+
+The first is the **width of the access**. A `uint32_t *` produces a 32-bit bus
+transaction; a `uint8_t *` produces an 8-bit one. That is line 1 against line 2 above.
+It also runs the other way: many peripherals are documented as requiring a 32-bit
+access and behave unpredictably, or fault, when a byte write reaches them. So the cast
+in `*(volatile uint32_t *)0x40020014` is load-bearing. It is not there to quiet the
+compiler.
+
+The second is the **stride of the arithmetic**. `p + n` in C means "n objects further
+on", so the byte address it produces is
+
+$$\text{byte address} = p + n \cdot \text{sizeof}(*p)$$
+
+Take the base of the GPIO block and step five `uint32_t` along it:
+
+```text
+(uint32_t *)0x40020000 + 5   ->   0x40020000 + 5*4   ->   0x40020014
+```
+
+That is the address from the previous module. The constant you were handed was a base
+plus an offset all along, and `0x14` is 20 bytes, which is the sixth register of the
+block counting from zero. The same arithmetic on a `uint8_t *` gives `0x40020005`, which
+is inside a register rather than at one. This is why a cast on a pointer is a change of
+meaning rather than a change of notation.
+
+## A run of registers is a struct
+
+A peripheral is a set of consecutive registers, so a struct of `volatile uint32_t`
+members laid over the base address names them, and `GPIOA->ODR` compiles to exactly the
+load-store you would have written by hand. The compiler adds the member's offset to the
+base and does nothing else — `GPIOA` is not a variable holding a struct, it is a number.
+
+Offsets come from one rule applied left to right: each member starts at the next address
+that is a multiple of its own size, padding is inserted wherever that forces a gap, and
+the whole structure is rounded up to a multiple of its widest member so that an array of
+them stays aligned. Write the rule out and it computes both halves of this module's
+fill-in drill:
+
+```python
+def layout(members):
+    off = 0
+    widest = 1
+    for name, size in members:
+        widest = max(widest, size)
+        pad = (-off) % size
+        off += pad
+        note = f"   ({pad} bytes of padding before it)" if pad else ""
+        print(f"  {name:<8} offset {off:>3} = 0x{off:02X}{note}")
+        off += size
+    tail = (-off) % widest
+    print(f"  sizeof = {off + tail} bytes")
+
+print("GPIO_TypeDef:")
+layout([("MODER", 4), ("OTYPER", 4), ("OSPEEDR", 4),
+        ("PUPDR", 4), ("IDR", 4), ("ODR", 4)])
+print("a word, a byte and another word:")
+layout([("a", 4), ("b", 1), ("c", 4)])
+```
+
+The first call prints offsets 0x00, 0x04, 0x08, 0x0C, 0x10 and 0x14, and a `sizeof` of
+24 bytes: six members of four bytes, no padding anywhere, and `ODR` landing on the
+`0x14` the bus analyser saw. The second prints `a` at 0, `b` at 4, then three bytes of
+padding before `c` at offset 8, and a `sizeof` of 12 — not 9, which adds the widths and
+ignores alignment, and not 16, which pads every member to a word.
+
+The failure this predicts is worth naming. Reference manuals leave gaps: a block will
+document registers at `0x00` through `0x14` and then nothing until `0x20`. If the struct
+does not contain an explicit reserved member across that gap, every register after it
+sits four bytes early, and the symptom is that the first few registers of a peripheral
+work perfectly and the rest read as garbage. That is the shape of the bug: not "the
+driver is broken" but "the driver is broken from a certain register onwards".
+
+## The other half of the line: what C does to the integers
+
+The type also decides what happens to the value before it ever reaches an address, and
+here C has two rules that surprise people.
+
+Anything narrower than `int` is promoted to `int` before arithmetic, keeping its value.
+And when signed meets unsigned of the same rank, the *signed* operand is converted. Both
+are silent. Model them and they stop being surprising:
+
+```python
+def store(value, bits, signed):
+    m = value & ((1 << bits) - 1)
+    if signed and m >= (1 << (bits - 1)):
+        m -= 1 << bits
+    return m
+
+total8 = 0
+for v in (200, 100, 50):
+    total8 = store(total8 + v, 8, False)
+print("uint8_t accumulator over 200,100,50 :", total8)
+print("uint32_t accumulator over the same  :", sum((200, 100, 50)))
+print("200 + 100 as an expression:", 200 + 100, "  stored into a uint8_t:", store(300, 8, False))
+print("1 << 31 as int:", store(1 << 31, 32, True), "  as unsigned:", store(1 << 31, 32, False))
+print("is -1 < 1u ?", store(-1, 32, False) < store(1, 32, False))
+```
+
+Run it and the first two lines read **94** and **350**. Follow the 8-bit accumulator by
+hand: 0 + 200 is 200 and fits; 200 + 100 is 300, which does not, and lands as 44; 44 + 50
+is 94. The sum is not merely inaccurate, it is 27% of the right answer, and nothing
+reported anything.
+
+The next line separates the two halves of that. `200 + 100` on its own is **300** —
+both operands were promoted to `int`, where there is room to spare — and it is the
+assignment back into eight bits that produces **44**. The addition and the store are
+different events with different results, and a checksum that reads low is one of them
+happening where you expected the other.
+
+The last two lines print `-2147483648` against `2147483648` for the same bit pattern, and
+`False` for `-1 < 1u`. That last one is the rule about signed meeting unsigned: −1
+converts to 4294967295, so the comparison is false, and it compiles without a murmur
+unless you have asked for `-Wsign-compare`.
+
+## The mistake, and why it is tempting
+
+```c
+for (unsigned int i = n; i >= 0; i--) { ... }
+```
+
+This loop never ends. `i` is unsigned, so `i >= 0` cannot be false — when `i` is 0 the
+decrement takes it to 4294967295 and round it goes.
+
+It is tempting because it reads exactly like the sentence it was meant to be: count down
+until you reach zero. It is also tempting because `unsigned` is the *correct* type for an
+index, and choosing it feels like the careful decision. The fix is to change the test
+rather than the type, usually by counting `i` down from `n` and testing `i-- > 0`, or by
+indexing with `n - 1 - i` from an ordinary ascending loop.
+
+The same instinct produces the 8-bit accumulator above: the data is bytes, so the total
+feels like it should be a byte. An accumulator needs the width of the *sum*, not the
+width of the samples.
+
+## The map, and where things actually live
+
+The address space is a map, not a memory. Flash holds the code and anything `const`;
+SRAM holds `.data`, whose initial values are copied out of flash before `main` runs, and
+`.bss`, which the startup code zeroes; and the stack grows down from the top of SRAM
+towards them. Peripheral registers are a third region that is not memory at all.
+
+A linker map on a part with 8 KB of SRAM says this in numbers:
+
+```text
+.text     0x08000000   0x4794      code and constants          in flash
+.rodata   0x08004794    0x800      2 KB const lookup table     in flash
+.data     0x20000000    0x1A8      initialised globals         in SRAM, copied from flash
+.bss      0x200001A8   0x1730      zeroed globals              in SRAM
+                                   -> 6248 of 8192 bytes used, 1944 left for the stack
+```
+
+Delete one keyword — the `const` on that lookup table — and the same table becomes
+initialised writable data. It now costs 2 KB of SRAM *and* 2 KB of flash for the initial
+values, plus the copy at startup, and SRAM goes to 8296 bytes on a part that has 8192.
+One qualifier is a quarter of your memory here.
+
+The stack is where this gets dangerous, because nothing checks it. A function that
+declares `uint8_t buf[4096]` as a local on this part will write straight down past the
+bottom of the stack into `.bss`. The compiler cannot warn, because it does not know how
+deep the call chain will be at run time. What you get is an unrelated variable changing
+value, or a return address overwritten and the chip executing nonsense, at a point in the
+program that has nothing to do with the array.
+
+## Where these models stop holding
+
+The integer model above is a description of what compilers do, not of what the standard
+promises, and the gap matters in two places. Signed overflow is *undefined behaviour*,
+not wrapping: an optimiser is entitled to assume it never happens and to delete a check
+written on the assumption that it does. Shifting a 1 into the sign bit of a signed 32-bit
+type is undefined for the same reason, which is why a mask for bit 31 is written
+`1u << 31` rather than relying on the answer the model prints.
+
+The width assumption is the other gap. This model hard-codes a 32-bit `int` because that
+is what the parts in this course have. On an 8-bit or 16-bit target `int` is 16 bits, and
+then the promotion of two `uint8_t` still gives 300, but a great deal else changes.
+
+And a pointer cast changes the arithmetic and the access width without changing the
+address or what the hardware has at it. Casting a `uint8_t *` to a `uint32_t *` on an
+address that is not four-byte aligned is undefined, and on some cores traps.
+
+Finally, the map says *where* things are and nothing about what reaching them costs.
+That is what this module's sandbox, **What an access pattern costs when the memory is
+slower than the core**, is for: the same number of bytes touched in a different order
+can cost sixteen times as many memory fetches, and the decision that sets it is how you
+lay a structure out.
+
+## What you are about to build
+
+Two exercises follow directly from the two halves above. The fill-in drill, **The GPIO
+block, from struct member to address**, walks the struct offsets to `&GPIOA->ODR` and
+makes the pointer arithmetic agree with it — the `layout` output above is the same sum
+done by machine. The lab, **C's integer rules, written out**, asks for `store`, `add_u8`,
+`assign_u8`, `shl`, `shl_u` and `lt_mixed`, and its last test is the 8-bit accumulator
+reaching 94 where a 32-bit one reaches 350.
+''',
+                },
             ],
             "sandbox": {
                 "title": "What an access pattern costs when the memory is slower than the core",
@@ -853,6 +1249,185 @@ assert wide == 350, "the same loop with a 32-bit accumulator keeps the answer"
                 "An input reads 1 above $V_{IH}$ and 0 below $V_{IL}$, and between them the answer is not defined. A slowly changing signal crossing that band can be read as either, and a divider feeding an input must be designed to land clearly outside it.",
                 "Open-drain output can only pull down; the pull-up does the rest. That is what lets several devices share one wire, and it is why $I^2$C looks the way it does.",
             ],
+            "read": [
+                {
+                    "title": "The pin droops: what a GPIO output really is",
+                    "minutes": 15,
+                    "body": r'''
+Wire a red LED from a 3.3 V microcontroller pin straight to ground, no resistor, and put
+a meter on the pin. Set the pin high.
+
+The LED lights. The meter reads **2.0 V**.
+
+It should read 3.3. Nothing is broken, nothing has reported an error, and the code is
+four characters long and correct. Yet a third of the supply voltage has gone missing
+somewhere between the register bit and the piece of copper the meter is touching, and
+until you know where, none of the design work in this module is possible.
+
+## Where the missing volt went
+
+A GPIO pin configured as an output is a pair of transistors: one that connects the pin to
+the supply rail and one that connects it to ground, with the register bit choosing which.
+A transistor that is on is not a wire. It has a channel resistance of a few tens of ohms,
+and every milliamp you pull through it drops a voltage across it.
+
+You do not have to guess that resistance, because the datasheet states it in disguise.
+Find the line in the DC characteristics table that reads something like
+
+```text
+V_OL   output low voltage    -    -   0.4 V    at I_OL = 8 mA
+```
+
+That is a measurement: at 8 mA of load the output is 0.4 V away from the rail it is
+trying to reach. Divide, and the output stage's resistance is $0.4/0.008 = 50$ Ω in the
+worst case the vendor will guarantee, with typical parts nearer 25 to 40 Ω. So a pin is
+an ideal voltage source of 0 V or $V_{DD}$ in series with a resistor, and it is that
+resistor which ate the volt.
+
+The other half of the picture is the LED. A diode's current is exponential in its
+voltage, $I = I_s(e^{V/nV_T} - 1)$, and the useful consequence of an exponential is how
+*little* the voltage moves. Multiplying the current by ten costs $nV_T\ln 10$, which for
+a real LED is roughly 0.1 V. Over the whole range you would ever run an indicator at —
+say 2 mA to 20 mA, a factor of ten — the forward voltage moves about a tenth of a volt.
+That is why the design model for an LED is a fixed drop, $V_F \approx 2.0$ V for a red
+one, and why the model is accurate enough to design with.
+
+Now the loop closes. Kirchhoff round it: the supply provides $V_{DD}$, the LED holds
+$V_F$, and everything left over is across the resistances in series with them. With no
+external resistor at all, the only resistance in the loop is the pin's own:
+
+$$I = \frac{V_{DD} - V_F}{R_{out}} = \frac{3.3 - 2.0}{40} = 32.5\ \text{mA}$$
+
+and the pin voltage is $V_{DD} - I R_{out} = 2.0$ V, which is what the meter said. The
+pin is not delivering 3.3 V into an LED; it is being dragged down to the LED's forward
+voltage and asked for four times its 8 mA rating to get there.
+
+## The design equation, and the whole table at once
+
+Put an external resistor $R$ in the loop and the same law gives what you want directly:
+
+$$I = \frac{V_{DD} - V_F}{R + R_{out}} \qquad\Longrightarrow\qquad R = \frac{V_{DD} - V_F}{I} - R_{out}$$
+
+The subtraction at the front is the part that matters and the part people skip. The LED
+takes its 2.0 V whatever happens, so the resistor never sees 3.3 V — it sees the
+remaining 1.3 V, and that is the number to divide by the current you want.
+
+Work an indicator through. Target 6 mA, comfortably visible and comfortably inside the
+pin's 8 mA. Then $R \approx 1.3/0.006 = 217$ Ω, and the nearest stock value at or above
+it is **220 Ω**. Check it back, and check the pin at the same time:
+
+```python
+VDD, VF, ROUT = 3.3, 2.0, 40.0
+
+def current(r):
+    return (VDD - VF) / (r + ROUT)
+
+for r in (0.0, 82.0, 200.0, 220.0, 470.0):
+    print("R = %6.1f ohm -> %5.2f mA, and the pin sits at %.2f V"
+          % (r, 1000 * current(r), VDD - current(r) * ROUT))
+```
+
+The five lines it prints are the whole design space of this circuit. With no resistor,
+32.50 mA and a pin at 2.00 V — the bench measurement at the top of this reading,
+reproduced. With 82 Ω, 10.66 mA, still over the rating. With 200 Ω, 5.42 mA and a pin at
+3.08 V; with 220 Ω, exactly 5.00 mA at 3.10 V; with 470 Ω, 2.55 mA, which is a visible
+but dim indicator.
+
+Two things fall out of that table that the one-line formula hides. The pin's own 40 Ω is
+not negligible: at 220 Ω it is 15% of the loop, and it always makes the LED *dimmer*
+than the arithmetic without it predicts, never brighter. And the current is far more
+sensitive to $R$ at the small end than at the large end, because $R_{out}$ and $V_F$
+stop being small corrections there.
+
+## Inputs: the pin that reads whatever you like
+
+Configured as an input, the same pin is close to an open circuit — leakage of perhaps a
+microamp. Connect a push-button between the pin and ground and nothing else, and ask
+what the pin reads when the button is *not* pressed.
+
+Nothing defines its voltage. The pin has a few picofarads of capacitance holding whatever
+charge last reached it, and mains hum, a finger near the board or the neighbouring pin
+switching will move it across the decision threshold. During bring-up it will read 1
+"most of the time", which is exactly what makes this fault survive into shipped products:
+it looks like it works.
+
+A pull-up resistor fixes the voltage. It holds the pin at $V_{DD}$ and leaves the button
+the single job of overriding it. Sizing it is a two-sided argument, and both sides are
+arithmetic. Too large and the input's own leakage matters: 1 µA through 1 MΩ is a volt of
+error, and the pin is defenceless against noise as well. Too small and you burn current
+every time the button is held: 3.3 V across 100 Ω is 33 mA, on a battery, to report a
+button. Ten kilohms puts $3.3/10\,\text{k} = 330$ µA through a pressed button and leaves
+the leakage contributing 10 mV. Most microcontrollers have an internal pull-up of 30 to
+50 kΩ that a register bit switches on, which is a resistor you do not have to buy.
+
+The threshold is not a threshold, either. An input reads 1 above $V_{IH}$ and 0 below
+$V_{IL}$, and between them the answer is not defined. So a level-shifting divider has to
+land well outside that band at both ends. A 5 V sensor read by a 3.3 V pin through
+10 kΩ over 20 kΩ gives $5 \times 20/30 = 3.33$ V at the top of its swing — over the
+rail — while a 4.5 V logic high gives 3.0 V, which clears $V_{IH} = 2.0$ V and stays
+under 3.3 V. Both checks are separate and both matter: too low and the reading is
+undefined, too high and current flows into the pin's protection diode.
+
+## The mistake, and why it is tempting
+
+The resistor is not optional, and the belief that it is has a specific form: *the diode
+limits its own current*.
+
+It is tempting for two honest reasons. The first is that the I-V curve really is very
+steep, so it feels like a device that picks its own operating point. The second, and the
+stronger one, is that leaving the resistor out **works**. The LED lights, the chip does
+not fail, and a meter that is not on the pin sees nothing wrong. What has actually
+happened is that the pin's own output resistance has become the current-limiting element
+by default — a resistor chosen by nobody, specified by nobody, and dissipating inside the
+package rather than in a component that was designed to get warm.
+
+The related trap is the port total. Eight pins rated at 8 mA each do not give you 64 mA;
+the whole port has its own limit, typically far below the sum, and exceeding it does not
+blow anything up. It drags every output on that port away from the rail, which is worse,
+because the circuit half works.
+
+## Where these models stop holding
+
+The constant-drop LED model fails when $V_{DD} - V_F$ is small. A white or blue LED has
+$V_F$ around 3.2 V, and from a 3.3 V rail that leaves 0.1 V for the resistor. The
+part-to-part spread of $V_F$ alone is ±0.2 V, so one LED from the reel draws far too much
+and the next one does not light at all. In that regime the resistor no longer sets the
+current, and the honest answers are a higher supply, a boost converter, or a proper
+constant-current driver.
+
+The Thevenin picture of the output stage is linear, and a transistor is not. Its channel
+resistance rises with temperature and varies with supply voltage, and near the current
+limit the stage leaves the region where a single resistance describes it at all. Treat
+$R_{out}$ as a bound worth including, not as a measured constant.
+
+Everything above is also static. It says nothing about *edges* — driving a long track, or
+a scope probe, means charging capacitance, and how fast the pin does that is what the
+slew-rate register controls and what makes a fast edge a source of radiated noise.
+
+And $V_{IH}$ and $V_{IL}$ describe a band, not a line. A slowly-changing input crossing
+that band can be read as either value, and can oscillate between them several times on
+one crossing. That is a genuine failure mode for a signal from an RC filter, and the
+device that removes it is a Schmitt-trigger input with hysteresis, which module 7 uses
+for exactly this reason.
+
+## What you are about to build
+
+The build for this module, **An indicator the pin can afford**, is the loop above drawn
+in the schematic editor. The 3.3 V pin is on the left, the LED is modelled the way it was
+modelled here — a 2.0 V source, since the editor has no diode symbol — and the probe sits
+on its anode. Nothing joins the two yet, so no current flows at all.
+
+Your job is the series resistor, and the checks measure the finished circuit: the LED
+current has to land between 5 mA and 8 mA, the probe has to read the LED's 2.0 V, and
+every milliamp the pin sources has to go through the LED rather than round it.
+
+One difference to hold in mind. The editor models the pin as an ideal 3.3 V source with
+no output resistance, so 220 Ω there gives $1.3/220 = 5.91$ mA rather than the 5.00 mA
+of the table above. Both are inside the window, which is the point of aiming at the
+middle of a range rather than at its edge.
+''',
+                },
+            ],
             "quiz": {
                 "title": "What the pin can and cannot drive",
                 "minutes": 9,
@@ -1076,6 +1651,191 @@ c.assert(iPin <= 8e-3 * 1.01,
                 "A MOSFET is driven by voltage, so it takes no steady gate current at all. What it takes instead is charge: the gate is a few nanofarads, and the pin has to move that charge at every edge, which is why a slow driver makes a hot transistor. The other requirement is that the threshold be low enough for 3.3 V to turn the part fully on — a **logic-level** device — because a part specified at 10 V will half-open at 3.3 and dissipate accordingly.",
                 "Low side means the switch sits between the load and ground, and it is the easy case: the emitter or source is at ground, which is where the control voltage is measured from. High side means the switch sits between the supply and the load, and now the device's reference terminal moves with the load — which needs a P-channel part, or a driver that can hold the gate above the supply rail.",
                 "A coil will not let its current stop. Open the switch and the inductance produces whatever voltage it takes to keep the current flowing, which is hundreds of volts across a transistor rated for tens, and the failure is immediate and permanent. A flyback diode across the coil — reverse-biased, so it does nothing at all while the load is on — gives that current a path the instant the switch opens, and clamps the excursion to a diode drop above the supply.",
+            ],
+            "read": [
+                {
+                    "title": "Three components between a pin and a relay",
+                    "minutes": 15,
+                    "body": r'''
+Put a meter across the relay coil on the bench. It reads **102 Ω**, and the part is a
+12 V relay, so operating it means moving $12/102 = 118$ mA through that coil.
+
+The pin that has to command it is rated at 8 mA.
+
+There is a factor of fifteen between those two measurements and no line of code closes
+it. What closes it is three components, and the useful thing about this module is that
+each of the three has a number attached — a base resistor you can compute, a dissipation
+you can compute, and a voltage spike you can compute. None of them is a rule of thumb.
+
+## The pin stops supplying and starts commanding
+
+Once the load draws more than the pin can source, or runs from a different rail, the
+pin's job changes. It is no longer the thing that delivers the current; it is the thing
+that operates a switch, and the switch delivers the current from the load's own supply.
+
+A transistor used as a switch lives in one of two states. Off, it passes almost nothing
+and dissipates almost nothing. Hard on — *saturated* — it holds perhaps 0.2 V across
+itself and dissipates almost nothing again. The region in between is where an amplifier
+lives and where a switch turns supply current into heat, so the whole of switch design is
+about staying out of it.
+
+A bipolar transistor is driven by current. To hold a collector current $I_C$ the base
+must be supplied with enough current that the transistor *could* pass more than the
+circuit is asking of it, which means
+
+$$I_B \geq \frac{I_C}{h_{FE}}$$
+
+and here the datasheet is doing something people misread. The $h_{FE}$ in that table is a
+**minimum**, it falls as the collector current rises, and it falls again when the part is
+cold. Designing at $I_C/h_{FE}$ exactly puts you on the boundary of saturation for the
+worst part on the worst day, so practice multiplies by an overdrive factor of two to ten.
+
+The other half of the base circuit is a diode. The base-emitter junction holds its own
+voltage — about 0.8 V when driven hard into saturation, a little above the 0.7 V quoted
+for a junction on the edge of conduction — so the resistor never sees the pin's whole
+output. It sees what is left:
+
+$$R_B = \frac{V_{pin} - V_{BE}}{I_B}$$
+
+which is the same subtraction as the LED in the previous module, for the same reason.
+
+## Working one through
+
+Take the relay above at 120 mA, and a small transistor whose datasheet guarantees
+$h_{FE} \geq 40$ at that collector current. An overdrive of three asks for
+$I_B = 3 \times 120/40 = 9$ mA, and the pin is rated at 8. The design does not close, and
+that is a real result rather than an arithmetic slip: the honest moves from here are a
+part with a higher guaranteed gain, a Darlington, a logic-level MOSFET, or a second
+transistor to drive the first.
+
+So work the other way instead. Fix the resistor and see what gain you are demanding:
+
+```python
+VPIN, VBE, IC, HFE_MIN = 3.3, 0.8, 0.120, 40
+
+print(" R_B       I_B     forced gain   saturated?")
+for rb in (330, 470, 1000, 2200, 10000):
+    ib = (VPIN - VBE) / rb
+    beta = IC / ib
+    print("%5d ohm  %5.2f mA  %8.1f      %s"
+          % (rb, 1000 * ib, beta, "yes" if beta <= HFE_MIN else "NO"))
+```
+
+The five lines say the whole story. A **330 Ω** base resistor draws 7.58 mA from the pin
+— inside its 8 mA, with nothing spare — and demands a forced gain of 15.8, which any part
+guaranteed to reach 40 will supply with room to spare. That transistor is properly
+saturated. 470 Ω gives 5.32 mA and a forced gain of 22.6, still comfortable.
+
+At **1 kΩ** the base current falls to 2.5 mA and the forced gain rises to 48.0, above
+the guaranteed 40. The transistor comes out of saturation. At 2.2 kΩ it is asking for
+105.6 and at 10 kΩ for 480, which is an amplifier, not a switch.
+
+What "coming out of saturation" costs is a multiplication:
+
+$$P = V_{CE} I_C$$
+
+Saturated at $V_{CE} = 0.2$ V and 120 mA, the transistor dissipates 24 mW and is cold.
+Half-on at $V_{CE} = 1.5$ V it dissipates 180 mW, and the same failure on a load of
+500 mA gives $1.5 \times 0.5 = 0.75$ W, against the half-watt or so a TO-92 package can
+shed into still air. The part is on its way out, and the cause is a resistor value rather
+than a transistor rating.
+
+## The coil will not let go of its current
+
+A board came back from the field with a dead transistor: 0.6 Ω from collector to emitter
+in both directions, a short. It had switched about four hundred times. Nothing in the
+circuit ever asked it to pass more than 120 mA, and it was rated at 40 V and 600 mA.
+
+An inductor opposes a change in its current, and the voltage it produces to do so is
+$v = L\,di/dt$. When the transistor turns off, $di/dt$ is enormous:
+
+```python
+L, I0, R_COIL = 0.085, 0.118, 102.0
+
+for t_off in (1e-6, 1e-5, 1e-4):
+    print("current falling to zero in %6.1f us would need %8.0f V"
+          % (t_off * 1e6, L * I0 / t_off))
+print("with a diode fitted, the current decays with L/R = %.2f ms"
+      % (1000 * L / R_COIL))
+```
+
+An 85 mH coil carrying 118 mA, switched off in a microsecond, would need **10030 V**.
+Ten microseconds still needs 1003 V, and a hundred needs 100 V. Nothing supplies ten
+kilovolts, of course — what happens instead is that the collector junction avalanches at
+its rated 40 V, and the coil's energy is dumped into a millimetre of silicon that was
+never meant to absorb it. Once is survivable. Four hundred times is not, which is why
+the part degrades slowly and the product fails in the field rather than on the bench.
+
+The last line of that block is the fix. A diode across the coil, cathode to the positive
+end, is reverse-biased and conducts nothing while the relay is energised. The instant the
+switch opens, the coil reverses the voltage across itself, the diode conducts, and the
+current circulates around the coil-and-diode loop, decaying with $L/R = 0.83$ ms instead
+of vanishing. The excursion is clamped to one diode drop above the supply, and the
+mechanism that killed the transistor no longer exists.
+
+That number has a cost attached, which is worth knowing before somebody blames you for
+it: 0.83 ms of decay is 0.83 ms of the relay staying closed after you told it to open. If
+release time matters, a resistor or a Zener in series with the diode shortens the decay
+by allowing a larger — but still bounded — voltage.
+
+## The mistake, and why it is tempting
+
+Fitting a 1 kΩ base resistor.
+
+It is the reflex value. A resistor into a base is "about a kilohm" in the same way that a
+pull-up is "about ten", and on this circuit it gives 2.5 mA, a forced gain of 48, and a
+transistor that is not saturated. What makes it genuinely hard to catch is that it
+*works*: at room temperature, on a part from the good end of the gain spread, the relay
+clicks and the LED lights and every test passes. What has changed is that $V_{CE}$ is now
+1.5 V rather than 0.2 V, the transistor is warm, and the margin that was supposed to
+absorb temperature and part spread has been spent.
+
+Its close relative is dividing the pin's whole 3.3 V by the base resistor instead of
+$3.3 - 0.8$. That is a 25% error in base current in the direction of less drive, and it
+is tempting because 3.3 V is the number printed on the schematic.
+
+## Where these models stop holding
+
+The fixed 0.8 V for $V_{BE}$ is a design convenience. It moves with current, and it moves
+about −2 mV per °C with temperature, so a design that only closes at 25 °C does not
+close at 85 °C.
+
+The $h_{FE}$ number is worse. It spreads by 3:1 across parts of the same type, falls at
+high collector current, and falls further when cold. A design that uses the *typical*
+figure from the datasheet is not a design; use the guaranteed minimum at your actual
+collector current, and then overdrive it.
+
+The saturation picture is a DC one. It says nothing about the transition, during which
+the device passes through the linear region and dissipates. At a few operations a second
+that is nothing at all; at tens of kilohertz it is the dominant loss, and it is why fast
+switching moves to MOSFETs — where the pin no longer supplies steady current at all, but
+must instead charge and discharge a few nanofarads of gate at every edge, through its own
+output resistance. "Logic-level" is a specification and not an adjective: an ordinary
+MOSFET characterised at $V_{GS} = 10$ V is part-way on at 3.3 V, and part-way on is the
+expensive state.
+
+Everything above is also low side — the switch between the load and ground, with the
+emitter or source at the same potential as the control voltage is measured from. Move the
+switch between the supply and the load and the reference terminal moves with the load,
+which needs a P-channel part or a driver that can hold a gate above the supply rail. A
+3.3 V pin cannot pull the base of a PNP whose emitter is at 12 V anywhere near low
+enough, and it cannot survive being pulled up to 12 V either.
+
+## What you are about to build
+
+Two exercises follow. The numeric question, **What the base resistor asks of the pin**,
+draws the base loop alone — the pin, a 330 Ω resistor and the junction modelled as its
+0.8 V — and asks how much current the pin has to supply. That is the first line of the
+table above, and the answer is checked against the app's own solver rather than against
+arithmetic somebody did once.
+
+The symbol drill, **Five symbols from a driver schematic**, asks you to read each part by
+its *job* rather than its name: the NPN low-side switch and the arrow that identifies it,
+the PNP you would reach for on the high side, the flyback diode and which way round its
+bar goes, the load's own supply drawn separately from the logic supply, and the
+mechanical contact whose bounce is the subject of module 7.
+''',
+                },
             ],
             "match": {
                 "title": "Five symbols from a driver schematic",
@@ -1311,6 +2071,238 @@ return 1000 * Math.abs(d.v[r.n1] - d.v[r.n2]) / r.value;
                 "A PLL is integer arithmetic wrapped around a feedback loop: divide the input by $M$ to make the reference, multiply it by $N$ in the oscillator, divide the result by $P$ on the way out. Each of those has a legal range — the reference must stay inside a window, the oscillator has a minimum and a maximum — and between them they mean some target frequencies are simply not reachable from some crystals.",
                 "The core can outrun the flash. Above some frequency the flash needs wait states, and the *order* of the two changes matters: raise the wait states first, then the clock. Do it the other way round and the very next instruction is fetched too quickly to be read correctly, which is a hang with no error message and nothing on the stack to explain it.",
                 "Reset is not one event. Power-on, brown-out, the external pin, the watchdog and a software request all arrive at the same vector, and a status register records which one it was. Reading that register at start-up, and keeping a count of what it said, is the difference between knowing why a product restarted in the field and guessing.",
+            ],
+            "read": [
+                {
+                    "title": "Zero comes back: clocks, wait states and the first instruction",
+                    "minutes": 16,
+                    "body": r'''
+Single-step this in a debugger:
+
+```c
+GPIOA->MODER = 0x00000400;          /* pin 5 as an output */
+uint32_t back = GPIOA->MODER;       /* read it straight back */
+```
+
+`back` is `0x00000000`.
+
+The address is right — you checked it against the manual and against `&GPIOA->MODER`.
+The chip is not in a fault handler. The write executed, the read executed, and the value
+did not survive the round trip. Change the pin number, change the value, write it twice:
+zero every time.
+
+Nothing is wrong with the two lines. The peripheral they are talking to is not switched
+on.
+
+## A gated peripheral is absent, not slow
+
+Every peripheral on a modern microcontroller sits behind a clock gate, and the gate is
+off at reset because a block with no clock costs no power. A gated peripheral does not
+respond to the bus at all: writes are discarded and reads return zero. It is not running
+slowly, and it is not ignoring you selectively. From the core's point of view there is
+nothing at that address.
+
+The enable bit is in a different peripheral — the reset-and-clock-control block — with a
+different chapter and a different base address, and that is exactly why this costs people
+an afternoon rather than a minute. The symptom is indistinguishable from a wrong address,
+so the search goes to the address, which is correct, and the actual missing line is
+somewhere the GPIO chapter never mentions.
+
+Two habits follow. Enable the clock before touching anything else about a peripheral, as
+the first line of its init function. And during bring-up, read a configuration register
+back after writing it: it costs two instructions and it distinguishes "not there" from
+"wrong value" immediately.
+
+## Where the clock comes from, and why it is a specification
+
+Two sources start a chip. An internal RC oscillator is free, starts in microseconds, and
+holds about ±1% over temperature. A crystal costs a part and two load capacitors, takes a
+couple of milliseconds to start, and holds tens of parts per million.
+
+Which you need is decided by whatever the clock has to agree with, and the numbers are
+not close together. A UART at 115200 tolerates a couple of percent between the two ends.
+USB allows the bit clock 0.25%. A clock that has to still be right in a month — a
+real-time count, a scheduled wake — needs a crystal cut for it. Against a 0.25%
+requirement, ±1% is four times the whole budget, and no amount of multiplication improves
+it: a PLL multiplies frequency, and the *fractional* error travels through untouched.
+
+## The PLL is integer arithmetic wrapped round a feedback loop
+
+The loop contains a voltage-controlled oscillator, a divider by $N$ in its feedback path,
+and a phase detector comparing the divided output against a reference. The loop settles
+where those two agree, so
+
+$$\frac{f_{vco}}{N} = \frac{f_x}{M} \qquad\Longrightarrow\qquad f_{vco} = \frac{N f_x}{M}$$
+
+and an output divider by $P$ makes the system clock $N f_x/(MP)$. Nothing analogue
+survives into the answer; it is three integers.
+
+What makes configuring one awkward is that each integer carries a window. The phase
+detector needs its reference inside a range — 1 to 2 MHz on the part modelled here. The
+oscillator has a minimum and a maximum, 100 to 432 MHz. And the system clock has a
+ceiling of its own. Between them, some target frequencies are not reachable from some
+crystals at all, and the reliable way to find out is to search:
+
+```python
+M_RANGE, N_RANGE, P_CHOICES = range(2, 64), range(50, 433), (2, 4, 6, 8)
+
+def legal(fx, m, n, p):
+    ref, vco = fx / m, fx * n / m
+    return 1e6 <= ref <= 2e6 and 100e6 <= vco <= 432e6 and vco / p <= 168e6
+
+def best(fx, target):
+    win, err = None, None
+    for m in M_RANGE:
+        for n in N_RANGE:
+            for p in P_CHOICES:
+                if not legal(fx, m, n, p):
+                    continue
+                e = abs(fx * n / (m * p) - target)
+                if err is None or e < err:
+                    win, err = (m, n, p), e
+    return win
+
+for fx, target in ((8e6, 168e6), (16e6, 48e6), (25e6, 168e6), (12e6, 100e6)):
+    m, n, p = best(fx, target)
+    print("%4.0f MHz crystal -> M=%2d N=%3d P=%d gives %7.3f MHz (wanted %.0f)"
+          % (fx / 1e6, m, n, p, fx * n / (m * p) / 1e6, target / 1e6))
+```
+
+Four lines come out, and all four are exact. An 8 MHz crystal reaches 168.000 MHz with
+$M=4$, $N=168$, $P=2$; a 16 MHz crystal reaches the 48.000 MHz that USB wants with
+$M=8$, $N=96$, $P=4$; a 25 MHz crystal — an unpromising number — reaches 168.000 MHz by
+dividing all the way down to a 1 MHz reference first, $M=25$, $N=336$, $P=2$; and 12 MHz
+reaches 100.000 MHz with $M=6$, $N=100$, $P=2$.
+
+The middle value is the one to watch while you read that. With $M=4$ on an 8 MHz crystal
+the reference is 2 MHz and the oscillator runs at $2 \times 168 = 336$ MHz, inside its
+100-to-432 window. A setting that produced the right *system* clock through an illegal
+600 MHz oscillator would not be a setting; it would be a chip that never locks.
+
+## The core can outrun the flash
+
+At 168 MHz the core wants an instruction every 5.95 ns. The flash on the same die has an
+access time of about 33 ns, fixed by physics and unaffected by anything you configure.
+The gap is bridged with wait states — cycles in which the bus waits — and how many you
+need is a division:
+
+$$\text{wait states} = \left\lceil \frac{t_{acc}}{T_{core}} \right\rceil - 1$$
+
+```python
+import math
+
+T_ACC = 33.3e-9          # the flash's access time, from the datasheet
+
+for f in (16e6, 30e6, 84e6, 168e6):
+    period = 1.0 / f
+    ws = max(0, math.ceil(T_ACC / period) - 1)
+    print("%6.1f MHz: core period %5.2f ns, flash needs %d wait state(s)"
+          % (f / 1e6, 1e9 * period, ws))
+```
+
+At 16 MHz the period is 62.50 ns, longer than the flash needs, so zero wait states. At
+30.0 MHz the period is 33.33 ns and it is still zero — which is where the familiar "one
+more wait state per 30 MHz" rule in the datasheet comes from; it is this same division
+with $t_{acc}$ around 33 ns. At 84 MHz the answer is 2, and at 168 MHz it is 5.
+
+Now the part that has no error message. Those two changes — the wait states and the clock
+— have an order, and it is **wait states first**. Setting them early costs a handful of
+wasted cycles while the part is still running at 16 MHz and nothing else. Setting them
+late means the instruction immediately *after* the clock switch is fetched from a flash
+that can no longer keep up, and what the core executes is whatever the bus happened to
+return. The chip stops, or runs nonsense, with a program counter pointing somewhere
+plausible and nothing on the stack to explain it.
+
+The general rule underneath is worth carrying past this module: when two settings must
+both change and one order is harmless, do the harmless one first.
+
+## Holding the chip in reset while the board catches up
+
+The last thing that has to be right before the first instruction is that the board around
+the processor is ready. The 8 MHz crystal takes about 2 ms to start oscillating; the
+sensor on the I²C bus does not answer for 3 ms after its own supply is valid. The
+processor, left alone, is running code within microseconds of the rail coming up.
+
+The reset pin releases the core when it rises past $0.7\,V_{DD}$, which on 3.3 V is
+2.31 V. A capacitor charging through a resistor from zero follows
+$v(t) = V_{DD}(1 - e^{-t/\tau})$ with $\tau = RC$, so the time to reach a fraction $f$ of
+the supply is found by rearranging:
+
+$$t = \tau \ln\!\frac{1}{1-f}$$
+
+```python
+import math
+
+k = math.log(1.0 / (1.0 - 0.7))
+print("the 0.7 V_DD threshold is reached after %.3f time constants" % k)
+for r, c in ((100e3, 0.0), (10e3, 100e-9), (10e3, 470e-9), (47e3, 100e-9)):
+    tau = r * c
+    print("R = %5.0f k, C = %6.1f nF -> tau = %5.2f ms, released after %5.2f ms"
+          % (r / 1e3, c * 1e9, 1e3 * tau, 1e3 * k * tau))
+```
+
+The constant is **1.204**, so the hold time is about $1.2\,RC$ and the design is one
+division. Wanting a 6 ms hold gives $RC = 5$ ms, and the resistor is bounded from above
+by leakage: the reset pin can leak up to 1 µA, and across anything larger than 50 kΩ that
+alone moves the release point by 50 mV or more, drifting with temperature. So 10 kΩ, and
+then $C = 5\,\text{ms}/10\,\text{k} = 500$ nF, of which the stock value is 470 nF.
+
+The four rows show that. 100 kΩ with no capacitor at all releases at 0.00 ms — a resistor
+with nothing after it carries no current and drops no voltage, so the pin follows the
+rail. 10 kΩ with 100 nF releases after 1.20 ms, which is before the crystal has started.
+10 kΩ with 470 nF releases after **5.66 ms**, comfortably inside a 3-to-15 ms window, and
+47 kΩ with 100 nF gives an identical answer because it is the same $RC$ product.
+
+## The mistake, and why it is tempting
+
+Configuring a peripheral before enabling its clock, and then debugging the address.
+
+It is tempting because the code reads correctly from top to bottom. Every line is about
+GPIO, in the order the GPIO chapter presents them, and the missing line belongs to a
+different peripheral entirely. It is tempting again because zero is such a plausible
+wrong answer: a wrong address usually reads as zero too, and so does an unmapped region,
+so the evidence points at the one thing that is not wrong.
+
+Its twin is raising the clock before the wait states, which is tempting for the opposite
+reason — the clock is the interesting change and the wait states feel like housekeeping
+to be tidied up afterwards.
+
+## Where these models stop holding
+
+The PLL equation is a ratio and says nothing about time. A PLL takes tens to hundreds of
+microseconds to lock, and using its output before the ready flag is set gives an
+unspecified frequency to a core you have already told to expect the final one. It also
+says nothing about jitter: the output of a PLL is noisier than its reference, which
+matters for a converter's sampling instant even when the average frequency is perfect.
+
+The reset model assumes the supply is a step. It is not — the rail rises over some
+hundreds of microseconds, and the capacitor charges while it does, so a real board
+releases earlier than $1.2\,RC$ suggests. The model also ignores any internal pull-up on
+the reset pin, which sits in parallel with your resistor and shortens $\tau$.
+
+The wait-state count is a worst case, not an average. Real parts put a prefetch buffer
+and an instruction cache in front of the flash, so straight-line code runs at close to
+full speed with five wait states configured, and it is branches and interrupt entries
+that pay. That is why a change that shortens a loop can slow a program down.
+
+And reset is not one event. Power-on, brown-out, the external pin, the watchdog and a
+software request all arrive at the same vector, and a status register records which one
+it was. Reading that register at start-up, and keeping a count of what it said, is the
+difference between knowing why a product restarted in the field and guessing.
+
+## What you are about to build
+
+Three exercises, one per section above. The derivation, **From the crystal to the
+peripheral, one divider at a time**, walks $f_x$, $M$, $N$, $P$ and the bus divider $Q$
+through to how long a 16-bit timer can measure before it wraps — 1.56 ms on the numbers
+here, which is why the prescaler in the next module exists. The lab, **Finding a PLL
+setting that exists**, asks for the three frequency functions, the four legality rules and
+the search above, with a stated tie-break so that the answer is reproducible. And the
+build, **Holding reset until the board is ready**, asks you to place the capacitor that
+turns a resistor into a delay, with the checks simulating the power-up and measuring when
+the pin crosses 2.31 V.
+''',
+                },
             ],
             "quiz": {
                 "title": "Gates, multipliers and the reasons a chip restarts",
