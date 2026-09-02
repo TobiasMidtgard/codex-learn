@@ -84,6 +84,279 @@ COURSE = {
                 "The **thermal voltage** $V_T = kT/q$ is 25.85 mV at 300 K. It is not a fitted constant; it is the thermal energy per carrier expressed in volts, and it sets the scale of every exponential in this course.",
                 "You cannot measure $V_{bi}$ with a voltmeter. The contact potentials at the two probe junctions cancel it exactly — if they did not, a diode in a drawer would be a battery, and thermodynamics forbids that.",
             ],
+            "read": [
+                {
+                    "title": "Two cubes of silicon, and the volt that appears where they meet",
+                    "minutes": 15,
+                    "body": r'''
+Two cubes of silicon, a centimetre on a side, sitting on a bench. An ohmmeter across the
+first one reads 341 k$\Omega$. The same meter across the second reads 0.46 $\Omega$.
+
+Both are silicon. Neither has been heated, strained or damaged. The difference is that
+somebody replaced one atom in five million of the second cube with phosphorus, and that
+one change moved its resistance by a factor of seven hundred thousand. Almost nothing else
+in engineering has a control knob with that range on it, and this course exists because
+the knob can be turned in one part of a crystal and left alone in the part beside it.
+
+## Why the first cube conducts so badly
+
+Silicon has about $5\times10^{28}$ atoms per cubic metre, each sharing its four outer
+electrons with its neighbours. An electron sitting in a bond carries no current. The
+lattice is vibrating, though, and now and then a vibration is violent enough to break one
+bond. That leaves two mobile things behind: the freed **electron**, and the vacancy where
+it used to be, which the surrounding bonds pass along like an empty seat down a row. The
+vacancy moves, carries current, and behaves in every measurement like a positive carrier.
+It is called a **hole**.
+
+Bonds break in pairs, so pure silicon holds exactly as many holes as electrons, and the
+count at 300 K is $n_i = 1.0\times10^{16}$ m$^{-3}$. Set that against $5\times10^{28}$
+atoms and it is one mobile carrier per five million million atoms. A material with one
+charge carrier per $5\times10^{12}$ atoms is barely a conductor, and 341 k$\Omega$ across
+a centimetre cube is what that looks like on a meter.
+
+## Doping, and the two things it does not do
+
+Replace one silicon atom with phosphorus, which brings five outer electrons instead of
+four. Four of them go into the bonds the silicon atom would have made. The fifth has
+nothing to bond to, is held to its parent only weakly, and at room temperature has long
+since wandered off into the crystal. One phosphorus atom, one extra mobile electron, and
+no hole to go with it. That is **n-type** silicon, and phosphorus is a **donor**. Boron
+has three outer electrons and does the mirror image: it leaves one bond short, which is a
+hole, and makes **p-type** silicon from an **acceptor**.
+
+Two things did not happen, and the picture goes wrong early if they are assumed.
+
+The material did not become charged. The phosphorus atom that gave up its electron is now
+a fixed positive ion in the lattice, and the electron it gave up is still inside the same
+piece of silicon. Add up the charge in any lump of n-type material big enough to see and
+it comes to zero. The name says which carrier is mobile in quantity; it says nothing about
+net charge.
+
+And the dopants did not move. They are substituted into the crystal at the temperature of
+a furnace and they stay exactly where they were put for the life of the device. Everything
+from here on is carriers moving through a fixed background of charged, immobile ions.
+
+## Raising one carrier population suppresses the other
+
+There is a second effect of doping that is less obvious than the first and matters more.
+
+Carriers are being generated all the time, by the same bond-breaking as before. The rate
+depends on the temperature and on how many bonds there are to break, and doping changes
+neither: call it $G(T)$. Carriers also disappear all the time, and disappearing needs an
+electron to *meet* a hole, so the recombination rate is proportional to the product of the
+two populations, $r\,np$. In equilibrium the two rates are equal:
+
+$$G(T) = r\,np \qquad\Longrightarrow\qquad np = \frac{G(T)}{r} = \text{a constant at a given temperature}$$
+
+Pure silicon is one solution of that equation with $n = p = n_i$, which fixes the constant.
+So in any silicon at equilibrium, doped or not,
+
+$$np = n_i^2$$
+
+This is the **law of mass action**, and it says that the two populations are on a seesaw.
+Push electrons up by a factor of a million and holes go down by a factor of a million,
+because every extra electron makes it that much more likely that a hole meets one and
+vanishes.
+
+```python
+n_i = 1.0e16
+for n_d in (1e21, 1e22, 1e23):
+    p = n_i * n_i / n_d
+    print("N_d = %6.0e   n = %6.0e   p = %6.0e   n/p = %5.0e"
+          % (n_d, n_d, p, n_d / p))
+```
+
+```text
+N_d =  1e+21   n =  1e+21   p =  1e+11   n/p = 1e+10
+N_d =  1e+22   n =  1e+22   p =  1e+10   n/p = 1e+12
+N_d =  1e+23   n =  1e+23   p =  1e+09   n/p = 1e+14
+```
+
+Electrons are now the **majority** carriers and holes the **minority** carriers, and in
+p-type material it is the other way round. The minority population looks negligible and is
+not: module 2's reverse saturation current is carried entirely by minority carriers, and
+module 5 computes it from the numbers in that last column.
+
+## What happens where p meets n
+
+Now the arrangement the whole course is about. One crystal, p-type on the left, n-type on
+the right, with the doping switching over a few atomic spacings. Nothing is connected to
+it.
+
+The hole concentration on the left is $10^{23}$ m$^{-3}$ and on the right it is
+$10^{9}$ m$^{-3}$ — fourteen orders of magnitude down over a few nanometres. A gradient
+like that drives **diffusion**, the same way a drop of ink spreads through still water:
+no force is needed, only the fact that random motion moves more carriers out of a crowded
+region than into it. Holes cross into the n-side, electrons cross into the p-side.
+
+Each departure exposes something. A hole leaving the p-side strands the acceptor ion that
+supplied it, which is negative and fixed. An electron leaving the n-side strands a donor
+ion, which is positive and fixed. So a layer of negative charge builds on the p-side of
+the boundary and a layer of positive charge on the n-side, and between them is an electric
+field pointing from n to p — which pushes holes back towards the p-side and electrons back
+towards the n-side, against the diffusion that created it.
+
+That field grows until it stops the net flow. The stripped layer is the **depletion
+region**, and the voltage across it is the **built-in potential** $V_{bi}$.
+
+Note carefully what equilibrium means here, because it is the point the quiz below leans
+on. Diffusion has not stopped. Drift has not stopped. Both are large, and they are equal
+and opposite, so the *net* current is exactly zero. A junction with a genuine net current
+in it and nothing connected would be delivering power from nowhere.
+
+## How big is the voltage
+
+Setting the two currents equal is the derivation, and this module's derivation unit, **The
+built-in potential, from mass action and Boltzmann**, walks it in four steps. The short
+version: a population of carriers in equilibrium across a potential difference is thinner
+on the high-potential side by the Boltzmann factor $e^{-V/V_T}$, where $V_T = kT/q$ is the
+thermal energy per carrier expressed in volts. Holes are $10^{14}$ times thinner on the
+n-side, so
+
+$$e^{V_{bi}/V_T} = \frac{p_p}{p_n} = \frac{N_aN_d}{n_i^2}
+\qquad\Longrightarrow\qquad V_{bi} = V_T\ln\!\left(\frac{N_aN_d}{n_i^2}\right)$$
+
+That exponential arrived from thermal statistics, not from anything about the junction —
+which is worth holding on to, because the same factor comes back in module 2 as the
+exponential of the diode equation.
+
+## A junction, in numbers
+
+$10^{23}$ m$^{-3}$ either side, at 300 K. This is the first two functions of the lab,
+**The junction, from the doping upwards**:
+
+```python
+import math
+
+K = 1.380649e-23                        # J/K
+Q = 1.602176634e-19                     # C
+EPS_SI = 11.7 * 8.8541878128e-12        # F/m
+
+n_i = 1.0e16                            # intrinsic carriers, m^-3
+n_a = n_d = 1.0e23                      # acceptors and donors, m^-3
+
+v_t = K * 300.0 / Q
+v_bi = v_t * math.log(n_a * n_d / (n_i * n_i))
+w = math.sqrt(2.0 * EPS_SI * v_bi / Q * (1.0 / n_a + 1.0 / n_d))
+
+print("V_T   = %.3f mV" % (1000.0 * v_t))
+print("V_bi  = %.4f V" % v_bi)
+print("W     = %.1f nm" % (1e9 * w))
+print("E_max = %.1f MV/m" % (2.0 * v_bi / w / 1e6))
+```
+
+```text
+V_T   = 25.852 mV
+V_bi  = 0.8334 V
+W     = 146.8 nm
+E_max = 11.4 MV/m
+```
+
+Two of those numbers deserve a second look. The depletion region is 147 nm wide — about
+five hundred atoms — so the entire device is happening in a layer far thinner than the
+silicon it sits in. And the field inside it is 11 MV/m with nothing connected, roughly a
+third of the field at which silicon breaks down. A junction is a violent place at rest.
+
+The logarithm is also why doping is a crude lever on $V_{bi}$. Multiplying both dopings by
+ten multiplies the argument by a hundred and adds only $V_T\ln 100 = 119$ mV, so the whole
+usable range of doping fits inside a ladder of equal steps: 0.595 V at $10^{21}$ m$^{-3}$,
+0.714 V at $10^{22}$, 0.833 V at $10^{23}$, 0.952 V at $10^{24}$.
+
+## Pulling it apart
+
+Apply $V_R$ volts in reverse — n-side positive — and the applied voltage adds to the
+built-in one rather than opposing it. The junction now supports $V_{bi}+V_R$, and to hold
+more voltage it has to expose more ionised dopant, so the depletion region widens. Because
+the charge exposed grows with the width and the voltage grows with the charge times the
+width again, the width goes as the square root of the voltage:
+
+```python
+import math
+
+Q = 1.602176634e-19
+EPS_SI = 11.7 * 8.8541878128e-12
+V_BI = 0.833370010652644
+
+
+def width(n_a, n_d, v):
+    return math.sqrt(2.0 * EPS_SI * v / Q * (1.0 / n_a + 1.0 / n_d))
+
+
+w0 = width(1e23, 1e23, V_BI)
+for v_r in (0.0, 1.0, 5.0, 20.0):
+    w = width(1e23, 1e23, V_BI + v_r)
+    print("V_R = %4.1f V   junction holds %6.3f V   W = %6.1f nm   W/W0 = %.3f"
+          % (v_r, V_BI + v_r, 1e9 * w, w / w0))
+```
+
+```text
+V_R =  0.0 V   junction holds  0.833 V   W =  146.8 nm   W/W0 = 1.000
+V_R =  1.0 V   junction holds  1.833 V   W =  217.8 nm   W/W0 = 1.483
+V_R =  5.0 V   junction holds  5.833 V   W =  388.4 nm   W/W0 = 2.646
+V_R = 20.0 V   junction holds 20.833 V   W =  734.0 nm   W/W0 = 5.000
+```
+
+Five volts of reverse bias multiplies the width by 2.646, not by 6, and the reason the
+first volt is worth so much more than the fifteenth is that $V_{bi}$ is already in the sum
+before you apply anything. Forward bias does the opposite: it subtracts, the region
+narrows, the barrier drops, and carriers start crossing in quantity. That is module 2.
+
+Two more consequences run through the rest of the course. A widening slab of insulator
+between two conductors is a capacitor whose value you can steer with a voltage, which is
+module 7. And the two dopings enter as $1/N_a + 1/N_d$, so the *lightly* doped side
+dominates the sum — which is why real diodes are made with one side doped far more heavily
+than the other, and why almost all the depletion region sits on the light side.
+
+## The mistake people actually make
+
+Reaching for a voltmeter. The built-in potential is real, it is 0.83 V, and it is doing
+all the work in the device — so it is natural to expect it across the terminals. It reads
+zero, every time.
+
+The reason is the contacts. To reach a diode you have to put metal on silicon at each end,
+and each of those is itself a junction with its own contact potential. Go all the way
+round the loop — meter, wire, metal-to-p, p-to-n, n-to-metal, wire, meter — and the
+potentials cancel to the last millivolt. They have to. A diode reading 0.83 V into a meter
+would drive current round that loop forever, and thermodynamics does not allow a device
+that delivers power at one uniform temperature.
+
+The general lesson is worth more than the special case: an internal potential is not a
+terminal voltage. What you can measure at the pins is what is left after every junction in
+the loop has had its say.
+
+The other common slip is quieter — reading "n-type" as "negatively charged". It leads
+directly to expecting an electric field around a doped wafer, or expecting two doped
+regions to attract each other. Both pieces are neutral. What is not neutral is the thin
+layer either side of the boundary once diffusion has moved some carriers across, and that
+layer is the entire device.
+
+## Where this stops holding
+
+The mass-action law assumes the carrier populations are dilute enough to ignore each
+other, and above about $10^{25}$ m$^{-3}$ they are not: the material becomes **degenerate**
+and both $np = n_i^2$ and the Boltzmann factor stop being right. The formula gives fair
+warning of its own limit. At $N_a = N_d = 2.6\times10^{25}$ m$^{-3}$ it returns
+$V_{bi} = 1.12$ V, which is silicon's band gap in volts — and a built-in potential larger
+than the band gap is not a thing that exists.
+
+The abrupt junction — doping that switches from $N_a$ to $N_d$ at a plane — is a
+convenience. Real profiles are graded over a distance, diffused or implanted, and the
+grading changes how the width and the capacitance depend on voltage. Module 7 makes that
+exponent a design parameter rather than a fixed $1/2$.
+
+The depletion approximation says the region is swept perfectly clean and the neutral
+regions are perfectly undisturbed, with a sharp boundary between them. The truth is a
+transition a few nanometres deep at each edge, which matters for a 147 nm region rather
+less than the arithmetic above suggests it might, and matters a great deal in a modern
+transistor whose whole channel is that size.
+
+And every number here is at 300 K. $n_i$ is not a constant of silicon but a steep function
+of temperature, and it sits squared in the denominator of the logarithm, so $V_{bi}$ falls
+as the junction warms. Module 6 does that properly, and the same effect is why a diode's
+forward drop falls by about 2 mV per kelvin.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Doping, mass action and the junction",
                 "minutes": 10,
@@ -455,6 +728,193 @@ assert wa > depletion_width(1e23, 1e23, va), \
                 "Static resistance answers 'how much current at this voltage'. Dynamic resistance answers 'how much does the voltage move if the current wobbles'. Confusing them is the most expensive mistake in this course.",
                 "The **piecewise-linear model** replaces the diode by a fixed voltage $V_{D0}$ in series with $r_d$ — the tangent to the exponential at the chosen operating point. It is exact at that point and useful for a decade either side.",
                 "How far either side is a number rather than a feeling, and the second build measures it against the device. Two decades below the tangent point the real drop has fallen by $nV_T\\ln 100 = 119$ mV; the tangent says 26 mV and the static resistance says 689 mV. A model you have never taken outside its range is a model whose range you do not know.",
+            ],
+            "read": [
+                {
+                    "title": "Where 0.7 volts comes from, and why it is not 0.7 volts",
+                    "minutes": 13,
+                    "body": r'''
+Put a diode, a resistor and a 5 V supply in series and measure across the diode. The
+meter says 0.70 V. Change the resistor from 430 $\Omega$ to 100 $\Omega$ — more than
+four times the current — and measure again. It says 0.73 V. Change it to 43 k$\Omega$,
+a hundredth of the original current, and it says 0.58 V.
+
+Three measurements, three answers, and the spread is 150 mV across a current range of
+more than four hundred to one. That is the entire behaviour of a diode in one paragraph:
+the voltage is *nearly* constant, and the small amount by which it is not is the most
+useful thing about the device.
+
+## Where the exponential comes from
+
+Module 1 left the junction in equilibrium, with a built-in potential $V_{bi}$ holding
+back a diffusion current that exactly cancels the drift current. Nothing flows, because
+the two flows are equal and opposite.
+
+Now put $V$ across the junction, forward. The applied voltage subtracts from the barrier,
+so carriers now face a hill of height $q(V_{bi} - V)$ instead of $qV_{bi}$. The
+population of carriers with enough thermal energy to climb a hill of height $E$ is
+proportional to $e^{-E/kT}$ — that is Boltzmann's result, and it is the only physics
+this course borrows. So the diffusion current, which was in balance, is multiplied by
+
+$$\frac{e^{-q(V_{bi}-V)/kT}}{e^{-qV_{bi}/kT}} = e^{qV/kT} = e^{V/V_T}$$
+
+The drift current is unchanged: it depends on how many minority carriers wander into the
+depletion region and get swept across, and that number is set by the doping, not by the
+barrier. Call that unchanged current $I_S$. The net current is what diffusion now
+delivers minus what drift takes back:
+
+$$I = I_S e^{V/V_T} - I_S = I_S\left(e^{V/V_T} - 1\right)$$
+
+The $-1$ is not a correction bolted on. It is the drift current that was there all along,
+and it is why the equation gets reverse bias right for free: make $V$ negative by a few
+$V_T$ and the exponential collapses, leaving $I = -I_S$, a current that does not care how
+hard you pull. That is what *saturation* means.
+
+The ideality factor $n$, which turns $V_T$ into $nV_T$, is the one fitted quantity. It
+absorbs recombination inside the depletion region, which the derivation above ignores. It
+is 1 for an ideal junction and up to 2 when that recombination dominates.
+
+## Inverting it, and the 60 mV that follows
+
+Beyond about $4V_T \approx 100$ mV the $-1$ is a part in fifty and can go:
+
+$$I \approx I_S e^{V/nV_T} \qquad\Longleftrightarrow\qquad V = nV_T\ln\frac{I}{I_S}$$
+
+Now ask what a *factor of ten* in current costs in volts. Logarithms turn the ratio into
+a difference:
+
+$$V_2 - V_1 = nV_T\ln\frac{I_2}{I_1} = nV_T\ln 10 = 1 \times 0.025852 \times 2.302585
+= 0.059526\ \text{V}$$
+
+Sixty millivolts per decade, and notice what dropped out: $I_S$ cancelled. The slope is
+the same for every silicon diode ever made, cheap or expensive, big or small. What $I_S$
+sets is *where* the curve sits, not how steeply it rises.
+
+That single number explains the three measurements at the top. Take the small-signal
+diode this module's lab uses, $I_S = 2.0\times10^{-14}$ A with $n = 1$ at 300 K:
+
+```text
+current      V = V_T ln(I/I_S)       relative to 10 mA
+   100 uA          0.5773 V              -2 decades, -119 mV
+     1 mA          0.6369 V              -1 decade,   -60 mV
+    10 mA          0.6964 V               reference
+   100 mA          0.7559 V              +1 decade,   +60 mV
+      1 A          0.8154 V              +2 decades, +119 mV
+```
+
+Four decades of current — a factor of ten thousand — fit inside 240 mV. *That* is why
+"0.7 V" works as a rule of thumb, and it is also exactly why it is not a constant. A
+resistor asked to carry ten thousand times the current would need ten thousand times the
+voltage.
+
+## Two resistances, and the ratio between them
+
+At 10 mA the diode has 0.6964 V across it, so $V/I = 69.6\ \Omega$. Wire a 69.6 $\Omega$
+resistor in its place and the DC voltmeter cannot tell the difference. That number is the
+**static resistance**, and it answers exactly one question: how much current flows at this
+voltage.
+
+Ask a different question — the load wobbles by 1 mA, how far does the voltage move? —
+and differentiate instead:
+
+$$r_d = \frac{dV}{dI} = \frac{d}{dI}\left(nV_T\ln\frac{I}{I_S}\right) = \frac{nV_T}{I}$$
+
+$I_S$ cancels again. At 10 mA, $r_d = 0.025852/0.010 = 2.585\ \Omega$: twenty-seven times
+smaller than the static resistance. A 1 mA wobble moves the diode by 2.6 mV, not by 70 mV.
+
+The factor of twenty-seven is not a coincidence, and it is worth deriving because it is
+the whole reason the next two modules work:
+
+$$\frac{R_{static}}{r_d} = \frac{V/I}{nV_T/I} = \frac{V}{nV_T} = \ln\frac{I}{I_S}$$
+
+The two resistances differ by the logarithm itself — $0.6964/0.025852 = 26.9$ here. Any
+device sitting many thermal voltages up an exponential has this property, and no resistor
+has it at all, because for a resistor $V = IR$ makes both definitions give $R$. When
+module 4 asks why a Zener regulates and a resistor cannot, this ratio is the answer.
+
+## Worked example: solving a circuit the algebra will not solve
+
+5 V, 430 $\Omega$, the diode above. Kirchhoff gives
+
+$$5 = 430\,I + V_T\ln\frac{I}{I_S}$$
+
+and there is no rearranging that isolates $I$: it sits both multiplied by 430 and inside
+a logarithm. So iterate. Guess a diode voltage, ask the *resistor* what current that
+implies, then ask the *diode* what voltage that current implies, and go round again:
+
+```text
+V0 = 0.7000 V     ->  I0 = (5 - 0.7000)/430   = 10.0000 mA
+                  ->  V1 = V_T ln(I0/I_S)     =  0.696398 V
+V1 = 0.696398 V   ->  I1 = (5 - 0.696398)/430 = 10.008377 mA
+                  ->  V2 = V_T ln(I1/I_S)     =  0.696420 V
+V2 = 0.696420 V   ->  I2 = (5 - 0.696420)/430 = 10.008327 mA
+                  ->  V3 = 0.696420 V         (unchanged to six figures)
+```
+
+Two passes. It converges that fast because of the ratio just derived: an error in the
+current is divided by 27 on its way to becoming an error in the voltage, so each pass
+kills most of what the last one left. The lab, **Solving the diode equation, both ways
+round**, does it without needing a good first guess at all: 200 halvings of the interval
+between 0 V and the supply, returning 0.6964194 V and 10.008327 mA — the same answer.
+
+Check the honesty of the 0.7 V assumption against it. Assuming 0.7 V flat gives 10.000 mA
+against a true 10.008 mA: an error of 0.08%, invisible. Now do the same at 43 k$\Omega$,
+where the true current is near 100 $\mu$A: assuming 0.7 V predicts $(5-0.7)/43000 =
+100.0\ \mu$A, while the diode actually sits at 0.578 V and passes 102.8 $\mu$A — nearly
+3% out, and all of the error in the diode's drop rather than the resistor's. The rule of
+thumb degrades exactly where the logarithm says it should.
+
+## The tangent, and why a linear solver can now cope
+
+Take the tangent to the curve at 10 mA. It passes through (0.6964 V, 10 mA) with slope
+$1/r_d$, so extended back to zero current it meets the voltage axis at
+
+$$V_{D0} = 0.6964 - 0.010 \times 2.585 = 0.6705\ \text{V}$$
+
+A 0.6705 V source in series with 2.585 $\Omega$. That is the **piecewise-linear model**,
+and it is the object you build in the schematic editor next. It is not an approximation
+to the diode everywhere — it is the diode's behaviour *at one operating point*, extended
+by a straight line. At 10 mA it is exact in both value and slope. At 1 mA the real diode
+sits at 0.6369 V and the model says $0.6705 + 0.001\times2.585 = 0.6731$ V, 36 mV high.
+At 100 mA the model says 0.929 V against a true 0.756 V.
+
+## The mistake people actually make
+
+Quoting one resistance for the diode. It is tempting because every component in the first
+year had one, and because at the operating point the static resistance is not wrong — it
+reproduces the DC voltage and the DC current perfectly. The first build, **A diode a
+linear solver can swallow**, is constructed entirely around this: a single 69.6 $\Omega$
+resistor passes its first three checks, and is caught only by how fast a capacitor
+charges through it, because
+charging depends on the *incremental* resistance and that is 2.585 $\Omega$, not
+69.6 $\Omega$. Twenty-seven times wrong, in a measurement no voltmeter would show you.
+
+The second mistake is subtler and follows from the first: reading "0.7 V" as a property
+of silicon rather than as a reading taken at an unstated current. It is a property of
+silicon *at a few milliamps*. Quote the current with it and it becomes a real number;
+quote it alone and it is a superstition that happens to work over three decades.
+
+## Where this stops holding
+
+- **At high current the exponential is not what limits you.** Past a few hundred
+  milliamps the bulk resistance of the neutral silicon and the bond wires — a few tens of
+  milliohms — starts to dominate, and the curve straightens out. The equation above says
+  1 A costs 0.815 V; a real 1 A diode measures nearer 1.0 V, and the extra is $IR$ in
+  ordinary resistive material, not junction physics.
+- **At very low current the ideality factor drifts towards 2.** Recombination inside the
+  depletion region has a different voltage dependence from diffusion, and below a
+  microamp or so it takes over. A single $n$ fitted at 10 mA will not extrapolate down
+  six decades.
+- **Every number here is at 300 K.** $V_T$ is proportional to absolute temperature and
+  $I_S$ roughly quadruples every 10 K, and the second effect wins: at a fixed current the
+  forward voltage *falls* by about 2 mV per kelvin. Module 6 does that properly, and it
+  is the reason a diode characterised on a cold bench misbehaves in a warm enclosure.
+- **The $-1$ matters again in reverse.** Everything after the inversion assumed forward
+  bias beyond $4V_T$. Below that — and in the whole reverse region — you need the full
+  Shockley form, which is why the lab keeps the $+1$ and the $-1$ in its two functions
+  even though they are invisible at 10 mA.
+''',
+                },
             ],
             "quiz": {
                 "title": "The exponential, and the two resistances",
@@ -1047,6 +1507,188 @@ assert abs(v3 - 1.383840561056358) < 1e-9, \
                 "Real diodes do not stop conducting instantly when the current reverses. **Reverse recovery** sweeps the stored minority charge out, and the loop inductance and junction capacitance then ring at tens of megahertz — the source of most of a supply's radiated noise.",
                 "A rectifier output is not a supply. It has ripple, it moves with the mains and with the load, and it needs either a filter, a regulator or both. Module 4 supplies the regulator.",
             ],
+            "read": [
+                {
+                    "title": "Sizing a reservoir, and the ten per cent the formula gives back",
+                    "minutes": 14,
+                    "body": r'''
+A transformer secondary labelled 12 V, a bridge, a capacitor, and a load that wants about
+70 mA at something near 15 V. Four components, and every one of them is chosen by an
+argument you can do on paper. This unit does that design from the label on the
+transformer to the part number of the diode, and then checks it against the time-stepped
+simulation you write in the lab, **Ripple, predicted and measured**.
+
+## What the capacitor sees, before the capacitor is there
+
+A bridge does one thing: it makes both half-cycles come out the same way up. With no
+capacitor, the output is $|V_{peak}\sin\omega t|$ less the drops of the two diodes that
+are conducting at that instant — a train of humps, touching zero twice per mains cycle.
+
+Two consequences follow immediately, and both catch people out.
+
+**The peak is not the label.** A transformer's rating is RMS. $12\ \text{V RMS}$ means
+$12\sqrt{2} = 16.97$ V peak, and it is the peak the capacitor charges towards. Take off
+two diode drops at roughly 0.7 V each and the rail sits near
+
+$$V_{rail} = 16.97 - 1.4 = 15.6\ \text{V}$$
+
+which is 30% above the number printed on the transformer. Designing a 12 V circuit around
+a 12 V transformer and discovering 15.6 V is the classic first mistake in a linear supply,
+and it is always in the direction that damages something.
+
+**The humps arrive at twice the mains frequency.** 50 Hz in, 100 Hz out. That factor of
+two is worth two extra diodes on its own, and the next section says why.
+
+## Deriving the ripple, rather than quoting it
+
+Add the reservoir. Near each peak the input is above the capacitor and the diodes
+conduct, topping it up. Once the input falls away, the diodes go open and the capacitor is
+alone with the load. The only equation for a capacitor is
+
+$$I = C\frac{dV}{dt}$$
+
+The load draws $I_{load}$ *out*, so $-C\,dV/dt = I_{load}$, giving a fall of
+$dV/dt = -I_{load}/C$. If the load is roughly constant, that slope is constant, so the
+voltage falls in a straight line, and over a time $t$ it falls by
+
+$$\Delta V = \frac{I_{load}}{C}\,t$$
+
+Now the assumption that makes this a design rule instead of a description: take $t$ to be
+the whole ripple period $T_r = 1/f_r$. Then
+
+$$\boxed{V_{ripple} \approx \frac{I_{load}}{f_r C}}$$
+
+Every property in the concept list falls straight out of that fraction. Double $C$ and the
+ripple halves. Double the load and it doubles. Go from half-wave to full-wave and $f_r$
+doubles from 50 Hz to 100 Hz, so the ripple halves — the capacitor only has to coast for
+10 ms instead of 20 ms.
+
+## Worked example, all the way through
+
+**Specification.** 12 V RMS at 50 Hz, full-wave bridge, load 220 $\Omega$, ripple no
+worse than 0.7 V peak-to-peak.
+
+**1. The rail.** $16.97 - 1.4 = 15.6$ V at the top of the ripple, as above.
+
+**2. The load current.** The rail is not flat, so use its mean, which will land a little
+below the peak — call it 15.3 V for now and check later. $I_{load} = 15.3/220 =
+69.5\ \text{mA}$.
+
+**3. The capacitor.** Rearranged, $C = I_{load}/(f_r V_{ripple})$:
+
+$$C = \frac{0.0695}{100 \times 0.7} = 993\ \mu\text{F} \;\longrightarrow\; 1000\ \mu\text{F}$$
+
+**4. What the formula now predicts.** $0.0695/(100 \times 1000\times10^{-6}) = 0.695$ V.
+
+**5. What actually happens.** The lab steps this exact circuit forward in time and
+measures the tail: peak 15.600 V, trough 14.968 V, so 0.632 V of ripple, with a mean of
+15.291 V. The mean vindicates the guess in step 2 — 15.291/220 = 69.5 mA, which is what
+was assumed.
+
+So the formula said 0.695 V and the circuit delivered 0.632 V. It over-predicted by 9.9%.
+
+## Where that ten per cent comes from
+
+The concept list says the formula "always overestimates" and puts the error at about ten
+per cent for an ordinary design. Here is the argument behind the number, because a design
+rule you cannot bound is a design rule you cannot trust.
+
+The formula charged the capacitor for discharging over the *whole* 10 ms. It does not.
+It discharges only from the moment the falling input lets go of it to the moment the next
+rising hump catches it up again. Find that instant: the capacitor is at 14.968 V, and the
+input reaches that value when
+
+$$17.0\,|\sin\theta| - 1.4 = 14.968 \quad\Longrightarrow\quad
+|\sin\theta| = \frac{16.368}{17.0} = 0.9628 \quad\Longrightarrow\quad \theta = 74.4^\circ$$
+
+The next peak is at $90^\circ$. So the diodes conduct for $90 - 74.4 = 15.6^\circ$ of the
+mains cycle, which at 50 Hz is 0.87 ms, and the capacitor is on its own for the other
+9.13 ms of the 10 ms period. Scaling the prediction by the time that actually elapsed:
+
+$$0.695 \times \frac{9.13}{10} = 0.634\ \text{V}$$
+
+against 0.632 V measured. The whole of the discrepancy was the conduction window, and the
+last two millivolts are the discharge being very slightly curved rather than straight —
+the load current falls as the rail falls, so the real slope eases off as it goes.
+
+That is also the answer to "how big is the error in general". It is the fraction of the
+period the diodes conduct, and that fraction grows as the ripple grows, because a deeper
+trough is caught earlier on the rising edge. Small ripple, small error. It is always in
+the safe direction: you get less ripple than you budgeted for.
+
+## What the capacitor costs
+
+All the charge the load takes over a full 10 ms has to be pushed back in during that
+0.87 ms window. Charge does not care how it is delivered:
+
+$$Q = I_{load}T_r = 0.0695 \times 0.010 = 695\ \mu\text{C}$$
+$$\bar{I}_{diode,\,conducting} = \frac{695\times10^{-6}}{0.87\times10^{-3}} = 0.80\ \text{A}$$
+
+Eleven and a half times the DC load current, on average, while conducting — and the
+instantaneous peak is higher still, since the current is a spike rather than a
+rectangle. A 70 mA supply is asking its diodes for the best part of an amp.
+
+This is the part of the design that gets worse when you improve the ripple. Ask for
+0.1 V instead of 0.7 V and you need seven times the capacitance; the trough rises to
+15.5 V, the input catches it at $\theta = 83.8^\circ$, and the window narrows to 0.35 ms —
+so the same 695 $\mu$C now goes in through a window two fifths as wide, and the conducting
+current is over 2 A. Nothing in $I/(f_rC)$ warns you about this. It is the reason a
+rectifier diode is specified by its surge rating as much as by its average one, and the
+reason the quiz's example, with a comfortable 3 ms window, belongs to a design with
+several volts of ripple rather than a fraction of one.
+
+## Choosing the diodes
+
+Three numbers, all now in hand:
+
+- **Average forward current.** 69.5 mA through the load; each of the two diode pairs in a
+  bridge carries it on alternate half-cycles, so about 35 mA each. Trivial for any part.
+- **Peak repetitive current.** 0.8 A average during conduction, peaking higher. This is
+  what actually sizes the diode.
+- **Peak inverse voltage.** For a bridge, the non-conducting diodes are clamped by the
+  conducting pair, so each sees about $V_{peak} = 17$ V. A 1N4001 at 50 V is enough with
+  margin to spare; the ubiquitous 1N4007 at 1000 V costs the same and removes the
+  question.
+
+Note the asymmetry with the half-wave case. There, the capacitor holds the cathode at
+$+V_{peak}$ while the transformer swings to $-V_{peak}$, and the diode sees the sum —
+$2V_{peak}$, 34 V here. Sizing a half-wave rectifier's diode for $V_{peak}$ is a
+destroyed part on the first switch-on.
+
+## The mistake people actually make
+
+Believing the rail. Everything above computes a *steady-state* number, and the moment the
+supply is switched on there is no steady state: the capacitor is at 0 V, the diodes see
+the full peak across a discharged capacitor, and the only thing limiting the current is
+the transformer's own winding resistance and leakage inductance. That inrush is orders of
+magnitude above the 0.8 A computed here, lasts a few cycles, and is why supplies of any
+size have a thermistor or a resistor in series at switch-on.
+
+The tempting error is arithmetic rather than conceptual: subtracting the diode drops from
+the RMS voltage instead of the peak. It gives 10.6 V here rather than 15.6 V, it looks
+like exactly the same calculation, and it is wrong by five volts.
+
+## Where this stops holding
+
+- **The rail is not a fixed voltage.** It rides on the mains, which is specified to
+  something like $\pm10\%$, so a 15.6 V rail is really 14 V to 17.2 V before the ripple is
+  added. Every number above moves with it. That range is the input specification for the
+  regulator in module 4, and it is why that module designs for a corner rather than a
+  value.
+- **A real reservoir capacitor has resistance.** The ESR of an electrolytic — tens of
+  milliohms — multiplies the 0.8 A charging spike into an extra tens of millivolts of
+  ripple that this model does not contain, and dissipates real power inside the capacitor,
+  which is the usual reason they fail.
+- **The straight-line discharge is an approximation to an exponential.** With
+  $R_LC = 0.22$ s against a 10 ms period, the exponential is straight to well within the
+  accuracy of anything else here. Load the same capacitor to 1 k$\Omega$ and it stays
+  straight; load it to 22 $\Omega$ and it does not, and the formula's error grows with it.
+- **None of this is regulation.** The rail moves with the mains, with the load, and with
+  temperature, and it still has hundreds of millivolts of 100 Hz on it. It is a raw
+  supply, and it is the input to the next module, not an output.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "What happens the instant a diode stops conducting",
                 "visualiser": "switching",
@@ -1387,6 +2029,184 @@ assert abs(max(half[-2000:]) - max(s[-2000:]) - 0.7) < 1e-9, \
                 "The opposite corner sets the power ratings: highest supply, lightest load, and the Zener absorbs the lot. A regulator that survives full load may still cook at no load.",
                 "A shunt regulator is deliberately wasteful: it draws its full current whether the load needs it or not. That is the price of a circuit with three components and no feedback loop.",
                 "Everything in this module rests on the same fact as module 2. The Zener's static resistance at 5.1 V and 20 mA is 255 Ω; its dynamic resistance is 8 Ω. The first number tells you what it costs to run; the second tells you how well it regulates. A resistor has only one number, which is exactly why a resistor cannot do this job.",
+            ],
+            "read": [
+                {
+                    "title": "Designing to the corner, not to the nominal",
+                    "minutes": 13,
+                    "body": r'''
+Module 3 produced a rail of about 15.6 V that moves with the mains and sags under load.
+Something has to turn that into a voltage a circuit can rely on. The simplest thing that
+does the job has three components and no feedback loop, and understanding exactly how
+well it works — and exactly where it fails — is the point of this module.
+
+## Why breakdown is not destruction
+
+Push a junction hard in reverse and, at some voltage, it conducts. Below about 5 V the
+depletion region is thin enough that carriers **tunnel** straight through the barrier;
+above about 6 V the region is wider and the mechanism is **avalanche**, where a carrier
+accelerated by the field knocks another one loose, and that one knocks two more.
+
+Neither mechanism damages anything by itself. What damages the part is the power: a diode
+in breakdown has several volts across it, and if nothing limits the current then $VI$
+climbs until the junction melts. Limit the current and the device sits in breakdown
+indefinitely. That is the whole trick, and it is why a Zener always appears with a series
+resistor.
+
+The two mechanisms have opposite temperature coefficients — tunnelling falls with
+temperature, avalanche rises — so somewhere between them the coefficient passes through
+zero. It does so near 5.6 V, which is why 5.6 V parts appear in reference circuits far
+more often than such an odd number should.
+
+## The model, and why it is the same construction as module 2
+
+A Zener's data sheet says: 5.1 V at 20 mA, dynamic resistance 8 $\Omega$. That is a point
+and a slope — exactly the tangent construction from module 2, applied to the breakdown
+region instead of the forward one. Extended back to zero current the tangent meets the
+axis at
+
+$$V_{Z0} = 5.1 - 0.020 \times 8 = 4.94\ \text{V}$$
+
+so the model is a **4.94 V source in series with 8 $\Omega$**. And with the diode replaced
+by a source and a resistor, the circuit is an ordinary linear network again — solvable by
+the node equation you have been writing since the first year.
+
+## Worked example: 12 V in, 5.1 V out, 470 ohm load
+
+**The circuit.** A series resistor $R_S$ from the 12 V rail to the output node; the Zener
+model from that node to ground; the load, 470 $\Omega$, across the output.
+
+**The node equation.** Everything $R_S$ delivers is split between the Zener and the load:
+
+$$\frac{12 - V}{R_S} = \frac{V - 4.94}{8} + \frac{V}{470}$$
+
+**Solving with $R_S = 220\ \Omega$.** Collecting terms in $V$:
+
+$$0.054545 - \frac{V}{220} = 0.127128\,V - 0.6175
+\quad\Longrightarrow\quad 0.672045 = 0.131673\,V$$
+$$V = 5.104\ \text{V}$$
+
+**The three currents.** They must add up, and checking that they do is the cheapest error
+detector in circuit design:
+
+```text
+through R_S    (12 - 5.104)/220   = 31.35 mA
+into the Zener (5.104 - 4.94)/8   = 20.49 mA
+into the load   5.104/470         = 10.86 mA
+                                    -------
+Zener + load                        31.35 mA   agrees
+```
+
+**The power.** $R_S$ dissipates $(12-5.104)\times0.03135 = 0.216$ W; the Zener dissipates
+$5.104 \times 0.02049 = 0.105$ W.
+
+This is the circuit you draw and measure in the build, **A 5.1 V rail that holds under
+load** — those components, that output voltage and those three currents. The lab,
+**Designing and grading a shunt regulator**, then turns the same node equation into four
+design functions: the output, the Zener current, the line regulation, and the largest
+series resistor the worst corner will allow.
+
+## How well does it regulate? Two numbers, both derivable
+
+**Line regulation.** Move the input and ask how much of that reaches the output. With the
+Zener modelled as a source in series with $r_z$, the output node is driven by $R_S$ from
+above and held by $r_z \parallel R_L$ from below — a plain divider, because a fixed source
+contributes nothing to a *change*:
+
+$$\frac{\Delta V_{out}}{\Delta V_{in}} = \frac{r_z \parallel R_L}{R_S + (r_z \parallel R_L)}
+= \frac{7.87}{227.87} = 0.0345$$
+
+So 2 V of input change becomes 69 mV at the output: a 12 V rail moving to 14 V takes the
+output from 5.104 V to 5.173 V. Not perfect — but two volts went in and 69 millivolts
+came out, which is the factor of 29 the divider promised; in relative terms a 16.7% swing
+on the raw rail has become a 1.4% swing on the output.
+
+**Load regulation.** Disconnect the load entirely. The node equation loses its last term:
+
+$$\frac{12 - V}{220} = \frac{V - 4.94}{8} \quad\Longrightarrow\quad V = 5.188\ \text{V}$$
+
+The output rose 84 mV when 10.86 mA of load was removed, which is an output resistance of
+$0.084/0.01086 = 7.7\ \Omega$. And that number is derivable too — looking back into the
+output node with the input shorted, you see $r_z$ in parallel with $R_S$:
+
+$$r_z \parallel R_S = 8 \parallel 220 = 7.72\ \Omega$$
+
+which matches. Note it is *not* simply $r_z$: the concept list's "roughly $r_z\Delta I$"
+is the right idea, and $r_z \parallel R_S$ is the exact version. For any sane design
+$R_S \gg r_z$ and the two agree to within a few per cent.
+
+## Designing to the corner
+
+Everything above used nominal values, and a regulator that works at nominal is not a
+regulator. The rail from module 3 moves with the mains; say $\pm15\%$, so 10.2 V to
+13.8 V. The load is 0 to 10.9 mA. The Zener needs at least 5 mA to stay in breakdown and
+no more than 40 mA to stay cool.
+
+**The corner that sets the largest $R_S$** is the worst of both: lowest input, heaviest
+load. There $R_S$ has the least voltage to work with and the load is taking the most, so
+it is where the Zener is closest to starving:
+
+$$R_S \le \frac{V_{in,min} - V_Z}{I_{Z,min} + I_{load,max}}
+= \frac{10.2 - 5.1}{0.005 + 0.0109} = 321\ \Omega$$
+
+**The opposite corner sets the ratings**: highest input, no load, so the Zener absorbs
+everything. With $R_S = 220\ \Omega$, solving the no-load node equation at 13.8 V gives
+$V = 5.251$ V and $I_Z = 38.9$ mA — inside the 40 mA limit, but only just.
+
+And now the number worth the whole section. At that same corner the series resistor
+dissipates
+
+$$\frac{(13.8 - 5.251)^2}{220} = 0.332\ \text{W}$$
+
+against the 0.216 W it dissipates at nominal. A quarter-watt resistor comfortably passes
+the nominal calculation and fails on a high-mains day. This is what "design to the corner"
+buys you, and it costs one extra line of arithmetic.
+
+Both 220 $\Omega$ and 321 $\Omega$ satisfy every constraint, which is worth noticing: this
+is a design with a *window*, not an equation with a root. Larger $R_S$ regulates better
+against the line (the divider ratio falls), wastes less, and runs the Zener cooler — but
+leaves less current in reserve, so it drops out of regulation sooner if the load grows.
+
+## The mistake people actually make
+
+Two, and the first is the one this whole course keeps circling.
+
+**Quoting the static resistance.** At the operating point the Zener carries 20.49 mA at
+5.104 V, so $V/I = 249\ \Omega$. Replace the model with a plain 249 $\Omega$ resistor and
+the DC solution does not move by a millivolt — same output, same currents, same power in
+the same places. It is not a regulator, and the arithmetic that proves it takes one line:
+remove the load. The impostor becomes a bare divider, $12 \times 249/(220+249) = 6.37$ V.
+The real Zener goes to 5.19 V. Same circuit at the operating point, 1.2 V apart one step
+away from it, because 249 $\Omega$ is the only number the resistor has and the Zener
+answers with 8 $\Omega$.
+
+**Designing at nominal.** Every constraint in this circuit binds at a corner, and the
+corners are in opposite directions: the resistor's maximum is set by the low-line,
+full-load case, and its power rating and the Zener's are set by the high-line, no-load
+case. Checking the middle checks neither.
+
+## Where this stops holding
+
+- **A shunt regulator wastes its full current always.** It draws 31.35 mA from the raw
+  rail whether the load wants 10.9 mA or nothing, because the Zener's job is to absorb the
+  difference. At nominal that is $12 \times 0.03135 = 0.376$ W taken in to deliver
+  0.055 W, an efficiency of 15%; the other 0.321 W is the 0.216 W in $R_S$ and the
+  0.105 W in the Zener, computed above. This is the price of three components and no
+  feedback, and it is why every supply above a few tens of milliamps uses a series-pass
+  regulator instead.
+- **$r_z$ is not a constant.** Data sheets quote it at one test current, and it rises
+  sharply as the current falls — which is the real reason for the $I_{Z,min}$ constraint.
+  Near the knee, regulation is far worse than 8 $\Omega$ suggests.
+- **$r_z$ is at its best around 7 V.** Below about 5 V and above about 10 V the dynamic
+  resistance of real parts climbs, so the 5.6 V chosen for temperature stability is not
+  the same as the value chosen for the best regulation.
+- **Nothing here rejects noise above the audio band.** The model is resistive, so the
+  divider ratio is frequency-independent — but a real Zener generates its own noise
+  (avalanche is a shot-noise process, and a Zener is a respectable noise *source*), and
+  the usual fix is a capacitor across it, which is also the usual fix for the 100 Hz that
+  survives from module 3.
+''',
+                },
             ],
             "sandbox": {
                 "title": "How much filtering the ripple actually needs",
@@ -1867,6 +2687,277 @@ assert abs(r - 250.0) < 1e-9, f"(9 - 5.0) / 0.016 is 250 ohms, got {r}"
                 "**Diffusion** is motion down a concentration gradient with no field at all: $J_p = -qD_p\\,dp/dx$. It is not separate physics from drift, it is the same random walk seen from a different starting condition, which is why the two coefficients cannot be independent. The **Einstein relation** $D = V_T\\mu$ says so: at 300 K the two mobilities above give $D_n = 34.9$ cm$^2$/s and $D_p = 12.4$ cm$^2$/s with no new measurement.",
                 "Forward bias injects minority carriers across the junction. They diffuse away from it and recombine, surviving a lifetime $\\tau$ and therefore travelling a **diffusion length** $L = \\sqrt{D\\tau}$ — 59 µm for electrons and 35 µm for holes at $\\tau = 1$ µs. That length sets the concentration gradient, the gradient sets the current, and evaluating it gives $I_S = qAn_i^2\\left(D_p/(L_pN_d) + D_n/(L_nN_a)\\right)$.",
                 "So $I_S$ is not a fitted constant, it is a consequence of the doping — and it goes the way round that surprises people. Raising $N_d$ from $10^{22}$ to $10^{23}$ m$^{-3}$ divides $I_S$ by 8.7 and therefore *raises* the forward drop at 1 mA by 56 mV, from 0.729 V to 0.785 V. Every diode's 0.7 V is a decision somebody made at a furnace.",
+            ],
+            "read": [
+                {
+                    "title": "How fast an electron actually moves, and what that has to do with 0.7 volts",
+                    "minutes": 15,
+                    "body": r'''
+A bar of n-type silicon, 500 µm long and 100 µm square, doped with $10^{22}$ donors per
+cubic metre. Force 10 mA through it and put a probe on the top: 2.31 V, so 231 $\Omega$.
+
+Now ask a question the meter cannot answer. Those 10 milliamps are $6\times10^{16}$
+electrons crossing every second. How fast is each one going?
+
+```python
+Q = 1.602176634e-19
+n_d = 1.0e22            # donors per cubic metre
+mu_n = 0.135            # electron mobility at that doping, m^2/V.s
+length = 500e-6         # metres
+area = 1.0e-8           # square metres
+i = 0.010               # amps forced through the bar
+
+sigma = Q * n_d * mu_n
+r = length / (sigma * area)
+v = i * r
+field = v / length
+drift = mu_n * field
+
+print("sigma      = %.1f S/m" % sigma)
+print("resistance = %.0f ohm" % r)
+print("volts      = %.3f V" % v)
+print("field      = %.0f V/m" % field)
+print("drift      = %.0f m/s" % drift)
+print("check J/qn = %.0f m/s" % (i / area / (Q * n_d)))
+```
+
+```text
+sigma      = 216.3 S/m
+resistance = 231 ohm
+volts      = 2.312 V
+field      = 4623 V/m
+drift      = 624 m/s
+check J/qn = 624 m/s
+```
+
+624 metres per second, about twice the speed of sound in air, and *steady*. That last word
+is the interesting one, and everything in this module comes out of explaining it.
+
+## Why a field gives a velocity and not an acceleration
+
+A charge in a vacuum in a 4623 V/m field feels a constant force and accelerates without
+limit. An electron in silicon has an effective mass around a quarter of the free-electron
+mass, so it would reach 624 m/s in about 0.2 ps and then keep going. It does not, because
+it does not get 0.2 ps of clear road. It collides — with a lattice vibration, with an
+ionised dopant — and each collision throws its direction away and leaves it starting again
+from the local thermal motion.
+
+So the picture is a stop-start crawl: accelerate for a fraction of a picosecond, scatter,
+accelerate again. Between collisions the field adds the same small increment of velocity
+every time, and the collisions keep discarding whatever has accumulated, so the *average*
+velocity settles at a value proportional to the field rather than growing:
+
+$$v = \mu E$$
+
+The constant $\mu$ is the **mobility**, and it is a measured property of the material at a
+given doping — about 0.135 m$^2$/V·s for electrons in lightly doped silicon and 0.048 for
+holes, the difference being that a hole moves by having bonds hand it along and that is a
+clumsier business than an electron in the conduction band.
+
+Everything else about **drift** follows in two lines. Current density is charge density
+times velocity, $J = qnv = qn\mu E$, and the thing multiplying $E$ is by definition the
+conductivity:
+
+$$\sigma = qn\mu \qquad\Longrightarrow\qquad R = \frac{L}{\sigma A} = 231\ \Omega$$
+
+That also settles module 1's two cubes. Doping raised $n$ by a factor of a million, and
+$\sigma$ went with it — from $2.93\times10^{-4}$ S/m in pure silicon to 216 S/m here,
+which is 341 k$\Omega$ against 0.46 $\Omega$ for a centimetre cube.
+
+The build, **Measuring a wafer's resistivity without measuring its contacts**, is about
+the gap between computing that 231 $\Omega$ and measuring it. The probe needle and its
+contact are worth another 22 $\Omega$, so a probe on the wrong node reports 253 $\Omega$
+and tells you the wafer is 9.5% more resistive than it is — stably, repeatably, and with
+nothing in the arithmetic to warn you.
+
+## The other way a carrier moves
+
+Take the field away entirely and put a concentration gradient in instead: more holes on
+the left than on the right. Nothing pushes them. But random motion moves more carriers out
+of a crowded region than into it, so there is a net flow down the gradient, proportional
+to how steep it is:
+
+$$J_p = -qD_p\frac{dp}{dx}$$
+
+This is **diffusion**, and $D_p$ is the diffusion coefficient. It looks like a second,
+independent property of the material, and it is not. Drift and diffusion are the same
+scattering random walk seen from two different starting conditions, and that means the two
+coefficients cannot be chosen independently.
+
+Here is the argument, and it takes four lines. Put the material in equilibrium in a
+potential that varies with position, as module 1's depletion region is. Two facts hold at
+once. Boltzmann says the hole concentration is $p = p_0e^{-V/V_T}$. And equilibrium says
+the *net* hole current is zero everywhere — drift and diffusion cancel, which is exactly
+what module 1 meant by a junction with nothing connected. So
+
+$$qp\mu_p E - qD_p\frac{dp}{dx} = 0$$
+
+Now differentiate the Boltzmann expression: $dp/dx = -(p/V_T)\,dV/dx$, and $E = -dV/dx$,
+so $dp/dx = (p/V_T)E$. Substituting,
+
+$$qp\mu_pE - qD_p\frac{p}{V_T}E = 0
+\qquad\Longrightarrow\qquad
+\boxed{D = V_T\mu}$$
+
+Everything cancels — the concentration, the field, the charge — and what is left is the
+**Einstein relation**. A mobility you measured with a voltmeter and an ammeter hands you a
+diffusion coefficient you never measured, and the constant between them is the thermal
+voltage yet again.
+
+A minority carrier that has diffused away from a junction does not travel for ever: it
+recombines, after an average **lifetime** $\tau$. A random walk covers a distance that goes
+as the square root of the time, and $D\tau$ is the only area those two quantities can
+make, so the **diffusion length** is $L = \sqrt{D\tau}$.
+
+```python
+import math
+
+V_T = 0.025851999786435535
+tau = 1.0e-6                 # minority carrier lifetime, seconds
+
+for name, mu in (("electrons", 0.135), ("holes", 0.048)):
+    d = V_T * mu
+    print("%-9s  mu = %.3f m^2/V.s   D = %.3e m^2/s = %.1f cm^2/s   L = %.1f um"
+          % (name, mu, d, d * 1e4, math.sqrt(d * tau) * 1e6))
+```
+
+```text
+electrons  mu = 0.135 m^2/V.s   D = 3.490e-03 m^2/s = 34.9 cm^2/s   L = 59.1 um
+holes      mu = 0.048 m^2/V.s   D = 1.241e-03 m^2/s = 12.4 cm^2/s   L = 35.2 um
+```
+
+Tens of micrometres. Hold that number: it is comparable with the thickness of the silicon
+in a real diode, which is why the geometry of the device turns out to matter.
+
+## Where $I_S$ comes from
+
+Module 2 took $I_S$ off a data sheet. It is four steps from what is now in hand, and this
+module's derivation, **$I_S$, from the injected minority carriers**, does them one at a
+time.
+
+Work on the n-side, where holes are the minority carriers. At equilibrium there are
+$p_{n0} = n_i^2/N_d$ of them. Forward bias lowers the barrier, and the same Boltzmann
+factor as always raises the concentration at the edge of the depletion region to
+$p_{n0}e^{V/V_T}$ — so the **excess**, the part that was not there before, is
+$p_{n0}(e^{V/V_T} - 1)$. There is the $-1$ of the Shockley equation, arriving on its own
+rather than being bolted on.
+
+Those excess holes diffuse away from the junction and recombine, and they are essentially
+gone after a diffusion length. So the gradient at the edge is the excess divided by $L_p$,
+and Fick turns a gradient into a current:
+
+$$J_p = \frac{qD_p n_i^2}{L_pN_d}\left(e^{V/V_T} - 1\right)$$
+
+The p-side does the same thing with electrons, with $D_n$, $L_n$ and $N_a$ in place of
+$D_p$, $L_p$ and $N_d$. Add them, multiply by the junction area, and everything in front of
+the bracket is $I_S$:
+
+$$I_S = qAn_i^2\left(\frac{D_p}{L_pN_d} + \frac{D_n}{L_nN_a}\right)$$
+
+```python
+import math
+
+Q = 1.602176634e-19
+V_T = 0.025851999786435535
+
+n_i = 1.0e16
+area = 1.0e-8
+tau = 1.0e-6
+d_n, d_p = V_T * 0.135, V_T * 0.048
+l_n, l_p = math.sqrt(d_n * tau), math.sqrt(d_p * tau)
+
+
+def i_s(n_a, n_d):
+    return Q * area * n_i * n_i * (d_p / (l_p * n_d) + d_n / (l_n * n_a))
+
+
+hole_term = d_p / (l_p * 1e22)
+elec_term = d_n / (l_n * 1e24)
+print("hole term into the n-side  = %.3e" % hole_term)
+print("electron term into p-side  = %.3e" % elec_term)
+print("ratio                      = %.1f" % (hole_term / elec_term))
+for n_d in (1e22, 1e23):
+    s = i_s(1e24, n_d)
+    print("N_d = %.0e  ->  I_S = %.4e A   V_F at 1 mA = %.4f V"
+          % (n_d, s, V_T * math.log(1.0 + 1e-3 / s)))
+print("ten times the doping divides I_S by %.2f"
+      % (i_s(1e24, 1e22) / i_s(1e24, 1e23)))
+```
+
+```text
+hole term into the n-side  = 3.523e-21
+electron term into p-side  = 5.908e-23
+ratio                      = 59.6
+N_d = 1e+22  ->  I_S = 5.7385e-16 A   V_F at 1 mA = 0.7287 V
+N_d = 1e+23  ->  I_S = 6.5904e-17 A   V_F at 1 mA = 0.7846 V
+ten times the doping divides I_S by 8.71
+```
+
+$5.74\times10^{-16}$ A, from a doping profile, an area and a lifetime — squarely inside the
+$10^{-15}$ to $10^{-12}$ A that module 2 quoted from a data sheet, and now with reasons
+attached. This whole chain, doping to conductivity to resistance to $D$ to $L$ to $I_S$, is
+the five functions of the lab, **From a doping level to a saturation current**.
+
+Two features of that output are worth stopping on. The hole term beats the electron term
+by 59.6 to one, because the p-side is doped a hundred times harder and injection into a
+heavily doped region is suppressed. Real diodes are made one-sided on purpose for that
+reason: almost all the current is then one carrier type, which makes the device's speed and
+its recovery behaviour predictable instead of a mixture of two.
+
+And doping the n-side ten times harder divided $I_S$ by 8.71 rather than by 10, because
+only one of the two terms moved.
+
+## The mistake people actually make
+
+Reading that last line as a defect and expecting heavier doping to give a *better* diode.
+The reasoning is that more dopant means more carriers means better conduction means less
+voltage dropped — and every step of it is true of the bar at the top of this page. Applied
+to the junction it is exactly backwards: ten times the doping raised the forward drop at
+1 mA from 0.7287 V to 0.7846 V, by 56 mV, which is the $V_T\ln 8.71$ the numbers demand.
+
+The reason the intuition fails is that two different currents live in the same lump of
+silicon. The bar conducts by *majority* carriers, and doping supplies those directly. The
+junction conducts by *minority* carriers injected across it, and mass action says that
+raising the majority population suppresses the minority one in exact proportion. Doping
+helps one current and hurts the other, and the diode's forward drop is set by the one it
+hurts.
+
+There is a smaller trap in the same formula, and the lab warns about it because it produces
+a plausible wrong answer rather than an absurd one: $D_p$ pairs with $L_p$ and $N_d$, not
+with $N_a$. The holes are injected *into* the n-side, so it is the n-side doping that
+limits them. Swap the two dopings and every number still looks like a saturation current.
+
+## Where this stops holding
+
+The mobility is not a constant, and this module used a single value for it throughout.
+Every ionised dopant is a charged obstacle, so $\mu$ falls as the doping rises — from about
+0.135 m$^2$/V·s in lightly doped silicon to well under half of that at $10^{24}$ m$^{-3}$.
+That is why resistivity is published as a table rather than computed from a formula, and
+why each number above was quoted at the doping it belongs to.
+
+Worse, $v = \mu E$ itself fails at high field. The drift velocity has a ceiling of about
+$10^5$ m/s in silicon, where the carriers start losing energy to the lattice as fast as the
+field feeds it to them. The 624 m/s in the bar is 0.6% of that, so the linear law is safe
+there. Put 1 V across the 100 nm channel of a modern transistor and the field is
+$10^7$ V/m, where $\mu E$ predicts more than ten times the ceiling — and the whole
+proportionality has stopped meaning anything.
+
+The $I_S$ formula assumes the neutral regions are much *longer* than a diffusion length, so
+that the excess carriers really do decay away inside the device. $L_p$ came out at 35 µm,
+and plenty of real diodes are thinner than that. In such a short-base device the gradient is
+set by the width of the neutral region rather than by $L_p$, and $I_S$ is correspondingly
+larger.
+
+The lifetime is the softest number in the calculation. One microsecond is a plausible
+figure and nothing more; real lifetimes span orders of magnitude, and module 9's fast
+diodes have theirs deliberately spoiled, which raises $I_S$ and the leakage together.
+
+Finally, this is the *ideal diffusion* saturation current, and it is not what a meter reads
+in reverse. Carriers generated inside the depletion region contribute a separate leakage
+that this model contains no term for; it is larger in silicon at room temperature, and it
+is why module 6 has to keep two different temperature rules apart.
+''',
+                },
             ],
             "quiz": {
                 "title": "Transport, and the saturation current it produces",
@@ -2420,6 +3511,206 @@ assert abs(sym - 1.5108965392828552e-16) < 1e-25, f"expected 1.5109e-16 A, got {
                 "Dissipation raises the junction above ambient by $T_J = T_A + \\theta_{JA}P$. A bridge delivering 1.0 A DC puts 0.5 A average through each diode, and at 0.85 V that is 0.425 W each; on a 100 K/W package in a 45 °C cabinet the junction sits at 87.5 °C. Nothing on the outside of the part is anywhere near that.",
                 "Drive a diode from a **voltage** instead and the loop closes: more temperature gives more current, more current gives more power, more power gives more temperature. For the device in module 5 on 100 K/W the loop converges at 0.84 V and runs away at 0.85 V. The same feedback is why paralleled diodes need ballast resistors: at a shared voltage, the one that is 5 °C hotter takes 47% more of the current, and pulls further ahead.",
             ],
+            "read": [
+                {
+                    "title": "Two coefficients, one sign each, and the loop that closes",
+                    "minutes": 13,
+                    "body": r'''
+Characterise a diode on a cold bench in January and it drops 0.73 V at 1 mA. Put the same
+part in a sealed enclosure in July, still at 1 mA, and it drops 0.65 V. Nothing broke.
+Nothing drifted. The forward voltage of a diode is a function of two variables and you
+only controlled one of them.
+
+Everything else about a hot semiconductor gets *bigger* — the leakage, the intrinsic
+carrier concentration, the thermal voltage itself. The forward drop is the one quantity
+that goes the other way, and the reason is worth deriving rather than memorising, because
+the derivation also tells you the size of the effect and why it depends on the current
+you happened to measure at.
+
+## Everything moves, but $I_S$ moves fastest
+
+Two temperature-dependent quantities sit in the diode equation. The first is honest and
+slow:
+
+$$V_T = \frac{kT}{q} \qquad \frac{dV_T}{dT} = \frac{k}{q} = 86.2\ \mu\text{V/K}$$
+
+Room temperature to boiling moves it by 6 mV. The second is not slow at all. From module
+5, $I_S \propto n_i^2$ and $n_i^2 \propto T^3e^{-E_g/kT}$, so
+
+$$\frac{I_S(T_2)}{I_S(T_1)} = \left(\frac{T_2}{T_1}\right)^{3}
+\exp\!\left[\frac{E_g}{k}\left(\frac{1}{T_1} - \frac{1}{T_2}\right)\right]$$
+
+Put in silicon's numbers for a 10 K step from 300 K. With $E_g = 1.12$ eV,
+$E_g/k = 12996$ K:
+
+```text
+cube of the ratio      (310/300)^3                        = 1.1034
+Boltzmann ratio        exp[12996 x (1/300 - 1/310)]
+                       = exp[12996 x 1.0753e-4] = exp(1.3975) = 4.0448
+product                                                    = 4.463
+```
+
+**A factor of 4.46 for every 10 K.** The cube contributes almost nothing; nearly all of it
+is the exponential, which is to say nearly all of it is the band gap.
+
+## Why the forward voltage falls, and by exactly how much
+
+At a *fixed current*, $V = V_T\ln(I/I_S)$ with both $V_T$ and $I_S$ moving. Differentiate
+properly. Take logarithms of $I = I_S(T)e^{qV/kT}$ at constant $I$:
+
+$$0 = \frac{3}{T} + \frac{E_g}{kT^2} + \frac{q}{k}\frac{d}{dT}\!\left(\frac{V}{T}\right)$$
+
+Expand the last derivative and multiply through by $kT^2/q$:
+
+$$0 = 3V_T + V_{G0} + T\frac{dV}{dT} - V
+\qquad\Longrightarrow\qquad
+\boxed{\frac{dV}{dT} = \frac{V - V_{G0} - 3V_T}{T}}$$
+
+where $V_{G0} = E_g/q = 1.12$ V. Everything about the temperature coefficient is in that
+one line. The forward voltage falls because it sits *below* the band-gap voltage, and the
+coefficient is proportional to how far below.
+
+Try it on the device module 5 built — $I_S = 5.74\times10^{-16}$ A at 300 K, which sits a
+little higher up the voltage axis than module 2's part because its $I_S$ is smaller:
+
+```text
+current    V_F at 300 K    (V_F - 1.12 - 0.0776)/300      quoted
+  100 uA      0.6692 V           -1.761 mV/K              -1.76
+    1 mA      0.7286 V           -1.563 mV/K              -1.56
+   10 mA      0.7882 V           -1.365 mV/K              -1.36
+```
+
+The three numbers the concept list quotes, all out of one formula, and the trend explained
+in a sentence: $V_{G0}$ and $3V_T$ are fixed, so the *only* thing that changes across
+those rows is $V_F$ — and a smaller current means a smaller $V_F$, which means further to
+fall. That is why a diode thermometer is biased at a low current, and why the bias must
+be *constant*: the coefficient you calibrated is only valid at the current you calibrated
+it at.
+
+Real diodes measure nearer $-2$ mV/K. The gap is $E_g$ itself, which shrinks by about
+0.25 eV per 1000 K and which this model holds fixed. The model gets the mechanism and the
+trend exactly right and the magnitude about 20% light.
+
+## The two rules for leakage that look contradictory
+
+A data sheet says reverse leakage doubles every 10 °C. The model above says $I_S$ rises
+4.46 times every 10 K. Both are right, and they are about different currents.
+
+$I_S$ is the *diffusion* current — minority carriers that wander in from the neutral
+regions — and it carries $n_i^2$. But a real reverse-biased junction has a second source:
+electron-hole pairs **generated inside the depletion region itself**, which never had to
+diffuse anywhere. That generation rate goes as $n_i$, not $n_i^2$, so its temperature
+factor is the square root of the other one:
+
+$$\sqrt{4.46} = 2.11 \approx 2$$
+
+One mechanism scales as the square of the other, so their rules of thumb differ by a
+square root. In silicon at room temperature the generation term is the larger of the two
+by orders of magnitude, so a data sheet quotes the doubling, because that is what a meter
+measures. Heat the part far enough and the $n_i^2$ term overtakes the $n_i$ term, and the
+doubling rule quietly turns into a quadrupling rule.
+
+## Worked example: where the junction of a bridge rectifier actually sits
+
+Module 3's supply, scaled up: a bridge delivering 1.0 A DC, in a 45 $^\circ$C cabinet,
+each diode in a package with $\theta_{JA} = 100$ K/W and a data-sheet drop of 0.85 V at
+0.5 A, quoted at 25 $^\circ$C.
+
+**First pass.** Each diode conducts on alternate half-cycles, so it carries 0.5 A average:
+
+$$P = 0.5 \times 0.85 = 0.425\ \text{W}
+\qquad T_J = 45 + 100\times0.425 = 87.5\ ^\circ\text{C}$$
+
+**Second pass, because $V_F$ is not 0.85 V at 87.5 $^\circ$C.** It has fallen by about
+2 mV/K over the rise above the 25 $^\circ$C it was quoted at, so the answer feeds back into
+its own input. Write it as one equation and solve it once:
+
+$$T_J = 45 + 100\times0.5\times V_F, \qquad V_F = 0.85 - 0.002\,(T_J - 25)$$
+$$T_J = 45 + 50\,(0.90 - 0.002\,T_J) = 90 - 0.1\,T_J
+\qquad\Longrightarrow\qquad T_J = 81.8\ ^\circ\text{C}$$
+
+with $V_F = 0.736$ V and $P = 0.368$ W. Cooler than the first pass, and cooler is the
+important word: **at constant current the thermal feedback is negative.** The loop gain is
+the $-0.1$ sitting in front of $T_J$ — heating lowers the drop, which lowers the power,
+which limits the heating. The circuit stabilises itself.
+
+Note what the answer depends on. 82 $^\circ$C in a 45 $^\circ$C cabinet, against a junction
+limit of typically 125 $^\circ$C, from 0.37 W in a small package. Nothing on the outside of
+that part is anywhere near 82 $^\circ$C, which is why derating curves start sloping down
+long before the maximum ambient.
+
+## The same loop, with the sign reversed
+
+Now drive the diode from a voltage source instead. At fixed $V$, differentiate
+$\ln I = \ln I_S(T) + qV/kT$ with respect to $T$:
+
+$$\frac{1}{I}\frac{dI}{dT} = \frac{3V_T + V_{G0} - V}{V_T\,T}$$
+
+At $V = 0.85$ V and $T = 300$ K that is $(0.0776 + 1.12 - 0.85)/(0.02585\times300)
+= 0.0448$ per kelvin — the current rises **4.5% for every kelvin**. The power rises with
+it, and the power is what produced the kelvin. The loop gain is
+
+$$G = \theta_{JA}\,\frac{dP}{dT} = \theta_{JA}\,P \times 0.0448$$
+
+and the device runs away when $G \ge 1$, which on a 100 K/W package means a critical
+dissipation of about $1/(100\times0.0448) = 0.22$ W. Below that the loop converges to a
+finite temperature; above it there is no solution and the junction climbs until something
+gives.
+
+The lab, **The two coefficients, and the loop that runs away**, iterates that loop until
+it settles or gives up, and finds the boundary between **0.84 V and 0.85 V** on this
+package.
+Ten millivolts is a startlingly narrow window for the difference between "warm" and
+"destroyed", and the reason is module 2's exponential: 10 mV at 300 K multiplies the
+current, and therefore the dissipation, and therefore the loop gain, by
+$e^{0.010/0.02585} = 1.47$. One 10 mV step moves the loop gain by nearly half. There is no
+gentle approach to thermal runaway.
+
+## The mistake people actually make
+
+Paralleling devices to share current. It is the obvious move — two diodes, half the
+current each, half the heat each — and it does the opposite of what it promises.
+
+Parallel parts share a *voltage*, not a current, and at a shared voltage the split is set
+by an exponential. Suppose one runs 5 K hotter, which at $-2$ mV/K shifts its curve by
+10 mV. The current ratio is $e^{0.010/0.025852} = 1.47$: the hotter one takes 47% more,
+dissipates 47% more, gets hotter still, and takes more again. The feedback is positive and
+it does not need a temperature difference to start — a 10 mV manufacturing spread does
+just as well, as module 10's two LEDs demonstrate.
+
+The fix is a ballast resistor in series with each device, chosen so that its drop is large
+compared with 10 mV. A 10 mV offset moves the split by roughly $\Delta V/(r_d + R_b)$, so
+for two diodes at 0.5 A each, where $r_d = V_T/I = 0.052\ \Omega$:
+
+```text
+no ballast          10 mV / 0.052 ohm  = 193 mA of imbalance on 500 mA   (39%)
+R_b = 0.1 ohm       10 mV / 0.152 ohm  =  66 mA                          (13%)
+R_b = 0.5 ohm       10 mV / 0.552 ohm  =  18 mA                          (3.6%)
+```
+
+A 0.5 $\Omega$ ballast carrying 0.5 A drops a quarter of a volt across itself and burns
+$I^2R = 0.125$ W doing it, which is the price of the sharing being real — and it is
+roughly a third of what the diode it is protecting dissipates.
+
+## Where this stops holding
+
+- **$-2$ mV/K is a linearisation.** The coefficient is itself a function of temperature and
+  of current, as the boxed formula makes explicit. Over a 100 K swing, using a single
+  number introduces several millivolts of error — usually irrelevant, but not in a
+  thermometer, which is the one application that cares.
+- **$\theta_{JA}$ is not a property of the part.** It is a property of the part, the board,
+  the copper attached to it, the airflow and the neighbours. A data-sheet figure assumes a
+  specified test board, and a real one can be twice as good or twice as bad.
+- **The lumped thermal model has no time in it.** $T_J = T_A + \theta_{JA}P$ is the steady
+  state. A surge lasting less than the junction's thermal time constant — milliseconds for
+  a small die — is limited by heat capacity, not by $\theta_{JA}$, which is exactly why a
+  rectifier survives module 3's switch-on inrush.
+- **The runaway threshold above is for one package in one ambient.** The criterion
+  $\theta_{JA}P \times d(\ln I)/dT \ge 1$ is general; the 0.84 V is not. Halve the thermal
+  resistance and the threshold moves by roughly $V_T\ln 2 = 18$ mV.
+''',
+                },
+            ],
             "quiz": {
                 "title": "What the temperature does, and to which quantity",
                 "minutes": 10,
@@ -2964,6 +4255,239 @@ assert math.isinf(settle(0.95, i_s, 300.0, 10.0)), \
                 "The exponent matters because the tuning is weak. Taking an abrupt junction from 1 V to 12 V of reverse bias changes $C_j$ by 2.65, and since $f = 1/2\\pi\\sqrt{LC}$ the frequency only moves by $\\sqrt{2.65} = 1.63$. Eleven volts buys two thirds of an octave. A hyperabrupt part with $m = 2$ does the same swing in about 1.1 V, and covers the whole FM broadcast band on a 1 µH coil — 88 to 108 MHz — with 0.28 V of tuning where the abrupt junction needs 4.9 V.",
                 "The same capacitance means a reverse-biased diode is not an open circuit. 2.67 pF is 596 $\\Omega$ of reactance at 100 MHz, which is a perfectly ordinary impedance — so a diode that is off at DC is merely a small capacitor at RF, and every fast circuit has to be drawn with that capacitor in it.",
                 "Whatever biases the varactor appears in parallel with the tuned circuit and damps it, so the tuning voltage is fed through a resistance large enough to be invisible to the signal. The same resistance and the same $C_j$ then set how fast the tuning can move, and those two requirements pull in opposite directions.",
+            ],
+            "read": [
+                {
+                    "title": "Eleven volts of tuning, and two thirds of an octave to show for it",
+                    "minutes": 15,
+                    "body": r'''
+A tuned circuit on the bench: a 1 µH coil, a reverse-biased diode across it, and a
+laboratory supply feeding the diode through a large resistor. Turn the supply from 1 V to
+12 V and the circuit's resonant frequency climbs from 72.9 MHz to 118.7 MHz.
+
+Two things about that are worth noticing before any theory. Nothing moved — there are no
+plates, no shaft, no gears, and the tuning is a voltage on a wire. And the wire carries
+essentially no current: a reverse-biased junction leaks nanoamps, so the supply delivers
+nothing and the frequency is set by a voltage the way a meter reading is. That is the
+whole appeal of a varactor, and it is why every phase-locked loop and every synthesised
+receiver built since the 1960s tunes this way.
+
+The second thing to notice is how *little* eleven volts bought. A factor of 1.63 in
+frequency is two thirds of an octave. This unit is about where the capacitance comes from,
+and about why the tuning is so hard-won.
+
+## The capacitor nobody fitted
+
+Module 1 left a depletion region: a slab of silicon 147 nm thick, stripped of mobile
+carriers, lying between two regions that are full of them. Read that description again
+without the semiconductor vocabulary and it is an insulating layer between two conductors.
+That is a capacitor, and it is not a parasitic anybody added — it is the same
+electrostatics that produced the built-in potential in the first place.
+
+Its value is the ordinary parallel-plate result, with the depletion width as the plate
+separation:
+
+$$C_j = \frac{\epsilon A}{W}$$
+
+Put module 1's junction into it — $A = 10^{-8}$ m$^2$, $W_0 = 146.8$ nm, and silicon's
+permittivity $11.7\epsilon_0$ — and the diode you have been studying turns out to have
+about 7 pF sitting inside it at zero bias.
+
+## Steering it
+
+Now the part that makes it a component rather than a nuisance. Module 1 also established
+that the depletion width grows as the square root of the total voltage the junction is
+supporting, which under $V_R$ volts of reverse bias is $V_{bi}+V_R$. Take the ratio of the
+width at $V_R$ to the width at zero and everything about the particular junction cancels:
+
+$$\frac{W}{W_0} = \sqrt{\frac{V_{bi}+V_R}{V_{bi}}}
+\qquad\Longrightarrow\qquad
+C_j = \frac{\epsilon A}{W} = \frac{C_{j0}}{\sqrt{1 + V_R/V_{bi}}}$$
+
+That is the varactor equation, and this module's derivation, **The capacitance of a
+junction you are pulling apart**, walks the four steps of it. A data sheet writes it with
+the exponent left general, $C_j = C_{j0}(1+V_R/V_{bi})^{-m}$, for reasons that come two
+sections down.
+
+```python
+import math
+
+EPS_SI = 11.7 * 8.8541878128e-12
+AREA = 1.0e-8                   # m^2, the junction of modules 1 and 5
+W0 = 1.4681182204947003e-07     # m, its depletion width with nothing applied
+V_BI = 0.833370010652644        # V
+L = 1.0e-6                      # H, the tank inductor
+
+print("eps*A/W0 = %.3f pF" % (EPS_SI * AREA / W0 * 1e12))
+
+c_j0 = 7.06e-12                 # the same number, as a data sheet would round it
+for v_r in (0.0, 1.0, 5.0, 12.0):
+    c_j = c_j0 / math.sqrt(1.0 + v_r / V_BI)
+    f = 1.0 / (2.0 * math.pi * math.sqrt(L * c_j))
+    print("V_R = %5.1f V   C_j = %.3f pF   f = %7.3f MHz" % (v_r, c_j * 1e12, f / 1e6))
+```
+
+```text
+eps*A/W0 = 7.056 pF
+V_R =   0.0 V   C_j = 7.060 pF   f =  59.899 MHz
+V_R =   1.0 V   C_j = 4.760 pF   f =  72.949 MHz
+V_R =   5.0 V   C_j = 2.668 pF   f =  97.429 MHz
+V_R =  12.0 V   C_j = 1.799 pF   f = 118.657 MHz
+```
+
+There are the two frequencies from the bench at the top, and the first four rows explain
+why the knob feels so uneven. The first volt of bias is worth 2.3 pF and the last seven
+volts together are worth 0.87 pF, because $V_{bi}$ is already in the sum before you apply
+anything: going from 4 V to 8 V of applied bias does not double the junction voltage, it
+takes it from 4.83 V to 8.83 V, a factor of 1.83, and the square root cuts even that to
+1.35.
+
+## Why the tuning is weak, in one exponent
+
+Stack the two square roots. The capacitance goes as the inverse square root of the
+junction voltage, and a resonant frequency goes as the inverse square root of the
+capacitance, so
+
+$$f \propto \frac{1}{\sqrt{C_j}} \propto \left(V_{bi}+V_R\right)^{1/4}$$
+
+The frequency of an abrupt-junction varactor tracks the **fourth root** of the voltage
+across it. From 1.833 V to 12.833 V is a factor of 7.0 in junction volts, and
+$7.0^{1/4} = 1.627$ — which is the 72.9 to 118.7 MHz measured at the top, to three
+figures. A fourth root is a brutal thing to design against: to double the frequency you
+need sixteen times the junction voltage, which from 1 V of bias means about 28 V at the
+other end.
+
+## The exponent is a doping profile
+
+This is where $m$ earns its place in the data sheet. The square root came from module 1's
+depletion width, and that width came from assuming an **abrupt** junction — doping that
+switches from $N_a$ to $N_d$ at a plane. Change the profile and the exposed charge grows
+differently with width, so the width grows differently with voltage, and the exponent
+moves: $m = 1/2$ for the abrupt step, $1/3$ for a doping that ramps linearly through the
+junction, and 1 to 2 for a **hyperabrupt** profile, grown with the doping deliberately
+heaviest right at the junction and falling away from it.
+
+That last one is worth what it costs. The lab, **The tuning curve, and reading it
+backwards**, bisects for the bias that lands a 1 µH tank on a wanted frequency, and the
+answer for the FM broadcast band is stark: covering 88 to 108 MHz takes 4.92 V of tuning
+range with the abrupt junction and 0.28 V with an $m = 2$ part. Same coil, same band,
+eighteen times less voltage.
+
+## Worked example: the tank, all the way through
+
+The build, **A tank tuned by a voltage**, is that circuit at one point in its range, and
+it has two requirements that fight each other.
+
+Bias the varactor at 5.00 V, so $C_j = 2.668$ pF, and with 1 µH the tank sits at 97.4 MHz,
+in the middle of the FM band. The bias has to arrive through a resistor $R_b$, because a
+tuning supply is a low impedance and anything low-impedance connected across a tuned
+circuit damps it flat. So $R_b$ is the only free choice, and it is the whole of two quite
+different specifications.
+
+**The loaded $Q$.** At resonance the coil and the capacitor cancel, and what is left across
+the node is $R_b$. For a parallel resonant circuit $Q = R/(\omega_0 L)$, and substituting
+$\omega_0 = 1/\sqrt{LC_j}$:
+
+$$Q = \frac{R_b}{\omega_0 L} = R_b\sqrt{\frac{C_j}{L}}$$
+
+A *bigger* resistor is a sharper tank. Asking for $Q \ge 80$ puts a floor under $R_b$.
+
+**The settling time.** To retune, the tuning voltage has to change the charge on $C_j$, and
+it can only do that through $R_b$. The time constant is $\tau = R_bC_j$, and a receiver
+that takes longer than a microsecond to arrive on a new station is one you can hear
+settling. Asking for $\tau \le 200$ ns puts a ceiling on $R_b$.
+
+```python
+import math
+
+L = 1.0e-6
+c_j = 2.668e-12                 # farads, the varactor at 5 V of reverse bias
+
+z0 = math.sqrt(L / c_j)
+print("sqrt(L/C_j)   = %.1f ohm" % z0)
+print("Q >= 80  needs  R_b >= %.2f k" % (80.0 * z0 / 1e3))
+print("tau <= 200 ns   R_b <= %.2f k" % (200e-9 / c_j / 1e3))
+for r_b in (56e3, 62e3, 68e3):
+    print("R_b = %2.0f k   Q = %5.1f   tau = %5.1f ns"
+          % (r_b / 1e3, r_b / z0, r_b * c_j * 1e9))
+```
+
+```text
+sqrt(L/C_j)   = 612.2 ohm
+Q >= 80  needs  R_b >= 48.98 k
+tau <= 200 ns   R_b <= 74.96 k
+R_b = 56 k   Q =  91.5   tau = 149.4 ns
+R_b = 62 k   Q = 101.3   tau = 165.4 ns
+R_b = 68 k   Q = 111.1   tau = 181.4 ns
+```
+
+Three standard values fit between the floor and the ceiling, and 62 k sits in the middle
+of them. But look at what the two constraints have in common. Divide one by the other:
+
+$$\frac{Q}{\tau} = \frac{R_b\sqrt{C_j/L}}{R_bC_j} = \frac{1}{\sqrt{LC_j}} = \omega_0
+\qquad\Longrightarrow\qquad Q = \omega_0\tau = 2\pi f_0\tau$$
+
+The loaded $Q$ and the tuning time constant are the same number in different clothes:
+$Q$ is how many radians of carrier fit inside one time constant. So the design window is
+not really about resistors at all. The ceiling on $\tau$ sets a ceiling on $Q$ of
+$2\pi \times 97.4\ \text{MHz} \times 200\ \text{ns} = 122$, the specification asks for at
+least 80, and the whole design exists in the gap between 80 and 122. Ask for a $Q$ of 150
+on this tank and no resistor works — you would have to change the tank.
+
+## A diode that is off is still a component
+
+One more consequence of the same capacitance, and it catches people out well away from
+tuning circuits. At 5 V of reverse bias this diode passes nanoamps of DC and is, for every
+DC purpose, an open circuit. At 100 MHz its 2.668 pF is
+
+$$\frac{1}{2\pi f C_j} = 596\ \Omega$$
+
+which is an utterly ordinary impedance, on the same scale as the circuits it sits among. A
+reverse-biased diode is not an open circuit; it is a small capacitor, and above a few
+megahertz it has to be drawn as one. This is why an RF switch specifies its off-state
+capacitance, why module 9's diode rings after it turns off, and why a photodiode's speed
+in module 10 is set by a number derived here.
+
+## The mistake people actually make
+
+Using $C_{j0}$. It is the number printed largest on the data sheet, it is the one that
+appears in the part's name, and every other capacitor anyone has ever fitted has a single
+value — so it goes into the resonance formula, and the tank lands at 59.9 MHz instead of
+97.4 MHz. That is not a small error at the edge of the band; it is not in the FM band or
+anywhere near it. The build's checks say so in as many words.
+
+The tempting part is that $C_{j0}$ is not wrong, it is a *boundary value*: the capacitance
+at exactly zero bias, which is the one bias a varactor is never used at. A varactor's
+capacitance is a function, and quoting the function's value at the one point outside its
+operating range is the same error as quoting a diode's 0.7 V without saying at what
+current.
+
+## Where this stops holding
+
+**In forward bias, none of it applies.** Set $V_R = -V_{bi}$ and the formula divides by
+zero. Well before that the junction starts conducting, and a conducting diode has a
+capacitance of an entirely different kind: the stored minority charge of module 9, which
+behaves as $C_d = \tau/r_d$. At 10 mA with a microsecond of lifetime that is 0.39 µF —
+five orders of magnitude above anything in the table above. Junction capacitance is a
+reverse-bias story, and diffusion capacitance is the forward-bias one.
+
+**A real varactor is not a lossless capacitor.** It has bulk resistance in series with the
+junction, giving the device its own $Q$ of $1/(\omega r_sC_j)$, which falls as the
+frequency rises. The build's tank was lossless apart from the bias resistor, which made
+$R_b$ the whole of the loaded $Q$; on a real board the varactor and the coil both take
+their share, and the coil is usually the worse of the two.
+
+**$m$ is not a constant either.** A hyperabrupt profile only behaves as $m = 2$ over the
+range of bias where the graded doping is what the depletion edge is moving through. Run
+off the end of that profile and the exponent reverts towards 1/2, which is why a
+hyperabrupt part's data sheet specifies a bias range and not only a capacitance.
+
+**And the depletion approximation is at its weakest near zero bias**, where the region is
+narrow and the few-nanometre transition at each edge is a real fraction of the width. The
+formula overstates $C_{j0}$ somewhat for that reason — which matters less than it might,
+since the working bias is never zero.
+''',
+                },
             ],
             "quiz": {
                 "title": "Capacitance you can steer",
@@ -3525,6 +5049,171 @@ assert hyper < abrupt / 10.0, \
                 "A **peak detector** is a diode and a capacitor feeding a load: it charges to $V_{peak}-V_F$ and then droops at $I_{load}/(fC)$. Feed a peak detector from a clamper and its input already swings to $2V_{peak}-V_F$, so the output is $2V_{peak}-2V_F$ — a **voltage doubler**, built from two diodes and two capacitors and no transformer. Stack $N$ of them and you have a Cockcroft–Walton ladder at roughly $2NV_{peak}$.",
                 "Notice the reversal from module 3. In a mains rectifier the 1.4 V of bridge drops is 4% of a 34 V peak and hardly worth the arithmetic. In a doubler run from a 5 V logic swing it is 1.4 V out of 10, and in a five-stage ladder it is paid five times over. That is why multipliers are built from Schottky diodes, which module 10 explains.",
             ],
+            "read": [
+                {
+                    "title": "Using none of the curve and all of the asymmetry",
+                    "minutes": 12,
+                    "body": r'''
+Every module so far has leaned on the *shape* of the diode's characteristic: the
+exponential, its slope, the tangent taken at a chosen point. This module throws all of
+that away. The circuits here need only one fact — the diode conducts one way and not the
+other — and the crudest model in the course, a **constant 0.7 V when on and an open
+circuit when off**, designs every one of them.
+
+That is worth saying plainly because it changes how you should read the arithmetic. When a
+clamper analysis uses 0.7 V, it is not being sloppy; it is using the only property of the
+diode the circuit depends on, and the exponential would add digits without adding
+understanding.
+
+## A clipper: the flat top that is not flat
+
+A resistor $R$ in series, a diode from the output down to a bias battery $V_B$. While the
+output is below $V_B + V_F$ the diode is off, no current flows in $R$, so nothing is
+dropped across it and the output follows the input exactly — a wire with a resistor in it.
+
+Push the input past $V_B + V_F$ and the diode conducts. Now the circuit is not a wire: it
+is $R$ from the input, into the diode's incremental resistance $r_d$ to a fixed voltage. A
+divider. Differentiate it:
+
+$$\frac{dV_{out}}{dV_{in}} = \frac{r_d}{R + r_d}$$
+
+With $R = 1$ k$\Omega$ and $r_d = 10\ \Omega$ that is $10/1010 = 0.0099$. So the clipped
+top is not flat; it has a residual slope of just under 1%. Take the input from 3 V to
+10 V, seven volts of swing, against a clip level of 2.7 V:
+
+```text
+V_in = 3 V    V_out = 2.7 + (3 - 2.7)  x 0.0099 = 2.703 V
+V_in = 10 V   V_out = 2.7 + (10 - 2.7) x 0.0099 = 2.772 V
+                                        change    69 mV
+```
+
+Sixty-nine millivolts of the seven volts got through. That is what "clipping" actually
+means, and the number is a ratio of two resistances — which is the only place in this
+module where the diode's curve reappears at all, through $r_d$.
+
+Two such branches facing opposite ways make a two-sided clipper. It is the cheapest
+waveform limiter there is, it is what protects a logic input from an overvoltage, and it
+is most of what an overdriven guitar pedal does to a sine wave.
+
+## A clamper: the same parts, rearranged, with memory
+
+Swap the roles — capacitor in *series*, diode across the output — and the circuit becomes
+something categorically different. A clipper is memoryless: give it a voltage and it
+returns a voltage. A clamper has a state, and the state is the charge on the capacitor.
+
+Feed it a 5 V peak sine, with the diode oriented to conduct when the output tries to go
+below $-V_F$. On the first few negative excursions the diode conducts and pumps charge
+into the capacitor. It stops when the capacitor holds exactly the DC offset that puts the
+negative extreme at $-0.7$ V. After that the diode conducts only in a brief top-up near
+each trough.
+
+Now the key step, and it is one line of bookkeeping. A series capacitor cannot change the
+*shape* of anything — it adds a constant. So the peak-to-peak swing is still 10 V, and if
+the bottom sits at $-0.7$ V then the top sits at
+
+$$-0.7 + 10 = +9.3\ \text{V} \;=\; 2V_{peak} - V_F$$
+
+Nothing was rectified, nothing was removed, and the output now swings to nearly twice the
+input's peak. **A clipper changes the shape and leaves the DC alone; a clamper changes the
+DC and leaves the shape alone.**
+
+The memory has a cost. Between top-ups the capacitor is the only thing holding the shift,
+and the load is draining it the whole time — which is module 3's reservoir problem
+wearing different clothes, with the same equation:
+
+$$V_{droop} \approx \frac{I_{load}}{fC}$$
+
+So a clamper needs $R_LC \gg T$. Make the time constant comparable with the period and the
+waveform visibly sags between clamps; the DC restoration becomes partial and, worse,
+*signal-dependent*, which is the failure mode that ruins a video clamp. The lab,
+**Clipping, clamping and the droop between clamps**, steps all three circuits through
+time and measures that sag — a clipper needs no memory and is one function of its input,
+while the clamper and the peak detector each carry a capacitor voltage from one sample to
+the next, which is the whole difference in four lines of code.
+
+## Worked example: a doubler, end to end
+
+**Specification.** A 10 kHz square drive swinging to 5.0 V peak, out of a logic gate.
+Wanted: a DC rail near 8.6 V at 1 mA, with less than 50 mV of droop.
+
+**1. The topology.** A clamper, then a peak detector. The clamper lifts the drive to swing
+between $-0.7$ V and $+9.3$ V, as above. The peak detector then charges to that peak less
+one more diode drop:
+
+$$V_{out} = (2V_{peak} - V_F) - V_F = 2V_{peak} - 2V_F = 10 - 1.4 = 8.6\ \text{V}$$
+
+Two diodes, two capacitors, no transformer, and no inductor. Stack $N$ of these and you
+have a Cockcroft-Walton ladder at roughly $2NV_{peak}$.
+
+**2. The output capacitor.** Droop is $I/(fC)$, and at 10 kHz the reservoir is topped up
+every 100 $\mu$s:
+
+$$C \ge \frac{I}{f\,V_{droop}} = \frac{0.001}{10^4 \times 0.05} = 2\ \mu\text{F}$$
+
+**3. Check the clamper's own time constant.** The load looks like $8.6/0.001 = 8.6$ k$\Omega$
+and the period is 100 $\mu$s, so with the same 2 $\mu$F part:
+
+$$R_LC = 8600 \times 2\times10^{-6} = 17.2\ \text{ms} = 172\,T$$
+
+Comfortably $\gg T$, so the clamp holds. Note how much easier this is at 10 kHz than at
+50 Hz: everything in this circuit is sized by $1/f$, and the capacitors that would be
+electrolytics on a mains rectifier are ceramics here.
+
+**4. The honest efficiency.** 8.6 V out of a possible 10.0 V. The circuit lost 14% of its
+output to two diode drops.
+
+## Why the drops matter here and did not in module 3
+
+The forward drop is roughly 0.7 V whatever circuit it is in. What changes is what it is
+0.7 V *of*:
+
+```text
+mains rectifier   2 drops out of a 34 V peak                = 4%     nobody notices
+this doubler      2 drops out of a 10 V doubled swing       = 14%    annoying
+5-stage ladder    10 drops out of a 50 V target             = 14%    and 7 V lost
+```
+
+Same diodes, same physics, three quite different verdicts. That reversal is the whole
+argument for building multipliers out of Schottky diodes at 0.3 V instead of silicon pn
+at 0.7 V, and it is what module 10 is for. Note what does *not* help: running the diodes
+at a lower current to bring their drops down, because a whole decade of current buys back
+only 60 mV, which is module 2's point arriving in a new context.
+
+## The mistake people actually make
+
+Expecting a doubler to be a power supply. It doubles the voltage, and charge is conserved
+while it does so, so it necessarily **halves the available current** before any losses —
+and the output impedance of a multiplier is high and rises with the number of stages,
+roughly as $N^3/(fC)$ for a Cockcroft-Walton ladder. A five-stage ladder that measures its
+target voltage beautifully on a meter can collapse to half of it under a load of tens of
+microamps. Multipliers belong where the load is tiny and the voltage is large: photomultiplier
+bias, ion pumps, electrostatics, LCD backlights.
+
+The second mistake is reading the clamper's output as rectified. Nothing has been
+rectified — the waveform is intact, it has simply moved. Put a meter set to AC across it
+and you will read the same value as at the input.
+
+## Where this stops holding
+
+- **The constant-drop model has no dynamics.** Every circuit here assumes the diode turns
+  off the instant the current tries to reverse. Module 9 is about how badly that fails: at
+  10 kHz the stored charge costs a fraction of a per cent of the period, and at 1 MHz the
+  same circuit built with the same diodes stops working entirely.
+- **The clamper's start-up is not instantaneous.** It takes several cycles to charge the
+  capacitor to its final offset, and longer if the diode's forward resistance is high. A
+  clamp on a signal that changes its DC content faster than that never settles.
+- **The 0.7 V is a stand-in.** The top-up current in a clamper flows in a brief spike, and
+  during that spike the current is far above the milliamp scale where 0.7 V was measured —
+  so the real drop is nearer 0.8 or 0.9 V. Every output above is a little optimistic, and
+  the error compounds with the number of stages.
+- **Leakage is now a design parameter.** These circuits hold charge on a capacitor between
+  refreshes, so a diode's reverse leakage discharges the very thing the circuit exists to
+  hold. It is the reason a low-drop Schottky is not automatically the right answer here:
+  the same trade that buys 0.4 V of forward drop costs orders of magnitude of leakage, and
+  module 10 puts numbers on it.
+''',
+                },
+            ],
             "quiz": {
                 "title": "Shaping a waveform with a decision",
                 "minutes": 10,
@@ -4015,6 +5704,235 @@ assert heavy[1] > 8.0 * light[1], \
                 "A Schottky has no minority carriers to store, so it has no recovery at all, only its junction capacitance. That is module 10, and it is the reason the fastest rectifier in a low-voltage supply is usually not a pn junction.",
                 "When a snap cannot be avoided, the response is an RC snubber across the diode: $R_s \\approx \\sqrt{L_{loop}/C_j}$, with $C_s$ three to ten times $C_j$. It costs $C_sV^2f$ of dissipation every cycle, which is why the first fix is always a shorter loop and the snubber is what you add when the layout has run out of improvements.",
             ],
+            "read": [
+                {
+                    "title": "The switch that goes on conducting after you turn it off",
+                    "minutes": 15,
+                    "body": r'''
+An oscilloscope on the cathode of a rectifier in a 100 kHz converter, with a current probe
+round its lead. The diode has been carrying 200 mA forward. The circuit reverses it, and
+the trace does this:
+
+the current does not go to zero. It goes *negative*, to the 2 A the rest of the circuit
+can pull, and sits there for about 95 ns while the voltage across the diode stays near
+zero. Then the current collapses to zero in a few nanoseconds, the voltage jumps to the
+60 V rail and overshoots it by nearly thirty volts, and the node rings at 75 MHz for a
+third of a microsecond.
+
+For 95 nanoseconds the device you were treating as a switch was a short circuit in the
+wrong direction. Everything a diode does wrong at speed is in that trace, and all of it
+comes from one fact: a conducting diode has charge inside it.
+
+## The charge you have been ignoring
+
+Module 5 counted the minority carriers injected across a forward-biased junction in order
+to get $I_S$ from them. What matters here is not their profile but their total. Holes are
+being pushed into the n-side at a rate $I_F/q$ per second, and each one survives on
+average a lifetime $\tau$ before it recombines. A population fed at a steady rate and
+drained by a fixed fraction per unit time settles where the two balance, so the stored
+charge is
+
+$$Q = I_F\tau$$
+
+At 200 mA with $\tau = 1$ µs that is 200 nC of charge sitting inside a part with two
+leads. Now reverse it. The junction cannot support any reverse voltage while that charge
+is still there — an excess of minority carriers at the depletion edge is precisely what
+forward bias means, and a junction cannot be forward biased and reverse biased at the same
+time. So the diode holds itself at nearly zero volts and conducts backwards, and how much
+current flows is decided by the external circuit, not by the diode.
+
+## How long that lasts
+
+The **charge-control model** treats the stored charge as the whole state of the device.
+Charge arrives as terminal current, and it leaves by recombination at a rate proportional
+to how much is there — which is what a lifetime means. One line:
+
+$$\frac{dQ}{dt} = i(t) - \frac{Q}{\tau}$$
+
+Put $i = -I_R$ into it from the instant of reversal, start from $Q_0 = I_F\tau$, and solve
+the first-order equation. The diode can begin to block when $Q$ reaches zero, and that
+happens at
+
+$$t_s = \tau\ln\!\left(1 + \frac{I_F}{I_R}\right)$$
+
+This module's derivation, **How long the charge takes to come out**, does those four steps
+one at a time. What is worth doing here is reading the result.
+
+```python
+import math
+
+tau = 1.0e-6            # minority carrier lifetime, seconds
+i_f = 0.200             # forward current before the reversal, amps
+
+q0 = i_f * tau
+print("stored charge Q0 = %.0f nC" % (q0 * 1e9))
+for i_r in (0.02, 0.2, 2.0, 20.0):
+    t_s = tau * math.log(1.0 + i_f / i_r)
+    q_rr = i_r * t_s
+    print("I_R = %5.2f A   t_s = %8.2f ns   Q_rr = %6.1f nC   %4.1f%% of Q0 came out of the terminals"
+          % (i_r, t_s * 1e9, q_rr * 1e9, 100.0 * q_rr / q0))
+```
+
+```text
+stored charge Q0 = 200 nC
+I_R =  0.02 A   t_s =  2397.90 ns   Q_rr =   48.0 nC   24.0% of Q0 came out of the terminals
+I_R =  0.20 A   t_s =   693.15 ns   Q_rr =  138.6 nC   69.3% of Q0 came out of the terminals
+I_R =  2.00 A   t_s =    95.31 ns   Q_rr =  190.6 nC   95.3% of Q0 came out of the terminals
+I_R = 20.00 A   t_s =    9.95 ns   Q_rr =  199.0 nC   99.5% of Q0 came out of the terminals
+```
+
+The middle column is the one everyone quotes: pulling harder clears the charge faster, and
+the logarithm decides by how much. Between 0.2 A and 2 A, ten times the current bought
+7.3 times the speed, because $I_F/I_R$ is 0.1 there and the $1$ inside the bracket is still
+the dominant term. Push on to 20 A and the returns are nearly perfect — $\ln(1+x)\to x$
+for small $x$, so $t_s\to\tau I_F/I_R$, inversely proportional to the reverse current. It
+is at the *gentle* end that the returns genuinely diminish: reverse with 20 mA and you wait
+2.4 µs, and a decade of extra current there subtracts only $\tau\ln 10$.
+
+The right-hand column is the one nobody expects. Charge can leave by two routes — through
+the terminals, or by recombining inside — and hurrying denies it the second. Pulling ten
+times harder cut the *time* by seven and raised the *charge the circuit had to carry away*
+from 139 nC to 191 nC. In the limit it approaches the stored charge exactly:
+$Q_{rr} = I_R\tau\ln(1+I_F/I_R) \to I_F\tau = Q_0$. There is no reverse current at which
+the recovery is free; the fastest turn-off is the one where the external circuit removes
+every last coulomb itself.
+
+## What that costs, and why 50 Hz never noticed
+
+A 1N4007 in a mains rectifier recovers in about 2 µs. One mains half-cycle is 10 ms, so
+the recovery is one part in five thousand of the period, and it happens while the voltage
+across the diode is near zero anyway. Nobody has ever measured it in a 50 Hz supply.
+
+The same 2 µs in a 100 kHz converter is 20% of the period. Nothing about the diode changed;
+what changed is what its recovery time is a fraction *of*. Take the trace at the top:
+$Q_{rr} = 191$ nC has to be pushed back through the diode while the node swings to 60 V,
+once per cycle at 100 kHz. An upper bound on the energy that costs is $Q_{rr}V_R$ per
+event, so
+
+$$P \le Q_{rr}V_Rf = 191\ \text{nC} \times 60\ \text{V} \times 10^5\ \text{s}^{-1}
+= 1.14\ \text{W}$$
+
+and in practice something like half of it, because the voltage is still rising while some
+of the charge comes out. Set that against the forward conduction loss of the same diode:
+200 mA at 0.75 V for half the cycle is 75 mW. The switching loss is more than ten times the
+conduction loss, and the forward drop — the number on the front page of the data sheet, the
+number this course has spent five modules on — is beside the point.
+
+## The snap, and the ring it excites
+
+At the end of the storage time the current has to return to zero, and it does so quickly:
+this is a **snappy** diode. Now the circuit takes over, and the two components that matter
+are ones nobody fitted. The loop the current was flowing in has inductance — a few
+centimetres of wiring is tens of nanohenries — and the diode, now off, is module 7's
+junction capacitance.
+
+The loop inductance was carrying 2 A and cannot stop instantly. That energy has to go
+somewhere, and the only place is the junction capacitance:
+
+$$\tfrac12 LI_R^2 = \tfrac12 C_jV^2
+\qquad\Longrightarrow\qquad
+V = I_R\sqrt{\frac{L}{C_j}}$$
+
+The overshoot is the reverse current times $\sqrt{L/C_j}$, the loop's characteristic
+impedance. That same square root sets everything else about the ring, which is why the
+build, **Damping what the snap leaves behind**, is built around it.
+
+```python
+import math
+
+L = 30e-9               # loop inductance, henries
+C_J = 150e-12           # the diode off-state junction capacitance, farads
+R = 0.5                 # loop resistance, ohms
+I_R = 2.0               # amps flowing when the diode snaps off
+V_RAIL = 60.0           # volts the node settles at
+F_SW = 100e3            # switching frequency, hertz
+
+z0 = math.sqrt(L / C_J)
+print("ring frequency  = %.1f MHz" % (1.0 / (2.0 * math.pi * math.sqrt(L * C_J)) / 1e6))
+print("z0 = sqrt(L/C)  = %.2f ohm" % z0)
+print("Q  = z0 / R     = %.1f" % (z0 / R))
+print("overshoot I*z0  = %.1f V on top of %.0f V" % (I_R * z0, V_RAIL))
+for c_s in (470e-12, 1.5e-9, 10e-9):
+    print("snubber %6.0f pF (%.1f x C_j)  costs C*V^2*f = %.2f W"
+          % (c_s * 1e12, c_s / C_J, c_s * V_RAIL ** 2 * F_SW))
+```
+
+```text
+ring frequency  = 75.0 MHz
+z0 = sqrt(L/C)  = 14.14 ohm
+Q  = z0 / R     = 28.3
+overshoot I*z0  = 28.3 V on top of 60 V
+snubber    470 pF (3.1 x C_j)  costs C*V^2*f = 0.17 W
+snubber   1500 pF (10.0 x C_j)  costs C*V^2*f = 0.54 W
+snubber  10000 pF (66.7 x C_j)  costs C*V^2*f = 3.60 W
+```
+
+88 V across a diode on a 60 V rail, and 75 MHz radiating out of every centimetre of the
+loop for the 28 cycles the $Q$ allows. That resonance is where most of a switching supply's
+radiated emissions come from, and it explains why the *area* of the loop around a rectifier
+is a design parameter rather than a layout convenience: the loop is half of the tuned
+circuit.
+
+When the layout has run out of improvements, the answer is an RC snubber across the diode.
+Both values follow from the same $\sqrt{L/C_j}$. The resistor is chosen near 14 $\Omega$
+because that is the impedance at which the loop trades its energy back and forth — much
+smaller is nearly a short and lets the loop ring against the snubber capacitor instead,
+much larger is nearly an open and the loop rings as though the snubber were not fitted. The
+capacitor is chosen at three to ten times $C_j$: less and its own voltage moves as much as
+the node it is meant to hold still, more and you are paying $C_sV^2f$ every cycle for
+nothing, as the last two rows show.
+
+## The mistake people actually make
+
+Choosing the bigger diode. Asked to rectify 200 mA at 100 kHz, almost everyone reaches for
+a 1N4007 over a 1N4148: 1 A against 200 mA, 1000 V against 100 V, and it costs the same. It
+is the better part by every number anyone is taught to check.
+
+Its recovery time is a few microseconds. The 1N4148's is 4 ns. At 100 kHz the 4007 spends a
+fifth of every cycle conducting backwards and gets hot enough to fail, while the part with a
+fifth of the current rating works perfectly.
+
+The trap is well laid, because $t_{rr}$ is often not on a 1N400x data sheet at all — the
+part was specified for 50 Hz, where it does not matter, and the omission reads as an absence
+of a problem rather than as an absence of a specification. Fast recovery is made by
+deliberately spoiling the silicon, with gold, platinum or electron irradiation, to add
+recombination centres and cut $\tau$; the same defects raise the forward drop and the
+leakage. A fast diode is a compromised diode sold as such, and the compromise is not
+visible in the current and voltage ratings.
+
+The second mistake is what people do when they see the spike: fit a larger snubber
+capacitor, on the grounds that more must be better. Going from 470 pF to 10 nF buys a
+marginal improvement in a peak that was already under control, and 3.6 W instead of 0.17 W.
+Snubbing is bought with watts.
+
+## Where this stops holding
+
+**One lifetime is one number, and recovery has a shape.** The charge-control model gives a
+storage time and says nothing about how abruptly the current returns to zero afterwards.
+Whether a diode is snappy or **soft** depends on the doping profile near the end of the
+neutral region, and it is the difference between a ring you must snub and one you can
+ignore. Data sheets express it as a softness factor, and the model above has no term for it.
+
+**$t_s$ is not $t_{rr}$.** After the stored charge is gone, the depletion region has to
+re-form and $C_j$ has to charge to the reverse voltage. That transition is extra time, it is
+where the $dV/dt$ lives, and for a fast diode it can be most of the total.
+
+**The reverse current is not really constant.** The derivation held $I_R$ fixed, which the
+external circuit does only approximately: in the loop above, the current ramps at
+$di/dt = V/L$, so a stiffer supply or a shorter loop reverses the diode harder and changes
+$t_s$ along with everything else. The model is a good estimate and a poor simulation.
+
+**It gets worse when hot.** Carrier lifetime rises with temperature, so the stored charge,
+the storage time and $Q_{rr}$ all rise with it, and the recovery loss heats the junction
+that made them rise. Data sheets quote $Q_{rr}$ at 25 $^\circ$C, and a doubling by 125
+$^\circ$C is ordinary.
+
+**And none of it applies to a Schottky.** There are no stored minority carriers to remove,
+so there is no storage time at all — but the junction capacitance is still there, so a
+Schottky in the same loop still rings. Module 10 is about what that costs elsewhere.
+''',
+                },
+            ],
             "quiz": {
                 "title": "How long a diode stays on after you turn it off",
                 "minutes": 10,
@@ -4407,6 +6325,206 @@ c.assert(snub[0] >= 7.0 * 0.99 && snub[0] <= 25.0 * 1.01,
                 "That 2.4:1 is the straight line's answer, and the junctions themselves are worse: **6.92:1**. Two LEDs on one node are held at one voltage, so $I_A/I_B = I_{SA}/I_{SB}$ exactly — the ratio of the saturation currents, and therefore the same number whatever ballast is chosen, measured unchanged from 50 $\\Omega$ to 10 k$\\Omega$. The linearised model cannot express that at all, because it makes the ratio depend on the node voltage. The second build measures both.",
                 "A **photodiode** is the same junction run backwards with light making the carriers. The photocurrent is proportional to optical power and almost independent of the reverse voltage, so the small-signal model is a current source in parallel with $C_j$ — which makes module 7's capacitance the thing that sets its speed. Its **responsivity** is $R = \\eta q\\lambda/hc$, or $\\eta\\lambda[\\mu\\text{m}]/1.24$ A/W, about 0.6 A/W for silicon at 900 nm.",
                 "Reverse bias it — photoconductive mode — and $C_j$ shrinks, the response is fast and linear, and you pay in dark current. Leave it at zero volts — photovoltaic mode — and the dark current vanishes while $C_j$ is at its largest and the device is slow. Push the same curve into the fourth quadrant, delivering power rather than absorbing it, and it is a solar cell.",
+            ],
+            "read": [
+                {
+                    "title": "Three junctions, three trades, and no free improvements",
+                    "minutes": 13,
+                    "body": r'''
+A Schottky diode drops 0.35 V where a silicon pn junction drops 0.70 V, at the same
+current. It also switches with no recovery delay at all, where the pn junction needs
+hundreds of nanoseconds. Read those two sentences on a data sheet and the obvious
+conclusion is that the Schottky is simply the better part.
+
+It is not. It is the *same* device with one number moved, and the arithmetic that shows
+this is one line of module 2.
+
+## The Schottky, and the price of its low drop
+
+Replace the p-side of the junction with a metal. There is still a barrier at the
+interface, still rectification — but the current across it is carried by **majority**
+carriers, thermionically, over the barrier. Nothing is injected into the other side and
+stored there, so there is nothing to remove when the device turns off. Module 9's entire
+problem simply does not arise; only the junction capacitance is left.
+
+The barrier is also lower, and a lower barrier means a much larger $I_S$. Now invert
+module 2's equation to see exactly how much larger. At the same current:
+
+$$\Delta V_F = V_T\ln\frac{I_{S2}}{I_{S1}}
+\quad\Longrightarrow\quad
+\frac{I_{S2}}{I_{S1}} = e^{\Delta V_F/V_T} = e^{0.35/0.025852} = e^{13.54} = 7.6\times10^{5}$$
+
+Saving 350 mV of forward drop *requires* a saturation current three quarters of a million
+times larger. That is not a coincidence of manufacture; it is the same equation read in
+the other direction, and there is no process that gives you one without the other.
+
+And $I_S$ is the reverse leakage. So a Schottky leaks microamps where a silicon diode
+leaks nanoamps, and it always did — this is a property of the part on the day you bought
+it, not a fault it develops. Its breakdown is lower too, typically 20 to 100 V against a
+1N4007's 1000 V.
+
+(The measured ratio is smaller than $7.6\times10^5$, and it is worth knowing why. Module 6
+showed that a silicon diode's *measured* leakage is dominated by generation inside the
+depletion region and is already far above its ideal $I_S$. So the comparison is between a
+Schottky's $I_S$ and a quantity that is not the pn junction's $I_S$ at all. The direction
+and the mechanism are exactly as derived; the factor is not.)
+
+**Worked comparison.** A 1 A rectifier on a 5 V rail:
+
+```text
+                  silicon pn        Schottky
+forward drop      0.75 V            0.35 V
+loss at 1 A       0.75 W            0.35 W        of 5 W delivered: 15% vs 7%
+reverse leakage   ~1 uA             ~200 uA       at 85 C, tens of times worse again
+recovery          ~500 ns           none
+```
+
+For a 5 V supply the Schottky wins on the only number anyone is counting — half the loss.
+Put the same two parts in a battery-powered circuit that idles for months and the
+200 $\mu$A is a permanent drain that empties the battery while the product sits on a
+shelf, and the pn junction wins. Neither is a better diode.
+
+## The LED: the forward voltage is the colour
+
+Silicon has an **indirect** band gap, which means an electron crossing it must trade
+momentum with the lattice as well as energy. That interaction goes to heat. Silicon does
+not emit light and no amount of engineering makes it.
+
+A **direct-gap** compound — AlGaInP, InGaN — lets a recombining electron hand its whole
+energy to a photon. That energy is the band gap, and photon energy and wavelength are
+related by $E = hc/\lambda$, which in the units anyone actually uses is
+
+$$E_g[\text{eV}] = \frac{1240}{\lambda[\text{nm}]}$$
+
+An electron cannot emit a photon of energy $E_g$ unless it has fallen through at least
+$E_g/q$ volts. So the forward voltage follows the **colour**, and nothing else:
+
+```text
+red      630 nm    1240/630 = 1.97 eV     ->  measures about 1.9-2.0 V
+green    525 nm    1240/525 = 2.36 eV     ->  measures about 2.2-2.4 V
+blue     465 nm    1240/465 = 2.67 eV     ->  measures about 3.0 V at 20 mA
+```
+
+That is a floor set by physics, not a preference of the manufacturer. No arrangement of
+resistors lights a blue LED from a single 1.5 V cell — which is why a blue torch contains
+a boost converter and a red one contains a resistor. The measured values sit above the
+floor because the junction needs bias beyond the gap to pass useful current, and because
+of series resistance.
+
+## Worked example: why two LEDs must not share one resistor
+
+Two nominally identical LEDs, data sheet 1.9 V typical, in parallel behind one resistor
+delivering 20 mA. Model them as module 2 would: a fixed drop in series with a resistance.
+Manufacturing spread puts one at 1.85 V and the other at 1.95 V, both with 12 $\Omega$.
+
+They share a node, so they share a voltage. Write the node equation:
+
+$$\frac{V - 1.85}{12} + \frac{V - 1.95}{12} = 0.020
+\quad\Longrightarrow\quad 2V - 3.80 = 0.24
+\quad\Longrightarrow\quad V = 2.02\ \text{V}$$
+
+$$I_1 = \frac{2.02 - 1.85}{12} = 14.1\ \text{mA}
+\qquad I_2 = \frac{2.02 - 1.95}{12} = 5.8\ \text{mA}$$
+
+A 100 mV spread — entirely ordinary, and well inside any data sheet's tolerance — became
+a **2.4 : 1** split in current, and therefore in brightness and in ageing rate. The one
+that needs *less* voltage takes more current, gets hotter, and module 6's coefficient
+moves its curve further down still. Give each LED its own ballast resistor. It costs one
+component and it is not optional.
+
+The two builds close this out by measuring the same pair of parts twice. **Two LEDs that
+are meant to look the same** uses the straight-line model above and finds the 2.4 : 1
+split; **The same two LEDs, with the junctions left in** puts the exponentials back and
+finds 6.92 : 1, because two junctions held at one voltage divide the current in the ratio
+of their saturation currents and nothing else — the same number whatever ballast you feed
+them through. The linearised model cannot even express that, which is a fair warning
+about how far a tangent travels.
+
+## The photodiode: the same junction, run backwards
+
+Reverse-bias a junction and light it. Photons absorbed in the depletion region create
+electron-hole pairs, and the field that was there anyway sweeps them out. The result is a
+current proportional to optical power and almost independent of the reverse voltage — a
+**current source**, in parallel with the junction capacitance from module 7.
+
+Its **responsivity** is amps out per watt in. Each photon of energy $hc/\lambda$ that is
+absorbed yields, with probability $\eta$, one electron of charge $q$:
+
+$$R = \frac{\eta q\lambda}{hc} = \frac{\eta\,\lambda[\mu\text{m}]}{1.24}\ \text{A/W}$$
+
+Note that a *perfect* detector's responsivity rises with wavelength — longer photons carry
+less energy, so a watt of them is more photons per second. Silicon's climbs to about
+0.6 A/W at 900 nm and then falls off a cliff, because past 1100 nm a photon no longer has
+$E_g$ and is not absorbed at all.
+
+**Worked example.** A silicon photodiode with $R = 0.6$ A/W at 900 nm, $C_j = 20$ pF at
+zero bias, receiving 10 $\mu$W, into a 100 k$\Omega$ load:
+
+```text
+photocurrent    0.6 x 10e-6            = 6 uA
+signal          6e-6 x 100e3           = 0.6 V
+bandwidth       1/(2 pi x 1e5 x 20e-12) = 79.6 kHz
+```
+
+Now reverse-bias it. Module 7's result — the depletion region widens, so $C_j = \epsilon
+A/W$ falls — takes 20 pF to about 5 pF at 10 V, and the bandwidth rises in exact
+proportion to **318 kHz**. Four times the speed, and the signal is unchanged, because the
+photocurrent did not care about the bias.
+
+That exchange is the whole of this module's design problem, **How fast a photodiode can
+be, and what that costs in signal**, where a 50 pF diode and a 250 kHz requirement leave
+exactly one value of load resistor and a signal of 28 mV to show for it.
+
+What it costs is dark current. Bias is what makes leakage flow, and leakage adds shot
+noise that sets the noise floor. So:
+
+- **Photoconductive** (reverse biased): fast, linear over a wide range, noisier.
+- **Photovoltaic** (zero bias): no dark current, lowest noise floor, and slow, because
+  $C_j$ is at its largest.
+
+A low-light instrument chooses the second deliberately. Push the same device into the
+fourth quadrant — delivering power rather than absorbing it — and it is a solar cell.
+
+## The mistake people actually make
+
+Reading responsivity as an efficiency. 0.50 A/W is not "50% efficient": it is amps per
+watt, its units are not dimensionless, and its value depends on the wavelength as much as
+on the quality of the device. Invert the formula to get the efficiency:
+
+$$\eta = \frac{R \times 1.24}{\lambda[\mu\text{m}]} = \frac{0.50\times1.24}{0.85} = 0.73$$
+
+73%, not 50%. The temptation is strong because the number looks like a percentage when it
+is written as 0.50, and because a figure of merit that is *nearly* an efficiency is worse
+than one that could never be mistaken for one.
+
+The broader version of the same mistake runs through all three devices in this module:
+treating a specification as a virtue rather than as one end of a trade. The Schottky's
+0.35 V is bought with leakage. The blue LED's brightness is bought with a forward voltage
+that will not run from a cell. The photodiode's bandwidth is bought with dark current.
+Each one is the same junction with a knob turned, and turning a knob moves everything
+attached to it.
+
+## Where this stops holding
+
+- **Schottky leakage is strongly temperature dependent, and worse than silicon's.** The
+  barrier is lower, so the same 10 K that quadruples a pn junction's ideal $I_S$ does more
+  damage here relative to the current being measured. A Schottky that leaks 200 $\mu$A at
+  25 $^\circ$C can leak milliamps at 100 $^\circ$C, and in a hot rectifier that leakage is
+  itself a heat source — which is a positive feedback loop of exactly module 6's kind.
+- **$E_g = 1240/\lambda$ gives the peak, not the spread.** An LED emits over a band of
+  tens of nanometres, because carriers are distributed in energy by roughly $kT$ above the
+  band edge. A white LED is not a band gap at all: it is a blue die with a phosphor on top,
+  and its forward voltage is blue's.
+- **The photodiode model has no series resistance and no amplifier.** A 100 k$\Omega$ load
+  resistor is the simplest possible receiver and almost never the right one; a
+  transimpedance amplifier holds the diode at a constant voltage, which removes the
+  $R_LC_j$ limit entirely and replaces it with a stability problem involving the same
+  $C_j$.
+- **The junction capacitance is module 7's, exponent and all.** $C_j$ falls as
+  $(1+V_R/V_{bi})^{-m}$, not linearly, so "four times the bias, four times the speed" is a
+  coincidence of the numbers chosen above, not a rule.
+''',
+                },
             ],
             "quiz": {
                 "title": "The same junction, changed on purpose",
