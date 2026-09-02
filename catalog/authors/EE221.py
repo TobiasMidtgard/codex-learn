@@ -83,6 +83,222 @@ COURSE = {
                 "Calibration is a *comparison* and produces numbers. Adjustment is a *change* and produces a different instrument. A certificate reading “10.00021 V displayed for 10.00000 V applied” is more useful than an adjustment, because a known correction can be subtracted while an adjustment's residual cannot.",
                 "Specifications read ±(a% of reading + b% of range), or ±(a% of reading + n counts). The first term follows the signal and the second does not, so the same voltage measured near the bottom of a range is far worse than the same voltage near the top of a smaller one — and every specification is conditional on a temperature band, a warm-up, and a time since calibration.",
             ],
+            "read": {
+                "title": "Two meters, one reference, and the brackets on the data sheet",
+                "minutes": 14,
+                "body": r'''
+Two bench multimeters sit side by side, their leads clipped to the same solid-state
+10 V reference. Both are 6½-digit instruments, both were calibrated inside the last
+twelve months, neither has been dropped. Watch them settle.
+
+```text
+  left meter     10.000 21 V
+  right meter     9.999 84 V
+```
+
+They disagree by 370 µV, which is 37 parts per million of the reading. Nothing is
+broken. Both meters are inside their published specifications, both certificates are
+valid, and between them they are showing you twelve digits of which the last two on
+each display cannot both be meaningful.
+
+The useful question is not which one to believe. It is what either of them was
+entitled to claim before you looked.
+
+## The last digit is a step, not a promise
+
+Behind that display is a converter that counts. A 1 200 000-count instrument on its
+10 V range runs to 12.00000 V, so one count is $12/1\,200\,000 = 10$ µV. That is the
+*resolution*: the smallest change the display is able to show. It is a property of the
+counter and of nothing else.
+
+Take ten readings from the left meter and they come back 10.000 21, 10.000 21,
+10.000 22, 10.000 21, 10.000 22 and so on — a spread of about one count. That is the
+*precision*: the repeatability, and it is genuinely good. Neither number says anything
+at all about where the reading sits relative to the volt, which is *accuracy*, and no
+amount of staring at the display will produce it. This is the whole reason calibration
+exists as a separate activity from measurement: the information you need is not
+available from inside the instrument.
+
+## Two mechanisms, and therefore two terms
+
+A meter takes your voltage and does two things to it before the counter sees it. It
+multiplies it by a gain, set by a resistor chain and a reference, and it adds an
+offset, contributed by an amplifier whose two inputs are not quite identical and by
+whatever thermal emfs the input connectors are generating that afternoon. Write that
+down as it is:
+
+$$V_{disp} = G\,V_{in} + V_{os}$$
+
+Nominally $G = 1$ and $V_{os} = 0$, and neither is exact. Put $G = 1 + g$ and subtract:
+
+$$V_{disp} - V_{in} = g\,V_{in} + V_{os}$$
+
+The error has fallen into two pieces of different character. The first, $g V_{in}$, is
+proportional to the signal — a 20 ppm gain error is 20 ppm of whatever you are
+measuring, at any level. The second, $V_{os}$, is a fixed number of volts and knows
+nothing about the signal at all; it is a property of the analogue front end that the
+range switch selected, and so it scales with the *range* rather than with the reading.
+Write it as a fraction $b$ of the range's full scale $V_{rng}$, bound the gain error
+by $a$, and the worst case is
+
+$$|V_{disp} - V_{in}| \le a\,V_{in} + b\,V_{rng}$$
+
+That is the bracket on the data sheet — $\pm(a\,\text{% of reading} + b\,\text{% of
+range})$ — and it is not a convention somebody chose. It is the shape the error has
+because there are two mechanisms, one of which scales and one of which does not.
+
+## Working one specification all the way down a range
+
+Take the left meter: $\pm(0.0035\,\text{% of reading} + 0.0005\,\text{% of range})$,
+one year after calibration, over 23 ± 5 °C. In parts per million that is 35 ppm of
+reading plus 5 ppm of range, which is how the same sentence appears on the next data
+sheet you pick up.
+
+```python
+def allowed(reading, full_scale, pct_rdg, pct_rng):
+    """The bracket, in volts: a fraction of the reading plus a fraction of the range."""
+    return pct_rdg / 100.0 * reading + pct_rng / 100.0 * full_scale
+
+
+for reading, full_scale in [(10.0, 10.0), (5.0, 10.0), (0.5, 10.0),
+                            (0.5, 1.0), (0.1, 10.0)]:
+    u = allowed(reading, full_scale, 0.0035, 0.0005)
+    print("%6.3f V on the %4.1f V range: %7.1f uV = %7.1f ppm of reading"
+          % (reading, full_scale, u * 1e6, u / reading * 1e6))
+```
+
+```text
+10.000 V on the 10.0 V range:   400.0 uV =    40.0 ppm of reading
+ 5.000 V on the 10.0 V range:   225.0 uV =    45.0 ppm of reading
+ 0.500 V on the 10.0 V range:    67.5 uV =   135.0 ppm of reading
+ 0.500 V on the  1.0 V range:    22.5 uV =    45.0 ppm of reading
+ 0.100 V on the 10.0 V range:    53.5 uV =   535.0 ppm of reading
+```
+
+Read the last column down. At the top of the range this is a 40 ppm instrument. At a
+tenth of the range it is a 535 ppm instrument — fifteen times worse, on the same
+meter, on the same afternoon, with nothing changed but the size of the signal. The
+range term did not move; it was 50 µV in every one of those rows and it is 50 µV when
+the input is shorted.
+
+Compare the third and fourth rows. Same voltage, same meter, one range apart:
+67.5 µV against 22.5 µV, three times better for pressing a button. That is what an
+autoranging meter is doing when it drops a range as soon as the reading will fit, and
+it is the one habit worth acquiring from this page.
+
+Now go back to the two meters on the reference. Each is allowed 400 µV at 10 V. They
+differ by 370 µV. Two instruments both behaving to specification can disagree by up to
+800 µV, and these two are comfortably inside that. There was never a contradiction to
+resolve — the display offered six digits and the specification only ever underwrote
+four and a half.
+
+## What the reference itself is standing on
+
+Neither meter is the authority here; the reference is, and it is not the authority
+either. Since 2019 the volt has been realised from the Josephson effect, a junction
+irradiated at frequency $f$ stepping in voltage by $fh/2e$ with $h$ and $e$ both
+defined constants. Between that and your bench is a chain of comparisons, each with a
+certificate and an uncertainty of its own, and the uncertainties combine in quadrature:
+
+```python
+import math
+
+links = [("your meter against the calibration laboratory", 8.0),
+         ("the laboratory standard against the national one", 2.0),
+         ("the national standard against the realisation", 0.5)]
+total = 0.0
+for name, u in links:
+    print("%-48s %5.2f ppm" % (name, u))
+    total += u * u
+print("%-48s %5.2f ppm" % ("combined in quadrature", math.sqrt(total)))
+print("%-48s %5.2f ppm" % ("the worst single link", max(u for _, u in links)))
+```
+
+```text
+your meter against the calibration laboratory     8.00 ppm
+the laboratory standard against the national one  2.00 ppm
+the national standard against the realisation     0.50 ppm
+combined in quadrature                            8.26 ppm
+the worst single link                             8.00 ppm
+```
+
+The whole chain costs 8.26 ppm and its worst link costs 8.00 ppm. Quadrature is
+brutal to small contributions: a term three times smaller than the leader adds 5% to
+the total, and one sixteen times smaller adds nothing you can write down. That is
+worth carrying into module 10, where it becomes the reason an uncertainty budget is
+mostly about finding the one line that matters.
+
+Notice also what the chain does *not* say. It is a documented sequence of comparisons,
+each with a stated uncertainty. It does not promise that your meter meets its
+published specification — a certificate reporting an out-of-tolerance instrument is a
+perfectly valid traceable certificate. It does not promise the meter will still be
+right next month; that is what the drift specification and the calibration interval
+are for. Traceability is a chain, not a sticker.
+
+## The mistake, and why it is tempting
+
+The mistake is reading the display as the answer and the specification as paperwork.
+It is tempting for an entirely rational reason: the display is the only quantitative
+thing in the room, it updates five times a second, and it has six digits, while the
+specification is three lines of small print in a PDF that nobody opened. Every
+incentive in front of you points at the number.
+
+It has a second half, which is worse. Faced with the 370 µV disagreement, the reflex
+is to take more readings and average. The left meter averaged over a hundred readings
+gives 10.000 213 with a standard error under a microvolt — and it is still 370 µV
+away from the right meter, because the disagreement is not random. Averaging attacks
+the scatter and leaves the offset exactly where it was. It buys resolution, never
+accuracy, and the fastest way to quote six meaningless digits is to average your way
+to them.
+
+The third half, if a thing may have three, is the certificate. "The meter was
+calibrated in March" is not a statement about accuracy. A certificate that says the
+meter displayed 10.000 21 V for exactly 10.000 00 V applied is a *correction*: subtract
+210 µV from readings near 10 V and carry the certificate's own uncertainty into your
+budget. That is strictly better than having the meter adjusted, because a stated
+correction has a stated uncertainty while the residual left behind by an adjustment
+has none.
+
+## Where this stops holding
+
+The two-term bracket is a bound, not a distribution. It says the error lies somewhere
+inside ±400 µV and says nothing about where. Turning it into a standard uncertainty
+means assuming a shape — with nothing else stated, a rectangular one, giving
+$400/\sqrt{3} = 231$ µV — and that assumption is a choice, made properly in module 10.
+Treating the 400 µV as though it were a standard deviation and combining it in
+quadrature with genuine standard uncertainties overstates the total by about 70%.
+
+The bracket is also conditional in ways the bracket does not mention. Outside 23 ± 5 °C
+a temperature coefficient applies, quoted per degree *outside* the band and not per
+degree from 23 °C. The instrument has to have warmed up. The figures are for one year
+since calibration, and the ninety-day column on the same data sheet is a different set
+of numbers. A specification is a conditional promise, and a meter used in a plant room
+is not being used under its conditions.
+
+Finally, the linear model $V_{disp} = GV_{in} + V_{os}$ is a linearisation. A real
+converter also has integral nonlinearity — a gain that varies slightly with where in
+the range you are — and it does not appear as a third term because the manufacturer
+folded it into the reading term when choosing $a$. The bracket is a bound over the
+whole range, so it is loose in the middle of the range and tight at the ends.
+
+## What this module asks you to do with it
+
+Two exercises turn this into arithmetic you own. **What the data sheet is promising**
+gives you the specification above and one reading and asks for the allowance in
+microvolts; the whole of it is deciding which term takes the reading and which takes
+the range, and the two answers people get wrong are the two ways of forgetting that
+distinction.
+
+**A ratio you can trust, at a current you can afford** goes at the other half of the
+problem. A reference is one number, 10.000 V and nothing else; every voltage below it
+has to be reached by a *ratio*, and a divider is a ratio standard. What makes it an
+exercise rather than a division is that the resistor values are constrained twice
+over: the ratio fixes their proportion, and their sum fixes the current, which decides
+whether the pair runs warm enough to drift or cold enough for board leakage to join
+the circuit. Both constraints have to hold at once, which is the ordinary condition of
+instrument design and the reason the slider opens satisfying one of them.
+''',
+            },
             "quiz": {
                 "title": "Chains, certificates and the small print",
                 "minutes": 9,
@@ -298,6 +514,209 @@ promise and the conditions are not decoration.
                 "Input resistance is a DC figure. At 1 MHz a 15 pF input is an impedance of 10.6 kΩ, so an instrument that loads a 100 kΩ node by 0.1% at DC loads it by 90% at 1 MHz.",
                 "Loading is correctable when $R_{th}$ is known: multiply the reading by $(1 + R_{th}/R_{in})$. It is a design error only when $R_{th}$ is unknown, which is most of the time.",
             ],
+            "read": {
+                "title": "The meter is a component, and you soldered it in",
+                "minutes": 15,
+                "body": r'''
+Two 1 MΩ resistors in series across a 9 V battery. Nothing else on the board. Put a
+digital multimeter on the junction between them and ask what it should read.
+
+Half of 9 V is 4.500 V. The meter says **4.286 V**.
+
+Both resistors measure 1.000 MΩ on the same meter. The battery measures 9.000 V on the
+same meter. The arithmetic is not in dispute, and the reading is 214 mV — 4.8% — away
+from it. Nothing here is faulty, and the meter is not lying: it is reporting, correctly,
+the voltage at that junction *while the meter is attached to it*, which is not the
+circuit you drew.
+
+## The third resistor
+
+The meter's input is a resistance to its own low terminal. On an ordinary bench
+instrument it is 10 MΩ, and it is not optional — it is the top of the divider chain
+that every range is tapped off. Clip it to the junction and there are now three
+resistors on the board, not two.
+
+Look at what the junction sees. Above it, 1 MΩ to the battery; below it, 1 MΩ to
+ground; and now 10 MΩ to ground as well. Reduce the original network at those two
+terminals the way any linear network reduces: an open-circuit voltage of 4.500 V behind
+a resistance of $1\,\text{M} \parallel 1\,\text{M} = 500$ kΩ. The meter is a 10 MΩ
+lower arm hung on a 4.500 V source with 500 kΩ in series. That is a voltage divider,
+whether you meant to build one or not, and its output is
+
+$$V_m = V_{th}\,\frac{R_{in}}{R_{th} + R_{in}} = 4.500 \times \frac{10}{10.5} = 4.286\,\text{V}$$
+
+Subtract the true value and divide by it and the $V_{th}$ falls out of the expression
+entirely:
+
+$$\delta = \frac{V_m - V_{th}}{V_{th}} = \frac{R_{in}}{R_{th}+R_{in}} - 1
+        = -\frac{R_{th}}{R_{th}+R_{in}}$$
+
+Three things are contained in that line. The error is always negative — an attached
+instrument can pull a node down and can never push it up. It does not depend on the
+signal, so changing the battery to 12 V changes the reading and not the percentage.
+And it is set by the ratio of the *source* resistance to the meter, not the other way
+round, which is the direction people reverse.
+
+```python
+V_BATT, R_TOP, R_BOT, R_IN = 9.0, 1e6, 1e6, 10e6
+
+v_th = V_BATT * R_BOT / (R_TOP + R_BOT)
+r_th = R_TOP * R_BOT / (R_TOP + R_BOT)
+v_m = v_th * R_IN / (r_th + R_IN)
+
+print("unloaded midpoint      %.4f V" % v_th)
+print("Thevenin resistance    %.0f ohm" % r_th)
+print("what the meter reads   %.4f V" % v_m)
+print("fractional error       %+.2f %%" % (100.0 * (v_m - v_th) / v_th))
+print("corrected reading      %.4f V" % (v_m * (1.0 + r_th / R_IN)))
+print("---")
+for r in [1e3, 1e4, 1e5, 1e6, 1e7]:
+    print("source %9.0f ohm into 10 M: %+8.3f %%" % (r, -100.0 * r / (r + R_IN)))
+```
+
+```text
+unloaded midpoint      4.5000 V
+Thevenin resistance    500000 ohm
+what the meter reads   4.2857 V
+fractional error       -4.76 %
+corrected reading      4.5000 V
+---
+source      1000 ohm into 10 M:   -0.010 %
+source     10000 ohm into 10 M:   -0.100 %
+source    100000 ohm into 10 M:   -0.990 %
+source   1000000 ohm into 10 M:   -9.091 %
+source  10000000 ohm into 10 M:  -50.000 %
+```
+
+The fifth line is the way out when the source resistance is known. Rearranging
+$V_m = V_{th}R_{in}/(R_{th}+R_{in})$ for $V_{th}$ gives
+
+$$V_{th} = V_m\left(1 + \frac{R_{th}}{R_{in}}\right)$$
+
+and multiplying 4.2857 by 1.05 returns 4.5000 exactly. The correction costs nothing and
+is available whenever you can put a number on $R_{th}$ — which, on a divider you built
+yourself, you can. On a node inside somebody else's design you cannot, and that is when
+loading stops being an arithmetic nuisance and becomes a design error.
+
+Read the sweep at the bottom. A 10 MΩ instrument is honest to 0.1% up to a source
+resistance of about 10 kΩ and to 1% up to about 100 kΩ. Above that the reading is
+worse in the second digit than the meter is in its sixth, and the 6½ digits on the
+display are decoration.
+
+## The same argument, turned inside out, is the ammeter
+
+An ammeter does not go across the circuit; it goes *into* it. Break the loop, insert
+the meter, and its shunt resistance $R_s$ is now in series with everything else. The
+current that flows is no longer $V/R$ but $V/(R+R_s)$, and the meter honestly reports
+the smaller current that its own presence created. The fractional error is
+
+$$\frac{I_m - I}{I} = -\frac{R_s}{R + R_s}$$
+
+which is the voltmeter expression with the roles of the two resistances exchanged: the
+voltmeter wants $R_{in}$ enormous compared with the source, the ammeter wants $R_s$
+tiny compared with the loop. One expression, two instruments, opposite requirements.
+
+Data sheets quote the ammeter's side of it as a *burden voltage* — the volts the meter
+develops across itself at full scale — because that is the number you can compare with
+the supply the circuit had to work with.
+
+```python
+V, R_LOAD = 5.0, 47.0
+i_true = V / R_LOAD
+for r_s in [0.01, 0.1, 1.0, 10.0]:
+    i = V / (R_LOAD + r_s)
+    print("shunt %6.2f ohm: reads %8.4f mA against %8.4f mA, %+6.2f %%, burden %7.2f mV"
+          % (r_s, i * 1e3, i_true * 1e3, 100.0 * (i - i_true) / i_true, i * r_s * 1e3))
+```
+
+```text
+shunt   0.01 ohm: reads 106.3603 mA against 106.3830 mA,  -0.02 %, burden    1.06 mV
+shunt   0.10 ohm: reads 106.1571 mA against 106.3830 mA,  -0.21 %, burden   10.62 mV
+shunt   1.00 ohm: reads 104.1667 mA against 106.3830 mA,  -2.08 %, burden  104.17 mV
+shunt  10.00 ohm: reads  87.7193 mA against 106.3830 mA, -17.54 %, burden  877.19 mV
+```
+
+The third row is an ordinary handheld meter on its milliamp range, and it has taken
+104 mV out of a 5 V supply. On a 3.3 V rail that is 3%. The place it does real damage
+is the row below: measuring the sleep current of a battery-powered board through the
+microamp range, where the shunt is hundreds of ohms, can drop the rail far enough that
+the board browns out and the current you are measuring is the current of a device that
+is no longer running.
+
+## The megohms on the front page are a DC number
+
+The input is not a resistor. It is a resistor in parallel with a capacitance — 10 to
+20 pF of amplifier, connector and cable on a scope input, and something similar inside
+a meter. At DC the capacitor is absent and the front page is telling the truth. At
+frequency it is the capacitor that does the loading, because its impedance falls as
+$1/2\pi f C$ while the resistor stays where it is. The two are equal at
+
+$$f = \frac{1}{2\pi R_{in}C_{in}}$$
+
+which for 10 MΩ and 15 pF is 1.06 kHz. Above about a kilohertz, an instrument sold as
+a 10 MΩ input is not a 10 MΩ input in any way that matters.
+
+```text
+at      1000 Hz the 15 pF alone is 10610329 ohm
+at     10000 Hz the 15 pF alone is  1061033 ohm
+at    100000 Hz the 15 pF alone is   106103 ohm
+at   1000000 Hz the 15 pF alone is    10610 ohm
+```
+
+An instrument that loads a 100 kΩ node by 1% at DC loads the same node by about 90% at
+1 MHz. This is the single most surprising line in the module, and it is the reason
+module 3 exists.
+
+## The mistake, and why it is tempting
+
+The mistake is treating "high impedance" as a property that removes the instrument from
+the circuit. It is tempting because the number is real, it is large, it is printed on
+the front page of the data sheet, and it is correct — at DC, on that range, against a
+source impedance the data sheet does not know. Ten megohms sounds like infinity right
+up to the moment you put it on a 1 MΩ node, where it is a 9% error, or on a 10 kHz
+signal, where the megohms have quietly become a hundred kilohms.
+
+The second half of the mistake is the response to it. A loading error is *systematic*:
+the same meter on the same node builds the same divider on every reading. Average a
+thousand of them and you have the same wrong answer with a smaller standard error
+attached to it, which is a worse situation than the one you started in, because now it
+looks defensible. The only two exits are a larger $R_{in}$ or the correction above,
+and the correction needs a number for $R_{th}$ that you are prepared to defend.
+
+## Where this stops holding
+
+Thévenin's theorem is a theorem about *linear* networks. A node behind a diode, a
+saturating amplifier or a switching regulator does not reduce to one source and one
+resistance, and the divider argument above says nothing about it — attaching a meter
+there can change the circuit's operating point rather than merely scale its output.
+
+The meter's input is not purely a resistance either, in a second way. It has an input
+bias current, and a current flowing out of the instrument into a high-value source
+develops a voltage in it that has nothing to do with the divider: 1 nA into 1 MΩ is
+1 mV, and it does not scale with the signal, so it appears as an offset rather than as
+a percentage. On some bench meters the input arrangement itself changes with range —
+more than 10 GΩ on the 10 V range and below, and the plain 10 MΩ chain above — so
+autoranging in the middle of a measurement can change the loading by three orders of
+magnitude and the data sheet is where that is written down.
+
+And the whole picture assumes two terminals, one of which is a perfect return. It is
+not. Module 7 is about what happens when the low lead is a piece of copper shared with
+somebody else, at which point the error is no longer a divider at all.
+
+## What this module asks you to build
+
+**The loading error, and the rule of 99** takes the algebra above and makes you produce
+it, ending at the smallest input resistance that holds a given error: $R_{in} \ge
+R_{th}(1-e)/e$, which at $e = 1\%$ is the factor of 99 the course refers to afterwards.
+
+**A probe that costs the circuit a tenth of what a bare input would** is the answer to
+the sweep table. A scope input is 1 MΩ, and on the 100 kΩ source in that exercise a
+bare 1 MΩ input takes the node from 10 V to 9.09 V. You add one series resistor so
+that the tip presents ten megohms instead of one and the attenuation is exactly 10:1 —
+which is the entire content of a ×10 probe, apart from the capacitor module 3 makes
+you add for the reason the last section gave.
+''',
+            },
             "quiz": {
                 "title": "Loading, burden and what averaging cannot fix",
                 "minutes": 9,
@@ -631,6 +1050,378 @@ c.assert(rp >= 9e6 && rp <= 11e6,
                 "Cascaded stages add rise times in quadrature: $t_{measured}^2 \\approx t_{signal}^2 + t_{scope}^2$. A 1 ns edge on a 350 MHz scope (1 ns of its own) displays as 1.41 ns, and reading 1.41 ns off the screen as though it were the signal is a 41% error.",
                 "The probe's ground lead is an inductor — roughly 1 nH per millimetre — and with the tip capacitance it forms a resonant tank. Every fast edge rings it, and the ringing is on the screen, not in the circuit.",
             ],
+            "read": {
+                "title": "Two capacitors nobody drew, and the corner they round off",
+                "minutes": 16,
+                "body": r'''
+On the front of every oscilloscope there is a small metal tab with a square wave on it,
+labelled something like PROBE COMP: about a volt, about a kilohertz, and square to
+within a few tens of nanoseconds. Clip a ×10 probe to it and look at the top of the
+waveform.
+
+On a probe that has never been adjusted you will see one of two things. Either the
+corner is rounded and the top creeps upward across the next half millisecond, arriving
+at the flat level shortly before the next edge; or the corner overshoots into a spike
+and the top sags back down to the flat level from above. Turn the little trimmer in the
+probe body with a plastic screwdriver and the shape moves between those two, passing
+through square on the way.
+
+The calibrator is not producing any of those shapes. Every one of them is manufactured
+between the probe tip and the screen, by two capacitors that were never on the drawing.
+
+## Where the capacitors come from
+
+Module 2 finished with the probe as two resistors: 9 MΩ from the tip down to the probe
+point and the scope's own 1 MΩ from there to ground, giving a tenth at the input and
+ten megohms at the tip. That is the entire probe at DC, and it is the wrong circuit
+everywhere else. A 9 MΩ resistor has a couple of picofarads across its own body. A
+metre of probe cable has tens of picofarads. The scope input has 10 to 20 pF of
+amplifier and connector. None of it is optional and none of it was chosen.
+
+So each arm is a resistor in parallel with a capacitor, and a parallel $RC$ has
+impedance
+
+$$Z = \frac{R \cdot \frac{1}{j\omega C}}{R + \frac{1}{j\omega C}} = \frac{R}{1 + j\omega RC}$$
+
+Write the divider with both arms in that form and clear the fractions by multiplying
+top and bottom by $(1+j\omega R_1C_1)(1+j\omega R_2C_2)$:
+
+$$\frac{Z_2}{Z_1+Z_2}
+ = \frac{R_2\,(1 + j\omega R_1C_1)}{R_1\,(1 + j\omega R_2C_2) + R_2\,(1 + j\omega R_1C_1)}$$
+
+Now look for the condition under which $\omega$ disappears. It cannot cancel term by
+term — but if the two products are equal, $R_1C_1 = R_2C_2 = \tau$, then every bracket
+in sight is the same $(1+j\omega\tau)$, it factors out of the top and out of both terms
+of the bottom, and what is left is
+
+$$\frac{R_2}{R_1+R_2}$$
+
+at every frequency. That is the compensation condition, and it was not announced: it is
+the one arrangement of four numbers that lets the frequency out of the expression.
+Written the other way, $R_1C_1 = R_2C_2$ rearranges to $C_1/(C_1+C_2) = R_2/(R_1+R_2)$ —
+the capacitive divider and the resistive divider give the same ratio, which is the same
+statement wearing different clothes and is the more useful of the two when you are
+choosing a part.
+
+## What it costs to miss it
+
+Set $C_1 = 0$ and the numerator's bracket is 1, so the denominator is
+$R_1 + R_2 + j\omega R_1R_2C_2$, which factors as $(R_1+R_2)\left(1 + j\omega\,
+\frac{R_1R_2}{R_1+R_2}C_2\right)$. The probe is the DC ratio followed by a single pole
+at
+
+$$f = \frac{1}{2\pi (R_1 \parallel R_2) C_2}$$
+
+For a 9 MΩ/1 MΩ probe into 20 pF that is $1/(2\pi \times 900\,\text{k} \times 20\,
+\text{pF}) = 8.8$ kHz. An instrument sold as a wideband probe has become an audio
+low-pass filter.
+
+```python
+import math
+
+R1, R2, C2 = 9e6, 1e6, 20e-12
+rp = R1 * R2 / (R1 + R2)
+print("R1 || R2 = %.0f ohm, uncompensated corner %.0f Hz"
+      % (rp, 1.0 / (2 * math.pi * rp * C2)))
+
+
+def ratio(f, c1):
+    w = 2 * math.pi * f
+    z1 = R1 / complex(1.0, w * R1 * c1)
+    z2 = R2 / complex(1.0, w * R2 * C2)
+    return abs(z2 / (z1 + z2))
+
+
+for c1 in (0.0, 1.5e-12, 2.0e-12, 20e-12 / 9.0, 3.0e-12):
+    print("C1 = %5.3f pF:  DC %.5f   10 kHz %.5f   1 MHz %.7f"
+          % (c1 * 1e12, ratio(1e-6, c1), ratio(1e4, c1), ratio(1e6, c1)))
+```
+
+```text
+R1 || R2 = 900000 ohm, uncompensated corner 8842 Hz
+C1 = 0.000 pF:  DC 0.10000   10 kHz 0.06624   1 MHz 0.0008842
+C1 = 1.500 pF:  DC 0.10000   10 kHz 0.08330   1 MHz 0.0697699
+C1 = 2.000 pF:  DC 0.10000   10 kHz 0.09458   1 MHz 0.0909097
+C1 = 2.222 pF:  DC 0.10000   10 kHz 0.10000   1 MHz 0.1000000
+C1 = 3.000 pF:  DC 0.10000   10 kHz 0.12003   1 MHz 0.1304332
+```
+
+Read the DC column: it never moves. The resistors own DC and the trimmer cannot touch
+it, which is why a badly compensated probe measures supply rails perfectly and lies
+about everything with an edge in it. Read the 1 MHz column: the same probe delivers
+anything from 0.00088 to 0.130 depending on a capacitor of two picofarads. And read the
+fourth row — 20 pF divided by 9 is 2.222 pF, and the response is flat to seven figures.
+
+## The picture on the screen, derived
+
+The frequency table explains nothing about the shape of the corner, and the shape of
+the corner is what you actually have to adjust. Take the two extremes of an edge.
+
+At the instant the calibrator steps, the capacitors are the low-impedance path in each
+arm and the resistors carry nothing worth counting: the divider is capacitive, and the
+trace goes to $C_1/(C_1+C_2)$ of the step. Long afterwards the capacitors are charged
+and pass no current at all: the divider is resistive, and the trace sits at
+$R_2/(R_1+R_2)$. Between the two there is one time constant, and it is the one the pole
+above already gave: $(R_1 \parallel R_2)(C_1+C_2)$.
+
+So the trace jumps to the capacitive ratio and relaxes exponentially to the resistive
+one. If $C_1$ is too small the jump falls short and the top creeps up; too large and it
+overshoots and sags back. A square corner means the two ratios are already equal, which
+is $R_1C_1 = R_2C_2$ arriving for the third time. You are adjusting a trimmer until an
+exponential disappears from a step response.
+
+```python
+import math
+
+R1, R2, C2, C1 = 9e6, 1e6, 20e-12, 1.5e-12
+rp = R1 * R2 / (R1 + R2)
+tau = rp * (C1 + C2)
+start, end = C1 / (C1 + C2), R2 / (R1 + R2)
+print("tau = %.2f us; the trace jumps to %.4f and ends at %.4f" % (tau * 1e6, start, end))
+for t in (0.0, 10e-6, 20e-6, 50e-6, 100e-6):
+    print("  t = %6.1f us: %.4f" % (t * 1e6, end + (start - end) * math.exp(-t / tau)))
+```
+
+```text
+tau = 19.35 us; the trace jumps to 0.0698 and ends at 0.1000
+  t =    0.0 us: 0.0698
+  t =   10.0 us: 0.0820
+  t =   20.0 us: 0.0892
+  t =   50.0 us: 0.0977
+  t =  100.0 us: 0.0998
+```
+
+That is a probe 0.7 pF short of compensation: 30% low at the corner, correct 100 µs
+later. Now notice why the calibrator runs at a kilohertz. Its half period is 500 µs,
+which is twenty-six of those time constants, so the trace has all the room it needs to
+arrive and the defect appears as a *visible curve* at full amplitude. Put the same
+probe on a 100 kHz square wave and the half period is 5 µs, a quarter of a time
+constant: the trace never arrives, the amplitude is 30% low, and there is no curve on
+the screen to warn you. The calibrator makes the fault visible precisely because it is
+slow.
+
+## Bandwidth and rise time are one number
+
+The pole above is also where the two figures on a scope's front panel come from. A
+first-order step response is $1-e^{-t/\tau}$, so it reaches 10% at $\tau\ln(10/9)$ and
+90% at $\tau\ln 10$, and the 10–90% rise time is the difference:
+
+$$t_r = \tau\ln 10 - \tau\ln\tfrac{10}{9} = \tau\ln 9 = 2.1972\,\tau$$
+
+The −3 dB frequency of the same pole is $f_{3dB} = 1/2\pi\tau$. Multiply the two and
+$\tau$ vanishes:
+
+$$t_r\,f_{3dB} = \frac{\ln 9}{2\pi} = 0.3497$$
+
+which everyone writes as 0.35. A 350 MHz oscilloscope has a rise time of 1.0 ns, and
+that is not a separate specification — it is the same specification.
+
+Two stages in cascade — the probe and the scope, or the signal and the instrument —
+combine their rise times in quadrature, $t_{obs} = \sqrt{t_1^2+t_2^2}$.
+
+```python
+import math
+
+for sig, inst in ((5e-9, 3.5e-9), (1e-9, 1e-9), (20e-9, 3.5e-9)):
+    obs = math.sqrt(sig * sig + inst * inst)
+    print("a %5.2f ns edge on a %4.2f ns instrument displays as %5.2f ns (%+5.1f %%)"
+          % (sig * 1e9, inst * 1e9, obs * 1e9, 100.0 * (obs - sig) / sig))
+```
+
+```text
+a  5.00 ns edge on a 3.50 ns instrument displays as  6.10 ns (+22.1 %)
+a  1.00 ns edge on a 1.00 ns instrument displays as  1.41 ns (+41.4 %)
+a 20.00 ns edge on a 3.50 ns instrument displays as 20.30 ns ( +1.5 %)
+```
+
+The third row is the working rule hidden in the first two: an instrument four or five
+times faster than the edge contributes a per cent or two and can be forgotten, and one
+of comparable speed is a co-author of the number on the screen.
+
+## The mistake, and why it is tempting
+
+Every scope has a rise-time measurement in its menu. It prints three digits, it updates
+live, and it is a completely correct measurement — of the trace on the screen. Nothing
+on that screen separates the signal's edge from the sum of the signal's edge and the
+instrument's, and there is no cue that the separation is needed. Reading 6.10 ns off a
+350 MHz scope and writing "the edge is 6.1 ns" in a notebook is the ordinary way this
+goes wrong, and the true edge was 5.00 ns.
+
+The other mistake is treating compensation as a factory setting. The trimmer is
+matching $C_1$ to the input capacitance of *the channel it is plugged into*, and two
+channels of the same instrument differ by a picofarad or two. Move a compensated probe
+to the next channel and it is out again, which is why the calibration tab is on the
+front panel rather than inside the case.
+
+## Where the model stops holding
+
+The quadrature rule is exact for Gaussian responses and approximate for everything
+else. Two identical single poles in cascade actually give a 10–90% rise time of
+$3.358\tau$, where quadrature predicts $\sqrt{2}\times 2.197\tau = 3.107\tau$ — 7.5%
+low. Scope front ends are deliberately shaped so that the rule holds to a few per cent;
+it is a convention that manufacturers design towards, not a theorem.
+
+The 0.35 belongs to a single pole. An instrument with a flatter, multi-pole response
+has a product nearer 0.40 or 0.45, and its data sheet quotes both figures rather than
+letting you infer one from the other. Applying 0.35 to such a scope understates its own
+rise time and therefore overstates the signal you extract.
+
+The lumped two-arm model is itself a fiction above a few tens of megahertz. A metre of
+probe cable is a transmission line, and a real ×10 probe is not a 9 MΩ resistor with
+2.2 pF across it — it uses a deliberately lossy centre conductor and networks at both
+ends whose job is to stop that line ringing. Soldering a 9 MΩ resistor to a length of
+coax does not produce a usable probe.
+
+And the divider contains no ground lead at all, which is where the remaining trouble
+lives. A wire is about 1 nH per millimetre, so the 8 cm flying lead on a new probe is
+roughly 80 nH; with 150 pF at the tip that is a tank resonating at
+$1/(2\pi\sqrt{LC}) = 46$ MHz, and every fast edge rings it. Shorten the lead to 2 cm
+and the same capacitance rings at 92 MHz and dies away sooner; keep the lead and drop
+the tip capacitance to 20 pF and it rings at 126 MHz instead. None of that oscillation
+is in the circuit under test, and none of it can be compensated away.
+
+## What this module asks you to do
+
+**The ring that lives in your ground lead** puts that tank on a slider. The visualiser
+was written for a power switch, so read its loop inductance as the ground lead and its
+device capacitance as the tip, and watch what 80 nH does to an edge that never
+oscillated.
+
+**Compensating the probe you just built** hands you the module 2 probe with the scope's
+20 pF now drawn in, and asks for one capacitor that holds the ratio at 0.1 from 100 Hz
+to 10 MHz. The whole of it is $R_2C_2 = 20$ µs and therefore $C_1 = 20\,\text{pF}/9$.
+
+**Bandwidth, rise time, and what the scope added** turns the last two sections into five
+functions, ending with the one that matters on a bench: given an edge you must measure
+and an error you are willing to tolerate, what bandwidth do you have to buy.
+''',
+            },
+            "quiz": {
+                "title": "Trimmers, corners and the edge that was not there",
+                "minutes": 9,
+                "questions": [
+                    {
+                        "q": "A ×10 probe reads supply rails perfectly but shows a rounded, creeping top on the 1 kHz calibrator square wave. What is wrong?",
+                        "opts": [
+                            "the 9 MΩ series resistor has drifted high, so the ratio is no longer ten to one",
+                            "the probe's own compensation capacitance is below what it needs to be",
+                            "the scope's input resistance has fallen and now loads the tip",
+                            "the ground lead is too long and its inductance is rounding the corner",
+                        ],
+                        "a": 1,
+                        "why": r'''
+The resistors alone set the DC ratio, and the rails read correctly, so the resistors are
+right — which rules out both a drifted 9 MΩ and a changed input resistance, since either
+one would put the rails wrong first. What is left is the capacitive divider. A top that
+starts low and creeps upward means the trace jumped to $C_1/(C_1+C_2)$ and had to climb
+to $R_2/(R_1+R_2)$, so the capacitive ratio is the smaller of the two and $C_1$ is short
+of the $C_2R_2/R_1$ it needs. Lead inductance is a genuine problem but not this one: it
+rings at tens of megahertz and is finished within nanoseconds, while this defect lasts
+tens of microseconds and has no oscillation in it.
+''',
+                    },
+                    {
+                        "q": "A 9 MΩ/1 MΩ probe with no compensation capacitor at all feeds a scope input of 20 pF. Above roughly what frequency does the ratio stop being a tenth?",
+                        "opts": [
+                            "884 Hz, the corner of the 9 MΩ arm working into the scope's 20 pF",
+                            "8.8 kHz, the corner of 900 kΩ — the arms in parallel — into 20 pF",
+                            "nowhere: two resistors divide the same way at every frequency",
+                            "8.8 MHz, close to the bandwidth a probe like this is sold with",
+                        ],
+                        "a": 1,
+                        "why": r'''
+With $C_1 = 0$ the divider's denominator is $R_1+R_2+j\omega R_1R_2C_2$, which factors
+into $(R_1+R_2)$ times $1 + j\omega(R_1\parallel R_2)C_2$: a single pole whose resistance
+is the *parallel* combination, 900 kΩ, not either arm on its own. That puts the corner at
+$1/(2\pi \times 900\,\text{k} \times 20\,\text{pF}) = 8.8$ kHz — an audio filter sold as a
+wideband probe, and nowhere near the megahertz figure on its label. Taking the 9 MΩ alone
+gives 884 Hz, a factor of ten out, and comes from picking an arm instead of asking what
+resistance the capacitor actually discharges into. The answer that the ratio never rolls
+off would be right if the arms were resistors, and the whole content of this module is
+that they are not.
+''',
+                    },
+                    {
+                        "q": "Compensation is achieved when $R_1C_1 = R_2C_2$. What does that condition do to the divider?",
+                        "opts": [
+                            "it moves the pole of each arm well above the highest frequency of interest",
+                            "it makes the capacitive divider give the resistive one's ratio",
+                            "it cancels the capacitance, leaving two resistors",
+                            "it puts the two arms in resonance at the frequency being measured",
+                        ],
+                        "a": 1,
+                        "why": r'''
+Rearranged, $R_1C_1 = R_2C_2$ is $C_1/(C_1+C_2) = R_2/(R_1+R_2)$: the two dividers
+present in the circuit agree, so it no longer matters which one is carrying the signal
+and the ratio is the same at every frequency. The capacitance has not gone anywhere —
+each arm still has a pole, and the point is that the two poles are identical and cancel
+between numerator and denominator. Nor has anything been pushed out of band: an
+uncompensated probe has a pole at 8.8 kHz and a compensated one is flat to 10 MHz, which
+no amount of moving a single pole achieves. Resonance needs an inductor, and there is
+none in the divider.
+''',
+                    },
+                    {
+                        "q": "You measure an edge at 6.10 ns on an oscilloscope whose own rise time is 3.50 ns. What was the signal doing?",
+                        "opts": [
+                            "2.60 ns — subtract the instrument's rise time from the measurement",
+                            "5.00 ns, from the square root of the difference of the squares",
+                            "6.10 ns; the instrument is faster, so it is not a factor",
+                            "9.60 ns — the instrument speeds up the edge it displays",
+                        ],
+                        "a": 1,
+                        "why": r'''
+Rise times add in quadrature, so they come apart the same way:
+$\sqrt{6.10^2 - 3.50^2} = 5.00$ ns. Subtracting directly gives 2.60 ns, which is the
+right instinct with the wrong arithmetic and is out by a factor of two here; adding
+gives 9.60 ns, which has the sign of the effect backwards, since an instrument can only
+make an edge look slower than it is. Believing the screen at 6.10 ns costs 22% — and
+the reason to distrust it is the ratio: an instrument less than about four times faster
+than the edge is a co-author of the number displayed.
+''',
+                    },
+                    {
+                        "q": "Why is the probe compensation output a 1 kHz square wave rather than a 100 kHz one?",
+                        "opts": [
+                            "a slower edge is easier for the calibrator circuit to produce accurately",
+                            "at 1 kHz the trace reaches its final level, so the fault shows as a shape",
+                            "1 kHz sits in the middle of the band a ×10 probe works in",
+                            "the trimmer only affects frequencies below the probe's compensation corner",
+                        ],
+                        "a": 1,
+                        "why": r'''
+The relaxation between the capacitive and resistive ratios takes
+$(R_1\parallel R_2)(C_1+C_2)$, about 20 µs. A 1 kHz half period is 500 µs — twenty-six
+of those — so a badly compensated trace arrives at full amplitude and the error appears
+as a visible curve at the corner. At 100 kHz the half period is 5 µs and the trace never
+arrives: the amplitude is wrong and the corner looks fine, which is the fault hiding
+rather than showing. The calibrator's own edge quality is not the point, and neither is
+the middle of the band; the trimmer acts at every frequency, and there is no corner
+below which it works and above which it does not.
+''',
+                    },
+                    {
+                        "q": "A fast edge shows 40 MHz ringing that dies away in about 120 ns. Replacing the 8 cm flying ground lead with a 2 cm spring tip changes it. To what, and why?",
+                        "opts": [
+                            "the ring is unchanged: it is genuinely there in the circuit",
+                            "a faster ring that settles sooner, since the loop inductance fell",
+                            "a slower ring, because the shorter lead has raised the tank's capacitance",
+                            "no ring at all, as the tip now has a direct connection to the ground plane",
+                        ],
+                        "a": 1,
+                        "why": r'''
+A wire is roughly 1 nH per millimetre, so 80 mm of lead is about 80 nH and 20 mm is
+about 20 nH. With the tip capacitance unchanged, $f = 1/(2\pi\sqrt{LC})$ rises by
+$\sqrt{4} = 2$ and the disturbance is over in roughly a third of the time. The
+capacitance is set by the tip and the input, not by the lead, so nothing about it went
+up. Shortening the lead does not abolish the tank either — there is always some loop —
+it makes it small enough and fast enough to sit outside the band you care about. And the
+ring is not in the circuit under test: it is made by the probe, which is why changing
+the probe changes it.
+''',
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "The ring that lives in your ground lead",
                 "visualiser": "switching",
@@ -1685,6 +2476,250 @@ difference in one wire.
                 "The rejection is only as good as the line frequency is known. Over an aperture of $n$ cycles a line frequency wrong by a fraction $\\varepsilon$ leaves about $\\varepsilon$ of the interference behind — 0.1% of error is 60 dB of rejection — and, unexpectedly, that figure barely improves with more cycles, because the accumulated phase error grows exactly as fast as the averaging shrinks it.",
                 "Anything above half the sampling rate folds down into the band and stays there. A logger taking ten readings a second records 50 Hz hum as a slow wander or a fixed offset depending on the exact rate, and nothing done after the converter can undo it. The defence is analogue and comes first — a filter, or the converter's own aperture, which is a filter with nulls exactly where you put them.",
             ],
+            "read": {
+                "title": "The reading is an average, and that is where the hum goes",
+                "minutes": 16,
+                "body": r'''
+A 6½-digit bench meter, its leads on the output of a thermocouple amplifier, on a bench
+under a fluorescent fitting. Set the integration to its fastest — 0.02 NPLC — and the
+display looks like this:
+
+```text
+  0.024 61   0.024 83   0.024 42   0.024 79   0.024 38   0.024 71 V
+```
+
+The last three digits are wandering over about 450 counts. Now press the setting up to
+10 NPLC and wait:
+
+```text
+  0.024 601   0.024 600   0.024 601   0.024 601   0.024 600 V
+```
+
+Nothing was filtered, nothing was screened, no lead was moved. The only thing that
+changed is how long the converter looked, and the interference has gone. Where did it
+go, and how much of it is really gone?
+
+## What the display is counting
+
+Begin with what a digit is. A "6½-digit" meter is a converter with a count: 1 200 000
+of them, with the 10 V range running to 12.00000 V, so one count is
+$12/1\,200\,000 = 10$ µV. That number is the *resolution* — the smallest step the
+display can take — and the specification from module 1 allows 350 µV at 10 V, which is
+thirty-five counts. The display steps in units of one and the instrument is honest to
+about thirty-five of them, and both statements are true at once.
+
+The wandering above is neither. It is interference reaching the converter, and it is
+worth 450 counts, or 4.5 mV, on a signal of 24.6 mV.
+
+## The converter reports a mean, not a sample
+
+A dual-slope converter works in two phases. In the **run-up** the input is switched onto
+a resistor into an integrator and left there for a fixed time $T_1$. In the
+**run-down** the input is disconnected, a reference of the opposite sign is applied
+instead, and a counter runs until a comparator sees the integrator cross zero again,
+after a time $T_2$.
+
+The integrator's output after the run-up is $\frac{1}{RC}\int_0^{T_1} v(t)\,dt$; the
+run-down takes it back down at a rate $V_{ref}/RC$, so the fall $V_{ref}T_2/RC$ equals
+the rise. Set them equal, the $RC$ divides out of both sides, and
+
+$$V_{ref}\,T_2 = \int_0^{T_1} v(t)\,dt
+\qquad\text{so}\qquad
+\frac{V_{ref}T_2}{T_1} = \frac{1}{T_1}\int_0^{T_1} v(t)\,dt$$
+
+That is the fact this whole module rests on, and this module's derivation, **Why a
+dual-slope converter does not care what it is made of**, takes it further into what
+cancels. The left side is what the meter displays. The right side is the *average of
+the input over the aperture*. A digital meter does not sample your voltage; it averages
+it, and it is entitled to display a number that the input never actually held.
+
+## What an average does to a sine
+
+So put a sine on the input and average it, and the answer follows without any new
+physics. Take interference $a\sin(\omega t + \phi)$ over a window of length $T$:
+
+$$\frac{1}{T}\int_0^{T} a\sin(\omega t + \phi)\,dt
+ = \frac{a}{\omega T}\left(\cos\phi - \cos(\omega T + \phi)\right)$$
+
+Turn the difference of cosines into a product with
+$\cos A - \cos B = 2\sin\frac{A+B}{2}\sin\frac{B-A}{2}$, and with $\omega = 2\pi f$:
+
+$$= a\,\frac{\sin(\pi f T)}{\pi f T}\,\sin(\pi f T + \phi)$$
+
+The second sine carries the starting phase and cannot exceed one, so whatever phase the
+mains happens to have when the conversion begins, the surviving interference is at most
+
+$$a\left|\frac{\sin(\pi f T)}{\pi f T}\right|$$
+
+This is the entire interference behaviour of an integrating meter, and it was derived
+from "the reading is an average" and nothing else. It is 1 at $f = 0$, it falls away as
+$1/\pi f T$, and — the useful part — it is **exactly zero whenever $fT$ is a whole
+number**. Make the aperture a whole number of periods of the interference and the
+average of that interference is zero at any starting phase.
+
+That is what NPLC means. One power line cycle is 20 ms at 50 Hz and 16.67 ms at 60 Hz,
+which is why the setting is quoted in cycles: the quantity that matters is how many
+whole periods of the interference fit inside the window, and that depends on where the
+instrument is standing.
+
+## The numbers, and the surprise inside them
+
+```python
+import math
+
+
+def surviving(f_hz, aperture_s):
+    x = math.pi * f_hz * aperture_s
+    return 1.0 if x == 0.0 else abs(math.sin(x) / x)
+
+
+def rejection_db(m):
+    return math.inf if m == 0.0 else -20.0 * math.log10(m)
+
+
+for nplc in (0.02, 1, 10, 100):
+    T = nplc / 50.0
+    row = "%6.2f NPLC (%8.2f ms):" % (nplc, T * 1e3)
+    for f in (50.0, 50.2, 50.5):
+        m = surviving(f, T)
+        row += "  %5.1f Hz %6.2f dB" % (f, rejection_db(m))
+    print(row)
+print("aperture set for 60 Hz, used on a 50 Hz supply: %.2f dB"
+      % rejection_db(surviving(50.0, 1 / 60.0)))
+```
+
+```text
+  0.02 NPLC (    0.40 ms):   50.0 Hz   0.01 dB   50.2 Hz   0.01 dB   50.5 Hz   0.01 dB
+  1.00 NPLC (   20.00 ms):   50.0 Hz 328.18 dB   50.2 Hz  47.99 dB   50.5 Hz  40.09 dB
+ 10.00 NPLC (  200.00 ms):   50.0 Hz 322.60 dB   50.2 Hz  48.02 dB   50.5 Hz  40.23 dB
+100.00 NPLC ( 2000.00 ms):   50.0 Hz 344.08 dB   50.2 Hz  50.41 dB   50.5 Hz 331.12 dB
+aperture set for 60 Hz, used on a 50 Hz supply: 14.38 dB
+```
+
+The first row explains the dancing display: a 0.4 ms window is a fiftieth of a mains
+cycle, the average over it is very nearly an instantaneous sample, and 0.01 dB of
+rejection means the hum arrives essentially intact.
+
+The 50.0 Hz column is a null. The three-hundred-odd decibels are the floating-point
+arithmetic failing to represent zero exactly, and the honest reading of that column is
+"exact".
+
+Now compare 1 NPLC and 10 NPLC in the 50.2 Hz column: 47.99 dB against 48.02 dB. Ten
+times the waiting has bought three hundredths of a decibel. That is worth understanding
+rather than memorising. Write the line frequency as fractionally wrong by $\varepsilon$,
+so over $n$ cycles $fT = n(1+\varepsilon)$. Then
+
+$$\sin(\pi f T) = \sin(\pi n + \pi n\varepsilon) = \pm\sin(\pi n \varepsilon)
+ \approx \pm\,\pi n \varepsilon$$
+
+and dividing by $\pi f T \approx \pi n$ leaves $\varepsilon$. The $n$ cancels: the
+surviving fraction is the *fractional frequency error itself*, no matter how many cycles
+you integrate over. A supply 0.4% off leaves 0.4% of the hum, which is 48 dB, at 1 NPLC
+and at 10 NPLC alike. The accumulated phase error grows exactly as fast as the longer
+average shrinks it.
+
+The last line is the one that costs people afternoons. A meter configured for a 60 Hz
+supply and used on a 50 Hz one integrates for 16.67 ms, which is 0.833 of a cycle, and
+its rejection collapses from exact to **14.4 dB**. That is one line-frequency setting in
+a menu, and getting it wrong throws away almost everything the architecture was built to
+provide.
+
+## What you buy by waiting, and what you pay
+
+```python
+import math
+
+OVERHEAD = 5e-3
+base = None
+for nplc in (0.02, 1, 10, 100):
+    T = nplc / 50.0
+    rate = 1.0 / (T + OVERHEAD)
+    if base is None:
+        base = T
+    print("%6.2f NPLC: %8.2f readings/s, white noise x %.3f, mains 50.2 Hz %5.2f dB"
+          % (nplc, rate, math.sqrt(base / T),
+             -20.0 * math.log10(abs(math.sin(math.pi * 50.2 * T) / (math.pi * 50.2 * T)))))
+```
+
+```text
+  0.02 NPLC:   185.19 readings/s, white noise x 1.000, mains 50.2 Hz  0.01 dB
+  1.00 NPLC:    40.00 readings/s, white noise x 0.141, mains 50.2 Hz 47.99 dB
+ 10.00 NPLC:     4.88 readings/s, white noise x 0.045, mains 50.2 Hz 48.02 dB
+100.00 NPLC:     0.50 readings/s, white noise x 0.014, mains 50.2 Hz 50.41 dB
+```
+
+Two different mechanisms, moving at different rates. Uncorrelated noise falls as the
+square root of the aperture, forever: a factor of 70 down the column, and it would keep
+going. Mains rejection leaps 48 dB on the first step, because a fraction of a cycle
+became a whole one, and then goes essentially flat — a further hundredfold in waiting
+buys 2.4 dB, and the last section explains why even that is an accident of where the
+sinc ripple landed rather than a trend to rely on. Anyone who has turned the NPLC up and
+watched the reading get quieter has seen the first mechanism and credited the second.
+
+## The mistake, and why it is tempting
+
+The mistake is treating NPLC as a volume control for interference. It is tempting
+because the evidence supports it: turn it up and the reading visibly steadies, every
+time, on every meter. What steadied was the white noise. If a hum is surviving because
+the supply is not at the frequency the aperture assumed, a longer aperture will not
+touch it, and you can spend a minute per reading discovering that. The right response is
+to measure the line frequency and set the aperture to it, which is what a meter with
+line-frequency tracking does automatically and what the front-panel line setting does by
+hand.
+
+The second mistake is thinking of NPLC as a time. Set 10 NPLC on a meter told it is on a
+60 Hz supply and you get 167 ms; tell the same meter 50 Hz and you get 200 ms. Both are
+"10 NPLC" and only one of them nulls the hum you have.
+
+## Where this stops holding
+
+The aperture is $T_1$ alone. The run-down, the auto-zero phase and the interval between
+conversions are not integrating anything, so a meter delivering 4.88 readings a second
+at 10 NPLC is averaging for 200 ms out of every 205 ms and is blind for the rest. What
+happens during the blind interval is not rejected — it is missed, and a burst of
+interference that lands there is invisible rather than averaged.
+
+The small-$\varepsilon$ result has a range. Look at the 100 NPLC row: the prediction is
+0.4% surviving, and the exact figure is 50.41 dB rather than 48. The approximation
+$\sin(\pi n\varepsilon)\approx \pi n \varepsilon$ needs $\pi n \varepsilon \ll 1$, and
+at $n = 100$, $\varepsilon = 0.004$ that product is 1.26 radians. Past that point the
+rejection stops tracking $\varepsilon$ and starts wandering through the sinc function's
+own ripples — which is also why the same row shows an exact null at 50.5 Hz, where
+$fT = 101$ lands on a whole number by accident.
+
+The $RC$ cancellation assumes the same $R$ and the same $C$ in both phases, with no
+memory between them. Dielectric absorption is exactly memory: a capacitor that has been
+charged one way for 200 ms gives a little of that charge back afterwards, and it does
+not cancel. It is why the integrating capacitor in a real converter is polypropylene or
+polystyrene rather than whatever was cheapest.
+
+And most modern bench meters are not dual-slope at all; they are sigma-delta converters
+whose line rejection comes from a digital decimation filter rather than one aperture.
+The picture survives, because a boxcar average *is* a sinc and a multi-stage comb filter
+is a $\text{sinc}^k$, but the nulls are broader — which makes the instrument more
+forgiving of a wandering supply than the arithmetic above suggests.
+
+Finally, none of this helps if the converter is fed by a sampler rather than an
+integrator. A logger taking ten readings a second with no aperture worth the name does
+not reject 50 Hz; it *folds* it, and 50 Hz being exactly five times 10 Hz means the hum
+arrives as a constant offset whose size depends on when the run happened to start. A
+constant is worse than a ripple, because a ripple can be recognised.
+
+## What this module asks you to do
+
+**Where the hum goes when you sample** is that last paragraph on a pair of sliders: set
+the interferer and the sample rate and watch the alias land, including the case where it
+lands at 0 Hz and disappears into your calibration.
+
+**Why a dual-slope converter does not care what it is made of** is the derivation, and
+its point is what is missing from the answer: not $R$, not $C$, not the clock. Arrange a
+measurement so the imprecise things appear twice, once on each side, and cancel.
+
+**What an aperture rejects, and what it costs** turns the two tables above into six
+functions, ending at the practical question: given a required reading rate, what is the
+largest whole NPLC you are allowed?
+''',
+            },
             "sandbox": {
                 "title": "Where the hum goes when you sample",
                 "visualiser": "spectrum",
@@ -2143,6 +3178,208 @@ assert raised, \
                 "Lead resistance in series with a remote sensor adds directly to its arm and is indistinguishable from signal. The three-wire connection puts an equal length of lead in the adjacent arm so that the two cancel to first order.",
                 "If the excitation also serves as the reference of the analogue-to-digital converter, the conversion is *ratiometric*: excitation drift divides out of the final number and stops being an error source at all.",
             ],
+            "read": {
+                "title": "Subtracting a divider from itself",
+                "minutes": 16,
+                "body": r'''
+A foil strain gauge is glued to a steel beam. It is 350.0 Ω, its gauge factor is 2.00,
+and when somebody stands on the beam the steel stretches by 1000 microstrain — a large
+but entirely ordinary strain, about a millimetre per metre. The gauge's resistance
+therefore changes by
+
+$$\Delta R = R\,G\,\varepsilon = 350.0 \times 2.00 \times 10^{-3} = 0.700\,\Omega$$
+
+so it goes from 350.000 Ω to 350.700 Ω. A 6½-digit ohmmeter can resolve that a thousand
+times over. Try to measure it that way anyway and watch what happens.
+
+The gauge is thirty metres from the instrument, on two copper leads of 1.5 Ω each. That
+is 3 Ω added to the 350 Ω — four times the whole signal, before the beam is touched.
+Worse, copper's resistance rises by 0.39% per kelvin, so a one-degree change in the
+temperature of the cable run is $3 \times 0.0039 = 0.0117$ Ω, which is **1.7% of the
+strain signal**, from nothing but the sun coming out. The gauge itself has a temperature
+coefficient too. Every one of those effects lands in the same digits as the measurement,
+and none of them is distinguishable from it.
+
+The whole difficulty is that 0.700 Ω has to be found on top of 350.000 Ω. What is
+needed is a way of asking about the *change* without asking about the resistance.
+
+## Subtract a divider that did not move
+
+Put the gauge in the lower half of a voltage divider — a fixed 350 Ω above it, both
+across an excitation $V_{ex}$ — and its midpoint sits at $V_{ex}R_2/(R_1+R_2)$. That
+midpoint moves when the gauge moves, and it also moves when the excitation drifts, when
+the leads warm, when everything warms.
+
+Now build a second divider of two fixed 350 Ω resistors across the *same* excitation,
+and read the difference between the two midpoints:
+
+$$V_o = V_{ex}\left(\frac{R_2}{R_1+R_2} - \frac{R_4}{R_3+R_4}\right)$$
+
+That is a Wheatstone bridge, and it is two dividers and a subtraction. The subtraction
+is the entire idea: anything that moves both midpoints together leaves the difference
+alone.
+
+Set the difference to zero and the condition falls out with no work:
+
+$$\frac{R_2}{R_1+R_2} = \frac{R_4}{R_3+R_4}
+\quad\Leftrightarrow\quad
+\frac{R_1}{R_2} = \frac{R_3}{R_4}$$
+
+Balance is a condition on *ratios*, and $V_{ex}$ is nowhere in it. So a bridge adjusted
+to null is a measurement whose answer does not depend on the excitation being accurate,
+or stable, or even known: multiplying zero by a drifting number leaves zero. That is why
+a null method beats a deflection method, and it is the same reason a beam balance beats
+a spring scale.
+
+## What one arm moving is worth
+
+Let three arms be $R$ and the lower left one be $R(1+x)$. The left midpoint is a
+fraction $(1+x)/(2+x)$ of the excitation — every $R$ cancels, which is the second sign
+that a bridge only sees proportions — and the right midpoint is exactly a half.
+Subtracting over the common denominator $2(2+x)$:
+
+$$\frac{V_o}{V_{ex}} = \frac{2(1+x) - (2+x)}{2(2+x)} = \frac{x}{4+2x}$$
+
+For small $x$ that is $x/4$, and the 4 is worth understanding rather than memorising. It
+is the slope of the divider: differentiate $(1+x)/(2+x)$ at $x = 0$ and you get exactly
+$1/4$. An equal-arm divider moves by a quarter of the fractional change in one of its
+arms, and the reference branch contributes nothing because nothing in it moved.
+
+Carry the beam all the way through. With $x = G\varepsilon = 0.00200$:
+
+```python
+R, GAUGE_FACTOR, STRAIN = 350.0, 2.00, 1000e-6
+x = GAUGE_FACTOR * STRAIN
+print("dR = %.4f ohm, x = %.5f (%.3f %% of the arm)" % (R * x, x, 100 * x))
+for vex in (2.0, 5.0, 10.0):
+    vo = vex * x / (4.0 + 2.0 * x)
+    i = vex / (2.0 * R)
+    print("  Vex %5.2f V: Vo %7.4f mV, arm current %6.3f mA, arm power %7.3f mW"
+          % (vex, vo * 1e3, i * 1e3, i * i * R * 1e3))
+```
+
+```text
+dR = 0.7000 ohm, x = 0.00200 (0.200 % of the arm)
+  Vex  2.00 V: Vo  0.9990 mV, arm current  2.857 mA, arm power   2.857 mW
+  Vex  5.00 V: Vo  2.4975 mV, arm current  7.143 mA, arm power  17.857 mW
+  Vex 10.00 V: Vo  4.9950 mV, arm current 14.286 mA, arm power  71.429 mW
+```
+
+At 5 V excitation the answer is **2.4975 mV**, and that number is the whole reason
+module 7 exists: two and a half millivolts, riding on a 2.5 V common-mode pedestal,
+arriving on thirty metres of cable in a building with volts of mains on its floor.
+
+## The price of turning the excitation up
+
+Read the last two columns of that table together. Going from 2 V to 5 V multiplies the
+output by two and a half and the power in the arm by six and a quarter; going from 2 V
+to 10 V multiplies the output by five and the power by twenty-five. Each arm carries
+$V_{ex}/2R$ and dissipates
+
+$$P = \left(\frac{V_{ex}}{2R}\right)^{2}R = \frac{V_{ex}^{2}}{4R}$$
+
+Signal is linear in the excitation; heating is quadratic. Nearly 18 mW in a foil gauge
+bonded to a thin section will warm it measurably, and the gauge's own temperature
+coefficient turns that into apparent strain.
+
+For a temperature sensor the same trade is far worse, because the error is in the
+measured quantity itself. A Pt1000 in a 2 V bridge carries 1.000 mA and dissipates
+1.000 mW; a sensor with a self-heating coefficient of 0.5 K/mW in still air is then
+reading half a kelvin high, permanently, on an instrument sold as good to a tenth. The
+inversion cannot detect it: a self-heated sensor is genuinely at that temperature.
+Rearranging $P = V_{ex}^2/4R$ gives the ceiling $V_{ex} = 2\sqrt{P_{max}R}$, which for
+5 mW in a 350 Ω arm is 2.646 V.
+
+## Where the linear formula runs out
+
+Inverting the exact relation the other way, someone reading the bridge and computing
+$\hat{x} = 4V_o/V_{ex}$ gets $\hat{x} = 2x/(2+x)$, which is low by a fraction
+$-x/(2+x)$ — about $x/2$.
+
+```text
+   x = 0.002  (strain gauge, 1000 ue)   the linear formula is  0.100 % low
+   x = 0.010  (strain gauge at its limit)                      0.498 % low
+   x = 0.100  (Pt100 over 25 kelvin)                           4.762 % low
+   x = 0.500  (thermistor over its range)                     20.000 % low
+```
+
+At 1000 µε the nonlinearity costs 1 µε out of 1000, which nobody will ever find. On a
+thermistor changing by tens of per cent it dominates every other error in the system.
+The rule is not "the bridge is linear"; it is "the bridge is nonlinear by about half the
+fractional change", and whether that matters is arithmetic you do once per sensor.
+
+## The leads, which is where this started
+
+The three-wire connection is the answer to the opening paragraph. Run a third conductor
+to the remote sensor and arrange the wiring so that one lead sits in the sensor's arm
+and an identical lead sits in the arm next to it. Both leads are the same copper, the
+same length, at the same temperature, so their resistances appear on both sides of the
+balance ratio and cancel to first order. The 3 Ω is still physically in the circuit;
+what has gone is its *effect*.
+
+The other half is ratiometric conversion. If the same excitation that drives the bridge
+is also the reference of the converter reading it, then the converter reports
+$V_o/V_{ex}$ rather than $V_o$, and the excitation divides out of the final number
+completely. It stops being an error source instead of being a well-controlled one, which
+is cheaper and better.
+
+## The mistake, and why it is tempting
+
+Turn the excitation up. Every piece of evidence in front of you supports it: the output
+doubles, the reading gets visibly cleaner because the amplifier's noise and offset have
+not changed, and no other knob in instrumentation gives signal away for free. What it is
+doing is heating the sensor quadratically, and for a temperature sensor the result looks
+exactly like the thing being measured — not noise, not drift, but a plausible, stable,
+repeatable temperature that is wrong. The trade is signal against self-heating and it is
+1:2 in the exponents, so the honest way to pick an excitation is to start from the power
+the sensor is allowed and work backwards.
+
+The second mistake is carrying $V_o = V_{ex}x/4$ from a strain gauge to a thermistor. It
+is tempting because it is correct where most people first meet it, to a part in a
+thousand, and nothing about the formula announces that its error grows with $x$. The
+fix is to use the exact inversion $x = 4V_o/(V_{ex}-2V_o)$ always, which costs one
+subtraction and never has to be revisited.
+
+## Where this stops holding
+
+The detector is assumed to draw nothing. It does not. Looking into the two midpoints of
+a balanced equal-arm bridge with the excitation shorted, each branch contributes
+$R\parallel R = R/2$, so the differential Thévenin resistance across the pair is $R$ and
+the resistance at either midpoint alone is $R/2$. Read a 350 Ω bridge differentially
+with an amplifier of 10 kΩ across the pair and it comes out 3.4% low; hang 10 kΩ on one
+midpoint only, which is what a bare difference stage does, and that midpoint alone is
+1.7% low. Either figure is a systematic error more than thirty times the nonlinearity
+being fussed over above, and it is why module 7 insists that an instrumentation
+amplifier's two input buffers are not a luxury.
+
+The excitation is assumed to be a voltage source. Drive the bridge from a current source
+instead and every expression above changes, generally in the direction of better
+linearity, which is why precision resistance thermometry often does exactly that.
+
+The lead cancellation is first order and needs the two leads genuinely matched: same
+gauge, same length, same run, same temperature. A three-wire sensor with one lead taped
+to a hot pipe is a two-wire sensor with extra confidence.
+
+And the nonlinearity result belongs to a *quarter* bridge. Put sensors in two opposite
+arms so that one rises as the other falls and the $2x$ in the denominator cancels
+exactly, giving $V_o = V_{ex}x/2$ with no error term at all — twice the signal and
+perfect linearity, which is why load cells are built as full bridges and why the
+quarter-bridge arithmetic on this page is the awkward case rather than the general one.
+
+## What this module asks you to do
+
+**The quarter bridge, exactly and then approximately** makes you produce the
+$x/(4+2x)$ above step by step and then price the linear shortcut, ending at the
+$-x/(2+x)$ that the table uses.
+
+**A bridge, its sensitivity and its limits** turns all of it into five functions: the
+general four-arm output, the quarter bridge written as one call to it, the
+nonlinearity, an exact inversion that must round-trip to twelve figures, and the
+excitation ceiling $2\sqrt{P_{max}R}$. The round-trip test is the one that matters —
+it is the difference between a formula that works on a strain gauge and one that works
+on a sensor.
+''',
+            },
             "quiz": {
                 "title": "Balance, sensitivity and the price of excitation",
                 "minutes": 10,
@@ -2493,6 +3730,218 @@ assert abs(arm_power - 1e-3) < 1e-15, \
                 "The rejection you get is the *system's*, not the amplifier's. A source imbalance $\\Delta R$ working against whatever impedance $Z_{cm}$ the two inputs see to common turns common mode straight into differential in the ratio $\\Delta R/Z_{cm}$ — and at mains frequency $Z_{cm}$ is usually not the amplifier at all but the cable's own capacitance to its screen, about 1 MΩ of reactance for thirty metres at 50 Hz. 100 Ω against that is 80 dB, and it caps a 100 dB amplifier at 80 dB whatever the amplifier cost.",
                 "The “66 dB from 0.1% parts” above is a real number with a formula behind it, and the derivation on this page produces it: the common-mode gain of a difference stage of gain $k$ with one resistor off by a fraction $t$ is $kt/(1+k+kt)$, so the rejection is $(1+k)/t$ to a very good approximation. At unity gain and $t = 0.001$ that is 2001, which is 66.0 dB — and unity gain is exactly what the difference stage inside an in-amp runs at, which is why 66 dB is the figure quoted for it. Two consequences follow that the slogan hides. The cap rises with gain, so the same 0.1% resistors give 100 dB at $k = 100$; and 66 dB is the *typical* case, because four resistors each within 0.1% can be wrong in opposite directions, which is $t = 0.004$ and 54 dB. Solving the circuit confirms all three: 66.03 dB, 100.10 dB and 53.98 dB.",
             ],
+            "read": {
+                "title": "The volt that arrives in series with your signal",
+                "minutes": 16,
+                "body": r'''
+A sensor thirty metres away produces 5 mV. Its signal lead runs back to an amplifier and
+its return runs back along a piece of copper — a chassis bond, a rail, a strap to the
+star ground at the bottom of the rack — whose resistance is 0.2 Ω. That is a poor bond
+but not a rare one: twelve metres of 1 mm² copper, or thirty of 2.5 mm², or one screw
+joint that has been painted over.
+
+On the same rack there is a motor, and its return runs down the same 0.2 Ω. It draws
+2 A.
+
+$$2.0\,\text{A} \times 0.2\,\Omega = 0.400\,\text{V}$$
+
+Put an instrument on the sensor and it reads **405 mV**. The signal is 5 mV. The reading
+is eighty-one times the quantity being measured, and every component in the circuit has
+exactly the value it should have. The motor is genuinely drawing its 2 A, the copper
+genuinely has its 0.2 Ω, and the sensor is genuinely producing its 5 mV. There is
+nothing to repair.
+
+## Why it is in series and not in parallel
+
+A ground is not a node; it is a conductor, and a conductor with current in it has a
+voltage along it. Follow the signal's loop: out of the sensor, up the signal lead, into
+the instrument, out of the instrument's low terminal, and back along the shared copper
+to the sensor. The last leg of that loop is *inside* the signal path, and whatever
+voltage exists along it is added to the sensor's own before anything measures anything:
+
+$$V_{measured} = V_{sig} + I_{other}\,R_{shared}$$
+
+That is the whole mechanism, and the shape of it decides what can be done about it. The
+interference is not riding on the signal, or coupling into it, or contaminating it — it
+is *in series* with it, as though somebody had soldered a 400 mV battery into the loop.
+No amount of amplification separates two voltages in series, because gain multiplies
+both. No filter separates them either when they overlap in frequency, and mains
+interference sits squarely in the band where sensors live.
+
+So the fix cannot be electrical. It is topological: the interference exists because two
+circuits share one conductor, so give the sensor its own return to the star ground. The
+motor still draws its 2 A and still develops its 0.4 V, but now in a conductor the
+signal loop does not contain, and the sensor's return carries nothing but the sensor's
+own microamps. That is the whole content of this module's build exercise, **The motor in
+your signal path**, and the reason it is drawn with the motor as a current source is to
+make it plain that nothing about the motor changes.
+
+## When you cannot avoid a difference
+
+Single-point grounding solves the rack. It does not solve the building. Two ends of a
+thirty-metre run in an industrial installation sit at different potentials — a volt or
+two of 50 Hz is ordinary — and no wiring discipline available to you removes it, because
+the current making it belongs to somebody else's equipment.
+
+At that point the input itself has to change. A **single-ended** input has one live
+terminal and measures it against *its own* ground, so any difference between the two
+grounds has already been added to the signal before the instrument exists; there is no
+terminal at which it could be told apart. A **differential** input has two live
+terminals and responds to the difference between them, which splits any input into two
+parts:
+
+$$v_d = v_{+} - v_{-} \qquad\qquad v_{cm} = \frac{v_{+} + v_{-}}{2}$$
+
+Run the sensor's two wires as a twisted pair to a differential input and the building's
+1.8 V appears on both cores equally: it is common mode, it is not a difference, and an
+ideal differential input ignores it. The 5 mV is a difference and survives.
+
+## How well "ignores it" works, in volts
+
+A real differential input has a small gain for common mode too, and the ratio of the two
+gains is quoted as CMRR in decibels. Decibels of a voltage ratio are $20\log_{10}$, so
+100 dB is a ratio of $10^{5}$, and the error it leaves referred to the input is the
+common-mode voltage divided by that:
+
+$$v_{err} = \frac{1.8\,\text{V}}{10^{5}} = 18\,\mu\text{V}$$
+
+Eighteen microvolts is meaningless next to a 2.5 V signal and is 0.72% of the 2.5 mV a
+strain-gauge bridge produces. That is why CMRR in decibels tells you nothing on its own:
+the number that matters is the fraction of *your* signal it becomes.
+
+Where that rejection comes from is this module's derivation, **Where the rejection of a
+difference amplifier actually lives**, and its result is worth stating before you work
+it: the common-mode gain of a difference stage has $R_1R_4 - R_2R_3$ on top, so it is
+exactly zero when two resistor ratios match and never otherwise. The rejection is a
+property of four resistors, not of the amplifier between them.
+
+## The half nobody quotes
+
+Now the term that is not on any data sheet, and it is the larger one.
+
+The two cores of the cable are not connected to nothing. Each has a capacitance to the
+screen around it — about 100 pF per metre, so 3 nF over thirty metres, whose reactance
+at 50 Hz is $1/(2\pi f C) = 1.06$ MΩ. Call that $Z_{cm}$. The common-mode voltage drives
+a current down each core through that impedance, and each core drops a share of it
+across its own source resistance. If the two source resistances were identical the two
+drops would be identical and the whole thing would stay common mode.
+
+They are not identical. Let one leg have $\Delta R$ more source resistance than the
+other. Then the two inputs differ by
+
+$$v_{err} \approx v_{cm}\,\frac{\Delta R}{Z_{cm}}$$
+
+and this is a genuine *differential* voltage, manufactured out of common mode by the
+cable and the source before the amplifier is reached. No CMRR can reject it. By the time
+it arrives it is indistinguishable from signal.
+
+```python
+import math
+
+V_CM, V_SIG, CABLE_C, F = 1.8, 2.5e-3, 3.0e-9, 50.0
+z_cm = 1.0 / (2.0 * math.pi * F * CABLE_C)
+print("30 m of cable is %.1f nF to screen; Zcm at %.0f Hz is %.3f Mohm"
+      % (CABLE_C * 1e9, F, z_cm / 1e6))
+print("the amplifier at 100 dB leaves %.2f uV = %.2f %% of the signal"
+      % (V_CM / 1e5 * 1e6, 100.0 * (V_CM / 1e5) / V_SIG))
+for d_r in (10.0, 100.0, 1000.0):
+    ratio = d_r / z_cm
+    print("  source imbalance %6.0f ohm: %5.1f dB, %8.2f uV, %6.2f %% of the signal"
+          % (d_r, -20.0 * math.log10(ratio), V_CM * ratio * 1e6,
+             100.0 * V_CM * ratio / V_SIG))
+```
+
+```text
+30 m of cable is 3.0 nF to screen; Zcm at 50 Hz is 1.061 Mohm
+the amplifier at 100 dB leaves 18.00 uV = 0.72 % of the signal
+  source imbalance     10 ohm: 100.5 dB,    16.96 uV,   0.68 % of the signal
+  source imbalance    100 ohm:  80.5 dB,   169.65 uV,   6.79 % of the signal
+  source imbalance   1000 ohm:  60.5 dB,  1696.46 uV,  67.86 % of the signal
+```
+
+Read the middle row against the line above it. A hundred ohms of imbalance — one leg of
+a bridge with a longer lead, a connector with a poorer contact, a completion resistor
+from a different reel — contributes ten times what a 100 dB amplifier does. The system
+is an 80 dB measurement and the money spent on the amplifier bought nothing. Matching
+the two source impedances costs nothing at all, and it is the single most effective
+thing on this page. This module's fill-in, **Two ways for the common mode to get in**,
+walks that budget down a page in five steps, and the point of its layout is that the two
+halves sit one above the other so the comparison cannot be avoided.
+
+## The instrumentation amplifier, and what its buffers are for
+
+The block that does this properly is two buffers feeding a difference stage, with one
+resistor between the buffers setting the gain. Two separate things are bought, and they
+are worth keeping apart because they are often run together into one vague claim about
+quality.
+
+The first is that the four matched resistors are trimmed once and never touched again.
+Changing the gain of a bare difference stage means re-scaling two of its four resistors,
+and every change is a fresh chance to unmatch the ratios. This module's second circuit
+exercise, **A gain of 100 on the bridge, without losing the rejection**, is that chance
+taken: raise $R_2$ alone and the numerator $R_1R_4 - R_2R_3$ becomes enormous, the
+common-mode gain reaches $-50$, and 5 V of common mode drives the output into a rail
+before the signal has contributed anything. Raise $R_4$ alone and it is quieter and
+therefore worse — the output lands on scale, believable, and mostly common mode. Note
+also what this is *not*: the rejection of a bare stage does not fall as its gain rises —
+the derivation on this page shows it climbing as $(1+k)/t$, so the same 0.1% resistors
+give 66 dB at unity gain and 100 dB at a gain of 100. The cost is that the match has to
+be re-earned at every gain setting, and an in-amp moves the gain to a single resistor
+that is not part of any ratio.
+
+The second is the one a bridge notices. A bare difference stage's inverting leg presents
+$R_1$ to its source and nothing more — 10 kΩ, typically. A 350 Ω bridge has 175 Ω at
+each midpoint, so 10 kΩ hung on one of them alone reads 1.7% low, and it is a
+*systematic* 1.7%, present on every reading. The buffers make the input resistance high
+and, more importantly, equal on both sides, which is also the $\Delta R$ of the previous
+section.
+
+## The mistake, and why it is tempting
+
+The mistake is buying rejection. CMRR is the number on the front of the data sheet, it
+is quoted in decibels, and decibels feel like a property of the system rather than of
+one component. So the response to a hum problem is a better amplifier — and the table
+above says what that achieves when the source is unbalanced: nothing, because the error
+was already differential when it arrived. The habit worth forming is to ask what the
+*source* looks like from the amplifier's two terminals before asking what the amplifier
+costs.
+
+The second mistake is bonding both ends of a run to earth because two earths sound safer
+than one. Two earths at opposite ends of a room are a ground loop: a closed conductive
+circuit enclosing an area, in a building full of alternating magnetic field, with the
+signal cable as one of its sides. Safety earthing is not negotiable, which is precisely
+why the signal return has to be arranged so that it is not also the safety path.
+
+## Where this stops holding
+
+CMRR is a function of frequency, and the figure on the front page is usually at DC or at
+50/60 Hz. It falls with frequency, often steeply, so an amplifier quoted at 100 dB may
+have 60 dB at the switching frequency of the supply sitting next to it — and that
+interference is common mode too.
+
+Common-mode *range* is a separate limit and a harder one. An in-amp rejects what it can
+see, and its inputs have to stay inside a window a few volts wide relative to its own
+supplies. Eighteen hundred millivolts is comfortable; a sensor floating at 200 V is not
+being poorly rejected, it is outside the amplifier's world altogether, and the answer
+there is galvanic isolation rather than a better ratio.
+
+The two error terms in the table are both input-referred voltages at 50 Hz with a fixed
+phase relationship, so they do not combine in quadrature the way independent
+uncertainties do. Worst case they add, and 18 + 170 µV is the honest figure to carry
+into a budget.
+
+And the 0.2 Ω of the opening is a resistance. The same conductor is also an inductance —
+a few hundred nanohenries per metre — so at 50 Hz the resistive term dominates, and by a
+few hundred kilohertz the inductive one does. A ground that is adequate for a
+thermocouple can be useless for a switching converter's return, which is why
+high-frequency grounding is about loop *area* rather than about milliohms.
+
+Finally, a screen is only a screen if it is grounded at exactly one end. Grounded at
+both, it is a low-resistance conductor joining two points at different potentials — a
+ground loop with a braid around your signal, which is the arrangement the opening
+paragraph described.
+''',
+            },
             "derive": {
                 "title": "Where the rejection of a difference amplifier actually lives",
                 "minutes": 14,
@@ -3232,6 +4681,239 @@ second half is the one nobody quotes, and it is the larger of the two.
                 "A thermistor is the opposite trade. $R = R_0\\exp\\left(\\beta(1/T - 1/T_0)\\right)$ with $T$ in kelvin gives about $\\beta/T^2 = 4.4\\%$ per kelvin at 25 °C for a $\\beta$ of 3950 K — ten times a platinum sensor's 0.39%/K — bought with a severe non-linearity and a useful range of perhaps a hundred kelvin.",
                 "None of it is a measurement until there is a calibration curve, and a curve is only as good as its residuals. Fit the model, then look at what it failed to explain: residuals that wander smoothly mean the model is the wrong *shape* and more data will not help, while residuals that scatter mean you have reached the noise. Quote the worst residual over the range you will actually use.",
             ],
+            "read": {
+                "title": "A sensor that cannot tell you a temperature",
+                "minutes": 17,
+                "body": r'''
+Put the tip of a type K thermocouple into boiling water and lay its two tails on a
+terminal block on the bench at 25 °C. A microvoltmeter across the tails reads
+**3.096 mV**.
+
+Now close your hand around the terminal block and hold it there for a minute. The
+reading falls, to somewhere near 2.7 mV. The water is still boiling. Nothing has
+happened at the end of the probe that is in the bath, and the reading has moved by 400
+microvolts — ten degrees' worth.
+
+This is not a fault, and it is not drift. It is the defining property of the sensor,
+and everything else in this module follows from it.
+
+## Why the far end matters
+
+The emf does not come from the junction. It comes from the *gradient*: a temperature
+gradient along a conductor drives a small emf along that conductor, of a size set by the
+metal it is made of. Take a loop of one metal with a hot spot anywhere in it and the two
+sides of the loop develop equal and opposite emfs, which cancel — which is why you
+cannot make a thermocouple out of one wire.
+
+Make the loop out of two different metals joined at each end, and the two sides no
+longer cancel, because the same temperature gradient produces different emfs in
+chromel and in alumel. What survives is a loop emf that depends on the temperature at
+each of the two joins and on nothing whatever in between. Run the wire through an oven,
+coil it in liquid nitrogen, bend it round a hot pipe: as long as both ends stay where
+they are, the emf does not change.
+
+That is the law of intermediate temperatures, and its consequence is the hand on the
+terminal block. The loop emf is
+
+$$E_{loop} = E(T_{meas}) - E(T_{ref})$$
+
+where $E$ is the tabulated emf of that couple against a 0 °C reference. Warming the
+reference junction raises $E(T_{ref})$ and lowers the difference. A thermocouple
+measures a difference of temperatures and has no mechanism by which it could measure
+anything else.
+
+## Getting a temperature out of it
+
+Rearrange, and the recipe is forced:
+
+$$E(T_{meas}) = E_{loop} + E(T_{ref})$$
+
+Measure the temperature of the reference junction with some other sensor, look up the
+emf that junction *would have* produced against 0 °C, add it to what you measured, and
+invert the table. That is cold-junction compensation, and every thermocouple instrument
+does it. Carry the opening numbers through it, using this course's table values —
+$E(25) = 1.000$ mV, $E(100) = 4.096$ mV:
+
+```text
+  loop emf measured                     3.096 mV
+  block at 25 C, table gives         +  1.000 mV
+                                     ------------
+  emf against a 0 C reference           4.096 mV
+  invert the table                        100.0 C
+```
+
+Two ways of getting this wrong are worth naming because they look alike here. Putting
+3.096 mV straight into the table lands between $E(75) = 3.059$ and $E(76) = 3.100$, at
+75.9 °C. Subtracting the reference *temperature* from the answer instead of adding its
+*emf* gives $100 - 25 = 75$ °C. The two mistakes agree to within a degree at this point
+on the curve and disagree by tens of degrees elsewhere, which is exactly the kind of
+coincidence that lets a wrong method survive a first test. This module's build exercise,
+**Compensating a cold junction**, draws the loop as two emf sources with the reference
+one turned to oppose the measuring one, so that the subtraction is visible as a circuit
+rather than asserted as a rule.
+
+Now differentiate the recipe with respect to the thing you had to measure separately:
+
+$$\frac{\partial T_{meas}}{\partial T_{ref}}
+ = \frac{\left(dE/dT\right)_{T_{ref}}}{\left(dE/dT\right)_{T_{meas}}}$$
+
+From the course's own table values the mean slope from 0 to 25 °C is 40.0 µV/K and the
+local slope near 75 °C is 41.0 µV/K, so that ratio is 0.976. A kelvin of error in the
+little sensor under the terminal block is very nearly a kelvin of error in the answer.
+The accuracy of a thermocouple measurement is capped by the accuracy of a component
+that is not the thermocouple, is not near the thing being measured, and costs a few
+pence.
+
+## The table is not a line
+
+The same two slopes say the other thing worth knowing: 40.0 µV/K in one place and
+41.0 µV/K in another. The sensitivity itself changes with temperature, which is why
+instruments carry polynomials rather than a slope.
+
+Price the shortcut. Inverting 4.096 mV with a constant 41.0 µV/K gives 99.90 °C — a
+tenth of a degree out, respectable. Inverting the same emf with the 40.0 µV/K measured
+near room temperature gives 102.40 °C, which is 2.4 K wrong. The linear model is not
+merely approximate; it is approximate in a way that depends on which part of the curve
+you calibrated it against, and it goes wrong fastest exactly where nobody checked.
+
+## The other trade: a thermistor
+
+An NTC thermistor takes the opposite bargain. Its two-parameter model is
+
+$$R = R_0\exp\left(\beta\left(\frac{1}{T}-\frac{1}{T_0}\right)\right)$$
+
+with $T$ in kelvin. Take logarithms and differentiate to get the fractional sensitivity:
+
+$$\frac{1}{R}\frac{dR}{dT} = -\frac{\beta}{T^{2}}$$
+
+For $\beta = 3950$ K at 25 °C that is $3950/298.15^{2} = 0.0444$ per kelvin — **4.4% per
+kelvin**, against 0.385% for a platinum sensor, a factor of eleven and a half. That
+sensitivity is the reason to use one, and it is bought with a resistance that falls by a
+factor of 48 between 0 and 100 °C. This module's derivation, **Reading a temperature off
+a thermistor**, inverts the model to
+$T = \left(1/T_0 + \ln(R/R_0)/\beta\right)^{-1}$, which is where the arithmetic below
+starts.
+
+## Fitting, and then looking at what the fit failed to explain
+
+Neither sensor is a measurement until there is a curve, and a curve is worth exactly
+what its residuals say it is. Here is the fit the lab asks for, on the lab's own table —
+nine points generated from the three-parameter Steinhart–Hart model that manufacturers
+publish, with no noise on them at all.
+
+```python
+import math
+
+K = 273.15
+TABLE = [(0.0, 32650.4), (12.5, 17668.7), (25.0, 9999.9), (37.5, 5892.6),
+         (50.0, 3601.0), (62.5, 2274.4), (75.0, 1480.0), (87.5, 989.7),
+         (100.0, 678.4)]
+
+
+def fit(points, t0=25.0):
+    xs = [1.0 / (t + K) for t, _ in points]
+    ys = [math.log(r) for _, r in points]
+    n = len(points)
+    mx, my = sum(xs) / n, sum(ys) / n
+    beta = (sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+            / sum((x - mx) ** 2 for x in xs))
+    return beta, math.exp(my - beta * mx + beta / (t0 + K))
+
+
+def temperature(r, beta, r0, t0=25.0):
+    return 1.0 / (1.0 / (t0 + K) + math.log(r / r0) / beta) - K
+
+
+for lo, hi in ((0.0, 100.0), (12.5, 50.0)):
+    pts = [p for p in TABLE if lo <= p[0] <= hi]
+    beta, r0 = fit(pts)
+    res = [temperature(r, beta, r0) - t for t, r in pts]
+    print("%5.1f to %5.1f C: beta %7.2f K, R0 %8.2f, worst residual %+.4f K"
+          % (lo, hi, beta, r0, max(res, key=abs)))
+    print("   ", "  ".join("%+.3f" % e for e in res))
+```
+
+```text
+  0.0 to 100.0 C: beta 3951.30 K, R0  9908.45, worst residual +0.6254 K
+    +0.387  +0.032  -0.207  -0.331  -0.346  -0.256  -0.060  +0.233  +0.625
+ 12.5 to  50.0 C: beta 3915.00 K, R0  9971.43, worst residual +0.0708 K
+    +0.053  -0.065  -0.058  +0.071
+```
+
+Look at the first row of residuals before looking at the number beside it. They go
+positive, cross to negative, reach a minimum in the middle, and climb back through zero
+to a large positive value at the top. That is not scatter. It is a smooth curve, and a
+smooth residual means the model has the wrong *shape*: the data are Steinhart–Hart and
+the fit is a straight line in $\ln R$ against $1/T$, and no amount of extra data will
+close a gap between two different functions.
+
+The second row is the same model on a third of the range, and the worst residual drops
+from 0.63 K to 0.071 K — a factor of nine, for doing nothing but declining to promise
+anything outside 12.5–50 °C. A two-parameter model is a local approximation, and the
+honest way to report one is with the range attached to it.
+
+## The mistake, and why it is tempting
+
+The mistake is quoting a thermocouple to a tenth of a kelvin. Everything visible
+supports it: the probe is the exotic, specified, expensive part; the display shows
+tenths; the microvoltmeter is a six-digit instrument. The cold-junction sensor is a
+three-pence package under the terminal block that nobody has thought about since the
+instrument was designed, and the derivative above says its error arrives in the answer
+essentially one for one. A thermocouple system is only as good as the least interesting
+component in it.
+
+The second mistake is judging a fit by a single summary number. A residual standard
+deviation of 0.3 K, or a correlation coefficient of 0.9999, is entirely consistent with
+the first row above — and the first row is a *wrong model*, not a noisy one. The two
+situations call for opposite responses: scattered residuals mean you have reached the
+noise and more averaging will help; wandering residuals mean more data will change
+nothing and the model has to change instead. Only the pattern distinguishes them, and
+only looking at the pattern reveals it.
+
+## Where this stops holding
+
+The law that only the two ends matter assumes the wire is *homogeneous*. It is the
+weakest assumption in the whole subject. A section that has been cold-worked by bending,
+contaminated by a furnace atmosphere, or annealed unevenly is locally a different
+material, and if it happens to sit in a temperature gradient it generates its own emf
+that no compensation can find. This, rather than the table or the instrument, is what
+limits thermocouple accuracy in industrial service, and it is why a probe that has been
+in a furnace for a year is recalibrated rather than trusted.
+
+The same law governs the wiring. Extension leads must be the same alloy pair, or a
+matched compensating alloy, all the way to the point where the reference temperature is
+measured. Splice copper into the middle of a run that lies in a gradient and you have
+created a new pair of junctions at an unknown temperature.
+
+The $\beta$ model above is two parameters and the fit shows what that buys. Steinhart–
+Hart uses three and reduces the residual by orders of magnitude over the same span; the
+lab's table was generated from it precisely so that the mismatch is a difference between
+models rather than noise.
+
+And a thermistor is a resistor, so reading it dissipates power in it, and module 6's
+self-heating argument returns in a nastier form. A 10 kΩ thermistor with 5 V across it
+dissipates 2.5 mW, which at a typical 0.2 K/mW in still air is 0.5 K of error — five
+times the residual being worried about above, and in the measured quantity itself. Drop
+the excitation to 0.5 V and it is 0.005 K. The measurement circuit is part of the sensor.
+
+Finally, residuals only report on the range you sampled. The 0.071 K over 12.5–50 °C is
+a statement about four points; it says nothing about 60 °C, and a two-parameter model
+extrapolated past its data is a guess with a decimal point on it.
+
+## What this module asks you to do
+
+**Compensating a cold junction** builds the loop of the opening paragraph as a circuit,
+with the reference junction's 1.000 mV opposing the measuring junction's 4.096 mV, and
+asks you to add the compensation that recovers the 4.096.
+
+**Reading a temperature off a thermistor** inverts the $\beta$ model symbolically, which
+is the function the lab then needs.
+
+**Fitting a curve, and reading its residuals** is the table above, done by you: the
+least-squares line in $\ln R$ against $1/T$, the inversion, the residuals, and the worst
+of them over two different ranges. The gap between those two numbers is the lesson.
+''',
+            },
             "quiz": {
                 "title": "Junctions, curves and the sensor that measures a difference",
                 "minutes": 10,
@@ -3811,6 +5493,208 @@ assert abs(worst([0.0, 0.0]) - 0.0) < 1e-15, "a perfect fit has a worst case of 
                 "A sensor with mass and a restoring force is second order, with the $\\omega_n$ and $\\zeta$ of any RLC. Damping near 0.6–0.7 gives the flattest amplitude response; at $\\zeta = 0.707$ the response is within 1% of flat only up to about $0.37\\omega_n$, so a transducer's natural frequency has to be several times the highest frequency in the signal, not merely above it.",
                 "It shows up far from sensors. An autoranging meter throws away readings after a range change while its input chain settles; a longer aperture is a narrower filter and therefore a longer wait; and every averaging setting that quietens a reading has bought that quiet with a settling time somebody now has to sit through. Bandwidth traded for noise is always paid for in time.",
             ],
+            "read": {
+                "title": "The display stops moving before the probe arrives",
+                "minutes": 15,
+                "body": r'''
+A sheathed temperature probe, time constant 8.00 s in stirred water, is lifted out of
+20.0 °C air and lowered into a bath held at 80.0 °C. The display updates twice a second
+and shows tenths. Watch it.
+
+```text
+     t        reading      still to go     change in the next 0.5 s
+   0.0 s     20.000 C       60.000 K            3.750 K
+   8.0 s     57.927 C       22.073 K            1.380 K
+  16.0 s     71.880 C        8.120 K            0.508 K
+  24.0 s     77.013 C        2.987 K            0.187 K
+  32.0 s     78.901 C        1.099 K            0.069 K
+  40.0 s     79.596 C        0.404 K            0.025 K
+  51.2 s     79.900 C        0.100 K            0.006 K
+```
+
+Look at the last column against the display's 0.1 K resolution. From about 32 seconds
+onwards the reading changes by less than one digit between updates; from 40 seconds it
+is changing by a quarter of a digit. To anybody watching, the display has stopped. It
+has 0.4 K still to go, and it will not be within 0.1 K of the bath for another eleven
+seconds.
+
+The reading did not become correct when it stopped moving. It stopped moving because the
+approach is exponential and the tail of an exponential is slower than the instrument can
+show.
+
+## Where the exponential comes from
+
+The probe has a heat capacity $C$ and it exchanges heat with the bath through some
+conductance $hA$ — a surface area times a film coefficient. Heat flows in proportion to
+the temperature difference, so
+
+$$C\,\frac{dT}{dt} = hA\,(T_{\infty} - T)$$
+
+which is a first-order equation with a time constant
+
+$$\tau = \frac{C}{hA}$$
+
+and, after a step from $T_0$ to $T_\infty$, the solution
+
+$$T(t) = T_{\infty} - (T_{\infty}-T_0)\,e^{-t/\tau}$$
+
+Two facts are already visible in $\tau = C/hA$, and they are the ones that matter on a
+plant. The numerator belongs to the probe. The denominator belongs to the *medium and
+the mounting*. The same probe is a second or two in stirred water, ten in slow water,
+and most of a minute in still air, because $h$ changes by more than an order of
+magnitude between them. A data sheet that quotes a time constant without naming a medium
+has quoted nothing. And a thermowell — which improves the mechanical protection, allows
+the probe to be withdrawn under pressure, and is often mandatory — adds mass to the
+numerator and a thermal resistance in series with the denominator, so it makes both
+terms worse at once. The 8 s probe above can be 40 s in a dry well.
+
+## How long to wait, and what it costs
+
+Set the outstanding gap to a fraction $\varepsilon$ of the step and take logarithms:
+
+$$e^{-t/\tau} = \varepsilon
+\qquad\Rightarrow\qquad
+t = \tau\ln\frac{1}{\varepsilon}$$
+
+which is 2.30τ for 10%, 4.61τ for 1% and 6.91τ for 0.1%. Put the opening numbers in: a
+60.0 K step and a 0.100 K tolerance is $\varepsilon = 1/600$, so
+$t = 8\ln 600 = 51.2$ s. That is this module's numerical problem, **Waiting for a
+thermometer**, and its two wrong answers are the two ways people skip the logarithm.
+
+Now read the shape of that result rather than the number. The wait grows with the
+*logarithm* of the precision demanded, so every further factor of ten costs the same
+$\tau\ln 10$ regardless of where you started. Set that against the other way of buying
+precision: module 10's averaging improves a random uncertainty as $\sqrt{N}$, so ten
+times better costs a hundred times longer.
+
+```python
+import math
+
+TAU, STEP = 8.0, 60.0
+for tol in (0.1, 0.01, 0.001):
+    print("within %6.3f K: wait %5.1f s   (for the same gain by averaging: %7.0f readings)"
+          % (tol, TAU * math.log(STEP / tol), (0.1 / tol) ** 2))
+print("every further factor of ten costs tau*ln(10) = %.1f s" % (TAU * math.log(10.0)))
+```
+
+```text
+within  0.100 K: wait  51.2 s   (for the same gain by averaging:       1 readings)
+within  0.010 K: wait  69.6 s   (for the same gain by averaging:     100 readings)
+within  0.001 K: wait  88.0 s   (for the same gain by averaging:   10000 readings)
+every further factor of ten costs tau*ln(10) = 18.4 s
+```
+
+Eighteen more seconds against ten thousand readings, for the same factor of a hundred.
+Settling is a cheap purchase and averaging is an expensive one, and the reason to know
+both scalings is to know which of the two problems you actually have.
+
+## Five time constants is a habit, not a specification
+
+$e^{-5} = 0.0067$, so five time constants leaves 0.67% of the step outstanding. On the
+60 K step above that is 0.40 K — four times the 0.1 K tolerance somebody asked for. The
+rule of five is fine when the required tolerance happens to be under a per cent of the
+step, and it is silently wrong the moment it is not. The step size is half of the
+calculation and the habit does not contain it.
+
+## Under a ramp the lag never goes away
+
+A step is the easy case, because the error decays. Most process measurements are not
+steps: a bath is ramped, a furnace is brought up, an oven cycles. Put
+$T_\infty(t) = kt$ into the equation and try the solution $T = k(t - \tau)$:
+
+$$\tau\,\frac{dT}{dt} + T = \tau k + k t - k\tau = kt$$
+
+It satisfies the equation exactly, so once any initial transient has died the sensor
+reads
+
+$$T(t) = k\,(t - \tau)$$
+
+a *constant* $k\tau$ behind the truth, indefinitely. A thermowell with $\tau = 20$ s
+watching a bath ramped at 2 K/min reads $0.0333 \times 20 = 0.667$ K low the whole way
+up, and becomes correct only after the ramp stops.
+
+This is worth separating from the step case because it looks nothing like it on a chart.
+There is no visible settling, no approach, nothing to wait for — the trace is smooth and
+parallel to the truth and offset from it, which is indistinguishable from a calibration
+error. A controller comparing that reading with a setpoint is being told the batch is
+0.667 K cooler than it is, and will overshoot by about that much when the ramp ends.
+
+## Sensors with mass and a spring
+
+An accelerometer, a diaphragm pressure sensor and a moving-coil galvanometer all have
+inertia and a restoring force, so they are second order, with the $\omega_n$ and $\zeta$
+of any RLC. The amplitude response is
+
+$$|H| = \frac{1}{\sqrt{(1-r^{2})^{2} + (2\zeta r)^{2}}},\qquad r = \frac{f}{f_n}$$
+
+At $\zeta = 1/\sqrt{2}$ the middle term does something worth noticing: $(2\zeta r)^2 =
+2r^2$, and $(1-r^2)^2 + 2r^2 = 1 + r^4$, so
+
+$$|H| = \frac{1}{\sqrt{1+r^{4}}}$$
+
+with no $r^2$ term at all. That is the flattest response any second-order system has,
+and it is why 0.707 is the number everybody quotes. Ask for 1% flatness and it gives
+
+$$1 + r^4 \le \frac{1}{0.99^{2}} = 1.0203
+\qquad\Rightarrow\qquad
+r \le 0.3775$$
+
+So a transducer damped to 0.707 is honest to 1% only up to about **0.38 of its natural
+frequency**. Measuring 100 Hz components to 1% needs $f_n \ge 265$ Hz, not 100 Hz and
+not 150 Hz. A natural frequency merely *above* the signal is not enough; it has to be
+several times above, and this module's slider exercise, **Damping a transducer you
+cannot see**, asks for 300–500 Hz with $\zeta$ between 0.60 and 0.75 for exactly that
+reason. The two constraints are not independent — $\zeta = \frac{R}{2}\sqrt{C/L}$ and
+$\omega_n = 1/\sqrt{LC}$ — so every change to $L$ or $C$ moves both, which is the
+ordinary condition of transducer design.
+
+## The mistake, and why it is tempting
+
+The mistake is treating "the display has stopped changing" as evidence that the reading
+has arrived. It is tempting because it is a genuine observation, made carefully, and
+because for a first-order system the criterion is self-defeating in a way nothing on the
+bench announces: the closer the probe gets, the slower it approaches, so a display
+resolving 0.1 K and updating twice a second necessarily goes still while an error larger
+than 0.1 K remains. The evidence of your eyes is a statement about the display, not
+about the probe.
+
+The second mistake is the ramp case, and it is worse because there is nothing at all to
+watch. Nobody stands over a chart recorder waiting for a smooth ramp to settle, because
+it never occurs to them that it has not. The tell is arithmetic rather than observation:
+if the quantity is moving at $k$ per second and your sensor's time constant is $\tau$,
+you are $k\tau$ behind, and the only question is whether $k\tau$ matters.
+
+## Where this stops holding
+
+The first-order model assumes the probe is isothermal — one temperature throughout, one
+heat capacity, one conductance. A sheathed probe in a thermowell is a stack: fluid to
+well, well to air gap, gap to sheath, sheath to element. That is three or four time
+constants in series, and its step response is S-shaped rather than exponential: it
+starts *slower* than $e^{-t/\tau}$ predicts, so fitting a single $\tau$ to the tail and
+extrapolating backwards understates the wait. Where a real settling time matters,
+measure it rather than compute it.
+
+The step assumes the bath does not care. Lower a probe with real heat capacity into a
+small volume and it cools it, so $T_\infty$ moves during the measurement and the
+exponential is chasing something that is itself relaxing.
+
+$\tau$ is not a constant even in one installation. $h$ depends on flow, so a probe
+characterised in stirred water is a different instrument in a stagnant pocket, and a
+flow that stops during a shutdown makes the sensor several times slower at precisely the
+moment somebody is watching it most closely.
+
+The ramp result is a steady state, reached after several time constants. Immediately
+after the ramp begins, the lag is still growing towards $k\tau$; immediately after it
+ends, the sensor spends several more time constants catching up. The constant-offset
+picture holds in the middle and not at either end.
+
+And for the second-order case, $\zeta$ and $f_n$ belong to the installation too. A
+pressure transducer connected through a metre of narrow tubing has a natural frequency
+set by that tubing and the fluid in it, not by the sensor, and it is usually far lower
+than the sensor's own. Every number in this module is a property of what you built, not
+of what you bought.
+''',
+            },
             "quiz": {
                 "title": "Lags, ramps and reading too early",
                 "minutes": 10,
@@ -4015,6 +5899,240 @@ long you are willing to wait, and the exchange rate between them is $\tau$.
                 "Reporting: multiply by a coverage factor, conventionally $k = 2$ for about 95% confidence, and quote the expanded uncertainty to two significant figures with the value rounded to the same decimal place. State $k$; a bare $\\pm$ means nothing.",
                 "Resolution is not accuracy. A 6½-digit display of a quantity known to 0.1% is showing four digits of measurement and two of decoration.",
             ],
+            "read": {
+                "title": "Powers add, and everything else on this page follows",
+                "minutes": 17,
+                "body": r'''
+A 1 MΩ resistor sits in a screened box with nothing else in it, its two leads going to a
+6½-digit meter on its fastest aperture. The resistor is connected to no source. The
+meter reads a few microvolts, and the last digits wander continuously.
+
+Swap it for a 1 kΩ resistor and the wander shrinks by a factor of about thirty. Cool the
+1 MΩ one and the wander shrinks a little. Buy a better resistor and nothing happens at
+all.
+
+What the meter is reading is the resistor's thermal noise, of spectral density
+
+$$e_n = \sqrt{4kTR}$$
+
+which is 4.07 nV/√Hz for the 1 kΩ and 128.7 nV/√Hz for the 1 MΩ at 300 K — a ratio of
+$\sqrt{1000} = 31.6$, which is the factor of thirty you saw. This is set by the
+temperature and the resistance and by nothing that anybody can manufacture better.
+
+The odd unit is the interesting part, and unpacking it gives most of this module.
+
+## One identity, three results
+
+Take two fluctuating voltages $v_1$ and $v_2$ and add them. The mean square of the sum
+is
+
+$$\langle (v_1+v_2)^2 \rangle
+ = \langle v_1^2 \rangle + 2\langle v_1 v_2 \rangle + \langle v_2^2 \rangle$$
+
+If the two are *uncorrelated*, the cross term averages to zero, and what is left is that
+**mean squares add**. Voltages do not; powers do. Three things follow from that one line,
+and they are the three things this module is about.
+
+**First, why the density is per root hertz.** Split a bandwidth into narrow slices. The
+noise in each slice is uncorrelated with the noise in every other, so their mean squares
+add, so the total mean square is proportional to the bandwidth $B$ and the r.m.s. voltage
+goes as $\sqrt{B}$. Quote the noise as volts per root hertz and you can get the answer by
+multiplying:
+
+$$v_{rms} = e_n\sqrt{B}$$
+
+```python
+import math
+
+k, T = 1.380649e-23, 300.0
+for r in (1e3, 1e5, 1e6):
+    print("%9.0f ohm at 300 K: %8.3f nV/rtHz" % (r, math.sqrt(4 * k * T * r) * 1e9))
+for bw in (1e6, 1e3, 10.0):
+    print("  10 nV/rtHz over %9.0f Hz = %8.3f uV rms" % (bw, 10e-9 * math.sqrt(bw) * 1e6))
+print("  narrowing 1 MHz to 10 Hz is worth a factor of %.1f" % math.sqrt(1e6 / 10))
+```
+
+```text
+     1000 ohm at 300 K:    4.070 nV/rtHz
+   100000 ohm at 300 K:   40.704 nV/rtHz
+  1000000 ohm at 300 K:  128.716 nV/rtHz
+  10 nV/rtHz over   1000000 Hz =   10.000 uV rms
+  10 nV/rtHz over      1000 Hz =    0.316 uV rms
+  10 nV/rtHz over        10 Hz =    0.032 uV rms
+  narrowing 1 MHz to 10 Hz is worth a factor of 316.2
+```
+
+The same amplifier, the same signal, a factor of 316 in noise, decided by nothing but how
+much bandwidth you left open. And module 9 says what that costs: a narrower filter is a
+longer time constant, so every one of those factors was paid for in waiting.
+
+**Second, why averaging works.** The mean of $N$ readings is $\frac{1}{N}\sum x_i$. If
+the readings are independent, their mean squares add, so the variance of the sum is
+$N\sigma^2$ and the variance of the mean is $N\sigma^2/N^2 = \sigma^2/N$. The standard
+error is therefore
+
+$$\frac{\sigma}{\sqrt{N}}$$
+
+Ten times better costs a hundred times as many readings.
+
+**Third, why averaging does not work on a systematic error** — and this is the same
+identity with the opposite assumption. A fixed offset is perfectly correlated with
+itself: $\langle v_1 v_2\rangle = \langle v^2\rangle$ rather than zero. Adding $N$ copies
+of the same offset and dividing by $N$ returns the offset, exactly, however large $N$ is.
+The $\sqrt{N}$ result was never a statement about errors in general; it was a statement
+about the cross term vanishing, and for a loading error, a calibration offset or a
+self-heated sensor it does not vanish.
+
+## Where averaging stops helping even on random noise
+
+The $\sqrt{N}$ result also assumes the noise density is flat over the band being
+averaged. Below a device's flicker corner it is not: the density rises as $1/\sqrt{f}$,
+because the *power* goes as $1/f$. Averaging for longer reaches down to lower
+frequencies, and down there the noise is larger, so the improvement flattens out and
+stops. This module's sandbox, **Where the floor stops falling**, is that curve on two
+sliders: put the corner at 1 Hz and the trace is flat from 10 Hz up, which is a
+chopper-stabilised amplifier and is why one is worth buying for a bridge measurement
+that takes seconds; put the corner at 100 kHz and five of the seven decades on the axis
+are sloped, and a slow average is working in the region where it does not pay.
+
+## Turning all of it into one reported number
+
+A measurement result is a value, an uncertainty, and a statement of where the
+uncertainty came from. The contributions come in two kinds and neither is better than
+the other.
+
+A **Type A** uncertainty is evaluated statistically from repeated readings: take $n$ of
+them, compute the sample standard deviation $s$ with the $n-1$ divisor, and the standard
+uncertainty of the mean is $s/\sqrt{n}$ — the result derived above.
+
+A **Type B** uncertainty comes from anywhere else: a data sheet, a calibration
+certificate, a tolerance band. Module 1's specification is one of these. It arrives as a
+*limit* $\pm a$ rather than as a standard deviation, so it has to be converted, and the
+conversion needs an assumption about the shape. With nothing else stated, assume the
+value is equally likely anywhere in the band — a rectangular distribution — and compute
+its variance directly:
+
+$$\frac{1}{2a}\int_{-a}^{a} x^{2}\,dx = \frac{a^{2}}{3}
+\qquad\Rightarrow\qquad
+u = \frac{a}{\sqrt{3}} = 0.577\,a$$
+
+That is where the $\sqrt{3}$ comes from, and it is worth having derived once rather than
+remembered, because it makes plain that it is an assumption of ignorance and not a law.
+
+Each input then has to be converted into the units of the answer by its **sensitivity
+coefficient** $\partial y/\partial x_i$ — how much the result moves when that input
+moves — and the converted contributions combine the way mean squares always do:
+
+$$u_c = \sqrt{\sum_i \left(\frac{\partial y}{\partial x_i}\right)^{2} u_i^{2}}$$
+
+Finally, multiply by a coverage factor, conventionally $k = 2$ for about 95%, and quote
+the expanded uncertainty to two significant figures with the value rounded to the same
+decimal place. State $k$. A bare ± means nothing at all.
+
+## The whole thing on one measurement
+
+Here is the budget this course ends with: a Pt1000 in a bridge, twelve readings of its
+output on a bench meter, and the temperature that comes out. Each line has already been
+converted into kelvin by its sensitivity coefficient.
+
+```python
+import math
+
+contributions = [
+    ("twelve readings, Type A", 5.291301263200489e-05),
+    ("excitation, Type B", 0.0005784739432217952),
+    ("completion resistors, Type B", 0.15053847137212684),
+    ("sensor nominal value, Type B", 0.09032308282327609),
+]
+u_c = math.sqrt(sum(u * u for _, u in contributions))
+for name, u in contributions:
+    print("  %-30s %10.6f K   %5.1f %% of the variance"
+          % (name, u, 100.0 * u * u / (u_c * u_c)))
+print("  %-30s %10.6f K" % ("combined standard uncertainty", u_c))
+print("  reported: 1.00 C +/- %.2f C (k = 2)" % (2.0 * u_c))
+```
+
+```text
+  twelve readings, Type A          0.000053 K     0.0 % of the variance
+  excitation, Type B               0.000578 K     0.0 % of the variance
+  completion resistors, Type B     0.150538 K    73.5 % of the variance
+  sensor nominal value, Type B     0.090323 K    26.5 % of the variance
+  combined standard uncertainty    0.175557 K
+  reported: 1.00 C +/- 0.35 C (k = 2)
+```
+
+Read the variance column and the whole point of building a budget arrives. Two ordinary
+resistor tolerances account for every part of the result that matters. The twelve
+readings — the only part of this that involved standing at a bench — contribute 0.000053
+K, which is one two-thousand-eight-hundredth of the leading term and rounds to nothing.
+Quadrature is brutal to small contributions, exactly as it was in module 1's traceability
+chain: a term three times below the leader adds 5% to the total and one sixteen times
+below adds nothing you could write down.
+
+And look at what is reported. The chain computes 1.0000211828 °C; the budget says the
+last five of those digits are noise and the sixth is guesswork. The published line is
+**1.00 °C ± 0.35 °C (k = 2)**, which is two digits of measurement out of eleven the
+software was happy to print.
+
+## The mistake, and why it is tempting
+
+The mistake is improving the term you can see. Taking more readings is the one thing at
+a bench that is entirely under your control, it costs only time, and the scatter is the
+only error that is *visible* — it is right there on the display, moving. Every other line
+in that budget came from a data sheet and cannot be attacked by working harder. So the
+afternoon goes into driving a contribution of 0.000053 K down to 0.000017 K, and the
+answer does not move, because it was never being limited by that. Build the budget
+first; then you know which single component to change, and here it is a pair of 1%
+resistors that cost pennies.
+
+The second mistake is the bare ±. "1.00 ± 0.35 °C" with no $k$ could be a standard
+uncertainty, an expanded one at $k = 2$, a manufacturer's limit, or half the spread of
+three readings, and those differ from one another by a factor of four. A number without
+a stated coverage factor is not a result; it is a rumour about one. The same goes for
+digits: module 1's distinction between resolution and accuracy is the reason eleven
+printed digits became two.
+
+## Where this stops holding
+
+Quadrature assumes independence, and the assumption is often quietly false. Two bridge
+completion resistors from the same reel, at the same temperature, on the same board are
+correlated; two readings taken from the same meter share its calibration entirely. When
+inputs are correlated the cross term is real and the GUM's covariance terms are needed —
+and the error runs both ways, because correlated contributions can also *cancel*, which
+is exactly what a ratiometric measurement is engineered to make happen.
+
+$s/\sqrt{n}$ assumes the readings are independent, and readings taken faster than the
+instrument settles are not. Module 9 is the reason: sample a chain with a one-second
+time constant ten times a second and consecutive readings share most of their content,
+so the effective $n$ is far below the count and the Type A uncertainty comes out
+optimistically small. Nothing in the arithmetic detects this; only knowing the settling
+time does.
+
+$k = 2$ gives about 95% coverage when the combined distribution is roughly normal, which
+needs several contributions of comparable size. In the budget above one rectangular term
+supplies three quarters of the variance, and the true coverage of $k = 2$ there is a
+little different from 95%; the GUM's Welch–Satterthwaite formula exists for that case.
+
+The rectangular assumption is itself a choice. If a manufacturer's ± limit is really a
+99% statistical bound rather than a hard one, dividing by $\sqrt3$ overstates the
+uncertainty; if the specification is a guarantee with no distribution behind it,
+$a/\sqrt3$ is the conventional and defensible reading.
+
+And none of this covers blunders. A wrong range, a lead left in the current jack, a
+transposed digit in a notebook — an uncertainty budget describes a measurement that went
+as intended, and says nothing about one that did not. That is what a second measurement
+by a different route is for.
+
+## What this module asks you to do
+
+**Noise floors, averaging and an uncertainty budget** is every relation on this page as
+seven small functions: the thermal density, the density-to-r.m.s. conversion, the number
+of averages needed for a target, the Type A standard error, the Type B rectangular
+conversion, the quadrature combination, and the rounding that turns a float into a
+publishable line. The last one is fussier than it looks and it is the one that decides
+whether your notebook says 1.0000211828 °C or 1.00 °C.
+''',
+            },
             "sandbox": {
                 "title": "Where the floor stops falling",
                 "visualiser": "noise-corner",
