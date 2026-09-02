@@ -53,6 +53,250 @@ COURSE = {
                 "The anti-alias filter must therefore stop everything above $\\pi/M$ *before* the discard, not after.",
                 "Filtering costs arithmetic that is then thrown away: the direct form computes `M-1` outputs out of every `M` only to discard them.",
             ],
+            "read": [
+                {
+                    "title": "Where the 9 kHz went",
+                    "minutes": 15,
+                    "body": r'''
+On the bench: a 48 kHz converter, and a generator putting two equal tones into it, one
+at 1 kHz and one at 9 kHz. The stage downstream wants the stream at 12 kHz, so every
+fourth sample is kept and the other three are dropped.
+
+Play the result back at 12 kHz and there are still two tones. One of them is at 1 kHz,
+where it was. The other is at 3 kHz, at the same amplitude as the tone that went in,
+and nothing anywhere in the chain generated 3 kHz.
+
+## The answer is already in the samples
+
+No spectrum is needed to find it, because keeping every fourth sample means the values
+that survive are the ones at indices $n = 4k$. Write those values out. A 9 kHz tone with
+phase $\varphi$ is $\cos(2\pi \cdot 9000\,n/48000 + \varphi)$, and at $n = 4k$ that
+argument is $2\pi(0.75)k + \varphi$.
+
+Cosine has period $2\pi$ and is even, so subtract a whole turn per sample and flip the
+sign of what is left:
+
+$$\cos\!\big(2\pi(0.75)k + \varphi\big)
+ = \cos\!\big(2\pi k - 2\pi(0.25)k + \varphi\big)
+ = \cos\!\big(2\pi(0.25)k - \varphi\big)$$
+
+and $0.25$ cycles per sample at 12 kHz is 3 kHz. The surviving samples of the 9 kHz tone
+are, number for number, the samples of a 3 kHz tone with its phase turned round.
+
+```python
+import math
+
+fs = 48000.0        # the rate the converter runs at
+M = 4               # keep one sample in four
+phi = 0.4           # the phase of the 9 kHz tone, in radians
+
+kept = [math.cos(2 * math.pi * 9000.0 * (M * k) / fs + phi) for k in range(8)]
+alias = [math.cos(2 * math.pi * 3000.0 * k / (fs / M) - phi) for k in range(8)]
+
+print("every 4th sample of 9 kHz:", [round(v, 6) for v in kept])
+print("3 kHz sampled at 12 kHz:  ", [round(v, 6) for v in alias])
+print("same to within 1e-12:", max(abs(a - b) for a, b in zip(kept, alias)) < 1e-12)
+```
+
+Both lines print `[0.921061, 0.389418, -0.921061, -0.389418, ...]` and the comparison
+prints `True`. Nothing was approximated and nothing leaked through a filter: the two
+sequences are the same list of floats. That is what makes the 3 kHz tone impossible to
+remove afterwards — it is not an artefact sitting on top of the wanted signal, it is
+the whole of what the stream now contains at that frequency.
+
+The minus sign in front of $\varphi$ is worth keeping. A folded component arrives with
+its phase conjugated, which is why an aliased chirp sweeps the wrong way and why an
+aliased transient looks time-reversed around its peak.
+
+## From one tone to the rule
+
+Redo that step with symbols instead of 9000. A component at $f_0$ in a sequence at
+$f_s$ has normalised frequency $\omega = 2\pi f_0/f_s$ radians per sample, so the
+sequence is $\cos(\omega n + \varphi)$. Keep one sample in $M$ and the surviving indices
+are $n = kM$, giving $\cos(M\omega\, k + \varphi)$: the new sequence carries normalised
+frequency $M\omega$.
+
+Two facts about $\cos$ then finish it. Its period in $\omega$ is $2\pi$, so $M\omega$ is
+read modulo $2\pi$; and it is even, so anything landing between $\pi$ and $2\pi$ is
+reported at $2\pi$ minus itself, with the phase negated. Stretch by $M$, wrap at
+$2\pi$, fold at $\pi$ — in that order, and none of the three steps is optional.
+
+The bench numbers go through it in one line. $\omega = 2\pi(9000/48000) = 0.375\pi$;
+$M\omega = 1.5\pi$, which is under $2\pi$ so the wrap does nothing; the fold gives
+$2\pi - 1.5\pi = 0.5\pi$, and $0.5\pi$ radians per sample at 12 kHz is 3 kHz. The
+derive unit *Where a component lands after decimation by M* walks the same journey
+with $f_0$, $f_s$ and $M$ left as symbols and ends on the two numbers that matter.
+
+Notice what the fold does to the map from input frequency to output frequency: it is
+two-to-one. A 3 kHz tone and a 9 kHz tone both land at 3 kHz, and once they are in the
+same sequence no operation can tell you how much of what you are looking at came from
+which. The sandbox *A tone, a sample rate, and where the tone ends up* makes that
+concrete — sweep the tone upward and watch the alias walk down to meet it, turn round
+at the fold point, and walk back.
+
+## Buying the band back
+
+Since the loss happens at the moment of discarding, the only defence is upstream of it.
+The decimated sequence can represent frequencies up to $f_s/2M$ — 6 kHz here — so
+anything above that must be gone before the discard. In radians per sample of the
+*original* sequence, where $f_s/2$ is $\pi$, the frequency $f_s/2M$ is $\pi/M$. That is
+the entire specification of an anti-alias filter: stop by $\pi/M$.
+
+Real filters do not stop anywhere; they roll off. The lab's `decimate` asks for a
+cutoff of `0.45/M` cycles per sample rather than `0.5/M`, which at $M = 4$ and 48 kHz
+is 5.4 kHz, leaving 600 Hz of room below the 6 kHz limit for the roll-off to happen in.
+Whether 600 Hz is enough depends on how many taps you are willing to pay for, and the
+question has an arithmetic answer:
+
+```python
+import math
+
+
+def design_lowpass(numtaps, fc):
+    """The lab's filter, in lists instead of arrays. fc is in cycles per sample."""
+    if numtaps % 2 == 0:
+        numtaps += 1
+    h = []
+    for i in range(numtaps):
+        n = i - (numtaps - 1) / 2.0
+        ideal = 2.0 * fc if n == 0.0 else math.sin(2.0 * math.pi * fc * n) / (math.pi * n)
+        window = 0.54 - 0.46 * math.cos(2.0 * math.pi * i / (numtaps - 1))
+        h.append(ideal * window)
+    total = sum(h)
+    return [v / total for v in h]
+
+
+def gain_db(h, f):
+    """20 log10 |H(f)| with f in cycles per sample."""
+    re = sum(v * math.cos(2.0 * math.pi * f * i) for i, v in enumerate(h))
+    im = sum(v * math.sin(2.0 * math.pi * f * i) for i, v in enumerate(h))
+    return 20.0 * math.log10(math.hypot(re, im))
+
+
+h = design_lowpass(101, 0.45 / 4)
+print("taps:", len(h), " dc gain:", round(sum(h), 9))
+for hz in (1000, 4000, 5400, 6000, 6600, 9000):
+    print(f"{hz:6d} Hz {gain_db(h, hz / 48000.0):8.2f} dB")
+```
+
+The table it prints is the design, honestly stated: `0.00 dB` at 1 kHz and 4 kHz,
+`-6.02 dB` at 5400 Hz, `-29.70 dB` at 6000 Hz, `-62.39 dB` at 6600 Hz and `-88.17 dB`
+at 9 kHz.
+
+Two of those readings do work. The $-6.02$ dB at the stated cutoff is not a failure: a
+windowed sinc puts its half-amplitude point at the cutoff, with the transition band
+straddling it, so `fc` names the middle of the slope rather than the end of the
+passband. And $-29.70$ dB at 6 kHz says the 101-tap design has not finished rolling off
+by the time it reaches the new Nyquist limit. A component sitting exactly at 6 kHz is
+attenuated to about 3% and then folds onto itself. It is small, it is real, and it is
+the price of 101 taps rather than 301.
+
+## The measurement, end to end
+
+Put the bench signal through both routes and read the two bins that matter. At 12 kHz a
+240-sample block has bins 50 Hz apart, so 1 kHz is bin 20 exactly and 3 kHz is bin 60
+exactly — no window and no leakage to argue about.
+
+```python
+import math
+
+
+def design_lowpass(numtaps, fc):
+    if numtaps % 2 == 0:
+        numtaps += 1
+    h = []
+    for i in range(numtaps):
+        n = i - (numtaps - 1) / 2.0
+        ideal = 2.0 * fc if n == 0.0 else math.sin(2.0 * math.pi * fc * n) / (math.pi * n)
+        window = 0.54 - 0.46 * math.cos(2.0 * math.pi * i / (numtaps - 1))
+        h.append(ideal * window)
+    total = sum(h)
+    return [v / total for v in h]
+
+
+def convolve(x, h):
+    y = [0.0] * (len(x) + len(h) - 1)
+    for i, xi in enumerate(x):
+        for j, hj in enumerate(h):
+            y[i + j] += xi * hj
+    return y
+
+
+def bin_amplitude(block, k):
+    """Amplitude of the cosine that sits exactly in bin k of a length-N DFT."""
+    N = len(block)
+    re = sum(v * math.cos(2.0 * math.pi * k * i / N) for i, v in enumerate(block))
+    im = sum(v * math.sin(2.0 * math.pi * k * i / N) for i, v in enumerate(block))
+    return 2.0 * math.hypot(re, im) / N
+
+
+fs = 48000.0
+x = [math.cos(2 * math.pi * 1000.0 * i / fs) + math.cos(2 * math.pi * 9000.0 * i / fs)
+     for i in range(1600)]
+
+naive = x[::4]
+guarded = convolve(x, design_lowpass(101, 0.45 / 4))[::4]
+
+for name, y in (("discarded  ", naive), ("filtered   ", guarded)):
+    block = y[60:300]            # 240 samples at 12 kHz, so the bins are 50 Hz apart
+    print(name, "1 kHz (bin 20):", round(bin_amplitude(block, 20), 6),
+          "  3 kHz (bin 60):", round(bin_amplitude(block, 60), 6))
+```
+
+Discarding alone gives `1.0` in bin 20 and `1.0` in bin 60: the 9 kHz tone arrives at
+3 kHz at its original amplitude, undiminished. Filtering first gives `1.000049` in
+bin 20 and `3.9e-05` in bin 60, and that second figure is $20\log_{10}(3.9\times10^{-5})
+= -88$ dB, the same number the response table printed for 9 kHz. The alias did not
+vanish; it was attenuated by a filter whose behaviour at 9 kHz you can look up before
+you run anything.
+
+## The mistake that costs the most
+
+The tempting belief is that a lower sample rate *removes* what it cannot represent —
+that 9 kHz has nowhere to go in a 12 kHz stream, so it goes away. It is tempting
+because every other lossy operation in signal processing behaves that way, and because
+the failure leaves no trace to contradict it: the output has the right length, the right
+level, no clipping and no gap. What actually happens is relocation at full amplitude
+into the middle of the band you were keeping, which is why `naive_decimate` exists in
+the lab alongside `decimate` and why one of the checks insists its output peak stays
+above 0.9. A test that only confirmed the good path would let you believe the bad one
+was harmless.
+
+The neighbouring confusion is worth separating out. Downsampling itself performs no
+arithmetic — it is a selection, `x[::M]`, with no multiply and no add. The averaging
+people associate with decimation is the anti-alias filter in front of it, a separate
+block you chose. Keeping the two apart is what makes module 3 possible at all.
+
+## Where this stops holding
+
+The rule "stop everything above $\pi/M$" is the baseband case, and it is a sufficient
+condition rather than a necessary one. What decimation actually requires is that no two
+components land on top of each other, and a signal occupying a single band between
+$k f_s/2M$ and $(k+1) f_s/2M$ for some integer $k$ already satisfies that. Such a signal
+can be decimated by $M$ with a *bandpass* filter in front, and it lands at baseband
+deliberately — this is bandpass sampling, and radio receivers live on it. The lowpass
+at $\pi/M$ is the right answer when you know nothing about where the energy is.
+
+The other limit is structural. Downsampling is not time-invariant: delay the input by
+one sample and a different set of samples survives, so the output is a different
+sequence rather than the old one delayed. There is no transfer function for it on its
+own, and that is exactly why the noble identities in module 3 have to be stated as
+conditions rather than assumed.
+
+## What you are about to build
+
+The lab *Decimate a signal without destroying it* asks for three functions:
+`design_lowpass(numtaps, fc)` — the windowed sinc above, normalised so `sum(h)` is 1 so
+that a constant passes through untouched; `naive_decimate(x, M)`, which is one slice;
+and `decimate(x, M, numtaps=101)`, which filters at `0.45/M` and then takes every `M`-th
+sample of the **full** convolution. Slicing `x` rather than the convolution is the error
+the length check is there to catch. The checks then measure what this reading measured:
+a tone at 0.02 cycles per sample comes through near amplitude 1, a tone at 0.20 comes
+through below 0.02, and the same 0.20 tone through `naive_decimate` still peaks above
+0.9, because it folded rather than left.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "A tone, a sample rate, and where the tone ends up",
                 "visualiser": "spectrum",
@@ -399,6 +643,384 @@ assert _amp > 0.9, \
                 "Zero insertion divides the mean signal power by `L`, so the filter needs a passband gain of `L` to preserve amplitude.",
                 "Between the images, the filter is doing bandlimited interpolation — the zeros are replaced by the sinc-weighted sum of the neighbours.",
             ],
+            "read": [
+                {
+                    "title": "Four tones where you sent one",
+                    "minutes": 15,
+                    "body": r'''
+A telephone codec hands you speech at 8 kHz. The converter on the board runs at 32 kHz
+and will not be persuaded otherwise, so the stream has to be brought up by a factor of
+four. Write each sample down and follow it with three zeros: 128 samples become 512,
+the same span of time now holds four times as many of them, and no sample that was
+measured has been altered.
+
+Send a 1 kHz tone through that and look at what comes out. A 512-sample block at 32 kHz
+has bins 62.5 Hz apart, so 1 kHz is bin 16 exactly, 7 kHz is bin 112, 9 kHz is bin 144
+and 15 kHz is bin 240 — every one of them an exact bin, with no window and no leakage to
+argue about.
+
+```python
+import math
+
+
+def bin_amplitude(block, k):
+    N = len(block)
+    re = sum(v * math.cos(2.0 * math.pi * k * i / N) for i, v in enumerate(block))
+    im = sum(v * math.sin(2.0 * math.pi * k * i / N) for i, v in enumerate(block))
+    return 2.0 * math.hypot(re, im) / N
+
+
+L = 4
+x = [math.cos(2 * math.pi * 1000.0 * j / 8000.0) for j in range(128)]
+
+v = [0.0] * (len(x) * L)
+v[::L] = x                              # zero insertion, and nothing else
+
+# 512 samples at 32 kHz: the bins are 62.5 Hz apart
+for hz in (1000, 5000, 7000, 9000, 15000):
+    k = int(hz / 62.5)
+    print(f"{hz:6d} Hz  bin {k:3d}  amplitude {bin_amplitude(v, k):.4f}")
+```
+
+One tone went in and four come out: `0.2500` at 1 kHz, `0.2500` at 7 kHz, `0.2500` at
+9 kHz, `0.2500` at 15 kHz, and `0.0000` at 5 kHz where nothing lives. Played through the
+converter that is a harsh metallic chord, not a 1 kHz tone, and the tone itself is a
+quarter of the height it went in at.
+
+## Why 7 kHz is in there
+
+The three extra lines are not an error in the arithmetic and they are not noise. Ask
+what the 32 kHz sequence would look like if the tone had been at 7 kHz instead. Its
+samples at the positions where $v$ is non-zero, $n = 4k$, are
+
+$$\cos\!\big(2\pi \cdot 7000 \cdot 4k/32000 + \psi\big) = \cos\!\big(2\pi(0.875)k + \psi\big)
+ = \cos\!\big(2\pi(0.125)k - \psi\big)$$
+
+by the same subtract-a-turn-and-flip step that folded the 9 kHz tone in the previous
+module. And $2\pi(0.125)k$ is exactly the 1 kHz tone as the 8 kHz sequence recorded it.
+So a 7 kHz tone at 32 kHz agrees with $v$ at every non-zero position, and the zeros in
+between have no opinion about which of the two they belong to. The same holds at 9 kHz
+and at 15 kHz.
+
+That is the whole of imaging: zero insertion does not choose a signal. It produces a
+sequence consistent with $L$ different tones at once, and the filter afterwards is what
+picks one. Nothing was added to the signal that has to be subtracted again — the
+alternatives were always there, and the earlier sequence had no way to express the
+difference.
+
+The compact statement is that inserting $L-1$ zeros leaves $V(\omega) = X(L\omega)$,
+since the zeros contribute nothing to the transform sum and the surviving terms are
+$x[k]e^{-j\omega kL}$. Reading $X$ at $L\omega$ compresses it into $[0, \pi/L]$ and, since
+$X$ repeats every $2\pi$, plants a copy of it every $2\pi/L$ along the axis. The derive
+unit *The gain and the images of an upsampler* does that solve step by step and lands on
+the two image positions, $\omega_0/L$ and $(2\pi - \omega_0)/L$ — which for
+$\omega_0 = 2\pi(0.125)$ and $L = 4$ are 1 kHz and 7 kHz at the 32 kHz rate.
+
+## Where the quarter comes from
+
+The `0.2500` is the second thing the block measured, and it has a shorter argument. Feed
+in a constant 1.0 instead of a tone. Zero insertion turns it into `1, 0, 0, 0, 1, 0, 0,
+0, ...`, whose mean is $1/4$. A filter's DC gain is $\sum_n h[n]$, and a filter with DC
+gain 1 maps a mean of $1/4$ to a mean of $1/4$. So the output of a unit-gain
+interpolation chain sits at a quarter of the input level, and the fix is one number:
+give the filter $\sum_n h[n] = L$.
+
+The energy did not go anywhere. Every measured sample is still present at its original
+height, and there are now four times as many slots for it to be averaged over. On the
+tone, the same factor shows up as four copies of amplitude $1/L$ rather than one copy of
+amplitude 1 — and since the filter keeps one copy and discards three, the surviving
+amplitude before compensation is $A/L$, which agrees with the DC argument.
+
+## Specifying the filter, then measuring it
+
+The baseband copy occupies $\omega < \pi/L$ and the nearest image begins above it, so any
+cutoff in that neighbourhood separates them: $\pi/L$, which at $L = 4$ and 32 kHz is
+4 kHz. The lab asks for `0.45/L` cycles per sample instead of `0.5/L`, which is 3.6 kHz,
+buying 400 Hz of transition room below the boundary. The sandbox *What a higher rate
+buys* walks up to that same boundary from the other side: raise the rate on a tone that
+is already aliasing until the alias disappears, and the rate at which it goes is the rate
+at which the nearest image stops landing inside the band you meant to keep.
+
+Here is what 121 taps make of that specification:
+
+```python
+import math
+
+
+def design_lowpass(numtaps, fc, gain=1.0):
+    """The lab's filter: windowed sinc, scaled so that sum(h) is `gain`."""
+    if numtaps % 2 == 0:
+        numtaps += 1
+    h = []
+    for i in range(numtaps):
+        n = i - (numtaps - 1) / 2.0
+        ideal = 2.0 * fc if n == 0.0 else math.sin(2.0 * math.pi * fc * n) / (math.pi * n)
+        window = 0.54 - 0.46 * math.cos(2.0 * math.pi * i / (numtaps - 1))
+        h.append(ideal * window)
+    scale = gain / sum(h)
+    return [v * scale for v in h]
+
+
+def gain_db(h, f, ref):
+    re = sum(v * math.cos(2.0 * math.pi * f * i) for i, v in enumerate(h))
+    im = sum(v * math.sin(2.0 * math.pi * f * i) for i, v in enumerate(h))
+    return 20.0 * math.log10(math.hypot(re, im) / ref)
+
+
+h = design_lowpass(121, 0.45 / 4, gain=4.0)
+print("taps:", len(h), " dc gain:", round(sum(h), 6))
+for hz in (1000, 3000, 3400, 3600, 4000, 4600, 7000):
+    print(f"{hz:6d} Hz {gain_db(h, hz / 32000.0, 4.0):8.2f} dB")
+```
+
+It reports `dc gain: 4.0`, then `0.02 dB` at 3 kHz, `-1.40 dB` at 3400 Hz, `-6.01 dB`
+at the stated cutoff of 3600 Hz, `-40.26 dB` at 4 kHz and `-57.35 dB` at 4600 Hz. The
+readings in dB are taken against the passband gain of 4, so `0.02 dB` means the tone
+comes out at the height it went in.
+
+Now the two ends of the chain together, against the cheapest alternative to it — holding
+each sample for four slots instead of stuffing zeros and filtering:
+
+```python
+import math
+
+
+def design_lowpass(numtaps, fc, gain=1.0):
+    if numtaps % 2 == 0:
+        numtaps += 1
+    h = []
+    for i in range(numtaps):
+        n = i - (numtaps - 1) / 2.0
+        ideal = 2.0 * fc if n == 0.0 else math.sin(2.0 * math.pi * fc * n) / (math.pi * n)
+        window = 0.54 - 0.46 * math.cos(2.0 * math.pi * i / (numtaps - 1))
+        h.append(ideal * window)
+    scale = gain / sum(h)
+    return [v * scale for v in h]
+
+
+def convolve(x, h):
+    y = [0.0] * (len(x) + len(h) - 1)
+    for i, xi in enumerate(x):
+        for j, hj in enumerate(h):
+            y[i + j] += xi * hj
+    return y
+
+
+def bin_amplitude(block, k):
+    N = len(block)
+    re = sum(v * math.cos(2.0 * math.pi * k * i / N) for i, v in enumerate(block))
+    im = sum(v * math.sin(2.0 * math.pi * k * i / N) for i, v in enumerate(block))
+    return 2.0 * math.hypot(re, im) / N
+
+
+L = 4
+x = [math.cos(2 * math.pi * 1000.0 * j / 8000.0) for j in range(256)]
+
+stuffed = [0.0] * (len(x) * L)
+stuffed[::L] = x
+interpolated = convolve(stuffed, design_lowpass(121, 0.45 / L, gain=float(L)))
+
+held = []
+for value in x:
+    held.extend([value] * L)            # sample and hold, the cheap alternative
+
+for name, y in (("filtered", interpolated), ("held    ", held)):
+    block = y[200:200 + 512]
+    wanted = bin_amplitude(block, 16)
+    image = bin_amplitude(block, 112)
+    print(name, " 1 kHz:", round(wanted, 4),
+          "  7 kHz image:", round(image, 4),
+          f"  ({20 * math.log10(image / wanted):.1f} dB)")
+```
+
+The filtered route gives `1 kHz: 0.9999` and a 7 kHz image of `0.0008`, which is
+`-62.0 dB`. Holding gives `1 kHz: 0.9761` and an image of `0.1508`, which is `-16.2 dB`.
+The 0.25 has been paid back in both cases, so the level is not what separates them —
+the difference is 46 dB of image, and 46 dB is the distance between inaudible and
+unmistakable.
+
+## The mistake, and why it is tempting
+
+Look at the zero-stuffed waveform on a scope and it is indefensible: a spike, three
+zeros, a spike, three zeros. It looks nothing like speech, and the first instinct is
+that the zeros are wrong values which ought to be replaced by better guesses — repeat
+the previous sample, or draw a straight line between neighbours. So people build the
+hold and are surprised when the result sounds bright and gritty.
+
+The measurement above says what happened. Repeating each sample four times is convolving
+the zero-stuffed signal with a rectangle of four ones, which is a filter — a poor lowpass
+whose response is a sinc. It droops across the passband, taking a 1 kHz tone to `0.9761`
+where the design leaves it at `0.9999`, and its first null lands at 8 kHz rather than
+inside the transition region, so the 7 kHz image
+comes through only 16 dB down. Linear interpolation is the same story with a triangle
+instead of a rectangle: better, still not a design. This is exactly what the blanks unit
+*Interpolation, in four decisions* closes on, and it is why the zeros are correct — they
+are the only insertion that asserts nothing, leaving the filter free to supply the one
+bandlimited answer consistent with the samples you actually took.
+
+The neighbouring slip is arithmetic rather than conceptual: applying the gain of $L$
+twice, once by scaling `x` before the stuffing and once through the filter, or applying
+it as $1/L$ because the level went down. The lab's constant-input check exists for that
+— a DC input of 1 must come out at 1, and a mean near 0.25 or near 16 names which of the
+two mistakes you made.
+
+## Where this stops holding
+
+Interpolation invents nothing. It evaluates the same bandlimited function on a finer
+grid, so anything the 8 kHz sequence had already lost stays lost: if the codec aliased a
+5 kHz component down to 3 kHz, upsampling to 32 kHz reproduces a 3 kHz component with
+excellent fidelity. The rate went up and the information did not.
+
+The response table also shows where the specification quietly stops being free.
+Telephone speech runs to about 3.4 kHz, and 121 taps put that edge at `-1.40 dB` — an
+audible tilt across the top of the band, caused by the transition region needing
+somewhere to sit. Widening the passband towards 4 kHz makes the transition steeper and
+the tap count larger, and tap count is arithmetic per sample at the *high* rate. That
+tension is the reason module 3 exists.
+
+Lastly, "bandlimited interpolation" is a promise about bandlimited signals. Feed a step
+or a click through this chain and the output rings around the discontinuity, symmetric in
+time, before the edge as well as after it. That ringing is not a defect in the filter; it
+is what the bandlimited reconstruction of a step is. If the ringing is unacceptable the
+answer is a different interpolation kernel with different guarantees, not more taps.
+
+## What you are about to build
+
+The lab *Interpolate by zero insertion and filtering* asks for `design_lowpass(numtaps,
+fc, gain=1.0)` — the same windowed sinc as module 1, now scaled so `sum(h)` equals
+`gain` rather than 1 — then `upsample(x, L)`, which allocates `len(x)*L` zeros and
+writes `x` into every `L`-th slot, and `interpolate(x, L, numtaps=121)`, which upsamples
+and convolves with a filter of cutoff `0.45/L` and gain `L`. Its last check is the
+measurement above in miniature: a 0.2 cycles-per-sample tone upsampled by 3 puts its
+image at 0.8/3, and that image has to be at least 40 dB down. Cutoff and gain are
+independent, so a filter with the right cutoff and a gain of 1 passes the image check
+and fails the amplitude one, which is the fastest way to find out which of the two you
+left out.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Zeros, images, and the gain that pays for them",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A 1 kHz tone recorded at 8 kHz is upsampled to 32 kHz by writing each sample followed by three zeros, and nothing else is done to it. A 512-point DFT of the result is taken. What does it show?",
+                        "opts": [
+                            "Four equal lines, at 1, 7, 9 and 15 kHz, each a quarter of the amplitude that went in",
+                            "One line at 1 kHz, at the amplitude the tone went in with",
+                            "Four lines at 1, 2, 3 and 4 kHz, spaced by the tone's own frequency, because the zeros carry the harmonics that a burst of one sample in four generates",
+                            "One line at 4 kHz, the tone carried up the axis by the same factor of four that the rate went up by",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Zero insertion produces a sequence that is consistent with $L$ different tones at once:
+at the positions where the sequence is non-zero, a 7 kHz tone at 32 kHz gives exactly the
+numbers a 1 kHz tone at 8 kHz gave, and so do 9 kHz and 15 kHz. Nothing chose between
+them yet, so all four are present, each carrying $1/L$ of the amplitude because the same
+total is now spread over four times as many samples. The tone does not move up the axis —
+that happens under decimation, where the frequency in radians per sample is multiplied by
+$M$; here it is divided by $L$, and the copies appear above it.
+""",
+                    },
+                    {
+                        "q": "The anti-image filter after an upsampler by $L$ is given a DC gain of $L$ rather than 1. What is that paying for?",
+                        "opts": [
+                            "Nothing was lost, so no gain is needed; the factor of $L$ compensates for the taps the window attenuates",
+                            "The same total now sits in $L$ times as many samples, so a unit-gain filter returns it $L$ times too small",
+                            "The energy carried off by the $L-1$ samples that the upsampler discarded from each group before the filter ran",
+                            "The rate went up by $L$, and a filter's gain has to track the rate it runs at",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Feed in a constant 1.0 and zero insertion makes it `1, 0, 0, 0, 1, 0, 0, 0, ...`, whose
+mean is $1/L$. A filter's DC gain is $\sum_n h[n]$, so a unit-gain filter maps that mean
+of $1/L$ straight through and the output sits at a quarter of the input level for $L=4$.
+Setting $\sum_n h[n] = L$ restores it. Note what is *not* happening: an upsampler
+discards nothing and loses no energy — every measured sample survives at its original
+height, with more slots to average it over. That is also why the correction
+is a multiplication by $L$ and never by $L^2$ or by $1/L$.
+""",
+                    },
+                    {
+                        "q": "Instead of stuffing zeros and filtering, each input sample is repeated $L$ times. In filtering terms, what has been built?",
+                        "opts": [
+                            "No filter at all — repetition copies values and computes nothing, so the spectrum is untouched",
+                            "An ideal lowpass at $\\pi/L$, arrived at by a cheaper route than convolution",
+                            "Convolution of the zero-stuffed signal with a rectangle of $L$ ones, whose response is a sinc",
+                            "A first-order difference, because consecutive output samples are equal and their difference is zero",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Holding a sample for $L$ slots is exactly convolving the zero-stuffed sequence with $L$
+ones, and that rectangle has a sinc magnitude response. It is a filter, and being a poor
+one is the problem rather than the alternative: measured on a 1 kHz tone taken from 8 kHz
+to 32 kHz, it drops the tone from 0.9999 to 0.9761 and leaves the 7 kHz image only 16.2 dB
+down, against 62 dB for the 121-tap design. The result sounds bright and gritty, which is
+the images rather than distortion. Repetition is sometimes enough — it is what a
+zero-order-hold DAC does — but it is a design decision with a measurable cost, not a
+shortcut past one.
+""",
+                    },
+                    {
+                        "q": "An interpolator taking 8 kHz to 32 kHz is built with its lowpass cutting at 8 kHz rather than at 4 kHz. What reaches the output?",
+                        "opts": [
+                            "The wanted band only, because 8 kHz is above anything an 8 kHz input was able to carry in the first place",
+                            "The wanted band at half amplitude, because a filter twice as wide passes twice as much of the noise floor",
+                            "Nothing above 4 kHz at all, since the input had no energy up there to be passed on",
+                            "The wanted band plus the image at 8 kHz minus the tone, which moves down the axis as the tone moves up",
+                        ],
+                        "a": 3,
+                        "why": r"""
+The first image sits at $2\pi/L$ minus the tone, which at these rates is 8 kHz minus the
+tone's frequency: 7 kHz for a 1 kHz input, 6 kHz for a 2 kHz input. A cutoff at 8 kHz
+passes all of it. The reasoning that feels safest is the one about the input's own
+Nyquist limit, and it is a units error: 4 kHz was the ceiling of the 8 kHz sequence, but
+the sequence being filtered runs at 32 kHz and the copies were planted after the rate
+changed. The mirror movement is the giveaway on a spectrum analyser — sweep the input
+tone upward and the image walks down to meet it.
+""",
+                    },
+                    {
+                        "q": "Does interpolation add information to the signal?",
+                        "opts": [
+                            "Yes — the filter estimates each missing value from the neighbours around it, which is more than the input stated",
+                            "Only when the input was oversampled to start with, so that there is headroom for the new samples to describe",
+                            "No — it evaluates the same bandlimited function on a finer grid of sample instants",
+                            "Yes, in proportion to $L$: the output carries $L$ times as many samples",
+                        ],
+                        "a": 2,
+                        "why": r"""
+The filter does compute the intermediate values from the neighbours, and that is what
+makes the first reading tempting — but those values were already determined. A
+bandlimited function is fixed everywhere by its samples, so the interpolator is reading
+off a function that was decided the moment the input was recorded, not choosing between
+possibilities. The practical consequence is worth carrying: whatever the earlier rate
+lost stays lost. If a component aliased down to 3 kHz before you got the file, upsampling
+reproduces a 3 kHz component beautifully, and the rate has gone up while the information
+has not.
+""",
+                    },
+                    {
+                        "q": "A component of the 8 kHz input sits at 3.9 kHz, close to that sequence's own limit. It is interpolated by 4 with the lab's filter, whose cutoff is at 3.6 kHz. What happens to it?",
+                        "opts": [
+                            "It comes through untouched: the cutoff is set at the 32 kHz rate, so 3.9 kHz is far inside the passband",
+                            "It is attenuated, because the transition region has to sit somewhere and the top of the band is where it was put",
+                            "It folds to 4.1 kHz, mirrored about the cutoff, in the way a component above the limit folds when a rate is reduced",
+                            "It is reproduced once in each of the four images, at a quarter of its amplitude in each",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The cutoff of `0.45/L` rather than `0.5/L` buys transition room by taking it out of the
+top of the signal band, and the response table shows the bill: `-1.40 dB` at 3400 Hz and
+`-6.01 dB` at 3600 Hz, so a 3.9 kHz component is well down the slope. Nothing folds — a
+filter attenuates, and folding needs a rate change downward, which is module 1's
+operation and not this one. Widening the passband towards 4 kHz is allowed, and it is
+paid for in taps: a steeper transition costs a longer filter, and every one of those taps
+runs at the high rate. That is the pressure module 3 relieves.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "What a higher rate buys",
                 "visualiser": "spectrum",
@@ -730,6 +1352,264 @@ assert _db < -40.0, \
                 "Noble identity, interpolation: $G(z)$ then upsampling by `L` is identical to upsampling then $G(z^L)$.",
                 "Applying the identities moves every filter to the *slow* side of the rate change, where each tap runs `M` times less often.",
                 "The saving is a factor of `M` in multiplications and nothing at all in output — the two structures are exactly equal, sample for sample.",
+            ],
+            "read": [
+                {
+                    "title": "The three quarters of the arithmetic nobody wanted",
+                    "minutes": 16,
+                    "body": r'''
+Put a counter on the multiplier in module 1's decimator. It runs at 48 kHz, its filter
+has 101 taps, and it keeps one output in four. Every input sample costs 101 multiplies,
+so the counter climbs by 4,848,000 every second — and three quarters of those products
+end up in outputs that `[::4]` discards before anyone sees them. Three point six million
+multiplies per second are being performed and then binned.
+
+That is not an inefficiency to be shaved. The outputs being discarded are known in
+advance, by index, before a single sample arrives, and the arithmetic that produces them
+can be identified and never started.
+
+## Which taps reach an output that survives
+
+Take a six-tap filter and $M = 2$, so the surviving outputs are the even-numbered ones.
+The convolution is $y[n] = \sum_k h[k]\,x[n-k]$, and at $n = 2m$ that is
+
+$$y[2m] = h_0x[2m] + h_1x[2m{-}1] + h_2x[2m{-}2] + h_3x[2m{-}3] + h_4x[2m{-}4] + h_5x[2m{-}5]$$
+
+Now sort the six terms by the parity of the input index they reach. The terms
+$h_0, h_2, h_4$ touch $x$ at even indices; $h_1, h_3, h_5$ touch it at odd ones. Regroup
+on that and nothing has been changed except the order of an addition:
+
+$$y[2m] = \big(h_0x[2m] + h_2x[2m{-}2] + h_4x[2m{-}4]\big)
+        + \big(h_1x[2m{-}1] + h_3x[2m{-}3] + h_5x[2m{-}5]\big)$$
+
+Read the first bracket on its own. It is a three-tap convolution of the taps
+$h_0, h_2, h_4$ with the sequence of even-indexed input samples — a filter running on
+its own stream, at the output rate. The second bracket is a three-tap convolution of
+$h_1, h_3, h_5$ with the odd-indexed samples. Two short filters, each stepping once per
+output, and their sum is the output.
+
+Nothing was approximated to get there. The regrouping is the associative law, and every
+one of the six products in the original line appears once in the rearranged one:
+
+```python
+import math
+
+h = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+x = [1.0, -2.0, 3.0, 0.0, 4.0, -1.0, 2.0, 5.0]
+M = 2
+mults = {"direct": 0, "branch": 0}
+
+
+def tap(j, seq):
+    return seq[j] if 0 <= j < len(seq) else 0.0
+
+
+# the direct route: every output, then throw M-1 of every M away
+full = []
+for n in range(len(x) + len(h) - 1):
+    acc = 0.0
+    for k, hk in enumerate(h):
+        acc += hk * tap(n - k, x)
+        mults["direct"] += 1
+    full.append(acc)
+direct = full[::M]
+
+# the branch route: only the outputs that survive, and only the taps that reach them
+P = (len(x) + len(h) - 1 + M - 1) // M
+branch = [0.0] * P
+for m in range(M):
+    e = h[m::M]
+    for p in range(P):
+        acc = 0.0
+        for k, ek in enumerate(e):
+            acc += ek * tap((p - k) * M - m, x)
+            mults["branch"] += 1
+        branch[p] += acc
+
+print("branch 0 taps:", h[0::M], " branch 1 taps:", h[1::M])
+print("direct then discard:", [round(v, 6) for v in direct])
+print("one branch at a time:", [round(v, 6) for v in branch])
+print("multiplies:", mults["direct"], "direct,", mults["branch"], "polyphase,",
+      "for", len(direct), "output samples")
+```
+
+Both routes print `[1.0, 2.0, 10.0, 15.0, 32.0, 24.0, 30.0]`, and the counters read
+`78 direct, 42 polyphase, for 7 output samples`. The branch taps are `[1.0, 3.0, 5.0]`
+and `[2.0, 4.0, 6.0]` — the prototype dealt out like a pack of cards, each tap in exactly
+one hand.
+
+## The same thing in $z$
+
+With $M$ branches instead of two, sort by the remainder on division by $M$: branch $m$
+holds $e_m[n] = h[nM + m]$. Split the exponent as $z^{-(nM+m)} = z^{-nM}z^{-m}$ and the
+$z^{-m}$ leaves the inner sum, since it has no $n$ in it:
+
+$$H(z) = \sum_{m=0}^{M-1} z^{-m} E_m(z^M), \qquad E_m(z) = \sum_n h[nM+m]\,z^{-n}$$
+
+The derive unit *Splitting a filter into M branches* takes those two steps in order and
+then adds the third one. It is worth noticing what $E_m(z^M)$ means as a sequence: the
+branch taps with $M-1$ zeros wedged between each pair, which is the same zero insertion
+module 2 was about. The sandbox *What z to the M does to a pole* is showing the same
+substitution acting on a pole rather than on a tap list — one pole at radius $r$ becomes
+$M$ poles at radius $r^{1/M}$, and $r^{1/M} < 1$ exactly when $r < 1$.
+
+## Why the filter may be moved at all
+
+The 42 against 78 above came from noticing which products survive. The identity that
+licenses doing it as a block diagram move is worth deriving rather than quoting, because
+its shape is the whole content.
+
+Ask what one sample of delay means on each side of a downsampler. Let $G(z) = z^{-1}$.
+Downsample first and then delay: the result at index $n$ is $x[(n-1)M] = x[nM - M]$.
+Delay first and then downsample: delaying by $M$ gives $v[n] = x[n-M]$, and downsampling
+gives $v[nM] = x[nM - M]$. The same sequence. One output-sample delay on the slow side is
+$M$ input-sample delays on the fast side, and no other number works.
+
+Any FIR $G(z) = \sum_k g[k]z^{-k}$ is a weighted sum of delays, and both routes are
+linear, so the result extends term by term: **$\downarrow M$ then $G(z)$ is
+$G(z^M)$ then $\downarrow M$**. Read it in the direction that saves work — a filter
+already sitting in the form $G(z^M)$ on the fast side may be moved to the slow side and
+becomes $G(z)$ there, running once per output instead of once per input.
+
+That is exactly the form each polyphase term is in. $H(z)$ before a downsampler is
+$\sum_m z^{-m}E_m(z^M)$ before it; each $E_m(z^M)$ moves through and lands as $E_m(z)$;
+the $z^{-m}$ stays behind on the fast side, where a delay costs no multiplier. Those $M$
+delays feeding $M$ branches through a downsampler are the commutator: input sample $n$ is
+handed to branch $(-n) \bmod M$, each branch fires once per output, and the $M$ branch
+outputs are added.
+
+Count the cost. Each branch holds $N/M$ taps and runs once per output, so an output costs
+$N$ multiplies. The direct form costs $N$ per *input*, which is $NM$ per output. For the
+bench decimator that is 101 × 12000 = 1,212,000 multiplies per second against 4,848,000 —
+the factor of four that was going in the bin.
+
+The upsampling identity is the mirror image and derives the same way: $G(z)$ then
+$\uparrow L$ is $\uparrow L$ then $G(z^L)$, because a delay of one sample before the
+zero-stuffing becomes a delay of $L$ afterwards. So an interpolator's filter can be
+pulled back to the low rate, where each branch convolves the *input* directly and the
+branch outputs are interleaved rather than summed. No array of zeros is ever built, and
+none of the multiplications by zero that filled the direct route are performed.
+
+## What a single branch is, and is not
+
+```python
+import math
+
+
+def design_lowpass(numtaps, fc):
+    if numtaps % 2 == 0:
+        numtaps += 1
+    h = []
+    for i in range(numtaps):
+        n = i - (numtaps - 1) / 2.0
+        ideal = 2.0 * fc if n == 0.0 else math.sin(2.0 * math.pi * fc * n) / (math.pi * n)
+        window = 0.54 - 0.46 * math.cos(2.0 * math.pi * i / (numtaps - 1))
+        h.append(ideal * window)
+    total = sum(h)
+    return [v / total for v in h]
+
+
+def response(taps, theta):
+    """Complex frequency response at theta radians per sample."""
+    re = sum(v * math.cos(theta * i) for i, v in enumerate(taps))
+    im = -sum(v * math.sin(theta * i) for i, v in enumerate(taps))
+    return complex(re, im)
+
+
+M = 4
+h = design_lowpass(101, 0.45 / M)
+branches = [h[m::M] for m in range(M)]
+print("branch lengths:", [len(e) for e in branches])
+
+for hz in (1000, 6000, 9000):
+    w = 2.0 * math.pi * hz / 48000.0
+    whole = response(h, w)
+    rebuilt = sum(complex(math.cos(-w * m), math.sin(-w * m)) * response(e, M * w)
+                  for m, e in enumerate(branches))
+    worst = max(abs(response(e, M * w)) for e in branches)
+    print(f"{hz:5d} Hz  |H| {20 * math.log10(abs(whole)):7.2f} dB"
+          f"   loudest branch {20 * math.log10(worst):6.2f} dB"
+          f"   rebuilt error {abs(whole - rebuilt):.2e}")
+```
+
+It prints `branch lengths: [26, 25, 25, 25]` — 101 does not divide by 4, so one branch
+carries an extra tap. Then, at the three frequencies module 1 measured:
+
+```text
+ 1000 Hz  |H|    0.00 dB   loudest branch -12.03 dB   rebuilt error 2.78e-16
+ 6000 Hz  |H|  -29.70 dB   loudest branch -35.68 dB   rebuilt error 4.57e-16
+ 9000 Hz  |H|  -88.17 dB   loudest branch -12.03 dB   rebuilt error 7.64e-16
+```
+
+The `rebuilt error` column is the point of the exercise: $\sum_m e^{-jm\omega}E_m(e^{jM\omega})$
+agrees with $H(e^{j\omega})$ to about $10^{-16}$, which is double-precision rounding and
+nothing else. The decomposition is an identity, and the −29.70 dB and −88.17 dB are the
+same numbers module 1's response table printed.
+
+## The mistake, and why it is tempting
+
+Look at the 9 kHz row again. The whole filter is 88 dB down there. The loudest of its
+four branches is 12 dB down — the level a branch sits at across the entire band, because
+each branch is close to a fractional-sample delay scaled by $1/M$.
+
+That is what a 25-tap filter can do, and it is why the natural worry is wrong. The worry
+is that splitting a 101-tap filter into four 25-tap filters must degrade it, since a
+25-tap lowpass has a far worse stopband than a 101-tap one. It is tempting because the
+premise is true: a 25-tap lowpass really is a much worse filter. The error is treating a
+branch as a filter with a job of its own. No branch attenuates anything. The 88 dB of
+stopband exists only in the sum, built by cancellation between four sequences that are
+each near full amplitude at 9 kHz and in opposing phase. Take one branch out and you do
+not get a slightly worse decimator, you get an unrecognisable one.
+
+The consequence for debugging is worth holding on to: if a polyphase implementation
+sounds wrong, the branch coefficients are almost never at fault. The phase alignment is —
+which sample feeds which branch, and which output slot a branch result lands in. The
+lab's checks are built around that: it compares against the direct route with a tolerance
+of `1e-9` and tells you that any difference is a phase-alignment error, because the
+algebra leaves no other possibility.
+
+## Where this stops holding
+
+The identity is exact in arithmetic, not in floating point. The branch route adds the
+products in a different order, so the last bits differ — which is why the lab's tolerance
+is `1e-9` rather than zero, and why a check written as `==` would fail on correct code.
+
+The noble identity is a statement about a filter that has the form $G(z^M)$, and it is
+false for one that does not. Moving $G(z)$ unchanged across a downsampler gives a
+different system: it filters at the wrong rate, and the error is not small. The identity
+also needs linearity and time-invariance on the block being moved, so a limiter, a
+quantiser or a gain that follows the signal cannot be pushed across a rate change at all.
+
+The saving is in multiplies per second and in nothing else. All $N$ taps are still
+stored, so memory is unchanged; the group delay is still the prototype's $(N-1)/2$
+samples at the fast rate, so latency is unchanged; and linear-phase tap symmetry, which
+halves the multiplier count on its own, does not survive the split — each branch on its
+own is asymmetric, and recovering that saving means folding taps across branches by hand.
+
+Recursive filters are the honest gap. Everything above splits a polynomial, so it applies
+to the numerator of an IIR filter and not to its feedback path, which cannot be run at
+the low rate without first being rewritten so that its denominator is a polynomial in
+$z^M$. That rewrite is possible and it costs extra numerator taps, which is a large part
+of why production decimators are FIR.
+
+## What you are about to build
+
+The lab *Polyphase decimation and interpolation* asks for three functions.
+`polyphase_split(h, M)` is one slice per branch, `h[m::M]`, and the check that catches a
+wrong one is that the branch lengths must sum to `len(h)` for every $M$ — ten taps over
+three branches is 4, 3, 3, matching the `[26, 25, 25, 25]` above.
+
+`polyphase_decimate(x, h, M)` must equal `np.convolve(x, h)[::M]` exactly, without ever
+computing a discarded output: build the phase sequence $u_m[p] = x[pM - m]$, convolve it
+with branch $m$, and accumulate. `polyphase_interpolate(x, h, L)` must equal
+`np.convolve(upsample(x, L), h)` without building the zero-stuffed array: convolve each
+branch with `x` and interleave, since `conv(e_p, x)` already *is* the sequence of output
+samples at positions $p, p+L, p+2L, \dots$. Both output lengths follow from the
+convolutions they must match — `ceil((len(x)+len(h)-1)/M)` and `len(x)*L + len(h) - 1` —
+and both are checked, because an off-by-one in the length is the same defect as an
+off-by-one in the phase, caught one step earlier.
+''',
+                },
             ],
             "sandbox": {
                 "title": "What z to the M does to a pole",
@@ -1118,6 +1998,384 @@ assert 0.97 < _amp < 1.03, \
                 "$L$ and $M$ come from the rates divided by their greatest common divisor: 44.1 kHz to 48 kHz is 160 over 147.",
                 "The intermediate rate $L f_s$ is never realised in a polyphase implementation — it exists only in the algebra.",
             ],
+            "read": [
+                {
+                    "title": "One output in 160 lands on a sample you have",
+                    "minutes": 16,
+                    "body": r'''
+A 44.1 kHz master has to go into a 48 kHz desk, and both are locked to the same house
+clock, so the rates are exact. In one second 44,100 samples arrive and 48,000 have to
+leave. Neither number divides the other, so almost every output sample is wanted at an
+instant when nothing was measured.
+
+How often is an output instant also an input instant? Output $k$ falls at $k/48000$
+seconds and input $p$ at $p/44100$, so they coincide when $44100\,k = 48000\,p$:
+
+```python
+from math import gcd
+
+f_in, f_out = 44100, 48000
+fine = f_in * f_out // gcd(f_in, f_out)          # the finest grid holding both
+print("finest grid:", fine, "Hz")
+print("L =", fine // f_in, "  M =", fine // f_out)
+
+# output instant k lands on an input instant when k/f_out == p/f_in for whole p
+hits = [k for k in range(400) if (k * f_in) % f_out == 0]
+print("output instants that fall on an input sample:", hits)
+```
+
+It prints `finest grid: 7056000 Hz`, `L = 160   M = 147`, and
+`output instants that fall on an input sample: [0, 160, 320]`. One output in 160 lands on
+a number you were given. The other 159 have to be worked out.
+
+## Where $L$ and $M$ come from
+
+The two grids are irregular against each other, but both sit inside a third one. The
+input instants are multiples of $1/44100$ and the output instants are multiples of
+$1/48000$, so both are multiples of the *least common multiple* of the two rates —
+$\text{lcm}(44100, 48000) = 7{,}056{,}000$ Hz, which is what the block computed. Every
+input instant is a point of that fine grid, one in every $7056000/44100 = 160$; every
+output instant is a point of it too, one in every $7056000/48000 = 147$.
+
+That reading gives the recipe rather than assuming it. Put the signal on the fine grid —
+which is upsampling by $L = 160$, since the input samples are already 160 fine-grid
+points apart. Fill in the fine-grid values the signal must have had, which is what the
+lowpass does. Then read off every 147th of them, which is downsampling by $M = 147$. The
+recipe is not a convention; it is the only grid on which both sets of instants exist at
+once, and $L$ and $M$ are the two spacings measured on it.
+
+It also settles the order, which is where the most expensive bug in resampling lives.
+Downsampling first would mean reading every 147th *input* sample before the fine grid is
+built. For the reverse conversion, 48 kHz down to 44.1 kHz with $M = 160$, that leaves
+300 samples per second, whose Nyquist limit is 150 Hz. Everything in the recording above
+150 Hz would be gone before the interpolator ran, and interpolation invents nothing, so
+no later stage can bring it back. The blanks unit *48 kHz to 44.1 kHz, decision by
+decision* opens on that choice for the same reason.
+
+## One filter, and which constraint binds
+
+The chain would have two filters back to back — the anti-image filter after the upsampler
+and the anti-alias filter before the downsampler — both running at 7.056 MHz. Two lowpass
+filters in cascade are one lowpass filter with the tighter cutoff, so the pair collapses
+to a single filter that must satisfy both bounds: $\pi/L$ for the images, $\pi/M$ for the
+aliases, and therefore $\pi/\max(L, M)$.
+
+Turn that into hertz and something tidy falls out. The filter runs at $Lf_{in}$, so a
+cutoff of $\pi/\max(L,M)$ is $Lf_{in}/(2\max(L,M))$. If $L > M$ that is $f_{in}/2$; if
+$M > L$ it is $Lf_{in}/(2M) = f_{out}/2$. The combined cutoff is always **half of
+whichever rate is lower** — 22.05 kHz for 44.1 kHz to 48 kHz, and 22.05 kHz again for the
+conversion back, because 44.1 kHz is the lower rate in both directions. The sandbox
+*Which of the two limits binds* is that sentence made movable: fix the tone and drop the
+output rate, and headroom that had already been granted is revoked.
+
+The gain follows from module 2 with nothing added. Zero insertion left the signal $L$
+times too small; discarding samples changes no amplitude at all. So the combined filter
+needs $\sum_n h[n] = L$, not $M$ and not $L/M$. The derive unit *Specifying the one filter
+that does both jobs* walks the output rate, the intermediate rate, the binding cutoff and
+the gain in that order.
+
+## The commutator, derived
+
+Written literally, the chain is: $v[n] = \sum_p x[p]\,h[n - pL]$ — the zero-stuffed
+convolution, in which every term with $n - pL$ outside the filter contributes nothing —
+followed by $y[k] = v[kM]$. Substitute:
+
+$$y[k] = \sum_p x[p]\, h[kM - pL]$$
+
+Now write $kM = qL + \varphi$ with $0 \le \varphi < L$, which is exactly
+`q, phase = divmod(k*M, L)`. Then $kM - pL = \varphi + (q - p)L$, and putting $j = q - p$
+so that $p = q - j$:
+
+$$y[k] = \sum_j h[\varphi + jL]\; x[q - j] = \sum_j e_\varphi[j]\, x[q-j]$$
+
+Every output sample is one branch of the filter dotted with one window of the input. The
+7.056 MHz stream never appears, because $v$ was substituted away rather than computed:
+the only quantities left in the final line are input samples and prototype taps.
+
+The two indices do different jobs. $q$ says which input samples the window covers, and it
+advances by roughly $M/L$ per output. $\varphi$ says which branch to use, and it walks:
+
+```python
+L, M = 3, 2
+print("L =", L, " M =", M)
+for k in range(7):
+    q, phase = divmod(k * M, L)
+    print(f"  output {k}: branch {phase}, input window ending at {q}")
+
+L, M = 160, 147
+print("L =", L, " M =", M)
+print("  branches used by the first ten outputs:",
+      [divmod(k * M, L)[1] for k in range(10)])
+print("  the branch index advances by M =", M, "modulo L =", L)
+```
+
+For 3 and 2 the branches run `0, 2, 1, 0, 2, 1, 0` while the window advances
+`0, 0, 1, 2, 2, 3, 4` — two branches fire for every one input sample consumed, which is
+the ratio $L/M$ appearing as a rhythm. For 160 and 147 the first ten branches are
+`[0, 147, 134, 121, 108, 95, 82, 69, 56, 43]`: the index advances by $M$ modulo $L$, and
+since $147 = 160 - 13$ that reads on the page as a walk backwards in steps of 13. It
+returns to branch 0 after 160 outputs, which is the same period the first block found —
+the outputs that land on an input instant are the ones the commutator serves from
+branch 0.
+
+## The whole thing, in numbers
+
+```python
+import math
+
+
+def design_lowpass(numtaps, fc, gain=1.0):
+    if numtaps % 2 == 0:
+        numtaps += 1
+    h = []
+    for i in range(numtaps):
+        n = i - (numtaps - 1) / 2.0
+        ideal = 2.0 * fc if n == 0.0 else math.sin(2.0 * math.pi * fc * n) / (math.pi * n)
+        window = 0.54 - 0.46 * math.cos(2.0 * math.pi * i / (numtaps - 1))
+        h.append(ideal * window)
+    scale = gain / sum(h)
+    return [v * scale for v in h]
+
+
+L, M = 3, 2
+N = 20 * max(L, M) + 1                     # the lab's rule: 61 taps here
+h = design_lowpass(N, 0.45 / max(L, M), gain=float(L))
+x = [math.sin(2 * math.pi * 0.07 * j) + 0.3 * math.cos(2 * math.pi * 0.19 * j)
+     for j in range(40)]
+
+# the literal route: build the zero-stuffed stream, convolve, keep every M-th
+v = [0.0] * (len(x) * L)
+v[::L] = x
+full = [0.0] * (len(v) + len(h) - 1)
+literal_mults = 0
+for i, vi in enumerate(v):
+    for j, hj in enumerate(h):
+        full[i + j] += vi * hj
+        literal_mults += 1
+literal = full[::M]
+
+# the commutator: one branch of h per output, and no stuffed array anywhere
+T = -(-len(h) // L)                        # taps per branch, rounded up
+E = [[h[p + j * L] if p + j * L < len(h) else 0.0 for j in range(T)] for p in range(L)]
+K = -(-((len(x) - 1) * L + len(h)) // M)
+pad = [0.0] * T + x + [0.0] * T
+commutated = []
+commutator_mults = 0
+for k in range(K):
+    q, phase = divmod(k * M, L)
+    acc = 0.0
+    for j in range(T):
+        acc += E[phase][j] * pad[q + T - j]
+        commutator_mults += 1
+    commutated.append(acc)
+
+print("outputs:", len(literal), "literal,", len(commutated), "commutator")
+worst = max(abs(a - b) for a, b in zip(commutated, literal))
+print("largest disagreement:", f"{worst:.2e}")
+print("multiplies:", literal_mults, "literal,", commutator_mults, "commutator")
+print("taps per branch:", T, "against a prototype of", len(h))
+```
+
+It reports `90 literal, 89 commutator`, a largest disagreement of `4.44e-16`, and
+`7320 literal, 1869 commutator` multiplies over a prototype of 61 taps split into
+branches of 21. The disagreement is double-precision rounding; the two routes are the
+same sum in a different order.
+
+The one-sample difference in length is real and worth understanding rather than patching.
+The literal route convolves a zero-stuffed array whose tail is zeros, so it emits one
+last output built entirely from them. The commutator's count,
+$K = \lceil((n-1)L + N)/M\rceil$, stops at the final output for which the filter has seen
+any input, which is the honest boundary. The capstone states that formula and compares on
+the overlap for exactly this reason.
+
+Scale the count up. At $L = 160$, $M = 147$ and 32 taps per phase, the prototype is 5120
+taps. The literal route would convolve a 7.056 MHz stream with all of them —
+$5120 \times 7{,}056{,}000 = 3.6 \times 10^{10}$ multiplies a second — and then discard
+146 of every 147 results. The commutator does 32 per output at 48 kHz, which is
+1,536,000 a second. The ratio is 23,520, and $160 \times 147$ is 23,520: the saving is
+$L$ from never multiplying by a zero and $M$ from never computing a discarded output.
+
+## The mistake, and why it is tempting
+
+The cutoff is where careful people go wrong, and the reason is that the wrong answer
+works. Setting the cutoff to $\pi/L$ is correct whenever $L > M$ — which is what 44.1 kHz
+to 48 kHz is — so a converter built that way passes every test on the way up. Turn it
+round to run 48 kHz into 44.1 kHz, where $M = 160$ is the larger, and $\pi/L = \pi/147$
+becomes the looser bound: everything between 22.05 kHz and 24 kHz survives the filter and
+folds into the audio band on the way through the decimator. The lab checks both degenerate
+directions, `L = 1` and `M = 1`, because each of them alone lets a `min` written where a
+`max` belongs go unnoticed.
+
+The second one is `rate_ratio` itself. The output rate is $f_{in}L/M$, so $L$ has to be
+built from $f_{out}$ and $M$ from $f_{in}$ — `(f_out//g, f_in//g)`. Writing them in the
+order they appear in the argument list inverts the conversion, and 44.1 kHz to 48 kHz
+becomes 48 kHz to 44.1 kHz, which is a plausible-looking file of the wrong length.
+
+## Where this stops holding
+
+Everything above assumes the two clocks are exactly nominal and locked together. Put the
+player on one crystal and the recorder on another, both specified to ±50 ppm, and the
+true ratio is not 160/147 — it is 160/147 times something near one that drifts with
+temperature. A fixed commutator then produces output samples at the wrong long-run rate,
+and the buffer between it and the recorder empties or fills, a sample at a time, until
+something clicks. Fixing that means measuring the ratio continuously and moving the
+branch phase by a fractional amount rather than by whole steps of $M$, which is
+asynchronous rate conversion and a different structure — a Farrow interpolator rather
+than a fixed bank.
+
+Rationality is also a statement about existence rather than cost. Every ratio of two
+integers is rational, so $L/M$ covers every conversion — but 44,100 to 44,101 has a
+greatest common divisor of 1, giving $L = 44101$ and $M = 44100$, a bank of 44,101
+branches and a prototype of well over a million taps. The structure is correct and
+unbuildable, which is again the boundary where the asynchronous methods take over.
+
+Lastly, the latency is the prototype's and not the branch's. A 5120-tap filter at
+7.056 MHz has a group delay of 2559.5 fine-grid samples, about 363 microseconds. Each
+output costs 32 multiplies, and none of that arithmetic reduces the delay by a sample —
+cheapness and promptness are separate specifications here, and only one of them was
+bought.
+
+## What you are about to build
+
+The lab *A rational rate converter, written literally* builds the version this reading
+substituted away, so that the capstone has something correct to be measured against.
+`rate_ratio(f_in, f_out)` reduces with `math.gcd`; `resample(x, L, M, numtaps=None)`
+upsamples by `L`, filters at `0.45/max(L, M)` with gain `L`, and keeps every `M`-th
+sample of the full convolution, with `numtaps` defaulting to `20*max(L, M) + 1`. Its
+checks include both degenerate cases and a spectral one — with `L = 4, M = 1` the three
+images have to be at least 50 dB down, which fails immediately if the cutoff used
+`min(L, M)`.
+
+The capstone *44.1 kHz to 48 kHz with a polyphase commutator* is the version derived
+here: `divmod(k*M, L)`, one branch of 32 taps per output, no intermediate array anywhere,
+and an equality check against the literal route to `1e-9` at both 5/3 and 160/147. A phase
+error that a small ratio hides shows up at 160/147, where the commutator wraps 147 places
+at a time.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Two rates, one grid, one filter",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A converter takes 32 kHz to 44.1 kHz. At what rate does the single combined filter conceptually run?",
+                        "opts": [
+                            "44.1 kHz, the output rate, because that is the grid the samples it produces have to live on",
+                            "14.112 MHz, the lowest rate whose instants include every input instant and every output instant",
+                            "32 kHz, the input rate, because that is where the samples the filter has to read actually come from",
+                            "76.1 kHz, the two rates added together, since both sets of instants have to be representable",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The input instants are multiples of $1/32000$ and the output instants are multiples of
+$1/44100$, and the finest grid containing both is $\text{lcm}(32000, 44100) =
+14{,}112{,}000$ Hz. That gives $L = 14112000/32000 = 441$ and $M = 14112000/44100 = 320$,
+and it is the only grid on which the two sets of instants exist at once — which is why
+the recipe is upsample, filter, downsample rather than something cleverer. The filter is
+placed between the two rate changes, so neither the input rate nor the output rate is
+where it sits. In a polyphase implementation that 14.112 MHz stream is never built; it
+survives only as the arithmetic that fixes $L$ and $M$.
+""",
+                    },
+                    {
+                        "q": "Going from 48 kHz to 44.1 kHz, $L = 147$ and $M = 160$. A converter is built that decimates by 160 first and interpolates by 147 afterwards. What comes out?",
+                        "opts": [
+                            "The right rate and the right band, but 160 times too quiet, because the decimator divided the level",
+                            "The same result as the correct order, because 147 and 160 share no common factor",
+                            "A signal band-limited to about 150 Hz and then stretched back over the audio range",
+                            "The right band at the right level, with the interpolation images left in, since the filter that removes them now runs first",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Decimating 48 kHz by 160 leaves 300 samples per second, whose Nyquist limit is 150 Hz.
+Everything above that is gone at that instant, and interpolating by 147 afterwards raises
+the rate without restoring any of it — the output has the right length, the right level
+and almost none of the recording. Coprimality is a real property of 147 and 160 and it
+has nothing to do with the question: these two stages do not commute in either case,
+because one of them destroys band and the other cannot create it. Discarding samples also
+scales nothing, so the level is not what changed.
+""",
+                    },
+                    {
+                        "q": "The combined filter's cutoff is $\\pi/\\max(L, M)$ in normalised terms. Expressed in hertz, what is that?",
+                        "opts": [
+                            "Half the input rate, whichever direction the conversion runs in",
+                            "Half the intermediate rate, since that is the rate the filter is running at",
+                            "Half of whichever of the input and output rates is the lower one",
+                            "Half the output rate, since that is the grid the result has to be representable on",
+                        ],
+                        "a": 2,
+                        "why": r"""
+The filter runs at $Lf_{in}$, so a cutoff of $\pi/\max(L,M)$ is
+$Lf_{in}/(2\max(L,M))$. When $L > M$ that reduces to $f_{in}/2$; when $M > L$ it reduces
+to $Lf_{in}/(2M)$, which is $f_{out}/2$. Either way it is half the lower of the two
+rates — 22.05 kHz both for 44.1 kHz into 48 kHz and for the return trip. Half the input
+rate and half the output rate are each right in one direction and wrong in the other,
+which is exactly why a converter built on one of them passes its tests going up and folds
+22 kHz of content into the audio band coming down.
+""",
+                    },
+                    {
+                        "q": "The combined filter is given a DC gain of $L$, rather than $M$ or $L/M$. What decides that?",
+                        "opts": [
+                            "The overall rate change is $L/M$, and the gain has to match it so that power per second is preserved",
+                            "Zero insertion divided the level by $L$, while discarding samples does not change any level at all",
+                            "The downsampler multiplies the level by $M$ on the way out, so one factor of $L$ cancels against it",
+                            "Here $L$ happens to exceed $M$, and the compensation always follows whichever of the two is larger",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Only one of the two rate changes touches amplitude. Zero insertion spreads the same total
+over $L$ times as many samples, so the mean falls by $L$ and a unit-gain filter passes
+that reduced mean straight through; keeping one sample in $M$ takes values that were
+already correct and drops the others, changing no level at all. So the compensation is
+$L$ regardless of which of $L$ and $M$ is larger, and regardless of whether the
+conversion raises or lowers the rate. The lab's constant-input check is the fastest way to
+see it: a DC input of 1 that comes out near $1/L$ names the missing gain immediately.
+""",
+                    },
+                    {
+                        "q": "At $L = 160$, $M = 147$ with a 5120-tap prototype, how many multiplications does one output sample cost in the commutator form?",
+                        "opts": [
+                            "147, one for each input sample the window advances over between outputs",
+                            "5120, the whole prototype, because every tap contributes something to every output",
+                            "32 — the prototype split $L$ ways gives branches of that length",
+                            "160, one tap taken from each of the 160 branches in turn",
+                        ],
+                        "a": 2,
+                        "why": r"""
+The prototype splits into $L = 160$ branches of $5120/160 = 32$ taps, and
+`q, phase = divmod(k*M, L)` picks exactly one of them per output. Every tap does still
+contribute to *some* output, which is what makes the 5120 reading tempting — but not to
+this one: the taps a given output touches are the ones whose index is congruent to
+$\varphi$ modulo $L$, and the rest line up against input positions that are zero in the
+stuffed stream. At 48 kHz that is 1,536,000 multiplies a second against the literal
+route's $3.6\times10^{10}$, a ratio of 23,520, which is $L$ times $M$.
+""",
+                    },
+                    {
+                        "q": "A 44.1 kHz player and a 48 kHz recorder run on separate crystals rather than a shared house clock. What does that break in a fixed 160/147 converter?",
+                        "opts": [
+                            "The stopband, because the images move along the axis as the true rates drift away from nominal",
+                            "The gain, because the compensation of $L$ was derived from the nominal rates",
+                            "Nothing: 160/147 is an exact ratio, so the conversion stays exact whatever the crystals do",
+                            "The buffer, because the true ratio is only near 160/147 rather than equal to it",
+                        ],
+                        "a": 3,
+                        "why": r"""
+Two crystals specified to ±50 ppm give a true ratio of 160/147 multiplied by something
+near one that wanders with temperature. The converter keeps producing exactly 160 outputs
+per 147 inputs, so the long-run rate is wrong by a few parts per million, and the buffer
+between the converter and the recorder fills or empties by one sample every few seconds
+until it clicks. The exactness of 160/147 is not in doubt — that is what makes this
+tempting to dismiss — but it is exact about the wrong quantity. The repair is to measure
+the ratio continuously and move the branch phase by a fractional amount, which is
+asynchronous conversion and a different structure.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "Which of the two limits binds",
                 "visualiser": "spectrum",
