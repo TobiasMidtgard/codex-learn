@@ -65,6 +65,298 @@ COURSE = {
                 "True LRU is a per-set ordering, not a per-block counter: a hit has to move its block to the recent end of that ordering. A policy that leaves the order alone on a hit is FIFO, and it will evict a block the program is still using.",
                 "Widening the set costs `W` tag comparators and a `W`-to-1 multiplexer in the hit path, which is why real L1 caches stop at four or eight ways.",
             ],
+            "read": [
+                {
+                    "title": "Twelve blocks, sixteen frames, no hits",
+                    "minutes": 16,
+                    "body": r'''
+Three arrays, four 64-byte blocks each, at addresses 0, 1024 and 2048. A loop walks
+them round-robin — one element from each, then the next element from each — four
+times over. Written out, the address stream starts like this:
+
+```text
+0  1024  2048   64  1088  2112   128  1152  2176   192  1216  2240   ... (four passes)
+```
+
+Forty-eight accesses over twelve distinct blocks. The cache is 1 KB with 64-byte
+blocks, so it holds sixteen block frames, and the working set needs twelve of them.
+It fits, with four frames to spare. Run it.
+
+```python
+class Cache:
+    def __init__(self, capacity, block, ways):
+        self.block, self.ways = block, ways
+        self.sets = capacity // (block * ways)
+        self.tags = [[] for _ in range(self.sets)]
+        self.hits = self.misses = self.evictions = 0
+
+    def access(self, addr):
+        b = addr // self.block
+        s, t = self.tags[b % self.sets], b // self.sets
+        if t in s:                      # hit: move to the recent end
+            s.remove(t)
+            s.append(t)
+            self.hits += 1
+            return True
+        s.append(t)                     # miss: install, evict the front
+        if len(s) > self.ways:
+            s.pop(0)
+            self.evictions += 1
+        self.misses += 1
+        return False
+
+
+trace = []
+for _ in range(4):
+    for i in range(4):
+        for base in (0, 1024, 2048):
+            trace.append(base + i * 64)
+
+print("accesses:", len(trace))
+for ways in (1, 2, 4, 8):
+    c = Cache(1024, 64, ways)
+    for a in trace:
+        c.access(a)
+    print("%2d-way: %2d sets, %2d hits, %2d misses, miss rate %.2f, evictions %d"
+          % (ways, c.sets, c.hits, c.misses, c.misses / len(trace), c.evictions))
+```
+
+Direct-mapped: zero hits out of forty-eight, and forty-four evictions. Two ways:
+still zero. Four ways: thirty-six hits and a miss rate of 0.25. Nothing about
+capacity explains any of that — the data fitted in every one of those four caches.
+The whole of the difference is in *which* frame a block is allowed to occupy, and
+that is decided by three fields of its address.
+
+## Where the address gets cut, and why there
+
+The block is 64 bytes, so the low 6 bits of an address select a byte inside it and
+cannot help choose a frame: every byte of a block lives or dies together. That
+leaves the block number, $\lfloor a/B \rfloor$, and sixteen frames to distribute it
+over, which needs 4 bits. The question is which 4.
+
+Take them from immediately above the offset and consecutive blocks land in
+consecutive sets, so a contiguous array spreads itself across the whole cache. Take
+them from the top of the address instead and every block of a 1 KB region shares one
+index, so an array would evict itself while fifteen sixteenths of the cache sat
+empty. The index is the low block bits because contiguous access is what programs
+do. Whatever is left above the index is the tag, and it is the only part that has to
+be stored and compared.
+
+```python
+BLOCK = 64
+for sets in (16, 8):
+    print("%d sets:" % sets)
+    for addr in (0, 1024, 2048, 1088):
+        b = addr // BLOCK
+        print("   addr %5d -> block %3d -> set %2d, tag %d"
+              % (addr, b, b % sets, b // sets))
+```
+
+The three array bases land in set 0 together. That is the whole defect, and it is a
+consequence of an arithmetic the addresses make unavoidable: two blocks collide when
+their block numbers are congruent modulo the set count $S$, so their addresses
+differ by a multiple of $S \cdot B$. With $S = C/(BW)$ from the derivation, that
+spacing is
+
+$$S \cdot B = \frac{C}{W}$$
+
+For this cache, 1024 bytes — and the three arrays were placed exactly 1024 bytes
+apart. That spacing is not contrived: an allocator handing out power-of-two buffers
+produces it constantly, which is why the pathology shows up in real code as an array
+dimension that is a power of two.
+
+## The set is the only unit of competition
+
+Follow the twelve live blocks — 0 to 3, 16 to 19, 32 to 35 — into each geometry.
+Block 0, block 16 and block 32 are congruent modulo 16, modulo 8 and modulo 4 alike,
+so they share a set at every associativity here; likewise blocks 1, 17 and 33, and so
+on. Four sets carry three live tags each, and every other set stays empty however the
+cache is arranged:
+
+```text
+ways  sets  frames per set  live tags per set  sets used
+  1    16          1                3             4 of 16
+  2     8          2                3             4 of 8
+  4     4          4                3             4 of 4
+```
+
+So the comparison that decides the outcome is three live tags against $W$ frames, and
+the capacity never enters it. At one and two ways the set is over-subscribed, and LRU
+turns over-subscription into total failure rather than partial: with three tags
+cycling through two frames, the block LRU evicts is always the one wanted next. Not
+a reduced hit rate — no hits at all. At four ways the three tags fit, and the twelve
+remaining misses are the first touch of each block: $12/48 = 0.25$, which is the
+figure the run printed.
+
+The derivation *The geometry of a set-associative cache* takes the same argument in
+symbols and ends with $W$ cancelling out: under a mapping that spreads blocks
+uniformly, the region that fits is the capacity $C$ and associativity buys nothing.
+This trace is the other case. Its mapping piles three blocks onto a quarter of the
+sets and leaves the rest untouched, and it is exactly there that the comparators earn
+their area.
+
+## What moves when the ways double
+
+Look at block 17 in the run above. At sixteen sets it is index 1, tag 1; at eight
+sets it is index 1, tag 2. The bit the index gave up has reappeared at the bottom of
+the tag, and the total number of address bits accounted for has not changed. Halving
+the sets does not shrink the cache; it makes each set responsible for twice as much
+of the address space and gives it twice as many frames to do that with. The lab check
+named *widening the set moves bits from index to tag* is that observation, asserted
+on this address.
+
+The cost is in the hit path. Every one of the $W$ ways needs its own tag comparator,
+their outputs drive a $W$-to-1 multiplexer on the data, and that multiplexer sits
+between the data array and the register file on the load-use path — the path a
+scheduler has already speculated on. Doubling the ways adds a level to that
+multiplexer and a comparator per way to the tag array, which is why L1 caches stop at
+four or eight ways while an L3, whose latency nobody is speculating on, goes to
+sixteen.
+
+## The mistake: a replacement policy that never runs on a hit
+
+The tempting implementation keeps one list per set in *insertion* order and evicts
+the front. Its hit path does nothing at all, which is attractive precisely because
+the hit path is the critical path — and the reasoning that supports it sounds solid:
+a hit changes nothing about which blocks are resident, so there is nothing to update.
+That is FIFO, and here is the difference:
+
+```python
+def run(trace, ways, reorder_on_hit):
+    """One set, `ways` frames. reorder_on_hit=True is LRU, False is FIFO."""
+    resident = []
+    out = []
+    for b in trace:
+        if b in resident:
+            if reorder_on_hit:
+                resident.remove(b)
+                resident.append(b)
+            out.append("hit")
+        else:
+            resident.append(b)
+            if len(resident) > ways:
+                resident.pop(0)
+            out.append("miss")
+    return out
+
+
+blocks = [0, 1, 0, 2, 1]        # addresses 0, 64, 0, 128, 64 in 64-byte blocks
+print("LRU :", run(blocks, 2, True))
+print("FIFO:", run(blocks, 2, False))
+```
+
+A 128-byte two-way cache is a single set of two frames. The re-touch of block 0 is
+the whole experiment: under LRU it makes block 1 the least recent, so block 1 is
+evicted and the final access to it misses. Under FIFO block 0 was installed first and
+leaves first regardless of having been used a moment ago, so block 1 survives and the
+final access hits.
+
+Read that result carefully, because it is the reason the bug survives review: on this
+trace **FIFO scores better**. A policy that ignores use is not uniformly worse, and no
+aggregate miss rate will reliably tell you which one you implemented. What separates
+them is the guarantee — LRU never evicts the most recently used block, FIFO evicts it
+whenever it happens to be the oldest — and a guarantee is checked by a case, not by an
+average. The lab check named *replacement is LRU and not FIFO* is this five-access
+trace, and it expects `[False, False, True, False, False]` with one hit and four
+misses.
+
+## True LRU stops being buildable at about four ways
+
+The model the lab asks for is exact recency, which means a set keeps an ordering of
+its $W$ frames.
+
+```python
+import math
+
+for ways in (2, 4, 8, 16):
+    orders = math.factorial(ways)
+    print("%2d ways: %d orderings, %d bits per set if packed perfectly"
+          % (ways, orders, math.ceil(math.log2(orders))))
+```
+
+Forty-five bits per set at sixteen ways if the permutation were packed optimally,
+and no hardware packs permutations — the usual construction spends an age counter per
+way, 64 bits per set, all of them read, compared and rewritten on every hit. So
+shipped caches approximate. Tree pseudo-LRU spends $W-1$ bits, fifteen for sixteen
+ways, and gets the recency order approximately right; some designs give up and choose
+at random. Write true LRU anyway, as the lab does: it is the policy whose behaviour is
+defined, and an approximation is only meaningful as a departure from something.
+
+## Where this picture stops holding
+
+LRU is not the best policy, only a defensible one. A cyclic sweep over $W+1$ blocks
+in a $W$-way set scores zero hits under LRU, because the victim is invariably the
+block wanted next; a policy allowed to look ahead misses once per pass after the
+first and hits on everything else — five blocks through four frames, four passes, is
+zero hits under LRU against twelve of twenty under Belady's optimal. The sandbox *What capacity and associativity do not buy you* is
+built on that worst case on purpose, and it is why the curve there stays pinned at
+100 per cent across sizes that look more than large enough.
+
+The sandbox also shows something the tags-against-ways story above does not predict.
+Its trace is a fixed 32 KB walk, three passes, and the same simulation reproduces it:
+
+```python
+WORKING_SET, LINE = 32 * 1024, 64
+
+
+def miss_rate(kb, ways, stride=64, passes=3):
+    lines = (kb * 1024) // LINE
+    sets = max(1, lines // ways)
+    tags = [[] for _ in range(sets)]
+    hits = total = 0
+    for _ in range(passes):
+        for addr in range(0, WORKING_SET, stride):
+            line = addr // LINE
+            s, t = tags[line % sets], line // sets
+            total += 1
+            if t in s:
+                s.remove(t)
+                s.append(t)
+                hits += 1
+            else:
+                s.append(t)
+                if len(s) > ways:
+                    s.pop(0)
+    return (total - hits) / total
+
+
+for kb in (8, 16, 24, 32, 64):
+    row = ["%5.1f%%" % (100 * miss_rate(kb, w)) for w in (1, 4, 16)]
+    print("%2d KB  direct %s   4-way %s   16-way %s" % (kb, *row))
+```
+
+At 24 KB the direct-mapped cache misses 66.7 per cent of the time and the associative
+ones miss on every access. More associativity, worse result — and it is not an
+artefact. The walk touches 512 lines. A 24 KB direct-mapped cache has 384 sets, so
+128 of them are asked to hold two lines and 256 are asked to hold one; the 256
+singletons survive and hit on the second and third passes, which is $512/1536 = 33.3$
+per cent hits. Group those same 384 frames four to a set and there are 96 sets, each
+responsible for five or six lines with four frames — over-subscribed everywhere, and
+under a cyclic sweep that means nothing at all survives. Associativity redistributes
+frames between sets; it never adds any, and redistribution can take a set that was
+coping and break it.
+
+Finally, the modulo arithmetic itself is a model. It assumes a power-of-two set count
+and an address the cache is allowed to see. Skewed-associative caches hash a
+different function into each way so that two blocks colliding in one way rarely
+collide in another. And a virtually-indexed, physically-tagged L1 has to finish
+indexing before translation completes, which caps $S \cdot B$ at the page size: with
+4 KB pages and 64-byte blocks that is 64 sets, so capacity beyond 4 KB can be bought
+only in ways. A 32 KB 8-way L1 is not a preference. It is $64 \times 64 \times 8$,
+and the constraint that produced it is in the MMU rather than in the cache.
+
+## What you are about to build
+
+The lab *A set-associative cache with true LRU* asks for `block_of`, `index_of`,
+`tag_of`, `access` and `miss_rate` — the five functions every trace above was made
+of. Its checks are the numbers already on this page: 44 evictions on the colliding
+trace, a miss rate of exactly 1.0 at one and two ways and 0.25 at four, one access in
+sixteen missing on a sequential byte walk, and the five-access trace that separates
+LRU from FIFO. Keep `self.tags[i]` in least-recently-used-first order and all five
+fall out of it.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "What capacity and associativity do not buy you",
                 "visualiser": "cache",
@@ -485,6 +777,474 @@ assert _c.evictions == 44, \
                 "The method: run the real cache, a fully associative cache of equal capacity, and an infinite cache over the same trace, and label each miss by which of them also missed.",
                 "The taxonomy classifies a measurement, not a cause — the same program under a different block size produces a different split.",
             ],
+            "read": [
+                {
+                    "title": "Two traces, one miss rate, opposite fixes",
+                    "minutes": 16,
+                    "body": r'''
+Here are two address traces. The first is the one from module 1: three arrays of
+four blocks each, at 0, 1024 and 2048, walked round-robin four times. The second is
+a cyclic sweep over 2 KB — thirty-two consecutive blocks, four passes. Put both
+through a 1 KB cache with 64-byte blocks and vary nothing but the associativity.
+
+```python
+def miss_rate(trace, ways, frames=16, block=64):
+    sets = frames // ways
+    tags = [[] for _ in range(sets)]
+    misses = 0
+    for addr in trace:
+        b = addr // block
+        s, t = tags[b % sets], b // sets
+        if t in s:
+            s.remove(t)
+            s.append(t)
+        else:
+            s.append(t)
+            if len(s) > ways:
+                s.pop(0)
+            misses += 1
+    return misses / len(trace)
+
+
+colliding = []
+for _ in range(4):
+    for i in range(4):
+        for base in (0, 1024, 2048):
+            colliding.append(base + i * 64)
+
+sweep = [i * 64 for _ in range(4) for i in range(32)]
+
+print("accesses: colliding %d, sweep %d" % (len(colliding), len(sweep)))
+for name, trace in (("three arrays 1 KB apart", colliding),
+                    ("2 KB cyclic sweep", sweep)):
+    rates = " ".join("%5.2f" % miss_rate(trace, w) for w in (1, 2, 4, 16))
+    print("%-24s miss rate at 1/2/4/16 ways: %s" % (name, rates))
+```
+
+Direct-mapped, both traces miss on every single access. A profiler reporting a miss
+rate would print 100 per cent for each and stop there, and the two situations could
+not be less alike: four ways takes the first trace to 0.25 and does nothing whatever
+to the second, which stays at 1.00 even fully associative. The number was the same
+and the correct response to it was opposite.
+
+## Ask what a different cache would have done
+
+There is no way to look at a miss and see its cause, so stop trying to. Ask a
+counterfactual instead: *which other cache would have avoided this miss?* Three
+caches answer between them, and each one is chosen to differ from the real cache in
+exactly one respect.
+
+An infinite cache never evicts anything, so the only misses it can take are
+references to blocks that have never been referenced before. Every cache in existence
+takes those, whatever its size or shape. Whatever the infinite cache misses on is
+therefore the floor, and the name for it is a **compulsory** miss.
+
+A fully associative cache of the *same capacity* evicts, but never because of where a
+block's address falls — any block may occupy any frame. So a miss it takes beyond the
+compulsory ones happened because the program asked for more live data than the cache
+holds. That surplus is a **capacity** miss.
+
+The real cache has the same capacity and a restricted placement. What it misses on
+beyond what the fully associative cache missed on is attributable to the index and to
+nothing else: a **conflict** miss.
+
+Three measurements, two subtractions, and the definitions are complete — which is the
+derivation *Splitting a measured miss rate three ways* in one paragraph:
+
+$$m_{\text{compulsory}} = m_{inf}, \qquad
+  m_{\text{capacity}} = m_{fa} - m_{inf}, \qquad
+  m_{\text{conflict}} = m_{dm} - m_{fa}$$
+
+Note what has been defined and what has not. Nothing here says why the program
+touched what it touched. The three names are labels for *what a change of cache would
+have done*, which is exactly the question an architect is asking, and it is why the
+taxonomy is worth its arithmetic.
+
+## Running it on both traces
+
+Feed one trace to all three models at once and label each access by which of them
+also missed.
+
+```python
+class LRU:
+    """A set-associative tag store. One set makes it fully associative."""
+
+    def __init__(self, sets, ways):
+        self.sets, self.ways = sets, ways
+        self.tags = [[] for _ in range(sets)]
+
+    def access(self, block):
+        s, t = self.tags[block % self.sets], block // self.sets
+        if t in s:
+            s.remove(t)
+            s.append(t)
+            return True
+        s.append(t)
+        if len(s) > self.ways:
+            s.pop(0)
+        return False
+
+
+def classify(trace, ways, frames=16, block=64):
+    real, full, seen = LRU(frames // ways, ways), LRU(1, frames), set()
+    counts = {"hit": 0, "compulsory": 0, "capacity": 0, "conflict": 0}
+    for addr in trace:
+        b = addr // block
+        first = b not in seen
+        seen.add(b)
+        fa_hit = full.access(b)          # every access, hit or miss
+        if real.access(b):
+            counts["hit"] += 1
+        elif first:
+            counts["compulsory"] += 1
+        elif not fa_hit:
+            counts["capacity"] += 1
+        else:
+            counts["conflict"] += 1
+    return counts
+
+
+colliding = []
+for _ in range(4):
+    for i in range(4):
+        for base in (0, 1024, 2048):
+            colliding.append(base + i * 64)
+
+sweep = [i * 64 for _ in range(4) for i in range(32)]
+
+for name, trace in (("three arrays", colliding), ("cyclic sweep", sweep)):
+    for w in (1, 4):
+        print("%-13s %2d-way %s" % (name, w, classify(trace, w)))
+```
+
+The infinite cache never appears in that code, because it does not need to: a set of
+blocks ever referenced is the same model with none of the bookkeeping.
+
+Take the colliding trace at one way: 12 compulsory, 36 conflict, 0 capacity, and not
+one hit. Every number is checkable by hand. Twelve distinct blocks are touched, so
+twelve first references, and the derivation's compulsory rate $M/(BN)$ gives
+$768/(64 \times 48) = 0.25$, which is what 12 out of 48 is. Twelve live blocks in a
+sixteen-frame cache fit with room over, so a fully associative cache of that capacity
+never evicts anything it will want again and the capacity count is zero. What is left
+— 36 accesses, three quarters of the trace — is placement, and nothing else.
+
+Now read the second line of the same output. Four ways: the 36 conflict misses have
+become 36 hits, and the 12 compulsory misses are exactly where they were. That is the
+decomposition making a prediction and the prediction coming true: associativity
+removes conflict misses, all of them if you give it enough ways, and it cannot touch
+either of the other two columns.
+
+The sweep says the opposite thing, and says it before you have built anything. Thirty
+-two compulsory and 96 capacity at one way, and the identical split at four ways —
+zero conflict misses at either. A trace that has no conflict misses to remove has
+nothing to gain from associativity, and no amount of measuring after the fact will
+change that. The lab's `least_associativity` is this observation turned into a
+function: on the colliding trace it returns 4, and on the sweep it returns 1, where
+the 1 does not mean direct-mapped is a good idea but that associativity has no work to
+do here.
+
+Each C also comes with the change that moves it. Compulsory misses are one per
+distinct block, so the only levers are a larger block, which fetches neighbours you
+have not asked for yet, and prefetching, which does the same thing under a different
+name. Capacity misses need either a larger cache or a program that revisits its data
+sooner — the tiling of a matrix multiply is exactly that change. Conflict misses need
+associativity, or the data moved: padding an array's leading dimension by one block
+breaks the congruence that piled its rows onto one set. And the block-size lever cuts
+both ways, since doubling $B$ halves the compulsory count and halves the number of
+frames at the same time, which is why the sandbox *A curve with no conflict misses in
+it* has you read the height against $\text{stride}/B$ rather than against the capacity.
+
+## The mistake: consulting the reference model only when the real cache misses
+
+The reference cache exists to explain misses, so it seems natural — and it reads
+better — to ask it only when there is a miss to explain. The bookkeeping looks
+identical and the model is doing less work.
+
+```python
+class LRU:
+    def __init__(self, sets, ways):
+        self.sets, self.ways = sets, ways
+        self.tags = [[] for _ in range(sets)]
+
+    def access(self, block):
+        s, t = self.tags[block % self.sets], block // self.sets
+        if t in s:
+            s.remove(t)
+            s.append(t)
+            return True
+        s.append(t)
+        if len(s) > self.ways:
+            s.pop(0)
+        return False
+
+
+def classify(trace, ask_reference_on_hits, frames=4, ways=2, block=64):
+    real, full, seen = LRU(frames // ways, ways), LRU(1, frames), set()
+    counts = {"hit": 0, "compulsory": 0, "capacity": 0, "conflict": 0}
+    for addr in trace:
+        b = addr // block
+        first = b not in seen
+        seen.add(b)
+        if ask_reference_on_hits:
+            fa_hit = full.access(b)
+            hit = real.access(b)
+        else:
+            hit = real.access(b)
+            fa_hit = False if hit else full.access(b)
+        if hit:
+            counts["hit"] += 1
+        elif first:
+            counts["compulsory"] += 1
+        elif not fa_hit:
+            counts["capacity"] += 1
+        else:
+            counts["conflict"] += 1
+    return counts
+
+
+trace = [0, 128, 64, 192, 0, 256, 128]
+print("every access:", classify(trace, True))
+print("misses only :", classify(trace, False))
+```
+
+Seven accesses through a 256-byte cache, two ways against a four-frame reference, and
+the two versions disagree: one capacity miss becomes one conflict miss. The re-touch
+of block 0 in the middle of the trace is a hit in the real cache, so the starved
+reference never sees it, so its recency order still has block 0 as the oldest thing it
+holds. When block 4 arrives the starved reference evicts block 0 while the honest one
+evicts block 2 — and the last access, to block 2, is then reported as a hit that the
+real cache spoiled. A conflict miss invented out of nothing.
+
+The direction of the error is what makes it expensive. It moves misses from the
+capacity column into the conflict column, and those two columns recommend different
+hardware. Acting on the corrupted numbers buys ways, which cost comparators and hit
+time and would have changed nothing, when the measurement that was actually there
+said buy capacity. A reference model has to see every reference; the clue is in the
+name.
+
+## Where the taxonomy stops holding
+
+It classifies one measurement, not a program. All three counts belong to a
+(trace, geometry) pair, and changing the geometry moves all of them at once —
+doubling the block size lowers the compulsory count and raises the other two, so
+comparing a compulsory count taken at 32-byte blocks with a conflict count taken at
+64 is comparing two different experiments.
+
+The conflict term can also come out negative, which a set of three non-negative
+categories should not be able to do.
+
+```python
+def miss_rate(blocks, sets, ways):
+    tags = [[] for _ in range(sets)]
+    misses = 0
+    for b in blocks:
+        s, t = tags[b % sets], b // sets
+        if t in s:
+            s.remove(t)
+            s.append(t)
+        else:
+            s.append(t)
+            if len(s) > ways:
+                s.pop(0)
+            misses += 1
+    return misses / len(blocks)
+
+
+sweep = [b for _ in range(4) for b in range(5)]   # five blocks, four passes
+dm = miss_rate(sweep, sets=4, ways=1)             # four frames, one way
+fa = miss_rate(sweep, sets=1, ways=4)             # four frames, fully associative
+print("direct-mapped     m_dm = %.2f" % dm)
+print("fully associative m_fa = %.2f" % fa)
+print("conflict rate m_dm - m_fa = %+.2f" % (dm - fa))
+```
+
+Five blocks cycling through four frames. The fully associative cache under LRU misses
+on every access, because the victim is always the block wanted next. The
+direct-mapped cache misses 55 per cent of the time: blocks 1, 2 and 3 own a set each
+and survive all four passes, while blocks 0 and 4 fight over set 0. Restricting
+placement did not only take choices away — it took away LRU's ability to make the
+worst one, on three quarters of the data. The conflict rate is $-0.45$.
+
+The subtraction leaks in a second, quieter way. The reference cache runs LRU, so
+everything a smarter replacement policy could have saved is charged to capacity. That
+column is not "misses caused by the size" but "misses caused by the size, under LRU",
+and the gap between the two is real: on the twenty accesses above, LRU takes no hits
+at all, the direct-mapped cache takes nine, and Belady's optimal takes twelve.
+
+And there is a fourth C that no uniprocessor measurement can produce at all. Put a
+second cache on the bus and a block can be taken away from you by another core's
+write, with your own cache neither evicting it nor running out of room. The sandbox
+*The floor a single cache cannot get below* ends on exactly that point, and module 4
+gives it a state machine.
+
+## What you are about to build
+
+The lab *Classify every miss in a trace* is the Hill–Smith method as it appears
+above: `classify` running three models over one trace and labelling every access, and
+`least_associativity` searching for the smallest candidate that leaves the conflict
+column at zero. Its checks are the numbers this page has already computed — 12
+compulsory and 36 conflict on the colliding trace at one way, all 36 becoming hits at
+four ways, 96 capacity misses on the sweep at every associativity — plus one that
+matters more than it looks: the labels must partition the trace, so the four counts
+have to sum to its length. The blanks unit *Three Cs, measured rather than argued*
+walks the same three subtractions in four lines, and the derivation
+*Splitting a measured miss rate three ways* writes them in symbols and ends on the
+one lever that moves the compulsory floor.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Which C is it, and what would fix it",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Two traces each miss on every access in the same 1 KB direct-mapped cache. Four ways takes one of them to a 0.25 miss rate and leaves the other at 1.00. What measurement tells the two apart before you build anything?",
+                        "opts": [
+                            "Whether a fully associative cache of the same capacity misses on them too",
+                            "Whether the trace touches more distinct bytes altogether than the cache can hold",
+                            "Whether the addresses in the trace are spaced by a power of two",
+                            "Whether the first pass of the trace misses more often than later passes",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Same capacity, no placement restriction: whatever it still misses on is volume, and whatever it rescues was the index's doing. That single comparison is the whole of the conflict-capacity distinction.",
+                            r"This is the right instinct pointed at the wrong quantity. Both of these traces have a working set that would fit — twelve blocks and thirty-two, in sixteen frames — so a byte count says 'fits' for one and 'does not' for the other without ever explaining why the first one missed anyway.",
+                            r"Power-of-two spacing is a good predictor of conflict misses and a poor definition of one. It is a property of the addresses rather than of the cache, and a trace with no such spacing can still pile several live blocks onto one index.",
+                            r"That comparison finds the compulsory misses, which both traces have and neither is limited by. It says nothing at all about whether the misses after the first pass came from volume or from placement.",
+                        ],
+                        "why": r"""
+A miss carries no label, so the classification is a counterfactual: which other cache
+would have avoided it? An equally sized fully associative cache differs from the real
+one in placement alone, so a miss it also takes is about volume and a miss it rescues
+is about the index. On the colliding trace it rescues 36 of 48; on the cyclic sweep it
+rescues none. That measurement is available from a simulation before any silicon
+exists, which is exactly why the method is worth its three models.
+""",
+                    },
+                    {
+                        "q": "A direct-mapped run over 48 accesses classifies as 12 compulsory, 36 conflict, 0 capacity, 0 hits. You rerun it four-way. What should the four numbers become?",
+                        "opts": [
+                            "12 compulsory and 36 hits, with both other columns still zero",
+                            "12 compulsory, 36 capacity, and no hits, because the misses move columns",
+                            "3 compulsory and 9 conflict, each column divided by four",
+                            "12 compulsory and 36 conflict again, since the trace has not changed",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Conflict is defined as what full associativity would have rescued, so giving the cache enough ways converts precisely that column into hits and leaves the other two alone.",
+                            r"Misses do not migrate between columns when the geometry changes: capacity is what the fully associative reference missed on, and it missed on nothing here, so that column cannot fill up no matter what the real cache does.",
+                            r"Associativity is not a divisor. Four ways either holds the live tags of a set or it does not, and here three tags in four frames means the conflict column empties completely rather than shrinking by a factor.",
+                            r"The trace is unchanged but the cache is not, and conflict is a statement about the cache. A count that is invariant to associativity is the definition of a capacity or compulsory miss.",
+                        ],
+                        "why": r"""
+The measured decomposition is a prediction, and this is the prediction: the conflict
+column is exactly the set of misses full associativity would have rescued, so
+supplying enough ways turns all 36 into hits while the 12 first references stay
+untouched. Running it and getting that answer is what validates the method — and
+getting a different one means the reference model was consulted wrongly, which is the
+usual defect in a three-cache simulator.
+""",
+                    },
+                    {
+                        "q": "A classifier feeds the fully associative reference model only the accesses on which the real cache missed. Which way do its numbers go wrong?",
+                        "opts": [
+                            "It reports conflict misses that were really capacity misses",
+                            "It reports capacity misses that were really conflict misses",
+                            "It reports compulsory misses as capacity misses, since first references are skipped",
+                            "It reports fewer misses overall, because the reference model sees fewer accesses",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Hits are references, and a starved reference model keeps a stale recency order that makes it evict blocks the honest one would have kept — so it 'hits' where it should have missed, and the classifier blames the index for a shortage of room.",
+                            r"The inversion of what happens. A starved reference model holds on to blocks it should have evicted, so it hits more often than it deserves to, and each of those spurious hits is scored as a conflict rather than as a capacity miss.",
+                            r"First references are found from a set of blocks ever seen, which is checked before either cache is consulted, so the compulsory column survives this bug intact.",
+                            r"The counts come from the real cache, which sees every access either way. The total number of misses is unaffected; the only casualty is which column each one lands in.",
+                        ],
+                        "why": r"""
+The reference model's recency order is only right if it sees the same reference stream
+the real cache sees, and a hit is a reference. Starve it and it evicts blocks that
+were recently used, which leaves other blocks resident longer, which makes it hit
+where an honest model would have missed — and a reference-model hit on a real-cache
+miss is scored as conflict. The error therefore moves work out of the capacity column
+into the conflict column, and those two columns recommend different hardware: ways
+that would change nothing, instead of the capacity the run was actually asking for.
+""",
+                    },
+                    {
+                        "q": "The compulsory miss rate over $N$ accesses to $M$ bytes with $B$-byte blocks is $M/(BN)$. What does doubling $B$ do to a real cache of fixed capacity?",
+                        "opts": [
+                            "Halves that rate, and halves the number of frames the cache has",
+                            "Halves that rate, leaving the other two categories where they were",
+                            "Leaves that rate alone, since $M$ itself has not changed",
+                            "Halves that rate and halves the traffic each miss puts on the bus",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"One first reference per distinct block, and doubling the block halves the number of blocks — but capacity is fixed, so the frame count halves with it and the blocks competing for each set change too.",
+                            r"True as far as it goes, and it is the half of the trade that gets quoted. Capacity is bytes, so a doubled block means half as many frames, and unrelated data that used to sit in its own frame now shares one or is evicted sooner.",
+                            r"$M$ is unchanged but the rate counts blocks, not bytes: $M/B$ distinct blocks at twice the size is half as many first references, so the rate does move.",
+                            r"The rate does halve, but a miss now fetches twice as many bytes: half as many misses each costing double is the same traffic, not less, which is the trade rather than a saving.",
+                        ],
+                        "why": r"""
+Compulsory misses are one per distinct block, so $M/B$ of them, and doubling $B$
+halves the count. Capacity is bytes and does not change, so the same cache now holds
+half as many frames, and each miss drags twice the data across the bus. The miss rate
+against block size therefore falls and then rises, with the turning point depending on
+the program — which is the reason block size is measured on real traces rather than
+argued from a formula.
+""",
+                    },
+                    {
+                        "q": "On a cyclic sweep over five blocks in a four-frame cache, LRU makes a fully associative cache miss on every access while a direct-mapped one hits 45 per cent of the time. What does that do to the three-C subtraction?",
+                        "opts": [
+                            "The conflict term goes negative, because restricting placement helped here",
+                            "The conflict term is zero, because the two caches hold identical numbers of blocks",
+                            "The capacity term goes negative, because the working set exceeds the cache",
+                            "Nothing: the subtraction is defined so that all three terms stay non-negative",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Conflict is $m_{dm} - m_{fa}$, and here the direct-mapped cache is the better of the two, so the difference comes out below zero — an honest report that placement was an advantage on this trace.",
+                            r"Equal capacity is what makes the comparison fair, not what makes it come out zero. The two caches evict different blocks with those same frames, and on a cyclic sweep that difference is the entire result.",
+                            r"Capacity is $m_{fa} - m_{inf}$, and the fully associative cache can never miss less often than an infinite one, so that term cannot go below zero however the working set is sized.",
+                            r"Nothing in the arithmetic enforces it. The three terms are defined as differences between measurements, and a measurement that comes out the wrong way round produces a negative term rather than being clipped to zero.",
+                        ],
+                        "why": r"""
+Restricting placement takes choices away from the replacement policy, and on a cyclic
+sweep LRU's choices are the worst available: the fully associative cache evicts
+exactly the block wanted next, every time. The direct-mapped cache cannot make that
+mistake for the three blocks that own a set to themselves, so it outlives its own
+reference model and $m_{dm} - m_{fa}$ comes out at $-0.45$. The taxonomy is a
+subtraction between two measurements, not a partition guaranteed by construction, and
+this is where the difference shows.
+""",
+                    },
+                    {
+                        "q": "A profile of your L1 comes back 5 per cent compulsory, 90 per cent capacity, 5 per cent conflict. Which change is worth making?",
+                        "opts": [
+                            "Restructure the program to revisit its data sooner, or build a larger cache",
+                            "Raise the associativity, since that is the standard remedy for a bad miss rate",
+                            "Shrink the block size so that the cache holds more separate blocks",
+                            "Nothing helps: capacity misses are as unavoidable as compulsory ones",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Capacity misses come from live data exceeding the frames available, so the two levers are more frames or a working set that fits between reuses — which is what tiling a loop nest does.",
+                            r"The reflex answer, and the profile has already priced it: conflict is 5 per cent, so even perfect associativity buys 5 per cent while costing comparators and hit time. Measuring first is what stops that trade from being made blind.",
+                            r"More frames of less use each. Smaller blocks raise the compulsory count and discard spatial locality, and neither of those is the column that this profile says is doing the damage.",
+                            r"Compulsory misses are unavoidable in a cache of any size; capacity misses are by definition the ones a bigger cache removes, and a program that reuses its data sooner removes them without any hardware at all.",
+                        ],
+                        "why": r"""
+The whole value of the decomposition is that it prices the options before they are
+paid for. Ninety per cent capacity means the live data does not fit between reuses, so
+the fixes are more frames or a program that comes back to its data sooner — blocking a
+matrix multiply is the second one, and it costs no silicon. Associativity is capped at
+the 5 per cent in the conflict column however many ways are added, and that is the
+number to weigh against the hit time those ways would cost.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "A curve with no conflict misses in it",
                 "visualiser": "cache",
@@ -905,6 +1665,298 @@ assert _four["hit"] == _one["hit"] + _one["conflict"], \
                 "Local miss rate is measured against accesses that reach the level; global miss rate is measured against all accesses, and is the product.",
                 "Write-back with write-allocate moves a whole block on a miss and another on a dirty eviction; write-through with no-write-allocate sends one word per write, and still fetches a whole block whenever a *read* misses.",
                 "Which wins is arithmetic, not doctrine: it turns on how many times a block is written before it leaves.",
+            ],
+            "read": [
+                {
+                    "title": "Where 512 accesses go, in bytes and then in cycles",
+                    "minutes": 17,
+                    "body": r'''
+A loop walks a 1 KB array twice, four bytes at a time, storing to every fourth
+element and loading the rest: 512 accesses, 128 of them writes, over sixteen
+64-byte blocks. The cache is 1 KB, two-way, 64-byte blocks — the array fits in it
+with nothing to spare and nothing to evict. Count the bytes that cross the memory
+interface under each write policy.
+
+```text
+write-back, write-allocate         2048 bytes moved
+write-through, no-write-allocate   1536 bytes moved
+```
+
+That is the wrong way round according to the usual summary, which has write-back as
+the policy that saves traffic and write-through as the one that floods the bus. Here
+write-back moves a third more. Nothing is broken; the summary left out the quantity
+the comparison actually turns on.
+
+```python
+class Cache:
+    """policy is "wb" (write-back, write-allocate) or "wt" (write-through, no-allocate)."""
+
+    def __init__(self, frames, block, ways, policy, word=4):
+        self.block, self.ways, self.policy, self.word = block, ways, policy, word
+        self.sets = frames // ways
+        self.tags = [[] for _ in range(self.sets)]
+        self.dirty = [set() for _ in range(self.sets)]
+        self.hits = self.misses = self.bytes_in = self.bytes_out = 0
+
+    def access(self, op, addr):
+        b = addr // self.block
+        i, t = b % self.sets, b // self.sets
+        s, d = self.tags[i], self.dirty[i]
+        if op == "w" and self.policy == "wt":
+            self.bytes_out += self.word            # every write goes onward
+        if t in s:
+            s.remove(t)
+            s.append(t)
+            if op == "w" and self.policy == "wb":
+                d.add(t)
+            self.hits += 1
+            return
+        self.misses += 1
+        if op == "w" and self.policy == "wt":      # no-write-allocate: nothing fetched
+            return
+        self.bytes_in += self.block                # allocate
+        s.append(t)
+        if op == "w":
+            d.add(t)
+        if len(s) > self.ways:
+            v = s.pop(0)
+            if v in d:
+                d.discard(v)
+                self.bytes_out += self.block       # a dirty victim goes back
+
+    def flush(self):
+        moved = sum(self.block * len(d) for d in self.dirty)
+        for d in self.dirty:
+            d.clear()
+        self.bytes_out += moved
+        return moved
+
+
+def rw_walk(count, passes, write_every, stride=4):
+    out, k = [], 0
+    for _ in range(passes):
+        for i in range(count):
+            out.append(("w" if k % write_every == 0 else "r", i * stride))
+            k += 1
+    return out
+
+
+def run(trace, policy):
+    c = Cache(16, 64, 2, policy)
+    for op, addr in trace:
+        c.access(op, addr)
+    c.flush()
+    return c
+
+
+trace = rw_walk(256, passes=2, write_every=4)
+print("512 accesses, %d of them writes, over 16 blocks"
+      % sum(1 for op, _ in trace if op == "w"))
+for policy in ("wb", "wt"):
+    c = run(trace, policy)
+    print("  %s: %3d hits %3d misses, %4d bytes in, %4d out, %4d moved in total"
+          % (policy, c.hits, c.misses, c.bytes_in, c.bytes_out,
+             c.bytes_in + c.bytes_out))
+
+print("writes per block   write-back   write-through")
+for every in (16, 8, 4, 2):
+    t = rw_walk(256, passes=2, write_every=every)
+    k = sum(1 for op, _ in t if op == "w") // 16
+    print("%16d   %6d       %6d"
+          % (k, run(t, "wb").bytes_in + run(t, "wb").bytes_out,
+             run(t, "wt").bytes_in + run(t, "wt").bytes_out))
+```
+
+## Price one block, and the whole trace follows
+
+Take a single block and ask what each policy spends on it over its lifetime in the
+cache. Let the block be $B$ bytes, a word $V$ bytes, and let $k$ be the number of
+times the program writes to that block before it is evicted.
+
+Write-back with write-allocate fetches the block on the first miss, read or write —
+$B$ bytes in. Every subsequent store lands in the cache and sets a dirty bit, and
+none of them reaches memory. When the block finally leaves, if it was written at all,
+it goes back whole: $B$ bytes out. The total is $2B$ **whatever $k$ is**. Sixteen
+blocks at 128 bytes each is 2048, which is the number in the first table, and the
+2048 column in the second one that never moves.
+
+Write-through with no-write-allocate never allocates on a store, so a block is only
+ever resident because a *read* missed and fetched it: $B$ in. Each of the $k$ writes
+sends its word onward: $kV$ out. The total is $B + kV$, and it grows with $k$.
+
+Set the two equal and the crossover is immediate:
+
+$$B + kV = 2B \quad \Longrightarrow \quad k = \frac{B}{V}$$
+
+With 64-byte blocks and 4-byte words, sixteen writes per block. The second table in
+the run above sweeps $k$ over 2, 4, 8 and 16 writes per block and the write-through
+column climbs 1152, 1280, 1536, 2048 while write-back sits at 2048 throughout —
+meeting it exactly at sixteen, which is $B/V$ measured rather than asserted. The
+opening trace has eight writes per block, comfortably under the crossover, and that
+single number is what the doctrine left out.
+
+The derivation *AMAT, global miss rates and bytes moved* does this per access rather
+than per block: $m B (1 + d)$ for write-back, where $d$ is the fraction of victims
+found dirty, against $(1-w) m B + w V$ for write-through. Same content, expressed
+against a different denominator, and the per-block form is the one to reach for when
+you want the crossover.
+
+## A miss is not a unit of cost
+
+Look again at the miss counts in the first table: 16 for write-back, 32 for
+write-through. The write-through cache missed twice as often on identical work, and
+moved fewer bytes.
+
+The reason is the no-write-allocate rule. In the first pass each block is met by a
+store, which misses and allocates nothing, and then by a load, which misses again and
+fetches. Two misses per block, and the first of them moved zero bytes and stalled
+nothing worth mentioning — the store went into a write buffer and the pipeline carried
+on. A raw miss count silently assumes every miss costs the same thing, and across a
+policy change that assumption fails badly enough to reverse the ranking. Compare
+bytes, or compare cycles, and say which.
+
+## From a rate to cycles
+
+Every access pays the hit time. The tag check has to happen before anyone knows
+whether it was a hit, so $t_{hit}$ is not conditional; the penalty is what a miss adds
+on top. That is the whole of
+
+$$\text{AMAT} = t_{hit} + m \cdot t_{penalty}$$
+
+and it composes downwards without any new idea, because what an L1 miss costs *is* the
+L2's average access time.
+
+```python
+def amat(t_hit, miss_rate, t_penalty):
+    return t_hit + miss_rate * t_penalty
+
+
+t1, m1, t2, m2_local, tm = 1.0, 0.05, 12.0, 0.20, 200.0
+m2_global = m1 * m2_local
+
+penalty = amat(t2, m2_local, tm)
+print("L1 miss penalty = the L2's own AMAT = %.1f cycles" % penalty)
+print("AMAT            = %.2f cycles" % amat(t1, m1, penalty))
+print("using the global rate inside = %.2f cycles"
+      % amat(t1, m1, amat(t2, m2_global, tm)))
+print("global L2 miss rate = %.2f%% of all accesses" % (100 * m2_global))
+print("cycles spent waiting on memory = %.2f of %.2f"
+      % (m2_global * tm, amat(t1, m1, penalty)))
+```
+
+An L1 that hits in a cycle and misses 5 per cent of the time, an L2 that answers in
+12 and misses on a fifth of what reaches it, and a memory at 200 cycles: 3.60 cycles
+per access. Then read the last line. Two of those 3.60 cycles — more than half the
+total — are spent in the one per cent of accesses that reach memory. That is the
+shape of every hierarchy calculation, and it is why the memory system is worth a
+course: the term that dominates the average is the one that almost never happens.
+
+## The mistake: putting the global rate inside the parentheses
+
+The middle line of that run is the wrong answer, 1.70 cycles against 3.60, and the
+reasoning that produces it is careful rather than careless. The L2's local rate of 20
+per cent looks like an exaggeration — the L2 is not failing on a fifth of the
+program's accesses, it is failing on a fifth of the few that got past the L1, and the
+honest share of all accesses is $0.05 \times 0.20 = 1\%$. Both of those statements are
+true. Substituting the second into the composed formula is still wrong, because the
+$m_1$ already sitting in front of the bracket is what accounts for reaching the L2 at
+all; using the global rate inside counts that filtering twice and halves the answer.
+
+The rule that prevents it is a question about the denominator: **every miss rate is
+measured against the accesses that arrive at its own level.** Inside the bracket you
+are already at the L2, so the L2's own local rate belongs there. The global rate is
+for a different purpose entirely — comparing levels, or costing memory bandwidth,
+where what you want is the share of *all* accesses.
+
+## Reading a plot as an input to arithmetic
+
+The sandbox *Turning a miss rate into cycles* is the module 1 curve again, now to be
+converted rather than admired. The same simulation reproduces it, so the conversion
+can be checked rather than eyeballed:
+
+```python
+WORKING_SET, LINE = 32 * 1024, 64
+
+
+def miss_rate(kb, ways, stride, passes=3):
+    lines = (kb * 1024) // LINE
+    sets = max(1, lines // ways)
+    tags = [[] for _ in range(sets)]
+    hits = total = 0
+    for _ in range(passes):
+        for addr in range(0, WORKING_SET, stride):
+            line = addr // LINE
+            s, t = tags[line % sets], line // sets
+            total += 1
+            if t in s:
+                s.remove(t)
+                s.append(t)
+                hits += 1
+            else:
+                s.append(t)
+                if len(s) > ways:
+                    s.pop(0)
+    return (total - hits) / total
+
+
+for kb in (8, 16, 32, 64):
+    for stride in (8, 4):
+        m = miss_rate(kb, 2, stride)
+        print("%2d KB, %d B stride: miss rate %5.2f%%, AMAT %5.2f cycles"
+              % (kb, stride, 100 * m, 1 + m * 100))
+print("compulsory floor at a 4 B stride: %.2f%%" % (100 * 512 / (8192 * 3)))
+```
+
+With a 1-cycle hit and a 100-cycle penalty, a 12.5 per cent miss rate is 13.5 cycles
+per access — thirteen and a half times what the same access costs when it hits. Going
+from 8 KB to 16 KB changes nothing at all, and then 32 KB takes the same walk to 4.17
+per cent and 5.17 cycles, a saving of 8.33 cycles on every access in the program.
+Doubling again to 64 KB saves nothing further, because 2.08 per cent at the 4-byte
+stride is the compulsory floor: one miss per 64-byte line, spread over three passes,
+$512/(8192 \times 3)$. A cache with no capacity misses left cannot be improved by
+being made larger, and the arithmetic says so before the silicon is spent.
+
+## Where this stops holding
+
+AMAT prices a stall as though the processor waits for one miss at a time. An
+out-of-order core with a non-blocking cache does not: it keeps issuing, and a second
+miss to an independent address overlaps the first. If two misses are in flight
+together on average, the 6.0-cycle AMAT of a single-level cache with a 5 per cent miss
+rate and a 100-cycle penalty corresponds to about $1 + 0.05 \times 50 = 3.5$ cycles of
+actual stall. AMAT overstates in that direction, and it is the direction most modern
+machines lean, which is why a design decision that AMAT says is worth 8 cycles per
+access may be worth four in a real pipeline.
+
+It understates in the other direction whenever the penalty stops being a constant.
+Two hundred cycles is a lightly loaded number; a DRAM row miss costs more, a bank
+conflict more again, and a queue at the memory controller adds delay that rises with
+how much traffic the rest of the machine is generating. That is where the two halves
+of this reading meet: the bytes counted in the first half are what fills that queue.
+Write-through's extra traffic is invisible in latency while the write buffer absorbs
+it and the bus has headroom, and it stops being invisible the moment either runs out —
+at which point a policy that was cheaper in bytes on this trace becomes the one
+holding up the reads.
+
+Two smaller edges. AMAT is per access, and performance is per instruction: converting
+one to the other needs the accesses per instruction, which is where a machine with a
+higher miss rate and fewer memory instructions can still win. And write-allocate's
+fetch is pure waste when the program is about to overwrite the entire block, which is
+common enough — `memset`, a buffer being filled, the initialisation of an array — that
+instruction sets provide non-temporal stores to skip it.
+
+## What you are about to build
+
+The lab *Write policy, byte for byte* is one `Cache` class with both policies and four
+counters — `hits`, `misses`, `bytes_in`, `bytes_out` — plus a `flush` that writes back
+what is still dirty when the trace ends, and `amat` and `amat2` taken straight from the
+derivation. Its checks are the numbers above and two more worth previewing: a
+write-only trace where no read ever allocates, so a write-through cache holds nothing,
+hits nothing and moves 4096 bytes against write-back's 2048; and a thrashing sweep
+where 40 of the 80 evictions are dirty, which is 2560 bytes out during the run and 512
+more at the flush. Get the dirty bookkeeping right and both fall out; get it wrong and
+only the second one tells you.
+''',
+                },
             ],
             "sandbox": {
                 "title": "Turning a miss rate into cycles",
@@ -1415,6 +2467,453 @@ assert np.isclose(amat2(1.0, 0.05, 12.0, 0.4, 200.0),
                 "A snooping cache holding Modified data must supply it and downgrade itself, so a remote read turns into a flush plus a state change.",
                 "False sharing: two cores writing different words of one block invalidate each other every time, and the protocol cannot tell the difference.",
             ],
+            "read": [
+                {
+                    "title": "Two counters, four bytes apart",
+                    "minutes": 17,
+                    "body": r'''
+Two cores, one counter each, incremented alternately. In the first version the
+counters are neighbouring words of a struct, at addresses 0 and 4. In the second
+someone has moved them a cache block apart, to 0 and 64. Neither core ever touches
+the other's counter; there is no lock, no shared variable, and nothing in the source
+of either version that a reviewer would call communication. Run eight increments of
+each version through two private caches on a snooping bus.
+
+```python
+BLOCK = 64
+
+
+class Mesi:
+    """Two private caches, one snooping bus. Nothing is evicted here."""
+
+    def __init__(self):
+        self.state = [{}, {}]
+        self.bus = {"BusRd": 0, "BusRdX": 0, "BusUpgr": 0, "Flush": 0}
+        self.hits = self.misses = 0
+
+    def st(self, core, addr):
+        return self.state[core].get(addr // BLOCK, "I")
+
+    def read(self, core, addr):
+        b, other = addr // BLOCK, 1 - core
+        if self.st(core, addr) != "I":
+            self.hits += 1
+            return "hit"
+        self.misses += 1
+        self.bus["BusRd"] += 1
+        remote = self.state[other].get(b, "I")
+        if remote == "I":
+            self.state[core][b] = "E"
+            return "BusRd -> E"
+        if remote == "M":
+            self.bus["Flush"] += 1
+        self.state[other][b] = "S"
+        self.state[core][b] = "S"
+        return "BusRd -> S"
+
+    def write(self, core, addr):
+        b, other = addr // BLOCK, 1 - core
+        here = self.st(core, addr)
+        if here in ("M", "E"):
+            self.hits += 1
+            self.state[core][b] = "M"
+            return "silent" if here == "E" else "hit"
+        if here == "S":
+            self.hits += 1
+            self.bus["BusUpgr"] += 1
+            self.state[other].pop(b, None)
+            self.state[core][b] = "M"
+            return "BusUpgr"
+        self.misses += 1
+        self.bus["BusRdX"] += 1
+        if self.state[other].get(b, "I") == "M":
+            self.bus["Flush"] += 1
+        self.state[other].pop(b, None)
+        self.state[core][b] = "M"
+        return "BusRdX"
+
+
+def run(work):
+    s = Mesi()
+    for core, op, addr in work:
+        (s.write if op == "w" else s.read)(core, addr)
+    return s
+
+
+false_sharing = [(c, "w", c * 4) for _ in range(4) for c in (0, 1)]
+padded = [(c, "w", c * 64) for _ in range(4) for c in (0, 1)]
+disjoint = [(c, "w", (c * 2 + i) * 64) for _ in range(4) for c in (0, 1) for i in (0, 1)]
+
+for name, work in (("false sharing", false_sharing), ("padded", padded),
+                   ("disjoint", disjoint)):
+    s = run(work)
+    print("%-14s %2d accesses, %2d hits, %2d misses, %s"
+          % (name, len(work), s.hits, s.misses,
+             {k: v for k, v in s.bus.items() if v}))
+```
+
+Four bytes apart: not one hit in eight accesses, eight bus transactions carrying data,
+and seven flushes of dirty data from one cache to the other. Sixty-four bytes apart:
+six hits, two cold misses, and the bus goes quiet after the first two accesses. The
+program is identical. The difference is which block each address falls in.
+
+## The unit of ownership is the block
+
+Coherence hardware tracks state per block, because a tag is per block and there is
+nowhere else to put the state. The derivation *What a shared line costs* opens on the
+count that follows: a 64-byte block at 4 bytes to the word covers $B/V = 16$
+independently addressable words, and one coherence decision covers all sixteen. When
+core 1 takes the block for writing, the protocol is not asked, and cannot answer,
+which word it wants. Core 0's copy goes Invalid whether or not it held anything core 1
+intends to touch.
+
+That is why the phenomenon is called *false* sharing: it is not sharing, it is a
+block-granularity approximation to sharing, and the approximation is conservative in
+the only direction it can safely be.
+
+## Four states, and why exactly four
+
+Rather than take the state names on trust, work out what a cache has to know about a
+block it holds. Three independent questions:
+
+- May I read it? Failing that, the block is not usable at all.
+- May I write it without telling anyone? That is allowed only if no other cache can
+  possibly hold a copy.
+- Do I owe memory a copy? That is, has it been written since it was fetched?
+
+Not present at all is one state: **Invalid**. Present, possibly held elsewhere, so
+readable but not silently writable, and necessarily clean because a dirty block cannot
+be shared under this design: **Shared**. Present, held by nobody else, clean:
+**Exclusive**. Present, held by nobody else, dirty: **Modified**. The fourth
+combination — present, shared, and dirty — is the one the design rules out, and that
+is a decision rather than a law. MOESI puts it back and calls it Owned, precisely to
+avoid the write-back that a shared dirty block would otherwise force.
+
+Three requests carry the transitions, and each exists because the others would be
+wasteful. BusRd asks for a readable copy. BusRdX asks for data *and* exclusivity, for
+a write to a block that is not present. BusUpgr asks for exclusivity *only*, for a
+write to a block already held Shared, where the data is in hand and only the
+permission is missing.
+
+## The ping-pong, one access at a time
+
+Two cores taking turns to read and then write the same word is the worst case that is
+still a legitimate program — a shared counter, a work-stealing index, a spin lock.
+Watch every access.
+
+```text
+   1  core 0 r  BusRd -> E   core0=E core1=I
+   2  core 0 w  silent       core0=M core1=I
+   3  core 1 r  BusRd -> S   core0=S core1=S
+   4  core 1 w  BusUpgr      core0=I core1=M
+   5  core 0 r  BusRd -> S   core0=S core1=S
+   6  core 0 w  BusUpgr      core0=M core1=I
+   7  core 1 r  BusRd -> S   core0=S core1=S
+   8  core 1 w  BusUpgr      core0=I core1=M
+   ...
+  totals: 8 hits 8 misses {'BusRd': 8, 'BusUpgr': 7, 'Flush': 7}
+```
+
+Step 1 is a read miss with no responder on the bus, so the block arrives Exclusive —
+the cache has learned from *silence* that it is the only holder. Step 2 is the payoff:
+a write to an Exclusive block changes E to M in the tag array and puts nothing on the
+bus at all. Step 3 is core 1's read; core 0 is holding modified data, so it must supply
+it and demote itself, which is the Flush, and both ends settle in Shared. Step 4 is
+core 1's write from Shared: the data is already there, so it sends a BusUpgr, core 0
+goes Invalid, and the cycle repeats from step 5.
+
+Steady state is three bus transactions for every two accesses, and eight hits out of
+sixteen — where the "hits" are the writes, each of which hit in the tag array while
+serialising the two cores against each other. Note the totals: seven BusUpgr for eight
+writes. The missing eighth is step 2, and it is the entire contribution of the E state.
+
+## What Exclusive is worth
+
+One transaction on this trace. That sounds like a rounding error until you run a
+pattern that is not pathological.
+
+```python
+BLOCK = 64
+
+
+def bus_traffic(work, with_E):
+    """Count bus transactions. with_E=False is MSI: a clean read miss lands in S."""
+    state = [{}, {}]
+    bus = 0
+    for core, op, addr in work:
+        b, other = addr // BLOCK, 1 - core
+        here = state[core].get(b, "I")
+        remote = state[other].get(b, "I")
+        if op == "r":
+            if here != "I":
+                continue                       # read hit, nothing on the bus
+            bus += 1                           # BusRd
+            if remote == "I":
+                state[core][b] = "E" if with_E else "S"
+            else:
+                if remote == "M":
+                    bus += 1                   # Flush
+                state[other][b] = "S"
+                state[core][b] = "S"
+        else:
+            if here in ("M", "E"):
+                state[core][b] = "M"           # silent, and only E can be silent
+                continue
+            bus += 1                           # BusUpgr from S, BusRdX from I
+            if here == "I" and remote == "M":
+                bus += 1                       # Flush
+            state[other].pop(b, None)
+            state[core][b] = "M"
+    return bus
+
+
+ping_pong = [(c, o, 0) for _ in range(4) for c in (0, 1) for o in ("r", "w")]
+private = [(c, o, (c * 2 + i) * BLOCK)
+           for _ in range(3) for c in (0, 1) for i in (0, 1) for o in ("r", "w")]
+
+for name, work in (("ping-pong", ping_pong), ("private read-then-write", private)):
+    mesi, msi = bus_traffic(work, True), bus_traffic(work, False)
+    print("%-24s %2d accesses: MESI %2d transactions, MSI %2d"
+          % (name, len(work), mesi, msi))
+```
+
+On the contended word, MESI saves one transaction of twenty-three. On a private
+read-then-write — each core loading and updating its own data, which is what most code
+spends most of its time doing — MESI needs four transactions and MSI needs eight.
+Half the bus traffic, from one state whose only job is to remember that nobody
+answered.
+
+## The mistake: sending BusRdX from Shared
+
+A write needs exclusivity; BusRdX is how a write asks for exclusivity; a write to a
+Shared block therefore sends BusRdX. Every step of that is defensible, and it
+collapses the two write-miss paths into one branch, which makes the state machine
+shorter and is the form the code wants to take.
+
+It is also correct, in the sense that the protocol still never lets two caches write
+the same block. What it costs is a block of data crossing the bus for no reason at all,
+because the cache issuing the request already has that data — it is holding it in
+Shared. On the ping-pong trace that is seven redundant block transfers, 448 bytes on
+top of the 448 the flushes already move: the traffic on the most contended resource in
+the machine, doubled, to save a branch. BusUpgr exists for that single case and does
+nothing else.
+
+There is a second error waiting immediately behind it, and the capstone brief flags it
+because it is worth flagging: a BusUpgr is a **hit**. The data was present and the
+access was satisfied from the cache; only the permission had to be acquired. Score it
+as a miss and the miss rate starts to depend on the coherence protocol rather than on
+the cache, and every false-sharing and producer-consumer measurement you take
+afterwards is wrong in a way that looks plausible.
+
+## Where the model stops holding
+
+MESI guarantees **coherence**: every read of a given address returns the value of the
+last write to that address, in a single agreed order. It says nothing whatever about
+the order of operations on *different* addresses, and that is a separate property
+called consistency. A core with a store buffer can retire its own store locally and
+let a later load of a different address complete before the invalidation for the store
+has been acknowledged — no coherence rule is broken, and two cores can still both
+observe the other's variable as unwritten. That gap is exactly why fences and atomic
+operations exist, and why a program that is correct under coherence alone can still
+fail.
+
+Snooping stops working before the core count gets interesting. Every transaction is a
+broadcast, every cache must check every one against its tags, and the bus is the
+serialisation point for the whole machine — which is fine for the two caches in this
+module's lab and hopeless at sixteen. Directory protocols replace the broadcast with a
+per-block list of sharers so a transaction reaches only the caches that hold the block,
+and pay for it with an extra hop and a directory to keep somewhere.
+
+The four states are a minimum rather than an optimum. Step 3 of the ping-pong trace
+wrote a modified block back to memory to hand a copy to the other core; memory did not
+want it and the block is modified again three accesses later. MOESI's Owned state lets
+the supplying cache keep the dirty copy and serve it directly, and MESIF designates one
+sharer as the forwarder so that several caches holding S do not all answer at once —
+an arbitration question that two caches cannot pose.
+
+And the protocol's knowledge of who holds what is deliberately conservative. A cache
+that evicts a clean block in S or E does so silently, telling nobody, so a later
+BusUpgr may invalidate copies that no longer exist. The bookkeeping is allowed to
+overestimate sharing; it is never allowed to underestimate it.
+
+Finally, none of this appears on any uniprocessor measurement. The sandbox *The floor
+a single cache cannot get below* ends by asking you to imagine the missing axis: a
+block that this cache has not evicted, at an address that has not moved, which misses
+because another core wrote it. The three-C decomposition of module 2 cannot produce
+that number, because all three of its reference caches are single caches. It is a
+fourth C, and the only way to measure it is to model the second cache.
+
+## What you are about to build
+
+The lab *MESI between two snooping caches* asks for the state machine above with
+replacement added: `state_of`, `read`, `write`, and an LRU order per core in which
+evicting a Modified block costs a Flush. The checks are the transitions this page has
+traced — a clean read miss landing in E rather than S, a first write to E costing a
+single BusRd in total with no BusUpgr behind it, a second reader forcing a flush and
+demoting the owner, a write from S issuing BusUpgr and never BusRdX — and then the
+three workloads: ping-pong at 8 BusRd, 7 BusUpgr and 7 Flush, false sharing at 8
+BusRdX and 7 Flush with no hits at all, and disjoint at 12 hits and no flushes.
+
+`coherence_amat` comes from the derivation *What a shared line costs*, and its closing
+numbers are the reason the whole module exists: at a 1-cycle hit, a 2 per cent local
+miss rate, a 200-cycle memory and a 40-cycle snoop, padding the data takes the average
+access from 9 cycles to 5. An 80 per cent slowdown, bought by a struct layout, with the
+algorithm, the cache size and the local miss rate all unchanged.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "What a block costs when two caches want it",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Two cores write different words that happen to share one 64-byte block, and each write invalidates the other core's copy. Why can the protocol not let both proceed?",
+                        "opts": [
+                            "Because a cache tracks state per block, so ownership cannot name a word",
+                            "Because writes to any address must be serialised across the whole machine",
+                            "Because the two words are in the same set, so one evicts the other",
+                            "Because the bus carries whole blocks and cannot transfer a single word",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"State lives beside the tag, and a tag names a block. The protocol is never told which word a write touched, so it has to invalidate everything the block covers.",
+                            r"Coherence serialises writes to *one* address, not to all of them. Two cores writing genuinely separate blocks proceed in parallel with no transaction between them, which is what the padded version of this workload demonstrates.",
+                            r"A conflict miss and a coherence miss are different failures. These two words are in the same block, not merely the same set, and the block is resident in both caches until a write takes it away — no eviction happens anywhere.",
+                            r"A bus that moved single words would change what a transfer costs and nothing about who is allowed to write. The permission is what is being contested here, and permission is granted per block.",
+                        ],
+                        "why": r"""
+Coherence state is stored with the tag, and a tag identifies a block, so the finest
+distinction the protocol can draw is block-sized. A write is a request for the block,
+and the request carries no information about which of its sixteen words was wanted.
+Everything follows from that: the invalidation is conservative because it must be, the
+two cores serialise on data neither of them shares, and the only available fix is to
+change the addresses so that the two counters land in different blocks.
+""",
+                    },
+                    {
+                        "q": "A read miss goes onto the bus and no other cache responds. The block is installed Exclusive rather than Shared. What is bought by the distinction?",
+                        "opts": [
+                            "The block can be supplied from this cache without going to memory",
+                            "The block is known clean, so evicting it later needs no writeback",
+                            "The next write to this block needs no bus transaction at all",
+                            "The block will not be invalidated by another core's read",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Supplying data to a requester is something a cache in Shared or Modified does too — the state that matters for that is having a copy, not having the only one.",
+                            r"True of Exclusive and true of Shared alike, since both are clean, so it cannot be what separates them. The dirty bit is what a writeback turns on, and that is the M in the protocol.",
+                            r"Nobody else can hold the block, so there is nobody to invalidate, and the cache moves E to M in its own tag array without asking anyone.",
+                            r"Another core's read never invalidates anything — it demotes the holder to Shared and takes a copy. Invalidation comes from a write, and E is no protection against one.",
+                        ],
+                        "why": r"""
+Silence on the bus is information: it proves no other cache holds the block, and
+Exclusive is where that proof is stored. The next write can then go ahead with nothing
+on the bus, because there is provably nobody to invalidate. MSI, which has no E, has to
+issue an upgrade for that same write, and the pattern it pays for — read a private
+variable, then update it — is one of the most common in any program. On a private
+read-then-write workload MESI needs half the transactions MSI does, all of it from
+this one state.
+""",
+                    },
+                    {
+                        "q": "A core writes to a block it already holds in Shared. What does issuing BusRdX instead of BusUpgr cost, and does it break anything?",
+                        "opts": [
+                            "It transfers a block that is already resident; correctness is unaffected",
+                            "It leaves the other copies valid, so two caches could then write",
+                            "It forces a writeback of memory's copy; correctness is unaffected",
+                            "It costs nothing at all, since both requests carry exactly the same message",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"BusRdX asks for data and exclusivity; the exclusivity is needed and the data is already in hand, so the transfer is redundant traffic on the most contended resource in the machine.",
+                            r"BusRdX invalidates other copies exactly as BusUpgr does — that is the X in its name. The protocol stays correct, which is precisely why this mistake survives testing.",
+                            r"Memory's copy is not touched by either request. A writeback happens when a cache holding Modified data has to give it up, and no cache here holds this block modified.",
+                            r"They differ in one respect that matters on a bus: BusUpgr asks for permission alone and moves no data, while BusRdX moves a whole block. On the ping-pong trace that is 448 redundant bytes.",
+                        ],
+                        "why": r"""
+Both requests invalidate the other copies, so a protocol built entirely on BusRdX is
+correct, which is what makes the shortcut tempting — it collapses two write paths into
+one branch and no test fails. What it spends is bandwidth: the requester already holds
+the data, so the block that comes back is a copy of what is in its own array. On the
+ping-pong trace, seven upgrades become seven block transfers, 448 bytes on top of the
+448 the flushes already move. BusUpgr exists for this single case.
+""",
+                    },
+                    {
+                        "q": "In a run over two cores, should a write that hits a Shared block and issues a BusUpgr be counted as a hit or a miss?",
+                        "opts": [
+                            "A miss, because issuing a bus transaction is what a miss is defined by",
+                            "A hit, because the data was resident and only permission was missing",
+                            "A miss, because the block was invalidated in the other cache",
+                            "Neither, since an upgrade is a coherence event and not an access",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Bus traffic and hit-or-miss are separate questions. A miss is an access the cache could not satisfy from its own array, and this one it could — tying the label to the bus makes the miss rate a property of the protocol rather than of the cache.",
+                            r"The block was in the array and the word was read out of it; what had to be acquired was the right to modify it, which is a permission and not data.",
+                            r"What happened in the *other* cache classifies that cache's next access, not this one. The remote copy going Invalid is what makes the remote core's following access a coherence miss.",
+                            r"Every access the core makes is either satisfied by the cache or not, and this one was, so leaving it out of both counts loses accesses and makes the rates not add up.",
+                        ],
+                        "why": r"""
+A hit, and the capstone brief warns about it because the wrong answer is stable and
+plausible. The data was present, the access was served from the array, and the bus
+transaction bought permission rather than bytes. Counting it as a miss makes the miss
+rate depend on which protocol the machine runs — the same code on MSI and MESI would
+report different miss rates for identical cache behaviour — and it corrupts the
+false-sharing and producer-consumer measurements in a direction that looks reasonable
+until you compare them with the bus counts.
+""",
+                    },
+                    {
+                        "q": "A run has a 1-cycle hit, a 2 per cent local miss rate to a 200-cycle memory, and 10 per cent of accesses served by the other cache at 40 cycles. Padding the data to remove the sharing gives what?",
+                        "opts": [
+                            "9 cycles falling to 5, since the snoop term goes to zero",
+                            "9 cycles falling to 1, since both miss terms go to zero",
+                            "5 cycles rising to 9, since padding costs extra capacity misses",
+                            "9 cycles unchanged, since the same data is fetched either way",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$1 + 0.02 \times 200 + 0.10 \times 40 = 9$, and removing the sharing removes the third term alone: the local miss rate is untouched by where the data sits.",
+                            r"Padding does not remove the local misses — the data still has to be fetched the first time and re-fetched when it is evicted. Only the misses caused by another core's writes disappear.",
+                            r"Backwards on the direction, though the concern is real: padding does waste space and can raise the local miss rate. Here it is the shared version that costs 9 cycles and the padded one that costs 5.",
+                            r"The same bytes are fetched, but not the same number of times. A block taken away by a remote write has to be fetched again, and that refetch is the entire third term of the expression.",
+                        ],
+                        "why": r"""
+The access time is $t_1 + m\,t_m + f\,t_s$, so $1 + 0.02 \times 200 + 0.10 \times 40 = 9$
+cycles. Padding drives $f$ to zero and leaves $m$ where it was, giving 5. That is an 80
+per cent slowdown attributable to a data layout, at an unchanged algorithm, cache size
+and local miss rate — which is why a profiler that reports only the local miss rate can
+show two versions of a program as identical while one of them runs at half the speed.
+""",
+                    },
+                    {
+                        "q": "MESI is running correctly on every cache in a machine. Which guarantee does that still not provide?",
+                        "opts": [
+                            "That two caches never hold the same block in Modified at once",
+                            "That a read returns the value of the last write to that address",
+                            "That a write to a block held Shared invalidates every other copy of it",
+                            "That one core's two writes to different addresses are seen in order",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            r"That is coherence's central invariant and the protocol enforces it: a transition into Modified invalidates every other copy first, so a second writer cannot exist.",
+                            r"This is what coherence means for a single address, and MESI delivers it — writes to one block are serialised by the bus into a single order that every cache observes.",
+                            r"BusUpgr and BusRdX both invalidate the remote copies before the write proceeds, which is the mechanism by which the guarantee above is kept.",
+                            r"Coherence orders the accesses to each address separately and says nothing about how two addresses interleave. A store buffer can retire one write locally while the other is still in flight, and no coherence rule is broken.",
+                        ],
+                        "why": r"""
+Coherence is a per-address property: every read of an address sees the last write to
+that address, in one order all caches agree on. Consistency is the property that
+relates *different* addresses, and MESI does not address it at all. A core with a store
+buffer can complete a later operation before an earlier store has been made visible,
+so two cores can each observe the other's flag as unset — with every cache perfectly
+coherent throughout. Fences and atomic instructions exist to constrain that ordering,
+and no amount of correctness in the coherence protocol removes the need for them.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "The floor a single cache cannot get below",
                 "visualiser": "cache",
