@@ -1511,6 +1511,400 @@ branch of a coin flip without disturbing anything else it is measuring.
                 "Var(X) = E[(X - mu)^2] = E[X^2] - mu^2, and why the centred form loses less precision",
                 "Exact integer binomial coefficients: multiply then divide, never factorial then divide",
             ],
+            "read": [
+                {
+                    "title": 'One flaky test, and the three lists that count it',
+                    "minutes": 14,
+                    "body": r'''
+A build server runs one integration test ten times every night. The test is flaky: on
+any single run it fails with probability $0.3$, and the runs have nothing to do with
+each other — a fresh container each time, no shared state, no cached artefacts. Here is
+last night's log.
+
+```text
+    run       1  2  3  4  5  6  7  8  9  10
+    result    .  F  .  .  F  .  .  .  F  .
+```
+
+Three failures out of ten. The question the on-call engineer actually asks is not "why
+three" but "is three unusual?", and that cannot be answered from one number. It needs
+the whole list — the probability of zero failures, of one, of two, of every count up to
+ten — because "unusual" means "far out in that list". A list of probabilities indexed by
+outcome is a **probability mass function**, and this module builds three of them out of
+nothing but counting.
+
+## One run is the atom
+
+A single run fails or does not, so its mass function has two entries: $P(X = 1) = p$ and
+$P(X = 0) = 1 - p$, here with $p = 0.3$. That is a **Bernoulli** variable. On its own it
+is barely a distribution; its job is to be the piece the other two are assembled from.
+
+Write down the probability of exactly the log above — failures on runs 2, 5 and 9,
+successes on the other seven. The runs are independent, so the probability of the whole
+sequence is the product of the ten single-run probabilities:
+
+$$0.7 \times 0.3 \times 0.7 \times 0.7 \times 0.3 \times 0.7 \times 0.7 \times 0.7
+\times 0.3 \times 0.7 = 0.3^{3}\,0.7^{7} \approx 0.002224 .$$
+
+Multiplication is commutative, so nothing in that product remembers *where* the failures
+fell. Every sequence with three F's and seven dots carries the same $0.002224$. And the
+events "failures on runs 2, 5, 9", "failures on runs 1, 2, 3" and the rest are disjoint —
+one night cannot be two of them — so module 1's third axiom says their probabilities add.
+Adding a pile of equal numbers is counting:
+
+$$P(X = 3) = (\text{number of such sequences}) \times 0.3^{3}\,0.7^{7} .$$
+
+A sequence is fixed by choosing which three of the ten positions hold an F, and module 1
+counted precisely that: $\binom{10}{3} = 120$. So
+
+$$P(X = 3) = 120 \times 0.027 \times 0.0823543 = 0.266828 .$$
+
+The general shape is the same two steps with letters. One specific arrangement has
+probability $p^{k}(1-p)^{n-k}$, and there are $\binom{n}{k}$ arrangements, so
+
+$$P(X = k) = \binom{n}{k} p^{k} (1-p)^{n-k} .$$
+
+```python
+def choose(n, k):
+    """Exact integer C(n, k), built up multiplicatively."""
+    if k < 0 or k > n:
+        return 0
+    k = min(k, n - k)
+    result = 1
+    for i in range(k):
+        result = result * (n - i) // (i + 1)
+    return result
+
+
+def binomial_pmf(n, p, k):
+    return choose(n, k) * p ** k * (1 - p) ** (n - k)
+
+
+table = {k: binomial_pmf(10, 0.3, k) for k in range(11)}
+for k in (2, 3, 4):
+    print(f"P(X = {k}) = {table[k]:.6f}")
+print(f"total mass  = {sum(table.values()):.12f}")
+print(f"E[X]        = {sum(k * m for k, m in table.items()):.6f}")
+```
+
+That prints
+
+```text
+P(X = 2) = 0.233474
+P(X = 3) = 0.266828
+P(X = 4) = 0.200121
+total mass  = 1.000000000000
+E[X]        = 3.000000
+```
+
+So three failures is the single most likely night there is, and the answer to the on-call
+question is that three is not unusual at all. Running totals answer the sharper version:
+$P(X \le 3) = 0.6496$, and $P(X \ge 7) = 0.0106$. A running total of a mass function is a
+**cumulative distribution function**, and it is a sum, not a new idea — which is why the
+lab writes `binomial_cdf` as a loop over `binomial_pmf` and then checks that it never
+dips.
+
+## A different question about the same test
+
+Do not fix the number of runs. Instead keep running until the test fails, and ask how
+many runs that takes. To have the first failure on run $k$, the first $k-1$ runs must all
+have passed and run $k$ must fail:
+
+$$P(X = k) = (1-p)^{k-1} p, \qquad k = 1, 2, 3, \dots$$
+
+There is no binomial coefficient here, and the absence is the content: only one sequence
+gives a first failure on run $k$, because the positions of everything before it are
+forced. This is the **geometric** distribution, and the lab counts trials *up to and
+including* the first success, so its support starts at $k = 1$.
+
+The masses do sum to one, and the check is a geometric series:
+$\sum_{k \ge 1}(1-p)^{k-1}p = p/(1 - (1-p)) = 1$. The cumulative version needs no series
+at all. $P(X > k)$ means the first $k$ runs all passed, which has probability $(1-p)^{k}$,
+so
+
+$$P(X \le k) = 1 - (1-p)^{k} .$$
+
+At $p = 0.3$ that gives $P(X \le 5) = 1 - 0.7^{5} = 0.83193$, which agrees to the last
+digit with summing the five masses. The lab's `geometric_cdf` uses the closed form and its
+test compares it against the summed pmf at every $k$ from 1 to 11 — the two routes to one
+number, which is the cheapest kind of check there is.
+
+## The moments, derived rather than quoted
+
+Expectation is $E[X] = \sum_k k\,P(X = k)$, and for the binomial that sum is unpleasant
+head-on. Take it sideways. Write $X = I_1 + I_2 + \dots + I_{10}$, where $I_j$ is $1$ if
+run $j$ failed and $0$ if it passed. Expectation is linear — and linear *whether or not*
+the terms are independent, which is the fact doing the work here — so
+
+$$E[X] = \sum_{j=1}^{10} E[I_j] = 10 \times 0.3 = 3 ,$$
+
+since a $0/1$ variable has expectation equal to its probability of being $1$. The code
+above prints exactly $3.000000$ from the eleven masses, by a completely different route.
+
+The geometric mean comes from self-similarity. Let $\mu = E[X]$. The first run always
+happens. With probability $p$ it fails and the count is $1$; with probability $1 - p$ it
+passes and you are looking at the same problem again, one run further on. So
+
+$$\mu = 1 + (1-p)\mu \quad \Longrightarrow \quad \mu = \frac{1}{p} .$$
+
+At $p = 0.3$ the expected wait is $3.\overline{3}$ runs. The lab checks this against a
+table truncated at $k_{\max}$, and the truncation is the thing to watch: at $p = 0.3$ the
+first $40$ terms give $3.33331$ rather than $3.33333$, because the tail beyond $40$ was
+discarded. The lab's own checks push $k_{\max}$ out to $400$ at $p = 0.25$, far enough
+that the discarded tail is around $10^{-50}$ and the sum comes back exact. The $10^{-6}$
+tolerance is there because a table that stops too early gives a wrong answer rather than a
+noisy one, and the size of that error is set by a choice you make.
+
+Variance is $\mathrm{Var}(X) = E[(X-\mu)^{2}]$, and expanding the square gives the
+algebraically equal $E[X^{2}] - \mu^{2}$. Equal in algebra is not equal in floating point.
+
+```python
+xs = [1e7 + 0.1, 1e7 + 0.2, 1e7 + 0.3]
+mass = 1 / 3
+mu = sum(x * mass for x in xs)
+centred = sum(mass * (x - mu) ** 2 for x in xs)
+raw = sum(mass * x * x for x in xs) - mu * mu
+print(f"centred form  : {centred!r}")
+print(f"E[X^2] - mu^2 : {raw!r}")
+```
+
+```text
+centred form  : 0.006666666741172473
+E[X^2] - mu^2 : 0.0
+```
+
+The true variance is $0.00\overline{6}$. The uncentred form reports **exactly zero**: it
+subtracts two numbers near $10^{14}$ whose difference is near $0.0067$, and double
+precision has no digits left down there. The centred form subtracts first, while the
+numbers are still close together, and keeps every digit. This is why the lab's `variance`
+is specified about the mean.
+
+## The mistake, and why it is tempting
+
+Twenty machines sit in a rack, six of them running a bad firmware image. Pull ten at
+random and count the bad ones. Ten trials, two outcomes each, and $6/20 = 0.3$ — the
+binomial story fits the sentence perfectly, and it is the wrong distribution.
+
+The binomial needs $p$ to be the same on every trial, and pulling *without replacement*
+changes it: after one bad machine is drawn, the rack holds $5$ bad out of $19$, so the
+next probability is $0.263$, not $0.3$. What the count follows is the hypergeometric
+distribution, and the difference is not cosmetic.
+
+```python
+def choose(n, k):
+    if k < 0 or k > n:
+        return 0
+    k = min(k, n - k)
+    result = 1
+    for i in range(k):
+        result = result * (n - i) // (i + 1)
+    return result
+
+
+N, K, n, p = 20, 6, 10, 0.3
+binom = sum(choose(n, k) * p ** k * (1 - p) ** (n - k) for k in range(4))
+hyper = sum(choose(K, k) * choose(N - K, n - k) for k in range(4)) / choose(N, n)
+print(f"binomial       P(X <= 3) = {binom:.4f}   variance = {n * p * (1 - p):.4f}")
+print(f"hypergeometric P(X <= 3) = {hyper:.4f}   variance = "
+      f"{n * p * (1 - p) * (N - n) / (N - 1):.4f}")
+```
+
+```text
+binomial       P(X <= 3) = 0.6496   variance = 2.1000
+hypergeometric P(X <= 3) = 0.6858   variance = 1.1053
+```
+
+The spread is nearly halved. Sampling without replacement is self-correcting — draw too
+many bad machines early and there are fewer left to draw — so the count clusters harder
+around its mean than the binomial expects. The mistake is tempting because the words
+"trial", "success" and "independent" all sound like descriptions of the story rather than
+conditions on the arithmetic, and the story is genuinely identical. Independence is a
+statement about the numbers, as module 2 insisted, and here the numbers move.
+
+## Where these stop holding
+
+**Constant $p$, and independence.** Both are assumptions about the mechanism that the
+formula cannot check. A flaky test that fails more often when the CI machine is loaded
+has neither, and the binomial will understate the tails: correlated failures cluster, and
+clustered failures make "eight failures tonight" far more likely than the $0.001447$ the
+formula assigns it.
+
+**The geometric's memorylessness.** $P(X > m + k \mid X > m) = (1-p)^{k}$, free of $m$ —
+seven passing runs tell you nothing about how much longer the wait is. That is a
+consequence of independence, not a law of nature, and it is false of anything that wears
+out or warms up. Module 4 meets the same property in continuous time.
+
+**Exactness, and floating point.** `choose` in the lab is written as
+`result = result * (n - i) // (i + 1)` rather than as a ratio of factorials, and the
+reason is that the multiplicative form keeps a running product that is always divisible,
+so it stays an exact `int` at every step, while $\binom{52}{5}$ built from
+$52!$ discards its precision before dividing. The masses themselves are floats, and
+$p^{k}$ for large $k$ and small $p$ underflows to zero — module 10 hits this hard enough
+that its spam filter has to work in logs.
+
+The lab for this module, **pmf, cdf and the first two moments**, asks you to build all of
+this from the definitions: `choose` without `math.comb`, both pmfs and both cdfs, tables
+over the support, and `expectation` and `variance` over any `{value: probability}` dict.
+The tables are the point. They let you check $np$ and $np(1-p)$ against a sum you computed
+yourself rather than against a formula somebody handed you.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Mass, counting, and the moments that follow",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": r"A flaky test is run ten times, failing independently with probability $0.3$ each time. In $P(X = 3) = \binom{10}{3}(0.3)^{3}(0.7)^{7}$, what work is the coefficient $\binom{10}{3}$ doing?",
+                        "opts": [
+                            r"It counts the arrangements of three failures among ten runs, each carrying that same probability",
+                            r"It corrects for the fact that the three failing runs might have occurred in any order, which makes each individual ordering more probable than it would otherwise be",
+                            r"It rescales the eleven masses so that they add to one",
+                            r"It accounts for the runs being independent of one another",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Each such arrangement has probability $0.3^{3}0.7^{7}$, they are disjoint, and adding 120 equal numbers is multiplication.",
+                            r"Ordering does not change any single sequence's probability — the product $0.7 \times 0.3 \times 0.7 \cdots$ is commutative, so every arrangement is worth the same $0.002224$. The coefficient counts the arrangements; it does not reweight them.",
+                            r"The masses add to one on their own once the coefficients are in place, and no separate normalising step happens. Treating $\binom{n}{k}$ as a fudge factor hides that it is a count of something you could list by hand.",
+                            r"Independence is what licenses multiplying the ten single-run probabilities together in the first place, and it produces $0.3^{3}0.7^{7}$ — not the coefficient in front of it. A dependent sequence would break the product, not the count.",
+                        ],
+                        "why": r"""
+The probability of one specific log — failures on runs 2, 5 and 9 — is the product of ten
+independent single-run probabilities, which is $0.3^{3}0.7^{7} \approx 0.002224$, and
+multiplication being commutative means every log with three failures is worth exactly the
+same. Those logs are disjoint events, so the addition axiom says their probabilities add,
+and adding 120 copies of one number is multiplying by 120. The coefficient is a count of
+sequences and nothing else; $\binom{10}{3} = 120$ is a number you could in principle
+obtain by listing them.
+""",
+                    },
+                    {
+                        "q": r"A geometric variable counts trials up to and including the first success, with $p = 0.3$. Why is there no binomial coefficient in $P(X = k) = (0.7)^{k-1}(0.3)$?",
+                        "opts": [
+                            r"Because the trials are dependent once you condition on the first success arriving late",
+                            r"Because exactly one sequence produces a first success on trial $k$: everything before it is forced to be a failure",
+                            r"Because the coefficient is present but equals one for every value of $k$ that the geometric distribution can take, and a factor of one is conventionally left out of the written formula",
+                            r"Because the support is unbounded, and no finite count of arrangements exists",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The trials are independent throughout; the conditioning event is a statement about them, not a change to them. Independence is precisely what makes the $k-1$ failures multiply to $(0.7)^{k-1}$.",
+                            r"Fail, fail, ..., fail, succeed — the arrangement is not a choice, so there is nothing to count.",
+                            r"It is true that $\binom{k-1}{0} = 1$, which is a fair way to see it, but the phrasing has the reasoning backwards: nothing was left out for convenience. There is one arrangement because the positions before the success are forced, and the count says so.",
+                            r"An unbounded support does not prevent counting the arrangements at a fixed $k$ — the binomial's support is finite and this argument would fail there too. At any given $k$ the count is a perfectly finite number, and that number is one.",
+                        ],
+                        "why": r"""
+For the first success to land on trial $k$, trials $1$ through $k-1$ must all have failed
+and trial $k$ must have succeeded. That describes one sequence, not a family of them:
+there is no freedom about where the failures go, because they go everywhere before the
+success. The binomial coefficient exists to count the ways of placing $k$ successes among
+$n$ positions, and when the placement is forced the count is one. The formal version is
+$\binom{k-1}{0} = 1$, which is a fine way to remember it as long as it is a conclusion
+rather than a convention.
+""",
+                    },
+                    {
+                        "q": r"Twenty servers sit in a rack and six of them carry a bad firmware image. Ten are pulled at random, without replacement, and the bad ones counted. Why is $\mathrm{Binomial}(10, 0.3)$ the wrong model?",
+                        "opts": [
+                            r"Ten pulls from twenty servers is too small a sample for any distribution with a fixed number of trials to describe it honestly",
+                            r"The binomial requires the count of successes to be smaller than the count of failures, which cannot be guaranteed here",
+                            r"Removing a server changes the composition of the rack, so the success probability is not the same on every pull",
+                            r"The pulls are made at random rather than in a fixed order, and the binomial assumes a fixed order",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Sample size is not the issue: a binomial with $n = 10$ is perfectly well defined and would be exactly right if the servers were sampled with replacement. The defect is in the mechanism, not the magnitude.",
+                            r"No such requirement exists. $\mathrm{Binomial}(10, 0.9)$ is an ordinary distribution with far more successes than failures, and nothing in its derivation cares which of the two is commoner.",
+                            r"After one bad pull the rack holds five bad of nineteen, so $p$ drops from $0.300$ to $0.263$.",
+                            r"Order is irrelevant to both models — the binomial coefficient exists precisely because arrangements are pooled, and the hypergeometric pools them too. Randomising the order changes neither answer.",
+                        ],
+                        "why": r"""
+The binomial derivation needs $p$ fixed across trials, and drawing without replacement
+breaks that: after a bad server is pulled, five of the remaining nineteen are bad, so the
+next probability is $0.263$ rather than $0.300$. The correct model is hypergeometric, and
+the difference is real — $P(X \le 3)$ moves from $0.6496$ to $0.6858$ and the variance
+falls from $2.10$ to $1.11$. Sampling without replacement is self-correcting, so the count
+clusters more tightly around its mean than the binomial expects. What makes the error
+tempting is that the words "trial", "success" and "independent" read as descriptions of
+the story, when they are conditions on the arithmetic.
+""",
+                    },
+                    {
+                        "q": r"Over the three equally likely values $10000000.1$, $10000000.2$ and $10000000.3$, computing the variance as $E[X^{2}] - \mu^{2}$ in double precision returns exactly $0.0$, while the true answer is about $0.00667$. What went wrong?",
+                        "opts": [
+                            r"The two forms are not algebraically equal, and $E[X^{2}] - \mu^{2}$ is the biased one of the pair",
+                            r"Two nearly equal numbers of size $10^{14}$ were subtracted, and their difference sits below the precision left there",
+                            r"Squaring values that large overflows the double-precision range, so the sum saturates before the subtraction happens",
+                            r"The masses $1/3$ cannot be held exactly in binary, so the two weighted sums were already wrong before either form was reached",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"They are exactly equal in algebra — expand $E[(X-\mu)^{2}]$ and the cross term is $-2\mu E[X] + \mu^{2}$, which collapses. Neither form is biased; only one of them survives arithmetic on a finite machine.",
+                            r"A double carries about sixteen significant digits, and $0.0067$ is the seventeenth digit of $10^{14}$.",
+                            r"Nothing overflows here. A double reaches about $1.8 \times 10^{308}$, and $10^{14}$ squared is $10^{28}$ — comfortably inside the range. The loss is of precision, which is silent, rather than of magnitude, which is not.",
+                            r"The masses really are inexact, and that is a genuine source of small error, but it is worth about $10^{-17}$ relative — nowhere near enough to erase the answer. Recomputing the same expression with exact thirds still returns zero at this scale.",
+                        ],
+                        "why": r"""
+$E[X^{2}]$ here is about $10^{14}$ and so is $\mu^{2}$, and their difference is about
+$0.0067$. A double holds roughly sixteen significant digits, so at a magnitude of $10^{14}$
+the smallest distinguishable step is larger than the answer being sought: the two sums
+round to the identical float and the subtraction yields zero. Computing
+$E[(X - \mu)^{2}]$ instead subtracts while the numbers are still close together, keeping
+every digit of the deviations, which is why the lab specifies the centred form.
+""",
+                    },
+                    {
+                        "q": r"Ten runs of the flaky test, with $E[X] = np = 3$. Which statement about that derivation is accurate?",
+                        "opts": [
+                            r"It follows from linearity of expectation over ten indicators, and holds even if the runs are correlated",
+                            r"It follows from the independence of the ten runs, without which the expectation would have to be summed term by term instead",
+                            r"It is a definition of the binomial's parameters rather than a result derived from the mass function",
+                            r"It holds only in the limit of many runs, and at $n = 10$ it is an approximation",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$E[I_1 + \dots + I_{10}] = \sum E[I_j]$ needs no independence at all, which is exactly what makes the indicator trick worth learning.",
+                            r"Independence is needed for the *variance* $np(1-p)$, and it is easy to carry that requirement backwards onto the mean. Linearity of expectation is unconditional: sums of expectations work for correlated terms too.",
+                            r"The parameters $n$ and $p$ are the trial count and the per-trial probability; the mean is a consequence of them, and summing $k\,P(X=k)$ over the eleven masses returns $3.000000$ independently of any indicator argument.",
+                            r"Nothing here is asymptotic. The value $3$ is exact at $n = 10$, and the direct sum over the mass function confirms it to every digit printed.",
+                        ],
+                        "why": r"""
+Write $X = I_1 + \dots + I_{10}$ with $I_j$ equal to $1$ when run $j$ fails. Expectation is
+linear, so $E[X] = \sum_j E[I_j] = 10 \times 0.3 = 3$, and linearity requires nothing
+whatever about how the terms relate to one another. That is what makes the indicator
+decomposition powerful: it survives correlation. Independence is needed for the variance
+$np(1-p)$, since variances add only when covariances vanish, and carrying that requirement
+back onto the mean is a common and unnecessary caution.
+""",
+                    },
+                    {
+                        "q": r"A geometric wait with $p = 0.3$ has run for seven trials with no success. What is the expected number of *further* trials until the first success?",
+                        "opts": [
+                            r"About $2.3$, since the expected total wait of $3.33$ has already been partly used up by the seven trials that have passed",
+                            r"Exactly $7$, because a run of seven failures is repaid by a success within a comparable number of trials",
+                            r"It cannot be determined without more information about those seven trials",
+                            r"$3.\overline{3}$ further trials, exactly the wait it faced before the first one",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            r"This treats the wait as a budget being spent, which is the intuition memorylessness contradicts. The expected total is not a quantity attached to the process that seven trials can deplete; it is an average over runs, most of which ended long ago.",
+                            r"There is no repayment mechanism anywhere in $(1-p)^{k-1}p$. Each trial is a fresh $0.3$, and a long run of failures neither raises nor lowers the next one — this is the gambler's fallacy in its usual dress.",
+                            r"The outcomes are known: all seven were failures, which is what the question states. Even if some had succeeded, independence means past outcomes carry no information about the next trial.",
+                            r"$P(X > 7 + k \mid X > 7) = (0.7)^{k}$, free of the $7$ entirely.",
+                        ],
+                        "why": r"""
+$P(X > m + k \mid X > m) = (1-p)^{k}$, with no $m$ anywhere on the right, so the
+distribution of the remaining wait is the original distribution and its mean is $1/p =
+3.\overline{3}$. That is memorylessness, and it is a consequence of the trials being
+independent with a constant $p$ rather than a special property the geometric happens to
+possess. It is also exactly where the model stops describing anything that wears out,
+warms up or retries with backoff: for those, seven failures genuinely are informative,
+and a geometric wait is the wrong tool.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "pmf, cdf and the first two moments",
                 "runtime": "python",
@@ -2506,6 +2900,423 @@ linear in it to find.
                 "The unbiased sample variance divides by n - 1; dividing by n underestimates systematically",
                 "Binning a sample into a histogram, and what its shape can and cannot tell you",
             ],
+            "read": [
+                {
+                    "title": 'The average you can watch converge, and the two theorems that let you stop',
+                    "minutes": 15,
+                    "body": r'''
+A service times out on $30$ per cent of requests. Rather than compute anything, throw
+requests at it and count. Here is the running fraction of timeouts from one stream, read
+off at five points.
+
+```text
+    n =     10   running mean = 0.40000   error = 0.10000
+    n =    100   running mean = 0.33000   error = 0.03000
+    n =   1000   running mean = 0.30300   error = 0.00300
+    n =  10000   running mean = 0.29200   error = 0.00800
+    n = 100000   running mean = 0.29796   error = 0.00204
+```
+
+Two features of that table need accounting for before anyone should trust an answer
+produced this way. The error shrinks, from $0.1$ to $0.002$, and that shrinking is the
+entire justification for answering a probability question by counting rather than by
+algebra. But it does not shrink *steadily*: the error at $n = 10{,}000$ is nearly three
+times the error at $n = 1000$. Watching that on a progress bar, you would suspect a bug.
+There is no bug, and this unit is about why — and about how many more requests it would
+take to buy another decimal place.
+
+## A seeded generator is a function, not a source of luck
+
+The word "random" in `random.random` is a courtesy. A pseudo-random generator holds an
+internal state, and each call returns a deterministic function of that state and then
+advances it. Fix the starting state and the entire sequence is fixed.
+
+```python
+import random
+
+a = random.Random(4242)
+b = random.Random(4242)
+print([round(a.random(), 6) for _ in range(3)])
+print([round(b.random(), 6) for _ in range(3)])
+```
+
+```text
+[0.862451, 0.415694, 0.028451]
+[0.862451, 0.415694, 0.028451]
+```
+
+Reproducibility is therefore a choice, and the lab makes it for you by requiring
+`random.Random(seed)` — a private stream — rather than the module-level `random.random`.
+The difference matters more than it reads. The module-level functions share one global
+state, so a logging call or a shuffle somewhere else in the program consumes draws from
+the same stream and silently changes your numbers. A defect that shows up one run in
+fifty is then unreproducible, which converts a bug into a rumour. A private generator per
+experiment means `lln_curve(20250901, 0.3, [10, 100])` returns the same pair today and
+next year.
+
+## Why the average converges, and exactly how fast
+
+The convergence is not a mystery to be believed; it falls out of the variance of a sum.
+Let $X_1, \dots, X_n$ be independent with common mean $\mu$ and variance $\sigma^{2}$.
+Module 5 showed that $\mathrm{Var}(A + B) = \mathrm{Var}(A) + \mathrm{Var}(B) +
+2\,\mathrm{Cov}(A, B)$, and independence sends every covariance to zero, so the variance
+of the sum is $n\sigma^{2}$. Scaling divides variance by the square of the scale factor,
+so for the sample mean $\bar{X} = \frac{1}{n}\sum X_i$,
+
+$$\mathrm{Var}(\bar{X}) = \frac{1}{n^{2}} \cdot n\sigma^{2} = \frac{\sigma^{2}}{n},
+\qquad \mathrm{SE}(\bar{X}) = \frac{\sigma}{\sqrt{n}} .$$
+
+That single line is the whole engine. The average of $n$ draws has the same centre as one
+draw and a spread smaller by $\sqrt{n}$. Turning it into a statement about probability —
+that $P(|\bar{X} - \mu| > \varepsilon)$ goes to zero for every $\varepsilon > 0$, which is
+the **weak law of large numbers** — takes one further step, and module 7 supplies it by
+applying Chebyshev's inequality to $\bar{X}$.
+
+Now go back to the wobbling table. The draws are Bernoulli$(0.3)$, so
+$\sigma^{2} = p(1-p) = 0.21$ and the standard error is $\sqrt{0.21/n}$. Measure each error
+in those units, on the very stream the table came from.
+
+```python
+import math
+import random
+
+p = 0.3
+rng = random.Random(20250901)
+hits = 0
+for n in range(1, 100001):
+    if rng.random() < p:
+        hits += 1
+    if n in (10, 100, 1000, 10000, 100000):
+        mean = hits / n
+        se = math.sqrt(p * (1 - p) / n)
+        print(f"n = {n:>6}   mean = {mean:.5f}   error = {abs(mean - p):.5f}   "
+              f"SE = {se:.5f}   error/SE = {abs(mean - p) / se:.2f}")
+```
+
+```text
+n =     10   mean = 0.40000   error = 0.10000   SE = 0.14491   error/SE = 0.69
+n =    100   mean = 0.33000   error = 0.03000   SE = 0.04583   error/SE = 0.65
+n =   1000   mean = 0.30300   error = 0.00300   SE = 0.01449   error/SE = 0.21
+n =  10000   mean = 0.29200   error = 0.00800   SE = 0.00458   error/SE = 1.75
+n = 100000   mean = 0.29796   error = 0.00204   SE = 0.00145   error/SE = 1.41
+```
+
+The apparent regression at $n = 10{,}000$ is a run that landed $1.75$ standard errors out,
+following one that landed a fifth of a standard error out. Both are unremarkable; it is
+the earlier point that was lucky. Convergence in probability is a statement about the
+*distribution* of the error, not a promise that any particular run improves at every step,
+and the lab's `lln_curve` returns the whole list of checkpoints so that this is visible
+rather than asserted.
+
+## Precision costs quadratically
+
+Because the error scales as $1/\sqrt{n}$, cutting it in half costs four times the work.
+Put a number on it. To pin a Bernoulli$(0.3)$ probability to within $\pm 0.001$ with about
+$95$ per cent confidence you need $1.96\,\sigma/\sqrt{n} \le 0.001$, so
+
+$$n \ge \frac{1.96^{2} \times 0.21}{0.001^{2}} = 806{,}736 .$$
+
+Another decimal place — $\pm 0.0001$ — costs a hundred times that, over eighty million
+draws. Monte Carlo buys the first three digits cheaply and the fourth painfully, and
+knowing which of those you are in is the difference between a five-second script and an
+overnight job. The relationship is checkable directly:
+
+```python
+import math
+import random
+
+for n in (4, 16, 64):
+    rng = random.Random(99)
+    means = [sum(rng.random() for _ in range(n)) / n for _ in range(4000)]
+    mu = sum(means) / len(means)
+    sd = math.sqrt(sum((m - mu) ** 2 for m in means) / (len(means) - 1))
+    print(f"n = {n:>2}   sd of the {len(means)} means = {sd:.5f}   "
+          f"sigma/sqrt(n) = {math.sqrt(1 / 12) / math.sqrt(n):.5f}")
+```
+
+```text
+n =  4   sd of the 4000 means = 0.14469   sigma/sqrt(n) = 0.14434
+n = 16   sd of the 4000 means = 0.07177   sigma/sqrt(n) = 0.07217
+n = 64   sd of the 4000 means = 0.03608   sigma/sqrt(n) = 0.03608
+```
+
+Uniform$(0,1)$ has variance $1/12$, and quadrupling $n$ halves the observed scatter at
+every step. That is exactly the assertion the lab's `clt_means` checks, and the division
+by `len(means) - 1` rather than `len(means)` is the unbiased sample variance: the
+deviations are measured about $\bar{x}$, which was fitted from the same data and therefore
+sits closer to them than the true mean does, so dividing by $n$ understates the spread
+every time. Module 8 works out the exact size of that shortfall.
+
+## The shape, not the spread
+
+The law of large numbers says where the sample mean goes. It says nothing about what the
+scatter *looks like* on the way, and that is a separate theorem. Take means of eight
+uniform draws and bin ten thousand of them.
+
+```python
+import random
+
+rng = random.Random(2024)
+means = [sum(rng.random() for _ in range(8)) / 8 for _ in range(10000)]
+counts = [0] * 10
+for v in means:
+    counts[int(v * 10)] += 1
+for i, c in enumerate(counts):
+    print(f"[{i / 10:.1f}, {(i + 1) / 10:.1f})  {c:>5}  {'#' * (c // 100)}".rstrip())
+```
+
+```text
+[0.0, 0.1)      0
+[0.1, 0.2)     15
+[0.2, 0.3)    218  ##
+[0.3, 0.4)   1410  ##############
+[0.4, 0.5)   3381  #################################
+[0.5, 0.6)   3299  ################################
+[0.6, 0.7)   1442  ##############
+[0.7, 0.8)    220  ##
+[0.8, 0.9)     15
+[0.9, 1.0)      0
+```
+
+A single uniform draw is flat — every bin near a thousand. Averaging eight of them
+produces a bell, and it took eight, not eight hundred. The **central limit theorem** says
+this happens whatever the parent distribution is, provided its variance is finite: the
+standardised mean $(\bar{X} - \mu)/(\sigma/\sqrt{n})$ has mean $0$ and variance $1$ by the
+two facts derived above, and its *shape* settles onto the standard normal curve. That is
+why the lab pairs `standardise` with `histogram`: standardising removes the centre and
+the scale, and whatever is left is the claim the theorem actually makes.
+
+## The mistake, and why it is tempting
+
+"It has come up heads too often, so tails is due." The law of large numbers is offered as
+the justification, and the law says nothing of the kind.
+
+```python
+import random
+
+rng = random.Random(31337)
+heads = 0
+for n in range(1, 1000001):
+    if rng.random() < 0.5:
+        heads += 1
+    if n in (100, 10000, 1000000):
+        print(f"n = {n:>7}  heads = {heads:>6}  ratio = {heads / n:.5f}  "
+              f"excess over n/2 = {heads - n / 2:+.1f}")
+```
+
+```text
+n =     100  heads =     50  ratio = 0.50000  excess over n/2 = +0.0
+n =   10000  heads =   5026  ratio = 0.50260  excess over n/2 = +26.0
+n = 1000000  heads = 500551  ratio = 0.50055  excess over n/2 = +551.0
+```
+
+The ratio converges to $0.5$ and the surplus of heads **grows**, from nothing to $551$.
+Both are the same arithmetic seen through different denominators. The excess
+$H - n/2$ is a sum of $n$ independent $\pm\frac{1}{2}$ terms, so its standard deviation is
+$\sqrt{n}/2$ — at a million flips, $500$, and the observed $551$ is an ordinary result.
+The ratio is that excess divided by $n$, so its typical size is $\frac{1}{2\sqrt{n}}$,
+which shrinks. Nothing repays anything. The early surplus is not cancelled; it is
+out-voted by later flips that know nothing about it.
+
+The error is tempting because "evens out" is a fair description of the ratio, and the mind
+supplies the counts as though the same sentence covered both. It does not, and the sign of
+the difference between the two is worth holding on to: the thing that converges is the one
+you divided by $n$.
+
+## Where it stops
+
+**Finite variance is a real condition.** Draw from a Cauchy distribution — the ratio of
+two normals, or $\tan(\pi(U - \frac{1}{2}))$ for uniform $U$ — and its variance is
+infinite. The sample mean of $n$ Cauchy draws is distributed exactly as *one* Cauchy draw,
+for every $n$, so it never settles anywhere:
+
+```text
+    n =     10   running mean =       0.4616
+    n =    100   running mean =      -3.5530
+    n =   1000   running mean =       3.2918
+    n =  10000   running mean =      -0.4165
+    n = 100000   running mean =      -4.2297
+```
+
+A hundred thousand draws leave the average further from zero than ten did. Averaging is
+not a universal purifier, and file sizes, city populations and losses on financial trades
+are all heavy-tailed enough for this to matter in practice.
+
+**Independence is a real condition too.** The step that removed the covariances is the
+only place independence entered, and if the draws are correlated the variance of the mean
+is larger than $\sigma^{2}/n$ — sometimes very much larger. Consuming one generator inside
+two nested loops so that the outer iterations share draws is the usual way to arrange this
+by accident, which is another reason the lab gives every experiment its own seed.
+
+**The central limit theorem is about the middle.** At any fixed $n$ the normal
+approximation is best near the centre and worst far out in the tails, which is exactly
+where a question about a rare event lives. Estimating a probability of $10^{-6}$ by
+counting how often it happened in a million draws is a plan whose expected count is one.
+Module 7's bounds exist for that case, because they do not need $n$ to be large.
+
+The lab, **Convergence you can watch**, asks for `sample_mean`, the unbiased
+`sample_variance` and `sample_sd`, `standardise`, `lln_curve`, `clt_means` and
+`histogram` — every one of them seeded, so the curve you plot is the curve the checks
+plot. The final assertion is the $1/\sqrt{n}$ law itself: quadruple $n$ and the scatter of
+the means must halve.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "What converges, how fast, and what does not",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": r"A running mean of Bernoulli$(0.3)$ draws is $0.30300$ after $1000$ draws and $0.29200$ after $10{,}000$. Has something gone wrong with the simulation?",
+                        "opts": [
+                            r"Yes — the law of large numbers guarantees the error decreases as more draws are added, so a larger error at a larger $n$ indicates a defective stream",
+                            r"Yes, but only because the two checkpoints came from one stream; independent streams at each checkpoint would have produced a monotone sequence of errors",
+                            r"No — the errors are $0.21$ and $1.75$ standard errors, and neither is unusual",
+                            r"No — a running mean need not approach $p$ at all",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"The law is about the probability of a large error shrinking, not about any single path descending. A guarantee that every step improves would make a lucky early draw permanently binding, which no theorem could deliver.",
+                            r"Independent streams would not help: each checkpoint would still land at a random distance from $p$, and a monotone sequence of errors would be a remarkable coincidence rather than the norm. The single stream is not the source of the wobble.",
+                            r"$\sqrt{0.21/1000} = 0.0145$ and $\sqrt{0.21/10000} = 0.0046$; the errors were $0.0030$ and $0.0080$.",
+                            r"It does approach $p$, in the precise sense that the probability of missing by more than any fixed amount goes to zero. Denying convergence outright throws away the entire justification for estimating anything by counting.",
+                        ],
+                        "why": r"""
+Measure each error in standard errors rather than in absolute units. With
+$\sigma^{2} = p(1-p) = 0.21$, the standard error is $\sqrt{0.21/1000} = 0.0145$ at the
+first checkpoint and $\sqrt{0.21/10000} = 0.0046$ at the second, so an error of $0.0030$
+is $0.21$ SE and an error of $0.0080$ is $1.75$ SE. It was the earlier point that was
+unusually good. Convergence in probability constrains the distribution of the error at
+each $n$; it does not order the errors along any particular path, and a run that improves
+at every checkpoint would itself be a surprise.
+""",
+                    },
+                    {
+                        "q": r"A Monte Carlo estimate currently has a standard error of $0.004$. Roughly how many times the present number of draws is needed to bring it to $0.001$?",
+                        "opts": [
+                            r"Four times, since the standard error falls in proportion to the number of draws",
+                            r"Sixteen times, since the standard error falls as one over the square root of the number of draws",
+                            r"Twice, since each doubling of the sample removes one binary digit of uncertainty from the estimate",
+                            r"It depends entirely on the variance of the underlying draws, which the question does not give",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"This reads the standard error as $\sigma/n$ rather than $\sigma/\sqrt{n}$, and it is the optimistic version of the mistake: it promises a fourth decimal place for a hundredth of the work actually required.",
+                            r"$\sigma/\sqrt{n}$ must fall by a factor of four, and $\sqrt{16} = 4$.",
+                            r"Nothing here is binary, and a doubling multiplies the precision by $\sqrt{2} \approx 1.41$, not by two. The bits-of-precision picture belongs to bisection, where each step genuinely halves an interval.",
+                            r"The variance is already inside the $0.004$ you were given, so it cancels: the ratio of the two standard errors is $\sqrt{n_{\text{old}}/n_{\text{new}}}$ whatever $\sigma$ is. The caution is reasonable in general and unnecessary here.",
+                        ],
+                        "why": r"""
+The standard error of a sample mean is $\sigma/\sqrt{n}$, so it is the square root of the
+sample size that does the work. Reducing $0.004$ to $0.001$ is a factor of four in
+precision and therefore a factor of $16$ in draws. The $\sigma$ never has to be known,
+because it appears in both standard errors and cancels in the ratio. This quadratic price
+is the defining economics of simulation: three good digits are cheap and the fourth costs
+a hundred times the third.
+""",
+                    },
+                    {
+                        "q": r"After a million fair coin flips a simulation reports $500{,}551$ heads. What does the law of large numbers say about the surplus of $551$?",
+                        "opts": [
+                            r"That later flips will tend to run short of heads until the surplus is worked off",
+                            r"That the surplus is evidence of a biased generator, since a fair stream would hold the two counts close to level throughout",
+                            r"That the ratio converges while the surplus typically grows like $\sqrt{n}$, and $551$ is close to the $500$ expected",
+                            r"That the surplus is meaningless, because the law describes only infinite sequences",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Nothing in the mechanism can arrange this. Each flip is a fresh half, with no memory of the surplus and no way to consult it, and this is the gambler's fallacy in its most respectable-sounding form.",
+                            r"A surplus of $551$ is about $1.1$ standard deviations, which is the least surprising thing a million flips could produce. Expecting the counts to stay level mistakes the convergence of the ratio for convergence of the difference.",
+                            r"The excess is a sum of $n$ terms of size $\pm\frac{1}{2}$, so its standard deviation is $\sqrt{n}/2 = 500$.",
+                            r"The law does concern a limit, but its content at finite $n$ is exactly the standard error, which is a computable number here. Declaring the surplus meaningless discards the one calculation that explains it.",
+                        ],
+                        "why": r"""
+Write the surplus as $H - n/2$, a sum of $n$ independent terms each $+\frac{1}{2}$ or
+$-\frac{1}{2}$. Variances add, so the surplus has standard deviation $\sqrt{n}/2$, which
+is $500$ at a million flips — the observed $551$ is an ordinary result. The ratio is that
+same surplus divided by $n$, with typical size $1/(2\sqrt{n})$, and that is what shrinks.
+So the difference grows and the proportion converges, from the identical arithmetic. No
+flip is ever repaid; an early surplus is out-voted by later flips that carry no record of
+it.
+""",
+                    },
+                    {
+                        "q": r"Ten thousand means of eight uniform draws each are binned, and the histogram is bell-shaped rather than flat. Which theorem is that, and what does it assert?",
+                        "opts": [
+                            r"The law of large numbers, which asserts that the sample mean approaches the population mean as the sample grows",
+                            r"The central limit theorem, which asserts that the standardised sample mean approaches a normal shape",
+                            r"Neither: with only eight draws per mean the shape is an artefact of the bin widths chosen for the histogram, and it would flatten under any other binning",
+                            r"Both, since the bell narrows around the mean as the number of draws per sample is increased",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"That law is about the location the mean converges to, and it would be equally satisfied by a scatter that stayed square-shouldered for ever. The picture here is about the shape of the scatter, which is a separate claim.",
+                            r"The bell appears at $n = 8$, and it appears whatever the parent distribution is, provided its variance is finite.",
+                            r"Rebinning changes the resolution, never the shape: the counts rise towards $0.5$ and fall away from it under any bin width, and a flat parent gives a flat histogram under the same code. The effect is in the data, not the axes.",
+                            r"Both theorems are true of this experiment, but the narrowing is the law of large numbers speaking and the bell is the central limit theorem, and the answer welds them into a single claim that neither makes. Keeping them apart is the point of standardising before plotting.",
+                        ],
+                        "why": r"""
+The law of large numbers fixes where the sample mean goes; the central limit theorem
+describes the shape of its scatter around that point, and the two are independent claims.
+Standardising as $(\bar{X} - \mu)/(\sigma/\sqrt{n})$ removes the centre and the scale —
+both already known from the mean and the variance of a sum — and what remains is the
+theorem's actual content: that the leftover shape tends to one fixed curve, whatever the
+parent distribution was. A flat uniform reaches a visible bell after averaging only eight
+draws, which is why simulation leans on this so heavily.
+""",
+                    },
+                    {
+                        "q": r"A running mean of Cauchy draws is $3.29$ at $n = 1000$ and $-4.23$ at $n = 100{,}000$. Why does averaging fail to help here?",
+                        "opts": [
+                            r"The draws are dependent, because each one is computed from the previous state of the generator",
+                            r"The Cauchy distribution has no finite variance, so the $\sigma^{2}/n$ argument has nothing to work with",
+                            r"A hundred thousand draws is far too few for a distribution whose support extends over the whole of the real line",
+                            r"The mean is being computed in floating point, and the extreme values destroy its precision",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Every generator computes each draw from its state, including the ones whose averages converge perfectly well — the stream is designed to behave as independent draws, and does. Blaming the mechanism here would condemn all of Monte Carlo.",
+                            r"$\mathrm{Var}(\bar{X}) = \sigma^{2}/n$ needs a finite $\sigma^{2}$, and the mean of $n$ Cauchy draws is distributed as one draw.",
+                            r"Unbounded support is not the problem: the normal distribution also lives on the whole line and its sample means converge beautifully. What matters is how much probability sits far out, not how far out the support reaches.",
+                            r"Floating point handles these values accurately; the wandering is in the mathematics, not the arithmetic, and exact rational arithmetic would produce the same wandering. This one is worth resisting precisely because numerical explanations are so often right.",
+                        ],
+                        "why": r"""
+Every guarantee in this module descends from $\mathrm{Var}(\bar{X}) = \sigma^{2}/n$, and
+that identity presumes a finite $\sigma^{2}$. The Cauchy has none — its tails are heavy
+enough that the defining integral diverges — and the consequence is exact rather than
+approximate: the average of $n$ Cauchy draws has the same distribution as a single draw,
+for every $n$. So a hundred thousand draws are worth precisely one, and the running mean
+wanders for ever. Heavy tails are not exotic; file sizes, city populations and trading
+losses all misbehave in this direction.
+""",
+                    },
+                    {
+                        "q": r"Why does the lab require `random.Random(seed)` rather than the module-level `random.random`?",
+                        "opts": [
+                            r"The module-level functions draw from a weaker generator, so the numbers they produce fail statistical tests that a private instance passes",
+                            r"A private instance owns its state, so unrelated code drawing from the global stream cannot shift the experiment's numbers",
+                            r"Module-level draws cannot be seeded at all, which makes any run of the experiment impossible to reproduce afterwards",
+                            r"The module-level functions are slower, because each call has to acquire a lock on the shared global state before it can advance it",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"It is the same Mersenne Twister either way — `random.random` is a bound method of one hidden instance of the very class the lab asks you to create. The quality of the numbers is identical; only their ownership differs.",
+                            r"A logging call or a shuffle elsewhere consumes draws from the shared stream, and the experiment silently returns different numbers.",
+                            r"`random.seed(...)` exists and works. The trouble is that it seeds a stream everything else in the process shares, so the guarantee it appears to give lasts only until some other code draws from it.",
+                            r"Speed is not the issue, and a defect you cannot reproduce costs far more than any per-call overhead. Correctness of the experiment, not its throughput, is what the private instance is protecting.",
+                        ],
+                        "why": r"""
+The module-level functions are bound methods of a single hidden generator shared by the
+whole process. Seeding it fixes the sequence only for as long as nothing else draws from
+it, and a shuffle, a jitter or a test helper elsewhere consumes values from the same
+stream and shifts every number after it. The failure is quiet and intermittent, which
+makes a defect that appears one run in fifty impossible to re-run and therefore
+impossible to investigate. A private `random.Random(seed)` per experiment means the curve
+you plotted is the curve the checks will plot.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Convergence you can watch",
                 "runtime": "python",
@@ -3496,6 +4307,396 @@ estimator is not unbiased, and $E[s] < \sigma$ strictly whenever $s^{2}$ varies 
                 "Chi-square goodness of fit: summed squared residuals scaled by expected counts, with k - 1 df",
                 "A rejected null is not a large effect, and a p-value is not the probability of the hypothesis",
             ],
+            "read": [
+                {
+                    "title": 'Nine point two units of difference, and the noise it has to clear',
+                    "minutes": 15,
+                    "body": r'''
+Two versions of a checkout page ran for five days each. The numbers are sign-ups per
+thousand sessions, one figure per day.
+
+```text
+    control     12   15   14   10   13        mean 12.8
+    treatment   22   19   25   21   23        mean 22.0
+```
+
+The treatment is ahead by $9.2$. The question is whether that means anything, and the
+first honest observation is that the day-to-day wobble inside each group is not small
+either: the control ranges from $10$ to $15$, a spread of $5$, on days where nothing was
+changed at all. A difference of $9.2$ against a background that moves by $5$ on its own is
+suggestive, not conclusive, and the whole apparatus of this module exists to turn
+"suggestive" into a number.
+
+## The noise, computed rather than eyeballed
+
+Start with what varies. The unbiased sample variance of the control is
+
+$$s_a^{2} = \frac{(-0.8)^{2} + 2.2^{2} + 1.2^{2} + (-2.8)^{2} + 0.2^{2}}{4}
+= \frac{14.8}{4} = 3.7 ,$$
+
+and the treatment's is $20/4 = 5.0$. But the comparison is not between individual days;
+it is between the two *means*, and module 6 established that a mean of $n$ draws has
+variance $\sigma^{2}/n$. So the control mean carries variance $3.7/5 = 0.74$ and the
+treatment mean carries $5.0/5 = 1.0$.
+
+The quantity under test is the difference of the two means. Module 5 showed
+$\mathrm{Var}(A - B) = \mathrm{Var}(A) + \mathrm{Var}(B) - 2\,\mathrm{Cov}(A, B)$, and the
+two groups are separate sessions, so the covariance is zero and the **variances add even
+though the means subtract**:
+
+$$\mathrm{SE} = \sqrt{\frac{s_a^{2}}{n_a} + \frac{s_b^{2}}{n_b}}
+= \sqrt{0.74 + 1.0} = \sqrt{1.74} = 1.3191 .$$
+
+Now the difference has a scale to be measured against, and dividing one by the other is
+the entire content of the statistic:
+
+$$t = \frac{\bar{x}_a - \bar{x}_b}{\mathrm{SE}} = \frac{-9.2}{1.3191} = -6.9745 .$$
+
+The observed gap is seven times the size of the noise in it. Nothing has been announced:
+$t$ is a signal-to-noise ratio, and it was built out of two facts about variances that
+were derived two modules ago.
+
+## Why the null hypothesis is the one you try to reject
+
+The next step needs a distribution for $t$, and here is the reason the logic runs
+backwards from the way people want it to. Suppose the two versions are identical. Then the
+difference of means is centred on zero with the standard error above, and $t$ has a known
+distribution — a $t$ distribution, whose only parameter is the degrees of freedom. Every
+number in the previous paragraph becomes checkable.
+
+Now suppose instead that the treatment is better. Better by how much? Two units? Nine?
+Nothing is pinned down, so no distribution follows and there is nothing to compute. The
+null hypothesis is not privileged because it is more likely or more respectable. It is
+privileged because it is the only one of the two that is specific enough to do arithmetic
+with, and the test can therefore report evidence *against* it and never evidence for it.
+
+## The degrees of freedom, and why they are rounded down
+
+If both groups had the same variance you could pool them and the degrees of freedom would
+be $n_a + n_b - 2 = 8$. Welch's variant drops that assumption, and the price is a
+degrees-of-freedom figure that is no longer a whole number:
+
+$$\nu = \frac{\left(\frac{s_a^{2}}{n_a} + \frac{s_b^{2}}{n_b}\right)^{2}}
+{\frac{(s_a^{2}/n_a)^{2}}{n_a - 1} + \frac{(s_b^{2}/n_b)^{2}}{n_b - 1}}
+= \frac{1.74^{2}}{\frac{0.74^{2}}{4} + \frac{1.0^{2}}{4}}
+= \frac{3.0276}{0.3869} = 7.8253 .$$
+
+The printed table has rows for $7$ and for $8$, not for $7.8253$. The lab's `t_critical`
+rounds **down**, to $7$, and the reason is visible in the table itself: fewer degrees of
+freedom means a fatter-tailed distribution and therefore a *larger* critical value, $2.365$
+at $7$ against $2.306$ at $8$. Rounding down demands more evidence before rejecting. It is
+the direction in which an error costs you nothing but a missed discovery, whereas rounding
+up buys a slightly easier rejection with an approximation nobody has bounded.
+
+One detail worth noticing here: with equal group sizes the Welch statistic and the pooled
+statistic are numerically identical — both are $-6.9745$. The whole of Welch's
+contribution in this example is the $7.8253$ instead of $8$.
+
+```python
+import math
+
+CONTROL = [12, 15, 14, 10, 13]
+TREATMENT = [22, 19, 25, 21, 23]
+
+
+def summarise(xs):
+    n = len(xs)
+    mean = sum(xs) / n
+    var = sum((x - mean) ** 2 for x in xs) / (n - 1)
+    return n, mean, var
+
+
+na, ma, va = summarise(CONTROL)
+nb, mb, vb = summarise(TREATMENT)
+sa, sb = va / na, vb / nb
+se = math.sqrt(sa + sb)
+t = (ma - mb) / se
+df = (sa + sb) ** 2 / (sa ** 2 / (na - 1) + sb ** 2 / (nb - 1))
+print(f"control    n={na}  mean={ma:.2f}  var={va:.2f}")
+print(f"treatment  n={nb}  mean={mb:.2f}  var={vb:.2f}")
+print(f"difference = {ma - mb:.2f}   standard error = {se:.4f}")
+print(f"t = {t:.4f}   df = {df:.4f}   critical(df rounded down to 7) = 2.365")
+print(f"smallest difference this design could reject: {2.365 * se:.2f}")
+```
+
+```text
+control    n=5  mean=12.80  var=3.70
+treatment  n=5  mean=22.00  var=5.00
+difference = -9.20   standard error = 1.3191
+t = -6.9745   df = 7.8253   critical(df rounded down to 7) = 2.365
+smallest difference this design could reject: 3.12
+```
+
+$6.9745$ exceeds $2.365$, so the null is rejected at the $5$ per cent level. The last line
+is the one people skip, and it is the most useful number on the page: with five days per
+arm and this much noise, no difference below $3.12$ sign-ups per thousand could have been
+detected at all. A real improvement of two units would have left this experiment looking
+exactly like a failure.
+
+## A second question, and a second statistic
+
+A die is rolled $120$ times. Face counts: $22, 17, 20, 26, 12, 23$. Under a fair die every
+face is expected $120/6 = 20$ times, so the residuals are $+2, -3, 0, +6, -8, +3$. Squaring
+removes the signs, and the question is what to divide by.
+
+Divide each squared residual by the count it belongs to. A cell with expectation $E$ has
+standard deviation close to $\sqrt{E}$, so $(O - E)/\sqrt{E}$ is roughly a $z$-score and
+$(O - E)^{2}/E$ is roughly its square. Summing over the six faces gives Pearson's statistic
+
+$$\chi^{2} = \sum_{i} \frac{(O_i - E_i)^{2}}{E_i} .$$
+
+Dividing by $E$ rather than by the observed count is what makes a residual of $6$ on an
+expectation of $20$ count for more than the same residual on an expectation of $200$ —
+the same absolute miss is far less surprising when more was expected.
+
+```python
+DIE_ROLLS = [22, 17, 20, 26, 12, 23]
+total = sum(DIE_ROLLS)
+expected = total / len(DIE_ROLLS)
+terms = [(o - expected) ** 2 / expected for o in DIE_ROLLS]
+for face, (o, term) in enumerate(zip(DIE_ROLLS, terms), 1):
+    print(f"face {face}: observed {o:>3}  expected {expected:.0f}  "
+          f"residual {o - expected:>+5.0f}  term {term:.2f}")
+print(f"chi-square = {sum(terms):.2f}   df = {len(DIE_ROLLS) - 1}   critical = 11.070")
+```
+
+```text
+face 1: observed  22  expected 20  residual    +2  term 0.20
+face 2: observed  17  expected 20  residual    -3  term 0.45
+face 3: observed  20  expected 20  residual    +0  term 0.00
+face 4: observed  26  expected 20  residual    +6  term 1.80
+face 5: observed  12  expected 20  residual    -8  term 3.20
+face 6: observed  23  expected 20  residual    +3  term 0.45
+chi-square = 6.10   df = 5   critical = 11.070
+```
+
+Six faces, five degrees of freedom. The reason is the same currency module 8 spent on the
+sample mean: the counts are forced to sum to $120$, so any five of the residuals determine
+the sixth, and only five of the six terms are free to move. A separate approximation runs
+the other way — a multinomial cell's standard deviation is $\sqrt{E(1-p)} = 4.08$ here,
+slightly under the $\sqrt{E} = 4.47$ the denominator uses, so each term is scaled down a
+little. The exact accounting of how those two effects meet is a matrix calculation; what
+survives it is that the sum of $k$ such terms behaves as a $\chi^{2}$ with $k - 1$ degrees
+of freedom. At $6.10$ against a critical $11.070$, this die gives no reason for suspicion.
+
+## The mistake, and why it is tempting
+
+"$6.10$ is well under $11.070$, so the die is fair." That sentence is the single most
+common error in applied statistics, and the two tests above sit side by side to make it
+visible.
+
+The $t$ test rejected. Its report is that a difference this large is hard to explain by
+chance. The $\chi^{2}$ test did not reject, and its report is emphatically not that the
+die is fair — it is that $120$ rolls were not enough to catch this die out. Nothing in the
+calculation ever examined the hypothesis "fair" as a candidate to be supported; the fair
+die was assumed, and the data failed to embarrass it. The evidence for that reading is on
+the page already: the $t$ test's own power line says a difference under $3.12$ would have
+been invisible, and a die biased by a few per cent on one face is exactly that kind of
+small effect.
+
+The mistake is tempting because the two outcomes are habitually described as "reject" and
+"accept", and "accept the null" sounds like a conclusion rather than a shrug. A companion
+error travels with it: reading a $p$-value as the probability that the null is true. It is
+the reverse conditional — the probability of data this extreme *given* the null — and
+module 2 showed with two machines what happens to people who swap those two.
+
+## Where it stops
+
+**Small expected counts break the $\chi^{2}$ approximation.** Each term is treated as
+roughly a squared $z$-score, and that leans on a normal approximation to a count. With
+$12$ rolls the expected count per face is $2$, where a count cannot be even approximately
+normal — it is bounded below by zero at less than one and a half standard deviations away.
+The usual working rule is every expected count at least $5$. The lab's `chi_square` refuses
+an expected count that is not strictly positive, which is the extreme of the same problem:
+a zero expectation would divide by zero and claim infinite surprise at a category the model
+declared impossible.
+
+**Independence is assumed and rarely checked.** The five control days were treated as
+independent draws. Five consecutive days on one server usually are not — a slow Monday
+affects Tuesday — and positive correlation inflates the true variance of the mean while
+leaving the computed standard error alone. The statistic then comes out too large and the
+test rejects too often. Where the two samples are *paired* by construction, the fix is not
+this test at all: take differences within pairs and run a one-sample test on them, which
+turns the correlation from a violated assumption into a cancelled term.
+
+**Every test spends its error budget.** A $5$ per cent level means a $5$ per cent chance of
+rejecting a true null. Run the same test on ten metrics and the probability of at least one
+spurious rejection is $1 - 0.95^{10} = 0.40$, and module 7's union bound caps it at $0.50$
+without needing the ten tests to be independent. The critical value in the table is for one
+test, decided on before the data were seen.
+
+**A rejected null is not a large effect.** The standard error shrinks as $1/\sqrt{n}$, so
+with enough data any non-zero difference whatever becomes significant. Significance carries
+the sign of the evidence; only the estimate carries its size. Here the estimate is $9.2$
+sign-ups per thousand with a standard error of $1.32$, and reporting that pair says more
+than the word "significant" ever will.
+
+The lab, **A t test and a chi-square test, by hand**, gives you the two critical-value
+tables and asks for everything else: `summarise`, `welch_t` returning both the statistic
+and the fractional degrees of freedom, `t_critical` with its downward rounding,
+`expected_uniform`, `chi_square` with its four refusals, and the two decision functions
+that pair a statistic with a verdict. Every number printed above is one your code will
+have to reproduce.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Signal, noise, and what a verdict does not say",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": r"Two independent groups of five have sample variances $3.7$ and $5.0$. Why is the standard error of the difference of the means $\sqrt{3.7/5 + 5.0/5}$ rather than $\sqrt{3.7/5 - 5.0/5}$?",
+                        "opts": [
+                            r"Because a variance under a square root has to be positive, and the subtraction would give an imaginary number for these particular sample values",
+                            r"Because variances add for independent variables whether the means are added or subtracted",
+                            r"Because the two groups are the same size, which forces the addition",
+                            r"Because the difference is taken in the order control minus treatment, and reversing that order would reverse the sign inside the root as well",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"$\mathrm{Var}(A - B) = \mathrm{Var}(A) + \mathrm{Var}(B) - 2\,\mathrm{Cov}(A, B)$, and the covariance is zero here.",
+                            r"The negative sign in the difference is squared away: subtracting $B$ is adding $-B$, and $\mathrm{Var}(-B) = \mathrm{Var}(B)$. Uncertainty accumulates however the quantities are combined.",
+                            r"Group sizes affect the $n$ in each $s^{2}/n$ and nothing else. The rule that variances add under independence holds for any sizes at all, and an unbalanced design changes the arithmetic without changing the sign.",
+                            r"Reversing the order flips the sign of the difference and of $t$, and leaves the standard error untouched — which is why the decision uses $|t|$. The order of subtraction is a labelling choice, not a modelling one.",
+                        ],
+                        "why": r"""
+$\mathrm{Var}(A - B) = \mathrm{Var}(A) + \mathrm{Var}(B) - 2\,\mathrm{Cov}(A, B)$, and
+independent groups have zero covariance, so the two variances add. Subtracting $B$ is the
+same as adding $-B$, and negating a variable leaves its variance alone because the
+definition squares the deviations. The intuition worth keeping is that uncertainty never
+cancels: combining two noisy measurements gives a result noisier than either, whichever
+way they are combined. Each mean contributes $s^{2}/n$, giving $0.74 + 1.0 = 1.74$ and a
+standard error of $1.3191$.
+""",
+                    },
+                    {
+                        "q": r"Welch's formula gives $7.8253$ degrees of freedom, and the printed table has rows only for whole numbers. Why does the lab round down to $7$ rather than to the nearer value $8$?",
+                        "opts": [
+                            r"Because degrees of freedom count observations, so the fraction must be discarded",
+                            r"Because $7$ carries the larger critical value, so rounding down demands more evidence before rejecting",
+                            r"Because the Welch-Satterthwaite formula is known to overestimate the degrees of freedom by slightly under one in every case where it is applied",
+                            r"Because the table's row for $8$ assumes the two groups have equal variances, which Welch's variant has already abandoned",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Welch's $\nu$ is not a count of anything; it is the parameter of the $t$ distribution that best matches the statistic's actual behaviour, and a fractional value is meaningful. Even granting the premise, it would not say which direction is safe.",
+                            r"$2.365$ at seven against $2.306$ at eight: the conservative reading is the one that is harder to pass.",
+                            r"No such systematic bias exists — $\nu$ lands wherever the two variances and sizes put it, anywhere between the smaller $n - 1$ and $n_a + n_b - 2$. The rounding rule is a choice about which way to err, not a correction for a known error.",
+                            r"The table is a table of the $t$ distribution and knows nothing about how its degrees of freedom were obtained. The pooled test would use $8$ here, but the row itself carries no assumption about variances.",
+                        ],
+                        "why": r"""
+Fewer degrees of freedom means a fatter-tailed $t$ distribution and therefore a larger
+critical value: $2.365$ at $7$ against $2.306$ at $8$. Rounding down asks for more evidence
+before the null is rejected, so an error made by rounding costs a missed discovery rather
+than a false one. Rounding up would buy a marginally easier rejection on the strength of
+an approximation whose error nobody has bounded, and false rejections are the failure this
+whole procedure is built to control. Note also that with equal group sizes the Welch and
+pooled statistics coincide exactly at $-6.9745$; the degrees of freedom are the only thing
+Welch changes in this example.
+""",
+                    },
+                    {
+                        "q": r"A die rolled $120$ times gives $\chi^{2} = 6.10$ against a critical value of $11.070$ at five degrees of freedom. What has been established?",
+                        "opts": [
+                            r"That the die is fair, since the statistic falls comfortably inside the region a fair die produces",
+                            r"That the probability the die is fair is at least $95$ per cent, which is the confidence level the table was drawn at",
+                            r"That $120$ rolls were not enough to catch this die out, which is a statement about the experiment",
+                            r"That the six face counts are close enough to equal for the differences between them to be exactly zero",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Fairness was assumed in order to compute the expected counts, and an assumption that survives a weak test has not been demonstrated. A die biased by a few per cent would pass this test nearly every time.",
+                            r"This reverses the conditional. The $5$ per cent belongs to the probability of data this extreme *given* a fair die, not to the probability of a fair die given the data — and the latter would need a prior, which no table supplies.",
+                            r"The residuals reach $-8$ on a face, and the test still cannot separate that from ordinary variation.",
+                            r"The counts plainly are not equal — $12$ against $26$ is a spread of $14$ — and the test never claimed they were. What it says is that a spread that size is unremarkable in $120$ rolls, which is a different sentence.",
+                        ],
+                        "why": r"""
+Failing to reject is a statement about the power of the experiment, not about the truth of
+the hypothesis. The fair die was assumed, in order to produce the expected count of $20$
+per face, and the data then failed to embarrass that assumption — which a die biased by a
+few per cent would also fail to do at this sample size. The evidence for that reading sits
+in the companion $t$ test, whose own arithmetic says no difference below $3.12$ units could
+have been detected at all. "Reject" and "accept" is a misleading pair of words: the second
+outcome is a shrug, not a conclusion.
+""",
+                    },
+                    {
+                        "q": r"Six face counts are compared against six expected counts, and the statistic is read against $5$ degrees of freedom. Where did the sixth go?",
+                        "opts": [
+                            r"The six counts must sum to the total, so any five of the residuals fix the sixth",
+                            r"One degree of freedom is reserved for estimating the expected counts, which were computed from the data rather than being known in advance of the experiment",
+                            r"The face with a residual of exactly zero contributes nothing to the sum",
+                            r"Chi-square tables are indexed by the number of comparisons rather than the number of categories, and there are five comparisons among six faces",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The residuals $+2, -3, 0, +6, -8, +3$ add to zero, and they must: both the observed and the expected counts total $120$.",
+                            r"Tempting, and it is the right rule in a different situation — fitting a parameter from the data does cost a further degree of freedom. Here the expectation of $20$ per face comes from the fairness hypothesis itself, so nothing was fitted.",
+                            r"A zero residual is an ordinary outcome, not a structural constraint, and reading it as one would make the degrees of freedom depend on the data. Roll again with no exact hit and the test is still run at five.",
+                            r"There is no such indexing convention. The degrees of freedom come from the geometry of the constraint on the residuals, not from a count of pairwise comparisons, which would in any case give fifteen.",
+                        ],
+                        "why": r"""
+Both the observed and the expected counts total $120$, so the six residuals must sum to
+zero: $+2, -3, 0, +6, -8, +3$. Any five of them determine the sixth, and only five can move
+independently. That is the same accounting module 8 applied to the sample variance, where
+fitting the mean from the data cost one degree of freedom for the same structural reason.
+The general rule is $k - 1$ for a goodness-of-fit test with no fitted parameters, and each
+parameter estimated from the data afterwards costs one more.
+""",
+                    },
+                    {
+                        "q": r"The same $5$ per cent test is applied to ten different metrics from one experiment. What is the chance of at least one rejection if every null is true?",
+                        "opts": [
+                            r"$5$ per cent, since a test's level does not depend on repetition",
+                            r"About $40$ per cent, since $1 - 0.95^{10} = 0.401$ for ten independent tests",
+                            r"$50$ per cent exactly, because ten tests at five per cent each contribute five per cent of error apiece",
+                            r"It cannot be stated without knowing how strongly the ten metrics are correlated with one another",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The level governs one test decided on in advance. Running ten and reporting whichever rejected is a different procedure with a different error rate, and this is the reasoning behind a great many irreproducible findings.",
+                            r"Ten independent chances to miss, each with probability $0.95$.",
+                            r"$50$ per cent is the union bound — a genuine upper limit that needs no independence — but it is a ceiling, not the value. Error probabilities do not add exactly; the overlap between two rejections is counted twice when they do.",
+                            r"Correlation does change the exact figure, and the caution is a fair instinct. But independence is the stated case here, and even without it module 7's union bound pins the answer below $0.50$.",
+                        ],
+                        "why": r"""
+Each true null survives with probability $0.95$, and ten independent survivals have
+probability $0.95^{10} = 0.599$, so something rejects about $40$ per cent of the time. The
+union bound from module 7 caps it at $10 \times 0.05 = 0.50$ without assuming anything
+about independence, and the gap between $0.401$ and $0.50$ is the overlap the bound
+double-counts. The practical consequence is that a critical value is for one test chosen
+before the data were seen; searching ten metrics for the one that rejected converts a
+$5$ per cent procedure into a $40$ per cent one.
+""",
+                    },
+                    {
+                        "q": r"A very large experiment reports a difference of $0.02$ sign-ups per thousand with $p < 0.001$. What follows?",
+                        "opts": [
+                            r"The effect is large, because a $p$-value that small can only arise from a substantial underlying difference between the two groups",
+                            r"The result is evidence that the difference is not zero, and its size is $0.02$ — which may be too small to act on",
+                            r"The test has been run incorrectly, since a difference that small cannot be significant",
+                            r"The probability that the two versions differ is greater than $99.9$ per cent, since the $p$-value measures exactly that",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Significance is the difference divided by a standard error that shrinks as $1/\sqrt{n}$, so a large enough sample makes any non-zero difference significant. The $p$-value carries no information about magnitude on its own.",
+                            r"The test supplies the sign of the evidence; the estimate supplies the size, and $0.02$ is the size.",
+                            r"It can, and routinely does. Nothing is wrong with the arithmetic — a tiny difference measured precisely enough is exactly what a very large experiment is built to detect, which is why effect sizes are reported beside verdicts.",
+                            r"Another reversed conditional: $p$ is the probability of data this extreme assuming no difference, not the probability of a difference given the data. The two are the pair module 2 separated with a machine that made $30$ per cent of the parts and $51.7$ per cent of the defects.",
+                        ],
+                        "why": r"""
+The statistic is a difference divided by a standard error, and the standard error falls as
+$1/\sqrt{n}$, so a sufficiently large experiment will find significance in any difference
+that is not exactly zero. What the test reports is that the difference is unlikely to be
+zero; what it never reports is whether the difference matters. Only the estimate carries
+magnitude, and $0.02$ sign-ups per thousand is a number a product decision can be taken
+against. Reporting the estimate and its standard error together says everything the verdict
+says and more, which is why the lab's decision functions return the statistic and the
+critical value rather than a bare boolean.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "A t test and a chi-square test, by hand",
                 "runtime": "python",
@@ -3783,6 +4984,435 @@ except ValueError:
                 "Laplace (add-alpha) smoothing: an unseen word must not annihilate a whole class",
                 "The MAP decision rule, and how the prior shows up as a constant additive term",
             ],
+            "read": [
+                {
+                    "title": 'A positive result, and the ninety-nine thousand people it did not come from',
+                    "minutes": 15,
+                    "body": r'''
+Screen a hundred thousand people for a condition that one in a thousand of them has. The
+test catches $99$ per cent of real cases and returns a false positive $5$ per cent of the
+time. Count the people rather than reaching for anything.
+
+```text
+    100 have the condition        ->   99 test positive,      1 negative
+ 99,900 do not have it            -> 4,995 test positive, 94,905 negative
+                                     ------
+    people holding a positive result: 5,094
+```
+
+Of the $5{,}094$ people looking at a positive result, $99$ have the condition. That is
+$99/5094 = 0.0194$, under $2$ per cent. The test is right $99$ per cent of the time and a
+positive result still means, on the balance of probability, that you are fine.
+
+Nothing in that table is a formula. The whole of Bayesian reasoning is in it, and the rest
+of this unit is bookkeeping for cases where you cannot write out a hundred thousand people.
+
+## The rule, and the normaliser you can skip
+
+Module 2 turned a conditional round once already, with two machines and a defective part.
+Give it a name and a shape. From the definition of conditional probability applied twice,
+
+$$P(H | E) = \frac{P(E | H)\,P(H)}{P(E)} ,$$
+
+where $H$ is a hypothesis and $E$ the evidence. Every number in the table above appears
+here: $P(H) = 0.001$ is the prior — the row totals on the left; $P(E | H) = 0.99$ is the
+likelihood — how each row splits; and $P(E) = 0.05094$ is the column total on the right.
+
+The useful observation for code is that $P(E)$ does not depend on $H$. Compute the
+numerator $P(E | H)P(H)$ for every hypothesis, then divide each by their sum. The
+denominator never has to be derived separately, because it *is* that sum:
+
+$$P(E) = \sum_{h} P(E | h)\,P(h) .$$
+
+That is why the lab's `bayes_posterior` takes a prior dict and a likelihood dict, multiplies
+them entry by entry, and renormalises. The law of total probability is a summation, not a
+separate theorem to look up.
+
+## Yesterday's posterior is today's prior
+
+Nothing distinguishes a prior from any other probability distribution over the hypotheses,
+so the output of one update is a legitimate input to the next.
+
+```python
+def posterior(prior, likelihood):
+    joint = {h: prior[h] * likelihood[h] for h in prior}
+    evidence = sum(joint.values())
+    if evidence == 0.0:
+        raise ValueError("the observation is impossible under every hypothesis")
+    return {h: value / evidence for h, value in joint.items()}
+
+
+prior = {"ill": 0.001, "well": 0.999}
+positive = {"ill": 0.99, "well": 0.05}
+negative = {"ill": 0.01, "well": 0.95}
+
+p = prior
+for step in (1, 2, 3):
+    p = posterior(p, positive)
+    print(f"after {step} positive test(s): P(ill) = {p['ill']:.6f}")
+
+a = posterior(posterior(prior, positive), negative)
+b = posterior(posterior(prior, negative), positive)
+print(f"positive then negative: P(ill) = {a['ill']:.10f}")
+print(f"negative then positive: P(ill) = {b['ill']:.10f}")
+```
+
+```text
+after 1 positive test(s): P(ill) = 0.019435
+after 2 positive test(s): P(ill) = 0.281832
+after 3 positive test(s): P(ill) = 0.885977
+positive then negative: P(ill) = 0.0002085862
+negative then positive: P(ill) = 0.0002085862
+```
+
+One positive result moves the belief from $0.001$ to $0.019$, a nineteenfold jump that
+still leaves the answer "probably not". A second takes it to $0.28$ and a third to $0.89$.
+The evidence never stopped being strong; it began against a prior strong enough to absorb
+it.
+
+The last two lines say the order does not matter, and that is not a coincidence to be
+memorised. Both routes end at the same place because the numerators multiply,
+$P(H)\,P(E_1 | H)\,P(E_2 | H)$, and multiplication is commutative; the renormalisation
+happens once at the end either way. The lab's `sequential_update` folds a list of
+likelihood dicts left to right, and its result is independent of how the list was sorted.
+
+## Scaling it up: many pieces of evidence at once
+
+A document is not one observation, it is a few hundred. Write $w_1, \dots, w_m$ for its
+words and $c$ for a class. The exact posterior wants $P(w_1, \dots, w_m | c)$, a joint
+distribution over every word combination the language admits, which no corpus could ever
+estimate. The **naive** assumption is that, given the class, the words are conditionally
+independent:
+
+$$P(w_1, \dots, w_m | c) \approx \prod_{i=1}^{m} P(w_i | c) .$$
+
+This is false. "New" and "York" are not independent in any corpus. What rescues it is that
+a classifier is asked for an $\arg\max$ and not for a probability: the products can be
+wrong by orders of magnitude and still be wrong in the same direction for every class,
+leaving the ranking intact. The lab's `classify` returns a label; its `log_prob` returns a
+score. Only the first is trustworthy.
+
+## Where the zero comes from, and how to remove it
+
+Train on the lab's four-document corpus. Spam contributes `buy cheap pills` and
+`cheap deal now`; ham contributes `meet me for lunch` and `lunch tomorrow`. Six tokens per
+class, a shared vocabulary of ten words.
+
+Now score the message `cheap lunch deal`. The word `lunch` never appeared in a spam
+document, so its raw estimate $P(\text{lunch} | \text{spam}) = 0/6$ is exactly zero, and a
+zero in a product is not evidence — it is a veto. One innocuous word would rule out spam
+however many pill advertisements surrounded it.
+
+The fix follows from asking what the zero means. It does not mean the word is impossible
+in spam; it means six tokens were not enough to see it. Pretend each word in the
+vocabulary was seen $\alpha$ extra times in each class:
+
+$$P(w | c) = \frac{\mathrm{count}(w, c) + \alpha}{\mathrm{total}(c) + \alpha |V|} .$$
+
+The denominator is forced rather than chosen: adding $\alpha$ to each of the $|V|$
+vocabulary entries adds $\alpha|V|$ to the total, and only that denominator keeps the
+smoothed probabilities summing to one over the vocabulary. With $\alpha = 1$ and
+$|V| = 10$ every denominator here is $6 + 10 = 16$.
+
+By hand, for `cheap lunch deal`, with `cheap` seen twice in spam, `deal` once and `lunch`
+never:
+
+$$P(\text{spam})\prod P(w | \text{spam})
+= \frac{1}{2} \cdot \frac{3}{16} \cdot \frac{1}{16} \cdot \frac{2}{16}
+= \frac{3}{4096} = 0.000732 ,$$
+
+$$P(\text{ham})\prod P(w | \text{ham})
+= \frac{1}{2} \cdot \frac{1}{16} \cdot \frac{3}{16} \cdot \frac{1}{16}
+= \frac{3}{8192} = 0.000366 .$$
+
+Spam wins by exactly two to one, so renormalising gives $P(\text{spam} | \text{message})
+= 2/3$. Note how small both numbers already are on a three-word message.
+
+## Logs, because the product does not survive
+
+```python
+import math
+
+q = 0.001
+print(f"a product of 200 factors of {q}: {q ** 200!r}")
+print(f"the same quantity in logs:      {200 * math.log(q):.4f}")
+```
+
+```text
+a product of 200 factors of 0.001: 0.0
+the same quantity in logs:      -1381.5511
+```
+
+A double-precision float bottoms out near $10^{-308}$, and a two-hundred-word document
+drives the product to $10^{-600}$. Both classes underflow to exactly `0.0`, and comparing
+two zeros decides nothing — the classifier does not crash, it silently returns whichever
+label the tie rule happens to name. Taking logarithms turns the product into a sum,
+$\log P(c) + \sum_i \log P(w_i | c)$, and $-1381.55$ is a number a computer is perfectly
+comfortable with. Since $\log$ is increasing, the label with the largest log score is the
+label with the largest probability, which is all the $\arg\max$ needs. The prior enters as
+a single additive constant, which is what the concepts list means by the MAP rule.
+
+```python
+import math
+import re
+
+CORPUS = [
+    ("buy cheap pills", "spam"),
+    ("cheap deal now", "spam"),
+    ("meet me for lunch", "ham"),
+    ("lunch tomorrow", "ham"),
+]
+ALPHA = 1.0
+
+
+def tokenise(text):
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+counts, totals, docs, vocab = {}, {}, {}, set()
+for text, label in CORPUS:
+    counts.setdefault(label, {})
+    totals.setdefault(label, 0)
+    docs[label] = docs.get(label, 0) + 1
+    for word in tokenise(text):
+        counts[label][word] = counts[label].get(word, 0) + 1
+        totals[label] += 1
+        vocab.add(word)
+
+
+def log_prob(text, label):
+    total = math.log(docs[label] / len(CORPUS))
+    for word in tokenise(text):
+        total += math.log((counts[label].get(word, 0) + ALPHA)
+                          / (totals[label] + ALPHA * len(vocab)))
+    return total
+
+
+print(f"vocabulary {len(vocab)} words, {totals['spam']} spam tokens, "
+      f"{totals['ham']} ham tokens")
+for message in ("cheap lunch deal", "buy pills now", "cheap lunch"):
+    spam, ham = log_prob(message, "spam"), log_prob(message, "ham")
+    verdict = "spam" if spam > ham else ("ham" if ham > spam else "tie -> ham")
+    print(f"{message:<18} spam {spam:.4f}   ham {ham:.4f}   {verdict}")
+```
+
+```text
+vocabulary 10 words, 6 spam tokens, 6 ham tokens
+cheap lunch deal   spam -7.2192   ham -7.9123   spam
+buy pills now      spam -6.9315   ham -9.0109   spam
+cheap lunch        spam -5.1397   ham -5.1397   tie -> ham
+```
+
+$e^{-7.2192} = 0.000732$, the number computed by hand above. And `cheap lunch` is an exact
+tie: one word each way, with symmetric counts, so the two scores agree to every digit. The
+lab requires ties to go to the alphabetically first label precisely so that this case, and
+the all-unseen document, have a defined answer rather than one that depends on dictionary
+ordering.
+
+## The mistake, and why it is tempting
+
+"The test is $99$ per cent accurate and mine came back positive, so I am $99$ per cent
+likely to have it." The number $0.99$ is $P(\text{positive} | \text{ill})$. The number
+wanted is $P(\text{ill} | \text{positive})$, and it is $0.0194$ — a factor of fifty out.
+
+It is tempting because the two read as the same English sentence with the words shuffled,
+and because the prior is invisible. Nothing in the phrase "$99$ per cent accurate"
+mentions the $99{,}900$ healthy people, and they are where the $4{,}995$ false positives
+come from: a small error rate on a huge group swamps a large success rate on a tiny one.
+The defence is the table at the top of this unit. Count people, in whatever units make the
+rare group a whole number, before dividing anything.
+
+## Where it stops
+
+**A prior of zero can never be updated.** If $P(H) = 0$ then $P(E | H)P(H) = 0$ for every
+possible $E$, and the posterior stays at zero for ever. Excluding a hypothesis outright is
+a permanent decision, not a strong opinion, which is why a filter should not be trained to
+believe a word is impossible in a class — the same reason smoothing exists.
+
+**Evidence impossible under every hypothesis breaks the arithmetic.** If every numerator is
+zero the normaliser is zero too, and the update is $0/0$. That is not a number to be
+patched with a default; it means the observation falsifies the model itself, so the lab
+raises `ValueError` rather than returning something plausible.
+
+**Naive Bayes probabilities are not calibrated.** The independence assumption double-counts
+correlated evidence, so a document containing `cheap` five times has its spam score driven
+five times further than the words jointly justify. The scores pile up near $0$ and $1$, and
+using one as a confidence — thresholding at "$99$ per cent sure" — is reading a number the
+model cannot supply. The ranking survives; the magnitude does not.
+
+**Smoothing is a choice with consequences.** $\alpha$ trades a veto for a bias: large
+$\alpha$ pulls every estimate towards uniform and blunts genuine evidence, small $\alpha$
+lets one rare word dominate a document. With six tokens against a vocabulary of ten,
+$\alpha = 1$ is contributing more mass than the data — visible in the fact that a word seen
+twice gets $3/16$ while a word never seen gets $1/16$, a ratio of three rather than the
+infinite one the raw counts asserted.
+
+The lab, **Posterior updates and a spam filter**, builds both halves: `bayes_posterior` and
+`sequential_update` for the screening example, then a `NaiveBayes` class with add-alpha
+smoothing, `log_prob` in logs throughout, and `classify` with the alphabetical tie rule.
+The numbers printed above — $0.019435$, $-7.2192$, and the tie on `cheap lunch` — are the
+ones your implementation has to reproduce.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Priors, products and the conditional that gets reversed",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": r"A condition affects $1$ in $1000$. A test catches $99$ per cent of cases and gives a false positive $5$ per cent of the time. A result comes back positive. What is the probability the condition is present?",
+                        "opts": [
+                            r"About $99$ per cent, which is the accuracy the test is advertised as having",
+                            r"About $95$ per cent, since the false positive rate of $5$ per cent is what has to be subtracted",
+                            r"About $2$ per cent, because $99$ true positives are outnumbered by $4995$ false ones",
+                            r"It cannot be computed without also knowing how many people were screened in total",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"$99$ per cent is $P(\text{positive} \mid \text{ill})$, which is how the test behaves on people who are ill. The question asks the reverse conditional, and the two differ here by a factor of fifty.",
+                            r"Subtracting an error rate from one hundred treats the two groups as though they were the same size. The $5$ per cent applies to $99{,}900$ people and the $99$ per cent to $100$, and no subtraction can repair that mismatch.",
+                            r"$99/(99 + 4995) = 0.0194$, and the rare group is the small one on both counts.",
+                            r"The total cancels: doubling the population doubles both the true and the false positives, leaving the ratio alone. Any convenient total works, and one hundred thousand is chosen only to make the rare group a whole number.",
+                        ],
+                        "why": r"""
+Out of $100{,}000$ people, $100$ have the condition and $99$ of them test positive, while
+$99{,}900$ do not and $4{,}995$ of those test positive anyway. So $5{,}094$ people hold a
+positive result and $99$ of them are ill: $99/5094 = 0.0194$. The advertised $99$ per cent
+is $P(\text{positive} \mid \text{ill})$ and the answer wanted is
+$P(\text{ill} \mid \text{positive})$ — the reversal module 2 met with two machines. The
+prior does the damage: a small error rate applied to a very large group produces far more
+positives than a high catch rate applied to a tiny one.
+""",
+                    },
+                    {
+                        "q": r"Starting from a prior of $0.001$, one positive test gives a posterior of $0.0194$ and a second gives $0.2818$. Why does the second test move the belief so much further than the first?",
+                        "opts": [
+                            r"Because the second test acts on a prior nineteen times larger, so the same likelihood ratio starts nearer even odds",
+                            r"Because repeating a test increases its accuracy, so the second result is stronger evidence than the first",
+                            r"Because the posterior after two tests is computed from the joint likelihood, which is not the same as updating twice",
+                            r"Because the second update multiplies the first posterior by the likelihood ratio a second time, and repeated multiplication compounds",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"Each positive multiplies the odds by $0.99/0.05 \approx 19.8$; odds of $1{:}999$ have far less room to move in probability than odds of $1{:}50$.",
+                            r"The test's characteristics are fixed properties of the test — $0.99$ and $0.05$ on every use — and nothing about a repeat changes them. What changed is the belief the second result acts on, not the result itself.",
+                            r"Updating twice and using the joint likelihood give the identical answer, which is exactly why sequential updating is legitimate: the numerators multiply and the single renormalisation at the end is the same either way.",
+                            r"The multiplication is real, but by itself it would predict a jump of the same *factor* each time, and the factor is indeed about $19.8$ in odds both times. What differs is how a fixed odds factor translates into probability at different starting points.",
+                        ],
+                        "why": r"""
+Work in odds. A positive result multiplies the odds on the condition by
+$0.99/0.05 \approx 19.8$ every time it is seen. Starting odds are $1{:}999$, which become
+about $1{:}50$ — a probability of $0.0194$. Applying the same factor again gives about
+$2{:}5$, a probability of $0.28$. The multiplicative step is identical; what changes is
+that probability compresses everything near zero and near one, so a fixed odds ratio buys
+far more probability once the odds are near even. The evidence was never weak — it was
+starting from a prior strong enough to absorb it.
+""",
+                    },
+                    {
+                        "q": r"In a naive Bayes filter, a word that never appeared in the spam training documents gets a raw estimate of $0/6$. What does that zero do, and why is add-alpha smoothing the answer?",
+                        "opts": [
+                            r"It makes the spam score negative, and smoothing restores it to a positive value so that the comparison against ham can proceed",
+                            r"It vetoes the class entirely whatever the other words say, and smoothing replaces the claim of impossibility with a small count",
+                            r"It leaves the product unchanged, since a factor of zero is neutral, and smoothing exists only to speed up the arithmetic on sparse vocabularies",
+                            r"It biases the estimate towards ham, and smoothing corrects the bias by adding the same constant to both classes",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Probabilities are never negative; the zero makes the product zero, not negative. The log of that product is $-\infty$, which is a different failure, and one that no amount of restoring sign would fix.",
+                            r"Zero times anything is zero, so one innocuous word outvotes every pill advertisement in the message.",
+                            r"A factor of zero is the opposite of neutral — the neutral factor under multiplication is one. Smoothing is about what the model asserts, not about how fast it computes, and the arithmetic is the same speed either way.",
+                            r"Symmetry is the tempting part, and it is true that $\alpha$ is added in both classes. But the defect is not a lopsided estimate to be balanced out; it is a single zero that annihilates a whole product regardless of what the other class does.",
+                        ],
+                        "why": r"""
+A zero factor annihilates the entire product, so the class is ruled out no matter what the
+remaining words say — one ordinary word can veto a message full of pill advertisements.
+The zero is also a claim the data do not support: six training tokens are not evidence that
+a word is impossible in spam, only that it was not seen. Add-alpha replaces the assertion
+of impossibility with a small count,
+$(\mathrm{count} + \alpha)/(\mathrm{total} + \alpha|V|)$, and the denominator is forced
+rather than chosen — adding $\alpha$ to each of $|V|$ entries adds $\alpha|V|$ to the
+total, which is what keeps the smoothed masses summing to one.
+""",
+                    },
+                    {
+                        "q": r"Why does the classifier accumulate $\log P(c) + \sum_i \log P(w_i \mid c)$ rather than multiplying the probabilities directly?",
+                        "opts": [
+                            r"Because a product of hundreds of small probabilities underflows to exactly $0.0$, and comparing two zeros decides nothing",
+                            r"Because logarithms convert the naive independence assumption into an exact one, which removes the approximation from the model",
+                            r"Because the sum and the product rank the classes differently, and the sum is the ranking that matches the true posterior",
+                            r"Because probabilities cannot be multiplied unless the events are independent, whereas their logarithms may always be added together safely",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$0.001^{200}$ is $10^{-600}$, and a double bottoms out near $10^{-308}$: both classes reach `0.0` and the tie rule decides the answer.",
+                            r"Nothing about taking logs touches the independence assumption. The words are exactly as dependent as they were, and the model exactly as approximate; only the representation of the arithmetic has changed.",
+                            r"They rank identically, and that is the whole reason logs are usable: $\log$ is strictly increasing, so it preserves order. If the two rankings differed, working in logs would be a bug rather than a technique.",
+                            r"The independence assumption is what licenses the product, so that part is fair — but adding logs is the same claim in different clothing, not an escape from it. $\log(ab) = \log a + \log b$ holds whether or not the product was justified.",
+                        ],
+                        "why": r"""
+A double-precision float bottoms out near $10^{-308}$, and a two-hundred-word document
+gives a product around $10^{-600}$. Both classes then evaluate to exactly `0.0` — no
+exception, no warning, and a comparison of two zeros that returns whatever the tie rule
+names. In logs the same quantity is about $-1381.55$, a number with plenty of room, and
+because $\log$ is strictly increasing the largest log score belongs to the largest
+probability. The prior becomes a single additive constant, which is the whole of the MAP
+rule as it appears in code.
+""",
+                    },
+                    {
+                        "q": r"A hypothesis is assigned a prior of exactly $0$. What can later evidence do to it?",
+                        "opts": [
+                            r"Raise it, provided the evidence is strong enough to overcome the initial assignment of zero",
+                            r"Nothing — every numerator $P(E \mid H)P(H)$ is zero, so the posterior stays at zero for ever",
+                            r"Raise it once the other hypotheses have been eliminated, since the posterior masses have to sum to one",
+                            r"Make the update undefined, because a zero prior means the total evidence probability is zero as well",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"There is no strength of evidence that multiplies zero into something positive. Assigning a zero prior is a permanent exclusion, not a strongly held opinion that data could revise.",
+                            r"The update multiplies the prior, and multiplying zero by any likelihood leaves zero.",
+                            r"Renormalising divides by the sum of the numerators, and a zero numerator divided by anything positive is still zero. Eliminating rivals redistributes mass among hypotheses that have some, never to one that has none.",
+                            r"Only if *every* hypothesis has a zero numerator. With other hypotheses carrying positive prior and likelihood the evidence total is positive, the division is well defined, and this one remains at zero.",
+                        ],
+                        "why": r"""
+The update is prior times likelihood, renormalised, and $0 \times P(E \mid H) = 0$ for
+every possible observation. The posterior is zero, and so is the posterior after that, for
+ever. A zero prior is therefore not a strong opinion but a permanent exclusion — the reason
+this is worth stating is that assigning zero feels like ordinary emphasis, whereas it
+removes a hypothesis from consideration irreversibly. It is the same mechanism that makes
+an unsmoothed count of zero veto a whole class, which is why the filter smooths. The one
+case that does break the arithmetic is different: if every hypothesis has a zero numerator,
+the normaliser is zero too, and the lab raises `ValueError` rather than dividing.
+""",
+                    },
+                    {
+                        "q": r"A naive Bayes filter reports $P(\text{spam}) = 0.9999$ for a message. How should that number be read?",
+                        "opts": [
+                            r"As a well-founded probability, since the independence assumption affects only which label is chosen and not the score attached to it",
+                            r"As a ranking signal, since correlated words are counted repeatedly and push the score towards the extremes",
+                            r"As an underestimate, because add-alpha smoothing pulls every estimate towards the uniform distribution",
+                            r"As a probability conditional on the training corpus, which is the only sense in which any classifier's output can be read",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"It is the other way round. The independence assumption damages the magnitudes badly and leaves the ordering largely intact, which is why the label is usable and the score is not.",
+                            r"Two occurrences of `cheap`, or `new` beside `york`, are multiplied in as though each carried fresh independent evidence.",
+                            r"Smoothing does pull estimates towards uniform, which would push a score down rather than up — but it is a small effect beside the double-counting, and calling $0.9999$ an underestimate gets the direction of the dominant error backwards.",
+                            r"Everything a model outputs is conditional on its training data, so this is true of every classifier and therefore explains nothing about this one. It also leaves the reader believing the $0.9999$ is otherwise sound.",
+                        ],
+                        "why": r"""
+The naive assumption treats every word as fresh independent evidence, so correlated words —
+`new` and `york`, or `cheap` twice in one message — are multiplied in repeatedly and drive
+the score much further than the evidence jointly warrants. The result is a distribution
+piled up near $0$ and $1$: the ordering of the classes usually survives, which is why the
+classifier works, but the magnitude does not, which is why thresholding at "$99$ per cent
+sure" is reading a number the model cannot supply. Use it to choose a label or to rank
+messages; do not report it as a probability without calibrating it against held-out data.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Posterior updates and a spam filter",
                 "runtime": "python",

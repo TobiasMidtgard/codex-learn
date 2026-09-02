@@ -1544,6 +1544,423 @@ for _name, _rule in [("trapezoid", trapezoid), ("midpoint_sum", midpoint_sum)]:
                 "Improper integrals of the first kind (infinite limit) yield to x = a + t/(1-t)",
                 "Improper integrals of the second kind (endpoint blow-up) often yield to x = a + u^2",
             ],
+            "read": [
+                {
+                    "title": "Two estimates of the same integral, and what their difference is worth",
+                    "minutes": 14,
+                    "body": r'''
+A detector on a beamline counts photons for one millisecond. For almost all of that
+window it sees background: a flat few counts per microsecond, dull and unchanging.
+Then, somewhere around $t = 0.31$ ms, the pulse you actually care about arrives, and
+it is over in about two microseconds. The total number of counts is the integral of
+the rate over the millisecond, and 998 of those 1000 microseconds are a straight line.
+
+Hand that to the composite Simpson rule from module 1 and something wasteful happens.
+The rule spreads its panels uniformly, so a thousand panels put 998 of them where the
+integrand is a straight line — a place Simpson's rule was exact after the first
+sample — and two of them across the only feature in the problem. Doubling the panel
+count doubles the effort spent confirming that a straight line is still straight. The
+error is dominated entirely by the two panels near the pulse, and no amount of uniform
+refinement changes which panels those are.
+
+What you want is a rule that finds the difficult part itself. That means it needs a
+way to ask, of any sub-interval, "am I already accurate enough here?" — without being
+told the answer in advance, and without evaluating a fourth derivative.
+
+## Two estimates of the same panel, and their difference
+
+Module 1 gave the composite Simpson error as $-\frac{(b-a)h^4}{180}f^{(4)}(\xi)$, with
+$h$ the node spacing. Specialise it to a single panel: the interval has width
+$b - a = H$, the rule reads $\frac{H}{6}\left(f(a) + 4f(m) + f(b)\right)$ with $m$ the
+midpoint, and the spacing between its three nodes is $h = H/2$. Substituting gives
+$-H\left(\frac{H}{2}\right)^4/180$, so
+
+$$I - S(a,b) = -\frac{H^5}{2880}f^{(4)}(\xi), \qquad \xi \in (a,b)$$
+
+Now compute the same integral a second way: split at $m$ and add the two half-panels,
+calling the result $S_2$ and the single panel $S_1$. Each half has width $H/2$, so each
+carries an error of $-\frac{(H/2)^5}{2880}f^{(4)}$, which is $\frac{1}{32}$ of the
+whole panel's — and there are two of them, so together they carry $\frac{1}{16}$ of it.
+This step, and only this step, assumes that $f^{(4)}$ is near enough constant across
+the panel for the same number to serve in all three error terms. Everything below
+inherits that assumption, and everything below fails exactly where it fails.
+
+Granting it,
+
+$$I - S_1 \approx 16\,(I - S_2)$$
+
+Subtract $I - S_2$ from both sides. The unknown $I$ cancels, which is the entire point:
+
+$$S_2 - S_1 \approx 15\,(I - S_2)$$
+
+Write $\delta = S_2 - S_1$, a quantity built from numbers already on the table. Two
+things drop out at once. The first is an error estimate: $I - S_2 \approx \delta/15$,
+so the refinement can measure its own accuracy with no derivative and no exact answer.
+The second is a free correction: $I \approx S_2 + \delta/15$, an estimate better than
+either of the two that produced it, obtained by one addition.
+
+The acceptance test writes itself. You want $|I - S_2| \le \text{tol}$; you have
+$|I - S_2| \approx |\delta|/15$; so accept when $|\delta| \le 15\,\text{tol}$. That is
+the line `abs(delta) <= 15.0 * tol` in this module's lab, and the factor of 15 is not a
+fudge — it is $2^4 - 1$, straight out of Simpson's fourth-order error term.
+
+## Why each half gets half the tolerance
+
+When a panel is refused, the recursion goes into both halves. If each half were given
+the full tolerance, each could come back with an error of tol and the pair would carry
+$2\,\text{tol}$; a tree eight levels deep could legitimately return an answer 256 times
+worse than asked for, with every local test passing. Halving the budget at each split
+fixes it by an argument that telescopes: at depth $d$ there are at most $2^d$ leaves,
+each admitting an error of $\text{tol}/2^d$, and $2^d \cdot \text{tol}/2^d$ is tol
+however deep the tree goes. That is why the lab recurses with `tol / 2.0` and not with
+`tol`.
+
+## Worked: one bisection, with all the numbers
+
+Take $\int_0^1 e^x\,\mathrm{d}x$, whose exact value is $e - 1 = 1.718281828459045$.
+The single panel needs $f$ at $0$, $0.5$, $1$; the two halves reuse all three and add
+$0.25$ and $0.75$.
+
+```
+S1 = (1/6)[ e^0 + 4 e^0.5 + e^1 ]                        = 1.718861151877
+L  = (0.5/6)[ e^0 + 4 e^0.25 + e^0.5 ]                   = 0.648735244788
+R  = (0.5/6)[ e^0.5 + 4 e^0.75 + e^1 ]                   = 1.069583597134
+S2 = L + R                                               = 1.718318841922
+```
+
+```python
+import math
+
+
+def panel(f, a, b):
+    """One Simpson panel: the parabola through the ends and the midpoint."""
+    m = 0.5 * (a + b)
+    return (b - a) / 6.0 * (f(a) + 4.0 * f(m) + f(b))
+
+
+exact = math.e - 1.0
+whole = panel(math.exp, 0.0, 1.0)
+halves = panel(math.exp, 0.0, 0.5) + panel(math.exp, 0.5, 1.0)
+delta = halves - whole
+print(f"S1        = {whole:.12f}   error {whole - exact:+.3e}")
+print(f"S2        = {halves:.12f}   error {halves - exact:+.3e}")
+print(f"delta     = {delta:+.3e}   delta/15 = {delta / 15.0:+.3e}")
+print(f"corrected = {halves + delta / 15.0:.12f}   error {halves + delta / 15.0 - exact:+.3e}")
+print(f"error ratio S1/S2 = {(whole - exact) / (halves - exact):.2f}")
+```
+
+The errors are $+5.793\times10^{-4}$ and $+3.701\times10^{-5}$, and their ratio prints
+as $15.65$ rather than $16$. Nothing is wrong: $f^{(4)} = e^x$ varies by a factor of
+$e$ across $[0,1]$, so the constant that the derivation held fixed is not quite fixed,
+and the predicted 16 is recovered only in the limit of small panels. Meanwhile
+$\delta/15 = -3.615\times10^{-5}$, against a true error in $S_2$ of
+$+3.701\times10^{-5}$ — the estimate is right to two significant figures and has the
+correct sign for the correction. Applying it lands on $1.718282687925$, an error of
+$8.6\times10^{-7}$: forty times better than $S_2$, for one addition.
+
+## The mistake, and why it is tempting
+
+The tempting move is to hand the full tolerance to each half. It reads as the careful
+choice — "each half should be at least as accurate as I asked the whole to be" — and
+it makes the code shorter. It is also invisible in testing, because on a smooth
+integrand the recursion is two or three levels deep and a factor of four or eight in
+the error hides under the pessimism of the bound. It surfaces on exactly the integrand
+the routine exists for: a spike drives the recursion twenty levels down in one place,
+and twenty levels of doubling is a millionfold breach of a tolerance the function
+claimed to honour. The lab's test *The tolerance is actually honoured* compares
+`tol=1e-3` with `tol=1e-12` on the same integral for this reason.
+
+A second, milder one is to return `left + right` and drop the `delta / 15`. The logic
+sounds sober — the correction is a fifteenth of something you have already certified as
+small, so surely it is noise. But the certification was that
+$|\delta|/15 \le \text{tol}$, which places $S_2$ *at* the tolerance rather than
+inside it, and the
+worked example above shows the correction is worth a factor of forty. It costs one
+addition on a value you already hold.
+
+## Where a local error estimate cannot see
+
+Everything above rests on $\delta$ noticing that the panel is hard. It is a difference
+of two estimates built from five samples, so if the integrand does nothing at those
+five points, $\delta$ is zero and the panel is accepted immediately.
+
+```python
+import math
+
+CLAMP = 1e-12
+
+
+def panel(f, a, b):
+    m = 0.5 * (a + b)
+    return (b - a) / 6.0 * (f(a) + 4.0 * f(m) + f(b))
+
+
+def refine(f, a, b, tol, whole, depth):
+    m = 0.5 * (a + b)
+    left, right = panel(f, a, m), panel(f, m, b)
+    delta = left + right - whole
+    if depth <= 0 or abs(delta) <= 15.0 * tol:
+        return left + right + delta / 15.0
+    return (refine(f, a, m, tol / 2.0, left, depth - 1)
+            + refine(f, m, b, tol / 2.0, right, depth - 1))
+
+
+def integrate(f, a, b, tol):
+    return refine(f, a, b, tol, panel(f, a, b), 30)
+
+
+def spike(x):
+    return math.exp(-((x - 0.31) ** 2) / 2e-6)
+
+
+print("spike sampled at the five starting nodes:",
+      [spike(x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)])
+print(f"adaptive Simpson says {integrate(spike, 0.0, 1.0, 1e-10)}")
+print(f"the true value is about {math.sqrt(2e-6 * math.pi):.7f}")
+```
+
+Every sample underflows to zero, $\delta$ is zero, the tolerance test passes on the
+first try, and the routine returns `0.0` with total confidence against a true value of
+$0.0025066$. Asking for a tighter tolerance changes nothing, because the routine is
+not inaccurate — it is answering a question about a function it has never seen a
+non-zero value of. This is the standing limitation of every adaptive rule: the estimate
+is local, and a feature narrower than the initial sampling is invisible to it. The
+defences are to start from a panel count fine enough to straddle any feature you know
+about, or to split the interval by hand where you know something happens.
+
+## Infinite limits, by change of variable
+
+An adaptive rule needs two finite endpoints, so an infinite domain has to be folded
+into a finite one. Look for a map from $[0,1)$ onto $[a,\infty)$ that is monotone,
+sends $0$ to $a$, and runs away as $t \to 1$. The simplest rational choice is
+
+$$x = a + \frac{t}{1-t}, \qquad
+\frac{\mathrm{d}x}{\mathrm{d}t} = \frac{(1-t) + t}{(1-t)^2} = \frac{1}{(1-t)^2}$$
+
+so that
+
+$$\int_a^{\infty} f(x)\,\mathrm{d}x
+ = \int_0^{1} \frac{f\!\left(a + \frac{t}{1-t}\right)}{(1-t)^2}\,\mathrm{d}t$$
+
+Whether that helps depends on how fast $f$ decays, and the arithmetic says exactly how
+fast is fast enough. Take $f(x) = x^{-p}$ with $a = 1$. Then $x = 1/(1-t)$ exactly, so
+$f = (1-t)^{p}$ and the transformed integrand is $(1-t)^{p-2}$. For $p = 2$ that is the
+constant $1$: the whole infinite integral collapses to $\int_0^1 1\,\mathrm{d}t$, which
+one Simpson panel gets exactly, and the block above prints `1.0`. For $p > 2$ the
+integrand vanishes at the endpoint and life is easy. For $1 < p < 2$ it blows up like
+$(1-t)^{-1/2}$ or worse — integrable, but singular, so a convergent integral has been
+turned into a convergent-but-awkward one and the recursion will grind. That band is
+where this substitution is at its weakest, and it is worth recognising before blaming
+the tolerance.
+
+## Where it stops holding
+
+At $p = 1$ the transformed integrand is $1/(1-t)$ and the integral genuinely diverges.
+The routine does not say so. The second `python` block above ends with
+
+```
+1/x   from 1 to infinity -> 95.47138
+```
+
+A finite number, printed without complaint, for an integral that has no value. The
+`CLAMP` is what allows it: replacing $1-t$ by $10^{-12}$ near the endpoint replaces a
+pole with a large finite number, and a finite integrand over a finite interval has a
+finite integral. The clamp is not a mistake — it is there because a *removable*
+singularity, such as $e^{-x}$ transformed, evaluates to $0/0$ in floating point at
+$t = 1$ and needs a value. But nothing in the code distinguishes a removable
+singularity from a real pole. Convergence is the reader's job; the routine's job is to
+find the value once you know there is one.
+
+## Endpoint blow-ups
+
+The second kind of improper integral is finite in extent and unbounded at an endpoint,
+such as $\int_0^1 x^{-1/2}\,\mathrm{d}x = 2$. Substituting $x = a + u^2$, so that
+$\mathrm{d}x = 2u\,\mathrm{d}u$ and $u$ runs from $0$ to $\sqrt{b-a}$, gives
+
+$$\int_a^b f(x)\,\mathrm{d}x = \int_0^{\sqrt{b-a}} 2u\,f(a + u^2)\,\mathrm{d}u$$
+
+The factor $2u$ is the whole mechanism. On $f = (x-a)^{-p}$ it produces
+$2u \cdot u^{-2p} = 2u^{1-2p}$, which is bounded when $p \le \frac12$ and unbounded
+otherwise. At $p = \frac12$ exactly it is the constant $2$, and Simpson is exact — the
+lab checks it returns $2.0$. For $\frac12 < p < 1$ the integral still converges and the
+substitution still improves matters, but a singularity remains. For $p \ge 1$ there was
+never a value to find. The logarithm is the interesting middle case:
+$2u\log(u^2) = 4u\log u$ tends to $0$, so the transformed integrand is bounded,
+but its derivative is
+not, which is why the lab keeps the clamp in `integrate_endpoint_singular` even though
+$x^{-1/2}$ does not need it.
+
+This module's lab, *Adaptive Simpson to a requested tolerance*, is these paragraphs
+turned into five functions: `_panel` for the rule, `adaptive_simpson` for the
+recursion with its `tol / 2` split and its `max_depth=30` backstop, and
+`integrate_to_infinity`, `integrate_real_line` and `integrate_endpoint_singular` for
+the three substitutions. The depth limit is the one piece with no mathematics behind
+it: it exists because the argument above breaks at a genuine singularity, and without
+it a divergent integrand would recurse until the interpreter ran out of stack.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Refining where it matters",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The Richardson correction adds $\\delta/15$, where $\\delta = S_2 - S_1$ is the difference between the split estimate and the single-panel one. Where does the 15 come from?",
+                        "opts": [
+                            "Simpson's rule uses 15 distinct sample points once a panel has been bisected four times over",
+                            "Halving the width divides a fourth-order error by 16, and 15 is what is left after subtracting",
+                            "It is the largest divisor that keeps the correction smaller than the tolerance being requested",
+                            "Simpson is exact on cubics, and 15 is the number of monomials up to degree four in one variable",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"A bisected panel has five distinct nodes, not fifteen, and the count of nodes plays no part in the algebra. The 15 arrives before any sampling is discussed.",
+                            r"$I - S_1 \approx 16(I - S_2)$, and subtracting $I - S_2$ leaves $S_2 - S_1 \approx 15(I - S_2)$.",
+                            r"Nothing about the constant is tuned. Replace 15 with anything else and the corrected value stops being an estimate of $I$ at all, whatever the tolerance happens to be.",
+                            r"The degree of precision does matter — it is why the error carries $f^{(4)}$ — but it enters as the exponent 4 in $2^4$, not as a count of monomials, and there are five of those up to degree four anyway.",
+                        ],
+                        "why": r"""
+One Simpson panel of width $H$ has error proportional to $H^5$. Two half-panels each
+have error proportional to $(H/2)^5$, a thirty-second of it, and two of those make a
+sixteenth — so $I - S_1 \approx 16(I - S_2)$. Subtracting $I - S_2$ from both sides
+cancels the unknown $I$ and leaves $S_2 - S_1 \approx 15(I - S_2)$, so the error in
+the better estimate is about $\delta/15$. The 15 is $2^4 - 1$, and the 4 is Simpson's
+order. A second-order rule such as the trapezoid would give $2^2 - 1 = 3$ in the same
+place.
+""",
+                    },
+                    {
+                        "q": "When a panel is refused, why does each half get `tol / 2` rather than the same `tol`?",
+                        "opts": [
+                            "Each half is half as wide, so its share of the total error must be halved to match",
+                            "The Richardson estimate is only valid on intervals smaller than the one it was derived on",
+                            "Errors from the halves add, so a full budget on each lets the total grow with depth",
+                            "Without it the recursion could never terminate, since the test would pass at every level",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Width is not the criterion — a narrow panel over a violent stretch of the integrand deserves more of the budget, not less. What is being divided is an allowance of error, and it is divided so the parts add to the whole.",
+                            r"The estimate is derived on a panel of any width, and it is used unchanged at every level of the tree. Nothing about it prefers small intervals except the assumption that $f^{(4)}$ barely moves across them.",
+                            r"Two halves at tol each can return $2\,\text{tol}$; at depth $d$ that is $2^{d}\,\text{tol}$.",
+                            r"Termination is guaranteed by `max_depth` and by $\delta$ shrinking like $H^5$, and both do their work with a constant tolerance. Passing the full tol makes the test easier, not harder, so the recursion would stop sooner rather than never.",
+                        ],
+                        "why": r"""
+The error of the accepted answer is the sum of the errors of the leaves, so the
+budget has to be split the way the interval is. Give each half the full tol and a
+tree of depth $d$ admits $2^{d}\,\text{tol}$ — eight levels is a factor of 256, and
+every local test passes on the way. Halving at each split telescopes: at depth $d$
+there are at most $2^{d}$ leaves each allowed $\text{tol}/2^{d}$, and the product is
+tol however deep the recursion goes. This is also why the acceptance test is
+$|\delta| \le 15\,\text{tol}$ rather than $|\delta| \le \text{tol}$: the quantity
+being held below tol is the error, which is $\delta/15$.
+""",
+                    },
+                    {
+                        "q": "`adaptive_simpson` is asked for $\\int_0^1 f$ where $f$ is a Gaussian spike of width $10^{-3}$ centred at $0.31$. It returns `0.0` at once. What went wrong?",
+                        "opts": [
+                            "The recursion hit `max_depth` before it could resolve a feature that narrow",
+                            "The five starting samples miss the spike, so $\\delta$ is zero and the panel passes",
+                            "Simpson's rule cannot represent a Gaussian, whose Taylor series never terminates",
+                            "The tolerance was absolute rather than relative, so a small integral was rounded away",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Depth was never reached. The routine stopped on its first test, having spent five function evaluations in total — the failure is that it was satisfied, not that it gave up.",
+                            r"$\delta$ measures disagreement between two estimates, and both estimates are zero.",
+                            r"Simpson represents nothing exactly except cubics, and it still integrates a Gaussian to full accuracy on any interval where it can see one. The trouble is the sampling, not the smoothness.",
+                            r"An absolute tolerance would make the routine work harder on a small integral, not less; and no rounding is involved, since every sample is exactly zero before any arithmetic happens.",
+                        ],
+                        "why": r"""
+The panel starts by sampling at $0$, $0.25$, $0.5$, $0.75$ and $1$. A spike of width
+$10^{-3}$ at $0.31$ is numerically zero at all five, so $S_1$ and $S_2$ are both zero,
+$\delta$ is zero, and $|\delta| \le 15\,\text{tol}$ passes on the first test. The
+routine is not inaccurate; it is answering correctly about the only function it has
+been shown, which is the zero function. Every adaptive rule shares this blind spot,
+because the error estimate is built from samples and cannot report on what lies
+between them. A feature narrower than the initial spacing has to be handled by
+splitting the interval where you know something happens, or by starting with enough
+panels to straddle it.
+""",
+                    },
+                    {
+                        "q": "Under $x = 1 + t/(1-t)$, which decay rate turns $\\int_1^{\\infty} x^{-p}\\,\\mathrm{d}x$ into a bounded integrand on $[0,1]$?",
+                        "opts": [
+                            "$p \\ge 2$, since the Jacobian is $(1-t)^{-2}$ and so the integrand becomes $(1-t)^{p-2}$",
+                            "Any $p > 1$, since that is exactly the condition for the original integral to converge",
+                            "Only $p > 2$, because a transformed integrand must vanish at the endpoint to be integrated",
+                            "Every $p$, since the substitution maps an infinite interval onto a finite one either way",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"With $a = 1$ the map is $x = 1/(1-t)$, so $x^{-p} = (1-t)^{p}$ and the Jacobian contributes $(1-t)^{-2}$.",
+                            r"Convergence and boundedness after the substitution are different questions, and this is the gap worth seeing: $p = 1.5$ converges, yet the transformed integrand behaves like $(1-t)^{-1/2}$ and is unbounded at the endpoint.",
+                            r"Vanishing is comfortable but not required — at $p = 2$ the transformed integrand is the constant 1, which is bounded, perfectly integrable, and in fact the easiest case Simpson ever meets.",
+                            r"The mapping is finite for every $p$, but the integrand is not carried across unchanged: the Jacobian $1/(1-t)^2$ grows without bound near $t = 1$, and whether that is cancelled depends entirely on the decay.",
+                        ],
+                        "why": r"""
+With $a = 1$ the substitution is $x = 1/(1-t)$ exactly, so $x^{-p}$ becomes
+$(1-t)^{p}$, and dividing by $(1-t)^2$ for the Jacobian leaves $(1-t)^{p-2}$. That is
+bounded when $p \ge 2$, the constant 1 at $p = 2$, and unbounded below that. The band
+$1 < p < 2$ is the one to remember: the integral converges, so the answer exists, but
+the substitution has traded an infinite interval for an endpoint singularity and the
+recursion will work hard for it. At $p = 1$ nothing converges at all, and the
+transformed integrand is $1/(1-t)$.
+""",
+                    },
+                    {
+                        "q": "`integrate_to_infinity(lambda x: 1/x, 1.0, 1e-8)` returns about `95.47`. What should be concluded?",
+                        "opts": [
+                            "The tolerance was too loose; asking for $10^{-12}$ would converge on the true value instead",
+                            "The result is meaningless — the integral diverges, and the clamp made a real pole finite",
+                            "The routine has hit its depth limit, so the answer is right to about two digits rather than eight",
+                            "The transformation is wrong for this integrand and $x = a + u^2$ should have been used",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"A tighter tolerance drives the recursion deeper into the endpoint and returns a larger number, not a converged one. The sequence of answers grows without limit, which is the divergence making itself visible.",
+                            r"$\int_1^{\infty}\mathrm{d}x/x$ is $\log$, which grows without bound; `CLAMP` replaced $1/(1-t)$ near $t=1$ with about $10^{12}$.",
+                            r"Depth is indeed exhausted near the endpoint, but that diagnosis suggests a correct value exists and has merely been approximated coarsely. There is no value to approximate.",
+                            r"That substitution is for a blow-up at a finite endpoint of a finite interval; it does nothing about an infinite upper limit, and swapping it in would not rescue an integral that has no value.",
+                        ],
+                        "why": r"""
+The integral of $1/x$ from 1 to infinity is $\log x$ evaluated at infinity, which
+diverges. After the substitution the integrand is $1/(1-t)$, a genuine pole at the
+right endpoint, and `CLAMP = 1e-12` replaces it with a finite value near $10^{12}$ —
+so a finite integrand over a finite interval returns a finite number. The clamp is
+not the defect: it is there because a decaying $f$ produces a removable $0/0$ at the
+endpoint and something has to be returned. What the code cannot do is tell a
+removable singularity from a pole. Deciding that the integral converges is the
+reader's job before calling the routine, not the routine's afterwards.
+""",
+                    },
+                    {
+                        "q": "Why does $x = a + u^2$ make $\\int_a^b (x-a)^{-1/2}\\,\\mathrm{d}x$ easy, while doing much less for $(x-a)^{-3/4}$?",
+                        "opts": [
+                            "The exponent $-1/2$ is the only one for which the substituted integral has a closed form",
+                            "Squaring clusters the sample points near $a$, and $-3/4$ needs them clustered more tightly still",
+                            "The Jacobian $2u$ cancels $u^{-1}$, leaving a constant; on $u^{-3/2}$ it leaves $u^{-1/2}$",
+                            "The routine refuses any exponent below $-1/2$, so the second integral is rejected before it starts",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Both have closed forms — the integrals are $2\sqrt{b-a}$ and $4(b-a)^{1/4}$ — and neither the routine nor the substitution knows or cares about that.",
+                            r"Clustering is a fair description of what the map does to a uniform grid, but it is not what decides the outcome. The deciding fact is algebraic: what the Jacobian multiplies the singularity by, which is $2u$ regardless of how the points end up spaced.",
+                            r"$(x-a)^{-p}$ becomes $2u^{1-2p}$, bounded exactly when $p \le 1/2$.",
+                            r"No such check exists. `integrate_endpoint_singular` validates only that $a < b$; it never inspects $f$, and it will happily return a number for an exponent that makes the integral diverge.",
+                        ],
+                        "why": r"""
+Substituting $x = a + u^2$ turns $(x-a)^{-p}$ into $u^{-2p}$ and brings a Jacobian of
+$2u$, so the integrand becomes $2u^{1-2p}$. At $p = 1/2$ that is the constant 2 —
+bounded, smooth, and integrated exactly by a single Simpson panel. At $p = 3/4$ it is
+$2u^{-1/2}$: still singular, though the exponent has been softened from $-3/4$ to
+$-1/2$, so the recursion converges but has to work. The rule is that the substitution
+halves the strength of the singularity and subtracts a further step, curing everything
+with $p \le 1/2$ and improving without curing on $1/2 < p < 1$. Beyond $p = 1$ the
+original integral has no value for anything to converge to.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Adaptive Simpson to a requested tolerance",
                 "runtime": "python",
@@ -1786,6 +2203,394 @@ for _bad in [(1.0, 1.0), (2.0, 1.0)]:
                 "Factorial growth beats any fixed power, so exp/sin/cos converge for every x",
                 "Catastrophic cancellation: exp(-20) by Maclaurin series loses every significant digit",
             ],
+            "read": [
+                {
+                    "title": "A machine that can only add and multiply, and what that costs",
+                    "minutes": 14,
+                    "body": r'''
+The attitude loop on a small drone runs four hundred times a second, and every pass
+needs the sine of a tilt angle. The processor it runs on has an adder, a multiplier
+and a divider. There is no sine instruction, no lookup table large enough to be worth
+the flash, and no time to iterate. Whatever the loop calls has to be built out of
+additions and multiplications — which is to say, out of a polynomial.
+
+One polynomial is already familiar: $\sin\theta \approx \theta$, the small-angle rule.
+At $\theta = 0.1$ radians the true sine is $0.09983341664682815$, so the rule is wrong
+by about one part in six hundred — fine for a control loop. At $\theta = 0.7$ the true
+sine is $0.6442176872$ and the rule is wrong by $8.7$ per cent, which is not fine for
+anything. The question is therefore not whether a polynomial can stand in for a
+function, but which one, and how far wrong it is at the angle you are actually at.
+
+## Matching a polynomial to a function at a point
+
+Suppose $P(x) = c_0 + c_1x + c_2x^2 + \dots + c_nx^n$ and demand that it agree with
+$f$ at $x = 0$ as thoroughly as its $n+1$ coefficients allow: same value, same slope,
+same second derivative, on up to the $n$-th. The coefficients follow from that demand
+alone.
+
+Differentiate $P$ exactly $k$ times and evaluate at zero. Every term of degree below
+$k$ has been differentiated into nothing. Every term of degree above $k$ still carries
+at least one factor of $x$, so it dies at $x = 0$. Only the $x^k$ term survives, and
+differentiating it $k$ times multiplies it by $k(k-1)(k-2)\cdots 1$:
+
+$$P^{(k)}(0) = k!\;c_k \quad\Rightarrow\quad c_k = \frac{f^{(k)}(0)}{k!}$$
+
+The factorial is not decoration. It is exactly what differentiating $x^k$ down to a
+constant produces, and it is there to be cancelled.
+
+Run that over the three functions this module works with. Every derivative of $e^x$ is
+$e^x$, worth $1$ at the origin, so $c_k = 1/k!$ for every $k$. The derivatives of
+$\sin$ cycle through $\sin, \cos, -\sin, -\cos$, which at the origin are
+$0, 1, 0, -1$ — so the even coefficients vanish and the odd ones alternate. The cosine
+cycle is the same list shifted, $1, 0, -1, 0$, so the odd coefficients vanish instead.
+That parity is a fact about the functions, not a convention: $\sin$ is odd, and an odd
+function cannot have an even-degree term without contradicting $f(-x) = -f(x)$.
+
+This is what `taylor_coefficients` builds in the lab, and it keeps the zeros in the
+list rather than storing only the surviving indices, because the evaluator wants a
+dense list of coefficients from $c_0$ upwards.
+
+## Worked: the sine of 0.7, and its error
+
+The degree-5 Maclaurin polynomial for $\sin$ is $x - \frac{x^3}{6} + \frac{x^5}{120}$.
+
+```
+0.7                    = 0.700000000000
+0.7^3 / 6   = 0.343/6  = 0.057166666667
+0.7^5 / 120            = 0.001400583333
+
+P5(0.7) = 0.7 - 0.057166666667 + 0.001400583333 = 0.644233916667
+```
+
+```python
+import math
+
+x = 0.7
+p5 = x - x ** 3 / 6.0 + x ** 5 / 120.0
+print(f"x^3/3!        = {x ** 3 / 6.0:.12f}")
+print(f"x^5/5!        = {x ** 5 / 120.0:.12f}")
+print(f"P5(0.7)       = {p5:.12f}")
+print(f"sin(0.7)      = {math.sin(x):.12f}")
+print(f"actual error  = {abs(p5 - math.sin(x)):.4e}")
+print(f"bound at n=5  = {x ** 6 / math.factorial(6):.4e}")
+print(f"bound at n=6  = {x ** 7 / math.factorial(7):.4e}")
+```
+
+Three terms have taken the $8.7$ per cent error of the small-angle rule down to
+$1.6229\times10^{-5}$. Notice how the terms fall: $0.7$, then $0.057$, then $0.0014$ —
+factors of twelve and forty. The numerator is multiplied by $x^2 = 0.49$ each time and
+the denominator by the next two integers, so once the integers pass $x$ the terms
+collapse.
+
+## The remainder, and the reason it is a bound rather than a value
+
+Taylor's theorem says the error left after the degree-$n$ polynomial is the *next*
+term of the series with its derivative evaluated not at the origin but at some
+unnamed point $c$ between $0$ and $x$:
+
+$$f(x) - P_n(x) = \frac{f^{(n+1)}(c)}{(n+1)!}\,x^{n+1}$$
+
+The shape is not arbitrary. Set $n = 0$ and it reads $f(x) - f(0) = f'(c)\,x$, which is
+the mean value theorem — the statement that somewhere in the interval the instantaneous
+slope equals the average slope. Taylor's theorem is that statement carried up the
+derivatives, and the unknown $c$ survives at every level for the same reason: you are
+told such a point exists, never where it is.
+
+That is why the remainder is used as a bound. Replace $f^{(n+1)}(c)$ by a number $M$
+that is at least as large as $|f^{(n+1)}|$ anywhere between $0$ and $x$, and
+
+$$|f(x) - P_n(x)| \le \frac{M\,|x|^{n+1}}{(n+1)!}$$
+
+For $\sin$ and $\cos$ every derivative is again a sine or cosine, so $M = 1$ serves for
+every $n$ and every $x$. For $e^x$ the derivatives are all $e^x$, which is increasing,
+so on the interval between $0$ and $x$ the largest value is $e^{|x|}$. Those two lines
+are the whole of `remainder_bound`, and the bound must use the maximum over the
+interval — evaluating $f^{(n+1)}$ at the single point $x$, or worse at $0$, gives a
+number that the true error can exceed.
+
+Run the block above and two bounds appear. At $n = 5$ the bound is
+$1.6340\times10^{-4}$, ten times the error actually committed. At $n = 6$ it is
+$1.6340\times10^{-5}$, within one per cent of the truth. Both are legitimate, because
+the degree-5 and degree-6 polynomials for $\sin$ are the same object — the coefficient
+$c_6$ is zero, so nothing was added, but the remainder is now allowed to start at
+$x^7$. Noticing a zero coefficient buys a factor of ten in the error bound for no
+arithmetic at all. The lab's `remainder_bound` takes whatever $n$ you hand it and its
+test *The bound is never violated* checks that both answers are honest; only the
+sharper one is useful.
+
+## Horner, and why the nesting is not a micro-optimisation
+
+Written out, $c_0 + c_1x + c_2x^2 + c_3x^3$ asks for powers of $x$. Computing each one
+from scratch costs $0 + 1 + 2$ multiplications for the powers plus three for the
+coefficients, and at degree $n$ that is about $n^2/2$. Keeping a running power drops it
+to about $2n$. Factor an $x$ out at every level instead:
+
+$$c_0 + x\left(c_1 + x\left(c_2 + x\,c_3\right)\right)$$
+
+and each level costs one multiplication and one addition, so degree $n$ costs exactly
+$n$ of each and no power of $x$ is ever formed. With $[1, 1, 0.5, 1/6]$ at $x = 2$:
+
+```
+start   0.166667
+*2 + 0.5  = 0.833333
+*2 + 1    = 2.666667
+*2 + 1    = 6.333333
+```
+
+which is $1 + 2 + 2 + \frac{8}{6}$, as it should be. The saving in multiplications is
+the small half of the argument. The larger half is that $x^{20}$ at $x = 2$ is a
+million and its coefficient is $4.1\times10^{-19}$; forming the two separately and
+multiplying loses digits that nesting never risks, because every intermediate in the
+nested form has the size of the answer. That is `evaluate` in the lab: three lines,
+running backwards through the coefficients.
+
+## The mistake, and why it is tempting
+
+The series for $e^x$ converges for every real $x$. So this ought to work:
+
+```python
+import math
+
+
+def series_exp(x, terms=200):
+    """Sum 1 + x + x^2/2! + ... the way the definition reads."""
+    total = 0.0
+    term = 1.0
+    biggest = 0.0
+    for k in range(terms):
+        if k:
+            term = term * x / k
+        total += term
+        biggest = max(biggest, abs(term))
+    return total, biggest
+
+
+bad, biggest = series_exp(-20.0)
+good, _ = series_exp(20.0)
+truth = math.exp(-20.0)
+print(f"series at -20   = {bad:.6e}")
+print(f"largest term    = {biggest:.6e}")
+print(f"math.exp(-20)   = {truth:.6e}")
+print(f"relative error  = {abs(bad - truth) / truth:.2f}")
+print(f"1 / series(+20) = {1.0 / good:.6e}")
+print(f"relative error  = {abs(1.0 / good - truth) / truth:.2e}")
+```
+
+The loop returns $5.621884\times10^{-9}$. The answer is $2.061154\times10^{-9}$. The
+relative error is $1.73$ — not a lost digit, but every digit, sign of the leading
+figure included on a bad day.
+
+The arithmetic is faultless and that is the point. With $x = -20$ the terms alternate
+in sign and grow before they shrink; the largest of them is $4.31\times10^{7}$, while
+the sum they are converging to is $2\times10^{-9}$. A double carries about sixteen
+significant digits, so a quantity of size $4\times10^{7}$ is known to about
+$4\times10^{-9}$ in absolute terms — larger than the answer. The final sum is built by
+cancelling sixteen-digit numbers against each other until only the rounding is left.
+Every step was correctly rounded, and there is nothing left.
+
+It is tempting because every warning sign is absent. The series converges, the terms do
+go to zero, the loop terminates, no exception is raised, and the identical routine at
+$x = +20$ is accurate to the last bit — all the terms are positive there, so nothing
+cancels. Running it at $-20$ through the reciprocal, `1 / series_exp(20.0)`, gives a
+relative error of $2\times10^{-16}$. Convergence is a statement about exact arithmetic;
+in floating point it has a second requirement, that no intermediate is much larger than
+the answer.
+
+## Where it stops holding
+
+Factorial growth is what makes $\exp$, $\sin$ and $\cos$ converge everywhere: once
+$n + 1$ exceeds $2|x|$, each further term of $|x|^{n+1}/(n+1)!$ is at most half the one
+before, so the tail is beaten by a geometric series and goes to zero for any fixed $x$.
+That argument is about a fixed $x$ and a growing $n$, and it says nothing about how
+many terms a given $x$ needs. `terms_for_tolerance("sin", 1.0, 1e-6)` returns 9. The
+same tolerance at $x = 10$ needs $n = 36$, and evaluating that polynomial in double
+precision runs into the cancellation above — the largest term is $10^{10}/10! = 2755$
+against an answer of magnitude $0.54$. This is why real libraries reduce the argument
+into a small interval before evaluating anything.
+
+Not every function is so obliging. The series for $\log(1+x)$ has factorials only in
+the derivatives, not in the coefficients, and it converges only for $-1 < x \le 1$;
+$\frac{1}{1+x^2}$ is smooth on the whole real line and its series still stops working
+past $|x| = 1$. The reason is not visible on the real line at all, and module 11,
+*Power series as functions*, is where that gets settled.
+
+The sharpest limit is that a function can have every Taylor coefficient and still not
+be its series. Let $f(x) = e^{-1/x^2}$ for $x \ne 0$ and $f(0) = 0$. Every derivative
+at the origin is zero, because the exponential decays faster than any power grows, so
+every coefficient is zero and the Maclaurin series is the zero function. It agrees with
+$f$ at exactly one point. The coefficients existed, the series converged everywhere,
+and it represented nothing — which is why "the series converges" and "the series equals
+the function" are two claims, and this module only ever earns the first one directly.
+The remainder bound is what earns the second, and it is the reason the lab makes you
+compute it rather than trust the picture.
+
+This module's lab, *Series coefficients and the Lagrange remainder*, is these
+paragraphs as four functions: `taylor_coefficients` for $f^{(k)}(0)/k!$ including its
+zeros, `evaluate` for the Horner nesting, `remainder_bound` for
+$M|x|^{n+1}/(n+1)!$ with $M = e^{|x|}$ for the exponential and $1$ otherwise, and
+`terms_for_tolerance`, which searches upward for the first $n$ whose bound is small
+enough — and raises rather than returning a polynomial that cannot meet the request.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Coefficients, remainders and the arithmetic underneath",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Why is the Taylor coefficient $c_k$ equal to $f^{(k)}(0)/k!$ rather than to $f^{(k)}(0)$?",
+                        "opts": [
+                            "The factorial keeps the coefficients small enough that the series converges for every $x$",
+                            "Differentiating $x^k$ down to a constant produces a factor of $k!$, which has to be undone",
+                            "It normalises the terms so that each contributes about equally near the expansion point",
+                            "The factorial converts the derivative at a point into the average of $f$ over the interval",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Convergence is a consequence, not a purpose, and it does not always follow: the series for $\log(1+x)$ has factorials in the same place and still fails past $|x| = 1$.",
+                            r"$k$ differentiations of $c_kx^k$ leave $k!\,c_k$, and matching that to $f^{(k)}(0)$ divides it back out.",
+                            r"The terms are emphatically not equal in size — that is the whole reason a truncated series is useful, since the tail has to be much smaller than what came before it.",
+                            r"No averaging happens anywhere in the construction. Every quantity in the coefficient is evaluated at the single expansion point; the averaged version of this idea is the mean value theorem, which appears in the remainder instead.",
+                        ],
+                        "why": r"""
+Demand that $P$ agree with $f$ in value and in the first $n$ derivatives at the
+origin. Differentiate $P$ exactly $k$ times: everything of lower degree has vanished,
+everything of higher degree still carries an $x$ and dies at $0$, and the $x^k$ term
+has picked up $k(k-1)\cdots 1 = k!$. So $P^{(k)}(0) = k!\,c_k$, and setting that equal
+to $f^{(k)}(0)$ gives $c_k = f^{(k)}(0)/k!$. The factorial is there to cancel the one
+differentiation produces, and nothing else.
+""",
+                    },
+                    {
+                        "q": "For $\\sin$, the degree-5 and degree-6 Maclaurin polynomials are the same object. What does quoting the remainder at $n = 6$ instead of $n = 5$ buy at $x = 0.7$?",
+                        "opts": [
+                            "Nothing, since the two polynomials are identical and so their errors must be identical too",
+                            "A bound ten times sharper, because the remainder is now allowed to begin at $x^7$",
+                            "A different polynomial with one more term, hence an error about ten times smaller",
+                            "A sharper bound, but only for even functions, where the odd coefficients drop out",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The errors are identical — that is exactly right — but the two *bounds* on that one error are not, and the sharper one is the one worth quoting.",
+                            r"$0.7^7/7! = 1.634\times10^{-5}$ against $0.7^6/6! = 1.634\times10^{-4}$, for the same polynomial.",
+                            r"There is no extra term: the degree-6 coefficient of $\sin$ is zero, so nothing was added and no error was removed. What changed is the bound, not the approximation.",
+                            r"Parity is doing the work, but the useful direction is the opposite one: it is $\sin$, an odd function, whose even coefficients vanish, and the same trick applies to $\cos$ with the roles swapped.",
+                        ],
+                        "why": r"""
+The remainder bound is $M|x|^{n+1}/(n+1)!$, and it does not ask whether $c_n$ was zero
+— it only asks which degree you are claiming. Since $c_6 = 0$ for $\sin$, the
+degree-5 polynomial is also the degree-6 one, so the bound may be quoted with $n = 6$:
+$0.7^7/5040 = 1.634\times10^{-5}$ rather than $0.7^6/720 = 1.634\times10^{-4}$. The
+true error is $1.6229\times10^{-5}$, so the second bound is within one per cent and the
+first is loose by a factor of ten. The approximation did not improve; the honesty of
+the statement about it did.
+""",
+                    },
+                    {
+                        "q": "Summing the Maclaurin series for $e^{x}$ at $x = -20$ with 200 terms gives $5.6\\times10^{-9}$, against a true value of $2.1\\times10^{-9}$. What has gone wrong?",
+                        "opts": [
+                            "The series for $e^x$ converges only for $x > 0$; negative arguments need the reciprocal form",
+                            "200 terms is too few at $|x| = 20$, and the truncated tail is the size of the answer",
+                            "Terms grow to $4\\times10^{7}$ before decaying, so cancellation eats every significant digit",
+                            "Python's floats overflow while forming $x^{k}$ for large $k$, so the later terms are wrong",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"The series converges for every real $x$, negative included, and in exact arithmetic it gives the right answer at $-20$. The reciprocal form is a repair for the floating point, not for the mathematics.",
+                            r"The tail after 200 terms is around $10^{-100}$ — the trouble is entirely in the terms already added.",
+                            r"The largest term is $20^{20}/20!$, and sixteen digits of it is $4\times10^{-9}$: bigger than the sum.",
+                            r"Nothing overflows: the running term is built by repeated multiplication by $x/k$, it peaks at $4\times10^{7}$, and it decays smoothly from there. Every individual operation is correctly rounded.",
+                        ],
+                        "why": r"""
+With $x = -20$ the terms alternate in sign and grow before they shrink, peaking at
+$20^{20}/20! \approx 4.3\times10^{7}$, while the sum they build is $2\times10^{-9}$. A
+double holds about sixteen significant digits, so a number of size $4\times10^{7}$
+carries an absolute uncertainty near $4\times10^{-9}$ — larger than the answer itself.
+The additions cancel away everything except that rounding. Nothing in the code is
+wrong, which is what makes it dangerous: the same loop at $x = +20$ is accurate to the
+last bit, because all the terms are positive there. Computing $e^{20}$ and taking the
+reciprocal gets $x = -20$ right to $2\times10^{-16}$.
+""",
+                    },
+                    {
+                        "q": "Horner evaluates $c_0 + x(c_1 + x(c_2 + xc_3))$ from the inside out. Beyond the multiplication count, what is the real advantage over summing $c_kx^k$?",
+                        "opts": [
+                            "It can be stopped early once a term is small, which the power form cannot manage",
+                            "Every intermediate stays about the size of the answer, so no digits are lost on powers",
+                            "It computes the coefficients as it goes, so the list never has to be stored in memory",
+                            "It is exact for polynomials of any degree, whereas the power form is exact only up to cubics",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Early exit is available to either form, and Horner is in fact the worse of the two for it: it starts from the highest coefficient, so the small terms are the ones it handles first.",
+                            r"$x^{20}$ at $x = 2$ is a million and its coefficient is $4.1\times10^{-19}$; the nested form forms neither.",
+                            r"The coefficients are an input to both forms and both need the whole list. Horner reads it backwards, which is not the same as generating it.",
+                            r"Both forms are algebraically exact for every degree — they are the same polynomial. The difference is in what floating point does to the intermediates, and the degree at which that starts to matter is a matter of size, not of cubics.",
+                        ],
+                        "why": r"""
+Both forms compute the same polynomial, so in exact arithmetic there is nothing to
+choose between them. In floating point there is: the power form builds $x^{20}$, which
+at $x = 2$ is over a million, and multiplies it by a coefficient of $4.1\times10^{-19}$
+— a huge number and a tiny one, formed separately, then combined. Every intermediate in
+the nested form has roughly the magnitude of the final answer, so nothing large is ever
+built only to be cancelled away. The multiplication count also drops from about $2n$ to
+exactly $n$, which is the part everyone quotes and the smaller of the two reasons.
+""",
+                    },
+                    {
+                        "q": "`remainder_bound(\"exp\", x, n)` uses $M = e^{|x|}$. Why not $M = e^{0} = 1$, given that the expansion is at the origin?",
+                        "opts": [
+                            "Because $M$ must bound $|f^{(n+1)}|$ over the whole interval from $0$ to $x$, not at one end",
+                            "Because the exponential grows, so its bound has to grow with $n$ as well as with $x$",
+                            "Because Taylor's theorem evaluates the remainder derivative at the far endpoint $x$ by definition",
+                            "Because $e^{0}$ would make the bound zero, and a bound of zero cannot be compared with anything",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"The unknown point $c$ can sit anywhere between $0$ and $x$, so the bound has to cover all of it.",
+                            r"Growth with $n$ is not the issue and does not happen: every derivative of $e^x$ is the same function, so $M$ depends on the interval alone and is the same for every order.",
+                            r"Taylor's theorem places the derivative at an unnamed interior point $c$, not at either endpoint. Using $x$ would be right by accident here — since $e^x$ increases — and wrong for a function whose derivative peaks in the middle.",
+                            r"It would not be zero but one, since $e^{0} = 1$; the bound would still be a positive number, merely a false one whenever $x > 0$.",
+                        ],
+                        "why": r"""
+Taylor's theorem gives $f(x) - P_n(x) = f^{(n+1)}(c)\,x^{n+1}/(n+1)!$ for some $c$
+between $0$ and $x$, and it never says where $c$ is. To turn that into a usable bound
+you replace $f^{(n+1)}(c)$ by a number at least as big as $|f^{(n+1)}|$ anywhere on the
+interval. Every derivative of $e^x$ is $e^x$, which increases, so the maximum over
+$[0, x]$ is $e^{|x|}$ and that is what the lab uses. Taking $e^{0} = 1$ would bound the
+derivative at one endpoint only and produce a "bound" the true error exceeds — at
+$x = 1, n = 5$ the honest bound is $e/720 = 3.8\times10^{-3}$. For $\sin$ and $\cos$
+the question never arises, since every derivative is bounded by 1 everywhere.
+""",
+                    },
+                    {
+                        "q": "Let $f(x) = e^{-1/x^2}$ for $x \\ne 0$ and $f(0) = 0$. Every derivative at the origin is zero. What follows?",
+                        "opts": [
+                            "The function is not differentiable at $0$, so it has no Maclaurin series to speak of",
+                            "Its Maclaurin series is identically zero, and it agrees with $f$ only at the origin",
+                            "Its Maclaurin series diverges for every $x \\ne 0$, which is why the coefficients vanish",
+                            "The remainder bound is zero, so the polynomial is exact and $f$ must itself be zero",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"It is differentiable at the origin, and infinitely so — that is precisely what makes the example uncomfortable rather than merely broken.",
+                            r"Every coefficient is $0/k!$, so the series is $0 + 0x + 0x^2 + \dots$, while $f(1) = e^{-1}$.",
+                            r"A series with every coefficient zero converges everywhere, and fastest of all. Divergence would be a different failure, and a more forgivable one, since it would at least announce itself.",
+                            r"The remainder is $f(x) - P_n(x)$, which here is $f(x)$ itself and is not zero away from the origin. What fails is the *bound*: the derivatives $f^{(n+1)}$ are unbounded near $0$ as $n$ grows, so no finite $M$ is available and the theorem gives nothing.",
+                        ],
+                        "why": r"""
+Every coefficient is $f^{(k)}(0)/k! = 0$, so the Maclaurin series is the zero function.
+It converges for every $x$ — trivially — and it equals $f$ at exactly one point, since
+$f(1) = e^{-1} \approx 0.368$ while the series says $0$. So having all its Taylor
+coefficients is not enough to make a function equal its series. What closes the gap is
+the remainder: a function equals its series on an interval when $R_n(x) \to 0$ there,
+and that is a claim about the derivatives on the whole interval, not about the
+coefficients at the point. It is why this module computes a bound instead of trusting
+that a convergent series must be the right one.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Series coefficients and the Lagrange remainder",
                 "runtime": "python",
@@ -2038,6 +2843,423 @@ except ValueError:
                 "That squeeze is a computable error bar, which is what makes the test practically useful",
                 "Radius of convergence R = 1/limsup |c_n|^(1/n), estimated from consecutive non-zero coefficients",
             ],
+            "read": [
+                {
+                    "title": "Two sums whose terms both vanish, and only one of which exists",
+                    "minutes": 15,
+                    "body": r'''
+Stack identical books at the edge of a table, each pushed out over the one below, and
+ask how far the top one can hang past the edge before the pile topples. Balancing each
+sub-pile over the book beneath it gives a maximum overhang of $\frac12 H_n$ book
+lengths after $n$ books, where $H_n = 1 + \frac12 + \frac13 + \dots + \frac1n$. Four
+books buy $1.04$ lengths — the top book is already entirely past the edge. Thirty-one
+books buy $2.01$. Two hundred and twenty-seven buy $3.00$, and ten lengths would take
+about $3\times10^{8}$ books.
+
+The pile never stops improving. Every extra book adds a little, the additions shrink
+towards nothing, and yet there is no distance the pile cannot eventually reach. Set
+that beside a sum whose terms shrink at a barely different rate:
+
+```python
+import math
+
+harmonic = 0.0
+squares = 0.0
+marks = (10, 1000, 100000, 1000000)
+for k in range(1, marks[-1] + 1):
+    harmonic += 1.0 / k
+    squares += 1.0 / (k * k)
+    if k in marks:
+        print(f"n = {k:>7}   sum of 1/k = {harmonic:9.6f}   sum of 1/k^2 = {squares:.9f}")
+print(f"                                            pi^2/6 = {math.pi ** 2 / 6.0:.9f}")
+```
+
+By a million terms the first sum has reached $14.39$ and is still climbing; the second
+has settled on $1.644933$ and will not move past the ninth digit again. Both sequences
+of terms go to zero. Watching the terms cannot tell the two cases apart, and that is
+the problem this module is about.
+
+## The partial sums are the object
+
+An infinite sum is not something you perform. It is defined as the limit of the finite
+sums $S_n = a_1 + a_2 + \dots + a_n$, and the series converges exactly when that
+sequence of numbers converges. Everything else is a technique for deciding whether the
+limit exists without computing it, which is the point: the sums above are still moving
+at a million terms.
+
+One consequence falls out immediately. If $S_n \to S$ then $S_{n-1} \to S$ as well, and
+$a_n = S_n - S_{n-1} \to S - S = 0$. So the terms of a convergent series must go to
+zero. Read the argument backwards and it gives nothing at all — nowhere did it show
+that terms going to zero force the partial sums to settle. The harmonic series is the
+standing counterexample, and the reason is visible by grouping:
+
+$$1 + \frac12 + \left(\frac13 + \frac14\right)
+ + \left(\frac15 + \dots + \frac18\right)
+ + \left(\frac19 + \dots + \frac1{16}\right) + \dots$$
+
+Every term inside a bracket is at least as large as the last one in it, and each bracket
+holds twice as many terms as the one before. So the bracket ending at $\frac14$ is at
+least $2 \times \frac14 = \frac12$, the one ending at $\frac18$ is at least
+$4 \times \frac18 = \frac12$, and so on for ever: every bracket exceeds $\frac12$, there
+are infinitely many of them, and the sum passes any number you name. It does so
+slowly: the terms up to $k = 1024$ have between them reached only $7.51$, and the next
+thousand of them add another half. Every further half costs twice as many terms as the
+one before it. That is exactly the behaviour the book pile has, and it is why the
+numeric evidence above looks so nearly like convergence.
+
+The n-th term test is therefore a one-way instrument: terms that do not go to zero
+prove divergence, and terms that do prove nothing.
+
+## The integral test, from the same rectangles as module 1
+
+Let $f$ be positive and decreasing with $a_k = f(k)$. On the interval $[k, k+1]$ the
+function lies between its two end values, so integrating across that unit width gives
+
+$$f(k+1) \;\le\; \int_k^{k+1} f(x)\,\mathrm{d}x \;\le\; f(k)$$
+
+which is the right-hand and left-hand rectangle from module 1, on a single strip. Now
+add the strips from $n$ onwards. Using the left inequality on strip $k$ and the right
+one on strip $k-1$ traps the tail of the series between two integrals:
+
+$$\int_{n+1}^{\infty} f(x)\,\mathrm{d}x \;\le\; \sum_{k=n+1}^{\infty} a_k
+ \;\le\; \int_{n}^{\infty} f(x)\,\mathrm{d}x$$
+
+Two things come out of one picture. The series converges exactly when the integral
+does, since each side is finite if and only if the other is. And — the part that makes
+this useful rather than decorative — the tail you have not summed is trapped between
+two numbers you can compute. The gap between them is $\int_n^{n+1} f$, the area of one
+strip, so the midpoint of the bracket is an estimate with a guaranteed error of half
+that width. That is a genuine error bar, not an extrapolation, and it is what
+`estimate_sum` returns alongside its answer.
+
+## Worked: six digits of $\sum 1/k^2$
+
+Here $f(x) = 1/x^2$, so $\int_n^{\infty} f = 1/n$ and the bracket after $n$ terms runs
+from $1/(n+1)$ to $1/n$. Its half-width is
+
+$$\frac12\left(\frac1n - \frac1{n+1}\right) = \frac{1}{2n(n+1)}$$
+
+Asking for $10^{-6}$ means $n(n+1) \ge 500\,000$. At $n = 706$ the product is
+$499\,142$ and the half-width is $1.0017\times10^{-6}$, a hair too large; at $n = 707$
+it is $500\,556$ and the half-width is $9.98889\times10^{-7}$. So 707 terms, which is
+the number the lab's own test asserts.
+
+```python
+import math
+
+exact = math.pi ** 2 / 6.0
+
+total = 0.0
+k = 0
+while True:
+    k += 1
+    term = 1.0 / (k * k)
+    total += term
+    if term < 1e-6:
+        break
+print(f"term fell below 1e-6 at k = {k}")
+print(f"  partial sum  = {total:.9f}   error still left = {exact - total:.3e}")
+
+total = 0.0
+for n in range(1, 100000):
+    total += 1.0 / (n * n)
+    upper, lower = 1.0 / n, 1.0 / (n + 1)
+    half = 0.5 * (upper - lower)
+    if half <= 1e-6:
+        break
+estimate = total + 0.5 * (upper + lower)
+print(f"bracket reached the tolerance at n = {n}")
+print(f"  estimate     = {estimate:.9f}   guaranteed to {half:.3e}")
+print(f"  actual error = {abs(estimate - exact):.3e}")
+```
+
+The bracket route stops at $n = 707$ with an estimate of $1.644934068$ and a promise of
+$10^{-6}$. Its actual error is $9.4\times10^{-10}$, a thousand times better than
+promised, because the midpoint of the bracket cancels the leading part of the tail and
+leaves only its curvature. The promise is still the number to quote: it is the one that
+was proved.
+
+## The mistake, and why it is tempting
+
+The first block in the listing above shows the rule most people reach for: keep adding
+until the term is smaller than the tolerance. It stops at $k = 1001$ with a partial sum
+of $1.643936$ — and an error of $9.985\times10^{-4}$, a thousand times the term that
+triggered the stop.
+
+The rule is tempting because it is correct somewhere else. For an *alternating* series
+with terms decreasing to zero, the error after truncation really is smaller than the
+first omitted term, so this is the right rule for
+$\log 2 = 1 - \frac12 + \frac13 - \dots$ and it is also what an
+iteration-until-converged loop looks like everywhere
+else in numerical work. For a series of positive terms it fails for a reason the
+picture makes plain: the omitted terms do not cancel each other, and there are
+infinitely many of them. Each one past $k = 1000$ is about $10^{-6}$; a thousand of
+them are $10^{-3}$; and the tail integral says so in one division.
+
+## The ratio test, and the reason $L = 1$ is silent
+
+Compare against the only series whose sum everyone knows. If
+$|a_{k+1}/a_k| \to L < 1$, choose any $r$ strictly between $L$ and $1$. Beyond some
+index $K$ every ratio is below $r$, so $|a_{K+j}| \le |a_K|\,r^{\,j}$ and the tail is
+dominated term by term by a geometric series with ratio $r$, which converges. If
+$L > 1$ the terms eventually grow, so they do not go to zero and the n-th term test
+ends the discussion.
+
+At $L = 1$ the comparison has nothing to compare with — $r$ would have to be both above
+$1$ and below it. That is not a gap waiting to be filled: $1/k$ and $1/k^2$ both have
+ratio limit $1$, and one diverges while the other converges. Any test that reported a
+verdict at $L = 1$ would have to be wrong about one of them.
+
+## Measuring a limit from two terms of a sequence
+
+A program cannot take a limit; it evaluates the ratio at some finite $m$ and hopes. The
+hoping is the problem:
+
+```python
+def ratio(term, m):
+    return abs(term(m + 1) / term(m))
+
+
+for name, term in (("1/k", lambda k: 1.0 / k),
+                   ("1/k^2", lambda k: 1.0 / (k * k)),
+                   ("(1/2)^k", lambda k: 0.5 ** k)):
+    r1, r2 = ratio(term, 200), ratio(term, 400)
+    print(f"{name:>8}:  r(200) = {r1:.6f}   r(400) = {r2:.6f}   2r(400) - r(200) = {2 * r2 - r1:.6f}")
+```
+
+At $m = 200$ the harmonic series reports a ratio of $0.995025$. A routine that declared
+convergence for any ratio below $1 - 10^{-3}$ would announce that $\sum 1/k$ converges,
+with numerical evidence and full confidence.
+
+The repair comes from the shape of the error. For these series the ratio approaches its
+limit like $r(m) = L + c/m$ for some constant $c$, and that form can be cancelled with
+two evaluations:
+
+$$2\,r(2m) - r(m) = 2\left(L + \frac{c}{2m}\right) - \left(L + \frac{c}{m}\right) = L$$
+
+The $1/m$ term goes exactly, and what is left is $L$ plus whatever was of order
+$1/m^2$. The printed numbers are $0.999988$ for $1/k$ and $0.999963$ for $1/k^2$ —
+both inside the $\pm10^{-3}$ band, so both are reported as inconclusive, which is the
+honest verdict for both. A true geometric series is untouched: its ratio is exactly
+$0.5$ at every $m$, so the extrapolation returns $0.5$. This is the same Richardson
+manoeuvre as module 2, applied to a sequence instead of a quadrature rule.
+
+## The radius of convergence
+
+Apply the ratio test to a power series $\sum c_kx^k$ at a fixed $x$. The ratio of
+successive terms is $|c_{k+1}/c_k|\,|x|$, so convergence follows whenever
+$|x| < 1/\rho$, where $\rho$ is the growth rate of the coefficients. That threshold is
+the radius $R = 1/\rho$, and the general form uses the root rather than the ratio,
+$\rho = \lim\sup |c_n|^{1/n}$, because a series such as $\sin$ has zero coefficients
+where a ratio would divide by zero.
+
+The lab estimates $\rho$ from the last two non-zero indices $n < m$ below a cut-off:
+
+$$\rho \approx \left(\frac{|c_m|}{|c_n|}\right)^{1/(m-n)}$$
+
+which is the geometric mean rate across the gap between them. The $1/(m-n)$ exponent is
+what makes it survive the sine, where every other coefficient is zero and the gap is
+$2$. Running it at cut-off 60 and again at 30 distinguishes the three outcomes. For
+coefficients $1/(3^kk^2)$ the two estimates are $3.1026$ and $3.2105$ — close, both
+near the true $R = 3$. For $1/k!$ they are $60$ and $30$: the estimate doubles when the
+cut-off doubles, because no geometric rate fits, and the test `R_full >= 1.9 * R_half`
+reports $\infty$. Coefficients $k!$ do the mirror image and report $0$.
+
+## Where it stops holding
+
+The radius says nothing about the two endpoints, and both behaviours occur at once:
+$\sum x^k/k$ has $R = 1$, diverges at $x = 1$ (it is the harmonic series) and converges
+at $x = -1$. Endpoints have to be checked one at a time by another test, which is what
+module 11, *Power series as functions*, does to get $\log 2$ and $\pi/4$ out of series
+whose radius is exactly 1.
+
+The estimator is a heuristic reading finitely many coefficients, and it can be misled.
+Coefficients $1/k$ have $R = 1$ exactly, and the estimate at cut-off 60 is $1.0169$,
+converging towards 1 far too slowly to be trusted to three digits. A series with
+irregular gaps in its non-zero coefficients defeats the two-index estimate entirely,
+which is why the exact statement uses a $\lim\sup$ over all $n$ rather than the last
+pair.
+
+The deepest limitation is that convergence of a positive series is a property of the
+sum, while convergence of a mixed-sign series can be a property of the *order*. The
+alternating harmonic series converges to $\log 2$, but the series of absolute values
+diverges, and rearranging the terms can make the sum come out at any value at all. The
+tests here are silent on this: the ratio test gives $L = 1$, and the integral test does
+not apply to a function that is not positive. Whenever a program sums a conditionally
+convergent series, the answer belongs to the order the loop happened to use.
+
+This module's lab, *Convergence tests and the radius of convergence*, is these four
+paragraphs as four functions: `partial_sums` for the definition itself,
+`ratio_test` for the comparison with a geometric series including the
+$2r(2n) - r(n)$ extrapolation and the honest `"inconclusive"` band, `estimate_sum` for
+the integral-test bracket and the half-width it guarantees, and
+`radius_of_convergence` for the coefficient growth rate with its two cut-offs. The last
+one is the only place where the thresholds — $1.9$ and $0.55$ — are chosen rather than
+derived, and knowing which numbers in a routine were derived and which were tuned is
+worth as much as knowing what it computes.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Does the sum exist, and how close are you",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The terms of $\\sum a_k$ tend to zero. What has been established?",
+                        "opts": [
+                            "The series converges, though possibly to a limit no finite calculation can reach",
+                            "The series converges if the terms are eventually positive, and otherwise nothing",
+                            "Nothing about convergence — the harmonic series has terms tending to zero and diverges",
+                            "The partial sums are bounded, which for an increasing sequence is already enough to converge",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"This is the converse of the true statement, and it is false. Convergence implies vanishing terms; the implication does not run the other way, and one line of grouping on $\sum 1/k$ shows why.",
+                            r"Positivity does not rescue it, and the harmonic series is the counterexample to this reading as well — every one of its terms is positive.",
+                            r"$a_n = S_n - S_{n-1} \to 0$ follows from convergence, and nothing follows from it.",
+                            r"Boundedness is exactly what has not been shown. Terms tending to zero leaves the partial sums free to climb without limit, which is what $\sum 1/k$ does at a rate of about $\log n$.",
+                        ],
+                        "why": r"""
+If $S_n \to S$ then $S_{n-1} \to S$ too, so $a_n = S_n - S_{n-1} \to 0$. That argument
+runs one way only. Nothing in it shows that vanishing terms force the partial sums to
+settle, and the harmonic series proves they do not: group the terms as
+$\frac13+\frac14 > \frac12$, then the next four, then the next eight, and every bracket
+exceeds $\frac12$, so the sum passes any bound. The n-th term test is useful in its
+contrapositive form — terms that do not vanish prove divergence — and useless in the
+direction people want to read it.
+""",
+                    },
+                    {
+                        "q": "Summing $\\sum 1/k^2$ until a term drops below $10^{-6}$ stops at $k = 1001$ and leaves an error of $10^{-3}$. Why is the error a thousand times the last term added?",
+                        "opts": [
+                            "Rounding accumulates over a thousand additions, at roughly $\\sqrt{n}$ times machine epsilon",
+                            "The terms decrease too slowly for the last one to say anything about the ones after it",
+                            "Roughly a thousand further terms are each about $10^{-6}$, and being positive they cannot cancel",
+                            "The stopping test compares a term against a tolerance meant for the sum, which is a thousand times larger",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Rounding over a thousand double-precision additions is around $10^{-14}$, eleven orders below the error observed. The defect is in the mathematics of the stopping rule, not in the arithmetic.",
+                            r"True as far as it goes, but it names the symptom rather than the cause. What matters is that the omitted terms are positive and numerous, which is what turns a small last term into a large tail.",
+                            r"The tail integral $\int_{1000}^{\infty}\mathrm{d}x/x^2$ is $10^{-3}$, and that is the number missing.",
+                            r"Rescaling the tolerance would patch this one case by luck. The rule is wrong in kind: the ratio between a term and the tail it leaves depends on the series, and for $\sum 1/k$ it is infinite.",
+                        ],
+                        "why": r"""
+The remaining terms are $1/1001^2, 1/1002^2, \dots$, each near $10^{-6}$, all positive,
+and there are infinitely many. The integral test prices them exactly: the tail after
+$n$ terms lies between $1/(n+1)$ and $1/n$, so at $n = 1000$ it is about $10^{-3}$.
+Stopping when a term is small is the right rule for an alternating series, where
+successive omitted terms cancel and the error is bounded by the first of them, and it
+is what convergence tests look like in root-finding. For positive terms nothing
+cancels, and the correct stopping rule prices the whole tail rather than one member
+of it.
+""",
+                    },
+                    {
+                        "q": "Why is the midpoint of $[\\int_{n+1}^{\\infty} f, \\int_{n}^{\\infty} f]$ added to the partial sum, rather than either endpoint?",
+                        "opts": [
+                            "The bracket is symmetric about the true tail, so the midpoint is the exact answer",
+                            "Either endpoint is off by up to the full bracket width; the midpoint is off by at most half",
+                            "The two integrals bracket the next term rather than the tail, so their mean is the term to add",
+                            "The midpoint keeps the estimate above the partial sum, which endpoints cannot both do",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The tail is not centred in its bracket in general, and the midpoint is an estimate rather than an identity — which is precisely why the returned half-width is a bound and not a claim of exactness.",
+                            r"Taking the centre of an interval that is known to contain the answer halves the worst case, whatever is inside.",
+                            r"The bracket is on the whole tail $\sum_{k>n}a_k$, not on a single term. Adding a mean of two integrals as if it were one term would leave essentially the entire tail unaccounted for.",
+                            r"Both endpoints are positive for a positive decreasing $f$, so every candidate lies above the partial sum. Sign is not what is being bought here; the worst-case distance is.",
+                        ],
+                        "why": r"""
+The integral test gives $\int_{n+1}^{\infty}f \le \sum_{k>n}a_k \le \int_n^{\infty}f$:
+the true tail is somewhere in that interval and the picture does not say where. Adding
+the lower endpoint could understate the sum by the full width; adding the upper could
+overstate it by the same. Adding the midpoint puts the estimate at most half a width
+from whatever the truth is, which is why `estimate_sum` returns
+`0.5 * (upper - lower)` as the guarantee. On $\sum 1/k^2$ at $n = 707$ that promise is
+$10^{-6}$ and the realised error is $9\times10^{-10}$, because the tail happens to sit
+near the centre — a bonus, not a claim.
+""",
+                    },
+                    {
+                        "q": "`ratio_test` estimates the ratio limit as $2r(2n) - r(n)$ instead of using $r(n)$. What does that fix?",
+                        "opts": [
+                            "It removes the $c/n$ error in the finite-$n$ ratio, so $\\sum 1/k$ is not called convergent",
+                            "It averages two measurements, so random floating-point noise in the ratio is halved",
+                            "It doubles the index, so any series is sampled far enough out for the limit to have settled",
+                            "It makes the estimate exact for geometric series, which a single ratio evaluation cannot be",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$r(200) = 0.995025$ for $\sum 1/k$; extrapolating gives $0.999988$, which lands in the inconclusive band.",
+                            r"Nothing here is random. The ratio is a deterministic function of $n$ and its distance from the limit is a systematic bias of size $c/n$, which averaging would reduce rather than remove — the coefficients $2$ and $-1$ are chosen to cancel it exactly.",
+                            r"Doubling once does not settle anything: $r(400) = 0.997506$ for the harmonic series is still $2.5\times10^{-3}$ from its limit, on the wrong side of a $10^{-3}$ threshold. No fixed index is far enough out.",
+                            r"A single evaluation is already exact for a geometric series — the ratio is the same constant at every index — so there was nothing to fix there, and the extrapolation leaves that case untouched.",
+                        ],
+                        "why": r"""
+For these series the finite-$n$ ratio behaves like $r(n) = L + c/n$. One evaluation
+therefore carries a systematic error of size $c/n$, and at $n = 200$ that is enough to
+put the harmonic series at $0.995$ — comfortably below a threshold of $1 - 10^{-3}$,
+which would report convergence for a divergent series. The combination
+$2r(2n) - r(n) = 2(L + c/2n) - (L + c/n)$ cancels the $c/n$ term identically, leaving
+$L$ plus terms of order $1/n^2$. The printed value for $\sum 1/k$ becomes $0.999988$,
+inside the inconclusive band, which is the truthful verdict since the ratio test cannot
+decide either $1/k$ or $1/k^2$.
+""",
+                    },
+                    {
+                        "q": "`radius_of_convergence` computes the estimate at cut-off 60 and again at 30, and returns $\\infty$ when the first is at least $1.9$ times the second. What makes that a reasonable test?",
+                        "opts": [
+                            "A radius above 1.9 is beyond what double precision can represent as a ratio of coefficients",
+                            "Two estimates that disagree are always untrustworthy, so the larger of them is reported",
+                            "A genuine finite radius gives two close estimates; one that scales with the cut-off fits no rate",
+                            "The coefficients of $\\exp$ halve at every step, so their estimated radius doubles with the cut-off",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"Doubles hold values up to about $10^{308}$, so no representational limit is anywhere near. The threshold is about the behaviour of the estimate, not about the arithmetic.",
+                            r"Disagreement alone would not say which way to fail, and reporting the larger would be arbitrary. What is being read is the *pattern* of disagreement — an estimate that scales with the cut-off — which points at an infinite radius specifically.",
+                            r"For $1/(3^kk^2)$ the estimates are $3.10$ and $3.21$; for $1/k!$ they are $60$ and $30$.",
+                            r"The coefficients of $\exp$ are $1/k!$, which fall by a factor of $k$ at step $k$ rather than by a fixed half — and a fixed halving would be a geometric rate with a perfectly finite radius of 2.",
+                        ],
+                        "why": r"""
+The estimate $(|c_m|/|c_n|)^{1/(m-n)}$ measures a geometric decay rate. When the
+coefficients really do decay geometrically, the rate is the same wherever you measure
+it, so the two cut-offs agree — $3.10$ against $3.21$ for $1/(3^kk^2)$, both near
+$R = 3$. When they decay faster than any geometric rate, as $1/k!$ does, no fixed rate
+fits and the apparent radius grows with the cut-off: $60$ at one, $30$ at the other,
+exactly a doubling. Comparing the two cut-offs turns "faster than geometric" into
+something a program can detect from numbers it already has, and the mirror test with
+$0.55$ catches coefficients such as $k!$ that grow instead, where $R = 0$.
+""",
+                    },
+                    {
+                        "q": "A power series has radius of convergence $R = 1$. What is known about its behaviour at $x = 1$?",
+                        "opts": [
+                            "It diverges there, since the radius marks the last point at which terms still shrink",
+                            "It converges there but possibly not absolutely, which is what the radius being 1 records",
+                            "Nothing — either behaviour is possible, and the endpoint needs a test of its own",
+                            "It converges there exactly when the coefficients are eventually of one sign",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            r"$\sum x^k/k^2$ has radius 1 and converges perfectly well at $x = 1$, to $\pi^2/6$. Divergence at the boundary is common but not compulsory.",
+                            r"Also too strong in the other direction: $\sum x^k$ has radius 1 and diverges outright at $x = 1$, where it becomes $1 + 1 + 1 + \dots$.",
+                            r"$\sum x^k/k$ has radius 1, diverges at $x = 1$ and converges at $x = -1$.",
+                            r"Sign is not the deciding factor: $\sum x^k/k^2$ has positive coefficients throughout and converges at $x=1$, while $\sum x^k$ also has positive coefficients and diverges there.",
+                        ],
+                        "why": r"""
+The radius is derived from a strict inequality — the ratio or root test gives
+convergence for $|x| < R$ and divergence for $|x| > R$, and says nothing at $|x| = R$,
+where the comparison it rests on becomes an equality. Every behaviour occurs. With
+$R = 1$: $\sum x^k$ diverges at both endpoints, $\sum x^k/k$ diverges at $+1$ and
+converges at $-1$, and $\sum x^k/k^2$ converges at both. Each endpoint is a separate
+numerical series and needs a test of its own — which is how module 11 gets $\log 2$
+and $\pi/4$ out of series whose radius is 1.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Convergence tests and the radius of convergence",
                 "runtime": "python",

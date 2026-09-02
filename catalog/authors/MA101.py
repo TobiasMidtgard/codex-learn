@@ -52,6 +52,335 @@ COURSE = {
                 "Tautology, contradiction, contingency — and logical equivalence as identical columns",
                 "De Morgan's laws, contraposition, and `P -> Q` as `~P | Q`",
             ],
+            "read": {
+                "title": "Two readings of the same door rule",
+                "minutes": 14,
+                "body": r'''
+A security team writes one sentence for the door controller on the ground floor:
+
+*the door opens if the badge is valid and it is not after 18:00, or the override switch
+is on.*
+
+Two engineers implement it. The first writes `valid & (~late | override)`. The second
+writes `valid & ~late | override`. Both of them will tell you they typed the sentence
+out. One of the two lets a person with no badge at all flip the override switch and walk
+through, and neither engineer can see which from the code, because both readings are
+faithful to the English.
+
+## The rows are the meaning
+
+There are three atomic statements here — *the badge is valid*, *it is after 18:00*, *the
+override is on* — and each of them is true or false with nothing in between. A statement
+of that kind is a **proposition**. Three independent true-or-false choices give
+$2 \times 2 \times 2 = 8$ combinations, and a formula built out of the three assigns a
+value to each of the eight. So a formula is not really a piece of text. It is a column of
+eight truth values, and two formulas mean the same thing exactly when their columns agree
+in every row. Nothing weaker will do, and nothing stronger is needed.
+
+That is a claim you can settle by machine rather than by argument:
+
+```python
+from itertools import product
+
+def door_a(valid, late, override):
+    return valid and ((not late) or override)
+
+def door_b(valid, late, override):
+    return (valid and not late) or override
+
+rows = list(product([False, True], repeat=3))
+differ = [r for r in rows if door_a(*r) != door_b(*r)]
+print(len(rows), "rows,", len(differ), "disagree")
+for valid, late, override in differ:
+    print("valid", valid, "late", late, "override", override)
+```
+
+It prints `8 rows, 2 disagree`, then the two rows: both have an invalid badge and the
+override on. On those two rows the second engine opens the door to somebody carrying no
+badge, and every other row in the building's history looks identical under the two
+programs. A bug that shows up on two rows out of eight is a bug that survives testing.
+
+Precedence is the convention that decides which of the two the unparenthesised text
+denotes. Tightest first: `~`, then `&`, then `|`, then `->`. So `valid & ~late | override`
+groups as `(valid & ~late) | override` — the second reading, the one that opens the door.
+The engine you are about to build has one parsing function per precedence level for
+exactly this reason, and the levels are what make the grouping a fact about the notation
+rather than a matter of taste.
+
+## The connectives, read off the door
+
+`~late` is true precisely when `late` is false. `A & B` is true only when both are.
+`A | B` is **inclusive**: true when either holds and true when both do. English disjunction
+is often exclusive — *tea or coffee* offers you one — and that is the first place a
+translation from a specification quietly changes meaning. The door rule wants the
+inclusive one: a valid badge before 18:00 with the override also on should still open the
+door.
+
+## The connective nobody believes at first
+
+Now the fourth. A manufacturer prints on the box: *if the part fails within a year, we
+replace it.* Rather than asking when the promise is true, ask when it is **broken**, which
+is a question anybody can answer without any logic at all. There is one way, and only one:
+the part failed and no replacement came. If the part never failed, the company has not broken its word —
+whether or not it posted you a spare part anyway.
+
+So the column for the promise has a single false entry, in the row where the first
+statement is true and the second is false. That column is `P -> Q`, and it was not
+announced; it is what "the promise was not broken" comes to. The same reading hands over
+the equivalence for free: the promise stands when either the part did not fail, `~P`, or a
+replacement arrived, `Q`. That is `~P | Q`, the same column by construction.
+
+A warranty on a part that never fails is a promise kept at no cost. Statements true for
+that reason are called *vacuously* true, and Module 2 shows the same effect at scale, when
+a universal claim ranges over a domain with nothing in it.
+
+## One table, carried all the way through
+
+```python
+from itertools import product
+
+def implies(a, b):
+    """The one false row: a true antecedent with a false consequent."""
+    return not (a and not b)
+
+print("P Q | P->Q  ~P|Q  ~Q->~P  Q->P")
+for p, q in product([False, True], repeat=2):
+    cells = [implies(p, q), (not p) or q, implies(not q, not p), implies(q, p)]
+    print(int(p), int(q), " |", "     ".join(str(int(c)) for c in cells))
+```
+
+The header line, then four rows. Reading down, the first three columns are `1 1 0 1` —
+identical, all four rows. The fourth column is `1 0 1 1`, and it parts from the others in
+two rows: the row where `P` is false and `Q` is true, and the row where `P` is true and
+`Q` is false. Those are the two rows on which `P` and `Q` disagree, which is the whole
+content of the difference.
+
+Put a sentence to it. *If it rains, the ground is wet.* Its contrapositive is *if the
+ground is not wet, it is not raining*, and the table says that is the same claim — one
+column, two English sentences. Its converse is *if the ground is wet, it is raining*, and
+that is a different claim, refuted by a burst pipe: rain false, wet ground true, which is
+precisely the row where the columns separate.
+
+## The mistake, and why it is tempting
+
+The mistake is reasoning from `P -> Q` and `Q` to `P` — affirming the consequent. It is
+tempting because English conditionals are usually offered by a speaker who believes the
+converse as well. *If you finish your dinner you can have pudding* is heard by every child
+as a promise of no pudding otherwise, and the child is reading the speaker correctly while
+reading the logic wrongly. Material implication carries no hint of *only if*; the arrow
+says one thing about one row and is silent about the rest.
+
+The course's capstone toolkit makes the distinction executable: `entails(["P", "P -> Q"],
+"Q")` returns `True`, which is modus ponens, and `entails(["P -> Q", "Q"], "P")` returns
+`False`, which is the fallacy that resembles it. The two differ by which of the two
+premises is the arrow's own antecedent.
+
+## De Morgan, without memorising it
+
+Ask the auditor's question about the door: when does the rule *fail* to open it? Negate
+`A & B` and think about what has to happen — at least one of the two conjuncts has to
+fail, so the negation is `~A | ~B`. Negate `A | B` and both have to fail, so it is
+`~A & ~B`. A negation crossing a connective flips the connective and lands on both sides.
+Contraposition falls out of the same habit applied to `~P | Q`.
+
+## Where the tables stop
+
+Three limits, and each of them matters later.
+
+The arrow is **truth-functional** and nothing more. *If 2 + 2 = 5 then the moon is cheese*
+comes out true, because a false antecedent is enough on its own. Nothing in the column
+tracks relevance or causation, so a conditional that means *because* is only partly
+captured by this notation.
+
+The atoms are opaque. *Every prime above 2 is odd* is a single letter here, and no
+manipulation of the letters can reach inside it. Getting at the internal structure of a
+statement is what Module 2's quantifiers are for.
+
+And the table has $2^n$ rows. Ten variables give 1024, thirty give 1073741824, and a
+formula with a few hundred variables is ordinary in industrial use. Walking every row is
+therefore a method that works at the scale of this module and at no other; deciding
+satisfiability faster than that in the worst case is the open problem behind SAT solving,
+and Module 12 supplies the notation for stating what "faster" would even mean.
+
+## What you are about to build
+
+The lab, **A propositional logic engine**, is those columns turned into code:
+`tokenise` splits the text, `parse` builds a nested-tuple tree with one function per
+precedence level, `evaluate` walks it under an assignment, and `truth_table` enumerates
+the $2^n$ assignments in binary-counting order with `False` first. `classify` then reads
+the column — all true is a tautology, none true a contradiction, anything else a
+contingency — and `equivalent` compares two columns over the **union** of the two
+formulas' variables, which is why `equivalent("P", "P | (Q & ~Q)")` comes out `True`
+rather than raising over a name one side has never heard of.
+
+One detail of the grammar is worth meeting before you implement it. Implication associates
+to the right, so `P -> Q -> R` is `P -> (Q -> R)`, and that is not a formality:
+
+```python
+from itertools import product
+
+def implies(a, b):
+    return not (a and not b)
+
+for p, q, r in product([False, True], repeat=3):
+    right = implies(p, implies(q, r))
+    left = implies(implies(p, q), r)
+    if right != left:
+        print("P", p, "Q", q, "R", r, "right", right, "left", left)
+```
+
+Two rows print, and both have `P` false and `R` false. Group the arrows the other way and
+the engine answers a different question on a quarter of its inputs.
+''',
+            },
+            "quiz": {
+                "title": "Columns, arrows and what a table decides",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Written without parentheses, `valid & ~late | override` is read by the engine as which grouping, and what does that cost?",
+                        "opts": [
+                            "`valid & (~late | override)`, since `|` is evaluated before `&`",
+                            "`(valid & ~late) | override`, which opens the door on override alone",
+                            "It is ambiguous, so the engine must reject it as malformed input",
+                            "`(valid & ~late) | override`, which agrees with the other grouping on every row",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "This inverts the precedence. `&` binds tighter than `|`, the same way multiplication binds tighter than addition, so the conjunction is gathered first and the disjunction sees it as one operand.",
+                            "`&` binds tighter, so the override is disjoined with the whole conjunction and can carry the formula on its own.",
+                            "Precedence exists so that unparenthesised text has exactly one reading. The grammar is ambiguous only until the levels are fixed, and a parser with one function per level never has a choice to make.",
+                            "The grouping is right and the consequence is not. The two readings disagree on two of the eight rows — the rows with an invalid badge and the override on — which is exactly the defect that matters.",
+                        ],
+                        "why": r'''
+Precedence runs `~`, then `&`, then `|`, then `->`, so the conjunction is built first and
+the override is disjoined with the whole of it. Under that reading the override alone
+makes the formula true, badge or no badge. Enumerating all eight rows shows the two
+readings differing on two of them, both with an invalid badge and the override on — a
+disagreement narrow enough to survive casual testing and wide enough to open a door to
+somebody with no badge.
+''',
+                    },
+                    {
+                        "q": "A warranty says: *if the part fails within a year, we replace it.* The part did not fail. What is the truth value of the warranty statement, and why?",
+                        "opts": [
+                            "False, because no replacement was ever sent",
+                            "True, because the one way to break the promise did not occur",
+                            "Undefined, since the antecedent never happened",
+                            "True, but only if the manufacturer sent a replacement anyway",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "This reads the arrow as if it also promised a replacement. The promise was conditional on a failure, so an absent replacement after an absent failure breaks nothing.",
+                            "The promise is broken only by a failure with no replacement, and no failure occurred.",
+                            "A propositional formula has a truth value on every row of its table, with no gaps. There is no third value here, and an undefined entry would leave the column incomplete.",
+                            "Sending a spare part to somebody whose part did not fail is generous and irrelevant. The row with a false antecedent is true under either value of the consequent, which is what makes the column the shape it is.",
+                        ],
+                        "why": r'''
+Ask when the promise is broken rather than when it holds, and there is one answer: the
+part failed and no replacement came. Every other combination leaves the manufacturer's
+word intact, so the arrow's column carries a single false entry. A conditional whose
+antecedent never occurs is *vacuously* true — a promise kept at no cost — and the same
+effect returns in Module 2, where a universal claim over an empty domain comes out true
+for the same reason.
+''',
+                    },
+                    {
+                        "q": "*If it rains, the ground is wet.* Which sentence has the identical truth column, and which one differs?",
+                        "opts": [
+                            "*If the ground is wet, it is raining* is identical; *if the ground is not wet, it is not raining* differs",
+                            "Both of those sentences are identical to the original, since each reverses it",
+                            "*If the ground is not wet, it is not raining* is identical; *if the ground is wet, it is raining* differs",
+                            "Neither is identical, because negating a statement always changes its column",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            "This has the pair the wrong way round. The converse is the one refuted by a burst pipe: wet ground, no rain, which the original never ruled out.",
+                            "Only one of the two is a reversal. The contrapositive reverses *and* negates both parts, and those two changes cancel, which is why it survives where the plain reversal does not.",
+                            "Reverse and negate both parts and the column is unchanged; reverse alone and it changes in two rows.",
+                            "Negating both parts *and* reversing them leaves the column untouched, which is precisely the contrapositive. A burst pipe refutes the converse and leaves the original standing.",
+                        ],
+                        "why": r'''
+Lay the columns side by side. `P -> Q`, `~P | Q` and `~Q -> ~P` agree in all four rows;
+`Q -> P` parts from them in the two rows where `P` and `Q` disagree. The concrete
+refutation of the converse is a burst pipe: the ground is wet with no rain, which is the
+row where the columns separate, and the original claim says nothing about it. The
+contrapositive reverses the arrow and negates both ends, and those two moves cancel.
+''',
+                    },
+                    {
+                        "q": "`equivalent(\"P\", \"P | (Q & ~Q)\")` is `True`. What does the engine have to do for that answer to come out?",
+                        "opts": [
+                            "Detect that `Q & ~Q` is a contradiction and delete it before comparing",
+                            "Compare the two columns over the union of the variables, four rows rather than two",
+                            "Refuse the comparison, since the two formulas do not use the same variables",
+                            "Compare only the variables that both formulas actually mention, which here is `P` on its own",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "Simplification is one route to the answer and not the one the engine takes. It never rewrites a formula; it evaluates both over the same assignments and compares the results, which needs no algebra at all.",
+                            "Two formulas are equivalent when they agree on every assignment to every variable either one mentions.",
+                            "Different variable sets are ordinary. Take the union, evaluate both sides on each of its assignments, and the comparison is well defined — which is what makes this pair equivalent rather than incomparable.",
+                            "Restricting to the shared variables leaves `Q` with no value, so the second formula cannot be evaluated at all. The fix runs the other way: widen to the union so both sides are defined everywhere.",
+                        ],
+                        "why": r'''
+Equivalence is agreement on every row, so the row set has to be big enough for both
+formulas to be evaluated. Taking the union of the variables gives `P` and `Q`, hence four
+rows; on each of them `Q & ~Q` is false, a false disjunct changes nothing, and the two
+columns match. Comparing over the intersection instead would leave `Q` unbound and the
+second formula unevaluatable, which is why the lab's `equivalent` is specified over the
+union.
+''',
+                    },
+                    {
+                        "q": "Why does the truth-table method stop being a practical decision procedure as formulas grow?",
+                        "opts": [
+                            "Because the row count is $2^n$, so thirty variables already give over a billion rows",
+                            "Because tables cannot represent implication, only conjunction and disjunction",
+                            "Because a formula with many variables usually turns out to be a contingency",
+                            "Because floating-point rounding creeps into the truth values once a table runs to thousands of rows",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "One independent binary choice per variable, multiplied together.",
+                            "Implication is a column like any other, fully determined by the values of its two parts. Its presence changes the cost of a table not at all; the number of variables is the only thing that does.",
+                            "Being a contingency is a property of the answer, not a difficulty in computing it, and the walk costs the same whichever of the three classifications comes back. Plenty of large formulas are tautologies.",
+                            "Nothing here is floating point. Every cell is a boolean and the arithmetic is exact at any size — what defeats the method is how many cells there are, not what happens inside one.",
+                        ],
+                        "why": r'''
+Each variable is one independent true-or-false choice, so the product rule gives $2^n$
+rows: 8 at three variables, 1024 at ten, 1073741824 at thirty. Industrial formulas carry
+hundreds. The walk stays exact and stays correct at every size — what fails is the time,
+and that is the whole difficulty. Deciding satisfiability faster than the exhaustive walk
+in the worst case is the open problem behind SAT solving, and Module 12 gives you the
+notation for saying what "faster" claims.
+''',
+                    },
+                    {
+                        "q": "`P -> Q -> R` associates to the right. How much does the grouping actually change?",
+                        "opts": [
+                            "Nothing, since implication is associative in the way conjunction is",
+                            "Everything: the two groupings agree on no row of the eight",
+                            "The two groupings disagree on two of the eight rows, both with `P` and `R` false",
+                            "Only the notation, because the parser rewrites either grouping into the same `~P | Q | R`",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            "Conjunction and disjunction are associative and implication is not, which is why the grammar has to make a choice. Testing the two groupings on all eight rows settles it in a few lines.",
+                            "They agree on six of the eight rows, and that near-agreement is what makes the difference easy to miss. A formula that failed everywhere would be caught by the first test anyone wrote.",
+                            "Enumerate the eight rows and two of them come out differently, both with a false `P` and a false `R`.",
+                            "No rewriting takes place, and `~P | Q | R` is a third formula again — it is true whenever `Q` is true, which the right grouping is as well but the left grouping is not.",
+                        ],
+                        "why": r'''
+`P -> (Q -> R)` is false only when `P` and `Q` are true and `R` is false. `(P -> Q) -> R`
+is false whenever `P -> Q` holds and `R` does not, which happens in three rows. The two
+columns therefore differ in two rows, both with `P` false and `R` false. Six rows of
+agreement is what makes the choice easy to overlook, and why the grammar has to fix the
+association rather than leave it to whoever wrote the parser.
+''',
+                    },
+                ],
+            },
             "lab": {
                 "title": "A propositional logic engine",
                 "runtime": "python",
@@ -2016,6 +2345,310 @@ the naturals that yields `S = {3, 6, 9, ...}`. The clause naming `3` is the base
                 "Vandermonde's identity as a counting argument, not an algebraic one",
                 "The triangular number C(n+1, 2) = 1 + 2 + ... + n counts the pairs drawn from n+1 things, and Module 13 spends it on numbering the diagonals of an infinite grid",
             ],
+            "read": {
+                "title": "Five cards, and the overcount that looks like a product",
+                "minutes": 16,
+                "body": r'''
+Deal five cards off a shuffled deck. How many different hands can you be holding?
+
+The number is 2598960, and the interesting part is not the number — it is that three
+separate counting arguments stand between the deck and it, and skipping any one of them
+gives a different answer that also looks right. This module is about which argument to
+reach for, and the way to tell is to ask what a *stage* of the choice is and whether the
+same hand can be reached twice.
+
+## The product rule, and the condition it quietly imposes
+
+A canteen offers 3 starters and 4 main courses. Draw the choices as a tree: the root
+splits three ways, and each of those three splits four ways, giving
+$3 \times 4 = 12$ leaves. Each leaf is a distinct meal and every meal is one leaf, so
+there are 12 meals.
+
+What the tree needed was not that the four mains are the *same* four after each starter.
+It needed that there are *four of them* whichever starter was taken. Change the rule to
+"any main except the one sharing a sauce with your starter" and each starter leaves three
+mains, so the count is $3 \times 3 = 9$ — the sets differ, the size does not, and the
+product rule still applies. Change it to "the fish starter may be followed by any main,
+the others by two" and the tree is lopsided; there is no single second factor and the
+count is a sum, $4 + 2 + 2 = 8$.
+
+That is the sum rule, and it is the other half of the pair: alternatives that cannot
+overlap add. Overlap is what breaks it, and overlap is what breaks most counts.
+
+## Ordered first, because ordered is easier
+
+Deal the five cards face up, one at a time, and record the sequence. The first card is any
+of 52, the second any of the 51 that remain, and so on:
+
+$$52 \times 51 \times 50 \times 49 \times 48 = 311875200$$
+
+Every stage offers a number of options that does not depend on which cards came before —
+one fewer each time — so the product rule applies exactly. This is $P(52, 5)$, and note
+what it is: the first five factors of $52!$. Building $52!$ and dividing by $47!$ gives the
+same number after passing through a 68-digit intermediate, which is why the lab computes
+the falling product directly and never calls for a factorial.
+
+## From ordered to unordered, by dividing out what you counted twice
+
+A hand of five cards, held in the hand, has no order. The sequence
+$(A\spadesuit, 7\heartsuit, 7\clubsuit, K\diamondsuit, 2\spadesuit)$ and every
+rearrangement of it are the same hand. How many sequences produced each hand? Exactly
+$5! = 120$, the number of orders five distinct cards can be laid out in.
+
+The word carrying the argument is *exactly*. Every hand is overcounted by the same 120, so
+dividing the whole tally by 120 is legitimate:
+
+$$\binom{52}{5} = \frac{311875200}{120} = 2598960$$
+
+If different hands had been overcounted by different amounts, no single division could
+repair the tally, and that possibility is not hypothetical — it is what goes wrong in the
+worked example below.
+
+## Computing it without ever building a factorial
+
+The lab asks for the multiplicative form, and it is worth watching the intermediate values
+rather than trusting the loop:
+
+```python
+result = 1
+for i in range(5):
+    result = result * (52 - i) // (i + 1)
+    print(f"step {i}: multiply by {52 - i}, divide by {i + 1} -> {result}")
+print("C(52,5) =", result)
+```
+
+The running values are 52, 1326, 22100, 270725 and 2598960 — and each of them is a
+binomial coefficient in its own right, $\binom{52}{1}$ through $\binom{52}{5}$. The
+integer division never loses anything, and the reason is another double count. After the
+multiplication the value is $\binom{52}{i}(52-i)$, which counts the pairs consisting of an
+$i$-card selection together with one further card. Count the same pairs the other way —
+first the $(i+1)$-card selection, then which of its members is the "further" one — and it
+is $\binom{52}{i+1}(i+1)$. The two expressions count one set of objects, so the product is
+divisible by $i+1$ before the division is attempted.
+
+Order the operations the other way, dividing before multiplying, and the exactness
+evaporates: $1 // 1 \times 52$ survives, but the next step would divide 52 by 2 and then
+the one after by 3, and $26 // 3$ discards a remainder that the true value needs.
+
+## Pascal's rule is a question about one card
+
+Fix the ace of spades and sort every 5-card hand into two boxes: the hands holding it and
+the hands not. A hand in the first box is the ace plus four cards from the other 51, so
+there are $\binom{51}{4}$ of them. A hand in the second is five cards from the other 51,
+so $\binom{51}{5}$. The boxes do not overlap and nothing is left over, so by the sum rule
+
+$$\binom{52}{5} = \binom{51}{4} + \binom{51}{5}$$
+
+That is Pascal's rule, derived by asking one question about one card. With small numbers:
+$\binom{5}{2} = 10$ and $\binom{4}{1} + \binom{4}{2} = 4 + 6$. It is also an algorithm —
+each row of the triangle is the pairwise sums of the row above, bordered by ones — and the
+lab's `pascal_row` is required to build rows that way rather than by calling
+`combinations`, because the additive route needs no division and no multiplication at all.
+
+Two more facts come free from the same style of argument. Choosing which 5 cards to take
+is the same act as choosing which 47 to leave, so $\binom{52}{5} = \binom{52}{47}$; the
+lab uses that to make `combinations(40, 20)` do twenty loop steps rather than forty. And
+every subset of an $n$-set has some size, so the sizes partition the subsets and the row
+sums to the $2^n$ subsets an in-or-out decision per element produces: row 4 is
+$1, 4, 6, 4, 1$, which adds to 16.
+
+## The mistake, and why it is tempting
+
+Count the hands containing at least one ace. The natural move is a two-stage product:
+choose the ace, $\binom{4}{1}$ ways, then choose the other four cards from the remaining
+51, $\binom{51}{4}$ ways. That gives $4 \times 249900 = 999600$.
+
+It is wrong, and it is tempting because every word of the description is true: any such
+hand does contain an ace, and does contain four other cards. What the description fails to
+do is name each hand *once*. A hand with two aces arises from two different first
+choices — pick this ace and find that one among the four others, or the reverse — so it is
+counted twice, and no division by a constant can fix a tally whose entries were multiplied
+by different amounts.
+
+```python
+def choose(n, k):
+    if k < 0 or k > n:
+        return 0
+    k = min(k, n - k)
+    result = 1
+    for i in range(k):
+        result = result * (n - i) // (i + 1)
+    return result
+
+naive = choose(4, 1) * choose(51, 4)
+exact = choose(52, 5) - choose(48, 5)
+print("pick an ace, then four more:", naive)
+print("all hands minus the ace-free hands:", exact)
+print("difference:", naive - exact)
+extra = sum((j - 1) * choose(4, j) * choose(48, 5 - j) for j in range(2, 5))
+print("overcount, summed by how many aces the hand holds:", extra)
+```
+
+It prints 999600, then 886656, then 112944 twice. The honest count subtracts the ace-free
+hands from all of them: $2598960 - 1712304 = 886656$. And the discrepancy is not a
+mystery — a hand with $j$ aces is counted $j$ times by the two-stage description, so it
+contributes $j - 1$ too many, and summing that over $j = 2, 3, 4$ gives
+$103776 + 9024 + 144 = 112944$, which is the difference to the digit.
+
+The habit worth forming: after writing a two-stage count, ask what the second stage would
+have to be told in order to reconstruct the first. If a finished object cannot tell you
+which branch it came down, the branches are not counting it once.
+
+## Where these arguments stop
+
+The product rule needs a *constant* number of options per stage, and the lopsided canteen
+above already breaks it. Combinations count selections of **distinct** items with no
+repetition; allowing repeats is a different count, $\binom{n + k - 1}{k}$, and using
+$\binom{n}{k}$ there undercounts badly. Dividing by $k!$ assumes every object is
+overcounted by the same $k!$ — true for orderings of distinct cards, false the moment
+symmetry enters, as it does for beads on a necklace that can be rotated, where the
+overcounts differ between symmetric and asymmetric arrangements and a heavier tool is
+needed.
+
+## What you are about to build
+
+The lab, **Counting from first principles**, forbids `math.comb`, `math.perm` and
+`math.factorial` and asks for the arguments above as code: `factorial` iteratively,
+`permutations` as the falling product, `combinations` multiplicatively with the symmetry
+applied first, `pascal_row` built additively from its predecessor, and
+`vandermonde_holds`, which checks
+
+$$\binom{m+n}{r} = \sum_{k=0}^{r} \binom{m}{k}\binom{n}{r-k}$$
+
+by evaluating both sides. That identity is another one-question argument: to pick $r$
+people from a room holding $m$ mathematicians and $n$ physicists, split the count by how
+many mathematicians you took. With $m = 4$, $n = 5$, $r = 3$ the right-hand side is
+$1 \cdot 10 + 4 \cdot 10 + 6 \cdot 5 + 4 \cdot 1 = 84$, and $\binom{9}{3}$ is 84.
+
+The last function, `catalan`, is $\binom{2n}{n}/(n+1)$, and the triangular numbers
+$\binom{n+1}{2} = 1 + 2 + \dots + n$ that fall out of the same triangle come back in
+Module 13, where they number the diagonals of an infinite grid.
+''',
+            },
+            "quiz": {
+                "title": "Stages, orders and the counts that overlap",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "To count 5-card hands holding at least one ace, someone writes $\\binom{4}{1}\\binom{51}{4} = 999600$. The true count is 886656. What went wrong?",
+                        "opts": [
+                            "The second factor should be $\\binom{48}{4}$, since the other four cards must not be aces",
+                            "A hand holding two aces is produced by two different first choices, so it is tallied twice",
+                            "Nothing is wrong; 886656 is the number of hands holding exactly one ace, rather than at least one",
+                            "The product rule never applies to cards, because the deck shrinks as cards are dealt",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "That change counts the hands with *exactly* one ace, which is a different and smaller quantity — 778320 of them. It removes the double counting by removing the hands that caused it, rather than by counting them once.",
+                            "The description never names a unique first ace, so hands with several are reached by several routes.",
+                            "Hands with exactly one ace number 778320, so 886656 is neither that nor the naive product. It is $\\binom{52}{5} - \\binom{48}{5}$: every hand, less the ace-free ones.",
+                            "Dealing in order is a textbook use of the rule — 52, then 51, then 50 — because the number of remaining cards does not depend on which ones went before. A shrinking pool is fine; a varying branch count is not.",
+                        ],
+                        "why": r'''
+Every word of the two-stage description is true of every hand it produces, and that is
+what makes it convincing. What it fails to do is name each hand once: a hand with two aces
+comes down two branches, one with three comes down three. Summing $(j-1)$ over the hands
+with $j$ aces gives $103776 + 9024 + 144 = 112944$, exactly the gap between 999600 and
+886656. The reliable test is to ask whether a finished object can tell you which branch
+produced it.
+''',
+                    },
+                    {
+                        "q": "In `result = result * (n - i) // (i + 1)`, why is the integer division never lossy?",
+                        "opts": [
+                            "Because Python's `//` rounds towards zero and the error stays below one",
+                            "Because $n - i$ and $i + 1$ are coprime for every $i$ in the loop's range",
+                            "Because $\\binom{n}{i}(n-i)$ and $\\binom{n}{i+1}(i+1)$ count the same pairs, so the product is a multiple of $i+1$",
+                            "Because the multiplication is always performed before the division, and Python's integers never overflow however large the running value grows",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            "`//` discards a remainder rather than keeping an error below one, and a discarded remainder here would be wrong by a factor, not by a rounding. The point is that there is no remainder to discard.",
+                            "They are frequently not coprime: at $n = 52$, $i = 3$ the factors are 49 and 4, and at $i = 1$ they are 51 and 2. Divisibility comes from the running value as a whole, not from the two factors in isolation.",
+                            "One set of objects counted two ways forces the divisibility before any division is attempted.",
+                            "Unbounded integers are why the intermediate value is safe, not why it is divisible. Multiplying first is indeed necessary — divide first and $26 // 3$ throws away part of the answer — but the exactness itself needs the counting argument.",
+                        ],
+                        "why": r'''
+After the multiplication the running value is $\binom{n}{i}(n-i)$, which counts pairs of
+an $i$-subset together with one further element. Count those same pairs by choosing the
+$(i+1)$-subset first and then which member is the extra one, and the tally is
+$\binom{n}{i+1}(i+1)$. One collection, two counts, so the value is divisible by $i+1$
+before `//` runs. Order matters all the same: multiply first, because dividing 1 by 1 then
+26 by 3 loses what the later multiplications would have restored.
+''',
+                    },
+                    {
+                        "q": "Pascal's rule $\\binom{n}{k} = \\binom{n-1}{k-1} + \\binom{n-1}{k}$ comes from a single question. Which one?",
+                        "opts": [
+                            "Whether $k$ lies closer to 0 or to $n$, which decides which of the two symmetric forms to use",
+                            "Whether a chosen element is being counted with order or without it",
+                            "Whether one fixed element is in the selection or out of it, splitting them into two boxes",
+                            "Whether the row above the current one has already been computed additively",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            "That decides which end to start the multiplicative loop from and saves work. It has nothing to do with the identity, which holds whatever the size of $k$ relative to $n$.",
+                            "Order is what separates permutations from combinations, and both sides of this identity are unordered counts. Nothing in the argument mentions arrangements.",
+                            "In or out is exhaustive and non-overlapping, so the sum rule applies with nothing to correct.",
+                            "That is the shape of the algorithm the identity licenses, not the reason the identity is true. The equation holds whether or not anything has been computed, and the additive triangle is a consequence of it.",
+                        ],
+                        "why": r'''
+Fix any one element — the ace of spades will do. The selections containing it are that
+element plus $k-1$ from the remaining $n-1$; those not containing it are $k$ from the
+remaining $n-1$. No selection is in both boxes and none is outside both, so the sum rule
+applies with no correction term. That is also why a triangle row can be built from its
+predecessor by pairwise addition, which is what the lab's `pascal_row` is required to do —
+no multiplication, no division, no factorial.
+''',
+                    },
+                    {
+                        "q": "A canteen has 3 starters; the fish starter may be followed by any of 4 mains and each of the other two by only 2. How many meals, and what does that show?",
+                        "opts": [
+                            "12 meals: the product rule uses the largest branch count available",
+                            "8 meals, by the sum rule — the product rule needs the same number of options at every branch",
+                            "9 meals, taking the average of 4, 2 and 2 as the second factor",
+                            "24 meals, since each starter must be paired with every main and then the restrictions removed",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "Taking the largest branch count would count six meals nobody can order. The product rule is not an approximation to be applied with the best available factor; it is exact when the branches match and inapplicable when they do not.",
+                            "The branches are 4, 2 and 2, and unequal branches are added rather than multiplied.",
+                            "Averaging happens to give a whole number here and would give 8/3 with a different menu, which is a hint that no counting argument supports it. Nothing is being counted by the average of a tree's branch widths.",
+                            "There are only 12 starter-main pairs to begin with, so 24 exceeds even the unrestricted count. Subtracting from a total is a sound technique, but the total has to be a real total.",
+                        ],
+                        "why": r'''
+Draw the tree: one branch of width 4 and two of width 2, so the leaves number
+$4 + 2 + 2 = 8$. The product rule applies when every node at a level has the same number of
+children — the *sets* may differ, as they do when each starter forbids one main and the
+count stays $3 \times 3 = 9$. What it cannot survive is branches of different widths, and
+then the sum rule takes over. Recognising which of the two applies is most of counting.
+''',
+                    },
+                    {
+                        "q": "Why is $\\binom{n}{k} = \\binom{n}{n-k}$, and what does the lab do with it?",
+                        "opts": [
+                            "It follows from each row of the triangle being a palindrome, and it lets `pascal_row` store only half of every row and mirror the rest",
+                            "Choosing the $k$ to take is the same act as choosing the $n-k$ to leave, so `combinations(40, 20)` can loop 20 times rather than 40",
+                            "It holds only when $n$ is even, and the lab uses it to test its own arithmetic",
+                            "It follows from the row summing to $2^n$, and the lab uses it to avoid computing a factorial",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "The palindrome is what the identity produces, not what produces it. Storing half a row would also be a different optimisation from the one the lab performs, which is to shorten the multiplicative loop.",
+                            "Every selection pairs with its complement, and the pairing is one-to-one.",
+                            "It holds for every $n$: $\\binom{5}{2} = \\binom{5}{3} = 10$ with $n$ odd. An identity that failed half the time would be no use in shortening a loop.",
+                            "The row sum counts all the subsets and says nothing about matching one size against another. Avoiding factorials is achieved by the multiplicative loop itself, whatever number of steps it runs for.",
+                        ],
+                        "why": r'''
+Name a selection of $k$ and you have named its complement of $n-k$, and each complement
+comes from one selection, so the two collections are matched one to one and must be
+equally large. No algebra is involved and none is needed. The lab's `combinations` applies
+`k = min(k, n - k)` first, so $\binom{40}{20}$ costs 20 multiply-divide steps and
+$\binom{40}{37}$ costs 3 rather than 37 — the same answer, a third of the arithmetic.
+''',
+                    },
+                ],
+            },
             "lab": {
                 "title": "Counting from first principles",
                 "runtime": "python",
@@ -2288,6 +2921,203 @@ assert catalan(10) == 16796, f"catalan(10) gave {catalan(10)!r}, expected 16796"
                 "Where the characteristic method does not apply, iterate the recurrence, guess the closed form, and prove the guess by induction",
                 "It does not apply to `T(n) = a*T(n/b) + f(n)`, where the argument is divided rather than decremented: that shape is priced by summing the cost of each level, which is the geometric series of Module 12 and the master theorem of the algorithms course",
             ],
+            "read": {
+                "title": "A strip of dominoes, and the sequence that describes itself",
+                "minutes": 16,
+                "body": r'''
+Take a strip of squares two high and $n$ long, and cover it completely with $2 \times 1$
+dominoes laid either upright or flat. How many coverings are there?
+
+For $n = 1$ there is one: a single upright domino. For $n = 2$ there are two — two
+uprights side by side, or two flat dominoes stacked. For $n = 3$ there are three, and for
+$n = 4$ there are five, which you can draw on paper in under a minute. The counts start
+1, 2, 3, 5, and anybody who has met a sequence before has already guessed the next one.
+Guessing is not the interesting part. Deriving it is.
+
+## The leftmost column decides everything
+
+Look only at the leftmost column of the strip. Whatever the covering, that column is
+filled in one of two ways and no others. Either a single upright domino fills it, and what
+remains is a strip of length $n - 1$ covered in every possible way; or two flat dominoes
+have their left halves there, and what remains is a strip of length $n - 2$. The two cases
+cannot both hold of one covering, and no covering escapes them, so Module 7's sum rule
+applies with nothing to correct:
+
+$$t(n) = t(n-1) + t(n-2)$$
+
+The starting values come from the same picture. $t(1) = 1$, and $t(0) = 1$ because there
+is exactly one way to cover a strip of length zero, namely by laying no dominoes. That
+last one is not a convention adopted to make the arithmetic work; it is the empty covering,
+counted the same way the empty product is 1.
+
+```python
+t = [1, 1]
+while len(t) < 11:
+    t.append(t[-1] + t[-2])
+print("tilings of a 2 x n strip, n = 0..10:", t)
+print("t(10) =", t[10])
+```
+
+It prints the list `[1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]` and then `t(10) = 89`. Eighty-
+nine coverings of a strip ten squares long, obtained without drawing one of them.
+
+## The recurrence on its own determines nothing
+
+Start the same rule at $a_0 = 2$, $a_1 = 1$ and it produces 2, 1, 3, 4, 7, 11, 18, 29, 47,
+76, 123 — the Lucas numbers, a different sequence obeying the identical rule. A recurrence
+that reaches back $d$ steps needs $d$ initial conditions before it names a sequence at all;
+with fewer it names a family. That is worth holding on to, because the algebra below
+produces a family first and the initial conditions are what collapse it to one member.
+
+## Why $r^n$ is the shape worth trying
+
+The rule says that each term is a fixed linear combination of the terms before it, and
+*fixed* is the operative word: the same coefficients at every $n$. A geometric sequence
+$a_n = r^n$ is the one shape whose ratio between consecutive terms is likewise the same at
+every $n$, so it is the shape with a chance of satisfying the whole infinite list of
+equations at once. Substitute it and see what the demand becomes:
+
+$$r^n = r^{n-1} + r^{n-2}$$
+
+Divide by $r^{n-2}$, which is legitimate for any $r \neq 0$ — and $r = 0$ gives the
+all-zero sequence, a solution nobody wants:
+
+$$r^2 = r + 1, \qquad r = \frac{1 \pm \sqrt{5}}{2}$$
+
+The infinitely many equations have become one quadratic. That collapse is the entire
+technique, and it happened because the coefficients did not vary with $n$.
+
+Call the roots $\varphi = 1.6180339\ldots$ and $\psi = -0.6180339\ldots$. Both
+$\varphi^n$ and $\psi^n$ satisfy the recurrence, and so does every combination
+$\alpha\varphi^n + \beta\psi^n$: substitute it, collect the $\alpha$ terms and the $\beta$
+terms separately, and each group vanishes because each root satisfies the quadratic. That
+is what *linear* buys, and it is why two roots give a two-parameter family exactly
+matching the two initial conditions waiting to be met.
+
+## Fitting the constants, with real numbers
+
+Take the Fibonacci start $F(0) = 0$, $F(1) = 1$, which is the same sequence as the
+tilings shifted by one place, since $t(n) = F(n+1)$. Then $\alpha + \beta = 0$ and
+$\alpha\varphi + \beta\psi = 1$. The first gives $\beta = -\alpha$, and substituting into
+the second gives $\alpha(\varphi - \psi) = 1$. The difference of the roots is
+$\sqrt{5}$, so $\alpha = 1/\sqrt{5}$ and
+
+$$F(n) = \frac{\varphi^n - \psi^n}{\sqrt{5}}$$
+
+Check it at $n = 11$, where the tiling count says the answer is 89. $\varphi^{11}/\sqrt 5$
+is $88.99775\ldots$, and $\psi^{11}/\sqrt 5$ is about $-0.00100$, so the difference is
+$89.000$ to three places. Because $|\psi| < 1$ the second term shrinks towards nothing, so
+$F(n)$ is the nearest integer to $\varphi^n/\sqrt 5$ for every $n$ — an irrational
+expression that is an integer every time, which it must be, since the two roots are
+conjugates and their irrational parts cancel.
+
+## The mistake, and why it is tempting
+
+The formula is exact, so evaluate it in floating point and skip the loop. That reasoning is
+half right, which is what makes it dangerous.
+
+```python
+from math import sqrt
+
+phi = (1 + sqrt(5)) / 2
+psi = (1 - sqrt(5)) / 2
+
+fib = [0, 1]
+while len(fib) < 80:
+    fib.append(fib[-1] + fib[-2])
+
+for n in range(80):
+    guess = round((phi ** n - psi ** n) / sqrt(5))
+    if guess != fib[n]:
+        print("first disagreement at n =", n)
+        print("integer recurrence:", fib[n])
+        print("closed form in floats:", guess)
+        break
+```
+
+The first disagreement is at $n = 71$: the recurrence gives 308061521170129 and the
+closed form rounds to 308061521170130, one too many. Note where the failure is *not*. A
+double holds integers exactly up to $2^{53} \approx 9.0 \times 10^{15}$, and $F(71)$ is
+about $3.1 \times 10^{14}$ — comfortably inside that, and $F(n)$ does not reach the limit
+until $n = 79$. The damage is done earlier and elsewhere: $\varphi$ itself is stored with a
+relative error near $1.1 \times 10^{-16}$, and raising it to the 71st power multiplies that
+relative error by about 71, giving roughly $8 \times 10^{-15}$. Against a value of
+$3.1 \times 10^{14}$ that is an absolute error of about 2, which is more than enough to
+move the rounded result.
+
+The mathematics is exact and the arithmetic is not, and the two claims live in different
+places. Exactness of a formula never promises exactness of an evaluation of it.
+
+## A repeated root, and the term that has to be invented
+
+Try $a_n = 4a_{n-1} - 4a_{n-2}$. The characteristic equation is $r^2 - 4r + 4 = 0$, which
+is $(r-2)^2$, so 2 is a root twice over and there is only one geometric sequence to be had.
+Writing $c_1 2^n + c_2 2^n$ achieves nothing: it is $(c_1 + c_2)2^n$, one constant wearing
+two names. With $a_0 = 1$ and $a_1 = 6$ it would need $C = 1$ and $2C = 6$ at the same
+time.
+
+A second, independent solution has to come from somewhere, and $n \cdot 2^n$ is it.
+Substitute and watch it work:
+
+$$4(n-1)2^{n-1} - 4(n-2)2^{n-2} = 2(n-1)2^{n} - (n-2)2^{n} = \bigl(2n - 2 - n + 2\bigr)2^{n} = n2^{n}$$
+
+Now fit: $c_1 = 1$ from $a_0$, and $2(c_1 + c_2) = 6$ from $a_1$ gives $c_2 = 2$, so
+$a_n = (1 + 2n)2^n$.
+
+```python
+a = [1, 6]
+while len(a) < 12:
+    a.append(4 * a[-1] - 4 * a[-2])
+closed = [(1 + 2 * n) * 2 ** n for n in range(12)]
+print(a == closed, closed[:6])
+```
+
+It prints `True [1, 6, 20, 56, 144, 352]`. The extra factor of $n$ is not a trick pulled
+out of the air — a degree-$d$ recurrence has $d$ initial conditions to meet, so it needs
+$d$ independent building blocks, and a repeated root supplies one where two were required.
+
+## When there is no characteristic equation at all
+
+The Towers of Hanoi puzzle satisfies $T(n) = 2T(n-1) + 1$ with $T(0) = 0$. The $+1$ is not
+a multiple of an earlier term, so the substitution above has nothing to collapse. Iterate
+instead: 1, 3, 7, 15, 31. The guess is $2^n - 1$, and the guess is all it is — the dots in
+an unrolled recurrence are an appeal to a pattern the reader is trusted to continue.
+Module 6's induction is what converts it into a theorem: $T(0) = 0 = 2^0 - 1$, and
+$T(k+1) = 2(2^k - 1) + 1 = 2^{k+1} - 1$. With 64 discs that is 18446744073709551615 moves,
+which is the point of the legend.
+
+## Where the method stops
+
+Four boundaries, and three of them are visible inside this course.
+
+Non-linearity kills it outright: substituting $r^n$ into $a_n = a_{n-1}^2$ gives
+$r^n = r^{2n-2}$, an equation that constrains $n$ rather than $r$.
+
+Coefficients that vary with $n$ kill it too. The capstone's `derangements` obeys
+$D(n) = (n-1)\bigl(D(n-1) + D(n-2)\bigr)$, whose leading coefficient changes at every
+step; its values run 1, 0, 1, 2, 9, 44, 265, 1854, and its closed form,
+$n!\sum_{k=0}^{n}(-1)^k/k!$, is not produced by any characteristic polynomial. It gives
+$D(4)/4! = 0.375$ against $1/e = 0.36788\ldots$, and the ratio keeps closing.
+
+A divided argument kills it as well. $T(n) = aT(n/b) + f(n)$ decrements nothing, so there
+is no power of $r$ to cancel; that shape is priced by summing the cost of each level, which
+is the geometric series of Module 12 and the master theorem of the algorithms course.
+
+And a recurrence in two indices is a table rather than a polynomial. The capstone's
+`stirling_second` is $S(n,k) = k\,S(n-1,k) + S(n-1,k-1)$ — filled in row by row, with
+$S(4,2) = 7$ — and `bell(n)` sums a row of it to give 1, 1, 2, 5, 15, 52, 203.
+
+## What this module asks of you
+
+There is no lab here; the work is on paper and in the quiz, **From a recurrence to a
+formula**, which walks the four moves above: read off the characteristic equation, handle
+a repeated root, iterate when the shape does not fit, and remember that iteration is a
+discovery and induction is the proof. The capstone toolkit then asks for three recurrences
+in code — `stirling_second`, `bell` and `derangements` — none of which the characteristic
+method solves, which is the honest ratio between the recurrences that have closed forms and
+the ones you compute.
+''',
+            },
             "quiz": {
                 "title": "From a recurrence to a formula",
                 "minutes": 7,
@@ -2387,6 +3217,313 @@ mathematics.
                 "The fundamental theorem of arithmetic: a unique multiset of prime factors",
                 "Fast modular exponentiation: O(log e) multiplications, never a huge intermediate — Module 12 defines that notation and puts the constant and the threshold on this very claim",
             ],
+            "read": {
+                "title": "Two cogs, and the remainder that will not go away",
+                "minutes": 17,
+                "body": r'''
+Mesh two cogs, one with 240 teeth and one with 46. Paint a mark on one tooth of each, line
+the marks up, and turn. How far do you have to turn before the two marks meet again?
+
+The marks meet when the number of teeth that have passed is a multiple of 240 and of 46 at
+once, so the answer is the least common multiple. The whole of this module is packed into
+the fact that you cannot compute that by inspection, and that a procedure older than
+algebra computes it in five lines.
+
+## Euclid, and why swapping in a remainder loses nothing
+
+Divide the larger by the smaller and keep the remainder:
+
+```python
+a, b = 240, 46
+while b:
+    q, r = divmod(a, b)
+    print(f"{a} = {q} * {b} + {r}")
+    a, b = b, r
+print("gcd =", a)
+```
+
+The five lines it prints are $240 = 5 \cdot 46 + 10$, then $46 = 4 \cdot 10 + 6$, then
+$10 = 1 \cdot 6 + 4$, then $6 = 1 \cdot 4 + 2$, then $4 = 2 \cdot 2 + 0$, and finally
+`gcd = 2`. So the marks meet after $240 \cdot 46 / 2 = 5520$ teeth, and not before.
+
+Why is the answer at the bottom the answer to the question at the top? Take any $d$
+dividing both 240 and 46. Since $10 = 240 - 5 \cdot 46$, that same $d$ divides 10. Run it
+the other way: any $d$ dividing 46 and 10 divides $5 \cdot 46 + 10 = 240$. So the pair
+$(240, 46)$ and the pair $(46, 10)$ have exactly the same set of common divisors — not
+merely the same largest one, the same set — and therefore the same greatest element.
+Each line of the trace replaces a pair by an easier pair with nothing lost, which is a
+stronger statement than "the algorithm works" and is the reason it does.
+
+It also stops. The remainders are non-negative and strictly decreasing, and a strictly
+decreasing sequence of non-negative integers cannot run forever. Module 6's induction is
+the same observation in its formal dress.
+
+## Running the trace backwards gives an identity for free
+
+Read the five lines from the bottom up, substituting each remainder by the line that
+produced it:
+
+$$2 = 6 - 1\cdot 4 = 6 - (10 - 6) = 2\cdot 6 - 10 = 2(46 - 4\cdot 10) - 10 = 2\cdot 46 - 9\cdot 10$$
+
+and one more step, using $10 = 240 - 5 \cdot 46$:
+
+$$2 = 2\cdot 46 - 9(240 - 5\cdot 46) = 47\cdot 46 - 9\cdot 240$$
+
+Check the arithmetic: $47 \cdot 46 = 2162$ and $9 \cdot 240 = 2160$. The gcd of two numbers
+is always expressible as an integer combination of them, and the trace exhibits the
+combination rather than promising one. That is Bezout's identity, and `extended_gcd(240,
+46)` in the lab returns exactly $(2, -9, 47)$.
+
+## The identity is what an inverse is made of
+
+Under a modulus $m$, dividing by $a$ means multiplying by some $x$ with $ax \equiv 1$. Run
+the extended algorithm on $a$ and $m$: it returns $x$ and $y$ with $ax + my = g$. If
+$g = 1$ then reading that equation modulo $m$ makes the $my$ term vanish and leaves
+$ax \equiv 1$ — the inverse, already computed.
+
+The converse closes the case. If some $x$ has $ax \equiv 1 \pmod m$, then $ax - 1$ is a
+multiple of $m$, so $ax - km = 1$ for some $k$, and any common divisor of $a$ and $m$
+divides the left-hand side and therefore divides 1. So $a$ is invertible modulo $m$ exactly
+when $\gcd(a, m) = 1$, with no case left over. Concretely, $3^{-1} \bmod 11$ is 4, because
+$3 \cdot 4 = 12 = 11 + 1$; and $6^{-1} \bmod 9$ does not exist, which the lab's
+`mod_inverse(6, 9)` reports as a `ValueError` rather than as a wrong number.
+
+## The mistake, and why it is tempting
+
+Cancelling a common factor from both sides of a congruence.
+
+```python
+print([(6 * x) % 9 for x in range(9)])
+print(6 * 2 % 9, 6 * 5 % 9)
+```
+
+The first line prints `[0, 6, 3, 0, 6, 3, 0, 6, 3]` and the second prints `3 3`. Multiplying
+by 6 modulo 9 can only ever land on 0, 6 or 3 — the multiples of $\gcd(6, 9) = 3$ — so 1 is
+out of reach and there is no inverse to cancel with. And the collision is explicit:
+$6 \cdot 2 \equiv 6 \cdot 5 \pmod 9$ while $2 \not\equiv 5$.
+
+Cancellation is tempting because it is the one algebraic reflex that transfers almost
+everywhere. It is valid over the rationals, valid over the reals, and valid modulo a prime,
+which covers every congruence most people meet before this one. The correct rule keeps a
+correction term: from $ac \equiv bc \pmod m$ you may conclude
+$a \equiv b \pmod{m/\gcd(c, m)}$. Here that is $2 \equiv 5 \pmod 3$, which is true, and the
+weakening from modulus 9 to modulus 3 is exactly the information the illegal cancellation
+would have invented.
+
+## The sieve, and the two places it saves work
+
+To list the primes up to a limit, write the numbers down and cross out the multiples of
+each prime as you meet it. Two savings turn that into the lab's `sieve`.
+
+Crossing out the multiples of $p$ can start at $p^2$. Any smaller multiple is $kp$ with
+$k < p$, so it has a prime factor below $p$, so it was crossed out when that smaller prime
+was processed. Running `sieve(30)`, the multiples of 5 begin at 25: the numbers 10, 15 and
+20 have already gone, struck out by 2 and by 3.
+
+And the outer loop stops once $p^2$ exceeds the limit. A composite $n$ has a factor no
+larger than $\sqrt{n}$ — if both factors exceeded it, their product would exceed $n$ — so
+every composite below the limit has been struck by a prime below $\sqrt{\text{limit}}$.
+For a limit of 30 that means the loop finishes after 5, and what remains uncrossed is
+$[2, 3, 5, 7, 11, 13, 17, 19, 23, 29]$.
+
+## Exponentiation that does not explode
+
+The lab closes on textbook RSA with $p = 61$, $q = 53$, so $n = 3233$, public exponent
+$e = 17$, and private exponent $d = $ `mod_inverse(17, 60 * 52)`, which is 2753. Encrypting
+the message 65 means computing $65^{17} \bmod 3233$. Computed the direct way, $65^{17}$ is
+6599743590836592050933837890625 — 31 digits — and every one of those digits is thrown away
+by the final remainder.
+
+Two ideas remove them. Reduce modulo 3233 after every multiplication, so no intermediate
+ever exceeds $3233^2$; the remainder of a product depends only on the remainders of its
+factors, so nothing is lost. And use the binary expansion of the exponent: $17$ is
+`0b10001`, so $x^{17} = x^{16} \cdot x$, and $x^{16}$ is four squarings.
+
+```python
+def mod_pow(base, exponent, modulus):
+    result = 1 % modulus
+    base %= modulus
+    steps = 0
+    while exponent:
+        if exponent & 1:
+            result = result * base % modulus
+            steps += 1
+        exponent >>= 1
+        if exponent:
+            base = base * base % modulus
+            steps += 1
+    return result, steps
+
+n, e, d = 3233, 17, 2753
+cipher, encrypt_steps = mod_pow(65, e, n)
+plain, decrypt_steps = mod_pow(cipher, d, n)
+print("cipher", cipher, "in", encrypt_steps, "multiplications")
+print("plain", plain, "in", decrypt_steps, "multiplications")
+```
+
+It prints `cipher 2790 in 6 multiplications` and `plain 65 in 16 multiplications`. The
+message comes back. Sixteen multiplications for an exponent of 2753, against 2752 for the
+repeated-multiplication route, and the ratio is what matters: the count grows with the
+*number of bits* in the exponent, not with the exponent. A 2048-bit exponent costs a few
+thousand multiplications, and the naive route costs a number with 617 digits.
+
+## Where all of this stops holding
+
+Inverses need coprimality, and `mod_inverse` raising on $(6, 9)$ is the module keeping its
+own rule. The lab also pins one boundary case that looks like a bug and is not:
+`mod_pow(x, 0, 1)` is 0, because every integer is congruent to 0 modulo 1, and the code
+gets it right by writing `1 % modulus` rather than `1`.
+
+Fermat's little theorem — $a^{p-1} \equiv 1 \pmod p$ — needs the modulus to be prime, and
+the tempting move is to run it backwards as a primality test. It does not close: 561 is
+$3 \cdot 11 \cdot 17$, and $2^{560} \equiv 1 \pmod{561}$ all the same. Numbers that fool
+the test for every coprime base are called Carmichael numbers, and passing a Fermat test is
+evidence rather than proof.
+
+Finally, nothing here says factoring is hard. The lab's `prime_factors` divides out small
+primes and is entirely adequate for the numbers in this course; it is hopeless on a
+617-digit modulus, and RSA rests on the belief that the gap between "adequate" and
+"hopeless" cannot be closed. That belief is unproven, and Module 12's notation will let you
+state precisely what is being assumed about it.
+
+## What you are about to build
+
+The lab, **Euclid, inverses, sieves and fast powers**, is the six routines above: `gcd` by
+the swap that loses nothing, `extended_gcd` carrying the Bezout coefficients along instead
+of recovering them by back-substitution, `mod_inverse` raising when the gcd is not 1,
+`sieve` crossing from $p^2$ and stopping when $p^2$ passes the limit, `mod_pow` by
+square-and-multiply with a reduction at each step, and `prime_factors` returning the
+ascending factorisation with multiplicity, so that `prime_factors(360)` is
+$[2, 2, 2, 3, 3, 5]$ — the unique multiset that the fundamental theorem of arithmetic
+promises and that every argument above quietly leaned on.
+''',
+            },
+            "quiz": {
+                "title": "Divisors, inverses and what a modulus permits",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "$6 \\cdot 2 \\equiv 6 \\cdot 5 \\pmod 9$, yet $2 \\not\\equiv 5 \\pmod 9$. What is the correct conclusion from $ac \\equiv bc \\pmod m$?",
+                        "opts": [
+                            "$a \\equiv b \\pmod m$, provided $c$ is not zero, exactly as over the rationals",
+                            "$a \\equiv b \\pmod{m / \\gcd(c, m)}$, so here the modulus drops from 9 to 3",
+                            "Nothing at all can be salvaged unless $m$ happens to be prime",
+                            "$a \\equiv b \\pmod{mc}$, since multiplying through by $c$ scaled the modulus up",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "A non-zero $c$ is not enough; 6 is non-zero and still uninvertible modulo 9. What cancellation needs is an inverse for $c$, and that needs $\\gcd(c, m) = 1$.",
+                            "Divide the modulus by the part of it that $c$ shares, and the cancellation becomes legal.",
+                            "A prime modulus makes every non-zero $c$ invertible, so cancellation is unrestricted there — but the general rule holds for any modulus and salvages a genuine conclusion, here $2 \\equiv 5 \\pmod 3$.",
+                            "The modulus never grows. A congruence modulo 9 says something about multiples of 9, and no manipulation can turn it into a claim about multiples of 54, which would be strictly more information than was supplied.",
+                        ],
+                        "why": r'''
+Multiplying by 6 modulo 9 lands only on 0, 3 and 6 — the multiples of $\gcd(6, 9) = 3$ — so
+6 has no inverse and cancelling it is not a legal move. What survives is
+$a \equiv b \pmod{m/\gcd(c, m)}$, which here is $2 \equiv 5 \pmod 3$, and that is true.
+The reflex is tempting because cancellation is valid over the rationals, over the reals,
+and modulo any prime, which is every setting most people have met. The lost precision —
+modulus 9 weakened to modulus 3 — is exactly what the illegal step would have invented.
+''',
+                    },
+                    {
+                        "q": "Euclid replaces $\\gcd(240, 46)$ by $\\gcd(46, 10)$. What makes that replacement safe?",
+                        "opts": [
+                            "The two pairs have the same set of common divisors, since each number is an integer combination of the other pair",
+                            "The remainder is smaller, and any procedure whose inputs shrink returns a correct answer",
+                            "10 divides both 240 and 46, so it is already a common divisor of the original pair",
+                            "The greatest common divisor of two numbers is left unchanged by subtraction, and division with remainder is repeated subtraction",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "Divisor sets are preserved in both directions, so the greatest element is preserved too.",
+                            "Shrinking inputs give termination and nothing else. A procedure that replaced the pair by $(1, 1)$ would shrink beautifully and return the wrong answer every time.",
+                            "10 divides neither: $240 = 24 \\cdot 10$ but $46 = 4 \\cdot 10 + 6$. The remainder is not claimed to be a common divisor — it is the second entry of an easier pair with the same answer.",
+                            "Subtraction does preserve the gcd, and repeated subtraction is what division with remainder compresses. But naming the operation is not the argument; the argument is that divisibility survives it in both directions.",
+                        ],
+                        "why": r'''
+Since $10 = 240 - 5 \cdot 46$, any $d$ dividing 240 and 46 divides 10. Since
+$240 = 5 \cdot 46 + 10$, any $d$ dividing 46 and 10 divides 240. The two pairs therefore
+share not merely their largest common divisor but their entire set of common divisors, so
+the greatest element of that set is the same for both. That is a stronger claim than the
+algorithm needs and is the reason it is correct; the strictly decreasing remainders are a
+separate argument, and they supply termination rather than correctness.
+''',
+                    },
+                    {
+                        "q": "Why can the sieve start crossing out multiples of $p$ at $p^2$ rather than at $2p$?",
+                        "opts": [
+                            "Because multiples below $p^2$ are rare enough that missing them changes nothing",
+                            "Because a multiple $kp$ with $k < p$ has a prime factor below $p$ and was crossed out already",
+                            "Because $p^2$ is the first multiple of $p$ that is itself composite, all the earlier multiples being prime",
+                            "Because crossing out below $p^2$ would remove $p$ itself, which must survive as a prime",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "Nothing is being approximated. Every composite still gets crossed out exactly as before; the saving is that some of them were crossed out earlier, by a smaller prime.",
+                            "Its smaller prime factor did the work when that smaller prime was processed.",
+                            "$2p$ is composite for every prime $p$, so this is false at the first multiple it describes. What is special about $p^2$ is that it is the smallest multiple of $p$ with no factor below $p$.",
+                            "Crossing conventionally begins at $2p$, which never touches $p$ itself, so the starting point was never in danger of removing it. Starting at $p^2$ is a saving, not a rescue.",
+                        ],
+                        "why": r'''
+Write a multiple of $p$ as $kp$. If $k < p$ then $k$ has a prime factor smaller than $p$,
+so $kp$ was struck when that smaller prime was processed. In `sieve(30)` the multiples of 5
+begin at 25, because 10, 15 and 20 fell to 2 and 3. The same reasoning bounds the outer
+loop: a composite $n$ has a factor no larger than $\sqrt{n}$, so once $p^2$ passes the
+limit every composite has already been struck and the survivors are the primes.
+''',
+                    },
+                    {
+                        "q": "What connects Bezout's identity to the existence of a modular inverse?",
+                        "opts": [
+                            "Nothing directly; the inverse is found by trying every residue from 1 to $m-1$ in turn",
+                            "$ax + my = 1$ read modulo $m$ leaves $ax \\equiv 1$, so $x$ is the inverse whenever the gcd is 1",
+                            "Bezout supplies the modulus $m$, and the inverse is then whichever coefficient turns out to be positive",
+                            "It guarantees $a$ and $m$ are coprime, which is what makes every extended-gcd run terminate",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "Exhaustive search does find it and is what the gcd is there to replace — it costs $m$ steps against Euclid's few dozen, and it also gives no reason for the answer to exist.",
+                            "The $my$ term vanishes modulo $m$, leaving the defining equation of an inverse.",
+                            "The modulus is an input, not something Bezout produces, and the sign of a coefficient decides nothing — a negative $x$ is corrected by taking $x \\bmod m$ at the end.",
+                            "Coprimality is a property of the inputs that Bezout detects, never one it guarantees. Termination comes from the strictly decreasing remainders and holds whatever the gcd turns out to be.",
+                        ],
+                        "why": r'''
+The extended algorithm returns $x$ and $y$ with $ax + my = g$. When $g = 1$, reading that
+equation modulo $m$ annihilates $my$ and leaves $ax \equiv 1$ — the inverse, already
+computed, at the price of one Euclid run. The converse settles the other direction: if
+$ax \equiv 1 \pmod m$ then $ax - km = 1$, and every common divisor of $a$ and $m$ divides
+1, forcing the gcd to be 1. So invertibility and coprimality are the same condition, which
+is why `mod_inverse(6, 9)` raises rather than returning something plausible.
+''',
+                    },
+                    {
+                        "q": "Square-and-multiply computed $65^{2753} \\bmod 3233$ in 16 multiplications. What is doing the work?",
+                        "opts": [
+                            "Reducing at each step, which lowers the number of multiplications needed",
+                            "The exponent's binary expansion: the count follows the bit length, not the exponent",
+                            "The modulus being a product of two primes, which lets the work be split between them",
+                            "Python's unbounded integers, which make the direct computation of $65^{2753}$ equally fast",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "Reduction keeps every intermediate below $3233^2$, which is essential and is a separate saving — the multiplications stay cheap. Their *number* is unchanged by it.",
+                            "Twelve bits give eleven squarings and five multiplies, whatever the exponent's size.",
+                            "Splitting the work across the two prime factors is a real optimisation and a different one, needing the factorisation of the modulus — which is precisely what the holder of a public key does not have.",
+                            "Unbounded integers make the direct computation possible rather than fast. $65^{2753}$ has over 4900 digits, and forming it costs thousands of multiplications on numbers of that size.",
+                        ],
+                        "why": r'''
+2753 is twelve bits long, so the loop squares eleven times and multiplies in the running
+result once per set bit — five of them — for sixteen multiplications in total against 2752
+for the repeated-multiplication route. The count grows with the number of bits, so a
+2048-bit exponent costs a few thousand steps. Reduction at every step is the second,
+independent saving: it keeps each of those multiplications between numbers below the
+modulus rather than letting a 4900-digit intermediate form, and it is legitimate because
+the remainder of a product depends only on the remainders of its factors.
+''',
+                    },
+                ],
+            },
             "lab": {
                 "title": "Euclid, inverses, sieves and fast powers",
                 "runtime": "python",
@@ -2683,6 +3820,344 @@ for _message in [0, 1, 42, 65, 3232]:
                 "Warshall's algorithm: O(n^3) with the intermediate vertex k on the outside — three nested loops, so the innermost line runs exactly n^3 times, which Module 12 turns from a notation into a count",
                 "A graph is bipartite exactly when it has no odd cycle — decided by two-colouring",
             ],
+            "read": {
+                "title": "Four cities, and the question the timetable does not answer",
+                "minutes": 17,
+                "body": r'''
+A small airline publishes four direct flights: Aberdeen to Bristol, Bristol to Dundee,
+Dundee to Cardiff, and Cardiff to Bristol. A passenger in Aberdeen asks whether she can get
+to Cardiff. The timetable does not say. It answers a different question — *is there a
+direct flight* — and she is asking *is there any route at all*.
+
+Both questions are about the same object. The timetable is a set of ordered pairs of
+cities, and that is the whole of what a **relation** is: a subset of $S \times S$, with no
+further structure demanded or implied. The route question asks for a different subset of
+the same $S \times S$, and the rest of this module is about getting from the first to the
+second.
+
+## The properties are quantified sentences, not adjectives
+
+Module 2 gave you the vocabulary, so the definitions can be written down rather than
+described. Over a ground set $S$, a relation $R$ is
+
+reflexive when $\forall x\, R(x,x)$; symmetric when
+$\forall x\,\forall y\,\bigl(R(x,y) \to R(y,x)\bigr)$; antisymmetric when
+$\forall x\,\forall y\,\bigl(R(x,y) \wedge R(y,x) \to x = y\bigr)$; and transitive when
+$\forall x\,\forall y\,\forall z\,\bigl(R(x,y) \wedge R(y,z) \to R(x,z)\bigr)$.
+
+Every one of them is a claim about *all* of $S$, and that is the detail the next section
+turns on. The flight relation above is none of the four: no city has a flight to itself,
+Aberdeen to Bristol has no return, and Aberdeen reaches Cardiff by no direct flight while
+reaching it by two hops.
+
+A relation with all of reflexive, symmetric and transitive is an **equivalence**, and it
+carves $S$ into disjoint classes — "reachable from" will be one once the flights are made
+two-way, and the components of the lab's `two_colouring` are exactly those classes.
+
+## The mistake, and why it is tempting
+
+Here is an argument that symmetry and transitivity together force reflexivity. Take any
+$x$. Since $R$ is symmetric, from $R(x,y)$ we get $R(y,x)$; since it is transitive,
+$R(x,y)$ and $R(y,x)$ give $R(x,x)$. Reflexivity, apparently, for free.
+
+Every step in that argument is valid, which is precisely why it is convincing. What is
+wrong is the very first sentence: it says "take any $x$" and then immediately helps itself
+to a $y$ with $R(x,y)$. Nothing supplies that $y$. The argument establishes $R(x,x)$ for
+every $x$ that is related to *something*, and reflexivity is a claim about every $x$
+whatsoever.
+
+```python
+GROUND = [1, 2, 3]
+R = {(1, 1), (1, 2), (2, 1), (2, 2)}
+symmetric = all((b, a) in R for (a, b) in R)
+transitive = all((a, d) in R for (a, b) in R for (c, d) in R if b == c)
+reflexive = all((x, x) in R for x in GROUND)
+print("symmetric", symmetric, "transitive", transitive, "reflexive", reflexive)
+print("missing:", [(x, x) for x in GROUND if (x, x) not in R])
+```
+
+It prints `symmetric True transitive True reflexive False`, and then `missing: [(3, 3)]`.
+Element 3 is related to nothing at all, so the argument never reaches it, and one isolated
+element is enough to sink the claim. This is Module 2's lesson in a new costume: a
+quantifier ranges over the domain that was declared, including the parts of it nobody
+mentioned.
+
+It also explains why the lab passes `elements` separately from `pairs`. A relation given
+only by its pairs cannot know that 3 exists, so `is_reflexive` would report `True` on a
+ground set it had never been told about.
+
+## Reachability is transitivity, added in
+
+The passenger's question asks for the smallest transitive relation containing the
+timetable — smallest, because adding routes nobody can fly would answer a different
+question. That such a thing exists is worth a sentence: the intersection of any collection
+of transitive relations is transitive, and $S \times S$ is transitive and contains $R$, so
+the intersection of all transitive relations containing $R$ is itself one, and it is
+contained in every other. The **transitive closure** is that intersection, and it is unique.
+
+The direct way to build it is to apply the rule and see what appears. Do that once, to the
+pairs originally given:
+
+```python
+FLIGHTS = {(0, 1), (1, 3), (3, 2), (2, 1)}
+one_round = FLIGHTS | {(a, d) for (a, b) in FLIGHTS for (c, d) in FLIGHTS if b == c}
+rounds, current = 0, set(FLIGHTS)
+while True:
+    grown = current | {(a, d) for (a, b) in current for (c, d) in current if b == c}
+    rounds += 1
+    if grown == current:
+        break
+    current = grown
+print("one round gives", len(one_round), "pairs")
+print("the fixed point gives", len(current), "pairs, after", rounds, "rounds")
+print("missing after one round:", sorted(current - one_round))
+```
+
+One round gives 8 pairs; the answer has 12. The four it misses are $(0,2)$ — Aberdeen to
+Cardiff, the passenger's own question, which needs three hops — and $(1,1)$, $(2,2)$,
+$(3,3)$, the self-loops that exist because Bristol, Dundee and Cardiff sit on a cycle and
+each can be left and returned to. The loop reports three rounds, the third of which changed
+nothing and served to prove there was nothing left to change.
+
+That is the honest way to say what goes wrong with applying the rule once: a two-hop route
+built by the rule is itself a pair, and the rule has to be offered the chance to build on
+it. Iterating to a fixed point is correct, and its cost is a number of rounds nobody knew
+in advance.
+
+## Warshall: one pass, because of the order
+
+Warshall's algorithm reaches the same fixed point in a single sweep, and the reason is an
+ordering choice rather than a trick. Number the cities $0$ to $n-1$ and define the
+invariant: after the outer loop has finished with $k$, the matrix entry $(i, j)$ is true
+exactly when there is a route from $i$ to $j$ whose **intermediate** stops all lie in
+$\{0, \dots, k\}$.
+
+Induction on $k$, in Module 6's pattern. Before the loop starts the only routes with no
+intermediate stops at all are the direct flights, which is the matrix as given. Now suppose
+the invariant holds after $k-1$ and consider a route from $i$ to $j$ whose intermediates
+lie in $\{0, \dots, k\}$. Either it never visits $k$, in which case its intermediates lie in
+$\{0, \dots, k-1\}$ and the entry is already true; or it visits $k$, and it may be assumed
+to visit it once, since a second visit encloses a loop that can be cut out. Then the route
+splits at $k$ into a leg $i \to k$ and a leg $k \to j$, each with intermediates in
+$\{0, \dots, k-1\}$, so both are already recorded, and the $k$-th pass sets $(i, j)$ from
+them. When $k$ reaches $n-1$ the permitted intermediates are every city, and the invariant
+says the matrix is the closure.
+
+```python
+CITIES = ["Aberdeen", "Bristol", "Cardiff", "Dundee"]
+FLIGHTS = [(0, 1), (1, 3), (3, 2), (2, 1)]
+
+reach = [[False] * 4 for _ in range(4)]
+for i, j in FLIGHTS:
+    reach[i][j] = True
+
+for k in range(4):
+    added = []
+    for i in range(4):
+        if reach[i][k]:
+            for j in range(4):
+                if reach[k][j] and not reach[i][j]:
+                    reach[i][j] = True
+                    added.append(CITIES[i] + " to " + CITIES[j])
+    print("via", CITIES[k] + ":", added)
+print("pairs in the closure:", sum(row.count(True) for row in reach))
+```
+
+Allowing Aberdeen as an intermediate adds nothing, since no flight lands there. Bristol
+adds Aberdeen to Dundee and Cardiff to Dundee. Cardiff adds Dundee to Bristol and Dundee to
+Dundee. Dundee, last, adds four more, among them Aberdeen to Cardiff. Twelve pairs, one
+sweep.
+
+Watch what happened at the third step: Dundee to Dundee was added using Cardiff as an
+intermediate, and Cardiff to Dundee had been added one step earlier. The passes are not
+independent — each one is entitled to the results of the previous ones, and that
+entitlement is what the invariant licenses. Move $k$ from the outermost loop to the
+innermost and the invariant has nothing to say; on the three-city cycle
+$1 \to 3 \to 2 \to 1$ that variant finishes without recording that Bristol is reachable
+from Bristol, and a second pass is needed to repair it.
+
+The inner line runs $n^3$ times exactly — 64 times for these four cities, whatever the
+flights are — because none of the three loops depends on the data. Module 12 turns that
+count into the notation the rest of the degree writes it in.
+
+## Colouring, and the cycles that forbid it
+
+Make the flights two-way and ask a different question: can the cities be split into two
+groups so that every flight crosses between them? Try to build the split greedily. Put the
+first city in group 0, everything it connects to in group 1, everything those connect to in
+group 0, and continue.
+
+Along any route the group alternates, so two cities joined by a route of even length are in
+the same group and by a route of odd length in different groups. A cycle is a route from a
+city back to itself, and a city is in the same group as itself, so every cycle must have
+even length. That is the obstruction, derived rather than quoted: a graph with an odd cycle
+cannot be split. And when there is no odd cycle the greedy construction never contradicts
+itself, so the split exists. A triangle fails; a square succeeds.
+
+## Where these tools stop
+
+The closure of a relation can lose a property the relation had. Take $\{(1,2), (2,3),
+(3,1)\}$, which is antisymmetric — no pair appears with its reverse. Its transitive closure
+is all nine pairs on $\{1,2,3\}$, which is as far from antisymmetric as a relation can get.
+Closure adds what transitivity demands and makes no promises about anything else.
+
+Warshall answers *whether*, never *how far*. Replace the boolean and-or by minimum and
+addition and the same three loops compute shortest distances instead, which is the
+Floyd-Warshall algorithm, but the version in this module has thrown that information away.
+
+The $n^3$ is a cost as well as a guarantee. At 5000 cities it is $1.25 \times 10^{11}$
+inner steps and $n^2$ booleans of memory, and for a sparse network a traversal from each
+vertex is far cheaper. The dense matrix is the right tool when the relation is dense and
+the wrong one when it is not.
+
+And two-colouring is a question about **undirected** graphs. On a directed timetable the
+question does not arise, and on a disconnected undirected graph the colouring is not unique
+— each component may be flipped independently — which is why the lab fixes the component
+order and starts every component at colour 0, so that a correct implementation returns one
+particular answer rather than any valid one.
+
+## What you are about to build
+
+The lab, **Relation properties, Warshall and bipartiteness**, works through all of it:
+`to_matrix` turning pairs into the boolean matrix and raising on a pair mentioning
+something outside the ground set; `is_reflexive`, `is_symmetric`, `is_transitive` and
+`is_equivalence` reading the quantified sentences above straight into code; `warshall`
+returning a **new** matrix with the caller's left untouched, since a closure that destroys
+its input cannot be compared against it; `transitive_closure` going out through the matrix
+and back to a set of pairs; and `two_colouring` and `is_bipartite` deciding the split, with
+`None` returned exactly when an odd cycle is found.
+''',
+            },
+            "quiz": {
+                "title": "Pairs, closures and the order of three loops",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "From $R(x,y)$, symmetry gives $R(y,x)$, and transitivity then gives $R(x,x)$. Why does that not prove every symmetric transitive relation reflexive?",
+                        "opts": [
+                            "Because transitivity requires three distinct elements, and $x$, $y$, $x$ repeats one",
+                            "Because it establishes $R(x,x)$ only for those $x$ related to something, and an isolated element has no such $y$",
+                            "Because symmetry and transitivity are properties of the pairs, while reflexivity is a property of the ground set",
+                            "Because the argument silently assumes the relation is already reflexive at $y$",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "Transitivity is stated with three quantified variables and nothing forbids them from coinciding; instantiating $z$ as $x$ is a legitimate use of a universal statement, and every step of the argument really is valid.",
+                            "The $y$ has to come from somewhere, and for an isolated element there is none.",
+                            "Reflexivity does quantify over the ground set, which is why the lab passes `elements` separately — but symmetry and transitivity quantify over it as well. The defect is a missing witness, not a difference in what the three properties range over.",
+                            "Nothing about $y$ is assumed beyond $R(x,y)$, and $R(y,y)$ is never used. The gap is earlier: the argument needs some $y$ to exist before it can begin.",
+                        ],
+                        "why": r'''
+Every inference in the argument is sound; the flaw is in what it starts from. It proves
+$R(x,x)$ for each $x$ that is related to at least one thing, and reflexivity is a claim
+about every element of the ground set. On $\{1,2,3\}$ the relation
+$\{(1,1),(1,2),(2,1),(2,2)\}$ is symmetric and transitive with $(3,3)$ absent, because 3 is
+related to nothing and the argument never reaches it. This is why the lab takes `elements`
+as its own argument: a relation given only by its pairs cannot know that 3 exists.
+''',
+                    },
+                    {
+                        "q": "Applying the rule \"if $(a,b)$ and $(b,c)$ then add $(a,c)$\" once to the given pairs produced 8 pairs where the closure has 12. What was missed?",
+                        "opts": [
+                            "Pairs whose route is longer than two hops, since a newly added pair can itself start a new route",
+                            "Pairs involving a vertex of the ground set that appears in no given pair at all",
+                            "Pairs in the reverse direction, which transitivity adds along with the forward ones",
+                            "Nothing at all was missed; the four extra pairs come from imposing reflexivity rather than from transitivity",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "A pair the rule creates is itself eligible to be combined again, and one round never offers it that chance.",
+                            "An isolated vertex gains no pairs under transitivity at all — nothing reaches it and it reaches nothing — so it is not what the second round adds.",
+                            "Transitivity says nothing about direction and adds no reverses; that is symmetry, a different property, and the closure here is emphatically not symmetric.",
+                            "Reflexivity is not being imposed. The self-loops that appear are earned: Bristol, Cardiff and Dundee lie on a cycle, so each really can be left and returned to, while Aberdeen gains no self-loop.",
+                        ],
+                        "why": r'''
+One round combines only the pairs it was handed. Aberdeen to Cardiff needs three hops, so
+it can be assembled solely from a two-hop pair the first round created, and the three
+self-loops need a full trip round the cycle. Feeding the output back in until nothing
+changes is correct and takes an unknown number of rounds — three here, the last confirming
+that the set had stopped growing. Warshall's contribution is to reach the same set in one
+sweep with a known cost.
+''',
+                    },
+                    {
+                        "q": "In Warshall's algorithm the intermediate vertex $k$ is the outermost loop. What does that ordering buy?",
+                        "opts": [
+                            "It lets the algorithm stop early as soon as a pass adds nothing, which the other loop orderings cannot detect",
+                            "It reduces the inner line's executions from $n^3$ to $n^2 \\log n$ by skipping unreachable vertices",
+                            "It maintains the invariant that after pass $k$ the matrix records routes with intermediates in $\\{0..k\\}$",
+                            "It guarantees the caller's matrix is not modified, since $k$ is read before $i$ and $j$ are written",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            "Stopping early is available to any fixed-point loop and is exactly what the repeated-rule version does. Warshall does not stop early — it runs all $n$ passes — and the point is that $n$ passes are all it ever needs.",
+                            "The inner line runs $n^3$ times whatever the data, because no loop bound depends on the matrix. That fixed count is a feature of the algorithm, and no reordering of the loops changes it.",
+                            "Each pass may use the previous passes' results, and the induction on $k$ is what makes one sweep enough.",
+                            "Leaving the input untouched is achieved by copying the matrix first, and the lab requires it for that reason. Loop order has no bearing on which object is written to.",
+                        ],
+                        "why": r'''
+After the pass for $k$, entry $(i,j)$ is true exactly when a route runs from $i$ to $j$
+using intermediates drawn from $\{0, \dots, k\}$. The induction is short: such a route
+either avoids $k$, and was recorded earlier, or passes through it once — a second visit
+encloses a removable loop — and splits into two legs whose intermediates lie in
+$\{0, \dots, k-1\}$, both already recorded. So each pass is entitled to the earlier passes'
+work, which is what makes a single sweep enough. Move $k$ inside and that entitlement
+disappears: on the cycle $1 \to 3 \to 2 \to 1$ the reordered version fails to record that 1
+reaches itself.
+''',
+                    },
+                    {
+                        "q": "What does *smallest* mean in \"the transitive closure is the smallest transitive relation containing $R$\", and why is there one?",
+                        "opts": [
+                            "Smallest in the number of pairs, found by trying each candidate and keeping the shortest",
+                            "Smallest by containment: it sits inside every transitive relation containing $R$, being their intersection",
+                            "Smallest in the number of vertices it mentions, which is why isolated elements are dropped",
+                            "There need not be one at all; several minimal transitive relations can contain $R$, and Warshall returns one of them",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "Counting pairs would leave the notion resting on a search, and it is not what makes the object well defined. Fewest pairs happens to coincide with the intersection here, but containment is the property the argument actually uses.",
+                            "An intersection of transitive relations is transitive, so the intersection of all of them containing $R$ is the least one.",
+                            "The closure mentions exactly the ground set it was given, isolated elements included; it adds pairs and removes none. Nothing about vertices is being minimised.",
+                            "Uniqueness is not in doubt: the intersection of all the candidates is itself a candidate, so it is the one and only least element rather than one of several incomparable minimal ones.",
+                        ],
+                        "why": r'''
+Order the candidates by containment. $S \times S$ is transitive and contains $R$, so
+candidates exist; and an intersection of transitive relations is transitive, because a
+pair chain lying in every one of them forces the closing pair to lie in every one of them.
+So the intersection of all transitive relations containing $R$ is itself transitive,
+contains $R$, and is inside each of them — a least element, not merely a minimal one.
+That is what makes "the" closure a definite object rather than a choice, and it is what
+Warshall computes.
+''',
+                    },
+                    {
+                        "q": "Why is a graph two-colourable exactly when it contains no odd cycle?",
+                        "opts": [
+                            "Because colours alternate along every walk, so a closed walk returning to its start must have even length",
+                            "Because an odd cycle contains more edges than it has vertices, and a graph with that imbalance needs a third colour",
+                            "Because a greedy colouring visits vertices in sorted order, and an odd cycle breaks that order",
+                            "Because every odd cycle contains a triangle, and a triangle plainly needs three colours",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "Alternation forces equal colours at even distance and different colours at odd, and a cycle demands both at once when its length is odd.",
+                            "A cycle has exactly as many edges as vertices, odd or even, so this counts nothing — and a 4-cycle has the same balance while colouring in two.",
+                            "Sorted order makes the lab's answer deterministic among the valid colourings and nothing more. A bipartite graph two-colours under every visiting order; an odd cycle defeats all of them.",
+                            "A 5-cycle contains no triangle and still cannot be two-coloured, so triangles are not what is doing the work. What every odd cycle shares is its parity, not a smaller cycle inside it.",
+                        ],
+                        "why": r'''
+In any two-colouring the colour flips along each edge, so vertices joined by a walk of even
+length share a colour and vertices joined by an odd walk do not. A cycle is a walk from a
+vertex to itself, and a vertex shares its own colour, so every cycle must be even. That
+rules out the odd ones. In the other direction, colouring by distance parity from a start
+vertex, one component at a time, only ever conflicts where two vertices at the same parity
+are adjacent, and that adjacency closes an odd cycle. The lab's `two_colouring` returns
+`None` in exactly that case.
+''',
+                    },
+                ],
+            },
             "lab": {
                 "title": "Relation properties, Warshall and bipartiteness",
                 "runtime": "python",
@@ -2987,6 +4462,196 @@ assert two_colouring({"a": ["a"]}) is None, "a self-loop is an odd cycle"
                 "Every connected graph contains a spanning tree, and there are `n^(n-2)` labelled trees on `n` vertices",
                 "A proper colouring gives adjacent vertices different colours; the chromatic number is the fewest that suffice, it is 2 for a bipartite graph with an edge, and greedy colouring never needs more than max-degree + 1",
             ],
+            "read": {
+                "title": "Counting cable ends, and the graph that cannot exist",
+                "minutes": 17,
+                "body": r'''
+Six machines are sitting in an office with cables between them, and somebody needs to know
+how many cables there are. Rather than trace them, walk to each machine and count the
+cables plugged into it: A has 2, B has 3, C has 3, D has 2, E has 3, F has 1.
+
+That is 14. There are 7 cables.
+
+```python
+EDGES = [("A", "B"), ("A", "C"), ("B", "C"), ("B", "D"),
+         ("C", "E"), ("D", "E"), ("E", "F")]
+degree = {v: 0 for v in "ABCDEF"}
+for u, v in EDGES:
+    degree[u] += 1
+    degree[v] += 1
+print("degrees:", degree)
+print("sum:", sum(degree.values()), "= twice", len(EDGES), "edges")
+print("odd degrees:", sorted(v for v in degree if degree[v] % 2))
+```
+
+The halving is not a coincidence and not an approximation. Count the pairs *(machine, cable
+end plugged into it)*. Each machine contributes its own degree, so the total is
+$\sum_v \deg(v)$. Each cable contributes exactly two ends, so the total is $2|E|$. One
+collection of objects counted two ways — Module 7's technique, applied to hardware:
+
+$$\sum_{v} \deg(v) = 2|E|$$
+
+## What the parity forbids
+
+The right-hand side is even, so the left-hand side is even, so the odd degrees must pair
+off. Here they do: B, C, E and F have odd degree, and four is even. A wiring plan for six
+machines in which exactly five have an odd number of cables is therefore not a plan that
+needs checking — it is a plan that cannot be built, whatever the other machine does. That
+is a parity argument ruling out a whole class of configurations before any construction is
+attempted, and it costs one line.
+
+The same accounting settles Euler's question. A closed walk that uses every cable exactly
+once enters a machine and leaves it, consuming two cable ends each time it passes through,
+and the start is also the finish, so its ends pair up too. Every degree must therefore be
+even. Königsberg's four landmasses had degrees 3, 3, 3 and 5, and that is the whole of the
+proof that the famous walk is impossible — no search, no case analysis.
+
+## Components, from Module 10's machinery
+
+Define $u \sim v$ to mean that some walk runs from $u$ to $v$. It is reflexive, by the walk
+of length zero; symmetric, because an undirected walk read backwards is a walk; and
+transitive, because two walks meeting at a vertex concatenate into one. So it is an
+equivalence relation, and Module 10 showed that an equivalence partitions its ground set
+into disjoint classes. Those classes are the **connected components**, and the capstone's
+`connected_components` computes exactly them. Connectivity is not a new idea in this
+course; it is a relation whose properties were established a module ago.
+
+## A tree, four ways, and one of them derived
+
+Four descriptions pick out the same graphs: connected and acyclic; connected with $n-1$
+edges; acyclic with $n-1$ edges; and a unique path between every pair of vertices. The
+useful form is that any two of *connected*, *acyclic* and *$n-1$ edges* force the third.
+
+Derive one of the links. Claim: a connected acyclic graph on $n \geq 2$ vertices has a
+vertex of degree 1. Take a path of maximum length and look at one end, $v$. If $v$ had a
+neighbour off the path, the path could be extended, contradicting maximality. If $v$ had a
+second neighbour on the path, that neighbour together with the path between them closes a
+cycle, and there are none. So $v$ has exactly one neighbour: a leaf.
+
+Now induct, in Module 6's pattern. A tree on 1 vertex has 0 edges. Given a tree on $n$
+vertices, remove a leaf and its single edge: what remains is still connected, since the
+leaf was on no path between other vertices, and still acyclic, so by the inductive
+hypothesis it has $n - 2$ edges, and putting the leaf back gives $n - 1$. The count is not
+a definition; it is a consequence of having no cycles and staying in one piece.
+
+The office graph has 6 machines and 7 cables, two more than a tree, and those two extra
+cables are what the two cycles cost — $A\!-\!B\!-\!C\!-\!A$ and $B\!-\!C\!-\!E\!-\!D\!-\!B$.
+Every connected graph contains a **spanning tree**, and the argument is a procedure: while
+a cycle remains, delete any edge on it. Connectivity survives each deletion, because the
+two endpoints of the deleted edge are still joined by the rest of that cycle. The process
+stops, because each step removes an edge. What is left is connected and acyclic.
+
+How many trees are there on $n$ labelled vertices? The answer is $n^{n-2}$, which is worth
+verifying rather than believing:
+
+```python
+from itertools import combinations
+
+def is_tree(n, edges):
+    parent = list(range(n))
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    for u, v in edges:
+        ru, rv = find(u), find(v)
+        if ru == rv:
+            return False
+        parent[ru] = rv
+    return True
+
+for n in (3, 4, 5):
+    slots = list(combinations(range(n), 2))
+    count = sum(1 for pick in combinations(slots, n - 1) if is_tree(n, pick))
+    print("n =", n, "labelled trees:", count, "and n^(n-2) =", n ** (n - 2))
+```
+
+It prints 3 and 3, then 16 and 16, then 125 and 125. The check works by taking every set of
+$n-1$ edges and keeping the acyclic ones — using two of the equivalences at once, since
+acyclic with $n-1$ edges is enough.
+
+## Colouring, and the bound greedy cannot beat
+
+Give every machine a radio channel so that no two machines joined by a cable share one.
+Colour them one at a time, each time taking the lowest-numbered channel none of its already
+coloured neighbours is using. A machine has at most $\Delta$ neighbours, where $\Delta$ is
+the largest degree, so among $\Delta + 1$ channels one is always free. Greedy therefore
+never needs more than $\Delta + 1$, and the office graph, with $\Delta = 3$, needs at most
+4. It in fact needs 3, because the triangle $A\!-\!B\!-\!C$ forces three and the assignment
+$A, D, F \to 0$, $B, E \to 1$, $C \to 2$ uses three.
+
+## The mistake, and why it is tempting
+
+The mistake is reading greedy's answer as the chromatic number.
+
+```python
+CYCLE = {
+    "a1": ["b2", "b3"], "a2": ["b1", "b3"], "a3": ["b1", "b2"],
+    "b1": ["a2", "a3"], "b2": ["a1", "a3"], "b3": ["a1", "a2"],
+}
+
+def greedy(order):
+    colour = {}
+    for v in order:
+        used = {colour[w] for w in CYCLE[v] if w in colour}
+        c = 0
+        while c in used:
+            c += 1
+        colour[v] = c
+    return colour
+
+for name, order in [("alternating", ["a1", "b1", "a2", "b2", "a3", "b3"]),
+                    ("one side first", ["a1", "a2", "a3", "b1", "b2", "b3"])]:
+    print(name, "uses", max(greedy(order).values()) + 1, "colours")
+```
+
+It prints `alternating uses 3 colours` and `one side first uses 2 colours`. The graph is a
+six-cycle — follow $a_1, b_2, a_3, b_1, a_2, b_3$ and back to $a_1$ — so it is bipartite and
+two colours are enough. One ordering finds that and the other spends three.
+
+The reason this is tempting is that greedy never produces anything *wrong*. Its output is a
+proper colouring every time, with no conflicting pair anywhere to inspect, so there is no
+symptom. And 3 is a defensible-looking answer: $\Delta = 2$ here, the bound $\Delta + 1$ is
+3, and the bound is genuinely attained — by complete graphs and by odd cycles. A graph that
+happens to be an even cycle looks, from the answer alone, exactly like one that is not.
+
+What greedy gives is an upper bound, and one that depends on the order it visited. What the
+chromatic number needs is a claim about *every* colouring, and that is a claim about all
+$k$-colourings at once, which no single run produces.
+
+## Where all of this stops
+
+The bound $\Delta + 1$ is loose almost everywhere. Brooks' theorem tightens it to $\Delta$
+for every connected graph other than a complete graph and an odd cycle, and even that is an
+upper bound: a star on 100 vertices has $\Delta = 99$ and chromatic number 2. Computing the
+chromatic number exactly is NP-hard, so no rule for ordering the vertices turns greedy into
+an exact method, and the algorithms course returns to what that phrase means.
+
+The handshake lemma is necessary and not sufficient. The degree sequence $3, 3, 3, 1$ sums
+to 10, which is even, and no graph on four vertices has it: a vertex of degree 3 among four
+is joined to all the others, so three such vertices leave the fourth joined to all three,
+with degree 3 rather than 1. Parity is a filter, not a construction, and the full condition
+for a sequence to be realisable is a separate theorem.
+
+Cayley's $n^{n-2}$ counts **labelled** trees, where the vertices are told apart. Forget the
+labels and the count collapses: there are $6^4 = 1296$ labelled trees on six vertices and
+six distinct shapes. Nearly every counting question in this course is about labelled
+objects, and it is worth noticing each time which one is being asked.
+
+And all four tree characterisations assume a finite simple graph. Allow infinitely many
+vertices and "connected and acyclic" survives while "$n-1$ edges" has nothing to say.
+
+## What to do with this module
+
+There is no lab here. The work is in this module's quiz, **Degrees, trees and chromatic
+numbers**, which turns each of the arguments above into a question, and in the code you
+have already written or are about to: Module 10's lab, **Relation properties, Warshall and
+bipartiteness**, supplies `two_colouring` and `is_bipartite`, and the capstone toolkit asks
+for `connected_components` alongside them — the components being, as above, the classes of
+an equivalence relation you met before you met graphs.
+''',
+            },
             "quiz": {
                 "title": "Degrees, trees and chromatic numbers",
                 "minutes": 7,
