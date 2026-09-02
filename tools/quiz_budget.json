@@ -56,6 +56,7 @@
   "RFIC530": {"longest": 6, "shortest": 1, "whys": 0, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 16}},
   "ROB520": {"longest": 0, "shortest": 0, "whys": 88, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "SE201": {"longest": 11, "shortest": 2, "whys": 0, "blanks": {"longest": 0, "shortest": 2, "markup": 0, "whys": 80}},
+  "SEC301": {"longest": 0, "shortest": 0, "whys": 120, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "VLSI510": {"longest": 6, "shortest": 1, "whys": 0, "blanks": {"longest": 2, "shortest": 1, "markup": 0, "whys": 28}},
   "VLSI520": {"longest": 6, "shortest": 0, "whys": 0, "blanks": {"longest": 3, "shortest": 0, "markup": 0, "whys": 32}},
   "VLSI530": {"longest": 8, "shortest": 1, "whys": 0, "blanks": {"longest": 3, "shortest": 1, "markup": 0, "whys": 40}},
