@@ -58,6 +58,184 @@ COURSE = {
                 "`g_m/I_D` is the currency of analogue design: it is fixed by $V_{ov}$ alone, and it trades directly against speed.",
                 "The model is only valid for signals small enough that the second-order term is negligible — a few tens of millivolts on a 200 mV overdrive.",
             ],
+            "read": [
+                {
+                    "title": "Every parameter in the model is a slope you can measure",
+                    "minutes": 14,
+                    "body": r'''
+A test chip, one NMOS transistor, $20\ \mu\text{m}$ wide and $0.5\ \mu\text{m}$ long. The
+gate sits $200$ mV above threshold, the drain at $1.0$ V, and the ammeter in the drain
+lead reads $172.8\ \mu\text{A}$. Nothing on the bench is moving. That single reading is
+the operating point, and on its own it says almost nothing about what this device will
+do to a signal.
+
+So move something. Raise the gate by 10 mV and read the ammeter again; then do it
+properly, with 5 mV either side of the bias.
+
+```python
+MU_COX, LAMBDA, W_OVER_L = 200e-6, 0.08, 40.0
+
+
+def drain_current(V_ov, V_DS=1.0):
+    return 0.5 * MU_COX * W_OVER_L * V_ov ** 2 * (1.0 + LAMBDA * V_DS)
+
+
+I0 = drain_current(0.200)
+forward = (drain_current(0.210) - I0) / 0.010
+central = (drain_current(0.205) - drain_current(0.195)) / 0.010
+print(f"I_D at a 200 mV overdrive : {I0 * 1e6:.3f} uA")
+print(f"forward slope over +10 mV : {forward * 1e3:.4f} mS")
+print(f"central slope over +-5 mV : {central * 1e3:.4f} mS")
+print(f"k_n V_ov (1 + lambda V_DS): {MU_COX * W_OVER_L * 0.200 * 1.08 * 1e3:.4f} mS")
+```
+
+The two measured slopes are $1.7712$ mS and $1.7280$ mS. They disagree in the third
+digit, and that disagreement is the whole of this module.
+
+## Where the disagreement comes from
+
+Write $k_n = \mu C_{ox}(W/L)$, so $I_D = \tfrac{1}{2}k_n V_{ov}^2(1 + \lambda V_{DS})$,
+and take the difference over a step $\Delta$ in the overdrive:
+
+$$I_D(V_{ov} + \Delta) - I_D(V_{ov}) = \tfrac{1}{2}k_n(1 + \lambda V_{DS})
+\left[2V_{ov}\Delta + \Delta^2\right]$$
+
+Divide by $\Delta$ and the measured ratio is
+$k_n(1 + \lambda V_{DS})\left(V_{ov} + \Delta/2\right)$. It depends on how hard you
+pushed. Push by $+10$ mV from a $200$ mV overdrive and the answer comes out
+$\Delta/(2V_{ov}) = 2.5\%$ high, which is exactly the $1.7712$ against $1.7280$ above.
+
+Two things follow. The first is the definition: the number that does not depend on
+$\Delta$ is the limit, $g_m = k_n V_{ov}(1 + \lambda V_{DS}) = 1.728$ mS, and every
+parameter in the hybrid-pi model is a limit of this kind — a partial derivative of the
+device equation evaluated at one bias point, which is what a first-order Taylor
+expansion is made of. The second is a measurement technique: the error term
+$k_n(1+\lambda V_{DS})\Delta/2$ is odd in $\Delta$, so averaging a step up with a step
+down cancels it, and for a quadratic it cancels it exactly. That is why the central
+difference above returns $1.7280$ mS to every digit shown, and it is why this module's
+lab, *Small-signal parameters from the bias point*, checks your analytic `gm` against a
+central difference of your own `drain_current` and demands agreement to better than a
+part in a million. A dropped $(1 + \lambda V_{DS})$ factor cannot hide from that test.
+
+## How small "small signal" has to be
+
+The same second-order term sets the honest limit on the model. Put a cosine of
+amplitude $a$ on top of the overdrive and expand:
+
+$$\left(V_{ov} + a\cos\omega t\right)^2 = V_{ov}^2 + \frac{a^2}{2}
++ 2V_{ov}a\cos\omega t + \frac{a^2}{2}\cos 2\omega t$$
+
+The third term is the signal the model predicts, with amplitude $g_m a$. The fourth is
+a second harmonic the model does not contain at all, and the ratio of the two is
+$a/(4V_{ov})$. On a $200$ mV overdrive, a $20$ mV amplitude gives $2.5\%$ second
+harmonic, about $-32$ dBc. "Small" is therefore not a number of millivolts; it is a
+fraction of the overdrive, and a device biased at $100$ mV of overdrive to buy
+efficiency is twice as easy to distort as this one.
+
+## Three ways to write the same slope
+
+A bias circuit sets a current, not an overdrive, so $g_m$ gets rewritten to suit
+whichever quantity you actually know. Eliminating $k_n$ between $g_m$ and $I_D$ gives
+$2I_D/V_{ov}$; eliminating $V_{ov}$ instead gives $\sqrt{2k_nI_D}$. They are the same
+slope, and on the bench they do not quite agree.
+
+```python
+MU_COX, LAMBDA, W_OVER_L = 200e-6, 0.08, 40.0
+V_ov, V_DS = 0.200, 1.0
+
+I_D = 0.5 * MU_COX * W_OVER_L * V_ov ** 2 * (1.0 + LAMBDA * V_DS)
+g_m = MU_COX * W_OVER_L * V_ov * (1.0 + LAMBDA * V_DS)
+r_o = 1.0 / (LAMBDA * 0.5 * MU_COX * W_OVER_L * V_ov ** 2)
+
+print(f"g_m as 2 I_D / V_ov      : {2 * I_D / V_ov * 1e3:.4f} mS")
+print(f"g_m as sqrt(2 k_n I_D)   : {(2 * MU_COX * W_OVER_L * I_D) ** 0.5 * 1e3:.4f} mS")
+print(f"r_o from the V_DS slope  : {r_o / 1e3:.3f} kohm")
+print(f"r_o as 1 / (lambda I_D)  : {1.0 / (LAMBDA * I_D) / 1e3:.3f} kohm")
+print(f"g_m r_o                  : {g_m * r_o:.1f}")
+print(f"2 / (lambda V_ov)        : {2.0 / (LAMBDA * V_ov):.1f}")
+print(f"g_m / I_D                : {g_m / I_D:.2f} 1/V")
+```
+
+$2I_D/V_{ov}$ returns $1.7280$ mS, agreeing to every digit, because the channel-length
+modulation factor sits in $I_D$ and in $g_m$ alike and cancels in the ratio.
+$\sqrt{2k_nI_D}$ returns $1.6628$ mS, low by $3.9\%$, because that route recovers
+$V_{ov}$ from a current that carries the factor while $g_m = k_nV_{ov}$ leaves it
+outside: the discrepancy is $\sqrt{1.08} = 1.039$ and nothing else. The lab's check on
+`gm_from_current` allows the two forms six per cent of daylight for that reason, and
+the tolerance is a statement about the model rather than about your arithmetic.
+
+## The other axis of the same surface
+
+$r_o$ is the same exercise along $V_{DS}$. Only the bracket depends on drain voltage,
+so $\partial I_D/\partial V_{DS} = \tfrac{1}{2}k_nV_{ov}^2\lambda$, which is
+$0.08 \times 160\ \mu\text{A} = 12.8\ \mu\text{S}$, and $r_o = 78.125$ k$\Omega$.
+Notice which current appears there: $160\ \mu\text{A}$, the current with the
+$(1+\lambda V_{DS})$ factor stripped off, not the $172.8\ \mu\text{A}$ the ammeter
+reads. Feed the measured current into the remembered form $1/(\lambda I_D)$ and you
+get $72.338$ k$\Omega$, eight per cent low.
+
+Both numbers live in this course, and it is worth knowing why. Exactly,
+$\partial I_D/\partial V_{DS} = \lambda I_D/(1+\lambda V_{DS})$, so
+$r_o = (1+\lambda V_{DS})/(\lambda I_D)$. The module lab takes that derivative and gets
+$78.125$ k$\Omega$; the capstone's `device.py` defines $r_o = 1/(\lambda I_D)$ from the
+specified bias current and gets $72.338$ k$\Omega$. The second is the first with
+$\lambda V_{DS} \ll 1$ assumed, and at $V_{DS} = 1$ V with $\lambda = 0.08$ that
+assumption is worth $8\%$. Note also what the exact derivative does *not* contain:
+$V_{DS}$ has vanished from it, so in this model $r_o$ is flat with drain voltage, which
+is what the lab's fourth test insists on.
+
+## What the two slopes buy together
+
+Multiply them. $g_mr_o = 1.728\ \text{mS} \times 78.125\ \text{k}\Omega = 135.0$, and
+the current has disappeared from the product: $g_m$ climbs as $\sqrt{I_D}$ while $r_o$
+falls as $1/I_D$. Algebraically the product is $2(1+\lambda V_{DS})/(\lambda V_{ov})$,
+which is the familiar $2/(\lambda V_{ov}) = 125$ carrying the same $8\%$ correction as
+before. The intrinsic gain is fixed by the overdrive and by the channel length through
+$\lambda \propto 1/L$, and by nothing else — which the lab checks by quadrupling $W/L$
+and requiring the gain not to move, even though the current and $g_m$ both quadrupled
+and $r_o$ quartered.
+
+The last line of that block, $g_m/I_D = 10\ \text{V}^{-1}$, is the same fact stated as
+a budget. It equals $2/V_{ov}$ exactly, so it is bought by lowering the overdrive, and
+module 3 will show that $f_T \propto V_{ov}$ — every volt of overdrive you give back to
+buy transconductance per amp is taken out of speed.
+
+## The mistake, and why it is tempting
+
+The first is writing $g_m = I_D/V_{GS}$. With $V_{TH} = 0.5$ V the gate sits at
+$0.7$ V, and that ratio gives $247\ \mu\text{S}$, seven times too small. It is tempting
+because a DC operating point is what a datasheet hands you and dividing is what one
+does to DC data, but $V_{GS}$ contains the threshold voltage, which carries no signal
+and produces no gain. The device responds to changes, and only the slope survives.
+
+The second is believing that more current buys gain. It buys $g_m$, and every stage
+that has to drive a capacitor wants $g_m$. But at fixed geometry a larger current is a
+larger overdrive, so $g_m$ rises as $\sqrt{I_D}$ while $r_o$ falls as $1/I_D$: take
+this device from $172.8\ \mu\text{A}$ to $691.2\ \mu\text{A}$ and the overdrive doubles
+to $0.4$ V, so the intrinsic gain halves to $67.5$. Four times the power, half the
+gain. Gain from a single device is bought with geometry, and that is the fact the
+cascode of module 4 exists to work around.
+
+## Where the model stops holding
+
+The square law is a long-channel approximation and it fails from both ends. Push the
+overdrive up on a short device and the carriers reach their saturation velocity: $I_D$
+turns linear in $V_{ov}$, $g_m$ flattens out near $WC_{ox}v_{sat}$, and the promised
+$\sqrt{I_D}$ growth stops arriving. Pull the overdrive down toward zero and the device
+slides into weak inversion, where the current is exponential rather than quadratic and
+$g_m/I_D$ tops out around $25$ to $30\ \text{V}^{-1}$ at room temperature — while
+$2/V_{ov}$ predicts it growing without bound. $\lambda$ is not a constant either; it
+varies with $V_{DS}$ and with length, and quoting it to two digits is optimistic.
+
+None of that spoils the exercise, because the model is doing a different job: it turns
+a curved surface into a slope you can compute with, and every number in the next three
+modules is that slope divided by a capacitance. The sandbox for this module, *Gain,
+corner frequency, and the fact that they are not yet linked*, gives you a gain slider
+and a corner slider that move independently. That independence is a fiction. Module 2
+removes it with a single $6$ fF capacitor.
+''',
+                },
+            ],
             "sandbox": {
                 "title": "Gain, corner frequency, and the fact that they are not yet linked",
                 "visualiser": "bode",
@@ -431,6 +609,347 @@ assert abs(ro(0.3, 20.0, 0.8) - 69444.44444444444) < 1e-3, \
                 "The same bridging capacitor feeds signal forward and creates a right-half-plane zero at $g_m/C_{gd}$ — far away in a good device, but it is the reason the phase keeps falling.",
                 "Miller is an approximation: it assumes the output follows the input with a constant gain, which stops being true near and above the corner.",
             ],
+            "read": [
+                {
+                    "title": "Six femtofarads, and where the bandwidth went",
+                    "minutes": 15,
+                    "body": r'''
+Take the device from module 1 — $g_m = 1.728$ mS at $172.8\ \mu\text{A}$ — and make an
+amplifier out of it. The gate is driven from the previous stage through
+$R_S = 5$ k$\Omega$, the drain has $R_L = 10$ k$\Omega$ to the supply, and the DC gain
+measures $-17.28$, which is $g_mR_L$ to three digits.
+
+Now the capacitances. There are two of them and both are on the data sheet:
+$C_{gs} = 57.3$ fF from the inversion layer under the gate, and $C_{gd} = 6.0$ fF from
+the sliver of gate metal that overlaps the drain diffusion. Add them, put the total on
+the gate node, and the input $RC$ gives a corner at
+$1/(2\pi \times 5\,\text{k}\Omega \times 63.3\,\text{fF}) = 503$ MHz.
+
+The stage measures $182$ MHz. Nearly two thirds of the bandwidth is missing, and there
+is nothing else in the circuit to blame.
+
+## The two ends of a capacitor do not have to agree
+
+Follow the small capacitor. One terminal is the gate; the other is the drain. Wiggle
+the gate up by $1$ mV and the drain does not stay where it was — it moves *down* by
+$17.28$ mV, because that is what the stage is for. So the voltage across $C_{gd}$
+changes by $1 + 17.28 = 18.28$ mV while the gate itself moved $1$ mV.
+
+Current follows voltage across the capacitor, not voltage at one end of it. At
+frequency $\omega$ that terminal draws
+
+$$i = j\omega C_{gd}\left(v_{in} - v_{out}\right)
+   = j\omega C_{gd}\left(1 + A_v\right)v_{in}$$
+
+with $A_v = g_mR_L$ written as a positive number. Divide by $v_{in}$ and the source
+driving the gate cannot tell this apart from a plain capacitor to ground of value
+$C_{gd}(1 + A_v)$. Nothing about the component changed. The voltage across it did.
+
+For this stage that is $6.0\ \text{fF} \times 18.28 = 109.7$ fF, from a capacitor
+that a data sheet reports as a tenth of $C_{gs}$.
+
+## The number the input node actually sees
+
+$C_{gs}$ has its far end at the source terminal, which is grounded, so it is not
+multiplied and contributes its own $57.3$ fF. The gate therefore carries
+$C_{in} = C_{gs} + C_{gd}(1 + A_v)$, and the pole is $1/(2\pi R_SC_{in})$.
+
+```python
+import math
+
+g_m, R_S, R_L = 1.728e-3, 5e3, 10e3
+C_gs, C_gd = 57.3e-15, 6.0e-15
+A_v = g_m * R_L
+
+
+def stage_gain(f):
+    """Exact v_out / v_s of the common-source stage, by Cramer's rule."""
+    s = 2j * math.pi * f
+    a, b = 1.0 / R_S + s * (C_gs + C_gd), -s * C_gd
+    c, d = g_m - s * C_gd, 1.0 / R_L + s * C_gd
+    return -c * (1.0 / R_S) / (a * d - b * c)
+
+
+def corner(gain, lo=1e3, hi=1e13):
+    """The -3 dB frequency, bisected on log f so no formula is assumed."""
+    target = abs(gain(0.0)) / math.sqrt(2.0)
+    for _ in range(200):
+        mid = math.sqrt(lo * hi)
+        lo, hi = (mid, hi) if abs(gain(mid)) > target else (lo, mid)
+    return math.sqrt(lo * hi)
+
+
+C_in = C_gs + C_gd * (1.0 + A_v)
+print(f"DC gain                     : {stage_gain(0.0).real:.2f}")
+print(f"C_gs + C_gd                 : {(C_gs + C_gd) * 1e15:.2f} fF")
+print(f"C_gs + C_gd (1 + A_v)       : {C_in * 1e15:.2f} fF")
+print(f"corner from C_gs + C_gd     : {1 / (2 * math.pi * R_S * (C_gs + C_gd)) / 1e6:.1f} MHz")
+print(f"corner from the Miller C_in : {1 / (2 * math.pi * R_S * C_in) / 1e6:.1f} MHz")
+print(f"corner from the exact solve : {corner(stage_gain) / 1e6:.1f} MHz")
+```
+
+$166.98$ fF against the $63.30$ fF of the naive sum, $190.6$ MHz against $502.9$ MHz,
+and an exact two-node solution that lands at $181.7$ MHz. The missing two thirds of the
+bandwidth is accounted for, by one capacitor and the gain standing behind it.
+
+## Why the estimate is nine megahertz optimistic
+
+The Miller number is $190.6$ MHz and the exact answer is $181.7$ MHz, so the estimate
+overstates the bandwidth by $4.9\%$. The reason is worth chasing down, because chasing
+it produces a second estimate that is better than either.
+
+Count time constants instead of poles. A capacitor's contribution to the delay of a
+circuit is its value times the resistance it charges through with every other capacitor
+removed, and those contributions add. $C_{gs}$ charges through $R_S$ alone. $C_{gd}$
+charges through $R_S$ *and* $R_L$, with the transistor's own feedback in between, and
+working that resistance out gives $R_S + R_L + g_mR_SR_L$ — which is
+$R_S(1 + g_mR_L)$, the Miller term, plus a leftover $R_L$ that the Miller estimate never
+counted.
+
+```python
+import math
+
+R_S, R_L = 5e3, 10e3
+C_gs, C_gd = 57.3e-15, 6.0e-15
+A_v = 1.728e-3 * R_L
+
+tau_gate = R_S * (C_gs + C_gd * (1.0 + A_v))
+tau_drain = R_L * C_gd
+print(f"the gate node, as the Miller estimate counts it : {tau_gate * 1e12:6.1f} ps")
+print(f"the drain-side term the estimate leaves out     : {tau_drain * 1e12:6.1f} ps")
+print(f"the two together                                : {(tau_gate + tau_drain) * 1e12:6.1f} ps")
+print(f"1 / 2 pi times that sum                         : "
+      f"{1 / (2 * math.pi * (tau_gate + tau_drain)) / 1e6:6.1f} MHz")
+```
+
+$834.9$ ps against a term of $60.0$ ps that was thrown away, and the sum puts the corner
+at $177.8$ MHz. So the exact answer, $181.7$ MHz, is bracketed: the Miller estimate is
+$4.9\%$ high because it left a time constant out, and the sum of time constants is
+$2.1\%$ low because the sum equals $\sum 1/\left|p_i\right|$ over *all* the poles, and
+charging the second pole's delay against the first understates the dominant one. The
+lab, *Miller estimate against an exact nodal solution*, asserts the first half of that
+directly: the Miller bandwidth comes out above the exact one, and the two agree within
+about ten per cent while the poles remain far apart.
+
+There is a second, softer approximation underneath both. The multiplication assumed
+$v_{out} = -A_vv_{in}$ at every frequency, and at the corner the gain has already
+dropped, so the far end of $C_{gd}$ swings less than $A_v$ times the near end and the
+true multiplied capacitance is under $109.7$ fF. That effect is real and runs the other
+way, and it is much the smaller of the two here.
+
+## The bridging capacitor also feeds forward
+
+At DC the transistor pulls current out of the drain node and $C_{gd}$ carries nothing.
+At high enough frequency the gate signal leaks straight through $C_{gd}$ into the drain
+in the opposite phase, and where $\omega C_{gd}v_{in}$ equals $g_mv_{in}$ the two
+cancel and the output is null. That is a zero at $s = +g_m/C_{gd}$, in the *right* half
+plane: $1.728\ \text{mS} / (2\pi \times 6\ \text{fF}) = 45.8$ GHz for this device. Ten
+times the device's own $f_T$, so it does no harm to the magnitude response here, but it
+subtracts phase like a pole while adding gain like a zero, and in a feedback loop that
+combination is what eats the phase margin nobody budgeted for. The Miller estimate has
+no way to produce it: a lumped capacitance to ground has no path from input to output.
+
+## What the trade actually is
+
+Folklore says gain-bandwidth product is constant, so raising the load resistance buys
+gain at exactly the price of bandwidth. Test it. Raise $R_L$ from $10$ k$\Omega$ to
+$50$ k$\Omega$: the gain goes from $17.28$ to $86.4$ and the exact bandwidth from
+$181.7$ MHz to $50.0$ MHz, so the product goes from $3.14$ GHz to $4.32$ GHz. It
+improved by nearly forty per cent.
+
+The reason is in $C_{in}$. Only the $C_{gd}(1+A_v)$ part scales with gain; $C_{gs}$ sits
+there unchanged, and at low gain it is most of the capacitance. As $A_v$ grows the
+Miller term swamps it and the product approaches
+$A_v/(2\pi R_SC_{gd}(1+A_v)) \to 1/(2\pi R_SC_{gd}) = 5.31$ GHz. So the invariant is
+real, it is a *ceiling* rather than a constant, and it is set by the source resistance
+and the overlap capacitance — two things that have nothing to do with the load
+resistor you were reaching for.
+
+## The mistake, and why it is tempting
+
+The mistake is adding the capacitances: $57.3 + 6.0 = 63.3$ fF, corner at $503$ MHz,
+a stage that measures $182$ MHz. It is tempting for three separate reasons, and they
+reinforce each other. Every other capacitance in the circuit does add that way.
+$6$ fF next to $57$ fF looks like a rounding error, so the instinct is to neglect it
+rather than to multiply it. And the number a data sheet gives you for the input, $C_{iss}$,
+really is $C_{gs} + C_{gd}$ — measured with the drain held at AC ground, which is the
+one condition under which the multiplication does not happen and is never the condition
+your amplifier operates under.
+
+The companion mistake is trying to fix it by shrinking the device. Halving $W$ halves
+$C_{gs}$ and $C_{gd}$ together, but at fixed current it also cuts $g_m$ by $\sqrt{2}$,
+so the gain falls and the pole moves by less than the factor of two you paid for.
+
+## Where the picture stops holding
+
+Miller's theorem as used here is exact only for a frequency-independent gain across the
+bridging element. It is a good estimate while the input pole is well below the output
+pole, and it degrades as they close on each other; the module's sandbox, *What raising
+the gain does to the corner*, lets you separate and merge two poles and watch the single
+break become two. When the drain node is loaded so heavily that the output pole comes
+down to meet the input pole, the response near the corner is set by both and the
+single-pole estimate stops meaning anything, however carefully you computed $C_{in}$.
+
+The lab builds both routes side by side — `miller_bandwidth` from the formula and
+`exact_bandwidth` from a bisection on the two-node solution — so the gap between them
+is something you measure rather than something you are told. Module 4 removes the gap
+entirely by removing its cause: hold the drain of the input device still, and there is
+nothing left for $C_{gd}$ to multiply.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "The small capacitor and the gain standing behind it",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "$C_{gd}$ is roughly a tenth of $C_{gs}$ in this device. Why does it cost more bandwidth?",
+                        "opts": [
+                            "Its far end swings the opposite way, so it draws far more current than its value suggests",
+                            "It sits nearer to the drain terminal, where the signal in a common-source stage is largest",
+                            "Overlap capacitance is lossier than channel capacitance once the frequency is high",
+                            "It creates the right-half-plane zero, and that zero is what sets the stage's corner",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "A 1 mV wiggle at the gate moves the drain 17.28 mV the other way, so 18.28 mV appears across a capacitor whose near end moved 1 mV — and current follows the voltage across it.",
+                            "Position on the die changes nothing. What matters is that its two terminals are the input and the output, so the swing across it is the sum of both, not the swing at either.",
+                            "Both capacitances are essentially lossless here, and loss is not what moves a pole. The pole moved because the input node is drawing more current at the same voltage.",
+                            "The zero is real and sits at $g_m/(2\\pi C_{gd})$, which is 45.8 GHz for this device — two hundred times the measured corner. It shapes phase, not bandwidth.",
+                        ],
+                        "why": r"""
+The capacitor is unchanged; the voltage across it is not. With a gain of 17.28 the two
+terminals move in opposite directions, so a 1 mV gate wiggle puts 18.28 mV across
+$C_{gd}$ and it draws 18.28 times the current a grounded 6 fF would. From the gate it
+is indistinguishable from a 109.7 fF capacitor to ground, which is nearly twice
+$C_{gs}$. The size of a capacitor is only half of what determines its current.
+""",
+                    },
+                    {
+                        "q": "With $C_{gs} = 57.3$ fF, $C_{gd} = 6.0$ fF and a gain magnitude of 17.28, what capacitance does the source resistance drive?",
+                        "opts": [
+                            "About 110 fF: the bridging capacitor after multiplication, which now dominates",
+                            "About 63 fF: the two gate capacitances of the device added together",
+                            "About 167 fF: $C_{gs}$ unchanged, plus the 6 fF counted 18.28 times over",
+                            "About 1.09 pF: both gate capacitances multiplied by the stage gain",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            "The Miller term alone, correctly multiplied, but with $C_{gs}$ dropped. It is by far the larger contribution, and leaving out the other 57.3 fF still overstates the corner by a third.",
+                            "This is the sum a data sheet quotes as $C_{iss}$, measured with the drain at AC ground. Under that condition there is no multiplication — and no amplifier runs under it.",
+                            "$57.3 + 6.0 \\times 18.28 = 166.98$ fF, and the source resistance sees every femtofarad of it.",
+                            "Multiplies $C_{gs}$ as well. Its far end is the source terminal, which is grounded and does not move, so there is no extra swing across it to multiply.",
+                        ],
+                        "why": r"""
+$C_{in} = C_{gs} + C_{gd}(1 + A_v) = 57.3 + 6.0 \times 18.28 = 166.98$ fF. Only the
+bridging capacitor is multiplied, because only its far end moves; $C_{gs}$ has its far
+end on the grounded source terminal and contributes its own value. With
+$R_S = 5\ \text{k}\Omega$ that gives a corner near 190 MHz rather than the 503 MHz the
+plain sum predicts.
+""",
+                    },
+                    {
+                        "q": "The Miller estimate gives 190.6 MHz and the exact two-node solution gives 181.7 MHz. Which way does the estimate err, and why?",
+                        "opts": [
+                            "Optimistic: it folds $C_{gd}$ onto the gate and drops the drain-side time constant",
+                            "Pessimistic: near the corner the gain has dropped, so less capacitance is multiplied",
+                            "Neither: the estimate is exact, and the 9 MHz gap is the bisection's tolerance",
+                            "Optimistic: the right-half-plane zero lifts the magnitude that the estimate omits",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "$C_{gd}$ charges through $R_S + R_L + g_mR_SR_L$, and the Miller form counts only the first and third of those — the missing $R_LC_{gd}$ is 60 ps out of 895 ps.",
+                            "This effect is genuine and it does run the other way — the multiplication really is smaller near the corner than the DC gain suggests. It is much the weaker of the two, and the net error is still optimism.",
+                            "The bisection converges to a part in $10^{12}$ over 200 halvings; 9 MHz out of 182 is five per cent, which is a modelling gap rather than a numerical one.",
+                            "The zero does lift the magnitude, but at 45.8 GHz it is far too remote to move a corner near 182 MHz, and the estimate's optimism has a much nearer source.",
+                        ],
+                        "why": r"""
+Count time constants rather than poles. $C_{gd}$ charges through
+$R_S + R_L + g_mR_SR_L$; the Miller form gathers $R_S(1 + g_mR_L)$ onto the gate and
+drops the leftover $R_L$, which is 60 ps of the 895 ps total. An estimate that discards
+delay always promises bandwidth the circuit does not have. A second approximation runs
+the other way — the gain has fallen by the corner, so rather less than 109.7 fF is
+really being multiplied — and it is the smaller of the two. The lab asserts the net
+ordering: the Miller bandwidth above the exact one, and the two within ten per cent
+while the poles stay apart.
+""",
+                    },
+                    {
+                        "q": "Raising $R_L$ from 10 k$\\Omega$ to 50 k$\\Omega$ takes the gain from 17.28 to 86.4 and the bandwidth from 181.7 MHz to 50.0 MHz. The product rose from 3.14 GHz to 4.32 GHz. Why did it not hold constant?",
+                        "opts": [
+                            "The output pole moved outward as $R_L$ rose and gave back some of the bandwidth",
+                            "Only the Miller part of $C_{in}$ scales with gain, and $C_{gs}$ weighs less as it grows",
+                            "A two-pole response has no gain-bandwidth product, so the two numbers cannot be compared",
+                            "The right-half-plane zero contributes gain, and it contributes more at high gain",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "Raising $R_L$ moves the output pole the wrong way — down, not out. The bandwidth improvement has to come from the input node, and it comes from $C_{gs}$ losing its share of $C_{in}$.",
+                            "$A_v/(2\\pi R_S(C_{gs} + C_{gd}(1+A_v)))$ rises with $A_v$ toward the ceiling $1/(2\\pi R_SC_{gd}) = 5.31$ GHz, and $C_{gs}$ is what keeps it below that.",
+                            "The product is defined for any response; it is being read here as the gain times the measured $-3$ dB point, which both stages have. What is in question is whether it is invariant, and it is not.",
+                            "The zero sits at $g_m/(2\\pi C_{gd})$, which depends on neither $R_L$ nor the gain. It is in the same place in both stages and cannot explain a difference between them.",
+                        ],
+                        "why": r"""
+The product is $A_v/(2\pi R_SC_{in})$ with
+$C_{in} = C_{gs} + C_{gd}(1 + A_v)$. If $C_{gs}$ were absent the $A_v$ would cancel
+against $(1+A_v)$ and the product would be a constant $1/(2\pi R_SC_{gd}) = 5.31$ GHz.
+$C_{gs}$ is not absent, and at low gain it is most of $C_{in}$, so the product starts
+well below that ceiling and climbs toward it as the Miller term takes over. The
+invariant is a limit that high-gain stages approach, not a conservation law, and what
+sets it is the source resistance and the overlap capacitance rather than the load
+resistor being adjusted.
+""",
+                    },
+                    {
+                        "q": "Seen from the drain looking back, what does the same 6 fF $C_{gd}$ contribute?",
+                        "opts": [
+                            "About 6.35 fF, because the gain from the drain back to the gate is only $-1/A_v$",
+                            "About 110 fF, by symmetry: a bridging capacitor is multiplied at both of its ends",
+                            "Exactly 6 fF, because Miller's theorem describes the input node and nothing else",
+                            "About 104 fF, the multiplied value less the 6 fF already counted at the input",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "The theorem applied at the far end gives $C_{gd}(1 + 1/A_v)$, and $1/17.28$ is a four per cent correction rather than a multiplication.",
+                            "The theorem is not symmetric, and the asymmetry is its practical point: the bridging capacitor is ruinous at the input and nearly free at the output.",
+                            "The theorem applies at both ends; the factor at the output end happens to be close to 1, which is not the same as being exactly 1.",
+                            "There is no bookkeeping in which multiplied charge is split between the two nodes. Each node is loaded by the swing it sees across the capacitor, computed independently.",
+                        ],
+                        "why": r"""
+Standing at the drain, the far end of $C_{gd}$ is the gate, and the gain from drain
+back to gate is $-1/A_v$. The factor is therefore $1 + 1/17.28 = 1.058$, giving
+6.35 fF. That asymmetry is the useful half of the theorem: the same component is worth
+110 fF at one end and 6.35 fF at the other, which is why bandwidth work on a
+common-source stage concentrates almost entirely on the gate node.
+""",
+                    },
+                    {
+                        "q": "Which change removes the multiplication itself, rather than working around its cost?",
+                        "opts": [
+                            "Drive the gate from a stiffer source, so that the pole rises for any input capacitance",
+                            "Lower $R_L$ until the gain is small enough that the multiplier is close to one",
+                            "Halve the width of the device, which halves both of its gate capacitances",
+                            "Keep the drain of the input device from moving, and develop the gain further along",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            "A stiffer source raises the pole for any $C_{in}$ and is worth doing, but $C_{in}$ is still 167 fF and the multiplication is untouched. It treats the symptom.",
+                            "This works and it is the wrong trade: the multiplication is removed by removing the gain that caused it, which is the thing the stage was built to provide.",
+                            "Both capacitances halve, but at fixed current $g_m$ falls by $\\sqrt{2}$ as well, so the gain drops and the pole improves by less than the factor paid for.",
+                            "The multiplier is $1 + |A|$ where $A$ is the gain across that capacitor alone. Hold the drain still and $|A|$ falls to about one, whatever the stage as a whole is doing.",
+                        ],
+                        "why": r"""
+The multiplier is $1 + |A|$ where $A$ is the gain measured across the bridging
+capacitor, not the gain of the stage. Stack a common-gate device on top and the input
+transistor's drain drives about $1/g_{m2}$ instead of $R_L$; the gain across
+$C_{gd1}$ collapses to roughly one while the stage keeps developing its full gain at
+the upper device's drain. That is the cascode of module 4, and it is the only one of
+these that keeps the gain and removes the cause. The others trade gain away, shrink the
+device, or improve the pole while leaving 167 fF on the gate.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "What raising the gain does to the corner",
                 "visualiser": "bode",
@@ -810,6 +1329,390 @@ assert abs(_without / 555514635.5738056 - 1.0) < 0.02, \
                 "Layout changes $f_{max}$ and not $f_T$. Splitting a wide device into fingers contacted at both ends cuts $R_g$ and buys speed for free.",
                 "A stage built from a 5 GHz device does not have 5 GHz of bandwidth. $f_T$ assumes a shorted output and no source resistance; both assumptions are violated in every real circuit.",
             ],
+            "read": [
+                {
+                    "title": "Two figures of merit, and the amplifiers they do not describe",
+                    "minutes": 17,
+                    "body": r'''
+The same device is on the probe station: $20\ \mu\text{m}$ by $0.5\ \mu\text{m}$,
+biased at $172.8\ \mu\text{A}$, $g_m = 1.728$ mS. The drain is taken to small-signal
+ground through a bias tee, a small current is forced into the gate, and the current
+coming out of the drain is measured against it. That ratio is $h_{21}$, and the sweep
+reads $43.4$ at $100$ MHz, $21.7$ at $200$ MHz, $10.9$ at $400$ MHz. Every doubling of
+frequency halves it.
+
+Draw that line out to where it crosses one and it crosses at $4.34$ GHz. Write that
+number in the process document and it becomes "a $4.3$ GHz device", and from there it
+becomes, in a design review, an argument that a $1$ GHz amplifier ought to be
+comfortable. The stage this course builds out of this device has $6$ MHz of bandwidth.
+
+Neither number is wrong. They are answers to different questions, and this module is
+about the distance between them.
+
+## Where the straight line comes from
+
+The measurement has the drain at AC ground, so the transistor's own drain voltage never
+moves and there is no $C_{gd}$ multiplication and no voltage gain to speak of. The gate
+draws no DC current at all, so every bit of the forced input current goes into charging
+the two gate capacitances:
+
+$$i_{in} = j\omega\left(C_{gs} + C_{gd}\right)v_{gs}, \qquad i_{out} = g_mv_{gs}$$
+
+Divide, and $v_{gs}$ disappears:
+
+$$\left|h_{21}\right| = \frac{g_m}{\omega\left(C_{gs} + C_{gd}\right)}$$
+
+That is the straight line. It falls as $1/f$ because the numerator is a constant of the
+bias point and the denominator is a capacitive admittance, and nothing else in the
+expression has any frequency in it. Set it to one and the crossing is
+
+$$f_T = \frac{g_m}{2\pi\left(C_{gs} + C_{gd}\right)}$$
+
+which is transconductance divided by the charge that has to be moved to obtain it.
+
+```python
+import math
+
+g_m, C_gs, C_gd = 1.728e-3, 57.3e-15, 6.0e-15
+
+
+def h21(f):
+    """Short-circuit current gain, keeping the feed-forward through C_gd."""
+    s = 2j * math.pi * f
+    return (g_m - s * C_gd) / (s * (C_gs + C_gd))
+
+
+for f in (1e8, 2e8, 4e8):
+    print(f"|h21| at {f / 1e6:4.0f} MHz      : {abs(h21(f)):7.3f}")
+f_T = g_m / (2 * math.pi * (C_gs + C_gd))
+print(f"g_m/(2 pi (Cgs + Cgd)) : {f_T / 1e9:7.4f} GHz")
+print(f"|h21| at that frequency: {abs(h21(f_T)):7.4f}")
+```
+
+The last line is worth a moment. At the frequency the formula calls $f_T$, the current
+gain is $1.0045$ rather than $1$. The formula dropped the current that feeds *forward*
+through $C_{gd}$ into the drain, which subtracts from the output current and therefore
+delays the crossing; keeping it gives
+$f_T = g_m/\left(2\pi\sqrt{C_{gs}(C_{gs}+2C_{gd})}\right) = 4.3644$ GHz, half a per cent
+higher. The lab, *Measure f_T the way the definition says*, has you find the crossing by
+bisecting on your own `h21` rather than trusting the closed form, and then asserts the
+ordering: the measured $f_T$ is above the formula's, and with a fat $20$ fF $C_{gd}$ the
+gap grows to three and a half per cent.
+
+## What $f_T$ is made of
+
+Substitute the long-channel expressions $g_m = \mu C_{ox}(W/L)V_{ov}$ and
+$C_{gs} = \tfrac{2}{3}WLC_{ox}$ and watch what survives. $W$ cancels, $C_{ox}$ cancels,
+and one factor of $L$ comes from each:
+
+$$f_T = \frac{g_m}{2\pi C_{gs}} = \frac{3\mu V_{ov}}{4\pi L^2}$$
+
+With $\mu = 200\ \mu\text{A/V}^2 / 8.6\ \text{mF/m}^2 = 0.0233\ \text{m}^2/\text{Vs}$
+and $L = 0.5\ \mu\text{m}$ that is $4.44$ GHz, which agrees with $g_m/(2\pi C_{gs})$ on
+the same device to every digit — the difference from the $4.34$ GHz above is $C_{gd}$
+being counted and the channel-length modulation factor being kept.
+
+Read the expression rather than memorising it. Width is absent: a wider device has more
+$g_m$ and exactly proportionally more capacitance, which is why the lab's scaling test
+doubles every capacitance and requires $f_T$ to halve. Current is absent too, except
+through $V_{ov}$: at fixed geometry $f_T \propto V_{ov} \propto \sqrt{I_D}$, so four
+times the current buys twice the speed and — from module 1 — halves the intrinsic gain
+along the way. Length appears squared, which is why the industry spent thirty years on
+it.
+
+## The two assumptions, and what they cost
+
+Everything above holds under two conditions that the measurement imposed. The drain was
+shorted, so there was no load, no voltage swing at the output, and no Miller
+multiplication. And the gate was driven from a current source, so the source resistance
+was zero and the gate capacitance formed a pole with nothing.
+
+An amplifier violates both. It has a load, because a load is what the gain is developed
+across; and it is driven from the output impedance of whatever came before it. Put the
+numbers from this course's own labs against $f_T$:
+
+```python
+import math
+
+g_m, C_gs, C_gd = 1.728e-3, 57.3e-15, 6.0e-15
+f_T = g_m / (2 * math.pi * (C_gs + C_gd))
+
+# each of these is a -3 dB point from an exact nodal solve, on this same device,
+# in this course's own labs
+stages = [
+    ("common source, 5k source, 10k load", 181.75e6),
+    ("common source, 50k source, 100k load", 6.045e6),
+    ("cascode, 50k source, 100k load", 37.76e6),
+]
+print(f"f_T = {f_T / 1e9:.3f} GHz")
+for name, f in stages:
+    print(f"  {name:36s} {f / 1e6:7.2f} MHz   f_T /{f_T / f:7.1f}")
+```
+
+A factor of $24$ in the friendliest case, $719$ in the case the capstone specification
+is written around, and $115$ for a cascode built from the same two transistors. A real
+design does not sit a little below $f_T$; it sits one to three orders of magnitude
+below, and which order depends on the source resistance and the load, neither of which
+$f_T$ knows anything about.
+
+That does not make $f_T$ useless — it makes it a *device* number. It is the largest
+transconductance-per-capacitance the device can offer, so it ranks two devices, or two
+bias points of one device, and it says how much room a circuit-level idea has to work
+in. The build exercise in this module, *The small-signal model is a circuit — so build
+it*, makes the shape of the comparison concrete: a $2$ mA/V source into a $1$ pF load
+has a gain-bandwidth product of $g_m/(2\pi C_L) = 318$ MHz, in which the load resistor
+has cancelled out. Identical algebra to $f_T$, a different capacitance, and a number
+fourteen times smaller — because a $1$ pF load is fifteen times the device's own gate
+capacitance. $f_T$ is that same expression evaluated with the smallest capacitance the
+device can possibly be asked to drive: its own.
+
+## Why a second figure of merit exists
+
+At $f_T$ the current gain is one, and a current gain of one is not by itself worth
+anything. What a receiver's first stage sells is *power* gain, and power gain can still
+exceed one at frequencies where current gain does not, because a lossless matching
+network is allowed to trade current for voltage.
+
+Power gain also brings in something $f_T$ ignores completely. The gate is not an ideal
+capacitor: it is a resistive sheet, and the current charging $C_{gs}$ has to flow
+through that resistance, dissipating power that never reaches the output. Call it
+$R_g$. Working the input dissipation against the power the device can deliver gives the
+unilateral power gain, and the standard result is
+
+$$U(f) = \frac{f_T}{16\pi R_gC_{gd}f^2} = \left(\frac{f_{max}}{f}\right)^2,
+\qquad f_{max} = \sqrt{\frac{f_T}{16\pi R_gC_{gd}}}$$
+
+which is the expression the derivation unit, *The transit frequency and the maximum
+oscillation frequency*, converts from radians to hertz step by step. Power gain falls
+as $1/f^2$, twenty decibels per decade, and reaches unity at $f_{max}$ — above which
+the device cannot be made to oscillate, whatever is wrapped around it.
+
+```python
+import math
+
+g_m, C_gs, C_gd = 1.728e-3, 57.3e-15, 6.0e-15
+f_T = g_m / (2 * math.pi * (C_gs + C_gd))
+for R_g in (200.0, 20.0):
+    f_max = math.sqrt(f_T / (16 * math.pi * R_g * C_gd))
+    print(f"R_g = {R_g:5.1f} ohm -> f_max = {f_max / 1e9:6.3f} GHz, "
+          f"U at 1 GHz = {(f_max / 1e9) ** 2:6.1f}")
+```
+
+With a $200\ \Omega$ gate, $f_{max} = 8.487$ GHz — above $f_T$, which is normal and not
+a contradiction: between the two frequencies the device has lost its current gain and
+kept its power gain. At $1$ GHz the same device offers at most $72$ times the power it
+is fed, $18.6$ dB, and that is the ceiling with perfect matching and perfect
+neutralisation, before any of it is spent on bandwidth, noise or linearity.
+
+Now change nothing but the drawing. Split the same $20\ \mu\text{m}$ of width into ten
+$2\ \mu\text{m}$ fingers and contact each gate at both ends: $N$ fingers in parallel cut
+the gate resistance by roughly $N^2$, and the second contact by about four again, so
+$200\ \Omega$ becomes $20\ \Omega$. $f_{max}$ goes to $26.8$ GHz and $U$ at $1$ GHz to
+$720$. The device is the same, the bias is the same, and $f_T$ has not moved by a
+hertz, because there is no resistance anywhere in $g_m/(2\pi(C_{gs}+C_{gd}))$. The lab
+makes the same point arithmetically: ten times $R_g$ costs a factor of $\sqrt{10}$ in
+$f_{max}$.
+
+## The mistake, and why it is tempting
+
+The mistake is treating $f_T$ as the speed of the circuit rather than of the device —
+and its sharpest form is the belief that a stage's gain-bandwidth product is $f_T$, so
+that a gain of ten leaves $434$ MHz on the table. On this device with a $50$ k$\Omega$
+source, gain ten arrives with about $6$ MHz.
+
+It is tempting for good reasons. $f_T$ is the only number in the process document with
+units of hertz. It is a genuine measurement, not a fudge. And there is a real
+inequality lurking underneath — $g_m$ over the capacitance the transconductance must
+drive does bound what any single stage can do — which makes the folklore feel like
+physics. What ruins it is that the capacitance in a circuit is never the device's own
+gate capacitance. It is that capacitance multiplied by the Miller factor of module 2,
+sitting against a source resistance that is not zero, and $518$ fF against
+$50\ \text{k}\Omega$ is $6$ MHz however fast the transistor is.
+
+The companion mistake is choosing devices by $f_T$ alone. Two transistors with
+identical $f_T$ can differ by a factor of three in $f_{max}$ on layout, and by more than
+that in a Miller-limited stage on their $C_{gd}$, which appears in neither figure of
+merit with any weight.
+
+## Where these numbers stop holding
+
+The long-channel scaling $f_T \propto \mu V_{ov}/L^2$ dies with velocity saturation. In
+a short-channel device the carriers stop accelerating, $g_m$ tends to $WC_{ox}v_{sat}$,
+and $f_T$ tends to $v_{sat}/(2\pi L)$ — first power of $L$, not the second, and no
+longer improving with overdrive. Real devices also show $f_T$ *peaking* against current
+density and falling beyond it, as mobility degradation and series resistance in the
+source and drain take over; the model here is monotonic in $I_D$, which no measured
+device is.
+
+Both figures also assume the hybrid-pi model is the whole device. The extrapolation
+from a measured $h_{21}$ includes the drain-bulk capacitance, the source and drain
+series resistances and the substrate network, none of which are in the two-capacitor
+model, so a measured $f_T$ generally comes in below the one computed from $g_m$ and the
+gate capacitances. And $U(f)$ assumes unilateralisation — that the reverse path through
+$C_{gd}$ has been cancelled by a network you have not built. $f_{max}$ is the frequency
+at which a device you do not have would stop oscillating.
+
+The sandbox for this module, *How far away the second pole has to be*, is where the
+consequence shows up as a shape: a device pole too close to the amplifier's own pole
+rings, and pushing it out past critical damping stops helping. That distance is what
+$f_T$ buys you, and what module 4 spends a second transistor to stop wasting.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "What the two frequencies measure, and what they leave out",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A device with $f_T = 4.34$ GHz is used in a common-source stage. What does $f_T$ tell you about that stage's $-3$ dB bandwidth?",
+                        "opts": [
+                            "It is the bandwidth of the stage itself, since both of them are set by the same capacitances",
+                            "It is the bandwidth the stage reaches once its own voltage gain is divided out of it",
+                            "It is a hard ceiling the stage approaches as its load resistance is made small enough",
+                            "Very little on its own: it was measured with the drain shorted and the gate current-driven",
+                        ],
+                        "a": 3,
+                        "whys": [
+                            "The same capacitances appear in both, but against entirely different resistances and multiplied by an entirely different gain — 4.34 GHz against roughly 6 MHz on the same device.",
+                            "This is the gain-bandwidth folklore, and it fails by two orders of magnitude here — a gain of ten would predict 434 MHz where the stage delivers about 6 MHz.",
+                            "Shrinking the load does raise the corner, but toward $1/(2\\pi R_SC_{in})$ with the Miller term still in $C_{in}$, and the gain vanishes on the way. The ceiling is set by the source resistance, not by $f_T$.",
+                            "Both conditions of the measurement are broken by any amplifier: it has a load, and it is driven from a real source impedance.",
+                        ],
+                        "why": r"""
+$f_T$ is a property of the device at a bias point, measured under two conditions no
+amplifier meets: the drain shorted, so there is no load and no Miller multiplication,
+and the gate current-driven, so there is no source resistance to form a pole with. Put
+the same device in the stage the capstone is written around and the corner is 6 MHz,
+$719$ times below $f_T$; loosen the source resistance to $5\ \text{k}\Omega$ and it is
+$182$ MHz, still $24$ times below. $f_T$ ranks devices and bias points, and it bounds
+what a circuit-level idea has to work with. It is not the bandwidth of anything you
+will build.
+""",
+                    },
+                    {
+                        "q": "A sweep reads $\\left|h_{21}\\right| = 43.4$ at 100 MHz. What is $f_T$, and why can it be had from one point?",
+                        "opts": [
+                            "About 4.3 GHz, because $\\left|h_{21}\\right|$ falls as $1/f$, so unity is 43.4 times up",
+                            "About 434 MHz, because the current gain falls by a decade for each decade of frequency",
+                            "About 2.2 GHz, because the current gain is down by half once the drain is loaded",
+                            "It cannot be had from one point, because the roll-off rate is a property of the device",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "$\\left|h_{21}\\right| = g_m/(\\omega(C_{gs}+C_{gd}))$ has frequency in one place and to one power, so one measured point fixes the whole line.",
+                            "Reads the 20 dB/decade slope as though the gain fell tenfold per decade of gain rather than per decade of frequency; the two are the same slope stated wrongly, and it lands a factor of ten low.",
+                            "There is no factor of two here, and no load either — the drain is at AC ground throughout the measurement, which is what makes the roll-off a clean $1/f$.",
+                            "The roll-off rate is not a free parameter: a transconductance against a capacitive admittance can only give $1/f$, which is why one point and a slope are enough.",
+                        ],
+                        "why": r"""
+The short-circuit current gain is $g_m$ over a capacitive admittance, so it falls as
+$1/f$ with no other frequency dependence anywhere in it. One measured point therefore
+fixes the entire line: $43.4$ at $100$ MHz puts unity at $43.4 \times 100$ MHz, which
+is $4.34$ GHz. That is how the number is obtained in practice, because at $4.34$ GHz
+the pads, the package and the probes contribute more than the device does. $f_T$ is an
+extrapolation, and describing it as a measured frequency overstates what was measured.
+""",
+                    },
+                    {
+                        "q": "The device does 4.34 GHz. The common-source stage built from it, driven from 50 k$\\Omega$ into a 100 k$\\Omega$ load, does 6.0 MHz. Where did the factor of 719 go?",
+                        "opts": [
+                            "Into the bias point, which is chosen for gain rather than for a high transit frequency",
+                            "Into the drain node, where the 100 k$\\Omega$ load works against the load capacitance",
+                            "Into a gate node driven from 50 k$\\Omega$ into 518 fF of Miller-multiplied capacitance",
+                            "Into the 5 fF load capacitance, which is what the transconductance has to drive",
+                        ],
+                        "a": 2,
+                        "whys": [
+                            "The bias is the same one $f_T$ was quoted at — the same $g_m$, the same capacitances. Nothing about the device changed between the two numbers.",
+                            "The output node is real but fast: $43.9\\ \\text{k}\\Omega$ against 11 fF puts that pole at about 330 MHz, fifty times above the corner being explained.",
+                            "$1/(2\\pi \\times 50\\,\\text{k}\\Omega \\times 518\\,\\text{fF})$ is 6.1 MHz, which accounts for the measured corner within two per cent.",
+                            "5 fF against the output resistance is a pole in the hundreds of megahertz. The capacitance that matters is at the gate, and Miller has made it a hundred times larger.",
+                        ],
+                        "why": r"""
+The Miller-multiplied input capacitance is
+$C_{gs} + C_{gd}(1 + 75.8) = 518$ fF, and against a $50\ \text{k}\Omega$ source that is
+a pole at $6.1$ MHz — the whole of the measured $6.045$ MHz, to two per cent. Both
+things $f_T$ assumed away are in that one number: the load that lets the drain swing,
+which is what multiplies $C_{gd}$, and the source resistance, which is what turns a
+capacitance into a pole. The output node contributes a pole near $330$ MHz and is not
+the constraint.
+""",
+                    },
+                    {
+                        "q": "Splitting a device into ten fingers contacted at both ends drops $R_g$ from 200 $\\Omega$ to 20 $\\Omega$. Which figure of merit moves?",
+                        "opts": [
+                            "$f_{max}$, from 8.5 GHz to 26.8 GHz; $f_T$ contains no resistance and does not move",
+                            "Both, since $f_{max}$ is built on $f_T$ and anything that changes one must change the other",
+                            "$f_T$, because narrow fingers have less gate area and therefore a smaller $C_{gs}$",
+                            "Neither, because both are properties of the process and the bias rather than the drawing",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "$f_{max} = \\sqrt{f_T/(16\\pi R_gC_{gd})}$ improves as $1/\\sqrt{R_g}$, while $g_m/(2\\pi(C_{gs}+C_{gd}))$ has no resistance in it at all.",
+                            "$f_{max}$ is built on $f_T$, but the dependence runs one way: $R_g$ enters $f_{max}$ and appears nowhere in $f_T$, so this change moves one and not the other.",
+                            "Ten fingers of one tenth the width have exactly the same total area and the same $C_{gs}$. What fingering changes is how far the gate current has to travel through the polysilicon.",
+                            "Layout is precisely what this changes. Two devices identical in process and bias can differ by three times in $f_{max}$ on the drawing alone, which is why $f_{max}$ is a layout figure of merit.",
+                        ],
+                        "why": r"""
+$f_T = g_m/(2\pi(C_{gs}+C_{gd}))$ has no resistance in it anywhere, so no amount of
+redrawing moves it. $f_{max} = \sqrt{f_T/(16\pi R_gC_{gd})}$ falls as $\sqrt{R_g}$, so
+a tenfold cut in gate resistance buys a factor of $\sqrt{10}$ — from $8.5$ GHz to
+$26.8$ GHz, with the unilateral power gain at 1 GHz going from 72 to 720. Same device,
+same bias, same current: this is the cheapest speed in the whole subject, and it is
+invisible to the one number most often quoted.
+""",
+                    },
+                    {
+                        "q": "For this device $f_{max} = 8.5$ GHz sits above $f_T = 4.3$ GHz. How can that be?",
+                        "opts": [
+                            "The matching networks assumed in the $f_{max}$ measurement supply the extra gain themselves",
+                            "They measure different gains: current gain reaches one at $f_T$, power gain at $f_{max}$",
+                            "It cannot be: $f_{max}$ is an upper bound, so a value above $f_T$ means an arithmetic slip",
+                            "$f_{max}$ leaves out $C_{gs}$, which is what makes it exceed the transit frequency",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            "A matching network is lossless and supplies no gain — it transforms impedance so that the gain the device has can be delivered. Believing otherwise makes every passive network a free amplifier.",
+                            "Between the two frequencies the device has lost its current gain and kept its power gain, which a lossless network can trade back into voltage.",
+                            "$f_{max}$ bounds oscillation, not $f_T$. The two are independent enough that either ordering occurs in practice, and which one you get depends mostly on the gate resistance.",
+                            "$C_{gs}$ is in $f_{max}$ through $f_T$, which sits inside the square root. What $f_{max}$ adds is $R_g$, and lowering that is what pushes it above $f_T$ here.",
+                        ],
+                        "why": r"""
+The two numbers answer different questions. $f_T$ is where the short-circuit *current*
+gain reaches one; $f_{max}$ is where the *power* gain does. Above $f_T$ the device
+returns less current than it is given and can still return more power, because a
+lossless matching network is free to trade current for voltage, and $f_{max}$ is the
+frequency at which no network can do it any longer. With a low gate resistance
+$f_{max}$ commonly lands two or three times above $f_T$; with a badly drawn wide device
+it lands below. Neither ordering is a mistake.
+""",
+                    },
+                    {
+                        "q": "At fixed geometry, the bias current is raised from 172.8 $\\mu$A to 691.2 $\\mu$A. What happens to $f_T$ and to the intrinsic gain?",
+                        "opts": [
+                            "$f_T$ doubles and the intrinsic gain halves, since $V_{ov}$ has doubled to 0.4 V",
+                            "$f_T$ quadruples with the current, and the intrinsic gain is unaffected by bias",
+                            "$f_T$ doubles and the intrinsic gain doubles, because $g_m$ has doubled as well",
+                            "$f_T$ quadruples and the intrinsic gain halves, because $r_o$ has fallen fourfold",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            "$f_T \\propto V_{ov} \\propto \\sqrt{I_D}$ and $g_mr_o = 2(1+\\lambda V_{DS})/(\\lambda V_{ov})$, so both follow the overdrive and in opposite directions.",
+                            "Takes $f_T$ as proportional to current rather than to $g_m$; $g_m$ itself grows only as $\\sqrt{I_D}$ at fixed geometry, so four times the current is twice the speed.",
+                            "$g_m$ has indeed doubled, but $r_o$ has fallen fourfold at the same time, and their product carries the net factor of one half rather than two.",
+                            "The right direction for the gain and the wrong law for $f_T$: $g_m$ is what $f_T$ follows, and it rises as the square root of the current, not with it.",
+                        ],
+                        "why": r"""
+Four times the current at fixed geometry is twice the overdrive: $0.2$ V to $0.4$ V.
+$g_m = 2I_D/V_{ov}$ therefore doubles and so does $f_T$, from $4.34$ GHz to
+$8.69$ GHz, since the capacitances have not changed. The intrinsic gain is
+$2(1+\lambda V_{DS})/(\lambda V_{ov})$, which halves from $135$ to $67.5$. Four times
+the power for twice the speed and half the gain is the trade in one line, and it is why
+$g_m/I_D$ is treated as a currency rather than a preference.
+""",
+                    },
+                ],
+            },
             "sandbox": {
                 "title": "How far away the second pole has to be",
                 "visualiser": "pole-step",
@@ -1197,6 +2100,194 @@ assert abs(_a / _b - np.sqrt(10.0)) < 1e-6, \
                 "The output resistance rises to $r_{o1} + r_{o2} + g_{m2}r_{o1}r_{o2}$, so the stage gains voltage gain at the same time as bandwidth.",
                 "The price: one $V_{DSsat}$ of headroom, a new pole at the intermediate node near $g_{m2}/\\left(2\\pi C_x\\right)$, and a second device's noise and area.",
                 "A cascode does not raise $f_T$. It removes a circuit-level penalty; the device is exactly as fast as it was.",
+            ],
+            "read": [
+                {
+                    "title": "One more transistor, six times the bandwidth",
+                    "minutes": 16,
+                    "body": r'''
+Two amplifiers on the same die, built from the same two transistors, biased at the same
+$172.8\ \mu\text{A}$, driven from the same $50$ k$\Omega$ source and loaded by the same
+$100$ k$\Omega$. The first is the common-source stage of module 2 with the second device
+used as nothing at all. Its gain is $75.8$ and its bandwidth is $6.04$ MHz.
+
+The second stacks that second device on top of the first: source on the input
+transistor's drain, gate tied to a fixed bias, drain to the load. Its gain is $170.0$
+and its bandwidth is $37.8$ MHz.
+
+More than twice the gain and six times the bandwidth, out of the same silicon, the same
+current and the same supply, for one wire moved. Both numbers come from the module's
+lab, *Common-source against cascode, by nodal analysis*, which solves each circuit
+exactly rather than estimating it. This reading is about where the six came from, and
+about the two situations in which it does not arrive.
+
+## The node in the middle
+
+The upper device has its gate held at a fixed voltage, so for small signals that gate
+is ground. The input device no longer drives the load; it drives whatever resistance
+appears at the *source* of the upper device.
+
+Push a test voltage $v_x$ into that source. The upper transistor's gate-source voltage
+is $0 - v_x$, so it pulls a drain current $-g_{m2}v_x$; its own $r_{o2}$ carries
+$(v_x - v_{out})/r_{o2}$; and $v_{out}$ is what the load makes of the total. Solving that
+loop gives
+
+$$R_x = \frac{R_L + r_{o2}}{1 + g_{m2}r_{o2}}$$
+
+The load has been divided down by the upper device's intrinsic gain before it reaches
+the source. When $R_L$ is modest this collapses to $1/g_{m2}$, and the usual statement
+is that a cascode presents $1/g_{m2}$ to the device below it. Keep the exact form for a
+moment, because the numbers matter here.
+
+```python
+import math
+
+g_m, r_o = 1.728e-3, 78125.0
+C_gs, C_gd = 57.3e-15, 6.0e-15
+R_S, R_L = 50e3, 100e3
+
+A_cs = g_m * (R_L * r_o / (R_L + r_o))
+C_in_cs = C_gs + C_gd * (1.0 + A_cs)
+R_x = (R_L + r_o) / (1.0 + g_m * r_o)
+C_in_ca = C_gs + C_gd * (1.0 + g_m * R_x)
+R_out = 2.0 * r_o + g_m * r_o * r_o
+
+print(f"common source : gain {A_cs:6.2f}   C_in {C_in_cs * 1e15:6.1f} fF   "
+      f"input pole {1 / (2 * math.pi * R_S * C_in_cs) / 1e6:5.1f} MHz")
+print(f"cascode       : gain {g_m * R_out * R_L / (R_out + R_L):6.2f}   "
+      f"C_in {C_in_ca * 1e15:6.1f} fF   "
+      f"input pole {1 / (2 * math.pi * R_S * C_in_ca) / 1e6:5.1f} MHz")
+print(f"into the source of the upper device : {R_x:9.1f} ohm")
+print(f"output resistance of the cascode    : {R_out / 1e6:9.3f} Mohm")
+print(f"pole at the intermediate node       : {g_m / (2 * math.pi * (C_gs + C_gd)) / 1e9:9.3f} GHz")
+```
+
+$R_x$ is $1310\ \Omega$: the $579\ \Omega$ of $1/g_{m2}$ plus $R_L/(g_{m2}r_{o2})$,
+which is $100\ \text{k}\Omega/135 = 741\ \Omega$ and not negligible. The gain from the
+input gate to that node is $g_{m1}R_x = 2.26$, against $75.8$ when the same device drove
+the load directly.
+
+## What that does to the input
+
+Module 2's result was that $C_{gd}$ arrives at the gate multiplied by $1 + |A|$, where
+$A$ is the gain measured *across that capacitor* — from the gate to the drain of the
+input device, not from the gate to the output. In the common-source stage those are the
+same node and the factor is $76.8$. In the cascode they are different nodes, and the
+factor is $3.26$.
+
+$$C_{in} = C_{gs} + C_{gd}\left(1 + \frac{g_{m1}}{g_{m2}}\right) \approx C_{gs} + 2C_{gd}$$
+
+The block gives $518.0$ fF for the common-source stage and $76.9$ fF for the cascode, a
+factor of $6.7$. Against a $50$ k$\Omega$ source those are single-pole estimates of
+$6.1$ MHz and $41.4$ MHz, and the exact solutions are $6.04$ MHz and $37.8$ MHz. The
+common-source estimate is within two per cent; the cascode's is ten per cent
+optimistic, for the same reason module 2's was — with the input pole pushed out that
+far, the pole at the output is no longer remote enough to ignore.
+
+The gain rose at the same time, and by a separate mechanism. Looking *into* the drain
+of the upper device, the $r_{o1}$ below it acts as source degeneration and the
+resistance becomes $r_{o1} + r_{o2} + g_{m2}r_{o1}r_{o2}$, which the block reports as
+$10.7$ M$\Omega$. That is two orders of magnitude above the $78$ k$\Omega$ of a single
+device, so the $100$ k$\Omega$ load — which used to be shunted down to $43.9$ k$\Omega$
+by $r_o$ — now sees almost nothing in parallel with it and keeps $99.1$ k$\Omega$. The
+gain estimate is $171.2$ against the exact $170.0$.
+
+Both improvements come from one structural change, and it is worth stating in one
+sentence: the input device no longer sees its own output swing. Its drain barely moves,
+so there is nothing for $C_{gd1}$ to multiply; and its $r_{o1}$ is no longer across the
+output node, so there is nothing to shunt the gain away.
+
+## What it costs
+
+Headroom, first and most seriously. The two devices are in series and each needs its
+own $V_{DSsat}$ — at a $200$ mV overdrive apiece that is $400$ mV of the supply gone
+before the load resistor or the output swing has been given anything. On a $1.2$ V rail
+that is a third of everything, which is why the cascode is common in a $3.3$ V analogue
+block and contentious in a low-voltage one.
+
+Second, a new pole. The intermediate node carries $C_{gs2}$ and $C_{gd1}$, about
+$63$ fF, and it is driven from $1/g_{m2}$, so it sits near
+$g_{m2}/\left(2\pi C_x\right)$. The block prints that as $4.345$ GHz, and the number
+should look familiar: it is the $f_T$ of module 3, the same $g_m$ over the same
+capacitance. The extra pole a cascode adds lands at the device's own transit frequency,
+which is why it is harmless in any design that was not already running at the device's
+limit — and why it stops being harmless if the upper device is made small to save area,
+because $g_{m2}$ falls and the pole comes down with it. The sandbox for this module,
+*The corner after the Miller penalty is removed*, shows the shape of that: hold the
+corner and drop the damping, and a peak appears at the corner.
+
+Third, the upper device contributes noise and area, and its gate needs a bias that is
+stable enough not to modulate the intermediate node.
+
+## Where the six disappears
+
+Drive the same two circuits from a $100\ \Omega$ source instead of $50$ k$\Omega$ and
+the ordering reverses: the common-source stage measures $301$ MHz and the cascode
+$140$ MHz. The lab asserts that inversion, and the ratio it requires is $0.46$.
+
+Two things happened. With a stiff source there was never a Miller problem to solve — a
+$518$ fF gate driven from $100\ \Omega$ is a pole at $3$ GHz, nowhere near the answer.
+And the cascode's own gain increase works against it here: the resistance at the output
+node went from $43.9$ k$\Omega$ to $99.1$ k$\Omega$, so the output pole, which is now
+the one that matters, moved down by that same factor. Gain and bandwidth traded exactly
+as they always do; the cascode gave back in bandwidth what it took in gain.
+
+The general statement is the useful one. A cascode does not make anything faster. It
+removes a penalty that exists only when the *input* node is the bottleneck, and it pays
+for that removal with headroom and with a higher output impedance that a
+capacitively-loaded output node will notice. When the source is stiff and the load is
+capacitive, it is the wrong tool.
+
+The same caution applies at the other end. $R_x$ was $1310\ \Omega$ rather than
+$579\ \Omega$ because $R_L/(g_{m2}r_{o2})$ was not small, and in a real amplifier $R_L$
+is often another cascode acting as a current source, with megohms rather than
+$100$ k$\Omega$. Then $R_L/(g_{m2}r_{o2})$ dominates $R_x$, the gain across $C_{gd1}$
+climbs back up, and some of the Miller multiplication returns. The existing quiz in this
+module asks exactly that question; the point of it is that $1/g_{m2}$ is a limiting case
+and not a law.
+
+## The mistake, and why it is tempting
+
+The mistake is saying that a cascode makes the transistor faster. It is tempting because
+the evidence looks overwhelming: the same devices, the same current, six times the
+bandwidth *and* twice the gain, which no other bandwidth trick offers. Every other route
+— a smaller load resistor, a wider device, a stiffer source — gives something back.
+
+But $f_T = g_m/(2\pi(C_{gs}+C_{gd}))$ contains nothing about what the drain is connected
+to. Neither transistor's $f_T$ changed by a hertz. What changed is that a circuit-level
+penalty, invented by the topology and not by the physics, was removed. Keeping the two
+apart is what stops the next mistake: reaching for a cascode in a stage that is already
+output-pole limited, and paying $400$ mV of headroom for the $140$ MHz above instead of
+the $301$ MHz that was already there.
+
+The gain-bandwidth products make the same point from the other side. Common-source:
+$75.8 \times 6.04\ \text{MHz} = 458$ MHz. Cascode: $170 \times 37.8\ \text{MHz} =
+6.42$ GHz, fourteen times higher, which the lab checks as a ratio above ten. A number
+that moves by fourteen was never a property of the device.
+
+## Where the model stops holding
+
+Everything above used $g_{m2}r_{o2} \gg 1$ and treated the bias on the upper gate as a
+perfect small-signal ground. On a short-channel device $g_mr_o$ can be ten rather than
+$135$, and then $R_x$ is a much larger fraction of $R_L$ and the Miller factor is
+several rather than two. The output resistance $g_{m2}r_{o1}r_{o2}$ is likewise a
+long-channel promise; in a modern process the boost from stacking is real but far
+smaller than the square of an intrinsic gain suggests.
+
+The two-transistor nodal model in the lab also has no body effect in it. The upper
+device's source is not at the substrate potential, so its threshold rises with $v_x$ and
+$g_{mb}$ adds to $g_{m2}$ — which helps, lowering $R_x$ and improving the very thing
+this module is about, and which is left out here so the arithmetic stays checkable by
+hand.
+
+The capstone puts all of it to work: `size_for_spec` walks a list of candidate currents
+and widths, builds the cascode for each, and returns the cheapest that meets a gain and
+a bandwidth at once. The trade it is searching against is the one in this module — a
+wider device raises $g_m$ and the gain, and raises $C_{gs}$ and costs bandwidth — and
+the answer is not the fastest device or the highest-gain device but the smallest one
+that clears both lines.
+''',
+                },
             ],
             "sandbox": {
                 "title": "The corner after the Miller penalty is removed",
