@@ -1540,13 +1540,17 @@ const Desk = (function () {
 
   function onHide() { if (document.visibilityState === 'hidden') flushSave(); }
 
-  /* The toolbar button opens this dialog, so its expanded state is part of the
+  /* Every button that opens this dialog, so their expanded state is part of the
      dialog's contract. Queried each time rather than cached: the shell owns its
-     header markup and re-renders it, and a cached node would be kept honest
-     forever while the live one never was. */
+     header markup and rebuilds the runner bar on every lesson, and a cached node
+     would be kept honest forever while the live one never was. The runner-bar
+     button came after the header one and shipped without either attribute — the
+     same defect, one trigger over — so the list is here, not in the shell. */
   function markTrigger(on) {
-    const b = document.getElementById('desk-btn');
-    if (b) b.setAttribute('aria-expanded', on ? 'true' : 'false');
+    ['desk-btn', 'rb-desk'].forEach(function (id) {
+      const b = document.getElementById(id);
+      if (b) b.setAttribute('aria-expanded', on ? 'true' : 'false');
+    });
   }
 
   function close() {

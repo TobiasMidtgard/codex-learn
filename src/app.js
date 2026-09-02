@@ -1388,7 +1388,12 @@ function paintRunner(info) {
        hides the top bar, and the desk button lived there, so the one place it was
        built for was the one place it could not be reached — Alt+K still worked,
        but nothing on screen said so. */
+    /* The same contract as #desk-btn: this opens a dialog, and Desk keeps
+       aria-expanded honest on both. Read from the desk rather than written
+       "false", because this bar is rebuilt on every lesson, open desk or not. */
     '<button class="rb-desk" id="rb-desk" aria-label="Notepad and calculator" ' +
+      'aria-haspopup="dialog" aria-expanded="' +
+      (typeof Desk !== 'undefined' && Desk.isOpen() ? 'true' : 'false') + '" ' +
       'title="Notepad and calculator (Alt+K)">\u25a4</button>';
 
   const rbDesk = $('#rb-desk');
