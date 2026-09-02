@@ -6584,6 +6584,292 @@ matters at this size.
                 "A relative step h * max(1, |x|) keeps the numerical derivative usable at large x",
                 "Every iteration needs a cap; a browser tab has no Ctrl-C",
             ],
+            "read": [
+                {
+                    "title": "The tangent line used backwards, and the three ways it fails",
+                    "minutes": 13,
+                    "body": r'''
+You want $\sqrt{2}$ to every digit a double can hold, and all you have is arithmetic.
+Start from $x_0 = 1$ — a guess wrong in the first decimal place — and apply the map
+$x \mapsto \tfrac{1}{2}(x + 2/x)$ five times.
+
+| $k$ | $x_k$ | $x_k - \sqrt{2}$ |
+| --- | --- | --- |
+| $0$ | $1.0000000000000000$ | $-4.142136\times 10^{-1}$ |
+| $1$ | $1.5000000000000000$ | $+8.578644\times 10^{-2}$ |
+| $2$ | $1.4166666666666667$ | $+2.453104\times 10^{-3}$ |
+| $3$ | $1.4142156862745099$ | $+2.123901\times 10^{-6}$ |
+| $4$ | $1.4142135623746899$ | $+1.594724\times 10^{-12}$ |
+| $5$ | $1.4142135623730951$ | $0$ |
+
+Count the correct digits down that last column: one, two, five, eleven, and then all of
+them. Each step roughly doubles the tally. Five multiplications and five divisions have
+produced a number that is correct in every bit.
+
+Three questions follow, and this module is the three answers. Where does that map come
+from? Why do the digits double? And what does the same procedure do on a function that
+does not cooperate?
+
+## The step is a tangent line, solved for zero
+
+Module 9 built the linearisation $L(x) = f(a) + f'(a)(x-a)$ and used it to *evaluate* $f$
+a short way from $a$. Read it in the other direction. A line is the one shape whose root
+can be written down, so if $L$ stands in for $f$ near $a$, the root of $L$ should stand
+in for the root of $f$. Set $L(x) = 0$ at $a = x_k$:
+
+$$0 = f(x_k) + f'(x_k)\,(x - x_k),$$
+
+which rearranges to
+
+$$x_{k+1} = x_k - \frac{f(x_k)}{f'(x_k)}.$$
+
+That is the whole method. Put $f(x) = x^2 - 2$ into it and
+
+$$x_{k+1} = x_k - \frac{x_k^2 - 2}{2x_k} = \frac{1}{2}\left(x_k + \frac{2}{x_k}\right),$$
+
+the average of a guess and $2$ divided by that guess. The rule the table used is not a
+trick handed down from Babylon; it is the tangent line to a parabola, written out.
+
+Notice what the derivation did not promise. $x_{k+1}$ is the exact root of an approximate
+function. Whether that is progress depends entirely on how good the approximation was —
+which is the quantity Module 9 spent its length measuring.
+
+## Why the digits double
+
+Take Taylor with remainder at $x_k$ and evaluate it at the true root $r$, where $f$ is
+zero. For some $\xi$ between $x_k$ and $r$,
+
+$$0 = f(r) = f(x_k) + f'(x_k)(r - x_k) + \frac{f''(\xi)}{2}(r - x_k)^2.$$
+
+Write $e_k = x_k - r$ for the error, so $r - x_k = -e_k$, and divide through by
+$f'(x_k)$:
+
+$$0 = \frac{f(x_k)}{f'(x_k)} - e_k + \frac{f''(\xi)}{2f'(x_k)}\,e_k^2.$$
+
+The next error is $e_{k+1} = x_{k+1} - r = e_k - f(x_k)/f'(x_k)$, and the line above says
+exactly what $f(x_k)/f'(x_k)$ is. Substituting it, the $e_k$ terms cancel and
+
+$$e_{k+1} = \frac{f''(\xi)}{2f'(x_k)}\,e_k^2.$$
+
+The error is *squared* each step, times a constant. For $f = x^2 - 2$ that constant tends
+to $2/(2\cdot 2\sqrt{2}) = 1/(2\sqrt{2}) = 0.3535534$, and the table can be used to check
+it rather than to illustrate it. From $e_2 = 2.453104\times 10^{-3}$ the formula predicts
+$e_3 = 0.3535534 \times (2.453104\times 10^{-3})^2 = 2.127586\times 10^{-6}$, against a
+measured $2.123901\times 10^{-6}$. From that, it predicts
+$e_4 = 1.594864\times 10^{-12}$ against a measured $1.594724\times 10^{-12}$ — four
+significant figures, out of an expression containing an unknown $\xi$.
+
+Squaring an error of $10^{-6}$ gives $10^{-12}$, and that is the doubling of digits, with
+no separate explanation needed. But look at where $f'(x_k)$ ended up: in the denominator.
+Everything that goes wrong below is that denominator misbehaving.
+
+## The three ways it fails
+
+**The derivative vanishes.** For $f(x) = x^2 + 1$ started at $x_0 = 0$, $f'(0) = 0$. The
+tangent there is horizontal, a horizontal line has no root, and there is no next point to
+compute. The iteration has not converged and has not diverged; it has stopped existing,
+which is why the lab gives it an exception of its own rather than a return value.
+
+**The iterates run away.** Newton on $\arctan$ from $x_0 = 2$ steps by
+$-(1 + x^2)\arctan x$. Because $\arctan$ flattens, $f'$ shrinks like $1/x^2$ while $f$
+stays near $\pi/2$, so the correction is enormous and lands further out than it started:
+
+| $k$ | $0$ | $1$ | $2$ | $3$ | $4$ | $5$ |
+| --- | --- | --- | --- | --- | --- | --- |
+| $x_k$ | $2.00$ | $-3.54$ | $13.95$ | $-279.34$ | $122017$ | $-2.34\times 10^{10}$ |
+
+The root at $0$ is crossed on the first step and never approached again. This is not a
+rounding effect; the same thing happens in exact arithmetic, and the boundary is sharp —
+$x_0 = 1.3917$ converges and $x_0 = 1.3918$ does not.
+
+**The iterates cycle.** For $f(x) = x^3 - 2x + 2$ from $x_0 = 0$: $f(0) = 2$ and
+$f'(0) = -2$, so $x_1 = 0 - 2/(-2) = 1$. Then $f(1) = 1$ and $f'(1) = 1$, so
+$x_2 = 1 - 1 = 0$. The sequence is $0, 1, 0, 1, \dots$ for as long as anyone is willing
+to run it. Every value is finite, every step is legal, and the residual never falls.
+
+That third one is the argument for a cap. Two of these failures announce themselves — a
+division by zero, a number that overflows — and the third produces perfectly ordinary
+output forever. `newton` in **Newton's method with guards** therefore counts its steps
+and raises rather than trusting the problem, because the tab it runs in has no Ctrl-C.
+
+## Worked: the step under the difference quotient
+
+When $f'$ is estimated rather than supplied, one more failure joins the list, and it is
+the reason the lab's `numeric_derivative` scales its step.
+
+At $x = 121977$, $\arctan x = 1.5707881$, and one unit in the last place of a number that
+size is $2.22\times 10^{-16}$. The true change in $\arctan$ across $h = 10^{-6}$ either
+side is $2h/(1+x^2) = 1.34\times 10^{-16}$ — smaller than the last place of the values
+being subtracted. So the subtraction cannot return the right answer: it returns zero, or
+it returns one unit in the last place. Here it returns one, $2.22\times 10^{-16}$, and
+the central difference reports $1.11\times 10^{-10}$ where the truth is
+$6.72\times 10^{-11}$. Sixty-five per cent high, with nothing raised and nothing printed.
+
+Scale the step with the point instead — `step = h * max(1.0, abs(x))`, which is $0.122$
+here — and the same expression returns $6.7211195\times 10^{-11}$ against an exact
+$6.7211580\times 10^{-11}$, wrong in the sixth significant figure. The difference matters
+downstream: a derivative 65 per cent too large makes every Newton step three-fifths of
+the length it should be, which turns quadratic convergence into a crawl.
+
+## The mistake
+
+A loop can measure $|f(x_k)|$ and cannot measure $|x_k - r|$, so the stopping test is
+written on the residual. It is then very easy to read a small residual as a small error.
+
+The two agree only when $f'$ at the root is not small, and at a **double** root they part
+company entirely. Take $f(x) = (x-1)^2$. The step collapses to
+$x_{k+1} = x_k - (x_k-1)^2/(2(x_k-1)) = \tfrac{1}{2}(x_k + 1)$, so the error *halves*
+each time rather than squaring — linear convergence, from the same formula that gave
+sixteen digits in five steps. From $x_0 = 2$ the errors are
+$1, \tfrac12, \tfrac14, \tfrac18, \tfrac{1}{16}, \tfrac{1}{32}$: after five steps $x$ is
+still wrong in the second decimal place, while the residual has fallen to
+$9.77\times 10^{-4}$ and looks convincing. Carry on to a residual of $10^{-12}$ and the
+root is located to about $10^{-6}$ — the square root of the tolerance asked for.
+
+It is tempting because on every well-behaved example the two quantities agree to within a
+factor of $f'(r)$, and the well-behaved examples are the ones people test with. The habit
+that catches it costs one line: watch $|x_{k+1} - x_k|$ as well. On a simple root that
+step collapses as fast as the residual; on a double root it settles into halving, and
+three iterations are enough to see it.
+
+## Where it stops
+
+Every claim above assumed four things at once: a simple root, a starting point near it, a
+derivative that stays away from zero along the whole path, and a bounded second
+derivative. None of the four is checkable from inside the loop, and none implies another.
+
+Convergence is local, and "near" carries no radius you can compute in advance. The set of
+starting points that reach a given root can be an interval, as it is for $x^2 - 2$; for
+$z^3 - 1$ in the complex plane the three sets interleave at every scale, so two starts a
+millionth apart reach different roots. A guard that gives up at $|x| > 10^9$ is therefore
+a policy rather than a theorem: it correctly stops the $\arctan$ runaway, and it would
+also stop a search that was going to succeed after wandering.
+
+Quadratic convergence is a statement about a limit, too, and says nothing about the first
+few steps. The opening table spent two steps merely arriving in the neighbourhood and
+three collecting all sixteen digits — which is the usual division of labour, and the
+reason a method with a cap of fifty is not being generous.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "What the iteration does when it is not converging",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "The Newton step `x - f(x)/f'(x)` is, geometrically:",
+                        "opts": [
+                            "the root of the tangent line to `f` drawn at `x`",
+                            "the point nearest `x` at which `f` is smallest",
+                            "the midpoint of a bracket known to hold the root",
+                            "the average of `x` and the estimate before it",
+                        ],
+                        "a": 0,
+                        "why": r"""
+Write the tangent at `x` as `L(t) = f(x) + f'(x)*(t - x)` and solve `L(t) = 0`: the
+answer is `t = x - f(x)/f'(x)`, which is the step. Nothing in that derivation minimises
+anything — a minimum of `f` is where the derivative vanishes, which is a different
+question and often a different point. Bisection is the method that halves a bracket, and
+it needs a sign change Newton never asks for; the resemblance to averaging comes from
+`x^2 - 2` alone, where the step happens to collapse to the mean of `x` and `2/x`.
+""",
+                    },
+                    {
+                        "q": "At a simple root, an iterate is wrong by about `1e-4`. The next one is wrong by about:",
+                        "opts": [
+                            "`5e-5`, because each step halves the distance to the root",
+                            "`1e-8`, because each step squares the current error",
+                            "`1e-2`, because rounding takes over at that size",
+                            "`1e-16`, since a double carries sixteen digits",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The error recurrence is `e_next = f''(xi)/(2*f'(x)) * e*e`, so the error is squared and
+`1e-4` becomes about `1e-8` — the count of correct digits doubles, which is what
+quadratic convergence means. Halving is what bisection does, and what Newton itself does
+at a double root, where `f'` vanishes with the error and the squaring is lost. Rounding
+does eventually put a floor under the process, but it sits near `1e-16`, and no single
+step jumps straight to it from `1e-4`.
+""",
+                    },
+                    {
+                        "q": "`newton(lambda x: x*x + 1, 0.0)` is run. What stops it, and why?",
+                        "opts": [
+                            "`f` has no real root, so the iterates wander until the cap fires",
+                            "`f(0)` is 1, which is over the tolerance, so it returns at once",
+                            "`f'(0)` is zero, so the flat tangent has no root to step to",
+                            "the iterates settle into a two-cycle and never leave it",
+                        ],
+                        "a": 2,
+                        "why": r"""
+`f'(x) = 2x` vanishes at exactly the point the run starts from, so the first step has
+nothing to compute: a horizontal line crosses zero nowhere. That is why the lab raises
+`ZeroDerivative` rather than `Diverged` — the iteration has not gone wrong, it has failed
+to exist. It is true that `x*x + 1` has no real root, and from a start away from the
+origin the iterates would indeed run until the cap stopped them; from `0` the derivative
+check fires first. A residual above the tolerance is a reason to keep going, not to stop,
+and the two-cycle belongs to `x**3 - 2*x + 2`.
+""",
+                    },
+                    {
+                        "q": "From `x0 = 0`, iterating on `x**3 - 2*x + 2` gives `0, 1, 0, 1, ...`. Why must the loop count its steps?",
+                        "opts": [
+                            "because the derivative reaches zero once a cycle has set in",
+                            "because nothing in the sequence itself ever signals failure",
+                            "because rounding error accumulates a little on every step",
+                            "because the iterates overflow if the cycle is left running",
+                        ],
+                        "a": 1,
+                        "why": r"""
+Every value in that sequence is finite, every derivative is non-zero, and every step is
+legal arithmetic; the residual is 2, then 1, then 2, then 1, and it never falls below any
+tolerance. There is no state the loop could inspect that distinguishes this from slow
+progress, so the only defence is a count. The other two Newton failures do announce
+themselves — a zero derivative divides, a runaway overflows — and it is precisely the
+quiet one that needs `max_iter`.
+""",
+                    },
+                    {
+                        "q": "Why does the lab scale the difference step as `h * max(1, abs(x))` instead of using `h`?",
+                        "opts": [
+                            "because `x + h` rounds back to `x` at large `x`, so the quotient divides by zero",
+                            "because the truncation error grows without bound as `x` grows",
+                            "because the two values of `f` come out too close to be told apart",
+                            "because a larger step is more accurate, so it should grow with `x`",
+                        ],
+                        "a": 2,
+                        "why": r"""
+At `x = 121977`, `atan(x)` is about 1.5707881 and one unit in its last place is `2.2e-16`,
+while the true change in `atan` across `h = 1e-6` either side is only `1.3e-16`. The
+subtraction therefore cannot resolve it: the computed difference comes out as zero or as
+one unit in the last place, and the quotient here reports `1.11e-10` against a true
+`6.72e-11`. Note what does *not* happen: `x + 1e-6` is perfectly distinct from `x` at
+that size, since one unit in the last place of `x` is only `1.5e-11`. Truncation error
+shrinks with `h` rather than growing with `x`, and a larger step buys accuracy only until
+its own `h^2` term takes over.
+""",
+                    },
+                    {
+                        "q": "`newton` stops when `abs(f(x)) <= tol`. On a double root with `tol = 1e-12`, the root is located to about:",
+                        "opts": [
+                            "`1e-12`, the tolerance itself",
+                            "`1e-24`, the tolerance squared",
+                            "`1e-6`, the square root of the tolerance",
+                            "`1e-12` still, since the residual test is unaffected by a double root",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Near a double root `f` behaves like `C*(x - r)^2`, so a residual of `1e-12` corresponds to
+a distance of about `1e-6` — six digits, not twelve. The residual is the only thing a loop
+can measure and it is a proxy for the error, with the flatness of `f` at the root setting
+the exchange rate; the flatter the root, the worse the deal. The same flatness costs the
+convergence rate as well: `x_next = (x + 1)/2` for `(x-1)^2`, which halves the error
+rather than squaring it. Watching `abs(x_next - x)` alongside the residual is what makes
+this visible within three iterations.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Newton's method with guards",
                 "runtime": "python",
@@ -6790,6 +7076,271 @@ for _kw in ({"tol": 0.0}, {"tol": -1e-9}, {"max_iter": 0}, {"max_iter": -3}):
                 "Grid-based search misses anything narrower than the grid — state the limitation",
                 "A sample that lands exactly on a root produces no sign change and must be handled separately",
             ],
+            "read": [
+                {
+                    "title": "Flat is not the same as best, and a grid does not see everything",
+                    "minutes": 13,
+                    "body": r'''
+A sheet of card measures 30 cm by 16 cm. Cut a square of side $x$ from each corner, fold
+the four flaps up, and tape the seams: you have an open box $x$ deep, with a base
+$(30-2x)$ by $(16-2x)$. Its volume is
+
+$$V(x) = x\,(30-2x)(16-2x).$$
+
+Cut nothing and there is no box; cut $x = 8$ and the short side has closed up entirely.
+Between those two the volume is positive, so somewhere in between it is largest. Try a
+few values: $V(2) = 624$, $V(3) = 720$, $V(4) = 704$. The best cut is somewhere near 3,
+and guessing more finely is not a method.
+
+## Why a maximum must have a horizontal tangent
+
+Suppose $c$ is an interior point of the interval where $f$ takes its largest value, and
+suppose $f'(c)$ exists and is positive. The definition of the derivative says the
+quotient $(f(c+h) - f(c))/h$ is close to $f'(c)$ for small $h$, so for small
+enough positive $h$ that quotient is positive, and multiplying by $h > 0$ makes
+$f(c+h) > f(c)$. That contradicts $c$ being the largest value. If instead $f'(c) < 0$,
+take $h$ small and negative and the same line gives $f(c+h) > f(c)$ again. The only
+survivor is $f'(c) = 0$.
+
+That is Fermat's theorem, and it is worth being exact about what it does and does not
+say. It is a **necessary** condition: every interior extremum is a critical point.
+It is not sufficient — $f(x) = x^3$ has $f'(0) = 0$ and no extremum there at all. And it
+says nothing about endpoints, where the argument breaks because $h$ cannot be taken in
+both directions.
+
+## Worked: the open box
+
+Multiply $V$ out to $4x^3 - 92x^2 + 480x$ and differentiate:
+
+$$V'(x) = 12x^2 - 184x + 480 = 4\,(3x^2 - 46x + 120).$$
+
+The quadratic formula gives $x = \dfrac{46 \pm \sqrt{2116 - 1440}}{6} = \dfrac{46 \pm 26}{6}$,
+so $x = 12$ or $x = \tfrac{10}{3}$.
+
+Only one of those is a cut you can make. At $x = 12$ the flaps have long since overlapped
+and $V(12) = -576$, a number the algebra is happy to produce and the card is not. The
+domain is $[0, 8]$, and the candidate list has to be intersected with it before anything
+else happens.
+
+So the interior candidate is $x = \tfrac{10}{3} = 3.3333$ cm, where
+
+$$V\left(\tfrac{10}{3}\right) = \tfrac{10}{3}\cdot\tfrac{70}{3}\cdot\tfrac{28}{3}
+= \tfrac{19600}{27} = 725.9259\,\text{cm}^{3},$$
+
+which beats the 720 found by guessing $x = 3$ by about six cubic centimetres.
+
+## Deciding what kind of point it is
+
+A critical point is a place where the tangent is flat, and flat is compatible with a
+peak, a trough and a shelf. To tell them apart, look at the term the tangent line left
+out. Taylor at $c$, with $f'(c) = 0$, gives
+
+$$f(c+h) = f(c) + \frac{f''(c)}{2}h^2 + \cdots$$
+
+Since $h^2 > 0$ on both sides, the sign of $f''(c)$ decides the sign of the change.
+Positive: $f(c+h) > f(c)$ either way, a minimum. Negative: a maximum. For the box,
+$V''(x) = 24x - 184$, and $V''(10/3) = 80 - 184 = -104$, comfortably negative — a maximum,
+confirmed rather than assumed.
+
+The test is silent when $f''(c) = 0$, and the reason is visible in the same expansion:
+the $h^2$ term has vanished and the sign is decided by whatever comes next. All three
+outcomes occur. For $x^4$ the next term is $h^4$, positive on both sides, a minimum. For
+$-x^4$, a maximum. For $x^3$ the next term is $h^3$, which changes sign with $h$, so the
+point is neither. That is why `critical_points` in **Locating and classifying critical
+points** falls back to the first derivative test — the sign of $f'$ one grid step either
+side — whenever $|f''(c)|$ is below $10^{-5}$. Negative then positive is a minimum,
+positive then negative a maximum, and no change at all is a shelf.
+
+## The candidates are a finite list
+
+A continuous function on a closed, bounded interval attains a largest and a smallest
+value somewhere. Wherever the largest value sits, it is either interior — and then
+Fermat forces a critical point — or it is one of the two endpoints. There is no third
+possibility, so the search is over a finite list: the critical points, plus $a$, plus
+$b$. Evaluate $f$ at each and compare.
+
+That list is what `optimise` builds, and the box shows why the endpoints have to be in
+it: $V(0) = V(8) = 0$, both minima, and neither is a critical point of anything.
+
+## The mistake
+
+Set the derivative to zero, solve, report the answer. It works on almost every problem
+anyone is first shown, which is exactly what makes it dangerous.
+
+Take $f(x) = x^3 - 3x$ on $[-3, 3]$. The critical points are $x = \pm 1$, with $f(-1) = 2$
+and $f(1) = -2$, and the second derivative test labels them cleanly: $f'' = 6x$, so $-1$
+is a maximum and $+1$ is a minimum. Both labels are correct, and both answers are wrong.
+The endpoints give $f(-3) = -18$ and $f(3) = 18$, so the largest value on the interval is
+$18$ and the smallest is $-18$ — and neither is at a critical point. The interior
+"maximum" at $-1$ is not even in the top half of the range.
+
+The word doing the damage is *local*. The second derivative test is a statement about a
+neighbourhood, and it stays true: $f(-1) = 2$ really is bigger than everything nearby.
+Asking which value is largest on the whole interval is a different question, and the only
+thing that answers it is the comparison across the whole candidate list. It is tempting
+because in the problems used to teach the technique the domain is usually unbounded, or
+the endpoints are hopeless on sight, so the extra comparison never changes the answer and
+quietly stops being made.
+
+## What a grid can and cannot see
+
+Roots of $f'$ are found numerically by sampling. `bracket_sign_changes` walks $n+1$
+samples and keeps a pair whenever the product of the two slopes is negative: a sign
+change means a root somewhere between, by the intermediate value theorem of Module 2, and
+bisection then squeezes the bracket down.
+
+A sign change is sufficient evidence of a root. It is not necessary, and both ways of
+failing are real. A feature narrower than one grid step is invisible — with $n = 400$ on
+$[-2,2]$ the step is $0.01$, and a pair of critical points $0.003$ apart falls between two
+samples with no sign change to show for it.
+
+The other failure is stranger, and it is why the lab has a degenerate case. Take
+$f(x) = x^4 - 2x^2$ on $[-2, 2]$ with $n = 400$. The samples land exactly on $-1$, $0$
+and $1$, which are precisely the three critical points. At $\pm 1$ the numerical
+derivative comes back as $\pm 5.55\times 10^{-11}$ rather than zero — rounding in the
+difference quotient — which is enough to keep a sign change alive on one side of each.
+At $0$ it comes back as exactly $0.0$, and a product with zero in it is never negative,
+so neither the pair to its left nor the pair to its right registers a change. A search
+that tests only for sign changes reports two critical points where there are three, and
+reports them with complete confidence. Emitting a degenerate bracket $(x_k, x_k)$
+whenever a sample is exactly zero is what closes that hole.
+
+## Where it stops
+
+Every guarantee here needs the interval closed and bounded and the function continuous on
+it, and each hypothesis fails on its own. On the open interval $(0,1)$ the function
+$f(x) = x$ has a least upper bound of 1 and never attains it; on $(0,1]$, $1/x$ is
+unbounded. In both cases the candidate list is complete and the answer is still not on
+it, because there is no answer.
+
+Fermat's theorem needs $f'(c)$ to exist. It does not for $f(x) = |x|$ at $0$, which is a
+genuine minimum with no horizontal tangent, so a search that hunts only for zeros of the
+derivative walks straight past it — and the numerical derivative makes matters worse by
+returning $0$ there, from a symmetric difference of two equal values.
+
+Bisection needs the sign change it is handed to be real. A double root of $f'$, as at
+$x = 0$ for $f(x) = x^4$, touches zero without crossing, so nothing brackets it unless a
+sample lands on it exactly. And the second derivative test decides between a peak and a
+trough; it never decides whether the point is worth having, which stays a question about
+the whole candidate list.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Candidates, classification and the limits of a grid",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "At an interior point `c` of the interval, `f'(c) = 0`. What has that established?",
+                        "opts": [
+                            "that `c` is either a local minimum or a local maximum",
+                            "that `c` is the largest or smallest value on the interval",
+                            "that `c` is a candidate, which may turn out to be neither",
+                            "that `f` fails to be differentiable somewhere near `c`",
+                        ],
+                        "a": 2,
+                        "why": r"""
+Fermat's theorem runs one way only: an interior extremum forces the derivative to vanish,
+so every interior extremum appears on the list of critical points. The converse is false,
+and `x**3` at `0` is the standing counterexample — flat tangent, no extremum. Being the
+largest value on the whole interval is a stronger claim again, and it needs the endpoints
+compared as well. A vanishing derivative is evidence that `f` is differentiable at `c`,
+not that it fails to be.
+""",
+                    },
+                    {
+                        "q": "Where does `f(x) = x**3 - 3*x` take its largest value on `[-3, 3]`?",
+                        "opts": [
+                            "at `x = -1`, the local maximum the derivative finds",
+                            "at `x = 1`, where the second derivative is positive",
+                            "at `x = 3`, an endpoint, where the value reaches 18",
+                            "nowhere: `x**3 - 3*x` is unbounded above",
+                        ],
+                        "a": 2,
+                        "why": r"""
+The critical points are `-1` and `1`, with values `2` and `-2`; the endpoints give `-18`
+and `18`. The largest of those four numbers is 18, at the right endpoint, and the interior
+"maximum" at `-1` is not close to it. That is the whole reason the extreme value theorem
+puts the endpoints on the candidate list: `local` maximum means larger than its
+neighbours and nothing more. `x**3 - 3*x` is indeed unbounded on the whole real line, but
+a continuous function on a closed bounded interval always attains a largest value on it.
+""",
+                    },
+                    {
+                        "q": "At a critical point `c`, the second derivative comes out as zero. What follows?",
+                        "opts": [
+                            "`c` is a point of inflection rather than a real extremum",
+                            "the test decides nothing; the sign of `f'` either side does",
+                            "`c` is a minimum, since the curvature is not negative there",
+                            "`f` has no extremum anywhere on the interval at all",
+                        ],
+                        "a": 1,
+                        "why": r"""
+With `f'(c) = 0`, the expansion reads `f(c+h) = f(c) + f''(c)*h*h/2 + ...`, and when the
+`f''` term vanishes the sign of the change is settled by whatever comes after it. All
+three outcomes really occur: `x**4` has a minimum at `0`, `-x**4` a maximum, and `x**3`
+neither, and every one of them has both derivatives zero there. So the fallback is to
+look at the sign of `f'` a step either side — negative then positive is a minimum,
+positive then negative a maximum, no change a shelf.
+""",
+                    },
+                    {
+                        "q": "A grid sample lands exactly on a root of `f'`, so the sampled slope is `0.0`. A search testing only `g(x_k)*g(x_k+1) < 0` will:",
+                        "opts": [
+                            "bracket it twice, once from each side of the exact hit",
+                            "miss it, since a product with a zero is never negative",
+                            "bracket it, since a zero counts as a change of sign",
+                            "raise a `ValueError` that the caller then has to handle",
+                        ],
+                        "a": 1,
+                        "why": r"""
+The pair to the left multiplies to `something * 0.0`, which is zero and not negative, and
+the pair to the right does the same. So the exact hit is passed over by both tests and the
+critical point is reported as absent. `x**4 - 2*x**2` on `[-2, 2]` with `n = 400` is the
+case the lab checks: the grid lands on `-1`, `0` and `1`, rounding leaves the outer two
+just off zero so their brackets survive, and the one at the origin comes back as exactly
+`0.0` and vanishes from the answer. Emitting a degenerate bracket `(x_k, x_k)` is what
+recovers it.
+""",
+                    },
+                    {
+                        "q": "Why must `critical_points` state a limitation about its grid?",
+                        "opts": [
+                            "because bisection cannot converge on fewer than 400 samples",
+                            "because two critical points inside one step leave no sign change",
+                            "because the second derivative test needs a finer grid to be reliable",
+                            "because no grid of rationals can land on an irrational root",
+                        ],
+                        "a": 1,
+                        "why": r"""
+A sign change is sufficient evidence of a root and not necessary evidence of one. With
+`n = 400` on `[-2, 2]` the step is `0.01`, and a pair of critical points `0.003` apart
+sits between two samples with the slope having the same sign at both — the feature is
+narrower than the sampling and leaves no trace. Bisection is not the limitation; it
+converges on any bracket it is handed. Nor is exactness: bisection locates an irrational
+root to whatever tolerance is asked, provided the bracket reached it in the first place.
+""",
+                    },
+                    {
+                        "q": "`f(x) = 1/x` on `(0, 1]` has no largest value. Which hypothesis has failed?",
+                        "opts": [
+                            "continuity, since `1/x` is discontinuous inside the interval",
+                            "differentiability, since `1/x` has no derivative at an endpoint",
+                            "closedness: the end where the trouble sits is left out",
+                            "none of them; the candidate list was built incorrectly",
+                        ],
+                        "a": 2,
+                        "why": r"""
+The extreme value theorem asks for a continuous function on a closed bounded interval, and
+`1/x` is continuous and differentiable at every point of `(0, 1]` — there is nothing wrong
+with the function on the set where it is defined. What is missing is the left end. The
+values climb without bound as `x` approaches `0`, and because `0` is not in the interval
+there is no point at which the climb is realised. Adding a candidate would not help: the
+supremum is not attained anywhere, so no list of points can contain it.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Locating and classifying critical points",
                 "runtime": "python",

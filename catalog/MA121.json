@@ -2277,9 +2277,86 @@
     "Power iteration converges to the dominant eigenvector at rate |lambda_2 / lambda_1|, provided |lambda_1| is strictly larger than every other eigenvalue's modulus and the starting vector has a component along v_1. Both hypotheses are needed: with eigenvalues of equal size the Rayleigh quotient can sit still while the vector swings, which looks exactly like convergence",
     "The Rayleigh quotient v^T A v is the best eigenvalue estimate for a given v"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "Right angles, and the two numbers a column splits into",
+     "minutes": 15,
+     "body": "Two columns of measurements, three rows deep:\n\n$$a_1 = \\begin{bmatrix} 12 \\\\ 6 \\\\ -4 \\end{bmatrix}, \\qquad\na_2 = \\begin{bmatrix} -51 \\\\ 167 \\\\ 24 \\end{bmatrix}.$$\n\nThey are independent, so they span a plane and either can be scaled and added to reach\nany point of it. That does not make them convenient. The first has length $14$, the\nsecond $176.26$, and the angle between them is $83.16^{\\circ}$ — close to a right angle\nand not a right angle, which turns out to be the whole difference.\n\nSplit the second column into the part that lies along the first and the part that does\nnot. The answer, worked below, is $21$ units along $a_1$ and a remainder of length $175$\nat right angles to it, and those two numbers satisfy\n\n$$21^2 + 175^2 = 441 + 30625 = 31066 = |a_2|^2$$\n\nexactly, in integers. Pythagoras holds because the split was made at a right angle, and\nthat is the only reason it holds. This module is about building bases where every split\nis made at a right angle, and about the one number that then prices everything.\n\n## The dot product does two jobs at once\n\nFor $u$ and $v$ in $\\mathbf{R}^n$, $u \\cdot v = \\sum_i u_i v_i$. Setting $v = u$ gives\n$u \\cdot u = \\sum u_i^2$, which is the squared length by Pythagoras in $n$ dimensions, so\n$|u| = \\sqrt{u \\cdot u}$. The law of cosines applied to the triangle with\nsides $u$, $v$ and $u - v$ turns the same sum into an angle:\n$u \\cdot v = |u| |v| \\cos\\theta$. One expression, a length and an\nangle. Perpendicular means $\\cos\\theta = 0$, which means $u \\cdot v = 0$, and that last\nform is the one a program can test.\n\nNow derive the split rather than quoting it. Take a unit vector $q$ and ask which\nmultiple $t\\,q$ sits closest to a given $a$. Minimise the squared distance:\n\n$$|a - t q|^2 = a \\cdot a - 2t\\,(q \\cdot a) + t^2,$$\n\nusing $q \\cdot q = 1$. This is a parabola in $t$ opening upwards, and its derivative\n$-2(q \\cdot a) + 2t$ vanishes at\n\n$$t = q \\cdot a.$$\n\nSo the coefficient is not a definition to remember; it is the answer to a minimisation.\nAnd the leftover is automatically perpendicular:\n\n$$q \\cdot (a - t q) = q \\cdot a - t = 0.$$\n\nClosest and perpendicular are the same condition, which is why the right angle in the\nopening was not a coincidence.\n\n### Worked: the two columns\n\nNormalise the first: $|a_1| = \\sqrt{144+36+16} = \\sqrt{196} = 14$, so\n$q_1 = \\tfrac{1}{7}(6, 3, -2)$.\n\nProject the second onto it:\n$q_1 \\cdot a_2 = \\tfrac{1}{7}(6(-51) + 3(167) - 2(24)) = \\tfrac{147}{7} = 21$.\n\nSubtract: $a_2 - 21\\,q_1 = (-51 - 18,\\; 167 - 9,\\; 24 + 6) = (-69, 158, 30)$, whose length\nis $\\sqrt{4761 + 24964 + 900} = \\sqrt{30625} = 175$. Normalising gives\n$q_2 = \\tfrac{1}{175}(-69, 158, 30)$, and $q_1 \\cdot q_2 = 0$ to the last bit a double\ncan hold.\n\nCollect the coefficients as they were produced:\n\n$$R = \\begin{bmatrix} 14 & 21 \\\\ 0 & 175 \\end{bmatrix},$$\n\nthe lengths on the diagonal and the projections above it. Multiplying back,\n$14\\,q_1 = a_1$ and $21\\,q_1 + 175\\,q_2 = (18,9,-6) + (-69,158,30) = a_2$: the original\nmatrix, reassembled. That is $A = QR$, and nothing was assumed to get it — the columns of\n$R$ are a record of what Gram-Schmidt did to each column of $A$ on the way past.\n\n## Repeating the step, and what a vanishing residual means\n\nFor a third vector, subtract its projection onto $q_1$ and onto $q_2$ before normalising.\nThis works because the accepted vectors are orthonormal: the projection onto a plane is\nthe sum of the projections onto two perpendicular directions in it, and that decomposition\nis false for a pair of directions that are not perpendicular, where each would be partly\ncounting the other.\n\nIf the remainder comes out at length zero, nothing has gone wrong with the arithmetic.\nThe vector lay in the span of the ones already accepted — every part of it was removed by\nthe subtractions, because there was no part outside. `gram_schmidt([[1, 2], [2, 4]])`\nraises for that reason, and so does a list of three vectors in $\\mathbf{R}^2$: a plane has\nno room for a third independent direction, so the third residual has to vanish. A raised\n`ValueError` there is a report of linear dependence, not a failure to cope.\n\nA residual that is small but not zero is the interesting case, and it is exactly the\ndiagonal entry $r_{ii}$. A tiny $r_{ii}$ says the $i$th column was nearly in the span of\nits predecessors — near-dependence, measured, before it becomes the conditioning disaster\nmodule 11 puts a price on.\n\n## Why the orthonormal basis was worth building\n\nEntry $(i,j)$ of $Q^{\\mathsf{T}}Q$ is the dot product $q_i \\cdot q_j$, which is $1$ when\n$i = j$ and $0$ otherwise, so $Q^{\\mathsf{T}}Q = I$. One consequence carries most of the\nvalue:\n\n$$|Qx|^2 = (Qx)^{\\mathsf{T}}(Qx) = x^{\\mathsf{T}}Q^{\\mathsf{T}}Qx\n= x^{\\mathsf{T}}x = |x|^2.$$\n\nLengths are preserved, so an error of size $\\varepsilon$ in the coordinates is an error of\nsize $\\varepsilon$ in the vector. No other change of basis promises that: in a badly chosen\nbasis of module 6 a coordinate vector of length $1$ can name a vector of length $10^6$, and\na rounding error in a coordinate arrives magnified by the same factor. Multiplying by $Q$\nor $Q^{\\mathsf{T}}$ can neither amplify nor shrink, and $Q^{\\mathsf{T}}Q = I$ is the whole\nreason.\n\nIt also makes an inverse unnecessary. Where a general basis needs a solve to recover\ncoordinates, an orthonormal one needs $x = Q^{\\mathsf{T}}b$ — one matrix-vector product,\nwhich is the fact module 8 spends on least squares.\n\n## Eigenvectors, by repeated multiplication\n\nOrthonormality also gives the cheapest possible eigenvalue estimate. Given a unit vector\n$v$, ask which scalar $\\lambda$ makes $Av$ closest to $\\lambda v$ — the same minimisation\nas before, with the same answer:\n\n$$\\lambda = v \\cdot Av,$$\n\nthe **Rayleigh quotient**. Power iteration is that estimate wrapped in a loop: form\n$w = Av$, record $v \\cdot w$, replace $v$ by $w / |w|$, repeat until two\nestimates agree. On $A = \\begin{bmatrix} 4 & 1 \\\\ 2 & 3 \\end{bmatrix}$ from\n$v_0 = \\tfrac{1}{\\sqrt 2}(1,1)$, the first multiplication returns\n$\\tfrac{5}{\\sqrt 2}(1,1)$ — the start was already an eigenvector — so the quotient reads\n$5$ immediately and the second step confirms it.\n\nOn $\\begin{bmatrix} 3 & 0 \\\\ 0 & -7 \\end{bmatrix}$ from the same start, the quotient runs\n$-2$, $-5.448$, $-6.674$, $-6.938$, $-6.989$, settling on $-7$ rather than on $3$.\nDominant means largest in *modulus*; the sign has nothing to do with it, and the vector\nflips direction at every step on the way. It converges at a rate set by $|\\lambda_2 /\n\\lambda_1| = 3/7$, and module 9 derives that rate and names the two hypotheses it needs —\nstrict dominance, and a starting vector with some component along the eigenvector being\nsought.\n\n## The mistake, and why it is tempting\n\nIn building $R$, use the original columns of $A$, not the orthonormalised ones:\n$r_{ij} = q_i \\cdot a_j$. Reaching for $q_i \\cdot q_j$ instead is a natural slip, because\nby the time $R$ is filled in the $q$ vectors are sitting there and the original columns\nfeel spent.\n\nWhat makes it dangerous is how well the result hides. $q_i \\cdot q_j$ is $1$ on the\ndiagonal and $0$ off it, so the mistake produces $R = I$ — and $Q$ is unharmed, so\n\"$Q^{\\mathsf{T}}Q = I$\" passes, \"$R$ is upper triangular\" passes, and \"the diagonal of $R$\nis positive\" passes. Every invariant that can be checked without reference to $A$ is\nsatisfied by a factorisation that has thrown $A$ away. The one test that catches it is\nmultiplying $QR$ back out and comparing, which is why **Gram-Schmidt, QR and the power\nmethod** checks that product entry by entry rather than checking properties of the\nfactors.\n\nThe second slip is quieter: normalising a residual that is numerical noise. Dividing a\nvector of length $10^{-17}$ by its own length yields a unit vector made entirely of\nrounding error — orthogonal to everything by construction, meaningless in content, and\nindistinguishable from a real basis vector in every printout. The tolerance test exists to\nrefuse that, and it is why a dependence is raised rather than returned.\n\n## Where it stops\n\nThe loop in the lab subtracts each projection from the *running* residual rather than from\nthe original vector. That is the modified Gram-Schmidt, and the difference is not\ncosmetic: the classical version, which computes every coefficient against the original\nvector, loses orthogonality on ill-conditioned input far faster, with $Q^{\\mathsf{T}}Q$\ndrifting from $I$ by roughly the square of the condition number. Neither version is what a\nnumerical library ships — that is Householder reflections, which never form a residual\nthat can cancel.\n\nThe dependence test is absolute. `norm(residual) <= tol` with `tol = 1e-10` is a judgement\nabout scale: multiply every input vector by $10^{-12}$ and a perfectly independent set is\nrefused, multiply by $10^{12}$ and a dependent one slips through. Comparing the residual\nagainst the length of the vector it came from would be scale-free instead.\n\nAnd orthogonality is always with respect to a chosen inner product. Weight the coordinates\ndifferently — as a fit with unequal measurement variances does — and two vectors that were\nperpendicular are no longer perpendicular. Everything above survives that change with\n$u \\cdot v$ replaced throughout, which is worth knowing before the first weighted\nleast-squares problem arrives."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "Right angles, and what they buy",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "Gram-Schmidt subtracts `dot(q, v) * q` from `v` for each accepted `q`. What is that subtraction achieving?",
+      "opts": [
+       "it rescales `v` so that its length comes out as exactly 1",
+       "it removes the part of `v` that the accepted `q` covers",
+       "it reorders the vectors so the longest one is treated first",
+       "it replaces `v` by the accepted vector nearest to it"
+      ],
+      "a": 1,
+      "why": "`dot(q, v)` is the multiple of `q` that sits closest to `v`, which is why what is left\nafter subtracting it is perpendicular to `q`: `dot(q, v - dot(q,v)*q) = dot(q,v) -\ndot(q,v) = 0`. So the subtraction strips out everything the existing basis already\naccounts for and keeps only what is new. Normalising is a separate step that happens\nafterwards, order is never changed, and replacing `v` by the nearest accepted vector would\ndiscard exactly the part being kept."
+     },
+     {
+      "q": "`gram_schmidt([[1, 2], [2, 4]])` raises `ValueError`. Why is that the right behaviour?",
+      "opts": [
+       "because the two vectors are already at right angles to begin with",
+       "because a zero residual says the second was in the first's span",
+       "because two vectors can never form a basis of the whole plane",
+       "because the entries are integers rather than floating-point values"
+      ],
+      "a": 1,
+      "why": "`(2, 4)` is twice `(1, 2)`, so subtracting its projection onto the normalised first vector\nremoves all of it and the residual is the zero vector. There is no direction left to\nnormalise, and a division by that length would produce a unit vector out of rounding error\nalone. The exception is a report about the input: these vectors are dependent. Two\nindependent vectors are exactly enough for a basis of the plane, and the dot product treats\nintegers and floats alike."
+     },
+     {
+      "q": "In `qr(a)`, `r[i][j]` is computed as `dot(basis[i], columns[j])` using the ORIGINAL columns. What breaks if the orthonormalised ones are used instead?",
+      "opts": [
+       "`R` stops being upper triangular, which the tests catch at once",
+       "the diagonal of `R` comes out negative for every column of `a`",
+       "`R` collapses to the identity and `Q R` stops reproducing `a`",
+       "`Q` loses its orthonormal columns, so `Q^T Q` drifts from `I`"
+      ],
+      "a": 2,
+      "why": "`dot(basis[i], basis[j])` is 1 when `i == j` and 0 otherwise, so the mistake fills `R`\nwith the identity. What makes it dangerous is that `Q` is untouched: `Q^T Q = I` still\nholds, `R` is still upper triangular, and its diagonal is still positive — every property\nthat can be checked without looking at `a` survives. The only test that fails is\nmultiplying `Q R` back out and comparing with `a`, which is why the lab checks the product\nentry by entry."
+     },
+     {
+      "q": "`Q` has orthonormal columns. What does `Q^T Q = I` guarantee about `Q x`?",
+      "opts": [
+       "that `Q x` has the same length as `x`, whatever `x` is",
+       "that `Q x` is a unit vector, whatever `x` happens to be",
+       "that `Q` is invertible, so `x` comes back by elimination",
+       "that `Q x` is orthogonal to `x` for every non-zero `x`"
+      ],
+      "a": 0,
+      "why": "Write it out: `|Qx|^2 = (Qx)^T (Qx) = x^T Q^T Q x = x^T x = |x|^2`. Lengths are preserved\nexactly, which is the reason an orthogonal change of basis can neither amplify nor damp a\nrounding error — the property that makes QR the numerically safe route through a least\nsquares fit. The output is a unit vector only when `x` was one. Recovering `x` needs no\nelimination at all, since `Q^T` does it directly. And `Qx` is generally nothing like\nperpendicular to `x`: with `Q = I` it is `x` itself."
+     },
+     {
+      "q": "The power method is run on the matrix `[[3, 0], [0, -7]]`. What does it converge to?",
+      "opts": [
+       "to `3`, since the method always finds the largest positive value",
+       "to `-7`, because dominance is decided by magnitude, not by sign",
+       "to `-2`, the Rayleigh quotient at the starting vector it uses",
+       "to nothing: a negative eigenvalue makes the iteration alternate"
+      ],
+      "a": 1,
+      "why": "Dominant means largest in modulus, and `|-7| > |3|`. Starting from the unit vector with\nequal components the Rayleigh quotient runs `-2`, `-5.448`, `-6.674`, `-6.938`, `-6.989`\nand settles on `-7`, with the eigenvector converging on `(0, 1)` up to sign. The vector\nreally does flip direction at every step, because multiplying by a negative eigenvalue\ndoes that — but the quotient `dot(v, A v)` picks up two factors of the sign and is\nunaffected. The first estimate is only a starting value, not a limit."
+     },
+     {
+      "q": "A diagonal entry `r[i][i]` of `R` comes out as `1e-9` while the others are near 1. What is that telling you?",
+      "opts": [
+       "that column `i` was very nearly in the span of the earlier ones",
+       "that column `i` of `a` is orthogonal to every column before it",
+       "that the arithmetic has overflowed and the factorisation is void",
+       "that column `i` of `a` is a very short vector to begin with"
+      ],
+      "a": 0,
+      "why": "Each `r[i][i]` is the length of the residual left after the projections onto the earlier\ndirections are removed, so a tiny one means almost nothing was left: the column is nearly a\ncombination of its predecessors. That is near-dependence measured on a scale, and it is\nthe same quantity conditioning is built from in module 11. A column orthogonal to all its\npredecessors is the opposite case — its residual is the whole column, giving a large\n`r[i][i]`. And a short column shows up in the length of the column itself, not in what\nsurvives the subtraction."
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
