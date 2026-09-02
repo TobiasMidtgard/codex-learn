@@ -217,6 +217,377 @@ COURSE = {
                 "Finite sampling error falls as 1/sqrt(shots), which is why quantum experiments are repeated",
                 "The Bloch sphere: theta = 2*acos(|a0|) and phi = arg(a1) - arg(a0) for one qubit",
             ],
+            "read": [
+                {
+                    "title": "Two detectors, one photon, and the square that makes it add up",
+                    "minutes": 14,
+                    "body": r'''
+A single photon arrives at a half-silvered mirror. Behind the mirror are two detectors,
+one on the transmitted path and one on the reflected path. You send 20,000 photons
+through, one at a time, and count: about 10,000 clicks on each detector, never both at
+once, and no pattern in the order. So far this is a coin. The photon goes one way or the
+other, and the mirror is a fair coin flip.
+
+Now put a second half-silvered mirror where the two paths cross again, so that a photon
+on either path meets it and can again go either way, and put the two detectors after
+that. A coin-flip picture says each photon takes one path, flips again at the second
+mirror, and the detectors split 50/50. They do not. With the path lengths matched, every
+single photon lands on one detector and none on the other. Lengthen one path by half a
+wavelength and it swaps: every photon lands on the other detector. Something the photon
+carries along each path is adding up at the second mirror, and it can add to zero.
+Probabilities cannot do that. A probability is never negative, so two of them cannot
+cancel. Whatever the photon carries has a sign, and that is where a qubit starts.
+
+## The number that carries the sign
+
+Call the two paths $|0\rangle$ and $|1\rangle$ and give each a number, $a_0$ and $a_1$,
+that can be negative, and in general complex. The pair $(a_0, a_1)$ is the state. The
+first mirror sends $|0\rangle$ to $(a_0, a_1) = (1/\sqrt{2},\ 1/\sqrt{2})$; the second
+mirror does the same thing to each path, and the two contributions to the $|1\rangle$
+detector arrive as $+1/2$ and $-1/2$. They cancel. The contributions to $|0\rangle$
+arrive as $+1/2$ and $+1/2$ and add to $1$. That reproduces the experiment, and it forces
+two conclusions about how the numbers relate to the counts.
+
+The counts must come from a quantity that is never negative, or the $-1/2$ would mean a
+negative click rate. And the quantity must respect the fact that $(1/\sqrt{2}, 1/\sqrt{2})$
+after the first mirror gave 50/50, while $(1, 0)$ before it gave everything on one
+detector. Squaring does both: $|a_k|^2$ is never negative, $(1/\sqrt{2})^2 = 1/2$ matches
+the half-and-half split, and $1^2 + 0^2 = 1$ matches a certain outcome. The rule that
+outcome $k$ occurs with probability $|a_k|^2$ is the Born rule, and the beam splitter is
+the experiment that makes it the only sensible choice. Squaring is also why the
+$1/\sqrt{2}$ was there in the first place: the probabilities have to add to one, so the
+amplitudes have to add to one *in squares*, which is to say the state is a unit vector.
+
+Work that through with a state that is not symmetric. Take amplitudes proportional to
+$(\sqrt{3}, 1)$, which is what a mirror that transmits three quarters of the light
+produces.
+
+```python
+import math
+
+amps = [math.sqrt(3), 1]
+norm = math.sqrt(sum(abs(a) ** 2 for a in amps))
+state = [a / norm for a in amps]
+print("moduli:       ", [round(abs(a), 4) for a in state])
+print("probabilities:", [round(abs(a) ** 2, 4) for a in state])
+print("they sum to:  ", round(sum(abs(a) ** 2 for a in state), 12))
+```
+
+The norm is $\sqrt{3 + 1} = 2$, so the state is $(\sqrt{3}/2,\ 1/2) = (0.866, 0.5)$, and
+the probabilities are $3/4$ and $1/4$. This is the state the lab's `sample_counts` test
+feeds you with 20,000 shots and expects to see land within 2% of 0.75. The first job in
+the lab, `normalise`, is this block's middle three lines, with one addition: the zero
+vector has norm 0, there is nothing to divide by, and there is no experiment it
+describes. That is a `ValueError`, not a list of `nan`.
+
+## The mistake: reading the amplitude as the probability
+
+The amplitude $0.866$ *looks* like a probability. It is between 0 and 1 and it is bigger
+for the likelier outcome. People read it as one, and the reason it is tempting is that
+for the symmetric state both readings give the same ranking. The damage shows on the
+asymmetric one: $0.866$ against $0.5$ says the odds are about $1.7 : 1$, while the real
+odds are $0.75 : 0.25 = 3 : 1$. Squaring stretches the gap. A state of $(0.99, 0.14)$
+gives the second outcome about one time in fifty, not one in seven.
+
+The same habit produces a second error in the other direction. Someone who has heard
+"probability is the square" will build a state from probabilities by taking the square
+root of each and stopping, which loses the sign and the phase. The photon experiment is
+the reason that matters: $(1/\sqrt{2}, 1/\sqrt{2})$ and $(1/\sqrt{2}, -1/\sqrt{2})$ have
+identical probabilities and opposite behaviour at the second mirror. The state is the
+amplitudes. The probabilities are a shadow of it.
+
+## Sampling: what 20,000 shots can and cannot tell you
+
+A detector count is a sample, and a sample of a $3 : 1$ coin does not come out at
+exactly $3 : 1$. The lab draws each shot with a single uniform random number: walk the
+cumulative probabilities and stop at the first one that exceeds the draw. That is the
+whole of `measure`, and it is the same thing a physical detector does with the
+amplitudes, only with `random.Random` in place of the universe.
+
+```python
+import math
+import random
+
+
+def measure(probs, rng):
+    u = rng.random()
+    acc = 0.0
+    for k, p in enumerate(probs):
+        acc += p
+        if u < acc:
+            return k
+    return len(probs) - 1
+
+
+probs = [0.75, 0.25]
+rng = random.Random(7)
+for shots in (100, 10000, 1000000):
+    zeros = sum(1 for _ in range(shots) if measure(probs, rng) == 0)
+    seen = zeros / shots
+    print(f"{shots:>8} shots: p0 = {seen:.4f}   error {abs(seen - 0.75):.4f}"
+          f"   1/sqrt(shots) = {1 / math.sqrt(shots):.4f}")
+```
+
+With seed 7 the hundred-shot estimate is $0.78$, off by $0.03$; ten thousand shots give
+$0.7497$; a million give $0.7499$. Each hundredfold increase in shots buys one more
+decimal place, which is the $1/\sqrt{\text{shots}}$ law: the standard deviation of a
+frequency estimate is $\sqrt{p(1-p)/\text{shots}}$, and for $p$ near a half that is
+close to $1/(2\sqrt{\text{shots}})$. The table's third column is a generous bound on it.
+This is why the lab's convergence test allows $0.02$ at 20,000 shots rather than
+demanding $0.75$ exactly, and why every quantum experiment you will read about reports
+thousands of shots: the answer is a distribution, and a single shot is one draw from it.
+
+The `return len(probs) - 1` at the end is not decoration. Floating-point probabilities
+can sum to $0.9999999999999999$, and a draw of $0.99999999999999995$ would walk off the
+end of the list. Returning the last index there is the difference between a simulator
+that works for a billion shots and one that crashes once a year.
+
+## Relative phase is real; global phase is not
+
+The photon carried a sign. In general it carries a complex phase, and the question is
+which phases you can measure. Take three one-qubit states: $|+\rangle$ with amplitudes
+$(1, 1)/\sqrt{2}$, a state with amplitudes $(1, i)/\sqrt{2}$, and $|+\rangle$ with every
+amplitude multiplied by $e^{0.9i}$.
+
+```python
+import cmath
+import math
+
+r = 1 / math.sqrt(2)
+plus = [r, r]                       # (|0> + |1>) / sqrt(2)
+plus_i = [r, 1j * r]                # (|0> + i|1>) / sqrt(2)
+spun = [a * cmath.exp(0.9j) for a in plus]   # |+> times a global phase
+
+
+def probs(state):
+    return [round(abs(a) ** 2, 4) for a in state]
+
+
+def hadamard(state):
+    a, b = state
+    return [(a + b) / math.sqrt(2), (a - b) / math.sqrt(2)]
+
+
+print("measured as they are:", probs(plus), probs(plus_i), probs(spun))
+print("measured after H:    ", probs(hadamard(plus)), probs(hadamard(plus_i)),
+      probs(hadamard(spun)))
+```
+
+Measured directly, all three give $[0.5, 0.5]$: the Born rule takes a modulus, and a
+modulus forgets phase. That is the lab's `probabilities([1, 1j])` test, and it is the
+same fact as the first beam splitter giving 50/50 whatever the path lengths. Now pass
+them through a second mirror, which is what the Hadamard is. The $|+\rangle$ state gives
+$[1, 0]$, the $(1, i)$ state stays at $[0.5, 0.5]$, and the spun state gives $[1, 0]$,
+identical to $|+\rangle$.
+
+Two rules fall out. The phase *between* the amplitudes changed the outcome of the second
+measurement, so it is physical, and interference is the name for the way it acts. The
+phase *common* to all the amplitudes changed nothing, before or after the Hadamard,
+because a common factor $e^{i\alpha}$ multiplies every amplitude, every gate is linear so
+it rides through unchanged, and $|e^{i\alpha}|^2 = 1$ removes it at the end. Two states
+that differ by a global phase are the same state. The lab's `collapse` respects this by
+keeping the phase of the surviving amplitude: `collapse([1, 1j], 1)` is `[0, 1j]`, not
+`[0, 1]`. Both describe the same physics, and the test asks for the one that does not
+throw information away.
+
+## The sphere, and what its angles are
+
+A one-qubit state has two complex amplitudes, which is four real numbers. Normalisation
+removes one and global phase removes another, leaving two, and two real numbers place a
+point on a sphere. Write the state with the freedom used up: choose the global phase so
+that $a_0$ is real and non-negative, then normalisation lets you write
+$a_0 = \cos(\theta/2)$ for some $\theta \in [0, \pi]$, and what is left of $a_1$ is its
+modulus $\sin(\theta/2)$ and a phase $\phi$:
+
+$$|\psi\rangle = \cos\frac{\theta}{2}\,|0\rangle + e^{i\phi}\sin\frac{\theta}{2}\,|1\rangle.$$
+
+Read the two angles back off any state and you have the lab's `bloch_angles`. From
+$|a_0| = \cos(\theta/2)$ comes $\theta = 2\arccos|a_0|$. From the phase of $a_1$
+*relative* to $a_0$ comes $\phi = \arg a_1 - \arg a_0$, which is the same difference
+whatever global phase the state arrived with.
+
+```python
+import cmath
+import math
+
+
+def bloch_angles(a0, a1):
+    theta = 2 * math.acos(min(1.0, abs(a0)))
+    if abs(a0) < 1e-12 or abs(a1) < 1e-12:
+        return (round(theta, 4), 0.0)
+    phi = (cmath.phase(a1) - cmath.phase(a0)) % (2 * math.pi)
+    return (round(theta, 4), round(phi, 4))
+
+
+r = 1 / math.sqrt(2)
+print("|+>  ", bloch_angles(r, r))
+print("|+i> ", bloch_angles(r, 1j * r))
+print("|->  ", bloch_angles(r, -r))
+print("|1>  ", bloch_angles(0, 1))
+print("|+> spun by a global phase", bloch_angles(r * cmath.exp(0.9j), r * cmath.exp(0.9j)))
+```
+
+$|+\rangle$ sits on the equator at $(\pi/2, 0)$; $(1, i)/\sqrt{2}$ is a quarter turn
+round at $(\pi/2, \pi/2)$; $|-\rangle$ is at $(\pi/2, \pi)$, diametrically opposite
+$|+\rangle$, which is why the Hadamard could tell them apart perfectly; and $|1\rangle$ is
+the south pole at $\theta = \pi$. The spun $|+\rangle$ lands exactly where $|+\rangle$
+does, because the difference of the two phases cancels the common $0.9$. At either pole
+one amplitude is zero and its phase is meaningless, so $\phi$ is undefined; the lab asks
+you to report $0.0$ there, and the `min(1.0, ...)` guards `acos` against a modulus that
+floating point has nudged to $1.0000000000000002$.
+
+## Where it stops holding
+
+Everything above is a *pure* state: one definite vector, with all the randomness in the
+measurement. A qubit that has been left to interact with its surroundings, or a
+photon whose source emits $|0\rangle$ half the time and $|1\rangle$ the other half, is
+not described by any vector at all. Its two outcomes are 50/50, like $|+\rangle$, but a
+Hadamard does not turn it into a certainty; the "phase between the amplitudes" that
+interference needs does not exist, because there are no amplitudes, only a mixture.
+Describing that takes a density matrix, and the Bloch sphere's interior, not its surface.
+The sphere itself stops at one qubit: two qubits have six real parameters after the two
+constraints, and no sphere holds six.
+
+Measurement in this module always means measurement in the computational basis, asking
+"which detector?" for $|0\rangle$ against $|1\rangle$. Asking a different question is
+done by rotating first and then asking this one, which is how module 3 measures along an
+angle. And the collapse rule is irreversible: after `collapse`, the state is a basis
+vector, the other amplitude and its phase are gone, and no gate recovers them. The
+photon that clicked on one detector cannot be asked which path it took.
+
+The lab, *State vectors and the Born rule*, is this reading as six functions: `normalise`
+is the unit-vector requirement, `probabilities` is the square, `measure` and
+`sample_counts` are the single draw and the $1/\sqrt{\text{shots}}$ law, `collapse` is
+the irreversible step with its phase kept, and `bloch_angles` is the two-parameter
+picture with its two poles handled. Every test in it is one of the numbers worked out
+above.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Amplitudes, squares and what a shot count means",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "A one-qubit state has amplitudes proportional to $(3, 4)$. What is the probability of measuring $|1\\rangle$?",
+                        "opts": [
+                            "$4/7$, the second amplitude's share of the total of the two amplitudes",
+                            "$16/25$, the square of the second amplitude over the sum of squares",
+                            "$4/5$, the second amplitude once the vector has unit norm",
+                            "$2/5$, half the normalised amplitude since two outcomes share it",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Dividing by the sum of the amplitudes treats them as probabilities that need to add to one. They add to one in squares, so the normaliser is $\sqrt{9 + 16} = 5$, not $7$, and the answer is a square, not a share.",
+                            r"The norm is $5$, the normalised state is $(0.6, 0.8)$, and $0.8^2 = 0.64$.",
+                            r"$4/5$ is the normalised amplitude, which is the right intermediate number and the wrong final one. The Born rule squares it: $0.8$ as an amplitude is a $0.64$ probability, and reading the amplitude as the odds understates how lopsided the state is.",
+                            r"Halving has no basis in the rule; the two outcomes do not split an amplitude between them. The probabilities come out of the squares $0.36$ and $0.64$, and those already sum to one without any sharing.",
+                        ],
+                        "why": r"""
+Normalise first: $\sqrt{3^2 + 4^2} = 5$, so the state is $(0.6, 0.8)$. Then square:
+$0.8^2 = 0.64 = 16/25$. The tempting wrong answers keep the amplitude as if it were
+the probability, which happens to rank the outcomes correctly and to get every ratio
+wrong; the square stretches a $4 : 3$ amplitude ratio into a $16 : 9$ probability
+ratio, which is what the detectors see.
+""",
+                    },
+                    {
+                        "q": "Two states have amplitudes $(1, 1)/\\sqrt{2}$ and $(1, -1)/\\sqrt{2}$. Measured directly both give 50/50. What is true of them?",
+                        "opts": [
+                            "They are the same state, since a sign is a global phase and a global phase is never observable",
+                            "They are different states, and a Hadamard before the measurement separates them perfectly",
+                            "They are different states, but no measurement in any basis can distinguish them",
+                            "They are the same state written in two bases, which is why the counts agree exactly",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The sign is on one amplitude, not both, so it is a relative phase and not a global one. Multiply every amplitude by $-1$ and you have the same state; flip the sign of one of them and you have moved to the opposite side of the Bloch sphere.",
+                            r"H sends $(1, 1)/\sqrt{2}$ to $(1, 0)$ and $(1, -1)/\sqrt{2}$ to $(0, 1)$, so after it the two states are told apart with certainty.",
+                            r"The computational basis cannot distinguish them, because the Born rule takes a modulus. That is a fact about one basis, not about all of them: interference at a second beam splitter is exactly a measurement that does distinguish them.",
+                            r"Nothing here has changed basis; both amplitude lists are written in the same $|0\rangle, |1\rangle$ basis and they differ in one sign. Equal counts on one measurement is a much weaker thing than being the same state.",
+                        ],
+                        "why": r"""
+The sign sits on one amplitude, so it is a relative phase, and relative phase is
+physical. A direct measurement hides it because $|{-1}|^2 = |1|^2$. Pass both states
+through a Hadamard and they become $(1, 0)$ and $(0, 1)$, which are told apart on
+every single shot. The states are $|+\rangle$ and $|-\rangle$, opposite points on the
+equator of the Bloch sphere, and "same probabilities in one basis" is not "same
+state".
+""",
+                    },
+                    {
+                        "q": "You estimate a probability of about $0.5$ from 10,000 shots and want the error bar ten times smaller. How many shots does that take?",
+                        "opts": [
+                            "About 100,000: the error falls in proportion to the shot count",
+                            "About 1,000,000: the error falls as the square root of the shot count",
+                            "About 20,000: the error halves once the estimate has stabilised",
+                            "It cannot be done by shots alone; the amplitude sets a floor on the error",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Tenfold shots buys a factor of $\sqrt{10} \approx 3.2$, not $10$. The error of a frequency estimate goes as $1/\sqrt{\text{shots}}$, so the shot count has to grow by the square of the improvement you want.",
+                            r"The standard error is $\sqrt{p(1-p)/\text{shots}}$; a hundredfold increase in shots is the tenfold reduction.",
+                            r"There is no point at which the estimate stabilises and the law changes; the scatter keeps shrinking as $1/\sqrt{\text{shots}}$ all the way down. Doubling the shots gets you a factor of $1.4$, not $2$.",
+                            r"The amplitude sets the probability, not a floor on how well you can estimate it. Sampling error is a property of finite counts and shrinks without limit as the count grows; only the cost of the shots stops you.",
+                        ],
+                        "why": r"""
+The standard deviation of a frequency estimate is $\sqrt{p(1-p)/\text{shots}}$, so
+the error scales as $1/\sqrt{\text{shots}}$. A tenfold reduction needs a hundredfold
+increase: from 10,000 shots to 1,000,000. The seeded run in the reading shows the same
+law from the other side, with each hundredfold jump in shots adding one decimal place.
+""",
+                    },
+                    {
+                        "q": "A state $(1, i)/\\sqrt{2}$ is measured and the outcome is $|1\\rangle$. Which post-measurement state does the lab's `collapse` return, and why that one?",
+                        "opts": [
+                            "$(0, 1)$, because after a collapse only the outcome matters and every phase is reset to zero",
+                            "$(0, i)$, because the surviving amplitude keeps its phase and is scaled to modulus one",
+                            "$(0, i/\\sqrt{2})$, because the surviving amplitude is left exactly as it was",
+                            "$(1, i)/\\sqrt{2}$, because measurement reads the state without changing it",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"$(0, 1)$ and $(0, i)$ are the same physical state, so this is not wrong physics; it is the choice that discards information the amplitude carried. The lab asks for the phase kept, so its test for `collapse([1, 1j], 1)` expects `[0, 1j]`.",
+                            r"Zero everywhere else, phase kept, modulus set to one: `amp / abs(amp)`.",
+                            r"Leaving $i/\sqrt{2}$ in place gives a vector of norm $1/2$, which is not a state; the probabilities would sum to a half. Collapse renormalises, and the way to do it while keeping the phase is to divide the amplitude by its own modulus.",
+                            r"Measurement is the one operation in the course that is not reversible. After the click the other amplitude is gone, and a second measurement returns $|1\rangle$ with certainty, which $(1, i)/\sqrt{2}$ would not do.",
+                        ],
+                        "why": r"""
+Collapse zeroes every amplitude except the outcome's and rescales that one to modulus
+$1$, keeping its direction in the complex plane: $i/\sqrt{2}$ divided by its modulus
+is $i$. The state $(0, i)$ differs from $(0, 1)$ only by a global phase, so both are
+physically the same, but the lab's convention is to keep what the amplitude carried
+rather than reset it, and its test checks for exactly `[0j, 1j]`. Leaving the
+amplitude unscaled produces a vector that is not normalised, and returning the
+original state pretends measurement is reversible, which it is not.
+""",
+                    },
+                    {
+                        "q": "For which one-qubit state does the Bloch azimuth $\\phi$ have no defined value?",
+                        "opts": [
+                            "$|+\\rangle$, because its two amplitudes are equal so their phase difference vanishes",
+                            "$|1\\rangle$, because the $|0\\rangle$ amplitude is zero and a zero has no phase at all",
+                            "$(1, -1)/\\sqrt{2}$, because a negative amplitude has no angle in the complex plane",
+                            "Any state multiplied by a global phase, because the common factor shifts $\\phi$ arbitrarily",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Equal amplitudes give a phase difference of $0$, which is a perfectly good value of $\phi$; $|+\rangle$ sits at $(\pi/2, 0)$. A difference that is zero is not a difference that is undefined.",
+                            r"At a pole one amplitude is $0$, and $\arg 0$ is not a number; every $\phi$ describes the same point.",
+                            r"A negative real number has a phase of $\pi$, so $(1, -1)/\sqrt{2}$ has $\phi = \pi$ and sits opposite $|+\rangle$ on the equator. The complex plane has an angle for every non-zero number, including the negative ones.",
+                            r"A global phase adds the same angle to $\arg a_0$ and $\arg a_1$, and $\phi$ is their difference, so it cancels. The reading's spun $|+\rangle$ lands at exactly $(\pi/2, 0)$ for that reason.",
+                        ],
+                        "why": r"""
+$\phi$ is $\arg a_1 - \arg a_0$, and at either pole one of those amplitudes is zero.
+Zero has no argument, so the difference is not defined, and geometrically every
+meridian meets at the pole anyway. The lab asks for $0.0$ there as a convention. The
+other states all have two non-zero amplitudes and therefore a perfectly definite
+$\phi$: $0$ for $|+\rangle$, $\pi$ for $|-\rangle$, and unchanged under any global
+phase because the common factor cancels in the difference.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "State vectors and the Born rule",
                 "runtime": "python",
@@ -478,6 +849,375 @@ except ValueError:
                 "CNOT is a permutation of basis states; combined with single-qubit rotations it is universal",
                 "Circuit depth versus gate count, and why the simulator's cost is 2^n regardless",
             ],
+            "read": [
+                {
+                    "title": "Eight amplitudes, three bits, and the pairs a gate touches",
+                    "minutes": 14,
+                    "body": r'''
+A three-qubit register is a list of eight complex numbers. Write the eight indices in
+binary and lay the list out:
+
+```text
+index   000  001  010  011  100  101  110  111
+amp      a0   a1   a2   a3   a4   a5   a6   a7
+```
+
+Now apply an X gate, a bit flip, to qubit 1, the middle bit. Nothing about the physics
+is in doubt: whatever amplitude was on $|0\mathbf{0}0\rangle$ is now on
+$|0\mathbf{1}0\rangle$, and so on for every index. Trace it. $a_0$ moves to index 2,
+$a_2$ to index 0, $a_1$ to 3, $a_3$ to 1, $a_4$ to 6, $a_6$ to 4, $a_5$ to 7, $a_7$ to 5.
+Four swaps, and every swap is between two indices that differ in exactly the middle bit
+and agree on the other two. The gate on one qubit never looked at the other qubits; it
+paired up the amplitudes that differ only in *its* bit and acted inside each pair. That
+observation is the whole of the simulator you are about to build.
+
+## Why the pairs, from the tensor product
+
+The reason it works is the structure of the state, not a coincidence of X. A three-qubit
+basis state is a product $|q_0\rangle|q_1\rangle|q_2\rangle$, and a gate $U$ on qubit 1
+acts as $I \otimes U \otimes I$: it does nothing to $q_0$ and $q_2$, and applies the
+$2 \times 2$ matrix $U$ to $q_1$. Fix $q_0$ and $q_2$ at any values; the two basis states
+$|q_0\,0\,q_2\rangle$ and $|q_0\,1\,q_2\rangle$ span a copy of one qubit, and inside it
+$U$ is the ordinary $2\times 2$ multiplication:
+
+$$\begin{pmatrix} a'_{q_0 0 q_2} \\ a'_{q_0 1 q_2} \end{pmatrix}
+= \begin{pmatrix} u_{00} & u_{01} \\ u_{10} & u_{11} \end{pmatrix}
+\begin{pmatrix} a_{q_0 0 q_2} \\ a_{q_0 1 q_2} \end{pmatrix}.$$
+
+There are four choices of $(q_0, q_2)$, hence four pairs, and $U$ is applied to each
+independently. For X the matrix is $\begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}$ and the
+multiplication is the swap you traced by hand. For H it is a mix of the two members. For
+a general $n$-qubit register the gate on one qubit is $2^{n-1}$ independent
+$2 \times 2$ multiplications, each touching a pair of indices that differ in one bit.
+
+The bit that identifies the pair depends on which qubit you mean, and this course fixes
+the convention once: **qubit 0 is the most significant bit**. On $n$ qubits, qubit $q$
+lives at bit position $n - 1 - q$, so on three qubits qubit 0 is bit 2 (weight 4), qubit
+1 is bit 1 (weight 2), and qubit 2 is bit 0 (weight 1). Enumerate the pairs by walking
+every index whose target bit is 0 and adding the bit to find its partner:
+
+```python
+n = 3
+for target in range(n):
+    shift = n - 1 - target
+    pairs = [(k, k | (1 << shift)) for k in range(2 ** n) if not (k >> shift) & 1]
+    print(f"qubit {target} (bit position {shift}):", pairs)
+```
+
+Qubit 1 gives $(0,2), (1,3), (4,6), (5,7)$, which are the four swaps from the trace.
+Qubit 0 gives $(0,4), (1,5), (2,6), (3,7)$, partners four apart; qubit 2 gives
+neighbours. Skipping the indices whose target bit is set is what makes each pair appear
+once: $(0, 2)$ is visited from 0, and index 2 is skipped rather than producing a second
+pair $(2, 0)$ that would apply the gate twice.
+
+## The mistake: the wrong end of the register
+
+The lab's test that fails most often reads "X on qubit 0 of $|000\rangle$ should give
+index 4". People write `shift = target` because that is how bit $q$ of an integer is
+normally addressed, and X on qubit 0 lands on index 1 instead of index 4. It is tempting
+because both conventions are self-consistent and the textbooks are split; Nielsen and
+Chuang write the register with qubit 0 on the left, which makes it the high bit, and
+Qiskit puts qubit 0 on the right, which makes it the low bit. Neither is wrong. Mixing
+them inside one program is, and the symptom is a CNOT that flips the wrong qubit and a
+Bell state that comes out as $(|00\rangle + |01\rangle)/\sqrt{2}$, which is not
+entangled at all. Write `shift = n - 1 - target` once, in one helper, and let every gate
+go through it.
+
+## The Bell state, with real numbers
+
+Carry a two-qubit circuit through by hand and by code. Start at $|00\rangle$, apply H to
+qubit 0, then CNOT with qubit 0 as control and qubit 1 as target. On two qubits, qubit 0
+is bit 1, so H on qubit 0 pairs $(0, 2)$ and $(1, 3)$. The first pair holds
+$(a_0, a_2) = (1, 0)$ and H sends it to $(1/\sqrt{2}, 1/\sqrt{2})$; the second holds
+$(0, 0)$ and stays there. The state after H is $(0.7071, 0, 0.7071, 0)$, which reads as
+$(|00\rangle + |10\rangle)/\sqrt{2}$: qubit 0 in superposition, qubit 1 still zero.
+
+CNOT is a permutation of the basis. Where the control bit is 1, flip the target bit;
+where it is 0, do nothing. With control at bit 1 and target at bit 0, the indices with
+control set are 2 and 3, and they exchange amplitudes. So $(0.7071, 0, 0.7071, 0)$
+becomes $(0.7071, 0, 0, 0.7071)$, which is $(|00\rangle + |11\rangle)/\sqrt{2}$.
+
+```python
+import math
+
+r = 1 / math.sqrt(2)
+H = [[r, r], [r, -r]]
+
+
+def apply_1q(state, gate, target):
+    n = len(state).bit_length() - 1
+    shift = n - 1 - target
+    out = list(state)
+    for k in range(len(state)):
+        if (k >> shift) & 1:
+            continue
+        k1 = k | (1 << shift)
+        a, b = state[k], state[k1]
+        out[k] = gate[0][0] * a + gate[0][1] * b
+        out[k1] = gate[1][0] * a + gate[1][1] * b
+    return out
+
+
+def apply_cnot(state, control, target):
+    n = len(state).bit_length() - 1
+    cs, ts = n - 1 - control, n - 1 - target
+    out = list(state)
+    for k in range(len(state)):
+        if ((k >> cs) & 1) and not ((k >> ts) & 1):
+            k1 = k | (1 << ts)
+            out[k], out[k1] = state[k1], state[k]
+    return out
+
+
+def show(label, state):
+    print(f"{label:<14}", [round(a, 4) for a in state])
+
+
+state = [1.0, 0.0, 0.0, 0.0]          # |00>
+show("start", state)
+state = apply_1q(state, H, 0)
+show("after H on 0", state)
+state = apply_cnot(state, 0, 1)
+show("after CNOT", state)
+print("norm squared:", round(sum(a * a for a in state), 12))
+```
+
+The two printed states are the two computed by hand, and the norm is still $1$. Notice
+what `apply_cnot` does not do: it does not touch the indices where the control is 0, and
+it does not build anything of size $4 \times 4$. The condition `control set and target
+clear` picks out one member of each swapped pair, exactly as the `if (k >> shift) & 1:
+continue` in `apply_1q` picks out one member of each mixed pair. Both functions copy the
+input first and overwrite only what changes, so the amplitudes they do not touch carry
+over and the caller's list is never mutated, which is what the lab's mutation test looks
+for.
+
+## Why every gate is unitary
+
+The norm came out as $1$, and that was not luck. Probabilities have to sum to one after
+the gate as well as before, for every input state, so a gate has to preserve the length
+of every vector. Write the gate as a matrix $U$ and the requirement as
+$\|U\psi\|^2 = \|\psi\|^2$; expanding, $\psi^\dagger U^\dagger U \psi = \psi^\dagger\psi$
+for all $\psi$, which holds only when $U^\dagger U = I$. That equation is the definition
+of unitary, and it is not an extra axiom: it is what "the probabilities still add to one"
+says in matrix language. It also makes every gate reversible, since $U^{-1} = U^\dagger$
+exists and is another gate.
+
+```python
+import math
+
+r = 1 / math.sqrt(2)
+H = [[r, r], [r, -r]]
+G = [[1, 1], [0, 1]]                  # not unitary: its columns are not orthonormal
+
+
+def matmul(a, b):
+    return [[sum(a[i][k] * b[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+
+
+def apply(gate, state):
+    a, b = state
+    return [gate[0][0] * a + gate[0][1] * b, gate[1][0] * a + gate[1][1] * b]
+
+
+def norm2(state):
+    return round(sum(abs(a) ** 2 for a in state), 6)
+
+
+print("H times H:", [[round(x, 6) for x in row] for row in matmul(H, H)])
+plus = [r, r]
+print("norm^2 of H|+>:", norm2(apply(H, plus)), "   norm^2 of G|+>:", norm2(apply(G, plus)))
+```
+
+H is real and symmetric, so $H^\dagger = H$, and $H H = I$ is the unitarity condition
+and the statement that H is its own inverse at once; the printed product is the identity.
+The matrix $G$ is a perfectly good linear map and it sends $|+\rangle$ to a vector of
+squared norm $2.5$. There is no experiment with probabilities summing to $2.5$, so $G$ is
+not a gate, and a simulator that accepted it would report nonsense with a straight face.
+The lab's norm test runs twenty random circuits from X, Y, Z, H, S, T and CNOT for
+exactly this reason: every one of those is unitary, so any drift from $1$ is a bug in
+the index arithmetic rather than in the physics.
+
+The phase gates are worth one remark. $S = \mathrm{diag}(1, i)$ and
+$T = \mathrm{diag}(1, e^{i\pi/4})$ leave the moduli alone and rotate the phase of the
+$|1\rangle$ component, so on their own they change no probability at all; the lab's
+`probabilities` would not notice them. They matter because a later H turns the phase
+into a modulus, which is the interference of module 1. $T^2 = S$ and $S^2 = Z$, since
+$(e^{i\pi/4})^2 = i$ and $i^2 = -1$; the test that applies T twice and compares with S is
+checking that you built T from `cmath.exp(1j * math.pi / 4)` rather than from a rounded
+decimal.
+
+## Where the trick stops paying
+
+The pair trick costs $2^n$ operations per gate, because it visits every amplitude once.
+Building the gate as a dense $2^n \times 2^n$ matrix and multiplying would cost $4^n$
+and, before that, would need $4^n$ complex numbers of memory:
+
+```python
+def human(nbytes):
+    for unit in ("bytes", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"):
+        if nbytes < 1024:
+            return f"{nbytes:.0f} {unit}"
+        nbytes /= 1024
+    return f"{nbytes:.0f} ZiB"
+
+
+for n in (10, 20, 30):
+    print(f"{n} qubits: state {human(2 ** n * 16):>8}   dense gate {human(4 ** n * 16):>8}")
+```
+
+Ten qubits is a 16 KiB state and a 16 MiB matrix, which is fine. Twenty is a 16 MiB
+state and a 16 TiB matrix, which is not. Thirty is a 16 GiB state, which a workstation
+can hold, and a matrix of 16 EiB, which nothing can. The pair trick is what makes twenty
+and thirty qubits reachable at all, and it is why the capstone rubric refuses dense
+operator matrices outright.
+
+But the state itself still doubles with every qubit, and that is the wall the trick does
+not move. Every gate touches every amplitude, so a circuit of $d$ gates on $n$ qubits
+costs $d \cdot 2^n$ regardless of how shallow or sparse it is; a depth-one circuit of
+fifty X gates is no cheaper per gate than a deep one. Around forty-five to fifty qubits
+the state no longer fits in any machine, and that is where a classical simulator stops
+and a quantum computer would begin. Circuit depth, which is the number of layers that
+can run in parallel, matters to hardware because it sets the running time and the
+exposure to noise; it does not matter to this simulator, which runs the gates one after
+another whatever the layer structure.
+
+Two further boundaries. CNOT together with arbitrary single-qubit rotations is
+universal, meaning any unitary on $n$ qubits can be built from them, but "can be built"
+says nothing about how many gates it takes, and a generic $n$-qubit unitary needs
+exponentially many. And the register in this module is closed: no measurement in the
+middle, no noise, no reset. The lab's `run_circuit` is a pure function from an op list
+to a state vector, and it is the engine the next three modules and the capstone's
+`Circuit` builder are written on. Build the index helper first, make `apply_1q` and
+`apply_cnot` go through it, and the Bell and GHZ tests follow from the arithmetic above.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Which amplitudes a gate touches",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "On a four-qubit register (qubit 0 most significant), which index pairs does a gate on qubit 1 mix?",
+                        "opts": [
+                            "Indices that differ by 2, since qubit 1 is the second bit from the low end",
+                            "Indices that differ by 4, since qubit 1 sits at bit position $4 - 1 - 1 = 2$",
+                            "Indices that differ by 1, since a single-qubit gate always pairs adjacent neighbours",
+                            "Indices that differ by 8, since qubit 1 is the second most significant bit",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"A difference of 2 is bit position 1, which on four qubits is qubit 2, not qubit 1. The convention counts from the top: qubit $q$ lives at bit $n - 1 - q$, so qubit 1 is bit 2 and the partners are 4 apart.",
+                            r"Bit position $n - 1 - q = 2$, weight $2^2 = 4$: the pairs are $(0,4), (1,5), (2,6), \dots$",
+                            r"Neighbouring indices differ in bit 0, which is the least significant qubit, qubit 3 here. A gate on any other qubit mixes indices further apart, by the weight of its bit.",
+                            r"A difference of 8 is bit 3, the most significant, which is qubit 0. Qubit 1 is one position below that, at bit 2, so its partners are 4 apart, not 8.",
+                        ],
+                        "why": r"""
+With qubit 0 as the most significant bit, qubit $q$ of an $n$-qubit register lives at
+bit position $n - 1 - q$. For $n = 4$ and $q = 1$ that is bit 2, weight 4, so a gate on
+qubit 1 mixes $(k, k + 4)$ for every $k$ whose bit 2 is clear. The other spacings
+belong to other qubits: 8 to qubit 0, 2 to qubit 2, 1 to qubit 3. Mixing the two
+conventions up is the most common failing test in the lab, which is why the helper
+computes the shift once.
+""",
+                    },
+                    {
+                        "q": "`apply_1q` loops over every index $k$ but skips those whose target bit is set. What goes wrong if the skip is removed?",
+                        "opts": [
+                            "Nothing, because a second visit to a pair recomputes the same two outputs from the input list, which is untouched",
+                            "Each upper index is visited with itself as its partner, and that write overwrites the correct amplitude",
+                            "The loop starts reading from `out` instead of `state`, so later pairs see partly updated values",
+                            "Half the pairs are never reached, because an index and its partner are now both passed over",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"That would be true if the upper visit found the same pair, but it does not: for an index whose target bit is already set, `k | (1 << shift)` is the index itself, so the second visit pairs the upper amplitude with itself rather than with its lower partner.",
+                            r"When the target bit is set, `k1 = k | (1 << shift)` equals `k`, so `a` and `b` are the same amplitude and `out[k]` is overwritten with $(u_{10} + u_{11})\,a_k$; for H that is zero.",
+                            r"The function reads from `state` and writes to `out` throughout, so there is no partial-update problem whatever the loop does. The bug is in which indices are visited and what partner they are given, not in aliasing.",
+                            r"Removing the skip makes the loop reach *more* indices, not fewer; every $k$ is now processed. The problem is a spurious extra visit, not a missing one.",
+                        ],
+                        "why": r"""
+Without the skip, an index $k_1$ whose target bit is set is visited too, and for it
+`k | (1 << shift)` is $k_1$ itself, so `a` and `b` are both $a_{k_1}$ and the code
+writes $(u_{10} + u_{11})\,a_{k_1}$ over the correct value the lower visit had placed
+there. For H that factor is $1/\sqrt{2} - 1/\sqrt{2} = 0$, so `H` on $|1\rangle$ comes
+out as $(0.7071, 0)$ instead of $(0.7071, -0.7071)$. The skip makes each pair appear
+once, from its lower member, which is what the tensor product picture says should
+happen.
+""",
+                    },
+                    {
+                        "q": "Why must every gate be a unitary matrix, in terms of what the simulator measures?",
+                        "opts": [
+                            "Unitarity keeps the matrix entries between $-1$ and $1$, so no amplitude can overflow",
+                            "Unitarity preserves the norm of every state, so the probabilities keep summing to one",
+                            "Unitarity guarantees the matrix is real, so the simulator never needs complex numbers",
+                            "Unitarity makes the gate diagonal in some basis, which is what lets it be applied sparsely",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Entries of a unitary do sit within the unit disc, but that is a consequence, not the point, and a matrix with small entries can still shrink or stretch a vector. The condition that matters is on the whole map: $\|U\psi\| = \|\psi\|$ for every $\psi$.",
+                            r"$U^\dagger U = I$ is precisely the statement that $\|U\psi\|^2 = \|\psi\|^2$ for all $\psi$, so the Born probabilities still add to one after the gate.",
+                            r"Y, S and T are unitary and complex. Unitarity says nothing about being real; it says the columns are orthonormal in the complex inner product.",
+                            r"Every unitary is diagonalisable, but so are many non-unitary matrices, and sparseness of application comes from the tensor product structure, not from diagonalisability. The pair trick works for any $2\times 2$ matrix, unitary or not.",
+                        ],
+                        "why": r"""
+After a gate the state must still be a state: the Born probabilities $|a_k|^2$ must
+sum to one for every possible input. That is $\|U\psi\| = \|\psi\|$ for all $\psi$,
+which expands to $U^\dagger U = I$. The reading's non-unitary $G$ sends $|+\rangle$ to a
+vector of squared norm $2.5$, which no experiment can produce. Unitarity also gives
+reversibility for free, since $U^{-1} = U^\dagger$ is itself a gate.
+""",
+                    },
+                    {
+                        "q": "Applying S to a qubit in the state $(1, 1)/\\sqrt{2}$ leaves its measurement probabilities at 50/50. What is the gate for, then?",
+                        "opts": [
+                            "It is a no-op on superpositions and acts only on the two basis states $|0\\rangle$ and $|1\\rangle$",
+                            "It changes the relative phase, which a later Hadamard converts into a change of probabilities",
+                            "It swaps the two amplitudes' moduli, which a symmetric state cannot show",
+                            "It changes the global phase, which is unobservable but needed to keep the matrix unitary",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"S acts on every state, including this one: it turns $(1, 1)/\sqrt{2}$ into $(1, i)/\sqrt{2}$, a different point on the Bloch sphere. On the basis states it does even less visibly, multiplying $|1\rangle$ by a global phase.",
+                            r"$(1, 1)/\sqrt{2}$ becomes $(1, i)/\sqrt{2}$; measured directly both are 50/50, but H sends the first to $|0\rangle$ and leaves the second at 50/50.",
+                            r"S is diagonal, so it never moves amplitude between components; each modulus stays where it was. What it changes is the phase of the $|1\rangle$ component.",
+                            r"The phase S applies is on one component only, so it is relative, not global. A global phase would indeed be unobservable, but this one is detected by any measurement after a Hadamard.",
+                        ],
+                        "why": r"""
+$S = \mathrm{diag}(1, i)$ multiplies the $|1\rangle$ amplitude by $i$ and leaves the
+moduli untouched, so a direct measurement cannot see it. The phase it introduces is
+between the two components, and a Hadamard afterwards turns that relative phase into
+a difference in moduli: $H$ takes $(1, 1)/\sqrt{2}$ to $(1, 0)$ but $(1, i)/\sqrt{2}$
+to a 50/50 state. Phase gates are the half of the gate set that interference runs
+on; without them there is nothing for the Hadamards to interfere.
+""",
+                    },
+                    {
+                        "q": "A circuit on 30 qubits has depth 1 and consists of thirty X gates, one per qubit. Roughly what does the sparse simulator pay to run it?",
+                        "opts": [
+                            "About $2^{30}$ operations in total, since a depth-one layer is applied as a single pass",
+                            "About $30 \\times 2^{30}$ operations, since each gate visits every one of the $2^{30}$ amplitudes",
+                            "About $30 \\times 2$ operations, since each X is a $2\\times 2$ matrix on one qubit",
+                            "About $30 \\times 4^{30}$ operations, since each gate is a dense $2^{30} \\times 2^{30}$ matrix multiply",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The simulator has no notion of a layer; it applies the gates one after another, and each pass over the state costs $2^{30}$. Depth is what hardware cares about, not what this engine pays.",
+                            r"Each gate touches all $2^n$ amplitudes once, and there are thirty gates.",
+                            r"The $2\times 2$ matrix is applied to $2^{29}$ independent pairs, not to one. A single-qubit gate is cheap to describe and expensive to apply, because it acts on every amplitude in the register.",
+                            r"$4^{30}$ is the dense-matrix cost that the pair trick exists to avoid. The sparse simulator never builds the $2^{30}\times 2^{30}$ matrix; it does $2^{30}$ work per gate, not $4^{30}$.",
+                        ],
+                        "why": r"""
+The pair trick reduces a gate from $4^n$ to $2^n$ operations, and it cannot go lower,
+because every amplitude belongs to some pair. Thirty gates on a $2^{30}$-amplitude
+state cost $30 \times 2^{30}$, about thirty billion pair updates, whatever the depth of
+the circuit. Depth matters to hardware, where a layer runs in parallel and sets the
+exposure to noise; it does not matter to a state-vector simulator, which is why the
+reading says the simulator's cost is $2^n$ regardless.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "A tensor-structured circuit simulator",
                 "runtime": "python",
@@ -789,6 +1529,357 @@ for _trial in range(20):
                 "For |Phi+> the correlation is E(a, b) = cos(a - b), independent of the individual angles",
                 "CHSH: any local hidden-variable model obeys |S| <= 2, while quantum mechanics reaches 2*sqrt(2)",
             ],
+            "read": [
+                {
+                    "title": "Two dials, two lamps, and a correlation no instruction card can produce",
+                    "minutes": 15,
+                    "body": r'''
+A source in the middle of a room emits pairs of particles, one to the left and one to
+the right. On each side stands a box with a dial, which can be set to any angle, and a
+lamp that flashes either $+1$ or $-1$ when a particle arrives. Alice runs the left box,
+Bob the right, far enough apart that nothing Alice does can reach Bob before his lamp
+has flashed. They record thousands of rounds, then compare notebooks.
+
+Alone, each notebook is a fair coin. Whatever angle Alice chose, her column is half
+$+1$ and half $-1$ with no pattern, and the same for Bob. Together, the notebooks are
+not coins at all. When the two dials were set to the same angle, the lamps agreed on
+every single round. When they differed by $45°$, the lamps agreed about $85\%$ of the
+time. When they differed by $90°$, agreement dropped to $50\%$, and at $180°$ the lamps
+disagreed every round. The correlation depends on the *difference* between the dials
+and on nothing else. Every number in this reading is an attempt to reproduce those
+notebooks, first with the state from module 2, and then with the most reasonable
+classical mechanism anyone can propose, which fails.
+
+## The state that fills the notebooks
+
+The source emits the Bell state $|\Phi^+\rangle = (|00\rangle + |11\rangle)/\sqrt{2}$,
+which the lab builds with an H and a CNOT. Alice's dial at angle $a$ means she measures
+along the axis $\cos a\, Z + \sin a\, X$ on the Bloch sphere. There is no new
+measurement primitive for that: rotate her qubit by $R_y(-a)$, which carries that axis
+onto $Z$, then measure in the computational basis as in module 1. The rotation is
+
+$$R_y(\theta) = \begin{pmatrix} \cos\frac{\theta}{2} & -\sin\frac{\theta}{2} \\
+\sin\frac{\theta}{2} & \cos\frac{\theta}{2} \end{pmatrix},$$
+
+applied with the `apply_1q` pair trick to qubit 0 for Alice and qubit 1 for Bob. The
+correlation $E(a, b)$ is the average of the product of the two lamps: $+1$ when they
+agree, $-1$ when they differ, weighted by the Born probabilities of the four outcomes.
+
+Work one setting through. Alice at $a = 0$ does not rotate. Bob at $b = \pi/4$ applies
+$R_y(-\pi/4)$ to qubit 1, with $\cos(\pi/8) = 0.9239$ and $\sin(\pi/8) = 0.3827$. On
+qubit 1, the pairs are $(0, 1)$ and $(2, 3)$. The first pair holds $(1/\sqrt{2}, 0)$ and
+becomes $(0.9239, -0.3827)/\sqrt{2} = (0.6533, -0.2706)$; the second holds
+$(0, 1/\sqrt{2})$ and becomes $(0.3827, 0.9239)/\sqrt{2} = (0.2706, 0.6533)$. Squaring
+the four amplitudes gives probabilities $0.4268, 0.0732, 0.0732, 0.4268$ for
+$|00\rangle, |01\rangle, |10\rangle, |11\rangle$. Agreement is $0.4268 + 0.4268 =
+0.8536$ and disagreement $0.1464$, so $E = 0.8536 - 0.1464 = 0.7071$. That is the
+$85\%$ agreement at $45°$ from the notebooks, and $0.7071$ is $\cos(\pi/4)$.
+
+```python
+import math
+
+r = 1 / math.sqrt(2)
+
+
+def ry(theta):
+    c, s = math.cos(theta / 2), math.sin(theta / 2)
+    return [[c, -s], [s, c]]
+
+
+def apply_1q(state, gate, target):
+    n = len(state).bit_length() - 1
+    shift = n - 1 - target
+    out = list(state)
+    for k in range(len(state)):
+        if (k >> shift) & 1:
+            continue
+        k1 = k | (1 << shift)
+        a, b = state[k], state[k1]
+        out[k] = gate[0][0] * a + gate[0][1] * b
+        out[k1] = gate[1][0] * a + gate[1][1] * b
+    return out
+
+
+def expectation(state, a, b):
+    rotated = apply_1q(apply_1q(state, ry(-a), 0), ry(-b), 1)
+    probs = [x * x for x in rotated]
+    agree = probs[0] + probs[3]
+    return probs, agree - (probs[1] + probs[2])
+
+
+phi_plus = [r, 0.0, 0.0, r]
+probs, e = expectation(phi_plus, 0.0, math.pi / 4)
+print("joint probabilities:", [round(p, 4) for p in probs])
+print("E(0, pi/4) =", round(e, 4), "  cos(pi/4) =", round(math.cos(math.pi / 4), 4))
+for a in (0.0, 1.9):
+    probs, _ = expectation(phi_plus, a, 0.0)
+    print(f"Alice at {a}: Bob sees p0 = {probs[0] + probs[2]:.4f}, p1 = {probs[1] + probs[3]:.4f}")
+```
+
+The general result is $E(a, b) = \cos(a - b)$ for $|\Phi^+\rangle$, and it comes from
+the same arithmetic with symbols: after both rotations, the agreeing amplitudes are
+$\cos\frac{a}{2}\cos\frac{b}{2} + \sin\frac{a}{2}\sin\frac{b}{2}$ and its twin, each
+equal to $\cos\frac{a-b}{2}/\sqrt{2}$, and the disagreeing ones are $\pm\sin\frac{a-b}{2}/\sqrt{2}$.
+So agreement is $\cos^2\frac{a-b}{2}$, disagreement is $\sin^2\frac{a-b}{2}$, and the
+difference is $\cos(a - b)$ by the double-angle identity. Only the difference survives,
+which is what the notebooks showed. For $|\Psi^-\rangle$ the same steps give
+$-\cos(a-b)$; the lab's `expectation_ab` test checks both.
+
+The last two printed lines are the other half of the notebooks. Whatever Alice's dial,
+Bob's marginal stays at $0.5 / 0.5$. This is the no-signalling fact, and it is why the
+correlation cannot be used to send a message: Bob's column alone is a coin regardless of
+what Alice did, and he learns nothing until the notebooks are brought together. The
+lab's `marginal_probabilities` computes those sums and every Bell state gives
+$[0.5, 0.5]$ on both halves.
+
+## The instruction card, and why it cannot reach $2\sqrt{2}$
+
+Here is the obvious classical mechanism. When the pair is created, each particle is
+handed a card that says what to flash for every possible dial angle; the two cards are
+made together, so they can be as correlated as you like. Alice's lamp is then a function
+$A(a, \lambda)$ of her angle and the card $\lambda$, Bob's is $B(b, \lambda)$, and
+neither depends on the other's dial. That independence is *locality*, and it is the only
+assumption. The lab's `lhv_chsh` is one such card: a random angle $\lambda$, with
+$A(\theta) = \mathrm{sign}\cos(\theta - \lambda)$ and $B(\theta) = -A(\theta)$.
+
+Now fix a card and consider two settings each: $a_0, a_1$ for Alice and $b_0, b_1$ for
+Bob. The four lamp values are each $\pm 1$. Form the combination
+
+$$s(\lambda) = A_0 B_0 + A_0 B_1 + A_1 B_0 - A_1 B_1 = A_0 (B_0 + B_1) + A_1 (B_0 - B_1).$$
+
+Since $B_0$ and $B_1$ are each $\pm 1$, either they are equal, in which case
+$B_0 - B_1 = 0$ and $B_0 + B_1 = \pm 2$, or they differ, in which case $B_0 + B_1 = 0$
+and $B_0 - B_1 = \pm 2$. Either way exactly one bracket is zero and the other is
+$\pm 2$, so $s(\lambda) = \pm 2$ for every card. Averaging over however the cards are
+distributed cannot escape an interval that every term sits in, so
+
+$$S = E(a_0, b_0) + E(a_0, b_1) + E(a_1, b_0) - E(a_1, b_1) \quad\text{satisfies}\quad |S| \le 2.$$
+
+That is the CHSH inequality, and notice what went into it: nothing about quantum
+mechanics, nothing about the specific card, only that each lamp is a definite function
+of its own dial and the shared card. Any mechanism of that shape obeys the bound.
+
+Now put the quantum correlation in, with the angles $a_0 = 0$, $a_1 = \pi/2$,
+$b_0 = \pi/4$, $b_1 = -\pi/4$:
+
+```python
+import math
+
+a0, a1, b0, b1 = 0.0, math.pi / 2, math.pi / 4, -math.pi / 4
+E = lambda a, b: math.cos(a - b)
+terms = [E(a0, b0), E(a0, b1), E(a1, b0), -E(a1, b1)]
+print("the four terms:", [round(t, 4) for t in terms])
+print("S =", round(sum(terms), 4), "   2*sqrt(2) =", round(2 * math.sqrt(2), 4))
+```
+
+Three differences of $\pm\pi/4$ each contribute $\cos(\pi/4) = 0.7071$, and the fourth,
+$a_1 - b_1 = 3\pi/4$, contributes $-\cos(3\pi/4) = +0.7071$ because of the minus sign in
+$S$. Four times $0.7071$ is $2.8284 = 2\sqrt{2}$. The notebooks the source fills cannot
+have come from any instruction card.
+
+The card the lab asks you to write is worth running, because it is a good card. It gets
+$E(a, b) = -1$ at equal angles and it depends only on the angle difference, both of
+which the notebooks demand.
+
+```python
+import math
+import random
+
+a0, a1, b0, b1 = 0.0, math.pi / 2, math.pi / 4, -math.pi / 4
+pairs = [(a0, b0), (a0, b1), (a1, b0), (a1, b1)]
+rng = random.Random(7)
+shots = 40000
+totals = [0, 0, 0, 0]
+for _ in range(shots):
+    lam = rng.random() * 2 * math.pi           # the shared instruction card
+    for i, (a, b) in enumerate(pairs):
+        alice = 1 if math.cos(a - lam) >= 0 else -1
+        bob = -1 if math.cos(b - lam) >= 0 else 1
+        totals[i] += alice * bob
+e = [t / shots for t in totals]
+print("local correlations:", [round(x, 3) for x in e])
+print("local S =", round(e[0] + e[1] + e[2] - e[3], 3))
+```
+
+With seed 7 the four correlations come out near $-0.5, -0.5, -0.5, +0.5$ and $S$ is
+$-2.0$, right on the bound. The card is built to disagree at equal angles, so it
+imitates $|\Psi^-\rangle$ rather than $|\Phi^+\rangle$ and its $S$ carries the opposite
+sign; only the magnitude matters for the bound. That magnitude falls short because the
+card's correlation is a straight line in the angle difference, $-(1 - 2|a-b|/\pi)$,
+rather than a cosine, and a straight line through the same endpoints is the best a card
+can manage. At a $45°$ difference it gives $|E| = 0.5$, a $75/25$ split, where the
+notebooks say $0.707$, an $85/15$ split; the missing ten points, at each of four settings,
+are the gap between $2$ and $2.83$.
+
+## The mistake: reading the correlation as a message
+
+The tempting error is to think that because Bob's lamp is correlated with Alice's
+setting, Alice's choice of dial *does something* to Bob's particle, and that with enough
+cleverness the effect could carry a bit. The reading's marginal check is the refutation:
+Bob's outcome distribution is $0.5 / 0.5$ for every setting of Alice's dial, so nothing
+Alice does changes anything Bob can observe on his own. What her setting changes is the
+*joint* distribution, which is only visible once both columns are side by side, and
+bringing them together takes an ordinary channel. The correlation is stronger than any
+card can produce and weaker than a signal; both halves of that sentence are true, and the
+first without the second is the most common misreading of the whole subject.
+
+A more practical mistake shows up in the code. `expectation_ab` must rotate Alice's
+qubit by $R_y(-a)$ and Bob's by $R_y(-b)$, both with the same sign. Use $R_y(+a)$ on one
+side and $R_y(-b)$ on the other and the result is $\cos(a + b)$: at $a = b = \pi/4$ that
+is $0$ instead of $1$, and the CHSH test reports $S = 0$ from a state that should give
+$2\sqrt{2}$. It is tempting because for $|\Phi^+\rangle$ the *sign* of $a - b$ does not
+matter, so flipping both is harmless and flipping one is not, and nothing in a single
+correlation at $a = 0$ tells you which you did.
+
+## Where the idea stops
+
+$2\sqrt{2}$ is not merely what these angles happen to give; it is the largest value any
+quantum state and any measurements can reach, a fact known as Tsirelson's bound. So the
+gap between $2$ and $2.83$ is the whole of the quantum advantage here, and no cleverer
+state pushes it further. The bound of $2$ is likewise not fragile: a product state, such
+as $|00\rangle$, obeys it for every choice of angles, which is the lab's product-state
+test, because a product state *is* an instruction card with no randomness.
+
+Finite shots blur both numbers. The lab's `sample_correlation` estimates each $E$ from
+seeded measurements with an error near $1/\sqrt{\text{shots}}$, and four of them add in
+$S$, so a 40,000-shot local model can land at $2.01$ and a 40,000-shot quantum estimate
+can land at $2.80$. Neither crosses the other's territory, and the tests allow the
+slack. In a real laboratory the slack is where the arguments live: detectors that miss
+some particles, dials chosen too slowly, or boxes too close together each open a
+loophole through which a card could in principle sneak, and closing all of them at once
+was worth a Nobel prize. The simulator has no loopholes, which is its virtue and its
+limitation.
+
+The lab, *Violating the CHSH inequality*, builds the four Bell states from gates,
+computes the marginals that show each half as a fair coin, derives $\cos(a - b)$ from
+rotations and the Born rule, estimates it from samples, assembles $S$, and then writes
+the instruction card and watches it stop at $2$. Every number above appears in one of
+its tests.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Correlations, marginals and the bound",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Alice and Bob share $|\\Phi^+\\rangle$ and Alice sets her dial to $a = 1.9$ rad while Bob stays at $0$. What does Bob's own column of results look like?",
+                        "opts": [
+                            "Biased towards $+1$ by $\\cos(1.9)$, since the correlation leaks into his marginal",
+                            "A fair coin, exactly as it would be for any setting of Alice's dial whatsoever",
+                            "A fair coin only on average, with runs that mirror Alice's outcomes in order",
+                            "Undefined until Alice's result is known, since his state is not fixed before then",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The correlation is a property of the *joint* distribution and never reaches a marginal. Summing the four joint probabilities over Alice's outcome gives $0.5$ and $0.5$ for every $a$, which the reading's last two printed lines show.",
+                            r"Summing the joint probabilities over Alice's outcome gives $[0.5, 0.5]$ whatever her angle; that is the no-signalling fact.",
+                            r"Bob's column on its own has no structure at all, in order or in total; the runs are those of a fair coin. The mirroring is only visible when his column is placed beside Alice's, which takes an ordinary channel.",
+                            r"Bob's marginal is perfectly well defined before, during and after Alice's measurement, and it is $0.5 / 0.5$ in every case. Collapse changes the joint description, not what Bob can see by himself.",
+                        ],
+                        "why": r"""
+Bob's marginal is the sum of the joint probabilities over Alice's outcome, and for
+every Bell state and every angle Alice chooses that sum is $[0.5, 0.5]$. Nothing Alice
+does is visible in Bob's notebook alone; the correlation lives in the comparison of
+the two notebooks, which is why it cannot carry a message. This is the lab's
+`marginal_probabilities`, and the reading's run at $a = 1.9$ shows the same numbers
+as at $a = 0$.
+""",
+                    },
+                    {
+                        "q": "For $|\\Phi^+\\rangle$, what is $E(a, b)$ when the dials differ by $60°$?",
+                        "opts": [
+                            "$0.5$, because the correlation is $\\cos$ of the difference between the dials",
+                            "$0.75$, because the correlation is $\\cos^2$ of half the difference",
+                            "$0.33$, because the correlation falls linearly from $1$ at $0°$ to $-1$ at $180°$",
+                            "$0.87$, because the correlation is $\\cos$ of half the angle difference",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$\cos 60° = 0.5$: agreement $\cos^2 30° = 0.75$ minus disagreement $\sin^2 30° = 0.25$.",
+                            r"$\cos^2(30°) = 0.75$ is the *probability of agreement*, not the correlation. The correlation subtracts the disagreement probability, $0.25$, and $0.75 - 0.25 = 0.5$.",
+                            r"A straight line through the endpoints is what the instruction-card model gives, and at $60°$ it would say $0.33$. The quantum correlation is a cosine, and the difference between the line and the curve is exactly what CHSH measures.",
+                            r"$\cos 30° = 0.87$ is the modulus of the agreeing amplitude, up to the $1/\sqrt{2}$. Probabilities are squares of amplitudes and the correlation is a difference of probabilities, so the amplitude has to be squared and combined first.",
+                        ],
+                        "why": r"""
+After the rotations the agreeing outcomes carry probability $\cos^2\frac{a-b}{2}$ and
+the disagreeing ones $\sin^2\frac{a-b}{2}$. At $60°$ those are $0.75$ and $0.25$, and
+the correlation is their difference, $0.5$, which is $\cos 60°$ by the double-angle
+identity. The agreement probability alone, the amplitude alone, and the straight line
+of the local model are each one step short of the answer.
+""",
+                    },
+                    {
+                        "q": "In the derivation of $|S| \\le 2$, what single assumption does the bound rest on?",
+                        "opts": [
+                            "That the hidden variable is drawn uniformly at random, so the four correlations average out to zero",
+                            "That each lamp is a definite function of its own dial and the shared card, not of the other dial",
+                            "That the two particles were prepared in the same state, so their cards are identical",
+                            "That the four dial settings are spaced $45°$ apart, which is where the algebra closes",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"No distribution over the cards was assumed; the argument shows $s(\lambda) = \pm 2$ for every card and then observes that an average of numbers in $[-2, 2]$ stays in $[-2, 2]$ whatever the weights.",
+                            r"Locality: $A$ depends on $a$ and $\lambda$, $B$ on $b$ and $\lambda$, so the four lamp values on one card are fixed $\pm 1$s and one bracket must vanish.",
+                            r"The cards may be as correlated or as different as you like; the two particles may even carry different cards, as long as each lamp reads only its own. The bound does not care what is written, only who can read it.",
+                            r"The angles are chosen to make the quantum value as large as possible; the bound itself holds for any four settings whatsoever, because the algebra of $\pm 1$ values does not mention angles.",
+                        ],
+                        "why": r"""
+Write $s = A_0(B_0 + B_1) + A_1(B_0 - B_1)$ with each lamp value $\pm 1$. That is
+only possible if $A_0$ and $A_1$ are definite values on the same card, fixed
+independently of which $b$ Bob chose, and likewise for Bob. Given that, one bracket
+is zero and the other $\pm 2$, so $|s| \le 2$ card by card and hence on average. The
+distribution of cards, their content, and the particular angles play no part.
+""",
+                    },
+                    {
+                        "q": "A student's `expectation_ab` rotates Alice by $R_y(+a)$ and Bob by $R_y(-b)$. Which symptom reveals the bug?",
+                        "opts": [
+                            "$E(a, b)$ comes out as $\\cos(a + b)$, so the CHSH value with the standard angles is $0$",
+                            "$E(a, b)$ comes out as $-\\cos(a - b)$, so the CHSH value flips its sign to $-2\\sqrt{2}$ overall",
+                            "$E(a, b)$ is right but Bob's marginal drifts away from $0.5$ at large $a$",
+                            "$E(0, 0)$ is $0$ instead of $1$, so the equal-angles test fails immediately",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"With one sign flipped only the sum of the angles survives, and at $a = b = \pi/4$ the correlation reads $\cos(\pi/2) = 0$; the four CHSH terms then cancel.",
+                            r"A global sign on every correlation would come from using $|\Psi^-\rangle$ in place of $|\Phi^+\rangle$, not from a rotation sign. The rotation error changes $a - b$ into $a + b$, which is a different function, not a negated one.",
+                            r"The marginals are $0.5 / 0.5$ for any rotation of either qubit, right or wrong, because a Bell state's halves are maximally mixed. The bug is invisible in the marginals, which is one reason it is easy to miss.",
+                            r"At $a = b = 0$ neither rotation does anything, so $E(0, 0) = 1$ comes out correctly and the equal-angles test passes. The bug only appears once both angles are non-zero.",
+                        ],
+                        "why": r"""
+Flipping one sign turns the difference $a - b$ into the sum $a + b$. Everything at
+$a = 0$ or $b = 0$ still passes, including the equal-angles test at $0$ and every
+marginal, so the bug survives until both dials move. With the standard CHSH angles
+the four terms become $\cos(\pi/4), \cos(-\pi/4), \cos(3\pi/4), -\cos(\pi/4)$, and
+they sum to $0$ rather than $2\sqrt{2}$.
+""",
+                    },
+                    {
+                        "q": "Could a better-designed pair of instruction cards, or a cleverer quantum state, push $|S|$ past $2\\sqrt{2}$?",
+                        "opts": [
+                            "Cards cannot pass $2$ and no quantum state can pass $2\\sqrt{2}$; both are hard ceilings",
+                            "Cards cannot pass $2$, but a three-qubit entangled state can reach $4$ with these settings",
+                            "Better cards could approach $2\\sqrt{2}$ given enough shared randomness, but never exceed it",
+                            "Both ceilings are artefacts of the chosen angles and move if the angles change",
+                        ],
+                        "a": 0,
+                        "whys": [
+                            r"$|S| \le 2$ for every local model, and Tsirelson's bound caps every quantum state and measurement at $2\sqrt{2}$.",
+                            r"Adding qubits does not raise the CHSH ceiling; Tsirelson's bound applies to any quantum state whatsoever. There are other inequalities for more parties, but this $S$ with two dials each stops at $2\sqrt{2}$.",
+                            r"Shared randomness is exactly what the card already has, and the derivation shows every card gives $s = \pm 2$ regardless of how it was made or how much randomness went into it. Averaging cannot exceed $2$.",
+                            r"The angles were chosen to *reach* the quantum maximum; changing them lowers the quantum value and leaves the local bound at $2$, since that bound never mentioned an angle.",
+                        ],
+                        "why": r"""
+The local bound of $2$ follows from the $\pm 1$ algebra for any card and any angles.
+The quantum value at these angles is $2\sqrt{2}$, and Tsirelson showed no quantum
+state or measurement can exceed that for this combination of four correlations.
+The gap between the two is therefore the entire quantum advantage in this
+experiment, and it cannot be widened from either side.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "Violating the CHSH inequality",
                 "runtime": "python",
@@ -1068,6 +2159,382 @@ assert _l == lhv_chsh(_A0, _A1, _B0, _B1, 40000, 7), "The same seed must repeat"
                 "Grover as a rotation in the two-dimensional span of the marked and unmarked states",
                 "Amplitude after k iterations is sin((2k+1)*theta) with sin(theta) = sqrt(M/N): overshooting makes it worse",
             ],
+            "read": [
+                {
+                    "title": "Paying per question: one query for a promise, and a rotation that overshoots",
+                    "minutes": 16,
+                    "body": r'''
+You are handed a sealed box. Feed it an $n$-bit number and it returns one bit, $f(x)$,
+and you are charged for every use. The box comes with a promise: $f$ is either
+*constant*, returning the same bit for every input, or *balanced*, returning $0$ on
+exactly half the inputs and $1$ on the other half. Your job is to say which, with as few
+uses as you can.
+
+Classically you start querying. Two different answers and you are done: balanced. But
+the same answer every time proves nothing until you have seen more than half the
+inputs, because a balanced function could have hidden all its zeros in the half you
+have not asked about yet. On $n = 3$ bits that is $5$ queries in the worst case, on
+$10$ bits it is $513$, and in general $2^{n-1} + 1$. The quantum version of the box
+answers with one query, for any $n$. This reading is about why, and then about a second
+box, one that marks a needle in a haystack, where the quantum advantage is real but much
+smaller than people expect.
+
+## A box you can run backwards
+
+A quantum gate is unitary and so reversible, and a function that maps eight inputs to
+one bit is not; from the output $0$ you cannot recover which input produced it. The box
+has to keep the input. The standard form takes an extra qubit $y$ and computes
+
+$$U_f\,|x\rangle|y\rangle = |x\rangle|y \oplus f(x)\rangle,$$
+
+which is its own inverse, since XOR-ing $f(x)$ in twice cancels. In the register layout
+of this course, the $n$ input qubits are the high bits and the ancilla $y$ is the lowest
+bit, so index $k$ is $2x + y$ and the oracle exchanges the amplitudes at $k$ and
+$k \oplus 1$ wherever $f(k \gg 1) = 1$. That is the lab's `apply_oracle`, and it is a
+permutation of the basis, the same kind of object as CNOT.
+
+## Phase kickback, derived
+
+Put the ancilla in $|-\rangle = (|0\rangle - |1\rangle)/\sqrt{2}$ before the query, by
+applying X and then H to it. Now feed the box a single input $|x\rangle$:
+
+$$U_f\,|x\rangle\frac{|0\rangle - |1\rangle}{\sqrt{2}}
+= |x\rangle\frac{|f(x)\rangle - |1 \oplus f(x)\rangle}{\sqrt{2}}.$$
+
+If $f(x) = 0$ the ancilla is unchanged. If $f(x) = 1$ it becomes
+$(|1\rangle - |0\rangle)/\sqrt{2} = -|-\rangle$. Either way the ancilla ends up as
+$|-\rangle$ times a sign, and the sign is $(-1)^{f(x)}$. Since the ancilla is the same
+in both cases, the sign can be read as belonging to the input:
+
+$$U_f\,|x\rangle|-\rangle = (-1)^{f(x)}\,|x\rangle|-\rangle.$$
+
+Nothing in the box wrote to the input register, and yet the input register now carries
+$f(x)$ in its phase. That is phase kickback, and it works on superpositions because
+$U_f$ is linear: feed in $\sum_x c_x|x\rangle$ and every term picks up its own sign.
+
+## Deutsch-Jozsa on one bit, amplitude by amplitude
+
+Take $n = 1$, so the register is two qubits, index $k = 2x + y$, and carry the whole
+algorithm through with numbers.
+
+```python
+import math
+
+r = 1 / math.sqrt(2)
+H = [[r, r], [r, -r]]
+X = [[0, 1], [1, 0]]
+
+
+def apply_1q(state, gate, target):
+    n = len(state).bit_length() - 1
+    shift = n - 1 - target
+    out = list(state)
+    for k in range(len(state)):
+        if (k >> shift) & 1:
+            continue
+        k1 = k | (1 << shift)
+        a, b = state[k], state[k1]
+        out[k] = gate[0][0] * a + gate[0][1] * b
+        out[k1] = gate[1][0] * a + gate[1][1] * b
+    return out
+
+
+def oracle(state, f):
+    out = list(state)
+    for k in range(len(state)):
+        if f(k >> 1):
+            out[k ^ 1] = state[k]
+    return out
+
+
+def show(label, state):
+    print(f"{label:<16}", [round(a, 4) for a in state])
+
+
+for name, f in (("f(x) = x", lambda x: x), ("f(x) = 0", lambda x: 0)):
+    print("--", name, "--")
+    state = [1.0, 0.0, 0.0, 0.0]                 # |x=0>|y=0>
+    state = apply_1q(state, X, 1)                # ancilla to |1>
+    state = apply_1q(apply_1q(state, H, 0), H, 1)
+    show("before query", state)
+    state = oracle(state, f)
+    show("after query", state)
+    state = apply_1q(state, H, 0)
+    show("after final H", state)
+    print("p(x = 0) =", round(state[0] ** 2 + state[1] ** 2, 4))
+```
+
+Before the query both runs hold $(0.5, -0.5, 0.5, -0.5)$: the input is
+$(|0\rangle + |1\rangle)/\sqrt{2}$ and the ancilla is $|-\rangle$, and their product
+spreads $\pm 1/2$ over the four indices with the sign following $y$. For $f(x) = x$ the
+oracle swaps indices 2 and 3, the pair with $x = 1$, giving $(0.5, -0.5, -0.5, 0.5)$;
+read against the ancilla, the $x = 1$ half has flipped sign, which is the kickback. The
+final H on the input mixes pairs $(0, 2)$ and $(1, 3)$: index 0 gets
+$(0.5 + (-0.5))/\sqrt{2} = 0$, index 2 gets $(0.5 - (-0.5))/\sqrt{2} = 0.7071$, and the
+whole amplitude lands on $x = 1$. The probability of reading $x = 0$ is exactly $0$:
+balanced. For $f(x) = 0$ the oracle does nothing, the final H undoes the first one, and
+the amplitude returns to $x = 0$ with probability $1$: constant.
+
+The general statement is one line. After the kickback the input register is
+$\frac{1}{\sqrt{N}}\sum_x (-1)^{f(x)}|x\rangle$ with $N = 2^n$, and $H^{\otimes n}$ sends
+$|x\rangle$ to $\frac{1}{\sqrt{N}}\sum_z (-1)^{x\cdot z}|z\rangle$, so the amplitude on
+$z = 0$ is
+
+$$\frac{1}{N}\sum_x (-1)^{f(x)},$$
+
+which is $\pm 1$ for a constant function and $0$ for a balanced one, since a balanced
+sum has as many $+1$s as $-1$s. There is no middle ground, so the lab's threshold of
+$0.5$ on the probability of the all-zeros input is a formality. The lab's `deutsch_jozsa`
+is this trace on $n$ input qubits, and its spy test counts the oracle calls to confirm
+there was one.
+
+## The mistake: believing the box was read $2^n$ times
+
+The tempting reading of the superposition is that the box was queried on every input at
+once and the answers were all collected. If that were true you could read $f$ out
+entirely, and you cannot: a measurement returns one $n$-bit string, and the values of
+$f$ are not sitting in any register. What the single query did was put $2^n$ signs into
+$2^n$ amplitudes, and what the Hadamards did was compute *one* particular sum of those
+signs and put its magnitude on a single basis state. The algorithm answers a yes/no
+question about a *global property* of $f$, the promise made it a question with only two
+answers, and interference is what evaluates the sum. Drop the promise and the algorithm
+does not degrade gracefully; it gives a probability strictly between $0$ and $1$ that
+tells you little.
+
+## Grover: the needle, and the angle
+
+The second box marks one index $m$ out of $N = 2^n$ by flipping its sign,
+$|x\rangle \to (-1)^{[x = m]}|x\rangle$, which is the phase-kickback form of a lookup.
+Classically you expect $N/2$ queries to find $m$. Start from the uniform superposition
+$|s\rangle$ with every amplitude $1/\sqrt{N}$, and split it into the marked state
+$|m\rangle$ and the normalised sum of the rest, $|u\rangle$. Both of these are real unit
+vectors, they are orthogonal, and $|s\rangle$ lies in their plane at an angle $\theta$
+from $|u\rangle$ with $\sin\theta = 1/\sqrt{N}$, since that is the overlap of $|s\rangle$
+with $|m\rangle$.
+
+The oracle reflects the state about $|u\rangle$: it negates the $|m\rangle$ component
+and leaves everything else. The lab's `diffusion`, $a_k \to 2\bar{a} - a_k$ where
+$\bar{a}$ is the mean amplitude, is the reflection about $|s\rangle$: written as a matrix
+it is $2|s\rangle\langle s| - I$, and $\langle s|\psi\rangle/\sqrt{N}$ is the mean of the
+amplitudes. Two reflections whose mirrors meet at angle $\theta$ compose to a rotation by
+$2\theta$, in the direction from $|u\rangle$ towards $|m\rangle$. After $k$ rounds the
+state is at angle $(2k + 1)\theta$ from $|u\rangle$, and its overlap with $|m\rangle$ is
+$\sin\big((2k+1)\theta\big)$.
+
+```python
+import math
+
+n, marked = 3, 5
+N = 2 ** n
+theta = math.asin(math.sqrt(1 / N))
+state = [1 / math.sqrt(N)] * N
+print(f"theta = {theta:.4f} rad, so one rotation turns by {2 * theta:.4f}")
+for k in range(5):
+    p = state[marked] ** 2
+    predicted = math.sin((2 * k + 1) * theta) ** 2
+    print(f"after {k} rounds: amplitude {state[marked]:>8.4f}  p = {p:.5f}  "
+          f"sin^2((2k+1)theta) = {predicted:.5f}")
+    state[marked] = -state[marked]                 # the phase oracle
+    mean = sum(state) / N
+    state = [2 * mean - a for a in state]          # inversion about the mean
+```
+
+With $N = 8$, $\theta = \arcsin(1/\sqrt{8}) = 0.3614$ rad. Round one by hand: every
+amplitude starts at $0.3536$; the oracle makes the marked one $-0.3536$; the mean of
+seven $0.3536$s and one $-0.3536$ is $0.2652$; reflecting, the unmarked amplitudes go to
+$2(0.2652) - 0.3536 = 0.1768$ and the marked one to $2(0.2652) + 0.3536 = 0.8839$. Its
+probability is $0.78125$, and $\sin^2(3\theta)$ agrees. Round two: mean of seven
+$0.1768$s and one $-0.8839$ is $0.0442$; the marked amplitude becomes
+$0.0884 + 0.8839 = 0.9723$, probability $0.9453$, which is the number the lab's Grover
+test asks for. Round three overshoots: the rotation carries the state past
+$|m\rangle$ and the probability falls to $0.3301$. Round four is worse still, at
+$0.0122$, with the marked amplitude now negative.
+
+The optimal count is where $(2k + 1)\theta$ is closest to $\pi/2$, that is
+$k \approx \frac{\pi}{4\theta} - \frac{1}{2}$, and for large $N$, $\theta \approx
+1/\sqrt{N}$, so $k \approx \frac{\pi}{4}\sqrt{N}$. The lab's `optimal_iterations` takes
+the floor, and with $M$ marked items the same geometry gives $\sin\theta = \sqrt{M/N}$
+and $k \approx \frac{\pi}{4}\sqrt{N/M}$. On two qubits, $\theta = \pi/6$, so a single
+round rotates to exactly $\pi/2$ and the probability is $1$; the lab's two-qubit test
+checks that exactness.
+
+```python
+import math
+
+for n in range(1, 11):
+    N = 2 ** n
+    print(f"n = {n:>2}: N = {N:>5}  rounds = {math.floor(math.pi / 4 * math.sqrt(N)):>2}"
+          f"  classical worst case for constant/balanced = {N // 2 + 1:>4}")
+```
+
+Ten qubits: a thousand-entry haystack searched in $25$ rounds. The right-hand column
+is the other algorithm's classical cost, for scale.
+
+## The mistake: more rounds are better
+
+Anyone who has trained a model or run an iterative solver expects extra iterations to
+help or at worst to plateau. Grover does neither. The state rotates at a fixed rate and
+passes straight through the target; the probability of success is a sine squared, and
+after the peak it falls back to nothing before rising again. The trace above shows it
+going $0.125 \to 0.78 \to 0.95 \to 0.33 \to 0.01$. Running "a few extra rounds to be
+safe" on $n = 3$ turns a $95\%$ search into a $1\%$ one. This is also why the count
+depends on knowing $M$: with two marked items among sixteen, $\sin\theta$ grows from
+$1/4$ to $\sqrt{2}/4$, the optimal count drops from three rounds to two, and the lab's
+two-of-sixteen test lands on $0.9453$ after those two rounds, the same value as one item
+among eight because the angle is the same.
+
+## Where the advantage stops
+
+Deutsch-Jozsa is exponential in query count but the problem is contrived: the promise
+is doing the work, and a classical *randomised* algorithm that samples a handful of
+inputs gets the right answer with overwhelming probability. It is a demonstration that
+interference can compute a global sum with one query, not a useful program.
+
+Grover's advantage is quadratic and it is provably the best possible for an unstructured
+search: no quantum algorithm finds the marked item in fewer than order $\sqrt{N}$
+queries. A quadratic gain is real but it is not the exponential one that headlines
+promise, and it evaporates the moment the haystack has structure. Sorted data is
+searched in $\log N$ classical steps; a database with an index does not need Grover;
+and for SAT or optimisation the "oracle" is a circuit that must itself be built, so the
+$\sqrt{N}$ speed-up applies to brute force, which is rarely the best classical method.
+Counting only queries also hides the fact that the oracle may be expensive: a query that
+costs a million gates does not become cheaper by being made in superposition.
+
+The lab, *One query, and a quadratic search*, builds both boxes on the module 2 engine:
+`apply_oracle` and `deutsch_jozsa` with its single counted call, and `phase_oracle`,
+`diffusion`, `optimal_iterations` and `grover` with the $0.9453$ landing point and the
+refusal of empty, repeated and out-of-range marked lists. The amplitudes in its tests
+are the ones traced above.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "What one query can and cannot tell you",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "Why is the ancilla prepared in $|-\\rangle$ rather than $|0\\rangle$ before the Deutsch-Jozsa query?",
+                        "opts": [
+                            "So that $f(x)$ can be read from the ancilla afterwards without disturbing the inputs",
+                            "So that $U_f$ leaves the ancilla unchanged and pushes $(-1)^{f(x)}$ onto the input register",
+                            "So that the ancilla is entangled with the inputs, which is what makes a single query enough",
+                            "So that the oracle becomes reversible, since an XOR into $|0\\rangle$ would erase the input",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"With $|0\rangle$ the ancilla does end up holding $f(x)$, but for a superposition of $x$ that entangles it with the input and a measurement returns $f$ at one random $x$, which is a single classical query.",
+                            r"$|f(x)\rangle - |1 \oplus f(x)\rangle$ is $|-\rangle$ times $(-1)^{f(x)}$, so the ancilla factors out and the sign belongs to $|x\rangle$.",
+                            r"The point of $|-\rangle$ is the opposite: it keeps the ancilla *unentangled*, a factor that can be ignored, so that the input register alone carries the phases the Hadamards then interfere.",
+                            r"$U_f$ is reversible for any ancilla state; XOR is its own inverse and the input is kept regardless. Reversibility is why the ancilla exists at all, not why it is set to $|-\rangle$.",
+                        ],
+                        "why": r"""
+The ancilla in $|-\rangle$ is an eigenstate of "flip me" with eigenvalue $-1$, so
+XOR-ing $f(x)$ into it multiplies by $(-1)^{f(x)}$ and leaves the ancilla exactly as
+it was. The sign has nowhere to live except on the input term $|x\rangle$, which is
+phase kickback, and because the ancilla never becomes entangled it can be dropped
+from the analysis. With the ancilla in $|0\rangle$ the answer is written *into* it
+instead, which is the classical situation of one query returning one value.
+""",
+                    },
+                    {
+                        "q": "After the query, the input register holds $\\frac{1}{\\sqrt{N}}\\sum_x (-1)^{f(x)}|x\\rangle$. What do the final Hadamards compute?",
+                        "opts": [
+                            "Every value $f(x)$ at once, each stored in the phase of its own basis state for later readout",
+                            "One specific sum of the signs, whose magnitude is placed on the single all-zeros basis state",
+                            "The parity of $f$ over all inputs, which is $0$ for constant and $1$ for balanced functions",
+                            "A uniform distribution if $f$ is constant and a random basis state if it is balanced",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The phases are already there before the Hadamards, and they are not readable: a measurement yields one $x$ and no phase. The Hadamards turn phases into a single interference sum, which destroys the individual values.",
+                            r"The amplitude on $|0\dots0\rangle$ becomes $\frac{1}{N}\sum_x (-1)^{f(x)}$: $\pm 1$ when constant, $0$ when balanced.",
+                            r"Parity is the XOR of all values, and a balanced function on $n \ge 2$ bits has even parity, the same as a constant one; parity cannot separate them. The sum computed is of $\pm 1$s, and it is its magnitude, not its parity, that distinguishes the cases.",
+                            r"Backwards for the constant case: a constant $f$ produces the all-zeros state with certainty, not a uniform distribution. For balanced $f$ the all-zeros amplitude is exactly $0$ and the rest depends on which balanced function it is.",
+                        ],
+                        "why": r"""
+$H^{\otimes n}$ sends $|x\rangle$ to $\frac{1}{\sqrt{N}}\sum_z (-1)^{x\cdot z}|z\rangle$,
+so the amplitude on $z = 0$ collects $\frac{1}{N}\sum_x (-1)^{f(x)}$ with no
+sign from $x \cdot z$. For constant $f$ every term has the same sign and the sum is
+$\pm 1$; for balanced $f$ the terms cancel exactly. Interference evaluates one
+global sum and answers one yes/no question; it does not deliver the individual
+values, which is why the algorithm needs the promise.
+""",
+                    },
+                    {
+                        "q": "Grover search on $n = 3$ qubits with one marked item reaches $p = 0.945$ after two rounds. What does a third round give?",
+                        "opts": [
+                            "About $0.99$, since each round pushes more amplitude onto the marked state",
+                            "About $0.33$, since the rotation carries the state past the target and back down",
+                            "Exactly $0.945$ again, since the optimal point is a fixed point of the iteration",
+                            "About $0.945$ with a flipped sign on the amplitude, which measurement cannot see",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Each round rotates by the same fixed angle $2\theta = 0.72$ rad regardless of where the state is. After two rounds it is at $5\theta = 1.81$ rad, already past $\pi/2$; a third round takes it to $7\theta = 2.53$ rad, where $\sin^2$ has fallen to $0.33$.",
+                            r"$\sin^2(7\theta)$ with $\theta = 0.3614$ is $0.330$; the state has rotated past $|m\rangle$.",
+                            r"Nothing about the iteration is a fixed point; it is a rotation by a constant angle and it never stops. The best round is where the angle happens to be nearest $\pi/2$, and the next round moves on from there.",
+                            r"A sign flip alone would keep $p$ at $0.945$, but the rotation changes the magnitude too; the amplitude goes from $0.972$ to $0.575$. The sign does eventually turn negative, at round four, by which time $p$ is $0.012$.",
+                        ],
+                        "why": r"""
+Each Grover round is a rotation by $2\theta$ in the plane of the marked and unmarked
+states, with $\sin\theta = 1/\sqrt{8}$, and the success probability after $k$ rounds
+is $\sin^2((2k+1)\theta)$. That is $0.945$ at $k = 2$ and $0.330$ at $k = 3$: the
+state has swept through the target and is on its way back to the uniform
+superposition and beyond. "More iterations are safer" is the intuition from
+convergent solvers, and Grover is not one.
+""",
+                    },
+                    {
+                        "q": "Inversion about the mean sends $a_k \\to 2\\bar{a} - a_k$. What is it geometrically, and why does the pair oracle-then-diffusion make progress?",
+                        "opts": [
+                            "A projection onto the uniform state; repeated projections converge to the marked item",
+                            "A reflection about the uniform state; two reflections compose to a rotation by twice the mirrors' angle",
+                            "A normalisation step that rescales the marked amplitude after the oracle has negated it",
+                            "A reflection about the marked state; repeating it alternately with the oracle cancels every unmarked amplitude",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"A projection would collapse the state onto $|s\rangle$ and lose everything else, and repeating a projection changes nothing. The operator is $2|s\rangle\langle s| - I$, which has eigenvalues $\pm 1$: a reflection, not a projection.",
+                            r"$2|s\rangle\langle s| - I$ reflects about $|s\rangle$; the oracle reflects about the unmarked state; together they rotate by $2\theta$.",
+                            r"Diffusion is unitary and changes no norm; there is nothing to rescale. The oracle's sign flip is what diffusion feeds on: a negative amplitude sits far below the mean, so reflecting it about the mean sends it far above.",
+                            r"Reflecting about the marked state is what the *oracle* does, up to sign, and repeating one reflection alternately with itself gives back the identity. Progress needs two *different* mirrors, and diffusion's mirror is the uniform state.",
+                        ],
+                        "why": r"""
+Writing the uniform state as $|s\rangle$, the mean of the amplitudes is
+$\langle s|\psi\rangle/\sqrt{N}$, and $a_k \to 2\bar{a} - a_k$ is the matrix
+$2|s\rangle\langle s| - I$, a reflection about $|s\rangle$. The oracle is a reflection
+about the unmarked state $|u\rangle$. Two reflections in mirrors that meet at angle
+$\theta$ compose to a rotation by $2\theta$, and since $|s\rangle$ starts $\theta$ away
+from $|u\rangle$, each round moves the state $2\theta$ closer to $|m\rangle$, which is
+where the $\sin((2k+1)\theta)$ schedule comes from.
+""",
+                    },
+                    {
+                        "q": "A colleague proposes using Grover to search a sorted list of a million names. What is the best response?",
+                        "opts": [
+                            "Agree: Grover needs about $\\frac{\\pi}{4}\\sqrt{10^6} \\approx 785$ queries against a classical $500{,}000$",
+                            "Decline: the list is sorted, so binary search finds any name in about $20$ comparisons",
+                            "Decline: Grover only works when the number of marked items is exactly one",
+                            "Agree, but note that the result is probabilistic and the classical search is certain",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"The $785$ is the right Grover count and the $500{,}000$ is the right cost of *unstructured* classical search, but the list is sorted. Grover's quadratic gain is over brute force, and brute force is not the classical competitor here.",
+                            r"$\log_2 10^6 \approx 20$: the structure in the data beats the quadratic speed-up by a very wide margin.",
+                            r"Grover handles $M$ marked items with $\sin\theta = \sqrt{M/N}$ and $\approx\frac{\pi}{4}\sqrt{N/M}$ rounds, as the lab's two-of-sixteen test shows. The reason to decline is the sorting, not the count.",
+                            r"Grover's success probability can be made as high as you like, and the deeper issue is not certainty. A sorted list has structure that a classical algorithm exploits in $\log N$ steps, and $20$ beats $785$ whether or not the $785$ come with a guarantee.",
+                        ],
+                        "why": r"""
+Grover's $\sqrt{N}$ is a gain over *unstructured* search, where the only thing you
+can do is ask the box about one index at a time. Sorted data is structured: binary
+search finds any name in $\lceil\log_2 10^6\rceil = 20$ comparisons, which is far
+fewer than the $785$ Grover rounds, and each Grover round also has to implement the
+oracle as a circuit. The quadratic advantage is real and it is also easy to lose to
+a better classical algorithm, which is the point of the reading's last section.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "One query, and a quadratic search",
                 "runtime": "python",
@@ -1362,6 +2829,378 @@ for _bad in [(3, []), (3, [8]), (3, [-1]), (3, [1, 1]), (0, [0])]:
                 "The transform of a comb of period r is a comb of period N/r, so peaks sit near multiples of N/r",
                 "Continued fractions turn a measured k/N into the denominator r, which is the classical half of Shor's algorithm",
             ],
+            "read": [
+                {
+                    "title": "A comb of amplitudes, its transform, and the fraction that names the period",
+                    "minutes": 16,
+                    "body": r'''
+Take the function $f(x) = 3^x \bmod 8$ and tabulate it for $x = 0$ to $7$: the values
+are $1, 3, 1, 3, 1, 3, 1, 3$. It repeats every two steps. You can see that by looking,
+because there are eight entries; Shor's algorithm needs the same fact about
+$a^x \bmod N$ for an $N$ with hundreds of digits, where the period is astronomically long
+and no table fits anywhere. The question this module answers is how a quantum register
+can be made to reveal a period it cannot be made to print.
+
+## The comb
+
+Prepare two registers: $n$ qubits for $x$ in uniform superposition, and a second holding
+$f(x)$, computed by a reversible circuit as in module 4. The joint state is
+$\frac{1}{\sqrt{N}}\sum_x |x\rangle|f(x)\rangle$ with $N = 2^n$. Now measure the second
+register. Suppose it reads $1$. The first register collapses onto every $x$ with
+$f(x) = 1$, and nothing else: for $n = 3$ that is $x \in \{0, 2, 4, 6\}$, each with
+amplitude $1/2$. A picket fence, or comb, of period $2$. Had the measurement read $3$ the
+comb would be $\{1, 3, 5, 7\}$, the same fence shifted by one. The period is in the
+spacing of the teeth, and the measurement told you nothing about it because every
+outcome produces a comb with the same spacing. The shift, which is what you learnt, is
+useless; the spacing, which is what you want, is still hidden in a state you cannot
+read out. That is what the transform is for.
+
+## The transform, straight from the definition
+
+The quantum Fourier transform on $N$ amplitudes is the discrete Fourier transform
+applied to the amplitude list:
+
+$$\text{out}_k = \frac{1}{\sqrt{N}}\sum_{j=0}^{N-1} x_j\, e^{2\pi i\, jk/N}.$$
+
+It is unitary, because the columns $e^{2\pi i jk/N}/\sqrt{N}$ are orthonormal, so it is
+a legitimate gate, and its inverse flips the sign in the exponent. Feed it the comb.
+
+```python
+import cmath
+import math
+
+n = 3
+N = 2 ** n
+f = lambda x: pow(3, x, 8)
+values = [f(x) for x in range(N)]
+print("f(x) for x = 0..7:", values)
+
+xs = [x for x in range(N) if f(x) == 1]
+branch = [0j] * N
+for x in xs:
+    branch[x] = 1 / math.sqrt(len(xs))
+print("branch with f = 1: ", [round(a.real, 4) for a in branch])
+
+
+def qft(state):
+    size = len(state)
+    out = []
+    for k in range(size):
+        acc = 0j
+        for j, amp in enumerate(state):
+            acc += amp * cmath.exp(2j * math.pi * j * k / size)
+        out.append(acc / math.sqrt(size))
+    return out
+
+
+spectrum = qft(branch)
+print("QFT probabilities: ", [round(abs(a) ** 2, 4) for a in spectrum])
+```
+
+The output has probability $0.5$ at $k = 0$ and $k = 4$ and nothing anywhere else. Do
+$k = 4$ by hand: the comb has teeth at $j = 0, 2, 4, 6$, and $e^{2\pi i\, j \cdot 4/8}
+= e^{i\pi j}$ is $+1$ for every even $j$, so the four teeth add: $\frac{1}{\sqrt{8}} \cdot
+4 \cdot \frac{1}{2} = 0.7071$, probability $0.5$. Now $k = 2$: the phases are
+$e^{i\pi j/2}$ at $j = 0, 2, 4, 6$, which is $1, -1, 1, -1$, and the teeth cancel to
+$0$. In general, a comb of period $r$ with $M = N/r$ teeth at $j = 0, r, 2r, \dots$
+transforms to
+
+$$\text{out}_k = \frac{1}{\sqrt{NM}}\sum_{m=0}^{M-1} e^{2\pi i\, mrk/N},$$
+
+a geometric series in $e^{2\pi i\, rk/N}$. When $rk/N$ is an integer every term is $1$
+and the sum is $M$; otherwise the terms walk evenly round the unit circle and cancel.
+So the transform of a comb of period $r$ is a comb of period $N/r$: peaks at
+$k = 0, N/r, 2N/r, \dots$, each with probability $1/r$. The shift of the original comb
+became a phase on each peak, $e^{2\pi i\, sk/N}$ for a shift $s$, which the Born rule
+discards. That is the whole trick: measurement turned the shift, which you do not want,
+into an invisible phase, and left the spacing, which you do, as the position of a peak.
+
+## From a peak to the period
+
+Measure the transformed register and you get some $k$ near a multiple of $N/r$, so
+$k/N \approx c/r$ for an unknown integer $c$. For $3^x \bmod 8$ the peaks are exactly at
+$k = 0$ and $k = 4$, so $k/N = 4/8 = 1/2$ in lowest terms and the denominator is $2$.
+When $r$ divides $N$ the fraction is exact; when it does not, the peaks sit near
+non-integer positions and $k/N$ is only close to $c/r$. The tool for recovering a
+fraction with a small denominator from a close decimal is the continued fraction
+expansion, and it must be done in integers.
+
+```python
+def best_rational(num, den, qmax):
+    a = num // den
+    p_prev, q_prev = 1, 0
+    p, q = a, 1
+    r_num, r_den = num - a * den, den
+    print(f"  convergent {p}/{q}")
+    while r_num != 0:
+        r_num, r_den = r_den, r_num
+        a = r_num // r_den
+        p_new, q_new = a * p + p_prev, a * q + q_prev
+        if q_new > qmax:
+            print(f"  next would be {p_new}/{q_new}, over qmax = {qmax}")
+            break
+        p_prev, q_prev = p, q
+        p, q = p_new, q_new
+        r_num = r_num - a * r_den
+        print(f"  convergent {p}/{q}")
+    return (p, q)
+
+
+print("11/32 with qmax 7  ->", best_rational(11, 32, 7))
+print("21/32 with qmax 10 ->", best_rational(21, 32, 10))
+```
+
+Follow $11/32$. The integer part is $0$, leaving $11/32$. Invert: $32/11 = 2$ remainder
+$10/11$, so the next convergent is $1/2$. Invert the remainder: $11/10 = 1$ remainder
+$1/10$, convergent $1/3$. Invert again: $10/1 = 10$, which would give $11/32$ itself with
+denominator $32 > 7$, so the expansion stops and the answer is $(1, 3)$. The recurrence
+$p_{\text{new}} = a\,p + p_{\text{prev}}$, $q_{\text{new}} = a\,q + q_{\text{prev}}$ is
+the standard one, and every quantity in it is an integer. The `qmax` is the largest
+period worth considering, which for order-finding is the modulus itself, and it is what
+stops the expansion from returning the exact but useless $k/N$.
+
+## The mistake: the first peak is not the period
+
+Two errors come from the same misreading. The first is to take the position of the
+peak as the answer. For $7^x \bmod 15$ on four qubits the period is $4$ and the peaks
+are at $k = 0, 4, 8, 12$; reading "$4$" off the second peak happens to be right here,
+which makes the habit stick, and for $2^x \bmod 7$ on five qubits, period $3$, the peaks
+are at $k \approx 10.7$ and $21.3$ and there is no $3$ anywhere in sight. The period is
+the *denominator* of $k/N$, not $k$.
+
+The second error is to use one peak. Reduce $8/16$ and you get $1/2$, denominator $2$,
+which is a divisor of the period and not the period. Any peak at $cN/r$ where $c$ and
+$r$ share a factor gives a reduced denominator that is too small. The remedy is to take
+every peak that clears the threshold, reduce each, and combine their denominators with
+a least common multiple.
+
+```python
+import cmath
+import math
+from math import gcd
+
+
+def qft(state):
+    size = len(state)
+    return [sum(amp * cmath.exp(2j * math.pi * j * k / size) for j, amp in enumerate(state))
+            / math.sqrt(size) for k in range(size)]
+
+
+def best_rational(num, den, qmax):
+    a = num // den
+    p_prev, q_prev, p, q = 1, 0, a, 1
+    r_num, r_den = num - a * den, den
+    while r_num != 0:
+        r_num, r_den = r_den, r_num
+        a = r_num // r_den
+        p_new, q_new = a * p + p_prev, a * q + q_prev
+        if q_new > qmax:
+            break
+        p_prev, q_prev, p, q = p, q, p_new, q_new
+        r_num = r_num - a * r_den
+    return (p, q)
+
+
+def period_report(f, n, qmax):
+    N = 2 ** n
+    first = min(f(x) for x in range(N))
+    xs = [x for x in range(N) if f(x) == first]
+    branch = [0j] * N
+    for x in xs:
+        branch[x] = 1 / math.sqrt(len(xs))
+    probs = [abs(a) ** 2 for a in qft(branch)]
+    peak = max(probs[1:])
+    ks = [k for k in range(1, N) if probs[k] >= 0.4 * peak]
+    qs = [best_rational(k, N, qmax)[1] for k in ks]
+    period = 1
+    for q in qs:
+        period = period * q // gcd(period, q)
+    print(f"peaks at k = {ks}, denominators {qs}, lcm = {period}")
+
+
+period_report(lambda x: pow(7, x, 15), 4, 15)     # 7^x mod 15 repeats every 4
+period_report(lambda x: pow(2, x, 7), 5, 7)       # 2^x mod 7 repeats every 3
+```
+
+For $7^x \bmod 15$ the three non-zero peaks reduce to denominators $4, 2, 4$; the middle
+one alone would have said $2$, and the lcm says $4$. For $2^x \bmod 7$ the period $3$
+does not divide $32$, so the peaks are smeared: the threshold picks up $k = 11$ and
+$k = 21$, whose continued fractions with `qmax = 7` both give denominator $3$. This is
+the lab's `estimate_period`, threshold and lcm included, and the reason the brief says
+the lcm step matters.
+
+## The same transform as a circuit
+
+The definition above costs $N^2$ multiplications, which for a real register is
+$4^n$, hopeless. The point of the *quantum* Fourier transform is that the same unitary
+factorises into $O(n^2)$ gates. Write $k$ in binary and split the exponent
+$e^{2\pi i\, jk/N}$ bit by bit: it becomes a product over the bits of $j$, and the
+transform of a basis state $|j\rangle$ turns out to be a product of one-qubit states,
+
+$$\frac{1}{\sqrt{N}}\bigotimes_{l}\Big(|0\rangle + e^{2\pi i\, (0.j_l j_{l+1}\dots)}|1\rangle\Big),$$
+
+where $0.j_l j_{l+1}\dots$ is a binary fraction. Each factor is an H on qubit $l$, which
+supplies the $|0\rangle + e^{2\pi i\, 0.j_l}|1\rangle$ part since $0.j_l$ is $0$ or a
+half, followed by a controlled phase from each later qubit $j$ contributing its bit at
+the right binary place: $2\pi/2^{j-l+1}$, halving with distance. That is the loop in the
+lab's `qft_circuit`: for each qubit $i$, H, then for each $j > i$ a controlled phase of
+$2\pi/2^{j-i+1}$ with control $j$ and target $i$. The product comes out with the qubits
+in reverse order, so the last step swaps qubit $i$ with $n - 1 - i$. Leave the swaps
+out and every amplitude is present but permuted by bit reversal; the lab's test against
+the definition will say so, and on one qubit, where there is nothing to swap, it will
+pass, which is why that test also runs on two and three.
+
+The halving angles are also why an *approximate* QFT exists: the phase from a qubit far
+down the register is $2\pi/2^{d}$ for distance $d$, and past $d \approx \log n$ it is
+below any realistic gate precision, so those controlled phases can be dropped for a cost
+of $O(n \log n)$ gates and a negligible error.
+
+## Where it stops
+
+The transform reads a period out of a comb whose spacing is hidden in $2^n$ amplitudes,
+and it does that with $O(n^2)$ gates. It does not let you load arbitrary data and
+compute its spectrum faster than a classical FFT: preparing a general amplitude list
+takes exponential work, and the transformed amplitudes cannot be read out, only sampled.
+The period-finding use survives because the comb is cheap to prepare, via one reversible
+evaluation of $f$ in superposition, and because the only thing you need from the
+spectrum is the position of a peak, which one sample gives with reasonable probability.
+
+Even then, one sample can return $k = 0$, which says nothing, or a $k$ whose reduced
+fraction has a denominator that divides $r$, which is why the classical half of Shor's
+algorithm repeats the quantum part a few times and takes lcms. The lab's threshold of
+$40\%$ of the tallest peak is a simulator's convenience: it reads every peak at once
+from the full probability list, which a real device cannot do. And nothing here factors
+anything yet; turning a period $r$ into a factor of a modulus needs $r$ even and
+$a^{r/2} \not\equiv -1$, which is more classical number theory, on top of what this
+reading did. What the lab *QFT on three qubits, and finding a period* builds is the
+quantum core: `qft` from the definition, `qft_circuit` from gates with its bit
+reversal, `best_rational` in integers, `periodic_branches` for the comb, and
+`estimate_period` to turn peaks into $r$.
+''',
+                },
+            ],
+            "quiz": {
+                "title": "Combs, peaks and denominators",
+                "minutes": 8,
+                "questions": [
+                    {
+                        "q": "After the second register is measured, the first register holds a comb of period $r$ with some shift $s$. Why does the shift not matter?",
+                        "opts": [
+                            "Because every measurement outcome of the second register happens to produce the unshifted comb starting at $x = 0$",
+                            "Because the transform turns the shift into a phase on each peak, and the Born rule discards phases",
+                            "Because the shift is always a multiple of $r$, so the comb is unchanged by it",
+                            "Because the continued-fraction step subtracts the shift before reducing the fraction",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Each distinct value of $f$ gives a differently shifted comb; measuring $3$ instead of $1$ for $3^x \bmod 8$ gives teeth at $1, 3, 5, 7$. The shift is random, and the algorithm has to be indifferent to it.",
+                            r"Shifting the input by $s$ multiplies output $k$ by $e^{2\pi i\, sk/N}$; the peak positions do not move and the probabilities are unchanged.",
+                            r"The shift is between $0$ and $r - 1$, never a multiple of $r$ unless it is $0$. A shift of $1$ moves every tooth, so the comb is a different vector; what stays the same is its spacing.",
+                            r"The continued fraction sees only $k$ and $N$; it has no way to know $s$ and never needs to, because $s$ is already gone from the probabilities by the time $k$ is measured.",
+                        ],
+                        "why": r"""
+The Fourier shift theorem: delaying the input by $s$ multiplies the transform at
+frequency $k$ by $e^{2\pi i\, sk/N}$. That is a phase of modulus $1$, so the peak
+probabilities $|{\text{out}_k}|^2$ are identical for every shift and the peaks sit at
+multiples of $N/r$ regardless. Measurement of the second register produced the shift
+and destroyed nothing that matters; the spacing survived as peak position.
+""",
+                    },
+                    {
+                        "q": "A comb with teeth at $j = 0, 2, 4, 6$ on eight amplitudes is transformed. Why is the output at $k = 2$ zero?",
+                        "opts": [
+                            "Because $k = 2$ is not a multiple of the period $2$, so the definition assigns it no weight at all",
+                            "Because the phases $e^{2\\pi i\\, jk/8}$ at the four teeth are $1, -1, 1, -1$ and cancel exactly",
+                            "Because the transform of a real comb is real, and only even $k$ can carry real amplitude",
+                            "Because the comb has four teeth and $k = 2$ is below the first harmonic at $k = 4$",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Peaks sit at multiples of $N/r = 4$, not of $r = 2$; and $k = 2$ is a multiple of $2$ anyway. The definition assigns weight by summing phases, and at $k = 2$ that sum is zero, which is the actual reason.",
+                            r"$e^{2\pi i\, jk/8}$ with $k = 2$ is $e^{i\pi j/2}$; at $j = 0, 2, 4, 6$ that is $1, -1, 1, -1$, summing to $0$.",
+                            r"The transform of a real vector is not real in general, and $k = 2$ is even. Reality has nothing to do with it; the four terms at $k = 2$ are real and they sum to zero.",
+                            r"Harmonics of a period-$2$ comb sit at multiples of $N/r = 4$, and $k = 2$ is not one; but the reason it is zero is the geometric-series cancellation, not a rule about being 'below' something.",
+                        ],
+                        "why": r"""
+At $k = 2$ the phases at the teeth are $e^{2\pi i \cdot 0}, e^{2\pi i \cdot 4/8},
+e^{2\pi i \cdot 8/8}, e^{2\pi i \cdot 12/8}$, which are $1, -1, 1, -1$; the four equal
+amplitudes cancel to nothing. At $k = 4$ the phases are all $1$ and the teeth add to
+$0.7071$. The general statement is that the sum $\sum_m e^{2\pi i\, mrk/N}$ is $M$
+when $rk/N$ is an integer and $0$ otherwise, which places peaks at multiples of $N/r$.
+""",
+                    },
+                    {
+                        "q": "`best_rational` is required to work in integers. What goes wrong with `float` arithmetic on a fraction like $k/N = 21/32$?",
+                        "opts": [
+                            "Floats cannot represent $21/32$ exactly, so the expansion starts from a slightly wrong number and drifts from there",
+                            "After a few inversions the remainder is a rounding residue rather than zero, so the expansion never stops",
+                            "Float division is too slow for the number of steps the expansion needs",
+                            "Floats lose the sign of the remainder, so the convergents alternate incorrectly",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"$21/32$ is a dyadic rational and is represented exactly in binary floating point. The trouble is not the starting number but what happens to the remainders after repeated subtraction and inversion.",
+                            r"With integers the remainder reaches exactly $0$ and the loop stops; with floats it reaches $10^{-16}$, is inverted to $10^{16}$, and manufactures a false term.",
+                            r"The expansion takes at most a few dozen steps for any realistic $N$; speed is not the issue. Correctness is: a float remainder never becomes exactly zero.",
+                            r"Remainders in the expansion are non-negative by construction, and the convergents do alternate above and below the target as a matter of course. Sign is not where floats fail here.",
+                        ],
+                        "why": r"""
+The expansion ends when a remainder is exactly zero. In integer arithmetic that
+happens; in floating point the remainder becomes something like $2 \times 10^{-16}$,
+inverting it gives an enormous partial quotient, and the algorithm either returns an
+absurd convergent or, if it is bounded by `qmax`, stops one step late with the wrong
+answer. The lab's `best_rational` keeps a `(num, den)` remainder pair and inverts it
+by swapping, so every quantity stays an integer and the termination test is exact.
+""",
+                    },
+                    {
+                        "q": "For $7^x \\bmod 15$ on four qubits the peaks are at $k = 4, 8, 12$. Taking only $k = 8$ gives $8/16 = 1/2$. What does the lcm across all peaks fix?",
+                        "opts": [
+                            "It averages the three estimates to reduce the sampling error on the period",
+                            "It recovers the full period $4$ from peaks whose reduced fractions gave only a divisor of it",
+                            "It removes the $k = 0$ peak, which would otherwise make the estimated period appear to be exactly $1$",
+                            "It converts the peak spacing $N/r$ back into $r$ by taking the lcm with $N$",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"There is no averaging in a least common multiple, and the individual estimates are not noisy; they are exact divisors of $r$. Combining divisors is a number-theoretic step, not a statistical one.",
+                            r"$8/16$ reduces to $1/2$ because $c = 2$ shares a factor with $r = 4$; the peaks at $4$ and $12$ give $1/4$ and $3/4$, and $\mathrm{lcm}(4, 2, 4) = 4$.",
+                            r"The $k = 0$ peak is excluded before any fraction is taken, by starting the scan at $k = 1$, and it would contribute a denominator of $1$ anyway, which changes no lcm. The lcm is fixing the peaks that *were* used.",
+                            r"The spacing is already turned into $r$ by reducing $k/N$; that is what the continued fraction does. The lcm combines several such denominators with *each other*, never with $N$.",
+                        ],
+                        "why": r"""
+A peak at $k = cN/r$ reduces to $c/r$ in lowest terms, and when $c$ and $r$ share a
+factor the denominator that comes back is $r$ divided by that factor. For $r = 4$ the
+peak with $c = 2$ says $2$; the ones with $c = 1$ and $c = 3$ say $4$. The lcm of
+what every peak says is $r$ itself, provided at least one peak had $c$ coprime to $r$.
+That is why the lab scans every peak above the threshold rather than the tallest one.
+""",
+                    },
+                    {
+                        "q": "A student's `qft_circuit` passes the comparison test on one qubit and fails on two and three. What is the likely cause?",
+                        "opts": [
+                            "The controlled-phase angles are off by a factor of two, which happens to make no difference at all on a single qubit",
+                            "The final swaps that reverse the qubit order are missing, and on one qubit there is nothing to reverse",
+                            "The Hadamards are applied after the controlled phases instead of before them",
+                            "The circuit uses `apply_cnot` where a controlled phase is needed, which coincides on one qubit",
+                        ],
+                        "a": 1,
+                        "whys": [
+                            r"Wrong angles would corrupt the two-qubit result but there are *no* controlled phases on one qubit, so the one-qubit pass tells you nothing about angles. The brief's warning and the lab's error message both point at the swaps first.",
+                            r"The product form comes out in reversed bit order; the swaps fix it, and a single qubit is its own reversal.",
+                            r"Reordering H and the phases changes the transform on two qubits and would also fail there, but it is not the usual mistake, and the one-qubit case, with only an H, cannot distinguish orderings either.",
+                            r"There are no two-qubit gates at all on one qubit, so nothing coincides. On two qubits a CNOT is a permutation while a controlled phase is diagonal; substituting one for the other breaks the result outright.",
+                        ],
+                        "why": r"""
+The product form of the transform delivers the output qubits in reverse order, so the
+circuit ends with a swap of qubit $i$ and $n - 1 - i$ for each $i < n/2$. On one qubit
+$n/2$ is $0$ and there are no swaps to forget, so the missing step is invisible there
+and shows up as a bit-reversed amplitude list on two and three. The lab's test runs on
+one, two and three qubits for that reason, and its failure message names the swaps.
+""",
+                    },
+                ],
+            },
             "lab": {
                 "title": "QFT on three qubits, and finding a period",
                 "runtime": "python",

@@ -47,6 +47,7 @@
   "PWR510": {"longest": 7, "shortest": 1, "whys": 0, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 16}},
   "PWR520": {"longest": 5, "shortest": 1, "whys": 0, "blanks": {"longest": 2, "shortest": 0, "markup": 0, "whys": 16}},
   "PWR530": {"longest": 6, "shortest": 1, "whys": 0, "blanks": {"longest": 3, "shortest": 0, "markup": 0, "whys": 20}},
+  "QC510": {"longest": 0, "shortest": 0, "whys": 100, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "RFIC510": {"longest": 9, "shortest": 0, "whys": 0, "blanks": {"longest": 2, "shortest": 0, "markup": 0, "whys": 16}},
   "RFIC520": {"longest": 5, "shortest": 0, "whys": 0, "blanks": {"longest": 2, "shortest": 0, "markup": 0, "whys": 16}},
   "RFIC530": {"longest": 6, "shortest": 1, "whys": 0, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 16}},
