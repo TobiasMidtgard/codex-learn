@@ -1,4 +1,5 @@
 {
+  "CAP501": {"longest": 0, "shortest": 0, "whys": 96, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "CE101": {"longest": 0, "shortest": 0, "whys": 96, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "CE201": {"longest": 4, "shortest": 2, "whys": 96, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "CS101": {"longest": 10, "shortest": 2, "whys": 0, "blanks": {"longest": 4, "shortest": 0, "markup": 0, "whys": 76}},
