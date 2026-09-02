@@ -33,6 +33,8 @@
   "EMAG520": {"longest": 5, "shortest": 1, "whys": 0, "blanks": {"longest": 2, "shortest": 1, "markup": 0, "whys": 20}},
   "EMAG530": {"longest": 8, "shortest": 1, "whys": 0, "blanks": {"longest": 5, "shortest": 0, "markup": 0, "whys": 32}},
   "GFX401": {"longest": 0, "shortest": 0, "whys": 96, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
+  "HPC401": {"longest": 0, "shortest": 0, "whys": 96, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
+  "ML401": {"longest": 0, "shortest": 0, "whys": 120, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 0}},
   "MA101": {"longest": 21, "shortest": 0, "whys": 40, "blanks": {"longest": 0, "shortest": 0, "markup": 0, "whys": 40}},
   "MA111": {"longest": 17, "shortest": 1, "whys": 0, "blanks": {"longest": 4, "shortest": 1, "markup": 0, "whys": 0}},
   "MA112": {"longest": 21, "shortest": 3, "whys": 0, "blanks": {"longest": 1, "shortest": 0, "markup": 0, "whys": 0}},
