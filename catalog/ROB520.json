@@ -43,9 +43,105 @@
     "det J = l1 l2 sin(theta2): the arm is singular fully stretched and fully folded",
     "Manipulability |det J| as a scalar score for how well-conditioned a pose is"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "Two angles in, one point out, and the way back",
+     "minutes": 14,
+     "body": "A two-link arm is bolted to a bench. The shoulder joint sits at the origin, the upper\narm is 1.3 m long, the forearm is 0.7 m, and somebody has put a bolt on the bench at\n(1.2, 0.9) and asked you to put the tip of the arm on it. You can command two things:\nthe shoulder angle and the elbow angle. Everything in this module is the question\n\"what angles?\" and the two or three surprises hiding inside it.\n\n## Forward: where the tip ends up\n\nStart with the direction that is easy. Turn the shoulder by $\\theta_1$ from the x-axis.\nThe elbow is then at the end of a rod of length $l_1$ pointing in that direction, so it\nsits at $(l_1\\cos\\theta_1,\\ l_1\\sin\\theta_1)$. The forearm is another rod, of length\n$l_2$, and the elbow angle $\\theta_2$ is measured *relative to the upper arm*, which is\nhow the motor at the elbow experiences it. In world terms, then, the forearm points at\nabsolute angle $\\theta_1 + \\theta_2$, and the tip is the elbow plus that second rod:\n\n$$x = l_1\\cos\\theta_1 + l_2\\cos(\\theta_1+\\theta_2), \\qquad\n  y = l_1\\sin\\theta_1 + l_2\\sin(\\theta_1+\\theta_2).$$\n\nThat is the forward kinematics. It is two vector additions and it never fails: any pair\nof angles gives exactly one tip position.\n\n```python\nimport math\n\n\ndef forward(t1, t2, l1=1.0, l2=1.0):\n    return (l1 * math.cos(t1) + l2 * math.cos(t1 + t2),\n            l1 * math.sin(t1) + l2 * math.sin(t1 + t2))\n\n\nprint(forward(0.0, 0.0))                 # stretched along x: (2.0, 0.0)\nx, y = forward(0.0, math.pi / 2)\nprint(round(x, 6), round(y, 6))          # elbow bent square: 1.0 1.0\n```\n\nThe second call is worth holding in your head, because it comes back later as the\nworked example for the reverse direction: upper arm along x, forearm turned a quarter\nturn, tip at (1, 1).\n\n## Where the tip can be at all\n\nBefore asking for the angles that reach a point, ask whether any do. Hold the shoulder\nstill and swing only the elbow. The tip's distance from the shoulder, $r$, is the third\nside of a triangle whose other two sides are $l_1$ and $l_2$. A triangle's third side\ncan be no longer than the other two added together and no shorter than their\ndifference, so\n\n$$|l_1 - l_2| \\le r \\le l_1 + l_2 .$$\n\nThe reachable set is an annulus: a disc of radius $l_1 + l_2$ with a hole of radius\n$|l_1 - l_2|$ punched out of the middle. For the bench arm that is 0.6 m to 2.0 m, and\nthe bolt is at $r = \\sqrt{1.2^2 + 0.9^2} = 1.5$ m, so it is reachable. With two equal\nlinks the hole has radius zero and the arm can fold back onto its own shoulder.\n\nOne practical note that the lab turns into a test: a point that `forward` produced can\nland a rounding error outside the annulus, at 2.0000000000000004 when the edge is 2.0.\nA reachability test with no tolerance would refuse the arm's own pose.\n\n## Back from the point: the law of cosines\n\nNow the direction that is not easy. You are given $(x, y)$ and want $\\theta_1, \\theta_2$.\nThe triangle from the previous section is the whole trick. Its sides are $l_1$, $l_2$\nand $r$, and the law of cosines relates the side $r$ to the interior angle $\\phi$\nopposite it, the angle at the elbow *inside* the triangle:\n\n$$r^2 = l_1^2 + l_2^2 - 2 l_1 l_2 \\cos\\phi .$$\n\nBut $\\theta_2$ is not $\\phi$. The elbow motor measures how far the forearm has turned\naway from the line of the upper arm, and that is the exterior angle, $\\theta_2 = \\pi -\n\\phi$. Since $\\cos(\\pi - \\phi) = -\\cos\\phi$, the sign flips and\n\n$$\\cos\\theta_2 = \\frac{r^2 - l_1^2 - l_2^2}{2 l_1 l_2}.$$\n\nPut the bench numbers in. $r^2 = 2.25$, $l_1^2 = 1.69$, $l_2^2 = 0.49$, $2 l_1 l_2 = 1.82$,\nso $\\cos\\theta_2 = 0.07 / 1.82 = 0.0385$ and $\\theta_2 = \\pm 87.8^\\circ$. Two signs, and\nthe next section is about why. Take the positive one for now: $\\sin\\theta_2 =\n\\sqrt{1 - 0.0385^2} = 0.9993$.\n\nFor $\\theta_1$, look at the tip from the shoulder. Its direction is\n$\\operatorname{atan2}(y, x) = \\operatorname{atan2}(0.9, 1.2) = 36.87^\\circ$. That\ndirection is the upper arm's direction $\\theta_1$ plus the angle by which the tip is\noffset from the upper arm's line, and that offset comes from the same triangle: in a\nframe aligned with the upper arm the tip sits at $(l_1 + l_2\\cos\\theta_2,\\\nl_2\\sin\\theta_2) = (1.3269, 0.6995)$, at angle $\\operatorname{atan2}(0.6995, 1.3269) =\n27.80^\\circ$. So\n\n$$\\theta_1 = \\operatorname{atan2}(y, x) - \\operatorname{atan2}(l_2\\sin\\theta_2,\\\nl_1 + l_2\\cos\\theta_2) = 36.87^\\circ - 27.80^\\circ = 9.07^\\circ .$$\n\n```python\nimport math\n\n\ndef forward(t1, t2, l1=1.0, l2=1.0):\n    return (l1 * math.cos(t1) + l2 * math.cos(t1 + t2),\n            l1 * math.sin(t1) + l2 * math.sin(t1 + t2))\n\n\ndef inverse(x, y, l1=1.0, l2=1.0, elbow=\"up\"):\n    c2 = (x * x + y * y - l1 * l1 - l2 * l2) / (2.0 * l1 * l2)\n    c2 = max(-1.0, min(1.0, c2))\n    s2 = math.sqrt(1.0 - c2 * c2)\n    if elbow == \"down\":\n        s2 = -s2\n    t2 = math.atan2(s2, c2)\n    t1 = math.atan2(y, x) - math.atan2(l2 * s2, l1 + l2 * c2)\n    return (t1, t2)\n\n\nfor branch in (\"up\", \"down\"):\n    t1, t2 = inverse(1.2, 0.9, 1.3, 0.7, branch)\n    x, y = forward(t1, t2, 1.3, 0.7)\n    print(branch, round(math.degrees(t1), 2), round(math.degrees(t2), 2),\n          \"->\", round(x, 6), round(y, 6))\n```\n\nThis prints `up 9.07 87.8 -> 1.2 0.9` and `down 64.67 -87.8 -> 1.2 0.9`: both answers\nput the tip on the bolt. Run the same function on the earlier example, `inverse(1, 1)`\nwith unit links, and the up branch gives $(0, \\pi/2)$, the pose that `forward` started\nfrom.\n\n## Two answers, and why exactly two\n\nTaking the square root threw away a sign, and the sign is real: $\\sin\\theta_2 > 0$ is\nthe elbow bent one way, $\\sin\\theta_2 < 0$ the other. Both elbows put the tip on the\nsame point, because both come from the same triangle reflected across the line from\nshoulder to tip. The lab calls them `\"up\"` and `\"down\"`, and the only thing that\ndiffers in the code is the sign of `s2`; `atan2(s2, c2)` then carries that sign into\n$\\theta_2$, and the $\\theta_1$ formula absorbs it.\n\nThere are never three answers, because the law of cosines fixes $\\cos\\theta_2$ to one\nvalue and a cosine has at most two angles in a full turn. There is one answer, not two,\nonly on the boundary of the annulus, where $\\cos\\theta_2 = \\pm 1$, $\\sin\\theta_2 = 0$,\nand the two branches meet.\n\n## The mistake that raises\n\nThe clamp on `c2` in the code above looks like paranoia. It is not. Take a pose on the\nouter boundary, feed it through `forward`, and hand the point back:\n\n```python\n# raises ValueError\nimport math\n\nx = math.cos(math.radians(105)) + math.cos(math.radians(105))\ny = math.sin(math.radians(105)) + math.sin(math.radians(105))\nc2 = (x * x + y * y - 1.0 - 1.0) / 2.0\nprint(repr(c2))                 # 1.0000000000000004\nprint(math.sqrt(1.0 - c2 * c2)) # the square root of a negative number\n```\n\nThe arm is fully stretched, so $\\cos\\theta_2$ should be exactly 1, and in floating\npoint it comes out four parts in $10^{16}$ above it. `1 - c2*c2` is then negative and\n`math.sqrt` raises. The temptation is to reason that a point produced by the arm must\nbe reachable, so no guard is needed; the guard is needed precisely because the point is\non the edge. Clamp `c2` into $[-1, 1]$ before the root, and treat the reachability test\nwith the same tolerance.\n\nThe other mistake is quieter. Writing $\\theta_1$ with `atan(y / x)` instead of\n`atan2(y, x)` gives the right answer for every target in the right half-plane and an\nanswer $180^\\circ$ off for every target in the left. It is tempting because the two\nfunctions agree on every example anyone tries first.\n\n## Velocities: the Jacobian\n\nPositions are half the story. A controller commands joint *rates*, and wants to know\nwhat tip velocity results. Differentiate the forward kinematics with respect to time,\nusing the chain rule on each term:\n\n$$\\dot{x} = -l_1\\sin\\theta_1\\,\\dot\\theta_1 - l_2\\sin(\\theta_1+\\theta_2)(\\dot\\theta_1 +\n\\dot\\theta_2), \\qquad\n\\dot{y} = l_1\\cos\\theta_1\\,\\dot\\theta_1 + l_2\\cos(\\theta_1+\\theta_2)(\\dot\\theta_1 +\n\\dot\\theta_2).$$\n\nCollect the coefficients of $\\dot\\theta_1$ and $\\dot\\theta_2$ into a matrix and the\nrelation is $\\dot{\\mathbf p} = J\\dot{\\boldsymbol\\theta}$ with\n\n$$J = \\begin{pmatrix} -l_1 s_1 - l_2 s_{12} & -l_2 s_{12} \\\\ l_1 c_1 + l_2 c_{12} &\nl_2 c_{12} \\end{pmatrix},$$\n\nwriting $s_{12}$ for $\\sin(\\theta_1 + \\theta_2)$ and so on. Its determinant is worth\nexpanding by hand once, because the answer collapses. The two $l_2^2 s_{12} c_{12}$\nterms cancel and what is left is $l_1 l_2 (s_{12} c_1 - c_{12} s_1) = l_1 l_2\n\\sin\\theta_2$, by the angle-difference identity. At the pose $(0, \\pi/2)$ with unit\nlinks, $J = \\begin{pmatrix} -1 & -1 \\\\ 1 & 0 \\end{pmatrix}$ and $\\det J = 1$.\n\n## Singularities are where the answer gets huge\n\n$\\det J = l_1 l_2 \\sin\\theta_2$ is zero at $\\theta_2 = 0$ and $\\theta_2 = \\pi$: the arm\nstretched straight and the arm folded double. At those poses $J$ cannot be inverted,\nwhich means there is a tip velocity no joint rates can produce — pushing the tip\nfurther out when the arm is already straight. Near those poses the inverse exists but\nthe rates it asks for climb without limit:\n\n```python\nimport math\n\n\ndef jacobian(t1, t2, l1=1.0, l2=1.0):\n    s1, c1 = math.sin(t1), math.cos(t1)\n    s12, c12 = math.sin(t1 + t2), math.cos(t1 + t2)\n    return ((-l1 * s1 - l2 * s12, -l2 * s12),\n            (l1 * c1 + l2 * c12, l2 * c12))\n\n\ndef rates_for(J, vx, vy):\n    (a, b), (c, d) = J\n    det = a * d - b * c\n    return ((d * vx - b * vy) / det, (-c * vx + a * vy) / det)\n\n\nfor t2 in (math.pi / 2, 0.5, 0.1, 0.01):\n    J = jacobian(0.0, t2)\n    det = J[0][0] * J[1][1] - J[0][1] * J[1][0]\n    q1, q2 = rates_for(J, 0.1, 0.0)\n    print(round(t2, 2), \"det\", round(det, 4), \"rates\", round(q1, 3), round(q2, 3))\n```\n\nThe tip is asked to move at 0.1 m/s along x in every case. At $\\theta_2 = \\pi/2$ the\nrates are 0 and −0.1 rad/s. At $\\theta_2 = 0.01$ they are 10 and −20 rad/s: two\nhundred times larger, for the same tip motion, with the two joints fighting each other\nin opposite directions. $|\\det J|$ is the *manipulability*, and this is why it is worth\ncomputing as a number rather than checking for zero: a pose with manipulability 0.01 is\nnot singular, but it is a pose you do not want to be commanding fine motion from.\n\n## Where it stops holding\n\nEverything above is planar and has two joints, which is exactly why it has a closed\nform. A six-joint industrial arm has an analytic inverse only when its geometry is\nspecial — three wrist axes meeting at a point is the usual condition — and a\nseven-joint arm has infinitely many inverses for most targets, so a numerical scheme\nbuilt on the Jacobian takes over from the law of cosines. Joint limits, which this\nmodel ignores, often remove one elbow branch in practice. And nothing here knows about\ngravity, inertia or motor torque: this is the geometry of the arm, not its dynamics.\n\n## What you are about to build\n\nThe lab *Forward and inverse kinematics of a 2R arm* asks for five functions:\n`forward`, `reachable` with the tolerance discussed above, `inverse` with both elbow\nbranches and a `ValueError` for an unreachable target, `jacobian` as two row tuples,\nand `manipulability` as the absolute determinant. Its tests run `inverse` and\n`forward` back to back over a 13-by-13 lattice of poses with links of 1.3 and 0.7,\nwhich is where the clamp earns its keep, and check that the determinant you compute\nfrom the matrix agrees with $l_1 l_2 |\\sin\\theta_2|$ to twelve decimals."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "Reaching, and failing to reach, with two joints",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "An arm has links of 2.0 and 1.0. Which target is *unreachable*, and why?",
+      "opts": [
+       "(0.5, 0) — it lies inside the hole of radius $|l_1 - l_2| = 1$ the arm cannot fold into",
+       "(3, 0) — the arm can reach the outer edge of its workspace only with the elbow bent, never straight",
+       "(−2, 0) — negative coordinates lie behind the shoulder, outside the annulus",
+       "(1, 0) — the inverse kinematics has a division by zero at the inner edge"
+      ],
+      "a": 0,
+      "why": "The reachable set is the annulus $|l_1 - l_2| \\le r \\le l_1 + l_2$, here $1 \\le r\n\\le 3$. Which direction the target lies in never matters, because the shoulder can\nturn a full circle. The hole in the middle is the surprise: an arm with unequal links\ncannot touch its own shoulder, or anything within $|l_1 - l_2|$ of it, because the\nforearm folded straight back still leaves the tip $l_1 - l_2$ away.",
+      "whys": [
+       "Fold the forearm back along the upper arm and the tip sits at 2 − 1 = 1 from the shoulder; nothing brings it closer. A point at $r = 0.5$ is inside that hole.",
+       "(3, 0) is at $r = 3 = l_1 + l_2$, reachable with the arm dead straight — a bent elbow is what brings the tip *closer*, not further.",
+       "The annulus is centred on the shoulder and has no favoured direction. (−2, 0) is at $r = 2$, comfortably between 1 and 3, reached by pointing the whole arm left.",
+       "$r = 1$ is exactly the inner edge, where $\\cos\\theta_2 = -1$ and the arm is folded double. The formulas evaluate fine there; the only division is by $2 l_1 l_2$."
+      ]
+     },
+     {
+      "q": "The law of cosines gives $\\cos\\theta_2$ for a target inside the workspace. Why does the inverse then have exactly two solutions?",
+      "opts": [
+       "The square root that recovers $\\sin\\theta_2$ has two signs, and each sign is a real elbow configuration",
+       "$\\theta_1$ can be measured from either the x-axis or the y-axis, and each convention gives a solution",
+       "The shoulder can turn either clockwise or anticlockwise to reach the same direction, and each way of turning counts",
+       "A cosine repeats every $2\\pi$, so $\\theta_2$ and $\\theta_2 + 2\\pi$ are distinct solutions"
+      ],
+      "a": 0,
+      "why": "The law of cosines pins $\\cos\\theta_2$ to one number, and a cosine has two angles per\nturn: $\\theta_2$ and $-\\theta_2$. The sign is the sign of $\\sin\\theta_2$, which is\nexactly what the square root discards. Physically the two are the elbow-up and\nelbow-down poses, reflections of the same triangle. There is one solution rather than\ntwo only on the boundary of the annulus, where $\\sin\\theta_2 = 0$ and the branches\ncoincide.",
+      "whys": [
+       "One value of the cosine, two angles with that cosine: the elbow bent one way or the other, mirror images across the shoulder-to-tip line.",
+       "A convention for measuring an angle does not create a second physical pose. Whatever axis you measure from, the arm is in one of two shapes.",
+       "The direction of rotation is a story about how the joint got there, not where it is. A shoulder at $9^\\circ$ is one pose however it was reached.",
+       "$\\theta_2 + 2\\pi$ is the same angle, and puts every link in the same place. Adding a full turn does not give a different configuration of the arm."
+      ]
+     },
+     {
+      "q": "Reading `inverse` code, you see `c2 = max(-1.0, min(1.0, c2))` before the square root. What is that line for?",
+      "opts": [
+       "It rejects unreachable targets by folding their cosine back into the valid range, so that the function never has to raise",
+       "It keeps a boundary target, which rounding can push to $\\cos\\theta_2$ a hair above 1, from making the square root fail",
+       "It selects the elbow branch, since values above 1 correspond to elbow-up and below −1 to elbow-down",
+       "It is a speed optimisation, avoiding a slow trigonometric call when the elbow is nearly straight"
+      ],
+      "a": 1,
+      "why": "On the boundary of the annulus $\\cos\\theta_2$ is exactly $\\pm 1$ in exact arithmetic\nand often $\\pm 1$ plus a few ulps in floating point. The very next line takes\n$\\sqrt{1 - c_2^2}$, which is undefined for $|c_2| > 1$ and raises `ValueError`. The\nclamp lets a pose the arm itself produced be inverted. It is not a substitute for the\nreachability test, which must run first: a genuinely unreachable target would\notherwise be clamped into a wrong but plausible answer.",
+      "whys": [
+       "Silencing unreachable targets is the *danger* of that line if reachability is not checked first — a target at $r = 2.5$ would quietly be reported as the stretched pose. The lab checks reachability separately, before the clamp, for that reason.",
+       "A point on the edge of the workspace can arrive with $\\cos\\theta_2 = 1.0000000000000004$, and $\\sqrt{1 - c_2^2}$ of that is the root of a negative number.",
+       "The branch is chosen by the sign of $\\sin\\theta_2$, after the root. A cosine above 1 or below −1 is not a configuration of anything; it is rounding noise.",
+       "No trigonometric call is skipped: `atan2` runs either way. The clamp costs two comparisons and exists for correctness on the boundary, not for speed."
+      ]
+     },
+     {
+      "q": "For the 2R arm, $\\det J = l_1 l_2 \\sin\\theta_2$. What does a determinant of exactly zero mean for the controller?",
+      "opts": [
+       "The tip is at rest, since zero determinant means zero tip velocity for any joint rates",
+       "The arm is at the workspace boundary and both elbow branches give the same joint angles",
+       "There is a tip velocity no joint rates can produce, so some motions cannot be commanded from this pose",
+       "The forward kinematics is undefined at this pose, and the tip position cannot be computed until the joints move away"
+      ],
+      "a": 2,
+      "why": "$J$ maps joint rates to tip velocity. When its determinant is zero its two columns are\nparallel, so every achievable tip velocity lies along one line and the perpendicular\ndirection is unreachable however fast the joints turn. Stretched straight, that\nmissing direction is radially outward. Near the singularity the inverse exists but\ndemands enormous rates, which is why the lab measures $|\\det J|$ as a continuous\nmanipulability score rather than testing it for zero.",
+      "whys": [
+       "Joint rates still move the tip — swinging the shoulder sweeps the straight arm round in an arc. What is lost is one *direction* of tip motion, not all motion.",
+       "Half right: $\\sin\\theta_2 = 0$ does put the arm on the boundary and does merge the branches. But the question asks what it means for control, and the answer is about which velocities $J$ can produce.",
+       "A singular matrix maps the two joint rates onto a line in the plane; the perpendicular direction, radially outward when stretched, is unreachable at any rate.",
+       "Forward kinematics is two sums of sines and cosines and is defined everywhere. It is the *inverse* of the Jacobian that fails, not the position map."
+      ]
+     },
+     {
+      "q": "A colleague computes $\\theta_1$ as `atan(y / x) - atan2(l2*s2, l1 + l2*c2)`. Every test target they tried works. What will go wrong?",
+      "opts": [
+       "Targets with $x < 0$ come back $180^\\circ$ off, because `atan` cannot tell $(-1, -1)$ from $(1, 1)$",
+       "Targets with $y = 0$ come back as `nan`, because the division inside `atan` is undefined when the numerator is zero",
+       "Nothing: `atan(y / x)` and `atan2(y, x)` are the same function written two ways",
+       "The elbow-down branch is lost, because `atan` always returns a positive angle"
+      ],
+      "a": 0,
+      "why": "`atan` sees only the ratio $y/x$ and returns an angle between $-90^\\circ$ and\n$90^\\circ$; `atan2` sees $x$ and $y$ separately and returns the full-circle direction.\nThe two agree whenever $x > 0$, which is why testing with a few targets in front of the\narm never catches it. The first target behind the shoulder gets a $\\theta_1$ off by\n$180^\\circ$, and `forward` of that pose lands on the mirror-image point.",
+      "whys": [
+       "$y/x$ is the same number for $(1, 1)$ and $(-1, -1)$, so `atan` gives $45^\\circ$ for both. The second target is at $225^\\circ$, and the arm reaches for the wrong side of the bench.",
+       "$y = 0$ makes $y/x$ zero, not undefined, and `atan(0)` is 0. The division fails only at $x = 0$, and even there the real defect is the lost quadrant, not a `nan`.",
+       "They agree on the right half-plane, which is where every first example lives. `atan2` takes two arguments precisely so that it can recover the quadrant the ratio destroys.",
+       "The branch lives in the sign of `s2`, which is still there. `atan` returns angles in $(-\\pi/2, \\pi/2)$, negative included; what it cannot do is reach the left half-plane."
+      ]
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
@@ -120,9 +216,122 @@
     "Particle filters represent an arbitrary posterior by weighted samples",
     "Systematic resampling and the effective sample size 1/sum(w^2) fight particle depletion"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "Believing a noisy sensor by exactly the right amount",
+     "minutes": 15,
+     "body": "A robot is stopped in a corridor and has two rangefinders pointed at the same wall. The\ncheap one says the wall is 3.0 m away, and its datasheet gives it a standard deviation\nof 0.4 m. The better one says 3.5 m, with a standard deviation of 0.2 m. Where is the\nwall? Not at 3.25 m, the plain average: that treats the two sensors as equally\ntrustworthy, and one of them is four times noisier in variance than the other. Not at\n3.5 m either, because throwing the cheap sensor away wastes real information. The\nanswer is in between, closer to the good sensor, and the whole of this module is\nworking out exactly how much closer, and then doing it again every tenth of a second\nas the robot drives.\n\n## Two readings, one belief\n\nCall the readings $x_a = 3.0$ with variance $p_a = 0.16$ and $x_b = 3.5$ with variance\n$p_b = 0.04$. Take a weighted average, $\\hat x = w x_a + (1-w) x_b$, and ask what $w$\nmakes the result least uncertain. The variance of the weighted sum, for independent\nerrors, is $w^2 p_a + (1-w)^2 p_b$. Differentiate with respect to $w$ and set to zero:\n$2 w p_a - 2(1-w) p_b = 0$, so $w = p_b / (p_a + p_b)$. Each reading is weighted by the\n*other* one's variance, which is the same as weighting each by its own precision $1/p$.\n\nWith the numbers: $w = 0.04/0.20 = 0.2$ on the cheap sensor, $0.8$ on the good one, and\n$\\hat x = 0.2 \\times 3.0 + 0.8 \\times 3.5 = 3.4$ m. Rewrite that as $\\hat x = x_a +\nK(x_b - x_a)$ with $K = p_a/(p_a + p_b) = 0.8$: start from one reading and move a\nfraction $K$ of the way toward the other. Substitute $w$ back into the variance and it\ncomes to $p_a p_b/(p_a + p_b) = 0.032$, or in precision terms $1/0.032 = 31.25 = 1/0.16\n+ 1/0.04$. Precisions add. A second reading, however bad, can only sharpen a belief.\n\n```python\nxa, pa = 3.0, 0.16\nxb, pb = 3.5, 0.04\nK = pa / (pa + pb)\nfused = xa + K * (xb - xa)\nvar = (1.0 - K) * pa\nprint(\"K\", round(K, 4), \"fused\", round(fused, 4), \"variance\", round(var, 4))\n```\n\nThis prints `K 0.8 fused 3.4 variance 0.032`. That line, $K = p/(p + r)$, $x\n\\leftarrow x + K(z - x)$, $p \\leftarrow (1-K)p$, is the Kalman update. Everything else\nis bookkeeping.\n\n## Doing it again, and again\n\nNow treat the first reading as a *prior* belief $(x, p)$ and every later reading $z$\nwith variance $r$ as a new sensor. The same three lines apply each time. Start with\n$x_0 = 0$, $p_0 = 1$ and feed in readings of $1.0$ with $r = 1$:\n\n```python\nx, p = 0.0, 1.0\nfor n, z in enumerate([1.0, 1.0, 1.0, 1.0], 1):\n    K = p / (p + 1.0)\n    x = x + K * (z - x)\n    p = (1.0 - K) * p\n    print(n, round(x, 4), round(p, 4))\n```\n\nThe variances print as 0.5, 0.3333, 0.25, 0.2 and the means as 0.5, 0.6667, 0.75, 0.8.\nBoth follow from precisions adding: after $n$ readings the precision is $1/p_0 + n/r =\n1 + n$, so $p_n = 1/(n+1)$, and the mean is the precision-weighted average of the prior\n0 and the $n$ readings of 1, which is $n/(n+1)$. This is the lab's `kalman_1d` with `q =\n0`, and its first test checks these exact fractions.\n\n## Motion adds doubt\n\nBetween readings the robot drives. If it commands a displacement $u$, the belief's mean\nmoves by $u$ and its variance grows by $q$, the variance of how far it *actually* moved\ngiven that command: $x \\leftarrow x + u$, $p \\leftarrow p + q$. That is the predict step,\nand it is the reason the variance in a real filter never reaches zero. With $q > 0$\neach cycle adds $q$ and each update removes some; the two balance at a steady-state\nvariance that depends on $q$ and $r$ together. The lab's test that \"process noise $q >\n0$ must leave more residual variance than $q = 0$\" is checking exactly that balance.\n\n## Several numbers at once\n\nA state is rarely one number. Stack them into a vector $\\mathbf x$ with covariance\nmatrix $P$, and let the motion be linear, $\\mathbf x \\leftarrow F\\mathbf x$. The\ncovariance of a linear map of a random vector is $F P F^\\top$ — the same rule as $\\text{Var}(a\nX) = a^2 \\text{Var}(X)$, written for matrices — so predict becomes\n\n$$\\mathbf x \\leftarrow F\\mathbf x, \\qquad P \\leftarrow F P F^\\top + Q.$$\n\nFor one scalar measurement $z = H\\mathbf x + \\text{noise}$, with $H$ a row vector picking\nout what the sensor sees, the same derivation as the corridor gives\n\n$$S = H P H^\\top + r, \\qquad K = P H^\\top / S, \\qquad \\mathbf x \\leftarrow \\mathbf x +\nK(z - H\\mathbf x), \\qquad P \\leftarrow P - K H P.$$\n\nSet every matrix to $1 \\times 1$ and $H = 1$ and these are the three lines from the\ncorridor: $S = p + r$, $K = p/(p+r)$, $P \\leftarrow p - Kp$.\n\n## The velocity you never measured\n\nHere is where the matrix form earns its keep. Track a robot with state $[\\text{position},\n\\text{velocity}]$ under a constant-velocity model: $F = \\begin{pmatrix} 1 & \\Delta t \\\\\n0 & 1 \\end{pmatrix}$. Only the position is measured, so $H = (1, 0)$. Start from $P =\nI$, take $\\Delta t = 0.5$ and $Q = 0.1 I$, and run one predict:\n\n$$F P F^\\top = \\begin{pmatrix} 1 + \\Delta t^2 & \\Delta t \\\\ \\Delta t & 1 \\end{pmatrix} =\n\\begin{pmatrix} 1.25 & 0.5 \\\\ 0.5 & 1 \\end{pmatrix}, \\qquad P = \\begin{pmatrix} 1.35 & 0.5\n\\\\ 0.5 & 1.1 \\end{pmatrix}.$$\n\nAn off-diagonal 0.5 has appeared from nothing. It says position and velocity are now\ncorrelated: if the position turns out further along than expected, the velocity was\nprobably higher than expected too. Now update with a position reading, $r = 1$:\n\n```python\nP = [[1.35, 0.5], [0.5, 1.1]]\nH = [1.0, 0.0]\nr = 1.0\nPHt = [sum(P[i][j] * H[j] for j in range(2)) for i in range(2)]\nS = sum(H[i] * PHt[i] for i in range(2)) + r\nK = [PHt[i] / S for i in range(2)]\nP_new = [[P[i][j] - K[i] * PHt[j] for j in range(2)] for i in range(2)]\nprint(\"K\", [round(k, 4) for k in K])\nprint(\"position variance\", round(P_new[0][0], 4))\nprint(\"velocity variance\", round(P_new[1][1], 4))\n```\n\nThe gain prints as `[0.5745, 0.2128]`: the position reading moves the *velocity*\nestimate too, by a fifth of the innovation. The position variance falls from 1.35 to\n0.5745, and the velocity variance falls from 1.1 to 0.9936 — a quantity no sensor ever\nlooked at has become more certain, purely because the motion model tied it to one that\nwas. The lab's `kalman_cv` runs this for sixty steps and recovers a velocity of 2.0 to\nwithin a tenth from position readings with noise of 0.5.\n\n## When the bell curve is the wrong shape\n\nEverything so far assumed the belief is a Gaussian: one hump, described by a mean and a\nvariance. Now put the robot in a circular corridor of circumference 20 with landmarks\nat 0, 5 and 12, and give it a sensor that reports only its distance to the *nearest*\nlandmark. A reading of 2.0 is consistent with being at 2, at 3, at 7, at 10, at 14 and\nat 18: six places, and no single hump covers them. A Kalman filter would report the\nmean of those, somewhere near 9, and be confidently wrong.\n\nA particle filter keeps a crowd of guesses instead. Each particle is a candidate\nposition with a weight; the update multiplies each weight by how likely the reading\nwould be from there, $\\exp(-\\tfrac12 ((z - \\text{sensor}(p))/\\sigma)^2)$, and\nnormalises; the predict moves every particle by the command plus its own noise.\n\n```python\nimport math\nimport random\n\nrng = random.Random(7)\nL, landmarks = 20.0, [0.0, 5.0, 12.0]\n\n\ndef ring(a, b):\n    d = abs(a - b) % L\n    return min(d, L - d)\n\n\ndef sensor(x):\n    return min(ring(x, m) for m in landmarks)\n\n\nn = 2000\nparticles = [rng.uniform(0.0, L) for _ in range(n)]\nweights = [1.0 / n] * n\n\n\ndef update(z, sigma):\n    global weights\n    raw = [w * math.exp(-0.5 * ((z - sensor(p)) / sigma) ** 2) + 1e-300\n           for p, w in zip(particles, weights)]\n    total = sum(raw)\n    weights = [w / total for w in raw]\n\n\ndef crowded():\n    mass = [0.0] * 20\n    for p, w in zip(particles, weights):\n        mass[int(p)] += w\n    return [i for i, m in enumerate(mass) if m > 0.05]\n\n\nupdate(2.0, 0.3)\nprint(\"after z=2:\", crowded(), \"ESS\", round(1.0 / sum(w * w for w in weights)))\nparticles = [(p + 3.0 + rng.gauss(0.0, 0.1)) % L for p in particles]\nupdate(1.0, 0.3)\nprint(\"after moving 3 and z=1:\", crowded(), \"ESS\", round(1.0 / sum(w * w for w in weights)))\n```\n\nAfter the first reading the unit-wide bins holding more than 5% of the weight are\n`[1, 2, 3, 6, 7, 9, 10, 13, 14, 17, 18]`: the six places, each smeared across two bins.\nThe robot then drives three units and reads a distance of 1, and the crowd thins to\n`[0, 1, 5, 6, 12, 13]`. Three of the six hypotheses were killed by the second reading\nand three survived, because a robot starting at 3, at 10 or at 18 would have seen\nexactly that sequence. The filter is honestly reporting three-way ambiguity. A\nGaussian would have had to pick one.\n\n## Depletion, and the effective sample size\n\nThe ESS printed above falls from about 611 to about 268 out of 2000. It is $1/\\sum\nw_i^2$: with uniform weights it equals $n$, and with all the weight on one particle it\nequals 1. It measures how many particles are doing any work. Left alone, a few\nparticles come to hold nearly all the weight and the rest are dead cargo, so when the\nESS drops below $n/2$ the filter *resamples*: draws $n$ new particles from the old ones\nin proportion to weight and resets every weight to $1/n$. Systematic resampling does\nthis with one random number: a comb of $n$ evenly spaced teeth, offset by a single\nuniform draw, swept once across the cumulative weights.\n\nThe mistake here is resampling at every step whether the ESS asks for it or not. It is\ntempting because it looks tidier, and it slowly destroys the crowd: each resample\ncopies some particles and deletes others, and with nothing to replenish diversity the\nfilter ends up with a few hundred copies of the same three positions. The threshold is\nthe cure.\n\nThere is a second trap, in the estimate itself:\n\n```python\nimport math\n\nparticles = [0.1, 19.9, 0.2, 19.8]\nL = 20.0\nprint(\"arithmetic mean\", sum(particles) / 4)\ncx = sum(math.cos(2 * math.pi * p / L) for p in particles) / 4\ncy = sum(math.sin(2 * math.pi * p / L) for p in particles) / 4\nprint(\"circular mean\", round((math.atan2(cy, cx) % (2 * math.pi)) * L / (2 * math.pi), 6))\n```\n\nFour particles huddled around the join of the ring average, arithmetically, to 10.0 —\nthe far side of the corridor. Average their unit vectors instead and the circular mean\nprints as 0.0 to six decimals. The lab's `estimate` must do the second thing, and one\nof its tests places particles on both sides of the wrap to make sure.\n\n## Where it stops holding\n\nThe Kalman filter is optimal when the motion and the sensor are linear and the noise is\nGaussian, and it is a reasonable approximation when they are nearly so: the extended\nKalman filter linearises a curved model around the current estimate and carries on.\nIt has no way at all to represent two hypotheses, which is what the ring showed. The\nparticle filter can represent anything, and pays for it in particles: in one dimension\ntwo thousand is lavish, in a six-dimensional pose it is barely enough, and in fifty\ndimensions no affordable number of samples covers the space. Between the two sit\nmost real localisation systems.\n\n## What you are about to build\n\nThe lab *Kalman and particle filters* has you write `kf_predict` and `kf_update` on\nplain lists of lists, then `kalman_1d` and `kalman_cv` on top of them, with tests that\npin the $1/(n+1)$ variances and the recovered velocity. The second half is the\n`ParticleFilter` class on the ring: `sensor`, `predict`, `update`, `ess`, a systematic\n`resample`, and the circular `estimate`. The tests seed the generator and specify the\norder in which random numbers are drawn, so the draw order in the brief is part of the\ncontract."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "How much to believe a reading",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "Two sensors read the same wall: 3.0 m with variance 0.16 and 3.5 m with variance 0.04. What estimate is least uncertain?",
+      "opts": [
+       "3.25 m, the average, since each sensor contributes one independent reading",
+       "3.33 m, weighting each by $1/\\sigma$ rather than by $1/\\sigma^2$",
+       "3.4 m, weighting each reading by the inverse of its own variance",
+       "3.5 m, since the better sensor's reading dominates the worse one entirely"
+      ],
+      "a": 2,
+      "why": "Minimising the variance of $w x_a + (1-w) x_b$ gives $w = p_b/(p_a + p_b)$, so the\nweights are proportional to precision, $1/p$. That is 0.2 on the 3.0 m reading and 0.8\non the 3.5 m reading, giving 3.4 m with variance $p_a p_b/(p_a + p_b) = 0.032$, lower\nthan either sensor alone. Weighting by $1/\\sigma$ is the common near-miss; it points\nthe right way but under-trusts the good sensor.",
+      "whys": [
+       "The plain average is the right answer only when the variances are equal. Here one sensor is four times noisier in variance, and treating it as an equal costs accuracy.",
+       "Weights of $1/0.4$ and $1/0.2$ give 3.33, and it feels natural to weight by the number on the datasheet. But minimising the variance of the combination puts the weights at $1/\\sigma^2$, not $1/\\sigma$.",
+       "$K = 0.16/(0.16 + 0.04) = 0.8$ of the way from 3.0 toward 3.5 is 3.4, with variance 0.032.",
+       "Discarding the cheap sensor leaves the variance at 0.04. Folding it in, even at a weight of 0.2, brings the variance down to 0.032: a worse sensor still carries information."
+      ]
+     },
+     {
+      "q": "A scalar Kalman filter with $p_0 = 1$, $r = 1$ and no process noise sees readings one after another. Its variance goes $1/2, 1/3, 1/4, \\dots$ Why that sequence?",
+      "opts": [
+       "Each update halves the remaining uncertainty, and the sequence approximates that halving",
+       "Precisions add: each reading contributes $1/r$, so after $n$ readings the precision is $1 + n$",
+       "The variance converges toward $r$, the measurement variance, which is the floor a sensor can reach",
+       "The gain $K$ is fixed at $1/2$, so the variance is scaled by a constant fraction every step"
+      ],
+      "a": 1,
+      "why": "The update's variance is $p r/(p + r)$, and in precision form that is $1/p' = 1/p +\n1/r$: every reading adds its own precision to the belief's. Starting at precision 1 and\nadding 1 per reading gives $1/(n+1)$. With process noise $q > 0$ the predict step would\nadd back $q$ each cycle and the sequence would level off; with $q = 0$ it runs to zero,\nbecause there is nothing left to be uncertain about.",
+      "whys": [
+       "Halving would give $1/2, 1/4, 1/8$. The actual sequence falls much more slowly, because each new reading is worth less against an ever-sharper prior.",
+       "$1/p_n = 1/p_0 + n/r = 1 + n$, so $p_n = 1/(n+1)$, which is the sequence.",
+       "The variance passes straight through $r = 1$ on the first step and keeps falling. Repeated readings beat a single sensor's variance; that is the point of averaging.",
+       "$K = p/(p + r)$ changes every step: $1/2$, then $1/3$, then $1/4$. It shrinks as the prior sharpens, which is exactly why later readings move the estimate less."
+      ]
+     },
+     {
+      "q": "In the constant-velocity tracker only position is measured, yet the velocity estimate converges. What carries the information from position to velocity?",
+      "opts": [
+       "The filter differences consecutive position estimates internally, dividing by $\\Delta t$ to form a velocity",
+       "The measurement row $H$ includes a small velocity component that the sensor picks up",
+       "The predict step's $F P F^\\top$ correlates position with velocity, so a position innovation updates both",
+       "The velocity is assumed constant, so it is known in advance and needs no estimation"
+      ],
+      "a": 2,
+      "why": "$F P F^\\top$ with $F = \\begin{pmatrix} 1 & \\Delta t \\\\ 0 & 1 \\end{pmatrix}$ produces an\noff-diagonal covariance term, because a position further along than expected is\nevidence of a higher velocity. The gain $K = P H^\\top / S$ then has a non-zero velocity\nrow, so each position reading nudges the velocity estimate, and $P - K H P$ shrinks\nthe velocity variance too. Nothing in the filter ever differences positions.",
+      "whys": [
+       "No differencing happens anywhere in the recursion. Differencing two noisy positions would give a very noisy velocity; the filter does better than that precisely by not doing it.",
+       "$H = (1, 0)$: the velocity component is exactly zero. The sensor sees position and nothing else.",
+       "After one predict $P$ gains an off-diagonal $\\Delta t$, and $K = P H^\\top/S$ inherits it, so the velocity gets a share of every position surprise.",
+       "Constant in the *model* means the velocity does not change; it says nothing about what value it has. The whole exercise is finding that value from readings that never mention it."
+      ]
+     },
+     {
+      "q": "Why does the ring-corridor robot with a nearest-landmark sensor need a particle filter rather than a Kalman filter?",
+      "opts": [
+       "Its motion is nonlinear, and the Kalman filter can only propagate a linear model",
+       "Its posterior has several separated peaks, and a Gaussian can represent only one",
+       "The corridor wraps around, and a Kalman filter has no way to take a modulo",
+       "A particle filter is more accurate than a Kalman filter on every problem, given enough particles"
+      ],
+      "a": 1,
+      "why": "The nearest-landmark sensor maps many positions to the same reading, so after one\nreading the belief is a set of well-separated peaks — multimodal. A Kalman filter's\nbelief is a single Gaussian, and the best single Gaussian over six peaks is a wide hump\ncentred between them, which is confidently wrong. Particles represent the peaks\ndirectly, and the second reading in the reading's example prunes six hypotheses to\nthree rather than to a spurious average.",
+      "whys": [
+       "The motion is a plain shift with noise, which is as linear as it gets. Nonlinearity would call for an extended Kalman filter; it is not the problem here.",
+       "A reading of 2 fits six places on the ring at once. One mean and one variance cannot describe six humps, and their average lands somewhere the robot is not.",
+       "Wrapping the mean is one line of arithmetic and would not help: the trouble is not the topology but the six-way ambiguity, which survives any wrapping.",
+       "On a linear-Gaussian problem the Kalman filter is exactly optimal and a particle filter is a noisy approximation of it. Particles win only where the Gaussian shape is wrong."
+      ]
+     },
+     {
+      "q": "After one update, a filter of 100 particles reports an effective sample size of 8. What does that say, and what should happen next?",
+      "opts": [
+       "The filter has converged: eight particles agree on the position, and the remaining ninety-two can be dropped",
+       "The reading was probably faulty, since a good reading would keep the ESS near 100",
+       "The weight now sits on a handful of particles and the rest carry almost none, so it is time to resample",
+       "92 particles fell outside the sensor's range and were removed, leaving 8 active ones"
+      ],
+      "a": 2,
+      "why": "The effective sample size $1/\\sum w_i^2$ is 100 with uniform weights and 1 when one\nparticle holds everything. A value of 8 says the update concentrated nearly all the\nweight on a few particles, and the others are dead cargo. The remedy is to resample —\nredraw 100 particles in proportion to weight and reset the weights — which the lab does\nwhenever the ESS falls below half the particle count. Resampling every step regardless\nwould slowly erase the diversity the filter depends on.",
+      "whys": [
+       "A low ESS is a statement about *weights*, not about agreement. The eight heavy particles may sit in three different clusters, and dropping the rest by hand is what resampling does properly.",
+       "A sharp, correct reading is exactly what collapses the ESS: it makes most particles implausible. Faulty readings tend to do the opposite, spreading weight thinly.",
+       "$1/\\sum w^2 = 8$ means the weights behave as if only eight particles were drawn. Resampling redistributes the crowd onto the plausible ones and resets the weights to $1/n$.",
+       "Nothing is removed by an update; every particle keeps its position and receives a weight, however tiny. The count stays at 100 throughout."
+      ]
+     },
+     {
+      "q": "Four particles at 0.1, 19.9, 0.2 and 19.8 on a ring of length 20 carry equal weight. What position estimate should the filter report?",
+      "opts": [
+       "10.0, the arithmetic mean of the four positions taken as plain numbers",
+       "About 0, the circular mean, since the particles straddle the join of the ring",
+       "19.9, the median of the four positions once they are sorted",
+       "The estimate is undefined, since the particles are split into two groups on opposite sides of the wrap"
+      ],
+      "a": 1,
+      "why": "On a ring, 0.1 and 19.9 are 0.2 apart, not 19.8. Any estimate that averages the raw\nnumbers gets the answer 10.0, which is the one place the robot is certainly not. The\ncircular mean maps each particle to a point on the unit circle, averages those, and\nreads the angle back — which gives 0.0 to six decimals here. The lab's `estimate` must\nwork this way, and one of its tests puts particles on both sides of the join to check.",
+      "whys": [
+       "10.0 is the far side of the corridor from every particle. The arithmetic mean treats 0.1 and 19.9 as twenty units apart when on the ring they are 0.2 apart.",
+       "Averaging the unit vectors $(\\cos, \\sin)$ of $2\\pi p/L$ and taking `atan2` gives an angle near 0, which maps back to a position near 0.",
+       "A median on a ring inherits the same problem as the mean: the sorted order puts 0.1 and 19.9 at opposite ends of the list, though they are neighbours.",
+       "The particles are one tight group that happens to sit across the point where the coordinate wraps. A ring has no ends, and the group has a perfectly good centre."
+      ]
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
@@ -197,9 +406,105 @@
     "RRT trades optimality for probabilistic completeness in continuous space",
     "Goal biasing and step size govern how fast an RRT finds anything at all"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "Finding a way through, and knowing what it cost",
+     "minutes": 15,
+     "body": "A delivery robot 40 cm across is parked at one corner of a warehouse whose floor has\nbeen mapped as a grid of half-metre cells, each marked free or occupied. The shelving\nruns in long rows with gaps in it. The robot has to get to the far corner, and it has\nto decide two things before it moves: which cells it may enter at all, given that it\nhas a body and not a point, and in what order to cross them so that the trip is as\nshort as it can be. The second question has a beautiful answer. The first has to be\nsettled before the second is even well posed.\n\n## The body becomes a point\n\nPlanning for a body is hard; planning for a point is a solved problem. The trick is to\nmove the body's size out of the robot and into the map. If the robot is a disc of\nradius one cell, then any cell within one cell of an obstacle is a cell whose *centre*\nthe robot cannot occupy without overlapping the obstacle. Paint every such cell\noccupied — a square of Chebyshev radius 1 around each original obstacle — and the\nrobot may thereafter be treated as a point on the inflated map. A gap one cell wide\ncloses; a gap three cells wide keeps a one-cell channel down its middle.\n\nThe mistake here is to paint into the same grid you are reading from:\n\n```python\nnarrow = [[0] * 7 for _ in range(3)] + [[1, 1, 1, 0, 1, 1, 1]] + [[0] * 7 for _ in range(3)]\n\n\ndef inflate_in_place(grid, radius):\n    out = [list(row) for row in grid]\n    rows, cols = len(out), len(out[0])\n    for r in range(rows):\n        for c in range(cols):\n            if out[r][c]:                      # reads the grid it is painting\n                for dr in range(-radius, radius + 1):\n                    for dc in range(-radius, radius + 1):\n                        rr, cc = r + dr, c + dc\n                        if 0 <= rr < rows and 0 <= cc < cols:\n                            out[rr][cc] = 1\n    return out\n\n\ngrown = inflate_in_place(narrow, 1)\nprint(\"occupied per row:\", [sum(row) for row in grown])\nprint(\"total:\", sum(map(sum, grown)))\n```\n\nThe wall has six obstacle cells and a radius of one should paint 21 cells: the three\nrows either side of and including the wall, full width. This prints `[0, 0, 7, 7, 7,\n7, 7]` and a total of 35. The scan reaches row 4, finds the cells it painted a moment\nago, treats them as obstacles, and paints row 5 from them, and so on to the bottom of\nthe map. It is tempting because copying the grid *looks* like the safeguard, and it is\nnot: the safeguard is reading only from the input and writing only to the output.\n\n## Cost, and a promise about what remains\n\nOn the inflated grid the robot is a point that can step to any of eight neighbours.\nOrthogonal steps cost 1 and diagonal steps cost $\\sqrt 2$, because that is how far the\ncentre moves. Dijkstra's algorithm finds the cheapest path by always expanding the\nfrontier cell with the smallest cost-so-far $g$, and it is correct because a cell is\nnever settled before every cheaper cell has been. It is also blind: it expands in\nevery direction equally, including straight away from the goal.\n\nA* keeps the guarantee and loses the blindness by expanding on $f = g + h$, where $h$\nis an estimate of the cost still to go. The guarantee survives if and only if $h$\n*never overestimates*. Here is why. Suppose A* pops the goal with $f = g_{\\text{goal}}$\nwhile some cheaper path of true cost $C < g_{\\text{goal}}$ exists. Some cell on that\ncheaper path is on the frontier; call it $n$, with $g(n)$ its true cost along the cheap\npath. Since $h$ never overestimates, $f(n) = g(n) + h(n) \\le g(n) + (\\text{true cost\nfrom } n) = C < g_{\\text{goal}}$. So $n$ would have been popped before the goal. The\ngoal was popped first, so no such path exists.\n\nWhat is the largest $h$ that never overestimates on an 8-connected grid? On an empty\ngrid, crossing $d_r$ rows and $d_c$ columns is done fastest by taking $\\min(d_r, d_c)$\ndiagonals and then the remaining $|d_r - d_c|$ orthogonal steps, so\n\n$$h_{\\text{octile}} = \\sqrt 2 \\min(d_r, d_c) + \\big(\\max(d_r, d_c) - \\min(d_r, d_c)\\big) =\n(d_r + d_c) + (\\sqrt 2 - 2)\\min(d_r, d_c).$$\n\nObstacles can only make the true cost larger, so this is admissible, and on an empty\ngrid it is exact. From (0, 0) to (3, 5) it is $3\\sqrt 2 + 2 = 6.243$.\n\n## The search, with the numbers on\n\n```python\nimport heapq\nimport math\n\nSQRT2 = math.sqrt(2.0)\n\n\ndef octile(a, b):\n    dr, dc = abs(a[0] - b[0]), abs(a[1] - b[1])\n    return (dr + dc) + (SQRT2 - 2.0) * min(dr, dc)\n\n\ndef astar(grid, start, goal, h=octile):\n    rows, cols = len(grid), len(grid[0])\n    frontier = [(h(start, goal), 0, start)]\n    came, cost, settled, tie, expanded = {}, {start: 0.0}, set(), 0, 0\n    while frontier:\n        _, _, node = heapq.heappop(frontier)\n        if node in settled:\n            continue\n        settled.add(node)\n        expanded += 1\n        if node == goal:\n            path = [node]\n            while path[-1] in came:\n                path.append(came[path[-1]])\n            return path[::-1], expanded\n        r, c = node\n        for dr in (-1, 0, 1):\n            for dc in (-1, 0, 1):\n                if dr == 0 and dc == 0:\n                    continue\n                rr, cc = r + dr, c + dc\n                if not (0 <= rr < rows and 0 <= cc < cols) or grid[rr][cc]:\n                    continue\n                if dr and dc and (grid[r][cc] or grid[rr][c]):\n                    continue                   # no corner cutting\n                g = cost[node] + (SQRT2 if dr and dc else 1.0)\n                if g < cost.get((rr, cc), float(\"inf\")) - 1e-12:\n                    cost[(rr, cc)] = g\n                    came[(rr, cc)] = node\n                    tie += 1\n                    heapq.heappush(frontier, (g + h((rr, cc), goal), tie, (rr, cc)))\n    return None, expanded\n\n\ndef length(path):\n    return sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(path, path[1:]))\n\n\nempty = [[0] * 6 for _ in range(6)]\npath, expanded = astar(empty, (0, 0), (5, 5))\nprint(\"octile:  length\", round(length(path), 4), \"settled\", expanded)\npath, expanded = astar(empty, (0, 0), (5, 5), h=lambda a, b: 0.0)\nprint(\"h = 0:   length\", round(length(path), 4), \"settled\", expanded)\n\nwall = [[0, 0, 0, 0, 0, 0, 0, 0],\n        [0, 0, 0, 1, 1, 1, 0, 0],\n        [0, 0, 0, 1, 0, 0, 0, 0],\n        [0, 0, 0, 1, 0, 0, 0, 0],\n        [0, 0, 0, 1, 0, 0, 0, 0],\n        [0, 0, 0, 0, 0, 0, 0, 0]]\npath, expanded = astar(wall, (0, 0), (3, 5))\nprint(\"wall:    length\", round(length(path), 4), \"settled\", expanded)\n```\n\nOn the empty 6-by-6 grid the diagonal costs $5\\sqrt 2 = 7.0711$ and A* settles exactly\n6 cells: the diagonal itself. Every other cell has $f$ strictly greater — the cell (1,\n0), for instance, has $g = 1$ and $h = 4\\sqrt 2 + 1 = 6.657$, so $f = 7.657$, and it is\nnever popped. Set $h$ to zero and the same path is found after settling all 36 cells,\nbecause without a guess about what remains the search has to sweep the whole board.\nThat is the honest measure of what the heuristic bought: the path is identical, and it\nis a property of the world; the count of settled cells is a property of the search.\n\nOn the wall grid, which is the one in the lab's starter file, the goal at (3, 5) sits\ninside an alcove and the search has to go round the top: the path is $8 + \\sqrt 2 =\n9.4142$ long and 22 cells are settled. Notice that the heap entries carry a strictly\nincreasing `tie` counter between $f$ and the cell. Two cells with equal $f$ are then\nordered by insertion, never by comparing tuples of coordinates, and the same grid\nalways gives the same path.\n\n## Corners\n\nThe `no corner cutting` line deserves its own paragraph. A diagonal step from $(r, c)$\nto $(r+1, c+1)$ passes through the shared corner of the cells $(r, c+1)$ and $(r+1,\nc)$. If either of those is occupied, a robot with any width at all clips it; the\ninflated grid has made the robot a point, but the *path* between cell centres still has\nto be clear. So the diagonal is allowed only when both orthogonal neighbours are free.\nOn the two-by-two grid `[[0, 1], [1, 0]]` the corners touch and there is no legal\nmove: the lab expects `None`.\n\n## When the guess is too big\n\nThe Manhattan distance $d_r + d_c$ is the obvious heuristic and it is wrong for this\ngrid: it charges 2 for a diagonal that costs $1.414$, so it overestimates, and the\nproof above no longer goes through.\n\n```python\nimport heapq\nimport math\n\nSQRT2 = math.sqrt(2.0)\n\n\ndef octile(a, b):\n    dr, dc = abs(a[0] - b[0]), abs(a[1] - b[1])\n    return (dr + dc) + (SQRT2 - 2.0) * min(dr, dc)\n\n\ndef manhattan(a, b):\n    return abs(a[0] - b[0]) + abs(a[1] - b[1])\n\n\ndef astar(grid, start, goal, h):\n    rows, cols = len(grid), len(grid[0])\n    frontier = [(h(start, goal), 0, start)]\n    came, cost, settled, tie, expanded = {}, {start: 0.0}, set(), 0, 0\n    while frontier:\n        _, _, node = heapq.heappop(frontier)\n        if node in settled:\n            continue\n        settled.add(node)\n        expanded += 1\n        if node == goal:\n            path = [node]\n            while path[-1] in came:\n                path.append(came[path[-1]])\n            return path[::-1], expanded\n        r, c = node\n        for dr in (-1, 0, 1):\n            for dc in (-1, 0, 1):\n                if dr == 0 and dc == 0:\n                    continue\n                rr, cc = r + dr, c + dc\n                if not (0 <= rr < rows and 0 <= cc < cols) or grid[rr][cc]:\n                    continue\n                if dr and dc and (grid[r][cc] or grid[rr][c]):\n                    continue\n                g = cost[node] + (SQRT2 if dr and dc else 1.0)\n                if g < cost.get((rr, cc), float(\"inf\")) - 1e-12:\n                    cost[(rr, cc)] = g\n                    came[(rr, cc)] = node\n                    tie += 1\n                    heapq.heappush(frontier, (g + h((rr, cc), goal), tie, (rr, cc)))\n    return None, expanded\n\n\ndef length(path):\n    return sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(path, path[1:]))\n\n\ngrid = [[0, 0, 0, 0, 0, 1],\n        [1, 0, 0, 0, 0, 0],\n        [0, 0, 0, 1, 0, 0],\n        [1, 0, 0, 0, 0, 0],\n        [0, 0, 0, 0, 0, 0],\n        [0, 1, 1, 0, 0, 0]]\nfor name, h in ((\"octile\", octile), (\"manhattan\", manhattan)):\n    path, expanded = astar(grid, (0, 0), (5, 5), h)\n    print(name, \"length\", round(length(path), 4), \"settled\", expanded)\n```\n\nOctile settles 12 cells and returns a path of length $8.2426$. Manhattan settles 10\ncells and returns a path of length $8.8284$: fewer expansions, and a route that is\n0.59 longer than the best one. That is the trap. An inflated heuristic is *faster*,\nbecause it drives the search harder toward the goal, and a benchmark that counts\nexpansions and never checks path length will report it as an improvement. Consistency\nis the slightly stronger property the lab's tests assume — $h(n) \\le c(n, m) + h(m)$\nfor every edge — and octile has it, which is what lets the search settle a cell the\nfirst time it is popped and ignore stale heap entries afterwards.\n\n## When the grid is hopeless\n\nA grid is a fine model of a warehouse floor and a terrible model of a six-joint arm.\nIts configuration space has six dimensions, and at one-degree resolution that is\n$360^6 \\approx 2 \\times 10^{15}$ cells, before inflation. No search that visits cells\ncan live there. A rapidly-exploring random tree gives up on visiting cells and grows a\ntree by sampling: draw a random point in the space, find the tree node nearest to it,\nstep a fixed distance from that node toward the sample, keep the new node if the\nsegment to it is collision-free, and stop when a node lands within tolerance of the\ngoal.\n\nThe nearest-node rule is what makes it *rapidly exploring*. A node on the edge of the\ntree next to a large empty region is the nearest node for every sample in that region,\nso it gets extended far more often than a node buried in the middle: the tree is\npulled toward the space it has not seen. Sampling the goal itself with a small\nprobability, the goal bias, adds a steady tug in the right direction. In the lab's\nworld of two disc obstacles between (0, 0) and (5, 5), seed 7 with a 5% bias builds a\ntree of 36 nodes and returns a 19-waypoint path of length 8.8 against a straight line\nof 7.07; with the bias at zero the same seed needs 48 nodes, and at 30% it needs 27.\nThose numbers move with the seed, which is the point: the RRT trades the grid's\ndeterminism and optimality for the ability to find *something* in a space the grid\ncannot represent. It is probabilistically complete — the chance of missing an\nexisting path goes to zero as the node count grows — and its paths are wandering, as\n8.8 against 7.07 shows.\n\n## Where it stops holding\n\nA* is optimal and its expansion count is honest, and both stop meaning much once the\ngrid is too big to hold or the space is continuous. The RRT finds paths in spaces the\ngrid cannot touch, and never the shortest one; RRT\\* rewires the tree as it grows and\nrecovers optimality in the limit, at a cost per node. Both planners assume a static\nmap. A planner on a live robot replans as the map changes, which is where the\ninflation radius earns a safety margin beyond the robot's true size.\n\n## What you are about to build\n\nThe lab *A\\* on an occupancy grid, then an RRT* asks for `inflate` into a fresh grid,\n`octile`, `astar` returning both the path and the count of settled cells, with the\ncorner rule, the `tie` counter, `ValueError` for an off-grid endpoint and `(None, 0)`\nfor an occupied one, `path_length`, and `rrt` over disc obstacles with every random\nnumber drawn from one seeded generator. Its tests check the $5\\sqrt 2$ diagonal, the\n$8 + \\sqrt 2$ detour round the wall, the closed one-cell gap after inflation, and that\ntwo runs of the RRT on the same seed give the same tree."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "Optimal, admissible and rapidly exploring",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "Why must obstacles be inflated by the robot's radius *before* planning, rather than checking the robot's footprint at every step of the search?",
+      "opts": [
+       "Inflation turns the robot into a point on a modified map, so a plain grid search stays correct and cheap",
+       "Inflation is needed because A* can only handle grids where every free cell is at least two cells from an obstacle",
+       "Inflation makes the search find shorter paths, since the obstacles' inflated shapes are simpler to route around",
+       "Inflation is optional on a grid; it matters only for continuous planners like the RRT"
+      ],
+      "a": 0,
+      "why": "A grid search moves a point between cell centres. A robot has a body, so a point path\nthat hugs an obstacle is a collision. Painting every cell within the robot's radius of\nan obstacle as occupied makes the point path correct for the body, once, before the\nsearch starts; the search itself is unchanged. The lab checks the consequence directly:\na one-cell gap that a point passes through is closed for a robot of radius one.",
+      "whys": [
+       "A cell whose centre is within the radius of an obstacle is a cell the body cannot occupy. Marking those once moves the body's size into the map, and the search never has to think about it again.",
+       "A* has no such requirement; it searches whatever grid it is given. The inflation is about what the *robot* can occupy, not about what the algorithm can handle.",
+       "Inflation removes cells, so paths can only get longer or vanish. What it buys is that the paths that remain are ones the body can actually follow.",
+       "It is the grid planner that needs it most: A* treats the robot as a point at a cell centre, and without inflation a point path runs a wide robot straight into shelving."
+      ]
+     },
+     {
+      "q": "On an 8-connected grid where diagonals cost $\\sqrt 2$, what goes wrong if A* uses the Manhattan distance $d_r + d_c$ as its heuristic?",
+      "opts": [
+       "Nothing: any distance-like heuristic gives an optimal path, and Manhattan expands fewer cells",
+       "The search may return a path that is not the shortest, because the heuristic can overestimate the remaining cost",
+       "The search never terminates on grids with obstacles, because the heuristic can equal zero at cells far away from the goal",
+       "The search expands more cells than Dijkstra, because Manhattan underestimates the diagonal moves"
+      ],
+      "a": 1,
+      "why": "A* is optimal only when $h$ never overestimates the true remaining cost. Manhattan\ncounts a diagonal as two unit steps, so it overestimates wherever a diagonal is\npossible, and the guarantee is lost. The failure is quiet: the search finishes sooner\nand returns a plausible path that is not the shortest. Octile is the largest\nheuristic that is still admissible on this grid, which is why it is both safe and\ntight.",
+      "whys": [
+       "Fewer expansions is precisely the symptom, and it is bought at the wrong price. The reading's 6-by-6 example settles 10 cells instead of 12 and hands back a path 0.59 longer than the best one.",
+       "Manhattan charges 2 for a diagonal that costs 1.414, so it overestimates, and the argument that the goal is popped only after every cheaper path no longer holds.",
+       "A heuristic that is zero somewhere is fine; Dijkstra is A* with $h = 0$ everywhere and terminates. Termination is not the issue; optimality is.",
+       "Manhattan *over*estimates diagonals, not under. Over-estimation makes the search greedier and faster, which is why it looks like a win until the path length is checked."
+      ]
+     },
+     {
+      "q": "On an empty 6-by-6 grid A* with the octile heuristic settles 6 cells for the corner-to-corner path; with $h = 0$ it settles 36. What is the right conclusion?",
+      "opts": [
+       "The heuristic found a shorter path, so the octile run is the better planner on both counts",
+       "The heuristic pruned the search without changing the path, so expansions measure the search, not the world",
+       "The $h = 0$ run is more reliable, since it examined every cell before answering",
+       "The two runs found different paths of equal length, and settling more cells reveals more of those alternatives"
+      ],
+      "a": 1,
+      "why": "With an admissible heuristic the path is the same as Dijkstra's — that is what\nadmissibility guarantees. What differs is effort: every off-diagonal cell has $f$\nabove $5\\sqrt 2$ under octile and is never popped, whereas with $h = 0$ nothing rules\nthem out. That is why the lab returns `expanded` alongside the path: length tells you\nabout the map, the count tells you about the planner.",
+      "whys": [
+       "Both runs return the same diagonal of length $5\\sqrt 2$. An admissible heuristic never changes the answer; it changes how much work is done to reach it.",
+       "The path is a property of the grid; the count of settled cells is a property of the search. Only the second moved.",
+       "Examining every cell is not extra reliability, it is wasted work. Dijkstra and A* with an admissible heuristic are both exact; one of them knows which cells cannot matter.",
+       "The tie counter makes both runs deterministic and they pop the same cells in the same order along the diagonal; the difference is the 30 cells the heuristic never had to pop."
+      ]
+     },
+     {
+      "q": "What does the no-corner-cutting rule forbid, and why does it exist even after obstacles have been inflated?",
+      "opts": [
+       "A diagonal step when either cell at the shared corner is occupied, since the segment between centres would clip it",
+       "Any diagonal step next to an obstacle, because inflation accounts only for orthogonal clearance and not diagonal clearance",
+       "A diagonal step when the destination cell is occupied, because the search must not enter obstacles",
+       "Two consecutive diagonal steps, because the path would then leave the 8-connected neighbourhood"
+      ],
+      "a": 0,
+      "why": "On the inflated grid the robot is a point, but the point moves along a straight\nsegment between cell centres, and a diagonal segment passes through the corner where\ntwo other cells meet. If one of those is occupied the segment grazes it. So a diagonal\nfrom $(r, c)$ is allowed only when both $(r, c + d_c)$ and $(r + d_r, c)$ are free. The\nlab's `[[0, 1], [1, 0]]` grid has two free cells that touch only at such a corner,\nand the correct answer is that there is no path.",
+      "whys": [
+       "The segment from $(r, c)$ to $(r+1, c+1)$ passes through the corner shared with $(r, c+1)$ and $(r+1, c)$. If either is a wall, the move brushes it.",
+       "Inflation is symmetric in all directions and clears diagonals as well as it clears anything. The corner rule is about the *segment* between two free centres, which can still touch an obstacle's corner.",
+       "Entering an occupied cell is refused for every step, diagonal or not, by the ordinary free-cell check. The corner rule is an extra condition on diagonals whose destination is free.",
+       "Consecutive diagonals are fine; the empty-grid solution is five of them in a row. The neighbourhood is checked one step at a time."
+      ]
+     },
+     {
+      "q": "An RRT is run on a world with a clear route between start and goal. Which statement about its result is correct?",
+      "opts": [
+       "It returns the shortest collision-free path once the tree contains enough nodes",
+       "It finds *a* collision-free path with probability approaching 1 as nodes are added, with no claim about length",
+       "It fails whenever the goal is not sampled directly, so the goal bias must be set well above zero for it to work at all",
+       "It returns the same path as A* on a fine enough grid, since both are complete planners"
+      ],
+      "a": 1,
+      "why": "The RRT's guarantee is probabilistic completeness: if a path exists, the probability of\nfinding one tends to 1 as the tree grows. Its paths are whatever chain of random steps\nreached the goal first, and the lab's own test bounds their length only loosely, at\nless than three times the straight line. Goal bias and step size change how fast a\npath is found, not whether one is found. The trade is deliberate: optimality and\ndeterminism in exchange for working in spaces no grid can hold.",
+      "whys": [
+       "An RRT's path is a chain of random steps and is never the shortest; the reading's example is 8.8 long against a straight line of 7.07. RRT* adds rewiring to converge on the optimum.",
+       "Probabilistic completeness is the whole promise: a path that exists will be found with probability tending to 1. Nothing is said about how good it is.",
+       "Goal bias speeds the search up — 48 nodes at zero bias against 36 at 5% in the reading — but with bias zero the tree still reaches the goal region by ordinary sampling.",
+       "A* is optimal and deterministic on its grid; an RRT is neither. They agree on whether a path exists, given enough effort, and on almost nothing else."
+      ]
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
@@ -274,9 +579,122 @@
     "Conditional integration (anti-windup): only commit the integral when the output is unsaturated",
     "Step-response metrics: rise time, overshoot, settling time, steady-state error"
    ],
-   "read": null,
+   "read": [
+    {
+     "title": "Closing the loop on a plant that lags",
+     "minutes": 15,
+     "body": "A wheel motor on the delivery robot is told to spin. Command it with $u = 0.5$ and the\nwheel does not leap to speed: it climbs, fast at first and then slower, toward a speed\nof $1.0$, taking about a second to get most of the way there. Push on the wheel and\nit slows; let go and it climbs back. Every actuator you will ever control behaves a\nlittle like this, and the simplest model that captures it is one line:\n\n$$\\tau\\,\\dot y = -y + K u .$$\n\n$y$ is the speed, $u$ the command, $K = 2$ the gain (steady speed per unit command) and\n$\\tau = 1$ s the time constant. With $u$ held fixed, $\\dot y = 0$ when $y = K u$, and\nthe further $y$ is from that the faster it moves toward it. To simulate it, replace\nthe derivative by a step of $\\Delta t$: $y \\leftarrow y + \\Delta t\\,(K u - y)/\\tau$,\nwhich is forward Euler and is exactly what the lab's `FirstOrderPlant.step` does, with\na `disturbance` added straight onto $y$ to model the push.\n\n## Proportional: the offset it cannot remove\n\nAsk for a setpoint $r = 1$. The obvious controller commands in proportion to the error,\n$u = k_p (r - y)$. What speed does the wheel settle at? At rest $\\dot y = 0$, so $y = K\nu = K k_p (r - y)$. Solve for $y$:\n\n$$y_\\infty = \\frac{K k_p}{1 + K k_p}\\, r, \\qquad r - y_\\infty = \\frac{r}{1 + K k_p}.$$\n\nWith $K = 2$ and $k_p = 1$ the wheel settles at $2/3$ and the error is $1/3$. This is\nnot a tuning accident. A proportional controller produces a command *only* from error,\nand holding the wheel at any speed above zero needs a non-zero command, so the error\ncan never reach zero while the command is needed. A bigger $k_p$ shrinks the offset —\n$k_p = 10$ leaves $1/21$ — and never removes it.\n\n## Integral: the term that refuses to rest\n\nAdd a term that accumulates the error over time: $u = k_p e + k_i \\int e\\,dt$. Now ask\nagain what the loop can settle to. At rest everything is constant, including the\nintegral, and an integral is constant only when what it is integrating is zero. So\n$e = 0$: the integrator keeps pushing the command up for as long as any error remains,\nand stops exactly when there is none. The price is momentum. The integral is still\nlarge when $y$ first reaches the setpoint, so the wheel overshoots and has to unwind.\n\n```python\nclass Plant:\n    def __init__(self, gain, tau, dt, y0=0.0):\n        self.gain, self.tau, self.dt, self.y = gain, tau, dt, y0\n\n    def step(self, u, disturbance=0.0):\n        self.y += (self.gain * u - self.y) / self.tau * self.dt + disturbance\n        return self.y\n\n\nclass PID:\n    def __init__(self, kp, ki, kd, dt, out_min=-1e30, out_max=1e30):\n        self.kp, self.ki, self.kd, self.dt = kp, ki, kd, dt\n        self.out_min, self.out_max = out_min, out_max\n        self.integral, self.prev_error = 0.0, None\n\n    def update(self, setpoint, y):\n        error = setpoint - y\n        derivative = 0.0 if self.prev_error is None else (error - self.prev_error) / self.dt\n        trial = self.integral + error * self.dt\n        u = self.kp * error + self.ki * trial + self.kd * derivative\n        if self.out_min <= u <= self.out_max:\n            self.integral = trial\n        else:\n            u = max(self.out_min, min(self.out_max, u))\n        self.prev_error = error\n        return u\n\n\ndef simulate(plant, pid, setpoint, steps):\n    ys = [plant.y]\n    for _ in range(steps):\n        ys.append(plant.step(pid.update(setpoint, plant.y)))\n    return ys\n\n\nys = simulate(Plant(2.0, 1.0, 0.01), PID(1.0, 0.0, 0.0, 0.01), 1.0, 2000)\nprint(\"P only, final:\", round(ys[-1], 4))\n\nys = simulate(Plant(2.0, 1.0, 0.01), PID(2.0, 5.0, 0.0, 0.01), 1.0, 2000)\npeak = max(ys)\nprint(\"PI, final:\", round(ys[-1], 4), \"overshoot %:\", round((peak - 1.0) * 100, 2),\n      \"at t =\", ys.index(peak) * 0.01)\nlow = next(i for i, y in enumerate(ys) if y >= 0.1)\nhigh = next(i for i, y in enumerate(ys) if y >= 0.9)\nprint(\"PI, rise time:\", round((high - low) * 0.01, 2))\n```\n\nThe proportional loop prints a final value of 0.6667, the $2/3$ from the algebra. The\nPI loop with $k_p = 2$, $k_i = 5$ prints a final value of 1.0, an overshoot of 10.19%\npeaking at $t = 0.79$ s, and a rise time — first sample at 10% to first sample at 90%\n— of 0.33 s. Those are the anchors the lab brief quotes, and the four metric functions\nyou will write are what produced them: `rise_time`, `overshoot` as a percentage of the\nsetpoint, `steady_state_error` as the gap to the mean of the final tenth, and\n`settling_time`, the time after which the response never again leaves a 2% band,\nwhich for this run is 1.57 s.\n\n## Derivative, and the kick\n\nThe third term, $k_d\\,\\dot e$, reacts to how fast the error is changing, so it brakes\nthe loop as it approaches the setpoint and softens the overshoot. It also multiplies\nmeasurement noise by $k_d/\\Delta t$, which with $\\Delta t = 0.01$ is a hundred times\n$k_d$, and that is why it is used sparingly on anything measured by a real sensor.\n\nIt has a trap on the very first call. There is no previous error yet, and the tempting\nsentinel is `prev_error = 0.0`:\n\n```python\nclass PID:\n    def __init__(self, kp, kd, dt, prev_error):\n        self.kp, self.kd, self.dt, self.prev_error = kp, kd, dt, prev_error\n\n    def update(self, setpoint, y):\n        error = setpoint - y\n        derivative = 0.0 if self.prev_error is None else (error - self.prev_error) / self.dt\n        self.prev_error = error\n        return self.kp * error + self.kd * derivative\n\n\nprint(\"prev_error = None:\", PID(1.0, 0.1, 0.01, None).update(1.0, 0.0))\nprint(\"prev_error = 0.0: \", PID(1.0, 0.1, 0.01, 0.0).update(1.0, 0.0))\n```\n\nWith `None` the first command is 1.0, the proportional term alone. With `0.0` it is\n11.0: the controller sees the error jump from 0 to 1 in one tick, computes a derivative\nof $100$, multiplies by $k_d = 0.1$, and slams the actuator with ten times the intended\ncommand on the first sample. Use `None` as the flag, as the lab's `reset` does, and\nreport zero derivative on the first call.\n\n## Saturation, and the integral that keeps counting\n\nReal actuators have limits. Give the motor a command range of $[0, 1]$ and ask for a\nsetpoint of 5: the wheel tops out at $K \\times 1 = 2$, the error never falls below 3,\nand the integrator does what integrators do. At $k_i = 4$ it accumulates about $4\n\\times 3 \\times \\Delta t$ of command per tick, and after five seconds it holds a\ncommand contribution of nearly 70, all of it clamped away and none of it doing\nanything. Now drop the setpoint to 1. The wheel is at 2, the error is $-1$, and the\nintegral unwinds at $k_i \\times 1 \\times \\Delta t = 0.04$ per tick. Unwinding 70 takes\nabout 1700 ticks: seventeen seconds during which the command stays pinned at its\nmaximum and the wheel sits at twice the setpoint. That is windup.\n\nThe fix in the lab is conditional integration. Compute the trial integral, use it to\ncompute $u$, and *then* decide: if $u$ is inside the limits, commit the trial;\notherwise leave the integral where it was and clamp $u$. The integrator is allowed to\ncount only while counting can change the output.\n\n```python\nclass Plant:\n    def __init__(self, gain, tau, dt, y0=0.0):\n        self.gain, self.tau, self.dt, self.y = gain, tau, dt, y0\n\n    def step(self, u, disturbance=0.0):\n        self.y += (self.gain * u - self.y) / self.tau * self.dt + disturbance\n        return self.y\n\n\nclass PID:\n    def __init__(self, kp, ki, dt, out_min, out_max, conditional):\n        self.kp, self.ki, self.dt = kp, ki, dt\n        self.out_min, self.out_max, self.conditional = out_min, out_max, conditional\n        self.integral = 0.0\n\n    def update(self, setpoint, y):\n        error = setpoint - y\n        trial = self.integral + error * self.dt\n        u = self.kp * error + self.ki * trial\n        if self.out_min <= u <= self.out_max or not self.conditional:\n            self.integral = trial\n        u = max(self.out_min, min(self.out_max, u))\n        return u\n\n\ndef simulate(plant, pid, setpoint, steps):\n    ys = [plant.y]\n    for _ in range(steps):\n        ys.append(plant.step(pid.update(setpoint, plant.y)))\n    return ys\n\n\nfor conditional in (True, False):\n    plant = Plant(2.0, 1.0, 0.01)\n    pid = PID(1.0, 4.0, 0.01, 0.0, 1.0, conditional)\n    simulate(plant, pid, 5.0, 500)\n    wound = pid.integral\n    after = simulate(plant, pid, 1.0, 500)\n    print(\"conditional\" if conditional else \"always     \",\n          \"integral after 5 s:\", round(wound, 3),\n          \"y 5 s after the drop:\", round(after[-1], 4))\n```\n\nWith conditional integration the integral after five saturated seconds is 0.0 — the\ncommand was clamped on every tick, so the trial was never committed — and five seconds\nafter the setpoint drops the wheel is at 1.0005. With the integral always committed it\nis 16.987, and five seconds after the drop the wheel is still at 1.9999. The lab's\ntest for this is the sharpest one in the module: after 500 saturated steps it asserts\n`abs(controller.integral) < 1e-9`.\n\nThe mistake people make is to clamp first and commit afterwards, or to commit the trial\nunconditionally and then clamp. Both look like anti-windup, because there is a clamp in\nthe code. Neither is, because the integral still grows while the clamp holds.\n\n## Rejecting a push\n\nThe integral term does one more thing for you. Apply a steady disturbance — a constant\n$0.002$ added to $y$ every tick from $t = 10$ s — to the PI loop above. The wheel jumps\nto about 1.024, the error goes negative, the integral winds *down* until the command\nhas fallen by exactly enough to cancel the push, and the wheel returns to 1.0. An open\nloop under the same push drifts to 1.2 and stays there. The disturbance never appears\nin the controller's inputs; it is inferred from its effect on the error and cancelled.\n\n## Where it stops holding\n\nTwo boundaries matter here. The first is the simulation itself. Forward Euler on the\nclosed loop with proportional control updates $y$ by a factor of $1 - \\Delta t (1 + K\nk_p)/\\tau$ each tick, and that factor must stay inside $(-1, 1)$, so\n\n$$\\Delta t < \\frac{2\\tau}{1 + K k_p}.$$\n\nFor $K = 2$, $k_p = 1$, $\\tau = 1$ the bound is $2/3$ s:\n\n```python\nclass Plant:\n    def __init__(self, gain, tau, dt, y0=0.0):\n        self.gain, self.tau, self.dt, self.y = gain, tau, dt, y0\n\n    def step(self, u):\n        self.y += (self.gain * u - self.y) / self.tau * self.dt\n        return self.y\n\n\nfor dt in (0.5, 1.0):\n    plant = Plant(2.0, 1.0, dt)\n    ys = [plant.y]\n    for _ in range(int(20 / dt)):\n        ys.append(plant.step(1.0 * (1.0 - plant.y)))\n    print(\"dt\", dt, \"final\", round(ys[-1], 4), \"peak\", round(max(ys), 4))\n```\n\nAt $\\Delta t = 0.5$ the loop oscillates on its way in (a peak of 1.0) and settles at\n0.6667. At $\\Delta t = 1.0$ it prints a final value of $-699050$: the plant is stable,\nthe controller is stable, and the *simulation* has blown up. When a tuned loop goes\nwild, check the step size before the gains.\n\nThe second boundary is the plant. A first-order lag can never overshoot under\nproportional control, and PID on it is nearly always tameable. Add a second lag, a\ntransport delay, or a nonlinearity — a robot arm's gravity load, a motor's friction —\nand the same three gains can produce oscillation that no amount of $k_d$ removes.\nPID is the right first controller for almost everything and the right last controller\nfor rather less.\n\n## What you are about to build\n\nThe lab *A PID loop with anti-windup* asks for `FirstOrderPlant`, the `PID` class\nwith `reset` and the conditional-integration `update`, `simulate` returning `steps +\n1` samples, and the four metrics. Its tests pin the $2/3$ offset, the 10.2% overshoot\nand 0.33 s rise time, the zero integral after 500 saturated steps, the recovery after\nthe setpoint drops, and the rejection of the sustained disturbance. The same `PID`\nclass, with the same anti-windup rule, is the one the capstone's delivery agent drives\nits wheels with, clamped at $\\pm v_{\\max}$."
+    }
+   ],
    "sandbox": null,
-   "quiz": null,
+   "quiz": {
+    "title": "Three gains and one clamp",
+    "minutes": 8,
+    "questions": [
+     {
+      "q": "A proportional controller with $k_p = 1$ drives a plant with gain $K = 2$ toward a setpoint of 1. It settles at $2/3$. Why not at 1?",
+      "opts": [
+       "At rest the command must be non-zero to hold the plant up, and a proportional command is non-zero only while error remains",
+       "Forward Euler with $\\Delta t = 0.01$ accumulates truncation error over the 2000 steps, and the error shows up as a $1/3$ shortfall at the end",
+       "The plant's gain of 2 halves the effective setpoint, and $k_p$ would need to be doubled to compensate exactly",
+       "The controller has not finished converging; a longer simulation would carry the output the rest of the way"
+      ],
+      "a": 0,
+      "why": "At equilibrium $\\dot y = 0$ so $y = K u = K k_p (r - y)$, giving $y = K k_p r/(1 + K\nk_p) = 2/3$. Holding the plant anywhere above zero needs a standing command, and a\nproportional controller makes its command out of error alone, so a standing command\nmeans a standing error. Raising $k_p$ shrinks the gap toward zero without reaching it;\nremoving it takes a term that keeps pushing while any error remains — the integral.",
+      "whys": [
+       "Solve $y = K k_p (r - y)$ at rest: $y = 2/3$. Zero error would mean zero command, and zero command lets the plant fall back to zero.",
+       "Euler's error here is a few parts in $10^{6}$, not a third. The offset is in the algebra of the equilibrium, and no step size removes it.",
+       "A higher gain shrinks the offset — $k_p = 2$ gives $4/5$ — and never removes it, because $K k_p/(1 + K k_p)$ is below 1 for every finite gain.",
+       "The output is within $10^{-6}$ of $2/3$ at the end of the run and is not moving. The equilibrium of the proportional loop *is* $2/3$; there is nowhere else to go."
+      ]
+     },
+     {
+      "q": "Why does adding an integral term remove the steady-state offset that proportional control leaves behind?",
+      "opts": [
+       "The integral averages out the measurement noise, so the controller sees the true error and can cancel it",
+       "The loop can only come to rest when the integral stops changing, and it stops changing only when the error is zero",
+       "The integral raises the effective gain to $k_p + k_i$, which pushes the equilibrium closer to the setpoint",
+       "The integral makes the plant respond faster, so it reaches the setpoint before the proportional term stops pushing"
+      ],
+      "a": 1,
+      "why": "With $u = k_p e + k_i \\int e$, equilibrium requires every term to stop changing. The\nintegral stops changing only when $e = 0$, so the loop cannot rest anywhere except on\nthe setpoint — the integrator holds the standing command that the proportional term\ncould only produce from a standing error. The cost is momentum: the integral is still\nlarge when the output first arrives, which is the 10% overshoot in the lab's PI run.",
+      "whys": [
+       "There is no noise in the lab's simulation and the offset is still there under P alone. The integral's job is not smoothing; it is providing a standing command with no standing error.",
+       "An integral is constant only while its integrand is zero. At rest everything is constant, so the error must be zero: the integrator supplies whatever command holds the plant there.",
+       "$k_i$ multiplies a different quantity from $k_p$ and the two do not add. A higher proportional gain would shrink the offset without removing it; the integral removes it at any $k_i > 0$.",
+       "The integral usually makes the loop *slower* to settle, with overshoot. It wins on the final value, not on speed."
+      ]
+     },
+     {
+      "q": "A PID with output limits $[0, 1]$ and $k_i = 4$ spends five seconds at an unreachable setpoint of 5, then the setpoint drops to 1. Without anti-windup, what happens?",
+      "opts": [
+       "The output falls to 1 within a second, since the clamp kept the command bounded throughout",
+       "The command stays pinned at its maximum for many seconds while the wound-up integral unwinds, and the plant sits at 2",
+       "The loop oscillates between 0 and 2, because the clamp introduces a hard nonlinearity",
+       "The plant overshoots the original setpoint of 5, since the integral accumulated during saturation is finally released all at once"
+      ],
+      "a": 1,
+      "why": "While the command is saturated the integrator keeps accumulating error it can do\nnothing about. When the setpoint drops, that stored integral still demands a command\nfar above the limit, so the clamp holds at the maximum until the negative error has\ndrained the store — about seventeen seconds in the reading's numbers, with the plant\nparked at 2. Conditional integration prevents the store from growing in the first\nplace: after the same five seconds the integral is exactly zero and the loop is within\n2% of the new setpoint in under a second.",
+      "whys": [
+       "The clamp bounds the *command*, not the integral. The integral kept counting the whole time, and with $k_i = 4$ it holds nearly 70 units of command that must unwind at 0.04 per tick.",
+       "Error of $-1$ drains the integral at $k_i \\times 1 \\times \\Delta t = 0.04$ per tick; unwinding about 70 takes about 1700 ticks, with the plant at $K \\times 1 = 2$ throughout.",
+       "Nothing oscillates. The command is saturated at 1 for as long as the integral term exceeds the limit, and the plant sits quietly at the ceiling that command allows.",
+       "The plant cannot exceed $K \\times u_{\\max} = 2$ whatever the integral holds; the limit is on the actuator. The damage is the long delay, not a burst above 5."
+      ]
+     },
+     {
+      "q": "Which implementation of `update` is the conditional-integration anti-windup the lab asks for?",
+      "opts": [
+       "Form $u$ from a trial integral; commit the trial only if $u$ is within limits, else clamp $u$ and keep the old integral",
+       "Commit the new integral on every call, form $u$ from it, and then clamp $u$ into the actuator limits before returning it to the caller",
+       "Clamp $u$ into the limits, and whenever the clamp was needed reset the integral to zero",
+       "Form $u$ from the committed integral, and skip the clamp entirely when the integral is small"
+      ],
+      "a": 0,
+      "why": "The rule in the brief is one `if`: compute `trial = integral + error*dt`, use it to\ncompute `u`, and commit `integral = trial` only when `out_min <= u <= out_max`;\notherwise leave the integral alone and clamp `u`. Committing before clamping is\nwindup with extra steps, and resetting on saturation discards the standing command the\nintegral exists to hold. The lab checks the rule by asserting the integral is still\nzero after 500 saturated ticks.",
+      "whys": [
+       "The integral counts only on ticks where counting could have changed the output. On a saturated tick the trial is discarded, so the store never grows while the clamp holds.",
+       "This is the windup case with a clamp attached. The integral grows on every saturated tick exactly as it would with no limits; the clamp hides the symptom and stores the problem.",
+       "Resetting throws away the correct standing command as well as the excess. Every time the loop brushes a limit it forgets what it had learned and has to start over, which is its own oscillation.",
+       "Skipping the clamp sends the actuator a command it cannot honour. The limits are a fact about the hardware and apply to every tick."
+      ]
+     },
+     {
+      "q": "A colleague initialises `prev_error = 0.0` instead of `None`. With $k_d = 0.1$ and $\\Delta t = 0.01$, what does the first call for a unit step do?",
+      "opts": [
+       "Nothing unusual: the derivative of a constant error is zero, so the first command is the proportional term alone, as intended",
+       "It adds a derivative term of $0.1 \\times (1 - 0)/0.01 = 10$ to the command, a kick ten times the intended proportional action",
+       "It raises a `ZeroDivisionError`, because there is no time interval yet over which to take a derivative",
+       "It halves the first command, because the derivative term opposes the proportional term on the first sample"
+      ],
+      "a": 1,
+      "why": "A sentinel of `0.0` is a claim that the error was zero one tick ago. On a step from 0\nto 1 that makes the measured slope $1/\\Delta t = 100$, and $k_d = 0.1$ turns it into a\ncommand of 10 on top of the proportional 1. Using `None` as the flag, as the lab's\n`reset` does, lets `update` report zero derivative on the first call and the command\ncomes out as 1.0. The same kick recurs whenever the setpoint changes suddenly, which\nis why many controllers differentiate the measurement rather than the error.",
+      "whys": [
+       "The error is not constant on the first call; it appears from nowhere. Compared with a sentinel of 0.0 it has changed by 1 in one tick, and the derivative term sees that as a slope of 100.",
+       "$(1 - 0)/0.01 = 100$, times $k_d = 0.1$, is 10, added to a proportional term of 1. The reading's example prints 11.0 against 1.0.",
+       "$\\Delta t$ is a fixed constructor argument and never zero; nothing divides by elapsed time. The failure is a wrong number, not an exception.",
+       "The derivative term has the same sign as the error's change, which on a rising step is positive: it adds to the command rather than opposing it."
+      ]
+     },
+     {
+      "q": "A proportional loop on the plant $\\tau = 1$, $K = 2$, $k_p = 1$ is simulated by forward Euler with $\\Delta t = 1.0$ and diverges to enormous values. What is wrong?",
+      "opts": [
+       "The gain $k_p$ is too high for this plant, and the closed loop is genuinely unstable at any step size, however small",
+       "The step exceeds $2\\tau/(1 + K k_p) = 2/3$, so the discretised loop is unstable although the continuous one is not",
+       "The plant model is unstable because $\\tau = 1$ equals $\\Delta t$, which makes the lag term vanish",
+       "Floating-point rounding accumulates over the run and eventually dominates the small step updates"
+      ],
+      "a": 1,
+      "why": "Forward Euler on the closed loop gives $e_{k+1} = \\big(1 - \\Delta t (1 + K\nk_p)/\\tau\\big) e_k$, which is stable only while that factor lies in $(-1, 1)$, i.e.\n$\\Delta t < 2\\tau/(1 + K k_p) = 2/3$ here. At $\\Delta t = 0.5$ the factor is $-0.5$\nand the loop rings its way in; at $\\Delta t = 1.0$ it is $-2$ and every tick doubles\nthe error. The physical loop is fine. When a simulated controller goes wild, the step\nsize is the first thing to check, before the gains.",
+      "whys": [
+       "The continuous loop is a first-order lag under proportional control and is stable for every positive $k_p$. The same gains at $\\Delta t = 0.01$ settle calmly at $2/3$.",
+       "Each Euler tick multiplies the error by $1 - \\Delta t(1 + K k_p)/\\tau$, which at $\\Delta t = 1$ is $-2$: the error doubles and flips sign every step.",
+       "$\\tau = \\Delta t$ makes the open-loop step land exactly on $K u$ in one tick, which is coarse but not unstable. It is the closed-loop factor that goes past $-1$.",
+       "Rounding is at the $10^{-16}$ level; a value of $-699050$ after twenty steps is not rounding. It is a geometric growth with ratio $-2$."
+      ]
+     }
+    ]
+   },
    "blanks": null,
    "numeric": null,
    "match": null,
